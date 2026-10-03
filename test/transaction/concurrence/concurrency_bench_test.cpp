@@ -30,6 +30,7 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <set>
 
 #include "bench_harness.h"
 #include "common/string_format.h"
@@ -136,7 +137,8 @@ public:
 
     int64_t queryInt(const std::string& query) {
         auto result = conn->query(query);
-        EXPECT_TRUE(result->isSuccess()) << query << "\n" << result->getErrorMessage();
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << query << "\n"
+                                         << result->getErrorMessage();
         if (!result->isSuccess() || !result->hasNext()) {
             return -1;
         }
@@ -178,10 +180,22 @@ public:
             violations = runThenCrash(benchCase, area);
             break;
         }
-        EXPECT_TRUE(violations.empty()) << "integrity violations, see the raw report";
-        EXPECT_EQ(totalRefusals(area, Refusal::Unexpected), 0u) << "an unexpected error";
-        EXPECT_EQ(area.barrierTimedOut.load(), 0u) << "a writer never reached the barrier";
-        EXPECT_EQ(area.guardExpired.load(), 0u) << "the engine blocked a writer past the guard";
+        // Une étiquette par invariant violé : known_red.txt épingle cet ensemble.
+        std::set<std::string> violated;
+        for (const auto& violation : violations) {
+            violated.insert(violation.invariant);
+        }
+        std::string checks;
+        for (const auto& invariant : violated) {
+            checks += "[check: " + invariant + "] ";
+        }
+        EXPECT_TRUE(violations.empty()) << checks << "integrity violations, see the raw report";
+        EXPECT_EQ(totalRefusals(area, Refusal::Unexpected), 0u)
+            << "[check: no-unexpected-error] " << "an unexpected error";
+        EXPECT_EQ(area.barrierTimedOut.load(), 0u)
+            << "[check: barrier] " << "a writer never reached the barrier";
+        EXPECT_EQ(area.guardExpired.load(), 0u)
+            << "[check: guard] " << "the engine blocked a writer past the guard";
         benchCase.expect(*this, area);
     }
 
@@ -195,6 +209,7 @@ private:
             database.reset();
             EXPECT_TRUE(launch(launcher, Opener{nullptr, databasePath, *systemConfig}, area,
                 benchCase.scenario, benchCase.guard))
+                << "[check: process-exit] "
                 << "a writer process did not exit normally";
             createDBAndConn();
         }
@@ -218,7 +233,8 @@ private:
             auto checkpoint = conn->query("CHECKPOINT;");
             std::cerr << "  -- CHECKPOINT: "
                       << (checkpoint->isSuccess() ? "ok" : checkpoint->getErrorMessage()) << "\n";
-            EXPECT_TRUE(checkpoint->isSuccess()) << checkpoint->getErrorMessage();
+            EXPECT_TRUE(checkpoint->isSuccess())
+                << "[check: checkpoint] " << checkpoint->getErrorMessage();
         }
         createDBAndConn();
         auto violations = verify("after checkpoint and reopen");
@@ -261,7 +277,11 @@ private:
         int status = 0;
         waitpid(pid, &status, 0);
         EXPECT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
-            << "the writer process was expected to die by SIGKILL";
+            << "[check: killed] "
+            << "the writer process was expected to die by SIGKILL" << " — "
+            << (WIFSIGNALED(status)  ? "signal " + std::to_string(WTERMSIG(status)) :
+                   WIFEXITED(status) ? "exit code " + std::to_string(WEXITSTATUS(status)) :
+                                       std::string("unknown status"));
         std::cerr << describe(area);
 
         std::vector<std::string> before;
@@ -293,7 +313,8 @@ private:
             if (entry.path().filename().string().starts_with(prefix)) {
                 std::cerr << "  -- set-aside journal: " << entry.path().filename() << " ("
                           << entry.file_size() << " bytes)\n";
-                ADD_FAILURE() << "the replay set aside part of the journal after acknowledged "
+                ADD_FAILURE() << "[check: no-set-aside] "
+                              << "the replay set aside part of the journal after acknowledged "
                                  "commits: "
                               << entry.path();
                 std::filesystem::remove(entry.path());
@@ -331,14 +352,17 @@ TEST_P(ConcurrencyBench, C0_DisjointKeysWitness) {
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea&) {
-                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes)
+                    << "[check: node-count] ";
                 EXPECT_EQ(bench.queryInt("MATCH ()-[r:Link]->() RETURN count(r);"),
-                    numWorkers * (numNodes - 1));
+                    numWorkers * (numNodes - 1))
+                    << "[check: rel-count] ";
             }});
 }
 
-// C1 — même clé primaire. Chaque écrivain ouvre une transaction, crée le nœud de clé
-// 7, attend les autres, puis tous valident l'un après l'autre. Invariant : un seul
+// C1 — même clé primaire. Chaque écrivain ouvre une transaction et crée le nœud de clé
+// 7 ; puis tous valident l'un après l'autre (commitInOrderByEvents : les écritures
+// sont toutes finies avant le premier commit, sans barrière). Invariant : un seul
 // commit réussit, une seule ligne de clé 7. Rouge à l'étape 1 : la clé non validée de
 // l'autre transaction est invisible au contrôle d'unicité (node_table.cpp,
 // validatePkNotExists).
@@ -351,14 +375,16 @@ static BenchCase samePrimaryKey(uint32_t numWorkers) {
         .scenario =
             [](Worker& worker) {
                 worker.begin();
-                worker.run(stringFormat("CREATE (:Item {id: 7, writer: {}});", worker.index()));
-                worker.sync();
-                worker.commitInOrder(ascending(worker.numWorkers()));
+                worker.writeInTurn(
+                    stringFormat("CREATE (:Item {id: 7, writer: {}});", worker.index()));
+                worker.commitInOrderByEvents(ascending(worker.numWorkers()));
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
-                EXPECT_EQ(totalCommits(area), 1u) << "exactly one writer of key 7 may commit";
-                EXPECT_EQ(bench.queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1);
+                EXPECT_EQ(totalCommits(area), 1u)
+                    << "[check: one-commit] " << "exactly one writer of key 7 may commit";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1)
+                    << "[check: one-row-per-key] ";
             }};
 }
 
@@ -370,12 +396,56 @@ TEST_P(ConcurrencyBench, C1_SamePrimaryKeyThreeWriters) {
     runCase(samePrimaryKey(3));
 }
 
-// C2 — relation vers un nœud supprimé. Les nœuds 1 et 2 sont validés avant. L'écrivain
-// 0 supprime le nœud 1 ; l'écrivain 1 crée une relation 1 -> 2. Barrière, puis les deux
-// commits dans l'ordre donné. Invariant : jamais les deux à la fois. Rouge à l'étape 1,
-// dans les deux ordres : chacun ne voit que son instantané (delete_executor.cpp,
-// throwIfNodeHasRels).
-static BenchCase deleteVersusNewRelation(std::vector<uint32_t> commitOrder) {
+// C1 — la même clé SANS chevauchement des écritures (relecture du cœur C++, 3 octobre).
+// L'écrivain 1 ouvre sa transaction et lit : son instantané est pris. Puis l'écrivain 0
+// ouvre, crée la clé 7 et valide. Enfin l'écrivain 1 crée la clé 7 et valide. Aucune
+// écriture ne se chevauche : un verrou par clé ne voit rien. Seul un contrôle
+// d'unicité fait contre le dernier état validé — et non contre l'instantané de
+// l'écrivain 1, qui précède le commit de l'écrivain 0 — refuse le second. Invariant :
+// un seul commit, une seule ligne de clé 7.
+TEST_P(ConcurrencyBench, C1_SnapshotPredatesCommit) {
+    runCase({.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+            },
+        .scenario =
+            [](Worker& worker) {
+                if (worker.index() == 1) {
+                    worker.begin();
+                    worker.run("MATCH (n:Item) RETURN count(n);");
+                }
+                worker.sync();
+                if (worker.index() == 0) {
+                    worker.begin();
+                    worker.run("CREATE (:Item {id: 7, writer: 0});");
+                    worker.commit();
+                }
+                worker.sync();
+                if (worker.index() == 1) {
+                    worker.run("CREATE (:Item {id: 7, writer: 1});");
+                    worker.commit();
+                }
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 1u)
+                    << "[check: one-commit] " << "exactly one writer of key 7 may commit";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1)
+                    << "[check: one-row-per-key] ";
+            }});
+}
+
+// C2 — relation contre suppression d'une de ses extrémités. Les nœuds 1 et 2 sont
+// validés avant. L'écrivain 0 supprime un nœud (la source 1, la destination 2, ou la
+// source par DETACH DELETE) ; l'écrivain 1 crée une relation 1 -> 2. Puis les deux
+// commits dans l'ordre donné. Invariant : jamais les deux à la fois. Rouge à l'étape 1
+// pour la source, dans les deux ordres : chacun ne voit que son instantané
+// (delete_executor.cpp, throwIfNodeHasRels). Les variantes destination et DETACH
+// DELETE viennent de la relecture du cœur C++ (3 octobre) : l'autre direction de la
+// CSR, et une suppression qui détache ce qu'elle voit — pas la relation encore non
+// validée de l'autre.
+static BenchCase deleteVersusNewRelation(std::string deletion, std::vector<uint32_t> commitOrder) {
     return {.numWorkers = 2,
         .setup =
             [](ConcurrencyBench& bench) {
@@ -385,30 +455,50 @@ static BenchCase deleteVersusNewRelation(std::vector<uint32_t> commitOrder) {
                 bench.mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
             },
         .scenario =
-            [commitOrder](Worker& worker) {
+            [deletion, commitOrder](Worker& worker) {
                 worker.begin();
                 if (worker.index() == 0) {
-                    worker.run("MATCH (a:Item {id: 1}) DELETE a;");
+                    worker.writeInTurn(deletion);
                 } else {
-                    worker.run("MATCH (a:Item {id: 1}), (b:Item {id: 2}) "
-                               "CREATE (a)-[:Link {src_id: 1, dst_id: 2}]->(b);");
+                    worker.writeInTurn("MATCH (a:Item {id: 1}), (b:Item {id: 2}) "
+                                       "CREATE (a)-[:Link {src_id: 1, dst_id: 2}]->(b);");
                 }
-                worker.sync();
-                worker.commitInOrder(commitOrder);
+                worker.commitInOrderByEvents(commitOrder);
             },
         .expect =
             [](ConcurrencyBench&, const SharedArea& area) {
                 EXPECT_EQ(totalCommits(area), 1u)
+                    << "[check: one-commit] "
                     << "the delete and the new relation cannot both commit";
             }};
 }
 
+static constexpr const char* DELETE_SOURCE = "MATCH (a:Item {id: 1}) DELETE a;";
+static constexpr const char* DELETE_DESTINATION = "MATCH (b:Item {id: 2}) DELETE b;";
+static constexpr const char* DETACH_DELETE_SOURCE = "MATCH (a:Item {id: 1}) DETACH DELETE a;";
+
 TEST_P(ConcurrencyBench, C2_DeleteCommitsFirst) {
-    runCase(deleteVersusNewRelation({0, 1}));
+    runCase(deleteVersusNewRelation(DELETE_SOURCE, {0, 1}));
 }
 
 TEST_P(ConcurrencyBench, C2_RelationCommitsFirst) {
-    runCase(deleteVersusNewRelation({1, 0}));
+    runCase(deleteVersusNewRelation(DELETE_SOURCE, {1, 0}));
+}
+
+TEST_P(ConcurrencyBench, C2_DestinationDeleteCommitsFirst) {
+    runCase(deleteVersusNewRelation(DELETE_DESTINATION, {0, 1}));
+}
+
+TEST_P(ConcurrencyBench, C2_DestinationRelationCommitsFirst) {
+    runCase(deleteVersusNewRelation(DELETE_DESTINATION, {1, 0}));
+}
+
+TEST_P(ConcurrencyBench, C2_DetachDeleteCommitsFirst) {
+    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, {0, 1}));
+}
+
+TEST_P(ConcurrencyBench, C2_DetachRelationCommitsFirst) {
+    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, {1, 0}));
 }
 
 // C3 — offsets locaux qui se chevauchent (marche A2). Chaque écrivain, dans une seule
@@ -445,10 +535,12 @@ TEST_P(ConcurrencyBench, C3_OverlappingLocalOffsets) {
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
-                EXPECT_EQ(totalCommits(area), numWorkers);
-                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes);
+                EXPECT_EQ(totalCommits(area), numWorkers) << "[check: all-commit] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), numWorkers * numNodes)
+                    << "[check: node-count] ";
                 EXPECT_EQ(bench.queryInt("MATCH ()-[r:Link]->() RETURN count(r);"),
-                    numWorkers * (numNodes - 1));
+                    numWorkers * (numNodes - 1))
+                    << "[check: rel-count] ";
             }});
 }
 
@@ -490,10 +582,13 @@ TEST_P(ConcurrencyBench, C4_Transfers) {
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
-                EXPECT_EQ(bench.queryInt("MATCH (a:Account) RETURN count(a);"), numAccounts);
+                EXPECT_EQ(bench.queryInt("MATCH (a:Account) RETURN count(a);"), numAccounts)
+                    << "[check: account-count] ";
                 EXPECT_EQ(bench.queryInt("MATCH (a:Account) RETURN sum(a.balance);"),
-                    numAccounts * 100);
-                EXPECT_GT(totalCommits(area), 0u) << "no transfer committed at all";
+                    numAccounts * 100)
+                    << "[check: sum-conserved] ";
+                EXPECT_GT(totalCommits(area), 0u)
+                    << "[check: some-commit] " << "no transfer committed at all";
             }});
 }
 
@@ -502,7 +597,7 @@ TEST_P(ConcurrencyBench, C4_Transfers) {
 // temps. Mesuré le 3 octobre sur 200 répétitions : rouge 2/200 à chaud, 2/200 après
 // réouverture, 52/200 après arrêt brutal — les deux valident. C'est la course du chemin
 // de suppression sans verrou (marche A5) ; le cas est donc probabiliste
-// (probabilistic.txt), et son témoin déterministe attendu est ThreadSanitizer.
+// (probabilistic.txt), et son témoin sous ThreadSanitizer sort 9 passes sur 10.
 TEST_P(ConcurrencyBench, C5_DoubleDelete) {
     runCase({.numWorkers = 2,
         .setup =
@@ -513,22 +608,38 @@ TEST_P(ConcurrencyBench, C5_DoubleDelete) {
         .scenario =
             [](Worker& worker) {
                 worker.begin();
-                worker.run("MATCH (n:Item {id: 1}) DELETE n;");
-                worker.sync();
-                worker.commitInOrder({0, 1});
+                worker.runMarked("MATCH (n:Item {id: 1}) DELETE n;", "write");
+                worker.commitInOrderByEvents({0, 1});
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
-                EXPECT_EQ(totalCommits(area), 1u) << "exactly one delete may commit";
-                EXPECT_EQ(totalRefusals(area, Refusal::WriteWriteConflict), 1u);
-                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), 1);
+                EXPECT_EQ(totalCommits(area), 1u)
+                    << "[check: one-commit] " << "exactly one delete may commit";
+                EXPECT_EQ(totalRefusals(area, Refusal::WriteWriteConflict), 1u)
+                    << "[check: ww-refusal] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), 1)
+                    << "[check: row-count] ";
             }});
 }
 
 // C6 — suppression contre mise à jour de la même ligne. L'écrivain 0 supprime le nœud
-// 1, l'écrivain 1 change sa valeur ; barrière ; commits dans l'ordre donné. Invariant :
-// jamais les deux — soit la ligne n'existe plus, soit elle porte la mise à jour.
-// Attendu inconnu (plan §13, non examiné).
+// 1, l'écrivain 1 change sa valeur ; puis les commits dans l'ordre donné. Aujourd'hui
+// les deux valident, la ligne finit supprimée et la mise à jour est perdue sans erreur
+// (reproduit dans un seul fil : MinimalReproduction.C6_*).
+// L'attendu dépend de l'écart n° 2 de la note de conception sur les verrous
+// (docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md), pas encore tranché
+// par Lucie :
+// - option A, recommandée — un instantané par transaction (le comportement Repeatable
+//   Read de PostgreSQL) : JAMAIS LES DEUX, l'invariant écrit ici. Le second écrivain
+//   attend ; si le premier valide, le second reçoit une erreur nommée et transitoire ;
+//   si le premier annule, le second passe ;
+// - option B — un instantané par instruction (Read Committed) : les deux valident, et
+//   la mise à jour touche zéro ligne ; l'état final d'aujourd'hui serait alors
+//   admissible.
+// Sous l'une comme sous l'autre, ce qui est un défaut aujourd'hui : il n'y a ni attente
+// ni détection croisée (la mise à jour ne regarde que les mises à jour, update_info.cpp ;
+// la suppression que les suppressions, version_info.cpp), et ThreadSanitizer voit une
+// course sur isDeleted. Le cas reste rouge tel quel jusqu'à la décision.
 static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
     return {.numWorkers = 2,
         .setup =
@@ -540,22 +651,23 @@ static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
             [commitOrder](Worker& worker) {
                 worker.begin();
                 if (worker.index() == 0) {
-                    worker.run("MATCH (n:Item {id: 1}) DELETE n;");
+                    worker.writeInTurn("MATCH (n:Item {id: 1}) DELETE n;");
                 } else {
-                    worker.run("MATCH (n:Item {id: 1}) SET n.writer = 1;");
+                    worker.writeInTurn("MATCH (n:Item {id: 1}) SET n.writer = 1;");
                 }
-                worker.sync();
-                worker.commitInOrder(commitOrder);
+                worker.commitInOrderByEvents(commitOrder);
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
                 EXPECT_EQ(totalCommits(area), 1u)
+                    << "[check: one-commit] "
                     << "the delete and the update of the same row cannot both commit";
                 const auto remaining = bench.queryInt("MATCH (n:Item) RETURN count(n);");
                 const auto updated =
                     bench.queryInt("MATCH (n:Item) WHERE n.writer = 1 RETURN count(n);");
                 EXPECT_TRUE((remaining == 0) || (remaining == 1 && updated == 1))
-                    << "remaining rows: " << remaining << ", updated rows: " << updated;
+                    << "[check: final-state] " << "remaining rows: " << remaining
+                    << ", updated rows: " << updated;
             }};
 }
 
@@ -686,6 +798,7 @@ TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
                     inserted += area.workers[i].statementsSucceeded.load();
                 }
                 EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), inserted)
+                    << "[check: inserted-count] "
                     << "every acknowledged insert must be there, once";
             },
         .autoCheckpoint = true});
@@ -704,6 +817,7 @@ TEST_P(ConcurrencyBench, C9_SecondWriterProcessRefused) {
         .expect =
             [](ConcurrencyBench&, const SharedArea& area) {
                 EXPECT_EQ(totalRefusals(area, Refusal::FileLock), 1u)
+                    << "[check: one-file-lock-refusal] "
                     << "exactly one of the two writer processes must be refused";
             },
         .runsInProcesses = true,

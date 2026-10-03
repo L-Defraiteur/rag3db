@@ -1,0 +1,14 @@
+# Les courses connues que ThreadSanitizer voit dans C5 et C6, une signature par ligne :
+# le type, puis les deux accès, chacun par son premier cadre dans src/ (fonction et
+# ligne). La passe concurrence_tsan.signatures échoue sur toute signature de C5 ou C6
+# absente d'ici ; une signature d'ici qui n'est pas revue n'est pas un échec. Mesuré
+# le 3 octobre : ces signatures sortent dès la première passe de dix répétitions, et les
+# mêmes sur cinq passes. Une ligne ne se retire que dans le commit de la marche qui
+# supprime la course (A5 pour VectorVersionInfo::delete_ et l'initialisation paresseuse
+# de initDeletionVersionArray). C7 n'est pas comparé (voir compare_tsan_signatures.py).
+data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:108 | rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316
+data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:112 | rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316
+data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98
+data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::isDeleted@storage/table/version_info.cpp:194
+data race: rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316 | rag3db::storage::VectorVersionInfo::isDeleted@storage/table/version_info.cpp:204
+data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::isSelected@storage/table/version_info.cpp:149

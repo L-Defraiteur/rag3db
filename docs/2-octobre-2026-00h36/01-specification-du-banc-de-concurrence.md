@@ -223,3 +223,70 @@ Chaque cas a été relancé seul pour savoir lequel déclenche quoi :
 TSan n'est pas encore branché dans ctest. Un rouge TSan n'est pas déterministe non
 plus : il ne voit une course que si les deux accès ont effectivement lieu sans relation
 d'ordre. Le brancher demande de décider quels cas y tournent, et ce qu'on y compare.
+
+## 10. Ce que la relecture du cœur C++ a changé (3 octobre)
+
+Relecture de `455939802` par la session cœur C++, qui l'a jugé fusionnable tel quel
+(fusionné dans `master`, `407fe0b04`). Ses remarques sont traitées ici, sur la branche
+`banc-remarques-de-relecture`. Tout ce qui suit est exécuté.
+
+- **Les identifiants de relation en double** (`rel-ids-unique`, `stored-rel-ids-unique`) :
+  deux relations de même identifiant s'écrasaient en silence dans les tables des deux
+  niveaux. Chaque balayage relève maintenant tout identifiant revu. Aucun cas ne le
+  produit aujourd'hui, et il n'a pas encore de témoin.
+- **La raison de chaque rouge est épinglée.** Chaque attente du banc porte une étiquette
+  `[check: …]` dans son message d'échec, et chaque invariant violé la sienne.
+  `known_red.txt` donne, pour chaque nom, l'ensemble exact d'étiquettes attendu ; la
+  comparaison échoue sur « known red for another reason ». Un échec sans étiquette
+  compte comme `untagged`. Éprouvé sur une copie modifiée de la liste.
+- **Un faux vert du niveau 1, trouvé par la nouvelle variante de C2 où la destination
+  est supprimée.** `MATCH (a:S) WITH a MATCH (a)-[r]->(b:D)` ne force rien : l'optimiseur
+  partait de b et étendait vers l'arrière, et une relation vers une destination supprimée
+  disparaissait des deux côtés (`count(r)` rendait même 0). Seul le niveau 2 la voyait.
+  Le balayage passe maintenant par une indication de jointure,
+  `MATCH (a:S)-[r:R]->(b) HINT (a JOIN r) JOIN b`, vérifiée par EXPLAIN : il balaye a,
+  étend en avant, et ne balaye jamais la table de b. Le témoin a désormais deux
+  variantes, source et destination.
+- **Nouveaux cas, tous rouges aujourd'hui** :
+  - `C1_SnapshotPredatesCommit` : la même clé, sans chevauchement des écritures,
+    depuis un instantané antérieur au commit de l'autre. Il impose à A3 de contrôler
+    contre le dernier état validé ;
+  - C2, destination supprimée et `DETACH DELETE` contre nouvelle relation, dans les deux
+    ordres de commit ;
+  - `MinimalReproduction.SameRowTwoColumnsSingleThread` : deux mises à jour de la même
+    ligne sur deux colonnes, validées toutes deux. Son témoin sur la même colonne est
+    vert : « Write-write conflict » immédiat.
+- **C6** : l'attendu dépend de l'écart n° 2 de la note sur les verrous
+  (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`). Avec l'option A,
+  un instantané par transaction, c'est « jamais les deux » ; avec l'option B, un
+  instantané par instruction, les deux validant et la mise à jour touchant zéro ligne
+  serait admissible. C'est écrit dans le cas, qui reste rouge.
+- **Les scripts sont prêts pour « le second attend »** : `writeInTurn` et
+  `commitInOrderByEvents` remplacent les barrières de C1, C2, C5 et C6. Le premier à
+  valider attend la fin de l'écriture des autres pendant au plus 2 s, puis valide. Ce
+  délai, qui aujourd'hui n'est jamais atteint, laissera passer un écrivain que le moteur
+  bloquera demain.
+- **La course du chemin de suppression fait planter le processus.** On l'a vu par
+  SIGSEGV :
+  - dans `VersionInfo::isSelected`, par la recherche de clé primaire, dans C5 : 3
+    plantages en au plus 1000 répétitions ;
+  - dans `VersionInfo::isDeleted`, dans C2, le `MATCH` de la création de relation
+    pendant un `DELETE` concurrent : environ 2 passes sur 15.
+
+  C'est la course que TSan voit entre `initDeletionVersionArray` et `isDeleted` /
+  `isSelected`, et la marche A5 la fermera. Deux conséquences dans le banc. C1, C2 et C6
+  enchaînent leurs écritures (`writeInTurn`) : même anomalie logique, aucune écriture
+  simultanée, 0 plantage sur 30 passes. La comparaison `known_red` ne lance plus les
+  cas probabilistes, puisqu'un plantage de C5 emportait toute la passe ; ctest les
+  lance un par un sous leur label. La comparaison garde aussi le JSON de toute passe en
+  échec.
+- **La passe ThreadSanitizer** (`concurrence_tsan.signatures`, label `concurrence-tsan`)
+  n'existe que dans le build TSan :
+  - C0 doit être propre ;
+  - C5 et C6 sont comparés dans un seul sens à `tsan_signatures.txt` (6 signatures, à
+    la ligne près, pour les deux côtés de l'accès) ;
+  - C7 est lancé et rapporté, jamais comparé. À la ligne comme à la fonction, il fait
+    encore apparaître de nouvelles signatures après soixante répétitions, alors que C5
+    et C6 se stabilisent dès la première passe.
+
+  Elle dure de 50 à 60 s.

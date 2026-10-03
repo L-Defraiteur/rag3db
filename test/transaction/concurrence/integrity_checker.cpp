@@ -181,22 +181,41 @@ struct Edge {
     std::vector<std::string> properties;
 };
 
-// Balaye les relations en partant d'un côté. Le WITH oblige le plan à lier d'abord ce
-// côté, puis à étendre vers l'autre (vérifié par EXPLAIN : SCAN_REL_TABLE depuis le
-// côté lié). Une relation dont ce côté est invisible n'est pas vue, ce qui est le but :
-// comparer les deux sens fait sortir les relations pendantes.
+std::string edgeText(const std::string& relOffset, const Edge& edge) {
+    return stringFormat("rel@{} ({}@{} -> {}@{})", relOffset, edge.sourceKey, edge.sourceOffset,
+        edge.destinationKey, edge.destinationOffset);
+}
+
+// Balaye les relations en partant d'un côté. L'indication de jointure oblige le plan à
+// balayer d'abord ce côté, puis à étendre vers l'autre, sans jamais balayer la table de
+// l'autre extrémité (vérifié par EXPLAIN le 3 octobre : SCAN_NODE_TABLE du côté lié,
+// SCAN_REL_TABLE dans le sens voulu, rien d'autre). Une relation dont ce côté est
+// invisible n'est pas vue, ce qui est le but : comparer les deux sens fait sortir les
+// relations pendantes. Ni WITH ni l'absence d'étiquette ne suffisent : avec « MATCH (a)
+// WITH a MATCH (a)-[r]->(b) », l'optimiseur partait de b et étendait vers l'arrière, et
+// une relation dont b est supprimé disparaissait des deux côtés (variante « destination
+// supprimée » de C2, que seul le niveau 2 voyait). L'autre extrémité ne porte pas
+// d'étiquette et aucune de ses propriétés n'est lue (règle de l'en-tête).
+// Deux relations distinctes de même identifiant s'écraseraient dans la table rendue :
+// chaque identifiant déjà vu est noté dans duplicates (relecture du cœur C++, 3 octobre).
 std::map<std::string, Edge> scanEdges(main::Connection& connection, const RelTable& rel,
-    bool fromSource, const VisibleRows& sources, const VisibleRows& destinations) {
-    const auto pattern = fromSource ? stringFormat("MATCH (a:{}) WITH a MATCH (a)-[r:{}]->(b:{})",
-                                          rel.source, rel.name, rel.destination) :
-                                      stringFormat("MATCH (b:{}) WITH b MATCH (a:{})-[r:{}]->(b)",
-                                          rel.destination, rel.source, rel.name);
+    bool fromSource, const VisibleRows& sources, const VisibleRows& destinations,
+    std::vector<std::string>& duplicates) {
+    const auto pattern =
+        fromSource ?
+            stringFormat("MATCH (a:{})-[r:{}]->(b) HINT (a JOIN r) JOIN b", rel.source, rel.name) :
+            stringFormat("MATCH (a)-[r:{}]->(b:{}) HINT (b JOIN r) JOIN a", rel.name,
+                rel.destination);
     const auto query = stringFormat("{} RETURN offset(id(r)), offset(id(a)), offset(id(b)){};",
         pattern, castAll("r", rel.properties));
     std::map<std::string, Edge> edges;
     for (auto& row : rows(connection, query)) {
         Edge edge{row[1], row[2], sources.keyOf(row[1]), destinations.keyOf(row[2]),
             std::vector<std::string>(row.begin() + 3, row.end())};
+        if (edges.contains(row[0])) {
+            duplicates.push_back(stringFormat("[{}] {} and {}", fromSource ? "forward" : "backward",
+                edgeText(row[0], edges.at(row[0])), edgeText(row[0], edge)));
+        }
         edges[row[0]] = std::move(edge);
     }
     return edges;
@@ -206,13 +225,16 @@ std::map<std::string, Edge> scanEdges(main::Connection& connection, const RelTab
 struct EdgeScan {
     std::map<std::string, Edge> all;
     std::vector<std::pair<std::string, std::string>> oneSideOnly;
+    std::vector<std::string> duplicateIDs;
 };
 
 EdgeScan scanBothSides(main::Connection& connection, const RelTable& rel,
     const VisibleRows& sources, const VisibleRows& destinations) {
-    const auto forward = scanEdges(connection, rel, true /* fromSource */, sources, destinations);
-    const auto backward = scanEdges(connection, rel, false /* fromSource */, sources, destinations);
     EdgeScan scan;
+    const auto forward =
+        scanEdges(connection, rel, true /* fromSource */, sources, destinations, scan.duplicateIDs);
+    const auto backward = scanEdges(connection, rel, false /* fromSource */, sources, destinations,
+        scan.duplicateIDs);
     for (const auto& [offset, edge] : forward) {
         if (!backward.contains(offset)) {
             scan.oneSideOnly.emplace_back("forward only", offset);
@@ -228,16 +250,21 @@ EdgeScan scanBothSides(main::Connection& connection, const RelTable& rel,
     return scan;
 }
 
-std::string edgeText(const std::string& relOffset, const Edge& edge) {
-    return stringFormat("rel@{} ({}@{} -> {}@{})", relOffset, edge.sourceKey, edge.sourceOffset,
-        edge.destinationKey, edge.destinationOffset);
-}
-
 void checkRelTable(main::Connection& connection, const RelTable& rel,
     const std::map<std::string, VisibleRows>& visible, std::vector<Violation>& violations) {
     const auto& sources = visible.at(rel.source);
     const auto& destinations = visible.at(rel.destination);
     const auto scan = scanBothSides(connection, rel, sources, destinations);
+
+    if (!scan.duplicateIDs.empty()) {
+        std::string detail =
+            stringFormat("table {}: {} relation identifiers returned twice:", rel.name,
+                scan.duplicateIDs.size());
+        for (auto i = 0u; i < scan.duplicateIDs.size() && i < MAX_LISTED; ++i) {
+            detail += " " + scan.duplicateIDs[i];
+        }
+        violations.push_back({"rel-ids-unique", detail});
+    }
 
     if (!scan.oneSideOnly.empty()) {
         std::string detail = stringFormat(
@@ -317,8 +344,8 @@ namespace {
 using StoredEdges = std::map<common::offset_t, std::pair<common::offset_t, common::offset_t>>;
 
 StoredEdges scanStoredEdges(transaction::Transaction* transaction, storage::MemoryManager* mm,
-    storage::RelTable& relTable, storage::NodeTable& boundTable,
-    common::RelDataDirection direction) {
+    storage::RelTable& relTable, storage::NodeTable& boundTable, common::RelDataDirection direction,
+    std::vector<std::string>& duplicates) {
     const auto boundState = common::DataChunkState::getSingleValueDataChunkState();
     const auto outState = std::make_shared<common::DataChunkState>();
     common::ValueVector bound(common::LogicalType::INTERNAL_ID(), mm, boundState);
@@ -339,8 +366,15 @@ StoredEdges scanStoredEdges(transaction::Transaction* transaction, storage::Memo
                 const auto position = selection[i];
                 const auto other = neighbour.getValue<common::nodeID_t>(position).offset;
                 const auto rel = relID.getValue<common::internalID_t>(position).offset;
-                edges[rel] = direction == common::RelDataDirection::FWD ? std::pair{offset, other} :
-                                                                          std::pair{other, offset};
+                const auto ends = direction == common::RelDataDirection::FWD ?
+                                      std::pair{offset, other} :
+                                      std::pair{other, offset};
+                if (const auto it = edges.find(rel); it != edges.end()) {
+                    duplicates.push_back(stringFormat("[{}] rel@{} (@{} -> @{}) and (@{} -> @{})",
+                        direction == common::RelDataDirection::FWD ? "forward" : "backward", rel,
+                        it->second.first, it->second.second, ends.first, ends.second));
+                }
+                edges[rel] = ends;
             }
         }
     }
@@ -414,9 +448,19 @@ void checkLevel2InTransaction(main::Connection& connection, const Schema& schema
         auto* source = nodeTables.at(rel.source);
         auto* destination = nodeTables.at(rel.destination);
         std::map<common::RelDataDirection, StoredEdges> byDirection;
+        std::vector<std::string> duplicates;
         for (const auto direction : relTable.getStorageDirections()) {
             byDirection[direction] = scanStoredEdges(transaction, mm, relTable,
-                direction == common::RelDataDirection::FWD ? *source : *destination, direction);
+                direction == common::RelDataDirection::FWD ? *source : *destination, direction,
+                duplicates);
+        }
+        if (!duplicates.empty()) {
+            std::string detail = stringFormat(
+                "table {}: {} relation identifiers stored twice:", rel.name, duplicates.size());
+            for (auto i = 0u; i < duplicates.size() && i < MAX_LISTED; ++i) {
+                detail += " " + duplicates[i];
+            }
+            violations.push_back({"stored-rel-ids-unique", detail});
         }
         if (byDirection.size() == 2) {
             const auto& forward = byDirection.at(common::RelDataDirection::FWD);

@@ -71,7 +71,7 @@ public:
 
     int64_t queryInt(const std::string& query) {
         auto result = conn->query(query);
-        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
         return result->isSuccess() && result->hasNext() ?
                    result->getNext()->getValue(0)->getValue<int64_t>() :
                    -1;
@@ -232,7 +232,7 @@ TEST_F(MinimalReproduction, C4_TransfersTraced) {
     constexpr int64_t numAccounts = 8;
     const auto outcome = runTransfers(4, numAccounts, 100, 20261002);
     std::cerr << explain(outcome, numAccounts);
-    EXPECT_EQ(outcome.actualSum, outcome.expectedSum);
+    EXPECT_EQ(outcome.actualSum, outcome.expectedSum) << "[check: sum-conserved] ";
 }
 
 // Les petites formes : chaque combinaison d'écrivains et de comptes est un test.
@@ -242,19 +242,19 @@ TEST_F(MinimalReproduction, C4_TwoWritersTwoAccounts) {
     if (outcome.actualSum != outcome.expectedSum) {
         std::cerr << eventsOf(outcome, 400);
     }
-    EXPECT_EQ(outcome.actualSum, outcome.expectedSum);
+    EXPECT_EQ(outcome.actualSum, outcome.expectedSum) << "[check: sum-conserved] ";
 }
 
 TEST_F(MinimalReproduction, C4_ThreeWritersTwoAccounts) {
     const auto outcome = runTransfers(3, 2, 300, 20261002);
     std::cerr << explain(outcome, 2);
-    EXPECT_EQ(outcome.actualSum, outcome.expectedSum);
+    EXPECT_EQ(outcome.actualSum, outcome.expectedSum) << "[check: sum-conserved] ";
 }
 
 TEST_F(MinimalReproduction, C4_TwoWritersThreeAccounts) {
     const auto outcome = runTransfers(2, 3, 300, 20261002);
     std::cerr << explain(outcome, 3);
-    EXPECT_EQ(outcome.actualSum, outcome.expectedSum);
+    EXPECT_EQ(outcome.actualSum, outcome.expectedSum) << "[check: sum-conserved] ";
 }
 
 // C6 dans un seul fil, deux connexions, sans aucune concurrence : la suppression et la
@@ -286,7 +286,8 @@ static void deleteAndUpdateSingleThread(MinimalReproduction& test, rag3db::main:
     }
     auto rows = test.conn->query("MATCH (n:Item) RETURN n.id, n.v;");
     std::cerr << "  rows after: " << rows->toString();
-    EXPECT_FALSE(first && second) << "the delete and the update both committed";
+    EXPECT_FALSE(first && second) << "[check: not-both-commit] "
+                                  << "the delete and the update both committed";
 }
 
 TEST_F(MinimalReproduction, C6_DeleteCommitsFirstSingleThread) {
@@ -315,19 +316,81 @@ TEST_F(MinimalReproduction, FailedTransactionRefusesFurtherStatements) {
                   << (result->isSuccess() ? "ok" : "ERROR " + result->getErrorMessage()) << "\n";
         return result->isSuccess();
     };
-    EXPECT_TRUE(run("BEGIN TRANSACTION;"));
-    EXPECT_FALSE(run("CREATE (:Item {id: 1, v: 9});")) << "the duplicated key must fail";
+    EXPECT_TRUE(run("BEGIN TRANSACTION;")) << "[check: begin] ";
+    EXPECT_FALSE(run("CREATE (:Item {id: 1, v: 9});"))
+        << "[check: duplicate-fails] " << "the duplicated key must fail";
     EXPECT_FALSE(run("CREATE (:Item {id: 2, v: 0});"))
+        << "[check: refused-after-error] "
         << "a statement after the error must be refused until ROLLBACK";
     EXPECT_FALSE(run("MATCH (n:Item {id: 1}) SET n.v = 5;"))
+        << "[check: refused-after-error] "
         << "a statement after the error must be refused until ROLLBACK";
-    EXPECT_TRUE(run("ROLLBACK;")) << "ROLLBACK must close the failed transaction";
+    EXPECT_TRUE(run("ROLLBACK;")) << "[check: rollback-closes] "
+                                  << "ROLLBACK must close the failed transaction";
     auto rows = conn->query("MATCH (n:Item) RETURN n.id, n.v ORDER BY n.id;");
     std::cerr << "  rows after: " << rows->toString();
     EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 1)
+        << "[check: nothing-after-error] "
         << "nothing after the error may be committed";
     EXPECT_EQ(queryInt("MATCH (n:Item {id: 1}) RETURN n.v;"), 0)
+        << "[check: nothing-after-error] "
         << "nothing after the error may be committed";
+}
+
+// Deux mises à jour de la même ligne, sur deux colonnes différentes (relecture du cœur
+// C++, 3 octobre). Deux connexions dans un seul fil, chacune dans sa transaction,
+// ouvertes avant que l'autre ne valide. Le conflit d'écriture n'est cherché que dans la
+// chaîne de mises à jour de la même colonne (column_chunk.cpp, update_info.cpp) : rien
+// ne l'arrête aujourd'hui. Attendu une fois le verrou de ligne posé (marche A4′ de la
+// note sur les verrous) : le SET du second attend le commit du premier, puis échoue par
+// l'erreur nommée — exactement un commit. À réécrire avec mark / waitFor quand la
+// marche arrivera.
+static void updateSameRow(MinimalReproduction& test, rag3db::main::Database& database,
+    const char* secondUpdate, bool& firstCommitted, bool& secondCommitted,
+    bool& secondUpdateSucceeded) {
+    test.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, a INT64, b INT64);");
+    test.mustRun("CREATE (:Item {id: 1, a: 0, b: 0});");
+    rag3db::main::Connection first(&database);
+    rag3db::main::Connection second(&database);
+    const auto show = [](const char* what, rag3db::main::QueryResult& result) {
+        std::cerr << "  " << what << ": "
+                  << (result.isSuccess() ? "ok" : "ERROR " + result.getErrorMessage()) << "\n";
+        return result.isSuccess();
+    };
+    show("w0 BEGIN", *first.query("BEGIN TRANSACTION;"));
+    show("w1 BEGIN", *second.query("BEGIN TRANSACTION;"));
+    show("w0 SET n.a = 1", *first.query("MATCH (n:Item {id: 1}) SET n.a = 1;"));
+    secondUpdateSucceeded = show(secondUpdate,
+        *second.query(std::string("MATCH (n:Item {id: 1}) SET ") + secondUpdate + ";"));
+    firstCommitted = show("w0 COMMIT", *first.query("COMMIT;"));
+    secondCommitted = show("w1 COMMIT", *second.query("COMMIT;"));
+    auto rows = test.conn->query("MATCH (n:Item) RETURN n.a, n.b;");
+    std::cerr << "  rows after: " << rows->toString();
+}
+
+TEST_F(MinimalReproduction, SameRowTwoColumnsSingleThread) {
+    bool firstCommitted = false;
+    bool secondCommitted = false;
+    bool secondUpdateSucceeded = false;
+    updateSameRow(*this, *database, "n.b = 1", firstCommitted, secondCommitted,
+        secondUpdateSucceeded);
+    EXPECT_FALSE(firstCommitted && secondCommitted)
+        << "[check: one-commit] two updates of the same row both committed";
+}
+
+// Le témoin : sur la même colonne, le conflit existe — le SET du second échoue tout de
+// suite par « Write-write conflict of updating the same row ». Vert aujourd'hui ; avec
+// le verrou de ligne, il attendra au lieu d'échouer tout de suite.
+TEST_F(MinimalReproduction, SameRowSameColumnConflictsSingleThread) {
+    bool firstCommitted = false;
+    bool secondCommitted = false;
+    bool secondUpdateSucceeded = true;
+    updateSameRow(*this, *database, "n.a = 2", firstCommitted, secondCommitted,
+        secondUpdateSucceeded);
+    EXPECT_FALSE(secondUpdateSucceeded) << "[check: same-column-conflict] the second update of "
+                                           "the same column must fail";
+    EXPECT_TRUE(firstCommitted) << "[check: first-commits] ";
+    EXPECT_FALSE(secondCommitted) << "[check: one-commit] ";
 }
 
 } // namespace
