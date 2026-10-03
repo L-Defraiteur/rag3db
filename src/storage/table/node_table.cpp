@@ -674,6 +674,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
     // connected local rels. Directly removing them will cause shift of committed node offset,
     // leading to an inconsistent result with connected rels.
     nodeGroups->append(transaction, columnIDsToCommit, localNodeTable.getNodeGroups());
+    localNodeTable.rowsAreCommitted();
     const auto logLocalNodes = transaction->shouldLogToWAL() && localTable->logsInsertions();
     if (logLocalNodes) {
         logLocalNodeInsertionsToWAL(transaction->getLocalWAL(), tableID, localNodeTable,
