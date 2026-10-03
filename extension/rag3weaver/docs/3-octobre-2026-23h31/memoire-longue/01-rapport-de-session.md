@@ -279,8 +279,20 @@ dépile celui d'une autre session sans que rien ne s'en voie chez elle.
    `ANCHORED_TO` entrantes, transitionner par `review`. **Demande un nœud
    neuf** — rien ne consomme le port `events` sauf `TraceSinkNode`, et un
    graphe-outil n'a pas de conditionnelle. En attente du mot de Lucie.
-3. le crochet après outil (session recherche) et le jardinier ;
-4. `Subject` en **entité dérivée** — la mesure dit que le bon classement vient
+3. l'**ancre** (`ANCHORED_TO`) — et **à lire avant de la coder** :
+   `docs/4-octobre-2026-00h09/01-vision-le-fil-de-travail.md`. Lucie veut
+   ancrer une mémoire sur le **schéma** (la table, pas une de ses lignes), sur
+   quelque chose **hors de la base** (un chemin, une PR, une branche), et
+   rejoindre tout cela en un point — `Subject` vu comme un fil de travail. La
+   proposition de l'orchestration : une seule relation d'ancrage dont la cible
+   porte un **genre** (ligne, `SchemaElement`, référence avec empreinte), pour
+   que les trois entrent par la même porte, et n'en coder que le premier genre
+   d'abord. À contredire comme la première vision l'a été : mon `anchorable`
+   est déjà polymorphe par la traversée, mais il ne connaît que des **lignes**,
+   et une ancre hors base n'a pas d'uuid — c'est là que ça se jouera. Trois
+   choix attendent Lucie en fin de document ;
+4. le crochet après outil (session recherche) et le jardinier ;
+5. `Subject` en **entité dérivée** — la mesure dit que le bon classement vient
    du *texte complet* du sujet, et une description écrite une fois ne contient
    pas ce qu'on range dessous ;
-5. le nœud de décision **à modèle**, en dernier.
+6. le nœud de décision **à modèle**, en dernier.
