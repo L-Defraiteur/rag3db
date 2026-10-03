@@ -1,0 +1,141 @@
+# Mémoire longue — ce que cette session sait
+
+3 octobre 2026. Mis à jour sur place. Ce que le [journal des
+chantiers](../../../../../docs/journal-des-chantiers.md) ne dit pas.
+
+## 1. Les fichiers
+
+| Où | Quoi |
+|---|---|
+| `templates/backends/memory/` | `Memory`, `Subject`, `ANCHORED_TO`, `REPLACES`, les machines à états — **tout en déclaration** |
+| `scripts/test_banc_memoire.py` | le banc, cinq sessions, cinq mesures, deux régimes |
+| `scripts/banc-memoire/paires-de-controle.json` | 72 paires, vérité **par construction**, versionnées |
+| `tests/e2e_arret_brutal.rs` | le témoin produit de la reprise après mort brutale |
+| `tests/e2e_simple_entity.rs` | la machine à états (27 août) et `EntitiesChanged` (3 octobre) |
+| `src/events.rs` | la variante `EntitiesChanged { entity, uuids }` |
+| `src/catalog.rs` | son émission, au succès, à côté de `marquer_les_ecritures` |
+| `docs/3-octobre-2026-20h41/01-…` | la proposition, avec ses §7.7 à §7.10 de corrections |
+
+## 2. Ce qu'il faut savoir du moteur pour travailler là
+
+**Une relation a un couple `(depuis, vers)` fixe.** `register_relation_with`
+refuse durement un ré-enregistrement avec un autre couple. Mais la
+**traversée** est déjà polymorphe : `FetchRelatedNode` fait un `MATCH` sur des
+nœuds non étiquetés et lit `label(m)` à l'exécution. C'est la déclaration qui
+borne, pas le stockage — et le dialecte Postgres ignore même le couple.
+
+**Au plus une relation par couple si l'on veut filtrer d'une entité sur une
+autre.** `find_relation` itère une table de hachage et rend la **première** ;
+avec deux relations entre les mêmes bouts, laquelle est prise n'est pas
+déterministe.
+
+**Une propriété d'arête ne se cherche ni ne se filtre.** Ni
+`FetchRelatedNode` (arête anonyme, propriétés non rendues), ni `FilterParser`
+(champs de nœuds seulement). Et `RelationBatchNode` **refuse** une relation à
+propriétés : « snapshot links require a property-free relation; use an entry
+entity for payload ».
+
+**Un graphe-outil n'a pas de conditionnelle.** La valeur neutre en tient lieu
+— une liste vide dans un port d'écriture n'écrit rien. Et il a **un seul**
+port de résultat.
+
+**Une seule cible de recherche par appel.** Le multi-entité se fait **par
+graphe** (cf. `search_related_scoped.mmd`, quatre entités chaînées), pas par
+paramètre.
+
+**Un backend exige un service d'embarquement à l'ouverture même si aucune
+entité ne déclare de vecteur** — `EmbeddingService::connect` est appelé sans
+regarder les signaux. Signalé à la session recherche ; en attendant, le banc
+exige le service.
+
+**`_absent_since`** existe (schéma v8), est posée sur les lignes
+transitionnées par une fin, effacée dès qu'une ligne reparaît par trois
+chemins — et **relue par personne en production**. Préfixée `_`, elle n'est
+pas adressable par `FilterParser`.
+
+**La mise de côté existe** (`src/catalog/aside.rs`, 3 octobre) et fait plus
+que promis : elle garde la ligne **et les vecteurs de ses chunks**, les rend
+sans réembarquer si identité et empreinte n'ont pas bougé, purge par lots
+bornés, et `undo_snapshot_finish` annule une fin en bloc tant que les copies
+vivent.
+
+## 3. La synchronisation par périmètre, ce que j'en ai relu
+
+Trois fenêtres ont été trouvées et fermées, dans cet ordre, chacune par la
+relecture de la précédente :
+
+1. **Un plan périmé supprimait une ligne reparue.** Fermé par la relecture à
+   l'application plus `check_open_session`.
+2. **Le garde de session est par périmètre, l'identité d'une ligne ne l'est
+   pas** — une session légitime sur B peut toucher une ligne que le plan de A
+   tient. Fermé par la relecture de l'appartenance.
+3. **Le garde gouverne le marquage, pas l'écriture** — une ligne recréée dans
+   le même périmètre par une ingestion ordinaire porte une marque non
+   concordante et serait retirée. Fermé en faisant prendre à toute écriture la
+   marque de la session ouverte.
+
+**La racine, utile à retenir** : la marque prouve « la session l'a vue », pas
+« la source ne l'a plus ». Retirer sur `mark != session` déduit une absence
+d'un négatif.
+
+**Le prix assumé** : un écrivain qui réécrit périodiquement une ligne que la
+source n'a plus **empêche définitivement son retrait**, en silence.
+
+## 4. Les mesures, et ce qu'elles valent
+
+| Mesure | Chiffre | Réserve |
+|---|---|---|
+| banc de la mémoire | 3 mesures jouées vertes, 2 non jouées | les non jouées **ne s'affichent pas en zéro** |
+| paires de contrôle | 72, vérité par construction | personne ne les a étiquetées — c'est leur intérêt |
+| seuil du modèle de décision sur mes paires | AUC 0,82 (0,97 sur les paires jugées) | les deux distributions se recouvrent |
+| avec le pourquoi en plus du titre | 0,80 → 0,92, 5 redites sur 6 | le cosinus fait l'inverse : 0,99 sur les titres, 0,83 avec le pourquoi |
+| ranger par le cosinus | 14/16, 19/32, 22/30 | sur le **texte complet** du sujet ; sur les noms seuls, 8/7/15 |
+| décider qu'il faut **créer** | rien ne marche, sur aucun jeu | d'où « demander toujours » |
+| arrêt brutal | `libvector` au journal ⟺ la base s'ouvre | 4 cas, une variable, aucune exception |
+
+**Le texte du juge n'est pas le texte du vecteur.** Le classement veut le
+titre court, le verdict veut le titre **et** le pourquoi. Ce n'est pas un
+réglage, c'est la forme du nœud — et la tentation est de passer le même objet
+aux deux puisque c'est la même mémoire.
+
+## 5. Défauts connus, non corrigés
+
+- **La portée `person` est écrite et jamais rappelée** par le crochet, faute
+  d'identité d'appelant au protocole. Dette nommée, avec sa condition de
+  sortie : le jour où elle existe, le crochet filtre au lieu d'exclure.
+- **Un backend sans vecteur exige quand même le service d'embarquement.**
+- **`_absent_since` n'a aucun lecteur** en production, et n'est pas filtrable.
+- **`e2e_arret_brutal` est rouge** sur un cas, en attente d'un moteur
+  postérieur à `fcd9a7882`.
+- **Le sujet n'est pas une entité dérivée**, alors que la mesure le demande.
+
+## 6. Ce qui a été essayé sans succès
+
+- **Un chaînage de nœuds existants pour le réacteur** : rien ne consomme le
+  port `events` sauf `TraceSinkNode`, et sans conditionnelle la chaîne
+  demanderait deux transformations `Rhai` et des ports qui ne s'emboîtent pas.
+  Un nœud dédié est la voie.
+- **Un lien symbolique pour peupler un sous-module dans un worktree** : git
+  refuse (« le chemin du sous-module ne devait pas être un lien
+  symbolique ») et `git status` sort en erreur. Un clone local depuis l'autre
+  arbre, `--no-checkout` puis la révision exacte : 2 Mo au lieu de 2,6 Go.
+- **Le régime sans embarquement du banc** : impossible aujourd'hui, le
+  backend joint le service à l'ouverture quels que soient les signaux.
+- **Le témoin « sans point de reprise » en une seule session** : muet, parce
+  que `CREATE_VECTOR_INDEX` pose son propre point de reprise. Il faut deux
+  sessions, la première fermée proprement.
+
+## 7. Les habitudes qui ont payé
+
+- **Vérifier à la source la plus récente avant d'annoncer qu'une chose
+  manque.** J'ai annoncé deux fois une absence depuis un endroit où la chose
+  ne pouvait pas être : la mise de côté (vue refusée sur une branche
+  antérieure) et la fermeture de session (lue en queue de fichier au lieu de
+  queue de fonction).
+- **Un test porte sa condition de validité à côté de son verdict** : journal
+  non vide, `REPLI=non`, âge de la bibliothèque liée.
+- **Nommer ce qu'un rouge signifierait**, dans le message d'échec, plutôt que
+  « attendu 6, reçu 0 ».
+- **Mesurer plutôt que raisonner, quand les deux sont possibles.** Aucun de
+  mes raisonnements sur l'émission de `EntitiesChanged` n'a tenu ; les cinq
+  jalons imprimés ont tranché en une exécution.
