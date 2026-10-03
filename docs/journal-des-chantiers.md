@@ -371,6 +371,52 @@ générique est une **session de synchronisation** (début, lots, fin) avec un
 périmètre déclaré par l'entité ; un backend qui veut un « dépôt » ou un
 « dossier » le déclare comme n'importe quelle entité.
 
+## Méthode : quatre façons de prendre son harnais pour un résultat
+
+Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal`.
+Les quatre se sont présentées à la suite, chacune sous un visage neuf, et la
+dernière a failli faire annoncer une fausse régression à une autre session.
+
+**1. Le sous-module reste en arrière après un rebase.** Le pointeur de
+`codeparsers` avance avec le code ; le clone local d'un worktree ne suit pas,
+et **`git status` ne montre rien** — on n'a rien modifié, c'est le contenu qui
+est devenu obsolète tout seul. La lib compile alors contre un parseur de la
+veille et l'erreur sort dans `code.rs`, un fichier qu'on n'a jamais ouvert.
+Après chaque rebase qui amène du code : `git submodule update --init`, ou
+`git config submodule.recurse true` dans le worktree.
+
+**2. `git stash` est partagé entre les worktrees.** C'est une pile **par
+dépôt**, pas par arbre de travail. Un `stash` qui n'empile rien suivi d'un
+`pop` dépile **celui d'une autre session**, l'applique chez vous et le retire
+de la liste. Pire que l'index partagé, qu'on connaissait : l'index se voit
+dans un `git status`, un stash dépilé ne se voit **nulle part** chez son
+propriétaire — il croit son travail rangé. Jamais de `git stash` ici ;
+`git diff > fichier.patch` fait le même travail sans toucher à un état commun.
+
+**3. Un rouge qui ne ressemble pas à la question posée est un rouge du
+harnais.** Un test de perte de données qui échoue sur « ce chemin est un
+répertoire » ne parle pas de perte de données. Règle utile, et insuffisante —
+voir la quatrième.
+
+**4. Un résultat qui ne dit pas contre quoi il a été obtenu n'est pas un
+résultat.** Celle-là est la plus coûteuse, parce qu'elle **ressemble trait
+pour trait à une vraie régression** : même signal, même code de sortie, même
+base conservée à examiner. La garde 1 du rejeu était commitée à 23 h 11 ; la
+bibliothèque liée datait de 21 h 33. Le SIGSEGV décrivait le moteur d'avant.
+Seule la comparaison de deux horodatages l'a attrapé — la règle 3 ne l'aurait
+pas vu.
+
+Conséquence pour les suites qui lient le moteur : **imprimer l'âge de la
+bibliothèque liée**, et refuser une bibliothèque plus vieille que les sources
+C++. `e2e_arret_brutal` imprime déjà la ligne ; proposé à `run_e2e.sh`.
+
+**Et la forme commune aux quatre**, qui est aussi celle des défauts qu'on
+corrige dans le produit : une information existe, et rien ne la consulte. Le
+pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
+d'une bibliothèque. Un banc, un test ou un rapport doivent **porter leur
+condition de validité à côté de leur verdict**, sinon le verdict se lit tout
+seul et on le croit.
+
 ### Mémoire longue : l'ordre des lots change (3 octobre 2026, au soir)
 
 Proposition et banc : `extension/rag3weaver/docs/3-octobre-2026-20h41/01-…`.
