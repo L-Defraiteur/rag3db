@@ -349,9 +349,12 @@ fn banc_etage_qui_perd() {
     // appelant applique exactement la même table que la déclaration
     // d'entité : la mesure vaut pour les deux sans toucher `Scope`.
     let mut par_poids: Vec<(String, Mesure)> = Vec::new();
-    for x in [0.8, 0.6, 0.4] {
+    {
+        // La demande (file et namespace dévalués) : une valeur représentative —
+        // la mesure du 3 octobre est identique à 0,8, 0,6 et 0,4 (les scores
+        // RRF sont serrés, toute dévaluation déclasse le bloc entier).
+        let x = 0.8;
         let mut p_demande = Mesure::default();
-        let mut p_ombre = Mesure::default();
         for (q, attendus) in QUESTIONS {
             let mut o = options_vecteur();
             o.field_weights = vec![FieldWeight {
@@ -361,7 +364,17 @@ fn banc_etage_qui_perd() {
             }];
             let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche pondérée");
             p_demande.noter(&noms(&r), attendus);
-
+        }
+        par_poids.push((format!("P(file,ns → {x}) — la demande, pondérée pas filtrée"), p_demande));
+    }
+    // L'ombre de G, des valeurs douces aux dures : à 0,8 un fichier de rang 1
+    // retombe derrière une quinzaine de fonctions (1/61 × 0,8 ≈ 1/76) — on
+    // cherche la valeur la plus douce qui atteint encore G. Aucune question
+    // du banc n'a un fichier ou un module pour bonne réponse : le banc ne
+    // voit pas ce que la dévaluation leur coûte, seulement ce qu'elle rend.
+    for x in [0.95, 0.9, 0.85, 0.8, 0.6, 0.4] {
+        let mut p_ombre = Mesure::default();
+        for (q, attendus) in QUESTIONS {
             let mut o = options_vecteur();
             o.field_weights = vec![FieldWeight {
                 field: "scope_type".into(),
@@ -371,7 +384,6 @@ fn banc_etage_qui_perd() {
             let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche pondérée");
             p_ombre.noter(&noms(&r), attendus);
         }
-        par_poids.push((format!("P(file,ns → {x}) — la demande, pondérée pas filtrée"), p_demande));
         par_poids.push((format!("P(default → {x}) — l'ombre pondérée de G"), p_ombre));
     }
 
