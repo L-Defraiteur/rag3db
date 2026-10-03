@@ -18,7 +18,7 @@ use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 
 mod synchronisation;
-pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions};
+pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
 use crate::records::{DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
@@ -3760,7 +3760,18 @@ impl Catalog {
         for table in tables.iter().filter(|t| !t.ends_with("_Chunk") && !t.ends_with("_Index")) {
             let ddl = self.dialect.alter_add_column_default(table, &marque, "''");
             match self.conn.execute(&ddl) {
-                Ok(_) => marques_ajoutees += 1,
+                Ok(_) => {
+                    marques_ajoutees += 1;
+                    // La marque d'absence, nulle : rien n'a encore été
+                    // constaté absent.
+                    let absence = crate::dialect::ColumnDef {
+                        name: "_absent_since".into(),
+                        col_type: crate::dialect::ColumnType::Int64,
+                    };
+                    self.conn.execute(&self.dialect.alter_add_column(table, &absence)).map_err(|e| {
+                        CatalogError::DbError(format!("migration _absent_since {table}: {e}"))
+                    })?;
+                }
                 Err(e) => {
                     let msg = e.to_string().to_lowercase();
                     if !(msg.contains("exist") || msg.contains("already has")
@@ -3774,7 +3785,7 @@ impl Catalog {
         }
         if marques_ajoutees > 0 {
             eprintln!(
-                "[rag3weaver] schéma v{SCHEMA_VERSION}: _snapshot ajouté sur \
+                "[rag3weaver] schéma v{SCHEMA_VERSION}: _snapshot et _absent_since ajoutés sur \
                  {marques_ajoutees} table(s) d'entités"
             );
         }
