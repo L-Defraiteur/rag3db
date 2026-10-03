@@ -327,11 +327,34 @@ sessions, pas d'une vérification.
   À vérifier avec bge-m3 (servi depuis l'autre poste), avec la mise de côté,
   qui touche les mêmes suppressions.
 - **Après une table vidée puis repeuplée par le chemin de masse, la recherche
-  dense ne rend rien** (3 octobre) : zéro résultat, sans erreur ni
-  avertissement, vecteurs pourtant en base. Grave pour la synchronisation, qui
-  vide et repeuple. Reproduction rouge et déterministe sur
-  `repro-recherche-dense-apres-table-videe` (`./run_e2e.sh --test
-  e2e_repro_dense_apres_table_videe`) ; confiée à la session cœur C++.
+  dense ne rendait rien : corrigé le 3 octobre**, dans **notre** greffe de
+  suppression dans l'index HNSW (l'amont n'y supprime rien), par la session
+  cœur C++ (`hnsw-point-d-entree-apres-suppression`). Trois défauts : le
+  nettoyage de fin d'instruction ne tournait jamais (`finalize()` appelé sur
+  l'opérateur d'origine, pas sur la copie qui s'exécute) ; le point d'entrée
+  de l'index remplacé par un nœud mort, d'où la recherche vide ; le graphe
+  coupé en morceaux après des suppressions partielles (899 sur 1 000 : 62 des
+  101 survivants atteignables, les plus proches rendus faux, sans erreur) —
+  le chemin ordinaire de toute réingestion qui supprime. Non-régression :
+  `e2e_recherche_dense_apres_suppressions` (table vidée puis repeuplée ; cent
+  notes dont quatre-vingt-dix supprimées, chaque survivante la plus proche
+  d'elle-même, pas de résultat fantôme). **Ce que le correctif ne règle pas**
+  (session cœur C++) :
+  - `QUERY_VECTOR_INDEX … RETURN count(*)` rend toujours `k`, même avec moins
+    de `k` résultats ; `count(node.id)` est juste. **Lu côté rag3weaver** :
+    aucune requête ne compte par `count(*)` — toutes rendent
+    `node._uuid, distance` et comptent les lignes en Rust
+    (`rag3db_search_backend.rs`, `search.rs`), sans filtrer un uuid vide ;
+    **exécuté** : `k=20` sur 10 survivantes rend 10 lignes, toutes
+    identifiées. Pas de fantôme observé.
+  - Un `DELETE` annulé par `ROLLBACK` laisse le point d'entrée et le compteur
+    de l'index modifiés (lu, non exécuté). **rag3weaver n'ouvre aucune
+    transaction explicite** (ni `BEGIN` ni `ROLLBACK` dans le crate) ; son
+    annulation passe par des instructions compensatoires. Il y reste exposé
+    par une instruction `DELETE` en auto-commit qui échoue, que le moteur
+    annule de lui-même.
+  - Un nœud qui pointait vers un supprimé sans réciproque garde une arête
+    morte.
 - **Les poids ne dépendent plus d'aucun disque** (3 octobre 2026). Les
   granite d'origine du 6 septembre, rapportés de l'ancien poste par ssh, sont
   installés (suite granite 11 sur 11) et publiés à la place des régénérés dans
