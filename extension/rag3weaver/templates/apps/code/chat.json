@@ -21,7 +21,8 @@
     "index",
     "run_command",
     "wait_output",
-    "usages"
+    "usages",
+    "impact"
   ],
   "state_dir": "data/code-chat",
   "max_iterations": 24
