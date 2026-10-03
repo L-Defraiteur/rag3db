@@ -1,0 +1,54 @@
+{
+ "modele": "jevk5-q8-carte",
+ "seuil": 0.07,
+ "lignes": [
+  {
+   "existante": "/tmp est de la mémoire vive",
+   "nouvelle": "le dossier temporaire vit en RAM",
+   "attendu": "same",
+   "choix": "completes",
+   "p_same": 0.30746814912590825,
+   "au_dessus_du_seuil": true
+  },
+  {
+   "existante": "la passe complète se lance sans demander",
+   "nouvelle": "le dossier temporaire vit en RAM",
+   "attendu": "new",
+   "choix": "new",
+   "p_same": 0.043120781597693954,
+   "au_dessus_du_seuil": false
+  },
+  {
+   "existante": "laisser deux coeurs libres",
+   "nouvelle": "le dossier temporaire vit en RAM",
+   "attendu": "new",
+   "choix": "new",
+   "p_same": 0.04481229280519955,
+   "au_dessus_du_seuil": false
+  },
+  {
+   "existante": "/tmp est de la mémoire vive",
+   "nouvelle": "la passe complète se lance sans demander",
+   "attendu": "new",
+   "choix": "new",
+   "p_same": 0.02136822004509678,
+   "au_dessus_du_seuil": false
+  },
+  {
+   "existante": "/tmp est de la mémoire vive",
+   "nouvelle": "laisser deux coeurs libres",
+   "attendu": "new",
+   "choix": "new",
+   "p_same": 0.04429522050793901,
+   "au_dessus_du_seuil": false
+  },
+  {
+   "existante": "la passe complète se lance sans demander",
+   "nouvelle": "laisser deux coeurs libres",
+   "attendu": "new",
+   "choix": "new",
+   "p_same": 0.05540443348929674,
+   "au_dessus_du_seuil": false
+  }
+ ]
+}

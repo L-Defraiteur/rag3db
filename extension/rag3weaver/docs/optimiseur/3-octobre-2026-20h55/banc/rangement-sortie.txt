@@ -1,0 +1,25 @@
+recherche (cosinus) : bon sujet absent des 2 premiers : 2 ; des 4 premiers : 1 sur 16
+contexte_nom : rejoint le bon 12/16, crée à tort 2, range ailleurs 2 ; neufs : crée 7/8, fusionne à tort 1 ; 188 jetons, 217 ms
+contexte_nom_description : rejoint le bon 13/16, crée à tort 2, range ailleurs 1 ; neufs : crée 7/8, fusionne à tort 1 ; 247 jetons, 253 ms
+contexte_un_exemple : rejoint le bon 9/16, crée à tort 7, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0 ; 348 jetons, 291 ms
+contexte_deux_exemples : rejoint le bon 8/16, crée à tort 8, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0 ; 431 jetons, 330 ms
+contexte_trois_exemples : rejoint le bon 9/16, crée à tort 7, range ailleurs 0 ; neufs : crée 7/8, fusionne à tort 1 ; 503 jetons, 346 ms
+neuf_texte_seul : rejoint le bon 4/16, crée à tort 12, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0 ; 447 jetons, 331 ms
+neuf_description : rejoint le bon 5/16, crée à tort 11, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0 ; 440 jetons, 330 ms
+neuf_aucun : rejoint le bon 12/16, crée à tort 1, range ailleurs 3 ; neufs : crée 7/8, fusionne à tort 1 ; 424 jetons, 330 ms
+neuf_en_premier : rejoint le bon 13/16, crée à tort 2, range ailleurs 1 ; neufs : crée 7/8, fusionne à tort 1 ; 431 jetons, 312 ms
+neuf_description_en_premier : rejoint le bon 13/16, crée à tort 2, range ailleurs 1 ; neufs : crée 8/8, fusionne à tort 0 ; 440 jetons, 312 ms
+deux_existants : rejoint le bon 5/16, crée à tort 11, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0 ; 274 jetons, 285 ms
+dix_existants : rejoint le bon 9/16, crée à tort 7, range ailleurs 0 ; neufs : crée 7/8, fusionne à tort 1 ; 901 jetons, 525 ms
+dix_existants_nom_seul : rejoint le bon 10/16, crée à tort 5, range ailleurs 1 ; neufs : crée 7/8, fusionne à tort 1 ; 294 jetons, 255 ms
+ordre_inverse : rejoint le bon 12/16, crée à tort 3, range ailleurs 1 ; neufs : crée 7/8, fusionne à tort 1 ; 431 jetons, 328 ms
+alternative, un choix, creer_en_premier : rejoint le bon 14/16, crée à tort 0, range ailleurs 2 ; neufs : crée 8/8, fusionne à tort 0
+alternative, un choix, creer_en_dernier : rejoint le bon 15/16, crée à tort 1, range ailleurs 0 ; neufs : crée 8/8, fusionne à tort 0
+alternative, deux temps, oui_en_premier : rejoint le bon 11/16, crée à tort 2, range ailleurs 3 ; neufs : crée 7/8, fusionne à tort 1
+alternative, deux temps, non_en_premier : rejoint le bon 10/16, crée à tort 3, range ailleurs 3 ; neufs : crée 8/8, fusionne à tort 0
+forme d'origine (deux noms, même/différent) : rejoint 2/16 ; neufs : fusionne à tort 0/8
+mémoires, same : 5/5
+mémoires, completes : 5/5
+mémoires, contradicts : 3/5
+mémoires, new : 5/5
+écrit

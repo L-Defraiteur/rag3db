@@ -1,0 +1,832 @@
+{
+ "modele": "jevk5-2b",
+ "critere_francais": {
+  "sujets": {
+   "lignes": [
+    {
+     "id": "s01",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.3646065423782901,
+      "variant": 0.15808286782152772,
+      "unrelated": 0.47731058980018215
+     }
+    },
+    {
+     "id": "s02",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.463155746531405,
+      "variant": 0.48455518278536247,
+      "unrelated": 0.05228907068323241
+     }
+    },
+    {
+     "id": "s03",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.31254715641090797,
+      "variant": 0.23787179059698074,
+      "unrelated": 0.4495810529921113
+     }
+    },
+    {
+     "id": "s04",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.32709382274671955,
+      "variant": 0.4257773464281073,
+      "unrelated": 0.2471288308251732
+     }
+    },
+    {
+     "id": "s05",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.2114835481617464,
+      "variant": 0.3670536154879173,
+      "unrelated": 0.42146283635033627
+     }
+    },
+    {
+     "id": "s06",
+     "etiquette": "variant",
+     "sortie": {
+      "same": 0.22552895326655198,
+      "variant": 0.4430724236317865,
+      "unrelated": 0.3313986231016615
+     }
+    },
+    {
+     "id": "s07",
+     "etiquette": "variant",
+     "sortie": {
+      "same": 0.31882338987210246,
+      "variant": 0.31767647743452365,
+      "unrelated": 0.36350013269337383
+     }
+    },
+    {
+     "id": "s08",
+     "etiquette": "variant",
+     "sortie": {
+      "same": 0.26734528810971003,
+      "variant": 0.44323789121435714,
+      "unrelated": 0.28941682067593283
+     }
+    },
+    {
+     "id": "s09",
+     "etiquette": "variant",
+     "sortie": {
+      "same": 0.26177302065478114,
+      "variant": 0.45011508469747585,
+      "unrelated": 0.28811189464774306
+     }
+    },
+    {
+     "id": "s10",
+     "etiquette": "variant",
+     "sortie": {
+      "same": 0.32054177622801505,
+      "variant": 0.3936183077694401,
+      "unrelated": 0.28583991600254477
+     }
+    },
+    {
+     "id": "s11",
+     "etiquette": "unrelated",
+     "sortie": {
+      "same": 0.28627430287087,
+      "variant": 0.36156801803345706,
+      "unrelated": 0.3521576790956728
+     }
+    },
+    {
+     "id": "s12",
+     "etiquette": "unrelated",
+     "sortie": {
+      "same": 0.1681130601963102,
+      "variant": 0.38553071792464744,
+      "unrelated": 0.4463562218790423
+     }
+    },
+    {
+     "id": "s13",
+     "etiquette": "unrelated",
+     "sortie": {
+      "same": 0.1300648740020058,
+      "variant": 0.3046115155999291,
+      "unrelated": 0.5653236103980651
+     }
+    },
+    {
+     "id": "s14",
+     "etiquette": "unrelated",
+     "sortie": {
+      "same": 0.16450074654842356,
+      "variant": 0.1792684341783446,
+      "unrelated": 0.6562308192732319
+     }
+    }
+   ],
+   "justes": 7,
+   "total": 14
+  },
+  "memoires": {
+   "lignes": [
+    {
+     "id": "m01",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.8275830776210505,
+      "completes": 0.12513301459255075,
+      "contradicts": 0.027377645303248793,
+      "new": 0.01990626248314992
+     }
+    },
+    {
+     "id": "m02",
+     "etiquette": "completes",
+     "sortie": {
+      "same": 0.22649619707530189,
+      "completes": 0.49471450630102104,
+      "contradicts": 0.15228194210658355,
+      "new": 0.12650735451709344
+     }
+    },
+    {
+     "id": "m03",
+     "etiquette": "contradicts",
+     "sortie": {
+      "same": 0.03313614308017706,
+      "completes": 0.017416311800578673,
+      "contradicts": 0.41033423886694065,
+      "new": 0.5391133062523036
+     }
+    },
+    {
+     "id": "m04",
+     "etiquette": "new",
+     "sortie": {
+      "same": 0.08384909612868609,
+      "completes": 0.14772136219572551,
+      "contradicts": 0.08763500735518745,
+      "new": 0.6807945343204009
+     }
+    },
+    {
+     "id": "m05",
+     "etiquette": "same",
+     "sortie": {
+      "same": 0.2036349599262186,
+      "completes": 0.3550817232562346,
+      "contradicts": 0.2938258376889246,
+      "new": 0.14745747912862214
+     }
+    },
+    {
+     "id": "m06",
+     "etiquette": "completes",
+     "sortie": {
+      "same": 0.06702604494000894,
+      "completes": 0.3452972999399735,
+      "contradicts": 0.33856397899783097,
+      "new": 0.24911267612218665
+     }
+    },
+    {
+     "id": "m07",
+     "etiquette": "contradicts",
+     "sortie": {
+      "same": 0.04744508173839827,
+      "completes": 0.05029938285395089,
+      "contradicts": 0.5124634430538474,
+      "new": 0.38979209235380347
+     }
+    },
+    {
+     "id": "m08",
+     "etiquette": "new",
+     "sortie": {
+      "same": 0.12682389249031137,
+      "completes": 0.16849811293859376,
+      "contradicts": 0.14512789949193863,
+      "new": 0.5595500950791562
+     }
+    }
+   ],
+   "justes": 6,
+   "total": 8
+  }
+ },
+ "deux_etages": {
+  "existants": 42,
+  "requetes": 20,
+  "avec_un_double": 14,
+  "cosinus": {
+   "lignes": [
+    {
+     "requete": "écritures parallèles",
+     "attendu": [
+      "concurrent writes",
+      "plusieurs écrivains en même temps"
+     ],
+     "trois": [
+      "concurrent writes",
+      "plusieurs écrivains en même temps",
+      "several transactions writing at the same time"
+     ],
+     "rendu": "concurrent writes",
+     "probabilite": 0.44145668486033823,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "reprise après un point de reprise interrompu",
+     "attendu": [
+      "récupération quand le checkpoint a été coupé en cours de route"
+     ],
+     "trois": [
+      "récupération quand le checkpoint a été coupé en cours de route",
+      "replaying the WAL after an unclean shutdown",
+      "WAL illisible après un arrêt brutal"
+     ],
+     "rendu": "récupération quand le checkpoint a été coupé en cours de route",
+     "probabilite": 0.8044095801506219,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "poids des modèles publiés sur Hugging Face",
+     "attendu": [
+      "mise en ligne des fichiers de poids sur le hub"
+     ],
+     "trois": [
+      "publishing model weights",
+      "mise en ligne des fichiers de poids sur le hub",
+      "default embedding model"
+     ],
+     "rendu": "mise en ligne des fichiers de poids sur le hub",
+     "probabilite": 0.5874426782118718,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "régime doux de la carte graphique pendant les embarquements",
+     "attendu": [
+      "limiter la charge du GPU quand on calcule les vecteurs"
+     ],
+     "trois": [
+      "GPU duty cycle of the embedding daemon",
+      "entry points of the HNSW graph",
+      "récupération quand le checkpoint a été coupé en cours de route"
+     ],
+     "rendu": null,
+     "probabilite": 0.6732992497080238,
+     "dans_les_trois": false,
+     "juste": false
+    },
+    {
+     "requete": "identité git personnelle dans les dépôts",
+     "attendu": [
+      "ne jamais commiter avec l'adresse professionnelle"
+     ],
+     "trois": [
+      "git identity on personal repositories",
+      "git commit identity",
+      "adresse professionnelle sur les forks"
+     ],
+     "rendu": "git identity on personal repositories",
+     "probabilite": 0.8337795146229638,
+     "dans_les_trois": false,
+     "juste": false
+    },
+    {
+     "requete": "concurrent writers",
+     "attendu": [
+      "several transactions writing at the same time"
+     ],
+     "trois": [
+      "concurrent writes",
+      "plusieurs écrivains en même temps",
+      "several transactions writing at the same time"
+     ],
+     "rendu": "concurrent writes",
+     "probabilite": 0.6771719595229407,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "crash recovery from the write-ahead log",
+     "attendu": [
+      "replaying the WAL after an unclean shutdown"
+     ],
+     "trois": [
+      "récupération quand le checkpoint a été coupé en cours de route",
+      "WAL illisible après un arrêt brutal",
+      "replaying the WAL after an unclean shutdown"
+     ],
+     "rendu": "replaying the WAL after an unclean shutdown",
+     "probabilite": 0.3850619781792145,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "default embedding model",
+     "attendu": [
+      "which embedding model is used when none is configured"
+     ],
+     "trois": [
+      "default embedding model",
+      "which embedding model is used when none is configured",
+      "publishing model weights"
+     ],
+     "rendu": "default embedding model",
+     "probabilite": 0.8863762612208925,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "half-precision attention on the GPU",
+     "attendu": [
+      "running the attention kernel in f16"
+     ],
+     "trois": [
+      "kernel fusion on the GPU",
+      "limiter la charge du GPU quand on calcule les vecteurs",
+      "choix du petit modèle au premier index sur un GPU faible"
+     ],
+     "rendu": null,
+     "probabilite": 0.7439081059575553,
+     "dans_les_trois": false,
+     "juste": false
+    },
+    {
+     "requete": "duplicate memories created at write time",
+     "attendu": [
+      "the same fact stored twice when saving a memory"
+     ],
+     "trois": [
+      "deduplicating memories at write time",
+      "the same fact stored twice when saving a memory",
+      "concurrent writes"
+     ],
+     "rendu": "the same fact stored twice when saving a memory",
+     "probabilite": 0.569726051632122,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "point de reprise",
+     "attendu": [
+      "checkpoint"
+     ],
+     "trois": [
+      "checkpoint",
+      "rotary position embeddings",
+      "verrous par clé"
+     ],
+     "rendu": "checkpoint",
+     "probabilite": 0.44853200312063657,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "modèle d'embarquement par défaut",
+     "attendu": [
+      "default embedding model"
+     ],
+     "trois": [
+      "default embedding model",
+      "which embedding model is used when none is configured",
+      "publishing model weights"
+     ],
+     "rendu": "which embedding model is used when none is configured",
+     "probabilite": 0.7272104253354096,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "recherche plein texte",
+     "attendu": [
+      "full-text search"
+     ],
+     "trois": [
+      "full-text search",
+      "image text recognition",
+      "tokenizer used by the full-text index"
+     ],
+     "rendu": "full-text search",
+     "probabilite": 0.8818317136905122,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "fusion de noyaux GPU",
+     "attendu": [
+      "kernel fusion on the GPU"
+     ],
+     "trois": [
+      "kernel fusion on the GPU",
+      "GPU duty cycle of the embedding daemon",
+      "limiter la charge du GPU quand on calcule les vecteurs"
+     ],
+     "rendu": "kernel fusion on the GPU",
+     "probabilite": 0.6173023401365572,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "couleur du thème de l'éditeur",
+     "attendu": [],
+     "trois": [
+      "card game deck builder",
+      "padding mask in attention",
+      "masque d'attention diffusé sur les lignes"
+     ],
+     "rendu": null,
+     "probabilite": 0.39911422405504765,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "raccourcis clavier du terminal",
+     "attendu": [],
+     "trois": [
+      "verrous par clé",
+      "per-key locks",
+      "per-key locking"
+     ],
+     "rendu": "per-key locking",
+     "probabilite": 0.3558746105219022,
+     "dans_les_trois": null,
+     "juste": false
+    },
+    {
+     "requete": "keyboard layout of the laptop",
+     "attendu": [],
+     "trois": [
+      "per-key locks",
+      "verrous par clé",
+      "per-key locking"
+     ],
+     "rendu": "per-key locking",
+     "probabilite": 0.41664087945643447,
+     "dans_les_trois": null,
+     "juste": false
+    },
+    {
+     "requete": "pricing page of the website",
+     "attendu": [],
+     "trois": [
+      "publishing model weights",
+      "checkpoint",
+      "points d'entrée de l'index vectoriel hors transaction"
+     ],
+     "rendu": null,
+     "probabilite": 0.5019472007601081,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "traduction de l'interface en espagnol",
+     "attendu": [],
+     "trois": [
+      "verrous par clé",
+      "default embedding model",
+      "kernel fusion on the GPU"
+     ],
+     "rendu": null,
+     "probabilite": 0.651348106322421,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "battery life of the tablet",
+     "attendu": [],
+     "trois": [
+      "the same fact stored twice when saving a memory",
+      "deduplicating memories at write time",
+      "publishing model weights"
+     ],
+     "rendu": null,
+     "probabilite": 0.6533514742260982,
+     "dans_les_trois": null,
+     "juste": true
+    }
+   ],
+   "bon_dans_les_trois": 11,
+   "avec_un_double": 14,
+   "verdict_juste_avec_double": 8,
+   "fusion_a_tort_avec_double": 4,
+   "sans_double": 6,
+   "aucun_bien_rendu": 4,
+   "latence_etage_1_ms": 17.659149998507928,
+   "latence_etage_2_ms": 1555.860547494376,
+   "latence_totale_mediane_ms": 1581.892637492274
+  },
+  "reranker": {
+   "lignes": [
+    {
+     "requete": "écritures parallèles",
+     "attendu": [
+      "concurrent writes",
+      "plusieurs écrivains en même temps"
+     ],
+     "trois": [
+      "plusieurs écrivains en même temps",
+      "several transactions writing at the same time",
+      "concurrent writes"
+     ],
+     "rendu": "concurrent writes",
+     "probabilite": 0.5918429053871311,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "reprise après un point de reprise interrompu",
+     "attendu": [
+      "récupération quand le checkpoint a été coupé en cours de route"
+     ],
+     "trois": [
+      "récupération quand le checkpoint a été coupé en cours de route",
+      "replaying the WAL after an unclean shutdown",
+      "checkpoint"
+     ],
+     "rendu": "récupération quand le checkpoint a été coupé en cours de route",
+     "probabilite": 0.739342213999154,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "poids des modèles publiés sur Hugging Face",
+     "attendu": [
+      "mise en ligne des fichiers de poids sur le hub"
+     ],
+     "trois": [
+      "publishing model weights",
+      "mise en ligne des fichiers de poids sur le hub",
+      "masque d'attention diffusé sur les lignes"
+     ],
+     "rendu": "mise en ligne des fichiers de poids sur le hub",
+     "probabilite": 0.5780999789689598,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "régime doux de la carte graphique pendant les embarquements",
+     "attendu": [
+      "limiter la charge du GPU quand on calcule les vecteurs"
+     ],
+     "trois": [
+      "GPU duty cycle of the embedding daemon",
+      "limiter la charge du GPU quand on calcule les vecteurs",
+      "suppression des lignes sorties de leur périmètre"
+     ],
+     "rendu": "limiter la charge du GPU quand on calcule les vecteurs",
+     "probabilite": 0.5059752968484097,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "identité git personnelle dans les dépôts",
+     "attendu": [
+      "ne jamais commiter avec l'adresse professionnelle"
+     ],
+     "trois": [
+      "git identity on personal repositories",
+      "git commit identity",
+      "adresse professionnelle sur les forks"
+     ],
+     "rendu": "git identity on personal repositories",
+     "probabilite": 0.8337795146229638,
+     "dans_les_trois": false,
+     "juste": false
+    },
+    {
+     "requete": "concurrent writers",
+     "attendu": [
+      "several transactions writing at the same time"
+     ],
+     "trois": [
+      "concurrent writes",
+      "plusieurs écrivains en même temps",
+      "several transactions writing at the same time"
+     ],
+     "rendu": "concurrent writes",
+     "probabilite": 0.6771719595229407,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "crash recovery from the write-ahead log",
+     "attendu": [
+      "replaying the WAL after an unclean shutdown"
+     ],
+     "trois": [
+      "replaying the WAL after an unclean shutdown",
+      "récupération quand le checkpoint a été coupé en cours de route",
+      "concurrent writes"
+     ],
+     "rendu": "replaying the WAL after an unclean shutdown",
+     "probabilite": 0.4541138101933367,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "default embedding model",
+     "attendu": [
+      "which embedding model is used when none is configured"
+     ],
+     "trois": [
+      "default embedding model",
+      "which embedding model is used when none is configured",
+      "rotary position embeddings"
+     ],
+     "rendu": "default embedding model",
+     "probabilite": 0.8476251766723281,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "half-precision attention on the GPU",
+     "attendu": [
+      "running the attention kernel in f16"
+     ],
+     "trois": [
+      "kernel fusion on the GPU",
+      "limiter la charge du GPU quand on calcule les vecteurs",
+      "choix du petit modèle au premier index sur un GPU faible"
+     ],
+     "rendu": null,
+     "probabilite": 0.7439081059575553,
+     "dans_les_trois": false,
+     "juste": false
+    },
+    {
+     "requete": "duplicate memories created at write time",
+     "attendu": [
+      "the same fact stored twice when saving a memory"
+     ],
+     "trois": [
+      "the same fact stored twice when saving a memory",
+      "several transactions writing at the same time",
+      "deduplicating memories at write time"
+     ],
+     "rendu": "deduplicating memories at write time",
+     "probabilite": 0.43098631809156734,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "point de reprise",
+     "attendu": [
+      "checkpoint"
+     ],
+     "trois": [
+      "checkpoint",
+      "récupération quand le checkpoint a été coupé en cours de route",
+      "points d'entrée de l'index vectoriel hors transaction"
+     ],
+     "rendu": "récupération quand le checkpoint a été coupé en cours de route",
+     "probabilite": 0.5919430851491366,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "modèle d'embarquement par défaut",
+     "attendu": [
+      "default embedding model"
+     ],
+     "trois": [
+      "default embedding model",
+      "which embedding model is used when none is configured",
+      "verrous par clé"
+     ],
+     "rendu": "which embedding model is used when none is configured",
+     "probabilite": 0.7100403069550992,
+     "dans_les_trois": true,
+     "juste": false
+    },
+    {
+     "requete": "recherche plein texte",
+     "attendu": [
+      "full-text search"
+     ],
+     "trois": [
+      "full-text search",
+      "tokenizer used by the full-text index",
+      "reconnaissance de texte dans les images (OCR)"
+     ],
+     "rendu": "full-text search",
+     "probabilite": 0.9242244528757328,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "fusion de noyaux GPU",
+     "attendu": [
+      "kernel fusion on the GPU"
+     ],
+     "trois": [
+      "kernel fusion on the GPU",
+      "GPU duty cycle of the embedding daemon",
+      "choix du petit modèle au premier index sur un GPU faible"
+     ],
+     "rendu": "kernel fusion on the GPU",
+     "probabilite": 0.8669616096435605,
+     "dans_les_trois": true,
+     "juste": true
+    },
+    {
+     "requete": "couleur du thème de l'éditeur",
+     "attendu": [],
+     "trois": [
+      "publishing model weights",
+      "default embedding model",
+      "checkpoint"
+     ],
+     "rendu": null,
+     "probabilite": 0.6857550756178418,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "raccourcis clavier du terminal",
+     "attendu": [],
+     "trois": [
+      "suppression des lignes sorties de leur périmètre",
+      "verrous par clé",
+      "rotary position embeddings"
+     ],
+     "rendu": null,
+     "probabilite": 0.6369041891309026,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "keyboard layout of the laptop",
+     "attendu": [],
+     "trois": [
+      "verrous par clé",
+      "default embedding model",
+      "rotary position embeddings"
+     ],
+     "rendu": "verrous par clé",
+     "probabilite": 0.6120326675939292,
+     "dans_les_trois": null,
+     "juste": false
+    },
+    {
+     "requete": "pricing page of the website",
+     "attendu": [],
+     "trois": [
+      "checkpoint",
+      "concurrent writes",
+      "tokenizer used by the full-text index"
+     ],
+     "rendu": null,
+     "probabilite": 0.701312509957681,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "traduction de l'interface en espagnol",
+     "attendu": [],
+     "trois": [
+      "image text recognition",
+      "reconnaissance de texte dans les images (OCR)",
+      "checkpoint"
+     ],
+     "rendu": null,
+     "probabilite": 0.6223899920561322,
+     "dans_les_trois": null,
+     "juste": true
+    },
+    {
+     "requete": "battery life of the tablet",
+     "attendu": [],
+     "trois": [
+      "checkpoint",
+      "the same fact stored twice when saving a memory",
+      "GPU duty cycle of the embedding daemon"
+     ],
+     "rendu": null,
+     "probabilite": 0.6151870452282351,
+     "dans_les_trois": null,
+     "juste": true
+    }
+   ],
+   "bon_dans_les_trois": 12,
+   "avec_un_double": 14,
+   "verdict_juste_avec_double": 7,
+   "fusion_a_tort_avec_double": 6,
+   "sans_double": 6,
+   "aucun_bien_rendu": 5,
+   "latence_etage_1_ms": 1515.0965890061343,
+   "latence_etage_2_ms": 1517.922680504853,
+   "latence_totale_mediane_ms": 2976.500329488772
+  }
+ }
+}

@@ -1,0 +1,3190 @@
+{
+ "laya": {
+  "notre_usage": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.3382,
+     "variant": 0.3793,
+     "unrelated": 0.2825
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.0283,
+     "variant": 0.004,
+     "unrelated": 0.9677
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.0416,
+     "variant": 0.0117,
+     "unrelated": 0.9467
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5132,
+     "variant": 0.2989,
+     "unrelated": 0.1879
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6265,
+     "variant": 0.1882,
+     "unrelated": 0.1853
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1583,
+     "variant": 0.1046,
+     "unrelated": 0.7371
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1483,
+     "variant": 0.1106,
+     "unrelated": 0.7411
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1533,
+     "variant": 0.0357,
+     "unrelated": 0.811
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5977,
+     "variant": 0.1454,
+     "unrelated": 0.2569
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.103,
+     "variant": 0.0748,
+     "unrelated": 0.8221
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.4444,
+     "variant": 0.122,
+     "unrelated": 0.4336
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.0039,
+     "variant": 0.0012,
+     "unrelated": 0.9949
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.0189,
+     "variant": 0.0031,
+     "unrelated": 0.978
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2083,
+     "variant": 0.0576,
+     "unrelated": 0.7341
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.545,
+     "variant": 0.2809,
+     "unrelated": 0.1741
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.0287,
+     "variant": 0.0053,
+     "unrelated": 0.966
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6304,
+     "variant": 0.1894,
+     "unrelated": 0.1802
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5855,
+     "variant": 0.2826,
+     "unrelated": 0.1319
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.4463,
+     "variant": 0.1003,
+     "unrelated": 0.4534
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2925,
+     "variant": 0.0796,
+     "unrelated": 0.6279
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2987,
+     "variant": 0.0717,
+     "unrelated": 0.6296
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.3659,
+     "variant": 0.3167,
+     "unrelated": 0.3174
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.0567,
+     "variant": 0.0243,
+     "unrelated": 0.9191
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.415,
+     "variant": 0.1427,
+     "unrelated": 0.4423
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2441,
+     "variant": 0.0519,
+     "unrelated": 0.704
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5068,
+     "variant": 0.0763,
+     "unrelated": 0.4169
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.0265,
+     "variant": 0.0117,
+     "unrelated": 0.9618
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.1225,
+     "variant": 0.027,
+     "unrelated": 0.8505
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.394,
+     "variant": 0.3258,
+     "unrelated": 0.2802
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.7242,
+     "variant": 0.1681,
+     "unrelated": 0.1077
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.4052,
+     "variant": 0.0513,
+     "unrelated": 0.5435
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6644,
+     "variant": 0.2929,
+     "unrelated": 0.0428
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6484,
+     "variant": 0.2059,
+     "unrelated": 0.1457
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2969,
+     "variant": 0.1968,
+     "unrelated": 0.5063
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.0716,
+     "variant": 0.0172,
+     "unrelated": 0.9112
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.3015,
+     "variant": 0.221,
+     "unrelated": 0.4774
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.0926,
+     "variant": 0.0609,
+     "unrelated": 0.8465
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5363,
+     "variant": 0.1521,
+     "unrelated": 0.3115
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.1872,
+     "variant": 0.1213,
+     "unrelated": 0.6914
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.1927,
+     "variant": 0.0457,
+     "unrelated": 0.7617
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.1605,
+     "variant": 0.0295,
+     "unrelated": 0.81
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.0159,
+     "variant": 0.0071,
+     "unrelated": 0.9769
+    }
+   }
+  ],
+  "forme_de_la_carte": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6247,
+     "variant": 0.3395,
+     "unrelated": 0.0359
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5426,
+     "variant": 0.3439,
+     "unrelated": 0.1134
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.0238,
+     "variant": 0.0085,
+     "unrelated": 0.9677
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.3458,
+     "variant": 0.6352,
+     "unrelated": 0.0189
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.4538,
+     "variant": 0.3226,
+     "unrelated": 0.2236
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1027,
+     "variant": 0.1024,
+     "unrelated": 0.7949
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.3283,
+     "variant": 0.6253,
+     "unrelated": 0.0464
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.4114,
+     "variant": 0.228,
+     "unrelated": 0.3606
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.123,
+     "variant": 0.7544,
+     "unrelated": 0.1226
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.4412,
+     "variant": 0.2687,
+     "unrelated": 0.2901
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.3388,
+     "variant": 0.5469,
+     "unrelated": 0.1143
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.0042,
+     "variant": 0.004,
+     "unrelated": 0.9919
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.3481,
+     "variant": 0.123,
+     "unrelated": 0.5289
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2501,
+     "variant": 0.4676,
+     "unrelated": 0.2823
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.359,
+     "variant": 0.6089,
+     "unrelated": 0.0321
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2753,
+     "variant": 0.2295,
+     "unrelated": 0.4952
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2338,
+     "variant": 0.75,
+     "unrelated": 0.0163
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.0159,
+     "variant": 0.976,
+     "unrelated": 0.008
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.416,
+     "variant": 0.5354,
+     "unrelated": 0.0486
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1239,
+     "variant": 0.0449,
+     "unrelated": 0.8312
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2195,
+     "variant": 0.0608,
+     "unrelated": 0.7197
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.7872,
+     "variant": 0.1393,
+     "unrelated": 0.0734
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.0527,
+     "variant": 0.1116,
+     "unrelated": 0.8357
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1926,
+     "variant": 0.7829,
+     "unrelated": 0.0245
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.6811,
+     "variant": 0.197,
+     "unrelated": 0.122
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2187,
+     "variant": 0.2093,
+     "unrelated": 0.572
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.7632,
+     "variant": 0.1284,
+     "unrelated": 0.1084
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.6477,
+     "variant": 0.2781,
+     "unrelated": 0.0742
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.4398,
+     "variant": 0.3508,
+     "unrelated": 0.2094
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8146,
+     "variant": 0.1415,
+     "unrelated": 0.0439
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.4315,
+     "variant": 0.5039,
+     "unrelated": 0.0646
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.3324,
+     "variant": 0.6535,
+     "unrelated": 0.0141
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.1344,
+     "variant": 0.8348,
+     "unrelated": 0.0307
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5645,
+     "variant": 0.3704,
+     "unrelated": 0.065
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5355,
+     "variant": 0.1368,
+     "unrelated": 0.3277
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.0652,
+     "variant": 0.8953,
+     "unrelated": 0.0395
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.1847,
+     "variant": 0.125,
+     "unrelated": 0.6902
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.549,
+     "variant": 0.3064,
+     "unrelated": 0.1446
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.3525,
+     "variant": 0.5348,
+     "unrelated": 0.1127
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5773,
+     "variant": 0.2453,
+     "unrelated": 0.1774
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5584,
+     "variant": 0.1653,
+     "unrelated": 0.2763
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.47,
+     "variant": 0.0941,
+     "unrelated": 0.4359
+    }
+   }
+  ],
+  "deux_options_neutres": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9797,
+     "different": 0.0203
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.968,
+     "different": 0.032
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9841,
+     "different": 0.0159
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8369,
+     "different": 0.1631
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.987,
+     "different": 0.013
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9779,
+     "different": 0.0221
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9918,
+     "different": 0.0082
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9773,
+     "different": 0.0227
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9789,
+     "different": 0.0211
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9966,
+     "different": 0.0034
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.978,
+     "different": 0.022
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.5118,
+     "different": 0.4882
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9976,
+     "different": 0.0024
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9504,
+     "different": 0.0496
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9407,
+     "different": 0.0593
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9595,
+     "different": 0.0405
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.893,
+     "different": 0.107
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.7836,
+     "different": 0.2164
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8997,
+     "different": 0.1003
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9761,
+     "different": 0.0239
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9813,
+     "different": 0.0187
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9916,
+     "different": 0.0084
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9669,
+     "different": 0.0331
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9676,
+     "different": 0.0324
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9387,
+     "different": 0.0613
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9833,
+     "different": 0.0167
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9777,
+     "different": 0.0223
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9736,
+     "different": 0.0264
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.985,
+     "different": 0.015
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9838,
+     "different": 0.0162
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8679,
+     "different": 0.1321
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9908,
+     "different": 0.0092
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9781,
+     "different": 0.0219
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9741,
+     "different": 0.0259
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9834,
+     "different": 0.0166
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.5976,
+     "different": 0.4024
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9781,
+     "different": 0.0219
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9486,
+     "different": 0.0514
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9853,
+     "different": 0.0147
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.942,
+     "different": 0.058
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9842,
+     "different": 0.0158
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9833,
+     "different": 0.0167
+    }
+   }
+  ],
+  "oui_non": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9991,
+     "different": 0.0009000000000000119
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9991,
+     "confidence": 0.9991,
+     "answer_confidence": 0.9991
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9997,
+     "different": 0.00029999999999996696
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9997,
+     "confidence": 0.9997,
+     "answer_confidence": 0.9997
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9996,
+     "different": 0.00039999999999995595
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9996,
+     "confidence": 0.9996,
+     "answer_confidence": 0.9996
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9946,
+     "different": 0.00539999999999996
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9946,
+     "confidence": 0.9946,
+     "answer_confidence": 0.9946
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 1.0,
+     "different": 0.0
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 1.0,
+     "confidence": 1.0,
+     "answer_confidence": 1.0
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 1.0,
+     "different": 0.0
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 1.0,
+     "confidence": 1.0,
+     "answer_confidence": 1.0
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 1.0,
+     "different": 0.0
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 1.0,
+     "confidence": 1.0,
+     "answer_confidence": 1.0
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 1.0,
+     "different": 0.0
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 1.0,
+     "confidence": 1.0,
+     "answer_confidence": 1.0
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9995,
+     "different": 0.0004999999999999449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9995,
+     "confidence": 0.9995,
+     "answer_confidence": 0.9995
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.999,
+     "different": 0.0010000000000000009
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.999,
+     "confidence": 0.999,
+     "answer_confidence": 0.999
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9998,
+     "different": 0.00019999999999997797
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9998,
+     "confidence": 0.9998,
+     "answer_confidence": 0.9998
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9914,
+     "different": 0.008600000000000052
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9914,
+     "confidence": 0.9914,
+     "answer_confidence": 0.9914
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9968,
+     "different": 0.0031999999999999806
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9968,
+     "confidence": 0.9968,
+     "answer_confidence": 0.9968
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 1.0,
+     "different": 0.0
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 1.0,
+     "confidence": 1.0,
+     "answer_confidence": 1.0
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9995,
+     "different": 0.0004999999999999449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9995,
+     "confidence": 0.9995,
+     "answer_confidence": 0.9995
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.998,
+     "different": 0.0020000000000000018
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.998,
+     "confidence": 0.998,
+     "answer_confidence": 0.998
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9988,
+     "different": 0.0011999999999999789
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9988,
+     "confidence": 0.9988,
+     "answer_confidence": 0.9988
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9997,
+     "different": 0.00029999999999996696
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9997,
+     "confidence": 0.9997,
+     "answer_confidence": 0.9997
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9899,
+     "different": 0.010099999999999998
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9899,
+     "confidence": 0.9899,
+     "answer_confidence": 0.9899
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9994,
+     "different": 0.0006000000000000449
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9994,
+     "confidence": 0.9994,
+     "answer_confidence": 0.9994
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9985,
+     "different": 0.0014999999999999458
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9985,
+     "confidence": 0.9985,
+     "answer_confidence": 0.9985
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9992,
+     "different": 0.0008000000000000229
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9992,
+     "confidence": 0.9992,
+     "answer_confidence": 0.9992
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9929,
+     "different": 0.007099999999999995
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9929,
+     "confidence": 0.9929,
+     "answer_confidence": 0.9929
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9996,
+     "different": 0.00039999999999995595
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9996,
+     "confidence": 0.9996,
+     "answer_confidence": 0.9996
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.999,
+     "different": 0.0010000000000000009
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.999,
+     "confidence": 0.999,
+     "answer_confidence": 0.999
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9992,
+     "different": 0.0008000000000000229
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9992,
+     "confidence": 0.9992,
+     "answer_confidence": 0.9992
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9989,
+     "different": 0.0010999999999999899
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9989,
+     "confidence": 0.9989,
+     "answer_confidence": 0.9989
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9999,
+     "different": 9.999999999998899e-05
+    },
+    "brut": {
+     "type": "noul",
+     "noul": 0.9999,
+     "confidence": 0.9999,
+     "answer_confidence": 0.9999
+    }
+   }
+  ]
+ },
+ "gliner": {
+  "notre_usage": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6837395429611206,
+     "variant": 0.1625252515077591,
+     "unrelated": 0.15373511612415314
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5830573439598083,
+     "variant": 0.18342308700084686,
+     "unrelated": 0.23351961374282837
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5902929902076721,
+     "variant": 0.15581995248794556,
+     "unrelated": 0.2538870871067047
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5816060900688171,
+     "variant": 0.14319124817848206,
+     "unrelated": 0.2752026617527008
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.3954208791255951,
+     "variant": 0.15883991122245789,
+     "unrelated": 0.44573917984962463
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5073061585426331,
+     "variant": 0.21466688811779022,
+     "unrelated": 0.27802690863609314
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.4563180208206177,
+     "variant": 0.16286246478557587,
+     "unrelated": 0.38081955909729004
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5260547995567322,
+     "variant": 0.1675899624824524,
+     "unrelated": 0.30635523796081543
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.4641563594341278,
+     "variant": 0.2235630452632904,
+     "unrelated": 0.3122805953025818
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.4453814923763275,
+     "variant": 0.2188168168067932,
+     "unrelated": 0.3358016908168793
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.4985763430595398,
+     "variant": 0.23648080229759216,
+     "unrelated": 0.26494282484054565
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5854356288909912,
+     "variant": 0.17025181651115417,
+     "unrelated": 0.24431255459785461
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.6052362322807312,
+     "variant": 0.1535494327545166,
+     "unrelated": 0.24121436476707458
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.49702122807502747,
+     "variant": 0.16636718809604645,
+     "unrelated": 0.33661162853240967
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.779024600982666,
+     "variant": 0.09654227644205093,
+     "unrelated": 0.12443307042121887
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6662103533744812,
+     "variant": 0.146303191781044,
+     "unrelated": 0.1874864548444748
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.280010461807251,
+     "variant": 0.11183106899261475,
+     "unrelated": 0.6081584692001343
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.6244926452636719,
+     "variant": 0.14626900851726532,
+     "unrelated": 0.2292383760213852
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.7200847864151001,
+     "variant": 0.1267721801996231,
+     "unrelated": 0.15314306318759918
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5895354151725769,
+     "variant": 0.17493027448654175,
+     "unrelated": 0.23553431034088135
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5642487406730652,
+     "variant": 0.15876822173595428,
+     "unrelated": 0.27698299288749695
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5710697770118713,
+     "variant": 0.15582004189491272,
+     "unrelated": 0.27311018109321594
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5973607301712036,
+     "variant": 0.14780505001544952,
+     "unrelated": 0.25483426451683044
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5656288862228394,
+     "variant": 0.17890506982803345,
+     "unrelated": 0.2554660439491272
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5533246994018555,
+     "variant": 0.18380005657672882,
+     "unrelated": 0.2628752589225769
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5927590727806091,
+     "variant": 0.14704833924770355,
+     "unrelated": 0.2601925730705261
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5919789671897888,
+     "variant": 0.15337181091308594,
+     "unrelated": 0.2546491324901581
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.609536349773407,
+     "variant": 0.16533951461315155,
+     "unrelated": 0.22512418031692505
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5165934562683105,
+     "variant": 0.22222650051116943,
+     "unrelated": 0.26118001341819763
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.591080904006958,
+     "variant": 0.16219542920589447,
+     "unrelated": 0.24672365188598633
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5477333664894104,
+     "variant": 0.150272399187088,
+     "unrelated": 0.3019942045211792
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5460299849510193,
+     "variant": 0.16365613043308258,
+     "unrelated": 0.2903139293193817
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5999202728271484,
+     "variant": 0.15121577680110931,
+     "unrelated": 0.24886390566825867
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5596448183059692,
+     "variant": 0.2009533941745758,
+     "unrelated": 0.239401713013649
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.6475234031677246,
+     "variant": 0.1396370530128479,
+     "unrelated": 0.2128395140171051
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.5643003582954407,
+     "variant": 0.1733211874961853,
+     "unrelated": 0.2623785138130188
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.6119158864021301,
+     "variant": 0.13943709433078766,
+     "unrelated": 0.24864695966243744
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.6011625528335571,
+     "variant": 0.14182275533676147,
+     "unrelated": 0.2570146918296814
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5384262800216675,
+     "variant": 0.20394955575466156,
+     "unrelated": 0.25762417912483215
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5902334451675415,
+     "variant": 0.15224038064479828,
+     "unrelated": 0.2575262188911438
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.6178798675537109,
+     "variant": 0.12939667701721191,
+     "unrelated": 0.25272348523139954
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.5844470858573914,
+     "variant": 0.16046351194381714,
+     "unrelated": 0.25508928298950195
+    }
+   }
+  ],
+  "forme_de_la_carte": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.43894582986831665,
+     "variant": 0.2014370560646057,
+     "unrelated": 0.35961711406707764
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2597000300884247,
+     "variant": 0.337349534034729,
+     "unrelated": 0.4029504656791687
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2579882740974426,
+     "variant": 0.40071845054626465,
+     "unrelated": 0.3412932753562927
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2678709030151367,
+     "variant": 0.39106541872024536,
+     "unrelated": 0.34106361865997314
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2344270497560501,
+     "variant": 0.2945788502693176,
+     "unrelated": 0.47099414467811584
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.23862490057945251,
+     "variant": 0.28452906012535095,
+     "unrelated": 0.47684603929519653
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.26655495166778564,
+     "variant": 0.31796759366989136,
+     "unrelated": 0.4154775142669678
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.23090100288391113,
+     "variant": 0.2823864221572876,
+     "unrelated": 0.48671257495880127
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2716251611709595,
+     "variant": 0.3044111728668213,
+     "unrelated": 0.42396366596221924
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2893292307853699,
+     "variant": 0.2733759582042694,
+     "unrelated": 0.43729475140571594
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2456277757883072,
+     "variant": 0.3420184254646301,
+     "unrelated": 0.4123537838459015
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.287995308637619,
+     "variant": 0.37901052832603455,
+     "unrelated": 0.3329942226409912
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.26322588324546814,
+     "variant": 0.38028398156166077,
+     "unrelated": 0.3564901649951935
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.23736120760440826,
+     "variant": 0.3215593993663788,
+     "unrelated": 0.44107940793037415
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5424270033836365,
+     "variant": 0.20567023754119873,
+     "unrelated": 0.2519027292728424
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2914735972881317,
+     "variant": 0.3443235456943512,
+     "unrelated": 0.3642028868198395
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.3041668236255646,
+     "variant": 0.2530191242694855,
+     "unrelated": 0.4428139925003052
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.2582688629627228,
+     "variant": 0.3660016655921936,
+     "unrelated": 0.3757294714450836
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.5887691378593445,
+     "variant": 0.2005351334810257,
+     "unrelated": 0.2106958031654358
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2113422155380249,
+     "variant": 0.2743716239929199,
+     "unrelated": 0.5142862200737
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2560681998729706,
+     "variant": 0.29289761185646057,
+     "unrelated": 0.45103418827056885
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2847316265106201,
+     "variant": 0.3635905683040619,
+     "unrelated": 0.351677805185318
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.25397494435310364,
+     "variant": 0.35025522112846375,
+     "unrelated": 0.39576980471611023
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2693217396736145,
+     "variant": 0.3988115191459656,
+     "unrelated": 0.3318667411804199
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.22140084207057953,
+     "variant": 0.2964872121810913,
+     "unrelated": 0.4821119010448456
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2534661889076233,
+     "variant": 0.35253939032554626,
+     "unrelated": 0.39399442076683044
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.24879048764705658,
+     "variant": 0.3260378837585449,
+     "unrelated": 0.4251716136932373
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.26057231426239014,
+     "variant": 0.34211814403533936,
+     "unrelated": 0.39730948209762573
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.23864206671714783,
+     "variant": 0.27738407254219055,
+     "unrelated": 0.4839739501476288
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.24828588962554932,
+     "variant": 0.2979165315628052,
+     "unrelated": 0.4537975788116455
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.32300621271133423,
+     "variant": 0.33615726232528687,
+     "unrelated": 0.3408365547657013
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.22422708570957184,
+     "variant": 0.3205278217792511,
+     "unrelated": 0.45524513721466064
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.251815527677536,
+     "variant": 0.3685562014579773,
+     "unrelated": 0.3796282410621643
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.23574401438236237,
+     "variant": 0.28866055607795715,
+     "unrelated": 0.47559547424316406
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.3152834177017212,
+     "variant": 0.3466785252094269,
+     "unrelated": 0.33803802728652954
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.2719770073890686,
+     "variant": 0.32473570108413696,
+     "unrelated": 0.40328729152679443
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.23716089129447937,
+     "variant": 0.36190465092658997,
+     "unrelated": 0.40093448758125305
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "variant",
+    "sortie": {
+     "same": 0.25042611360549927,
+     "variant": 0.2985890805721283,
+     "unrelated": 0.45098480582237244
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.23825085163116455,
+     "variant": 0.28138333559036255,
+     "unrelated": 0.4803657531738281
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.20817069709300995,
+     "variant": 0.2970612049102783,
+     "unrelated": 0.49476808309555054
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.2801643908023834,
+     "variant": 0.32396993041038513,
+     "unrelated": 0.39586561918258667
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "unrelated",
+    "sortie": {
+     "same": 0.25317224860191345,
+     "variant": 0.3046746253967285,
+     "unrelated": 0.44215309619903564
+    }
+   }
+  ],
+  "phrase_et_deux_etiquettes": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.7807328701019287,
+     "different": 0.2192671000957489
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9428712725639343,
+     "different": 0.0571286715567112
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9167370796203613,
+     "different": 0.08326295018196106
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9550299644470215,
+     "different": 0.044970013201236725
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8758705258369446,
+     "different": 0.12412943691015244
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8193513751029968,
+     "different": 0.18064862489700317
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8166322112083435,
+     "different": 0.1833678036928177
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.6934560537338257,
+     "different": 0.3065439462661743
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8161279559135437,
+     "different": 0.1838720291852951
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9384804964065552,
+     "different": 0.061519499868154526
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8131501078605652,
+     "different": 0.18684984743595123
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9061059355735779,
+     "different": 0.09389404952526093
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8244466781616211,
+     "different": 0.17555327713489532
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8877199292182922,
+     "different": 0.11228007078170776
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8726735711097717,
+     "different": 0.12732645869255066
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9288552403450012,
+     "different": 0.07114473730325699
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8965949416160583,
+     "different": 0.10340501368045807
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9267200827598572,
+     "different": 0.0732799544930458
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.926015317440033,
+     "different": 0.07398469001054764
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8361855745315552,
+     "different": 0.16381442546844482
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.827239990234375,
+     "different": 0.1727600395679474
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8835052251815796,
+     "different": 0.11649482697248459
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8844922184944153,
+     "different": 0.11550778150558472
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.892309308052063,
+     "different": 0.10769064724445343
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8085575699806213,
+     "different": 0.19144241511821747
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9106273651123047,
+     "different": 0.08937268704175949
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9006709456443787,
+     "different": 0.09932902455329895
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9510324001312256,
+     "different": 0.04896760359406471
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8517742156982422,
+     "different": 0.14822573959827423
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8626101613044739,
+     "different": 0.13738976418972015
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9447529911994934,
+     "different": 0.05524705722928047
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.9700219035148621,
+     "different": 0.029978102073073387
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "attendu": "same",
+    "sortie": {
+     "same": 0.8716216683387756,
+     "different": 0.12837834656238556
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8590756058692932,
+     "different": 0.1409243941307068
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8785455822944641,
+     "different": 0.12145444005727768
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8797501921653748,
+     "different": 0.12024979293346405
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8947921991348267,
+     "different": 0.10520774871110916
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.7894850373268127,
+     "different": 0.21051490306854248
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8524749279022217,
+     "different": 0.14752507209777832
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8640750050544739,
+     "different": 0.13592492043972015
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.9045416712760925,
+     "different": 0.09545831382274628
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "attendu": "different",
+    "sortie": {
+     "same": 0.8580491542816162,
+     "different": 0.1419508457183838
+    }
+   }
+  ],
+  "ranger_parmi_dix_sujets": [
+   {
+    "id": "d1",
+    "attendu": "écritures parallèles",
+    "sortie": {
+     "écritures parallèles": 0.8918442130088806,
+     "index vectoriel HNSW": 0.003211606526747346,
+     "recherche plein texte": 0.01735120825469494,
+     "modèle d'embarquement par défaut": 0.007375548593699932,
+     "reprise après un point de reprise": 0.005811166018247604,
+     "synchronisation par périmètre": 0.01998336985707283,
+     "reconnaissance de texte (OCR)": 0.011592925526201725,
+     "identité git des dépôts": 0.006433509755879641,
+     "deck builder de cartes": 0.008087333291769028,
+     "correctifs proposés à burn": 0.003911114297807217,
+     "none of these topics": 0.024397926405072212
+    }
+   },
+   {
+    "id": "d2",
+    "attendu": "recherche plein texte",
+    "sortie": {
+     "écritures parallèles": 0.053576890379190445,
+     "index vectoriel HNSW": 0.013166150078177452,
+     "recherche plein texte": 0.6668242812156677,
+     "modèle d'embarquement par défaut": 0.026018403470516205,
+     "reprise après un point de reprise": 0.019642390310764313,
+     "synchronisation par périmètre": 0.019473349675536156,
+     "reconnaissance de texte (OCR)": 0.0717715322971344,
+     "identité git des dépôts": 0.022395147010684013,
+     "deck builder de cartes": 0.017945004627108574,
+     "correctifs proposés à burn": 0.018712542951107025,
+     "none of these topics": 0.07047423720359802
+    }
+   },
+   {
+    "id": "d3",
+    "attendu": "correctifs proposés à burn",
+    "sortie": {
+     "écritures parallèles": 0.131272092461586,
+     "index vectoriel HNSW": 0.020769882947206497,
+     "recherche plein texte": 0.05433793365955353,
+     "modèle d'embarquement par défaut": 0.06762294471263885,
+     "reprise après un point de reprise": 0.04893437400460243,
+     "synchronisation par périmètre": 0.04616641625761986,
+     "reconnaissance de texte (OCR)": 0.04078086465597153,
+     "identité git des dépôts": 0.10366973280906677,
+     "deck builder de cartes": 0.07464885711669922,
+     "correctifs proposés à burn": 0.3119184076786041,
+     "none of these topics": 0.09987853467464447
+    }
+   },
+   {
+    "id": "d4",
+    "attendu": "reprise après un point de reprise",
+    "sortie": {
+     "écritures parallèles": 0.04833953455090523,
+     "index vectoriel HNSW": 0.007457617204636335,
+     "recherche plein texte": 0.027579179033637047,
+     "modèle d'embarquement par défaut": 0.04097965732216835,
+     "reprise après un point de reprise": 0.7449439764022827,
+     "synchronisation par périmètre": 0.016590723767876625,
+     "reconnaissance de texte (OCR)": 0.016690773889422417,
+     "identité git des dépôts": 0.021400170400738716,
+     "deck builder de cartes": 0.013725103810429573,
+     "correctifs proposés à burn": 0.01927183009684086,
+     "none of these topics": 0.043021366000175476
+    }
+   },
+   {
+    "id": "d5",
+    "attendu": "modèle d'embarquement par défaut",
+    "sortie": {
+     "écritures parallèles": 0.00012607169628608972,
+     "index vectoriel HNSW": 2.476469126122538e-05,
+     "recherche plein texte": 0.0002319614141015336,
+     "modèle d'embarquement par défaut": 0.998729407787323,
+     "reprise après un point de reprise": 4.969377187080681e-05,
+     "synchronisation par périmètre": 6.33407398709096e-05,
+     "reconnaissance de texte (OCR)": 0.00014708958042319864,
+     "identité git des dépôts": 0.0001318538998020813,
+     "deck builder de cartes": 0.00021312705939635634,
+     "correctifs proposés à burn": 6.896757986396551e-05,
+     "none of these topics": 0.00021398163517005742
+    }
+   },
+   {
+    "id": "d6",
+    "attendu": "none of these topics",
+    "sortie": {
+     "écritures parallèles": 0.07670409232378006,
+     "index vectoriel HNSW": 0.034544069319963455,
+     "recherche plein texte": 0.1006300300359726,
+     "modèle d'embarquement par défaut": 0.04954887554049492,
+     "reprise après un point de reprise": 0.038274116814136505,
+     "synchronisation par périmètre": 0.046784333884716034,
+     "reconnaissance de texte (OCR)": 0.06974615901708603,
+     "identité git des dépôts": 0.05138077586889267,
+     "deck builder de cartes": 0.06916507333517075,
+     "correctifs proposés à burn": 0.05365610122680664,
+     "none of these topics": 0.40956640243530273
+    }
+   }
+  ]
+ }
+}

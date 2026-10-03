@@ -46,10 +46,11 @@ elif modele == "gliner":
         r = extracteur.classify_text(etat, tache, include_confidence=True, format_results=False)
         return {k: float(v) for k, v in r[instructions]}
 
-elif modele == "jevk5":
+elif modele in ("jevk5", "jevk5-2b"):
     sys.path.insert(0, os.path.join(os.path.dirname(ICI), "jevk5-src"))
     from jevk5.gguf import JevK5GGUF
-    client = JevK5GGUF(url="http://127.0.0.1:8091", temperature=1.367)  # température de la carte pour la v0.3 4B
+    # températures données par la carte du modèle : 1,367 pour la v0.3 4B, 1,42 pour la 2B
+    client = JevK5GGUF(url=os.environ.get("JEVK5_URL", "http://127.0.0.1:8091"), temperature=1.42 if modele == "jevk5-2b" else 1.367)
 
     def decider(etat, instructions, options):
         probs, _ = client.probabilities(etat, {"type": "choice", "instructions": instructions, "criteria": options})

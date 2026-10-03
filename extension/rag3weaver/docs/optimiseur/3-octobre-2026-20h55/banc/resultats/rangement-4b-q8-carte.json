@@ -1,0 +1,4968 @@
+{
+ "url": "http://127.0.0.1:7982",
+ "temperature": 1.367,
+ "manques_recherche": {
+  "2": 2,
+  "4": 1,
+  "9": 0
+ },
+ "configs": {
+  "contexte_nom": {
+   "contexte": "nom",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.7786457594319984,
+     "p_second": 0.15228128617510825,
+     "p_neuf": 0.021981176716697304,
+     "p_bon": 0.7786457594319984,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.645562137312172,
+     "p_second": 0.2758260605318813,
+     "p_neuf": 0.2758260605318813,
+     "p_bon": 0.645562137312172,
+     "position_choisie": 0
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.8881353622798718,
+     "p_second": 0.036144329571440724,
+     "p_neuf": 0.036144329571440724,
+     "p_bon": 0.8881353622798718,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.4334974751240796,
+     "p_second": 0.2614887194118284,
+     "p_neuf": 0.4334974751240796,
+     "p_bon": 0.2614887194118284,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.5864642751962059,
+     "p_second": 0.18889103210030372,
+     "p_neuf": 0.5864642751962059,
+     "p_bon": 0.1825906962452954,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5903682639337885,
+     "p_second": 0.30432230250366143,
+     "p_neuf": 0.30432230250366143,
+     "p_bon": 0.5903682639337885,
+     "position_choisie": 0
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.3970934659103944,
+     "p_second": 0.35931112746706584,
+     "p_neuf": 0.35931112746706584,
+     "p_bon": 0.3970934659103944,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.4201327853652949,
+     "p_second": 0.2583262883757598,
+     "p_neuf": 0.2583262883757598,
+     "p_bon": 0.4201327853652949,
+     "position_choisie": 0
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.8120174503038525,
+     "p_second": 0.1102237550504271,
+     "p_neuf": 0.1102237550504271,
+     "p_bon": 0.8120174503038525,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.39422959792406403,
+     "p_second": 0.33492014901144423,
+     "p_neuf": 0.33492014901144423,
+     "p_bon": 0.09139709289608877,
+     "position_choisie": 0
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.7402992854268773,
+     "p_second": 0.11616618952115763,
+     "p_neuf": 0.11616618952115763,
+     "p_bon": 0.7402992854268773,
+     "position_choisie": 0
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.4939923996846535,
+     "p_second": 0.2646780722469494,
+     "p_neuf": 0.10897622427413373,
+     "p_bon": 0.4939923996846535,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "identifiants et secrets",
+     "p": 0.4197461146978577,
+     "p_second": 0.20435206030973055,
+     "p_neuf": 0.20435206030973055,
+     "p_bon": 0.1898175309578512,
+     "position_choisie": 2
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.733770033060908,
+     "p_second": 0.1931966871891571,
+     "p_neuf": 0.1931966871891571,
+     "p_bon": 0.733770033060908,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.6981004155175027,
+     "p_second": 0.20143860275751388,
+     "p_neuf": 0.06223562752516988,
+     "p_bon": 0.6981004155175027,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.9010657984284445,
+     "p_second": 0.06164030282955005,
+     "p_neuf": 0.06164030282955005,
+     "p_bon": 0.9010657984284445,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.7004317145007817,
+     "p_second": 0.13248248583623212,
+     "p_neuf": 0.13248248583623212,
+     "p_bon": 0.13248248583623212,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8857530209302137,
+     "p_second": 0.04212792746632028,
+     "p_neuf": 0.8857530209302137,
+     "p_bon": 0.8857530209302137,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8969864930063676,
+     "p_second": 0.05805591819840721,
+     "p_neuf": 0.8969864930063676,
+     "p_bon": 0.8969864930063676,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7638571414263116,
+     "p_second": 0.10911621812438001,
+     "p_neuf": 0.7638571414263116,
+     "p_bon": 0.7638571414263116,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.810659961405765,
+     "p_second": 0.07503552841505644,
+     "p_neuf": 0.810659961405765,
+     "p_bon": 0.810659961405765,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.4945291985314912,
+     "p_second": 0.19721700320888283,
+     "p_neuf": 0.4945291985314912,
+     "p_bon": 0.4945291985314912,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5489537718490366,
+     "p_second": 0.25055910773948437,
+     "p_neuf": 0.5489537718490366,
+     "p_bon": 0.5489537718490366,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.42979869873068405,
+     "p_second": 0.303075087012743,
+     "p_neuf": 0.42979869873068405,
+     "p_bon": 0.42979869873068405,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 217.20521648724875,
+   "jetons_moyens": 187.95833333333334
+  },
+  "contexte_nom_description": {
+   "contexte": "nom_description",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8048957437943609,
+     "p_second": 0.07805395569777498,
+     "p_neuf": 0.07805395569777498,
+     "p_bon": 0.8048957437943609,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8820209508538479,
+     "p_second": 0.08510560234018788,
+     "p_neuf": 0.08510560234018788,
+     "p_bon": 0.8820209508538479,
+     "position_choisie": 0
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7213623413291437,
+     "p_second": 0.1344073182409569,
+     "p_neuf": 0.046078726949738434,
+     "p_bon": 0.7213623413291437,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.748749716242226,
+     "p_second": 0.1874795110288401,
+     "p_neuf": 0.748749716242226,
+     "p_bon": 0.1874795110288401,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.7111983689771791,
+     "p_second": 0.15177778932416278,
+     "p_neuf": 0.15177778932416278,
+     "p_bon": 0.05440411420530185,
+     "position_choisie": 0
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7255538907252016,
+     "p_second": 0.10936450666657437,
+     "p_neuf": 0.7255538907252016,
+     "p_bon": 0.10936450666657437,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.7760139410784063,
+     "p_second": 0.11351840108531683,
+     "p_neuf": 0.11351840108531683,
+     "p_bon": 0.7760139410784063,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.37727157391907123,
+     "p_second": 0.3390076262778347,
+     "p_neuf": 0.3390076262778347,
+     "p_bon": 0.37727157391907123,
+     "position_choisie": 0
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.9457358450661181,
+     "p_second": 0.04148761140733543,
+     "p_neuf": 0.04148761140733543,
+     "p_bon": 0.9457358450661181,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.531194609478138,
+     "p_second": 0.28022082052215125,
+     "p_neuf": 0.28022082052215125,
+     "p_bon": 0.531194609478138,
+     "position_choisie": 2
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.4268874943121289,
+     "p_second": 0.31606363278374594,
+     "p_neuf": 0.31606363278374594,
+     "p_bon": 0.4268874943121289,
+     "position_choisie": 0
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.8849325214630452,
+     "p_second": 0.07598945288401593,
+     "p_neuf": 0.020998364811970992,
+     "p_bon": 0.8849325214630452,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.9188158426729031,
+     "p_second": 0.048171939636791755,
+     "p_neuf": 0.048171939636791755,
+     "p_bon": 0.9188158426729031,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8523132002993988,
+     "p_second": 0.09132607171304508,
+     "p_neuf": 0.09132607171304508,
+     "p_bon": 0.8523132002993988,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.9169668649700639,
+     "p_second": 0.03916995649628614,
+     "p_neuf": 0.03916995649628614,
+     "p_bon": 0.9169668649700639,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8872709170265201,
+     "p_second": 0.08950717681909452,
+     "p_neuf": 0.08950717681909452,
+     "p_bon": 0.8872709170265201,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.739699135375199,
+     "p_second": 0.1451049146133273,
+     "p_neuf": 0.1451049146133273,
+     "p_bon": 0.1451049146133273,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9452025074999764,
+     "p_second": 0.01752304526096377,
+     "p_neuf": 0.9452025074999764,
+     "p_bon": 0.9452025074999764,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.948984123447115,
+     "p_second": 0.01814172300984406,
+     "p_neuf": 0.948984123447115,
+     "p_bon": 0.948984123447115,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.754545470509051,
+     "p_second": 0.10275370258324473,
+     "p_neuf": 0.754545470509051,
+     "p_bon": 0.754545470509051,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7423165315645412,
+     "p_second": 0.20185491467640926,
+     "p_neuf": 0.7423165315645412,
+     "p_bon": 0.7423165315645412,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6934353767222939,
+     "p_second": 0.12691892872937618,
+     "p_neuf": 0.6934353767222939,
+     "p_bon": 0.6934353767222939,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.45255244508157755,
+     "p_second": 0.33143520353255473,
+     "p_neuf": 0.45255244508157755,
+     "p_bon": 0.45255244508157755,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8728408322860629,
+     "p_second": 0.05044550153132181,
+     "p_neuf": 0.8728408322860629,
+     "p_bon": 0.8728408322860629,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 253.0996799468994,
+   "jetons_moyens": 246.875
+  },
+  "contexte_un_exemple": {
+   "contexte": "un_exemple",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.5132676246989203,
+     "p_second": 0.4669345226321663,
+     "p_neuf": 0.4669345226321663,
+     "p_bon": 0.5132676246989203,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6955923248531328,
+     "p_second": 0.2882608843635157,
+     "p_neuf": 0.6955923248531328,
+     "p_bon": 0.2882608843635157,
+     "position_choisie": 4
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5857207779760517,
+     "p_second": 0.16902035892445738,
+     "p_neuf": 0.16902035892445738,
+     "p_bon": 0.5857207779760517,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9280768666855355,
+     "p_second": 0.040909334232300726,
+     "p_neuf": 0.9280768666855355,
+     "p_bon": 0.040909334232300726,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7402756936038237,
+     "p_second": 0.14388126151413502,
+     "p_neuf": 0.7402756936038237,
+     "p_bon": 0.08278416502383945,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7145340465414626,
+     "p_second": 0.10882537628719201,
+     "p_neuf": 0.7145340465414626,
+     "p_bon": 0.10882537628719201,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.6970628729242422,
+     "p_second": 0.16085106436572966,
+     "p_neuf": 0.16085106436572966,
+     "p_bon": 0.6970628729242422,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.6930760956469022,
+     "p_second": 0.2157526660650791,
+     "p_neuf": 0.6930760956469022,
+     "p_bon": 0.07880979261221506,
+     "position_choisie": 4
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5417739597934044,
+     "p_second": 0.4458456278823387,
+     "p_neuf": 0.4458456278823387,
+     "p_bon": 0.5417739597934044,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.6199258483517253,
+     "p_second": 0.2088534028648951,
+     "p_neuf": 0.6199258483517253,
+     "p_bon": 0.2088534028648951,
+     "position_choisie": 4
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.5629492021594839,
+     "p_second": 0.2992353826803455,
+     "p_neuf": 0.5629492021594839,
+     "p_bon": 0.2992353826803455,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.5203182551696435,
+     "p_second": 0.3124396116631636,
+     "p_neuf": 0.1509766627656874,
+     "p_bon": 0.5203182551696435,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6934787636827044,
+     "p_second": 0.24491086433319503,
+     "p_neuf": 0.24491086433319503,
+     "p_bon": 0.6934787636827044,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7009507861073827,
+     "p_second": 0.22121990472901282,
+     "p_neuf": 0.22121990472901282,
+     "p_bon": 0.7009507861073827,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.6566074141170075,
+     "p_second": 0.26837417619394055,
+     "p_neuf": 0.26837417619394055,
+     "p_bon": 0.6566074141170075,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.6020345486756664,
+     "p_second": 0.3707818702955917,
+     "p_neuf": 0.3707818702955917,
+     "p_bon": 0.6020345486756664,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8334105209161538,
+     "p_second": 0.08914351407581453,
+     "p_neuf": 0.8334105209161538,
+     "p_bon": 0.8334105209161538,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9368104352691027,
+     "p_second": 0.023882421789634973,
+     "p_neuf": 0.9368104352691027,
+     "p_bon": 0.9368104352691027,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9644860845231611,
+     "p_second": 0.013764880136219647,
+     "p_neuf": 0.9644860845231611,
+     "p_bon": 0.9644860845231611,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5114371493109892,
+     "p_second": 0.22841113960945073,
+     "p_neuf": 0.5114371493109892,
+     "p_bon": 0.5114371493109892,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8941691265560097,
+     "p_second": 0.06770585546454287,
+     "p_neuf": 0.8941691265560097,
+     "p_bon": 0.8941691265560097,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7899488599340043,
+     "p_second": 0.09292764270540295,
+     "p_neuf": 0.7899488599340043,
+     "p_bon": 0.7899488599340043,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6245794450716206,
+     "p_second": 0.18460401293310472,
+     "p_neuf": 0.6245794450716206,
+     "p_bon": 0.6245794450716206,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9365744482807734,
+     "p_second": 0.03208629864098929,
+     "p_neuf": 0.9365744482807734,
+     "p_bon": 0.9365744482807734,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 291.1148468653361,
+   "jetons_moyens": 347.5833333333333
+  },
+  "contexte_deux_exemples": {
+   "contexte": "deux_exemples",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6224142232434269,
+     "p_second": 0.3706306540914278,
+     "p_neuf": 0.6224142232434269,
+     "p_bon": 0.3706306540914278,
+     "position_choisie": 4
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6614223247392205,
+     "p_second": 0.33412285882490556,
+     "p_neuf": 0.6614223247392205,
+     "p_bon": 0.33412285882490556,
+     "position_choisie": 4
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.802254633179733,
+     "p_second": 0.15709391867417247,
+     "p_neuf": 0.15709391867417247,
+     "p_bon": 0.802254633179733,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9544109313331642,
+     "p_second": 0.030982763434527296,
+     "p_neuf": 0.9544109313331642,
+     "p_bon": 0.030982763434527296,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7980470164198256,
+     "p_second": 0.15269895527588204,
+     "p_neuf": 0.7980470164198256,
+     "p_bon": 0.15269895527588204,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.5556453189513071,
+     "p_second": 0.3251599830373303,
+     "p_neuf": 0.5556453189513071,
+     "p_bon": 0.3251599830373303,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.6116338348845901,
+     "p_second": 0.17886064056474307,
+     "p_neuf": 0.17886064056474307,
+     "p_bon": 0.6116338348845901,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.6814079671465462,
+     "p_second": 0.2018715001014323,
+     "p_neuf": 0.6814079671465462,
+     "p_bon": 0.2018715001014323,
+     "position_choisie": 4
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5609969256439846,
+     "p_second": 0.4307467748768273,
+     "p_neuf": 0.4307467748768273,
+     "p_bon": 0.5609969256439846,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.6099375160165841,
+     "p_second": 0.2782133805806438,
+     "p_neuf": 0.6099375160165841,
+     "p_bon": 0.048431033833335226,
+     "position_choisie": 4
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.5157134510871555,
+     "p_second": 0.39253348020337,
+     "p_neuf": 0.5157134510871555,
+     "p_bon": 0.39253348020337,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.801443466485535,
+     "p_second": 0.11754133356497715,
+     "p_neuf": 0.11754133356497715,
+     "p_bon": 0.801443466485535,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7186712230594,
+     "p_second": 0.25285139710625637,
+     "p_neuf": 0.25285139710625637,
+     "p_bon": 0.7186712230594,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6375193122287193,
+     "p_second": 0.29723270663794304,
+     "p_neuf": 0.29723270663794304,
+     "p_bon": 0.6375193122287193,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.6613177460314931,
+     "p_second": 0.30930516599832264,
+     "p_neuf": 0.30930516599832264,
+     "p_bon": 0.6613177460314931,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.6728187565201468,
+     "p_second": 0.30166862523531784,
+     "p_neuf": 0.30166862523531784,
+     "p_bon": 0.6728187565201468,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7387812712061183,
+     "p_second": 0.20571053139248296,
+     "p_neuf": 0.7387812712061183,
+     "p_bon": 0.7387812712061183,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9399279171558858,
+     "p_second": 0.024103836398890858,
+     "p_neuf": 0.9399279171558858,
+     "p_bon": 0.9399279171558858,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.955903222852844,
+     "p_second": 0.01823145944748761,
+     "p_neuf": 0.955903222852844,
+     "p_bon": 0.955903222852844,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7755134885401398,
+     "p_second": 0.09629592107539459,
+     "p_neuf": 0.7755134885401398,
+     "p_bon": 0.7755134885401398,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9262468996874507,
+     "p_second": 0.042170756114792894,
+     "p_neuf": 0.9262468996874507,
+     "p_bon": 0.9262468996874507,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7736458033134108,
+     "p_second": 0.10026035999199927,
+     "p_neuf": 0.7736458033134108,
+     "p_bon": 0.7736458033134108,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6250580884441822,
+     "p_second": 0.1427059940874009,
+     "p_neuf": 0.6250580884441822,
+     "p_bon": 0.6250580884441822,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9552315989561968,
+     "p_second": 0.02532701252218342,
+     "p_neuf": 0.9552315989561968,
+     "p_bon": 0.9552315989561968,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 329.94473973910016,
+   "jetons_moyens": 430.875
+  },
+  "contexte_trois_exemples": {
+   "contexte": "trois_exemples",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.4951591177603641,
+     "p_second": 0.4933894957859459,
+     "p_neuf": 0.4951591177603641,
+     "p_bon": 0.4933894957859459,
+     "position_choisie": 4
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6859467420945654,
+     "p_second": 0.3061000230340897,
+     "p_neuf": 0.6859467420945654,
+     "p_bon": 0.3061000230340897,
+     "position_choisie": 4
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5775425777670777,
+     "p_second": 0.24419455398743495,
+     "p_neuf": 0.15699278924379034,
+     "p_bon": 0.5775425777670777,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.7938500418385273,
+     "p_second": 0.18359056603463483,
+     "p_neuf": 0.7938500418385273,
+     "p_bon": 0.18359056603463483,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.8298056921104373,
+     "p_second": 0.13118201893611725,
+     "p_neuf": 0.8298056921104373,
+     "p_bon": 0.13118201893611725,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.5107916260792723,
+     "p_second": 0.3890873505941594,
+     "p_neuf": 0.5107916260792723,
+     "p_bon": 0.3890873505941594,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.5855883410324523,
+     "p_second": 0.2645845930400979,
+     "p_neuf": 0.2645845930400979,
+     "p_bon": 0.5855883410324523,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.6918870003378259,
+     "p_second": 0.20073197118331124,
+     "p_neuf": 0.6918870003378259,
+     "p_bon": 0.20073197118331124,
+     "position_choisie": 4
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5729602832120905,
+     "p_second": 0.3979675768068953,
+     "p_neuf": 0.3979675768068953,
+     "p_bon": 0.5729602832120905,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.8835406727556864,
+     "p_second": 0.07217194007669835,
+     "p_neuf": 0.07217194007669835,
+     "p_bon": 0.8835406727556864,
+     "position_choisie": 2
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.6021810130746239,
+     "p_second": 0.32173096378634,
+     "p_neuf": 0.6021810130746239,
+     "p_bon": 0.32173096378634,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.8079525185258859,
+     "p_second": 0.13085873486452237,
+     "p_neuf": 0.13085873486452237,
+     "p_bon": 0.8079525185258859,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.704774552509296,
+     "p_second": 0.27026601358064833,
+     "p_neuf": 0.27026601358064833,
+     "p_bon": 0.704774552509296,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6073047241045425,
+     "p_second": 0.3507276699313201,
+     "p_neuf": 0.3507276699313201,
+     "p_bon": 0.6073047241045425,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.5757958644371256,
+     "p_second": 0.39352384140747715,
+     "p_neuf": 0.39352384140747715,
+     "p_bon": 0.5757958644371256,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8092210042537572,
+     "p_second": 0.1609270388842173,
+     "p_neuf": 0.1609270388842173,
+     "p_bon": 0.8092210042537572,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.44918239528981396,
+     "p_second": 0.4309150884621317,
+     "p_neuf": 0.4309150884621317,
+     "p_bon": 0.4309150884621317,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.960768328838658,
+     "p_second": 0.016174652819827693,
+     "p_neuf": 0.960768328838658,
+     "p_bon": 0.960768328838658,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9727505733243338,
+     "p_second": 0.008154631568211017,
+     "p_neuf": 0.9727505733243338,
+     "p_bon": 0.9727505733243338,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.803690852963868,
+     "p_second": 0.0706276642144444,
+     "p_neuf": 0.803690852963868,
+     "p_bon": 0.803690852963868,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9601102958132914,
+     "p_second": 0.025764535063943057,
+     "p_neuf": 0.9601102958132914,
+     "p_bon": 0.9601102958132914,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8402224534853558,
+     "p_second": 0.05276604973537585,
+     "p_neuf": 0.8402224534853558,
+     "p_bon": 0.8402224534853558,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6391930035923749,
+     "p_second": 0.16738539296147248,
+     "p_neuf": 0.6391930035923749,
+     "p_bon": 0.6391930035923749,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9675253364865682,
+     "p_second": 0.015406491942828067,
+     "p_neuf": 0.9675253364865682,
+     "p_bon": 0.9675253364865682,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 346.31065527598065,
+   "jetons_moyens": 503.25
+  },
+  "neuf_texte_seul": {
+   "contexte": "deux_exemples",
+   "neuf": "texte_seul",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6643119635830712,
+     "p_second": 0.3308778359020533,
+     "p_neuf": 0.6643119635830712,
+     "p_bon": 0.3308778359020533,
+     "position_choisie": 4
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.7549472066110877,
+     "p_second": 0.24043792078772727,
+     "p_neuf": 0.7549472066110877,
+     "p_bon": 0.24043792078772727,
+     "position_choisie": 4
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.516307785031735,
+     "p_second": 0.46174283790999293,
+     "p_neuf": 0.46174283790999293,
+     "p_bon": 0.516307785031735,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9752785632908401,
+     "p_second": 0.014410218538516704,
+     "p_neuf": 0.9752785632908401,
+     "p_bon": 0.014410218538516704,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.9490334187233225,
+     "p_second": 0.03234481709437624,
+     "p_neuf": 0.9490334187233225,
+     "p_bon": 0.03234481709437624,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.8962697937191945,
+     "p_second": 0.064671505725113,
+     "p_neuf": 0.8962697937191945,
+     "p_bon": 0.064671505725113,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.555192011620402,
+     "p_second": 0.3035311032742512,
+     "p_neuf": 0.3035311032742512,
+     "p_bon": 0.555192011620402,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.8104987822563425,
+     "p_second": 0.09321178592960787,
+     "p_neuf": 0.8104987822563425,
+     "p_bon": 0.09321178592960787,
+     "position_choisie": 4
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.6339683874502958,
+     "p_second": 0.36130124739240393,
+     "p_neuf": 0.6339683874502958,
+     "p_bon": 0.36130124739240393,
+     "position_choisie": 4
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.9300779534531918,
+     "p_second": 0.04436725930910088,
+     "p_neuf": 0.9300779534531918,
+     "p_bon": 0.007584461547830479,
+     "position_choisie": 4
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.869371993865951,
+     "p_second": 0.10456866657816277,
+     "p_neuf": 0.869371993865951,
+     "p_bon": 0.10456866657816277,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.7206674849169434,
+     "p_second": 0.23839516811632439,
+     "p_neuf": 0.23839516811632439,
+     "p_bon": 0.7206674849169434,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6198555912710819,
+     "p_second": 0.36420611064661335,
+     "p_neuf": 0.36420611064661335,
+     "p_bon": 0.6198555912710819,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.48744925003484774,
+     "p_second": 0.4517307085874895,
+     "p_neuf": 0.48744925003484774,
+     "p_bon": 0.4517307085874895,
+     "position_choisie": 4
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.7665725250288304,
+     "p_second": 0.21616849506651079,
+     "p_neuf": 0.7665725250288304,
+     "p_bon": 0.21616849506651079,
+     "position_choisie": 4
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": null,
+     "p": 0.49781231174450313,
+     "p_second": 0.4815727246652268,
+     "p_neuf": 0.49781231174450313,
+     "p_bon": 0.4815727246652268,
+     "position_choisie": 4
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8632102734854535,
+     "p_second": 0.11441301265898386,
+     "p_neuf": 0.8632102734854535,
+     "p_bon": 0.8632102734854535,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9482448446208155,
+     "p_second": 0.01816934636080582,
+     "p_neuf": 0.9482448446208155,
+     "p_bon": 0.9482448446208155,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9779039102429696,
+     "p_second": 0.009083750326386435,
+     "p_neuf": 0.9779039102429696,
+     "p_bon": 0.9779039102429696,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9723675108480244,
+     "p_second": 0.009833510708852182,
+     "p_neuf": 0.9723675108480244,
+     "p_bon": 0.9723675108480244,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9528612475543379,
+     "p_second": 0.02433102846451467,
+     "p_neuf": 0.9528612475543379,
+     "p_bon": 0.9528612475543379,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9519552922260981,
+     "p_second": 0.016352728375578118,
+     "p_neuf": 0.9519552922260981,
+     "p_bon": 0.9519552922260981,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9522631731915956,
+     "p_second": 0.024204520327226857,
+     "p_neuf": 0.9522631731915956,
+     "p_bon": 0.9522631731915956,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9664895289110715,
+     "p_second": 0.022498637028930943,
+     "p_neuf": 0.9664895289110715,
+     "p_bon": 0.9664895289110715,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 330.76144258181256,
+   "jetons_moyens": 447.0416666666667
+  },
+  "neuf_description": {
+   "contexte": "deux_exemples",
+   "neuf": "description",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.752750259482081,
+     "p_second": 0.24115127769320074,
+     "p_neuf": 0.752750259482081,
+     "p_bon": 0.24115127769320074,
+     "position_choisie": 4
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.7210552550614122,
+     "p_second": 0.27411728338941843,
+     "p_neuf": 0.7210552550614122,
+     "p_bon": 0.27411728338941843,
+     "position_choisie": 4
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.5222978551080364,
+     "p_second": 0.4513618319264959,
+     "p_neuf": 0.5222978551080364,
+     "p_bon": 0.4513618319264959,
+     "position_choisie": 4
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9678978160736851,
+     "p_second": 0.01890001227510712,
+     "p_neuf": 0.9678978160736851,
+     "p_bon": 0.01890001227510712,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.9371954719840673,
+     "p_second": 0.0435700951881032,
+     "p_neuf": 0.9371954719840673,
+     "p_bon": 0.0435700951881032,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.6285571330693805,
+     "p_second": 0.2527848960682859,
+     "p_neuf": 0.6285571330693805,
+     "p_bon": 0.2527848960682859,
+     "position_choisie": 4
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.5647412175466339,
+     "p_second": 0.20973481518793527,
+     "p_neuf": 0.20973481518793527,
+     "p_bon": 0.5647412175466339,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.5205600044671397,
+     "p_second": 0.3024446159570081,
+     "p_neuf": 0.5205600044671397,
+     "p_bon": 0.3024446159570081,
+     "position_choisie": 4
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.6342393688699403,
+     "p_second": 0.3624915790905613,
+     "p_neuf": 0.6342393688699403,
+     "p_bon": 0.3624915790905613,
+     "position_choisie": 4
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.5452127636071017,
+     "p_second": 0.39035609028721274,
+     "p_neuf": 0.5452127636071017,
+     "p_bon": 0.020198777630304303,
+     "position_choisie": 4
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.6645795479213589,
+     "p_second": 0.24354329902422128,
+     "p_neuf": 0.6645795479213589,
+     "p_bon": 0.24354329902422128,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.5307682248096581,
+     "p_second": 0.4011171566402927,
+     "p_neuf": 0.4011171566402927,
+     "p_bon": 0.5307682248096581,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.5925782081414174,
+     "p_second": 0.3816913387311146,
+     "p_neuf": 0.3816913387311146,
+     "p_bon": 0.5925782081414174,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.5035173990990969,
+     "p_second": 0.44852206365700026,
+     "p_neuf": 0.44852206365700026,
+     "p_bon": 0.5035173990990969,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.5684145102750334,
+     "p_second": 0.4094260256204556,
+     "p_neuf": 0.5684145102750334,
+     "p_bon": 0.4094260256204556,
+     "position_choisie": 4
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.5970199823098834,
+     "p_second": 0.3766433359791723,
+     "p_neuf": 0.3766433359791723,
+     "p_bon": 0.5970199823098834,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9408980269461791,
+     "p_second": 0.045430541937990135,
+     "p_neuf": 0.9408980269461791,
+     "p_bon": 0.9408980269461791,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.891098478207052,
+     "p_second": 0.04300056880295209,
+     "p_neuf": 0.891098478207052,
+     "p_bon": 0.891098478207052,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9769284389207181,
+     "p_second": 0.009384121402602178,
+     "p_neuf": 0.9769284389207181,
+     "p_bon": 0.9769284389207181,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8650950967297018,
+     "p_second": 0.05154206840554493,
+     "p_neuf": 0.8650950967297018,
+     "p_bon": 0.8650950967297018,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9608751545278792,
+     "p_second": 0.020223712779451137,
+     "p_neuf": 0.9608751545278792,
+     "p_bon": 0.9608751545278792,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9408312469528648,
+     "p_second": 0.02242176495580112,
+     "p_neuf": 0.9408312469528648,
+     "p_bon": 0.9408312469528648,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9018626861004179,
+     "p_second": 0.03868759598099929,
+     "p_neuf": 0.9018626861004179,
+     "p_bon": 0.9018626861004179,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.97097413337656,
+     "p_second": 0.018033100313870096,
+     "p_neuf": 0.97097413337656,
+     "p_bon": 0.97097413337656,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 330.49426476160687,
+   "jetons_moyens": 440.25
+  },
+  "neuf_aucun": {
+   "contexte": "deux_exemples",
+   "neuf": "aucun",
+   "n": 4,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.844215152332462,
+     "p_second": 0.14463960847571164,
+     "p_neuf": 0.14463960847571164,
+     "p_bon": 0.844215152332462,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8887553603516402,
+     "p_second": 0.10252752346380559,
+     "p_neuf": 0.10252752346380559,
+     "p_bon": 0.8887553603516402,
+     "position_choisie": 0
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9518820518088287,
+     "p_second": 0.029911407564445047,
+     "p_neuf": 0.029911407564445047,
+     "p_bon": 0.9518820518088287,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.6119573664292096,
+     "p_second": 0.28648168884545216,
+     "p_neuf": 0.28648168884545216,
+     "p_bon": 0.6119573664292096,
+     "position_choisie": 0
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.4886878904322619,
+     "p_second": 0.3035154214853493,
+     "p_neuf": 0.3035154214853493,
+     "p_bon": 0.19114738686319768,
+     "position_choisie": 0
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.4521085629635429,
+     "p_second": 0.21029715677541247,
+     "p_neuf": 0.21029715677541247,
+     "p_bon": 0.4521085629635429,
+     "position_choisie": 0
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.6114052944584829,
+     "p_second": 0.19692251552952192,
+     "p_neuf": 0.07310076019073354,
+     "p_bon": 0.6114052944584829,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.3543842514846773,
+     "p_second": 0.33648657999617765,
+     "p_neuf": 0.33648657999617765,
+     "p_bon": 0.2874765553300112,
+     "position_choisie": 1
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.9438899059022597,
+     "p_second": 0.05209502216157526,
+     "p_neuf": 0.05209502216157526,
+     "p_bon": 0.9438899059022597,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7750986972359034,
+     "p_second": 0.1841156261743126,
+     "p_neuf": 0.1841156261743126,
+     "p_bon": 0.005885710281701716,
+     "position_choisie": 0
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.41146900715133145,
+     "p_second": 0.35924964736484405,
+     "p_neuf": 0.41146900715133145,
+     "p_bon": 0.35924964736484405,
+     "position_choisie": 4
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.8821795861754741,
+     "p_second": 0.07315466797942966,
+     "p_neuf": 0.03773757187410898,
+     "p_bon": 0.8821795861754741,
+     "position_choisie": 3
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8831500351020537,
+     "p_second": 0.07389060271838431,
+     "p_neuf": 0.07389060271838431,
+     "p_bon": 0.8831500351020537,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8489271761476617,
+     "p_second": 0.10628664418187884,
+     "p_neuf": 0.10628664418187884,
+     "p_bon": 0.8489271761476617,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.9100323366450851,
+     "p_second": 0.06906562989959329,
+     "p_neuf": 0.06906562989959329,
+     "p_bon": 0.9100323366450851,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.9470278544827462,
+     "p_second": 0.04472281890110501,
+     "p_neuf": 0.04472281890110501,
+     "p_bon": 0.9470278544827462,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.8784443444691166,
+     "p_second": 0.08411864133058872,
+     "p_neuf": 0.08411864133058872,
+     "p_bon": 0.08411864133058872,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7018683652110322,
+     "p_second": 0.1444116951331795,
+     "p_neuf": 0.7018683652110322,
+     "p_bon": 0.7018683652110322,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7837996081222193,
+     "p_second": 0.0910194772158903,
+     "p_neuf": 0.7837996081222193,
+     "p_bon": 0.7837996081222193,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6706392668432377,
+     "p_second": 0.14302919542406636,
+     "p_neuf": 0.6706392668432377,
+     "p_bon": 0.6706392668432377,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.49801850764590655,
+     "p_second": 0.33448204735895515,
+     "p_neuf": 0.49801850764590655,
+     "p_bon": 0.49801850764590655,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6245852867796016,
+     "p_second": 0.1710918315140044,
+     "p_neuf": 0.6245852867796016,
+     "p_bon": 0.6245852867796016,
+     "position_choisie": 4
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5794466486785786,
+     "p_second": 0.12696062990882898,
+     "p_neuf": 0.5794466486785786,
+     "p_bon": 0.5794466486785786,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6814859822637036,
+     "p_second": 0.19295543190907596,
+     "p_neuf": 0.6814859822637036,
+     "p_bon": 0.6814859822637036,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 329.8702538013458,
+   "jetons_moyens": 424.1666666666667
+  },
+  "neuf_en_premier": {
+   "contexte": "deux_exemples",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "premier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.9478503395409537,
+     "p_second": 0.04274271006887857,
+     "p_neuf": 0.04274271006887857,
+     "p_bon": 0.9478503395409537,
+     "position_choisie": 1
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8777731706691739,
+     "p_second": 0.06399714502725282,
+     "p_neuf": 0.06399714502725282,
+     "p_bon": 0.8777731706691739,
+     "position_choisie": 1
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9754499032125279,
+     "p_second": 0.01102656285262735,
+     "p_neuf": 0.00860349970220343,
+     "p_bon": 0.9754499032125279,
+     "position_choisie": 1
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.4870386986570793,
+     "p_second": 0.44371173848186357,
+     "p_neuf": 0.4870386986570793,
+     "p_bon": 0.44371173848186357,
+     "position_choisie": 0
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5740577222033293,
+     "p_second": 0.27943800729840623,
+     "p_neuf": 0.1308368890779074,
+     "p_bon": 0.5740577222033293,
+     "position_choisie": 2
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.46795465059496627,
+     "p_second": 0.3159404954734955,
+     "p_neuf": 0.3159404954734955,
+     "p_bon": 0.46795465059496627,
+     "position_choisie": 1
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.6877352478734352,
+     "p_second": 0.16660268986126978,
+     "p_neuf": 0.16660268986126978,
+     "p_bon": 0.6877352478734352,
+     "position_choisie": 2
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.3483154061610716,
+     "p_second": 0.3395910864303925,
+     "p_neuf": 0.3483154061610716,
+     "p_bon": 0.3395910864303925,
+     "position_choisie": 0
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.9727777604273165,
+     "p_second": 0.018589892376712866,
+     "p_neuf": 0.018589892376712866,
+     "p_bon": 0.9727777604273165,
+     "position_choisie": 1
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5698388022798974,
+     "p_second": 0.36465903941856487,
+     "p_neuf": 0.36465903941856487,
+     "p_bon": 0.038931382492484914,
+     "position_choisie": 1
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.731622278424389,
+     "p_second": 0.15315373177302452,
+     "p_neuf": 0.04992106403468155,
+     "p_bon": 0.731622278424389,
+     "position_choisie": 1
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.6552011649258883,
+     "p_second": 0.21128028165003465,
+     "p_neuf": 0.21128028165003465,
+     "p_bon": 0.6552011649258883,
+     "position_choisie": 4
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8294811850848292,
+     "p_second": 0.10360680035298847,
+     "p_neuf": 0.10360680035298847,
+     "p_bon": 0.8294811850848292,
+     "position_choisie": 1
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7071636639996892,
+     "p_second": 0.17824743863260065,
+     "p_neuf": 0.17824743863260065,
+     "p_bon": 0.7071636639996892,
+     "position_choisie": 2
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.929855090854114,
+     "p_second": 0.030739338875014077,
+     "p_neuf": 0.030739338875014077,
+     "p_bon": 0.929855090854114,
+     "position_choisie": 1
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8962138938116512,
+     "p_second": 0.09831397300991783,
+     "p_neuf": 0.09831397300991783,
+     "p_bon": 0.8962138938116512,
+     "position_choisie": 1
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.6802852717098071,
+     "p_second": 0.269853511136997,
+     "p_neuf": 0.269853511136997,
+     "p_bon": 0.269853511136997,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7276060127260178,
+     "p_second": 0.11367066037313928,
+     "p_neuf": 0.7276060127260178,
+     "p_bon": 0.7276060127260178,
+     "position_choisie": 0
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.85766104914199,
+     "p_second": 0.052364403878194174,
+     "p_neuf": 0.85766104914199,
+     "p_bon": 0.85766104914199,
+     "position_choisie": 0
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5303450984767901,
+     "p_second": 0.16478404498983595,
+     "p_neuf": 0.5303450984767901,
+     "p_bon": 0.5303450984767901,
+     "position_choisie": 0
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6419592973306933,
+     "p_second": 0.19917705976430738,
+     "p_neuf": 0.6419592973306933,
+     "p_bon": 0.6419592973306933,
+     "position_choisie": 0
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6670022012533877,
+     "p_second": 0.10304253729023208,
+     "p_neuf": 0.6670022012533877,
+     "p_bon": 0.6670022012533877,
+     "position_choisie": 0
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8059592664265333,
+     "p_second": 0.09174978189745878,
+     "p_neuf": 0.8059592664265333,
+     "p_bon": 0.8059592664265333,
+     "position_choisie": 0
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.48602707056800626,
+     "p_second": 0.24656001817132372,
+     "p_neuf": 0.48602707056800626,
+     "p_bon": 0.48602707056800626,
+     "position_choisie": 0
+    }
+   ],
+   "ms": 312.4055763085683,
+   "jetons_moyens": 430.875
+  },
+  "neuf_description_en_premier": {
+   "contexte": "deux_exemples",
+   "neuf": "description",
+   "n": 4,
+   "neuf_en": "premier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.9375294327384857,
+     "p_second": 0.05036206189180746,
+     "p_neuf": 0.05036206189180746,
+     "p_bon": 0.9375294327384857,
+     "position_choisie": 1
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.7899767784179729,
+     "p_second": 0.14204907070200312,
+     "p_neuf": 0.14204907070200312,
+     "p_bon": 0.7899767784179729,
+     "position_choisie": 1
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9381092481159744,
+     "p_second": 0.048413005387155206,
+     "p_neuf": 0.048413005387155206,
+     "p_bon": 0.9381092481159744,
+     "position_choisie": 1
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.919797289164144,
+     "p_second": 0.06060897495891383,
+     "p_neuf": 0.919797289164144,
+     "p_bon": 0.06060897495891383,
+     "position_choisie": 0
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.6010149700784104,
+     "p_second": 0.2921416669299645,
+     "p_neuf": 0.2921416669299645,
+     "p_bon": 0.6010149700784104,
+     "position_choisie": 2
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.6450134250381037,
+     "p_second": 0.19019693516528563,
+     "p_neuf": 0.6450134250381037,
+     "p_bon": 0.19019693516528563,
+     "position_choisie": 0
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.742406539284201,
+     "p_second": 0.13967199711147413,
+     "p_neuf": 0.0615758563765338,
+     "p_bon": 0.742406539284201,
+     "position_choisie": 2
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.3574194459911967,
+     "p_second": 0.3526451448884657,
+     "p_neuf": 0.3526451448884657,
+     "p_bon": 0.3574194459911967,
+     "position_choisie": 1
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.9771139170197982,
+     "p_second": 0.016471308489872754,
+     "p_neuf": 0.016471308489872754,
+     "p_bon": 0.9771139170197982,
+     "position_choisie": 1
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5250189289944924,
+     "p_second": 0.4023252572888744,
+     "p_neuf": 0.4023252572888744,
+     "p_bon": 0.04166036223904722,
+     "position_choisie": 1
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.8355185786925281,
+     "p_second": 0.07700644150594776,
+     "p_neuf": 0.05257133387177932,
+     "p_bon": 0.8355185786925281,
+     "position_choisie": 1
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.5281576317706681,
+     "p_second": 0.37585590200200786,
+     "p_neuf": 0.37585590200200786,
+     "p_bon": 0.5281576317706681,
+     "position_choisie": 4
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7831849044798825,
+     "p_second": 0.12578662577020194,
+     "p_neuf": 0.12578662577020194,
+     "p_bon": 0.7831849044798825,
+     "position_choisie": 1
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6074807520144659,
+     "p_second": 0.31177665784419506,
+     "p_neuf": 0.31177665784419506,
+     "p_bon": 0.6074807520144659,
+     "position_choisie": 2
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.8554927872144247,
+     "p_second": 0.10025503994949513,
+     "p_neuf": 0.10025503994949513,
+     "p_bon": 0.8554927872144247,
+     "position_choisie": 1
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8398601099718347,
+     "p_second": 0.14825207646742408,
+     "p_neuf": 0.14825207646742408,
+     "p_bon": 0.8398601099718347,
+     "position_choisie": 1
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7089647546353555,
+     "p_second": 0.2549857035402452,
+     "p_neuf": 0.7089647546353555,
+     "p_bon": 0.7089647546353555,
+     "position_choisie": 0
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8745949576202112,
+     "p_second": 0.04276971243002208,
+     "p_neuf": 0.8745949576202112,
+     "p_bon": 0.8745949576202112,
+     "position_choisie": 0
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9618465656862051,
+     "p_second": 0.013803764916118063,
+     "p_neuf": 0.9618465656862051,
+     "p_bon": 0.9618465656862051,
+     "position_choisie": 0
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5615481486975918,
+     "p_second": 0.13987310914101422,
+     "p_neuf": 0.5615481486975918,
+     "p_bon": 0.5615481486975918,
+     "position_choisie": 0
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8597522952616384,
+     "p_second": 0.08504398890931582,
+     "p_neuf": 0.8597522952616384,
+     "p_bon": 0.8597522952616384,
+     "position_choisie": 0
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9197107187687051,
+     "p_second": 0.03905155897037086,
+     "p_neuf": 0.9197107187687051,
+     "p_bon": 0.9197107187687051,
+     "position_choisie": 0
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9554919696040173,
+     "p_second": 0.019119268111783622,
+     "p_neuf": 0.9554919696040173,
+     "p_bon": 0.9554919696040173,
+     "position_choisie": 0
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9648678915528311,
+     "p_second": 0.016992385164922564,
+     "p_neuf": 0.9648678915528311,
+     "p_bon": 0.9648678915528311,
+     "position_choisie": 0
+    }
+   ],
+   "ms": 312.396506468455,
+   "jetons_moyens": 440.25
+  },
+  "deux_existants": {
+   "contexte": "deux_exemples",
+   "neuf": "sans_texte",
+   "n": 2,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6747791821416217,
+     "p_second": 0.32105890695379496,
+     "p_neuf": 0.6747791821416217,
+     "p_bon": 0.32105890695379496,
+     "position_choisie": 2
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.8034308292740447,
+     "p_second": 0.19474031303666317,
+     "p_neuf": 0.8034308292740447,
+     "p_bon": 0.19474031303666317,
+     "position_choisie": 2
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.8610765710557857,
+     "p_second": 0.12228570664532923,
+     "p_neuf": 0.12228570664532923,
+     "p_bon": 0.8610765710557857,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9553984315093631,
+     "p_second": 0.03445841047783769,
+     "p_neuf": 0.9553984315093631,
+     "p_bon": 0.03445841047783769,
+     "position_choisie": 2
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.8525233180728402,
+     "p_second": 0.08671372807877921,
+     "p_neuf": 0.8525233180728402,
+     "p_bon": 0.060762953848380645,
+     "position_choisie": 2
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7241719666747439,
+     "p_second": 0.2407459686180691,
+     "p_neuf": 0.7241719666747439,
+     "p_bon": 0.2407459686180691,
+     "position_choisie": 2
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.5356047483937345,
+     "p_second": 0.33715973869191807,
+     "p_neuf": 0.33715973869191807,
+     "p_bon": 0.5356047483937345,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.7293057229283704,
+     "p_second": 0.18024458982565403,
+     "p_neuf": 0.7293057229283704,
+     "p_bon": 0.18024458982565403,
+     "position_choisie": 2
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.6643596741304242,
+     "p_second": 0.3321968751241576,
+     "p_neuf": 0.6643596741304242,
+     "p_bon": 0.3321968751241576,
+     "position_choisie": 2
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.7105347035564238,
+     "p_second": 0.2554836701338374,
+     "p_neuf": 0.7105347035564238,
+     "p_bon": 0.03398162630973878,
+     "position_choisie": 2
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.5728514249366262,
+     "p_second": 0.34620578474584246,
+     "p_neuf": 0.5728514249366262,
+     "p_bon": 0.34620578474584246,
+     "position_choisie": 2
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.5660762228003675,
+     "p_second": 0.41511883509297604,
+     "p_neuf": 0.5660762228003675,
+     "p_bon": 0.41511883509297604,
+     "position_choisie": 2
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7074005038742021,
+     "p_second": 0.27530648431770616,
+     "p_neuf": 0.27530648431770616,
+     "p_bon": 0.7074005038742021,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.502004658687494,
+     "p_second": 0.41502227300032124,
+     "p_neuf": 0.502004658687494,
+     "p_bon": 0.41502227300032124,
+     "position_choisie": 2
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.6768938680842929,
+     "p_second": 0.30254909948121606,
+     "p_neuf": 0.30254909948121606,
+     "p_bon": 0.6768938680842929,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.637335859212117,
+     "p_second": 0.34192211444117004,
+     "p_neuf": 0.34192211444117004,
+     "p_bon": 0.637335859212117,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9667753076324337,
+     "p_second": 0.02698328631356204,
+     "p_neuf": 0.9667753076324337,
+     "p_bon": 0.9667753076324337,
+     "position_choisie": 2
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.975541132260958,
+     "p_second": 0.015336300576682336,
+     "p_neuf": 0.975541132260958,
+     "p_bon": 0.975541132260958,
+     "position_choisie": 2
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9809011756435964,
+     "p_second": 0.012501591318694423,
+     "p_neuf": 0.9809011756435964,
+     "p_bon": 0.9809011756435964,
+     "position_choisie": 2
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8787837802720392,
+     "p_second": 0.08757196319735588,
+     "p_neuf": 0.8787837802720392,
+     "p_bon": 0.8787837802720392,
+     "position_choisie": 2
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9660406522613815,
+     "p_second": 0.02653763198061758,
+     "p_neuf": 0.9660406522613815,
+     "p_bon": 0.9660406522613815,
+     "position_choisie": 2
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9172589756077483,
+     "p_second": 0.05285951197590258,
+     "p_neuf": 0.9172589756077483,
+     "p_bon": 0.9172589756077483,
+     "position_choisie": 2
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8380574420572088,
+     "p_second": 0.11342354910035296,
+     "p_neuf": 0.8380574420572088,
+     "p_bon": 0.8380574420572088,
+     "position_choisie": 2
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9821991221082355,
+     "p_second": 0.009800255648801107,
+     "p_neuf": 0.9821991221082355,
+     "p_bon": 0.9821991221082355,
+     "position_choisie": 2
+    }
+   ],
+   "ms": 285.33071279525757,
+   "jetons_moyens": 274.4583333333333
+  },
+  "dix_existants": {
+   "contexte": "deux_exemples",
+   "neuf": "sans_texte",
+   "n": 10,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.5491997820908546,
+     "p_second": 0.441164847107669,
+     "p_neuf": 0.441164847107669,
+     "p_bon": 0.5491997820908546,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.7709737135241778,
+     "p_second": 0.21339114488747635,
+     "p_neuf": 0.21339114488747635,
+     "p_bon": 0.7709737135241778,
+     "position_choisie": 0
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9021943306312866,
+     "p_second": 0.08467240718331732,
+     "p_neuf": 0.08467240718331732,
+     "p_bon": 0.9021943306312866,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.865629756242597,
+     "p_second": 0.10183780049303502,
+     "p_neuf": 0.865629756242597,
+     "p_bon": 0.10183780049303502,
+     "position_choisie": 10
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.6154866695984683,
+     "p_second": 0.3272319759301319,
+     "p_neuf": 0.6154866695984683,
+     "p_bon": 0.3272319759301319,
+     "position_choisie": 10
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.6577590095145136,
+     "p_second": 0.2860976530293434,
+     "p_neuf": 0.6577590095145136,
+     "p_bon": 0.2860976530293434,
+     "position_choisie": 10
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.602039855702893,
+     "p_second": 0.3248084370132637,
+     "p_neuf": 0.3248084370132637,
+     "p_bon": 0.602039855702893,
+     "position_choisie": 1
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.6197358118675238,
+     "p_second": 0.26016091217946075,
+     "p_neuf": 0.6197358118675238,
+     "p_bon": 0.26016091217946075,
+     "position_choisie": 10
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.72747851310924,
+     "p_second": 0.2650161135008889,
+     "p_neuf": 0.2650161135008889,
+     "p_bon": 0.72747851310924,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.5610873037716531,
+     "p_second": 0.2945354002808345,
+     "p_neuf": 0.5610873037716531,
+     "p_bon": 0.028763556437052553,
+     "position_choisie": 10
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.5290873537671615,
+     "p_second": 0.38320616090702797,
+     "p_neuf": 0.5290873537671615,
+     "p_bon": 0.38320616090702797,
+     "position_choisie": 10
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.7787498773606564,
+     "p_second": 0.17703813322523976,
+     "p_neuf": 0.17703813322523976,
+     "p_bon": 0.7787498773606564,
+     "position_choisie": 4
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8700695027778351,
+     "p_second": 0.11490727492888508,
+     "p_neuf": 0.11490727492888508,
+     "p_bon": 0.8700695027778351,
+     "position_choisie": 0
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6340814584748001,
+     "p_second": 0.2648376219835974,
+     "p_neuf": 0.2648376219835974,
+     "p_bon": 0.6340814584748001,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.5384267555289501,
+     "p_second": 0.4199047122420904,
+     "p_neuf": 0.5384267555289501,
+     "p_bon": 0.4199047122420904,
+     "position_choisie": 10
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.7819309439662931,
+     "p_second": 0.20397031974935925,
+     "p_neuf": 0.20397031974935925,
+     "p_bon": 0.7819309439662931,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.551789501754013,
+     "p_second": 0.2621789202858371,
+     "p_neuf": 0.2621789202858371,
+     "p_bon": 0.2621789202858371,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9247832558263392,
+     "p_second": 0.020263316756198902,
+     "p_neuf": 0.9247832558263392,
+     "p_bon": 0.9247832558263392,
+     "position_choisie": 10
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9697891268446073,
+     "p_second": 0.009049011654081215,
+     "p_neuf": 0.9697891268446073,
+     "p_bon": 0.9697891268446073,
+     "position_choisie": 10
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.382360676391889,
+     "p_second": 0.30423125404445944,
+     "p_neuf": 0.382360676391889,
+     "p_bon": 0.382360676391889,
+     "position_choisie": 10
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9499423048783698,
+     "p_second": 0.02771706225544974,
+     "p_neuf": 0.9499423048783698,
+     "p_bon": 0.9499423048783698,
+     "position_choisie": 10
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8125775518298483,
+     "p_second": 0.07419768288216684,
+     "p_neuf": 0.8125775518298483,
+     "p_bon": 0.8125775518298483,
+     "position_choisie": 10
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.454280833563127,
+     "p_second": 0.11497238119133114,
+     "p_neuf": 0.454280833563127,
+     "p_bon": 0.454280833563127,
+     "position_choisie": 10
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9491835302210307,
+     "p_second": 0.021497931085473446,
+     "p_neuf": 0.9491835302210307,
+     "p_bon": 0.9491835302210307,
+     "position_choisie": 10
+    }
+   ],
+   "ms": 525.3724753856659,
+   "jetons_moyens": 900.75
+  },
+  "dix_existants_nom_seul": {
+   "contexte": "nom",
+   "neuf": "sans_texte",
+   "n": 10,
+   "neuf_en": "dernier",
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8173059562965436,
+     "p_second": 0.1219299144692904,
+     "p_neuf": 0.026881045707786055,
+     "p_bon": 0.8173059562965436,
+     "position_choisie": 0
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8007952146090347,
+     "p_second": 0.12058765279950133,
+     "p_neuf": 0.12058765279950133,
+     "p_bon": 0.8007952146090347,
+     "position_choisie": 0
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.8299974688148581,
+     "p_second": 0.0335658502392531,
+     "p_neuf": 0.033234647418564314,
+     "p_bon": 0.8299974688148581,
+     "position_choisie": 0
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.3979402546710967,
+     "p_second": 0.26454148251863796,
+     "p_neuf": 0.3979402546710967,
+     "p_bon": 0.26454148251863796,
+     "position_choisie": 10
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.6184177344426112,
+     "p_second": 0.12541715717447177,
+     "p_neuf": 0.6184177344426112,
+     "p_bon": 0.12541715717447177,
+     "position_choisie": 10
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.6508293162705208,
+     "p_second": 0.27843608105493795,
+     "p_neuf": 0.27843608105493795,
+     "p_bon": 0.6508293162705208,
+     "position_choisie": 0
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.4740485925127911,
+     "p_second": 0.33897165891170966,
+     "p_neuf": 0.4740485925127911,
+     "p_bon": 0.33897165891170966,
+     "position_choisie": 10
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.5329572724414684,
+     "p_second": 0.21114748149688567,
+     "p_neuf": 0.21114748149688567,
+     "p_bon": 0.5329572724414684,
+     "position_choisie": 0
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.8117244037730073,
+     "p_second": 0.10502852241199001,
+     "p_neuf": 0.10502852241199001,
+     "p_bon": 0.8117244037730073,
+     "position_choisie": 0
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.446548059385398,
+     "p_second": 0.2937830402467562,
+     "p_neuf": 0.446548059385398,
+     "p_bon": 0.06427658091314943,
+     "position_choisie": 10
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.6091947171758794,
+     "p_second": 0.11058213547355739,
+     "p_neuf": 0.11058213547355739,
+     "p_bon": 0.6091947171758794,
+     "position_choisie": 0
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.6337509563137115,
+     "p_second": 0.12977431018695013,
+     "p_neuf": 0.6337509563137115,
+     "p_bon": 0.12977431018695013,
+     "position_choisie": 10
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "identifiants et secrets",
+     "p": 0.34248404615057726,
+     "p_second": 0.23944849444686125,
+     "p_neuf": 0.23944849444686125,
+     "p_bon": 0.17803511726021248,
+     "position_choisie": 2
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7739611719265653,
+     "p_second": 0.11929823800241689,
+     "p_neuf": 0.11929823800241689,
+     "p_bon": 0.7739611719265653,
+     "position_choisie": 1
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.7654816422315379,
+     "p_second": 0.13655849843275458,
+     "p_neuf": 0.034787303622996944,
+     "p_bon": 0.7654816422315379,
+     "position_choisie": 0
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.9285606613056615,
+     "p_second": 0.04156348018482068,
+     "p_neuf": 0.04156348018482068,
+     "p_bon": 0.9285606613056615,
+     "position_choisie": 0
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.6437983186271266,
+     "p_second": 0.176098127916283,
+     "p_neuf": 0.176098127916283,
+     "p_bon": 0.176098127916283,
+     "position_choisie": 3
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8513835979572603,
+     "p_second": 0.042533823420294735,
+     "p_neuf": 0.8513835979572603,
+     "p_bon": 0.8513835979572603,
+     "position_choisie": 10
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7888946101704907,
+     "p_second": 0.11859024153564886,
+     "p_neuf": 0.7888946101704907,
+     "p_bon": 0.7888946101704907,
+     "position_choisie": 10
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6442039087082352,
+     "p_second": 0.08396668039312837,
+     "p_neuf": 0.6442039087082352,
+     "p_bon": 0.6442039087082352,
+     "position_choisie": 10
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8168142335921856,
+     "p_second": 0.1275930255092973,
+     "p_neuf": 0.8168142335921856,
+     "p_bon": 0.8168142335921856,
+     "position_choisie": 10
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5554252286937732,
+     "p_second": 0.12485453553732723,
+     "p_neuf": 0.5554252286937732,
+     "p_bon": 0.5554252286937732,
+     "position_choisie": 10
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5434410620313013,
+     "p_second": 0.17534289944632303,
+     "p_neuf": 0.5434410620313013,
+     "p_bon": 0.5434410620313013,
+     "position_choisie": 10
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5120397466164741,
+     "p_second": 0.1381349394138984,
+     "p_neuf": 0.5120397466164741,
+     "p_bon": 0.5120397466164741,
+     "position_choisie": 10
+    }
+   ],
+   "ms": 254.74613904953003,
+   "jetons_moyens": 293.75
+  },
+  "ordre_inverse": {
+   "contexte": "deux_exemples",
+   "neuf": "sans_texte",
+   "n": 4,
+   "neuf_en": "dernier",
+   "inverse": true,
+   "lignes": [
+    {
+     "id": "r01",
+     "langue": "fr",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.953424530213452,
+     "p_second": 0.015577904833536228,
+     "p_neuf": 0.01130273857274035,
+     "p_bon": 0.953424530213452,
+     "position_choisie": 3
+    },
+    {
+     "id": "r02",
+     "langue": "en",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.6871802118854704,
+     "p_second": 0.2871636329607103,
+     "p_neuf": 0.2871636329607103,
+     "p_bon": 0.6871802118854704,
+     "position_choisie": 3
+    },
+    {
+     "id": "r03",
+     "langue": "fr",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9798683903603688,
+     "p_second": 0.00902041505466154,
+     "p_neuf": 0.00902041505466154,
+     "p_bon": 0.9798683903603688,
+     "position_choisie": 3
+    },
+    {
+     "id": "r04",
+     "langue": "en",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.748784444111665,
+     "p_second": 0.23233860043542814,
+     "p_neuf": 0.748784444111665,
+     "p_bon": 0.23233860043542814,
+     "position_choisie": 4
+    },
+    {
+     "id": "r05",
+     "langue": "fr",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.5542790152748003,
+     "p_second": 0.2241874768847561,
+     "p_neuf": 0.5542790152748003,
+     "p_bon": 0.13475625380014492,
+     "position_choisie": 4
+    },
+    {
+     "id": "r06",
+     "langue": "en",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5768358457614706,
+     "p_second": 0.3661210936642543,
+     "p_neuf": 0.3661210936642543,
+     "p_bon": 0.5768358457614706,
+     "position_choisie": 3
+    },
+    {
+     "id": "r07",
+     "langue": "fr",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.7358418351504973,
+     "p_second": 0.12810370429076898,
+     "p_neuf": 0.12810370429076898,
+     "p_bon": 0.7358418351504973,
+     "position_choisie": 2
+    },
+    {
+     "id": "r08",
+     "langue": "en",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.6365509865986918,
+     "p_second": 0.2613575468807782,
+     "p_neuf": 0.2613575468807782,
+     "p_bon": 0.6365509865986918,
+     "position_choisie": 3
+    },
+    {
+     "id": "r09",
+     "langue": "fr",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.8339033566066455,
+     "p_second": 0.10097212316316986,
+     "p_neuf": 0.10097212316316986,
+     "p_bon": 0.8339033566066455,
+     "position_choisie": 3
+    },
+    {
+     "id": "r10",
+     "langue": "en",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.4443030641737278,
+     "p_second": 0.2569267146413621,
+     "p_neuf": 0.1790024063449112,
+     "p_bon": 0.2569267146413621,
+     "position_choisie": 3
+    },
+    {
+     "id": "r11",
+     "langue": "fr",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.5907622086626751,
+     "p_second": 0.3178841953604134,
+     "p_neuf": 0.3178841953604134,
+     "p_bon": 0.5907622086626751,
+     "position_choisie": 3
+    },
+    {
+     "id": "r12",
+     "langue": "en",
+     "attendu": "modèles d'embarquement",
+     "rendu": null,
+     "p": 0.600998969766248,
+     "p_second": 0.36631228739662186,
+     "p_neuf": 0.600998969766248,
+     "p_bon": 0.36631228739662186,
+     "position_choisie": 4
+    },
+    {
+     "id": "r13",
+     "langue": "fr",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6520222277136926,
+     "p_second": 0.2936745198868214,
+     "p_neuf": 0.2936745198868214,
+     "p_bon": 0.6520222277136926,
+     "position_choisie": 3
+    },
+    {
+     "id": "r14",
+     "langue": "en",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7635686370901368,
+     "p_second": 0.18117596579265785,
+     "p_neuf": 0.18117596579265785,
+     "p_bon": 0.7635686370901368,
+     "position_choisie": 2
+    },
+    {
+     "id": "r15",
+     "langue": "fr",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.600760204032023,
+     "p_second": 0.36047906038505795,
+     "p_neuf": 0.36047906038505795,
+     "p_bon": 0.600760204032023,
+     "position_choisie": 3
+    },
+    {
+     "id": "r16",
+     "langue": "en",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8967673888605533,
+     "p_second": 0.07658932299890754,
+     "p_neuf": 0.07658932299890754,
+     "p_bon": 0.8967673888605533,
+     "position_choisie": 3
+    },
+    {
+     "id": "n01",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.577068369896925,
+     "p_second": 0.3410785981385431,
+     "p_neuf": 0.577068369896925,
+     "p_bon": 0.577068369896925,
+     "position_choisie": 4
+    },
+    {
+     "id": "n02",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9782187911591702,
+     "p_second": 0.005897139525384923,
+     "p_neuf": 0.9782187911591702,
+     "p_bon": 0.9782187911591702,
+     "position_choisie": 4
+    },
+    {
+     "id": "n03",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9723888970013478,
+     "p_second": 0.012513834357801313,
+     "p_neuf": 0.9723888970013478,
+     "p_bon": 0.9723888970013478,
+     "position_choisie": 4
+    },
+    {
+     "id": "n04",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5825130815688172,
+     "p_second": 0.18826457136076188,
+     "p_neuf": 0.5825130815688172,
+     "p_bon": 0.5825130815688172,
+     "position_choisie": 4
+    },
+    {
+     "id": "n05",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8645607684657622,
+     "p_second": 0.0798742650753378,
+     "p_neuf": 0.8645607684657622,
+     "p_bon": 0.8645607684657622,
+     "position_choisie": 4
+    },
+    {
+     "id": "n06",
+     "langue": "en",
+     "attendu": null,
+     "rendu": "compilation et charge du poste",
+     "p": 0.3503304214102265,
+     "p_second": 0.3411317656360967,
+     "p_neuf": 0.3411317656360967,
+     "p_bon": 0.3411317656360967,
+     "position_choisie": 1
+    },
+    {
+     "id": "n07",
+     "langue": "fr",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6816483540867925,
+     "p_second": 0.15123641509852442,
+     "p_neuf": 0.6816483540867925,
+     "p_bon": 0.6816483540867925,
+     "position_choisie": 4
+    },
+    {
+     "id": "n08",
+     "langue": "en",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9030839242733999,
+     "p_second": 0.058662250813018346,
+     "p_neuf": 0.9030839242733999,
+     "p_bon": 0.9030839242733999,
+     "position_choisie": 4
+    }
+   ],
+   "ms": 327.5410830974579,
+   "jetons_moyens": 430.875
+  },
+  "alternative_un_choix_creer_en_premier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.9230253496029157,
+     "p_second": 0.05249228091118148,
+     "p_neuf": 0.05249228091118148
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8380773198617687,
+     "p_second": 0.14740846265302518,
+     "p_neuf": 0.14740846265302518
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9568115204345619,
+     "p_second": 0.03576356025159357,
+     "p_neuf": 0.03576356025159357
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.531964568242138,
+     "p_second": 0.3948538108162768,
+     "p_neuf": 0.3948538108162768
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.7922799479606195,
+     "p_second": 0.10240382631846923,
+     "p_neuf": 0.09249672493069301
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.6912367553985842,
+     "p_second": 0.22480735566893392,
+     "p_neuf": 0.22480735566893392
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.9192841566770293,
+     "p_second": 0.050499528621840796,
+     "p_neuf": 0.02000697694113994
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5209953235982028,
+     "p_second": 0.4207099363540754,
+     "p_neuf": 0.04396729636458534
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.9280568959315942,
+     "p_second": 0.06764381348177834,
+     "p_neuf": 0.06764381348177834
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.4934234543295973,
+     "p_second": 0.3130337185282398,
+     "p_neuf": 0.15097616687756604
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.7530493742598796,
+     "p_second": 0.14997550370651577,
+     "p_neuf": 0.14997550370651577
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9639762040655899,
+     "p_second": 0.028922396291444975,
+     "p_neuf": 0.028922396291444975
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.9517769323088583,
+     "p_second": 0.02471727174714503,
+     "p_neuf": 0.02471727174714503
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.7714219193527593,
+     "p_second": 0.16710135341069063,
+     "p_neuf": 0.057003020976716445
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.8718115683504684,
+     "p_second": 0.11461545619608299,
+     "p_neuf": 0.11461545619608299
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.9747498974921519,
+     "p_second": 0.021306606149821616,
+     "p_neuf": 0.021306606149821616
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.45886969991609855,
+     "p_second": 0.27709558814089075,
+     "p_neuf": 0.45886969991609855
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8533309279947139,
+     "p_second": 0.1139503685359963,
+     "p_neuf": 0.8533309279947139
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7881454075966644,
+     "p_second": 0.11654488848569684,
+     "p_neuf": 0.7881454075966644
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6417718564672699,
+     "p_second": 0.14347237536903037,
+     "p_neuf": 0.6417718564672699
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6622155447157941,
+     "p_second": 0.28941059383446227,
+     "p_neuf": 0.6622155447157941
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8826512548828251,
+     "p_second": 0.0594192301453672,
+     "p_neuf": 0.8826512548828251
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6882773294084197,
+     "p_second": 0.13343102042325544,
+     "p_neuf": 0.6882773294084197
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8428572172066094,
+     "p_second": 0.08203398849749925,
+     "p_neuf": 0.8428572172066094
+    }
+   ]
+  },
+  "alternative_un_choix_creer_en_dernier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.821522963287427,
+     "p_second": 0.15615925164402053,
+     "p_neuf": 0.15615925164402053
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.8145491126422133,
+     "p_second": 0.16842785902075366,
+     "p_neuf": 0.16842785902075366
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.8780048768083772,
+     "p_second": 0.10087283952822977,
+     "p_neuf": 0.10087283952822977
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.6032805065695126,
+     "p_second": 0.3500349556586001,
+     "p_neuf": 0.6032805065695126
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.7895559266976171,
+     "p_second": 0.1596449177555995,
+     "p_neuf": 0.1596449177555995
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5758888158236107,
+     "p_second": 0.34334162395692397,
+     "p_neuf": 0.34334162395692397
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.8916464983601756,
+     "p_second": 0.04945292966808754,
+     "p_neuf": 0.040814054685347385
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p": 0.8112123104905632,
+     "p_second": 0.12644773046270497,
+     "p_neuf": 0.12644773046270497
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.8138350741250513,
+     "p_second": 0.17744580550045824,
+     "p_neuf": 0.17744580550045824
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.3614111095457061,
+     "p_second": 0.3096094528902373,
+     "p_neuf": 0.3096094528902373
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.649942088724172,
+     "p_second": 0.2525635414660087,
+     "p_neuf": 0.2525635414660087
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9596773438197679,
+     "p_second": 0.033303432138235806,
+     "p_neuf": 0.033303432138235806
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.8212494823370005,
+     "p_second": 0.1452761137212523,
+     "p_neuf": 0.1452761137212523
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.6192678624647655,
+     "p_second": 0.23152208838673377,
+     "p_neuf": 0.23152208838673377
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.6632753496843546,
+     "p_second": 0.3114528767735102,
+     "p_neuf": 0.3114528767735102
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.8326439645185081,
+     "p_second": 0.1497663509017387,
+     "p_neuf": 0.1497663509017387
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5755370818789931,
+     "p_second": 0.21022539924592318,
+     "p_neuf": 0.5755370818789931
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9579223077403543,
+     "p_second": 0.021713023340008877,
+     "p_neuf": 0.9579223077403543
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9285281230162824,
+     "p_second": 0.04020782757232669,
+     "p_neuf": 0.9285281230162824
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9262247049826743,
+     "p_second": 0.02779810297872267,
+     "p_neuf": 0.9262247049826743
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.88098577817562,
+     "p_second": 0.08732606078001724,
+     "p_neuf": 0.88098577817562
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9455605674080583,
+     "p_second": 0.021953958507180814,
+     "p_neuf": 0.9455605674080583
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8044923711853111,
+     "p_second": 0.06770231350191241,
+     "p_neuf": 0.8044923711853111
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9260522685411292,
+     "p_second": 0.033226791434532985,
+     "p_neuf": 0.9260522685411292
+    }
+   ]
+  },
+  "alternative_deux_temps_oui_en_premier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p_existant": 0.8067444373176349,
+     "p": 0.9840460666520664,
+     "p_second": 0.008446367721214978,
+     "p_neuf": 0.19325556268236502
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p_existant": 0.9026006392319473,
+     "p": 0.9845941605826561,
+     "p_second": 0.01174930877904146,
+     "p_neuf": 0.09739936076805271
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.9364519569902076,
+     "p": 0.9801915220914859,
+     "p_second": 0.007971212828697623,
+     "p_neuf": 0.06354804300979244
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p_existant": 0.3985567832432482,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.6014432167567517
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p_existant": 0.7753467917962239,
+     "p": 0.46064255051537384,
+     "p_second": 0.44291287300973453,
+     "p_neuf": 0.2246532082037761
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": null,
+     "p_existant": 0.3785146403690825,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.6214853596309176
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p_existant": 0.9107023407924009,
+     "p": 0.74187534093001,
+     "p_second": 0.16634617963986556,
+     "p_neuf": 0.08929765920759912
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.675673554631457,
+     "p": 0.5043098103023301,
+     "p_second": 0.44116470859166046,
+     "p_neuf": 0.3243264453685431
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p_existant": 0.9277612006757345,
+     "p": 0.9959019131683922,
+     "p_second": 0.0031544488375510743,
+     "p_neuf": 0.0722387993242655
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.6882005085809325,
+     "p": 0.9433451255602336,
+     "p_second": 0.028826328813986724,
+     "p_neuf": 0.31179949141906754
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p_existant": 0.7057876355408176,
+     "p": 0.5105754908952937,
+     "p_second": 0.26858027853444294,
+     "p_neuf": 0.2942123644591824
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p_existant": 0.894708709533645,
+     "p": 0.9272293232472574,
+     "p_second": 0.06512978395647578,
+     "p_neuf": 0.10529129046635494
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p_existant": 0.9044255022436763,
+     "p": 0.9290461767842898,
+     "p_second": 0.03969558120937466,
+     "p_neuf": 0.0955744977563237
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p_existant": 0.6358928936904394,
+     "p": 0.959372871043685,
+     "p_second": 0.026634976085131254,
+     "p_neuf": 0.36410710630956067
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p_existant": 0.5060548840496436,
+     "p": 0.9731751149879861,
+     "p_second": 0.012079966012092967,
+     "p_neuf": 0.4939451159503564
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p_existant": 0.93671523961803,
+     "p": 0.9933629314856663,
+     "p_second": 0.003652135054781543,
+     "p_neuf": 0.06328476038196992
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": "tests",
+     "p_existant": 0.6437716176742774,
+     "p": 0.9621877393769834,
+     "p_second": 0.020421930883589633,
+     "p_neuf": 0.3562283823257227
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.21426793386708556,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7857320661329146
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.26001864105865186,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7399813589413482
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.21128275872641294,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7887172412735871
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.2478706100814834,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7521293899185166
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.28205776493988166,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7179422350601183
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.4763474283919317,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.5236525716080682
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.18023485494441627,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8197651450555836
+    }
+   ]
+  },
+  "alternative_deux_temps_non_en_premier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p_existant": 0.7703009092654531,
+     "p": 0.9845894037835345,
+     "p_second": 0.007967147335713838,
+     "p_neuf": 0.22969909073454678
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p_existant": 0.8394484957625392,
+     "p": 0.985912569067084,
+     "p_second": 0.010648108921295538,
+     "p_neuf": 0.16055150423746076
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.9012621036349903,
+     "p": 0.9776832606623299,
+     "p_second": 0.008480008248547714,
+     "p_neuf": 0.09873789636500972
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p_existant": 0.3581601579377035,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.6418398420622965
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p_existant": 0.7868029225994745,
+     "p": 0.5059640143728665,
+     "p_second": 0.39598438608782976,
+     "p_neuf": 0.2131970774005254
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": null,
+     "p_existant": 0.3796351887776165,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.6203648112223834
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "régime GPU",
+     "p_existant": 0.9060805424023451,
+     "p": 0.7506135068160115,
+     "p_second": 0.15796632486830373,
+     "p_neuf": 0.09391945759765477
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.6451278119371328,
+     "p": 0.5492075804615899,
+     "p_second": 0.3917655937748212,
+     "p_neuf": 0.3548721880628673
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p_existant": 0.8409867536735743,
+     "p": 0.9962834716170709,
+     "p_second": 0.0028939827135228283,
+     "p_neuf": 0.15901324632642574
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p_existant": 0.6353422426635645,
+     "p": 0.9500795398394691,
+     "p_second": 0.025633040438831592,
+     "p_neuf": 0.3646577573364355
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p_existant": 0.6857091713674491,
+     "p": 0.5076387212362495,
+     "p_second": 0.27217457904769604,
+     "p_neuf": 0.3142908286325508
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p_existant": 0.9184313451320074,
+     "p": 0.931134696848715,
+     "p_second": 0.062056698124126806,
+     "p_neuf": 0.08156865486799247
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p_existant": 0.8521376723966438,
+     "p": 0.9187084701242524,
+     "p_second": 0.05035578981931814,
+     "p_neuf": 0.14786232760335613
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p_existant": 0.6792303032341462,
+     "p": 0.965055536164369,
+     "p_second": 0.022552474212177608,
+     "p_neuf": 0.32076969676585376
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p_existant": 0.4246772046340703,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.5753227953659297
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p_existant": 0.9004813523137492,
+     "p": 0.9933912092363865,
+     "p_second": 0.0035276869972677124,
+     "p_neuf": 0.09951864768625075
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.48487209157370786,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.5151279084262922
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.18860298617886562,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8113970138211344
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.18301196265867745,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8169880373413226
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.16216470004594807,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8378352999540519
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.1592567082346073,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8407432917653928
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.2201981312083344,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.7798018687916657
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.47864009923380285,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.5213599007661972
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p_existant": 0.13410911231562986,
+     "p": null,
+     "p_second": null,
+     "p_neuf": 0.8658908876843702
+    }
+   ]
+  }
+ },
+ "forme_origine_deux_noms": [
+  {
+   "id": "r01",
+   "attendu": "same",
+   "contre": "identité git",
+   "p_same": 0.07963755057464673
+  },
+  {
+   "id": "r02",
+   "attendu": "same",
+   "contre": "identité git",
+   "p_same": 0.26448546703333625
+  },
+  {
+   "id": "r03",
+   "attendu": "same",
+   "contre": "compilation et charge du poste",
+   "p_same": 0.23177718935228273
+  },
+  {
+   "id": "r04",
+   "attendu": "same",
+   "contre": "compilation et charge du poste",
+   "p_same": 0.08671716981584587
+  },
+  {
+   "id": "r05",
+   "attendu": "same",
+   "contre": "tests",
+   "p_same": 0.28599942818336527
+  },
+  {
+   "id": "r06",
+   "attendu": "same",
+   "contre": "tests",
+   "p_same": 0.1595955282279087
+  },
+  {
+   "id": "r07",
+   "attendu": "same",
+   "contre": "régime GPU",
+   "p_same": 0.3454087025544115
+  },
+  {
+   "id": "r08",
+   "attendu": "same",
+   "contre": "régime GPU",
+   "p_same": 0.33581398828202214
+  },
+  {
+   "id": "r09",
+   "attendu": "same",
+   "contre": "arbre partagé entre sessions",
+   "p_same": 0.19692961344622503
+  },
+  {
+   "id": "r10",
+   "attendu": "same",
+   "contre": "arbre partagé entre sessions",
+   "p_same": 0.45307811076761473
+  },
+  {
+   "id": "r11",
+   "attendu": "same",
+   "contre": "modèles d'embarquement",
+   "p_same": 0.22888121930860578
+  },
+  {
+   "id": "r12",
+   "attendu": "same",
+   "contre": "modèles d'embarquement",
+   "p_same": 0.6195281579577068
+  },
+  {
+   "id": "r13",
+   "attendu": "same",
+   "contre": "moteur de base de données",
+   "p_same": 0.10638884283938846
+  },
+  {
+   "id": "r14",
+   "attendu": "same",
+   "contre": "moteur de base de données",
+   "p_same": 0.05350996491631409
+  },
+  {
+   "id": "r15",
+   "attendu": "same",
+   "contre": "recherche plein texte",
+   "p_same": 0.10285954412772198
+  },
+  {
+   "id": "r16",
+   "attendu": "same",
+   "contre": "identifiants et secrets",
+   "p_same": 0.5400700621747077
+  },
+  {
+   "id": "n01",
+   "attendu": "different",
+   "contre": "conception et périmètre",
+   "p_same": 0.10272827542321819
+  },
+  {
+   "id": "n02",
+   "attendu": "different",
+   "contre": "compilation et charge du poste",
+   "p_same": 0.0485545263101141
+  },
+  {
+   "id": "n03",
+   "attendu": "different",
+   "contre": "tests",
+   "p_same": 0.1004784006389366
+  },
+  {
+   "id": "n04",
+   "attendu": "different",
+   "contre": "moteur de base de données",
+   "p_same": 0.050111091219279105
+  },
+  {
+   "id": "n05",
+   "attendu": "different",
+   "contre": "moteur de base de données",
+   "p_same": 0.08056314581405266
+  },
+  {
+   "id": "n06",
+   "attendu": "different",
+   "contre": "identité git",
+   "p_same": 0.07437868028874907
+  },
+  {
+   "id": "n07",
+   "attendu": "different",
+   "contre": "recherche plein texte",
+   "p_same": 0.04378645877967786
+  },
+  {
+   "id": "n08",
+   "attendu": "different",
+   "contre": "conception et périmètre",
+   "p_same": 0.10905690455530169
+  }
+ ],
+ "memoires_meme_forme": [
+  {
+   "id": "m01",
+   "etiquette": "same",
+   "juste": true,
+   "p": 0.9439113905775419,
+   "p_bon": 0.9439113905775419
+  },
+  {
+   "id": "m02",
+   "etiquette": "completes",
+   "juste": true,
+   "p": 0.91104804935711,
+   "p_bon": 0.91104804935711
+  },
+  {
+   "id": "m03",
+   "etiquette": "contradicts",
+   "juste": true,
+   "p": 0.567829170468513,
+   "p_bon": 0.567829170468513
+  },
+  {
+   "id": "m04",
+   "etiquette": "new",
+   "juste": true,
+   "p": 0.8574903026201254,
+   "p_bon": 0.8574903026201254
+  },
+  {
+   "id": "m05",
+   "etiquette": "same",
+   "juste": true,
+   "p": 0.7417110702739824,
+   "p_bon": 0.7417110702739824
+  },
+  {
+   "id": "m06",
+   "etiquette": "completes",
+   "juste": true,
+   "p": 0.8568288209188223,
+   "p_bon": 0.8568288209188223
+  },
+  {
+   "id": "m07",
+   "etiquette": "contradicts",
+   "juste": true,
+   "p": 0.5922467543999516,
+   "p_bon": 0.5922467543999516
+  },
+  {
+   "id": "m08",
+   "etiquette": "new",
+   "juste": true,
+   "p": 0.9262259705817543,
+   "p_bon": 0.9262259705817543
+  },
+  {
+   "id": "m09",
+   "etiquette": "same",
+   "juste": true,
+   "p": 0.9129988483364537,
+   "p_bon": 0.9129988483364537
+  },
+  {
+   "id": "m10",
+   "etiquette": "completes",
+   "juste": true,
+   "p": 0.9034836980181913,
+   "p_bon": 0.9034836980181913
+  },
+  {
+   "id": "m11",
+   "etiquette": "contradicts",
+   "juste": true,
+   "p": 0.6823663355626656,
+   "p_bon": 0.6823663355626656
+  },
+  {
+   "id": "m12",
+   "etiquette": "new",
+   "juste": true,
+   "p": 0.8875765735773283,
+   "p_bon": 0.8875765735773283
+  },
+  {
+   "id": "m13",
+   "etiquette": "same",
+   "juste": true,
+   "p": 0.9687980596007918,
+   "p_bon": 0.9687980596007918
+  },
+  {
+   "id": "m14",
+   "etiquette": "completes",
+   "juste": true,
+   "p": 0.6959075074390113,
+   "p_bon": 0.6959075074390113
+  },
+  {
+   "id": "m15",
+   "etiquette": "contradicts",
+   "juste": false,
+   "p": 0.5299722852589501,
+   "p_bon": 0.33689599270662385
+  },
+  {
+   "id": "m16",
+   "etiquette": "same",
+   "juste": true,
+   "p": 0.7832170214574984,
+   "p_bon": 0.7832170214574984
+  },
+  {
+   "id": "m17",
+   "etiquette": "completes",
+   "juste": true,
+   "p": 0.8679421295105729,
+   "p_bon": 0.8679421295105729
+  },
+  {
+   "id": "m18",
+   "etiquette": "contradicts",
+   "juste": false,
+   "p": 0.7976054254831747,
+   "p_bon": 0.03583566739061295
+  },
+  {
+   "id": "m19",
+   "etiquette": "new",
+   "juste": true,
+   "p": 0.8298760107000137,
+   "p_bon": 0.8298760107000137
+  },
+  {
+   "id": "m20",
+   "etiquette": "new",
+   "juste": true,
+   "p": 0.8583908269214192,
+   "p_bon": 0.8583908269214192
+  }
+ ]
+}
