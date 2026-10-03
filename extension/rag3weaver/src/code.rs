@@ -492,6 +492,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             let mut props = usage_property_defs();
             props.insert("kind".to_string(), field_def(FieldType::String));
             props.insert("qualifier_types".to_string(), field_def(FieldType::String));
+            props.insert("import_modules".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -624,6 +625,12 @@ pub struct CodeAnalysis {
     /// définisseurs homonymes à la matérialisation.
     #[serde(default)]
     pub pending_qualifier_types: Vec<(String, String, Vec<String>)>,
+    /// Les modules d'où le scope importe le nom (`crate::estimate` pour
+    /// `use crate::estimate::Rate`), quand **toutes** ses références à ce nom
+    /// en portent un. Ils départagent les définisseurs homonymes à la
+    /// matérialisation, comme le type lu.
+    #[serde(default)]
+    pub pending_import_modules: Vec<(String, String, Vec<String>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -719,6 +726,25 @@ pub fn source_id(cursor: &str) -> String {
 /// origine**. Sans le curseur, on irait chercher une ancre sur un disque qui
 /// ne contient pas ces fichiers.
 pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) -> CodeAnalysis {
+    analyze_in_project(root, sources, cursor, None)
+}
+
+/// **L'analyse d'une partie d'un projet** : `project_files` porte les chemins
+/// de **tout** le projet (relatifs à `root`), pour que l'analyseur sache qu'un
+/// import vers un fichier d'un autre paquet n'est pas une bibliothèque.
+///
+/// L'analyseur ne résout que **dans le fichier** (`resolve_cross_file`, décision
+/// du 4 octobre 2026, journal : « un seul résolveur entre fichiers ») : tout
+/// lien entre fichiers passe par la voie des `Symbol`, qui s'abstient sur un
+/// nom ambigu. Résolu par l'analyseur entre les fichiers d'un même paquet, le
+/// graphe dépendait de la taille du paquet, et 35 de ces liens sur 50 étaient
+/// faux.
+pub fn analyze_in_project(
+    root: &str,
+    sources: Vec<(String, String)>,
+    cursor: &str,
+    project_files: Option<&[String]>,
+) -> CodeAnalysis {
     let mut content_map = HashMap::new();
     let mut files = Vec::new();
     let mut skipped = Vec::new();
@@ -781,6 +807,8 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         resolver_options: Some(RelationshipResolverOptions {
             include_file_level_refs: Some(false),
             include_child_refs: Some(false),
+            resolve_cross_file: Some(false),
+            project_files: project_files.map(<[String]>::to_vec),
             ..Default::default()
         }),
     });
@@ -797,8 +825,16 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         ..Default::default()
     };
 
+    // **Les fichiers dans l'ordre de leur chemin** : `result.files` est un
+    // `HashMap`, dont l'ordre change d'un processus à l'autre. Les scopes, les
+    // relations et les rendez-vous en héritaient, et le repli des fermetures
+    // (le scope le plus étroit, à égalité d'empan) choisissait selon la passe :
+    // une arête clignotait d'une exécution à l'autre (4 octobre 2026).
+    let mut fichiers_tries: Vec<_> = result.files.iter().collect();
+    fichiers_tries.sort_by(|a, b| a.0.cmp(b.0));
+
     // Fichiers
-    for (abs, fa) in &result.files {
+    for (abs, fa) in fichiers_tries.iter().copied() {
         let (name, coordinates) = identity_of(&relative(root, abs));
         analysis.files.push(FileRecord {
             path: name,
@@ -906,7 +942,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
         let Some(key) = stable.get(uuid.as_str()) else { continue };
         by_position.insert((entry.file.clone(), entry.name.clone(), entry.r#type.clone(), entry.start_line), key.clone());
     }
-    for (abs, fa) in &result.files {
+    for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
         let (indexed_name, coords) = identity_of(&rel);
         let repo = coords.get("repo").cloned().unwrap_or_default();
@@ -988,10 +1024,21 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
     // refaire sans relire les fichiers appelants (doc 17 §2 bis).
     //
     // Les `Builtin` et les `LocalScope` restent écartés : résolus, ou hors
-    // projet. Les bibliothèques aussi — elles ont leur propre entité.
-    let libraries: std::collections::HashSet<&str> =
-        analysis.libraries.iter().map(|l| l.name.as_str()).collect();
-    for (abs, fa) in &result.files {
+    // projet. Les bibliothèques aussi — elles ont leur propre entité —, mais
+    // **celles du fichier** : un nom n'est une bibliothèque que là où le
+    // fichier l'importe. Pris sur tout le paquet, l'import de `uuid` par un
+    // fichier faisait sauter toutes les références `uuid` des autres, et le
+    // graphe changeait avec la taille du paquet (4 octobre 2026).
+    let fichier_du_scope: HashMap<String, String> =
+        analysis.scopes.iter().map(|s| (s.key.clone(), s.file_path.clone())).collect();
+    let mut libraries_du_fichier: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
+    for r in analysis.relations.iter().filter(|r| r.rel == "USES_LIBRARY") {
+        if let Some(f) = fichier_du_scope.get(&r.from_key) {
+            libraries_du_fichier.entry(f.clone()).or_default().insert(r.to_key.clone());
+        }
+    }
+    let aucune = std::collections::HashSet::new();
+    for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
         for sc in &fa.scopes {
             let Some(key) = by_position.get(&(
@@ -1002,10 +1049,13 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             )) else {
                 continue;
             };
+            let libraries = fichier_du_scope.get(key).and_then(|f| libraries_du_fichier.get(f)).unwrap_or(&aucune);
             let mut seen = std::collections::HashSet::new();
             let mut sites: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             // Par nom : les types lus, ou `None` dès qu'une référence n'en a pas.
             let mut types_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Par nom : les modules d'import, même règle.
+            let mut modules_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             for r in &sc.identifier_references {
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
@@ -1052,6 +1102,21 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                     }
                     _ => *types = None,
                 }
+                // Le module d'où vient le nom : `use crate::estimate::Rate` →
+                // `crate::estimate` ; `connection::open()` après
+                // `use crate::connection` → `crate::connection`.
+                let module = r.import_origin.as_ref().map(|o| {
+                    if o.via_qualifier { format!("{}::{}", o.source, o.imported) } else { o.source.clone() }
+                });
+                let modules = modules_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
+                match (modules.as_mut(), module) {
+                    (Some(v), Some(m)) => {
+                        if !v.contains(&m) {
+                            v.push(m);
+                        }
+                    }
+                    _ => *modules = None,
+                }
                 if !seen.insert(id.to_string()) {
                     continue;
                 }
@@ -1073,7 +1138,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                     _ => "INHERITS_FROM",
                 };
                 for t in &clause.types {
-                    if t.is_empty() || t == &sc.name || libraries.contains(t.as_str()) {
+                    if t.is_empty() || t == &sc.name || libraries.contains(t) {
                         continue;
                     }
                     analysis.pending.push((key.clone(), t.clone(), kind.to_string()));
@@ -1091,6 +1156,12 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 if let Some(mut v) = types.filter(|v| !v.is_empty()) {
                     v.sort();
                     analysis.pending_qualifier_types.push((key.clone(), name, v));
+                }
+            }
+            for (name, modules) in modules_lus {
+                if let Some(mut v) = modules.filter(|v| !v.is_empty()) {
+                    v.sort();
+                    analysis.pending_import_modules.push((key.clone(), name, v));
                 }
             }
         }
@@ -1695,6 +1766,8 @@ impl Catalog {
             analysis.pending_sites.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         let types_of: HashMap<(&str, &str), &Vec<String>> =
             analysis.pending_qualifier_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let modules_of: HashMap<(&str, &str), &Vec<String>> =
+            analysis.pending_import_modules.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -1709,6 +1782,8 @@ impl Catalog {
             // Vide, pas nul, quand le type ne se lit pas partout.
             let types = types_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
             props.insert("qualifier_types".to_string(), s(&types));
+            let modules = modules_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
+            props.insert("import_modules".to_string(), s(&modules));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -1758,12 +1833,19 @@ impl Catalog {
         let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
         // Le parent des définisseurs, pour les noms qu'une mention typée
         // atteint (`n.run()` avec `n: Node` vise le `run` de `Node`).
+        // Et le fichier des définisseurs, pour les noms qu'une mention atteint
+        // par un import (`use crate::estimate::Rate` vise le `Rate` de
+        // `estimate.rs`).
         let a_departager: Vec<String> = uuids
             .iter()
-            .filter(|sym| mentioners_by_symbol.get(*sym).is_some_and(|ms| ms.iter().any(|m| !m.qualifier_types.is_empty())))
+            .filter(|sym| {
+                mentioners_by_symbol
+                    .get(*sym)
+                    .is_some_and(|ms| ms.iter().any(|m| !m.qualifier_types.is_empty() || !m.import_modules.is_empty()))
+            })
             .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
             .collect();
-        let parents = self.parent_names(&a_departager)?;
+        let (parents, fichiers) = self.parents_et_fichiers(&a_departager)?;
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<Mention> = Vec::new();
@@ -1796,6 +1878,18 @@ impl Catalog {
                     }
                 } else if definers.len() == 1 {
                     definers[0].clone()
+                } else if !m.import_modules.is_empty() {
+                    // Plusieurs définisseurs, et un import qui désigne un
+                    // module : le définisseur du fichier de ce module, s'il
+                    // est seul. Sinon, l'abstention.
+                    let du_module: Vec<&String> = definers
+                        .iter()
+                        .filter(|d| fichiers.get(*d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))))
+                        .collect();
+                    match du_module.as_slice() {
+                        [un] => (*un).clone(),
+                        _ => continue,
+                    }
                 } else {
                     continue;
                 };
@@ -1859,26 +1953,35 @@ impl Catalog {
             .collect())
     }
 
-    /// Le `parent_name` de scopes, par uuid.
-    fn parent_names(&self, uuids: &[String]) -> Result<std::collections::HashMap<String, String>, CatalogError> {
-        let mut out = std::collections::HashMap::new();
+    /// Le `parent_name` et le fichier de scopes, par uuid.
+    #[allow(clippy::type_complexity)]
+    fn parents_et_fichiers(
+        &self,
+        uuids: &[String],
+    ) -> Result<(std::collections::HashMap<String, String>, std::collections::HashMap<String, String>), CatalogError> {
+        let mut parents = std::collections::HashMap::new();
+        let mut fichiers = std::collections::HashMap::new();
         if uuids.is_empty() {
-            return Ok(out);
+            return Ok((parents, fichiers));
         }
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
             .conn()
             .execute_with_params(
-                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name"),
+                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name, s.file_path"),
                 &[crate::connection::QueryParam::new("uuids", param)],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
-            if let (Some(CypherValue::String(u)), Some(CypherValue::String(p))) = (row.first(), row.get(1)) {
-                out.insert(u.clone(), p.clone());
+            let Some(CypherValue::String(u)) = row.first() else { continue };
+            if let Some(CypherValue::String(p)) = row.get(1) {
+                parents.insert(u.clone(), p.clone());
+            }
+            if let Some(CypherValue::String(f)) = row.get(2) {
+                fichiers.insert(u.clone(), f.clone());
             }
         }
-        Ok(out)
+        Ok((parents, fichiers))
     }
 
     /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
@@ -1894,7 +1997,7 @@ impl Catalog {
         if to_uuids.is_empty() {
             return Ok(out);
         }
-        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types" } else { "" };
+        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types, r.import_modules" } else { "" };
         let cypher = format!(
             // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
             // toutes les tables, à chaque symbole de chaque lot.
@@ -1921,7 +2024,14 @@ impl Catalog {
                     .and_then(|v| v.as_str())
                     .map(|t| t.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
                     .unwrap_or_default();
-                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types });
+                let liste = |i: usize| -> Vec<String> {
+                    row.get(i)
+                        .and_then(|v| v.as_str())
+                        .map(|t| t.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+                        .unwrap_or_default()
+                };
+                let import_modules = liste(7);
+                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules });
             }
         }
         Ok(out)
@@ -1942,6 +2052,29 @@ struct Mention {
     kind: String,
     usage: BTreeMap<String, CypherValue>,
     qualifier_types: Vec<String>,
+    /// Les modules d'où le mentionneur importe le nom.
+    import_modules: Vec<String>,
+}
+
+/// **Un module d'import désigne-t-il ce fichier ?** `crate::estimate` désigne
+/// `…/src/estimate.rs` (ou `…/estimate/mod.rs`), `pkg.models` désigne
+/// `…/pkg/models.py` (ou `…/pkg/models/__init__.py`), `./util` désigne
+/// `…/util.ts`. Les segments de tête qui ne nomment pas un fichier (`crate`,
+/// `self`, `super`, les points relatifs) sont retirés ; le reste doit finir
+/// le chemin du fichier, sans son extension. Lu sur les chemins, rien de
+/// deviné : un module qui ne finit aucun chemin ne désigne rien.
+fn module_designe_fichier(module: &str, fichier: &str) -> bool {
+    let segments: Vec<&str> = module
+        .split(|c| c == ':' || c == '.' || c == '/')
+        .filter(|s| !s.is_empty() && !matches!(*s, "crate" | "self" | "super" | "@"))
+        .collect();
+    if segments.is_empty() {
+        return false;
+    }
+    let sans_ext = fichier.rsplit_once('.').map_or(fichier, |(a, b)| if b.contains('/') { fichier } else { a });
+    let sans_index = ["/mod", "/__init__", "/index"].iter().find_map(|f| sans_ext.strip_suffix(f)).unwrap_or(sans_ext);
+    let attendu = segments.join("/");
+    sans_index == attendu || sans_index.ends_with(&format!("/{attendu}"))
 }
 
 /// **Le texte propre de chaque scope d'un fichier.**

@@ -82,7 +82,19 @@ pub fn colonnes_de_chunk(alias: &str, has_source_refs: bool) -> Vec<String> {
 
 /// **Le NULL d'un CSV de chargement en masse.** Un mot convenu, jamais une
 /// cellule vide : la cellule vide est une chaîne vide.
-pub const CSV_NULL: &str = "__rag3weaver_null__";
+///
+/// **Tiré au démarrage du processus, jamais écrit dans le code** : le COPY lit
+/// NULL toute cellule qui porte ce mot. Une constante du code source finit
+/// dans les données dès qu'on indexe ce code : `__rag3weaver_null__`, le
+/// symbole de l'ancienne constante, devenait NULL au chargement en masse de
+/// `dialect.rs` (4 octobre 2026).
+pub fn csv_null() -> &'static str {
+    static MOT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    MOT.get_or_init(|| {
+        let instant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        format!("__nul_{:x}_{:x}__", std::process::id(), instant)
+    })
+}
 
 /// **Retrouver par sa clé le nœud de chaque ligne d'un lot** — la forme que
 /// toutes les requêtes `UNWIND` du dialecte prennent (3 octobre 2026).
@@ -1095,7 +1107,8 @@ impl SchemaDialect for Rag3dbDialect {
         // dépôt entier), ou une cellule changeait de valeur sans erreur, et
         // un saut de ligne restait échappé (3 octobre 2026, `e2e_copy_liens`).
         Some(format!(
-            "COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}', escaped_newlines=true, auto_detect=false, null_strings=['{CSV_NULL}'])"
+            "COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}', escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
+            csv_null()
         ))
     }
 
@@ -1113,8 +1126,9 @@ impl SchemaDialect for Rag3dbDialect {
         // `""` comme un NULL, or une chaîne vide en est une (`_embed_hash` à
         // la naissance d'un chunk) — la comparer à NULL la ferait réécrire.
         Some(format!(
-            "COPY {table} ({}) FROM '{path}' (escaped_newlines=true, auto_detect=false, null_strings=['{CSV_NULL}'])",
-            columns.join(", ")
+            "COPY {table} ({}) FROM '{path}' (escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
+            columns.join(", "),
+            csv_null()
         ))
     }
 

@@ -526,3 +526,45 @@ fn une_premiere_indexation_ne_se_replie_pas_en_silence() {
         }
     }
 }
+
+/// **Sur disque, après un point de reprise** (4 octobre 2026) : les arêtes à
+/// retirer sont alors celles que le moteur a écrites, pas celles qu'il garde
+/// en mémoire de transaction. Trois défauts du moteur ce soir-là ne se
+/// voyaient qu'ainsi. Une source indexée sur disque, un `CHECKPOINT`, puis
+/// une édition qui garde un scope mais change ses appels (`reingest_file`
+/// retire les arêtes sortantes puis repose) : l'index vaut un index bâti à
+/// neuf sur l'état final.
+#[test]
+#[ignore]
+fn une_edition_apres_un_point_de_reprise_vaut_un_index_neuf() {
+    let dir = std::path::PathBuf::from(std::env::var("HOME").unwrap())
+        .join(format!(".cache/rag3weaver-build/code-sync-disque-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let snapshot = Snapshot::new("disque", source_reliee());
+    let options = SourceSyncOptions { batch_files: 2, ..Default::default() };
+    let fini = {
+        let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display())).unwrap();
+        let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
+        catalog.initialize().unwrap();
+        register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+        sync_source(&mut catalog, &snapshot, &options, &mut |_| {}).unwrap();
+        catalog.execute_raw("CHECKPOINT").unwrap();
+        let r = edit_file(
+            &snapshot,
+            Some(&mut catalog),
+            "base.rs",
+            &EditOp::Replace { old: "pub fn autre() -> f64 { base() }".into(), new: "pub fn autre() -> f64 { 2.0 }\npub fn neuve() -> f64 { autre() }".into() },
+        )
+        .unwrap();
+        assert!(r.reingest.is_some(), "{r:?}");
+        etat(&catalog)
+    };
+    let _ = std::fs::remove_dir_all(&dir);
+    let attendu = etat(&a_neuf(&snapshot, "disque", &options));
+    assert_eq!(fini.0, attendu.0, "les scopes");
+    assert_eq!(fini.1, attendu.1, "les fichiers");
+    assert_eq!(fini.2, attendu.2, "les arêtes, avec leur multiplicité");
+}

@@ -91,7 +91,7 @@ fn le_csv_du_moteur_garde_les_chaines_les_vides_et_les_vecteurs() {
     let cellule = format!("\"{}\"", texte.replace('\\', "\\\\").replace('\n', "\\n").replace('\r', "\\r").replace('"', "\"\""));
     std::fs::write(
         &chemin,
-        format!("a,{cellule},\"\",42,1.5,true,\"[0.25,-1,3.5]\"\nb,simple,{n},7,2.5,false,\"[1,2,3]\"\n", n = rag3weaver::dialect::CSV_NULL),
+        format!("a,{cellule},\"\",42,1.5,true,\"[0.25,-1,3.5]\"\nb,simple,{n},7,2.5,false,\"[1,2,3]\"\n", n = rag3weaver::dialect::csv_null()),
     )
     .unwrap();
     let copie = Rag3dbDialect.copy_nodes_from_csv("T", &["_uuid", "texte", "vide", "n", "f", "b", "vec"], &chemin.to_string_lossy()).unwrap();
