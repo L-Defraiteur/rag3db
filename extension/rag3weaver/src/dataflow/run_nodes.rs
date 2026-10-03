@@ -63,6 +63,49 @@ pub fn dossier_journaux() -> std::path::PathBuf {
     std::env::temp_dir().join("rag3weaver-commandes")
 }
 
+/// Vérifie qu'un chemin de journal reste **réellement** sous
+/// [`dossier_journaux`], et pas seulement dans son texte.
+///
+/// `starts_with` compare composant par composant sans rien résoudre : il
+/// laisse passer `<dossier>/../../etc/passwd` (le texte commence bien par le
+/// dossier) et un lien symbolique posé sous le dossier qui pointe dehors. Deux
+/// gardes, dans l'ordre : le texte (aucun `..`, le préfixe exigé), puis le
+/// disque (le maillon existant le plus profond, canonisé, doit rester sous le
+/// dossier canonisé — la canonisation résout toute la chaîne de liens d'un
+/// coup). Un chemin dont rien n'existe encore ne détourne rien : il passe, et
+/// l'attente dira « pas encore ».
+fn journal_borne(journal: &str) -> Result<std::path::PathBuf, String> {
+    let chemin = std::path::PathBuf::from(journal);
+    let refus = || {
+        format!(
+            "wait: `{journal}` n'est pas un journal de commande — on n'attend que sur ce qu'on a produit"
+        )
+    };
+    if chemin.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(refus());
+    }
+    let base = dossier_journaux();
+    if !chemin.starts_with(&base) {
+        return Err(refus());
+    }
+    let base_canon = base.canonicalize().unwrap_or_else(|_| base.clone());
+    let mut maillon = chemin.as_path();
+    while maillon != base {
+        if maillon.exists() {
+            let canon = maillon.canonicalize().map_err(|e| format!("wait: {e}"))?;
+            if !canon.starts_with(&base_canon) {
+                return Err(refus());
+            }
+            break;
+        }
+        match maillon.parent() {
+            Some(parent) => maillon = parent,
+            None => break,
+        }
+    }
+    Ok(chemin)
+}
+
 impl Node for RunCommandNode {
     fn name(&self) -> &str {
         &self.node_name
@@ -221,15 +264,9 @@ impl Node for WaitOutputNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::run_nodes::WaitOutputNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let chemin = std::path::PathBuf::from(&self.journal);
         // **Seulement ses propres journaux.** Le reste de `/tmp` appartient aux
-        // autres processus de la machine.
-        if !chemin.starts_with(dossier_journaux()) {
-            return Err(format!(
-                "wait: `{}` n'est pas un journal de commande — on n'attend que sur ce qu'on a produit",
-                chemin.display()
-            ));
-        }
+        // autres processus de la machine — `..` et liens symboliques compris.
+        let chemin = journal_borne(&self.journal)?;
         let motif = regex::Regex::new(&self.motif)
             .map_err(|e| format!("wait: motif invalide : {e}"))?;
 
@@ -489,6 +526,50 @@ mod tests {
             .execute(&mut ctx)
             .expect_err("hors de nos journaux");
         assert!(e.contains("journal de commande"), "{e}");
+    }
+
+    /// **Un `..` dans le chemin est un mensonge sur la destination.** Le texte
+    /// commence sous nos journaux, la cible est ailleurs : on refuse avant de
+    /// lire quoi que ce soit.
+    #[test]
+    fn on_n_attend_pas_a_travers_des_points_points() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let mut ctx = contexte(Mode::Auto, dossier.path());
+        // Un fichier à nous, hors du dossier des journaux, atteint en le
+        // traversant : même contrôlé, il doit rester hors de portée.
+        let secret = dossier.path().join("secret.out");
+        std::fs::write(&secret, "fini\n").unwrap();
+        let traverse = dossier_journaux().join("essai-traverse").join("..").join("..").join(
+            secret.strip_prefix(std::env::temp_dir()).expect("sous temp_dir"),
+        );
+        let e = WaitOutputNode::new("wait", traverse.to_string_lossy(), "fini")
+            .with_delai(1)
+            .execute(&mut ctx)
+            .expect_err("une traversée n'est pas un journal");
+        assert!(e.contains("journal de commande"), "{e}");
+    }
+
+    /// **Un lien symbolique sous le dossier peut pointer dehors.** Le texte du
+    /// chemin reste sous nos journaux, le disque dit autre chose : c'est le
+    /// disque qui compte.
+    #[cfg(unix)]
+    #[test]
+    fn on_n_attend_pas_a_travers_un_lien_qui_sort() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let mut ctx = contexte(Mode::Auto, dossier.path());
+        let secret = dossier.path().join("secret.out");
+        std::fs::write(&secret, "fini\n").unwrap();
+        let repaire = dossier_journaux().join("essai-lien");
+        std::fs::create_dir_all(&repaire).unwrap();
+        let lien = repaire.join("sortie");
+        let _ = std::fs::remove_file(&lien);
+        std::os::unix::fs::symlink(dossier.path(), &lien).unwrap();
+        let e = WaitOutputNode::new("wait", lien.join("secret.out").to_string_lossy(), "fini")
+            .with_delai(1)
+            .execute(&mut ctx)
+            .expect_err("un lien qui sort n'est pas un journal");
+        assert!(e.contains("journal de commande"), "{e}");
+        let _ = std::fs::remove_dir_all(&repaire);
     }
 
     /// **« Pas encore » n'est pas « non ».** C'est ce qui distingue une attente
