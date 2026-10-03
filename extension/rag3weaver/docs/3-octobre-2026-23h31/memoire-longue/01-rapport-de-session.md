@@ -51,6 +51,34 @@ remède. Origine et date sont des propriétés de la **mémoire**.
 un fichier édité. C'est le désaccord avec la vision qui a changé le plus de
 travail.
 
+**La création d'un sujet se confirme, et seulement s'il y a un proche** (Lucie,
+nuit du 4 octobre, relayé par l'orchestration). C'est la forme du verbe unique,
+précisée sur son point le plus important : le refus ne se déclenche **que si un
+proche existe** — au-dessus d'un seuil de similarité contre le *texte complet*
+du sujet, celui que la mesure désigne. Sans proche, la création passe du premier
+coup, sans friction. Avec un proche, le refus nomme le sujet, **montre un
+extrait de son contenu** et donne les deux appels exacts : rejoindre celui-là,
+ou confirmer (`confirm: true`).
+
+Ce qui se décide là, et qui vaut d'être dit : **c'est l'agent appelant qui est
+le modèle de décision.** C'est ce que la mesure de l'optimiseur a montré de
+mieux, et il décide en voyant le contenu, pas un nom — exactement ce que mes
+chiffres disaient (ranger par le cosinus : 14/16 sur le texte complet, 8/7/15
+sur les noms seuls).
+
+Et **les deux à la fois**, le harnais comme garantie et la consigne (« cherche
+d'abord un sujet lié », dans la description de l'outil et le prompt du backend)
+comme incitation. La consigne seule ne suffit pas : les deux passes d'agent du
+3 octobre ont montré qu'un modèle faible comme un modèle fort ignorent une
+ligne qu'on ne les oblige pas à lire, et qu'un modèle faible ne tient pas deux
+tours. D'où un refus qui porte l'appel exact à refaire, lisible en un tour.
+
+Cela remplace « dans le doute, créer et demander après » : dans le doute,
+**demander à l'appelant avant**, par le refus. Le jardinier reste pour ce qui
+passe quand même. Même forme pour une mémoire proche d'une mémoire existante.
+Ce que le banc devra mesurer : confirmations déclenchées à tort (la friction),
+doublons créés malgré tout, sujets rejoints à tort.
+
 **L'étage 2 du nœud de décision reste sur « demander toujours »**, aucun
 modèle branché, critère et liste de choix en **données du graphe**. Trois
 raisons : Lucie garde la découpe ouverte (« ça reste une expérimentation,
