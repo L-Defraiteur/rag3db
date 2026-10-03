@@ -294,3 +294,72 @@ fn la_dette_de_rendu_se_voit_en_base_et_se_rattrape() {
     assert_eq!(res.results.len(), 1, "la vue de la porte est re-rendue par la consigne : {:?}", res.meta);
     assert_eq!(compte(&catalog, "MATCH (v:TicketView) RETURN count(v)"), 2);
 }
+
+/// **Une famille du catalogue pose sa dérivée** (pas C, étape 3, 3 octobre
+/// 2026). Les gabarits se posent par le mécanisme de `place` (`read` +
+/// `prepare_entity` + `register_entity`) ; la relation, elle, se déclare à
+/// la main — un gabarit ne sait pas poser de relation, c'est la limite
+/// écrite dans leurs fiches. Puis la vie ordinaire d'une dérivée : créer,
+/// lier, chercher la vue rendue — les messages dans l'ordre du temps que le
+/// gabarit impose (tri sur createdAt), pas dans l'ordre des uuid du moteur.
+#[test]
+#[ignore]
+fn une_famille_du_catalogue_pose_sa_derivee() {
+    use rag3weaver::template::{builtin_root, prepare_entity, read, Family};
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let config = CatalogConfig { name: Some("famille".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+
+    // La famille, aux noms fixes : racine et voisine d'abord…
+    let racine = builtin_root();
+    for nom in ["conversation", "message"] {
+        let contenu = read(&racine, Family::Entity, nom).expect("gabarit de la famille");
+        let config = prepare_entity(&contenu, &[]).expect("configuration lisible");
+        catalog.register_entity(nom, config).expect("pose du gabarit");
+    }
+    // … la relation à la main (la limite), puis la dérivée se pose dessus.
+    catalog.register_relation("HAS_MESSAGE", "conversation", "message").unwrap();
+    let contenu = read(&racine, Family::Entity, "fil").expect("le gabarit de la dérivée");
+    let config = prepare_entity(&contenu, &[]).expect("configuration lisible");
+    catalog.register_entity("fil", config).expect("la dérivée se pose sur sa famille");
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+
+    // La vie ordinaire : une conversation, deux messages **dans le désordre
+    // du temps** — l'ordre du rendu doit venir du gabarit, pas des uuid.
+    let c1 = catalog.create("conversation", BTreeMap::from([
+        ("title".into(), s("Panne du four")),
+        ("summary".into(), s("Le four ne chauffe plus.")),
+    ])).unwrap();
+    let m_tard = catalog.create("message", BTreeMap::from([
+        ("author".into(), s("Bob")),
+        ("body".into(), s("Alors c'était bien le thermostat.")),
+        ("createdAt".into(), s("2026-10-02")),
+    ])).unwrap();
+    let m_tot = catalog.create("message", BTreeMap::from([
+        ("author".into(), s("Ana")),
+        ("body".into(), s("Vérifie le thermostat.")),
+        ("createdAt".into(), s("2026-10-01")),
+    ])).unwrap();
+    catalog.link("HAS_MESSAGE", c1.clone(), m_tard, BTreeMap::new()).unwrap();
+    catalog.link("HAS_MESSAGE", c1, m_tot, BTreeMap::new()).unwrap();
+    let r = catalog.drain();
+    assert_eq!(r.failed, 0, "{:?}", r.warnings);
+
+    // La vue est rendue, liée, et son texte suit l'ordre du temps.
+    assert_eq!(compte(&catalog, "MATCH (v:fil) RETURN count(v)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (v:fil)-[:fil_DERIVED_FROM]->(c:conversation) RETURN count(v)"), 1);
+    let lu = catalog.execute_raw("MATCH (v:fil) RETURN v.content").unwrap();
+    assert_eq!(
+        lu.rows[0][0].as_str().unwrap(),
+        "Le four ne chauffe plus.\nAna : Vérifie le thermostat.\nBob : Alors c'était bien le thermostat.\n",
+        "les messages dans l'ordre du temps, pas celui des uuid"
+    );
+
+    // Et elle se cherche comme n'importe quelle entité.
+    let (_catalog, res) = cherche(catalog, "fil", "thermostat", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() });
+    assert_eq!(res.results.len(), 1, "le fil rendu se trouve en plein texte");
+}

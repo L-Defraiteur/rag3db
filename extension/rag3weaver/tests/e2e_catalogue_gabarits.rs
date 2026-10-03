@@ -81,7 +81,15 @@ fn brique_1_le_cosinus_nu_dit_il_la_verite() {
     let emb: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
 
     let fiches = scan(&builtin_root(), Origin::Builtin).unwrap();
-    let entites: Vec<_> = fiches.iter().filter(|f| f.family == Family::Entity).collect();
+    // Les trois cobayes historiques, nommés : le catalogue a grossi (les
+    // familles de dérivées du 3 octobre 2026, aux descriptions voisines) et
+    // ce test prouve « l'embedder reconnaît ses propres descriptions », pas
+    // le compte des gabarits.
+    let cobayes = ["conversation", "product", "user"];
+    let entites: Vec<_> = fiches
+        .iter()
+        .filter(|f| f.family == Family::Entity && cobayes.contains(&f.name.as_str()))
+        .collect();
     assert_eq!(entites.len(), 3);
 
     let mut textes: Vec<String> = entites.iter().map(|f| f.description.clone()).collect();
@@ -294,11 +302,19 @@ fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
     eprintln!("[catalogue] catégorie auth : {}", detail(&auth));
     assert_eq!(noms(&auth), vec!["user".to_string()], "{}", detail(&auth));
 
-    // Et la famille filtre aussi — l'autre axe, structurel celui-là.
-    let entites = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "", filtre("family", "entity")).unwrap();
+    // Et la famille filtre aussi — l'autre axe, structurel celui-là. Le
+    // catalogue a grossi (les familles de dérivées du 3 octobre 2026) : on
+    // vérifie l'axe, pas une liste figée — les trois historiques y sont, et
+    // le compte suit le disque (11, limite relevée en conséquence).
+    let mut options_famille = filtre("family", "entity");
+    options_famille.limit = 20;
+    let entites = Catalog::rechercher(&cat, TEMPLATE_ENTITY, "", options_famille).unwrap();
     let mut e = noms(&entites);
     e.sort();
-    assert_eq!(e, vec!["conversation", "product", "user"], "{}", detail(&entites));
+    assert_eq!(e.len(), 11, "{}", detail(&entites));
+    for historique in ["conversation", "product", "user"] {
+        assert!(e.iter().any(|n| n == historique), "{historique} manque : {e:?}");
+    }
 
     // ── 3. Par le sens — sans reprendre les mots ────────────────────────
     //

@@ -1,0 +1,26 @@
+{
+  "template": {
+    "category": "messagerie",
+    "description": "Un message dans un fil de discussion : qui l'a écrit, ce qu'il dit, quand. Compagnon de `conversation`, que la dérivée `fil` rassemble par HAS_MESSAGE.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : conversation (racine), message, fil (la dérivée) ; relation HAS_MESSAGE (conversation → message)."
+  },
+  "entity": {
+    "fields": {
+      "author": {
+        "fieldType": "string"
+      },
+      "body": {
+        "fieldType": "text",
+        "isContent": true
+      },
+      "createdAt": {
+        "fieldType": "string"
+      }
+    },
+    "hashsafe": [
+      "author",
+      "body",
+      "createdAt"
+    ]
+  }
+}

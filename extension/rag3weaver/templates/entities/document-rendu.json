@@ -1,0 +1,38 @@
+{
+  "template": {
+    "category": "documents",
+    "description": "La vue rendue d'un document entier : le résumé puis chaque section à son rang, en un seul texte cherchable. Une entité dérivée : une section modifiée re-rend son document.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : document (racine), section ; relation HAS_SECTION (document → section). L'ordre vient du gabarit (tri sur rank), pas du moteur."
+  },
+  "entity": {
+    "fields": {
+      "title": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "content": {
+        "fieldType": "text",
+        "isContent": true
+      }
+    },
+    "derived": {
+      "from": "document",
+      "gather": [
+        {
+          "name": "sections",
+          "relation": "HAS_SECTION",
+          "direction": "out",
+          "fields": [
+            "heading",
+            "body",
+            "rank"
+          ]
+        }
+      ],
+      "render": {
+        "title": "{{ root.title }}",
+        "content": "{{ root.summary }}{% for s in sections|sort(attribute=\"rank\") %}\n## {{ s.heading }}\n{{ s.body }}{% endfor %}"
+      }
+    }
+  }
+}

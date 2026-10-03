@@ -1,0 +1,23 @@
+{
+  "template": {
+    "category": "documents",
+    "description": "Un document : son titre et son résumé. Ses sections sont une entité à part, que la dérivée `document-rendu` assemble dans l'ordre de leur rang.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : document (racine), section, document-rendu (la dérivée) ; relation HAS_SECTION (document → section)."
+  },
+  "entity": {
+    "fields": {
+      "title": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "summary": {
+        "fieldType": "text",
+        "isContent": true
+      }
+    },
+    "hashsafe": [
+      "title",
+      "summary"
+    ]
+  }
+}

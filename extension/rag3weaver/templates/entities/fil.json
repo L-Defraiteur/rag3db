@@ -1,0 +1,38 @@
+{
+  "template": {
+    "category": "messagerie",
+    "description": "La vue rendue d'une conversation : son sujet, son résumé et ses messages dans l'ordre du temps, en un seul texte cherchable. Une entité dérivée : elle se re-rend quand un message change.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : conversation (racine), message ; relation HAS_MESSAGE (conversation → message). L'ordre du temps vient du gabarit (tri sur createdAt), pas du moteur."
+  },
+  "entity": {
+    "fields": {
+      "title": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "content": {
+        "fieldType": "text",
+        "isContent": true
+      }
+    },
+    "derived": {
+      "from": "conversation",
+      "gather": [
+        {
+          "name": "messages",
+          "relation": "HAS_MESSAGE",
+          "direction": "out",
+          "fields": [
+            "author",
+            "body",
+            "createdAt"
+          ]
+        }
+      ],
+      "render": {
+        "title": "{{ root.title }}",
+        "content": "{{ root.summary }}\n{% for m in messages|sort(attribute=\"createdAt\") %}{{ m.author }} : {{ m.body }}\n{% endfor %}"
+      }
+    }
+  }
+}

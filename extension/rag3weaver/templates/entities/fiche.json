@@ -1,0 +1,23 @@
+{
+  "template": {
+    "category": "fiches",
+    "description": "Une fiche : son nom et son corps. Ses étiquettes sont une entité à part, que la dérivée `fiche-etiquetee` injecte dans le titre rendu — c'est elles que la pondération par champ peut peser.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : fiche (racine), etiquette, fiche-etiquetee (la dérivée) ; relation TAGGED_WITH (fiche → etiquette)."
+  },
+  "entity": {
+    "fields": {
+      "name": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "body": {
+        "fieldType": "text",
+        "isContent": true
+      }
+    },
+    "hashsafe": [
+      "name",
+      "body"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "template": {
+    "category": "fiches",
+    "description": "Une étiquette : un mot qu'on accroche à des fiches (catégorie, auteur, état).",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : fiche, etiquette, fiche-etiquetee ; relation TAGGED_WITH (fiche → etiquette)."
+  },
+  "entity": {
+    "fields": {
+      "label": {
+        "fieldType": "string",
+        "isTitle": true
+      }
+    },
+    "hashsafe": [
+      "label"
+    ]
+  }
+}

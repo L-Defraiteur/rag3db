@@ -1,0 +1,36 @@
+{
+  "template": {
+    "category": "fiches",
+    "description": "La vue rendue d'une fiche avec ses étiquettes dans le titre : « Nom [tag] [tag] ». Le plein texte trouve la fiche par ses étiquettes, sans colonne de plus.",
+    "note": "Ce gabarit appartient à une famille aux noms fixes : un gabarit de dérivée ne vit pas seul, sa racine et ses voisines se posent d'abord (sans `as`, ou avec les `as` que la dérivée attend), et la relation se déclare à la main — un gabarit ne sait pas poser de relation. Famille : fiche (racine), etiquette ; relation TAGGED_WITH (fiche → etiquette)."
+  },
+  "entity": {
+    "fields": {
+      "title": {
+        "fieldType": "string",
+        "isTitle": true
+      },
+      "content": {
+        "fieldType": "text",
+        "isContent": true
+      }
+    },
+    "derived": {
+      "from": "fiche",
+      "gather": [
+        {
+          "name": "etiquettes",
+          "relation": "TAGGED_WITH",
+          "direction": "out",
+          "fields": [
+            "label"
+          ]
+        }
+      ],
+      "render": {
+        "title": "{{ root.name }}{% for t in etiquettes|sort(attribute=\"label\") %} [{{ t.label }}]{% endfor %}",
+        "content": "{{ root.body }}"
+      }
+    }
+  }
+}
