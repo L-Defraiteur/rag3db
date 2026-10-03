@@ -11,6 +11,20 @@
 //! rien vu dans le périmètre est refusé ; au-delà de `maxMissingRatio` du
 //! périmètre, la fin refuse sans `force` ; le rapport nomme tout ce qui a été
 //! retiré, transitionné ou gardé.
+//!
+//! **La marque à l'écriture** (3 octobre 2026) : une écriture ordinaire —
+//! ingestion, création, mise à jour, hors de toute session — dans un
+//! périmètre dont une session est ouverte prend la marque de cette session
+//! (`{session}+w`) : écrire une ligne, c'est dire que la source l'a. Sans
+//! elle, une ligne écrite pendant la session, ou recréée entre le plan et
+//! l'application, gardait une marque qui n'était pas la sienne et la fin la
+//! retirait. Le rapport compte à part ce que la session a porté (`seen`) et ce
+//! que des écritures ont marqué (`written`) ; la marque monte, elle ne descend
+//! jamais (portée puis réécrite reste portée) ; les écritures de la fin
+//! elle-même ne marquent pas. **Le prix, assumé** : un écrivain qui réécrit
+//! périodiquement une ligne que la source n'a plus empêche son retrait, sans
+//! bruit — la rétention plutôt que la suppression à tort. Une écriture en
+//! Cypher brut (`execute_raw`) contourne le catalogue et ne marque pas.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -19,6 +33,33 @@ use serde::{Deserialize, Serialize};
 use super::{Catalog, CatalogError, LifecycleVerdict};
 use crate::config::OnMissing;
 use crate::connection::{CypherValue, QueryParam};
+
+/// Le suffixe de la marque d'une **écriture** pendant une session :
+/// `{session}+w`. Un identifiant de session qui le contiendrait est refusé à
+/// l'ouverture : la lecture de la marque reste sans ambiguïté par construction.
+const WRITTEN_SUFFIX: &str = "+w";
+
+/// **Ce que dit la marque `_snapshot` d'une ligne**, pour une session — lue
+/// en un seul endroit ([`mark_verdict`]), comme `LifecycleVerdict` pour la
+/// machine à états : une égalité oubliée quelque part retirerait une ligne
+/// présente.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MarkVerdict {
+    /// Un lot de la session l'a portée.
+    Carried,
+    /// Une écriture ordinaire l'a écrite pendant la session.
+    Written,
+    /// Ni l'un ni l'autre : absente de la session.
+    Unseen,
+}
+
+pub(crate) fn mark_verdict(mark: &str, session: &str) -> MarkVerdict {
+    match mark.strip_prefix(session) {
+        Some("") => MarkVerdict::Carried,
+        Some(rest) if rest == WRITTEN_SUFFIX => MarkVerdict::Written,
+        _ => MarkVerdict::Unseen,
+    }
+}
 
 /// La raison d'une ligne gardée parce qu'elle a quitté le périmètre de la
 /// session entre le plan et l'application.
@@ -79,6 +120,11 @@ pub struct SnapshotFinish {
     pub in_scope: usize,
     /// Celles qu'un lot de la session a portées.
     pub seen: usize,
+    /// Celles qu'une **écriture** ordinaire a marquées pendant la session,
+    /// sans qu'un lot les porte : présentes elles aussi, comptées à part pour
+    /// que `seen` dise ce que la session a vraiment porté.
+    #[serde(default)]
+    pub written: usize,
     /// Les absentes (uuids), quoi qu'il leur soit arrivé ensuite.
     pub missing: Vec<String>,
     /// Retirées (`onMissing: delete`).
@@ -200,10 +246,16 @@ impl Catalog {
         let opened_at = now_ms();
         let seed = format!("{entity_name}|{:?}|{opened_at}|{}|{:?}", scope, std::process::id(), replaced);
         let session = format!("{opened_at}-{}", &blake3::hash(seed.as_bytes()).to_hex()[..12]);
+        if session.contains(WRITTEN_SUFFIX) {
+            return Err(CatalogError::DbError(format!(
+                "identifiant de session « {session} » : il contient « {WRITTEN_SUFFIX} », réservé à la marque d'une écriture"
+            )));
+        }
         let open = SnapshotSession { session, opened_at, replaced };
         let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
+        self.oublier_les_sessions(entity_name);
         Ok(open)
     }
 
@@ -218,7 +270,9 @@ impl Catalog {
         self.check_ecriture("abort_snapshot")?;
         self.check_entity(entity_name)?;
         self.check_open_session(entity_name, scope, session)?;
-        self.persist_meta_key(&self.session_key(entity_name, scope), "")
+        self.persist_meta_key(&self.session_key(entity_name, scope), "")?;
+        self.oublier_les_sessions(entity_name);
+        Ok(())
     }
 
     /// **Marquer des lignes comme portées par la session ouverte** sur leur
@@ -350,10 +404,10 @@ impl Catalog {
         for row in &rows {
             let uuid = row.first().and_then(|v| v.as_str()).unwrap_or_default().to_string();
             let mark = row.get(1).and_then(|v| v.as_str()).unwrap_or_default();
-            if mark == session {
-                report.seen += 1;
-            } else {
-                report.missing.push(uuid);
+            match mark_verdict(mark, session) {
+                MarkVerdict::Carried => report.seen += 1,
+                MarkVerdict::Written => report.written += 1,
+                MarkVerdict::Unseen => report.missing.push(uuid),
             }
         }
         report.missing.sort();
@@ -507,8 +561,8 @@ impl Catalog {
             for uuid in planned {
                 match marks.get(&uuid) {
                     None => report.kept.push((uuid, "introuvable à la relecture".into())),
-                    Some((mark, _)) if mark == &report.session => {
-                        report.kept.push((uuid, "reparue depuis le plan (portée par la session)".into()))
+                    Some((mark, _)) if mark_verdict(mark, &report.session) != MarkVerdict::Unseen => {
+                        report.kept.push((uuid, "reparue depuis le plan (portée ou écrite pendant la session)".into()))
                     }
                     Some((_, false)) => report.kept.push((uuid, QUITTE_LE_PERIMETRE.into())),
                     Some(_) => {
@@ -563,7 +617,12 @@ impl Catalog {
             }
         }
         if !(report.removed.is_empty() && report.transitioned.is_empty()) {
+            // Les écritures de la fin elle-même — ses transitions — ne sont
+            // pas des vues : elles ne marquent pas. Sinon la fin suivante
+            // croirait présentes les lignes qu'elle vient d'archiver.
+            self.dans_une_fin = true;
             let res = self.drain();
+            self.dans_une_fin = false;
             // Le rapport ne dit que ce qui a eu lieu : une transition refusée
             // au drain (l'état relu à un autre instant) quitte `transitioned`
             // pour `kept`, avec la cause que porte `UpdateStatus::Failed` ;
@@ -604,7 +663,100 @@ impl Catalog {
         }
         // La fin ferme la session.
         self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
+        self.oublier_les_sessions(&entity_name);
         Ok(report)
+    }
+
+    // ── La marque à l'écriture ──────────────────────────────────────────
+    //
+    // Une écriture dans un périmètre dont une session est ouverte prend la
+    // marque de cette session (`{session}+w`) : écrire une ligne, c'est dire
+    // que la source l'a. Le prix, assumé : un écrivain qui réécrit
+    // périodiquement une ligne que la source n'a plus empêche son retrait,
+    // sans bruit — la rétention plutôt que la suppression à tort.
+
+    fn cle_des_sessions(&self, entity_name: &str) -> String {
+        format!("{}/{}:{entity_name}", self.scope.org, self.scope.project)
+    }
+
+    fn oublier_les_sessions(&mut self, entity_name: &str) {
+        let cle = self.cle_des_sessions(entity_name);
+        self.sessions_ouvertes.remove(&cle);
+    }
+
+    /// Les sessions ouvertes de l'entité dans la cellule courante, par
+    /// valeurs de périmètre (JSON, comme dans la clé de session). Une lecture
+    /// de `_catalog_meta` au premier besoin, puis le cache.
+    fn sessions_ouvertes_de(&mut self, entity_name: &str) -> Result<HashMap<String, String>, CatalogError> {
+        let cle = self.cle_des_sessions(entity_name);
+        if let Some(s) = self.sessions_ouvertes.get(&cle) {
+            return Ok(s.clone());
+        }
+        let prefixe = format!("snapshot_session:{cle}:");
+        let res = self
+            .conn
+            .execute_with_params(
+                &self.dialect.load_meta_by_prefix("prefix"),
+                &[QueryParam::new("prefix", CypherValue::String(prefixe.clone()))],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut ouvertes = HashMap::new();
+        for row in res.rows {
+            let (Some(k), Some(v)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_str())) else {
+                continue;
+            };
+            let Some(scope_json) = k.strip_prefix(&prefixe) else { continue };
+            if let Ok(open) = serde_json::from_str::<SnapshotSession>(v) {
+                ouvertes.insert(scope_json.to_string(), open.session);
+            }
+        }
+        self.sessions_ouvertes.insert(cle, ouvertes.clone());
+        Ok(ouvertes)
+    }
+
+    /// **Marquer les lignes écrites** (`uuids`, de l'entité) de la session
+    /// ouverte sur leur périmètre, s'il y en a une. Aucun coût — ni lecture de
+    /// ligne, ni écriture — quand l'entité ne déclare pas `snapshot` ou
+    /// qu'aucune session n'est ouverte sur elle dans cette cellule ; sinon,
+    /// une relecture des lignes écrites et un SET par session touchée.
+    pub(crate) fn marquer_les_ecritures(&mut self, entity_name: &str, uuids: &[String]) -> Result<(), CatalogError> {
+        if uuids.is_empty() || self.dans_une_fin {
+            return Ok(());
+        }
+        let Some(config) = self.entity_configs().get(entity_name).and_then(|c| c.snapshot.clone()) else {
+            return Ok(());
+        };
+        let ouvertes = self.sessions_ouvertes_de(entity_name)?;
+        if ouvertes.is_empty() {
+            return Ok(());
+        }
+        let mut par_session: HashMap<String, Vec<String>> = HashMap::new();
+        for row in self.get_many(entity_name, uuids)? {
+            let Some(uuid) = row.get("_uuid").and_then(|v| v.as_str()) else { continue };
+            let cellule = |champ: &str, attendu: &str| row.get(champ).and_then(|v| v.as_str()) == Some(attendu);
+            if !(cellule("_org", &self.scope.org) && cellule("_project", &self.scope.project)) {
+                continue;
+            }
+            let perimetre: BTreeMap<String, CypherValue> = config
+                .scope
+                .iter()
+                .filter_map(|f| Some((f.clone(), row.get(f)?.clone())))
+                .collect();
+            let json = serde_json::to_string(&perimetre).unwrap_or_default();
+            if let Some(session) = ouvertes.get(&json) {
+                par_session.entry(session.clone()).or_default().push(uuid.to_string());
+            }
+        }
+        for (session, uuids) in par_session {
+            self.conn
+                .execute_with_params(&self.dialect.mark_written_session(entity_name), &[
+                    QueryParam::new("uuids", CypherValue::List(uuids.into_iter().map(CypherValue::String).collect())),
+                    QueryParam::new("mark", CypherValue::String(format!("{session}{WRITTEN_SUFFIX}"))),
+                    QueryParam::new("session", CypherValue::String(session)),
+                ])
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        Ok(())
     }
 
     /// **La ligne est-elle encore dans ce périmètre**, dans la cellule

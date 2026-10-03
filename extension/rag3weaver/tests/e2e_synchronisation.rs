@@ -615,6 +615,167 @@ fn un_plan_dont_la_session_a_ete_reprise_ne_s_applique_pas() {
     assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"], "rien n'est retiré");
 }
 
+// ─── La marque à l'écriture (3 octobre 2026) ────────────────────────────────
+//
+// Une écriture dans un périmètre dont une session est ouverte prend la marque
+// de cette session : écrire une ligne, c'est dire que la source l'a. Sans
+// elle, une ligne écrite hors session — avant le plan, ou entre le plan et
+// l'application — gardait une marque qui n'était pas celle de la session, et
+// la fin la retirait. La marque d'une écriture se distingue de celle d'un lot
+// (`written` et `seen` dans le rapport) ; elle monte, elle ne descend jamais.
+
+/// Une ligne **créée hors session pendant la session**, avant le plan, est
+/// gardée — et comptée à part de ce que la session a porté.
+#[test]
+#[ignore]
+fn une_ligne_ecrite_hors_session_avant_le_plan_est_gardee() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1"], "A")).unwrap();
+    // Un écrivain ordinaire, sans session : a3 entre dans le classeur A.
+    catalog.ingest_entities("Fiche", lignes(&["a3"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed, [uuid(&catalog, "a2")], "seule a2, absente de la source, part : {fin:?}");
+    assert_eq!((fin.seen, fin.written), (1, 1), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a3"]);
+}
+
+/// Une ligne **supprimée puis recréée hors session entre le plan et
+/// l'application** est gardée.
+#[test]
+#[ignore]
+fn une_ligne_recreee_entre_le_plan_et_l_application_est_gardee() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    let a3 = uuid(&catalog, "a3");
+    assert_eq!(plan.removed, [a3.clone()]);
+    catalog.delete("Fiche", &a3).unwrap();
+    catalog.ingest_entities("Fiche", lignes(&["a3"], "A")).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(fin.removed.is_empty(), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("reparue")), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
+}
+
+/// Une **mise à jour hors session** (par la file et le drain) entre le plan
+/// et l'application garde la ligne.
+#[test]
+#[ignore]
+fn une_mise_a_jour_hors_session_entre_le_plan_et_l_application_garde_la_ligne() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    let a3 = uuid(&catalog, "a3");
+    let mut nouvelle = ligne("a3", "A", None);
+    nouvelle.insert("texte".into(), CypherValue::String("La fiche a3, réécrite par un autre.".into()));
+    catalog.update("Fiche", &a3, nouvelle).unwrap();
+    catalog.drain();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(fin.removed.is_empty(), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
+}
+
+/// **Le chemin de masse aussi** : une table vide repeuplée hors session
+/// pendant qu'une session est ouverte — rien n'est retiré.
+#[test]
+#[ignore]
+fn le_chemin_de_masse_hors_session_marque_aussi() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    let s1 = ouvrir(&mut catalog, "A");
+    catalog.ingest_entities("Fiche", lignes(&["a1", "a2"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s1, SnapshotFinishOptions { allow_empty: true, force: false }).unwrap();
+    assert!(fin.removed.is_empty(), "{fin:?}");
+    assert_eq!((fin.seen, fin.written), (0, 2), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
+}
+
+/// **Une transition de fin ne marque pas la ligne** : une transition n'est
+/// pas une vue. La marque porte l'identifiant de sa session, donc une marque
+/// posée à tort par la fin ne tromperait pas la fin suivante (elle vient
+/// d'une autre session) — le contrat se vérifie donc sur la marque même, et
+/// sur la fin suivante, qui doit encore voir les archivées absentes.
+#[test]
+#[ignore]
+fn une_transition_de_fin_ne_marque_pas_la_ligne() {
+    let (mut catalog, s2) = archivage();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    let mut archivees = fin.transitioned.clone();
+    archivees.sort();
+    assert_eq!(archivees.len(), 2, "{fin:?}");
+    for u in &archivees {
+        let marque = colonne(&catalog, u, "_snapshot");
+        assert_ne!(marque.as_str(), Some(format!("{s2}+w").as_str()), "la transition n'est pas une écriture vue");
+    }
+    let s3 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s3, vec![ligne("a1", "A", Some("active"))]).unwrap();
+    let fin = finir(&mut catalog, "A", &s3, SnapshotFinishOptions::default()).unwrap();
+    let mut deja = fin.already.clone();
+    deja.sort();
+    assert_eq!(deja, archivees, "les archivées restent absentes pour la fin suivante : {fin:?}");
+}
+
+/// **La marque monte, elle ne descend jamais** : une ligne portée par la
+/// session puis réécrite par un écrivain ordinaire reste comptée comme
+/// portée.
+#[test]
+#[ignore]
+fn la_marque_d_un_lot_ne_redescend_pas_apres_une_ecriture() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let mut autre = ligne("a1", "A", None);
+    autre.insert("texte".into(), CypherValue::String("La fiche a1, réécrite.".into()));
+    catalog.ingest_entities("Fiche", vec![autre]).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!((fin.seen, fin.written), (2, 0), "{fin:?}");
+}
+
+/// **Ce que coûte la marque à l'écriture** sur une ingestion ordinaire, en
+/// lots de 500 : sans session ouverte (le cache dit « aucune », rien n'est
+/// relu ni écrit), puis avec une session ouverte (une relecture des lignes et
+/// un SET par lot). Mesure affichée ; seule la correction est affirmée.
+#[test]
+#[ignore]
+fn mesure_le_cout_de_la_marque_a_l_ecriture() {
+    let lots = |base: &str| -> Vec<Vec<BTreeMap<String, CypherValue>>> {
+        (0..4)
+            .map(|l| (0..500).map(|i| ligne(&format!("{base}{l}-{i}"), "A", None)).collect())
+            .collect()
+    };
+    let mesurer = |catalog: &mut Catalog, base: &str| -> u128 {
+        let t = std::time::Instant::now();
+        for l in lots(base) {
+            catalog.ingest_entities("Fiche", l).unwrap();
+        }
+        t.elapsed().as_millis()
+    };
+    let mut sans = catalogue();
+    sans.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    sans.ingest_entities("Fiche", lignes(&["amorce"], "A")).unwrap();
+    let ms_sans = mesurer(&mut sans, "s");
+
+    let mut avec = catalogue();
+    avec.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    avec.ingest_entities("Fiche", lignes(&["amorce"], "A")).unwrap();
+    let session = ouvrir(&mut avec, "A");
+    let ms_avec = mesurer(&mut avec, "s");
+    eprintln!("MESURE marque à l'écriture, 4 lots de 500 : sans session {ms_sans} ms, avec session {ms_avec} ms");
+    let fin = finir(&mut avec, "A", &session, SnapshotFinishOptions { allow_empty: true, force: false }).unwrap();
+    assert_eq!(fin.written, 2000, "toutes les lignes écrites pendant la session sont marquées : {}", fin.written);
+}
+
 // ─── Les cellules (_org / _project) ─────────────────────────────────────────
 
 /// Un périmètre de synchronisation est borné à la **cellule courante** : deux

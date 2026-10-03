@@ -258,6 +258,15 @@ pub struct Catalog {
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
     sync_conn: Option<Arc<dyn SyncDbConnection>>,
+    /// **Les sessions de synchronisation ouvertes**, par (cellule, entité) :
+    /// valeurs du périmètre en JSON → identifiant. Lu une fois depuis
+    /// `_catalog_meta`, oublié à chaque ouverture, abandon ou fin. Hypothèse
+    /// nommée : une base n'a qu'un processus écrivain, donc aucun autre ne
+    /// peut ouvrir une session à l'insu de ce cache.
+    pub(crate) sessions_ouvertes: HashMap<String, HashMap<String, String>>,
+    /// Vrai pendant l'application d'une fin : ses propres écritures (les
+    /// transitions) ne sont pas des vues et ne marquent pas.
+    pub(crate) dans_une_fin: bool,
     /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
     fail_node: Option<String>,
     /// Schema dialect for multi-backend DDL/DML generation.
@@ -361,6 +370,8 @@ impl Catalog {
             dette_publiee: BTreeMap::new(),
             cache_base: std::env::temp_dir().join("rag3weaver_cache"),
             sync_conn: None,
+            sessions_ouvertes: HashMap::new(),
+            dans_une_fin: false,
             fail_node: None,
             dialect: Arc::new(crate::dialect::Rag3dbDialect),
             search_backend: None,
@@ -4708,9 +4719,14 @@ impl Catalog {
             .clone();
 
         let mut entity_records: Vec<EntityRecord> = Vec::with_capacity(records.len());
+        // Toutes les lignes du lot, inchangées comprises : la marque à
+        // l'écriture les vise toutes (une réécriture identique dit aussi que
+        // la source a la ligne).
+        let mut uuids_du_lot: Vec<String> = Vec::with_capacity(records.len());
         for mut data in records {
             // Generate deterministic UUID from hashsafe fields or all content fields
             let uuid = Self::uuid_for(entity_name, &entity_def, &data);
+            uuids_du_lot.push(uuid.clone());
             data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
 
             // Content hash from content fields
@@ -4804,6 +4820,7 @@ impl Catalog {
             }
         }
         if entity_records.is_empty() {
+            self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
             self.flush_blob_store("ingest")?;
             // Un lot entièrement refusé ne doit pas se lire comme un lot
             // entièrement inchangé : c'est la différence entre « rien à
@@ -4947,6 +4964,7 @@ impl Catalog {
                 // prochain drain — ou au Drop.
                 self.flush_blob_store("ingest")?;
                 self.signaler_les_troncatures("ingest_entities");
+                self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
                 // Les lignes refusées par la machine à états ne sont jamais
                 // descendues dans le graphe : elles sortent du compte des
                 // traitées et entrent dans celui des échecs, avec leur cause.
@@ -6175,6 +6193,17 @@ impl Catalog {
             }
         };
         phase("extraction du lot", &mut horloge);
+        // Ce que ce lot écrit (créations et mises à jour), pour la marque à
+        // l'écriture une fois le drain réussi.
+        let mut ecrites: HashMap<String, Vec<String>> = HashMap::new();
+        for rec in &lot.entities {
+            if let Some(uuid) = rec.data.get("_uuid").and_then(|v| v.as_str()) {
+                ecrites.entry(rec.entity_name.clone()).or_default().push(uuid.to_string());
+            }
+        }
+        for upd in &lot.updates {
+            ecrites.entry(upd.entity_name.clone()).or_default().push(upd.uuid.clone());
+        }
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
             self.build_ingestion_graph(lot, avec_embarquement, avec_decoupage);
         phase("construction du graphe", &mut horloge);
@@ -6225,6 +6254,7 @@ impl Catalog {
         let avertissements = ramasser_les_avertissements(&mut ecoute);
         let echecs = Self::relever_les_echecs(&canal);
 
+        let reussi = result.is_ok();
         let mut outcome = match result {
             Ok(_output) => {
                 self.drain_counters.total_processed += op_count;
@@ -6325,6 +6355,13 @@ impl Catalog {
         // index files before dying, and pushing them is what the write-through
         // store did anyway. What's not flushed here is retried at the next
         // boundary, never dropped.
+        if reussi {
+            for (entite, uuids) in &ecrites {
+                if let Err(e) = self.marquer_les_ecritures(entite, uuids) {
+                    outcome.warnings.push(format!("marque à l'écriture ({entite}) : {e}"));
+                }
+            }
+        }
         if let Err(e) = self.flush_blob_store("drain") {
             // The records may already be written; persistence is a separate failed
             // operation. Never advertise ready indexes after an unsuccessful flush.

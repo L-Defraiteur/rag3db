@@ -397,6 +397,18 @@ pub trait SchemaDialect: Send + Sync {
         format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL")
     }
 
+    /// **La marque d'une écriture** : `_snapshot = $mark` sur `$uuids`, sauf
+    /// là où un lot de la session les a déjà portées (`_snapshot = $session`)
+    /// — la marque monte, elle ne descend jamais. Une ligne écrite est
+    /// présente : sa marque d'absence part.
+    fn mark_written_session(&self, table: &str) -> String {
+        format!(
+            "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
+             WHERE n._snapshot IS NULL OR n._snapshot <> $session \
+             SET n._snapshot = $mark, n._absent_since = NULL"
+        )
+    }
+
     /// Une colonne entière à NULL, sur toute la table (une migration).
     fn set_column_null(&self, table: &str, field: &str) -> String {
         format!("MATCH (n:{table}) SET n.{field} = NULL")
@@ -1727,6 +1739,13 @@ impl SchemaDialect for PostgresDialect {
 
     fn mark_absent_since(&self, table: &str) -> String {
         format!("UPDATE {table} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND (_absent_since IS NULL OR _absent_since = 0)")
+    }
+
+    fn mark_written_session(&self, table: &str) -> String {
+        format!(
+            "UPDATE {table} SET _snapshot = $mark, _absent_since = NULL \
+             WHERE _uuid = ANY($uuids) AND (_snapshot IS NULL OR _snapshot <> $session)"
+        )
     }
 
     fn set_column_null(&self, table: &str, field: &str) -> String {
