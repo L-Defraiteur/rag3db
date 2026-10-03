@@ -46,6 +46,7 @@ pub enum Kept {
 }
 
 /// La politique des dépôts de code, telle que l'ingestion l'applique.
+#[cfg(feature = "code")]
 pub fn code_policy(path: &str, bytes: u64) -> Kept {
     match crate::code::verdict(path, bytes as usize) {
         crate::code::Verdict::Code => Kept::Yes("code"),
@@ -105,6 +106,7 @@ pub fn survey<'a>(files: impl IntoIterator<Item = (&'a str, u64)>, policy: impl 
 /// raison (`WorkingTree::list_with_exclusions` : la liste unique du crate).
 /// Les fichiers ignorés par les règles du dossier n'y sont pas : ce n'est pas
 /// le dépôt.
+#[cfg(feature = "code")]
 pub fn working_tree_files(tree: &crate::code_tools::WorkingTree) -> Result<(Vec<(String, u64)>, Vec<(String, &'static str)>), String> {
     let (paths, excluded) = tree.list_with_exclusions()?;
     let files = paths
@@ -120,6 +122,7 @@ pub fn working_tree_files(tree: &crate::code_tools::WorkingTree) -> Result<(Vec<
 /// Les chemins et les tailles d'une source quelconque. Elle ne sait pas dire
 /// une taille sans lire : on lit — c'est le prix d'une source qui n'est pas
 /// un dossier.
+#[cfg(feature = "code")]
 pub fn source_files(source: &dyn crate::code_tools::FileSource) -> Result<Vec<(String, u64)>, String> {
     source
         .list()?
@@ -244,7 +247,7 @@ impl Estimate {
 pub fn service_attached() -> bool {
     #[cfg(feature = "daemon")]
     {
-        std::env::var(crate::daemon::embeddings::SERVICE_VARIABLE).is_ok_and(|v| !v.trim().is_empty())
+        crate::model_source::Capability::Embed.variables().iter().any(|v| std::env::var(v).is_ok_and(|v| !v.trim().is_empty()))
     }
     #[cfg(not(feature = "daemon"))]
     {
@@ -292,6 +295,7 @@ mod tests {
     const MO: u64 = 1_000_000;
 
     /// Un dépôt comme celui-ci : du code, un texte, des données qu'on écarte.
+    #[cfg(feature = "code")]
     #[test]
     fn un_depot_de_code_se_compte_par_la_politique_d_ingestion() {
         let files = [("src/lib.rs", 40_000), ("README.md", 3_000), ("data/users.csv", 9 * MO), ("app.min.js", 80_000)];
@@ -362,6 +366,7 @@ mod tests {
         assert_eq!(probe_rate(&Lent, &[]).unwrap(), None);
     }
 
+    #[cfg(feature = "code")]
     #[test]
     fn l_estimation_dit_le_modele_la_duree_et_la_confirmation() {
         let s = survey([("a.rs", 35 * MO)], code_policy);

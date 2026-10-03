@@ -29,7 +29,15 @@ pub struct BackendManifest {
     pub scripts: BTreeMap<String, PathBuf>,
     pub name: String,
     pub database: PathBuf,
-    pub embeddings: EmbeddingService,
+    /// La déclaration d'avant de l'embarquement dense. Gardée : c'est un
+    /// alias de `models.embed` — l'une ou l'autre, pas les deux.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embeddings: Option<EmbeddingService>,
+    /// **Les modèles, par capacité** — en local, en service à nous, ou chez
+    /// un tiers : la même déclaration pour toutes
+    /// (`crate::model_source::ModelSource`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub models: BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
     pub vector_extension: PathBuf,
     pub entities: BTreeMap<String, BackendEntity>,
     #[serde(default)]
@@ -70,30 +78,42 @@ pub enum EmbeddingProvider {
     Compatible,
 }
 impl EmbeddingService {
-    #[cfg(feature = "daemon")]
-    pub fn connect(&self) -> Result<Box<dyn Embedder>, String> {
-        match self.provider {
-            EmbeddingProvider::Daemon if self.address.trim().is_empty() => {
-                match crate::daemon::DaemonEmbedder::from_service(&self.model) {
-                    Some(service) => Ok(Box::new(service?)),
-                    None => Err(format!(
-                        "embeddings : ni `address` dans le manifeste, ni {} dans l'environnement",
-                        crate::daemon::embeddings::SERVICE_VARIABLE
-                    )),
-                }
-            }
-            EmbeddingProvider::Daemon => Ok(Box::new(
-                crate::daemon::DaemonEmbedder::joindre(&self.address).map_err(|e| e.to_string())?,
-            )),
-            EmbeddingProvider::Compatible => Ok(Box::new(crate::http_embedder::HttpEmbedder::new(
-                &self.address,
-                &self.model,
-                self.dimensions,
-                self.api_key_env.as_deref(),
-            )?)),
+    /// La même chose, dans la déclaration commune.
+    pub fn source(&self) -> crate::model_source::ModelSource {
+        use crate::model_source::{Addresses, Fallback, ModelSource, Provider};
+        ModelSource {
+            provider: match self.provider {
+                EmbeddingProvider::Daemon => Provider::Service,
+                EmbeddingProvider::Compatible => Provider::Compatible,
+            },
+            model: self.model.clone(),
+            address: Addresses::parse(&self.address),
+            protocol: None,
+            api_key_env: self.api_key_env.clone(),
+            fallback: Fallback::Refuse,
+            dimensions: Some(self.dimensions),
         }
     }
 }
+
+impl BackendManifest {
+    /// **L'embarquement dense de ce backend** : `models.embed`, ou la section
+    /// `embeddings` d'avant. Les deux à la fois, ou aucune, c'est une erreur
+    /// dite au chargement.
+    pub fn embed_source(&self) -> Result<crate::model_source::ModelSource, String> {
+        use crate::model_source::Capability;
+        match (self.models.get(&Capability::Embed), &self.embeddings) {
+            (Some(_), Some(_)) => Err("`models.embed` et `embeddings` déclarent tous deux l'embarquement : gardez-en un".into()),
+            (Some(source), None) => match source.dimensions {
+                Some(_) => Ok(source.clone()),
+                None => Err("`models.embed` doit déclarer `dimensions`".into()),
+            },
+            (None, Some(legacy)) => Ok(legacy.source()),
+            (None, None) => Err("ce backend ne déclare pas d'embarquement : `models.embed` (ou `embeddings`) est requis".into()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendEntity {
@@ -203,6 +223,8 @@ pub struct OutputPort {
 
 pub struct PreparedBackend {
     pub manifest: BackendManifest,
+    /// L'embarquement dense, résolu au chargement (`BackendManifest::embed_source`).
+    embed: crate::model_source::ModelSource,
     pub directory: PathBuf,
     entities: HashMap<String, EntityConfig>,
     mappings: HashMap<String, JsonSchemaMapping>,
@@ -240,6 +262,7 @@ impl PreparedBackend {
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
         }
+        let embed = manifest.embed_source()?;
         if manifest.database.as_os_str().is_empty()
             || manifest.database.to_string_lossy() == ":memoire:"
         {
@@ -592,6 +615,7 @@ impl PreparedBackend {
         }
         Ok(Self {
             manifest,
+            embed,
             directory,
             entities,
             mappings,
@@ -650,7 +674,18 @@ impl PreparedBackend {
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
         }
-        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.manifest.embeddings,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read"]})
+        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.embed,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read"]})
+    }
+    /// La déclaration de l'embarquement dense de ce backend.
+    pub fn embed_source(&self) -> &crate::model_source::ModelSource {
+        &self.embed
+    }
+    fn embed_dimensions(&self) -> usize {
+        self.embed.dimensions.unwrap_or(0)
+    }
+    /// L'embarqueur que la déclaration désigne, et d'où il calcule.
+    pub fn connect_embedder(&self) -> Result<(Box<dyn Embedder>, crate::model_source::Origin), String> {
+        crate::model_source::connect_embedder(&self.embed)
     }
     pub fn open(
         self,
@@ -663,31 +698,29 @@ impl PreparedBackend {
         if sans_service && self.needs_embeddings() {
             return Err(
                 "ce backend déclare des signaux vecteur ou sparse (ou un workspace indexé) : \
-                 un service d'embarquement est requis — donnez embeddings.address, ou \
-                 RAG3WEAVER_EMBED_SERVICE"
+                 un service d'embarquement est requis — donnez models.embed.address \
+                 (ou embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)"
                     .into(),
             );
         }
         let embedder = match embedder {
             Some(e) => {
                 if e.is_mock()
-                    || e.name() != self.manifest.embeddings.model
-                    || e.dim() != self.manifest.embeddings.dimensions
+                    || e.name() != self.embed.model
+                    || e.dim() != self.embed_dimensions()
                 {
                     return Err("embedding model identity differs from manifest".into());
                 }
                 e
             }
-            None => Box::new(crate::embedder::MockEmbedder::new(
-                self.manifest.embeddings.dimensions,
-            )),
+            None => Box::new(crate::embedder::MockEmbedder::new(self.embed_dimensions())),
         };
         let mut cat = Catalog::new(
             conn,
             embedder,
             CatalogConfig {
                 name: Some(self.manifest.name.clone()),
-                embedding_dim: self.manifest.embeddings.dimensions,
+                embedding_dim: self.embed_dimensions(),
                 allow_mock_embedder: sans_service,
                 checkpoint_dir: Some(
                     self.path(&self.manifest.database)
@@ -1759,6 +1792,44 @@ mod tests {
         };
         assert!(erreur.contains("embarquement"), "{erreur}");
         assert!(erreur.contains("RAG3WEAVER_EMBED_SERVICE"), "le refus dit quoi faire : {erreur}");
+    }
+
+    /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
+    /// l'autre, jamais les deux, et l'absence des deux se dit au chargement.
+    #[test]
+    fn l_embarquement_se_declare_par_models_embed_ou_par_embeddings() {
+        use crate::model_source::{Capability, Provider};
+        let chemin = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook/backend.json");
+        let base: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+
+        // La section d'avant : un démon, à l'adresse écrite.
+        let avant: BackendManifest = serde_json::from_value(base.clone()).unwrap();
+        let s = avant.embed_source().unwrap();
+        assert_eq!((s.provider, s.model.as_str(), s.dimensions), (Provider::Service, "bge-m3", Some(1024)));
+        assert_eq!(s.address.0, ["127.0.0.1:7878"]);
+
+        // La même chose sous `models.embed`, sans adresse : elle viendra de l'environnement.
+        let mut neuf = base.clone();
+        neuf.as_object_mut().unwrap().remove("embeddings");
+        neuf["models"] = json!({"embed": {"provider": "service", "model": "granite-278m", "dimensions": 768}});
+        let neuf: BackendManifest = serde_json::from_value(neuf).unwrap();
+        let s = neuf.embed_source().unwrap();
+        assert_eq!((s.provider, s.model.as_str(), s.dimensions, s.address.is_empty()), (Provider::Service, "granite-278m", Some(768), true));
+        assert!(neuf.models.contains_key(&Capability::Embed));
+
+        // Les deux à la fois, ou aucune : une erreur qui dit laquelle.
+        let mut deux = base.clone();
+        deux["models"] = json!({"embed": {"model": "granite-278m", "dimensions": 768}});
+        let e = serde_json::from_value::<BackendManifest>(deux).unwrap().embed_source().unwrap_err();
+        assert!(e.contains("gardez-en un"), "{e}");
+        let mut aucune = base.clone();
+        aucune.as_object_mut().unwrap().remove("embeddings");
+        let e = serde_json::from_value::<BackendManifest>(aucune).unwrap().embed_source().unwrap_err();
+        assert!(e.contains("models.embed"), "{e}");
+        // Une capacité inconnue est une faute de frappe, pas un modèle.
+        let mut faute = base;
+        faute["models"] = json!({"embedd": {"model": "x"}});
+        assert!(serde_json::from_value::<BackendManifest>(faute).is_err());
     }
 
     /// Sans aucune description déclarée, rien ne change : les textes des

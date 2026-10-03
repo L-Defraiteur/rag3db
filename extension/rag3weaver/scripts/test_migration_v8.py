@@ -47,7 +47,7 @@ def service_address(model):
     """The address in RAG3WEAVER_EMBED_SERVICE that serves `model`, or None when
     the variable is not set. A set variable with no service for the model is an
     error, as in the Rust client: no silent fallback on the local card."""
-    addresses=[a.strip() for a in os.environ.get('RAG3WEAVER_EMBED_SERVICE','').split(',') if a.strip()]
+    addresses=[a.strip() for a in (os.environ.get('RAG3WEAVER_SERVICE_EMBED') or os.environ.get('RAG3WEAVER_EMBED_SERVICE','')).split(',') if a.strip()]
     if not addresses: return None
     import urllib.request
     seen=[]

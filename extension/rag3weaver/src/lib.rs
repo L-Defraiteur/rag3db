@@ -181,6 +181,9 @@ pub mod burst;
 /// Dire ce que ça va coûter avant d'indexer : comptes, modèle, durée,
 /// confirmation. Une lecture, générique — voir l'en-tête du module.
 pub mod estimate;
+/// Un modèle, en service ou en local : la déclaration commune à toute
+/// capacité, et sa résolution en un client.
+pub mod model_source;
 /// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
 /// entités, des graphes, des composants, et des motifs qui s'appliquent aux
 /// trois. Voir `docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md`.

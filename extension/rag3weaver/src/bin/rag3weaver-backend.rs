@@ -25,7 +25,7 @@ fn run() -> Result<(), String> {
     }
     // Un backend en mots seuls n'exige pas de service d'embarquement.
     let embedder = if prepared.needs_embeddings() {
-        Some(prepared.manifest.embeddings.connect()?)
+        Some(prepared.connect_embedder()?.0)
     } else {
         None
     };

@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix='rag3-backend-persistence-') as tmp:
     config['database']=str(Path(tmp)/'persistent.rag3db')
     # Un service d'embarquement déjà en place (RAG3WEAVER_EMBED_SERVICE) l'emporte
     # sur l'adresse du gabarit : `address` vide, et le backend choisit par le modèle.
-    if os.environ.get('RAG3WEAVER_EMBED_SERVICE'):config['embeddings']=dict(config['embeddings'],address='')
+    if os.environ.get('RAG3WEAVER_SERVICE_EMBED') or os.environ.get('RAG3WEAVER_EMBED_SERVICE'):config['embeddings']=dict(config['embeddings'],address='')
     config['vector_extension']=str(ROOT/'extension/vector/build/libvector.rag3db_extension')
     for entity in config['entities'].values():entity['schema']=str(sample.parent/entity['schema'])
     for tool in config['tools'].values():tool['graph']=str((sample.parent/tool['graph']).resolve())

@@ -421,7 +421,12 @@ impl DaemonEmbedder {
     /// un refus qui dit ce que chacune sert : des vecteurs d'un autre modèle
     /// dans un index ne se voient qu'à la recherche, trop tard.
     pub fn from_service(model: &str) -> Option<Result<Self, String>> {
-        let addresses = std::env::var(SERVICE_VARIABLE).ok().filter(|v| !v.trim().is_empty())?;
+        // La variable commune d'abord (`RAG3WEAVER_SERVICE_EMBED`), puis
+        // celle d'avant, gardée comme alias (`crate::model_source`).
+        let addresses = crate::model_source::Capability::Embed
+            .variables()
+            .iter()
+            .find_map(|v| std::env::var(v).ok().filter(|v| !v.trim().is_empty()))?;
         Some(Self::from_addresses(&addresses, model))
     }
 
