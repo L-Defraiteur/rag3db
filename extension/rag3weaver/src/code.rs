@@ -318,7 +318,7 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // fichier. Elle est bornée au rendu (`max_chars`), pas ici.
         return_fields: Some(vec![
             "file_path".into(), "start_line".into(), "end_line".into(),
-            "scope_type".into(), "parent_name".into(),
+            "scope_type".into(), "parent_name".into(), "test_role".into(),
             "docstring".into(), "signature".into(), "folds".into(),
         ]),
         source_lines: Some(crate::config::SourceLines {
@@ -338,13 +338,38 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // pour ces questions-là que la valeur reste douce. Un graphe
         // (`weights` du nœud) ou un appelant la surchargent par l'échelle du
         // pas C.
-        field_weights: vec![crate::search::FieldWeight {
-            field: "scope_type".into(),
-            weights: [("function".to_string(), 1.0), ("method".to_string(), 1.0)]
+        field_weights: vec![
+            crate::search::FieldWeight {
+                field: "scope_type".into(),
+                weights: [("function".to_string(), 1.0), ("method".to_string(), 1.0)]
+                    .into_iter()
+                    .collect(),
+                default: 0.85,
+            },
+            // **Les tests à 0,5** (session recherche, banc étagé, 3 octobre
+            // 2026) : depuis que les fonctions d'un `mod tests` sont des
+            // scopes, un test court qui nomme `f` passait devant la
+            // définition de `f` (e2e_code, « la correspondance exacte en
+            // tête »). Le poids rend au banc ce que ~2 500 scopes de test lui
+            // coûtaient (0,361 → 0,405, R@1 11 → 13). De 0,4 à 0,7 le banc
+            // fait un plateau ; 0,5 laisse 19 % de marge sous le plafond où
+            // e2e_code rougit (0,597). **Ce que le banc ne voit pas** : aucune
+            // de ses questions n'a un test pour bonne réponse — d'où une
+            // valeur douce, et 1,0 pour tout ce qui n'est pas un test. Le
+            // champ doit être dans `return_fields`, sans quoi le nœud de
+            // pondération ne le voit pas et reste neutre.
+            crate::search::FieldWeight {
+                field: "test_role".into(),
+                weights: [
+                    ("case".to_string(), 0.5),
+                    ("suite".to_string(), 0.5),
+                    ("support".to_string(), 0.5),
+                ]
                 .into_iter()
                 .collect(),
-            default: 0.85,
-        }],
+                default: 1.0,
+            },
+        ],
         // La vue par parent : les méthodes d'un même impl rendues ensemble,
         // sous sa signature, que l'impl soit ou non un résultat.
         group_by: Some(crate::config::GroupBy { relation: "HAS_PARENT".into(), frame_field: "signature".into() }),
