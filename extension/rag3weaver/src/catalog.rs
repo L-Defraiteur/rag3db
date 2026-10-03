@@ -3771,8 +3771,9 @@ impl Catalog {
                     self.conn.execute(&self.dialect.alter_add_column(table, &absence)).map_err(|e| {
                         CatalogError::DbError(format!("migration _absent_since {table}: {e}"))
                     })?;
-                    // rag3db remplit d'un 0 une colonne entière ajoutée :
-                    // « pas d'absence constatée » s'écrit NULL, pas 0.
+                    // `alter_add_column` pose la valeur par défaut du type
+                    // (0 pour un entier) sur les lignes existantes : « pas
+                    // d'absence constatée » s'écrit NULL, pas 0.
                     self.conn.execute(&self.dialect.set_column_null(table, "_absent_since")).map_err(|e| {
                         CatalogError::DbError(format!("migration _absent_since {table} (NULL) : {e}"))
                     })?;

@@ -50,11 +50,15 @@ Cinq branches en cours, toutes poussées, aucune fusionnée (les noms
 | `reprise-apres-panne-index-cle-primaire` (`a486fde9c`) | `../rag3db-moteur` | cœur C++ | Le correctif est sur `master` (`6bf46150b`) ; reste un commit de test seul (panne pendant la phase de stockage, 38 s). | Relire, fusionner avec la marche 1. |
 | `banc-de-concurrence` (`00b2a0263`) | `../rag3db-banc` | banc | Étape 1 faite, étape 2 en cours (compile). Cinq cas rouges, dont deux hors plan (§6). | Relecture par la session cœur C++, fusion de l'étape 1, fin de l'étape 2. |
 | `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
-| `synchronisation-par-perimetre` (`325134ff0`) | arbre principal | produit | `SnapshotConfig` dans `EntityConfig` ; le reste à écrire. | Tests rouges sur une entité synthétique, puis la marque, l'appel de fin, les garde-fous. |
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
 `extension/rag3weaver/docs/2-octobre-2026-00h16/01-ce-que-rag3weaver-suppose-d-une-seule-base.md`.
+
+`synchronisation-par-perimetre` est fusionnée dans `master` le 3 octobre 2026
+(dernière branche `-4`, en avance rapide). Les branches `synchronisation-par-perimetre`,
+`-2` et `-3` sur `origin` sont des états d'avant rebase, laissées sans force : à
+supprimer par Lucie, comme `origin/fin-de-journal-dechiree`.
 
 `origin/fin-de-journal-dechiree` est périmée (son contenu est sur `master`
 depuis `a66bb0b9d`, rebasé) : à supprimer par Lucie.
@@ -101,7 +105,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Décidé (§4) ; **la mesure des poids de fusion ne commence pas** avant la référence du banc `e2e_banc_etage` en granite-278m, avant / après les suppressions — avant = `a66bb0b9d`, après = `01791e347` (45 → 43 questions : les deux sur le parcours en largeur n'ont plus de cible) —, à jouer dès que les poids granite-278m sont sur ce poste. |
 | Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
 | Deck builder MTG (produit) | `experiments/mtga`, `master` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
-| Synchronisation par identifiant : supprimer les lignes disparues d'un snapshot | moteur (`ingest_snapshot` / `EntityBatchNode`) | Décidé avec Lucie le 1er octobre, après les étapes D et E du WAL. Générique ; aujourd'hui seuls les fichiers de code le font (`reingest_file`). **Tranché par Lucie (2 et 3 octobre)** : périmètre déclaré par l'entité, les six recommandations, puis une mise de côté avant purge de **7 jours par défaut** (`keepFor`, réglable par entité), avec laquelle viendra l'annulation en bloc. Branche `synchronisation-par-perimetre`. |
+| Synchronisation par périmètre | **première étape sur `master` (3 octobre)** : `SnapshotConfig` (périmètre, `maxMissingRatio`, `onMissing: delete \| {transition}`), une session à la fois par périmètre et par cellule (`begin_snapshot` rend l'identifiant, `takeover`, `abort_snapshot`), marque `_snapshot`, fin en deux temps (`plan_snapshot_finish` / `apply_snapshot_finish`) et ses garde-fous, marque d'absence `_absent_since`, schéma v8 ; `tests/e2e_synchronisation.rs`, `scripts/test_backend_snapshot.py`, `scripts/test_migration_v8.py` | **Seconde étape** : la mise de côté avant purge (`keepFor`, 7 jours par défaut, `0` pour la couper) et l'annulation en bloc d'une fin — page de conception `extension/rag3weaver/docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`. Puis rebrancher `reingest_file` (dette de généricité ci-dessous). |
 | Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
@@ -187,6 +191,17 @@ quatre commits anciens en portent encore — un de février 2026, trois de
 l'amont Kuzu de 2025 — et ne sont pas réécrits : cela changerait tous les
 hash du dépôt public.
 
+**2 et 3 octobre 2026, synchronisation par périmètre** : le périmètre se
+déclare dans l'entité, des champs de la ligne (aucun nom en dur) ; les
+relations partent avec la ligne et sont comptées ; `onMissing` nomme une
+**transition** (pas un état) et une absente d'où elle ne part pas est gardée
+et nommée ; une fin est une unité ; proportion maximale réglable, la moitié par
+défaut ; **une session à la fois par périmètre**, identifiant rendu par le
+moteur, reprise explicite (`takeover`), jamais d'expiration — comme le verrou
+d'état de Terraform et la table de verrou de Flyway ; **marque d'absence**
+`_absent_since` ; **mise de côté de 7 jours** avant purge, avec l'annulation en
+bloc, en seconde étape. Un périmètre est **borné à la cellule** courante.
+
 **3 octobre 2026** : étapes 1 et 2 du pas C livrées et fusionnées — l'échelle
 de préséance sur la fusion (`weights` choix / `default_weights` défaut,
 `search_base` migré) et `FieldWeightNode` (pondération par valeur de champ,
@@ -208,6 +223,26 @@ sessions, pas d'une vérification.
 | Amont Vela | remote `vela`, branche `storage/concurrent-checkpoint-recovery` (27 septembre) | En cours de relecture par la session cœur C++ (2 octobre), voir « Un seul écrivain à la fois » au §3. Le WAL illisible, lui, venait de notre bug d'écriture, corrigé (§6). |
 
 ## 6. Bugs connus, non corrigés
+
+- **Une colonne nulle sur toutes les lignes d'une liste de paramètres est
+  lue comme STRING** (moteur, trouvé le 3 octobre par `e2e_undo`).
+  Reproduction : `CREATE NODE TABLE T(id STRING PRIMARY KEY, n INT64)`,
+  `CREATE (:T {id: 'a'})`, puis `UNWIND $items AS i MATCH (t:T {id: i.id})
+  SET t.n = i.n` avec `$items = [{id: 'a', n: NULL}]` : « Binder exception:
+  … STRUCT_EXTRACT(i, n) has data type STRING but expected INT64 ». Latent
+  pour tout champ typé nullable. Contourné dans les annulations de
+  `DeleteRecordNode` et `UpdateRecordNode` (`0709e3cba`) ; la correction est
+  au moteur. (Reproduction tirée de l'erreur d'`e2e_undo`, pas rejouée seule.)
+  Le « 0 au lieu de NULL » vu par la migration v8 n'est **pas** un défaut du
+  moteur : un `ALTER TABLE … ADD n INT64` nu rend bien NULL (vérifié) ; c'est
+  `SchemaDialect::alter_add_column` qui pose la valeur par défaut du type.
+- **L'identité d'une ligne ne dépend pas de la cellule** (crate) : `uuid_for`
+  hache les champs `hashsafe` seuls. La même clé ingérée dans deux cellules
+  donne **la même ligne**, dont la seconde ingestion réécrit `_org` /
+  `_project`. `e2e_scope` l'évite par des noms distincts par cellule. La
+  synchronisation, bornée à la cellule, n'y ajoute rien ; mais deux cellules
+  ne peuvent pas porter deux lignes de même identité. À trancher si un produit
+  le demande.
 
 - **Deux corruptions de plus sous le mode multi-écrivains, hors plan**
   (étape 2 du banc, 2 octobre) : des virements entre comptes ne conservent
