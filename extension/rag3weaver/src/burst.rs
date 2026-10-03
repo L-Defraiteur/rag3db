@@ -560,7 +560,10 @@ mod tests {
     fn le_plan_suit_les_reglages() {
         let lens = vec![100usize; 400];
         // Sans réglage : le découpage d'avance, comme avant.
-        assert!(matches!(plan_with(&lens, Some((128, 512)), 32, None), Batches::Fixed(_)));
+        // Et c'est **exactement** celui d'avant : une carte à soi, ou `plein`
+        // écrit, ne voient aucune différence.
+        let Batches::Fixed(lots) = plan_with(&lens, Some((128, 512)), 32, None) else { panic!("un plan d'avance attendu") };
+        assert_eq!(lots, stable_batches(&lens, lot_budget(Some((128, 512)), 32)));
         // Avec : une rafale après l'autre, sous le plafond du modèle — pas
         // sous le budget prudent d'une carte partagée.
         let Batches::Paced { budget, .. } = plan_with(&lens, Some((128, 512)), 32, Some(BurstSettings::DEFAULT)) else {
