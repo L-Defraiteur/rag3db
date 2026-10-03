@@ -1,0 +1,423 @@
+-DATASET CSV empty
+-BUFFER_POOL_SIZE 134217728
+
+--
+
+# Quatre-vingt-dix nœuds sur cent supprimés un par un, une instruction chacun : les dix
+# survivants doivent tous rester atteignables. Un survivant vers lequel ne menaient que des
+# nœuds supprimés gardait ses propres arêtes mais n'était plus atteint par personne ; la
+# recherche ne le rendait plus, sans erreur. Chaque nœud vers lequel pointait un supprimé
+# est maintenant recherché depuis le point d'entrée, et rattaché s'il n'est pas retrouvé.
+#
+# Les survivants de ces deux cas évitent le nœud 13 : sur ces cent lignes, l'index le
+# laisse injoignable dès sa construction, avant toute suppression. C'est un autre défaut,
+# de la construction de l'index, que ces cas ne mesurent pas.
+
+-CASE SurvivorsStayReachableAscending
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id >= 100 DELETE e;
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 0 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 1 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 2 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 3 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 4 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 6 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 7 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 8 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 9 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 10 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 11 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 12 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 13 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 14 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 15 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 16 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 17 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 18 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 19 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 20 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 21 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 22 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 23 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 24 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 25 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 26 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 27 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 28 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 29 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 30 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 31 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 32 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 34 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 35 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 36 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 37 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 39 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 40 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 41 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 42 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 43 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 44 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 45 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 46 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 47 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 48 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 50 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 52 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 54 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 55 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 56 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 57 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 58 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 59 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 60 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 63 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 64 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 66 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 67 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 68 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 69 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 70 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 71 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 72 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 73 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 74 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 75 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 76 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 77 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 78 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 79 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 80 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 81 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 82 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 83 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 84 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 85 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 86 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 87 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 88 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 89 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 90 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 91 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 92 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 93 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 94 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 95 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 96 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 98 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 99 DELETE e;
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 100, efs := 500) RETURN node.id ORDER BY node.id;
+-CHECK_ORDER
+---- 10
+5
+33
+38
+49
+51
+53
+61
+62
+65
+97
+
+-CASE SurvivorsStayReachableShuffled
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id >= 100 DELETE e;
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 8 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 89 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 70 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 42 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 0 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 65 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 52 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 43 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 59 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 86 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 1 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 32 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 76 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 37 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 39 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 28 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 54 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 49 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 68 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 55 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 20 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 64 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 25 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 85 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 98 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 96 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 63 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 21 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 66 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 23 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 78 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 12 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 99 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 34 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 27 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 22 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 35 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 84 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 83 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 77 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 56 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 74 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 79 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 88 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 81 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 4 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 45 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 11 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 44 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 15 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 80 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 50 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 38 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 6 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 53 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 19 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 26 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 95 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 51 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 7 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 87 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 62 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 46 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 91 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 9 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 14 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 40 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 18 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 57 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 69 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 61 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 75 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 41 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 2 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 36 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 93 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 13 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 97 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 30 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 82 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 72 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 58 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 94 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 71 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 67 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 3 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 92 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 60 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 33 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 73 DELETE e;
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 100, efs := 500) RETURN node.id ORDER BY node.id;
+-CHECK_ORDER
+---- 10
+5
+10
+16
+17
+24
+29
+31
+47
+48
+90
+

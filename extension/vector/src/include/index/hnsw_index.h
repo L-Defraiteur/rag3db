@@ -419,6 +419,13 @@ private:
         const std::unordered_set<common::offset_t>* deletedNodes = nullptr);
     // True if `offset` can serve as an entry point: a row this transaction still sees, with a
     // vector, that the statement in progress has not deleted.
+    // A node that a deleted node pointed to has lost a way in. If the deleted nodes were the only
+    // ones leading to it, the search no longer reaches it, whatever its own edges are. It is
+    // searched for from the entry point; if it is not found, it is tied to the nearest nodes the
+    // search did reach.
+    void keepNodeReachable(transaction::Transaction* transaction, common::offset_t offset,
+        const std::vector<common::offset_t>& neighbors, bool isUpperLayer,
+        HNSWInsertState& insertState);
     // The first row of the table, other than `except`, that this transaction sees and that has a
     // vector, or INVALID_OFFSET. The entry points live outside transactions: a delete that is
     // rolled back gives the rows back but not the entry point it had removed. An invalid entry
@@ -439,7 +446,9 @@ private:
     // Rewrites the edges of a surviving node that points to deleted nodes: each edge to a deleted
     // node is replaced by edges to the live nodes that node led to, through as many deleted nodes
     // as it takes. Merely dropping those edges cut the graph into pieces after a large delete.
-    void cleanEdgesForNode(transaction::Transaction* transaction, common::offset_t offset,
+    // Returns the edges the node has in the end.
+    std::vector<common::offset_t> cleanEdgesForNode(transaction::Transaction* transaction,
+        common::offset_t offset,
         bool isUpperLayer, HNSWInsertState& insertState,
         const std::unordered_set<common::offset_t>& deletedNodes,
         const std::unordered_map<common::offset_t, std::vector<common::offset_t>>&
