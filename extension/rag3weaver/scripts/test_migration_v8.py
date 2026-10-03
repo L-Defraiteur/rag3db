@@ -43,12 +43,32 @@ def invoke(ask,name,arguments):
     reply=ask(name=name,arguments=arguments); assert reply['ok'],reply
     return reply['result']['result']
 
+def service_address(model):
+    """The address in RAG3WEAVER_EMBED_SERVICE that serves `model`, or None when
+    the variable is not set. A set variable with no service for the model is an
+    error, as in the Rust client: no silent fallback on the local card."""
+    addresses=[a.strip() for a in os.environ.get('RAG3WEAVER_EMBED_SERVICE','').split(',') if a.strip()]
+    if not addresses: return None
+    import urllib.request
+    seen=[]
+    for address in addresses:
+        try:
+            with urllib.request.urlopen(f'http://{address}/sante',timeout=5) as r: served=json.loads(r.read()).get('modele')
+        except OSError as e:
+            seen.append(f'{address} ne répond pas ({e})'); continue
+        if served==model: return address
+        seen.append(f'{address} sert {served}')
+    raise SystemExit(f'RAG3WEAVER_EMBED_SERVICE : aucun service ne sert {model} — '+' ; '.join(seen))
+
 def manifest_for(tmp, database, with_sync):
     sample=CRATE/'templates/backends/notebook/backend.json'
     config=json.loads(sample.read_text())
     # Un service d'embarquement déjà en place (RAG3WEAVER_EMBED_SERVICE) l'emporte
-    # sur l'adresse du gabarit : `address` vide, et le backend choisit par le modèle.
-    if os.environ.get('RAG3WEAVER_EMBED_SERVICE'):config['embeddings']=dict(config['embeddings'],address='')
+    # sur l'adresse du gabarit. **L'adresse est écrite dans le manifeste**, pas
+    # laissée vide : le binaire v7 date d'avant la variable et ne sait pas
+    # choisir par le modèle — on le fait ici pour les deux versions.
+    service=service_address(config['embeddings']['model'])
+    if service: config['embeddings']=dict(config['embeddings'],address=service)
     config['database']=str(database)
     config['vector_extension']=str(ROOT/'extension/vector/build/libvector.rag3db_extension')
     for entity in config['entities'].values(): entity['schema']=str(sample.parent/entity['schema'])
