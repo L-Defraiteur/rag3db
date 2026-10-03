@@ -86,15 +86,22 @@ impl Regime {
     /// Le régime courant, depuis l'environnement. Une valeur illisible n'est
     /// pas une raison de s'arrêter : on le dit et on prend le défaut.
     pub fn courant() -> Self {
+        Self::explicit().unwrap_or_default()
+    }
+
+    /// Le régime **écrit** dans l'environnement, ou `None` si rien n'est dit.
+    /// La distinction compte pour un seul défaut : le rythme de la carte quand
+    /// elle porte aussi l'affichage (`crate::burst::applies`).
+    pub fn explicit() -> Option<Self> {
         match std::env::var(VARIABLE) {
-            Err(_) => Self::Plein,
+            Err(_) => None,
             Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
-                "" => Self::Plein,
-                "confort" => Self::Confort,
-                "plein" | "plein-regime" | "plein_regime" => Self::Plein,
+                "" => None,
+                "confort" => Some(Self::Confort),
+                "plein" | "plein-regime" | "plein_regime" => Some(Self::Plein),
                 autre => {
                     eprintln!("[rag3weaver] {VARIABLE}='{autre}' inconnu (confort | plein) — plein");
-                    Self::Plein
+                    Some(Self::Plein)
                 }
             },
         }
@@ -340,6 +347,39 @@ pub fn card_class(racine: &Path) -> crate::embedding_choice::CardClass {
     }
 }
 
+/// [`sole_card_drives_display`] sur le vrai `/sys/class/drm`, lue une fois.
+pub fn sole_card_of_this_machine_drives_display() -> bool {
+    static SOLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SOLE.get_or_init(|| sole_card_drives_display(Path::new("/sys/class/drm")))
+}
+
+/// **La seule carte du poste porte-t-elle l'affichage ?**
+///
+/// Une carte, et au moins un connecteur actif dessus : tout ce que les
+/// modèles soumettent passe devant le compositeur. C'est le portable à iGPU,
+/// et c'est aussi la tour à une seule carte dédiée — ce qui compte n'est pas
+/// le genre de la carte, c'est qu'il n'y en ait pas d'autre.
+///
+/// Même lecture que [`least_watched_card`] : une vraie carte a un compteur
+/// d'occupation, un connecteur `enabled` est un écran qu'on dessine. Un
+/// serveur sans écran ne ménage rien.
+pub fn sole_card_drives_display(racine: &Path) -> bool {
+    let Ok(entrees) = std::fs::read_dir(racine) else { return false };
+    let entrees: Vec<_> = entrees.flatten().collect();
+    let cartes: Vec<String> = entrees
+        .iter()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|nom| nom.starts_with("card") && !nom.contains('-'))
+        .filter(|nom| racine.join(nom).join("device").join("gpu_busy_percent").exists())
+        .collect();
+    let [carte] = cartes.as_slice() else { return false };
+    let prefixe = format!("{carte}-");
+    entrees
+        .iter()
+        .filter(|c| c.file_name().to_string_lossy().starts_with(&prefixe))
+        .any(|c| std::fs::read_to_string(c.path().join("enabled")).map(|v| v.trim() == "enabled").unwrap_or(false))
+}
+
 pub fn least_watched_card(racine: &Path) -> Option<usize> {
     // (adresse PCI, écrans actifs, VRAM prise)
     let mut cartes: Vec<(String, usize, u64)> = Vec::new();
@@ -502,6 +542,20 @@ mod tests {
     }
 
     // ── La classe de carte, pour l'heuristique du premier index ─────────
+
+    /// Le Z13 : une carte, deux écrans. Et ce qui n'est pas ce cas.
+    #[test]
+    fn la_seule_carte_du_poste_porte_l_affichage() {
+        let z13 = faux_sysfs_avec_ecrans(&[("card1", "0000:c4:00.0", 0, 2)]);
+        assert!(sole_card_drives_display(z13.path()));
+        // Une carte sans écran actif — la télé éteinte ne compte pas.
+        let serveur = faux_sysfs_avec_ecrans(&[("card0", "0000:04:00.0", 0, 0)]);
+        assert!(!sole_card_drives_display(serveur.path()));
+        // Deux cartes : il y en a une autre où aller, c'est l'affaire de `confort`.
+        let tour = faux_sysfs_avec_ecrans(&[("card0", "0000:04:00.0", 0, 2), ("card1", "0000:07:00.0", 0, 0)]);
+        assert!(!sole_card_drives_display(tour.path()));
+        assert!(!sole_card_drives_display(Path::new("/n/existe/pas")));
+    }
 
     /// Un faux `/sys/class/drm` : des cartes et leur VRAM totale en octets.
     fn faux_sysfs_total(cartes: &[(&str, u64)]) -> tempfile::TempDir {

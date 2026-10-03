@@ -32,7 +32,10 @@
 //! l'appelant, aux deux seuls endroits qui exécutent des lots.
 
 use std::ops::Range;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use crate::embedder::{lot_budget, lot_budget_si, stable_batches, stable_count, LotBudget, EMBED_CHAR_BUDGET};
+use crate::regime::Regime;
 
 /// La variable de la durée visée d'une rafale, en millisecondes.
 pub const TARGET_VARIABLE: &str = "RAG3WEAVER_BURST_MS";
@@ -131,6 +134,19 @@ impl BurstPacer {
         self.settings
     }
 
+    /// La pause due après une rafale qui a duré `took` : entière si la rafale
+    /// a tenu sa durée, **au prorata** si elle a été plus courte. Une requête
+    /// de recherche — un texte, quelques millisecondes — ne doit pas payer le
+    /// trou d'une rafale d'ingestion.
+    pub fn pause_after(&self, took: Duration) -> Duration {
+        let target = self.settings.target;
+        if took >= target {
+            self.settings.pause
+        } else {
+            self.settings.pause.mul_f64(took.as_secs_f64() / target.as_secs_f64())
+        }
+    }
+
     /// **Un lot vient de finir** : `chars` caractères ont pris `took`.
     ///
     /// Règle de trois sur le débit de ce lot, bornée : pas plus d'un
@@ -146,6 +162,120 @@ impl BurstPacer {
         let current = self.budget as f64;
         let stepped = ideal.clamp(current / MAX_STEP, current * MAX_STEP);
         self.budget = (stepped.round() as usize).clamp(FLOOR_CHARS.min(self.ceiling), self.ceiling);
+    }
+}
+
+/// **Le régulateur et son horloge** — la seule partie de ce module qui lit
+/// l'heure et qui dort.
+///
+/// La pause n'est pas dormie *après* la rafale mais **exigée avant la
+/// suivante** : celui qui vient de finir rend sa réponse tout de suite, et le
+/// trou est tenu quand même — y compris entre deux appelants différents, tant
+/// qu'ils passent par la même porte.
+#[derive(Debug)]
+pub struct BurstGate {
+    pacer: BurstPacer,
+    not_before: Option<Instant>,
+}
+
+impl BurstGate {
+    pub fn new(pacer: BurstPacer) -> Self {
+        Self { pacer, not_before: None }
+    }
+
+    /// Le budget de la prochaine rafale, en caractères.
+    pub fn budget(&self) -> usize {
+        self.pacer.budget()
+    }
+
+    /// Attend la fin du trou laissé par la rafale précédente.
+    pub fn wait(&self) {
+        if let Some(wait) = self.not_before.and_then(|at| at.checked_duration_since(Instant::now())) {
+            std::thread::sleep(wait);
+        }
+    }
+
+    /// Une rafale de `chars` caractères vient de durer `took`.
+    pub fn done(&mut self, chars: usize, took: Duration) {
+        self.pacer.record(chars, took);
+        self.not_before = Some(Instant::now() + self.pacer.pause_after(took));
+    }
+}
+
+/// **Faut-il ménager l'écran ?** — pur, pour les tests.
+///
+/// - Un réglage explicite de l'ancien rythme (`RAG3WEAVER_GPU_DUTY`,
+///   `RAG3WEAVER_EMBED_CHAR_BUDGET`) garde le dernier mot : c'est lui qui
+///   s'applique, pas le régulateur.
+/// - `plein` **écrit** veut dire plein : on prend la carte sans ménagement.
+/// - `confort` ménage dès que la carte des modèles est celle du compositeur.
+/// - **Rien d'écrit** : on ménage si la seule carte du poste porte
+///   l'affichage (Lucie, 3 octobre 2026). Le reste de `confort` — l'origine
+///   de l'inférence agentique — ne bouge pas : ce défaut ne change que le
+///   rythme de la carte.
+pub fn applies(explicit_regime: Option<Regime>, sole_card_drives_display: bool, shared_under_confort: bool, explicit_tuning: bool) -> bool {
+    if explicit_tuning {
+        return false;
+    }
+    match explicit_regime {
+        Some(Regime::Plein) => false,
+        Some(Regime::Confort) => shared_under_confort,
+        None => sole_card_drives_display,
+    }
+}
+
+/// Les réglages de rafale **si** ce processus doit ménager l'écran.
+pub fn active() -> Option<BurstSettings> {
+    let set = |v: &str| std::env::var(v).map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let explicit_tuning = set("RAG3WEAVER_GPU_DUTY") || set("RAG3WEAVER_EMBED_CHAR_BUDGET");
+    let explicit = Regime::explicit();
+    let shared_under_confort = explicit == Some(Regime::Confort) && Regime::Confort.carte_partagee();
+    applies(explicit, crate::regime::sole_card_of_this_machine_drives_display(), shared_under_confort, explicit_tuning)
+        .then(BurstSettings::from_env)
+}
+
+/// Comment une passe d'embarquement se découpe.
+#[derive(Debug, Clone)]
+pub enum Batches {
+    /// Tout est découpé d'avance : la carte est à soi, ou quelqu'un d'autre
+    /// la tient (un démon, une API).
+    Fixed(Vec<Range<usize>>),
+    /// Une rafale après l'autre, chacune dimensionnée par la précédente.
+    /// `budget` est **ce que le modèle tient d'un coup** : le plafond.
+    Paced { lens: Vec<usize>, budget: LotBudget, settings: BurstSettings },
+}
+
+/// Le découpage d'une passe sur des longueurs **triées**.
+///
+/// `holds_card` : cet appelant soumet lui-même à la carte (l'embarqueur
+/// n'est pas `distant`). Sinon c'est celui qui la tient qui règle le rythme.
+pub fn plan(lens: &[usize], advice: Option<(usize, usize)>, default_items: usize, holds_card: bool) -> Batches {
+    plan_with(lens, advice, default_items, if holds_card { active() } else { None })
+}
+
+/// [`plan`], les réglages en paramètre — pour les tests.
+pub fn plan_with(lens: &[usize], advice: Option<(usize, usize)>, default_items: usize, settings: Option<BurstSettings>) -> Batches {
+    match settings {
+        Some(settings) => Batches::Paced { lens: lens.to_vec(), budget: ceiling(advice, default_items), settings },
+        None => Batches::Fixed(stable_batches(lens, lot_budget(advice, default_items))),
+    }
+}
+
+/// Ce que le modèle tient d'un coup, sans égard pour l'écran : le plafond
+/// d'une rafale.
+pub fn ceiling(advice: Option<(usize, usize)>, default_items: usize) -> LotBudget {
+    lot_budget_si(advice, default_items, None, false, EMBED_CHAR_BUDGET)
+}
+
+/// [`next_batch`] sous un plafond de modèle et le budget courant d'une porte.
+/// Les comptes restent « stables » quand le modèle le demande : les formes de
+/// lot se répètent et l'autotune ne recompile pas à chaque rafale.
+pub fn next_paced_batch(lens: &[usize], start: usize, budget: LotBudget, chars: usize) -> Range<usize> {
+    let lot = next_batch(lens, start, budget.max_items, chars.min(budget.max_chars), budget.max_area);
+    if budget.stable && !lot.is_empty() {
+        lot.start..lot.start + stable_count(lot.len())
+    } else {
+        lot
     }
 }
 
@@ -388,5 +518,74 @@ mod tests {
         assert_eq!(BurstSettings::from_values(Some("0"), Some("0")), settings(1, 0));
         // Illisible : on le dit et on prend le défaut.
         assert_eq!(BurstSettings::from_values(Some("vite"), Some("")), BurstSettings::DEFAULT);
+    }
+
+    #[test]
+    fn une_rafale_courte_ne_paie_qu_une_part_de_la_pause() {
+        let p = BurstPacer::new(BurstSettings { target: Duration::from_millis(50), pause: Duration::from_millis(200) }, 100_000);
+        assert_eq!(p.pause_after(Duration::from_millis(50)), Duration::from_millis(200));
+        assert_eq!(p.pause_after(Duration::from_millis(400)), Duration::from_millis(200), "jamais plus que la pause");
+        assert_eq!(p.pause_after(Duration::from_millis(5)), Duration::from_millis(20), "une requête ne paie pas le trou d'une rafale");
+    }
+
+    #[test]
+    fn on_menage_l_ecran_par_defaut_quand_la_seule_carte_le_porte() {
+        // Rien d'écrit : la carte décide.
+        assert!(applies(None, true, false, false));
+        assert!(!applies(None, false, false, false), "une carte à soi ne se ménage pas");
+        // `plein` écrit veut dire plein, même sur ce poste.
+        assert!(!applies(Some(Regime::Plein), true, false, false));
+        // `confort` suit sa propre question : la carte est-elle partagée ?
+        assert!(applies(Some(Regime::Confort), false, true, false));
+        assert!(!applies(Some(Regime::Confort), true, false, false));
+        // Un réglage explicite de l'ancien rythme garde le dernier mot.
+        assert!(!applies(None, true, false, true));
+        assert!(!applies(Some(Regime::Confort), true, true, true));
+    }
+
+    #[test]
+    fn la_porte_tient_le_trou_avant_la_rafale_suivante() {
+        let settings = BurstSettings { target: Duration::from_millis(10), pause: Duration::from_millis(40) };
+        let mut gate = BurstGate::new(BurstPacer::new(settings, 100_000));
+        let t = Instant::now();
+        gate.wait();
+        assert!(t.elapsed() < Duration::from_millis(20), "la première rafale n'attend rien");
+        gate.done(2_048, Duration::from_millis(10));
+        let t = Instant::now();
+        gate.wait();
+        assert!(t.elapsed() >= Duration::from_millis(35), "le trou est tenu : {:?}", t.elapsed());
+    }
+
+    #[test]
+    fn le_plan_suit_les_reglages() {
+        let lens = vec![100usize; 400];
+        // Sans réglage : le découpage d'avance, comme avant.
+        assert!(matches!(plan_with(&lens, Some((128, 512)), 32, None), Batches::Fixed(_)));
+        // Avec : une rafale après l'autre, sous le plafond du modèle — pas
+        // sous le budget prudent d'une carte partagée.
+        let Batches::Paced { budget, .. } = plan_with(&lens, Some((128, 512)), 32, Some(BurstSettings::DEFAULT)) else {
+            panic!("un plan cadencé attendu")
+        };
+        assert_eq!(budget.max_items, 128);
+        assert_eq!(budget.max_chars, 128 * 512 * 3);
+        // Sans conseil du modèle, l'optimum mesuré d'avant sert de plafond.
+        assert_eq!(ceiling(None, 32).max_chars, EMBED_CHAR_BUDGET);
+    }
+
+    #[test]
+    fn les_lots_cadences_gardent_des_comptes_stables() {
+        let lens = vec![100usize; 400];
+        let budget = ceiling(Some((128, 512)), 32);
+        // 2 048 caractères de textes de 100 : 20 tiendraient, 16 est stable.
+        assert_eq!(next_paced_batch(&lens, 0, budget, 2_048), 0..16);
+        // Et tout est couvert, sans trou ni doublon.
+        let mut start = 0;
+        while start < lens.len() {
+            let lot = next_paced_batch(&lens, start, budget, 2_048);
+            assert_eq!(lot.start, start);
+            assert!(!lot.is_empty());
+            start = lot.end;
+        }
+        assert_eq!(start, lens.len());
     }
 }

@@ -109,6 +109,20 @@ fn servir() -> Result<(), String> {
         }
     }
     .expose(expose);
+    // La seule carte du poste porte l'affichage : des rafales courtes, un
+    // trou entre deux (`rag3weaver::burst`). Dit au journal, parce qu'un
+    // débit plus bas sans explication se prend pour une panne.
+    let rafales = rag3weaver::burst::active();
+    if let Some(r) = rafales {
+        eprintln!(
+            "  écran ménagé : rafales de {} ms, {} ms entre deux ({}, {})",
+            r.target.as_millis(),
+            r.pause.as_millis(),
+            rag3weaver::burst::TARGET_VARIABLE,
+            rag3weaver::burst::PAUSE_VARIABLE
+        );
+    }
+    let demon = demon.burst(rafales);
     // **Refuser avant d'annoncer.** Sinon le journal dit « à l'écoute sur
     // 0.0.0.0 » juste avant d'échouer, et c'est la ligne qu'on croira.
     if !expose && !rag3weaver::daemon::est_local(&adresse) {
