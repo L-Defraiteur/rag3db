@@ -784,8 +784,21 @@ sessions, pas d'une vérification.
   value 7 »). Cela **corrige** ce que le banc disait depuis l'étape 2 (« le rejeu
   réinsère le doublon sans erreur ») : la variante Crash fermait la base proprement avant
   de tuer le fils, et ne rejouait aucun journal. C'est corrigé, avec un témoin
-  (`journal-to-replay`). La marche A3′ ferme le doublon ; la question de ce que le rejeu
-  doit faire d'un journal qui en porte déjà un reste à poser à la session cœur C++.
+  (`journal-to-replay`). **Cela ne se produit qu'en mode multi-écrivains**, éteint hors
+  du banc : avec un seul écrivain, une clé en double ne peut pas être validée. C'est
+  rangé sous A3′ : le verrou de clé empêche le doublon de naître (C1, et C7 en
+  variante Crash, rouge 20 fois sur 20). Un second témoin,
+  `LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen` (rouge), demande
+  à la reprise de refuser la transaction fautive en nommant la clé, plutôt que de rendre
+  la base inouvrable. Audit du 3 octobre au soir, toutes les variantes Crash rejouées
+  avec un vrai arrêt (spécification du banc, §12) :
+  - C1 passe de « doublon visible » à « base perdue » ;
+  - C7 passe de probabiliste à rouge certain ;
+  - C2 en DETACH, relation validée d'abord, voit le rejeu réparer la relation pendante ;
+  - C5 est vert depuis A5, pas à cause de l'arrêt ;
+  - le reste est inchangé.
+  La phrase « C1 et C7, sans index, valident des clés en double mais se rouvrent » (plus
+  haut, cœur C++) reposait sur la fausse variante.
 - **Sous le mode multi-écrivains, une table indexée par HNSW peut rendre la base
   inutilisable** (banc de concurrence, cas H4, 3 octobre). Quatre écrivains mélangent
   insertions, suppressions et nouveaux vecteurs sur une table qui porte un index HNSW.

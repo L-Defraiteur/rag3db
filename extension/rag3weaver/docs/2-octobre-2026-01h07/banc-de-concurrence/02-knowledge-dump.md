@@ -179,6 +179,9 @@ Branche `banc-de-concurrence`, commit `00b2a0263` :
 - **Le rejeu du journal** (exécuté, phase Crash) rejoue les doublons de C1 sans
   rien refuser, et rend les mêmes réponses qu'avant l'arrêt. Aucun fichier
   `.ecarte-` après des commits acquittés.
+  **Faux, corrigé le 3 octobre au soir** : la phase Crash fermait la base avant le
+  SIGKILL et ne rejouait rien. Avec un vrai arrêt brutal, le rejeu refuse le doublon
+  de C1 et la base ne se rouvre plus. Voir la spécification du banc, §12.
 - **Le point de reprise sous écrivains** (exécuté, C8) : avec le délai de 5 s,
   la plupart des CHECKPOINT expirent, et les écrivains restent gelés pendant
   l'attente (déduit de la durée, environ 17 × 5 s). Les commits des écrivains

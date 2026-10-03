@@ -105,6 +105,17 @@ aggravé, les réponses sont les mêmes avant et après. Le rejeu du journal ré
 la clé 7 en double sans rien refuser. Aucun fichier `.ecarte-` n'apparaît après un
 arrêt brutal qui suit des commits acquittés.
 
+> **Correction du 3 octobre au soir.** Ce paragraphe est faux pour l'arrêt brutal. La
+> variante Crash du banc fermait la base du fils, proprement, avant de le tuer : elle ne
+> rejouait aucun journal. Avec un vrai arrêt, une clé en double validée (C1) rend la
+> base **impossible à rouvrir**, puisque le rejeu refuse le doublon. Le détail est dans
+> la spécification du banc, au §12 (`docs/2-octobre-2026-00h36/01-…`). La phrase sur le
+> point de reprise et la réouverture reste juste.
+>
+> **Correction du 3 octobre.** C4, ci-dessous, n'était pas un défaut du moteur mais du
+> banc : le `Worker` envoyait encore des instructions après un échec, et elles partaient
+> en auto-commit. C'est corrigé, et C4 est vert.
+
 **C4, la trouvaille inattendue.** Huit comptes à 100, quatre écrivains, des
 virements de deux mises à jour par transaction. La somme finit à 1279 au lieu de
 800 : de l'argent est créé, alors que 256 conflits d'écriture ont été correctement

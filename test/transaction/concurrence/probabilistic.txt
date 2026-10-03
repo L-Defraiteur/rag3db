@@ -4,11 +4,11 @@
 # jamais se lire comme un vert : son vert ne prouve rien, son rouge est un vrai rouge.
 #
 # C7 — mélange aléatoire, cinq manches (3 octobre, 20 passes) : rouge 18/20 à chaud,
-# 19/20 après réouverture, 15/20 après arrêt brutal ; violations vues : clés en double
-# et relations pendantes.
+# 19/20 après réouverture ; violations vues : clés en double et relations pendantes.
+# Sa variante Crash n'est plus ici : avec un vrai arrêt brutal (3 octobre au soir), elle
+# est rouge 20 fois sur 20, la base ne se rouvrant plus (known_red.txt, sous A3′).
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Hot
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
-Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash
 #
 # H4 — le mélange de C7 sur une table indexée par HNSW (3 octobre) : le processus
 # écrivain meurt (SIGSEGV, ou SIGABRT sur « corrupted double-linked list »), et la base

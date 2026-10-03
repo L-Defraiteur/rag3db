@@ -409,3 +409,37 @@ Les quinze cas sont stables sur vingt lancements.
 leur ordre de commit devient impossible (celui qui attend ne peut pas valider le
 premier) : C5, C6_UpdateCommitsFirst, et les trois C2_*RelationCommitsFirst. C1 passe
 tel quel, avec 2 s d'attente de plus. La note est écrite dans les cas.
+
+### Ce que la fausse variante Crash a fait dire au banc (audit du 3 octobre au soir)
+
+Toutes les variantes Crash ont été rejouées avec le vrai arrêt brutal, avec un journal
+non vide à rejouer dans chaque cas. « Avant » est le verdict de `known_red.txt` et
+`probabilistic.txt` au dernier état publié avant la correction (`707a8d4a7`) ;
+« maintenant », celui de cinq passes, ou de 20 à 200 répétitions pour les cas
+probabilistes.
+
+| variante Crash | avant | maintenant | change ? |
+|---|---|---|---|
+| C0, C3, C4, C8, H1, H2 | vert | vert | non |
+| C1 (deux et trois écrivains, instantané antérieur) | rouge : doublon visible après « rejeu » | **rouge : la base ne se rouvre plus** (« Found duplicated primary key value 7 ») | **oui** : bien plus grave |
+| C2 (source, destination, DETACH, suppression d'abord) | rouge : relation pendante | rouge, identique | non |
+| C2, DETACH, relation validée d'abord | rouge : relation pendante | **rouge : le rejeu répare la relation pendante**, les réponses changent avant et après l'arrêt | **oui** |
+| C5 | probabiliste, 52 rouges sur 200 | vert, 0 sur 200 (et 0 sur 200 à chaud et après réouverture) | oui, mais **par la marche A5**, pas par l'arrêt brutal |
+| C6 (deux ordres), H3 | rouge | rouge, identique | non |
+| C7 | probabiliste, 15 rouges sur 20 | **rouge 20 fois sur 20 : la base ne se rouvre plus** | **oui** : passé dans `known_red.txt` sous A3′ |
+| H4 | probabiliste (les fils mouraient d'eux-mêmes : c'était déjà un vrai arrêt) | probabiliste, la base ne se rouvre plus 16 fois sur 20 | non |
+| C9 | (lanceur Processus seulement) | — | — |
+
+Ce qui tombe : toute phrase disant qu'une clé en double « survit au rejeu » ou que
+« C1 et C7, sans index, valident des clés en double mais se rouvrent ». Cette
+dernière, de la session cœur C++, reposait sur la fausse variante et sera corrigée
+par elle. Ce qui reste juste : tout ce qui a été dit des variantes à chaud et après
+point de reprise et réouverture, ainsi que les plantages de H1 et H4, dont les fils
+mouraient d'eux-mêmes.
+
+**Second témoin pour A3′** :
+`LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen`. Un doublon est
+validé par deux connexions dans un seul fil, sous le mode multi-écrivains, puis le
+fils meurt base ouverte. La reprise doit ouvrir la base, avec une seule ligne de clé 7,
+plutôt que la rendre inouvrable. Il est rouge et déterministe ; la forme du nom donné
+à la clé refusée reste à décider.

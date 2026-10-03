@@ -601,4 +601,60 @@ TEST_F(IndexReopen, DropAfterCheckpointThenCrashLeavesAnUnloadedIndex) {
     EXPECT_TRUE(query->isSuccess()) << "[check: query-succeeds] ";
 }
 
+// ── A3′, second témoin : ce que la reprise fait d'un journal qui porte un doublon ─────
+// Sous le mode multi-écrivains (éteint hors du banc), deux transactions valident la même
+// clé primaire (C1) ; si le processus meurt base ouverte, le rejeu du journal bute sur
+// le doublon (« Found duplicated primary key value 7 ») et la base ne se rouvre plus —
+// déterministe (3 octobre au soir). Le verrou de clé d'A3′ empêche le doublon de naître ;
+// ce cas-ci demande en plus à la reprise de ne pas rendre la base inouvrable : refuser la
+// transaction fautive en nommant la clé (la forme du nom reste à décider), et ouvrir la
+// base avec une seule ligne de clé 7. Le doublon est fabriqué dans un seul fil, par deux
+// connexions, pour être sûr.
+TEST_F(LockBench, RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        disableCoreDumps();
+        try {
+            rag3db::main::Database childDatabase(databasePath, *systemConfig);
+            rag3db::main::Connection first(&childDatabase);
+            rag3db::main::Connection second(&childDatabase);
+            applyBenchSettings(first);
+            for (const auto& [connection, query] :
+                std::vector<std::pair<rag3db::main::Connection*, const char*>>{
+                    {&first, "BEGIN TRANSACTION;"}, {&second, "BEGIN TRANSACTION;"},
+                    {&first, "CREATE (:Item {id: 7, v: 0});"},
+                    {&second, "CREATE (:Item {id: 7, v: 1});"}, {&first, "COMMIT;"},
+                    {&second, "COMMIT;"}}) {
+                if (!connection->query(query)->isSuccess()) {
+                    _exit(2);
+                }
+            }
+            // Mourir base ouverte : le doublon n'est que dans le journal.
+            kill(getpid(), SIGKILL);
+        } catch (...) {
+            _exit(3);
+        }
+        _exit(4);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+        << "[check: setup] the child could not commit the duplicate before its kill";
+    std::string reopenError;
+    try {
+        createDBAndConn();
+    } catch (const std::exception& e) {
+        reopenError = e.what();
+    }
+    std::cerr << "  reopen: " << (reopenError.empty() ? "ok" : reopenError) << "\n";
+    ASSERT_TRUE(reopenError.empty())
+        << "[check: database-reopens] a journal with a duplicated key must not make the "
+           "database impossible to open";
+    EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1)
+        << "[check: one-row-per-key] ";
+}
+
 #endif

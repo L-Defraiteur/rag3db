@@ -18,6 +18,17 @@ Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot one-commit,p
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash database-reopens
 #
+# Marche A3′ — le mélange de C7 après un vrai arrêt brutal : des clés en double validées
+# sous concurrence rendent la base impossible à rouvrir (20 fois sur 20, 3 octobre au
+# soir). Ses variantes à chaud et après réouverture restent probabilistes.
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash database-reopens
+#
+# Marche A3′, second témoin — ce que la reprise fait d'un journal qui porte un doublon
+# validé sous le mode multi-écrivains (éteint hors du banc) : aujourd'hui la base ne se
+# rouvre plus ; attendu, refuser la transaction fautive en nommant la clé et ouvrir la
+# base.
+LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen database-reopens
+#
 # Marche A3′ — la même clé sans chevauchement, depuis un instantané antérieur au commit de
 # l'autre : le contrôle d'unicité doit regarder le dernier état validé.
 Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
