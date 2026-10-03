@@ -461,11 +461,13 @@ avertissement est une erreur dont on a choisi de ne pas mourir.** Ce choix se
 justifie par un lecteur nommé. Sans lecteur, ce n'est pas un avertissement,
 c'est un silence avec du texte dedans.
 
-## Méthode : quatre façons de prendre son harnais pour un résultat
+## Méthode : cinq façons de prendre son harnais pour un résultat
 
-Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal`.
-Les quatre se sont présentées à la suite, chacune sous un visage neuf, et la
-dernière a failli faire annoncer une fausse régression à une autre session.
+Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
+la cinquième est tombée la nuit suivante. Elles se sont présentées à la suite,
+chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
+régression à une autre session, et la cinquième montre que le remède de la
+quatrième était à moitié écrit.
 
 **1. Le sous-module reste en arrière après un rebase.** Le pointeur de
 `codeparsers` avance avec le code ; le clone local d'un worktree ne suit pas,
@@ -500,12 +502,40 @@ Conséquence pour les suites qui lient le moteur : **imprimer l'âge de la
 bibliothèque liée**, et refuser une bibliothèque plus vieille que les sources
 C++. `e2e_arret_brutal` imprime déjà la ligne ; proposé à `run_e2e.sh`.
 
-**Et la forme commune aux quatre**, qui est aussi celle des défauts qu'on
+**5. Le moteur remplacé *pendant* la passe.** La suite de la quatrième, trouvée
+une heure plus tard, et elle montre que le remède de la quatrième était à
+moitié écrit. `run_e2e.sh` imprime l'âge de la bibliothèque **en tête de
+passe** : ça dit contre quoi la passe a *commencé*, pas contre quoi elle a
+*tourné*. Le 4 octobre à 00 h 59 min 43, la session de l'arbre principal a
+rebâti `librag3db.so` pendant une batterie complète. Les binaires de test
+démarrés avant cette seconde tiennent l'ancienne bibliothèque, déjà projetée en
+mémoire ; ceux d'après la neuve. **Un seul résultat, deux moteurs, et rien dans
+le journal ne le dit** — la ligne d'âge du début est parfaitement exacte et
+parfaitement trompeuse.
+
+Ce qui l'a attrapé n'est pas le harnais : c'est que l'autre session a **annoncé
+qu'elle n'avait pas attendu**. Sans son message, j'aurais rendu un verdict sur
+un mélange.
+
+Conséquence, prise par la session de l'arbre principal : relever la date **et
+la taille** des deux bibliothèques au début et à la fin, et **refuser de
+conclure** si elles ont changé — « le moteur a été remplacé pendant la passe,
+ce résultat ne vaut rien, rejoue ». La taille en plus de la date, pour qu'un
+`touch` sans rebâti ne déclenche pas un faux refus. Et la règle de voisinage
+qui va avec : **annoncer, attendre les « libre » des passes en vol, puis
+rebâtir** — l'annonce seule ne suffit pas, puisque la passe en vol ne peut pas
+l'entendre.
+
+**Et la forme commune aux cinq**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
-d'une bibliothèque. Un banc, un test ou un rapport doivent **porter leur
-condition de validité à côté de leur verdict**, sinon le verdict se lit tout
-seul et on le croit.
+d'une bibliothèque — et, pour la cinquième, son âge **à la fin**. Un banc, un
+test ou un rapport doivent **porter leur condition de validité à côté de leur
+verdict**, sinon le verdict se lit tout seul et on le croit.
+
+La cinquième ajoute une nuance aux quatre autres : une condition de validité
+relevée **avant** le travail ne prouve rien de ce qui s'est passé pendant. Ce
+qui peut changer sous les pieds d'une mesure se vérifie **aux deux bouts**.
 
 ### Mémoire longue : l'ordre des lots change (3 octobre 2026, au soir)
 
