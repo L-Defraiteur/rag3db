@@ -27,7 +27,7 @@ use codeparsers::parallel::project_parser::{
     ProjectParserOptions,
 };
 use codeparsers::relationship_resolution::types::{RelationshipResolverOptions, RelationshipType};
-use codeparsers::scope_extraction::types::ScopeInfoType;
+use codeparsers::scope_extraction::types::{ScopeInfoType, UsageKind, UsageSite};
 
 use crate::catalog::{Catalog, CatalogError};
 use crate::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType, SimpleFieldDef};
@@ -368,6 +368,61 @@ pub fn symbol_config() -> EntityConfig {
 }
 
 
+/// Les relations qui sont des usages : elles portent, sur l'arête, comment la
+/// source se sert de la cible (`usage`, `usages`) et à quelle ligne (`line`).
+/// Les relations de structure (`DEFINED_IN`, `PARENT_OF`, `HAS_PARENT`) et
+/// le rendez-vous `DEFINES` n'en portent pas.
+const USAGE_RELATIONS: [&str; 6] = ["CONSUMES", "CONSUMED_BY", "INHERITS_FROM", "IMPLEMENTS", "DECORATES", "USES_LIBRARY"];
+
+fn field_def(field_type: FieldType) -> crate::config::FieldDef {
+    crate::config::FieldDef { field_type, title_for: None, content_for: None, boost: None, default_value: None }
+}
+
+fn usage_property_defs() -> HashMap<String, crate::config::FieldDef> {
+    HashMap::from([
+        ("usage".to_string(), field_def(FieldType::String)),
+        ("usages".to_string(), field_def(FieldType::String)),
+        ("line".to_string(), field_def(FieldType::Int64)),
+    ])
+}
+
+fn usage_name(u: &UsageKind) -> &'static str {
+    match u {
+        UsageKind::Call => "call",
+        UsageKind::Type => "type",
+        UsageKind::Import => "import",
+        UsageKind::Inheritance => "inheritance",
+        UsageKind::Other => "other",
+    }
+}
+
+/// Les propriétés d'une arête d'usage, tirées de ses sites :
+/// - `usage`, le genre le plus fort présent (héritage, puis appel, type,
+///   import, autre) : « tous les appels de X » ne doit pas manquer un appel
+///   parce que X sert aussi de type au même endroit ;
+/// - `usages`, tous les genres présents, triés, séparés par des virgules
+///   (`call,type`) ;
+/// - `line`, la première ligne d'un site.
+///
+/// Les trois clés sont toujours là (`line` peut être nulle) : le chemin COPY
+/// écrit une colonne par propriété déclarée, un groupe à qui il en manque
+/// une n'y entrerait pas.
+fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
+    const ORDRE: [UsageKind; 5] = [UsageKind::Inheritance, UsageKind::Call, UsageKind::Type, UsageKind::Import, UsageKind::Other];
+    let Some(retenu) = ORDRE.iter().find(|k| sites.iter().any(|s| &s.usage == *k)) else {
+        return BTreeMap::new();
+    };
+    let mut tous: Vec<&str> = sites.iter().map(|s| usage_name(&s.usage)).collect();
+    tous.sort_unstable();
+    tous.dedup();
+    let line = sites.iter().filter_map(|s| s.line).min().map_or(CypherValue::Null, |l| CypherValue::Int(l as i64));
+    BTreeMap::from([
+        ("usage".to_string(), s(usage_name(retenu))),
+        ("usages".to_string(), s(&tous.join(","))),
+        ("line".to_string(), line),
+    ])
+}
+
 /// Déclare `File`, `Scope`, `Library` et les neuf relations. Idempotent
 /// (`register_entity` / `register_relation` le sont).
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
@@ -380,19 +435,15 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // Le rendez-vous porte le **genre** de l'arête à poser quand la
             // cible arrivera : sans lui, un `IMPLEMENTS` dont l'interface est
             // ingérée au lot suivant se matérialiserait en `CONSUMES`, et
-            // l'ordre d'ingestion changerait le graphe (doc 17 §10).
-            let mut props = HashMap::new();
-            props.insert(
-                "kind".to_string(),
-                crate::config::FieldDef {
-                    field_type: FieldType::String,
-                    title_for: None,
-                    content_for: None,
-                    boost: None,
-                    default_value: None,
-                },
-            );
+            // l'ordre d'ingestion changerait le graphe (doc 17 §10). Il porte
+            // aussi l'usage, que l'arête matérialisée recopiera.
+            let mut props = usage_property_defs();
+            props.insert("kind".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
+        if USAGE_RELATIONS.contains(&rel) {
+            catalog.register_relation_with(rel, from, to, usage_property_defs())?;
             continue;
         }
         catalog.register_relation(rel, from, to)?;
@@ -473,6 +524,10 @@ pub struct CodeRelation {
     pub from_key: String,
     pub to_entity: String,
     pub to_key: String,
+    /// Les usages qui font cette arête (genre, ligne) ; vide pour une
+    /// relation de structure.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<UsageSite>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -498,6 +553,10 @@ pub struct CodeAnalysis {
     /// suivant se matérialiserait en `CONSUMES`, et l'ordre d'ingestion
     /// changerait le graphe.
     pub pending: Vec<(String, String, String)>,
+    /// Les usages derrière chaque rendez-vous (clé du scope, nom) : toutes
+    /// les références du scope à ce nom, pas seulement la première.
+    #[serde(default)]
+    pub pending_sites: Vec<(String, String, Vec<UsageSite>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -735,6 +794,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             from_key: key,
             to_entity: FILE.to_string(),
             to_key: name,
+            sites: Vec::new(),
         });
     }
 
@@ -839,6 +899,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             from_key: from.1.clone(),
             to_entity: to.0.to_string(),
             to_key: to.1.clone(),
+            sites: r.metadata.as_ref().map(|m| m.sites.clone()).unwrap_or_default(),
         });
     }
     // ── Ce que le lot référence, par nom ────────────────────────────────
@@ -867,21 +928,29 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 continue;
             };
             let mut seen = std::collections::HashSet::new();
+            let mut sites: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             for r in &sc.identifier_references {
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
                     continue;
                 }
                 let id = r.identifier.as_str();
-                if id.is_empty()
-                    || id == sc.name
-                    || libraries.contains(id)
-                    || !seen.insert(id.to_string())
-                {
+                if id.is_empty() || id == sc.name || libraries.contains(id) {
                     continue;
                 }
-                let kind = relation_name(&codeparsers::relationship_resolution::relationship_resolver::detect_relationship_type_by_name(
-                    sc, id, "", r.context.as_deref(),
+                let site = UsageSite { usage: r.usage.clone().unwrap_or(UsageKind::Other), line: Some(r.line) };
+                let liste = sites.entry(id.to_string()).or_default();
+                if !liste.contains(&site) {
+                    liste.push(site);
+                }
+                if !seen.insert(id.to_string()) {
+                    continue;
+                }
+                // Le genre lu sur l'AST décide si la référence peut être un
+                // héritage ; la devinette sur le texte ne choisit plus que
+                // l'espèce (codeparsers f0faa82).
+                let kind = relation_name(&codeparsers::relationship_resolution::relationship_resolver::detect_relationship_type_for_reference(
+                    sc, id, "", r,
                 ));
                 analysis.pending.push((key.clone(), id.to_string(), kind.to_string()));
             }
@@ -899,7 +968,15 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                         continue;
                     }
                     analysis.pending.push((key.clone(), t.clone(), kind.to_string()));
+                    let site = UsageSite { usage: UsageKind::Inheritance, line: Some(sc.signature_start_line) };
+                    let liste = sites.entry(t.clone()).or_default();
+                    if !liste.contains(&site) {
+                        liste.push(site);
+                    }
                 }
+            }
+            for (name, liste) in sites {
+                analysis.pending_sites.push((key.clone(), name, liste));
             }
         }
     }
@@ -1032,10 +1109,24 @@ fn fold_lambdas(a: &mut CodeAnalysis) {
 }
 
 fn dedupe_relations(a: &mut CodeAnalysis) {
-    let mut seen: std::collections::HashSet<(String, String, String, String, String)> = Default::default();
-    a.relations.retain(|r| {
-        seen.insert((r.rel.clone(), r.from_entity.clone(), r.from_key.clone(), r.to_entity.clone(), r.to_key.clone()))
-    });
+    // Une arête par (relation, source, cible) ; les sites des doublons — une
+    // fermeture repliée sur son scope, par exemple — rejoignent la première.
+    let mut index: HashMap<(String, String, String, String, String), usize> = HashMap::new();
+    let mut kept: Vec<CodeRelation> = Vec::with_capacity(a.relations.len());
+    for r in a.relations.drain(..) {
+        let cle = (r.rel.clone(), r.from_entity.clone(), r.from_key.clone(), r.to_entity.clone(), r.to_key.clone());
+        if let Some(&i) = index.get(&cle) {
+            for site in r.sites {
+                if !kept[i].sites.contains(&site) {
+                    kept[i].sites.push(site);
+                }
+            }
+            continue;
+        }
+        index.insert(cle, kept.len());
+        kept.push(r);
+    }
+    a.relations = kept;
 }
 
 /// Les noms que le résolveur de `codeparsers` met dans `ScopeMappingEntry.type`
@@ -1388,7 +1479,8 @@ impl Catalog {
             let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
             let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
-            par_relation.entry(r.rel.as_str()).or_default().push((from, to, BTreeMap::new()));
+            let props = if USAGE_RELATIONS.contains(&r.rel.as_str()) { usage_properties(&r.sites) } else { BTreeMap::new() };
+            par_relation.entry(r.rel.as_str()).or_default().push((from, to, props));
         }
         let en_file: usize = par_relation.values().map(Vec::len).sum();
         for (rel, liens) in par_relation {
@@ -1478,12 +1570,19 @@ impl Catalog {
         // mentionneurs — pour ne reposer que les arêtes neuves.
         let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("DEFINES", definitions)?;
+        let sites_of: HashMap<(&str, &str), &Vec<UsageSite>> =
+            analysis.pending_sites.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
-            // l'arête à poser quand la cible arrivera.
-            let props = BTreeMap::from([("kind".to_string(), s(kind))]);
+            // l'arête à poser quand la cible arrivera ; l'usage aussi, que
+            // l'arête recopiera.
+            let mut props = sites_of.get(&(scope_key.as_str(), name.as_str())).map_or_else(BTreeMap::new, |v| usage_properties(v));
+            if props.is_empty() {
+                props = usage_properties(&[UsageSite { usage: UsageKind::Other, line: None }]);
+            }
+            props.insert("kind".to_string(), s(kind));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -1533,7 +1632,7 @@ impl Catalog {
         let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
-            let empty: Vec<(String, String)> = Vec::new();
+            let empty: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::new();
             let definers = definers_by_symbol.get(sym).unwrap_or(&no_definer);
             if definers.len() > 1 {
                 // Plusieurs définisseurs : on s'abstient. Une relation
@@ -1547,7 +1646,7 @@ impl Catalog {
                 continue;
             };
             let tous = lot.is_none_or(|(scopes, _)| scopes.contains(target));
-            for (mentioner, kind) in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
+            for (mentioner, kind, usage) in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
                 if &mentioner == target {
                     continue;
                 }
@@ -1558,9 +1657,9 @@ impl Catalog {
                 // a une réciproque déclarée ; `IMPLEMENTS` et `INHERITS_FROM`
                 // n'en ont pas, et on n'en invente pas.
                 let rel = if RELATIONS.iter().any(|(r, _, _)| *r == kind) { kind.as_str() } else { "CONSUMES" };
-                self.link_jusqu_a(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                self.link_jusqu_a(rel, RefOrUuid::Uuid(mentioner.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
-                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(mentioner), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
                 }
                 report.linked_across_batches += 1;
             }
@@ -1603,23 +1702,24 @@ impl Catalog {
         Ok(self
             .linked_from_many_with_kind(rel, to_uuids, false)?
             .into_iter()
-            .map(|(k, v)| (k, v.into_iter().map(|(uuid, _)| uuid).collect()))
+            .map(|(k, v)| (k, v.into_iter().map(|(uuid, _, _)| uuid).collect()))
             .collect())
     }
 
     /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
+    /// et l'usage (`usage`, `usages`, `line`)
     /// de l'arête quand `with_kind` — le genre inscrit au rendez-vous.
     fn linked_from_many_with_kind(
         &self,
         rel: &str,
         to_uuids: &[String],
         with_kind: bool,
-    ) -> Result<std::collections::HashMap<String, Vec<(String, String)>>, CatalogError> {
-        let mut out: std::collections::HashMap<String, Vec<(String, String)>> = std::collections::HashMap::new();
+    ) -> Result<std::collections::HashMap<String, Vec<(String, String, BTreeMap<String, CypherValue>)>>, CatalogError> {
+        let mut out: std::collections::HashMap<String, Vec<(String, String, BTreeMap<String, CypherValue>)>> = std::collections::HashMap::new();
         if to_uuids.is_empty() {
             return Ok(out);
         }
-        let kind_expr = if with_kind { ", r.kind" } else { "" };
+        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line" } else { "" };
         let cypher = format!(
             // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
             // toutes les tables, à chaque symbole de chaque lot.
@@ -1633,7 +1733,15 @@ impl Catalog {
         for row in &result.rows {
             if let (Some(CypherValue::String(to)), Some(CypherValue::String(from))) = (row.first(), row.get(1)) {
                 let kind = row.get(2).and_then(|v| v.as_str()).unwrap_or("CONSUMES").to_string();
-                out.entry(to.clone()).or_default().push((from.clone(), kind));
+                // L'usage du rendez-vous, que l'arête matérialisée recopie ;
+                // vide pour un rendez-vous posé avant qu'il existe.
+                let mut usage = BTreeMap::new();
+                if let Some(u) = row.get(3).and_then(|v| v.as_str()) {
+                    usage.insert("usage".to_string(), s(u));
+                    usage.insert("usages".to_string(), row.get(4).cloned().unwrap_or(CypherValue::Null));
+                    usage.insert("line".to_string(), row.get(5).cloned().unwrap_or(CypherValue::Null));
+                }
+                out.entry(to.clone()).or_default().push((from.clone(), kind, usage));
             }
         }
         Ok(out)
@@ -1758,6 +1866,42 @@ mod tests {
     use super::*;
 
     const RUST_SRC: &str = "use serde::Serialize;\n\npub struct Point {\n    x: i32,\n}\n\nimpl Point {\n    pub fn norm(&self) -> i32 {\n        self.x.abs()\n    }\n}\n\npub fn twice(p: &Point) -> i32 {\n    p.norm() * 2\n}\n";
+
+    /// **Une arête d'usage porte comment on se sert de la cible, et où.**
+    /// `twice` prend un `&Point` (ligne 13) : son `CONSUMES` vers `Point` dit
+    /// « type » et la ligne ; une relation de structure ne porte rien.
+    #[test]
+    fn une_arete_d_usage_porte_son_genre_et_sa_ligne() {
+        let a = analyze("/virtual", vec![("a.rs".into(), RUST_SRC.into())]);
+        let twice = a.scopes.iter().find(|s| s.name == "twice").expect("twice");
+        let points: Vec<&str> = a.scopes.iter().filter(|s| s.name == "Point").map(|s| s.key.as_str()).collect();
+        let r = a.relations.iter()
+            .find(|r| r.rel == "CONSUMES" && r.from_key == twice.key && points.contains(&r.to_key.as_str()))
+            .expect("twice CONSUMES Point");
+        let props = usage_properties(&r.sites);
+        assert_eq!(props.get("usage"), Some(&s("type")), "sites : {:?}", r.sites);
+        assert_eq!(props.get("line"), Some(&CypherValue::Int(13)), "sites : {:?}", r.sites);
+        let structure = a.relations.iter().find(|r| r.rel == "DEFINED_IN").expect("un DEFINED_IN");
+        assert!(structure.sites.is_empty() && usage_properties(&structure.sites).is_empty());
+    }
+
+    /// **L'usage retenu est le plus fort présent**, pas le plus fréquent :
+    /// une arête qui appelle une fois et nomme le type trois fois est un appel.
+    #[test]
+    fn l_usage_retenu_est_le_plus_fort_present() {
+        let site = |usage, line| UsageSite { usage, line: Some(line) };
+        let props = usage_properties(&[
+            site(UsageKind::Type, 4),
+            site(UsageKind::Type, 5),
+            site(UsageKind::Call, 7),
+            site(UsageKind::Other, 2),
+        ]);
+        assert_eq!(props.get("usage"), Some(&s("call")));
+        assert_eq!(props.get("usages"), Some(&s("call,other,type")));
+        assert_eq!(props.get("line"), Some(&CypherValue::Int(2)));
+        let sans_ligne = usage_properties(&[UsageSite { usage: UsageKind::Import, line: None }]);
+        assert_eq!(sans_ligne.get("line"), Some(&CypherValue::Null), "la clé reste, pour le chemin COPY");
+    }
 
     /// **Un scope embarque son texte propre, pas celui de ses enfants.** Un
     /// `impl` à deux méthodes garde ses deux signatures et aucun corps ; une
