@@ -57,7 +57,7 @@ pub const FILES_THRESHOLD: usize = 50_000;
 /// En dessous, la carte est « faible » : le lot de 278m n'y tient pas entier.
 pub const VRAM_FLOOR_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
-/// Ce qu'on sait de la carte, résumé en quatre cas. La lecture de
+/// Ce qu'on sait de la carte, résumé en cinq cas. La lecture de
 /// `/sys/class/drm` est ailleurs (`regime::card_class`) : ici c'est un
 /// paramètre, donc l'heuristique se teste sans carte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +72,11 @@ pub enum CardClass {
     Integrated,
     /// Aucune carte dédiée : le calcul partira sur le processeur.
     None,
+    /// **Ce n'est pas ce poste qui calcule** : un service d'embarquement est
+    /// attaché (`RAG3WEAVER_EMBED_SERVICE`). Les déclencheurs qui parlent de
+    /// la carte d'ici — faible, absente, seule à porter l'affichage — n'ont
+    /// alors rien à dire ; seul celui de la taille reste.
+    Service,
 }
 
 impl CardClass {
@@ -117,6 +122,13 @@ pub fn recommended_model(files: usize, source_bytes: u64, card: CardClass, sole_
         };
     }
     match card {
+        CardClass::Service => Choice {
+            model: DEFAULT_MODEL.into(),
+            reason: format!(
+                "{files} fichiers ({} Mo de source), calcul par un service d'embarquement : {DEFAULT_MODEL}, le meilleur des deux",
+                mib(source_bytes)
+            ),
+        },
         CardClass::None => Choice {
             model: FAST_MODEL.into(),
             reason: format!("aucune carte dédiée, calcul sur le processeur : {FAST_MODEL} pour le premier index"),
