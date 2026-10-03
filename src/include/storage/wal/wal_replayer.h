@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <string>
 
 #include "storage/wal/wal_record.h"
 
@@ -74,6 +75,33 @@ private:
         bool enableChecksums) const;
 
     void runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const;
+
+    // What a read-only open saw of the two files before reading them, so that it can tell
+    // afterwards whether a writer's checkpoint crossed it. A reader takes no lock: the journal is
+    // scanned, then the data file is read, then the journal is replayed, at three different
+    // times. Between two checkpoints a writer only appends to the journal and writes pages that
+    // the last checkpoint does not reference, so those three reads agree. A checkpoint rewrites
+    // the header page and referenced pages in place and then truncates the journal: a reader that
+    // straddles it can load a data file that already contains the transactions it then replays.
+    struct ReadOnlyOpenIdentity {
+        std::string headerPage; // page 0 of the data file, raw
+        bool journalExists = false;
+        uint64_t journalSize = 0;
+        uint64_t journalChecksum = 0; // of the first journalSize bytes
+    };
+    ReadOnlyOpenIdentity captureReadOnlyOpenIdentity() const;
+    // Throws CHECKPOINT_CROSSED_READ_ONLY_OPEN if the files no longer match `before`: the header
+    // page changed, the journal bytes seen at the start are gone, or the journal now ends with a
+    // CHECKPOINT record. A journal that merely grew by new commits is not a change.
+    //
+    // What this does NOT cover, on purpose: it needs an epoch written in the file, which is
+    // step 5 ("marche 5") of docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md:
+    //  - a reader that STAYS open while a checkpoint passes: it reads pages on demand with the
+    //    metadata it loaded at open, and nothing tells it they were rewritten;
+    //  - two complete checkpoints within a single open that leave a byte-identical header page
+    //    and an empty journal on both sides.
+    void throwIfCheckpointCrossedReadOnlyOpen(const ReadOnlyOpenIdentity& before,
+        bool enableChecksums) const;
 
     void removeWALAndShadowFiles() const;
     void removeFileIfExists(const std::string& path) const;

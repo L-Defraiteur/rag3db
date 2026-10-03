@@ -1,14 +1,19 @@
 #include "storage/wal/wal_replayer.h"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <optional>
 
 #include "binder/binder.h"
 #include "catalog/catalog_entry/scalar_macro_catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_entry/type_catalog_entry.h"
+#include "common/checksum.h"
 #include "common/exception/end_of_file.h"
+#include "common/exception/io.h"
+#include "common/exception/runtime.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
@@ -99,25 +104,159 @@ void WALReplayer::runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const {
     }
 }
 
+// Checksum of the first `size` bytes of a file, read in blocks. Used only to compare two reads
+// of the same bytes; a file that shrinks under it gives a different value, which is what we want.
+static uint64_t checksumOfPrefix(FileInfo& fileInfo, uint64_t size) {
+    static constexpr uint64_t BLOCK_SIZE = 1ull << 20;
+    const auto buffer = std::make_unique<uint8_t[]>(std::min<uint64_t>(BLOCK_SIZE, size) + 1);
+    uint64_t result = 0;
+    for (uint64_t position = 0; position < size; position += BLOCK_SIZE) {
+        const auto numBytes = std::min<uint64_t>(BLOCK_SIZE, size - position);
+        fileInfo.readFromFile(buffer.get(), numBytes, position);
+        result = result * 1099511628211ull + checksum(buffer.get(), numBytes);
+    }
+    return result;
+}
+
+// Page 0 of the data file, raw. Empty if the file is missing.
+static std::string readHeaderPage(main::ClientContext& clientContext) {
+    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
+    const auto databasePath = clientContext.getDatabasePath();
+    std::string page;
+    if (!vfs->fileOrPathExists(databasePath, &clientContext)) {
+        return page;
+    }
+    const auto dataFile = vfs->openFile(databasePath, FileOpenFlags(FileFlags::READ_ONLY));
+    page.resize(std::min<uint64_t>(dataFile->getFileSize(), RAG3DB_PAGE_SIZE));
+    if (!page.empty()) {
+        dataFile->readFromFile(page.data(), page.size(), 0 /* position */);
+    }
+    return page;
+}
+
+WALReplayer::ReadOnlyOpenIdentity WALReplayer::captureReadOnlyOpenIdentity() const {
+    ReadOnlyOpenIdentity identity;
+    identity.headerPage = readHeaderPage(clientContext);
+    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
+    try {
+        if (vfs->fileOrPathExists(walPath, &clientContext)) {
+            const auto journal = vfs->openFile(walPath, FileOpenFlags(FileFlags::READ_ONLY));
+            identity.journalSize = journal->getFileSize();
+            identity.journalChecksum = checksumOfPrefix(*journal, identity.journalSize);
+            identity.journalExists = true;
+        }
+    } catch (const IOException&) {
+        // The journal vanished between the test and the open: a checkpoint just removed it. Seen
+        // as absent; the header page tells the rest.
+        identity = ReadOnlyOpenIdentity{identity.headerPage};
+    }
+    return identity;
+}
+
+void WALReplayer::throwIfCheckpointCrossedReadOnlyOpen(const ReadOnlyOpenIdentity& before,
+    bool enableChecksums) const {
+    auto crossed = readHeaderPage(clientContext) != before.headerPage;
+    if (!crossed) {
+        auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
+        std::unique_ptr<FileInfo> journal;
+        uint64_t journalSize = 0;
+        try {
+            if (vfs->fileOrPathExists(walPath, &clientContext)) {
+                journal = vfs->openFile(walPath, FileOpenFlags(FileFlags::READ_ONLY));
+                journalSize = journal->getFileSize();
+            }
+            if (before.journalExists && before.journalSize > 0) {
+                // The bytes this open decided on must still be there, unchanged.
+                crossed = !journal || journalSize < before.journalSize ||
+                          checksumOfPrefix(*journal, before.journalSize) != before.journalChecksum;
+            }
+            if (!crossed && journal && journalSize > 0 && journalSize != before.journalSize) {
+                // The journal grew. New commits are harmless: they only append here and write
+                // pages the last checkpoint does not reference. A CHECKPOINT record at the end is
+                // a checkpoint in progress, applying its pages to the data file right now.
+                crossed = dryReplay(*journal, false /* throwOnWalReplayFailure */, enableChecksums)
+                              .isLastRecordCheckpoint;
+            }
+        } catch (const IOException&) {
+            // The journal was removed or cut while we were comparing: that is a checkpoint.
+            crossed = true;
+        }
+    }
+    if (crossed) {
+        throw RuntimeException(stringFormat(
+            "{}: what it read may mix the state before and after that checkpoint, so the open is "
+            "refused rather than served. Retry the open.",
+            CHECKPOINT_CROSSED_READ_ONLY_OPEN));
+    }
+}
+
 void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) const {
     auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
     Checkpointer checkpointer(clientContext);
+    // A read-only open takes no lock and reads the journal and the data file at different times.
+    // It remembers what both looked like before reading them, and checks afterwards that no
+    // checkpoint of a writer crossed it (see ReadOnlyOpenIdentity). This protects the open only:
+    // a reader that stays open while a checkpoint passes is NOT protected by it.
+    std::optional<ReadOnlyOpenIdentity> identity;
+    if (StorageManager::Get(clientContext)->isReadOnly()) {
+        identity = captureReadOnlyOpenIdentity();
+    }
+    auto refusedAsCrossed = false;
+    const auto verifyNoCheckpointCrossed = [&]() {
+        if (!identity) {
+            return;
+        }
+        try {
+            throwIfCheckpointCrossedReadOnlyOpen(*identity, enableChecksums);
+        } catch (...) {
+            refusedAsCrossed = true;
+            throw;
+        }
+    };
+    // Whatever goes wrong while a read-only open reads the two files, the first question is
+    // whether a checkpoint crossed it: if so that is the cause, and it is what gets reported. If
+    // not, the original error goes out untouched. The error is neither read nor retried here.
+    const auto rethrowAsCrossedIfSo = [&]() {
+        if (!refusedAsCrossed) {
+            verifyNoCheckpointCrossed();
+        }
+    };
     // First, check if the WAL file exists. If it does not, we can safely remove the shadow file.
     if (!vfs->fileOrPathExists(walPath, &clientContext)) {
         removeFileIfExists(shadowFilePath);
         runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
         // Read the checkpointed data from the disk.
-        checkpointer.readCheckpoint();
+        try {
+            checkpointer.readCheckpoint();
+        } catch (const std::exception&) {
+            rethrowAsCrossedIfSo();
+            throw;
+        }
+        verifyNoCheckpointCrossed();
         return;
     }
     // If the WAL file exists, we need to replay it.
-    auto fileInfo = openWALFile();
+    std::unique_ptr<FileInfo> fileInfo;
+    try {
+        fileInfo = openWALFile();
+    } catch (const std::exception&) {
+        // A reader can find the journal removed between the test above and this open: the end of
+        // a writer's checkpoint.
+        rethrowAsCrossedIfSo();
+        throw;
+    }
     // Check if the wal file is empty. If so, we do not need to replay anything.
     if (fileInfo->getFileSize() == 0) {
         removeWALAndShadowFiles();
         runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
         // Read the checkpointed data from the disk.
-        checkpointer.readCheckpoint();
+        try {
+            checkpointer.readCheckpoint();
+        } catch (const std::exception&) {
+            rethrowAsCrossedIfSo();
+            throw;
+        }
+        verifyNoCheckpointCrossed();
         return;
     }
     // A previous unclean exit may have left non-durable contents in the WAL, so before we start
@@ -147,6 +286,9 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             runReadOnlyOpenHook(ReadOnlyOpenPhase::JOURNAL_SCANNED);
             // Read the checkpointed data from the disk.
             checkpointer.readCheckpoint();
+            // The data file is read: before replaying the journal on top of it, make sure it is
+            // still the one the journal belongs to.
+            verifyNoCheckpointCrossed();
             runReadOnlyOpenHook(ReadOnlyOpenPhase::DATA_FILE_READ);
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer = initDeserializer(*fileInfo, clientContext, enableChecksums);
@@ -169,6 +311,9 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // After replaying all the records, we should truncate the WAL file to the last
             // COMMIT/CHECKPOINT record.
             truncateWALFile(*fileInfo, offsetDeserialized);
+            // The replay read the journal again and, through the tables, pages of the data file:
+            // a checkpoint that started meanwhile invalidates it too.
+            verifyNoCheckpointCrossed();
         }
     } catch (const std::exception&) {
         auto transactionContext = TransactionContext::Get(clientContext);
@@ -179,6 +324,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // transactions that have been replayed.
             transactionContext->rollback();
         }
+        rethrowAsCrossedIfSo();
         throw;
     }
 }

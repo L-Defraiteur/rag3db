@@ -13,12 +13,19 @@
 // de reprise passe. La revérification à l'ouverture ne le protège pas ; il faut
 // une époque écrite dans le fichier (marche suivante).
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <string>
 
 #include "api_test/private_api_test.h"
+#include "common/checksum.h"
 #include "common/exception/runtime.h"
+#include "common/string_format.h"
+#include "storage/storage_utils.h"
 #include "flaky_checkpointer.h"
 #include "gmock/gmock.h"
 #include "storage/checkpointer.h"
@@ -51,6 +58,19 @@ public:
         WAL::Get(clientContext)->logAndFlushCheckpoint(&clientContext);
         shadowFile.applyShadowPages(clientContext);
         throw RuntimeException("checkpoint stopped before truncating the journal.");
+    }
+};
+
+// Un point de reprise arrêté encore plus tôt : sa phase de stockage est faite —
+// des pages neuves écrites directement dans le fichier de données, d'autres
+// préparées dans le fichier fantôme — et RIEN n'est encore journalisé. Ni
+// l'en-tête ni le journal ne portent trace de ce point de reprise.
+class CheckpointerStoppedAfterStoragePhase final : public Checkpointer {
+public:
+    explicit CheckpointerStoppedAfterStoragePhase(ClientContext& context) : Checkpointer(context) {}
+
+    void serializeCatalogAndMetadata(DatabaseHeader&, bool) override {
+        throw RuntimeException("checkpoint stopped after its storage phase.");
     }
 };
 
@@ -114,8 +134,9 @@ protected:
     }
 
     // Arme le crochet : au point `phase`, l'écrivain commence un point de
-    // reprise qui s'arrête après avoir appliqué ses pages, journal intact.
-    void writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase phase) {
+    // reprise qui s'arrête en chemin, à l'endroit que choisit `Stopped`.
+    template<typename Stopped>
+    void writerCheckpointStopsAt(ReadOnlyOpenPhase phase) {
         auto fired = std::make_shared<bool>(false);
         WALReplayer::setReadOnlyOpenHookForTesting([this, phase, fired](ReadOnlyOpenPhase current) {
             if (current != phase || *fired) {
@@ -123,7 +144,7 @@ protected:
             }
             *fired = true;
             FlakyCheckpointer([](ClientContext& context) -> std::unique_ptr<Checkpointer> {
-                return std::make_unique<CheckpointerStoppedBeforeTruncatingJournal>(context);
+                return std::make_unique<Stopped>(context);
             }).setCheckpointer(*getClientContext(*conn));
             auto result = conn->query("CHECKPOINT");
             EXPECT_FALSE(result->isSuccess()) << "le point de reprise devait s'arrêter à mi-chemin";
@@ -191,7 +212,8 @@ TEST_F(ReadOnlyOpenTest, HalfDoneCheckpointAfterJournalScanIsRefusedNotMisread) 
         run("CREATE (:Pair {id: " + std::to_string(i) + ", twice: " + std::to_string(i * 2) + "})");
     }
 
-    writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase::JOURNAL_SCANNED);
+    writerCheckpointStopsAt<CheckpointerStoppedBeforeTruncatingJournal>(
+        ReadOnlyOpenPhase::JOURNAL_SCANNED);
     openReader();
     ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
     ASSERT_FALSE(reader.opened()) << "ouvert alors qu'un point de reprise a traversé l'ouverture";
@@ -224,7 +246,8 @@ TEST_F(ReadOnlyOpenTest, RelationshipsAreNotDoubledByAHalfDoneCheckpoint) {
     }
     ASSERT_EQ(single(*conn, "MATCH ()-[l:Link]->() RETURN count(l)"), 9);
 
-    writerCheckpointStopsHalfwayAt(ReadOnlyOpenPhase::JOURNAL_SCANNED);
+    writerCheckpointStopsAt<CheckpointerStoppedBeforeTruncatingJournal>(
+        ReadOnlyOpenPhase::JOURNAL_SCANNED);
     openReader();
     ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
     if (reader.opened()) {
@@ -280,5 +303,102 @@ TEST_F(ReadOnlyOpenTest, CommitDuringOpenIsNotRefused) {
         EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) RETURN count(*)"), before);
         EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) WHERE p.twice <> p.id * 2 RETURN count(*)"),
             0);
+    }
+}
+
+// Le point de reprise n'en est qu'à sa phase de stockage quand le lecteur
+// arrive : rien n'est journalisé, l'en-tête n'a pas bougé. Mais l'écrivain a
+// déjà écrit des pages directement dans le fichier de données.
+TEST_F(ReadOnlyOpenTest, CheckpointInItsStoragePhaseIsRefusedNotMisread) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    run("CREATE NODE TABLE Pair(id INT64 PRIMARY KEY, twice INT64)");
+    // Une table qui a déjà vécu : plusieurs points de reprise derrière elle, des
+    // pages réécrites et d'autres libérées, puis un lot encore au journal.
+    auto next = 0;
+    for (auto cycle = 0; cycle < 12; cycle++) {
+        for (auto i = 0; i < 25; i++, next++) {
+            run("CREATE (:Pair {id: " + std::to_string(next) +
+                ", twice: " + std::to_string(next * 2) + "})");
+        }
+        if (cycle < 11) {
+            run("CHECKPOINT");
+        }
+    }
+
+    for (auto phase : {ReadOnlyOpenPhase::JOURNAL_SCANNED, ReadOnlyOpenPhase::DATA_FILE_READ}) {
+        writerCheckpointStopsAt<CheckpointerStoppedAfterStoragePhase>(phase);
+        openReader();
+        ASSERT_TRUE(*hookFired) << "le crochet n'a pas été atteint : le test ne prouve rien";
+        if (reader.opened()) {
+            // S'il s'ouvre, ce qu'il lit doit être juste.
+            EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) RETURN count(*)"), next);
+            EXPECT_EQ(
+                single(*reader.conn, "MATCH (p:Pair) WHERE p.twice <> p.id * 2 RETURN count(*)"),
+                0);
+        } else {
+            EXPECT_THAT(reader.error, HasSubstr(WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN));
+        }
+    }
+}
+
+// Une mesure, pas un test : ce que coûte la revérification quand le journal est
+// gros. Désactivée (50 s) ; elle se lance par
+//   transaction_test --gtest_also_run_disabled_tests --gtest_filter='*MeasureCost*'
+// Elle fait grossir le journal par paliers de 16 Mo et imprime, à chaque palier,
+// la durée d'une ouverture en lecture seule et, à part, celle des trois passes de
+// somme de contrôle qu'une telle ouverture fait sur le journal. Mesuré le
+// 3 octobre 2026 : 0,35 ms par Mo, 6 à 7 % de l'ouverture de 16 à 262 Mo.
+TEST_F(ReadOnlyOpenTest, DISABLED_MeasureCostOfRevalidationOnABigJournal) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    using clock = std::chrono::steady_clock;
+    const auto ms = [](clock::duration d) {
+        return std::chrono::duration_cast<std::chrono::microseconds>(d).count() / 1000.0;
+    };
+    systemConfig->bufferPoolSize = 4ull * 1024 * 1024 * 1024;
+    createDBAndConn();
+    run("CALL force_checkpoint_on_close=false");
+    run("CALL auto_checkpoint=false");
+    run("CREATE NODE TABLE big(id INT64 PRIMARY KEY, payload STRING)");
+    const auto walPath = StorageUtils::getWALFilePath(databasePath);
+    for (auto batch = 0; batch < 16; batch++) {
+        run(stringFormat("UNWIND range({}, {}) AS i CREATE (:big {id: i, payload: "
+                         "repeat(cast(i + 100000 AS STRING), 100)})",
+            batch * 25000, batch * 25000 + 24999));
+        const auto size = std::filesystem::file_size(walPath);
+        // trois ouvertures, on garde la plus courte
+        double best = 1e18;
+        for (auto i = 0; i < 3; i++) {
+            const auto start = clock::now();
+            openReader();
+            best = std::min(best, ms(clock::now() - start));
+            ASSERT_TRUE(reader.opened()) << reader.error;
+            reader.conn.reset();
+            reader.db.reset();
+        }
+        // les trois passes de somme de contrôle que fait une ouverture, seules
+        double bestChecksum = 1e18;
+        for (auto i = 0; i < 3; i++) {
+            const auto start = clock::now();
+            for (auto pass = 0; pass < 3; pass++) {
+                std::ifstream in(walPath, std::ios::binary);
+                std::vector<uint8_t> buffer(1 << 20);
+                uint64_t result = 0;
+                while (in.read(reinterpret_cast<char*>(buffer.data()), buffer.size()) ||
+                       in.gcount() > 0) {
+                    result = result * 1099511628211ull +
+                             checksum(buffer.data(), static_cast<size_t>(in.gcount()));
+                }
+                EXPECT_NE(result, 1u);
+            }
+            bestChecksum = std::min(bestChecksum, ms(clock::now() - start));
+        }
+        std::cout << stringFormat("  journal {} Mo : ouverture {} ms, dont 3 passes de somme {} ms",
+                         std::to_string(size / (1024.0 * 1024.0)), std::to_string(best),
+                         std::to_string(bestChecksum))
+                  << std::endl;
     }
 }
