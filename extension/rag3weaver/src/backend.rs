@@ -217,6 +217,7 @@ impl PreparedBackend {
         let (mut nodes, _) = builtin_graph_tools().map_err(|e| e.to_string())?;
         nodes.register(Box::new(crate::backend_nodes::EntityRecordFactory));
         nodes.register(Box::new(crate::backend_nodes::EntityBatchFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotFinishFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();
@@ -868,6 +869,7 @@ impl Backend {
             "RhaiNode",
             "EntityRecordNode",
             "EntityBatchNode",
+            "SnapshotFinishNode",
             "RelationBatchNode",
             "KBQuerySourceNode",
             "SelectRecordsNode",

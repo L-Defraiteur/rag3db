@@ -9,7 +9,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -244,7 +244,7 @@ impl NodeFactory for EntityBatchFactory {
         );
         records.json_schema =
             Some(json!({"type":"array","maxItems":512,"items":{"type":"object"}}));
-        NodeSchema { node_type:self.node_type(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies", inputs:vec![], outputs:vec![PortDef{name:"report",port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records] }
+        NodeSchema { node_type:self.node_type(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies", inputs:vec![], outputs:vec![PortDef{name:"report",port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -340,6 +340,14 @@ impl Node for EntityBatchNode {
             rows.push(row);
             ids.push(id);
         }
+        // A synchronisation session: one batch carries one scope, checked
+        // before any write like the rest.
+        let session = self.config["snapshot"].as_str().unwrap_or("").to_string();
+        let scope = if session.is_empty() {
+            None
+        } else {
+            Some(cat.snapshot_scope_of(entity, &rows).map_err(|e| e.to_string())?)
+        };
         // A lifecycle is checked like the schema: all-or-nothing, before any
         // write. The ingestion applies the same rule again while writing
         // (the catalog lock is held from here on), so nothing slips through.
@@ -359,7 +367,11 @@ impl Node for EntityBatchNode {
                 report.warnings
             ));
         }
-        ctx.set_output("report",PortValue::new(json!({"ids":ids,"processed":report.processed,"unchanged":report.unchanged,"ready":report.rendu_pret,"warnings":report.warnings})));
+        if !session.is_empty() {
+            cat.mark_snapshot(entity, &session, &ids).map_err(|e| e.to_string())?;
+        }
+        let scope_json = scope.map(|s| serde_json::to_value(s).unwrap_or(Value::Null));
+        ctx.set_output("report",PortValue::new(json!({"ids":ids,"processed":report.processed,"unchanged":report.unchanged,"ready":report.rendu_pret,"warnings":report.warnings,"snapshot":if session.is_empty() { Value::Null } else { json!(session) },"scope":scope_json})));
         Ok(())
     }
 }
@@ -396,6 +408,90 @@ mod batch_tests {
                 &json!({"entity":"Record","records":vec![json!({});513]})
             )
             .is_err());
+    }
+}
+
+/// The end of a synchronisation session: the rows of the scope that no batch
+/// of the session carried are missing, and become what the entity declares
+/// (`snapshot.onMissing`). The guards refuse before any write.
+pub struct SnapshotFinishFactory;
+struct SnapshotFinishNode {
+    name: String,
+    config: Value,
+}
+impl NodeFactory for SnapshotFinishFactory {
+    fn node_type(&self) -> &'static str {
+        "SnapshotFinishNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        let mut scope = param("scope", ConfigParamType::Json, true, "The scope values, one per scope field declared by the entity ({} for the whole entity)");
+        scope.json_schema = Some(json!({"type":"object"}));
+        NodeSchema {
+            node_type: self.node_type(),
+            description: "End a synchronisation session: missing rows of the scope are removed or follow the declared transition; refuses an empty session or too many missing rows unless told otherwise",
+            inputs: vec![],
+            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            config_params: vec![
+                param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
+                scope,
+                param("snapshot", ConfigParamType::String, true, "The session id the batches carried"),
+                param("allow_empty", ConfigParamType::Bool, false, "Accept a session that carried no row of the scope"),
+                param("force", ConfigParamType::Bool, false, "Go past maxMissingRatio"),
+            ],
+        }
+    }
+    fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
+        crate::schema::validate_identifier(config["entity"].as_str().ok_or("entity missing")?, "entity")
+            .map_err(|e| e.to_string())?;
+        if !config["scope"].is_object() {
+            return Err("scope must be an object".into());
+        }
+        if config["snapshot"].as_str().is_none_or(str::is_empty) {
+            return Err("snapshot (the session id) is required".into());
+        }
+        Ok(Box::new(SnapshotFinishNode { name: name.into(), config: config.clone() }))
+    }
+}
+impl Node for SnapshotFinishNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "SnapshotFinishNode"
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        SnapshotFinishFactory.schema().outputs
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(self.config.clone()))
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let entity = self.config["entity"].as_str().unwrap();
+        let policy = ctx
+            .service::<HashMap<String, WritePolicy>>("backend_write_policies")
+            .and_then(|p| p.get(entity))
+            .ok_or("policy missing")?;
+        if policy.immutable
+            || policy.created_at.is_some()
+            || policy.updated_at.is_some()
+            || policy.revision.is_some()
+            || !policy.transition_dates.is_empty()
+        {
+            return Err("a synchronisation cannot bypass managed write policies".into());
+        }
+        let scope: BTreeMap<String, CypherValue> = serde_json::from_value(self.config["scope"].clone())
+            .map_err(|e| format!("scope: {e}"))?;
+        let options = crate::catalog::SnapshotFinishOptions {
+            allow_empty: self.config["allow_empty"].as_bool().unwrap_or(false),
+            force: self.config["force"].as_bool().unwrap_or(false),
+        };
+        let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").ok_or("catalog missing")?.clone();
+        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let report = cat
+            .finish_snapshot(entity, &scope, self.config["snapshot"].as_str().unwrap(), options)
+            .map_err(|e| e.to_string())?;
+        ctx.set_output("report", PortValue::new(serde_json::to_value(report).map_err(|e| e.to_string())?));
+        Ok(())
     }
 }
 
