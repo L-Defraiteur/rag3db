@@ -392,6 +392,39 @@ fn banc_etage_qui_perd() {
         par_poids.push((format!("P(default → {x}) — l'ombre pondérée de G"), p_ombre));
     }
 
+    // ── T : la marque de test, dévaluée — même geste que P (test_role) ──
+    // La pile codeparsers fait des fonctions de `mod tests` des scopes :
+    // 415 de plus sur src/dataflow, dont 350 fonctions de test. Sur
+    // `merge_port_values`, deux tests qui l'appellent passent devant sa
+    // définition (e2e_code:331). Aucune question du banc n'a un test pour
+    // bonne réponse : la ligne mesure ce que la dévaluation rend aux
+    // définitions, pas ce qu'elle coûte à « où est le test de X » — c'est
+    // pour ces questions-là que la valeur doit rester douce. e2e_code fixe
+    // le plafond (w < 0,60 sur les scores mesurés) ; le banc dit si une
+    // valeur plus douce suffit déjà, et ce qu'on y gagne.
+    for x in [0.7, 0.6, 0.55, 0.5, 0.4] {
+        let mut t = Mesure::default();
+        for (q, attendus) in QUESTIONS {
+            let mut o = options_vecteur();
+            o.field_weights = vec![FieldWeight {
+                field: "test_role".into(),
+                weights: [
+                    ("case".to_string(), x),
+                    ("suite".to_string(), x),
+                    ("support".to_string(), x),
+                ]
+                .into_iter()
+                .collect(),
+                // La valeur vide — un scope qui n'est pas un test — reste
+                // pleine : hors table, elle prend `default`.
+                default: 1.0,
+            }];
+            let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche pondérée test_role");
+            t.noter(&noms(&r), attendus);
+        }
+        par_poids.push((format!("T(case,suite,support → {x}) — les tests dévalués"), t));
+    }
+
     // ── H et I : les poids de fusion en hybride, sur les deux versants ──
     // La mesure que Lucie attend depuis le 18 septembre, affinée le
     // 3 octobre : « favorise légèrement les identifiants » se cherche entre
