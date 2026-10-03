@@ -284,10 +284,35 @@ sessions, pas d'une vérification.
   moteur : corrigé.
 - **Après un point de reprise échoué, le processus qui continue perd des clés
   en silence puis plante** (mesuré sur `master`, 2 octobre ; patch
-  d'expérience dans `…/2-octobre-2026-01h07/moteur-concurrence/`). rag3weaver
-  ne demande pas de `CHECKPOINT` mais subit ceux du commit, et continue après
-  un échec : il est exposé. Prévu : le moteur refuse tout jusqu'à réouverture
-  (à vérifier contre PostgreSQL), puis rag3weaver apprend à rouvrir.
+  d'expérience dans `…/2-octobre-2026-01h07/moteur-concurrence/`). **Corrigé
+  côté moteur le 3 octobre** : le gestionnaire de transactions retient
+  l'échec, et tout début de transaction ou point de reprise — celui de la
+  fermeture compris — est refusé sous le nom
+  `TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT` jusqu'à la réouverture,
+  comme PostgreSQL (PANIC puis reprise par le journal). Les lectures fausses,
+  la corruption durable (301 lignes pour 276 clés) et le gel à la fermeture ne
+  se produisent plus ; un `COPY` dont le point de reprise échoue est atomique.
+  Livré depuis `refus-apres-point-de-reprise-echoue` (`6d0c540f5`, sans son
+  premier commit, déjà sur `master`) : transaction_test 65/65, api_test
+  102/102, copy_tests 19/19, les huit suites de stockage, `known_red` vert ;
+  Rust ciblé — lib 1111, `e2e_prise_atomique`, `e2e_checkpoint`,
+  `e2e_chemin_de_masse` ; le reste non rejoué, le changement ne joue que sur
+  le chemin d'un point de reprise en échec. **Reste le côté rag3weaver**,
+  tranché le 3 octobre (option B) : `MustReopen` reconnu en un point, le
+  catalogue empoisonné, les hôtes qui répondent l'erreur puis sortent avec 75
+  pour être relancés — chantier ouvert, avant la mise de côté.
+- **La suppression ne retire jamais les vecteurs creux de l'index lucistore**
+  (lu, non vérifié par exécution — 3 octobre) : `DeleteRecordNode` supprime
+  les chunks en base et l'entrée plein texte, mais aucun `SparseHandle::remove`
+  n'existe dans le crate ; l'entrée creuse reste à l'offset du chunk supprimé.
+  À vérifier avec bge-m3 (servi depuis l'autre poste), avec la mise de côté,
+  qui touche les mêmes suppressions.
+- **Après une table vidée puis repeuplée par le chemin de masse, la recherche
+  dense ne rend rien** (3 octobre) : zéro résultat, sans erreur ni
+  avertissement, vecteurs pourtant en base. Grave pour la synchronisation, qui
+  vide et repeuple. Reproduction rouge et déterministe sur
+  `repro-recherche-dense-apres-table-videe` (`./run_e2e.sh --test
+  e2e_repro_dense_apres_table_videe`) ; confiée à la session cœur C++.
 - **Les poids ne dépendent plus d'aucun disque** (3 octobre 2026). Les
   granite d'origine du 6 septembre, rapportés de l'ancien poste par ssh, sont
   installés (suite granite 11 sur 11) et publiés à la place des régénérés dans
