@@ -27,7 +27,7 @@ scope porte déjà ; aucun scope n'est créé ni retiré.
 | Python | `@pytest.fixture` ; une sous-classe de `…TestCase` (unittest) et ses méthodes `test*` | pytest : `test_*` et `Test*` dans un fichier `test_*.py` / `*_test.py`, le reste de ce fichier, `conftest.py` (les motifs de pytest se règlent : c'est une convention) |
 | C++ | gtest `TEST`, `TEST_F`, `TEST_P`, `TYPED_TEST`, `TYPED_TEST_P` ; Catch2 `TEST_CASE` | — |
 | Go | `TestX(t *testing.T)`, `BenchmarkX(b *testing.B)`, `FuzzX(f *testing.F)`, `ExampleX()` dans un `_test.go` ; le reste de ce fichier (la chaîne d'outils l'exclut des builds) | — |
-| TS / JS | — | à venir : `describe` / `it` / `test` sont des appels, pas des scopes ; il faut d'abord leur créer des scopes (lot suivant, pointeur séparé) |
+| TS / JS | `describe`, `context`, `suite` (suites), `it`, `test`, `specify` (cas), et leurs `.only` / `.skip`, appelés avec un titre littéral et une fonction ; chacun devient un scope nommé par son titre, avec son chemin (`calc > adds`) — codeparsers `594fc61`, pointeur séparé puisqu'il crée des scopes | — |
 
 Une fonction nommée `test_x` hors d'un fichier de test, ou `TestLike` hors
 d'un `_test.go`, n'est pas marquée : le nom seul ne suffit jamais hors de
@@ -39,6 +39,7 @@ la convention de l'outil.
 |---|---|
 | `src/dataflow` (Rust) | 350 cas — autant que d'attributs de test dans la source —, 33 suites, 281 supports |
 | 40 fichiers gtest de `test/` du moteur | 336 cas, tous les `TEST` / `TEST_F` lus, chacun avec son nom gtest |
+| 21 fichiers de test JS (`tools/nodejs_api/test`, `tools/wasm/test`) | 148 cas pour 148 `it(` / `test(` dans la source, 81 suites |
 | 11 scripts `scripts/test_*.py` | 2 suites, 5 cas et 3 supports unittest (sûrs) ; 42 fonctions en support par convention (ces scripts ne suivent pas pytest) |
 
 Cela suppose les fonctions de module Rust devenues des scopes
@@ -46,6 +47,9 @@ Cela suppose les fonctions de module Rust devenues des scopes
 de `src/dataflow` n'existaient pas comme scopes.
 
 ## Proposition pour rag3weaver (à la session de l'arbre principal)
+
+Faite et acceptée : branche `codeparsers-champs-test` (`b6e7db858`), en
+attente de reprise après les pointeurs 4 et 5. Ce qu'elle contient :
 
 Deux champs ordinaires de l'entité `Scope`, rien d'orienté test dans le
 moteur :
