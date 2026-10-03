@@ -205,6 +205,24 @@ essayer « ouvrir sans l'extension puis écrire », le moteur refuse cette
 | le crochet après outil (`context` : identités résolues, source, cellule, lignes) | recherche | contrat acté, code après la passe Gemini |
 | un modèle de décision, quand une bonne manière de s'en servir existera | optimiseur | diagnostic en cours |
 
+## 5 bis. Qui est qui, la nuit du 4 octobre
+
+Les noms de session sont des empreintes depuis la reprise du 3, et **ils
+changent à chaque relance des fenêtres**. Le sujet d'abord, donc : c'est lui
+qui vaudra encore quelque chose demain.
+
+| Sujet | Nom cette nuit |
+|---|---|
+| orchestration | `rag3db-9f` |
+| arbre principal, moteur bâti, dialecte, `code.rs` | `rag3db-50` |
+| cœur C++ | `rag3db-e3` |
+| banc | `rag3db-76` |
+| embarquements | `rag3db-eb` |
+| codeparsers | `rag3db-c0` |
+| optimiseur | `rag3db-a6` |
+| recherche (harnais du chat, crochet après outil) | `rag3db-88` |
+| mémoire longue | moi |
+
 ## 6. Comment reprendre
 
 ```sh
