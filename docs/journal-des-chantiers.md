@@ -297,10 +297,29 @@ sessions, pas d'une vérification.
   102/102, copy_tests 19/19, les huit suites de stockage, `known_red` vert ;
   Rust ciblé — lib 1111, `e2e_prise_atomique`, `e2e_checkpoint`,
   `e2e_chemin_de_masse` ; le reste non rejoué, le changement ne joue que sur
-  le chemin d'un point de reprise en échec. **Reste le côté rag3weaver**,
-  tranché le 3 octobre (option B) : `MustReopen` reconnu en un point, le
-  catalogue empoisonné, les hôtes qui répondent l'erreur puis sortent avec 75
-  pour être relancés — chantier ouvert, avant la mise de côté.
+  le chemin d'un point de reprise en échec. **Le côté rag3weaver est fait
+  aussi** (3 octobre, option B) : le nom est reconnu en un seul point
+  (`Rag3dbConnection`), la base empoisonnée pour toutes ses connexions, et le
+  catalogue refuse chaque verbe par `CatalogError::MustReopen` en comptant la
+  file non drainée qu'il perd. **Les hôtes sortent avec 75** (`EX_TEMPFAIL`,
+  `connection::EXIT_MUST_REOPEN`) après avoir répondu l'erreur :
+  `rag3weaver-backend` (`mustReopen: true` dans sa réponse) et `rag3daemon`,
+  dont le client reconnaît le nom à travers le fil. **`rag3weaver-chat`
+  relance son backend une fois**, le dit dans le résultat de l'outil, ne
+  rejoue pas l'appel, et ne relance pas une seconde fois si la panne se
+  répète ; `chat_app.py` lance le chat, rien à y changer. Rien n'est retenté
+  ni rejoué par le crate : un COPY non validé se relance par son appelant,
+  l'ingestion étant idempotente. Éprouvé par crochet de test (la vraie panne
+  l'est côté C++) : `e2e_rouvrir`, `e2e_rag3daemon`,
+  `test_backend_must_reopen.py`, `test_chat_must_reopen.py`.
+- **`les_lots_stables_comptent_des_puissances_de_deux` (lib) échoue sous le
+  régime doux** (3 octobre) : il appelle `lot_budget`, qui lit
+  `RAG3WEAVER_EMBED_CHAR_BUDGET`, que toute passe pose à 4096 ; seul, il
+  échoue à chaque fois avec la variable et passe sans. Les passes d'avant
+  étaient vertes par chance d'ordre : un test voisin retire la variable en
+  parallèle. Défaut d'isolement du test, pas du code ; d'ici sa correction,
+  la suite lib se joue sans cette variable (elle n'embarque rien sur la
+  carte).
 - **La suppression ne retire jamais les vecteurs creux de l'index lucistore**
   (lu, non vérifié par exécution — 3 octobre) : `DeleteRecordNode` supprime
   les chunks en base et l'entrée plein texte, mais aucun `SparseHandle::remove`
