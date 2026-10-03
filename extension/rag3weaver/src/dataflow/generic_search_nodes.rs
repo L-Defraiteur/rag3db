@@ -2266,6 +2266,7 @@ mod tests {
                 relations: Level::Ready,
                 vectors_percent: pct,
                 vectors_seconds_left: None,
+                sparse: None,
                 updated_ms: 0,
             })
         };

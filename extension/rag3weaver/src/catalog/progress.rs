@@ -60,6 +60,23 @@ impl IndexProgress {
         self.tables.iter().filter_map(|t| t.sparse_missing).sum()
     }
 
+    /// L'état du signal creux, sur les seules tables qui le portent ; `None`
+    /// si aucune n'en a.
+    pub fn sparse_state(&self) -> Option<SignalState> {
+        let carrying: Vec<(usize, usize)> = self.tables.iter().filter_map(|t| t.sparse_missing.map(|m| (t.chunks, m))).collect();
+        if carrying.is_empty() {
+            return None;
+        }
+        let chunks: usize = carrying.iter().map(|(n, _)| n).sum();
+        let missing: usize = carrying.iter().map(|(n, m)| (*m).min(*n)).sum();
+        Some(match (chunks, missing) {
+            (0, _) => SignalState { level: Level::Never, percent: 0 },
+            (_, 0) => SignalState { level: Level::Ready, percent: 100 },
+            (n, m) if m >= n => SignalState { level: Level::Never, percent: 0 },
+            (n, m) => SignalState { level: Level::Running, percent: (100 * (n - m) / n) as u8 },
+        })
+    }
+
     /// Les vecteurs denses faits, en pourcentage. Un index vide est à jour.
     pub fn dense_percent(&self) -> u8 {
         match self.chunks() {
@@ -148,8 +165,20 @@ pub struct IndexState {
     /// Ce qu'il reste de vecteurs, en secondes, quand un débit est connu.
     #[serde(default)]
     pub vectors_seconds_left: Option<u64>,
+    /// **Le signal creux**, quand l'index en porte un ; `None` sinon. Un
+    /// niveau à part des vecteurs denses : un backend peut avoir le dense
+    /// prêt et le creux en dette, et la fusion doit pouvoir le dire.
+    #[serde(default)]
+    pub sparse: Option<SignalState>,
     /// Quand cet état a été écrit (millisecondes Unix).
     pub updated_ms: u64,
+}
+
+/// Où en est un signal : son niveau, et ce qui est fait en pourcentage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignalState {
+    pub level: Level,
+    pub percent: u8,
 }
 
 fn ready() -> Level {
@@ -183,6 +212,7 @@ impl IndexState {
             vectors: level(progress.dense_missing()),
             vectors_percent: if chunks == 0 { 0 } else { progress.dense_percent() },
             vectors_seconds_left: None,
+            sparse: progress.sparse_state(),
             updated_ms: now_ms,
         }
     }
@@ -197,7 +227,10 @@ impl IndexState {
     }
 
     pub fn running(&self) -> bool {
-        self.text == Level::Running || self.relations == Level::Running || self.vectors == Level::Running
+        self.text == Level::Running
+            || self.relations == Level::Running
+            || self.vectors == Level::Running
+            || self.sparse.is_some_and(|s| s.level == Level::Running)
     }
 
     /// Un état « en cours » trop vieux pour être cru.
@@ -523,13 +556,32 @@ mod tests {
         assert_eq!(IndexState::from_progress(&progress(1_000, 0, None, 5), 1).text, Level::Running);
     }
 
+    /// Le creux a son niveau à lui : le dense prêt n'en dit rien.
+    #[test]
+    fn le_creux_a_son_niveau_a_part_des_vecteurs_denses() {
+        let sans = IndexState::from_progress(&progress(100, 0, None, 0), 0);
+        assert_eq!(sans.sparse, None, "une table sans signal creux n'a pas d'état creux");
+        let en_dette = IndexState::from_progress(&progress(100, 0, Some(40), 0), 0);
+        assert_eq!(en_dette.vectors, Level::Ready);
+        assert_eq!(en_dette.sparse, Some(SignalState { level: Level::Running, percent: 60 }));
+        assert!(en_dette.running(), "une dette creuse est un état en cours");
+        let rien = IndexState::from_progress(&progress(100, 0, Some(100), 0), 0);
+        assert_eq!(rien.sparse, Some(SignalState { level: Level::Never, percent: 0 }));
+        let pret = IndexState::from_progress(&progress(100, 0, Some(0), 0), 0);
+        assert_eq!(pret.sparse, Some(SignalState { level: Level::Ready, percent: 100 }));
+        // Un état noté avant ce champ se relit sans lui.
+        let ancien: IndexState =
+            serde_json::from_str(r#"{"text":"ready","vectors":"ready","relations":"ready","vectors_percent":100,"updated_ms":1}"#).unwrap();
+        assert_eq!(ancien.sparse, None);
+    }
+
     #[test]
     fn un_etat_en_cours_sans_nouvelles_n_est_plus_cru() {
-        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, updated_ms: 1_000 };
+        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, sparse: None, updated_ms: 1_000 };
         assert!(!en_cours.is_stale(1_000 + STATE_STALE_MS));
         assert!(en_cours.is_stale(1_001 + STATE_STALE_MS), "un processus tué ne laisse pas « en cours » pour toujours");
         // Un état abouti ne périme pas : rien ne le rafraîchit, et c'est normal.
-        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, updated_ms: 1_000 };
+        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, sparse: None, updated_ms: 1_000 };
         assert!(!pret.is_stale(u64::MAX));
         // Et il se lit tel qu'il s'écrit.
         let json = serde_json::to_string(&en_cours).unwrap();

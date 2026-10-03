@@ -81,6 +81,7 @@ fn jamais_indexe_meme_quand_la_base_porte_autre_chose() {
             relations: Level::Ready,
             vectors_percent: 100,
             vectors_seconds_left: None,
+            sparse: None,
             updated_ms: maintenant,
         })
         .unwrap();
@@ -118,6 +119,7 @@ fn en_cours_le_resultat_avec_sa_ligne_d_etat() {
             relations: Level::Running,
             vectors_percent: 10,
             vectors_seconds_left: None,
+            sparse: None,
             updated_ms: maintenant,
         })
         .unwrap();
