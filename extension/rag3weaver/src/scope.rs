@@ -66,7 +66,11 @@ pub const EMBEDDING_MODEL_KEY: &str = "embedding_model";
 /// `{E}_IN_{KB}` et `{E}_SOURCED_{KB}` d'une base d'avant sont supprimées, et
 /// chaque base traduite est re-rendue depuis ses racines au drain suivant
 /// (`Catalog::migrer_les_kb_v7`).
-pub const SCHEMA_VERSION: &str = "7";
+///
+/// **8** le 3 octobre 2026 : la colonne `_snapshot` sur les tables d'entités
+/// (la synchronisation par périmètre, `SnapshotConfig`), vide sur les lignes
+/// d'avant — aucune n'a encore été portée par une session.
+pub const SCHEMA_VERSION: &str = "8";
 
 /// La cellule courante : dans quelle org et quel projet on écrit et on cherche.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

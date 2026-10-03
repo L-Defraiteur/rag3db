@@ -184,6 +184,9 @@ pub fn generate_node_table_ddl_with_dialect(
         // actuels sont issus. `<> _content_hash` = chunks en retard. Vide =
         // jamais découpé.
         ColumnDef { name: "_chunked_hash".into(), col_type: ColumnType::Text },
+        // **La marque de synchronisation** : la session du dernier instantané
+        // qui a porté la ligne (`SnapshotConfig`). Vide hors synchronisation.
+        ColumnDef { name: "_snapshot".into(), col_type: ColumnType::Text },
     ];
     if entity_def.derived_from.is_some() {
         // **Une entité dérivée** (doc du 7 septembre 2026) : d'où vient la
