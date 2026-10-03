@@ -1,6 +1,6 @@
 # Session recherche — ce que je sais
 
-**Mis à jour : 4 octobre 2026, vers 00 h 30.** Le rapport (01) dit l'état ;
+**Mis à jour : 4 octobre 2026, vers 01 h 15.** Le rapport (01) dit l'état ;
 ici, l'architecture et les leçons, pour qu'une reprise n'ait pas à les
 redécouvrir.
 
@@ -143,9 +143,16 @@ scripté ne voyait :
 - La ligne d'état sous `⚠` n'est relayée par AUCUN modèle (faible et
   Gemini) — proposition « en tête de fiche » chez Lucie ; ne pas coder
   sans son mot (changement de rendu).
-- Le seuil du motif-ailleurs n'est PAS calibré (les scores du signal
-  vectoriel seul, pas la fusion) — le défaut du gabarit sera provisoire
-  et dit tel ; calibration au banc avant de servir le crochet en vrai.
+- Le seuil du motif-ailleurs n'est PAS calibré — 0,72 provisoire, dit
+  tel. Premières données réelles (granite-278m, micro-corpus de la
+  tuyauterie) : 0,84 = le scope édité contre son propre ancien texte,
+  0,76 = son appelant direct. Le seuil utile est donc quelque part sous
+  0,76 pour « un appelant ressemble » et la calibration au banc doit
+  mesurer de VRAIS motifs répétés sur src/, pas ce micro-corpus.
+- L'exclusion d'un champ chemin se compare à frontière de séparateur
+  (file_path en base est ABSOLU, l'argument d'outil est relatif) —
+  l'égalité stricte a laissé le fichier édité dans sa propre section au
+  premier run d'attache.
 - Première ligne T du banc : plate par pondération neutre (champ non
   enrichi), pas par neutralité — un « zéro effet » se vérifie en
   branchant le levier avant de conclure.

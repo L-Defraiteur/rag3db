@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 00 h 30.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 01 h 15.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -62,7 +62,28 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
 
 ## En cours
 
-**Le client « motif ailleurs » (lot 2 du crochet)** : après `edit_file`,
+**Lot 6 d'embarquements (models.llm au chat)** : accepté — la session
+embarquements apporte connect_llm (openai + vertex) dans model_source,
+la fenêtre de contexte dans ModelSource (comme dimensions), et me passe
+le diff de chat.rs (mon fichier, section llm → alias de models.llm) que
+je pose moi-même ; s'il met un Auth qui rafraîchit par requête, la
+limite d'une heure du jeton vertex tombe. Reste ensuite : la
+**calibration du seuil du crochet au banc** (premières données réelles,
+granite-278m : 0,84 pour le scope édité contre son propre ancien texte,
+0,76 pour son appelant — le seuil 0,72 est en dessous des deux).
+
+**Livré depuis le premier jet** — le client « motif ailleurs »
+(e87b64ba0 + a49a48422) : FilterResultsNode (seuil + exclusion à
+frontière de séparateur — file_path en base est absolu, l'argument est
+relatif, l'égalité stricte laissait le fichier édité dans sa propre
+section), gabarit vecteur seul (le seuil est une similarité, jamais un
+rang de fusion), rendu Jinja vide-si-rien, porte
+silent_unless_vectors_ready (try_lock + index_state_for), attaché à
+edit_file du poste. La tuyauterie porte la PREUVE SÉMANTIQUE : après
+l'index, l'édition rend la section avec le vrai voisin (l'appel dans
+main.rs) et jamais le fichier édité.
+
+Ancien en-cours, pour mémoire : **le client « motif ailleurs » (lot 2 du crochet)** : après `edit_file`,
 chercher par similarité le code qui ressemble à l'ANCIEN texte, hors du
 fichier édité, au-dessus d'un seuil. État : `FilterResultsNode` écrit
 (générique : seuil + exclusion par champ, `src/dataflow/filter_results_node.rs`,
