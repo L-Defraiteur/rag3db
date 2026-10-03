@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 05 h 00.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 06 h 00.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -60,7 +60,26 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (05 h)
+## En cours (06 h)
+
+**Les trois lots de l'orchestration sont FERMÉS.** Lot 3 livré
+(0d4c6b5e6 + 4a313daae) : le bac à sable Landlock — BacASable dans
+commande.rs (ruleset construit avant le fork, le fils n'exécute que la
+restriction ; une erreur refuse la commande, jamais de repli
+silencieux), la clé workspace.sandbox (mode/network/extra_read/
+extra_write, ~ étendu), le service posé sur chaque run, commands "auto"
+qui REFUSE de s'armer sans bac, le noyau prouvé au chargement ET par le
+test (dedans tout marche ; dehors lecture et écriture échouent par
+EACCES ; le HOME invisible). bubblewrap : dit « pas encore branché »,
+pas promis. Et la ligne d'état porte le niveau creux d'embarquements
+(« creux N % » ; prêt silencieux si les trois niveaux le sont).
+
+Reste ouvert chez moi : la T5 du scénario d'agent en mode auto AVEC bac
+(l'épreuve finale du lot 3 — demande un manifeste de passe en commands
+auto) ; la ligne de statut d'application du chat (journal §3, après) ;
+l'instrument des quatre issues de la session mémoire (il me le rend).
+
+## Ancien (05 h)
 
 **Le lot 3 — bac à sable de run_command** : la proposition est au dépôt
 (03-bac-a-sable-proposition.md), le code commence (crate landlock,
