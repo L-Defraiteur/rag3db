@@ -102,6 +102,34 @@ TEST_F(FailedTransactionTest, AnErrorFoundBeforeExecutionFailsTheBlockToo) {
     EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 1);
 }
 
+// Une seule règle, quelle que soit la cause : une instruction qui ne s'analyse même pas
+// met le bloc en échec comme les autres. Sinon un client qui envoie son bloc d'un trait
+// continuerait d'exécuter la suite après une instruction mal écrite.
+TEST_F(FailedTransactionTest, ASyntaxErrorFailsTheBlockToo) {
+    ok("BEGIN TRANSACTION;");
+    ok("CREATE (:Item {id: 2, v: 0});");
+    fails("CREATE (:Item {id: 3, v: 0}"); // parenthèse manquante
+    refused("CREATE (:Item {id: 4, v: 0});");
+    ok("ROLLBACK;");
+    EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 1);
+    // Hors de tout bloc, une erreur de syntaxe ne laisse aucun état.
+    fails("CREATE (:Item {id: 3, v: 0}");
+    ok("CREATE (:Item {id: 3, v: 0});");
+}
+
+// De même pour une instruction préparée à laquelle il manque un paramètre.
+TEST_F(FailedTransactionTest, AMissingParameterFailsTheBlockToo) {
+    auto prepared = conn->prepare("CREATE (:Item {id: $id, v: 0});");
+    ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
+    ok("BEGIN TRANSACTION;");
+    ok("CREATE (:Item {id: 2, v: 0});");
+    auto result = conn->execute(prepared.get());
+    ASSERT_FALSE(result->isSuccess());
+    refused("CREATE (:Item {id: 4, v: 0});");
+    ok("ROLLBACK;");
+    EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 1);
+}
+
 TEST_F(FailedTransactionTest, AStatementPreparedBeforeTheFailureIsRefusedToo) {
     auto prepared = conn->prepare("CREATE (:Item {id: 7, v: 0});");
     ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
