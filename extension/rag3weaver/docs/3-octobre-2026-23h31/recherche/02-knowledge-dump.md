@@ -1,6 +1,6 @@
 # Session recherche — ce que je sais
 
-**Mis à jour : 4 octobre 2026, vers 02 h 10.** Le rapport (01) dit l'état ;
+**Mis à jour : 4 octobre 2026, vers 04 h 00.** Le rapport (01) dit l'état ;
 ici, l'architecture et les leçons, pour qu'une reprise n'ait pas à les
 redécouvrir.
 
@@ -90,6 +90,19 @@ ligne T plate du banc. Déclaré dans `Scope` : `scope_type` 1,0/0,85 et
 0,406-0,407/13/27). La ligne T est un plateau 0,4–0,7 : la valeur se
 décide à e2e_code (plafond 0,597 — scores 0,0159 contre 0,0095), 0,5 pour
 la marge. En attente de Lucie : couple de fusion 0,45/0,55.
+
+### Les références du banc étagé (4 octobre, avec la pile)
+
+| config | tel quel | meilleur H | I |
+|---|---|---|---|
+| granite-278m (défaut) | 0,405/13/26 | 0,355 (0,3/0,7) | 0,850 |
+| granite + creux bge 0,4 | 0,403/13/25 | **0,369/11/23 (0,45/0,55)** | **0,900** |
+| bge-m3 pur | 0,342/9/24 | 0,360 (creux 0,4) | 0,950 (tout couple) |
+
+Variance observée ~0,002. Le creux se mesure par RAG3WEAVER_BANC_CREUX
+=bge-m3 (indépendant du dense ; dual seulement au même-modèle — sinon le
+dense bge 1024 irait dans la colonne granite 768). Le seuil motif 0,97
+reste compatible bge (p10 0,944-0,975 selon le dense).
 
 ## 5. Le crochet après outil
 

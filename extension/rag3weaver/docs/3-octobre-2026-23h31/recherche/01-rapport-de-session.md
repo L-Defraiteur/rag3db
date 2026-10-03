@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 02 h 10.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 04 h 00.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -60,7 +60,31 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours
+## En cours (04 h)
+
+**La pièce de câblage du creux** (cadrée par l'orchestration) : une clé
+EXPLICITE du manifeste monte le signal creux sur l'entité d'un index
+nommé quand models.sparse est déclaré — générique (toute entité d'un
+schéma nommé), validée au chargement dans les deux sens. À livrer avec :
+le coût du creux à l'indexation (mesuré), la conduite d'une base déjà
+indexée (la dette rattrape, pas de zéro pour un signal absent — à voir
+avec embarquements et index_state_for), le creux déclaré au manifeste du
+poste et la recommandation cloud. Puis le lot 3 (bac à sable — la
+proposition est écrite, 03-bac-a-sable-proposition.md).
+
+**Fermés depuis la dernière mise à jour** :
+- Lot 1 rendus (0f75fa79b) : ligne d'état EN TÊTE (verdict des rejeux :
+  les modèles ne la relaient pas mais agissent mieux — mesuré ; la ligne
+  de statut d'application du chat est au journal pour après) ; marque de
+  test lisible par value_labels déclaratif ; correspondance exacte : non.
+- Lot 2 fusion (91c44a96c) : la demande du 1er octobre FERMÉE par la
+  mesure — voir le journal §4.2 et le message de commit ; les chiffres
+  clés : creux 0,4 porte H à 0,369/11/23 et I à 0,900 sur granite+bge ;
+  default_weights='bm25:0.45,vector:0.55,sparse:0.4', étage choix→défaut.
+- Le banc : RAG3WEAVER_BANC_CREUX (creux indépendant du dense, dual gardé
+  au même-modèle), lignes HS/IS, branche bge-m3.
+
+## Ancien en-cours
 
 **L'épreuve T5 Gemini du lot 6** (en fond) : la tâche 5 du scénario par
 le chemin vertex DÉCLARÉ (llm → alias → source() → connect_llm) — elle
