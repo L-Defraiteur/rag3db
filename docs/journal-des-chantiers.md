@@ -128,27 +128,86 @@ et lire la ligne « bench matches known_red.txt ».
 H3 est inchangé par A5 (rouge 10 sur 10). H4 aussi reste rouge, pour d'autres causes :
 voir A5 bis ci-dessous et le §6.
 
-**Suite de la session cœur C++** : **A5 bis** est en cours (branche locale
-`a5-bis-ajout-en-memoire-sous-les-lecteurs`), devant tout ce qui attend Lucie. La
-recherche HNSW lit les vecteurs sans le verrou du groupe (`NodeTable::lookup<false>`,
-`extension/vector/src/index/hnsw_graph.cpp`) pendant que le commit d'un écrivain ajoute au
-dernier bloc en mémoire et réalloue le tampon de la colonne : un seul écrivain et une
-recherche vectorielle suffisent (18 avertissements ThreadSanitizer en une passe du témoin
-`vector_search_during_insert_test.cpp`) — le régime du démon pendant une ingestion. Le
-correctif est une garde partagée (`NodeGroup::inMemAppendMtx`), exclusive pendant l'ajout ;
-le verrou exclusif du groupe, essayé d'abord, doublait le temps de quatre recherches
-parallèles. Liste C++ verte et ThreadSanitizer à zéro sur C5, C6, C7 et les deux témoins ;
-restent la mesure de coût au calme, la passe Rust et la livraison. Ensuite : la base qui
-ne se rouvre plus après H4 (« Found duplicated primary key value » au rejeu, 21 à 23 fois
-sur 40, **seulement sur une table indexée** — C1 et C7 sans index valident des clés en
-double mais se rouvrent), et une lecture de mémoire libérée au point de reprise que H4
-montre encore une fois les courses fermées. Puis, après la réponse de Lucie sur les trois
-écarts (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le
-gestionnaire de verrous, A3′, A4′, l'annonce en tête de transaction ; la maintenance de
-l'index vectoriel au commit avant A6.
+**Marche A5 bis, livrée le 3 octobre 2026** (`7487fae08`, en avance rapide). Un seul
+écrivain et une recherche vectorielle suffisaient : la recherche HNSW lit les vecteurs
+sans le verrou du groupe (`NodeTable::lookup<false>`,
+`extension/vector/src/index/hnsw_graph.cpp`) pendant que le commit de l'écrivain ajoute au
+dernier bloc en mémoire, allonge la liste des blocs et réalloue le tampon d'une colonne à
+longueur variable — le lecteur lisait de la mémoire rendue. Même défaut dans
+`NodeGroup::isVisibleNoLock` (toute recherche par clé primaire) et dans le balayage des
+relations validées en mémoire. C'est le régime du démon pendant une ingestion.
+`NodeGroup` reçoit une garde lecteurs/écrivain (`inMemAppendMtx`), exclusive pendant
+l'ajout, partagée dans ces trois chemins. Le témoin
+`test/transaction/vector_search_during_insert_test.cpp` sort 18 avertissements
+ThreadSanitizer avant, aucun après ; il se saute si l'extension vector n'est pas bâtie.
+La course est prouvée à un seul écrivain, le plantage seulement à plusieurs (H4).
 
-Les branches `a5-suppression-sure-entre-fils`, `-2` et `-3` sur `origin` et en local sont
-des états d'avant rebase : à supprimer par Lucie.
+Passe de livraison : la liste C++ complète (`transaction_test` 76, `api_test` 104,
+`c_api_test` 136, `copy_tests` 19, stockage 77, Cypher 1866, vector 74 et 63, banc
+39 rouges connus et 33 verts) ; ThreadSanitizer à zéro sur C5 et C6 (40 répétitions), sur
+C7 — ses deux signatures étaient celles du balayage des relations en mémoire — et sur les
+deux témoins ; côté Rust, lib 1177 passés et 9 ignorés, dix-huit suites e2e (les quinze de
+la liste, plus `e2e_estimate`, `e2e_code_sync`, `e2e_working_tree` : 245 tests), les
+binaires, neuf scripts Python. Les quatre derniers commits de master (Rust seulement,
+sources C++ identiques, vérifié par diff) sont entrés après cette passe : rien n'a été
+rejoué dessus.
+
+**Un faux vert à éviter dans la passe Rust** : les binaires demandent maintenant la
+feature `code` (`cargo build --features daemon,rag3db-native,openai-llm,code`). Sans elle
+la construction échoue, et les scripts Python tournent quand même, sur les binaires de la
+passe précédente : lire le code de sortie de la construction avant de croire leurs « PASS ».
+
+**Marche A5 ter, ouverte, non commencée : une garde qui ne coûte rien au lecteur.** La
+garde simple a été livrée **sans** la mesure de son coût sur nos chemins au calme — décision
+de l'orchestration, sur délégation de Lucie : une lecture de mémoire libérée atteignable
+en service ne reste pas ouverte pour attendre un chiffre que le poste ne pouvait pas
+donner ce soir-là (six sessions y travaillaient).
+- Mesuré, dos à dos, sur la recherche vectorielle seule (dix mille vecteurs, `efs` 200,
+  2 000 recherches par fil, médiane de cinq passes, charge du poste entre 6 et 7) :
+  dimension 8, un fil 2,02 s → 2,07 s (+3 %), quatre fils 3,44 s → 4,03 s (+17 %) ;
+  dimension 256, un fil 9,67 s → 10,29 s (+6 %), quatre fils 13,84 s → 16,79 s (+21 %).
+- Mesuré sur nos chemins, sous charge, à lire sans conclure : `e2e_search` 3,73 s avec la
+  garde (charge 9) contre 3,85 à 3,98 s avant ; une passe d'ingestion avant/après faite
+  sous une charge de 20 est inexploitable (l'embarquement, que la garde ne touche pas, y
+  passe de 94 s à 144 s).
+- **Non vérifié** : le coût sur `e2e_search` et sur l'ingestion au calme. À faire une nuit
+  ou sur l'autre poste ; scripts dans `~/.cache/rag3db-moteur-notes/a5bis/`
+  (`mesure-appariee.sh`, et le brouillon `vector_search_cost_scratch_test.cpp.brouillon`).
+- Essayé sans gain mesurable dans ce bruit, à ne pas refaire tel quel : le verrou exclusif
+  du groupe (ferme la course mais double le temps de quatre recherches parallèles) ; une
+  garde à bandes, une case par fil lecteur (donc le coût n'est pas la dispute d'une ligne
+  de cache) ; la garde tenue par lot plutôt que par ligne (patch gardé,
+  `variante-par-lot.patch`). Le poste n'a ni `perf` ni `valgrind` : on ne sait pas où part
+  le temps.
+- La piste : que le lecteur ne prenne rien, et que l'ancien tampon reste en vie tant qu'un
+  lecteur peut le tenir. Elle touche `ColumnChunkData` et ses dérivés (code de l'amont) et
+  la liste des blocs ; deux à trois jours, estimation non étayée. Si `e2e_search` ne bouge
+  pas de façon visible au calme, elle attend derrière les verrous.
+- Non examiné : la liste des groupes d'une table (`NodeGroupCollection`), lue sans verrou
+  par `NodeTable::isVisibleNoLock` ; elle ne s'allonge que toutes les 131 072 lignes.
+
+**Suite de la session cœur C++**, dans l'ordre :
+1. **Le `MERGE` de relation dont le coût suit la taille de la table** (mesuré par la
+   session de l'arbre principal : 2 764 liens en 108 ms au paquet 2, 4 085 en 2 159 ms au
+   paquet 25). Il ne bloque plus « indexer ce dépôt » depuis que les liens passent par
+   `COPY`, mais les éditions y passent encore. D'abord dire si le défaut est dans le
+   moteur : un premier essai isolé en C++ (lots de 4 000 relations jusqu'à 100 000,
+   `MERGE` et `CREATE`, épars et moyeu) est plat, mais la liste y passait en littéral et
+   le temps était dominé par l'analyse — non probant, à refaire avec un paramètre et la
+   forme réelle. S'il reste plat, le défaut est dans la forme des requêtes et repart à la
+   session de l'arbre principal.
+2. **H4** : une fois les courses fermées, il reste rouge (35 sur 40). Sous ThreadSanitizer,
+   plus aucune course entre fils ; restent une lecture de mémoire libérée au point de
+   reprise (`ListChunkData::append` sous `NodeGroup::checkpointInMemAndOnDisk`, un seul fil
+   à ce moment-là, donc un état déjà corrompu) et la base qui ne se rouvre pas (« Found
+   duplicated primary key value » au rejeu, 21 à 23 fois sur 40), **seulement sur une
+   table indexée** : C1 et C7, sans index, valident des clés en double mais se rouvrent.
+3. Les verrous, tranchés le 3 octobre (§4) : le gestionnaire de verrous, A3′, A4′,
+   l'annonce en tête de transaction ; la maintenance de l'index vectoriel au commit avant
+   A6.
+
+Les branches `a5-suppression-sure-entre-fils`, `-2` et `-3` sur `origin` sont des états
+d'avant rebase : à supprimer par Lucie. Celles d'A5 bis sont restées locales.
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
@@ -695,7 +754,16 @@ sessions, pas d'une vérification.
   sur une bibliothèque d'avant A5 : `an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`
   (e2e_code) rouge sur « Index … is not loaded yet » à la réouverture, puis
   vert trois fois et à la batterie suivante, sur la bibliothèque reconstruite
-  — à surveiller.
+  — à surveiller. Ce n'est pas une forme de ce que les marches A5 ont corrigé
+  (session cœur C++) : le message vient de `NodeTable::getIndex`
+  (`src/storage/table/node_table.cpp`), l'index est au catalogue mais son
+  contenu n'est pas chargé ; il l'est quand l'extension vector se charge
+  (`extension/vector/src/main/vector_extension.cpp`), pour les index déjà au
+  catalogue à ce moment-là. Hypothèse non vérifiée : une requête a touché
+  l'index avant la fin de ce chargement, ou la réparation du chargement
+  interrompu a retrouvé un index après lui. Non reproduit ; pas de correctif
+  avant reproduction. Cas à ajouter au banc : rouvrir puis interroger l'index
+  tout de suite, répété.
 - **La suppression ne retirait jamais les vecteurs creux de l'index
   lucistore : corrigé le 3 octobre**, confirmé par exécution avec bge-m3
   avant (3 entrées sur 3 après un retrait ; 4 pour 3 chunks vivants après une

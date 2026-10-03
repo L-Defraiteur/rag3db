@@ -18,6 +18,22 @@ raisonnement, à valider.
 
 ## 1. Ce qui attend la décision de Lucie : trois écarts
 
+> **Tranché le 3 octobre 2026 au soir**, par l'orchestration sur délégation de Lucie —
+> « tu sais pas trancher au mieux ? de toute façon tout ça peut être corrigé plus tard —
+> toujours prendre le meilleur chemin possible et laisser la voie aux autres options » :
+>
+> 1. **Écart 1**, l'annonce en tête de transaction (`CALL acquire_locks`) : **oui**.
+> 2. **Écart 2**, hors annonce : **option A** — on reste en instantané par transaction ;
+>    après l'attente, si le premier a validé, une erreur nommée et transitoire. La voie
+>    laissée : l'erreur porte un nom stable et un code distinct, pour qu'un passage à
+>    l'instantané par instruction (option B) puisse un jour la faire disparaître sans
+>    changer l'appelant ; rien dans V1 ni A4′ ne suppose qu'on ne rejouera jamais une
+>    instruction seule.
+> 3. **Écart 3**, créer une relation : **verrou partagé** sur les extrémités. La voie
+>    laissée : le mode est un paramètre de la prise, pas une branche en dur.
+>
+> Le texte ci-dessous est celui qui a été soumis ; il reste pour ses raisons.
+
 Tout le reste de la note suit le comportement établi et n'est pas une question.
 
 ### Écart 1 — Les verrous annoncés en tête de transaction (mieux que les deux)
