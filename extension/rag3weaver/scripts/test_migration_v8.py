@@ -46,6 +46,9 @@ def invoke(ask,name,arguments):
 def manifest_for(tmp, database, with_sync):
     sample=CRATE/'templates/backends/notebook/backend.json'
     config=json.loads(sample.read_text())
+    # Un service d'embarquement déjà en place (RAG3WEAVER_EMBED_SERVICE) l'emporte
+    # sur l'adresse du gabarit : `address` vide, et le backend choisit par le modèle.
+    if os.environ.get('RAG3WEAVER_EMBED_SERVICE'):config['embeddings']=dict(config['embeddings'],address='')
     config['database']=str(database)
     config['vector_extension']=str(ROOT/'extension/vector/build/libvector.rag3db_extension')
     for entity in config['entities'].values(): entity['schema']=str(sample.parent/entity['schema'])

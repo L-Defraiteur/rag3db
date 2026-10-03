@@ -46,6 +46,9 @@ def card(key,binder):
 with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
     tmp=Path(tmp)
     base=json.loads((CRATE/'templates/backends/notebook/backend.json').read_text())
+    # Un service d'embarquement déjà en place (RAG3WEAVER_EMBED_SERVICE) l'emporte
+    # sur l'adresse du gabarit : `address` vide, et le backend choisit par le modèle.
+    if os.environ.get('RAG3WEAVER_EMBED_SERVICE'):base['embeddings']=dict(base['embeddings'],address='')
     (tmp/'card.json').write_text(json.dumps({
         'type':'object','additionalProperties':False,'required':['key','binder','text'],
         'properties':{'key':{'type':'string','minLength':1},'binder':{'type':'string','minLength':1},'text':{'type':'string'}}}))

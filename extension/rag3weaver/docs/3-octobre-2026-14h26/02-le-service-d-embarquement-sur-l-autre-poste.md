@@ -4,8 +4,8 @@
 
 Lucie : « on pourrait, pour ne pas se bloquer de trop, utiliser mon GPU qui
 sert pas à seat1 sur l'autre PC, faire servir un modèle d'embedding depuis
-là-bas ». C'est fait : deux démons `rag3weaver-embeddings` tournent sur
-`luciepc`, joignables d'ici par deux tunnels ssh, et une variable suffit pour
+là-bas ». C'est fait : trois démons `rag3weaver-embeddings` tournent sur
+`luciepc`, joignables d'ici par trois tunnels ssh, et une variable suffit pour
 qu'une suite ou un backend s'en serve à la place de la carte de ce poste.
 
 ## 1. Ce qui tourne, et où
@@ -14,9 +14,11 @@ qu'une suite ou un backend s'en serve à la place de la carte de ce poste.
 |---|---|---|---|
 | service 1 | granite-278m (768 d) | `127.0.0.1:7878` | `127.0.0.1:7979` |
 | service 2 | bge-m3 (1 024 d, dense + creux) | `127.0.0.1:7879` | `127.0.0.1:7980` |
+| service 3 | granite-107m (384 d) | `127.0.0.1:7880` | `127.0.0.1:7981` |
 
-Deux services parce qu'un démon sert un modèle : le banc et l'agent de code
-demandent granite, les suites e2e ordinaires demandent bge-m3 dense et creux.
+Trois services parce qu'un démon sert un modèle : le banc et l'agent de code
+demandent granite, les suites e2e ordinaires demandent bge-m3 dense et creux,
+le banc de qualité compare aussi granite-107m.
 
 Sur luciepc, rien n'écoute hors de la boucle locale. Le code vient d'un
 worktree à part, `~/git_workspaces/rag3db-service`, détaché sur
@@ -62,7 +64,7 @@ cd ~/git_workspaces/rag3db-service/extension/rag3weaver
 cargo build --release --bin rag3weaver-embeddings --features daemon,burn-embedder -j8
 ```
 
-Lancer les deux, détachés :
+Lancer les trois, détachés :
 
 ```bash
 BIN=~/git_workspaces/rag3db-service/extension/rag3weaver/target/release/rag3weaver-embeddings
@@ -70,6 +72,8 @@ RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 RAG3WEAVER_REGIME=plein RAG3WEAVER_EMBED_M
   setsid nohup $BIN --adresse 127.0.0.1:7878 > ~/.cache/rag3weaver/service-embeddings.log 2>&1 < /dev/null &
 RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 RAG3WEAVER_REGIME=plein RAG3WEAVER_EMBED_MODEL=bge-m3 \
   setsid nohup $BIN --adresse 127.0.0.1:7879 > ~/.cache/rag3weaver/service-embeddings-bge-m3.log 2>&1 < /dev/null &
+RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 RAG3WEAVER_REGIME=plein RAG3WEAVER_EMBED_MODEL=granite-107m \
+  setsid nohup $BIN --adresse 127.0.0.1:7880 > ~/.cache/rag3weaver/service-embeddings-granite-107m.log 2>&1 < /dev/null &
 ```
 
 Chacun annonce dans son journal la carte prise et « à l'écoute sur … » après
@@ -83,8 +87,8 @@ que par `tests/common`).
 Arrêter, proprement :
 
 ```bash
-kill -TERM $(pidof rag3weaver-embeddings)      # les deux
-ss -ltnp | grep -E ':787[89]'                  # qui tient quel port, pour n'en arrêter qu'un
+kill -TERM $(pidof rag3weaver-embeddings)      # les trois
+ss -ltnp | grep -E ':78(78|79|80)'             # qui tient quel port, pour n'en arrêter qu'un
 ```
 
 Pour mettre le service à jour : `git fetch origin` dans
@@ -96,6 +100,7 @@ Pour mettre le service à jour : `git fetch origin` dans
 ```bash
 ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 127.0.0.1:7979:127.0.0.1:7878 lucied@luciepc
 ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 127.0.0.1:7980:127.0.0.1:7879 lucied@luciepc
+ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 127.0.0.1:7981:127.0.0.1:7880 lucied@luciepc
 curl -s http://127.0.0.1:7979/sante    # dit le modèle servi, la dimension, la précision
 curl -s http://127.0.0.1:7980/sante
 ```
@@ -109,7 +114,7 @@ les suites lancent et remplacent.
 séparées par des virgules.
 
 ```bash
-export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980
+export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981
 ```
 
 Le client demande à chaque adresse son identité et prend celle qui sert le
@@ -119,22 +124,22 @@ silencieux sur la carte d'ici, que la variable existe pour épargner. Le
 client **s'attache et rien d'autre** : il ne lance, n'arrête ni ne remplace
 jamais un service désigné par cette variable.
 
-> **État au 3 octobre** : la variable est codée sur la branche
-> `regime-carte-partagee` (`48d43fdce`), pas encore sur master. Jusqu'à la
-> fusion, seules les sessions bâties depuis cette branche l'honorent.
+> La variable vit dans le code depuis la branche `regime-carte-partagee` :
+> une session bâtie d'avant sa fusion ne l'honore pas.
 
 Qui l'honore :
 
 - **Les suites e2e** (`tests/common`) : `BGE_M3`, `GRANITE_278M`,
-  `GRANITE_107M` passent par le service quand la variable est posée. Vérifié
-  sur `e2e_undo` : 4 tests verts par le service distant, aucun démon local
-  lancé, carte d'ici à 0 %.
+  `GRANITE_107M` passent par le service quand la variable est posée. La
+  batterie complète du 3 octobre : 374 tests verts, 0 rouge, en 20 minutes.
 - **Le banc** : il prend ses modèles par ces mêmes statics, donc il suit sans
   rien de plus.
-- **Les backends** (`rag3weaver-backend`, et les scripts Python qui lui
-  passent un manifeste) : dans `embeddings`, laisser `address` vide avec
-  `provider: daemon` ; l'adresse vient alors de la variable, choisie par
-  `model`. Une `address` écrite dans le manifeste garde le dernier mot.
+- **Les backends** (`rag3weaver-backend`) : dans `embeddings`, laisser
+  `address` vide avec `provider: daemon` ; l'adresse vient alors de la
+  variable, choisie par `model`. Une `address` écrite dans le manifeste
+  garde le dernier mot. Les scripts Python (`test_backend_persistence`,
+  `_snapshot`, `_lifecycle_batch`, `test_migration_v8`) vident l'adresse du
+  gabarit quand la variable est posée.
 - **Une ingestion par le code** : `DaemonEmbedder::from_service("granite-278m")`
   rend `None` si la variable n'est pas posée, sinon le client ou le refus.
 
@@ -149,6 +154,12 @@ sert pas (MiniLM, les relecteurs, l'OCR) restent locaux aussi.
 Cette variable-là désigne *notre* démon local ; `tests/common` y remplace un
 démon d'une autre construction en lui envoyant `/quitter` — il arrêterait le
 service distant.
+
+**Deux arbres qui jouent des e2e en même temps** se disputent le démon
+local de `127.0.0.1:7878` : chacun trouve celui de l'autre « périmé » et le
+remplace (arrivé le 3 octobre, entre cette batterie et celle de l'arbre
+principal). Les suites restées locales en lancent un ; donner à chaque arbre
+son port : `RAG3WEAVER_EMBEDDINGS_ADDR=127.0.0.1:7890`.
 
 Il existe une autre voie, sans rien de tout cela : un service d'embarquement
 compatible OpenAI, par `HttpEmbedder` (`provider: compatible` dans le
@@ -184,8 +195,9 @@ qui échoue sur « aucun service ne sert … ne répond pas » : relancer la lig
 
 - Les démons ne sont pas des services systemd : un redémarrage de luciepc
   demande la relance à la main. À faire si l'usage dure.
-- Deux modèles chargés tiennent environ 8 Gio sur les 31 de la carte ;
-  granite-107m n'est pas servi — un troisième démon et une troisième adresse
-  dans la variable suffiraient.
+- Trois modèles chargés tiennent environ 10 Gio sur les 31 de la carte.
+- Une enveloppe d'embarqueur doit relayer `distant()` : celle des tests ne
+  le faisait pas, et le client cadençait ses rafales pour une carte qui
+  n'était pas la sienne (`e2e_charge_ingestion` : 1 019 s, puis 123 s).
 - Le service distant tourne le code de master, sans le régulateur de rafale
   de la branche : sans effet là-bas, la carte n'affiche rien.
