@@ -112,6 +112,8 @@ const BASE_NODES: &[&str] = &[
     "SparseSearchNode",
     "FuseResultsNode",
     "FieldWeightNode",
+    // Le filtre de résultats : un seuil, une exclusion — rien n'est relu.
+    "FilterResultsNode",
     "RerankNode",
     "PaginateNode",
     "ResolveParentNode",

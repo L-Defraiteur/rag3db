@@ -152,6 +152,9 @@ def main():
         r = host.ask(op="call", name="edit_file",
                      arguments={"path": "main.rs", "old": "depart()", "new": "arrivee()"})
         assert r.get("ok"), r
+        # Le crochet « motif ailleurs » se tait tant que les vecteurs ne
+        # sont pas prêts : aucune section avant le premier index.
+        assert "même motif" not in json.dumps(r, ensure_ascii=False), f"crochet muet avant l'index : {r}"
         sur_disque = (manifest.parent / "workspace/main.rs").read_text()
         assert "arrivee()" in sur_disque, "le disque est édité"
         r = host.ask(op="call", name="search_code",
@@ -190,6 +193,19 @@ def main():
         t = json.dumps(r, ensure_ascii=False)
         assert "main.rs" in t, f"la recherche répond après l'indexation : {r}"
         assert "balayage" not in t, f"l'index prêt répond sans ligne de balayage : {r}"
+        # Après l'index (vecteurs prêts), une édition d'un texte sans voisin
+        # au-dessus du seuil rend un crochet SILENCIEUX — pas de section
+        # vide, pas de bruit. (La section présente se prouvera avec le seuil
+        # calibré au banc, pas ici : le corpus de deux fichiers n'a pas de
+        # vrai motif répété.)
+        r = host.ask(op="call", name="edit_file",
+                     arguments={"path": "lib.rs",
+                                "old": "pub fn depart() {}",
+                                "new": "pub fn depart() { let _unique_xq7 = 1; }"})
+        assert r.get("ok"), r
+        t = json.dumps(r, ensure_ascii=False)
+        assert "Le même motif" not in t, f"pas de section sans voisin au-dessus du seuil : {r}"
+
         # wait ne sort pas du dossier des journaux : la traversée se refuse.
         traverse = str(Path(journal).parent / ".." / ".." / "etc" / "passwd")
         r = host.ask(op="call", name="wait_output",

@@ -35,6 +35,7 @@ pub mod template_nodes;
 pub mod run_nodes;
 /// **La carte du graphe**, en Mermaid, pour qu'un agent cesse d'inventer des relations.
 pub mod schema_nodes;
+pub mod filter_results_node;
 pub mod generic_search_nodes;
 pub mod reactor;
 pub mod render_nodes;
@@ -63,6 +64,7 @@ pub use observe::{TapEvent, TapSpec};
 pub use port::{merge_port_values, BatchPayload, PortDef, PortType, PortValue, QueryPayload};
 pub use resultat::{source_info, ChildSummary, UnifiedResult};
 pub use field_weight::FieldWeightNode;
+pub use filter_results_node::FilterResultsNode;
 pub use record::{DataflowRecorder, RecordRetention, RecordSink};
 pub use report::{ExecutionReport, ExecutionStatus, NodeReport, EdgeReport, NodeStatus};
 pub use runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, NodeEventFilter};

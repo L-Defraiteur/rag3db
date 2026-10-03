@@ -204,6 +204,13 @@ pub struct AfterToolHook {
     /// crochet.
     #[serde(default)]
     pub policy: crate::backend_code::ToolPolicy,
+    /// **Se taire tant que les vecteurs de cette entité ne sont pas prêts.**
+    /// Le client « motif ailleurs » cherche par similarité : pendant une
+    /// indexation, il n'a rien d'honnête à dire — try_lock puis
+    /// `index_state_for(entité)`, et tout ce qui n'est pas `Ready` (verrou
+    /// occupé compris) est un silence, compté « tu ».
+    #[serde(default)]
+    pub silent_unless_vectors_ready: Option<String>,
     /// **Ce que l'outil a résolu, exposé au crochet** : le port de l'outil
     /// (ex. `{"node": "render", "port": "results"}`) dont les `uuid` des
     /// résultats sont passés au gabarit sous `$result_uuids` — s'il les
@@ -1317,6 +1324,18 @@ impl Backend {
         let Some(graph) = self.prepared.after_hooks.get(tool_name) else {
             return;
         };
+        if let Some(entite) = &hook.silent_unless_vectors_ready {
+            let prets = self
+                .catalog
+                .try_lock()
+                .ok()
+                .and_then(|c| c.index_state_for(entite).ok())
+                .is_some_and(|s| s.vectors == crate::catalog::Level::Ready);
+            if !prets {
+                eprintln!("[crochet {tool_name}] tu — les vecteurs de {entite} ne sont pas prêts");
+                return;
+            }
+        }
         // Le crochet ne reçoit que ce que son gabarit déclare : les
         // arguments de l'outil qui l'intéressent, et le seuil s'il le
         // demande — `instantiate` refuse l'inconnu, à raison.
@@ -2148,6 +2167,23 @@ mod tests {
         let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), avide);
         let erreur = prepared.err().expect("result_uuids sans results_port se refuse");
         assert!(erreur.contains("results_port"), "le refus dit quoi déclarer : {erreur}");
+
+        // (e) La porte des vecteurs : rien n'est indexé pour Note, le
+        // crochet se tait — même graphe que (a), qui parlait.
+        let (_d, prepared) = montage(
+            json!({"graph": "apres_essai.mmd", "silent_unless_vectors_ready": "Note"}),
+            carte,
+        );
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let backend = prepared.unwrap().open(Box::new(conn), None).unwrap();
+        let r = backend
+            .call_tool("put_note", json!({"record": {"key": "k3", "text": "essai", "labels": [], "stage": "working"}}))
+            .unwrap();
+        let rendu = serde_json::to_string(&r).unwrap();
+        assert!(
+            !rendu.contains("À voir aussi"),
+            "vecteurs pas prêts : le crochet se tait : {rendu}"
+        );
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou

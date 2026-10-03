@@ -1,0 +1,30 @@
+%% tool: apres_motif_ailleurs
+%% description: Le crochet d'edit_file — « le même motif existe ailleurs » : cherche par similarité le code qui ressemble à l'ANCIEN texte édité, hors du fichier qu'on vient de toucher, au-dessus d'un seuil. Il ne rend rien quand il n'y a rien : le silence est sa conduite normale.
+%% param: old string! -- L'ancien texte de l'édition (l'argument old d'edit_file).
+%% param: path string! -- Le fichier édité (exclu des voisins : il n'est pas un « ailleurs »).
+%% param: threshold float = 0.72 -- Seuil de similarité du signal vectoriel. **Provisoire** : à calibrer au banc avant de servir le crochet en vrai — un seuil ne se pose pas sans preuve.
+%% param: target string = "Scope" -- L'entité où chercher ; un binding du manifeste peut la changer.
+%% result: render.text
+%%
+%% **Le seuil s'applique au score du signal vectoriel — une similarité —
+%% jamais à un score de fusion, qui est un rang.** C'est pourquoi le graphe
+%% est vecteur seul : pas de fusion, pas de bm25, le cosinus nu contre le
+%% texte qu'on vient de remplacer.
+%%
+%% Le rendu passe par le gabarit `motif-ailleurs` (templates/render/), qui
+%% rend une chaîne vide quand il n'y a aucun voisin : c'est lui qui porte le
+%% droit de se taire — une section vide ne s'affiche pas.
+%%
+%% Les scopes de test pèsent déjà moins (test_role 0,5, déclaré dans
+%% l'entité) : trois tests qui ressemblent à l'ancien texte ne noieront pas
+%% le voisin de production — la demande de l'orchestration.
+
+graph LR
+    source["SearchSourceNode(target_name=$target, query=$old, mode='indexed')"]
+    vector["VectorSearchNode"]
+    filtre["FilterResultsNode(min_score=$threshold, exclude_field='file_path', exclude_value=$path)"]
+    render["RenderResultsNode(template='motif-ailleurs')"]
+    source -->|query| vector
+    source -->|query| render
+    vector -->|results| filtre
+    filtre -->|results| render

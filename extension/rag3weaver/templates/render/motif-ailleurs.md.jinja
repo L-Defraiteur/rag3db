@@ -1,0 +1,10 @@
+{#-
+  La section « le même motif existe ailleurs » : une ligne par voisin,
+  et RIEN quand il n'y a rien — le droit de se taire du crochet après
+  outil passe par ce gabarit : une section vide ne s'affiche pas.
+-#}
+{%- if count > 0 -%}
+{%- for r in results -%}
+- `{{ r.title }}`{% if r.location %} — {{ r.location }}{% endif %} (★ {{ r.score }})
+{% endfor -%}
+{%- endif -%}

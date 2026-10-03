@@ -55,6 +55,13 @@
       "description": "Éditer un fichier du workspace : remplacer un texte unique, ou écrire le contenu entier. La réindexation du fichier suit l'édition — search_code voit le changement aussitôt.",
       "policy": {
         "write_files": true
+      },
+      "after": {
+        "graph": "../../tools/apres-motif-ailleurs.mmd",
+        "title": "Le même motif existe ailleurs",
+        "max_lines": 6,
+        "threshold": 0.72,
+        "silent_unless_vectors_ready": "Scope"
       }
     },
     "run_command": {
