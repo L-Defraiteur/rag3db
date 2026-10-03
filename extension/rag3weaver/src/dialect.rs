@@ -411,11 +411,11 @@ pub trait SchemaDialect: Send + Sync {
         format!("MATCH (n:{table}){ou} RETURN {}", rend.join(", "))
     }
 
-    /// **Combien de relations touchent ces lignes**, toutes tables de
-    /// relations confondues — ce que `DETACH DELETE` emportera. `None` quand
-    /// le dialecte ne sait pas le dire en une requête.
-    fn compter_relations_de(&self, table: &str) -> Option<String> {
-        Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r]-() RETURN count(r)"))
+    /// **Combien de liens de la relation `rel` touchent ces lignes**, dans
+    /// les deux sens — ce que `DETACH DELETE` emportera de cette relation.
+    /// `None` quand le dialecte ne sait pas le dire.
+    fn compter_relations_de(&self, table: &str, rel: &str) -> Option<String> {
+        Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r:{rel}]-() RETURN count(r)"))
     }
 
     /// **Les dérivées en dette de rendu** : `_render_hash` nul ou vide. Rend
@@ -1722,7 +1722,7 @@ impl SchemaDialect for PostgresDialect {
         format!("SELECT {} FROM {table}{ou}", rend.join(", "))
     }
 
-    fn compter_relations_de(&self, _table: &str) -> Option<String> {
+    fn compter_relations_de(&self, _table: &str, _rel: &str) -> Option<String> {
         // Les relations sont des tables : il faudrait les énumérer toutes.
         None
     }
