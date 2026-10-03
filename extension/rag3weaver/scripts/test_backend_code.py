@@ -117,6 +117,22 @@ def main():
         assert desc["search_code"] != desc["grep_files"], "chaque outil dit le sien"
         assert "motif littéral" in desc["grep_files"].lower() or "littéral" in desc["grep_files"], desc["grep_files"]
 
+        # ── Le chat réel écrit son journal dans la même base : l'état du
+        # code ne doit pas mentir pour autant (trouvé par la reprise de
+        # passe du 3 octobre — c'est ce que les tuyauteries sans chat ne
+        # voyaient pas). Le journal s'écrit D'ABORD, comme dans une vraie
+        # conversation ; les trois outils doivent encore dire la vérité.
+        r = host.ask(op="journal", events=[{"kind": "Message", "run": "r1",
+                                            "from": "user", "to": "agent",
+                                            "content": "bonjour", "at_ms": 1}])
+        assert r.get("ok"), f"le journal s'écrit : {r}"
+        r = host.ask(op="call", name="usages", arguments={"name": "depart"})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "Aucun index" in t, f"usages refuse encore, journal ou pas : {r}"
+        r = host.ask(op="call", name="impact", arguments={"name": "depart"})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "Aucun index" in t, f"impact refuse encore, journal ou pas : {r}"
+
         # ── Le mode auto : avant toute indexation, le balayage répond ───────
         # Même question qu'après : c'est la réponse qui change de chemin, et
         # la ligne d'état qui le dit.
