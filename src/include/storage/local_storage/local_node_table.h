@@ -41,6 +41,12 @@ public:
 
     TableStats getStats() const { return nodeGroups.getStats(); }
     common::offset_t getStartOffset() const { return startOffset; }
+    // Called at commit once the rows are in the table. From then on no offset designates a row of
+    // this local table: the transaction tells its own rows from the committed ones by comparing
+    // an offset to the start offset, which was only ever the size of the table when the
+    // transaction first wrote to it. The rows may have landed further, and what follows in the
+    // commit (an index inserting the new rows) reads them by their final offsets.
+    void rowsAreCommitted() { startOffset = common::INVALID_OFFSET; }
 
     static std::vector<common::LogicalType> getNodeTableColumnTypes(
         const catalog::TableCatalogEntry& table);

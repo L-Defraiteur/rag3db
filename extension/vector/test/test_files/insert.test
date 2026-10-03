@@ -210,3 +210,40 @@ Binder exception: Cannot drop property vec in table embeddings because it is use
 -LOAD_DYNAMIC_EXTENSION vector
 -STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
 ---- ok
+
+# Deux transactions ouvertes ensemble insèrent chacune des vecteurs, puis valident l'une
+# après l'autre. La seconde numérotait ses nœuds depuis la même taille de table que la
+# première ; à son commit, l'index lisait ses nouveaux nœuds par leurs offsets définitifs,
+# que le moteur prenait encore pour des offsets de son stockage local : plantage.
+-CASE TwoOpenTransactionsInsertVectors
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CALL debug_enable_multi_writes=true;
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-CREATE_CONNECTION conn1
+-CREATE_CONNECTION conn2
+-STATEMENT [conn1] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [conn2] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [conn1] UNWIND range(5000, 5004) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-STATEMENT [conn2] UNWIND range(6000, 6004) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-STATEMENT [conn1] COMMIT;
+---- ok
+-STATEMENT [conn2] COMMIT;
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 10, efs := 500) RETURN count(node.id), min(node.id) >= 5000, min(distance), max(distance);
+---- 1
+10|True|0.000000|0.000000
+-STATEMENT MATCH (e:embeddings) WHERE e.id >= 5000 RETURN count(e), count(DISTINCT e.id);
+---- 1
+10|10
