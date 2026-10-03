@@ -2,6 +2,7 @@
 
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
+#include "common/data_chunk/data_chunk_state.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
 #include "common/types/types.h"
@@ -20,6 +21,55 @@ using namespace rag3db::evaluator;
 
 namespace rag3db {
 namespace storage {
+
+static std::pair<ChunkedNodeGroup*, row_idx_t> getChunkedGroupAndRow(const NodeGroup& nodeGroup,
+    row_idx_t rowIdx) {
+    for (auto chunkedGroupIdx = 0u; chunkedGroupIdx < nodeGroup.getNumChunkedGroups();
+         chunkedGroupIdx++) {
+        auto* chunkedGroup = nodeGroup.getChunkedNodeGroup(chunkedGroupIdx);
+        if (rowIdx < chunkedGroup->getNumRows()) {
+            return {chunkedGroup, rowIdx};
+        }
+        rowIdx -= chunkedGroup->getNumRows();
+    }
+    KU_UNREACHABLE;
+}
+
+// The nodes a transaction created, logged when it commits, with the values they have then. Every
+// row is logged, deleted or not, so that a replay gives each the offset it got here; the
+// deletions follow, with those final offsets.
+static void logLocalNodeInsertionsToWAL(LocalWAL& wal, table_id_t tableID,
+    LocalNodeTable& localNodeTable, MemoryManager& mm) {
+    for (auto localNodeGroupIdx = 0u; localNodeGroupIdx < localNodeTable.getNumNodeGroups();
+         localNodeGroupIdx++) {
+        const auto localNodeGroup = localNodeTable.getNodeGroup(localNodeGroupIdx);
+        for (auto chunkedGroupIdx = 0u; chunkedGroupIdx < localNodeGroup->getNumChunkedGroups();
+             chunkedGroupIdx++) {
+            const auto* chunkedGroup = localNodeGroup->getChunkedNodeGroup(chunkedGroupIdx);
+            for (auto startRow = 0u; startRow < chunkedGroup->getNumRows();
+                 startRow += DEFAULT_VECTOR_CAPACITY) {
+                const auto numRows = std::min<row_idx_t>(DEFAULT_VECTOR_CAPACITY,
+                    chunkedGroup->getNumRows() - startRow);
+                auto state = std::make_shared<DataChunkState>();
+                state->getSelVectorUnsafe().setToUnfiltered(numRows);
+                std::vector<std::unique_ptr<ValueVector>> ownedVectors;
+                std::vector<ValueVector*> vectors;
+                ownedVectors.reserve(chunkedGroup->getNumColumns());
+                vectors.reserve(chunkedGroup->getNumColumns());
+                for (auto columnID = 0u; columnID < chunkedGroup->getNumColumns(); columnID++) {
+                    const auto& columnChunk = chunkedGroup->getColumnChunk(columnID);
+                    auto vector =
+                        std::make_unique<ValueVector>(columnChunk.getDataType().copy(), &mm, state);
+                    ChunkState chunkState;
+                    columnChunk.scan(&DUMMY_TRANSACTION, chunkState, *vector, startRow, numRows);
+                    vectors.push_back(vector.get());
+                    ownedVectors.push_back(std::move(vector));
+                }
+                wal.logTableInsertion(tableID, TableType::NODE, numRows, vectors);
+            }
+        }
+    }
+}
 
 NodeTableVersionRecordHandler::NodeTableVersionRecordHandler(NodeTable* table) : table(table) {}
 
@@ -436,13 +486,12 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         index->insert(transaction, nodeInsertState.nodeIDVector, indexedPropertyVectors,
             *nodeInsertState.indexInsertStates[i]);
     }
-    if (insertState.logToWAL && transaction->shouldLogToWAL()) {
-        KU_ASSERT(transaction->isWriteTransaction());
-        auto& wal = transaction->getLocalWAL();
-        wal.logTableInsertion(tableID, TableType::NODE,
-            nodeInsertState.nodeIDVector.state->getSelVector().getSelSize(),
-            insertState.propertyVectors);
+    if (!insertState.logToWAL) {
+        localTable->doNotLogInsertions();
     }
+    // Not logged here: NodeTable::commit logs the nodes of the transaction with the values they
+    // have at commit, so that updates and deletions of those nodes, whose offsets are provisional
+    // until then, need no record of their own.
     hasChanges = true;
 }
 
@@ -498,7 +547,10 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
             ->update(transaction, rowIdxInGroup, nodeUpdateState.columnID,
                 nodeUpdateState.propertyVector);
     }
-    if (updateState.logToWAL && transaction->shouldLogToWAL()) {
+    // A node of this transaction is logged at commit with its final values: no record here, its
+    // offset is provisional.
+    if (!transaction->isUnCommitted(tableID, nodeOffset) && updateState.logToWAL &&
+        transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         auto& wal = transaction->getLocalWAL();
         wal.logNodeUpdate(tableID, nodeUpdateState.columnID, nodeOffset,
@@ -547,7 +599,9 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
             *nodeDeleteState.indexDeleteStates[i]);
     }
 
-    if (transaction->isUnCommitted(tableID, nodeOffset)) {
+    // The deletion of a node of this transaction is logged at commit, with its final offset.
+    const auto isLocalNode = transaction->isUnCommitted(tableID, nodeOffset);
+    if (isLocalNode) {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
         isDeleted = localTable->delete_(&DUMMY_TRANSACTION, deleteState);
     } else {
@@ -561,7 +615,7 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     if (isDeleted) {
         hasChanges = true;
-        if (deleteState.logToWAL && transaction->shouldLogToWAL()) {
+        if (!isLocalNode && deleteState.logToWAL && transaction->shouldLogToWAL()) {
             KU_ASSERT(transaction->isWriteTransaction());
             auto& wal = transaction->getLocalWAL();
             wal.logNodeDeletion(tableID, nodeOffset, &nodeDeleteState.pkVector);
@@ -620,6 +674,11 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
     // connected local rels. Directly removing them will cause shift of committed node offset,
     // leading to an inconsistent result with connected rels.
     nodeGroups->append(transaction, columnIDsToCommit, localNodeTable.getNodeGroups());
+    const auto logLocalNodes = transaction->shouldLogToWAL() && localTable->logsInsertions();
+    if (logLocalNodes) {
+        logLocalNodeInsertionsToWAL(transaction->getLocalWAL(), tableID, localNodeTable,
+            *memoryManager);
+    }
     // 2. Set deleted flag for tuples that are deleted in local storage.
     row_idx_t numLocalRows = 0u;
     for (auto localNodeGroupIdx = 0u; localNodeGroupIdx < localNodeTable.getNumNodeGroups();
@@ -631,6 +690,17 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
             for (auto row = 0u; row < localNodeGroup->getNumRows(); row++) {
                 if (localNodeGroup->isDeleted(transaction, row)) {
                     const auto nodeOffset = startNodeOffset + numLocalRows + row;
+                    if (logLocalNodes) {
+                        const auto [chunkedGroup, rowInChunkedGroup] =
+                            getChunkedGroupAndRow(*localNodeGroup, row);
+                        ValueVector pkVector(
+                            chunkedGroup->getColumnChunk(pkColumnID).getDataType().copy(),
+                            memoryManager, DataChunkState::getSingleValueDataChunkState());
+                        ChunkState chunkState;
+                        chunkedGroup->getColumnChunk(pkColumnID)
+                            .lookup(&DUMMY_TRANSACTION, chunkState, rowInChunkedGroup, pkVector, 0);
+                        transaction->getLocalWAL().logNodeDeletion(tableID, nodeOffset, &pkVector);
+                    }
                     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(nodeOffset);
                     const auto rowIdxInGroup =
                         nodeOffset - StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
