@@ -66,3 +66,157 @@
 333
 444
 598
+
+# Le point d'entrée de l'index doit survivre à une suppression en lot. Quand le nœud
+# d'entrée est supprimé il est remplacé par un de ses voisins ; dans un même lot, ce
+# voisin peut avoir été supprimé juste avant. L'index gardait alors pour entrée un nœud
+# mort et sans arêtes : toute recherche partait de lui et ne rendait rien, y compris
+# pour les nœuds restés et pour ceux qu'on insérait ensuite.
+
+-CASE DeleteAllThenCopyAgain
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) DELETE e;
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id;
+---- 0
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+333
+444
+133
+
+-CASE DeleteAllThenCreate
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) DELETE e;
+---- ok
+-STATEMENT UNWIND range(5000, 5010) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id >= 5000;
+---- 3
+True
+True
+True
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 20, efs := 500) RETURN count(node.id);
+---- 1
+11
+
+-CASE DeleteAllButOneThenCreate
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id <> 333 DELETE e;
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id;
+---- 1
+333
+-STATEMENT UNWIND range(5000, 5010) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id >= 5000;
+---- 3
+True
+True
+True
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 20, efs := 500) RETURN count(node.id);
+---- 1
+12
+
+-CASE DeleteAllInTwoStatementsThenCreate
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id <> 333 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id = 333 DELETE e;
+---- ok
+-STATEMENT UNWIND range(5000, 5010) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 20, efs := 500) RETURN count(node.id);
+---- 1
+11
+
+-CASE DeleteMostKeepsTheSurvivorsReachable
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id > 100 DELETE e;
+---- ok
+-STATEMENT MATCH (e:embeddings) WITH e.id as id, array_distance(e.vec, [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+37
+40
+52
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+37
+40
+52
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 200, efs := 500) RETURN count(node.id);
+---- 1
+101
+
+# Le point d'entrée est écrit dans le fichier au point de reprise : une réouverture ne
+# réparait rien. Ce cas ferme et rouvre la base après chaque étape.
+-CASE DeleteAllButOneSurvivesAReopen
+-SKIP_IN_MEM
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT MATCH (e:embeddings) WHERE e.id <> 333 DELETE e;
+---- ok
+-RELOADDB
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id;
+---- 1
+333
+-STATEMENT UNWIND range(5000, 5010) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- ok
+-RELOADDB
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 20, efs := 500) RETURN count(node.id);
+---- 1
+12

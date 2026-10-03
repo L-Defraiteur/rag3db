@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_map>
 #include <queue>
 
 #include "common/random_engine.h"
@@ -314,6 +315,10 @@ public:
         std::unordered_set<common::offset_t> upperNeighborsToShrink;
         // Track deleted nodes so we skip them during finalize.
         std::unordered_set<common::offset_t> deletedNodes;
+        // What each deleted node pointed to, per layer: finalizeDelete reconnects through them
+        // the nodes that pointed to a deleted node.
+        std::unordered_map<common::offset_t, std::vector<common::offset_t>> lowerNeighborsOfDeleted;
+        std::unordered_map<common::offset_t, std::vector<common::offset_t>> upperNeighborsOfDeleted;
         HNSWDeleteState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
@@ -406,13 +411,33 @@ private:
         std::vector<common::offset_t> lower;
         std::vector<common::offset_t> upper;
     };
+    // `deletedNodes`: the nodes already deleted by the statement in progress, if any. They are
+    // still pointed to by their neighbours (those edges are cleaned in finalizeDelete), so they
+    // must not be picked to replace an entry point.
     DeletedNeighbors deleteFromGraph(transaction::Transaction* transaction, common::offset_t offset,
-        HNSWInsertState& insertState);
+        HNSWInsertState& insertState,
+        const std::unordered_set<common::offset_t>* deletedNodes = nullptr);
+    // True if `offset` can serve as an entry point: a row this transaction still sees, with a
+    // vector, that the statement in progress has not deleted.
+    bool canBeEntryPoint(transaction::Transaction* transaction, common::offset_t offset,
+        HNSWInsertState& insertState,
+        const std::unordered_set<common::offset_t>* deletedNodes) const;
+    // After deletions, an entry point left invalid while the layer still has nodes would make the
+    // next insertion start a new graph that cannot reach them. Picks a live node among
+    // `candidates`; for the lower layer, falls back to the first live indexed row of the table.
+    void repairEntryPoint(transaction::Transaction* transaction, bool isUpperLayer,
+        HNSWInsertState& insertState, const std::unordered_set<common::offset_t>& candidates,
+        const std::unordered_set<common::offset_t>* deletedNodes);
     std::vector<common::offset_t> scanNeighbors(transaction::Transaction* transaction,
         common::offset_t offset, bool isUpperLayer, HNSWInsertState& insertState);
+    // Rewrites the edges of a surviving node that points to deleted nodes: each edge to a deleted
+    // node is replaced by edges to the live nodes that node led to, through as many deleted nodes
+    // as it takes. Merely dropping those edges cut the graph into pieces after a large delete.
     void cleanEdgesForNode(transaction::Transaction* transaction, common::offset_t offset,
         bool isUpperLayer, HNSWInsertState& insertState,
-        const std::unordered_set<common::offset_t>& deletedNodes);
+        const std::unordered_set<common::offset_t>& deletedNodes,
+        const std::unordered_map<common::offset_t, std::vector<common::offset_t>>&
+            neighborsOfDeleted);
 
     void processSecondHopCandidates(const EmbeddingHandle& queryVector,
         HNSWSearchState& searchState, int64_t& numVisitedNbrs,
