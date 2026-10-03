@@ -69,11 +69,12 @@ fn run() -> Result<(), String> {
                 }
                 // Réservées à l'hôte : jamais exposées comme outils.
                 Some("journal") => backend.journal(v["events"].as_array().ok_or("events missing")?),
+                Some("index_state") => backend.index_states(),
                 Some("journal_read") => backend.journal_read(
                     v["conversation"].as_str().ok_or("conversation missing")?,
                     v["since_ms"].as_i64().unwrap_or(0),
                 ),
-                _ => Err("op must be describe, call, journal or journal_read".into()),
+                _ => Err("op must be describe, call, journal, journal_read or index_state".into()),
             }
         });
         // **Un point de reprise a échoué** : la réponse le dit, puis l'hôte

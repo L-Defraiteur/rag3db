@@ -1699,6 +1699,49 @@ impl Backend {
     /// `Message` — le format de [`crate::dataflow::trace_nodes::record_runs_and_messages`].
     /// Ils deviennent `Run`, `Message`, `Conversation`, `Participant` liés :
     /// cherchables comme le reste, et relisibles par un agent plus tard.
+    /// **L'état de l'index, par entité du schéma nommé** — pour la ligne de
+    /// statut de l'application : ce qu'un harnais sait, il le dit lui-même
+    /// plutôt que de compter sur le modèle pour le répéter (décision du
+    /// 4 octobre, après les rejeux T1). `try_lock` : une indexation qui
+    /// tient le verrou rend `{"busy": true}`, jamais une attente.
+    pub fn index_states(&self) -> Result<Value, String> {
+        #[cfg(not(feature = "code"))]
+        {
+            return Ok(json!({}));
+        }
+        #[cfg(feature = "code")]
+        {
+        let entites: &[&str] = match self
+            .prepared
+            .manifest
+            .workspace
+            .as_ref()
+            .and_then(|w| w.index.as_deref())
+        {
+            Some("code") => &[
+                crate::code::FILE,
+                crate::code::SCOPE,
+                crate::code::LIBRARY,
+                crate::code::SYMBOL,
+            ],
+            _ => return Ok(json!({})),
+        };
+        let Ok(cat) = self.catalog.try_lock() else {
+            return Ok(json!({"busy": true}));
+        };
+        let mut etats = serde_json::Map::new();
+        for entite in entites {
+            if let Ok(state) = cat.index_state_for(entite) {
+                etats.insert(
+                    entite.to_string(),
+                    serde_json::to_value(state).map_err(|e| e.to_string())?,
+                );
+            }
+        }
+        Ok(Value::Object(etats))
+        }
+    }
+
     pub fn journal(&self, events: &[Value]) -> Result<Value, String> {
         let mut cat = self.catalog.lock().map_err(|_| "catalog lock poisoned")?;
         crate::dataflow::trace_nodes::register_trace_schema(&mut cat).map_err(|e| e.to_string())?;

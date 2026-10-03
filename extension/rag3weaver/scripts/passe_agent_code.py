@@ -80,6 +80,8 @@ def main():
     p.add_argument("--keep-tmp", action="store_true")
     p.add_argument("--taches", default="",
                    help="Reprise ciblée : numéros séparés par des virgules (ex. 1,5). Vide = toutes.")
+    p.add_argument("--commands", default="",
+                   help="Surcharge workspace.commands du manifeste de passe (ex. auto).")
     args = p.parse_args()
     if not args.binary.exists():
         fail(f"binaire absent : {args.binary}")
@@ -89,6 +91,11 @@ def main():
     import tempfile
     tmp = tempfile.mkdtemp(prefix="passe-agent-")
     manifeste = preparer(tmp)
+    if args.commands:
+        import json as _json
+        m = _json.loads(manifeste.read_text())
+        m["workspace"]["commands"] = args.commands
+        manifeste.write_text(_json.dumps(m, ensure_ascii=False, indent=1))
     config = config_de_passe(tmp, manifeste, llm)
     shutil.copy(config, args.output / "config.json")
 

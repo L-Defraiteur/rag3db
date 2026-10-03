@@ -442,6 +442,23 @@ fn run() -> Result<(), String> {
             Ok(value) => json!({"event":"done","ok":true,"result":value}),
             Err(e) => json!({"event":"done","ok":false,"error":e}),
         });
+        // **La ligne de statut de l'index, par l'application** : ce que le
+        // harnais sait, il le dit lui-même — les passes d'agent ont montré
+        // qu'aucun modèle ne relaie l'état à l'utilisateur. Après chaque
+        // tour, l'état lu au backend part en événement ; l'interface
+        // l'affiche hors du texte de l'agent. Un backend sans index nommé
+        // rend {} : rien n'est émis, rien ne change.
+        if let Some(backend) = &tools.backend {
+            if let Ok(etats) = backend
+                .lock()
+                .map_err(|_| ())
+                .and_then(|mut b| b.request(json!({"op":"index_state"})).map_err(|_| ()))
+            {
+                if etats.as_object().is_some_and(|o| !o.is_empty()) {
+                    emit(json!({"event":"index_status","entities":etats}));
+                }
+            }
+        }
     }
     // Le journal d'abord (ses dernières écritures passent par le backend), le
     // backend ensuite : sa fermeture propre vide le WAL.

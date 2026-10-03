@@ -315,6 +315,17 @@ def terminal(url, token, session_id=None):
                     status = "Exécution : " + event["name"]
                 elif kind == "tool_end":
                     transcript.append(["Résultat", event["content"]])
+                elif kind == "index_status":
+                    # La ligne de statut de l'index, par l'application — hors
+                    # du texte de l'agent. Scope d'abord (le code), compacte.
+                    ents = event.get("entities", {})
+                    e = ents.get("Scope") or next(iter(ents.values()), None)
+                    if isinstance(e, dict):
+                        morceaux = [f"mots {e.get('text', '?')}", f"vecteurs {e.get('vectorsPercent', e.get('vectors_percent', '?'))} %"]
+                        sp = e.get("sparse")
+                        if isinstance(sp, dict):
+                            morceaux.append(f"creux {sp.get('percent', '?')} %")
+                        status = f"[index] {' · '.join(morceaux)}"
                 elif kind == "status":
                     status = event["text"]
                 elif kind == "done":
