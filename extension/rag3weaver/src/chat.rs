@@ -60,15 +60,37 @@ fn tokens() -> usize {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LlmProvider {
-    pub base_url: String,
+    /// `openai` (défaut) : un endpoint OpenAI-compatible à `base_url`, avec
+    /// au besoin un Bearer statique (`api_key_env`). `vertex` : Gemini par
+    /// Vertex AI — l'URL se construit depuis `project` et `location`, le
+    /// jeton OAuth vient de [`crate::gcp_auth::TokenSource`]
+    /// (`GOOGLE_APPLICATION_CREDENTIALS`), jamais d'une variable à la main.
+    /// Limite avouée : le jeton est pris à la connexion et dure une heure —
+    /// assez pour une passe ; une session plus longue recevra des 401.
+    #[serde(default = "openai")]
+    pub provider: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
     pub model: String,
     #[serde(default)]
     pub api_key_env: Option<String>,
+    /// Vertex seulement : le projet GCP ; à défaut, `GOOGLE_CLOUD_PROJECT`.
+    #[serde(default)]
+    pub project: Option<String>,
+    /// Vertex seulement : `global` (défaut) ou une région.
+    #[serde(default = "global")]
+    pub location: String,
     #[serde(default = "context")]
     pub context_tokens: usize,
 }
 fn context() -> usize {
     32768
+}
+fn openai() -> String {
+    "openai".into()
+}
+fn global() -> String {
+    "global".into()
 }
 impl ChatConfig {
     pub fn load(path: &Path) -> Result<Self, String> {
@@ -99,19 +121,38 @@ impl LlmProvider {
     #[cfg(feature = "openai-llm")]
     pub fn connect(&self) -> Result<crate::openai_llm::OpenAiLlm, String> {
         use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
-        if !(self.base_url.starts_with("http://") || self.base_url.starts_with("https://"))
-            || self.model.trim().is_empty()
-        {
-            return Err("LLM requires an HTTP(S) base URL and model".into());
+        if self.model.trim().is_empty() {
+            return Err("LLM requires a model".into());
         }
-        let mut llm =
-            OpenAiLlm::new(&self.base_url, &self.model).with_context_len(self.context_tokens);
-        if let Some(env) = &self.api_key_env {
-            llm = llm.with_auth(Auth::Bearer(
-                secret_from_env(env).map_err(|e| e.to_string())?,
-            ));
+        match self.provider.as_str() {
+            "openai" => {
+                let base = self.base_url.as_deref().unwrap_or_default();
+                if !(base.starts_with("http://") || base.starts_with("https://")) {
+                    return Err("llm.provider=openai requiert llm.base_url en HTTP(S)".into());
+                }
+                let mut llm =
+                    OpenAiLlm::new(base, &self.model).with_context_len(self.context_tokens);
+                if let Some(env) = &self.api_key_env {
+                    llm = llm.with_auth(Auth::Bearer(
+                        secret_from_env(env).map_err(|e| e.to_string())?,
+                    ));
+                }
+                Ok(llm)
+            }
+            "vertex" => {
+                let project = self
+                    .project
+                    .clone()
+                    .or_else(|| std::env::var("GOOGLE_CLOUD_PROJECT").ok())
+                    .ok_or("llm.provider=vertex requiert llm.project, ou GOOGLE_CLOUD_PROJECT")?;
+                let token = crate::gcp_auth::TokenSource::from_env()
+                    .and_then(|s| s.token())
+                    .map_err(|e| format!("jeton Vertex : {e}"))?;
+                Ok(OpenAiLlm::vertex(&project, &self.location, token, &self.model)
+                    .with_context_len(self.context_tokens))
+            }
+            autre => Err(format!("llm.provider inconnu : '{autre}' (openai | vertex)")),
         }
-        Ok(llm)
     }
 }
 
