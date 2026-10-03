@@ -15,14 +15,18 @@
 #ifndef __SINGLE_THREADED__
 
 #include <atomic>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <mutex>
 #include <random>
 #include <thread>
 
+#include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
+#include "integrity/integrity_checker.h"
 #include "processor/result/flat_tuple.h"
 
 using namespace rag3db::common;
@@ -391,6 +395,46 @@ TEST_F(MinimalReproduction, SameRowSameColumnConflictsSingleThread) {
                                            "the same column must fail";
     EXPECT_TRUE(firstCommitted) << "[check: first-commits] ";
     EXPECT_FALSE(secondCommitted) << "[check: one-commit] ";
+}
+
+// Un index HNSW construit sur exactement cent lignes laisse un nœud injoignable, sans
+// aucune écriture concurrente (session cœur C++, 3 octobre). Les N premières lignes de
+// dataset/embeddings/embeddings-8-1k.csv, chargées par COPY, puis CREATE_VECTOR_INDEX
+// avec les paramètres par défaut : à N = 100, le nœud 13 n'est rendu par aucune
+// recherche, pas même par son propre vecteur ; à 50, 90, 95, 99, 101, 105, 110, 120, 150,
+// 200, 300, 500 et 1000, rien ne manque — mais à 98 (balayage du banc), le nœud 13 manque
+// aussi. alpha := 1.0 fait manquer quatre nœuds ;
+// ml := 20, mu := 10 n'en fait manquer aucun : l'élagage des voisins à la construction.
+// Cause non élucidée. L'invariant de l'index du vérificateur (vector-index-complete) le
+// voit.
+static void buildIndexOnFirstEmbeddings(MinimalReproduction& test, int64_t numRows) {
+    rag3db::testing::concurrency::loadVectorExtension(*test.conn);
+    const auto source =
+        rag3db::testing::TestHelper::appendRag3dbRootPath("dataset/embeddings/embeddings-8-1k.csv");
+    const auto subset = test.databasePath + stringFormat(".embeddings-{}.csv", numRows);
+    {
+        std::ifstream in(source);
+        std::ofstream out(subset);
+        std::string line;
+        for (auto i = 0; i < numRows && std::getline(in, line); ++i) {
+            out << line << "\n";
+        }
+    }
+    test.mustRun("CREATE NODE TABLE embeddings (id INT64, vec FLOAT[8], PRIMARY KEY (id));");
+    test.mustRun(stringFormat("COPY embeddings FROM '{}' (deLim=',');", subset));
+    test.mustRun("CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'l2');");
+    std::filesystem::remove(subset);
+}
+
+TEST_F(MinimalReproduction, HnswBuiltOnTheFirstHundredRowsLosesANode) {
+    buildIndexOnFirstEmbeddings(*this, 100);
+    const auto violations = rag3db::testing::integrity::checkVectorIndexes(*conn);
+    std::cerr << rag3db::testing::integrity::describe(violations);
+    std::string checks;
+    for (const auto& violation : violations) {
+        checks += "[check: " + violation.invariant + "] ";
+    }
+    EXPECT_TRUE(violations.empty()) << checks << "the freshly built index misses rows";
 }
 
 } // namespace

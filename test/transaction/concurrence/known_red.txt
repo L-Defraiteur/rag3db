@@ -74,3 +74,7 @@ Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Crash all-commit,kil
 # l'index au commit (étude, §4) le fera passer au vert.
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
+#
+# Un index HNSW construit sur les 100 premières lignes d'embeddings-8-1k.csv laisse le
+# nœud 13 injoignable, sans aucune concurrence (session cœur C++ ; à 98 lignes aussi).
+MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete
