@@ -198,8 +198,16 @@ impl Node for SearchSourceNode {
             ),
             // `try_lock` : une indexation qui tient le verrou ne s'attend
             // jamais — l'échec est une réponse (« occupé »), pas une erreur.
+            // L'état est celui de la CIBLE : l'état global mentait dès que le
+            // journal de conversation écrivait dans la même base (trouvé par
+            // la reprise de passe du 3 octobre — `index_state_for`, session
+            // embarquements, et son test « le journal d'une conversation ne
+            // fait pas croire le code indexé »).
             SearchMode::Auto => {
-                let state = catalog.try_lock().ok().and_then(|cat| cat.index_state().ok());
+                let state = catalog
+                    .try_lock()
+                    .ok()
+                    .and_then(|cat| cat.index_state_for(&self.target_name).ok());
                 adaptive_search_decision(state, has_source)
             }
         };

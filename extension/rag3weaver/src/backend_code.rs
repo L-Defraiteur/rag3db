@@ -143,6 +143,33 @@ const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "Scan
 const WRITE_NODES: &[&str] = &["EditFileNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 
+/// **Les nœuds d'un crochet après outil** : la base MOINS tout ce qui
+/// écrit, bloque ou lance — un crochet enrichit un rendu, il ne peut ni
+/// écrire ni retarder l'outil qu'il suit. `read_files` s'ouvre par
+/// `after.policy` (le client « motif ailleurs » balaye) ; les commandes,
+/// jamais : un crochet qui lance un processus sur une lecture de fichier
+/// n'a pas de cas d'usage honnête, et c'est écrit ici plutôt que découvert.
+const HOOK_FORBIDDEN: &[&str] = &[
+    "EntityRecordNode",
+    "EntityBatchNode",
+    "RelationBatchNode",
+    "SnapshotFinishNode",
+    "SnapshotUndoNode",
+    "SnapshotSessionNode",
+    "IndexNode",
+    "WaitOutputNode",
+    "RunCommandNode",
+    "EditFileNode",
+];
+
+/// Les types de nœuds qu'un crochet peut traverser, selon sa politique.
+pub fn hook_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
+    allowed_nodes(policy)
+        .into_iter()
+        .filter(|n| !HOOK_FORBIDDEN.contains(n))
+        .collect()
+}
+
 /// Les types de nœuds que cette politique permet.
 pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     let mut nodes: Vec<&'static str> = BASE_NODES.to_vec();
@@ -383,6 +410,23 @@ mod tests {
         assert!(build_garde(&c).is_none(), "off = pas de service, run refuse tout");
         c.commands = CommandGate::Approval;
         assert!(build_garde(&c).is_some());
+    }
+
+    /// **Un crochet ne peut ni écrire, ni bloquer, ni lancer** — quelle que
+    /// soit la politique déclarée.
+    #[test]
+    fn un_crochet_n_ecrit_pas_ne_bloque_pas_ne_lance_pas() {
+        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true };
+        let nodes = hook_nodes(&tout);
+        for interdit in ["EntityRecordNode", "SnapshotFinishNode", "IndexNode", "WaitOutputNode", "RunCommandNode", "EditFileNode"] {
+            assert!(!nodes.contains(&interdit), "{interdit} permis dans un crochet");
+        }
+        // La lecture déclarée passe : le balayage du « motif ailleurs ».
+        assert!(nodes.contains(&"ScanFilesNode"));
+        assert!(nodes.contains(&"SearchSourceNode"));
+        // Sans déclaration, pas de lecture de fichiers.
+        let base = ToolPolicy::default();
+        assert!(!hook_nodes(&base).contains(&"ReadFileNode"));
     }
 
     /// **La surface cloud ne lance aucun processus.** Le manifeste réel :

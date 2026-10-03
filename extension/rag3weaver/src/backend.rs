@@ -173,6 +173,45 @@ pub struct ToolAttachment {
     /// Terminal metadata ports to include alongside the declared result.
     #[serde(default)]
     pub metadata: Vec<OutputPort>,
+    /// **Le crochet après outil** : un petit graphe qui ajoute une section
+    /// au rendu de cet outil — et qui a le droit de se taire. Proposition du
+    /// 3 octobre 2026 (docs/3-octobre-2026-23h05/01), validée.
+    #[serde(default)]
+    pub after: Option<AfterToolHook>,
+}
+
+/// Une section au rendu d'un outil, depuis un petit graphe. Il ne peut ni
+/// écrire, ni bloquer l'outil (toute erreur se journalise et se tait), ni
+/// lancer quoi que ce soit ([`crate::backend_code::hook_nodes`]). Le silence
+/// — section vide — est la conduite par défaut, et il s'observe : le journal
+/// du backend (stderr) compte déclenché / tu / en erreur.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AfterToolHook {
+    pub graph: PathBuf,
+    /// Le titre de la section. Défaut : « À voir aussi ».
+    #[serde(default = "titre_a_voir_aussi")]
+    pub title: String,
+    /// Le budget de lignes de la section ; au-delà, tronquée et avouée.
+    #[serde(default = "douze_lignes")]
+    pub max_lines: usize,
+    /// Passé au gabarit s'il déclare `$threshold` — un seuil de similarité,
+    /// calibré au banc comme les poids.
+    #[serde(default)]
+    pub threshold: Option<f64>,
+    /// La base sans l'écriture, seule, sauf déclaration (`read_files` pour
+    /// un crochet qui balaye). `run_commands` est ignoré : jamais dans un
+    /// crochet.
+    #[serde(default)]
+    pub policy: crate::backend_code::ToolPolicy,
+}
+
+fn titre_a_voir_aussi() -> String {
+    "À voir aussi".into()
+}
+
+fn douze_lignes() -> usize {
+    12
 }
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -234,6 +273,9 @@ pub struct PreparedBackend {
     tool_schemas: BTreeMap<String, Value>,
     tool_validators: HashMap<String, jsonschema::Validator>,
     harnesses: HashMap<String, PreparedHarness>,
+    /// Les graphes des crochets après outil, chargés et validés au même
+    /// moment que les outils qu'ils suivent.
+    after_hooks: BTreeMap<String, GraphTool>,
     scripts: BTreeMap<String, String>,
     /// Les entités **décrites** que chaque outil vise (payloads, bindings,
     /// nœuds de sélection/recherche) : ce que `describe()` reprend.
@@ -439,6 +481,7 @@ impl PreparedBackend {
                 .collect()
         };
         let mut harnesses = HashMap::new();
+        let mut after_hooks = BTreeMap::new();
         let mut tools = BTreeMap::new();
         let mut tool_schemas = BTreeMap::new();
         let mut tool_validators = HashMap::new();
@@ -456,6 +499,32 @@ impl PreparedBackend {
                 if !tool.params().iter().any(|p| p.name == key) {
                     return Err(format!("{name}: unknown binding {key}"));
                 }
+            }
+            if let Some(hook) = &attachment.after {
+                // Le graphe du crochet se charge et se valide ICI : un
+                // crochet mal déclaré est une erreur de manifeste, pas un
+                // silence — le silence couvre l'exécution, jamais le montage.
+                let source = std::fs::read_to_string(directory.join(&hook.graph))
+                    .map_err(|e| format!("{name}: crochet after : {e}"))?;
+                let hook_tool = GraphTool::from_mermaid(&source)
+                    .and_then(|t| t.bind(&nodes))
+                    .map_err(|e| format!("{name}: crochet after : {e}"))?;
+                let permis = crate::backend_code::hook_nodes(&hook.policy);
+                for node in &hook_tool.template().nodes {
+                    if !permis.contains(&node.node_type.as_str()) {
+                        return Err(format!(
+                            "{name}: crochet after : le nœud {} n'entre pas dans un \
+                             crochet — un crochet n'écrit pas, ne bloque pas, ne lance \
+                             rien ; pour lire des fichiers, ajoutez \"policy\": \
+                             {{\"read_files\": true}} au crochet",
+                            node.node_type
+                        ));
+                    }
+                }
+                if hook.max_lines == 0 {
+                    return Err(format!("{name}: crochet after : max_lines doit être au moins 1"));
+                }
+                after_hooks.insert(name.clone(), hook_tool);
             }
             let mut input = tool.tool_def().parameters;
             for (parameter, payload) in &attachment.input_payloads {
@@ -621,6 +690,7 @@ impl PreparedBackend {
             mappings,
             validators,
             tools,
+            after_hooks,
             nodes,
             tool_schemas,
             tool_validators,
@@ -1153,6 +1223,7 @@ impl Backend {
             return Ok(json!({"validation":before,"stage":"before","executed":false}));
         }
         args.extend(attachment.bindings.clone());
+        let args_for_hook = args.clone();
         let def = tool
             .instantiate(&Value::Object(args))
             .map_err(|e| e.to_string())?;
@@ -1184,7 +1255,98 @@ impl Backend {
             }
         }
         response["delivery"] = json!({"ok":true,"results":deliveries});
+        if attachment.after.is_some() {
+            self.enrich_with_after_hook(name, &args_for_hook, &mut response);
+        }
         Ok(response)
+    }
+
+    /// **Le crochet après outil** : monte son graphe avec les mêmes arguments
+    /// que l'outil (plus `threshold` s'il est déclaré), et ajoute sa section
+    /// au rendu — ou se tait. Toute erreur se journalise et se tait aussi :
+    /// le résultat de l'outil part toujours, entier, inchangé. Le journal du
+    /// backend (stderr) rend le silence observable : déclenché / tu / en
+    /// erreur — sans lui, le défaut sûr serait un défaut invisible.
+    fn enrich_with_after_hook(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Map<String, Value>,
+        response: &mut Value,
+    ) {
+        let Some(hook) = self
+            .prepared
+            .manifest
+            .tools
+            .get(tool_name)
+            .and_then(|a| a.after.as_ref())
+        else {
+            return;
+        };
+        let Some(graph) = self.prepared.after_hooks.get(tool_name) else {
+            return;
+        };
+        // Le crochet ne reçoit que ce que son gabarit déclare : les
+        // arguments de l'outil qui l'intéressent, et le seuil s'il le
+        // demande — `instantiate` refuse l'inconnu, à raison.
+        let declares: std::collections::HashSet<&str> =
+            graph.params().iter().map(|p| p.name.as_ref()).collect();
+        let mut hargs: serde_json::Map<String, Value> = args
+            .iter()
+            .filter(|(k, _)| declares.contains(k.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if declares.contains("threshold") {
+            if let Some(t) = hook.threshold {
+                hargs.entry("threshold".to_string()).or_insert(json!(t));
+            }
+        }
+        // Un paramètre du gabarit absent des arguments garde son défaut ;
+        // un requis manquant échoue ici — compté, jamais bloquant.
+        let outcome = graph
+            .instantiate(&Value::Object(hargs))
+            .map_err(|e| e.to_string())
+            .and_then(|def| {
+                self.execute_graph(
+                    graph,
+                    &def,
+                    &[],
+                    &NodeTypePolicy::only(crate::backend_code::hook_nodes(&hook.policy)),
+                )
+            });
+        match outcome {
+            Ok(hresp) => {
+                let texte = hresp["result"].as_str().unwrap_or_default().trim().to_string();
+                if texte.is_empty() {
+                    eprintln!("[crochet {tool_name}] tu — rien à dire");
+                    return;
+                }
+                let lignes: Vec<&str> = texte.lines().collect();
+                let coupees = lignes.len().saturating_sub(hook.max_lines);
+                let mut section = lignes
+                    .into_iter()
+                    .take(hook.max_lines)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if coupees > 0 {
+                    // Tronqué, et avoué — jamais une troncature muette.
+                    section.push_str(&format!("\n_… et {coupees} lignes de plus._"));
+                }
+                eprintln!("[crochet {tool_name}] déclenché — {} lignes", hook.max_lines.min(texte.lines().count()));
+                match response.get_mut("result") {
+                    // Le rendu markdown gagne sa section à la suite.
+                    Some(Value::String(r)) => {
+                        r.push_str(&format!("\n\n### {}\n{}", hook.title, section));
+                    }
+                    // Un résultat structuré la porte à côté, sans le toucher.
+                    _ => {
+                        response["after"] = json!({"title": hook.title, "text": section});
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[crochet {tool_name}] en erreur (l'outil répond quand même) : {e}");
+            }
+        }
     }
     fn call_hook(&self, hook: &PreparedHook, context: &Value) -> Result<Value, String> {
         let mut context = context.clone();
@@ -1841,6 +2003,85 @@ mod tests {
         };
         assert!(erreur.contains("embarquement"), "{erreur}");
         assert!(erreur.contains("RAG3WEAVER_EMBED_SERVICE"), "le refus dit quoi faire : {erreur}");
+    }
+
+    /// **Le crochet après outil** : la section s'ajoute au rendu, une
+    /// erreur du crochet laisse l'outil entier, et un crochet qui demande
+    /// un nœud interdit est refusé au chargement, en disant quoi faire.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn le_crochet_apres_outil_enrichit_se_tait_et_se_valide() {
+        // Le montage notebook en mots seuls, comme le test des embarquements.
+        fn montage(after: Value, gabarit: &str) -> (tempfile::TempDir, Result<PreparedBackend, String>) {
+            let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+            let dir = tempfile::tempdir().unwrap();
+            fn copier(src: &Path, dst: &Path) {
+                std::fs::create_dir_all(dst).unwrap();
+                for entry in std::fs::read_dir(src).unwrap() {
+                    let entry = entry.unwrap();
+                    let cible = dst.join(entry.file_name());
+                    if entry.file_type().unwrap().is_dir() {
+                        copier(&entry.path(), &cible);
+                    } else {
+                        std::fs::copy(entry.path(), &cible).unwrap();
+                    }
+                }
+            }
+            copier(&src, dir.path());
+            std::fs::copy(
+                src.join("../../tools/search_structured.mmd"),
+                dir.path().join("search_structured.mmd"),
+            )
+            .unwrap();
+            std::fs::write(dir.path().join("apres_essai.mmd"), gabarit).unwrap();
+            let chemin = dir.path().join("backend.json");
+            let mut manifest: Value =
+                serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+            manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+            manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
+            manifest["embeddings"]["address"] = json!("127.0.0.1:9");
+            manifest["tools"]["put_note"]["after"] = after;
+            let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string()
+            });
+            manifest["vector_extension"] =
+                json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+            std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+            let prepared = PreparedBackend::load(&chemin);
+            (dir, prepared)
+        }
+        let carte = "%% tool: apres_essai\n%% description: essai\n%% result: schema.result\n\ngraph LR\n    schema[\"SchemaNode\"]\n";
+
+        // (a) La section s'ajoute au rendu de l'outil.
+        let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd", "title": "À voir aussi"}), carte);
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let backend = prepared.unwrap().open(Box::new(conn), None).unwrap();
+        let r = backend
+            .call_tool("put_note", json!({"record": {"key": "k1", "text": "essai", "labels": [], "stage": "working"}}))
+            .unwrap();
+        let rendu = serde_json::to_string(&r).unwrap();
+        assert!(rendu.contains("À voir aussi"), "la section du crochet manque : {rendu}");
+
+        // (b) Un gabarit qui exige un paramètre jamais fourni : l'outil
+        // répond entier, sans section — l'erreur se journalise et se tait.
+        let exigeant = "%% tool: apres_essai\n%% description: essai\n%% param: inconnu string! -- jamais fourni\n%% result: schema.result\n\ngraph LR\n    schema[\"SchemaNode(target=$inconnu)\"]\n";
+        let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), exigeant);
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let backend = prepared.unwrap().open(Box::new(conn), None).unwrap();
+        let r = backend
+            .call_tool("put_note", json!({"record": {"key": "k2", "text": "essai", "labels": [], "stage": "working"}}))
+            .unwrap();
+        let rendu = serde_json::to_string(&r).unwrap();
+        assert!(r.get("delivery").is_some(), "l'outil répond entier : {rendu}");
+        assert!(!rendu.contains("À voir aussi"), "pas de section sur une erreur : {rendu}");
+
+        // (c) Un nœud interdit dans le crochet : refus au chargement, qui
+        // dit quoi faire.
+        let interdit = "%% tool: apres_essai\n%% description: essai\n%% result: run.result\n\ngraph LR\n    run[\"RunCommandNode(command='ls')\"]\n";
+        let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), interdit);
+        let erreur = prepared.err().expect("un crochet qui lance se refuse au chargement");
+        assert!(erreur.contains("crochet"), "{erreur}");
+        assert!(erreur.contains("RunCommandNode"), "le refus nomme le nœud : {erreur}");
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
