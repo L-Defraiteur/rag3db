@@ -1,0 +1,578 @@
+[
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le dossier temporaire vit en RAM",
+      "why": "Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "rien de lourd dans le repertoire temporaire",
+      "why": "On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "la batterie se joue sans rien demander",
+      "why": "Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "garder deux processeurs pour la machine",
+      "why": "La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le compte rendu de la passe reste sur le disque",
+      "why": "Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "meme",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "redite",
+    "verite": "different",
+    "nouveau": {
+      "claim": "dire qu on prend le compilateur",
+      "why": "Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on peut mettre un target cargo dans /tmp",
+      "why": "Le repertoire temporaire est sur disque et tient un gros dossier de compilation."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "compiler sur tous les coeurs ne gêne personne",
+      "why": "Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  }
+]

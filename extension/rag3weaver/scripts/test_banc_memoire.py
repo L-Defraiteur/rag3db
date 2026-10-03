@@ -189,32 +189,58 @@ def main():
             #
             # Écrites en artefact plutôt que laissées à lire dans ce script :
             # un jeu qu'il faut extraire d'un programme n'est pas un jeu.
+            # Chaque paire porte **l'affirmation et le pourquoi des deux
+            # côtés**. La première version ne donnait que les titres : des
+            # paraphrases lointaines de phrases très courtes, c'est-à-dire une
+            # tâche plus dure que la vraie, où un `remember` apporte toujours
+            # son pourquoi. Un jeu de contrôle qui montre moins que la réalité
+            # mesure le jeu, pas le produit.
             redites = [
-                ('le dossier temporaire vit en RAM', '/tmp est de la mémoire vive'),
-                ('rien de lourd dans le repertoire temporaire', '/tmp est de la mémoire vive'),
-                ('la batterie se joue sans rien demander', 'la passe complète se lance sans demander'),
-                ('garder deux processeurs pour la machine', 'laisser deux coeurs libres'),
-                ('le compte rendu de la passe reste sur le disque', 'le journal survit à la passe'),
-                ('dire qu on prend le compilateur', 'annoncer cargo avant de le prendre'),
+                ('le dossier temporaire vit en RAM',
+                 'Le repertoire temporaire de ce poste est un tmpfs : ce qu on y ecrit occupe la RAM.',
+                 '/tmp est de la mémoire vive'),
+                ('rien de lourd dans le repertoire temporaire',
+                 'On ne met ni dossier de compilation ni gros clone sous /tmp, faute de place en mémoire.',
+                 '/tmp est de la mémoire vive'),
+                ('la batterie se joue sans rien demander',
+                 'Plus besoin de demander avant de lancer la suite complète : le debug de performance est fini.',
+                 'la passe complète se lance sans demander'),
+                ('garder deux processeurs pour la machine',
+                 'La compilation ne prend jamais tous les processeurs : il en faut pour que l interface réponde.',
+                 'laisser deux coeurs libres'),
+                ('le compte rendu de la passe reste sur le disque',
+                 'Le journal de la suite est écrit dans un fichier qui survit à la passe, et les échecs y sont nommés.',
+                 'le journal survit à la passe'),
+                ('dire qu on prend le compilateur',
+                 'Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions.',
+                 'annoncer cargo avant de le prendre'),
             ]
             contradictions = [
-                ('on peut mettre un target cargo dans /tmp', '/tmp est de la mémoire vive'),
-                ('compiler sur tous les coeurs ne gêne personne', 'laisser deux coeurs libres'),
+                ('on peut mettre un target cargo dans /tmp',
+                 'Le repertoire temporaire est sur disque et tient un gros dossier de compilation.',
+                 '/tmp est de la mémoire vive'),
+                ('compiler sur tous les coeurs ne gêne personne',
+                 'Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine.',
+                 'laisser deux coeurs libres'),
             ]
+            par_claim = {f['claim']: f['why'] for f in faits}
             paires = []
-            claims = [f['claim'] for f in faits]
-            for nouveau, cible in redites:
-                for claim in claims:
-                    paires.append({'nouveau': nouveau, 'existant': claim,
-                                   'verite': 'meme' if claim == cible else 'different',
-                                   'genre': 'redite'})
-            for nouveau, cible in contradictions:
-                for claim in claims:
-                    paires.append({'nouveau': nouveau, 'existant': claim,
-                                   'verite': 'contredit' if claim == cible else 'different',
-                                   'genre': 'contradiction'})
+            for genre, source, verite_si_cible in (('redite', redites, 'meme'),
+                                                   ('contradiction', contradictions, 'contredit')):
+                for nouveau, pourquoi, cible in source:
+                    for claim, why in par_claim.items():
+                        paires.append({
+                            'genre': genre,
+                            'verite': verite_si_cible if claim == cible else 'different',
+                            'nouveau': {'claim': nouveau, 'why': pourquoi},
+                            'existant': {'claim': claim, 'why': why},
+                        })
+            # Les paires sont **des données du scénario**, pas une sortie de
+            # build : elles vivent dans le dépôt, versionnées, pour qu'un diff
+            # dise quand le jeu de contrôle a changé — sinon deux mesures ne
+            # sont pas comparables et personne ne peut le savoir.
             sortie = Path(os.environ.get('BANC_PAIRES')
-                          or (TARGET / 'banc-memoire-paires.json'))
+                          or (CRATE / 'scripts/banc-memoire/paires-de-controle.json'))
             sortie.parent.mkdir(parents=True, exist_ok=True)
             sortie.write_text(json.dumps(paires, ensure_ascii=False, indent=2) + '\n')
             artefact = (len(paires), str(sortie))

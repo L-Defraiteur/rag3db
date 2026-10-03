@@ -582,16 +582,69 @@ est aussi un **réglage de latence**, et les deux exigences poussent dans le
 même sens : **peu de candidats**. Trois vaut mieux que dix, pour la
 comparabilité comme pour le temps.
 
-**Les réserves de la mesure, et ce qui les lève.** 42 et 20 paires, étiquetées
-par une seule personne, et **les seuils réglés sur les paires mêmes qui
-servent à juger** — donc les AUC annoncés sont une borne haute, pas une
-performance attendue. Rien n'a été mesuré sur la carte.
+**Les réserves de la mesure, et ce qui les a levées.** 42 et 20 paires,
+étiquetées par une seule personne, et **les seuils réglés sur les paires mêmes
+qui servent à juger** — donc les AUC annoncés étaient une borne haute.
 
-C'est exactement le trou que le banc de §4 bouche, et ce n'était pas prévu
-pour ça : son scénario est **écrit**, donc il produit des paires dont la
-réponse est connue *sans que personne les ait étiquetées*. Elles sont donc un
-jeu de contrôle indépendant des seuils. Les deux travaux se tiennent : la
-mesure donne les seuils, le banc dit s'ils tiennent ailleurs.
+Le banc de §4 a bouché ce trou, et ce n'était pas prévu pour ça : son scénario
+est **écrit**, donc il produit des paires dont la réponse est connue sans que
+personne les ait étiquetées.
+
+### 7.8 Et le contrôle a défait la conclusion
+
+Les 48 paires du banc, jouées avec le critère, les options et le seuil du
+document 02 **sans rien régler** :
+
+| | sur les paires jugées | sur les 48 du banc |
+|---|---|---|
+| AUC de P(même) | 0,97 | **0,82** |
+| au seuil 0,07 | aucune fausse fusion | **4 redites sur 6** passent, et **6 « différent » sur 40** passent aussi |
+| verdict à quatre choix | 85 % | **« même » pour aucune des six redites** |
+
+Les deux distributions se recouvrent : P(même) va de 0,03 à 0,31 pour les
+vraies et monte à 0,13 pour une paire sans rapport. **« Le seuil tient »
+reposait sur six paires ; il ne tient pas sur quarante-huit.**
+
+Ce qui tient quand même, et qui n'est pas rien : les deux contradictions
+sortent à 0,03 et 0,05 — **aucune n'est prise pour une redite**. C'est la
+confusion la plus coûteuse, et elle ne se produit pas.
+
+**Et une réserve sur mon propre jeu, qu'il faut écrire avec le reste.** Mes
+redites étaient des paraphrases lointaines de titres très courts, et le modèle
+ne voyait que le titre. C'est **plus dur que la vraie tâche**, où un
+`remember` apporte toujours son pourquoi. Donc ni 0,97 ni 0,82 n'est « le »
+chiffre : entre les deux mesures, la définition de la tâche a bougé. Les
+paires portent désormais l'affirmation **et** le pourquoi des deux côtés, pour
+qu'une prochaine mesure sépare le modèle de ce qu'on lui montre.
+
+### 7.9 Ce que je retire — une mesure est un fait sur son jeu
+
+J'avais adopté cinq « trouvailles » de la forme de la question. Rejouées sur un
+autre jeu — les entrées d'un journal rangées sous leurs sections — la forme qui
+faisait 15 sur 16 rejoint **13 fois sur 32**. Deux survivent, deux non :
+
+| Trouvaille | Ailleurs |
+|---|---|
+| la décision se pose sur le texte, pas sur deux noms | **survit** |
+| l'ordre des options déplace les verdicts | **survit** |
+| quatre candidats plutôt que deux ou dix | **non confirmé** |
+| nom et description suffisent, le contexte nuit | **non confirmé** |
+| un seul choix dont le neuf est une option | à revoir |
+
+Je retire donc « quatre candidats » et « nom et description suffisent » de ce
+que la conception fixe. Ce qui reste du §7.5 point 4 — **un nombre fixe** de
+candidats — tient toujours, parce qu'il vient du softmax et non d'une mesure :
+c'est *le nombre* qui n'est pas connu, pas la nécessité qu'il soit fixe.
+
+**La leçon, et c'est la deuxième fois dans la même journée que je la reçois :**
+une mesure est un fait sur le jeu qui l'a produite. J'avais déjà tranché trop
+vite sur « variante » après un seul chiffre ; j'ai recommencé avec cinq. Ce
+qu'une mesure autorise, c'est d'éliminer — pas de choisir.
+
+Conséquence pratique, et elle est rassurante : **l'étage 2 sur « demander
+toujours » est le seul réglage que la mesure soutienne aujourd'hui.** C'est
+déjà ce que la conception prévoit, et Lucie l'avait demandé avant que ces
+chiffres existent.
 
 **Les trois zones, et leur asymétrie assumée.** Les coûts ne sont pas
 symétriques, donc les zones ne doivent pas l'être :
