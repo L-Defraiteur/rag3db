@@ -51,6 +51,23 @@ global. La décision de recherche (cible `Scope`) et la porte
 d'`usages`/`impact` (l'entité du pivot) basculeront dessus. La reprise
 T1 se rejouera après.
 
+## T1 rejouée, après l'état par entité : la réponse est vraie
+
+Avec les trois corrections en place (description d'`usages`, porte par
+entité des deux côtés, journal sans effet sur l'état), l'agent faible
+prend toujours `usages` — mais sa conclusion est désormais **vraie** :
+« pas encore d'indexation, il faut indexer d'abord », avec l'appel
+`index` proposé. Plus de « cette fonction n'existe pas ». L'outillage
+corrige ce que le modèle ne sait pas rattraper.
+
+Le décrochage multi-tour, lui, est confirmé comme **limite du modèle** :
+le harnais renvoie `tools` à chaque tour (fiches relues fraîches,
+`agent.rs`) et l'historique garde les `tool_calls` avec leurs `id` mot
+pour mot (`openai_llm.rs`, testé en SSE) — et le 7B en 4 bits écrit
+quand même son deuxième appel en bloc de code. Le rappel de protocole
+proposé au document 03 reste la réponse si l'on veut faire mieux avec
+les petits modèles.
+
 C'est la leçon récurrente de la soirée : **chaque passe réelle a trouvé
 un trou qu'aucun test scripté ne voyait** — l'outil muet sur un index
 vide (faible), la traversée par la liste libre (Gemini), et l'état
