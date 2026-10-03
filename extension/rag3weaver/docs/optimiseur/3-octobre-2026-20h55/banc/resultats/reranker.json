@@ -1,0 +1,678 @@
+{
+ "modele": "reranker",
+ "fils": 8,
+ "sujets": {
+  "lignes": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9208369255065918
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6501467227935791
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.013618339784443378
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.004409139510244131
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 4.832122795050964e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0004901846405118704
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0294441320002079
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.01930300146341324
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0014814703026786447
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0020959991961717606
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.0009845707099884748
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.822287231334485e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.6315756511176005e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.6091566067188978e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.42810672521591187
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.002831663005053997
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.2780403196811676
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.015452063642442226
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.43114274740219116
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 1.6364789189537987e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.10894288122653961
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.06181911379098892
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.001640777220018208
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.15033939480781555
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.692925434326753e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 2.6192341465502977e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 2.152976594516076e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.00022931322746444494
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.2958899140357971
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.06246054172515869
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9671512842178345
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9980340003967285
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6549094915390015
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 1.6761201550252736e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0011606108164414763
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0007176699000410736
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.0002552773803472519
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 6.838967237854376e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 7.749634823994711e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.612945197848603e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.641485323489178e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 1.686172436166089e-05
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.10371814700192772,
+  "latence_max_s": 0.16227233000972774,
+  "premier_appel_s": 0.1321725659945514
+ },
+ "memoires": {
+  "lignes": [
+   {
+    "id": "m01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9997870326042175
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m02",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.9573143720626831
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m03",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.0023929534945636988
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m04",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "score": 1.6173842595890164e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.01480053924024105
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m06",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.032518789172172546
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m07",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.2955833673477173
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m08",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "score": 2.2530428395839408e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m09",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8685715794563293
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m10",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.6132740378379822
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m11",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.005473746918141842
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m12",
+    "langue": "en",
+    "etiquette": "new",
+    "sortie": {
+     "score": 1.982606772799045e-05
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m13",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.16305625438690186
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m14",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.01429241057485342
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m15",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.2006068229675293
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m16",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9998795986175537
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m17",
+    "langue": "mixte",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.6173514127731323
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m18",
+    "langue": "mixte",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.07346019893884659
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m19",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.0022440191823989153
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m20",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "score": 1.6163625332410447e-05
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.11964875400008168,
+  "latence_max_s": 0.18785108199517708,
+  "premier_appel_s": 0.1102519590058364
+ },
+ "dix": {
+  "lignes": [
+   {
+    "id": "d1",
+    "attendu": 0,
+    "sortie": {
+     "0": 0.9208369255065918,
+     "1": 1.6259702533716336e-05,
+     "2": 0.0018752282485365868,
+     "3": 1.609661921975203e-05,
+     "4": 9.331616456620395e-05,
+     "5": 0.004635027144104242,
+     "6": 2.651753311511129e-05,
+     "7": 1.6548976418562233e-05,
+     "8": 1.6148271242855117e-05,
+     "9": 2.0747032976942137e-05
+    }
+   },
+   {
+    "id": "d2",
+    "attendu": 2,
+    "sortie": {
+     "0": 0.0001795958960428834,
+     "1": 0.0004439397598616779,
+     "2": 0.9980340003967285,
+     "3": 1.6523928934475407e-05,
+     "4": 4.4132939365226775e-05,
+     "5": 0.00013541019870899618,
+     "6": 0.03661111742258072,
+     "7": 4.5221124310046434e-05,
+     "8": 1.9861796317854896e-05,
+     "9": 1.7393533198628575e-05
+    }
+   },
+   {
+    "id": "d3",
+    "attendu": 9,
+    "sortie": {
+     "0": 1.62865653692279e-05,
+     "1": 1.628967947908677e-05,
+     "2": 1.6129724826896563e-05,
+     "3": 1.6344303730875254e-05,
+     "4": 2.603546454338357e-05,
+     "5": 2.7250240236753598e-05,
+     "6": 1.628173231438268e-05,
+     "7": 1.6384230548283085e-05,
+     "8": 1.6162772226380184e-05,
+     "9": 0.1859004646539688
+    }
+   },
+   {
+    "id": "d4",
+    "attendu": 4,
+    "sortie": {
+     "0": 1.6045170923462138e-05,
+     "1": 1.629852340556681e-05,
+     "2": 1.6198788216570392e-05,
+     "3": 3.012165689142421e-05,
+     "4": 0.5214743614196777,
+     "5": 1.877593604149297e-05,
+     "6": 1.995849197555799e-05,
+     "7": 1.614007487660274e-05,
+     "8": 1.6032561688916758e-05,
+     "9": 1.6553414752706885e-05
+    }
+   },
+   {
+    "id": "d5",
+    "attendu": 3,
+    "sortie": {
+     "0": 2.906210283981636e-05,
+     "1": 2.3169941414380446e-05,
+     "2": 1.7755335647962056e-05,
+     "3": 0.9960553646087646,
+     "4": 0.0005014427588321269,
+     "5": 7.362267206190154e-05,
+     "6": 3.696046405821107e-05,
+     "7": 1.7005244444590062e-05,
+     "8": 1.6616762877674773e-05,
+     "9": 1.8381459085503593e-05
+    }
+   },
+   {
+    "id": "d6",
+    "attendu": -1,
+    "sortie": {
+     "0": 3.6740751966135576e-05,
+     "1": 1.830457040341571e-05,
+     "2": 3.250387089792639e-05,
+     "3": 2.106266765622422e-05,
+     "4": 1.630614133318886e-05,
+     "5": 1.6344283721991815e-05,
+     "6": 2.418783333268948e-05,
+     "7": 5.427560972748324e-05,
+     "8": 2.2198548322194256e-05,
+     "9": 1.707517367321998e-05
+    }
+   }
+  ],
+  "latence_mediane_s": 1.0601205845014192,
+  "latence_max_s": 1.251467173002311
+ }
+}

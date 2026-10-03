@@ -1,0 +1,1294 @@
+{
+ "modele": "gliner",
+ "fils": 8,
+ "sujets": {
+  "lignes": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.6837395429611206,
+     "variant": 0.1625252515077591,
+     "unrelated": 0.15373511612415314
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5830573439598083,
+     "variant": 0.18342308700084686,
+     "unrelated": 0.23351961374282837
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5902929902076721,
+     "variant": 0.15581995248794556,
+     "unrelated": 0.2538870871067047
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5816060900688171,
+     "variant": 0.14319124817848206,
+     "unrelated": 0.2752026617527008
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.3954208791255951,
+     "variant": 0.15883991122245789,
+     "unrelated": 0.44573917984962463
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5073061585426331,
+     "variant": 0.21466688811779022,
+     "unrelated": 0.27802690863609314
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.4563180208206177,
+     "variant": 0.16286246478557587,
+     "unrelated": 0.38081955909729004
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5260547995567322,
+     "variant": 0.1675899624824524,
+     "unrelated": 0.30635523796081543
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.4641563594341278,
+     "variant": 0.2235630452632904,
+     "unrelated": 0.3122805953025818
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.4453814923763275,
+     "variant": 0.2188168168067932,
+     "unrelated": 0.3358016908168793
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4985763430595398,
+     "variant": 0.23648080229759216,
+     "unrelated": 0.26494282484054565
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5854356288909912,
+     "variant": 0.17025181651115417,
+     "unrelated": 0.24431255459785461
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.6052362322807312,
+     "variant": 0.1535494327545166,
+     "unrelated": 0.24121436476707458
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.49702122807502747,
+     "variant": 0.16636718809604645,
+     "unrelated": 0.33661162853240967
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.779024600982666,
+     "variant": 0.09654227644205093,
+     "unrelated": 0.12443307042121887
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.6662103533744812,
+     "variant": 0.146303191781044,
+     "unrelated": 0.1874864548444748
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.280010461807251,
+     "variant": 0.11183106899261475,
+     "unrelated": 0.6081584692001343
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.6244926452636719,
+     "variant": 0.14626900851726532,
+     "unrelated": 0.2292383760213852
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.7200847864151001,
+     "variant": 0.1267721801996231,
+     "unrelated": 0.15314306318759918
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5895354151725769,
+     "variant": 0.17493027448654175,
+     "unrelated": 0.23553431034088135
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5642487406730652,
+     "variant": 0.15876822173595428,
+     "unrelated": 0.27698299288749695
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5710697770118713,
+     "variant": 0.15582004189491272,
+     "unrelated": 0.27311018109321594
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5973607301712036,
+     "variant": 0.14780505001544952,
+     "unrelated": 0.25483426451683044
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5656288862228394,
+     "variant": 0.17890506982803345,
+     "unrelated": 0.2554660439491272
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5533246994018555,
+     "variant": 0.18380005657672882,
+     "unrelated": 0.2628752589225769
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5927590727806091,
+     "variant": 0.14704833924770355,
+     "unrelated": 0.2601925730705261
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5919789671897888,
+     "variant": 0.15337181091308594,
+     "unrelated": 0.2546491324901581
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.609536349773407,
+     "variant": 0.16533951461315155,
+     "unrelated": 0.22512418031692505
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5165934562683105,
+     "variant": 0.22222650051116943,
+     "unrelated": 0.26118001341819763
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.591080904006958,
+     "variant": 0.16219542920589447,
+     "unrelated": 0.24672365188598633
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5477333664894104,
+     "variant": 0.150272399187088,
+     "unrelated": 0.3019942045211792
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5460299849510193,
+     "variant": 0.16365613043308258,
+     "unrelated": 0.2903139293193817
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5999202728271484,
+     "variant": 0.15121577680110931,
+     "unrelated": 0.24886390566825867
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5596448183059692,
+     "variant": 0.2009533941745758,
+     "unrelated": 0.239401713013649
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.6475234031677246,
+     "variant": 0.1396370530128479,
+     "unrelated": 0.2128395140171051
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5643003582954407,
+     "variant": 0.1733211874961853,
+     "unrelated": 0.2623785138130188
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.6119158864021301,
+     "variant": 0.13943709433078766,
+     "unrelated": 0.24864695966243744
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.6011625528335571,
+     "variant": 0.14182275533676147,
+     "unrelated": 0.2570146918296814
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5384262800216675,
+     "variant": 0.20394955575466156,
+     "unrelated": 0.25762417912483215
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5902334451675415,
+     "variant": 0.15224038064479828,
+     "unrelated": 0.2575262188911438
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.6178798675537109,
+     "variant": 0.12939667701721191,
+     "unrelated": 0.25272348523139954
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5844470858573914,
+     "variant": 0.16046351194381714,
+     "unrelated": 0.25508928298950195
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.08965399999578949,
+  "latence_max_s": 0.12341387999185827,
+  "premier_appel_s": 0.15410417900420725
+ },
+ "memoires": {
+  "lignes": [
+   {
+    "id": "m01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.27145352959632874,
+     "completes": 0.25051647424697876,
+     "contradicts": 0.06295575946569443,
+     "new": 0.41507428884506226
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m02",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "same": 0.23861901462078094,
+     "completes": 0.23698976635932922,
+     "contradicts": 0.05903734266757965,
+     "new": 0.4653538465499878
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m03",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "same": 0.2370593100786209,
+     "completes": 0.2414303719997406,
+     "contradicts": 0.07348094880580902,
+     "new": 0.44802936911582947
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m04",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "same": 0.31397998332977295,
+     "completes": 0.3091507852077484,
+     "contradicts": 0.07677308470010757,
+     "new": 0.30009618401527405
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.28687620162963867,
+     "completes": 0.3102748394012451,
+     "contradicts": 0.19153350591659546,
+     "new": 0.21131545305252075
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m06",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "same": 0.19649188220500946,
+     "completes": 0.21004241704940796,
+     "contradicts": 0.1874266117811203,
+     "new": 0.40603911876678467
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m07",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "same": 0.1549253910779953,
+     "completes": 0.5438302159309387,
+     "contradicts": 0.0885503962635994,
+     "new": 0.2126939594745636
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m08",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "same": 0.07044635713100433,
+     "completes": 0.8227431178092957,
+     "contradicts": 0.015412014909088612,
+     "new": 0.09139858931303024
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m09",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.23852205276489258,
+     "completes": 0.1767760068178177,
+     "contradicts": 0.40532273054122925,
+     "new": 0.17937923967838287
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m10",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "same": 0.46814772486686707,
+     "completes": 0.15627557039260864,
+     "contradicts": 0.24181802570819855,
+     "new": 0.13375870883464813
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m11",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "same": 0.2396833300590515,
+     "completes": 0.2941575050354004,
+     "contradicts": 0.1274491399526596,
+     "new": 0.3387099802494049
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m12",
+    "langue": "en",
+    "etiquette": "new",
+    "sortie": {
+     "same": 0.25428932905197144,
+     "completes": 0.3216739594936371,
+     "contradicts": 0.1259026974439621,
+     "new": 0.2981340289115906
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m13",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.24057869613170624,
+     "completes": 0.27655449509620667,
+     "contradicts": 0.22181324660778046,
+     "new": 0.26105350255966187
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m14",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "same": 0.24023185670375824,
+     "completes": 0.232184499502182,
+     "contradicts": 0.18659324944019318,
+     "new": 0.3409903347492218
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m15",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "same": 0.2648371756076813,
+     "completes": 0.21392327547073364,
+     "contradicts": 0.32270440459251404,
+     "new": 0.19853514432907104
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m16",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.2921089828014374,
+     "completes": 0.21161188185214996,
+     "contradicts": 0.08663012087345123,
+     "new": 0.4096490442752838
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m17",
+    "langue": "mixte",
+    "etiquette": "completes",
+    "sortie": {
+     "same": 0.2752281129360199,
+     "completes": 0.2121366709470749,
+     "contradicts": 0.07660167664289474,
+     "new": 0.43603354692459106
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m18",
+    "langue": "mixte",
+    "etiquette": "contradicts",
+    "sortie": {
+     "same": 0.29589179158210754,
+     "completes": 0.18576209247112274,
+     "contradicts": 0.12114396691322327,
+     "new": 0.39720213413238525
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m19",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "same": 0.26590192317962646,
+     "completes": 0.31520724296569824,
+     "contradicts": 0.07471133023500443,
+     "new": 0.34417951107025146
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m20",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "same": 0.2542411684989929,
+     "completes": 0.29541459679603577,
+     "contradicts": 0.08063080906867981,
+     "new": 0.3697134554386139
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.10212691899505444,
+  "latence_max_s": 0.11087539899745025,
+  "premier_appel_s": 0.10614509700099006
+ },
+ "sujets_avec_abstention": {
+  "lignes": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.48332566022872925,
+     "variant": 0.16734158992767334,
+     "unrelated": 0.1609293818473816,
+     "unsure": 0.1884034276008606
+    }
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4572964310646057,
+     "variant": 0.1472303867340088,
+     "unrelated": 0.18300212919712067,
+     "unsure": 0.2124711126089096
+    }
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4787617623806,
+     "variant": 0.12923964858055115,
+     "unrelated": 0.20299015939235687,
+     "unsure": 0.1890084445476532
+    }
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4721495807170868,
+     "variant": 0.11727893352508545,
+     "unrelated": 0.2168426364660263,
+     "unsure": 0.1937289535999298
+    }
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.3221186101436615,
+     "variant": 0.13840064406394958,
+     "unrelated": 0.2579244077205658,
+     "unsure": 0.28155621886253357
+    }
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.35810524225234985,
+     "variant": 0.17212705314159393,
+     "unrelated": 0.20501187443733215,
+     "unsure": 0.2647557854652405
+    }
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.3650776445865631,
+     "variant": 0.1327413022518158,
+     "unrelated": 0.277191162109375,
+     "unsure": 0.2249898612499237
+    }
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.40270644426345825,
+     "variant": 0.1455182582139969,
+     "unrelated": 0.2537137567996979,
+     "unsure": 0.1980615109205246
+    }
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.3662242293357849,
+     "variant": 0.1792534440755844,
+     "unrelated": 0.23804177343845367,
+     "unsure": 0.216480553150177
+    }
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.31663259863853455,
+     "variant": 0.16027452051639557,
+     "unrelated": 0.23986198008060455,
+     "unsure": 0.28323090076446533
+    }
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.38670578598976135,
+     "variant": 0.18440072238445282,
+     "unrelated": 0.20882634818553925,
+     "unsure": 0.22006718814373016
+    }
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5298774242401123,
+     "variant": 0.13701657950878143,
+     "unrelated": 0.19439761340618134,
+     "unsure": 0.1387084573507309
+    }
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4792431592941284,
+     "variant": 0.13567982614040375,
+     "unrelated": 0.19401945173740387,
+     "unsure": 0.19105754792690277
+    }
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.38029107451438904,
+     "variant": 0.1401011049747467,
+     "unrelated": 0.24729198217391968,
+     "unsure": 0.23231586813926697
+    }
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.658194363117218,
+     "variant": 0.10366596281528473,
+     "unrelated": 0.12044152617454529,
+     "unsure": 0.11769812554121017
+    }
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.47965502738952637,
+     "variant": 0.1346707046031952,
+     "unrelated": 0.1561679095029831,
+     "unsure": 0.22950634360313416
+    }
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.23836247622966766,
+     "variant": 0.0995086058974266,
+     "unrelated": 0.42321473360061646,
+     "unsure": 0.2389141470193863
+    }
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.48423340916633606,
+     "variant": 0.12919971346855164,
+     "unrelated": 0.1925729662179947,
+     "unsure": 0.1939939260482788
+    }
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.5990210175514221,
+     "variant": 0.12867960333824158,
+     "unrelated": 0.14020757377147675,
+     "unsure": 0.13209168612957
+    }
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.46214479207992554,
+     "variant": 0.15391430258750916,
+     "unrelated": 0.1839522421360016,
+     "unsure": 0.1999887079000473
+    }
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.4222603142261505,
+     "variant": 0.13855715095996857,
+     "unrelated": 0.23659589886665344,
+     "unsure": 0.20258668065071106
+    }
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.435231477022171,
+     "variant": 0.13320593535900116,
+     "unrelated": 0.21292389929294586,
+     "unsure": 0.21863862872123718
+    }
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.46054384112358093,
+     "variant": 0.13287900388240814,
+     "unrelated": 0.19847136735916138,
+     "unsure": 0.20810584723949432
+    }
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.44751879572868347,
+     "variant": 0.1447363644838333,
+     "unrelated": 0.200327530503273,
+     "unsure": 0.20741741359233856
+    }
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4043676257133484,
+     "variant": 0.15395526587963104,
+     "unrelated": 0.20334088802337646,
+     "unsure": 0.2383362352848053
+    }
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4448859393596649,
+     "variant": 0.12885373830795288,
+     "unrelated": 0.1992148905992508,
+     "unsure": 0.2270454615354538
+    }
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4771501421928406,
+     "variant": 0.13783054053783417,
+     "unrelated": 0.1945461481809616,
+     "unsure": 0.19047316908836365
+    }
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4209710657596588,
+     "variant": 0.15220528841018677,
+     "unrelated": 0.18175284564495087,
+     "unsure": 0.24507081508636475
+    }
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.39031150937080383,
+     "variant": 0.1798582226037979,
+     "unrelated": 0.19513511657714844,
+     "unsure": 0.2346951961517334
+    }
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.45766881108283997,
+     "variant": 0.14219625294208527,
+     "unrelated": 0.19411198794841766,
+     "unsure": 0.2060229778289795
+    }
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4509253203868866,
+     "variant": 0.12088838219642639,
+     "unrelated": 0.2392742782831192,
+     "unsure": 0.1889120489358902
+    }
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4134041965007782,
+     "variant": 0.13704536855220795,
+     "unrelated": 0.22273299098014832,
+     "unsure": 0.22681735455989838
+    }
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "same": 0.4860489070415497,
+     "variant": 0.1271977424621582,
+     "unrelated": 0.20657843351364136,
+     "unsure": 0.18017494678497314
+    }
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.4172954261302948,
+     "variant": 0.17462043464183807,
+     "unrelated": 0.19374066591262817,
+     "unsure": 0.21434342861175537
+    }
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5073529481887817,
+     "variant": 0.1233874037861824,
+     "unrelated": 0.17775368690490723,
+     "unsure": 0.19150595366954803
+    }
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.42094433307647705,
+     "variant": 0.15014876425266266,
+     "unrelated": 0.21686388552188873,
+     "unsure": 0.21204304695129395
+    }
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.5170080065727234,
+     "variant": 0.12407422065734863,
+     "unrelated": 0.20033589005470276,
+     "unsure": 0.15858186781406403
+    }
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "same": 0.3935632109642029,
+     "variant": 0.11287519335746765,
+     "unrelated": 0.18887174129486084,
+     "unsure": 0.30468979477882385
+    }
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.38910433650016785,
+     "variant": 0.16668403148651123,
+     "unrelated": 0.20725354552268982,
+     "unsure": 0.23695804178714752
+    }
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.45556575059890747,
+     "variant": 0.13409419357776642,
+     "unrelated": 0.20533345639705658,
+     "unsure": 0.20500661432743073
+    }
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.5138887763023376,
+     "variant": 0.11111482232809067,
+     "unrelated": 0.19359663128852844,
+     "unsure": 0.18139982223510742
+    }
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "same": 0.4609900414943695,
+     "variant": 0.13757115602493286,
+     "unrelated": 0.2062482088804245,
+     "unsure": 0.19519059360027313
+    }
+   }
+  ]
+ },
+ "dix": {
+  "lignes": [
+   {
+    "id": "d1",
+    "attendu": 0,
+    "sortie": {
+     "t0": 0.17065662145614624,
+     "t1": 0.07935641705989838,
+     "t2": 0.12709940969944,
+     "t3": 0.07916253805160522,
+     "t4": 0.08239494264125824,
+     "t5": 0.08107823878526688,
+     "t6": 0.08679544925689697,
+     "t7": 0.0616924986243248,
+     "t8": 0.06352771073579788,
+     "t9": 0.06838195025920868,
+     "none": 0.09985420852899551
+    }
+   },
+   {
+    "id": "d2",
+    "attendu": 2,
+    "sortie": {
+     "t0": 0.070340596139431,
+     "t1": 0.05860808491706848,
+     "t2": 0.47586914896965027,
+     "t3": 0.04251536354422569,
+     "t4": 0.041298337280750275,
+     "t5": 0.038561396300792694,
+     "t6": 0.06707024574279785,
+     "t7": 0.042263470590114594,
+     "t8": 0.03634557127952576,
+     "t9": 0.03944192826747894,
+     "none": 0.08768586069345474
+    }
+   },
+   {
+    "id": "d3",
+    "attendu": 9,
+    "sortie": {
+     "t0": 0.09153086692094803,
+     "t1": 0.09712507575750351,
+     "t2": 0.09986873716115952,
+     "t3": 0.06543706357479095,
+     "t4": 0.06920048594474792,
+     "t5": 0.05244525149464607,
+     "t6": 0.0625733807682991,
+     "t7": 0.07010207325220108,
+     "t8": 0.07114502042531967,
+     "t9": 0.23019154369831085,
+     "none": 0.09038057178258896
+    }
+   },
+   {
+    "id": "d4",
+    "attendu": 4,
+    "sortie": {
+     "t0": 0.10524754226207733,
+     "t1": 0.0906231701374054,
+     "t2": 0.08454462140798569,
+     "t3": 0.06527559459209442,
+     "t4": 0.2416808307170868,
+     "t5": 0.06278109550476074,
+     "t6": 0.08335458487272263,
+     "t7": 0.05958874523639679,
+     "t8": 0.050133444368839264,
+     "t9": 0.06367704272270203,
+     "none": 0.09309343993663788
+    }
+   },
+   {
+    "id": "d5",
+    "attendu": 3,
+    "sortie": {
+     "t0": 0.07661359757184982,
+     "t1": 0.08289527148008347,
+     "t2": 0.057340312749147415,
+     "t3": 0.4553978145122528,
+     "t4": 0.04714954271912575,
+     "t5": 0.03811846300959587,
+     "t6": 0.04406982660293579,
+     "t7": 0.04093470051884651,
+     "t8": 0.04335332289338112,
+     "t9": 0.03934267535805702,
+     "none": 0.07478449493646622
+    }
+   },
+   {
+    "id": "d6",
+    "attendu": -1,
+    "sortie": {
+     "t0": 0.11076351255178452,
+     "t1": 0.1256832480430603,
+     "t2": 0.10131809860467911,
+     "t3": 0.08355667442083359,
+     "t4": 0.07251731306314468,
+     "t5": 0.05960036441683769,
+     "t6": 0.07491768151521683,
+     "t7": 0.07533136010169983,
+     "t8": 0.09411732852458954,
+     "t9": 0.08091419190168381,
+     "none": 0.12128021568059921
+    }
+   }
+  ],
+  "latence_mediane_s": 0.11685592449066462,
+  "latence_max_s": 0.12961303499469068
+ }
+}

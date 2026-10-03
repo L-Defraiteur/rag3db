@@ -1,0 +1,678 @@
+{
+ "modele": "granite",
+ "fils": 8,
+ "sujets": {
+  "lignes": [
+   {
+    "id": "s01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8079043030738831
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s02",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.7666305303573608
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s03",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.7057539224624634
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s04",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.5983186960220337
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6363985538482666
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s06",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6532635688781738
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s07",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6913418769836426
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s08",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6348308324813843
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s09",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.5930591821670532
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s10",
+    "langue": "fr",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.7235039472579956
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s11",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.49861183762550354
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s12",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.48891425132751465
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s13",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5278494358062744
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s14",
+    "langue": "fr",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5227556228637695
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s15",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6723576188087463
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s16",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6476544141769409
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s17",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.7808287143707275
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s18",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6386411786079407
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s19",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.7769151329994202
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s20",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6560343503952026
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s21",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.7680065631866455
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s22",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6718422174453735
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s23",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6560876965522766
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s24",
+    "langue": "en",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.739051103591919
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s25",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5417938232421875
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s26",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.4825051724910736
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s27",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.534229040145874
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s28",
+    "langue": "en",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5710558891296387
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s29",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9164560437202454
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s30",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8074948191642761
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s31",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8932551145553589
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s32",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9280307292938232
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s33",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8907177448272705
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s34",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.6884419918060303
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s35",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.5363515615463257
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s36",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.5977287292480469
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s37",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.5487983226776123
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s38",
+    "langue": "mixte",
+    "etiquette": "variant",
+    "sortie": {
+     "score": 0.5593284368515015
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s39",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.547909140586853
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s40",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5194535255432129
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s41",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.5178893804550171
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "s42",
+    "langue": "mixte",
+    "etiquette": "unrelated",
+    "sortie": {
+     "score": 0.563809871673584
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.012824267003452405,
+  "latence_max_s": 0.017027080000843853,
+  "premier_appel_s": 0.03508347900060471
+ },
+ "memoires": {
+  "lignes": [
+   {
+    "id": "m01",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.954024612903595
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m02",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.8579772710800171
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m03",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.8680912852287292
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m04",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.528320848941803
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m05",
+    "langue": "fr",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.7682336568832397
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m06",
+    "langue": "fr",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.7549179196357727
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m07",
+    "langue": "fr",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.8438031673431396
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m08",
+    "langue": "fr",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.5051880478858948
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m09",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.8059912919998169
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m10",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.7495327591896057
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m11",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.834557294845581
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m12",
+    "langue": "en",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.5037491321563721
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m13",
+    "langue": "en",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.6552073955535889
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m14",
+    "langue": "en",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.5734759569168091
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m15",
+    "langue": "en",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.860175371170044
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m16",
+    "langue": "mixte",
+    "etiquette": "same",
+    "sortie": {
+     "score": 0.9488077759742737
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m17",
+    "langue": "mixte",
+    "etiquette": "completes",
+    "sortie": {
+     "score": 0.7665647864341736
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m18",
+    "langue": "mixte",
+    "etiquette": "contradicts",
+    "sortie": {
+     "score": 0.8681551814079285
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m19",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.6920574903488159
+    },
+    "ecart_passe_2": 0.0
+   },
+   {
+    "id": "m20",
+    "langue": "mixte",
+    "etiquette": "new",
+    "sortie": {
+     "score": 0.5409642457962036
+    },
+    "ecart_passe_2": 0.0
+   }
+  ],
+  "latence_mediane_s": 0.016361222995328717,
+  "latence_max_s": 0.021413408001535572,
+  "premier_appel_s": 0.017097111005568877
+ },
+ "dix": {
+  "lignes": [
+   {
+    "id": "d1",
+    "attendu": 0,
+    "sortie": {
+     "0": 0.8079043030738831,
+     "1": 0.4961742162704468,
+     "2": 0.5626000165939331,
+     "3": 0.42319899797439575,
+     "4": 0.47975626587867737,
+     "5": 0.5546025037765503,
+     "6": 0.5319188833236694,
+     "7": 0.48257315158843994,
+     "8": 0.5752658843994141,
+     "9": 0.5179380774497986
+    }
+   },
+   {
+    "id": "d2",
+    "attendu": 2,
+    "sortie": {
+     "0": 0.600245475769043,
+     "1": 0.5521306395530701,
+     "2": 0.9280307292938232,
+     "3": 0.5275307297706604,
+     "4": 0.5310226678848267,
+     "5": 0.5275612473487854,
+     "6": 0.6802708506584167,
+     "7": 0.47827109694480896,
+     "8": 0.5065194964408875,
+     "9": 0.5574154853820801
+    }
+   },
+   {
+    "id": "d3",
+    "attendu": 9,
+    "sortie": {
+     "0": 0.5392057299613953,
+     "1": 0.5105775594711304,
+     "2": 0.5279926061630249,
+     "3": 0.5650262832641602,
+     "4": 0.5618888139724731,
+     "5": 0.5106785893440247,
+     "6": 0.4309592843055725,
+     "7": 0.5698230862617493,
+     "8": 0.5175522565841675,
+     "9": 0.6967531442642212
+    }
+   },
+   {
+    "id": "d4",
+    "attendu": 4,
+    "sortie": {
+     "0": 0.4255900979042053,
+     "1": 0.45017775893211365,
+     "2": 0.42966926097869873,
+     "3": 0.47695475816726685,
+     "4": 0.7307796478271484,
+     "5": 0.4868435859680176,
+     "6": 0.39490675926208496,
+     "7": 0.41331061720848083,
+     "8": 0.44571471214294434,
+     "9": 0.5155972242355347
+    }
+   },
+   {
+    "id": "d5",
+    "attendu": 3,
+    "sortie": {
+     "0": 0.40157249569892883,
+     "1": 0.5101170539855957,
+     "2": 0.42932218313217163,
+     "3": 0.9151904582977295,
+     "4": 0.5154180526733398,
+     "5": 0.4777481257915497,
+     "6": 0.4553995132446289,
+     "7": 0.5120975971221924,
+     "8": 0.48245489597320557,
+     "9": 0.5288227200508118
+    }
+   },
+   {
+    "id": "d6",
+    "attendu": -1,
+    "sortie": {
+     "0": 0.5149185657501221,
+     "1": 0.5075503587722778,
+     "2": 0.5263218879699707,
+     "3": 0.5650058388710022,
+     "4": 0.4668632447719574,
+     "5": 0.4814145267009735,
+     "6": 0.5245323777198792,
+     "7": 0.5436310768127441,
+     "8": 0.611121654510498,
+     "9": 0.5835673809051514
+    }
+   }
+  ],
+  "latence_mediane_s": 0.1328800415067235,
+  "latence_max_s": 0.15238523499283474
+ }
+}

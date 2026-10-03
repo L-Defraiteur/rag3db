@@ -1,0 +1,114 @@
+{
+  "note": "Jeu du 3 octobre 2026 pour mesurer des modèles de décision. Sujets tirés du travail réel sur rag3db. Étiquettes posées à la main par la session optimiseur, non relues par une seconde personne.",
+  "sujets": {
+    "instructions": "Do these two topic names refer to the same topic?",
+    "options": {
+      "same": "both phrases name the same topic, worded differently or in another language",
+      "variant": "related topics: one is a part, a mechanism or a special case of the other",
+      "unrelated": "two different topics"
+    },
+    "paires": [
+      {"id": "s01", "langue": "fr", "a": "écritures parallèles", "b": "plusieurs écrivains en même temps", "etiquette": "same"},
+      {"id": "s02", "langue": "fr", "a": "reprise après un point de reprise interrompu", "b": "récupération quand le checkpoint a été coupé en cours de route", "etiquette": "same"},
+      {"id": "s03", "langue": "fr", "a": "poids des modèles publiés sur Hugging Face", "b": "mise en ligne des fichiers de poids sur le hub", "etiquette": "same"},
+      {"id": "s04", "langue": "fr", "a": "régime doux de la carte graphique pendant les embarquements", "b": "limiter la charge du GPU quand on calcule les vecteurs", "etiquette": "same"},
+      {"id": "s05", "langue": "fr", "a": "identité git personnelle dans les dépôts", "b": "ne jamais commiter avec l'adresse professionnelle", "etiquette": "same"},
+      {"id": "s06", "langue": "fr", "a": "écritures parallèles", "b": "verrous par clé", "etiquette": "variant"},
+      {"id": "s07", "langue": "fr", "a": "index vectoriel HNSW", "b": "points d'entrée de l'index vectoriel hors transaction", "etiquette": "variant"},
+      {"id": "s08", "langue": "fr", "a": "synchronisation par périmètre", "b": "suppression des lignes sorties de leur périmètre", "etiquette": "variant"},
+      {"id": "s09", "langue": "fr", "a": "modèle d'embarquement par défaut", "b": "choix du petit modèle au premier index sur un GPU faible", "etiquette": "variant"},
+      {"id": "s10", "langue": "fr", "a": "journal d'écriture anticipée (WAL)", "b": "WAL illisible après un arrêt brutal", "etiquette": "variant"},
+      {"id": "s11", "langue": "fr", "a": "écritures parallèles", "b": "reconnaissance de texte dans les images (OCR)", "etiquette": "unrelated"},
+      {"id": "s12", "langue": "fr", "a": "deck builder pour un jeu de cartes", "b": "accumulation en f32 dans le produit matriciel", "etiquette": "unrelated"},
+      {"id": "s13", "langue": "fr", "a": "plein texte avec lucivy", "b": "adresse professionnelle sur les forks", "etiquette": "unrelated"},
+      {"id": "s14", "langue": "fr", "a": "estimation de la durée d'indexation d'un dépôt", "b": "masque d'attention diffusé sur les lignes", "etiquette": "unrelated"},
+
+      {"id": "s15", "langue": "en", "a": "concurrent writers", "b": "several transactions writing at the same time", "etiquette": "same"},
+      {"id": "s16", "langue": "en", "a": "crash recovery from the write-ahead log", "b": "replaying the WAL after an unclean shutdown", "etiquette": "same"},
+      {"id": "s17", "langue": "en", "a": "default embedding model", "b": "which embedding model is used when none is configured", "etiquette": "same"},
+      {"id": "s18", "langue": "en", "a": "half-precision attention on the GPU", "b": "running the attention kernel in f16", "etiquette": "same"},
+      {"id": "s19", "langue": "en", "a": "duplicate memories created at write time", "b": "the same fact stored twice when saving a memory", "etiquette": "same"},
+      {"id": "s20", "langue": "en", "a": "concurrent writers", "b": "per-key locking", "etiquette": "variant"},
+      {"id": "s21", "langue": "en", "a": "vector index", "b": "deleting a row from the vector index", "etiquette": "variant"},
+      {"id": "s22", "langue": "en", "a": "full-text search", "b": "tokenizer used by the full-text index", "etiquette": "variant"},
+      {"id": "s23", "langue": "en", "a": "upstream pull requests to burn", "b": "AI disclosure line in a pull request", "etiquette": "variant"},
+      {"id": "s24", "langue": "en", "a": "embedding daemon", "b": "GPU duty cycle of the embedding daemon", "etiquette": "variant"},
+      {"id": "s25", "langue": "en", "a": "concurrent writers", "b": "image text recognition", "etiquette": "unrelated"},
+      {"id": "s26", "langue": "en", "a": "reranker model", "b": "git identity on personal repositories", "etiquette": "unrelated"},
+      {"id": "s27", "langue": "en", "a": "checkpoint recovery", "b": "card game deck builder", "etiquette": "unrelated"},
+      {"id": "s28", "langue": "en", "a": "tmpfs filling up during a build", "b": "padding mask in attention", "etiquette": "unrelated"},
+
+      {"id": "s29", "langue": "mixte", "a": "écritures parallèles", "b": "concurrent writes", "etiquette": "same"},
+      {"id": "s30", "langue": "mixte", "a": "point de reprise", "b": "checkpoint", "etiquette": "same"},
+      {"id": "s31", "langue": "mixte", "a": "modèle d'embarquement par défaut", "b": "default embedding model", "etiquette": "same"},
+      {"id": "s32", "langue": "mixte", "a": "recherche plein texte", "b": "full-text search", "etiquette": "same"},
+      {"id": "s33", "langue": "mixte", "a": "fusion de noyaux GPU", "b": "kernel fusion on the GPU", "etiquette": "same"},
+      {"id": "s34", "langue": "mixte", "a": "écritures parallèles", "b": "per-key locks", "etiquette": "variant"},
+      {"id": "s35", "langue": "mixte", "a": "index vectoriel", "b": "entry points of the HNSW graph", "etiquette": "variant"},
+      {"id": "s36", "langue": "mixte", "a": "mémoire longue de l'agent", "b": "deduplicating memories at write time", "etiquette": "variant"},
+      {"id": "s37", "langue": "mixte", "a": "poids des modèles", "b": "regenerating the granite weights from ONNX", "etiquette": "variant"},
+      {"id": "s38", "langue": "mixte", "a": "synchronisation par périmètre", "b": "missing-ratio threshold of a snapshot", "etiquette": "variant"},
+      {"id": "s39", "langue": "mixte", "a": "écritures parallèles", "b": "optical character recognition", "etiquette": "unrelated"},
+      {"id": "s40", "langue": "mixte", "a": "verrous par clé", "b": "publishing model weights", "etiquette": "unrelated"},
+      {"id": "s41", "langue": "mixte", "a": "régime de la carte graphique", "b": "git commit identity", "etiquette": "unrelated"},
+      {"id": "s42", "langue": "mixte", "a": "journal des chantiers", "b": "rotary position embeddings", "etiquette": "unrelated"}
+    ]
+  },
+  "memoires": {
+    "instructions": "How does the new memory relate to the existing memory?",
+    "options": {
+      "same": "the new memory states the same fact as the existing one",
+      "completes": "the new memory agrees with the existing one and adds information",
+      "contradicts": "the new memory states something incompatible with the existing one",
+      "new": "the new memory is about something else"
+    },
+    "paires": [
+      {"id": "m01", "langue": "fr", "existante": "Le modèle d'embarquement par défaut est granite-278m.", "nouvelle": "Par défaut, on embarque avec granite-278m.", "etiquette": "same"},
+      {"id": "m02", "langue": "fr", "existante": "Le modèle d'embarquement par défaut est granite-278m.", "nouvelle": "Granite-278m est le modèle par défaut ; au premier index, on prend le 107m si le dépôt dépasse 50 000 documents.", "etiquette": "completes"},
+      {"id": "m03", "langue": "fr", "existante": "Le modèle d'embarquement par défaut est granite-278m.", "nouvelle": "Le modèle d'embarquement par défaut est désormais granite-107m.", "etiquette": "contradicts"},
+      {"id": "m04", "langue": "fr", "existante": "Le modèle d'embarquement par défaut est granite-278m.", "nouvelle": "Les commits de ce dépôt s'écrivent en français.", "etiquette": "new"},
+      {"id": "m05", "langue": "fr", "existante": "Il ne faut jamais lancer la compilation sur tous les cœurs.", "nouvelle": "On laisse toujours des cœurs libres quand on compile.", "etiquette": "same"},
+      {"id": "m06", "langue": "fr", "existante": "Il ne faut jamais lancer la compilation sur tous les cœurs.", "nouvelle": "Compiler sur tous les cœurs fige le poste ; la limite est de huit tâches.", "etiquette": "completes"},
+      {"id": "m07", "langue": "fr", "existante": "Les tests complets se lancent sans demander.", "nouvelle": "Il faut demander avant de lancer la passe complète des tests.", "etiquette": "contradicts"},
+      {"id": "m08", "langue": "fr", "existante": "Les tests complets se lancent sans demander.", "nouvelle": "Le répertoire /tmp est en mémoire vive.", "etiquette": "new"},
+
+      {"id": "m09", "langue": "en", "existante": "The user prefers commit messages without any AI attribution.", "nouvelle": "Do not add AI co-author trailers to commits; the user does not want them.", "etiquette": "same"},
+      {"id": "m10", "langue": "en", "existante": "The user prefers commit messages without any AI attribution.", "nouvelle": "No AI attribution in commits, and pull request descriptions follow the same rule unless upstream asks for disclosure.", "etiquette": "completes"},
+      {"id": "m11", "langue": "en", "existante": "Pull requests are sent without any AI disclosure.", "nouvelle": "Every pull request now carries an AI disclosure line.", "etiquette": "contradicts"},
+      {"id": "m12", "langue": "en", "existante": "Pull requests are sent without any AI disclosure.", "nouvelle": "The vector index uses HNSW.", "etiquette": "new"},
+      {"id": "m13", "langue": "en", "existante": "The database must be shut down cleanly or the WAL breaks.", "nouvelle": "Killing the backend abruptly corrupts the write-ahead log, so stop it gracefully.", "etiquette": "same"},
+      {"id": "m14", "langue": "en", "existante": "The database must be shut down cleanly or the WAL breaks.", "nouvelle": "Stop the backend with SIGTERM, and take a reflink snapshot before any write.", "etiquette": "completes"},
+      {"id": "m15", "langue": "en", "existante": "The build directory lives in /tmp.", "nouvelle": "Never put a build directory in /tmp; it goes on disk under ~/.cache.", "etiquette": "contradicts"},
+
+      {"id": "m16", "langue": "mixte", "existante": "Les identifiants du code sont en anglais.", "nouvelle": "Code identifiers are written in English.", "etiquette": "same"},
+      {"id": "m17", "langue": "mixte", "existante": "Les identifiants du code sont en anglais.", "nouvelle": "Identifiers are in English; comments, commits and docs stay in French.", "etiquette": "completes"},
+      {"id": "m18", "langue": "mixte", "existante": "Les identifiants du code sont en français.", "nouvelle": "Code identifiers must be written in English.", "etiquette": "contradicts"},
+      {"id": "m19", "langue": "mixte", "existante": "Les identifiants du code sont en anglais.", "nouvelle": "The reranker is a multilingual cross-encoder.", "etiquette": "new"},
+      {"id": "m20", "langue": "mixte", "existante": "La carte graphique de ce poste est une Radeon 8060S.", "nouvelle": "Checkpoints are written every five minutes.", "etiquette": "new"}
+    ]
+  },
+  "dix": {
+    "instructions": "Which existing topic is the same as the new topic?",
+    "existants": [
+      "écritures parallèles",
+      "index vectoriel HNSW",
+      "recherche plein texte",
+      "modèle d'embarquement par défaut",
+      "reprise après un point de reprise",
+      "synchronisation par périmètre",
+      "reconnaissance de texte (OCR)",
+      "identité git des dépôts",
+      "deck builder de cartes",
+      "correctifs proposés à burn"
+    ],
+    "aucun": "none of these topics",
+    "cas": [
+      {"id": "d1", "nouveau": "plusieurs écrivains en même temps", "attendu": 0},
+      {"id": "d2", "nouveau": "full-text search", "attendu": 2},
+      {"id": "d3", "nouveau": "upstream pull requests to burn", "attendu": 9},
+      {"id": "d4", "nouveau": "crash recovery after an interrupted checkpoint", "attendu": 4},
+      {"id": "d5", "nouveau": "quel modèle d'embarquement est pris par défaut", "attendu": 3},
+      {"id": "d6", "nouveau": "couleur du thème de l'éditeur", "attendu": -1}
+    ]
+  }
+}
