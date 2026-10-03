@@ -405,6 +405,70 @@ pub fn connect_sparse(source: &ModelSource) -> Result<(SparseClients, Origin), S
     resolve(Capability::Sparse, source, &builders, &process_env)
 }
 
+// ─── Le relecteur et l'OCR ───────────────────────────────────────────────────
+
+/// **Le relecteur d'une déclaration.** Une seule forme aujourd'hui : `local`,
+/// un cross-encoder burn dans ce processus — `msmarco-minilm` (anglais),
+/// `mmarco-mminilm` (multilingue), `bge-reranker-v2-m3` (multilingue, 2,2 Go).
+/// Ni démon ni tiers : la déclaration qui les demande est refusée en le disant.
+pub fn connect_reranker(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::reranker::Reranker>, Origin), String> {
+    type Client = std::sync::Arc<dyn crate::reranker::Reranker>;
+    #[cfg(feature = "burn-embedder")]
+    let local = |s: &ModelSource| -> Result<Client, String> {
+        use crate::burn_device::{BurnDevice, BurnRole};
+        let (folder, prefix) = match s.model.as_str() {
+            "msmarco-minilm" => ("msmarco-minilm", "RAG3WEAVER_MSMARCO"),
+            "mmarco-mminilm" => ("mmarco-mminilm", "RAG3WEAVER_MMARCO"),
+            "bge-reranker-v2-m3" => ("bge-reranker-v2-m3", "RAG3WEAVER_BGE_RERANKER"),
+            other => return Err(format!("relecteur local `{other}` inconnu (msmarco-minilm, mmarco-mminilm, bge-reranker-v2-m3)")),
+        };
+        let weights = local_artifact(folder, prefix, "BPK", "model.bpk")?;
+        let tokenizer = local_artifact(folder, prefix, "TOKENIZER", "tokenizer.json")?;
+        let device = BurnDevice::for_role(BurnRole::Reranker);
+        let built: Client = match s.model.as_str() {
+            "msmarco-minilm" => std::sync::Arc::new(crate::BurnMiniLmReranker::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
+            "mmarco-mminilm" => std::sync::Arc::new(crate::BurnMMiniLmReranker::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
+            _ => std::sync::Arc::new(crate::BurnBgeRerankerV2M3::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
+        };
+        Ok(built)
+    };
+    let builders: Builders<Client> = Builders {
+        #[cfg(feature = "burn-embedder")]
+        local: Some(&local),
+        #[cfg(not(feature = "burn-embedder"))]
+        local: None,
+        service: None,
+        compatible: None,
+    };
+    resolve(Capability::Rerank, source, &builders, &process_env)
+}
+
+/// **L'OCR d'une déclaration.** Une seule forme aujourd'hui : `local`,
+/// PP-OCR sur burn (`ppocrv6-tiny`), les poids là où les tests les cherchent.
+pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::ocr::Ocr>, Origin), String> {
+    type Client = std::sync::Arc<dyn crate::ocr::Ocr>;
+    #[cfg(feature = "burn-ocr")]
+    let local = |s: &ModelSource| -> Result<Client, String> {
+        use crate::burn_device::{BurnDevice, BurnRole};
+        if s.model != "ppocrv6-tiny" {
+            return Err(format!("OCR local `{}` inconnu (ppocrv6-tiny)", s.model));
+        }
+        let dir = crate::BurnPpOcr::default_cache_dir();
+        let ocr = crate::BurnPpOcr::from_cache_dir(&dir, BurnDevice::for_role(BurnRole::Ocr))
+            .map_err(|e| format!("{} : {e} — donnez RAG3WEAVER_PPOCR_DIR, ou placez-y det.bpk, rec.bpk et dict.txt", dir.display()))?;
+        Ok(std::sync::Arc::new(ocr) as Client)
+    };
+    let builders: Builders<Client> = Builders {
+        #[cfg(feature = "burn-ocr")]
+        local: Some(&local),
+        #[cfg(not(feature = "burn-ocr"))]
+        local: None,
+        service: None,
+        compatible: None,
+    };
+    resolve(Capability::Ocr, source, &builders, &process_env)
+}
+
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
 /// sinon `~/.cache/rag3weaver/<dossier>/<fichier>`.
 #[cfg(feature = "burn-embedder")]
@@ -533,5 +597,28 @@ mod tests {
         let none: Builders<String> = Builders { local: None, service: None, compatible: None };
         let e = resolve(Capability::Ocr, &ModelSource::local("ppocrv6-tiny"), &none, &no_env).unwrap_err();
         assert!(e.contains("pas de forme locale"), "{e}");
+    }
+
+    /// Le relecteur et l'OCR n'ont qu'une forme, locale : un démon ou un tiers
+    /// demandé est refusé avec sa raison, et un modèle inconnu se dit.
+    #[test]
+    fn le_relecteur_et_l_ocr_ne_se_declarent_qu_en_local_et_le_disent() {
+        let e = connect_reranker(&ModelSource::service("bge-reranker-v2-m3")).err().expect("pas de démon de relecture");
+        assert!(e.contains("models.rerank") && e.contains("pas encore de démon"), "{e}");
+        let e = connect_ocr(&ModelSource::service("ppocrv6-tiny")).err().expect("pas de démon d'OCR");
+        assert!(e.contains("models.ocr") && e.contains("pas encore de démon"), "{e}");
+        let tiers = ModelSource { provider: Provider::Compatible, address: Addresses::parse("http://x:1"), ..ModelSource::local("x") };
+        assert!(connect_reranker(&tiers).err().expect("pas de tiers").contains("pas de forme `compatible`"));
+        // Un nom que le moteur local ne connaît pas : l'erreur liste ceux qu'il connaît.
+        #[cfg(feature = "burn-embedder")]
+        {
+            let e = connect_reranker(&ModelSource::local("un-autre")).err().expect("inconnu");
+            assert!(e.contains("msmarco-minilm") && e.contains("bge-reranker-v2-m3"), "{e}");
+        }
+        #[cfg(feature = "burn-ocr")]
+        {
+            let e = connect_ocr(&ModelSource::local("un-autre")).err().expect("inconnu");
+            assert!(e.contains("ppocrv6-tiny"), "{e}");
+        }
     }
 }

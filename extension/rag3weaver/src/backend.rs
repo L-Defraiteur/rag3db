@@ -737,6 +737,15 @@ impl PreparedBackend {
         // Déclaré sans `models.sparse`, c'est maintenant un refus qui dit
         // quoi écrire ; et le dual n'est pris que si c'est le même modèle des
         // deux côtés — sinon dense et creux viendraient de deux espaces.
+        // Le relecteur et l'OCR : les nœuds existaient (`RerankNode`,
+        // `OcrNode`), le backend ne leur donnait aucun service. Déclarés, ils
+        // sont joints ici ; non déclarés, rien ne change.
+        if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Rerank) {
+            cat.set_reranker(crate::model_source::connect_reranker(source)?.0);
+        }
+        if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Ocr) {
+            cat.set_ocr(crate::model_source::connect_ocr(source)?.0);
+        }
         let veut_le_creux = self.entities.values().any(|config| config.signals.sparse());
         match (self.manifest.models.get(&crate::model_source::Capability::Sparse), veut_le_creux) {
             (None, true) if !sans_service => {
