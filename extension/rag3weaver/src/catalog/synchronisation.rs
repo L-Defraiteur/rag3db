@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Catalog, CatalogError};
+use super::{Catalog, CatalogError, LifecycleVerdict};
 use crate::config::OnMissing;
 use crate::connection::{CypherValue, QueryParam};
 
@@ -80,7 +80,7 @@ impl Catalog {
         if uuids.is_empty() {
             return Ok(());
         }
-        let cypher = self.dialect.marquer_session(entity_name);
+        let cypher = self.dialect.mark_snapshot_session(entity_name);
         self.conn
             .execute_with_params(&cypher, &[
                 QueryParam::new("uuids", CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect())),
@@ -159,7 +159,7 @@ impl Catalog {
             .cloned()
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
         let scope_fields: Vec<&str> = config.scope.iter().map(String::as_str).collect();
-        let cypher = self.dialect.select_perimetre(entity_name, &scope_fields, &[]);
+        let cypher = self.dialect.select_snapshot_scope(entity_name, &scope_fields, &[]);
         let params: Vec<QueryParam> = config
             .scope
             .iter()
@@ -234,7 +234,7 @@ impl Catalog {
                 let list = CypherValue::List(report.missing.iter().cloned().map(CypherValue::String).collect());
                 let mut total = Some(0usize);
                 for rel in &rels {
-                    let Some(cypher) = self.dialect.compter_relations_de(entity_name, rel) else {
+                    let Some(cypher) = self.dialect.count_relations_of(entity_name, rel) else {
                         total = None;
                         break;
                     };
@@ -255,6 +255,8 @@ impl Catalog {
                 let lc = entity_config.lifecycle.as_ref().ok_or_else(|| {
                     CatalogError::SchemaError(format!("snapshot : la transition '{name}' sans lifecycle"))
                 })?;
+                // Un nom désigne un seul couple (from, to) : `Lifecycle::validate`
+                // refuse deux transitions du même nom. Le `find` en dépend.
                 let transition = lc
                     .transitions
                     .iter()
@@ -267,18 +269,31 @@ impl Catalog {
                     .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
                     .collect();
                 for uuid in report.missing.clone() {
-                    let Some(row) = current.get(&uuid) else { continue };
-                    let state = row.get(&lc.field).and_then(|v| v.as_str()).unwrap_or(&lc.initial).to_string();
-                    if state == transition.to {
-                        report.already.push(uuid);
+                    let Some(row) = current.get(&uuid) else {
+                        report.kept.push((uuid, "introuvable à la relecture".into()));
                         continue;
-                    }
-                    if state != transition.from {
-                        report.kept.push((
-                            uuid,
-                            format!("transition '{}' impossible depuis '{state}' (elle part de '{}')", transition.name, transition.from),
-                        ));
-                        continue;
+                    };
+                    // Un état vide est un état inconnu (une machine déclarée
+                    // sur une entité déjà en service) : l'état initial.
+                    let state = row
+                        .get(&lc.field)
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or(&lc.initial)
+                        .to_string();
+                    match Catalog::lifecycle_verdict(entity_name, lc, &uuid, &transition.to, Some(&state)) {
+                        LifecycleVerdict::Same => {
+                            report.already.push(uuid);
+                            continue;
+                        }
+                        LifecycleVerdict::Refused(cause) => {
+                            report.kept.push((
+                                uuid,
+                                format!("transition '{}' impossible depuis '{state}' (elle part de '{}') — {cause}", transition.name, transition.from),
+                            ));
+                            continue;
+                        }
+                        LifecycleVerdict::Allowed => {}
                     }
                     // La ligne entière, sans ses colonnes internes : le hash
                     // de contenu se calcule sur ce qu'on écrit.
@@ -297,6 +312,17 @@ impl Catalog {
         // le régime d'écriture du catalogue.
         if !(report.removed.is_empty() && report.transitioned.is_empty()) {
             let res = self.drain();
+            // Le rapport ne dit que ce qui a eu lieu : une transition refusée
+            // au drain (l'état relu à un autre instant) quitte `transitioned`
+            // pour `kept`, avec la cause que porte `UpdateStatus::Failed`.
+            for update in &res.update_results {
+                if let crate::records::UpdateStatus::Failed(cause) = &update.status {
+                    if let Some(pos) = report.transitioned.iter().position(|u| u == &update.uuid) {
+                        let uuid = report.transitioned.remove(pos);
+                        report.kept.push((uuid, format!("refusée à l'écriture : {cause}")));
+                    }
+                }
+            }
             report.warnings = res.warnings;
         }
         Ok(report)

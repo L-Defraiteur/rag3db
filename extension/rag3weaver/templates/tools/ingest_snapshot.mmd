@@ -2,7 +2,7 @@
 %% description: Ingestion validée par lots d’un snapshot externe.
 %% param: entity string! -- Entité fixée par le manifeste.
 %% param: records json! -- Tableau de records.
-%% param: snapshot string = "" -- Session de synchronisation qui porte ces lignes (l'entité doit déclarer snapshot ; un lot porte un seul périmètre). Vide : pas de session.
+%% param: snapshot string = "" -- Session de synchronisation qui porte ces lignes (l'entité doit déclarer snapshot ; un lot porte un seul périmètre). Vide : pas de session. Un identifiant neuf à chaque synchronisation, une seule session à la fois par périmètre.
 %% result: ingest.report
 
 graph LR
