@@ -49,37 +49,56 @@ Branches encore en cours, toutes poussées (les noms
 | `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
 | `regime-carte-partagee-2` | `../rag3db-embarquements` | embarquements | **3 octobre** : régulateur de rafale (durée visée + pause, défaut **provisoire** 50 ms / 150 ms) dans l'ingestion et le démon, écran ménagé par défaut quand la seule carte le porte, `CardClass::Integrated` dite par le pilote, troisième déclencheur de 107m, et **`RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981`** : s'attacher aux trois services d'embarquement de luciepc (granite-278m, bge-m3, granite-107m), tests compris. Batterie complète par le service : lib 1 134, e2e 374, 0 rouge ; scripts Python verts. **Ne jamais pointer `RAG3WEAVER_EMBEDDINGS_ADDR` sur un tunnel** (les suites arrêteraient le service) ; deux arbres qui jouent des e2e en même temps prennent chacun leur port local par cette variable. Page : `extension/rag3weaver/docs/3-octobre-2026-14h26/02-le-service-d-embarquement-sur-l-autre-poste.md`. | Lucie choisit le défaut (rafale, pause) sur deux ou trois couples mesurés devant l'écran. |
 
-**Session cœur C++, 3 octobre 2026 — cinq branches poussées, en attente de relecture
-et de livraison** (arbre `../rag3db-moteur`, build `build/moteur`). La session n'a pas pu
-joindre l'orchestration après la relance des terminaux : l'état est ici.
+**Livraison du cœur C++, 3 octobre 2026** : `master` a reçu en avance rapide dix commits
+(`81f8982ea..13284a0fe`), livrés par la session cœur C++ depuis son arbre
+(`../rag3db-moteur`), à la demande de l'orchestration.
 
-| Branche | Tête | Contenu | Passe |
-|---|---|---|---|
-| `t0-transaction-en-echec` | `849e86cc0` | Marche T0 : après une erreur dans `BEGIN … COMMIT`, tout est refusé jusqu'au `ROLLBACK` (`TransactionContext::MANUAL_TRANSACTION_FAILED`) ; l'erreur de syntaxe compte comme les autres, alignée sur PostgreSQL. Sept cas de la batterie Cypher reçoivent le `ROLLBACK` qui ferme le bloc. | Sur `4a338bf42` : batterie Cypher 1862/1862, `transaction_test`, `api_test`, copie, stockage verts, banc conforme (le cas rouge passé au vert, sa ligne retirée). Sur `849e86cc0` : `transaction_test` 72/72, `api_test` 102/102, répertoires `exceptions` et `transaction`. **La batterie complète est à rejouer une fois à la livraison.** |
-| `test-c-api-octets-magiques` | `ca2c0d187` | `c_api_test` : les deux `GetStorageVersion` étaient rouges depuis le renommage `c647fbb33` (le test lisait quatre octets et attendait « RAG3DB »). Le test est corrigé, pas le moteur. | `c_api_test` 136/136. La suite entre dans la liste de livraison. |
-| `a2-remappage-des-offsets-au-commit` | `f8d73398a` | Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit, et les insertions sont journalisées au commit avec leurs offsets définitifs. Deux corrections par rapport à Vela (tables internes des index ; `DETACH DELETE` d'un nœud neuf). C3 quitte `known_red.txt`. Second commit `f8d73398a` : au commit, un offset définitif n'est plus pris pour une ligne locale — deux transactions qui inséraient des vecteurs faisaient planter le second `COMMIT`. | Sur `2f3ae46b6`, passe complète verte : `transaction_test` 67/67, `api_test` 102/102, copie 19/19, stockage 77/77, vector 70/70 et 59/59, batterie Cypher 1862/1862, banc conforme. Sur `f8d73398a` : `transaction_test`, banc, vector 71/71 et 60/60, répertoires d'écriture de la batterie Cypher. |
-| `champ-nul-d-une-liste-de-structures` | `3789201de` | Un champ `NULL` d'une liste de structures littérales prend le type que les autres éléments lui donnent (il devenait STRING et la liste était refusée). | Batterie Cypher 1866/1866, `api_test` 104/104. |
+| Ce qui est entré | Commits |
+|---|---|
+| `c_api_test` : deux tests faux depuis le renommage du fork (le moteur était juste) | `3bc404937` |
+| **Marche T0** : après une erreur dans `BEGIN … COMMIT`, tout est refusé jusqu'au `ROLLBACK` (`TransactionContext::MANUAL_TRANSACTION_FAILED`), erreur de syntaxe comprise | `88f57e2ba`, `4c13619d1`, et `a34538c9a` pour trois cas de l'extension vector |
+| **Marche A2** : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; les insertions sont journalisées au commit ; au commit, un offset définitif n'est plus pris pour une ligne locale | `e81423a28`, `875da1772` |
+| Un champ `NULL` d'une liste de structures littérales prend le type des autres éléments | `17c1ae41d`, `909c2573c` |
+| Index vectoriel : un `DELETE` annulé par `ROLLBACK` ne le laisse plus muet ; un survivant vers lequel ne menaient que des nœuds supprimés reste atteignable | `e64839489`, `13284a0fe` |
 
-| `hnsw-point-d-entree-apres-rollback` | `d64c74b18` | Un `DELETE` annulé par `ROLLBACK` laissait l'index vectoriel muet (mille lignes, zéro résultat), avec un seul écrivain : le point d'entrée vit hors transaction. La recherche et l'insertion ne tiennent plus un point d'entrée invalide pour la preuve d'un index vide. Extension seule, le cœur n'est pas touché. | Extension vector 71/71 sur disque, 60/60 en mémoire. |
+Passe de livraison, sur l'empilement tel qu'il est entré : `transaction_test` 74/74,
+`api_test` 104/104, `c_api_test` 136/136, `copy_tests` 19/19, stockage 77/77, batterie
+Cypher complète 1866/1866, extension vector 74/74 sur disque et 63/63 en mémoire,
+`concurrence_test.known_red` vert (36 rouges connus, 24 verts : les lignes de T0 et de C3
+retirées, rien d'autre n'a bougé) ; côté Rust, lib 1135 passés et 8 ignorés, quinze suites
+e2e (212 tests), les binaires, neuf scripts Python. Non joués : `e2e_postgres`, les cinq
+suites qui appellent un vrai modèle, les suites e2e hors de la liste de livraison, et les
+tests des extensions fts et httpfs, qui ne sont dans aucun build.
 
-L'étude de l'index vectoriel sous plusieurs écrivains est écrite :
+**`c_api_test` entre dans la liste de livraison de toute marche du moteur**, avec les
+tests de l'extension vector (disque et mémoire) : c'est la passe de livraison qui a vu
+que T0 touchait trois de ses cas.
+
+**Ce que T0 change pour un client** : après une erreur dans un bloc `BEGIN`, il doit
+envoyer `ROLLBACK` avant de continuer. Dix cas de test existants ont reçu ce `ROLLBACK`.
+Les tests des extensions fts et httpfs ont aussi des blocs `BEGIN` : T0 les touchera le
+jour où on les bâtira.
+
+Les branches `t0-transaction-en-echec`, `test-c-api-octets-magiques`,
+`a2-remappage-des-offsets-au-commit`, `champ-nul-d-une-liste-de-structures`,
+`hnsw-point-d-entree-apres-rollback`, `refus-apres-point-de-reprise-echoue` et
+`hnsw-point-d-entree-apres-suppression` sur `origin` sont des états d'avant
+l'empilement : à supprimer par Lucie.
+
+L'étude de l'index vectoriel sous plusieurs écrivains :
 `docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md`. Elle propose de faire
-toute la maintenance de l'index au commit (environ trois jours), et dit qu'en attendant
-une table indexée ne devrait pas recevoir deux écrivains à la fois.
+toute la maintenance de l'index au commit (environ trois jours) ; en attendant, une table
+indexée ne devrait pas recevoir deux écrivains à la fois. Le banc l'a confirmé depuis :
+deux suppressions de nœuds voisins dans le graphe se heurtent sur « Write-write
+conflict » dix fois sur dix, et son mélange aléatoire sur une table indexée corrompt le
+tas.
 
-**Une décision à prendre, née de la branche du champ nul** — voir §4 : le refus de
-`UNWIND $rows … SET n.c = r.c` quand `c` est nul dans toutes les lignes.
-
-**Ordre de fusion** : les cinq branches sont indépendantes et partent chacune de
-`master`. T0 et A2 retirent chacune une ligne différente de `known_red.txt` ; T0 et la
-branche du champ nul ajoutent chacune un fichier à la liste de `transaction_test` ou à
-`prepare_test.cpp` sans se toucher. A2 et T0 ajoutent toutes deux un fichier à
-`test/transaction/CMakeLists.txt`, sur la même ligne : conflit trivial à la seconde.
-
-**Suite de la session, après la réponse de Lucie sur les trois écarts de la note sur les
-verrous** (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le
-gestionnaire de verrous, A3′, A4′, l'annonce en tête de transaction. La maintenance de
-l'index vectoriel au commit vient après le gestionnaire de verrous, avant A6.
+**Suite de la session cœur C++** : A5 d'abord — la course du chemin de suppression fait
+planter le processus (§10 de la spécification du banc), et elle ne dépend pas des écarts
+de la note sur les verrous. Puis, après la réponse de Lucie sur ces trois écarts
+(`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le gestionnaire de
+verrous, A3′, A4′, l'annonce en tête de transaction ; la maintenance de l'index vectoriel
+au commit avant A6.
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
@@ -304,8 +323,10 @@ Trois options :
    la vraie correction, et celle qui garde `SET` strict ; elle touche la liaison et
    l'exécution d'`UNWIND`. Estimation : deux jours.
 
-Avis de la session : **1 maintenant, 3 quand le chantier des verrous sera passé.** L'option
-2 échange un piège contre un contrat plus lâche, et c'est `CREATE` qui est l'anomalie,
+**Tranché le 3 octobre par l'orchestration, sans le faire trancher à Lucie** (c'est le
+comportement des moteurs établis) : **option 1 maintenant, option 3 après le chantier des
+verrous.** `SET` reste strict ; le contournement de rag3weaver reste en place. L'option 2
+échangerait un piège contre un contrat plus lâche, et c'est `CREATE` qui est l'anomalie,
 pas `SET`.
 
 ## 5. Hors de ce dépôt
@@ -323,6 +344,45 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- **L'index vectoriel peut laisser une ligne injoignable dès sa construction**
+  (extension vector, trouvé le 3 octobre par la session cœur C++, non corrigé). Une
+  ligne indexée qu'aucune recherche n'atteint : un trou de rappel silencieux, sans
+  aucune suppression. Reproduction, déterministe : les cent premières lignes de
+  `dataset/embeddings/embeddings-8-1k.csv` chargées par `COPY`, puis
+  `CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'l2')`,
+  paramètres par défaut ; une recherche exhaustive (`k = 100`, `efs := 500`) rend 99
+  lignes, et chercher la ligne 13 par son propre vecteur rend trois autres lignes.
+  **Ce n'est pas une proportion du corpus, c'est un cas limite** : le trou apparaît à 98
+  et à 100 lignes, pas à 50, 90, 95, 99, 101, 105, 110, 120, 150, 200, 300, 500, 1 000 ;
+  sur des jeux aléatoires, 1 puis 4 puis 0 ligne perdue à 100 lignes selon la graine,
+  aucune à 1 000, 3 000 et 10 000. Indépendant du nombre de fils et de `pu` ; dépend de
+  `ml` (`ml := 20` : rien ne manque) et d'`alpha` (`alpha := 1.0` : quatre lignes
+  manquent). Le même trou apparaît quand l'index existe avant le `COPY` (insertion sur
+  disque, en lot), pas quand les lignes sont insérées une à une : **c'est l'élagage
+  différé des voisins**, commun aux deux chemins en lot, qui retire à un nœud toutes ses
+  arêtes entrantes. Cause exacte non élucidée ; code de l'amont. Une vérification
+  d'atteignabilité en fin de construction coûterait une recherche par nœud élagué — le
+  correctif de la suppression (`13284a0fe`, `keepNodeReachable`) fait exactement cela
+  pour les voisins d'un nœud supprimé et peut servir de modèle. Le banc en a fait un
+  cas rouge (`MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode`, branche
+  `banc-hnsw`). C'est aussi pourquoi le test Rust des suppressions partielles ne doit
+  pas exiger que chaque survivante se retrouve elle-même sur un jeu de cent lignes : il
+  compare désormais à un index bâti à neuf (session de l'arbre principal).
+- **`QUERY_VECTOR_INDEX … RETURN count(*)` rend toujours `k`** (extension vector,
+  3 octobre), même quand l'index a moins de `k` lignes : le résultat est complété
+  jusqu'à `k` avant la jointure avec la table. `count(node.id)` est juste.
+- **L'élagage immédiat des voisins plante dans le chemin de suppression** (extension
+  vector, 3 octobre) : appeler `createRels` depuis `finalizeDelete` pour ajouter une
+  arête à un nœud déjà plein mène à un SIGSEGV dans `shrinkForNode`. Non élucidé ; le
+  correctif `13284a0fe` l'évite en écrivant les arêtes directement.
+- **Les points d'entrée de l'index vectoriel vivent hors transaction** (extension
+  vector) : c'est la cause du défaut du `ROLLBACK` corrigé le 3 octobre par un
+  contournement (`e64839489`), et de la course que décrit
+  `docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md`. La vraie correction
+  est la maintenance de l'index au commit.
+- **L'extension de plein texte range des offsets provisoires** dans ses tables internes
+  (identifiants de document en entiers) : la marche A2 ne les remappe pas. Elle n'est
+  dans aucun build et rag3weaver ne s'en sert pas.
 - **Une colonne nulle sur toutes les lignes d'une liste de paramètres est
   lue comme STRING** (moteur, trouvé le 3 octobre par `e2e_undo`).
   Reproduction : `CREATE NODE TABLE T(id STRING PRIMARY KEY, n INT64)`,
@@ -331,7 +391,11 @@ sessions, pas d'une vérification.
   … STRUCT_EXTRACT(i, n) has data type STRING but expected INT64 ». Latent
   pour tout champ typé nullable. Contourné dans les annulations de
   `DeleteRecordNode` et `UpdateRecordNode` (`0709e3cba`) ; la correction est
-  au moteur. (Reproduction tirée de l'erreur d'`e2e_undo`, pas rejouée seule.)
+  au moteur. Rejouée le 3 octobre par la session cœur C++ : la cause est
+  qu'`UNWIND` remplace tout type inconnu par STRING et que `SET`, à la différence
+  de `CREATE`, n'accepte qu'une conversion implicite (détail et décision au §4).
+  Le cas voisin des littéraux — `UNWIND [{v: 5}, {v: NULL}]`, refusé à la
+  liaison — est corrigé (`17c1ae41d`) ; celui des paramètres par `SET` ne l'est pas.
   Le « 0 au lieu de NULL » vu par la migration v8 n'est **pas** un défaut du
   moteur : un `ALTER TABLE … ADD n INT64` nu rend bien NULL (vérifié) ; c'est
   `SchemaDialect::alter_add_column` qui pose la valeur par défaut du type.
