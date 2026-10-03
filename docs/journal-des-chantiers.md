@@ -195,6 +195,12 @@ commits en avance rapide, passe C++ complète et passe Rust à chacun) :
   dit par une erreur nommée, `is behind its table` ; rag3weaver doit le reconnaître à
   l'ouverture, le retirer et le rebâtir (à faire, session de l'arbre principal).
 
+**Livré le 4 octobre 2026** (session cœur C++, `c8fdaf196`, avance rapide, passes C++ et
+Rust complètes) : une transaction relit juste les relations qu'elle vient de créer après en
+avoir supprimé — défaut du moteur d'origine, atteignable par Cypher, qui laissait aussi des
+relations en trop ou en double (§6) ; et la mise à jour d'un vecteur garde ses anciens
+voisins joignables dans l'index.
+
 **Deux faux verts à connaître pour tout test de reprise** (trouvés ce soir, par le banc et
 ici) : un test qui ferme la base avec son point de reprise final ne rejoue rien — exiger un
 journal non vide juste avant de rouvrir ; et un processus qui a déjà chargé l'extension
@@ -203,13 +209,18 @@ vector ne voit pas les défauts du rejeu sans extension — rouvrir dans un proc
 
 **Suite de la session cœur C++**, dans l'ordre fixé par l'orchestration :
 1. **La garde 2 de la reprise** : que le rejeu ait l'extension avant de rejouer, pour que
-   l'index reste juste après une mort au lieu d'être à rebâtir. Deux formes à lire avant de
-   chiffrer : la liste des extensions chargées persistée avec la base (préférée si le
-   changement de format est petit), ou l'enregistrement de chargement réécrit en tête du
-   journal après chaque point de reprise. Ses cinq témoins sont rouges au banc.
-2. **Les deux défauts de l'index vectoriel en service** (§6) : la mise à jour d'un vecteur
-   qui perd des lignes, la ligne lointaine injoignable à la construction. Regarder d'abord
-   ce que Ladybug a fait de son HNSW.
+   l'index reste juste après une mort au lieu d'être à rebâtir. Le repérage est fait
+   (relevé de connaissances de la session, §1) : la liste persistée avec la base demande
+   soit de monter la version de stockage, soit un marqueur dans l'en-tête ; l'enregistrement
+   réécrit en tête du journal ne touche aucun format mais change l'ouverture en lecture
+   seule et une huitaine de tests. Dans le même lot : un journal qui porte un
+   `LOAD EXTENSION` dont le fichier a disparu empêche aujourd'hui d'ouvrir la base. Ses cinq
+   témoins sont rouges au banc.
+2. **La mise à jour massive de vecteurs** (§6) : un contrôle en fin d'instruction sur tout
+   ce qu'elle a touché, la dimension 768, les dix mille lignes ; et la ligne lointaine
+   injoignable à la construction. Avant V1 seulement si l'invariant « toute ligne à vecteur
+   est joignable » rougit en usage réel côté produit ; sinon après. Ladybug n'a ni mise à
+   jour ni suppression dans son HNSW : rien à y reprendre.
 3. **Les verrous**, tranchés le 3 octobre (§4) : V1 (gestionnaire générique, deux genres dès
    le départ : ligne par clé, index d'une table), A3′, A4′, V2 ; puis **la maintenance de
    l'index vectoriel au commit**, qui n'est plus un affinage mais une marche du plan —
@@ -954,17 +965,50 @@ sessions, pas d'une vérification.
 - **Le rejeu d'une mise à jour de nœud n'informait aucun index** : corrigé avec la garde 1
   (`fcd9a7882`). `WALReplayer::replayNodeUpdateRecord` appelait `update` sans
   `initUpdateState` ; un index chargé gardait l'ancienne position du vecteur.
-- **La mise à jour d'un vecteur perd des lignes dans l'index** (extension vector, en
-  service, sans arrêt ni rejeu ; trouvé le 3 octobre par la session cœur C++, non corrigé).
-  Mille lignes indexées, `MATCH (n:Doc) WHERE n.id >= 100 AND n.id < 120 SET n.vec =
-  [7.0, 7.0, 7.0, 7.0]`, et une recherche exhaustive (`k = 1000`, `efs := 1000`) ne rend
-  plus que 998 lignes ; un point de reprise n'y change rien. Les lignes sont dans la table,
-  l'index ne les atteint plus : du rappel perdu sans erreur. C'est notre chemin de mise à
-  jour de l'index (`98e35566a`), le pendant de ce que `13284a0fe` a corrigé pour la
-  suppression (`keepNodeReachable`). Témoin au banc, rouge sous ce nom :
-  `Writes/ExtensionIndexRecovery.IndexMaintainedWhenTheJournalHoldsTheLoad/UpdateVector`.
-  À savoir avant de le placer : si rag3weaver met à jour des vecteurs en place ou supprime
-  et réinsère (question posée à la session de l'arbre principal).
+- **Une transaction relisait de travers ses propres relations, et écrivait faux à partir
+  de là : corrigé le 4 octobre 2026 (`c8fdaf196`).** Défaut du moteur d'origine, sans
+  rapport avec l'index vectoriel, atteignable par Cypher. Une transaction supprime des
+  relations d'un nœud qui sont **sur disque** (écrites par un point de reprise), en crée de
+  nouvelles depuis ce nœud, puis relit : elle recevait les survivantes, puis la même relation
+  locale répétée à la place des nouvelles (`{ 1, 3, …, 59, 100, 100, 100, … }`). **Ce
+  n'était pas qu'une lecture fausse** : dans la même transaction, un `DELETE` des relations
+  qu'elle venait de créer en laissait, et un `MERGE` des mêmes en créait en double — la base
+  restait fausse après le `COMMIT`. **Une base existante peut donc porter des relations en
+  trop ou en double** si une transaction explicite a supprimé, créé puis réécrit les
+  relations d'un même nœud ; aucun outil ne le détecte aujourd'hui. **Ce qui n'est pas
+  touché** : des relations validées encore en mémoire ; une transaction sans suppression —
+  un `MERGE` par lot depuis un même nœud, sans `DELETE`, est juste ; rag3weaver, qui valide
+  chaque instruction seule, n'y passe pas, sauf par l'index vectoriel, qui supprime et
+  recrée ses arêtes à chaque mise à jour d'un vecteur. La cause : le balayage des relations
+  sur disque laisse le vecteur de sélection en mode filtré quand la transaction en a
+  supprimé, et `LocalRelTable::scan` n'en changeait que la taille. Ladybug avait posé la
+  même ligne (`ffe855873`, 23 avril 2026) ; Vela non. Témoin :
+  `test/transaction/uncommitted_rels_scan_test.cpp`, six cas, et la suite
+  `UncommittedRelations` du banc. **Leçon du témoin** : la première version était verte
+  avant comme après, parce que ses relations étaient encore en mémoire — il manquait un
+  `CHECKPOINT`.
+- **La mise à jour d'un vecteur perdait des lignes dans l'index : deux causes corrigées le
+  4 octobre 2026 (`c8fdaf196`), une troisième ouverte.** En service, sans arrêt ni rejeu.
+  Mesure d'origine sur master (1000 lignes de dimension 4, recherche exhaustive depuis une
+  sonde, lignes joignables) : `SET` depuis NULL, 1000 ; `SET` vers un autre vecteur pour les
+  mille lignes, 969 ligne à ligne et 532 par lots de 512 ; vingt `SET` vers le même vecteur
+  en une instruction, 998. **Ces comptes varient d'une passe à l'autre** (le tirage des
+  niveaux de l'index : la session du banc a mesuré 779, 593, 772 pour la même variante) :
+  ordre de grandeur, pas un seuil. Le chemin principal de rag3weaver — les morceaux insérés
+  sans vecteur, puis les vecteurs posés — n'a jamais été touché ; le réembarquement d'une
+  ligne gardée l'est, rare chez nous. **Corrigé** : `OnDiskHNSWIndex::update` garde
+  joignables les anciens voisins de la ligne (la suppression le faisait depuis `13284a0fe`) ;
+  et l'index relit juste ses arêtes dans une instruction à plusieurs lignes (l'entrée
+  précédente). Au passage disparaît un échec des grosses transactions de mises à jour,
+  « bitset::set: __position (which is 2049) >= _Nb (which is 2048) ». **Ouvert** : quand
+  presque toutes les lignes d'une table sont mises à jour, il reste des lignes injoignables
+  (865 et 491 dans une passe, 1000 et 964 dans une autre) ; l'élagage des voisins retire des
+  arêtes entrantes à des nœuds que personne ne recontrôle. Il faut un passage en fin
+  d'instruction — un `finalize` de la mise à jour, comme pour la suppression ; l'état de mise
+  à jour de l'index est aujourd'hui recréé à chaque ligne. **Contournement sûr** : supprimer
+  puis réinsérer la ligne ; en masse, retirer l'index, poser les vecteurs, le recréer.
+  Repasser par NULL n'est pas sûr par lots (599 sur 1000 avant correction). Notre greffe
+  (`98e35566a`) ; Ladybug n'a ni mise à jour ni suppression dans son HNSW.
 - **`e2e_idempotent_registration` rougit environ une fois sur dix à la réouverture**
   (`register_entity_persists_and_reloads`) : « Runtime exception: Reading past the end of
   the file …/test.db.wal with size 0 at offset 0 ». Mesuré le 3 octobre : 2 rouges sur 20
@@ -981,11 +1025,19 @@ sessions, pas d'une vérification.
   et la marche T0 la laisse en échec. Un client qui n'a pas ouvert le bloc ne doit pas
   avoir à le fermer. Vu le 3 octobre, non examiné ; une suite de T0, à reprendre avec les
   verrous.
-- **Ladybug est un amont vivant, à surveiller en plus de Vela.** Trois correctifs qui nous
-  manquaient y ont été trouvés le 3 octobre (la recherche par clé par ligne, les gardes des
-  index non chargés). Son histoire est séparée de la nôtre (espace de noms `lbug`, même
-  arborescence) : on porte, on ne cherry-pick pas. À regarder, pas fait : ce qu'il a changé
-  depuis notre fork à la reprise après panne et à l'index HNSW (mise à jour, construction).
+- **Les amonts : on les lit, on ne leur transmet rien, on ne copie pas** (décision de
+  Lucie, 4 octobre 2026 : « Vela, ils ont pas l'air très sérieux, et Kuzu un peu mort, donc
+  non on leur transmet rien » ; tout reste sous LRSL). Ladybug est sous MIT (« Kùzu Inc.,
+  Ladybug Memory Inc. », lu dans son `LICENSE` au tag `ladybug-main-2026-08-31`) ; à ce
+  jour aucun code de Ladybug n'est copié chez nous — des idées lues puis réécrites (les
+  gardes des index non chargés), et une ligne trouvée indépendamment (la sélection des
+  relations locales). La règle : chaque commit qui doit quelque chose à un amont dit ce qui
+  vient d'où, « lu puis réécrit » avec le commit cité ; copier un bloc se demande avant, et
+  c'est Lucie qui tranche l'ajout à `NOTICE`. Quatre correctifs qui nous manquaient y ont
+  été trouvés (`e92346c97` et suite, `d2db8acb4`, `1ba0cc540`, `ffe855873`) : la session du
+  banc fait un passage en lecture seule sur ses commits de stockage, avec un témoin rouge
+  par correctif atteignable en service. Son histoire est séparée de la nôtre (espace de
+  noms `lbug`, même arborescence) ; celle de Vela nous est commune jusqu'au 10 octobre 2025.
 - **`UNWIND $items AS item MATCH (n {_uuid: item.champ})` balaie la table entière**
   (planificateur, trouvé le 3 octobre par la session cœur C++, non corrigé ; un
   contournement existe). Toute écriture par lot qui retrouve ses nœuds par la clé primaire

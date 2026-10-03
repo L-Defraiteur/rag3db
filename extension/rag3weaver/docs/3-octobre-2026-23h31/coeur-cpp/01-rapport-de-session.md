@@ -20,83 +20,52 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Marche A5 bis | `7487fae08` | l'ajout en mémoire ne réalloue plus un bloc sous une recherche vectorielle |
 | `DROP` d'index au rejeu | `f5acca417` | le rejeu retire aussi l'index de la table |
 | Garde 1 de la reprise | `fcd9a7882` | une base ne plante plus à l'ouverture ; l'index se dit « en retard » |
+| Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
 
-**Le `SET` d'un vecteur vers un autre perd des lignes dans l'index** (en service, sans
-arrêt). Branche locale `set-de-vecteur-et-index`, **rien de commité** ; l'état de travail
-est dans `annexes/set-de-vecteur/` (`etat-de-travail-complet.patch` s'applique sur master
-`fcd9a7882` et suivants).
+**La garde 2 de la reprise** (ordre de l'orchestration, 4 octobre) : rendre la demi-page —
+version de stockage montée, marqueur dans l'en-tête, ou enregistrement réécrit en tête du
+journal — avec une recommandation, puis la coder. Le repérage est dans le relevé de
+connaissances, §1. Dans le même lot : le rejeu continue quand le fichier d'une extension
+notée au journal a disparu (aujourd'hui la base ne s'ouvre pas).
 
-Ce qui est établi (C++ seul, 1000 lignes de dimension 4, recherche exhaustive depuis une
-sonde, lignes joignables sur 1000) :
+**La mise à jour de vecteur, ce qui reste** (après la garde 2, avant V1 seulement si
+l'invariant côté produit rougit) : quand presque toutes les lignes d'une table sont mises à
+jour, il reste des lignes injoignables, en nombre variable d'une passe à l'autre. Piste :
+un `finalize` de la mise à jour, comme pour la suppression — l'état de mise à jour de
+l'index est recréé à chaque ligne, rien ne s'y accumule. À regarder aussi : `shrinkForNode`
+reprend ses voisins à partir du second (`for (auto i = 1u; …)`), code de l'amont, non
+examiné. Pas fait : la dimension 768, les dix mille lignes, la ligne lointaine à la
+construction. Les brouillons et l'état de travail d'avant livraison sont dans
+`annexes/set-de-vecteur/`.
 
-| Variante, sur master | ligne à ligne | lots de 512 |
-|---|---|---|
-| `SET` depuis NULL, les mille lignes | 1000 | 1000 |
-| `SET` vers un autre vecteur, les mille lignes | 969 | 532 |
-| vingt `SET` vers le même vecteur | 1000 | 998 |
-| supprimer puis réinsérer la ligne | 1000 | 1000 |
-| repasser par NULL (deux `SET`) | 1000 | 599 |
-| retirer l'index, `SET`, recréer l'index | — | 1000 |
+## Les amonts et la licence (4 octobre 2026)
 
-- **Le compte n'est pas stable d'une passe à l'autre** (le tirage des niveaux de l'index) :
-  la session du banc a mesuré 779, 593, 772 pour la même variante. Tout témoin doit être
-  joué plusieurs fois, avec le seuil « toutes joignables ».
-- Le chemin principal de rag3weaver (morceaux insérés sans vecteur, puis vecteurs posés)
-  n'est pas touché. Le réembarquement d'une ligne gardée l'est ; la session de l'arbre
-  principal le dit rare et n'ajoute pas de contournement. **Contournement sûr s'il en faut
-  un** : supprimer puis réinsérer la ligne ; en masse, retirer et recréer l'index.
-  Repasser par NULL n'est pas sûr par lots.
-- Ladybug n'a ni mise à jour ni suppression dans son HNSW : rien à reprendre, tout ce
-  chemin est notre greffe `98e35566a`.
-
-Trois causes, où j'en suis de chacune :
-1. **`OnDiskHNSWIndex::update` ne gardait pas joignables les anciens voisins** de la ligne
-   (la suppression le fait depuis `13284a0fe`). Corrigé dans l'état de travail
-   (`correctif-1-voisins-joignables.patch`). Effet mesuré seul : ligne à ligne 969 → 1000,
-   vingt vers le même vecteur en une instruction 998 → 1000.
-2. **Dans une instruction à plusieurs lignes, l'index relit de travers ses arêtes non
-   validées** : le nœud qu'il vient de réinsérer rend 59 fois le même voisin au lieu de 59
-   voisins. Les arêtes écrites sont justes (relues après le commit) ; c'est la lecture dans
-   la transaction qui est fausse, et tout ce qui relit ses voisins (élagage, réparation)
-   travaille alors sur du faux. `correctif-2-selection-des-relations-locales.patch`
-   (`LocalRelTable::scan` pose `setToUnfiltered` au lieu de changer la seule taille du
-   vecteur de sélection) rend la lecture juste. **Mais je n'ai pas compris par où le
-   vecteur de sélection arrive périmé** : mon témoin au niveau du moteur
-   (`uncommitted_rels_scan_test.cpp`, par `MATCH` et par `graph::OnDiskGraph`) est vert
-   avant comme après. À faire : trouver ce qui distingue le chemin de l'index (une
-   instruction à plusieurs lignes, `detachDelete` de toutes les arêtes sortantes puis
-   réinsertion) de ce témoin.
-3. **Une grosse transaction de mises à jour échouait** sur « bitset::set: __position (which
-   is 2049) >= _Nb (which is 2048) » (mille `SET` en une instruction, ou vers la 465e ligne
-   d'un `BEGIN … COMMIT`). Disparu avec le correctif 2 : c'était sans doute la lecture
-   fausse qui faisait demander plus de 2048 vecteurs d'un coup. Non vérifié autrement.
-
-Avec les correctifs 1 et 2, plus aucune instruction n'échoue, mais **il reste des pertes**
-(par exemple 865 ligne à ligne, 491 par lots de 512 dans une passe ; 1000 et 964 dans une
-autre) : quand toutes les lignes sont mises à jour, l'élagage des voisins retire des arêtes
-entrantes à des nœuds que personne ne recontrôle. Piste : un passage de contrôle en fin
-d'instruction sur tout ce qu'elle a touché — il faut pour cela un `finalize` de la mise à
-jour, comme celui de la suppression ; l'état de mise à jour de l'index est aujourd'hui
-recréé à chaque ligne. À regarder aussi : `shrinkForNode` reprend ses voisins à partir du
-second (`for (auto i = 1u; …)`), donc laisse tomber le plus proche — code de l'amont, non
-examiné.
-
-Pas encore fait : la dimension 768, les dix mille lignes, la ligne lointaine injoignable à
-la construction.
-
-Le repérage de la garde 2 est rendu (voir le relevé de connaissances, §1).
+Décision de Lucie : on lit les amonts, on ne leur transmet rien ; tout reste sous LRSL ;
+par défaut, **lire, ne pas copier**.
+- Ladybug est sous MIT (« Copyright (c) 2022-2025 Kùzu Inc. — Copyright (c) 2025-2026
+  Ladybug Memory Inc. », `LICENSE` au tag `ladybug-main-2026-08-31`). Notre `LICENSE` est la
+  LRSL et renvoie à `NOTICE` pour la notice MIT de Kuzu ; `NOTICE` ne mentionne pas Ladybug.
+- Ce qui a été repris, et comment : les gardes des index non chargés (`d2db8acb4`,
+  `1ba0cc540`) — lues puis réécrites (`NodeTable::isWritableIndex`, l'index détaché, le refus
+  nommé sont à nous) ; la ligne de `LocalRelTable::scan` (`ffe855873`) — écrite ici avant
+  d'avoir lu la leur, retrouvée identique ensuite ; le `DROP` d'index au rejeu — correction
+  différente de la leur. Aucun bloc copié ; non vérifié par un outil de comparaison.
+- La règle : le message de commit dit ce qui vient d'où (« lu puis réécrit », commit de
+  l'amont cité). Copier un bloc — le port de `e92346c97` serait le premier cas tentant — se
+  demande avant ; c'est Lucie qui tranche l'ajout d'une ligne à `NOTICE`.
 
 ## L'ordre, et pourquoi
 
-1. **Le `SET` vecteur → vecteur** (orchestration, 3 octobre au soir) : un index faux en
-   service passe devant un confort.
-2. **La garde 2 de la reprise** : que le rejeu ait l'extension avant de rejouer. Sans elle,
-   chaque mort pendant une écriture dans une table indexée coûte un index entier à rebâtir.
+1. **La garde 2 de la reprise** : que le rejeu ait l'extension avant de rejouer. Sans elle,
+   chaque mort pendant une écriture dans une table indexée coûte un index entier à rebâtir,
+   sur le chemin de chaque première indexation.
+2. **La mise à jour massive de vecteurs** : rare chez nous et contournable ; avant V1
+   seulement si l'invariant côté produit rougit.
 3. **Les verrous** (décision de Lucie : avant H4) : V1, A3′, A4′, V2, puis la maintenance de
    l'index vectoriel au commit — une marche du plan, pas un affinage : sans elle deux
    écrivains sur la même table indexée s'attendent du début à la fin.
@@ -147,6 +116,12 @@ Le repérage de la garde 2 est rendu (voir le relevé de connaissances, §1).
   écrivent eux-mêmes un point de reprise ; la reprise aussi, à la fin du rejeu.
 - Un processus qui a déjà chargé l'extension vector ne voit pas les défauts du rejeu sans
   extension : rouvrir dans un processus neuf (`exec`).
+- Un témoin vert avant comme après un correctif ne prouve rien : celui des relations relues
+  de travers était vert parce que ses relations étaient encore en mémoire — il manquait un
+  `CHECKPOINT`. Le jouer d'abord sans le correctif.
+- Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
+  joignables », plusieurs passes.
+- La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
 - Une ligne très loin des autres est injoignable dans un index bâti d'un coup : ne pas
   s'en servir comme sonde dans un test qui prouve autre chose.
 - Le poste est partagé par plusieurs sessions : une mesure de temps faite sous charge ne
