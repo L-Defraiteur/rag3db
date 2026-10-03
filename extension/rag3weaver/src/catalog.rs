@@ -4703,6 +4703,8 @@ impl Catalog {
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
         let avec_embarquement = exige.dense() || exige.sparse();
+        let t_appel = std::time::Instant::now();
+        let t = std::time::Instant::now();
         self.check_initialized()?;
         self.check_ecriture("ingest_entities")?;
         if avec_embarquement {
@@ -4720,7 +4722,11 @@ impl Catalog {
         // Même contrat que `drain()` : sans handle ouvert, l'indexation FTS est
         // sautée en silence. `ingest_entities` a son propre graphe, il faut donc
         // l'ouvrir ici aussi.
+        crate::ingest_profile::add("entités · gardes", t);
+        let t = std::time::Instant::now();
         self.open_fts_handles_for(&[entity_name.to_string()]);
+        crate::ingest_profile::add("entités · ouvrir les index plein texte", t);
+        let t = std::time::Instant::now();
 
         // Ensure chunker is cached for this entity's config
         let chunker_key = ChunkerConfig::from(&entity_config.chunking);
@@ -4772,7 +4778,11 @@ impl Catalog {
         // vecteur se pose avec la ligne. Au moindre doute (table non vide,
         // moteur sans COPY, entité d'une base de connaissances), le chemin
         // de toujours. Mesuré le 6 septembre 2026 sur le cœur C++ de rag3db.
+        crate::ingest_profile::add("entités · construire les enregistrements (uuid, hash)", t);
+        let t = std::time::Instant::now();
         let premiere_ingestion = self.premiere_ingestion_possible(entity_name, &entity_config);
+        crate::ingest_profile::add("entités · la table est-elle vide ? (COUNT)", t);
+        let t = std::time::Instant::now();
         let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
         if premiere_ingestion && profil {
             eprintln!("[ingest-profile] {entity_name} : première ingestion, {record_count} lignes par le chemin de masse");
@@ -4791,6 +4801,8 @@ impl Catalog {
         } else {
             self.split_unchanged(entity_name, &entity_config, entity_records)
         };
+        crate::ingest_profile::add("entités · relire ce qui est en base (inchangés)", t);
+        let t = std::time::Instant::now();
 
         // **Un lot de naissances : le chemin de masse aussi.** La table n'est
         // pas vide, mais aucune ligne de ce lot n'y est : la relecture vient de
@@ -4867,7 +4879,11 @@ impl Catalog {
                 ))
             })
             .collect();
+        crate::ingest_profile::add("entités · cycle de vie et tri du lot", t);
+        let t = std::time::Instant::now();
         let aside_return = self.take_from_aside(entity_name, &pairs)?;
+        crate::ingest_profile::add("entités · reprendre la mise de côté", t);
+        let t = std::time::Instant::now();
 
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
@@ -4925,9 +4941,13 @@ impl Catalog {
         graph.add_node(Box::new(FlushNode::new("flush_fts", vec![entity_name.to_string()]))).unwrap();
         graph.connect("insert", "done", "flush_fts", "trigger").unwrap();
 
+        crate::ingest_profile::add("entités · monter le graphe", t);
+        let t = std::time::Instant::now();
         // Build services
         let mut services = ServiceRegistry::new();
         let canal = self.enregistrer_les_services_d_ingestion(&mut services);
+        crate::ingest_profile::add("entités · enregistrer les services (méta, clones de config)", t);
+        let t = std::time::Instant::now();
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
         if !aside_return.known.by_chunk.is_empty() {
             services.register(aside::SERVICE_KNOWN_VECTORS, Arc::new(aside_return.known.clone()));
@@ -4952,11 +4972,17 @@ impl Catalog {
         let execution_id = crate::dataflow::checkpoint::execution_id("ingest", &graph_def.hash());
 
         let mode = entity_config.checkpoint.unwrap_or(self.config.checkpoint_mode);
+        crate::ingest_profile::add("entités · runtime, définition et empreinte du graphe", t);
+        let t = std::time::Instant::now();
         let result = match (&self.checkpoint_store, mode) {
             (Some(store), crate::config::CheckpointMode::Full | crate::config::CheckpointMode::Operations) => runtime
                 .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
             _ => runtime.execute(&mut graph),
         };
+        // Le total de l'exécution ; les nœuds eux-mêmes sont ajoutés plus bas.
+        // La différence est ce que le runtime fait autour d'eux — les points
+        // de reprise, surtout.
+        crate::ingest_profile::add("entités · exécuter le graphe (nœuds + points de reprise)", t);
 
         if let Some(rx) = rx.as_mut() {
             let mut by_node: Vec<(String, u64)> = Vec::new();
@@ -4970,6 +4996,10 @@ impl Catalog {
                 }
             }
             by_node.sort_by(|a, b| b.1.cmp(&a.1));
+            for (node, ms) in &by_node {
+                let name = node.split(' ').next().unwrap_or(node);
+                crate::ingest_profile::add_duration(crate::ingest_profile::node_stage(name), std::time::Duration::from_millis(*ms));
+            }
             for (node, ms) in by_node {
                 eprintln!("[ingest-profile] {ms:>6} ms  {node}");
             }
@@ -4980,6 +5010,7 @@ impl Catalog {
             Ok(_output) => {
                 // Les entités dérivées de celle-ci, ou qui la rassemblent : à
                 // rendre, dans un drain borné à sa fermeture.
+                let t = std::time::Instant::now();
                 let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
                 derivations.extend(self.derivations_pour_voisine(entity_name, &uuids_ingeres));
                 if !derivations.is_empty() {
@@ -4997,11 +5028,19 @@ impl Catalog {
                 // Frontière de durabilité : sans ce flush, les fichiers d'index
                 // commités par ce graphe restaient dans le tampon jusqu'au
                 // prochain drain — ou au Drop.
+                crate::ingest_profile::add("entités · dérivations", t);
+                let t = std::time::Instant::now();
                 self.flush_blob_store("ingest")?;
+                crate::ingest_profile::add("entités · pousser les blobs d'index en base", t);
                 self.signaler_les_troncatures("ingest_entities");
                 // Les copies lues sont vidées une fois l'écriture faite.
+                let t = std::time::Instant::now();
                 self.clear_aside(entity_name, &aside_return.consumed)?;
+                crate::ingest_profile::add("entités · vider la mise de côté", t);
+                let t = std::time::Instant::now();
                 self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+                crate::ingest_profile::add("entités · marquer les écritures de la session (relit le lot)", t);
+                crate::ingest_profile::add("entités · TOTAL des appels", t_appel);
                 // **Dire ce qui a changé**, et seulement au succès : une
                 // ingestion qui échoue n'a rien changé, et l'annoncer ferait
                 // relire des mémoires pour rien.

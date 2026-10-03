@@ -678,6 +678,8 @@ impl SyncProfile {
         for (stage, total) in &self.stages {
             eprintln!("[sync-profile] {:>7} ms  {stage}", total.as_millis());
         }
+        // Le détail de l'ingestion, cumulé sur toute la source.
+        crate::ingest_profile::publish();
     }
 }
 
