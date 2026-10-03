@@ -21,8 +21,14 @@ static void initHNSWEntries(main::ClientContext* context) {
             auto& nodeTable =
                 storageManager->getTable(indexEntry->getTableID())->cast<storage::NodeTable>();
             auto optionalIndex = nodeTable.getIndexHolder(indexEntry->getIndexName());
-            KU_ASSERT_UNCONDITIONAL(
-                optionalIndex.has_value() && !optionalIndex.value().get().isLoaded());
+            if (!optionalIndex.has_value()) {
+                // Une entrée au catalogue sans exemplaire dans la table : le rejeu du journal
+                // a écrit dans la table pendant que cette extension n'était pas chargée, et
+                // l'index a été détaché. Il n'y a rien à charger ; l'index est à rebâtir, et
+                // HNSWIndexUtils le dit à qui veut s'en servir.
+                continue;
+            }
+            KU_ASSERT_UNCONDITIONAL(!optionalIndex.value().get().isLoaded());
             auto& unloadedIndex = optionalIndex.value().get();
             unloadedIndex.load(context, storageManager);
         }

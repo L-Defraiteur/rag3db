@@ -197,11 +197,18 @@ public:
         uint32_t storageInfoBufferSize);
 
     std::string getName() const { return indexInfo.name; }
+    const IndexInfo& getIndexInfo() const { return indexInfo; }
     bool isLoaded() const { return loaded; }
+    // Détaché : le rejeu du journal a écrit dans la table sans pouvoir tenir cet index à
+    // jour (son extension n'était pas chargée). Il n'est plus un index de la table : il
+    // n'est plus écrit au point de reprise, et son entrée au catalogue reste seule — c'est
+    // l'état « à rebâtir », que l'extension nomme quand on veut s'en servir.
+    bool isDetached() const { return detached; }
+    void detach() { detached = true; }
 
     void serialize(common::Serializer& ser) const;
     RAG3DB_API void load(main::ClientContext* context, StorageManager* storageManager);
-    bool needCommitInsert() const { return index->needCommitInsert(); }
+    bool needCommitInsert() const { return index && index->needCommitInsert(); }
     // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
     void checkpoint(main::ClientContext* context, PageAllocator& pageAllocator) {
         if (loaded) {
@@ -234,6 +241,7 @@ private:
     std::unique_ptr<uint8_t[]> storageInfoBuffer;
     uint64_t storageInfoBufferSize;
     bool loaded;
+    bool detached = false;
 
     // Loaded index structure.
     std::unique_ptr<Index> index;

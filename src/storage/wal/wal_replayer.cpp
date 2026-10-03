@@ -674,6 +674,9 @@ void WALReplayer::replayNodeUpdateRecord(const WALRecord& walRecord) const {
         *nodeIDVector, *updateRecord.ownedPropertyVector);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
+    // Sans cela la mise à jour rejouée ne dit rien aux index de la colonne : un index chargé
+    // garderait l'ancienne valeur, un index non chargé ne serait pas détaché.
+    table.initUpdateState(&clientContext, *updateState);
     table.update(transaction::Transaction::Get(clientContext), *updateState);
 }
 

@@ -127,25 +127,27 @@ IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks
 # MARCHE « REPRISE AVEC INDEX D'EXTENSION » — mode en service, un seul écrivain ; à part des
 # verrous. Le journal ne porte plus le LOAD EXTENSION (un point de reprise après le
 # chargement de l'extension, ou la création d'un index, qui en écrit un), puis une écriture
-# dans la table indexée, puis la mort : la base fait planter le processus qui l'ouvre
-# (SIGSEGV dans NodeTable::initInsertState au rejeu, avant tout LOAD EXTENSION). Vu par une
-# ouverture dans un processus neuf, comme un service qui redémarre (3 octobre au soir).
-# Garde 1 : la base s'ouvre avec toutes ses lignes, l'index « à rebâtir » le dit par une
-# erreur nommée (fragment « is behind its table », HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE) ;
-# garde 2 : l'index est juste sans
-# rebâtir. Quand la garde 2 arrivera, les témoins IndexToRebuildIsNamed deviendront rouges
-# pour une autre raison : elle les retirera dans son commit.
-SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery database-opens-without-crash
-SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact database-opens-without-crash
-Writes/ExtensionIndexRecovery.OpensWithEveryCommittedRow/Insert database-opens-without-crash
-Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/Insert database-opens-without-crash
-Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert database-opens-without-crash
-Writes/ExtensionIndexRecovery.SecondDeathAfterRecovery/Insert database-opens-without-crash
-Writes/ExtensionIndexRecovery.OpensWithEveryCommittedRow/Delete database-opens-without-crash
-Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/Delete database-opens-without-crash
-Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete database-opens-without-crash
-Writes/ExtensionIndexRecovery.SecondDeathAfterRecovery/Delete database-opens-without-crash
-# La mise à jour d'un vecteur ne plante pas et l'index reste exact aujourd'hui ; la garde 1
-# s'y applique aussi (session cœur C++) : son témoin est rouge tant qu'elle n'est pas
-# livrée.
-Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/UpdateVector create-names-index-to-rebuild,search-names-index-to-rebuild
+# dans la table indexée, puis la mort. Vu par une ouverture dans un processus neuf, comme un
+# service qui redémarre (3 octobre au soir).
+# GARDE 1, LIVRÉE : la base s'ouvre avec toutes ses lignes (elle faisait planter le processus
+# qui l'ouvrait, SIGSEGV dans NodeTable::initInsertState au rejeu), et l'index « à rebâtir »
+# le dit par une erreur nommée (fragment « is behind its table »,
+# HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE). Ses témoins sont verts et ont quitté cette liste.
+# GARDE 2, À FAIRE : l'index est juste sans rebâtir. Ses témoins sont rouges parce que la
+# recherche refuse par le nom de la garde 1 (search-works ; « untagged » pour les deux cas
+# qui échouent sur une requête sans étiquette). Quand la garde 2 arrivera, les témoins
+# IndexToRebuildIsNamed deviendront rouges pour une autre raison : elle les retirera dans son
+# commit.
+SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery untagged
+SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact untagged
+Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert search-works,untagged
+Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete search-works,untagged
+Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/UpdateVector index-knows-new-vectors,search-works,untagged
+#
+# La mise à jour d'un vecteur perd des lignes dans l'index — EN SERVICE, sans arrêt ni rejeu
+# (session cœur C++, 3 octobre) : mille lignes indexées, vingt mises à jour vers le même
+# vecteur, et une recherche exhaustive ne rend plus que 998 lignes. Défaut du chemin de mise
+# à jour de l'index, non corrigé. Il apparaît ici depuis la garde 1 parce que le rejeu d'une
+# mise à jour informe désormais un index chargé, comme le fait une mise à jour en service ;
+# avant, le rejeu ne lui disait rien et l'index gardait d'anciennes positions.
+Writes/ExtensionIndexRecovery.IndexMaintainedWhenTheJournalHoldsTheLoad/UpdateVector vector-index-complete

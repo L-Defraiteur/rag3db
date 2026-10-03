@@ -152,6 +152,9 @@ public:
 
     void addIndex(std::unique_ptr<Index> index);
     void dropIndex(const std::string& name);
+    // Le nom du refus d'écrire dans une table dont un index n'est pas chargé.
+    static constexpr const char* INDEX_NOT_LOADED_FOR_WRITE =
+        "is not loaded: load its extension before writing to table";
 
     common::column_id_t getPKColumnID() const { return pkColumnID; }
     PrimaryKeyIndex* getPKIndex() const {
@@ -212,6 +215,12 @@ public:
     void serialize(common::Serializer& serializer) const override;
     void deserialize(main::ClientContext* context, StorageManager* storageManager,
         common::Deserializer& deSer) override;
+
+private:
+    // Un index dans lequel une écriture peut passer. Un index non chargé ne l'est pas :
+    // pendant le rejeu du journal il est détaché (la table reçoit la ligne, l'index sera à
+    // rebâtir) ; hors rejeu, l'écriture est refusée par INDEX_NOT_LOADED_FOR_WRITE.
+    bool isWritableIndex(IndexHolder& indexHolder, const transaction::Transaction* transaction);
 
 private:
     void validatePkNotExists(const transaction::Transaction* transaction,

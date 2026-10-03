@@ -4,8 +4,11 @@
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/exception/binder.h"
+#include "common/exception/runtime.h"
 #include "common/types/types.h"
 #include "simsimd.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
 #include "transaction/transaction_context.h"
 
 namespace rag3db {
@@ -18,6 +21,22 @@ bool HNSWIndexUtils::indexExists(const main::ClientContext& context,
         indexName);
 }
 
+// L'index est au catalogue mais la table n'en porte plus l'exemplaire : le rejeu du journal a
+// écrit dans la table sans lui (voir IndexHolder::detach). Il ne répond plus de rien ; on le
+// retire et on le rebâtit.
+static void throwIfBehindItsTable(const main::ClientContext& context,
+    const catalog::TableCatalogEntry* tableEntry, const std::string& indexName) {
+    auto& nodeTable = storage::StorageManager::Get(context)
+                          ->getTable(tableEntry->getTableID())
+                          ->cast<storage::NodeTable>();
+    if (!nodeTable.getIndexHolder(indexName).has_value()) {
+        throw common::RuntimeException{common::stringFormat(
+            "Index {} {} {}: rows were recovered from the journal while its extension was not "
+            "loaded. Drop it and build it again.",
+            indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableEntry->getName())};
+    }
+}
+
 bool HNSWIndexUtils::validateIndexExistence(const main::ClientContext& context,
     const catalog::TableCatalogEntry* tableEntry, const std::string& indexName,
     IndexOperation indexOperation, common::ConflictAction conflictAction) {
@@ -25,6 +44,7 @@ bool HNSWIndexUtils::validateIndexExistence(const main::ClientContext& context,
     switch (indexOperation) {
     case IndexOperation::CREATE: {
         if (indexExists(context, transaction, tableEntry, indexName)) {
+            throwIfBehindItsTable(context, tableEntry, indexName);
             switch (conflictAction) {
             case common::ConflictAction::ON_CONFLICT_THROW:
                 throw common::BinderException{common::stringFormat(
@@ -57,6 +77,7 @@ bool HNSWIndexUtils::validateIndexExistence(const main::ClientContext& context,
             throw common::BinderException{common::stringFormat(
                 "Table {} doesn't have an index with name {}.", tableEntry->getName(), indexName)};
         }
+        throwIfBehindItsTable(context, tableEntry, indexName);
         return true;
     } break;
     default: {

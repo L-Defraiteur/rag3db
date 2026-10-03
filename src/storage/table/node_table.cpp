@@ -453,11 +453,31 @@ void NodeTable::validatePkNotExists(const Transaction* transaction, ValueVector*
     }
 }
 
+bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* transaction) {
+    if (indexHolder.isDetached()) {
+        return false;
+    }
+    if (indexHolder.isLoaded()) {
+        return true;
+    }
+    if (transaction->isRecovery()) {
+        indexHolder.detach();
+        hasChanges = true;
+        return false;
+    }
+    throw RuntimeException(stringFormat("Index {} {} {}.", indexHolder.getName(),
+        INDEX_NOT_LOADED_FOR_WRITE, tableName));
+}
+
 void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& insertState) {
     auto& nodeInsertState = insertState.cast<NodeTableInsertState>();
     nodeInsertState.indexInsertStates.resize(indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
+        if (!isWritableIndex(indexHolder, transaction::Transaction::Get(*context))) {
+            nodeInsertState.indexInsertStates[i] = nullptr;
+            continue;
+        }
         const auto index = indexHolder.getIndex();
         nodeInsertState.indexInsertStates[i] =
             index->initInsertState(context, [&](offset_t offset) {
@@ -478,6 +498,9 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
     validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
     localTable->insert(transaction, insertState);
     for (auto i = 0u; i < indexes.size(); i++) {
+        if (!nodeInsertState.indexInsertStates[i]) {
+            continue; // index sauté par initInsertState
+        }
         auto index = indexes[i].getIndex();
         std::vector<ValueVector*> indexedPropertyVectors;
         for (const auto columnID : index->getIndexInfo().columnIDs) {
@@ -500,6 +523,19 @@ void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& 
     nodeUpdateState.indexUpdateState.resize(indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
+        if (!indexHolder.isLoaded()) {
+            // Un index non chargé ne répond pas ; sa description suffit à dire s'il porte
+            // sur la colonne. S'il n'y porte pas, la mise à jour ne le regarde pas.
+            const auto& columnIDs = indexHolder.getIndexInfo().columnIDs;
+            if (std::find(columnIDs.begin(), columnIDs.end(), nodeUpdateState.columnID) !=
+                columnIDs.end()) {
+                const_cast<NodeTable*>(this)->isWritableIndex(
+                    const_cast<IndexHolder&>(indexHolder),
+                    transaction::Transaction::Get(*context));
+            }
+            nodeUpdateState.indexUpdateState[i] = nullptr;
+            continue;
+        }
         auto index = indexHolder.getIndex();
         if (index->isPrimary() || !index->isBuiltOnColumn(nodeUpdateState.columnID)) {
             nodeUpdateState.indexUpdateState[i] = nullptr;
@@ -528,10 +564,10 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
     }
     const auto nodeOffset = nodeUpdateState.nodeIDVector.readNodeOffset(pos);
     for (auto i = 0u; i < indexes.size(); i++) {
-        auto index = indexes[i].getIndex();
         if (!nodeUpdateState.needToUpdateIndex(i)) {
             continue;
         }
+        auto index = indexes[i].getIndex();
         index->update(transaction, nodeUpdateState.nodeIDVector, nodeUpdateState.propertyVector,
             *nodeUpdateState.indexUpdateState[i]);
     }
@@ -566,6 +602,10 @@ void NodeTable::initDeleteStates(const Transaction* transaction, TableDeleteStat
     }
     nodeDeleteState.indexDeleteStates.resize(indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
+        if (!isWritableIndex(indexes[i], transaction)) {
+            nodeDeleteState.indexDeleteStates[i] = nullptr;
+            continue;
+        }
         nodeDeleteState.indexDeleteStates[i] =
             indexes[i].getIndex()->initDeleteState(transaction, memoryManager,
                 getVisibleFunc(transaction));
@@ -579,6 +619,9 @@ void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& delet
         return;
     }
     for (auto i = 0u; i < indexes.size(); i++) {
+        if (!nodeDeleteState.indexDeleteStates[i]) {
+            continue; // index sauté par initDeleteStates
+        }
         indexes[i].getIndex()->finalizeDelete(transaction, *nodeDeleteState.indexDeleteStates[i]);
     }
 }
@@ -595,6 +638,9 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     // Use pre-created index delete states (initialized once, reused across calls).
     initDeleteStates(transaction, deleteState);
     for (auto i = 0u; i < indexes.size(); i++) {
+        if (!nodeDeleteState.indexDeleteStates[i]) {
+            continue; // index sauté par initDeleteStates
+        }
         indexes[i].getIndex()->delete_(transaction, nodeDeleteState.nodeIDVector,
             *nodeDeleteState.indexDeleteStates[i]);
     }
@@ -720,13 +766,23 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
 
     // 3. Scan index columns for newly inserted tuples.
     for (auto& index : indexes) {
-        if (!index.needCommitInsert()) {
-            continue;
-        }
+        // Chargé d'abord : needCommitInsert interroge l'index lui-même.
         if (!index.isLoaded()) {
+            if (index.isDetached() || transaction->isRecovery()) {
+                // Au rejeu du journal, la table reçoit ses lignes sans cet index : il est
+                // détaché, à rebâtir.
+                if (!index.isDetached()) {
+                    index.detach();
+                    hasChanges = true;
+                }
+                continue;
+            }
             throw RuntimeException(
                 "Cannot commit index insertions for index " + index.getName() +
                 ", because it is not loaded. Please load the extension for the index first.");
+        }
+        if (!index.needCommitInsert()) {
+            continue;
         }
         UncommittedIndexInserter indexInserter{startNodeOffset, this, index.getIndex(),
             getVisibleFunc(transaction)};
@@ -870,6 +926,11 @@ void NodeTable::addIndex(std::unique_ptr<Index> index) {
     if (getIndex(index->getName()).has_value()) {
         throw RuntimeException("Index with name " + index->getName() + " already exists.");
     }
+    // Un exemplaire détaché du même nom n'est plus un index de la table : il cède la place.
+    std::erase_if(indexes, [&](const IndexHolder& holder) {
+        return holder.isDetached() &&
+               StringUtils::caseInsensitiveEquals(holder.getName(), index->getName());
+    });
     indexes.push_back(IndexHolder{std::move(index)});
     hasChanges = true;
 }
@@ -888,7 +949,7 @@ void NodeTable::dropIndex(const std::string& name) {
 std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
     const std::string& name) {
     for (auto& index : indexes) {
-        if (StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+        if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             return index;
         }
     }
@@ -897,7 +958,7 @@ std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
 
 std::optional<Index*> NodeTable::getIndex(const std::string& name) const {
     for (auto& index : indexes) {
-        if (StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+        if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             if (index.isLoaded()) {
                 return index.getIndex();
             }
@@ -910,9 +971,14 @@ std::optional<Index*> NodeTable::getIndex(const std::string& name) const {
 
 void NodeTable::serialize(Serializer& serializer) const {
     nodeGroups->serialize(serializer);
-    serializer.write<uint64_t>(indexes.size());
+    // Un index détaché n'est plus un index de la table : il n'est pas écrit.
+    const auto numAttached = std::count_if(indexes.begin(), indexes.end(),
+        [](const IndexHolder& holder) { return !holder.isDetached(); });
+    serializer.write<uint64_t>(numAttached);
     for (auto i = 0u; i < indexes.size(); ++i) {
-        indexes[i].serialize(serializer);
+        if (!indexes[i].isDetached()) {
+            indexes[i].serialize(serializer);
+        }
     }
 }
 

@@ -21,6 +21,12 @@ using metric_func_t = std::function<double(const void*, const void*, uint32_t)>;
 struct HNSWIndexUtils {
     enum class RAG3DB_API IndexOperation { CREATE, QUERY, DROP };
 
+    // Le nom du refus de chercher dans un index, ou de le recréer sans l'avoir retiré, quand
+    // il est au catalogue mais que la table ne le porte plus : le rejeu du journal a écrit
+    // dans la table pendant que l'extension n'était pas chargée. L'appelant le reconnaît à
+    // ce fragment, retire l'index (DROP_VECTOR_INDEX) et le rebâtit.
+    static constexpr const char* INDEX_BEHIND_ITS_TABLE = "is behind its table";
+
     static bool indexExists(const main::ClientContext& context,
         const transaction::Transaction* transaction, const catalog::TableCatalogEntry* tableEntry,
         const std::string& indexName);
