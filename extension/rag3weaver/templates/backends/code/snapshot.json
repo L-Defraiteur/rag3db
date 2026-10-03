@@ -70,7 +70,7 @@
     },
     "usages": {
       "graph": "../../tools/usages.mmd",
-      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence."
+      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence. Exige l'index : avant le premier index, un nom introuvable ici ne veut rien dire — prenez search_code, qui balaye les fichiers tant que rien n'est indexé."
     }
   }
 }
