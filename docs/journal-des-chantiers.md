@@ -705,6 +705,14 @@ premier index peut prendre de gros paquets, bornés en octets plutôt qu'en
 fichiers. Mesure de la session embarquements : le dépôt entier en un
 paquet fait 132 s (352 par paquets de 64), pour 16 Go au pic.
 
+**Gelé : le report de la poussée des blobs d'index.** C'était 119 s sur 352 par
+paquets de 64, à 0,29 s pour chacun des 404 appels d'`ingest_entities`. En un
+seul paquet, la même poussée ne coûte plus que 2 s, en 4 appels (mesure de la
+session embarquements). Le report, avec sa marque durable « plein texte en
+retard », est donc sans objet pour le premier index par gros paquets. Pour
+l'incrémental, ce n'est pas un gros poste. Ne pas le rouvrir sans une mesure
+qui le redemande.
+
 ### `SET` refuse un champ nul partout qu'un `CREATE` accepte (cœur C++, 3 octobre)
 
 `UNWIND $rows AS r MATCH (t:T {id: r.id}) SET t.v = r.v`, avec `v` nul dans toutes les

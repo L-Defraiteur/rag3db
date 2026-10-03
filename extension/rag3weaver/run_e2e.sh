@@ -272,6 +272,38 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 # échoue au hasard. Le script ne force rien : c'est le défaut de la
 # bibliothèque qui est testé ici. RAG3DB_MAX_DB_SIZE reste surchargeable.
 
+# **Contre quoi la passe tourne.** Un résultat qui ne dit pas contre quoi il a
+# été obtenu n'est pas un résultat (3 octobre 2026 : un SIGSEGV qui avait
+# l'air d'une régression venait d'une bibliothèque bâtie 1 h 38 avant le
+# correctif qu'on vérifiait). En tête de passe : la date et l'âge de la
+# bibliothèque et de l'extension liées ; et un refus si elles sont plus
+# vieilles que le dernier commit des sources du moteur (le commit résiste à
+# un `touch`). `RAG3WEAVER_MOTEUR_ANCIEN=1` passe outre, en le disant.
+verifier_le_moteur() {
+  local lib="$BUILD/src/librag3db.so" ext="$ROOT/extension/vector/build/libvector.rag3db_extension"
+  local sources_ct sources_de vieux=0 f ct
+  sources_ct=$(git -C "$ROOT" log -1 --format=%ct -- src extension/vector/src 2>/dev/null)
+  sources_de=$(git -C "$ROOT" log -1 --format='%h du %cd' --date=format:'%d/%m %H:%M' -- src extension/vector/src 2>/dev/null)
+  for f in "$lib" "$ext"; do
+    [ -f "$f" ] || continue
+    ct=$(stat -c %Y "$f")
+    echo "▸ moteur lié : $f — bâti le $(date -d "@$ct" '+%d/%m %H:%M'), il y a $(( ($(date +%s) - ct) / 60 )) min"
+    if [ -n "$sources_ct" ] && [ "$ct" -lt "$sources_ct" ]; then
+      echo "✗ $(basename "$f") est plus vieux que le dernier commit des sources du moteur ($sources_de)"
+      vieux=1
+    fi
+  done
+  if [ "$vieux" = 1 ]; then
+    if [ "${RAG3WEAVER_MOTEUR_ANCIEN:-}" = 1 ]; then
+      echo "⚠ RAG3WEAVER_MOTEUR_ANCIEN=1 : la passe tourne contre un moteur d'avant ces sources — à dire avec son résultat"
+    else
+      echo "✗ Rebâtir : cmake --build $BUILD -j 8 (ou ./run_e2e.sh --build-only), ou RAG3WEAVER_MOTEUR_ANCIEN=1 en le sachant."
+      exit 1
+    fi
+  fi
+}
+verifier_le_moteur
+
 # **Zéro test n'est pas une réussite** — dans les deux modes. Sans filtre,
 # chaque suite demandée doit jouer au moins un test ; avec un filtre, c'est la
 # passe entière (un filtre qui ne désigne rien est une faute de frappe, pas
