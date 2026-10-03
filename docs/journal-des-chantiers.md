@@ -673,6 +673,29 @@ sessions, pas d'une vérification.
   lifecycle. **Le prix, assumé** : un écrivain qui réécrit périodiquement une
   ligne que la source n'a plus empêche son retrait, sans bruit. Une écriture
   en Cypher brut ne marque pas.
+- **Les relations d'une première indexation, en masse ; le seuil du COPY des
+  liens à 200 ; un COPY de liens qui nomme ses colonnes** (3 octobre, soir).
+  *Décidé, et pourquoi* : Lucie — « gros dossier, on fait tout d'un coup » —,
+  parce que les relations posées paquet par paquet partaient par MERGE, dont
+  le coût grandit avec la base (sur `src/` du moteur, 2 à 5 s par paquet d'un
+  tiers à l'autre). `sync_source` pose désormais, pour une source sans rien en
+  base (`RelationsMode::Bulk`, le défaut alors), les nœuds et le plein texte
+  par paquets et toutes les relations à la fin, en une fois, avec une seule
+  résolution par Symbol ; la mémoire est bornée (la file est posée par COPY
+  au-delà de 200 000 liens) ; une marque `relations_pending:{cellule}:{source}`
+  dit, dès le début, que les relations ne sont pas encore là. **La mesure a
+  trouvé mieux en chemin** : le seuil du COPY des liens à 200 au lieu de
+  2 000 rend l'incrémental presque aussi rapide (48 s contre 92 s, durée par
+  paquet presque plate) — c'est lui qui sert la synchronisation d'une source
+  déjà indexée ; mesures dos à dos sous la charge du banc d'optimisation, à
+  lire en ordre de grandeur. **Le COPY des liens nomme ses colonnes** : sans
+  elles, deux colonnes texte d'une relation s'échangeaient sans erreur (relevé
+  par la session codeparsers, test `e2e_copy_liens` rouge avant). Reste,
+  au moteur : l'insertion par MERGE qui croît (session cœur C++). Vu une fois,
+  sur une bibliothèque d'avant A5 : `an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`
+  (e2e_code) rouge sur « Index … is not loaded yet » à la réouverture, puis
+  vert trois fois et à la batterie suivante, sur la bibliothèque reconstruite
+  — à surveiller.
 - **La suppression ne retirait jamais les vecteurs creux de l'index
   lucistore : corrigé le 3 octobre**, confirmé par exécution avec bge-m3
   avant (3 entrées sur 3 après un retrait ; 4 pour 3 chunks vivants après une
