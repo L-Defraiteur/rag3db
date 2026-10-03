@@ -1,0 +1,9 @@
+%% tool: abort_snapshot
+%% description: Abandonne une session de synchronisation : elle se ferme, rien n'est retiré.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: scope json! -- Les valeurs du périmètre de la session.
+%% param: snapshot string! -- L'identifiant de la session à fermer.
+%% result: abort.session
+
+graph LR
+    abort["SnapshotSessionNode(entity=$entity, scope=$scope, action=abort, snapshot=$snapshot)"]
