@@ -94,12 +94,58 @@ deux suppressions de nœuds voisins dans le graphe se heurtent sur « Write-writ
 conflict » dix fois sur dix, et son mélange aléatoire sur une table indexée corrompt le
 tas.
 
-**Suite de la session cœur C++** : A5 d'abord — la course du chemin de suppression fait
-planter le processus (§10 de la spécification du banc), et elle ne dépend pas des écarts
-de la note sur les verrous. Puis, après la réponse de Lucie sur ces trois écarts
-(`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le gestionnaire de
-verrous, A3′, A4′, l'annonce en tête de transaction ; la maintenance de l'index vectoriel
-au commit avant A6.
+**Marche A5, livrée le 3 octobre 2026** (`1175cc0a2`, `e415e0277`, en avance rapide,
+push autorisé par Lucie). Les informations de version d'un bloc de lignes et l'index des
+relations validées en mémoire étaient lus et écrits sans garde entre fils ; ils passent
+sous un verrou partagé/exclusif, qu'un drapeau atomique épargne au lecteur tant qu'un bloc
+n'a jamais eu d'informations de version. **Ce n'est pas propre au mode multi-écrivains** :
+un seul écrivain qui supprime pendant que d'autres connexions du même processus lisent
+suffit — le témoin `test/transaction/readers_during_delete_test.cpp` sort 6 avertissements
+ThreadSanitizer sans A5, aucun avec. La course est prouvée dans ce régime, le plantage
+non ; les plantages mesurés (`isSelected`, `isDeleted`) viennent des cas à deux écrivains
+du banc. C5 n'est plus probabiliste (900 passes vertes), `tsan_signatures.txt` est vide :
+toute signature de C5 ou C6 est un rouge.
+
+Passe de livraison : la liste C++ complète sur la marche avant son rebase
+(`transaction_test`, `api_test` 104, `c_api_test` 136, `copy_tests` 19, stockage 77,
+Cypher 1866, vector 74 et 63) ; sur l'empilement, le banc (39 rouges connus, 33 verts) et
+`transaction_test` 75/75 ; côté Rust, lib 1135, quinze suites e2e (212 tests), binaires,
+neuf scripts. Le dernier rebase n'a apporté que du Rust et des docs (sources C++
+identiques, vérifié par diff) : rien n'a été rejoué dessus, la passe Rust d'A5 bis le
+couvrira. Coût sur nos chemins : rien au temps mur d'une ingestion (93,7 s contre 93,6 s
+sur `e2e_mesure_ingestion_code`), quelques pour cent au plus sur la part du moteur, du
+même ordre que le bruit de deux passes.
+
+**Un faux vert à éviter dans la liste de livraison** : `ctest -R
+concurrence_test.known_red` lancé depuis la racine du build ne trouve aucun test et sort
+0. Lancer la comparaison directement :
+`cmake -DBENCH=<concurrence_test> -DKNOWN_RED_FILE=… -DPROBABILISTIC_FILE=… -DRESULT_FILE=… -P test/transaction/concurrence/compare_known_red.cmake`,
+et lire la ligne « bench matches known_red.txt ».
+
+H3 est inchangé par A5 (rouge 10 sur 10). H4 aussi reste rouge, pour d'autres causes :
+voir A5 bis ci-dessous et le §6.
+
+**Suite de la session cœur C++** : **A5 bis** est en cours (branche locale
+`a5-bis-ajout-en-memoire-sous-les-lecteurs`), devant tout ce qui attend Lucie. La
+recherche HNSW lit les vecteurs sans le verrou du groupe (`NodeTable::lookup<false>`,
+`extension/vector/src/index/hnsw_graph.cpp`) pendant que le commit d'un écrivain ajoute au
+dernier bloc en mémoire et réalloue le tampon de la colonne : un seul écrivain et une
+recherche vectorielle suffisent (18 avertissements ThreadSanitizer en une passe du témoin
+`vector_search_during_insert_test.cpp`) — le régime du démon pendant une ingestion. Le
+correctif est une garde partagée (`NodeGroup::inMemAppendMtx`), exclusive pendant l'ajout ;
+le verrou exclusif du groupe, essayé d'abord, doublait le temps de quatre recherches
+parallèles. Liste C++ verte et ThreadSanitizer à zéro sur C5, C6, C7 et les deux témoins ;
+restent la mesure de coût au calme, la passe Rust et la livraison. Ensuite : la base qui
+ne se rouvre plus après H4 (« Found duplicated primary key value » au rejeu, 21 à 23 fois
+sur 40, **seulement sur une table indexée** — C1 et C7 sans index valident des clés en
+double mais se rouvrent), et une lecture de mémoire libérée au point de reprise que H4
+montre encore une fois les courses fermées. Puis, après la réponse de Lucie sur les trois
+écarts (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le
+gestionnaire de verrous, A3′, A4′, l'annonce en tête de transaction ; la maintenance de
+l'index vectoriel au commit avant A6.
+
+Les branches `a5-suppression-sure-entre-fils`, `-2` et `-3` sur `origin` et en local sont
+des états d'avant rebase : à supprimer par Lucie.
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
