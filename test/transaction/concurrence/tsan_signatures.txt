@@ -6,9 +6,8 @@
 # mêmes sur cinq passes. Une ligne ne se retire que dans le commit de la marche qui
 # supprime la course (A5 pour VectorVersionInfo::delete_ et l'initialisation paresseuse
 # de initDeletionVersionArray). C7 n'est pas comparé (voir compare_tsan_signatures.py).
-data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:108 | rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316
-data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:112 | rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316
-data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98
-data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::isDeleted@storage/table/version_info.cpp:194
-data race: rag3db::storage::VectorVersionInfo::initDeletionVersionArray@storage/table/version_info.cpp:316 | rag3db::storage::VectorVersionInfo::isDeleted@storage/table/version_info.cpp:204
-data race: rag3db::storage::VectorVersionInfo::delete_@storage/table/version_info.cpp:98 | rag3db::storage::VectorVersionInfo::isSelected@storage/table/version_info.cpp:149
+#
+# Marche A5 (3 octobre) : les six signatures de C5 et C6 — VectorVersionInfo::delete_,
+# initDeletionVersionArray, isDeleted, isSelected — ont disparu avec le verrou des
+# informations de version (ChunkedNodeGroup::versionInfoMtx). La liste est vide : toute
+# signature de C5 ou C6 est désormais un rouge.
