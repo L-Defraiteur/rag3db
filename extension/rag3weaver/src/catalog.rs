@@ -141,6 +141,39 @@ pub enum CatalogError {
     MustReopen(String),
 }
 
+/// **L'état d'avant d'un lot — relu, ou pas regardé.**
+///
+/// Un type pour une distinction d'une ligne, parce que l'avoir confondue
+/// coûtait une garde. `split_unchanged` rendait une `HashMap` nue, et une carte
+/// vide voulait dire deux choses incompatibles : « la table a répondu, aucune
+/// de ces lignes n'y est » — des naissances prouvées — et « je n'ai pas pu
+/// regarder ». Comme [`Catalog::lifecycle_verdict`] traite une absence d'état
+/// d'avant comme une naissance, le second cas **laissait passer n'importe
+/// quelle transition déclarée**, en silence. Le commentaire du code le disait
+/// déjà — « d'avant sort d'ici, un silence fait passer une transition
+/// interdite » — et personne ne l'avait relié au comportement.
+///
+/// Trouvé le 4 octobre 2026 en auditant les `CatalogEvent::Warning`, et tranché
+/// par la règle qui vaut pour toute garde : **une garde qui ne sait pas dit
+/// non.**
+///
+/// La variante `Unknown` de l'entité absente de la configuration est une
+/// branche **défensive** : `register_entity` insère dans `config.entities`
+/// (`register_entity_adds_to_catalog_entities` l'exige), donc une entité
+/// enregistrée dynamiquement n'y passe pas — et les témoins qui le prouvent
+/// existent depuis le 27 août : `une_transition_non_declaree_ne_passe_pas`,
+/// `une_reingestion_ne_contourne_pas_la_machine_a_etats` et
+/// `une_naissance_prend_l_etat_initial_ou_un_etat_declare`, dans
+/// `tests/e2e_simple_entity.rs`, tous sur une entité posée après l'ouverture.
+pub(crate) enum PreviousState {
+    /// La table a été interrogée et a répondu. Un uuid absent de la carte est
+    /// une **naissance prouvée** : elle passe, comme avant.
+    Read(HashMap<String, String>),
+    /// On n'a pas pu regarder, et on dit pourquoi. Aucune naissance ne peut
+    /// être prouvée, donc aucune transition ne peut être vérifiée.
+    Unknown(String),
+}
+
 /// Le verdict de la machine à états pour une ligne (`Catalog::lifecycle_verdict`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LifecycleVerdict {
@@ -4495,7 +4528,7 @@ impl Catalog {
         entity_name: &str,
         config: &crate::config::EntityConfig,
         records: Vec<EntityRecord>,
-    ) -> (Vec<EntityRecord>, usize, HashMap<String, String>, Option<usize>) {
+    ) -> (Vec<EntityRecord>, usize, PreviousState, Option<usize>) {
         const NULL: CypherValue = CypherValue::Null;
 
         let Some(entity_def) = self.config.entities.get(entity_name) else {
@@ -4503,7 +4536,13 @@ impl Catalog {
                 context: "split_unchanged".into(),
                 message: format!("{entity_name} : entité absente de la configuration, court-circuit de l'inchangé sauté"),
             });
-            return (records, 0, HashMap::new(), None);
+            Self::trace_previous_state(entity_name, "entité absente de la configuration");
+            return (
+                records,
+                0,
+                PreviousState::Unknown("entité absente de la configuration".into()),
+                None,
+            );
         };
 
         // Les colonnes comparées : les champs déclarés, le hash de contenu, et
@@ -4557,7 +4596,13 @@ impl Catalog {
                         "{entity_name} : relecture impossible ({e}), court-circuit de l'inchangé sauté et état d'avant inconnu"
                     ),
                 });
-                return (records, 0, HashMap::new(), None);
+                Self::trace_previous_state(entity_name, &format!("relecture impossible : {e}"));
+                return (
+                    records,
+                    0,
+                    PreviousState::Unknown(format!("relecture impossible : {e}")),
+                    None,
+                );
             }
         };
         let stored: HashMap<String, Vec<CypherValue>> = result
@@ -4587,6 +4632,10 @@ impl Catalog {
                      0 relue — ni court-circuit de l'inchangé, ni état d'avant"
                 ),
             });
+            // Compté à part : celui-ci **passe**, parce que la relecture a
+            // répondu et n'a rien rendu — des naissances prouvées. C'est le cas
+            // qu'il ne faut surtout pas durcir avec les deux autres.
+            Self::trace_previous_state(entity_name, "relu, zéro ligne — naissances prouvées");
         }
 
         // ── 2. Les artefacts dérivés ────────────────────────────────────
@@ -4657,7 +4706,17 @@ impl Catalog {
             };
             let Some(result) = result else {
                 // `complete` reste vide : aucune ligne ne sera sautée.
-                return (records, 0, Self::previous_states_de(config, &columns, &stored), Some(stored.len()));
+                // **Celui-là reste `Relu`** : `stored` vient d'une relecture
+                // qui a réussi ; ce sont les *chunks* qui sont illisibles. La
+                // garde de cycle de vie tient. À ne pas confondre avec les deux
+                // sorties `Inconnu` ci-dessus, ce que le voisinage des messages
+                // invite à faire.
+                return (
+                    records,
+                    0,
+                    PreviousState::Read(Self::previous_states_de(config, &columns, &stored)),
+                    Some(stored.len()),
+                );
             };
             // Par parent : combien de chunks, combien embarqués **en dense**,
             // combien **en sparse**.
@@ -4714,7 +4773,12 @@ impl Catalog {
         // `stored` porte les valeurs dans l'ordre de `columns` ; le champ
         // d'état en est un. On ne le sort que si une machine est déclarée —
         // sinon c'est une table vide qu'on promènerait pour rien.
-        (todo, skipped, Self::previous_states_de(config, &columns, &stored), Some(stored.len()))
+        (
+            todo,
+            skipped,
+            PreviousState::Read(Self::previous_states_de(config, &columns, &stored)),
+            Some(stored.len()),
+        )
     }
 
     /// **L'état d'avant, pour la machine à états.**
@@ -4767,11 +4831,23 @@ impl Catalog {
     /// sa cause est nommée — comme les refus des nœuds de record. Et la cause
     /// **dit ce qui aurait été permis**, sinon l'appelant doit aller relire la
     /// déclaration pour comprendre un mur.
+    /// Dire les trois chemins quand on les compte.
+    ///
+    /// Posé pour la mesure que l'orchestration a exigée avant la fusion :
+    /// transformer un silence en panne demande de savoir à quelle fréquence le
+    /// silence se produit. `RAG3WEAVER_TRACE_ETAT_DAVANT=1` et la batterie le
+    /// dit ; sans la variable, rien ne s'imprime.
+    fn trace_previous_state(entity_name: &str, cas: &str) {
+        if std::env::var("RAG3WEAVER_TRACE_ETAT_DAVANT").is_ok() {
+            eprintln!("[etat-davant] {entity_name} : {cas}");
+        }
+    }
+
     fn apply_lifecycle(
         entity_name: &str,
         config: &crate::config::EntityConfig,
         records: Vec<EntityRecord>,
-        previous_states: &HashMap<String, String>,
+        avant: &PreviousState,
     ) -> (Vec<EntityRecord>, Vec<String>) {
         let Some(lc) = config.lifecycle.as_ref() else {
             return (records, Vec::new());
@@ -4788,7 +4864,23 @@ impl Catalog {
                 kept.push(rec);
                 continue;
             };
-            match Self::lifecycle_verdict(entity_name, lc, &uuid, &to, previous_states.get(&uuid).map(String::as_str)) {
+            // **Un état écrit sur une ligne dont on ignore l'état d'avant ne
+            // se vérifie pas.** On ne le présume donc plus naissance : le refus
+            // dit pourquoi on ne sait pas, et quoi faire — c'est la relecture
+            // qui a échoué, pas l'écriture, donc rejouer le lot a un sens.
+            let from = match avant {
+                PreviousState::Read(carte) => carte.get(&uuid).map(String::as_str),
+                PreviousState::Unknown(raison) => {
+                    refused.push(format!(
+                        "{entity_name} '{uuid}' : état d'avant inconnu ({raison}) — la \
+                         transition vers '{to}' ne peut pas être vérifiée, et une garde qui \
+                         ne sait pas dit non. Rejouer le lot : c'est la relecture qui a \
+                         échoué, pas l'écriture."
+                    ));
+                    continue;
+                }
+            };
+            match Self::lifecycle_verdict(entity_name, lc, &uuid, &to, from) {
                 LifecycleVerdict::Same | LifecycleVerdict::Allowed => kept.push(rec),
                 LifecycleVerdict::Refused(cause) => refused.push(cause),
             }
@@ -5014,12 +5106,14 @@ impl Catalog {
         // et complet, ne redescend pas dans le graphe (doc 17 §6). Le compte
         // rendu ne bouge pas — ces enregistrements *sont* ingérés, ils
         // l'étaient déjà. Sur une table vide, il n'y a rien à relire.
-        let (entity_records, unchanged, previous_states, deja_en_base) = if premiere_ingestion {
+        let (entity_records, unchanged, avant, deja_en_base) = if premiere_ingestion {
             // Table vide : rien à relire, donc aucun état d'avant. Toutes les
             // lignes sont des naissances, et c'est la règle des naissances qui
             // s'applique — pas l'absence de règle. Il n'y a pas de transition à
             // vérifier, mais il y a toujours un état à **écrire**.
-            (entity_records, 0, HashMap::new(), Some(0))
+            // `Relu(vide)` et non `Inconnu` : la table a été interrogée et
+            // elle est vide. Ce sont des naissances **prouvées**.
+            (entity_records, 0, PreviousState::Read(HashMap::new()), Some(0))
         } else {
             self.split_unchanged(entity_name, &entity_config, entity_records)
         };
@@ -5046,7 +5140,7 @@ impl Catalog {
         // valeur écrite par COPY n'est plus rattrapable. Une ligne refusée sort
         // du lot, les autres passent.
         let (mut entity_records, refus) =
-            Self::apply_lifecycle(entity_name, &entity_config, entity_records, &previous_states);
+            Self::apply_lifecycle(entity_name, &entity_config, entity_records, &avant);
         if !refus.is_empty() && profil {
             eprintln!("[ingest-profile] {entity_name} : {} ligne(s) refusée(s) par la machine à états", refus.len());
         }
@@ -10281,7 +10375,7 @@ mod tests {
                 ligne("u-connu", Some("closed")),   // in_progress → closed, déclarée
                 ligne("u-connu", Some("open")),     // in_progress → open, non déclarée
             ],
-            &avant,
+            &PreviousState::Read(avant),
         );
 
         assert_eq!(gardes.len(), 3, "trois passent : {refus:?}");
@@ -10295,6 +10389,80 @@ mod tests {
         assert!(refus[1].contains("in_progress") && refus[1].contains("close"), "{}", refus[1]);
     }
 
+    /// **Les trois états d'avant, et ce que chacun autorise.** Un test par cas,
+    /// parce que c'est la confusion de deux d'entre eux qui a coûté la garde.
+    ///
+    /// Le défaut qu'il ferme : jusqu'au 4 octobre 2026, `split_unchanged`
+    /// rendait une carte vide aussi bien pour « la table a répondu, rien » que
+    /// pour « je n'ai pas pu regarder », et le second laissait passer
+    /// **n'importe quelle transition déclarée** — jugée comme une naissance.
+    #[test]
+    fn un_etat_d_avant_inconnu_ne_passe_pas_pour_une_naissance() {
+        let config = config_ticket();
+
+        // 1. Relu, non vide : la règle habituelle. Reprise ici pour que les
+        //    trois cas se lisent côte à côte.
+        let mut carte = HashMap::new();
+        carte.insert("u".to_string(), "in_progress".to_string());
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![ligne("u", Some("open"))],
+            &PreviousState::Read(carte),
+        );
+        assert!(gardes.is_empty(), "une transition non déclarée ne passe pas");
+        assert_eq!(refus.len(), 1, "{refus:?}");
+        assert!(refus[0].contains("non déclarée"), "{}", refus[0]);
+
+        // 2. Relu, vide : des **naissances prouvées**. La table a été
+        //    interrogée et n'a rien rendu, donc tout état déclaré est admis.
+        //    Ce cas doit continuer de passer — le durcir casserait toute
+        //    première ingestion.
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![ligne("u", Some("closed"))],
+            &PreviousState::Read(HashMap::new()),
+        );
+        assert_eq!(gardes.len(), 1, "une naissance prouvée passe : {refus:?}");
+        assert!(refus.is_empty(), "{refus:?}");
+
+        // 3. Inconnu : **refus**, et le refus dit pourquoi et quoi faire. C'est
+        //    le cas qui passait en silence.
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![ligne("u", Some("closed"))],
+            &PreviousState::Unknown("relecture impossible : connexion perdue".into()),
+        );
+        assert!(gardes.is_empty(), "une garde qui ne sait pas dit non");
+        assert_eq!(refus.len(), 1, "{refus:?}");
+        assert!(
+            refus[0].contains("inconnu") && refus[0].contains("connexion perdue"),
+            "le refus doit nommer la cause de l'ignorance : {}",
+            refus[0]
+        );
+        assert!(
+            refus[0].contains("Rejouer le lot"),
+            "un refus qui ne dit pas quoi faire envoie son appelant chercher ailleurs : {}",
+            refus[0]
+        );
+
+        // 4. L'exception qui reste permise : **rien d'écrit**, donc aucune
+        //    transition à vérifier. L'état initial s'applique même sans savoir
+        //    l'état d'avant — refuser ici bloquerait une ingestion qui ne
+        //    prétend rien du cycle de vie.
+        let (gardes, refus) = Catalog::apply_lifecycle(
+            "Ticket",
+            &config,
+            vec![ligne("u", None)],
+            &PreviousState::Unknown("relecture impossible".into()),
+        );
+        assert_eq!(gardes.len(), 1, "{refus:?}");
+        assert_eq!(etat(&gardes[0]), Some("open"), "l'état initial s'applique quand même");
+        assert!(refus.is_empty(), "{refus:?}");
+    }
+
     /// Sans machine déclarée, la fonction ne touche à rien — la promesse qui
     /// vient avant les autres.
     #[test]
@@ -10304,7 +10472,7 @@ mod tests {
             "Ticket",
             &config,
             vec![ligne("u", Some("n_importe_quoi")), ligne("v", None)],
-            &HashMap::new(),
+            &PreviousState::Read(HashMap::new()),
         );
         assert!(refus.is_empty());
         assert_eq!(gardes.len(), 2);
