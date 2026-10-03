@@ -49,6 +49,8 @@ pub mod index_nodes;
 pub mod catalog_read;
 pub mod usage_nodes;
 pub mod neighborhood_nodes;
+pub mod graph_walk;
+pub mod links_nodes;
 /// **Le balayage des fichiers** : la recherche quand l'index ne sait pas (encore).
 #[cfg(feature = "code")]
 pub mod scan_nodes;
