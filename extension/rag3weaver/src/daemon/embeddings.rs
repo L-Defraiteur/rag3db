@@ -397,8 +397,9 @@ impl DaemonEmbedder {
     ) -> (Serveur, crate::embedding_choice::Choice) {
         use crate::embedding_choice::{choose, MODEL_VARIABLE};
         let explicit = std::env::var(MODEL_VARIABLE).ok();
-        let card = crate::regime::card_class(std::path::Path::new("/sys/class/drm"));
-        let choice = choose(files, source_bytes, card, explicit.as_deref());
+        let card = crate::regime::card_class_of_this_machine();
+        let sole = crate::regime::sole_card_of_this_machine_drives_display();
+        let choice = choose(files, source_bytes, card, sole, explicit.as_deref());
         let serveur = Self::serveur(adresse, programme).env(MODEL_VARIABLE, choice.model.clone());
         (serveur, choice)
     }

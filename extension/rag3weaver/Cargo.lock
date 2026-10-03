@@ -6454,6 +6454,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "ureq 3.4.0",
+ "wgpu",
 ]
 
 [[package]]

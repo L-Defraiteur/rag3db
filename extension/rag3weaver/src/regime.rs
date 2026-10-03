@@ -318,9 +318,17 @@ fn carte_libre_du_poste() -> Option<usize> {
 ///
 /// Une carte dont le total est illisible compte comme dédiée sans chiffre —
 /// on ne déclare pas « faible » ce qu'on n'a pas pu mesurer.
-pub fn card_class(racine: &Path) -> crate::embedding_choice::CardClass {
-    let Ok(entrees) = std::fs::read_dir(racine) else { return crate::embedding_choice::CardClass::None };
-    let mut vue = false;
+///
+/// `integrated` : **ce que le pilote dit** de la carte à cette adresse PCI —
+/// `Some(true)` intégrée, `Some(false)` dédiée, `None` s'il ne dit rien.
+/// `/sys` ne le sait pas : la VRAM d'une carte intégrée est une réservation
+/// du BIOS (4 096 Mo sur le Z13, pile sur l'ancien plancher), pas une mesure.
+/// Une carte dédiée, s'il y en a une, l'emporte : c'est elle qu'on prendra.
+pub fn card_class(racine: &Path, integrated: &dyn Fn(&str) -> Option<bool>) -> crate::embedding_choice::CardClass {
+    use crate::embedding_choice::CardClass;
+    let Ok(entrees) = std::fs::read_dir(racine) else { return CardClass::None };
+    let mut dediee = false;
+    let mut integree = false;
     let mut max_total: Option<u64> = None;
     for e in entrees.flatten() {
         let nom = e.file_name();
@@ -332,7 +340,15 @@ pub fn card_class(racine: &Path) -> crate::embedding_choice::CardClass {
         if !device.join("gpu_busy_percent").exists() {
             continue;
         }
-        vue = true;
+        let adresse = std::fs::read_link(&device)
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .unwrap_or_default();
+        if integrated(&adresse) == Some(true) {
+            integree = true;
+            continue;
+        }
+        dediee = true;
         if let Some(total) = std::fs::read_to_string(device.join("mem_info_vram_total"))
             .ok()
             .and_then(|v| v.trim().parse::<u64>().ok())
@@ -340,11 +356,53 @@ pub fn card_class(racine: &Path) -> crate::embedding_choice::CardClass {
             max_total = Some(max_total.map_or(total, |m| m.max(total)));
         }
     }
-    match (vue, max_total) {
-        (false, _) => crate::embedding_choice::CardClass::None,
-        (true, None) => crate::embedding_choice::CardClass::Dedicated { vram_bytes: 0 },
-        (true, Some(t)) => crate::embedding_choice::CardClass::from_vram(Some(t)),
+    match (dediee, max_total) {
+        (false, _) if integree => CardClass::Integrated,
+        (false, _) => CardClass::None,
+        (true, None) => CardClass::Dedicated { vram_bytes: 0 },
+        (true, Some(t)) => CardClass::from_vram(Some(t)),
     }
+}
+
+/// [`card_class`] sur ce poste : le vrai `/sys/class/drm`, et le pilote.
+pub fn card_class_of_this_machine() -> crate::embedding_choice::CardClass {
+    let types = driver_card_types();
+    card_class(Path::new("/sys/class/drm"), &|adresse| {
+        types.iter().find(|(a, _)| a.eq_ignore_ascii_case(adresse)).map(|(_, integree)| *integree)
+    })
+}
+
+/// **Ce que le pilote dit de chaque carte** : son adresse PCI, et si elle est
+/// intégrée (`VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU`, par wgpu). Vide quand
+/// il ne dit rien — pas de Vulkan, pas d'adresse PCI : la classe retombe
+/// alors sur ce que `/sys` sait lire, sans se plaindre.
+#[cfg(feature = "burn-embedder")]
+fn driver_card_types() -> Vec<(String, bool)> {
+    use std::future::Future;
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+    // Sur un poste natif la réponse est prête au premier tour ; une boucle
+    // d'attente suffit, pas besoin d'un exécuteur pour une énumération.
+    let mut future = std::pin::pin!(instance.enumerate_adapters(wgpu::Backends::VULKAN));
+    let mut contexte = std::task::Context::from_waker(std::task::Waker::noop());
+    let cartes = loop {
+        match future.as_mut().poll(&mut contexte) {
+            std::task::Poll::Ready(cartes) => break cartes,
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    };
+    cartes
+        .iter()
+        .map(|carte| carte.get_info())
+        .filter(|info| !info.device_pci_bus_id.is_empty())
+        .filter(|info| matches!(info.device_type, wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::DiscreteGpu))
+        .map(|info| (info.device_pci_bus_id, info.device_type == wgpu::DeviceType::IntegratedGpu))
+        .collect()
+}
+
+/// Sans l'embarqueur burn, pas de pilote à interroger : on ne sait pas.
+#[cfg(not(feature = "burn-embedder"))]
+fn driver_card_types() -> Vec<(String, bool)> {
+    Vec::new()
 }
 
 /// [`sole_card_drives_display`] sur le vrai `/sys/class/drm`, lue une fois.
@@ -543,6 +601,35 @@ mod tests {
 
     // ── La classe de carte, pour l'heuristique du premier index ─────────
 
+    /// **Le défaut du 3 octobre** : le Z13 annonce 4 096 Mo de VRAM — une
+    /// réservation du BIOS, pile sur le plancher — et passait pour une carte
+    /// dédiée. C'est le pilote qui dit ce qu'elle est.
+    #[test]
+    fn une_carte_integree_se_reconnait_a_ce_que_dit_le_pilote() {
+        use crate::embedding_choice::CardClass;
+        let d = faux_sysfs_total(&[("card1", 4 * GIB)]);
+        assert_eq!(card_class(d.path(), &|_| Some(true)), CardClass::Integrated);
+        // 512 Mo réservés : intégrée aussi, pas « faible ».
+        let petit = faux_sysfs_total(&[("card1", GIB / 2)]);
+        assert_eq!(card_class(petit.path(), &|_| Some(true)), CardClass::Integrated);
+        // Le pilote ne dit rien : ce que `/sys` sait lire, comme avant.
+        assert_eq!(card_class(d.path(), &|_| None), CardClass::Dedicated { vram_bytes: 4 * GIB });
+        // Un portable à deux cartes : la dédiée l'emporte, à son adresse.
+        let deux = faux_sysfs_total(&[("card0", GIB / 2), ("card1", 8 * GIB)]);
+        assert_eq!(card_class(deux.path(), &|adresse| Some(adresse == "0000:00:00.0")), CardClass::Dedicated { vram_bytes: 8 * GIB });
+    }
+
+    /// Sur le vrai poste : ce que le pilote dit, tel quel. Ignoré — il
+    /// interroge Vulkan, et son résultat dépend de la machine.
+    #[test]
+    #[ignore]
+    fn ce_poste_dit_sa_carte() {
+        eprintln!("pilote : {:?}", driver_card_types());
+        eprintln!("classe : {:?}", card_class_of_this_machine());
+        eprintln!("seule carte et affichage : {}", sole_card_of_this_machine_drives_display());
+        eprintln!("rafales : {:?}", crate::burst::active());
+    }
+
     /// Le Z13 : une carte, deux écrans. Et ce qui n'est pas ce cas.
     #[test]
     fn la_seule_carte_du_poste_porte_l_affichage() {
@@ -578,7 +665,7 @@ mod tests {
     fn deux_cartes_de_31_go_donnent_une_carte_dediee() {
         use crate::embedding_choice::CardClass;
         let d = faux_sysfs_total(&[("card0", 31 * GIB), ("card2", 31 * GIB)]);
-        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 31 * GIB });
+        assert_eq!(card_class(d.path(), &|_| None), CardClass::Dedicated { vram_bytes: 31 * GIB });
     }
 
     /// La plus grosse carte décide : c'est celle que l'embarqueur prendra.
@@ -586,17 +673,17 @@ mod tests {
     fn la_plus_grosse_carte_decide() {
         use crate::embedding_choice::CardClass;
         let d = faux_sysfs_total(&[("card0", 2 * GIB), ("card1", 8 * GIB)]);
-        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 8 * GIB });
+        assert_eq!(card_class(d.path(), &|_| None), CardClass::Dedicated { vram_bytes: 8 * GIB });
     }
 
     #[test]
     fn une_petite_carte_est_faible_et_aucune_carte_est_absente() {
         use crate::embedding_choice::CardClass;
         let d = faux_sysfs_total(&[("card0", 2 * GIB)]);
-        assert_eq!(card_class(d.path()), CardClass::Weak { vram_bytes: 2 * GIB });
+        assert_eq!(card_class(d.path(), &|_| None), CardClass::Weak { vram_bytes: 2 * GIB });
         let vide = tempfile::tempdir().unwrap();
-        assert_eq!(card_class(vide.path()), CardClass::None);
-        assert_eq!(card_class(Path::new("/n/existe/pas")), CardClass::None);
+        assert_eq!(card_class(vide.path(), &|_| None), CardClass::None);
+        assert_eq!(card_class(Path::new("/n/existe/pas"), &|_| None), CardClass::None);
     }
 
     /// Un total illisible ne rend pas la carte « faible » : on ne déclare pas
@@ -605,7 +692,7 @@ mod tests {
     fn un_total_illisible_reste_une_carte_dediee_sans_chiffre() {
         use crate::embedding_choice::CardClass;
         let d = faux_sysfs(&[("card0", "0000:04:00.0", 90_000_000)]);
-        assert_eq!(card_class(d.path()), CardClass::Dedicated { vram_bytes: 0 });
+        assert_eq!(card_class(d.path(), &|_| None), CardClass::Dedicated { vram_bytes: 0 });
     }
 
     // ── Les quatre promesses ────────────────────────────────────────────
