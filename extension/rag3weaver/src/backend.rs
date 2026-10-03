@@ -1541,9 +1541,19 @@ mod tests {
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
     fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
-        use crate::connection::CallbackConnection;
         use crate::embedder::HashEmbedder;
-        let conn = CallbackConnection::new(|_, _| Ok(crate::connection::QueryResult::default()));
+        // Une VRAIE base en mémoire : depuis que `edit` réindexe par la
+        // synchronisation déclarée, la session fine s'écrit puis se RELIT en
+        // base — une connexion factice qui rend des résultats vides la
+        // trouvait « fermée » (le rouge du 3 octobre au soir ; le scénario
+        // de tuyauterie, sur une vraie base, passait). Trouvé par ce test.
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let root = std::env::var("RAG3DB_ROOT")
+            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
+        conn.execute(&format!(
+            "LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'"
+        ))
+        .unwrap();
         let mut catalog = Catalog::new(
             Box::new(conn),
             Box::new(HashEmbedder::new(8)),
