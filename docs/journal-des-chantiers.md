@@ -48,12 +48,19 @@ Cinq branches en cours, toutes poussées, aucune fusionnée (les noms
 |---|---|---|---|---|
 | `lecteur-reverifie-a-l-ouverture` (`6bc8ce632`) | `../rag3db-moteur` | cœur C++ | Marche 1 « en cours » : crochet de test, quatre tests déterministes, revérification ; tests ciblés 17/17, suites complètes non rejouées. | Rebaser, rejouer les suites, rendre le tableau ; la livraison se fait depuis l'arbre principal. |
 | `reprise-apres-panne-index-cle-primaire` (`a486fde9c`) | `../rag3db-moteur` | cœur C++ | Le correctif est sur `master` (`6bf46150b`) ; reste un commit de test seul (panne pendant la phase de stockage, 38 s). | Relire, fusionner avec la marche 1. |
-| `banc-de-concurrence` (`00b2a0263`) | `../rag3db-banc` | banc | Étape 1 faite, étape 2 en cours (compile). Cinq cas rouges, dont deux hors plan (§6). | Relecture par la session cœur C++, fusion de l'étape 1, fin de l'étape 2. |
 | `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
 `extension/rag3weaver/docs/2-octobre-2026-00h16/01-ce-que-rag3weaver-suppose-d-une-seule-base.md`.
+
+`banc-de-concurrence` est fusionnée dans `master` le 3 octobre 2026 (dernière
+branche `banc-de-concurrence-sur-7928974`, en avance rapide, après relecture par la
+session cœur C++ et une passe `known_red` verte). **Depuis, `concurrence_test.known_red`
+entre dans la liste de livraison de toute marche du moteur.** Les branches
+`banc-de-concurrence` (`00b2a0263`) et `banc-de-concurrence-sur-7928974` sur `origin`
+sont des états d'avant rebase, laissées sans force : à supprimer par Lucie. Les six
+remarques de la relecture se traitent sur une branche neuve.
 
 `synchronisation-par-perimetre` est fusionnée dans `master` le 3 octobre 2026
 (dernière branche `-4`, en avance rapide). Les branches `synchronisation-par-perimetre`,
@@ -244,11 +251,18 @@ sessions, pas d'une vérification.
   ne peuvent pas porter deux lignes de même identité. À trancher si un produit
   le demande.
 
-- **Deux corruptions de plus sous le mode multi-écrivains, hors plan**
-  (étape 2 du banc, 2 octobre) : des virements entre comptes ne conservent
-  pas la somme (mécanisme non identifié — le plan croyait ce cas protégé par
-  le conflit de mise à jour) ; une suppression et une mise à jour de la même
-  ligne valident toutes deux. À faire examiner par la session cœur C++.
+- **Les défauts du mode multi-écrivains et des transactions, prouvés par le banc**
+  (`test/transaction/concurrence/`, fusionné le 3 octobre) : la liste à jour est
+  `known_red.txt`, les rouges déterministes, et `probabilistic.txt`, les rouges
+  qui dépendent de l'ordonnancement. On y trouve : la clé primaire en double (C1),
+  la relation pendante (C2), les relations rattachées aux mauvais nœuds (C3), la
+  suppression et la mise à jour d'une même ligne validées toutes deux (C6, attendu
+  en suspens jusqu'à la note sur les verrous), la double suppression sans conflit
+  (C5, course, marche A5) et la transaction en échec qui repasse en auto-commit.
+  Les courses vues par ThreadSanitizer sont dans
+  `docs/2-octobre-2026-00h36/02-threadsanitizer-premiere-passe.txt`. Les virements
+  qui ne conservaient pas la somme (étape 2) étaient un défaut **du banc**, pas du
+  moteur : corrigé.
 - **Après un point de reprise échoué, le processus qui continue perd des clés
   en silence puis plante** (mesuré sur `master`, 2 octobre ; patch
   d'expérience dans `…/2-octobre-2026-01h07/moteur-concurrence/`). rag3weaver
