@@ -393,6 +393,17 @@ sessions, pas d'une vérification.
   parallèle. Défaut d'isolement du test, pas du code ; d'ici sa correction,
   la suite lib se joue sans cette variable (elle n'embarque rien sur la
   carte).
+- **Une fin de synchronisation retirait une ligne sortie de son périmètre
+  entre le plan et l'application** (trouvé le 3 octobre en répondant à la
+  revue de la session lifecycle) : l'identité d'une ligne ne dépend pas du
+  périmètre, la session unique par périmètre ne la protégeait donc pas.
+  **Corrigé** : l'application relit le périmètre et la cellule, sur les deux
+  chemins. **Reste ouverte la classe des écritures hors session** (une ligne
+  réécrite ou recréée dans le périmètre, ou écrite pendant la session avant
+  le plan, garde une marque qui n'est pas celle de la session et serait
+  retirée) : tranché le 3 octobre, une écriture dans un périmètre en session
+  prendra la marque de cette session — branche suivante, devant la mise de
+  côté.
 - **La suppression ne retire jamais les vecteurs creux de l'index lucistore**
   (lu, non vérifié par exécution — 3 octobre) : `DeleteRecordNode` supprime
   les chunks en base et l'entrée plein texte, mais aucun `SparseHandle::remove`

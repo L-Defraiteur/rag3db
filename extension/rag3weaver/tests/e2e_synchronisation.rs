@@ -551,6 +551,70 @@ fn une_ligne_reparue_depuis_le_plan_n_est_pas_retiree() {
     assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
 }
 
+/// Une ligne planifiée pour le retrait qui **change de périmètre** avant
+/// l'application — portée par la session d'un autre classeur — vit
+/// désormais ailleurs : elle reste, nommée. L'identité d'une ligne ne dépend
+/// pas du périmètre, la session unique par périmètre ne la protège donc pas.
+#[test]
+#[ignore]
+fn une_ligne_sortie_du_perimetre_depuis_le_plan_n_est_pas_retiree() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    let a3 = uuid(&catalog, "a3");
+    assert_eq!(plan.removed, [a3.clone()]);
+    // Le classeur B porte a3 : elle y passe.
+    let sb = ouvrir(&mut catalog, "B");
+    lot(&mut catalog, &sb, lignes(&["a3"], "B")).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(fin.removed.is_empty(), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("quitté le périmètre")), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
+    assert_eq!(cles(&catalog, "B"), ["a3"], "a3 vit dans B");
+}
+
+/// Le même cas sur le chemin des transitions : une ligne sortie du périmètre
+/// ne passe pas par la transition de l'absence.
+#[test]
+#[ignore]
+fn une_ligne_sortie_du_perimetre_depuis_le_plan_ne_transitionne_pas() {
+    let (mut catalog, s2) = archivage();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    let a3 = uuid(&catalog, "a3");
+    assert!(plan.transitioned.contains(&a3), "{plan:?}");
+    let sb = ouvrir(&mut catalog, "B");
+    lot(&mut catalog, &sb, vec![ligne("a3", "B", Some("active"))]).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(!fin.transitioned.contains(&a3), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("quitté le périmètre")), "{fin:?}");
+    assert_eq!(etat(&catalog, &a3), "active", "a3 n'est pas archivée");
+}
+
+/// **Un plan dont la session a été reprise ne s'applique pas** : la reprise
+/// (`takeover`) ferme la session du plan, et rien n'est retiré. C'est la
+/// garde qui tient la porte entre un plan périmé et une suppression.
+#[test]
+#[ignore]
+fn un_plan_dont_la_session_a_ete_reprise_ne_s_applique_pas() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(plan.removed.len(), 1);
+    let reprise = catalog.begin_snapshot("Fiche", &perimetre("A"), true).unwrap();
+    assert_eq!(reprise.replaced.as_deref(), Some(s2.as_str()));
+    match catalog.apply_snapshot_finish(plan) {
+        Err(CatalogError::SnapshotRefused(m)) => assert!(m.contains(&s2), "{m}"),
+        autre => panic!("le plan d'une session reprise doit être refusé : {autre:?}"),
+    }
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"], "rien n'est retiré");
+}
+
 // ─── Les cellules (_org / _project) ─────────────────────────────────────────
 
 /// Un périmètre de synchronisation est borné à la **cellule courante** : deux

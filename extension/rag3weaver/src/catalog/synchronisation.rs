@@ -20,6 +20,10 @@ use super::{Catalog, CatalogError, LifecycleVerdict};
 use crate::config::OnMissing;
 use crate::connection::{CypherValue, QueryParam};
 
+/// La raison d'une ligne gardée parce qu'elle a quitté le périmètre de la
+/// session entre le plan et l'application.
+const QUITTE_LE_PERIMETRE: &str = "a quitté le périmètre depuis le plan";
+
 /// Les deux échappatoires des garde-fous, toujours explicites.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -486,22 +490,27 @@ impl Catalog {
         // le plan (un lot arrivé entre les deux) a reparu : elle reste. Une
         // ligne déjà partie n'est pas annoncée retirée par cette fin.
         if !report.removed.is_empty() {
-            let marks: HashMap<String, String> = self
+            // La marque, et l'appartenance au périmètre relue : une ligne que
+            // l'autre session d'un autre périmètre a portée depuis le plan vit
+            // ailleurs, sa marque n'est simplement plus la nôtre.
+            let marks: HashMap<String, (String, bool)> = self
                 .get_many(&entity_name, &report.removed)?
                 .into_iter()
                 .filter_map(|row| {
                     let uuid = row.get("_uuid")?.as_str()?.to_string();
                     let mark = row.get("_snapshot").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-                    Some((uuid, mark))
+                    let dedans = self.dans_le_perimetre(&row, &report.scope);
+                    Some((uuid, (mark, dedans)))
                 })
                 .collect();
             let planned = std::mem::take(&mut report.removed);
             for uuid in planned {
                 match marks.get(&uuid) {
                     None => report.kept.push((uuid, "introuvable à la relecture".into())),
-                    Some(mark) if mark == &report.session => {
+                    Some((mark, _)) if mark == &report.session => {
                         report.kept.push((uuid, "reparue depuis le plan (portée par la session)".into()))
                     }
+                    Some((_, false)) => report.kept.push((uuid, QUITTE_LE_PERIMETRE.into())),
                     Some(_) => {
                         self.mettre_en_file_la_suppression(&entity_name, &uuid)?;
                         report.removed.push(uuid);
@@ -536,6 +545,10 @@ impl Catalog {
                     report.kept.push((uuid, "introuvable à la relecture".into()));
                     continue;
                 };
+                if !self.dans_le_perimetre(row, &report.scope) {
+                    report.kept.push((uuid, QUITTE_LE_PERIMETRE.into()));
+                    continue;
+                }
                 // La ligne entière, sans ses colonnes internes : le hash de
                 // contenu se calcule sur ce qu'on écrit. La garde de la
                 // machine à états juge à l'écriture.
@@ -592,6 +605,16 @@ impl Catalog {
         // La fin ferme la session.
         self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
         Ok(report)
+    }
+
+    /// **La ligne est-elle encore dans ce périmètre**, dans la cellule
+    /// courante ? Relu à l'application : entre le plan et elle, une ligne a pu
+    /// changer de périmètre — portée par la session d'un autre, ou mise à jour.
+    fn dans_le_perimetre(&self, row: &BTreeMap<String, CypherValue>, scope: &BTreeMap<String, CypherValue>) -> bool {
+        let cellule = |champ: &str, attendu: &str| row.get(champ).and_then(|v| v.as_str()) == Some(attendu);
+        scope.iter().all(|(champ, valeur)| row.get(champ) == Some(valeur))
+            && cellule("_org", &self.scope.org)
+            && cellule("_project", &self.scope.project)
     }
 
     fn snapshot_config(&self, entity_name: &str) -> Result<&crate::config::SnapshotConfig, CatalogError> {
