@@ -69,6 +69,35 @@ avec `key`.
 septembre) : un `why` d'un paragraphe fait un chunk, donc dix mille mémoires
 font dix mille embarquements.
 
+### 1.1 bis. Une dette nommée : la portée `person` n'est pas rappelée
+
+Le crochet après outil (session recherche, 3 octobre) **n'affiche jamais** la
+portée `person`, et c'est une décision prise ensemble plutôt qu'un oubli : le
+protocole du backend n'a **aucune identité d'appelant**, donc filtrer sur
+« la personne » serait un faux filtrage — les mémoires d'une personne
+sortiraient à tout le monde.
+
+Mais la décision crée un piège, et il faut l'écrire : une mémoire de portée
+`person` est alors **écrite, stockée, cherchable, et ignorée par le rappel
+automatique**. Invisible à l'endroit même où elle devait servir. C'est la
+famille qu'on traque partout dans ce dépôt — *écrire quelque chose que rien ne
+lira* — et elle y a déjà deux occurrences : `_absent_since`, posée par la
+synchronisation et relue par personne en production, et le crochet muet sans
+compteurs.
+
+**Ce qu'on fait** : on accepte la portée, et **l'écriture le dit** — « cette
+portée ne sera pas rappelée automatiquement tant que le protocole n'a pas
+d'identité d'appelant ». Plutôt que de la refuser, parce que refuser
+interdirait d'enregistrer une préférence que la personne vient d'énoncer, ce
+qui est le cas d'usage le plus naturel du produit ; et la mémoire reste
+retrouvable par un `recall` adressé.
+
+**La condition de sortie, parce qu'une dette qui ne dit pas comment elle se
+solde est une dette oubliée** : le jour où le protocole porte une identité
+d'appelant, le crochet **filtre** au lieu d'exclure, l'avertissement
+disparaît, et rien d'autre ne change — la mécanique de section est déjà
+prévue pour ça.
+
 ### 1.2 Les relations : comment une ancre vise n'importe quoi
 
 Le moteur est net : `register_relation_with` exige un couple `(depuis, vers)`,
