@@ -31,11 +31,34 @@ pub struct SnapshotFinishOptions {
     pub force: bool,
 }
 
+/// **Une session ouverte** sur un périmètre, rendue par `begin_snapshot`.
+/// L'identifiant est généré par le moteur : un appelant ne peut ni le
+/// réutiliser ni le partager par mégarde.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotSession {
+    pub session: String,
+    /// Millisecondes depuis l'époque Unix.
+    pub opened_at: i64,
+    /// La session abandonnée que `takeover` a remplacée, s'il y en avait une.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced: Option<String>,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 /// Ce qu'une fin de synchronisation a fait — une absence se nomme.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotFinish {
     pub entity: String,
+    /// Le périmètre de la session.
+    pub scope: BTreeMap<String, CypherValue>,
     pub session: String,
     /// Les lignes du périmètre en base au moment de la fin.
     pub in_scope: usize,
@@ -65,23 +88,136 @@ pub struct SnapshotFinish {
 }
 
 impl Catalog {
-    /// **Marquer des lignes comme portées par une session** de
-    /// synchronisation — un `SET` par appel, quel que soit le nombre de
-    /// lignes (mesuré : 53 lots de 512 en 324 ms). L'entité doit déclarer
-    /// `snapshot`.
+    // ── Les sessions : une à la fois par périmètre ───────────────────────
+    //
+    // Comme le verrou d'état de Terraform ou la table de verrou de Flyway :
+    // une session ouverte par périmètre, prise au début, rendue à la fin ou à
+    // l'abandon ; une session abandonnée se reprend par un geste explicite
+    // (`takeover`), jamais par un délai qui expire seul — un mécanisme qui
+    // supprime ne devine pas qu'un appelant est parti. Deux périmètres
+    // différents se synchronisent en même temps sans se gêner.
+
+    fn session_key(entity_name: &str, scope: &BTreeMap<String, CypherValue>) -> String {
+        let scope = serde_json::to_string(scope).unwrap_or_default();
+        format!("snapshot_session:{entity_name}:{scope}")
+    }
+
+    /// La session ouverte sur ce périmètre, s'il y en a une.
+    pub fn open_snapshot_session(
+        &self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+    ) -> Result<Option<SnapshotSession>, CatalogError> {
+        match self.read_meta_key(&Self::session_key(entity_name, scope))? {
+            Some(v) if !v.is_empty() => serde_json::from_str(&v)
+                .map(Some)
+                .map_err(|e| CatalogError::DbError(format!("session de synchronisation illisible : {e}"))),
+            _ => Ok(None),
+        }
+    }
+
+    fn check_scope_declared(
+        &self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+    ) -> Result<(), CatalogError> {
+        let config = self.snapshot_config(entity_name)?;
+        let mut declared: Vec<&str> = config.scope.iter().map(String::as_str).collect();
+        declared.sort_unstable();
+        let given: Vec<&str> = scope.keys().map(String::as_str).collect();
+        if declared != given {
+            return Err(CatalogError::ValidationFailed(format!(
+                "snapshot : le périmètre déclaré est [{}], reçu [{}]",
+                declared.join(", "),
+                given.join(", ")
+            )));
+        }
+        Ok(())
+    }
+
+    /// Refuse une session qui n'est pas celle ouverte sur ce périmètre.
+    fn check_open_session(
+        &self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+        session: &str,
+    ) -> Result<SnapshotSession, CatalogError> {
+        match self.open_snapshot_session(entity_name, scope)? {
+            Some(open) if open.session == session => Ok(open),
+            Some(open) => Err(CatalogError::SnapshotRefused(format!(
+                "{entity_name} : la session '{session}' n'est pas celle ouverte sur ce périmètre ('{}', depuis {} ms) — \
+                 périmée, reprise par une autre, ou d'un autre périmètre",
+                open.session, open.opened_at
+            ))),
+            None => Err(CatalogError::SnapshotRefused(format!(
+                "{entity_name} : aucune session ouverte sur ce périmètre — begin_snapshot d'abord (la session '{session}' est fermée ou n'a jamais existé)"
+            ))),
+        }
+    }
+
+    /// **Ouvrir une session** sur un périmètre. Refusé si une session y est
+    /// déjà ouverte, en disant laquelle et depuis quand ; `takeover` la
+    /// remplace (un appelant qui reprend une synchronisation abandonnée).
+    pub fn begin_snapshot(
+        &mut self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+        takeover: bool,
+    ) -> Result<SnapshotSession, CatalogError> {
+        self.check_initialized()?;
+        self.check_ecriture("begin_snapshot")?;
+        self.check_entity(entity_name)?;
+        self.check_scope_declared(entity_name, scope)?;
+        let replaced = match self.open_snapshot_session(entity_name, scope)? {
+            Some(open) if !takeover => {
+                return Err(CatalogError::SnapshotRefused(format!(
+                    "{entity_name} : une session est déjà ouverte sur ce périmètre ('{}', depuis {} ms) ; \
+                     une seule à la fois — la finir, l'abandonner, ou takeover pour la reprendre",
+                    open.session, open.opened_at
+                )))
+            }
+            Some(open) => Some(open.session),
+            None => None,
+        };
+        let opened_at = now_ms();
+        let graine = format!("{entity_name}|{:?}|{opened_at}|{}|{:?}", scope, std::process::id(), replaced);
+        let session = format!("{opened_at}-{}", &blake3::hash(graine.as_bytes()).to_hex()[..12]);
+        let open = SnapshotSession { session, opened_at, replaced };
+        let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(&Self::session_key(entity_name, scope), &value)?;
+        Ok(open)
+    }
+
+    /// **Abandonner une session** : elle se ferme, rien n'est retiré.
+    pub fn abort_snapshot(
+        &mut self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+        session: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.check_ecriture("abort_snapshot")?;
+        self.check_entity(entity_name)?;
+        self.check_open_session(entity_name, scope, session)?;
+        self.persist_meta_key(&Self::session_key(entity_name, scope), "")
+    }
+
+    /// **Marquer des lignes comme portées par la session ouverte** sur leur
+    /// périmètre — un `SET` par appel, quel que soit le nombre de lignes
+    /// (mesuré : 53 lots de 512 en 324 ms). Une ligne qui reparaît perd sa
+    /// marque d'absence.
     pub fn mark_snapshot(
         &mut self,
         entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
         session: &str,
         uuids: &[String],
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
         self.check_ecriture("mark_snapshot")?;
         self.check_entity(entity_name)?;
-        self.snapshot_config(entity_name)?;
-        if session.is_empty() {
-            return Err(CatalogError::ValidationFailed("snapshot : la session ne peut pas être vide".into()));
-        }
+        self.check_open_session(entity_name, scope, session)?;
         if uuids.is_empty() {
             return Ok(());
         }
@@ -159,20 +295,8 @@ impl Catalog {
         self.check_ecriture("finish_snapshot")?;
         self.check_entity(entity_name)?;
         let config = self.snapshot_config(entity_name)?.clone();
-        if session.is_empty() {
-            return Err(CatalogError::ValidationFailed("snapshot : la session ne peut pas être vide".into()));
-        }
-        // Le périmètre donné est exactement celui que l'entité déclare.
-        let mut declared: Vec<&str> = config.scope.iter().map(String::as_str).collect();
-        declared.sort_unstable();
-        let given: Vec<&str> = scope.keys().map(String::as_str).collect();
-        if declared != given {
-            return Err(CatalogError::ValidationFailed(format!(
-                "snapshot : le périmètre déclaré est [{}], reçu [{}]",
-                declared.join(", "),
-                given.join(", ")
-            )));
-        }
+        self.check_scope_declared(entity_name, scope)?;
+        self.check_open_session(entity_name, scope, session)?;
 
         let entity_config = self
             .entity_configs()
@@ -195,6 +319,7 @@ impl Catalog {
 
         let mut report = SnapshotFinish {
             entity: entity_name.to_string(),
+            scope: scope.clone(),
             session: session.to_string(),
             in_scope: rows.len(),
             ..Default::default()
@@ -332,9 +457,38 @@ impl Catalog {
         }
         report.applied = true;
         let entity_name = report.entity.clone();
+        self.check_initialized()?;
         self.check_ecriture("finish_snapshot")?;
-        for uuid in &report.removed {
-            self.mettre_en_file_la_suppression(&entity_name, uuid)?;
+        self.check_entity(&entity_name)?;
+        // La session est toujours celle ouverte : un plan d'une session
+        // reprise ou fermée entre-temps ne s'applique pas.
+        self.check_open_session(&entity_name, &report.scope, &report.session)?;
+        // Une ligne planifiée pour le retrait que la session a portée depuis
+        // le plan (un lot arrivé entre les deux) a reparu : elle reste. Une
+        // ligne déjà partie n'est pas annoncée retirée par cette fin.
+        if !report.removed.is_empty() {
+            let marks: HashMap<String, String> = self
+                .get_many(&entity_name, &report.removed)?
+                .into_iter()
+                .filter_map(|row| {
+                    let uuid = row.get("_uuid")?.as_str()?.to_string();
+                    let mark = row.get("_snapshot").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    Some((uuid, mark))
+                })
+                .collect();
+            let planned = std::mem::take(&mut report.removed);
+            for uuid in planned {
+                match marks.get(&uuid) {
+                    None => report.kept.push((uuid, "introuvable à la relecture".into())),
+                    Some(mark) if mark == &report.session => {
+                        report.kept.push((uuid, "reparue depuis le plan (portée par la session)".into()))
+                    }
+                    Some(_) => {
+                        self.mettre_en_file_la_suppression(&entity_name, &uuid)?;
+                        report.removed.push(uuid);
+                    }
+                }
+            }
         }
         if !report.transitioned.is_empty() {
             let entity_config = self
@@ -403,8 +557,21 @@ impl Catalog {
                     }
                 }
             }
-            report.warnings = res.warnings;
+            report.warnings.extend(res.warnings);
         }
+        // La marque d'absence : posée sur les lignes que l'absence a fait
+        // changer d'état, à la première absence constatée seulement.
+        if !report.transitioned.is_empty() {
+            let cypher = self.dialect.mark_absent_since(&entity_name);
+            self.conn
+                .execute_with_params(&cypher, &[
+                    QueryParam::new("uuids", CypherValue::List(report.transitioned.iter().cloned().map(CypherValue::String).collect())),
+                    QueryParam::new("since", CypherValue::Int(now_ms())),
+                ])
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+        // La fin ferme la session.
+        self.persist_meta_key(&Self::session_key(&entity_name, &report.scope), "")?;
         Ok(report)
     }
 

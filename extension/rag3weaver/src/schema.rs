@@ -187,6 +187,11 @@ pub fn generate_node_table_ddl_with_dialect(
         // **La marque de synchronisation** : la session du dernier instantané
         // qui a porté la ligne (`SnapshotConfig`). Vide hors synchronisation.
         ColumnDef { name: "_snapshot".into(), col_type: ColumnType::Text },
+        // **La marque d'absence** : millisecondes de la première absence
+        // constatée par une fin qui a appliqué la transition d'absence ; vide
+        // dès que la ligne reparaît dans un lot. Elle dit qu'un état a été
+        // posé par une absence, pas par quelqu'un.
+        ColumnDef { name: "_absent_since".into(), col_type: ColumnType::Int64 },
     ];
     if entity_def.derived_from.is_some() {
         // **Une entité dérivée** (doc du 7 septembre 2026) : d'où vient la

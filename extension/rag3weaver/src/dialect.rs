@@ -394,7 +394,16 @@ pub trait SchemaDialect: Send + Sync {
     /// **Marquer les lignes d'une session de synchronisation** :
     /// `_snapshot = $session` sur les lignes de `$uuids`.
     fn mark_snapshot_session(&self, table: &str) -> String {
-        format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session")
+        format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL")
+    }
+
+    /// **Poser la marque d'absence** sur `$uuids`, à `$since`, sauf là où elle
+    /// est déjà : c'est la *première* absence constatée qu'elle garde.
+    fn mark_absent_since(&self, table: &str) -> String {
+        format!(
+            "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
+             WHERE n._absent_since IS NULL SET n._absent_since = $since"
+        )
     }
 
     /// **Les lignes d'un périmètre de synchronisation** : chaque champ du
@@ -1708,7 +1717,11 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn mark_snapshot_session(&self, table: &str) -> String {
-        format!("UPDATE {table} SET _snapshot = $session WHERE _uuid = ANY($uuids)")
+        format!("UPDATE {table} SET _snapshot = $session, _absent_since = NULL WHERE _uuid = ANY($uuids)")
+    }
+
+    fn mark_absent_since(&self, table: &str) -> String {
+        format!("UPDATE {table} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND _absent_since IS NULL")
     }
 
     fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
