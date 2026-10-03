@@ -44,10 +44,6 @@ Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Hot one-commit,r
 Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 #
-# C3 — relations rattachées aux nœuds de l'autre transaction (marche A2).
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Hot rel-endpoints-correct
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Reopen rel-endpoints-correct
-Launchers/ConcurrencyBench.C3_OverlappingLocalOffsets/Thread_Crash rel-endpoints-correct
 #
 # C6 — suppression et mise à jour de la même ligne validées toutes les deux ; la
 # mise à jour est perdue. Reproduit sans harnais, dans un seul fil. L'attendu est en

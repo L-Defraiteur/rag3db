@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <numeric>
 
+#include "common/data_chunk/data_chunk_state.h"
 #include "common/enums/rel_direction.h"
+#include "common/system_config.h"
 #include "storage/table/rel_table.h"
+#include "storage/wal/local_wal.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -159,6 +162,131 @@ bool LocalRelTable::addColumn(TableAddColumnState& addColumnState) {
     localNodeGroup->addColumn(addColumnState, nullptr /* FileHandle */,
         nullptr /* newColumnStats */);
     return true;
+}
+
+static bool remapNodeOffset(table_id_t tableID, offset_t& offset,
+    const local_node_offset_map_t& offsetMap) {
+    const auto mapping = offsetMap.find(tableID);
+    if (mapping == offsetMap.end()) {
+        return false;
+    }
+    const auto& [oldStartOffset, newStartOffset, numRows] = mapping->second;
+    if (offset < oldStartOffset || offset >= oldStartOffset + numRows) {
+        return false;
+    }
+    if (oldStartOffset == newStartOffset) {
+        return false;
+    }
+    offset = newStartOffset + (offset - oldStartOffset);
+    return true;
+}
+
+static bool remapNodeIDColumn(NodeGroup& nodeGroup, column_id_t columnID, table_id_t tableID,
+    const local_node_offset_map_t& offsetMap, row_idx_t numRows) {
+    auto remapped = false;
+    row_idx_t numRowsSeen = 0;
+    for (auto chunkedGroupIdx = 0u;
+         chunkedGroupIdx < nodeGroup.getNumChunkedGroups() && numRowsSeen < numRows;
+         chunkedGroupIdx++) {
+        auto* chunkedGroup = nodeGroup.getChunkedNodeGroup(chunkedGroupIdx);
+        auto& nodeIDChunk = chunkedGroup->getColumnChunk(columnID);
+        for (auto rowIdx = 0u; rowIdx < chunkedGroup->getNumRows() && numRowsSeen < numRows;
+             rowIdx++, numRowsSeen++) {
+            auto offset = nodeIDChunk.getValue<offset_t>(rowIdx);
+            if (remapNodeOffset(tableID, offset, offsetMap)) {
+                nodeIDChunk.setValue<offset_t>(offset, rowIdx);
+                remapped = true;
+            }
+        }
+    }
+    return remapped;
+}
+
+void LocalRelTable::remapNodeOffsets(const local_node_offset_map_t& offsetMap,
+    row_idx_t numRows) {
+    if (offsetMap.empty() || isEmpty() || numRows == 0) {
+        return;
+    }
+    const auto& relTable = table.cast<RelTable>();
+    const auto remappedSrc = remapNodeIDColumn(*localNodeGroup, LOCAL_BOUND_NODE_ID_COLUMN_ID,
+        relTable.getFromNodeTableID(), offsetMap, numRows);
+    const auto remappedDst = remapNodeIDColumn(*localNodeGroup, LOCAL_NBR_NODE_ID_COLUMN_ID,
+        relTable.getToNodeTableID(), offsetMap, numRows);
+    if (!remappedSrc && !remappedDst) {
+        return;
+    }
+    // The indexes are keyed by the bound node offset: rebuild them from the rewritten columns.
+    const auto rowsToIndex = getActiveRows();
+    for (auto& index : directedIndices) {
+        index.clear();
+    }
+    for (const auto relRowIdx : rowsToIndex) {
+        const auto [chunkedGroup, rowIdxInGroup] = getChunkedGroupAndRow(relRowIdx);
+        const auto srcNodeOffset = chunkedGroup->getColumnChunk(LOCAL_BOUND_NODE_ID_COLUMN_ID)
+                                       .getValue<offset_t>(rowIdxInGroup);
+        const auto dstNodeOffset = chunkedGroup->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
+                                       .getValue<offset_t>(rowIdxInGroup);
+        for (auto& index : directedIndices) {
+            const auto boundNodeOffset =
+                index.direction == RelDataDirection::FWD ? srcNodeOffset : dstNodeOffset;
+            index.index[boundNodeOffset].push_back(relRowIdx);
+        }
+    }
+}
+
+row_idx_vec_t LocalRelTable::getActiveRows() const {
+    row_idx_vec_t rows;
+    for (const auto& [_, rowIndices] : directedIndices[0].index) {
+        rows.insert(rows.end(), rowIndices.begin(), rowIndices.end());
+    }
+    std::sort(rows.begin(), rows.end());
+    return rows;
+}
+
+std::pair<ChunkedNodeGroup*, row_idx_t> LocalRelTable::getChunkedGroupAndRow(
+    row_idx_t rowIdx) const {
+    for (auto chunkedGroupIdx = 0u; chunkedGroupIdx < localNodeGroup->getNumChunkedGroups();
+         chunkedGroupIdx++) {
+        auto* chunkedGroup = localNodeGroup->getChunkedNodeGroup(chunkedGroupIdx);
+        if (rowIdx < chunkedGroup->getNumRows()) {
+            return {chunkedGroup, rowIdx};
+        }
+        rowIdx -= chunkedGroup->getNumRows();
+    }
+    KU_UNREACHABLE;
+}
+
+void LocalRelTable::logInsertionsToWAL(LocalWAL& wal, MemoryManager& mm) const {
+    const auto rowsToLog = getActiveRows();
+    for (size_t batchStart = 0; batchStart < rowsToLog.size();
+         batchStart += DEFAULT_VECTOR_CAPACITY) {
+        const auto numRows =
+            std::min<row_idx_t>(DEFAULT_VECTOR_CAPACITY, rowsToLog.size() - batchStart);
+        auto state = std::make_shared<DataChunkState>();
+        state->getSelVectorUnsafe().setToUnfiltered(numRows);
+        std::vector<std::pair<const ChunkedNodeGroup*, row_idx_t>> rows;
+        rows.reserve(numRows);
+        for (auto rowIdx = 0u; rowIdx < numRows; rowIdx++) {
+            rows.push_back(getChunkedGroupAndRow(rowsToLog[batchStart + rowIdx]));
+        }
+        std::vector<std::unique_ptr<ValueVector>> ownedVectors;
+        std::vector<ValueVector*> vectors;
+        ownedVectors.reserve(localNodeGroup->getDataTypes().size());
+        vectors.reserve(localNodeGroup->getDataTypes().size());
+        for (auto columnID = 0u; columnID < localNodeGroup->getDataTypes().size(); columnID++) {
+            auto vector = std::make_unique<ValueVector>(
+                localNodeGroup->getDataTypes()[columnID].copy(), &mm, state);
+            for (auto rowIdx = 0u; rowIdx < numRows; rowIdx++) {
+                const auto [chunkedGroup, rowIdxInGroup] = rows[rowIdx];
+                ChunkState chunkState;
+                chunkedGroup->getColumnChunk(columnID).lookup(&DUMMY_TRANSACTION, chunkState,
+                    rowIdxInGroup, *vector, rowIdx);
+            }
+            vectors.push_back(vector.get());
+            ownedVectors.push_back(std::move(vector));
+        }
+        wal.logTableInsertion(table.getTableID(), TableType::REL, numRows, vectors);
+    }
 }
 
 bool LocalRelTable::checkIfNodeHasRels(ValueVector* srcNodeIDVector,

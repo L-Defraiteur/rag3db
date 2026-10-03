@@ -59,11 +59,32 @@ void LocalStorage::commit() {
     auto catalog = catalog::Catalog::Get(clientContext);
     auto transaction = transaction::Transaction::Get(clientContext);
     auto storageManager = StorageManager::Get(clientContext);
+    // The nodes this transaction created were numbered from the size each table had when the
+    // transaction first wrote to it. If another transaction committed nodes to the same table
+    // since, they land further: note where, so that the relationships created towards them in
+    // this transaction can follow. Without it they pointed to the other transaction's nodes.
+    local_node_offset_map_t nodeOffsetMap;
+    // What each local relationship table held before the nodes are committed: committing nodes
+    // can add rows to some (an index creating edges for the new nodes), and those carry final
+    // offsets already.
+    std::unordered_map<table_id_t, row_idx_t> numLocalRelsBeforeCommit;
+    for (auto& [tableID, localTable] : tables) {
+        if (localTable->getTableType() == TableType::REL) {
+            numLocalRelsBeforeCommit[tableID] = localTable->getNumTotalRows();
+        }
+    }
     for (auto& [tableID, localTable] : tables) {
         if (localTable->getTableType() == TableType::NODE) {
             const auto tableEntry = catalog->getTableCatalogEntry(transaction, tableID);
             const auto table = storageManager->getTable(tableID);
+            const auto oldStartOffset = localTable->cast<LocalNodeTable>().getStartOffset();
+            const auto newStartOffset = table->getNumTotalRows(nullptr /* transaction */);
+            const auto numRows = localTable->getNumTotalRows();
             table->commit(&clientContext, tableEntry, localTable.get());
+            if (numRows > 0) {
+                nodeOffsetMap[tableID] =
+                    LocalNodeOffsetMap{oldStartOffset, newStartOffset, numRows};
+            }
         }
     }
     for (auto& [tableID, localTable] : tables) {
@@ -71,6 +92,9 @@ void LocalStorage::commit() {
             const auto table = storageManager->getTable(tableID);
             const auto tableEntry =
                 catalog->getTableCatalogEntry(transaction, table->cast<RelTable>().getRelGroupID());
+            const auto numRowsBefore = numLocalRelsBeforeCommit.find(tableID);
+            localTable->cast<LocalRelTable>().remapNodeOffsets(nodeOffsetMap,
+                numRowsBefore == numLocalRelsBeforeCommit.end() ? 0 : numRowsBefore->second);
             table->commit(&clientContext, tableEntry, localTable.get());
         }
     }

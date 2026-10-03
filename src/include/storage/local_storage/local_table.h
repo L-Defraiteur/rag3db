@@ -27,6 +27,12 @@ public:
     virtual common::TableType getTableType() const = 0;
     virtual common::row_idx_t getNumTotalRows() = 0;
 
+    // Insertions are logged to the journal when the transaction commits, not when they are made.
+    // The internal tables of an index insert with logToWAL = false, because a replay rebuilds
+    // them through the index: for those, nothing is logged at commit either.
+    void doNotLogInsertions() { insertionsLogged = false; }
+    bool logsInsertions() const { return insertionsLogged; }
+
     template<class TARGET>
     const TARGET& constCast() {
         return common::ku_dynamic_cast<const TARGET&>(*this);
@@ -51,6 +57,7 @@ protected:
 
 protected:
     const Table& table;
+    bool insertionsLogged = true;
 };
 
 } // namespace storage
