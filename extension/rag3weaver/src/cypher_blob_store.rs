@@ -270,12 +270,7 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
                 return Ok(());
             }
             let items = CypherValue::List(std::mem::take(batch));
-            self.execute(
-                "UNWIND $items AS item \
-                 MERGE (b:_index_blobs {_key: item.key}) \
-                 SET b._data = item.data, b._deleted_gen = -1",
-                &[QueryParam::new("items", items)],
-            )
+            self.execute(&upsert_blobs_query(), &[QueryParam::new("items", items)])
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             Ok(())
         };
@@ -308,6 +303,21 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         Ok(())
     }
+}
+
+/// **L'écriture d'un lot de blobs** (`$items` : `key`, `data`), par la forme
+/// commune du dialecte : la clé dans un `WITH`, sans quoi le `MERGE`
+/// balayait toute la table des blobs à chaque lot. Publique pour que
+/// `e2e_plans_par_lot` en lise le plan.
+pub fn upsert_blobs_query() -> String {
+    format!(
+        "{} SET b._data = item.data, b._deleted_gen = -1",
+        crate::dialect::unwind_par_cle(
+            "items",
+            &[crate::dialect::ParCle { var: "b", label: Some("_index_blobs"), prop: "_key", champ: "key" }],
+            "MERGE"
+        )
+    )
 }
 
 #[cfg(test)]

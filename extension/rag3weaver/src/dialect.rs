@@ -84,6 +84,63 @@ pub fn colonnes_de_chunk(alias: &str, has_source_refs: bool) -> Vec<String> {
 /// cellule vide : la cellule vide est une chaîne vide.
 pub const CSV_NULL: &str = "__rag3weaver_null__";
 
+/// **Retrouver par sa clé le nœud de chaque ligne d'un lot** — la forme que
+/// toutes les requêtes `UNWIND` du dialecte prennent (3 octobre 2026).
+///
+/// `MATCH (n:T {_uuid: item.champ})` balayait la table entière : le moteur
+/// ne sait faire une jointure de hachage que si l'égalité porte sur une
+/// **variable simple**, pas sur un champ de structure. Le plan était un
+/// produit cartésien de la table et du lot, puis un filtre — un coût qui
+/// suit le nombre de nœuds de la table, pas la taille du lot (session cœur
+/// C++ : 169 ms au lieu de 6,5 pour 300 clés à 200 000 nœuds ; 348 ms au
+/// lieu de 2,8 pour 300 liens à 20 000).
+///
+/// La recette, éprouvée sur le moteur par `EXPLAIN` : `item` voyage d'étape
+/// en étape, et **chaque clé est extraite dans le `WITH` qui précède
+/// immédiatement le `MATCH` ou le `MERGE` qui s'en sert**. Une clé extraite
+/// plus tôt et passée par un second `WITH` fait refuser un `MERGE`
+/// (« Cannot evaluate expression with type VARIABLE »). Deux nœuds dans le
+/// même `MATCH` retombent sur le produit cartésien : un `WITH` entre eux.
+///
+/// Un seul endroit à changer le jour où le moteur saura mieux faire.
+/// `e2e_plans_par_lot` lit le plan de chaque forme et refuse tout produit
+/// cartésien.
+pub(crate) fn cle_de_ligne(lies: &[&str], champ: &str, alias: &str) -> String {
+    let mut garde: Vec<&str> = lies.to_vec();
+    garde.push("item");
+    format!("WITH {}, item.{champ} AS {alias}", garde.join(", "))
+}
+
+/// Un nœud à retrouver : sa variable, son étiquette (sans étiquette, toutes
+/// les tables), la propriété clé, et le champ de `item` qui la porte.
+pub(crate) struct ParCle<'a> {
+    pub var: &'a str,
+    pub label: Option<&'a str>,
+    pub prop: &'a str,
+    pub champ: &'a str,
+}
+
+/// `UNWIND $param AS item`, puis, pour chaque nœud dans l'ordre, l'extraction
+/// de sa clé et son `verbe` (`MATCH` ou `MERGE`). Rend la requête jusqu'au
+/// dernier motif inclus ; l'appelant ajoute `SET`, `RETURN`, `DELETE`…
+pub(crate) fn unwind_par_cle(param: &str, noeuds: &[ParCle], verbe: &str) -> String {
+    let mut q = format!("UNWIND ${param} AS item");
+    let mut lies: Vec<&str> = Vec::new();
+    for (i, n) in noeuds.iter().enumerate() {
+        let alias = format!("__cle_{i}");
+        let etiquette = n.label.map(|l| format!(":{l}")).unwrap_or_default();
+        q.push(' ');
+        q.push_str(&cle_de_ligne(&lies, n.champ, &alias));
+        q.push_str(&format!(" {verbe} ({}{etiquette} {{{}: {alias}}})", n.var, n.prop));
+        lies.push(n.var);
+    }
+    q
+}
+
+fn par_uuid<'a>(var: &'a str, label: Option<&'a str>, champ: &'a str) -> ParCle<'a> {
+    ParCle { var, label, prop: "_uuid", champ }
+}
+
 pub trait SchemaDialect: Send + Sync {
     /// Backend name for diagnostics (e.g. "rag3db", "postgresql").
     fn name(&self) -> &'static str;
@@ -462,10 +519,11 @@ pub trait SchemaDialect: Send + Sync {
     /// Poser des copies : `$items` porte `key`, `entity`, `uuid`, `hash`,
     /// `row`, `chunks`, `session`, `at`.
     fn upsert_aside(&self) -> String {
-        "UNWIND $items AS i MERGE (a:_snapshot_aside {_key: i.key}) \
-         SET a._entity = i.entity, a._uuid = i.uuid, a._content_hash = i.hash, a._row = i.row, \
-         a._chunks = i.chunks, a._session = i.session, a._removed_at = i.at"
-            .into()
+        format!(
+            "{} SET a._entity = item.entity, a._uuid = item.uuid, a._content_hash = item.hash, a._row = item.row, \
+             a._chunks = item.chunks, a._session = item.session, a._removed_at = item.at",
+            unwind_par_cle("items", &[ParCle { var: "a", label: Some("_snapshot_aside"), prop: "_key", champ: "key" }], "MERGE")
+        )
     }
 
     /// Les copies vivantes de `$keys` : `_uuid`, `_content_hash`, `_row`,
@@ -514,8 +572,8 @@ pub trait SchemaDialect: Send + Sync {
     /// annulation n'est pas une transition.
     fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
         format!(
-            "UNWIND $items AS i MATCH (n:{table} {{_uuid: i.uuid}}) \
-             SET n.{field} = i.state, n._absent_since = NULL"
+            "{} SET n.{field} = item.state, n._absent_since = NULL",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
         )
     }
 
@@ -984,7 +1042,8 @@ impl SchemaDialect for Rag3dbDialect {
             .collect();
         let id_expr = self.node_id_expr("n");
         format!(
-            "UNWIND $items AS item MERGE (n:{table} {{_uuid: item._uuid}}) SET {} RETURN {id_expr}, item._uuid",
+            "{} SET {} RETURN {id_expr}, item._uuid",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MERGE"),
             set_clause.join(", ")
         )
     }
@@ -1007,9 +1066,8 @@ impl SchemaDialect for Rag3dbDialect {
             format!(" SET {}", assigns.join(", "))
         };
         format!(
-            "UNWIND $items AS item \
-             MATCH (a {{_uuid: item.from_uuid}}), (b {{_uuid: item.to_uuid}}) \
-             MERGE (a)-[r:{rel_table}]->(b){prop_set}"
+            "{} MERGE (a)-[r:{rel_table}]->(b){prop_set}",
+            unwind_par_cle("items", &[par_uuid("a", None, "from_uuid"), par_uuid("b", None, "to_uuid")], "MATCH")
         )
     }
 
@@ -1067,9 +1125,8 @@ impl SchemaDialect for Rag3dbDialect {
         // MERGE ne change rien (98 s dans les deux cas) — le coût n'est pas
         // la vérification d'existence, c'est l'insertion elle-même.
         format!(
-            "UNWIND $items AS item \
-             MATCH (a:{from} {{_uuid: item.from_uuid}}), (b:{to} {{_uuid: item.to_uuid}}) \
-             MERGE (a)-[r:{rel_table}]->(b){prop_set}"
+            "{} MERGE (a)-[r:{rel_table}]->(b){prop_set}",
+            unwind_par_cle("items", &[par_uuid("a", Some(from), "from_uuid"), par_uuid("b", Some(to), "to_uuid")], "MATCH")
         )
     }
 
@@ -1078,9 +1135,8 @@ impl SchemaDialect for Rag3dbDialect {
             .map(|c| format!("n.{c} = item.{c}"))
             .collect();
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item._uuid}}) \
-             SET {}",
+            "{} SET {}",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MATCH"),
             assigns.join(", ")
         )
     }
@@ -1112,10 +1168,8 @@ impl SchemaDialect for Rag3dbDialect {
             })
             .collect();
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item._uuid}}) \
-             SET {} \
-             RETURN {}",
+            "{} SET {} RETURN {}",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MATCH"),
             assigns.join(", "),
             returns.join(", "),
         )
@@ -1143,9 +1197,9 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn batch_delete_relation(&self, rel_table: &str) -> String {
         format!(
-            "UNWIND $items AS item \
-             MATCH (a {{_uuid: item.from}})-[r:{rel_table}]->(b {{_uuid: item.to}}) \
-             DELETE r"
+            "{} {} MATCH (a)-[r:{rel_table}]->(b {{_uuid: __cle_1}}) DELETE r",
+            unwind_par_cle("items", &[par_uuid("a", None, "from")], "MATCH"),
+            cle_de_ligne(&["a"], "to", "__cle_1")
         )
     }
 
@@ -1161,9 +1215,8 @@ impl SchemaDialect for Rag3dbDialect {
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{{table_match_col}: item.{match_field}}}) \
-             RETURN {returns}"
+            "{} RETURN {returns}",
+            unwind_par_cle("items", &[ParCle { var: "n", label: Some(table), prop: table_match_col, champ: match_field }], "MATCH")
         )
     }
 
@@ -1340,36 +1393,31 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item.uuid}}) \
-             RETURN n._uuid, n.{marker}, n._sparse_hash"
+            "{} RETURN n._uuid, n.{marker}, n._sparse_hash",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
         )
     }
 
     fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item.uuid}}) \
-             SET n.{embedding_col} = item.emb, n.{marker} = item.hash"
+            "{} SET n.{embedding_col} = item.emb, n.{marker} = item.hash",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
         )
     }
 
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr("n");
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item.uuid}}) \
-             SET n.{marker} = item.hash \
-             RETURN item.uuid, {offset} AS offset"
+            "{} SET n.{marker} = item.hash RETURN item.uuid, {offset} AS offset",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
         )
     }
 
     fn embed_get_offset(&self, table: &str) -> String {
         let offset = self.node_offset_expr("n");
         format!(
-            "UNWIND $items AS item \
-             MATCH (n:{table} {{_uuid: item.uuid}}) \
-             RETURN item.uuid, {offset} AS offset"
+            "{} RETURN item.uuid, {offset} AS offset",
+            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
         )
     }
 
@@ -1383,11 +1431,7 @@ impl SchemaDialect for Rag3dbDialect {
             .chain(return_entity_fields.iter().map(|f| format!("e.{f} AS {f}")))
             .collect::<Vec<_>>()
             .join(", ");
-        format!(
-            "UNWIND $items AS item \
-             MATCH (e:{table} {{_uuid: item.uuid}}) \
-             RETURN {returns}"
-        )
+        format!("{} RETURN {returns}", unwind_par_cle("items", &[par_uuid("e", Some(table), "uuid")], "MATCH"))
     }
 
     fn kb_gather_content(
@@ -1402,18 +1446,12 @@ impl SchemaDialect for Rag3dbDialect {
             .chain(return_fields.iter().map(|f| format!("c.{f} AS {f}")))
             .collect::<Vec<_>>()
             .join(", ");
+        // Le titre par sa clé, puis le contenu par l'arête depuis le titre lié.
+        let titre = unwind_par_cle("items", &[par_uuid("t", Some(title_entity), "uuid")], "MATCH");
         if direction_forward {
-            format!(
-                "UNWIND $items AS item \
-                 MATCH (t:{title_entity} {{_uuid: item.uuid}})-[:{rel}]->(c:{content_entity}) \
-                 RETURN {returns}"
-            )
+            format!("{titre} WITH t, item MATCH (t)-[:{rel}]->(c:{content_entity}) RETURN {returns}")
         } else {
-            format!(
-                "UNWIND $items AS item \
-                 MATCH (t:{title_entity} {{_uuid: item.uuid}})<-[:{rel}]-(c:{content_entity}) \
-                 RETURN {returns}"
-            )
+            format!("{titre} WITH t, item MATCH (t)<-[:{rel}]-(c:{content_entity}) RETURN {returns}")
         }
     }
 
@@ -1432,10 +1470,8 @@ impl SchemaDialect for Rag3dbDialect {
             .collect::<Vec<_>>()
             .join(", ");
         format!(
-            "UNWIND $items AS item \
-             MERGE (idx:{index_table} {{_uuid: item.uuid}}) \
-             ON CREATE SET {create_set} \
-             ON MATCH SET {match_set}"
+            "{} ON CREATE SET {create_set} ON MATCH SET {match_set}",
+            unwind_par_cle("items", &[par_uuid("idx", Some(index_table), "uuid")], "MERGE")
         )
     }
 
@@ -2761,7 +2797,8 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_delete_relation("AUTHORED_BY");
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("MATCH (a {_uuid: item.from})-[r:AUTHORED_BY]->(b {_uuid: item.to})"));
+        assert!(stmt.contains("WITH item, item.from AS __cle_0 MATCH (a {_uuid: __cle_0})"));
+        assert!(stmt.contains("WITH a, item, item.to AS __cle_1 MATCH (a)-[r:AUTHORED_BY]->(b {_uuid: __cle_1})"));
         assert!(stmt.contains("DELETE r"));
     }
 
@@ -2780,7 +2817,7 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_select("kb_Index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("MATCH (n:kb_Index {_uuid: item.uuid})"));
+        assert!(stmt.contains("WITH item, item.uuid AS __cle_0 MATCH (n:kb_Index {_uuid: __cle_0})"));
         assert!(stmt.contains("RETURN n._uuid, n._title, n._content"));
     }
 
