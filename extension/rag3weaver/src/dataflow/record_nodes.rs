@@ -2802,11 +2802,17 @@ impl Node for DeleteRecordNode {
         for (entity_name, items) in &groups {
             if items.is_empty() { continue; }
 
-            let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
+            // Une colonne nulle partout n'a pas de type dans la liste de
+            // paramètres (rag3db la lit en STRING, et refuse de la poser dans
+            // une colonne INT64) : la ligne recréée l'a nulle de toute façon.
+            let nulles = colonnes_toutes_nulles(items);
+            let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).filter(|k| !nulles.contains(*k)).collect();
             let cypher = dialect.batch_upsert(entity_name, &columns);
 
             let items_param = CypherValue::List(
-                items.iter().map(|m| CypherValue::Map(m.clone())).collect()
+                items.iter().map(|m| CypherValue::Map(
+                    m.iter().filter(|(k, _)| !nulles.contains(k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect()
+                )).collect()
             );
             conn.execute_with_params(
                 &cypher,
@@ -2815,6 +2821,20 @@ impl Node for DeleteRecordNode {
         }
         Ok(())
     }
+}
+
+/// Les colonnes nulles dans **tous** les éléments d'un lot d'annulation : la
+/// liste de paramètres ne leur donne aucun type (rag3db les lit en STRING),
+/// donc elles ne peuvent pas partir dans un `SET n.c = item.c` sur une colonne
+/// typée — `_absent_since` (INT64) l'a montré le 3 octobre 2026.
+fn colonnes_toutes_nulles(items: &[BTreeMap<String, CypherValue>]) -> std::collections::HashSet<String> {
+    let Some(premier) = items.first() else { return Default::default() };
+    premier
+        .keys()
+        .filter(|k| k.as_str() != "_uuid")
+        .filter(|k| items.iter().all(|m| matches!(m.get(k.as_str()), None | Some(CypherValue::Null))))
+        .cloned()
+        .collect()
 }
 
 // ─── UpdateRecordNode ──────────────────────────────────────────────────────
@@ -3338,10 +3358,22 @@ impl Node for UpdateRecordNode {
             if items.is_empty() { continue; }
 
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).collect();
+            // Une colonne nulle partout n'a pas de type dans la liste de
+            // paramètres : elle est remise à NULL à part, par uuid.
+            let nulles = colonnes_toutes_nulles(items);
             let other_cols: Vec<&str> = columns.iter()
-                .filter(|c| **c != "_uuid")
+                .filter(|c| **c != "_uuid" && !nulles.contains(**c))
                 .copied()
                 .collect();
+            if !nulles.is_empty() {
+                let uuids = CypherValue::List(items.iter().filter_map(|m| m.get("_uuid").cloned()).collect());
+                for colonne in &nulles {
+                    conn.execute_with_params(
+                        &dialect.batch_set_null(entity_name, colonne),
+                        &[QueryParam { name: "uuids".into(), value: uuids.clone() }],
+                    ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
+                }
+            }
             if other_cols.is_empty() { continue; }
 
             let cypher = dialect.batch_update_fields(entity_name, &other_cols);
