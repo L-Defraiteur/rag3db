@@ -158,3 +158,40 @@ dépend d'une mesure.
 - **Au banc, quand les poids seront là** : la ligne G (la pondération par
   genre vaut le changement de texte, sans toucher l'embarquement), les
   défauts de fusion 0,6/0,4 contre 0,3/0,7, et le poids du sparse.
+
+
+## 7. Ajout du 3 octobre — ce que les familles de gabarits ne savent pas faire
+
+L'étape 3 est livrée avec des **familles à noms fixes** (fil, document,
+fiche étiquetée : la racine, la voisine, la dérivée — rendu en ligne), parce
+que le repérage a contredit la conception du 2 : `place` ne substitue rien
+dans un gabarit, et aucun gabarit ne sait poser une relation. La limite est
+écrite dans chaque fiche. Voici ce qui manque, en proposition — c'est un
+choix à porter à Lucie, dont le principe est « le plus générique et
+personnalisable sans être pénible » :
+
+**Une famille posée d'un coup.** Un gabarit de famille serait un JSON de
+plus (`templates/families/…`) : les entités membres (par référence à leurs
+gabarits), les **relations** entre elles (ce que le catalogue de gabarits ne
+sait pas dire aujourd'hui), et des **noms en paramètres** — `place
+family=fil as=Support` poserait `Support`, `SupportMessage`,
+`SupportFil`, la relation `Support_HAS_MESSAGE`, et réécrirait le `from`,
+les `relation` des `gather` et les préfixes dans les rendus. Ce que ça
+demande : une famille `families` dans `template.rs` (scan, read, header) ;
+une substitution de noms dans `prepare_entity` (un simple remplacement
+d'identifiants déclarés, pas un moteur de gabarits) ; `place` qui enregistre
+plusieurs entités et leurs relations dans l'ordre (racine, voisines,
+relations, dérivées) et qui dise ce qu'il a posé. Ce que ça coûte : la
+validation croisée (un membre manquant, un `as` qui collisionne), l'adoption
+inverse (`adopt` d'une famille vivante), et la question du démontage (on ne
+sait pas retirer une entité posée).
+
+**`GatherRule` qui trie et borne.** Aujourd'hui les voisines arrivent
+triées par uuid et sans limite ; l'ordre du temps et le rang vivent dans le
+Jinja (`sort(attribute=…)`), et une racine à mille voisines rend un texte de
+mille lignes. `order_by: <champ>` et `limit: <n>` dans la règle diraient
+l'intention dans la config — lisible par un outil, un schéma, une doc — au
+lieu de l'enfouir dans la source d'un gabarit ; le Jinja resterait libre de
+sur-trier. Coût faible (deux champs optionnels, le tri avant le rendu dans
+`derive_nodes`), bénéfice réel : les gabarits de famille n'auraient plus
+besoin d'inclure le champ de tri dans `fields` juste pour trier.
