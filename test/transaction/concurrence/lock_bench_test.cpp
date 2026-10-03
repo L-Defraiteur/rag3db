@@ -657,4 +657,112 @@ TEST_F(LockBench, RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen) {
         << "[check: one-row-per-key] ";
 }
 
+// ── Le verrou d'index (genre « index », forme décidée par la session cœur C++ et
+// l'orchestration le 3 octobre) ─────────────────────────────────────────────────────
+// Tout écrivain qui insère, supprime ou change un vecteur dans une table indexée prend
+// l'index de cette table en exclusif à sa première écriture sur la table, jusqu'au
+// commit ou au rollback. Le détenteur insère un vecteur dans une transaction ouverte ;
+// l'attendant insère une autre clé de la même table. Aujourd'hui, sans verrou : rouge
+// « waited ». H3 et H4 sont les autres témoins de ce genre.
+class IndexLockBench : public LockBench {
+public:
+    void SetUp() override {
+        LockBench::SetUp();
+        if (IsSkipped()) {
+            return;
+        }
+        loadVectorExtension(*conn);
+        mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
+        mustRun("UNWIND range(0, 199) AS i CREATE (:Doc {id: i, vec: [CAST(i % 17 AS FLOAT), "
+                "CAST(i % 23 AS FLOAT), CAST(i % 29 AS FLOAT), CAST(i AS FLOAT)]});");
+        mustRun("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    }
+    static std::string insertDoc(int64_t id) {
+        return stringFormat("CREATE (:Doc {id: {}, vec: [1.5, 2.5, 3.5, {}.0]});", id, id);
+    }
+};
+
+// En auto-commit : une instruction pour l'attendant ; il attend le commit du détenteur,
+// puis valide (son instruction a un instantané neuf). Marche V1.
+TEST_F(IndexLockBench, AutoCommitWriterWaitsForTheIndexThenCommits) {
+    SharedMapping mapping(2);
+    auto& area = mapping.get();
+    launchCase(area, [](Worker& worker) {
+        if (worker.index() == 0) {
+            worker.begin();
+            worker.runMarked(insertDoc(1000), "write");
+            worker.waitFor(1, "write:start", EVENT_WAIT);
+            std::this_thread::sleep_for(HOLD);
+            worker.mark("end:start");
+            worker.commit();
+            worker.mark("end:done");
+            return;
+        }
+        worker.waitForAny(0, {"write:done", "write:failed"}, EVENT_WAIT);
+        worker.runMarked(insertDoc(1001), "write");
+    });
+    expectWaited(area);
+    EXPECT_GE(eventIndex(area, 1, "write:done"), 0) << "[check: waiter-writes] ";
+    EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 1000 RETURN count(n);"), 2)
+        << "[check: both-rows] ";
+    expectIntegrity();
+}
+
+// Dans des blocs BEGIN sans annonce : l'attendant attend, puis valide OU échoue sur
+// « could not serialize » (option A : son instantané précède le commit du détenteur) —
+// jamais de corruption. Marche V1.
+TEST_F(IndexLockBench, BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError) {
+    SharedMapping mapping(2);
+    auto& area = mapping.get();
+    launchCase(area,
+        holderAndWaiter({.holderWrite = insertDoc(1000), .waiterWrite = insertDoc(1001)}));
+    expectWaited(area);
+    const bool committed = eventIndex(area, 1, "commit:done") >= 0;
+    const bool serialized = refusals(area, 1, Refusal::SerializationFailure) == 1;
+    EXPECT_TRUE(committed || serialized)
+        << "[check: waiter-commits-or-serializes] the waiter must either commit or get the "
+           "named serialization error";
+    uint32_t otherErrors = 0;
+    for (auto r = 0u; r < NUM_REFUSALS; ++r) {
+        if (static_cast<Refusal>(r) != Refusal::SerializationFailure) {
+            otherErrors += refusals(area, 1, static_cast<Refusal>(r));
+        }
+    }
+    EXPECT_EQ(otherErrors, 0u) << "[check: no-other-error] ";
+    expectIntegrity();
+}
+
+// L'annonce sur une table indexée prend aussi l'index : deux écrivains qui annoncent des
+// clés différentes s'attendent quand même, puis valident tous les deux sans erreur.
+// Marche V2 ; rouge aujourd'hui : acquire_locks n'existe pas.
+TEST_F(IndexLockBench, AnnouncedWritersOfOneIndexedTableWaitThenBothCommit) {
+    SharedMapping mapping(2);
+    auto& area = mapping.get();
+    launchCase(area, [](Worker& worker) {
+        const auto key = 1000 + worker.index();
+        if (worker.index() == 1) {
+            worker.waitForAny(0, {"write:done", "write:failed"}, EVENT_WAIT);
+        }
+        worker.begin();
+        worker.runMarked(stringFormat("CALL acquire_locks('Doc', [{}]);", key), "announce");
+        worker.runMarked(insertDoc(key), "write");
+        if (worker.index() == 0) {
+            worker.waitFor(1, "announce:start", EVENT_WAIT);
+            std::this_thread::sleep_for(HOLD);
+        }
+        worker.commitMarked("commit");
+    });
+    EXPECT_EQ(totalRefusals(area, Refusal::MissingFunction), 0u)
+        << "[check: acquire-locks-exists] CALL acquire_locks does not exist yet";
+    uint32_t errors = 0;
+    for (auto r = 0u; r < NUM_REFUSALS; ++r) {
+        errors += totalRefusals(area, static_cast<Refusal>(r));
+    }
+    EXPECT_EQ(errors, 0u) << "[check: no-error] ";
+    EXPECT_EQ(totalCommits(area), 2u) << "[check: both-commit] ";
+    EXPECT_GT(eventIndex(area, 1, "announce:done"), eventIndex(area, 0, "commit:done"))
+        << "[check: in-turn] the second announcement must wait for the first commit";
+    expectIntegrity();
+}
+
 #endif

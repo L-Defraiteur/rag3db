@@ -101,8 +101,9 @@ LockBench.InterruptedWaitGivesInterruptedAndRollsBack waited-the-delay,waiter-ge
 # (lock-timeout-exists, CALL lock_timeout), en plus du comportement.
 LockBench.LockTimeoutGivesNamedErrorAndRollsBack lock-timeout-exists,waited-the-delay,waiter-gets-lock-timeout
 #
-# Maintenance de l'index HNSW au commit (étude HNSW, §4) — H3 : deux suppressions sans rapport
-# dont les voisinages se recouvrent ; le second reçoit un « Write-write conflict ».
+# Marche V1, genre « index » (et maintenance de l'index HNSW au commit, étude HNSW §4) — H3 :
+# deux suppressions sans rapport dont les voisinages se recouvrent ; le second reçoit un
+# « Write-write conflict ». H4 (probabilistic.txt) est l'autre témoin de ce genre.
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
 #
@@ -117,3 +118,14 @@ MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-comple
 # table garde un exemplaire non chargé, et le recréer lève « Index … is not loaded yet »
 # (cause isolée par la session de l'arbre principal, 3 octobre).
 IndexReopen.DropAfterCheckpointThenCrashLeavesAnUnloadedIndex index-loaded,index-recreated,query-succeeds
+#
+# Marche V1, genre « index » — tout écrivain d'une table indexée prend l'index de la table en
+# exclusif : l'écrivain en auto-commit attend puis valide ; en bloc, il attend puis valide ou
+# reçoit « could not serialize ». Aujourd'hui, sans verrou : waited.
+IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits waited
+IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError waited
+#
+# Marche V2, genre « index » — l'annonce sur une table indexée prend aussi l'index : deux
+# annonces de clés différentes s'attendent puis valident sans erreur. ROUGE : LA FONCTION
+# N'EXISTE PAS (acquire-locks-exists).
+IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks-exists,both-commit,in-turn,no-error
