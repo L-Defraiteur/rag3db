@@ -36,40 +36,23 @@ fn samples() -> Vec<String> {
     out
 }
 
-/// Les fichiers **suivis par git**, avec leur taille. Le dossier d'un dépôt
-/// en travail contient bien plus que le dépôt — des builds, des données, des
-/// `target/` : mesuré le 3 octobre 2026 sur celui-ci, 307 541 fichiers sur le
-/// disque contre 6 110 suivis. Ce que l'estimation compte doit être ce que
-/// l'indexation prendra ; tant que la source « dépôt git » n'existe pas, ce
-/// test fait la différence lui-même pour montrer les deux.
-fn tracked_files(root: &std::path::Path) -> Vec<(String, u64)> {
-    let out = std::process::Command::new("git").arg("-C").arg(root).args(["ls-files", "-z"]).output().expect("git ls-files");
-    String::from_utf8_lossy(&out.stdout)
-        .split('\0')
-        .filter(|p| !p.is_empty())
-        .filter_map(|p| std::fs::symlink_metadata(root.join(p)).ok().filter(|m| m.is_file()).map(|m| (p.to_string(), m.len())))
-        .collect()
-}
-
 #[test]
 #[ignore]
 fn ce_depot_s_estime_avant_de_s_indexer() {
-    let root = repository_root();
+    let tree = WorkingTree::new(repository_root());
     let t = std::time::Instant::now();
-    let on_disk = working_tree_files(&WorkingTree::new(&root)).expect("liste du dossier");
-    let whole = estimate_here(&on_disk, code_policy, None, true);
-    eprintln!("[estimate] le dossier tel quel : {} fichiers listés en {:?}, sans en lire un seul", on_disk.len(), t.elapsed());
-    eprintln!("[estimate]   → {} retenus, {:.0} Mo", whole.survey.files, whole.survey.bytes as f64 / 1e6);
-    let files = tracked_files(&root);
-    eprintln!("[estimate] les fichiers suivis par git : {}", files.len());
-    assert!(files.len() < on_disk.len(), "un dossier de travail contient plus que le dépôt");
+    let (files, excluded) = working_tree_files(&tree).expect("liste du dépôt");
+    eprintln!("[estimate] {} fichiers listés en {:?}, sans en lire un seul ; {} écartés par la source", files.len(), t.elapsed(), excluded.len());
+    // Le dossier pris tel quel, ignorés compris, n'est pas le dépôt : 307 541
+    // fichiers le 3 octobre 2026, dont 278 759 retenus (2,46 Go).
+    assert!(files.len() < 50_000, "la source respecte les règles d'exclusion du dossier : {}", files.len());
     let samples = samples();
 
     let embedders: [(&str, Arc<dyn Embedder>); 2] =
         [("granite-278m", common::burn::GRANITE_278M.clone()), ("granite-107m", common::burn::GRANITE_107M.clone())];
     for (name, embedder) in embedders {
         let rate = probe_rate(embedder.as_ref(), &samples).expect("sonde");
-        let estimate = estimate_here(&files, code_policy, rate, embedder.distant());
+        let estimate = estimate_here(&files, &excluded, code_policy, rate, embedder.distant());
         eprintln!(
             "[estimate] sonde {name} ({}) : {:.0} caractères/s",
             if embedder.distant() { "service" } else { "carte d'ici" },
