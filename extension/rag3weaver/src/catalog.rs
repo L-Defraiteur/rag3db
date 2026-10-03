@@ -68,6 +68,15 @@ pub enum CatalogError {
     IndexPersistence(String),
     #[error("not initialized")]
     NotInitialized,
+    /// **Un catalogue qui ne peut rien rendre durable ne s'ouvre pas.** Sans
+    /// magasin de blobs, les index plein texte et creux ne survivent pas à la
+    /// fermeture ; sans magasin de points de reprise, une ingestion morte en
+    /// route ne reprend pas. C'étaient des avertissements, et personne ne les
+    /// lisait en production (audit de la session mémoire, 4 octobre 2026) :
+    /// un catalogue qui perd sa durabilité sans que personne le sache.
+    /// L'erreur dit quoi fournir.
+    #[error("{0}")]
+    DurableStoreMissing(String),
     /// Ce catalogue a été ouvert en lecture : il ne met rien en file et ne
     /// pose rien. Le verbe refusé est nommé.
     #[error("catalogue ouvert en lecture seule : {0} refusé")]
@@ -971,15 +980,15 @@ impl Catalog {
                     self.checkpoint_store = Some(cp_store);
                 }
                 None => {
-                    self.emit_event(CatalogEvent::Warning {
-                        context: "initialize".into(),
-                        message: format!(
-                            "aucun magasin de checkpoints pour le dialecte « {} » : la \
-                             reprise après incident est indisponible ; fournis-en un avec \
-                             set_checkpoint_store().",
-                            self.dialect.name()
-                        ),
-                    });
+                    // Aucun des dialectes livrés n'en arrive là : c'est la
+                    // porte d'un dialecte neuf, qui doit la fermer avant
+                    // d'ouvrir une base.
+                    return Err(CatalogError::DurableStoreMissing(format!(
+                        "aucun magasin de points de reprise pour le dialecte « {} » : une \
+                         ingestion interrompue ne pourrait pas reprendre. Fournis-en un avec \
+                         set_checkpoint_store() avant initialize().",
+                        self.dialect.name()
+                    )));
                 }
             }
         }
@@ -1001,17 +1010,15 @@ impl Catalog {
         if self.blob_store.is_none() && !self.dialect.speaks_cypher() {
             // Même raison qu'en 7 : `CypherBlobStore` parle Cypher. Sans
             // magasin, les index FTS et sparse ne se posent nulle part — ce
-            // qui se voit *plus tard*, sous forme de recherche vide. On le dit
-            // maintenant.
-            self.emit_event(CatalogEvent::Warning {
-                context: "initialize".into(),
-                message: format!(
-                    "aucun magasin de blobs : le seul disponible parle Cypher, et le \
-                     dialecte est « {} ». Les index FTS et sparse ne seront pas \
-                     persistés ; fournis-en un avec set_blob_store().",
-                    self.dialect.name()
-                ),
-            });
+            // qui se voyait *plus tard*, sous forme de recherche vide après
+            // réouverture. Un refus maintenant, qui dit quoi fournir.
+            return Err(CatalogError::DurableStoreMissing(format!(
+                "aucun magasin de blobs pour le dialecte « {} » (le seul livré d'office parle \
+                 Cypher) : les index plein texte et creux ne survivraient pas à la fermeture. \
+                 Fournis-en un avec set_blob_store() avant initialize() — \
+                 PostgresBlobStore pour PostgreSQL.",
+                self.dialect.name()
+            )));
         }
         if self.blob_store.is_none() && self.dialect.speaks_cypher() {
             // `sync_conn` est un vestige de l'époque async : depuis la migration
@@ -9021,6 +9028,36 @@ mod tests {
             }
         }
         vus
+    }
+
+    /// **Un catalogue qui ne peut rien rendre durable ne s'ouvre pas**
+    /// (4 octobre 2026). Sous un dialecte qui ne parle pas Cypher, sans
+    /// magasin de blobs, `initialize()` avertissait et continuait — et personne
+    /// ne lisait l'avertissement : les index plein texte disparaissaient à la
+    /// fermeture. C'est un refus nommé, qui dit quoi fournir ; avec le magasin
+    /// fourni, la même ouverture passe.
+    #[test]
+    fn sans_magasin_de_blobs_un_catalogue_postgres_ne_s_ouvre_pas() {
+        let ouvrir = |avec_magasin: bool| {
+            let mut catalog = Catalog::new(
+                Box::new(MockConnection::new()),
+                Box::new(MockEmbedder::new(384)),
+                make_test_config(),
+            );
+            catalog.set_dialect(Arc::new(crate::dialect::PostgresDialect));
+            if avec_magasin {
+                let conn: Arc<dyn crate::connection::DbConnection> = Arc::new(MockConnection::new());
+                catalog.set_blob_store(Arc::new(crate::cypher_blob_store::CypherBlobStore::from_sync_connection(conn)));
+            }
+            catalog.initialize()
+        };
+        match ouvrir(false) {
+            Err(CatalogError::DurableStoreMissing(m)) => {
+                assert!(m.contains("set_blob_store") && m.contains("postgres"), "{m}")
+            }
+            autre => panic!("un refus nommé est attendu : {autre:?}"),
+        }
+        assert!(ouvrir(true).is_ok(), "avec le magasin fourni, l'ouverture passe");
     }
 
     /// `boost` est désérialisé et aucun chemin de recherche ne le lit. Le taire,
