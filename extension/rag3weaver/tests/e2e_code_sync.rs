@@ -295,6 +295,15 @@ fn les_relations_en_masse_donnent_le_meme_graphe() {
     let ga = graphe(&par_paquet);
     assert!(ga.iter().any(|(r, n)| r == "CONSUMES" && *n > 0), "la source a des appels : {ga:?}");
     assert_eq!(ga, graphe(&en_masse), "même graphe, relation par relation");
+    // Les propriétés d'usage voyagent aussi par le COPY du chemin de masse.
+    let usages = |c: &Catalog| {
+        c.execute_raw("MATCH ()-[r:CONSUMES]->() WHERE r.usage IS NOT NULL RETURN r.usage, count(*) ORDER BY r.usage")
+            .unwrap()
+            .rows
+    };
+    let ua = usages(&par_paquet);
+    assert!(!ua.is_empty(), "les CONSUMES portent leur usage");
+    assert_eq!(ua, usages(&en_masse), "les mêmes usages dans les deux modes");
 }
 
 /// **Le mode se choisit seul** : une source neuve en masse, une source déjà
