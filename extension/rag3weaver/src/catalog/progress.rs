@@ -208,6 +208,11 @@ impl IndexState {
 
 const INDEX_STATE_KEY: &str = "index_state";
 
+/// La clé de méta de l'état d'une entité.
+fn entity_state_key(entity: &str) -> String {
+    format!("{INDEX_STATE_KEY}:{entity}")
+}
+
 /// Le débit noté pour un modèle et une origine (`local`, ou l'adresse d'un
 /// service).
 fn rate_key(model: &str, origin: &str) -> String {
@@ -215,17 +220,46 @@ fn rate_key(model: &str, origin: &str) -> String {
 }
 
 impl Catalog {
-    /// **Où en est l'index**, compté en base. Lecture seule.
+    /// **Où en est l'index**, compté en base, toutes entités confondues.
+    /// Lecture seule.
     pub fn index_progress(&self) -> Result<IndexProgress, CatalogError> {
         self.check_initialized()?;
+        self.progress_of(self.vector_tables())
+    }
+
+    /// **Où en est l'index de cette entité** — ses morceaux à elle, pas ceux
+    /// des autres. Une entité sans vecteurs (plein texte seul) est comptée sur
+    /// ses lignes : cherchable par mots dès qu'elle en a, jamais par vecteurs.
+    pub fn index_progress_for(&self, entity: &str) -> Result<IndexProgress, CatalogError> {
+        self.check_initialized()?;
+        if !self.entity_configs.contains_key(entity) {
+            return Err(CatalogError::UnknownEntity(entity.to_string()));
+        }
+        let chunks = format!("{entity}_Chunk");
+        if self.vector_tables().contains(&chunks) {
+            return self.progress_of(vec![chunks]);
+        }
+        let rows = self.count_rows_of(entity);
+        Ok(IndexProgress {
+            model: self.current_embedding_entry().name.clone(),
+            tables: vec![TableProgress { table: entity.to_string(), chunks: rows, dense_missing: rows, sparse_missing: None }],
+            writes_pending: self.pending.total_count(),
+            relations_pending: self.relations_pending()?,
+        })
+    }
+
+    fn count_rows_of(&self, table: &str) -> usize {
+        self.conn
+            .execute(&self.dialect.count_rows(table))
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+            .unwrap_or(0) as usize
+    }
+
+    fn progress_of(&self, vector_tables: Vec<String>) -> Result<IndexProgress, CatalogError> {
         let mut tables = Vec::new();
-        for table in self.vector_tables() {
-            let chunks = self
-                .conn
-                .execute(&self.dialect.count_rows(&table))
-                .ok()
-                .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
-                .unwrap_or(0) as usize;
+        for table in vector_tables {
+            let chunks = self.count_rows_of(&table);
             let entity = table.strip_suffix("_Chunk").unwrap_or(&table);
             let sparse = self.entity_configs.get(entity).is_some_and(|c| c.signals.sparse());
             tables.push(TableProgress {
@@ -271,15 +305,39 @@ impl Catalog {
         Ok(pending)
     }
 
-    /// **L'état de l'index, à bas coût** : l'état noté par l'indexation, en
-    /// une lecture de méta. Sans état noté — un index rempli par un autre
-    /// chemin — ou devant un état « en cours » périmé, on compte
-    /// ([`Self::index_progress`]) et on note le résultat, pour que l'appel
-    /// suivant ne recompte pas.
+    /// **L'état de l'index, à bas coût**, toutes entités confondues : l'état
+    /// noté par l'indexation, en une lecture de méta. Sans état noté — un
+    /// index rempli par un autre chemin — ou devant un état « en cours »
+    /// périmé, on compte ([`Self::index_progress`]) et on note le résultat,
+    /// pour que l'appel suivant ne recompte pas.
+    ///
+    /// **Il ne répond pas à « cette entité est-elle indexée ? ».** Tout ce que
+    /// la base contient y compte — le journal d'une conversation, écrit dès le
+    /// premier message, le fait quitter `never` avant qu'aucun code ne soit
+    /// indexé (trouvé le 3 octobre 2026 dans le chat réel). Pour une entité,
+    /// [`Self::index_state_for`].
     pub fn index_state(&self) -> Result<IndexState, CatalogError> {
+        self.state_at(INDEX_STATE_KEY, || self.index_progress())
+    }
+
+    /// **L'état de l'index de cette entité**, au même prix : une lecture de
+    /// méta, sa propre clé. C'est lui qu'une recherche ou un outil consulte
+    /// pour sa cible.
+    pub fn index_state_for(&self, entity: &str) -> Result<IndexState, CatalogError> {
+        if !self.entity_configs.contains_key(entity) {
+            return Err(CatalogError::UnknownEntity(entity.to_string()));
+        }
+        self.state_at(&entity_state_key(entity), || self.index_progress_for(entity))
+    }
+
+    fn state_at(&self, key: &str, count: impl FnOnce() -> Result<IndexProgress, CatalogError>) -> Result<IndexState, CatalogError> {
         let now = crate::dataflow::checkpoint::timestamp_ms();
-        if let Some(noted) = self.read_meta_key(INDEX_STATE_KEY)?.and_then(|v| serde_json::from_str::<IndexState>(&v).ok()) {
-            if !noted.is_stale(now) {
+        if let Some(noted) = self.read_meta_key(key)?.and_then(|v| serde_json::from_str::<IndexState>(&v).ok()) {
+            // Un « jamais » noté n'est pas cru sur parole : la table a pu être
+            // remplie depuis par un autre chemin que l'indexation, et rien ne
+            // viendrait le corriger — un outil refuserait pour toujours un
+            // index qui existe. Compter une table vide ne coûte rien.
+            if !noted.is_stale(now) && noted.text != Level::Never {
                 // Les relations se lisent à leur marque, que la
                 // synchronisation tient elle-même à jour : une lecture de
                 // méta de plus, toujours pas un comptage.
@@ -291,18 +349,60 @@ impl Catalog {
                 return Ok(IndexState { relations, ..noted });
             }
         }
-        let counted = IndexState::from_progress(&self.index_progress()?, now);
-        self.note_index_state(counted)?;
+        let counted = IndexState::from_progress(&count()?, now);
+        self.note_state_at(key, counted)?;
         Ok(counted)
     }
 
-    /// Note l'état de l'index. Appelé par l'indexation à chaque changement.
+    /// Note l'état global de l'index. Appelé par l'indexation à chaque changement.
     pub fn note_index_state(&self, state: IndexState) -> Result<(), CatalogError> {
+        self.note_state_at(INDEX_STATE_KEY, state)
+    }
+
+    /// Note l'état de l'index d'une entité.
+    pub fn note_index_state_for(&self, entity: &str, state: IndexState) -> Result<(), CatalogError> {
+        self.note_state_at(&entity_state_key(entity), state)
+    }
+
+    fn note_state_at(&self, key: &str, state: IndexState) -> Result<(), CatalogError> {
         if self.lecture_seule {
             return Ok(());
         }
         let json = serde_json::to_string(&state).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        self.persist_meta_key(INDEX_STATE_KEY, &json)
+        self.persist_meta_key(key, &json)
+    }
+
+    /// **Une indexation commence** sur ces entités : leur texte passe « en
+    /// cours », sauf s'il était prêt — une réindexation ne fait pas régresser
+    /// un niveau, l'ancien contenu reste cherchable. L'état global suit.
+    pub fn note_indexing_started(&self, entities: &[&str]) -> Result<(), CatalogError> {
+        let now = crate::dataflow::checkpoint::timestamp_ms();
+        let started = |before: IndexState| IndexState { text: if before.text == Level::Ready { Level::Ready } else { Level::Running }, updated_ms: now, ..before };
+        self.note_index_state(started(self.index_state()?))?;
+        for entity in entities {
+            self.note_index_state_for(entity, started(self.index_state_for(entity)?))?;
+        }
+        Ok(())
+    }
+
+    /// **Compte et note** l'état global et celui de chaque entité. `working` :
+    /// une passe de vecteurs vient d'avancer — « jamais » devient « en cours ».
+    /// Rend l'avancement global, pour la ligne de journal.
+    pub fn refresh_index_states(&self, entities: &[&str], rate: Option<Rate>, chars_per_chunk: usize, working: bool) -> Result<IndexProgress, CatalogError> {
+        let now = crate::dataflow::checkpoint::timestamp_ms();
+        let state_of = |progress: &IndexProgress| {
+            let mut state = IndexState::from_progress(progress, now).with_time_left(progress, rate, chars_per_chunk);
+            if working && state.vectors == Level::Never && progress.chunks() > 0 && progress.dense_missing() < progress.chunks() {
+                state.vectors = Level::Running;
+            }
+            state
+        };
+        for entity in entities {
+            self.note_index_state_for(entity, state_of(&self.index_progress_for(entity)?))?;
+        }
+        let global = self.index_progress()?;
+        self.note_index_state(state_of(&global))?;
+        Ok(global)
     }
 
     /// L'embarqueur de ce catalogue vit-il ailleurs (un démon, un service) ?

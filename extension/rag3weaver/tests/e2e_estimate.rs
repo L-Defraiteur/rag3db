@@ -239,6 +239,18 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
 
     let progress = catalog.lock().unwrap().index_progress().expect("avancement");
     assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
+    // Par entité : `Scope` est prêt des deux côtés ; `Symbol`, plein texte
+    // seul, est cherchable par mots et jamais par vecteurs ; une entité
+    // inconnue est une erreur, pas un « jamais ».
+    {
+        use rag3weaver::code::SYMBOL;
+        let guard = catalog.lock().unwrap();
+        let scope = guard.index_state_for(SCOPE).expect("état de Scope");
+        assert_eq!((scope.text, scope.vectors, scope.vectors_percent), (Level::Ready, Level::Ready, 100), "{scope:?}");
+        let symbol = guard.index_state_for(SYMBOL).expect("état de Symbol");
+        assert_eq!((symbol.text, symbol.vectors), (Level::Ready, Level::Never), "{symbol:?}");
+        assert!(guard.index_state_for("Inconnue").is_err());
+    }
     let after = catalog.lock().unwrap().index_state().expect("état");
     eprintln!("[index] état lu par la recherche : {}", serde_json::to_string(&after).unwrap());
     assert_eq!((after.text, after.vectors, after.vectors_percent), (Level::Ready, Level::Ready, 100), "{after:?}");
@@ -256,3 +268,64 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     }
     let _ = std::fs::remove_file(&journal);
 }
+
+/// **Le journal d'une conversation ne fait pas croire le code indexé.**
+///
+/// Trouvé le 3 octobre 2026 dans le chat réel : le journal de la conversation
+/// s'écrit dans la même base dès le premier message ; l'état global quitte
+/// `never`, et plus rien ne se replie — ni la recherche qui choisit son mode,
+/// ni les outils qui refusent sans index. L'état d'une entité, lui, ne compte
+/// que ses lignes.
+#[test]
+#[ignore]
+fn le_journal_d_une_conversation_ne_fait_pas_croire_le_code_indexe() {
+    use rag3weaver::catalog::Level;
+    use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
+    use rag3weaver::connection::CypherValue;
+    use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+    use std::collections::BTreeMap;
+
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    boxed
+        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", repository_root().display()))
+        .expect("extension vector");
+    let config = CatalogConfig { name: Some("chat".into()), embedding_dim: 8, allow_mock_embedder: true, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(rag3weaver::embedder::HashEmbedder::new(8)), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let message: rag3weaver::config::EntityConfig = serde_json::from_value(serde_json::json!({
+        "fields": {"key": {"type": "string", "isTitle": true}, "text": {"type": "string", "isContent": true}},
+        "hashsafe": ["key"],
+        "signals": ["bm25"]
+    }))
+    .expect("configuration d'une entité de journal");
+    catalog.register_entity("Message", message).unwrap();
+
+    // Rien n'est indexé : tout est « jamais », globalement et pour le code.
+    assert_eq!(catalog.index_state().unwrap().text, Level::Never);
+    assert_eq!(catalog.index_state_for(SCOPE).unwrap().text, Level::Never);
+
+    // L'utilisateur parle : un message entre dans le journal.
+    let row = BTreeMap::from([
+        ("key".to_string(), CypherValue::String("m1".into())),
+        ("text".to_string(), CypherValue::String("Où est défini le régulateur de rafale ?".into())),
+    ]);
+    catalog.ingest_entities("Message", vec![row]).expect("le journal s'écrit");
+
+    // Le journal, lui, est cherchable ; le code ne l'est toujours pas.
+    let journal = catalog.index_state_for("Message").unwrap();
+    assert_eq!(journal.text, Level::Ready, "{journal:?}");
+    let code = catalog.index_state_for(SCOPE).unwrap();
+    assert_eq!((code.text, code.vectors), (Level::Never, Level::Never), "le code n'est pas indexé : {code:?}");
+    eprintln!("[état] après un message : Message {:?}, Scope {:?}", journal.text, code.text);
+
+    // Et un « jamais » noté n'est pas cru sur parole : le code ingéré par un
+    // autre chemin que `index` se voit à la lecture suivante.
+    let files = vec![("src/lib.rs".to_string(), "pub fn regulateur() {}\n".to_string())];
+    let analysis = rag3weaver::code::analyze_source(&rag3weaver::code_tools::Snapshot::new("depot", files)).expect("analyse");
+    catalog.ingest_code(&analysis).expect("ingestion directe");
+    let code = catalog.index_state_for(SCOPE).unwrap();
+    assert_eq!(code.text, Level::Ready, "le code ingéré directement est vu : {code:?}");
+}
+

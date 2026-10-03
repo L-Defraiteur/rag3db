@@ -236,22 +236,16 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
     use crate::disponibilite::Disponibilites;
 
-    use crate::catalog::{IndexState, Level};
-    let now = crate::dataflow::checkpoint::timestamp_ms;
-    // L'état que la recherche lit à chaque appel. Une réindexation ne fait
-    // pas régresser un niveau déjà prêt : l'ancien contenu reste cherchable.
-    let note = |guard: &Catalog, text: Level, before: IndexState| {
-        guard.note_index_state(IndexState { text, updated_ms: now(), ..before }).map_err(|e| e.to_string())
-    };
+    // L'état que la recherche lit à chaque appel, **par entité** : celui de
+    // `Scope` ne doit rien au journal d'une conversation rangé dans la même
+    // base. Une réindexation ne fait pas régresser un niveau déjà prêt.
+    const ENTITIES: [&str; 4] = [crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY, crate::code::SYMBOL];
 
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
     let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
     let report = {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-        let before = guard.index_state().map_err(|e| e.to_string())?;
-        if before.text != Level::Ready {
-            note(&guard, Level::Running, before)?;
-        }
+        guard.note_indexing_started(&ENTITIES).map_err(|e| e.to_string())?;
         sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| match p.phase {
             // Les paquets : les mots. En masse, les liens s'accumulent en
             // file ; un fichier édité après son passage sera repris à la fin.
@@ -291,7 +285,7 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     catalog
         .lock()
         .map_err(|_| "catalogue empoisonné".to_string())?
-        .note_index_state(IndexState::from_progress(&start, now()).with_time_left(&start, rate, chars_per_chunk))
+        .refresh_index_states(&ENTITIES, rate, chars_per_chunk, false)
         .map_err(|e| e.to_string())?;
     // Une ligne par changement : un journal qui se répète noie ce qu'il dit.
     let mut last_line = String::new();
@@ -309,14 +303,9 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
         let (n, progress) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
             let n = guard.embarquer_le_retard(Disponibilites::TOUT, 512, None).map_err(|e| e.to_string())?;
-            let progress = guard.index_progress().map_err(|e| e.to_string())?;
-            // Chaque passe rafraîchit l'état : « en cours » reste cru tant
+            // Chaque passe rafraîchit les états : « en cours » reste cru tant
             // que quelqu'un travaille.
-            let mut state = IndexState::from_progress(&progress, now()).with_time_left(&progress, rate, chars_per_chunk);
-            if n > 0 && state.vectors == Level::Never {
-                state.vectors = Level::Running;
-            }
-            guard.note_index_state(state).map_err(|e| e.to_string())?;
+            let progress = guard.refresh_index_states(&ENTITIES, rate, chars_per_chunk, n > 0).map_err(|e| e.to_string())?;
             (n, progress)
         };
         if n == 0 {
