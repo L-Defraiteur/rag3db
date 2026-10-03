@@ -23,7 +23,15 @@ pub type EventHandler = Arc<dyn Fn(Value) + Send + Sync>;
 pub struct ChatConfig {
     pub name: String,
     pub system_prompt: String,
-    pub llm: LlmProvider,
+    /// La déclaration d'avant du modèle de langage. Gardée : c'est un alias
+    /// de `models.llm` — l'une ou l'autre, pas les deux.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm: Option<LlmProvider>,
+    /// **Les modèles, par capacité** : la même déclaration que dans un
+    /// manifeste de backend (`crate::model_source::ModelSource`). Le chat
+    /// lit `models.llm`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub models: std::collections::BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
     /// An independently running JSON-lines backend host, not a shell command.
     #[serde(default)]
     pub backend_command: Vec<String>,
@@ -102,7 +110,7 @@ impl ChatConfig {
             || c.max_iterations > 100
             || c.max_output_tokens == 0
             || c.max_tool_output_bytes < 1024
-            || c.llm.context_tokens == 0
+            || c.llm_source()?.context_tokens == Some(0)
             || !c.temperature.is_finite()
             || !(0.0..=2.0).contains(&c.temperature)
             || !c.top_p.is_finite()
@@ -117,42 +125,52 @@ impl ChatConfig {
         Ok(c)
     }
 }
+impl ChatConfig {
+    /// **Le modèle de langage de ce chat** : `models.llm`, ou la section
+    /// `llm` d'avant. Les deux à la fois, ou aucune, c'est une erreur dite au
+    /// chargement.
+    pub fn llm_source(&self) -> Result<crate::model_source::ModelSource, String> {
+        match (self.models.get(&crate::model_source::Capability::Llm), &self.llm) {
+            (Some(_), Some(_)) => Err("`models.llm` et `llm` déclarent tous deux le modèle de langage : gardez-en un".into()),
+            (Some(source), None) => Ok(source.clone()),
+            (None, Some(legacy)) => Ok(legacy.source()),
+            (None, None) => Err("ce chat ne déclare pas de modèle de langage : `models.llm` (ou `llm`) est requis".into()),
+        }
+    }
+
+    /// Le client du modèle de langage déclaré, et d'où il calcule.
+    #[cfg(feature = "openai-llm")]
+    pub fn connect_llm(&self) -> Result<(crate::openai_llm::OpenAiLlm, crate::model_source::Origin), String> {
+        crate::model_source::connect_llm(&self.llm_source()?)
+    }
+}
 impl LlmProvider {
+    /// La même chose, dans la déclaration commune.
+    pub fn source(&self) -> crate::model_source::ModelSource {
+        use crate::model_source::{Addresses, ModelSource, Provider};
+        let mut params = std::collections::BTreeMap::new();
+        if self.provider == "vertex" {
+            if let Some(project) = &self.project {
+                params.insert("project".to_string(), project.clone());
+            }
+            params.insert("location".to_string(), self.location.clone());
+        }
+        ModelSource {
+            provider: Provider::Compatible,
+            address: Addresses::parse(self.base_url.as_deref().unwrap_or_default()),
+            protocol: Some(self.provider.clone()),
+            api_key_env: self.api_key_env.clone(),
+            context_tokens: Some(self.context_tokens),
+            params,
+            ..ModelSource::local(self.model.clone())
+        }
+    }
+
+    /// Gardé pour ses appelants : la connexion passe par la déclaration
+    /// commune ([`crate::model_source::connect_llm`]).
     #[cfg(feature = "openai-llm")]
     pub fn connect(&self) -> Result<crate::openai_llm::OpenAiLlm, String> {
-        use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
-        if self.model.trim().is_empty() {
-            return Err("LLM requires a model".into());
-        }
-        match self.provider.as_str() {
-            "openai" => {
-                let base = self.base_url.as_deref().unwrap_or_default();
-                if !(base.starts_with("http://") || base.starts_with("https://")) {
-                    return Err("llm.provider=openai requiert llm.base_url en HTTP(S)".into());
-                }
-                let mut llm =
-                    OpenAiLlm::new(base, &self.model).with_context_len(self.context_tokens);
-                if let Some(env) = &self.api_key_env {
-                    llm = llm.with_auth(Auth::Bearer(
-                        secret_from_env(env).map_err(|e| e.to_string())?,
-                    ));
-                }
-                Ok(llm)
-            }
-            "vertex" => {
-                let project = self
-                    .project
-                    .clone()
-                    .or_else(|| std::env::var("GOOGLE_CLOUD_PROJECT").ok())
-                    .ok_or("llm.provider=vertex requiert llm.project, ou GOOGLE_CLOUD_PROJECT")?;
-                let token = crate::gcp_auth::TokenSource::from_env()
-                    .and_then(|s| s.token())
-                    .map_err(|e| format!("jeton Vertex : {e}"))?;
-                Ok(OpenAiLlm::vertex(&project, &self.location, token, &self.model)
-                    .with_context_len(self.context_tokens))
-            }
-            autre => Err(format!("llm.provider inconnu : '{autre}' (openai | vertex)")),
-        }
+        crate::model_source::connect_llm(&self.source()).map(|(llm, _)| llm)
     }
 }
 

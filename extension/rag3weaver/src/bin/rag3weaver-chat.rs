@@ -362,7 +362,7 @@ fn run() -> Result<(), String> {
     let llm: Box<dyn Llm> = if demo {
         Box::new(MockLlm::new("Mode démonstration : les deux interfaces partagent cet agent. Configurez un modèle pour rechercher et créer des exports."))
     } else {
-        Box::new(config.llm.connect()?)
+        Box::new(config.connect_llm()?.0)
     };
     let tools = AppTools::new(&config)?;
     // L'écrivain du journal en base : un fil à part, pour que l'agent n'attende
@@ -414,7 +414,7 @@ fn run() -> Result<(), String> {
         }
         let result=request.and_then(|request|->Result<Value,String> {
             match request["op"].as_str() {
-                Some("describe")=>Ok(json!({"name":config.name,"model":config.llm.model,"demo":demo,"tools":tools.defs.iter().map(|t|&t.name).collect::<Vec<_>>(),"state_dir":config.state_dir})),
+                Some("describe")=>Ok(json!({"name":config.name,"model":config.llm_source().map(|s| s.model).unwrap_or_default(),"demo":demo,"tools":tools.defs.iter().map(|t|&t.name).collect::<Vec<_>>(),"state_dir":config.state_dir})),
                 Some("history")=>Ok(json!({"turns":session(&config,request["session"].as_str().ok_or("session missing")?)?.turns})),
                 Some("chat")=>{
                     let id=request["session"].as_str().ok_or("session missing")?;
