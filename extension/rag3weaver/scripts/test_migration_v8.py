@@ -59,7 +59,9 @@ def manifest_for(tmp, database, with_sync):
     if with_sync: card['snapshot']={'scope':['binder']}
     config['entities']['Card']={'schema':str(tmp/'card.json'),'config':card}
     config['tools']['ingest_cards']={'graph':str(CRATE/'templates/tools/ingest_snapshot.mmd'),'bindings':{'entity':'Card'}}
-    if with_sync: config['tools']['finish_cards']={'graph':str(CRATE/'templates/tools/finish_snapshot.mmd'),'bindings':{'entity':'Card'}}
+    if with_sync:
+        config['tools']['finish_cards']={'graph':str(CRATE/'templates/tools/finish_snapshot.mmd'),'bindings':{'entity':'Card'}}
+        config['tools']['begin_cards']={'graph':str(CRATE/'templates/tools/begin_snapshot.mmd'),'bindings':{'entity':'Card'}}
     path=tmp/('backend-v8.json' if with_sync else 'backend-v7.json'); path.write_text(json.dumps(config))
     return path
 
@@ -79,18 +81,21 @@ with tempfile.TemporaryDirectory(prefix='rag3-migration-v8-', dir='/var/tmp') as
         # Rows written by v7 read back unchanged.
         got=invoke(ask,'get_note',{'record':{'key':'alpha'}})['data']
         # Unchanged, plus the new column, empty: no session has carried it.
-        assert got.pop('_snapshot')=='' and got==note,(got,note)
+        snap,absent=got.pop('_snapshot',None),got.pop('_absent_since','MANQUANTE')
+        assert snap=='' and absent is None and got==note,(snap,absent,got,note)
         # Search still answers on the migrated indexes.
         reply=ask(name='search_notes',arguments={'query':'Flying','options':{'signals':['bm25'],'limit':1}})
         assert reply['ok'] and len(reply['result']['result'])==1,reply
         # Writes work, and a synchronisation runs on rows that predate the column.
         invoke(ask,'put_note',{'record':{**payload,'stage':'reviewed'},'expected_revision':1})
-        invoke(ask,'ingest_cards',{'records':[{'key':k,'binder':'A','text':f'Card {k}.'} for k in ['a1','a2']],'snapshot':'s1'})
-        done=invoke(ask,'finish_cards',{'scope':{'binder':'A'},'snapshot':'s1'})
+        s1=invoke(ask,'begin_cards',{'scope':{'binder':'A'}})['session']
+        invoke(ask,'ingest_cards',{'records':[{'key':k,'binder':'A','text':f'Card {k}.'} for k in ['a1','a2']],'snapshot':s1})
+        done=invoke(ask,'finish_cards',{'scope':{'binder':'A'},'snapshot':s1})
         assert done['inScope']==3 and done['seen']==2 and len(done['removed'])==1,done
     # The version and the column, read on the closed copy.
     query=CRATE/'target/debug/examples/db_query'
     out=subprocess.run([str(query),str(v8db),"MATCH (m:_catalog_meta {_key: 'schema_version'}) RETURN m._value",
-                        "MATCH (n:Note) RETURN n._snapshot"],capture_output=True,text=True,check=True).stdout
+                        "MATCH (n:Note) RETURN n._snapshot, n._absent_since"],capture_output=True,text=True,check=True).stdout
     assert '"8"' in out.split('## ')[1],out
+    assert 'ERREUR' not in out,out
 print('PASS: v7 base migrated to v8 — reads, search, writes and a synchronisation session on the copy.')
