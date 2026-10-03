@@ -253,14 +253,25 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
             note(&guard, Level::Running, before)?;
         }
         sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| match p.phase {
-            // Les paquets : les mots. En masse, les liens s'accumulent en file.
-            SyncPhase::Nodes if p.relations_pending > 0 => log(
-                journal,
-                &format!("plein texte : {} fichiers sur {} ({} scopes) · {} liens en file", p.files_done, p.files_total, p.scopes_written, p.relations_pending),
-            ),
-            SyncPhase::Nodes => log(journal, &format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written)),
+            // Les paquets : les mots. En masse, les liens s'accumulent en
+            // file ; un fichier édité après son passage sera repris à la fin.
+            SyncPhase::Nodes => {
+                let mut line = format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written);
+                if p.relations_pending > 0 {
+                    line.push_str(&format!(" · {} liens en file", p.relations_pending));
+                }
+                if p.files_to_resume > 0 {
+                    line.push_str(&format!(" — {} édités après leur passage, repris à la fin", p.files_to_resume));
+                }
+                log(journal, &line);
+            }
             // Les mots sont là ; le graphe arrive d'un coup.
             SyncPhase::Relations => log(journal, &format!("plein texte prêt · relations : {} liens à poser", p.relations_pending)),
+            // Ce qui a été édité pendant l'indexation, repris avant de finir.
+            SyncPhase::Resume => log(
+                journal,
+                &format!("reprise : {} fichier(s) sur {} édités pendant l'indexation", p.files_resumed, p.files_resumed + p.files_to_resume),
+            ),
             SyncPhase::Done => {}
         })?
     };
