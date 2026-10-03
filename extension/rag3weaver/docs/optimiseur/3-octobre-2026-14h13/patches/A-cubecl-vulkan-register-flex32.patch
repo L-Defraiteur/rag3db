@@ -1,0 +1,57 @@
+From d27f6ed02f6f391041ad29b8b6769024dc39b628 Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Fri, 2 Oct 2026 00:15:29 +0200
+Subject: [PATCH] fix(wgpu): register Flex32 on the Vulkan backend
+
+The WGSL backend lists FloatKind::Flex32 among its supported types and
+cubecl-spirv knows how to emit it (a 32-bit float), but the Vulkan
+backend's register_types leaves it out. Configuring a wgpu/Vulkan device
+with Flex32 as its default float type therefore fails with an
+unsupported-dtype error, while the same device accepts it through WGSL.
+---
+ crates/cubecl-wgpu/src/backend/vulkan.rs |  1 +
+ crates/cubecl-wgpu/src/lib.rs            | 16 ++++++++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/crates/cubecl-wgpu/src/backend/vulkan.rs b/crates/cubecl-wgpu/src/backend/vulkan.rs
+index 3308c303..24024d27 100644
+--- a/crates/cubecl-wgpu/src/backend/vulkan.rs
++++ b/crates/cubecl-wgpu/src/backend/vulkan.rs
+@@ -531,6 +531,7 @@ fn register_types(props: &mut DeviceProperties, ext_feat: &ExtendedFeatures<'_>)
+         ElemType::UInt(UIntKind::U32),
+         ElemType::Int(IntKind::I32),
+         ElemType::Float(FloatKind::F32),
++        ElemType::Float(FloatKind::Flex32),
+         ElemType::Bool,
+     ];
+ 
+diff --git a/crates/cubecl-wgpu/src/lib.rs b/crates/cubecl-wgpu/src/lib.rs
+index 226e40ca..61570d23 100644
+--- a/crates/cubecl-wgpu/src/lib.rs
++++ b/crates/cubecl-wgpu/src/lib.rs
+@@ -207,6 +207,22 @@ mod tests_spirv {
+     cubecl_std::testgen_tensor_identity!([f16, flex32, f32, u32]);
+     cubecl_std::testgen_quantized_view!(f16);
+     cubecl_core::testgen_profiling!();
++
++    /// The kernels above run on `flex32` whether or not the backend declares it; what the
++    /// declaration decides is whether a caller may *select* it (`supports_type`), which is
++    /// what a device's default float type is checked against.
++    #[test]
++    fn flex32_is_a_registered_type() {
++        use cubecl_core::ir::{ElemType, FloatKind};
++        use cubecl_server::runtime::Runtime;
++
++        let client = TestRuntime::client(&Default::default());
++        assert!(
++            client
++                .properties()
++                .supports_type(ElemType::Float(FloatKind::Flex32))
++        );
++    }
+ }
+ 
+ #[cfg(all(test, feature = "msl"))]
+-- 
+2.55.0
+

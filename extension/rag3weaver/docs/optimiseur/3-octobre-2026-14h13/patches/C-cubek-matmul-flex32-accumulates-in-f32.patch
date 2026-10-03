@@ -1,0 +1,83 @@
+From e20293ce381fee528132df2da108855cec77e798 Mon Sep 17 00:00:00 2001
+From: Lucie Defraiteur <luciedefraiteur@gmail.com>
+Date: Sat, 3 Oct 2026 14:07:39 +0200
+Subject: [PATCH] fix(matmul): a Flex32 output accumulates in f32, like f16 and
+ bf16
+
+from_globals promotes the accumulator to f32 for f16 and bf16 outputs but
+keeps it as-is for Flex32. adjust_dtypes then lowers the Flex32 stage and
+register types to f16 for the accelerated routines, and no cooperative
+matrix configuration takes f16 operands with a Flex32 accumulator: every
+cmma candidate is dropped and a Flex32 matmul never reaches the tensor
+cores, which is the whole point of the type.
+---
+ crates/cubek-matmul/src/definition/elems.rs | 49 +++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+
+diff --git a/crates/cubek-matmul/src/definition/elems.rs b/crates/cubek-matmul/src/definition/elems.rs
+index 3b823f67..13a8dad7 100644
+--- a/crates/cubek-matmul/src/definition/elems.rs
++++ b/crates/cubek-matmul/src/definition/elems.rs
+@@ -29,6 +29,7 @@ impl MatmulElems {
+     pub fn from_globals(global_elems: &MatmulGlobalElems) -> Self {
+         let acc_type = if global_elems.out == half::f16::elem_type_native()
+             || global_elems.out == half::bf16::elem_type_native()
++            || global_elems.out == flex32::elem_type_native()
+         {
+             f32::elem_type_native()
+         } else {
+@@ -103,3 +104,51 @@ impl MatmulElems {
+         self.acc_stage = self.acc_global;
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    /// Narrow outputs accumulate in f32. `flex32` is one of them: it is stored as f32
++    /// but its stage and register types are lowered to f16 for the accelerated routines,
++    /// and no cooperative-matrix configuration accumulates f16 operands into `flex32`.
++    #[test]
++    fn narrow_outputs_accumulate_in_f32() {
++        for out in [
++            half::f16::elem_type_native(),
++            half::bf16::elem_type_native(),
++            flex32::elem_type_native(),
++        ] {
++            let elems = MatmulElems::from_globals(&MatmulGlobalElems {
++                lhs: out,
++                rhs: out,
++                out,
++            });
++
++            assert_eq!(elems.acc_global, out);
++            assert_eq!(
++                elems.acc_stage,
++                f32::elem_type_native(),
++                "stage for {out:?}"
++            );
++            assert_eq!(
++                elems.acc_register,
++                f32::elem_type_native(),
++                "register for {out:?}"
++            );
++        }
++    }
++
++    #[test]
++    fn f32_output_accumulates_in_f32() {
++        let ty = f32::elem_type_native();
++        let elems = MatmulElems::from_globals(&MatmulGlobalElems {
++            lhs: ty,
++            rhs: ty,
++            out: ty,
++        });
++
++        assert_eq!(elems.acc_stage, ty);
++        assert_eq!(elems.acc_register, ty);
++    }
++}
+-- 
+2.55.0
+
