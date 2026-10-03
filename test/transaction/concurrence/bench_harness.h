@@ -12,6 +12,7 @@
 
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -35,6 +36,7 @@
 
 #include "main/connection.h"
 #include "main/database.h"
+#include "test_helper/test_helper.h"
 
 namespace rag3db {
 namespace testing {
@@ -445,7 +447,29 @@ struct Opener {
     main::Database* shared = nullptr;
     std::string path;
     main::SystemConfig config;
+    // La base porte un index vectoriel : l'extension se recharge à chaque ouverture.
+    bool vectorExtension = false;
 };
+
+// Dans un processus fils du banc : pas de vidage mémoire. Un fils que le moteur fait
+// planter (H1, H4) en écrivait un, ce qui coûtait 20 à 27 s par plantage (3 octobre) ;
+// le banc lit le signal, le vidage n'apprend rien de plus.
+inline void disableCoreDumps() {
+    const rlimit none{0, 0};
+    setrlimit(RLIMIT_CORE, &none);
+}
+
+// L'extension vector, bâtie dans l'arbre source (-DBUILD_EXTENSIONS=vector), comme la
+// charge le runner des tests .test. Elle n'est pas persistante : sans elle, un index
+// HNSW d'une base rouverte n'est plus interrogeable.
+inline void loadVectorExtension(main::Connection& connection) {
+    const auto path =
+        TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
+    auto result = connection.query("LOAD EXTENSION '" + path + "';");
+    if (!result->isSuccess()) {
+        throw std::runtime_error("LOAD EXTENSION vector: " + result->getErrorMessage());
+    }
+}
 
 // Les réglages du banc sur une Database qu'on vient d'ouvrir (voir l'en-tête du banc).
 // Le premier n'est pas persistant : il se repose à chaque ouverture.
@@ -530,6 +554,7 @@ inline bool launch(LaunchMode mode, const Opener& opener, SharedArea& area,
         for (auto i = 0u; i < area.numWorkers; ++i) {
             const auto pid = fork();
             if (pid == 0) {
+                disableCoreDumps();
                 std::unique_ptr<main::Database> database;
                 std::unique_ptr<main::Connection> connection;
                 std::string openError;
@@ -537,6 +562,9 @@ inline bool launch(LaunchMode mode, const Opener& opener, SharedArea& area,
                     database = std::make_unique<main::Database>(opener.path, opener.config);
                     connection = std::make_unique<main::Connection>(database.get());
                     applyBenchSettings(*connection);
+                    if (opener.vectorExtension) {
+                        loadVectorExtension(*connection);
+                    }
                 } catch (const std::exception& e) {
                     openError = e.what();
                     connection.reset();

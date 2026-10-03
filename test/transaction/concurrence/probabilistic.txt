@@ -20,3 +20,9 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash
 Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Hot
 Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Reopen
 Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Crash
+#
+# H4 — le mélange de C7 sur une table indexée par HNSW (3 octobre) : le processus
+# écrivain meurt (SIGSEGV, ou SIGABRT sur « corrupted double-linked list »), et la base
+# ne se rouvre parfois plus (« Found duplicated primary key value » au rejeu).
+Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Hot
+Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash

@@ -334,6 +334,8 @@ std::vector<Violation> checkLevel1(main::Connection& connection) {
     for (const auto& rel : schema.relTables) {
         checkRelTable(connection, rel, visible, violations);
     }
+    const auto vectorViolations = checkVectorIndexes(connection);
+    violations.insert(violations.end(), vectorViolations.begin(), vectorViolations.end());
     return violations;
 }
 
@@ -527,6 +529,115 @@ std::vector<Violation> checkLevel2(main::Connection& connection) {
     }
     mustQuery(connection, "COMMIT;");
     return violations;
+}
+
+std::vector<Violation> checkVectorIndexes(main::Connection& connection) {
+    std::vector<Violation> violations;
+    for (const auto& index : rows(connection,
+             "CALL SHOW_INDEXES() RETURN table_name, index_name, index_type, property_names, "
+             "extension_loaded;")) {
+        const auto& table = index[0];
+        const auto& name = index[1];
+        if (index[2] != "HNSW") {
+            continue;
+        }
+        if (index[4] != "True") {
+            violations.push_back({"vector-extension-loaded",
+                stringFormat("index {} on {}: the vector extension is not loaded, the index "
+                             "cannot be checked",
+                    name, table)});
+            continue;
+        }
+        // property_names s'écrit « [vec] ».
+        const auto property = index[3].substr(1, index[3].size() - 2);
+        std::string primaryKey;
+        for (const auto& row : rows(connection,
+                 stringFormat("CALL table_info('{}') RETURN name, `primary key`;", table))) {
+            if (row[1] == "True") {
+                primaryKey = row[0];
+            }
+        }
+        std::set<std::string> living;
+        std::string probe;
+        for (const auto& row : rows(connection,
+                 stringFormat("MATCH (n:{}) WHERE n.{} IS NOT NULL RETURN CAST(n.{} AS STRING), "
+                              "n.{};",
+                     table, property, primaryKey, property))) {
+            living.insert(row[0]);
+            if (probe.empty()) {
+                probe = row[1];
+            }
+        }
+        if (living.empty()) {
+            continue;
+        }
+        std::multiset<std::string> returned;
+        for (const auto& row :
+            rows(connection, stringFormat("CALL QUERY_VECTOR_INDEX('{}', '{}', {}, {}, efs := {}) "
+                                          "RETURN CAST(node.{} AS STRING);",
+                                 table, name, probe, living.size(), living.size(), primaryKey))) {
+            returned.insert(row[0]);
+        }
+        std::string missing;
+        size_t numMissing = 0;
+        for (const auto& key : living) {
+            if (!returned.contains(key) && ++numMissing <= MAX_LISTED) {
+                missing += " " + key;
+            }
+        }
+        if (numMissing != 0) {
+            violations.push_back({"vector-index-complete",
+                stringFormat("index {} on {}: {} of {} living rows with a vector are not "
+                             "returned by an exhaustive search:{}",
+                    name, table, numMissing, living.size(), missing)});
+        }
+        std::string dead;
+        size_t numDead = 0;
+        for (auto it = returned.begin(); it != returned.end(); it = returned.upper_bound(*it)) {
+            const auto count = returned.count(*it);
+            if ((!living.contains(*it) || count > 1) && ++numDead <= MAX_LISTED) {
+                dead += stringFormat(" {}{}", *it,
+                    living.contains(*it) ? stringFormat(" (x{})", count) : " (not living)");
+            }
+        }
+        if (numDead != 0) {
+            violations.push_back({"vector-index-no-dead",
+                stringFormat("index {} on {}: {} returned rows are dead, absent or "
+                             "repeated:{}",
+                    name, table, numDead, dead)});
+        }
+    }
+    return violations;
+}
+
+std::map<uint64_t, std::set<uint64_t>> storedForwardAdjacency(main::Connection& connection,
+    const std::string& relTableName) {
+    std::map<uint64_t, std::set<uint64_t>> adjacency;
+    mustQuery(connection, "BEGIN TRANSACTION READ ONLY;");
+    try {
+        auto* context = connection.getClientContext();
+        auto* transaction = transaction::Transaction::Get(*context);
+        auto* catalog = catalog::Catalog::Get(*context);
+        auto* storageManager = storage::StorageManager::Get(*context);
+        auto* mm = storage::MemoryManager::Get(*context);
+        const auto* entry =
+            catalog->getTableCatalogEntry(transaction, relTableName, true /* useInternal */);
+        const auto relTableID =
+            entry->constCast<catalog::RelGroupCatalogEntry>().getSingleRelEntryInfo().oid;
+        auto& relTable = storageManager->getTable(relTableID)->cast<storage::RelTable>();
+        auto& source =
+            storageManager->getTable(relTable.getFromNodeTableID())->cast<storage::NodeTable>();
+        std::vector<std::string> duplicates;
+        for (const auto& [rel, ends] : scanStoredEdges(transaction, mm, relTable, source,
+                 common::RelDataDirection::FWD, duplicates)) {
+            adjacency[ends.first].insert(ends.second);
+        }
+    } catch (...) {
+        connection.query("ROLLBACK;");
+        throw;
+    }
+    mustQuery(connection, "COMMIT;");
+    return adjacency;
 }
 
 std::vector<std::string> canonicalDump(main::Connection& connection) {

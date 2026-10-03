@@ -60,3 +60,15 @@ Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
 # Deux mises à jour de la même ligne sur deux colonnes, validées toutes les deux : le
 # conflit n'est cherché que colonne par colonne (relecture du cœur C++ ; marche A4′).
 MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
+#
+# H1 — deux insertions dans une table indexée par HNSW, transactions ouvertes ensemble :
+# le processus écrivain meurt par SIGSEGV au second COMMIT (défaut 5 de l'étude HNSW,
+# offsets définitifs lus comme locaux). Corrigé par la marche A2, qui retire ces lignes.
+Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Hot all-commit,row-count,writer-process-crashed
+Launchers/ConcurrencyBench.H1_IndexedInsertsTogether/Thread_Crash all-commit,killed,row-count,same-answers
+#
+# H3 — deux suppressions de documents sans rapport, dont les voisinages dans le graphe de
+# l'index se recouvrent : le second reçoit un « Write-write conflict » (la suppression
+# réécrit les arêtes des voisins). Déduit par l'étude HNSW, §3 ; vu le 3 octobre.
+Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
+Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count

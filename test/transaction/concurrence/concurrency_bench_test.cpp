@@ -26,9 +26,12 @@
 
 #include <signal.h>
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <memory>
 #include <random>
 #include <set>
 
@@ -107,6 +110,13 @@ struct BenchCase {
     bool autoCheckpoint = false;
     // Au-delà, le moteur est tenu pour bloqué et le cas est rouge (voir launch).
     std::chrono::milliseconds guard = DEFAULT_GUARD;
+    // La table porte un index HNSW : l'extension vector est chargée à chaque ouverture.
+    bool vectorExtension = false;
+    // Le scénario tourne dans un processus fils qui vérifie, puis ferme la base ; le père
+    // rouvre et revérifie. Un plantage du moteur devient un rouge étiqueté
+    // (writer-process-crashed) au lieu de tuer toute la passe. Pour les cas dont le
+    // moteur d'aujourd'hui plante à coup sûr (H1, défaut 5 de l'étude HNSW).
+    bool isolated = false;
 };
 
 class ConcurrencyBench : public EmptyDBTest, public ::testing::WithParamInterface<BenchParam> {
@@ -158,8 +168,16 @@ public:
             GTEST_SKIP() << "B not built: a second writer process is refused when it opens "
                             "the database (case C9)";
         }
+        if (benchCase.isolated && check == Check::Reopen) {
+            GTEST_SKIP() << "an isolated case: its Hot check already closes, reopens and "
+                            "checks again";
+        }
         std::cerr << "[bench] " << ::testing::UnitTest::GetInstance()->current_test_info()->name()
                   << " (seed " << benchSeed() << ")\n";
+        currentCase = &benchCase;
+        if (benchCase.vectorExtension) {
+            loadVectorExtension(*conn);
+        }
         if (benchCase.autoCheckpoint) {
             mustRun("CALL auto_checkpoint=true;");
         }
@@ -170,6 +188,10 @@ public:
         std::vector<integrity::Violation> violations;
         switch (check) {
         case Check::Hot:
+            if (benchCase.isolated) {
+                violations = runIsolated(benchCase, area);
+                break;
+            }
             launchHere(launcher, benchCase, area);
             violations = verify("hot");
             break;
@@ -190,6 +212,9 @@ public:
             checks += "[check: " + invariant + "] ";
         }
         EXPECT_TRUE(violations.empty()) << checks << "integrity violations, see the raw report";
+        if (databaseLost) {
+            return;
+        }
         EXPECT_EQ(totalRefusals(area, Refusal::Unexpected), 0u)
             << "[check: no-unexpected-error] " << "an unexpected error";
         EXPECT_EQ(area.barrierTimedOut.load(), 0u)
@@ -199,19 +224,117 @@ public:
         benchCase.expect(*this, area);
     }
 
+    // Rouvre la base du test et recharge ce que le cas demande (l'extension vector).
+    // Une base qui ne se rouvre plus (le rejeu du journal refuse, par exemple, une clé
+    // en double que des écrivains concurrents ont validée : H4, 3 octobre) est un rouge
+    // étiqueté, pas une exception qui sort du test ; la suite du cas est alors sautée.
+    bool reopen() {
+        try {
+            createDBAndConn();
+            if (currentCase != nullptr && currentCase->vectorExtension) {
+                loadVectorExtension(*conn);
+            }
+            return true;
+        } catch (const std::exception& e) {
+            ADD_FAILURE() << "[check: database-reopens] the database could not be reopened: "
+                          << e.what();
+            conn.reset();
+            database.reset();
+            databaseLost = true;
+            return false;
+        }
+    }
+
 private:
+    const BenchCase* currentCase = nullptr;
+    bool databaseLost = false;
+
+    // Le scénario dans un processus fils : il ouvre la base, lance les écrivains en fils,
+    // vérifie (les violations passent par un fichier), puis ferme la base normalement.
+    // Le père lit ce compte rendu, constate comment le fils est sorti, rouvre et
+    // revérifie.
+    std::vector<integrity::Violation> runIsolated(const BenchCase& benchCase, SharedArea& area) {
+        const auto reportPath = databasePath + ".isolated-report";
+        conn.reset();
+        database.reset();
+        const auto pid = fork();
+        if (pid == 0) {
+            disableCoreDumps();
+            std::ofstream out(reportPath);
+            try {
+                auto childDatabase =
+                    std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+                auto childConnection =
+                    std::make_unique<rag3db::main::Connection>(childDatabase.get());
+                applyBenchSettings(*childConnection);
+                if (benchCase.vectorExtension) {
+                    loadVectorExtension(*childConnection);
+                }
+                launch(LaunchMode::Thread,
+                    Opener{childDatabase.get(), databasePath, *systemConfig,
+                        benchCase.vectorExtension},
+                    area, benchCase.scenario, benchCase.guard);
+                auto violations = integrity::checkLevel1(*childConnection);
+                const auto level2 = integrity::checkLevel2(*childConnection);
+                violations.insert(violations.end(), level2.begin(), level2.end());
+                for (const auto& violation : violations) {
+                    out << violation.invariant << "\t" << violation.detail << "\n";
+                }
+                out.close();
+                childConnection.reset();
+                childDatabase.reset();
+            } catch (const std::exception& e) {
+                out << "child-failed\t" << e.what() << "\n";
+                out.close();
+            }
+            _exit(0);
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+        const bool exitedNormally = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        EXPECT_TRUE(exitedNormally)
+            << "[check: writer-process-crashed] the isolated writer process did not exit "
+               "normally — "
+            << (WIFSIGNALED(status)  ? "signal " + std::to_string(WTERMSIG(status)) :
+                   WIFEXITED(status) ? "exit code " + std::to_string(WEXITSTATUS(status)) :
+                                       std::string("unknown status"));
+        std::cerr << describe(area);
+        std::vector<integrity::Violation> violations;
+        {
+            std::ifstream in(reportPath);
+            for (std::string line; std::getline(in, line);) {
+                const auto tab = line.find('\t');
+                violations.push_back(
+                    {line.substr(0, tab), tab == std::string::npos ? "" : line.substr(tab + 1)});
+            }
+        }
+        std::filesystem::remove(reportPath);
+        std::cerr << "  -- integrity in the writer process:\n" << integrity::describe(violations);
+        if (!reopen()) {
+            return violations;
+        }
+        const auto after = verify("after close and reopen");
+        violations.insert(violations.end(), after.begin(), after.end());
+        return violations;
+    }
+
     void launchHere(LaunchMode launcher, const BenchCase& benchCase, SharedArea& area) {
         if (launcher == LaunchMode::Thread) {
-            launch(launcher, Opener{database.get()}, area, benchCase.scenario, benchCase.guard);
+            launch(launcher,
+                Opener{database.get(), databasePath, *systemConfig, benchCase.vectorExtension},
+                area, benchCase.scenario, benchCase.guard);
         } else {
             // Les écrivains ouvrent eux-mêmes la base : le test doit l'avoir fermée.
             conn.reset();
             database.reset();
-            EXPECT_TRUE(launch(launcher, Opener{nullptr, databasePath, *systemConfig}, area,
+            EXPECT_TRUE(launch(launcher,
+                Opener{nullptr, databasePath, *systemConfig, benchCase.vectorExtension}, area,
                 benchCase.scenario, benchCase.guard))
                 << "[check: process-exit] "
                 << "a writer process did not exit normally";
-            createDBAndConn();
+            if (!reopen()) {
+                return;
+            }
         }
         std::cerr << describe(area);
     }
@@ -236,7 +359,9 @@ private:
             EXPECT_TRUE(checkpoint->isSuccess())
                 << "[check: checkpoint] " << checkpoint->getErrorMessage();
         }
-        createDBAndConn();
+        if (!reopen()) {
+            return {};
+        }
         auto violations = verify("after checkpoint and reopen");
         const auto sameAnswers = integrity::compareDumps(before, integrity::canonicalDump(*conn),
             "before the checkpoint", "after the reopen");
@@ -255,16 +380,21 @@ private:
         database.reset();
         const auto pid = fork();
         if (pid == 0) {
+            disableCoreDumps();
             std::ofstream out(hotDumpPath);
             try {
                 rag3db::main::Database childDatabase(databasePath, *systemConfig);
                 rag3db::main::Connection childConnection(&childDatabase);
                 applyBenchSettings(childConnection);
+                if (benchCase.vectorExtension) {
+                    loadVectorExtension(childConnection);
+                }
                 if (benchCase.autoCheckpoint) {
                     childConnection.query("CALL auto_checkpoint=true;");
                 }
-                launch(LaunchMode::Thread, Opener{&childDatabase}, area, benchCase.scenario,
-                    benchCase.guard);
+                launch(LaunchMode::Thread,
+                    Opener{&childDatabase, databasePath, *systemConfig, benchCase.vectorExtension},
+                    area, benchCase.scenario, benchCase.guard);
                 for (const auto& line : integrity::canonicalDump(childConnection)) {
                     out << line << "\n";
                 }
@@ -292,7 +422,9 @@ private:
             }
         }
         std::filesystem::remove(hotDumpPath);
-        createDBAndConn();
+        if (!reopen()) {
+            return {};
+        }
         reportSetAsideJournals();
         auto violations = verify("after kill and replay");
         const auto sameAnswers = integrity::compareDumps(before, integrity::canonicalDump(*conn),
@@ -822,6 +954,210 @@ TEST_P(ConcurrencyBench, C9_SecondWriterProcessRefused) {
             },
         .runsInProcesses = true,
         .onlyInProcesses = true});
+}
+
+// ── Les cas sur une table indexée par HNSW ─────────────────────────────────────────────
+// Demandés par l'étude de la session cœur C++
+// (docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md, §5). La table Doc porte
+// un vecteur de 8 composantes et l'index doc_index ; chaque vecteur est une fonction de
+// l'identifiant, pour que tout cas se rejoue à l'identique. Le vérificateur ajoute
+// l'invariant de l'index (checkVectorIndexes) : une recherche exhaustive rend exactement
+// les lignes vivantes qui portent un vecteur.
+
+static constexpr int64_t NUM_BASE_DOCS = 300;
+
+// Le vecteur d'un document, en Cypher, à partir d'une variable entière.
+static std::string docVector(const std::string& variable) {
+    std::string out = "[";
+    const std::array<int, 8> multipliers{37, 53, 71, 89, 97, 13, 29, 41};
+    const std::array<int, 8> moduli{101, 103, 107, 109, 113, 127, 131, 137};
+    for (auto i = 0u; i < multipliers.size(); ++i) {
+        out += stringFormat("{}CAST(({} * {}) % {} AS FLOAT) / {}", i == 0 ? "" : ", ", variable,
+            multipliers[i], moduli[i], moduli[i]);
+    }
+    return out + "]";
+}
+
+static std::string createDocs(int64_t first, int64_t last) {
+    return stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first, last,
+        docVector("i"));
+}
+
+static void createIndexedDocs(ConcurrencyBench& bench) {
+    bench.mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[8]);");
+    bench.mustRun(createDocs(0, NUM_BASE_DOCS - 1));
+    bench.mustRun("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+}
+
+// H1 — deux écrivains insèrent des vecteurs dans des transactions ouvertes ensemble,
+// puis valident l'un après l'autre. Invariant : les deux valident, tous les vecteurs sont
+// retrouvés par l'index. C'est le défaut 5 de l'étude : le moteur plantait au second
+// COMMIT (SIGSEGV, offsets définitifs lus comme locaux) ; corrigé par la marche A2. Le
+// cas est isolé, pour qu'un plantage soit un rouge et non la fin de la passe.
+TEST_P(ConcurrencyBench, H1_IndexedInsertsTogether) {
+    runCase({.numWorkers = 2,
+        .setup = createIndexedDocs,
+        .scenario =
+            [](Worker& worker) {
+                const int64_t first = 1000 + worker.index() * 100;
+                worker.begin();
+                worker.writeInTurn(createDocs(first, first + 4));
+                worker.commitInOrderByEvents({0, 1});
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS + 10)
+                    << "[check: row-count] ";
+            },
+        .vectorExtension = true,
+        .isolated = true});
+}
+
+// H2 — un écrivain supprime des documents pendant qu'un autre en insère, dans les deux
+// ordres de commit. Les lignes sont disjointes : les deux doivent valider. Invariant : les
+// deux valident, l'index rend exactement les lignes vivantes.
+static BenchCase indexedDeleteVersusInsert(std::vector<uint32_t> commitOrder) {
+    return {.numWorkers = 2,
+        .setup = createIndexedDocs,
+        .scenario =
+            [commitOrder](Worker& worker) {
+                worker.begin();
+                if (worker.index() == 0) {
+                    worker.writeInTurn("MATCH (n:Doc) WHERE n.id < 10 DELETE n;");
+                } else {
+                    worker.writeInTurn(createDocs(1000, 1009));
+                }
+                worker.commitInOrderByEvents(commitOrder);
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS)
+                    << "[check: row-count] ";
+            },
+        .vectorExtension = true,
+        .isolated = true};
+}
+
+TEST_P(ConcurrencyBench, H2_IndexedDeleteCommitsFirst) {
+    runCase(indexedDeleteVersusInsert({0, 1}));
+}
+
+TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
+    runCase(indexedDeleteVersusInsert({1, 0}));
+}
+
+// H3 — deux écrivains suppriment deux documents dont les voisinages dans le graphe de
+// l'index se recouvrent (le cas que l'étude n'avait pas su tirer). Le recouvrement est
+// construit en lisant les arêtes stockées de l'index (table interne
+// _<table>_doc_index_LOWER) : on prend les deux nœuds, non voisins entre eux, qui
+// partagent le plus de voisins. Supprimer un nœud réécrit les arêtes de ses voisins
+// (cleanEdgesForNode) : les deux suppressions se rencontrent sur les mêmes arêtes, alors
+// que l'utilisateur a touché deux lignes sans rapport. Invariant : les deux valident,
+// l'index rend exactement les lignes vivantes. Attendu aujourd'hui (déduit par l'étude) :
+// un « Write-write conflict » de suppression de relation chez le second.
+TEST_P(ConcurrencyBench, H3_IndexedDeletesWithOverlappingNeighbourhoods) {
+    auto chosen = std::make_shared<std::pair<int64_t, int64_t>>(-1, -1);
+    runCase({.numWorkers = 2,
+        .setup =
+            [chosen](ConcurrencyBench& bench) {
+                createIndexedDocs(bench);
+                const auto tableID =
+                    bench.queryInt("CALL show_tables() WHERE name = 'Doc' RETURN id;");
+                const auto adjacency = integrity::storedForwardAdjacency(*bench.conn,
+                    stringFormat("_{}_doc_index_LOWER", tableID));
+                // Les voisins d'un nœud : ses arêtes sortantes et entrantes.
+                std::map<uint64_t, std::set<uint64_t>> neighbours;
+                for (const auto& [source, destinations] : adjacency) {
+                    for (const auto destination : destinations) {
+                        neighbours[source].insert(destination);
+                        neighbours[destination].insert(source);
+                    }
+                }
+                size_t best = 0;
+                std::pair<uint64_t, uint64_t> pair{0, 0};
+                for (const auto& [a, aNeighbours] : neighbours) {
+                    for (const auto& [b, bNeighbours] : neighbours) {
+                        if (b <= a || aNeighbours.contains(b)) {
+                            continue;
+                        }
+                        size_t shared = 0;
+                        for (const auto n : aNeighbours) {
+                            shared += bNeighbours.contains(n) ? 1 : 0;
+                        }
+                        if (shared > best) {
+                            best = shared;
+                            pair = {a, b};
+                        }
+                    }
+                }
+                ASSERT_GT(best, 0u) << "no two nodes share a neighbour in the index graph";
+                const auto idAt = [&](uint64_t offset) {
+                    return bench.queryInt(stringFormat(
+                        "MATCH (n:Doc) WHERE offset(id(n)) = {} RETURN n.id;", offset));
+                };
+                *chosen = {idAt(pair.first), idAt(pair.second)};
+                std::cerr << "  -- chosen documents " << chosen->first << " and " << chosen->second
+                          << ", " << best << " shared neighbours\n";
+            },
+        .scenario =
+            [chosen](Worker& worker) {
+                const auto id = worker.index() == 0 ? chosen->first : chosen->second;
+                worker.begin();
+                worker.writeInTurn(stringFormat("MATCH (n:Doc {id: {}}) DELETE n;", id));
+                worker.commitInOrderByEvents({0, 1});
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 2u)
+                    << "[check: all-commit] two deletes of unrelated rows must both commit";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS - 2)
+                    << "[check: row-count] ";
+            },
+        .vectorExtension = true,
+        .isolated = true});
+}
+
+// H4 — le mélange de C7 sur une table indexée : insertions, suppressions, nouveaux
+// vecteurs, sur un petit domaine de clés. Probabiliste par construction
+// (probabilistic.txt), et joué aussi sous ThreadSanitizer (exploration rapportée, non
+// comparée). Isolé : la course du chemin de suppression peut faire planter le processus.
+TEST_P(ConcurrencyBench, H4_IndexedRandomMix) {
+    static constexpr int64_t numKeys = 40;
+    const auto iterations = benchIterations(60);
+    runCase({.numWorkers = 4,
+        .setup = createIndexedDocs,
+        .scenario =
+            [iterations](Worker& worker) {
+                std::mt19937_64 random(benchSeed() + 200 + worker.index());
+                std::uniform_int_distribution<int64_t> key(0, numKeys - 1);
+                std::uniform_int_distribution<int> operation(0, 2);
+                for (auto i = 0u; i < iterations; ++i) {
+                    const auto k = 2000 + key(random);
+                    worker.begin();
+                    switch (operation(random)) {
+                    case 0:
+                        worker.run(createDocs(k, k));
+                        break;
+                    case 1:
+                        worker.run(stringFormat("MATCH (n:Doc {id: {}}) DELETE n;", k));
+                        break;
+                    default:
+                        worker.run(stringFormat("MATCH (n:Doc {id: {}}) SET n.vec = {};", k,
+                            docVector(std::to_string(k + 7))));
+                        break;
+                    }
+                    if (random() % 8 == 0) {
+                        worker.rollback();
+                    } else {
+                        worker.commit();
+                    }
+                }
+            },
+        .expect = [](ConcurrencyBench&, const SharedArea&) {},
+        .vectorExtension = true,
+        .isolated = true});
 }
 
 INSTANTIATE_TEST_SUITE_P(Launchers, ConcurrencyBench,

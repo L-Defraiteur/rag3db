@@ -295,3 +295,49 @@ Relecture de `455939802` par la session cœur C++, qui l'a jugé fusionnable tel
 parcours d'une relation doit forcer ce sens par une indication de jointure (`HINT`) et
 le vérifier par `EXPLAIN`. Un `WITH` ou l'ordre d'écriture du motif ne forcent rien :
 l'optimiseur choisit, et un mauvais choix efface en silence ce que le cas cherche.
+
+## 11. Les cas sur une table indexée par HNSW (3 octobre)
+
+Demandés par l'étude de la session cœur C++
+(`docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md`, §5). La table `Doc`
+porte 300 documents à vecteur de 8 composantes, chaque vecteur étant une fonction de
+l'identifiant, et l'index `doc_index`. Tout ce qui suit est exécuté.
+
+**Le build** : `-DBUILD_EXTENSIONS=vector` sur `build/release`. L'extension se
+construit en 10 s, dans l'arbre source (`extension/vector/build/libvector.rag3db_extension`),
+comme pour les tests `.test`. Elle n'est pas persistante : sans elle, un index d'une
+base rouverte n'est plus interrogeable (`extension_loaded = False`). Le banc la recharge
+donc à chaque ouverture (`BenchCase::vectorExtension`, `Opener::vectorExtension`,
+`reopen()`).
+
+**L'invariant** (`checkVectorIndexes`, appelé par le niveau 1) : pour chaque index
+HNSW, une recherche exhaustive (`k = efs =` nombre de lignes vivantes qui portent un
+vecteur) doit rendre exactement ces lignes.
+- `vector-index-complete` : aucune ligne vivante oubliée ;
+- `vector-index-no-dead` : aucune ligne morte, absente ou répétée ;
+- `vector-extension-loaded` : un index dont l'extension n'est pas chargée est une
+  violation, jamais un saut.
+
+Les identifiants rendus sont comptés un à un : `RETURN count(*)` rend toujours `k`.
+
+**L'exécution isolée** (`BenchCase::isolated`). Le scénario tourne dans un processus
+fils, qui vérifie, ferme la base et sort ; le père rouvre et revérifie. Un plantage du
+moteur devient le rouge `writer-process-crashed` au lieu de tuer la passe. Une base qui
+ne se rouvre plus devient le rouge `database-reopens`. La variante Reopen d'un cas
+isolé est sautée, puisque sa vérification Hot ferme et rouvre déjà la base. Les fils
+du banc n'écrivent pas de vidage mémoire : sans cela, chaque plantage coûtait 20 à 27 s.
+
+| cas | à chaud (isolé) | après arrêt brutal |
+|---|---|---|
+| H1, deux écrivains insèrent des vecteurs, transactions ouvertes ensemble | **rouge** : le fils meurt par SIGSEGV au second commit (défaut 5, corrigé par A2) | **rouge**, idem |
+| H2, une suppression contre une insertion, deux ordres | vert | vert |
+| H3, deux suppressions de documents dont les voisinages se recouvrent (115 et 121 : 41 voisins communs, lus dans les arêtes stockées de l'index) | **rouge** : « Write-write conflict » chez le second, déterministe sur 10 essais | **rouge**, idem |
+| H4, le mélange de C7 sur la table indexée | probabiliste : SIGSEGV, ou SIGABRT sur « corrupted double-linked list », et une fois une base qui ne se rouvre plus (« Found duplicated primary key value » au rejeu) | idem |
+
+H1 et H3 sont dans `known_red.txt`, H4 dans `probabilistic.txt`.
+
+**Non fait : H4 sous ThreadSanitizer.** L'extension se construit dans l'arbre source, à
+un chemin fixe. Un build TSan avec l'extension écraserait celle du build Release, et
+le banc Release chargerait alors une extension instrumentée, ou l'inverse. Il faudrait
+un worktree à part pour le build TSan, ou un répertoire de sortie de l'extension
+propre à chaque build, ce qui touche le CMake du dépôt. C'est à décider.
