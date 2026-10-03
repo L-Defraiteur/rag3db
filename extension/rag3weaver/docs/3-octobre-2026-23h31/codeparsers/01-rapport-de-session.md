@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, vers 0 h 30.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, nuit (après le banc du résolveur unique).
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -41,16 +41,30 @@ estimate_of → probe_rate) : la règle ne vise que les non-appels.
 
 ## En cours
 
-**Le résolveur unique, preuve au banc** : la branche codeparsers
-`fichier-seul` (`2c17314`) est chez l'arbre principal, qui l'intègre côté
-rag3weaver (rendez-vous enrichis par `import_origin` et `qualifier_type`). La
-fusion et le pointeur unique attendent `e2e_banc_relations` avant et après :
-le rappel de « qui appelle » (1,00) et de « tests qui traversent » (0,96) ne
-doit pas baisser, la précision de « dépend de » (0,61) doit monter. Les
-retraits relus contre l'index d'aujourd'hui : 32 justes, 18 fausses, d'où
-cette condition (journal, « Un seul résolveur entre fichiers »).
+**Le résolveur unique, en fusion** : codeparsers `fichier-seul` @ `d567e7c`,
+intégré par l'arbre principal (branche rag3db `resolveur-unique`), batterie
+complète en cours chez lui. Banc des relations : « dépend de » 1,00 / 0,64
+(master) → 1,00 / 0,85 ; les autres questions inchangées ; égalité des
+graphes entre paquets de 1, 64 et un seul tenant, 3 passes sur 3. Correctifs
+de la nuit, tous dans `fichier-seul` :
+- un accès de champ ne vise plus une méthode homonyme ; une fermeture exclut
+  ce qu'elle capture (`de76555`) ;
+- un type de champ ou de retour déclaré dans le fichier est lu dès
+  l'analyse — le rappel perdu `self.dialect.drop_vector_index()` (`d61b83a`) ;
+- en Rust, un `use` qui part d'un nom du fichier n'est pas une bibliothèque
+  (`d567e7c` — oublié dans `d61b83a`, voir les pièges).
 
-**Ensuite, les paires `.h` / `.cpp`**, puis la section Liens.
+**Les paires `.h` / `.cpp`, partie codeparsers faite** : branche
+`declarations` @ `44c4310` (au-dessus de `fichier-seul`). Une méthode
+déclarée est un membre de sa classe (6 395 sur le dépôt), une fonction
+déclarée un membre de son namespace (1 100) ; les noms déclarés ne sont plus
+des références (−61 598) ; `kz::Foo::qux` et `Foo::~Foo` ne sont plus des
+`AnonymousFunction` (2 476 → 738). Reste côté rag3weaver : HAS_PARENT de la
+définition vers sa classe (arbre principal), « déclaré foo.h:5 » dans
+`usages` (moi) — après la fusion de `fichier-seul`, pour ne pas mêler les
+mesures.
+
+**Ensuite**, la section Liens (garée, en attente de Lucie).
 
 **(B) La section « Liens »** — branche `liens` (`1ff5a1dcd`), pas sur master.
 
@@ -143,3 +157,7 @@ Pièges rencontrés :
 - **L'arbre principal est vivant** : d'autres sessions y changent de
   branche. Une comparaison avant / après se fait sur la même liste, dans le
   même créneau.
+- **Un commit par chemins listés peut oublier un fichier** : `d61b83a`
+  annonçait un correctif absent du commit (resté dans l'arbre de travail, où
+  tournaient mes vérifications). `git status` vide après le commit, tests
+  rejoués sur l'état commité, avant d'annoncer un hash.
