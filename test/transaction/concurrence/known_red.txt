@@ -143,11 +143,3 @@ SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert search-works,untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete search-works,untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/UpdateVector index-knows-new-vectors,search-works,untagged
-#
-# La mise à jour d'un vecteur perd des lignes dans l'index — EN SERVICE, sans arrêt ni rejeu
-# (session cœur C++, 3 octobre) : mille lignes indexées, vingt mises à jour vers le même
-# vecteur, et une recherche exhaustive ne rend plus que 998 lignes. Défaut du chemin de mise
-# à jour de l'index, non corrigé. Il apparaît ici depuis la garde 1 parce que le rejeu d'une
-# mise à jour informe désormais un index chargé, comme le fait une mise à jour en service ;
-# avant, le rejeu ne lui disait rien et l'index gardait d'anciennes positions.
-Writes/ExtensionIndexRecovery.IndexMaintainedWhenTheJournalHoldsTheLoad/UpdateVector vector-index-complete

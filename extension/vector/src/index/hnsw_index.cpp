@@ -976,6 +976,17 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
             scanState.get()};
         insertInternal(transaction, offset, handle, state.insertState);
     }
+    // 3. The nodes the old position led to have lost an incoming edge each. One of them may
+    // have been reachable through this node only: check them all, as finalizeDelete does for
+    // the neighbours of a deleted node.
+    for (const auto nbr : lowerNbrs) {
+        if (nbr == offset) {
+            continue;
+        }
+        keepNodeReachable(transaction, nbr,
+            scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState),
+            false /*isUpperLayer*/, state.insertState);
+    }
 }
 
 std::vector<common::offset_t> OnDiskHNSWIndex::scanNeighbors(Transaction* /*transaction*/,
