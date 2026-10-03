@@ -6,6 +6,8 @@
 //! Run with: ./run_e2e.sh --test e2e_synchronisation
 #![cfg(feature = "rag3db-native")]
 
+mod common;
+
 use std::collections::{BTreeMap, HashMap};
 
 use rag3weaver::catalog::{SnapshotFinish, SnapshotFinishOptions};
@@ -1103,3 +1105,68 @@ fn une_ligne_mise_de_cote_ne_sort_dans_aucune_recherche() {
     assert!(!dense.is_empty() && !dense.contains(&a3), "{dense:?}");
 }
 
+
+/// **Le creux d'une ligne retirée quitte l'index** (bge-m3, vrai creux). Les
+/// vecteurs creux ne vivent que dans l'index lucistore, par offset de chunk :
+/// une suppression qui ne les retire pas y laisse des entrées orphelines, et
+/// une ligne revenue y serait comptée deux fois. Vérifie aussi qu'une ligne
+/// rendue depuis la mise de côté retrouve son creux, recalculé.
+#[cfg(feature = "burn-embedder")]
+#[test]
+#[ignore]
+fn le_creux_d_une_ligne_retiree_quitte_l_index() {
+    use std::sync::Arc;
+    use rag3weaver::embedder::{Embedder, SparseEmbedder};
+    let embedder: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
+    let sparse: Arc<dyn SparseEmbedder> = common::burn::BGE_M3.clone();
+    let dim = embedder.dim();
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let ext = format!(
+        "{}/extension/vector/build/libvector.rag3db_extension",
+        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
+        })
+    );
+    rag3weaver::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let config = CatalogConfig { name: Some("creux".into()), embedding_dim: dim, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(dim)), config);
+    catalog.set_embedder(embedder);
+    catalog.set_sparse_embedder(sparse);
+    catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    let mut entite = fiche(perimetre_classeur(), None);
+    entite.signals = SearchSignals::BM25 | SearchSignals::SPARSE;
+    catalog.register_entity("Fiche", entite).unwrap();
+
+    let texte = |cle: &str, mot: &str| {
+        let mut l = ligne(cle, "A", None);
+        l.insert("texte".into(), CypherValue::String(format!("Une fiche sur le {mot}, rien d'autre.")));
+        l
+    };
+    let rows = || vec![texte("a1", "abricot"), texte("a2", "baleine"), texte("a3", "cormoran")];
+    let entrees = |c: &Catalog| c.sparse_handles().get("Fiche_Chunk").map(|h| h.len()).unwrap_or(0);
+
+    peupler(&mut catalog, "A", rows());
+    let pleines = entrees(&catalog);
+    assert!(pleines >= 3, "le creux est posé : {pleines}");
+    let a3 = uuid(&catalog, "a3");
+
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, rows()[..2].to_vec()).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed, [a3.clone()]);
+    let apres_retrait = entrees(&catalog);
+    let (mut catalog, creux) = rechercher(catalog, "cormoran", SearchSignals::SPARSE);
+    eprintln!("CREUX après retrait : {apres_retrait} entrées (avant {pleines}), recherche {creux:?}");
+    assert!(!creux.contains(&a3), "une ligne retirée ne sort pas en creux : {creux:?}");
+    assert!(apres_retrait < pleines, "les entrées creuses de la ligne retirée quittent l'index ({pleines} → {apres_retrait})");
+
+    let res = catalog.ingest_entities("Fiche", vec![texte("a3", "cormoran")]).unwrap();
+    assert_eq!(res.restored, [a3.clone()], "{res:?}");
+    let apres_retour = entrees(&catalog);
+    let (_, creux) = rechercher(catalog, "cormoran", SearchSignals::SPARSE);
+    eprintln!("CREUX après retour : {apres_retour} entrées, recherche {creux:?}");
+    assert_eq!(apres_retour, pleines, "la ligne revenue a son creux, une fois");
+    assert_eq!(creux.iter().filter(|u| **u == a3).count(), 1, "elle ressort en creux, une fois : {creux:?}");
+}
