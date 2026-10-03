@@ -65,7 +65,7 @@ Fusionné depuis le premier jet :
    Le dépôt entier en un paquet fait 132 s pour 16 Go au pic (rag3db-eb).
    Mes deux mesures d'un seul tenant (analyse 44 s, plein texte 306 s) sont à
    refaire : elles ont tourné en même temps qu'une autre passe lourde.
-3. **Renommer** `an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`
+3. ~~Renommer~~ fait : `a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`
    (une panique rattrapée, pas une mort).
 
 Dégagé par l'orchestration :

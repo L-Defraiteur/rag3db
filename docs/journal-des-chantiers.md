@@ -912,7 +912,8 @@ sessions, pas d'une vérification.
   de reprise sont de trois familles :
   - **A. Réouverture dans le même processus.** L'extension y est déjà chargée, et le
     défaut du rejeu sans `LOAD EXTENSION` y est invisible. Ce sont
-    `e2e_code::an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens` (la mort
+    `e2e_code::a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`
+    (renommé le 4 octobre, ex-`an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens` ; la mort
     y est une panique rattrapée, suivie d'une fermeture propre), `e2e_rouvrir` (deux
     tests), `e2e_idempotent_registration` (trois tests), `e2e_search::phase6_sparse_mmap_persistence`
     et `e2e_entites_derivees::la_dette_de_rendu_se_voit_en_base_et_se_rattrape`. Ils

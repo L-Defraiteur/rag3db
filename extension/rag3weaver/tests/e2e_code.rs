@@ -733,13 +733,17 @@ fn the_bulk_switch_yields_the_same_graph_and_a_working_vector_index() {
     assert!(bulk.4 > 0, "la recherche vectorielle doit marcher après une construction en masse");
 }
 
-/// Et si le processus meurt entre la destruction et la reconstruction ? La
-/// réouverture rebâtit — sans quoi la recherche vectorielle rendrait moins de
-/// résultats **en silence**. On simule la mort par une panique dans la
-/// fermeture, sur une base **sur disque** pour pouvoir rouvrir.
+/// Et si le chargement s'interrompt entre la destruction et la reconstruction ?
+/// La réouverture rebâtit — sans quoi la recherche vectorielle rendrait moins
+/// de résultats **en silence**. L'interruption est une **panique rattrapée**
+/// dans la fermeture, suivie d'une fermeture propre et d'une réouverture
+/// **dans le même processus** : ce test prouve la réparation par le drapeau,
+/// pas la reprise après une mort (journal §6, 3 octobre 2026). La mort par
+/// SIGKILL et la réouverture dans un processus neuf sont dans
+/// `e2e_arret_brutal`.
 #[test]
 #[ignore]
-fn an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens() {
+fn a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen() {
     use std::panic::AssertUnwindSafe;
 
     let dir = std::env::temp_dir().join(format!("rag3weaver-bulk-{}", std::process::id()));
