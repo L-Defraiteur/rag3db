@@ -174,6 +174,11 @@ pub struct FlushResult {
     pub rendu_pret: Option<crate::disponibilite::Disponibilites>,
     pub update_results: Vec<UpdateResult>,
     pub delete_results: Vec<DeleteResult>,
+    /// Les lignes **rendues depuis la mise de côté** (`keepFor`) : reparues
+    /// avec le contenu qu'elles avaient au retrait, leurs vecteurs denses
+    /// rendus au lieu d'être recalculés. Sans leurs relations, que
+    /// `DETACH DELETE` a emportées.
+    pub restored: Vec<String>,
 }
 
 impl FlushResult {

@@ -230,6 +230,7 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::EntityRecordFactory));
         nodes.register(Box::new(crate::backend_nodes::EntityBatchFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotFinishFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
         let mut schemas = HashMap::new();
@@ -883,6 +884,7 @@ impl Backend {
             "EntityRecordNode",
             "EntityBatchNode",
             "SnapshotFinishNode",
+            "SnapshotUndoNode",
             "SnapshotSessionNode",
             "RelationBatchNode",
             "KBQuerySourceNode",

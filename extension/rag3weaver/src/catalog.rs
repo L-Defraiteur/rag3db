@@ -17,7 +17,9 @@ use crate::events::{CatalogEvent, EventBus};
 use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
 
+mod aside;
 mod synchronisation;
+pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
@@ -955,6 +957,11 @@ impl Catalog {
         // quand l'appelant a fourni son propre magasin, qui écrit dedans.
         let blob_ddl = self.dialect.create_blob_table();
         self.conn.execute(&blob_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        // La mise de côté avant purge (`keepFor`) : interne, idempotente,
+        // posée à chaque ouverture — une base d'avant la reçoit sans migration.
+        self.conn
+            .execute(&self.dialect.create_aside_table())
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.poser_index(self.dialect.blob_store_indexes(&self.dialect.internal_table("_index_blobs")));
 
         if self.blob_store.is_none() && !self.dialect.speaks_cypher() {
@@ -4837,6 +4844,23 @@ impl Catalog {
             eprintln!("[ingest-profile] {entity_name} : {unchanged}/{record_count} inchangés, travail dérivé sauté");
         }
 
+        // **Le retour depuis la mise de côté** (`keepFor`), décidé avant le
+        // graphe : une ligne reparue avec le contenu qu'elle avait au retrait
+        // s'écrit par le chemin de toujours, et ses chunks retrouvent leurs
+        // vecteurs denses au lieu d'être réembarqués (`EmbedNode`, service
+        // `known_vectors`). Le découpage, lui, se refait : il est déterministe
+        // et bon marché.
+        let pairs: Vec<(String, String)> = entity_records
+            .iter()
+            .filter_map(|r| {
+                Some((
+                    r.data.get("_uuid")?.as_str()?.to_string(),
+                    r.data.get("_content_hash")?.as_str()?.to_string(),
+                ))
+            })
+            .collect();
+        let aside_return = self.take_from_aside(entity_name, &pairs)?;
+
         // Build dataflow graph
         let mut graph = DataflowGraph::new();
         let signals = entity_config.signals;
@@ -4897,6 +4921,9 @@ impl Catalog {
         let mut services = ServiceRegistry::new();
         let canal = self.enregistrer_les_services_d_ingestion(&mut services);
         services.register("chunker_cache", Arc::new(std::mem::take(&mut self.chunker_cache)));
+        if !aside_return.known.by_chunk.is_empty() {
+            services.register(aside::SERVICE_KNOWN_VECTORS, Arc::new(aside_return.known.clone()));
+        }
 
         // Execute
         let node_count = graph.nodes.len();
@@ -4964,6 +4991,8 @@ impl Catalog {
                 // prochain drain — ou au Drop.
                 self.flush_blob_store("ingest")?;
                 self.signaler_les_troncatures("ingest_entities");
+                // Les copies lues sont vidées une fois l'écriture faite.
+                self.clear_aside(entity_name, &aside_return.consumed)?;
                 self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
                 // Les lignes refusées par la machine à états ne sont jamais
                 // descendues dans le graphe : elles sortent du compte des
@@ -4980,6 +5009,7 @@ impl Catalog {
                     } else {
                         crate::disponibilite::Disponibilites::RECHERCHE_TEXTE
                     }),
+                    restored: aside_return.restored,
                     ..Default::default()
                 };
                 res.absorber_les_echecs(&Self::relever_les_echecs(&canal));
@@ -6319,6 +6349,9 @@ impl Catalog {
                         crate::disponibilite::Disponibilites::DONNEE
                     }),
                     update_results: updates,
+                    // La file ne consulte pas la mise de côté : seule
+                    // `ingest_entities` rend une ligne depuis sa copie.
+                    restored: Vec::new(),
                     delete_results: deletes,
                 };
                 // **Les comptes cessent de mentir** : ce que les nœuds ont

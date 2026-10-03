@@ -437,6 +437,88 @@ pub trait SchemaDialect: Send + Sync {
         format!("MATCH (n:{table}){ou} RETURN {}", rend.join(", "))
     }
 
+    // ── La mise de côté avant purge (`_snapshot_aside`) ──────────────────
+    //
+    // Une ligne par ligne retirée, clé `{entité}:{uuid}`. La ligne (`_row`) et
+    // les vecteurs denses de ses chunks (`_chunks`) sont du JSON. Une copie
+    // consommée ou purgée est **vidée par SET**, jamais supprimée : rag3db ne
+    // récupère pas la place d'une ligne supprimée, il récupère celle d'un SET.
+
+    /// La table de la mise de côté.
+    fn create_aside_table(&self) -> String {
+        "CREATE NODE TABLE IF NOT EXISTS _snapshot_aside(\n    \
+         _key STRING,\n    \
+         _entity STRING,\n    \
+         _uuid STRING,\n    \
+         _content_hash STRING,\n    \
+         _row STRING,\n    \
+         _chunks STRING,\n    \
+         _session STRING,\n    \
+         _removed_at INT64,\n    \
+         PRIMARY KEY(_key)\n)"
+            .into()
+    }
+
+    /// Poser des copies : `$items` porte `key`, `entity`, `uuid`, `hash`,
+    /// `row`, `chunks`, `session`, `at`.
+    fn upsert_aside(&self) -> String {
+        "UNWIND $items AS i MERGE (a:_snapshot_aside {_key: i.key}) \
+         SET a._entity = i.entity, a._uuid = i.uuid, a._content_hash = i.hash, a._row = i.row, \
+         a._chunks = i.chunks, a._session = i.session, a._removed_at = i.at"
+            .into()
+    }
+
+    /// Les copies vivantes de `$keys` : `_uuid`, `_content_hash`, `_row`,
+    /// `_chunks`, `_session`.
+    fn select_aside(&self) -> String {
+        "UNWIND $keys AS k MATCH (a:_snapshot_aside {_key: k}) WHERE a._row <> '' \
+         RETURN a._uuid, a._content_hash, a._row, a._chunks, a._session"
+            .into()
+    }
+
+    /// Les copies vivantes qu'une session a posées pour `$entity`.
+    fn select_aside_by_session(&self) -> String {
+        "MATCH (a:_snapshot_aside) WHERE a._entity = $entity AND a._session = $session AND a._row <> '' \
+         RETURN a._uuid, a._content_hash, a._row, a._chunks, a._session"
+            .into()
+    }
+
+    /// Vider les copies de `$keys` (consommées ou périmées).
+    fn clear_aside(&self) -> String {
+        "UNWIND $keys AS k MATCH (a:_snapshot_aside {_key: k}) SET a._row = '', a._chunks = ''".into()
+    }
+
+    /// **La purge, bornée** : vider au plus `limit` copies de `$entity`
+    /// posées avant `$before`. Rend le nombre vidé.
+    fn purge_aside_before(&self, limit: usize) -> String {
+        format!(
+            "MATCH (a:_snapshot_aside) WHERE a._entity = $entity AND a._row <> '' AND a._removed_at < $before \
+             WITH a LIMIT {limit} SET a._row = '', a._chunks = '' RETURN count(a)"
+        )
+    }
+
+    /// Les vecteurs denses des chunks des lignes `$uuids`, pour une copie :
+    /// `_uuid`, `_parent_uuid`, `_text_hash`, le marqueur, le vecteur. `None`
+    /// quand le dialecte ne sait pas relire un vecteur : la copie part sans,
+    /// et la ligne qui revient est réembarquée.
+    fn select_chunk_vectors(&self, chunk_table: &str, column: &str, marker: &str) -> Option<String> {
+        Some(format!(
+            "MATCH (c:{chunk_table}) WHERE c._parent_uuid IN $uuids \
+             RETURN c._uuid, c._parent_uuid, c._text_hash, c.{marker}, c.{column}"
+        ))
+    }
+
+    /// **Rendre l'état d'avant** à des lignes qu'une fin a fait passer par
+    /// une transition, et retirer leur marque d'absence : `$items` porte
+    /// `uuid` et `state`. Écrit sans la garde de la machine à états — une
+    /// annulation n'est pas une transition.
+    fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
+        format!(
+            "UNWIND $items AS i MATCH (n:{table} {{_uuid: i.uuid}}) \
+             SET n.{field} = i.state, n._absent_since = NULL"
+        )
+    }
+
     /// **Combien de liens de la relation `rel` touchent ces lignes**, dans
     /// les deux sens — ce que `DETACH DELETE` emportera de cette relation.
     /// `None` quand le dialecte ne sait pas le dire.
@@ -1766,6 +1848,75 @@ impl SchemaDialect for PostgresDialect {
     fn count_relations_of(&self, _table: &str, _rel: &str) -> Option<String> {
         // Les relations sont des tables : il faudrait les énumérer toutes.
         None
+    }
+
+    fn create_aside_table(&self) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!(
+            "CREATE TABLE IF NOT EXISTS {t} (\n    \
+             _key TEXT PRIMARY KEY,\n    \
+             _entity TEXT,\n    \
+             _uuid TEXT,\n    \
+             _content_hash TEXT,\n    \
+             _row TEXT,\n    \
+             _chunks TEXT,\n    \
+             _session TEXT,\n    \
+             _removed_at BIGINT\n)"
+        )
+    }
+
+    fn upsert_aside(&self) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!(
+            "INSERT INTO {t} (_key, _entity, _uuid, _content_hash, _row, _chunks, _session, _removed_at) \
+             SELECT v.key, v.entity, v.uuid, v.hash, v.row, v.chunks, v.session, v.at \
+             FROM jsonb_to_recordset($items::text::jsonb) AS v(key TEXT, entity TEXT, uuid TEXT, hash TEXT, row TEXT, chunks TEXT, session TEXT, at BIGINT) \
+             ON CONFLICT (_key) DO UPDATE SET _entity = EXCLUDED._entity, _uuid = EXCLUDED._uuid, \
+             _content_hash = EXCLUDED._content_hash, _row = EXCLUDED._row, _chunks = EXCLUDED._chunks, \
+             _session = EXCLUDED._session, _removed_at = EXCLUDED._removed_at"
+        )
+    }
+
+    fn select_aside(&self) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!("SELECT _uuid, _content_hash, _row, _chunks, _session FROM {t} WHERE _key = ANY($keys) AND _row <> ''")
+    }
+
+    fn select_aside_by_session(&self) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!(
+            "SELECT _uuid, _content_hash, _row, _chunks, _session FROM {t} \
+             WHERE _entity = $entity AND _session = $session AND _row <> ''"
+        )
+    }
+
+    fn clear_aside(&self) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!("UPDATE {t} SET _row = '', _chunks = '' WHERE _key = ANY($keys)")
+    }
+
+    fn purge_aside_before(&self, limit: usize) -> String {
+        let t = self.internal_table("_snapshot_aside");
+        format!(
+            "WITH p AS (UPDATE {t} SET _row = '', _chunks = '' WHERE _key IN \
+             (SELECT _key FROM {t} WHERE _entity = $entity AND _row <> '' AND _removed_at < $before LIMIT {limit}) \
+             RETURNING 1) SELECT count(*) FROM p"
+        )
+    }
+
+    fn select_chunk_vectors(&self, _chunk_table: &str, _column: &str, _marker: &str) -> Option<String> {
+        // Relire une colonne `vector` en liste de flottants n'est pas encore
+        // éprouvé sur ce dialecte : la copie part sans vecteurs, la ligne qui
+        // revient est réembarquée. Moins bien, jamais faux.
+        None
+    }
+
+    fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
+        format!(
+            "UPDATE {table} SET {field} = v.state, _absent_since = NULL \
+             FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, state TEXT) \
+             WHERE {table}._uuid = v.uuid"
+        )
     }
 
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {

@@ -371,7 +371,7 @@ impl Node for EntityBatchNode {
             cat.mark_snapshot(entity, scope, &session, &ids).map_err(|e| e.to_string())?;
         }
         let scope_json = scope.map(|s| serde_json::to_value(s).unwrap_or(Value::Null));
-        ctx.set_output("report",PortValue::new(json!({"ids":ids,"processed":report.processed,"unchanged":report.unchanged,"ready":report.rendu_pret,"warnings":report.warnings,"snapshot":if session.is_empty() { Value::Null } else { json!(session) },"scope":scope_json})));
+        ctx.set_output("report",PortValue::new(json!({"ids":ids,"processed":report.processed,"unchanged":report.unchanged,"ready":report.rendu_pret,"restored":report.restored,"warnings":report.warnings,"snapshot":if session.is_empty() { Value::Null } else { json!(session) },"scope":scope_json})));
         Ok(())
     }
 }
@@ -572,6 +572,85 @@ impl Node for SnapshotFinishNode {
         let mut cat = cat.lock().map_err(|e| e.to_string())?;
         let report = cat
             .finish_snapshot(entity, &scope, self.config["snapshot"].as_str().unwrap(), options)
+            .map_err(|e| e.to_string())?;
+        ctx.set_output("report", PortValue::new(serde_json::to_value(report).map_err(|e| e.to_string())?));
+        Ok(())
+    }
+}
+
+/// Undo an applied synchronisation finish, as a block: the rows it removed
+/// come back from the set-aside copies (no re-embedding), the rows it moved
+/// through a transition get their previous state back. Possible while the
+/// copies live (`snapshot.keepFor`), once per finish.
+pub struct SnapshotUndoFactory;
+struct SnapshotUndoNode {
+    name: String,
+    config: Value,
+}
+impl NodeFactory for SnapshotUndoFactory {
+    fn node_type(&self) -> &'static str {
+        "SnapshotUndoNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        let mut scope = param("scope", ConfigParamType::Json, true, "The scope values of the finished session");
+        scope.json_schema = Some(json!({"type":"object"}));
+        NodeSchema {
+            node_type: self.node_type(),
+            description: "Undo an applied synchronisation finish: removed rows come back from their set-aside copies, transitioned rows get their previous state back",
+            inputs: vec![],
+            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            config_params: vec![
+                param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
+                scope,
+                param("snapshot", ConfigParamType::String, true, "The session id of the finish to undo"),
+            ],
+        }
+    }
+    fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
+        crate::schema::validate_identifier(config["entity"].as_str().ok_or("entity missing")?, "entity")
+            .map_err(|e| e.to_string())?;
+        if !config["scope"].is_object() {
+            return Err("scope must be an object".into());
+        }
+        if config["snapshot"].as_str().is_none_or(str::is_empty) {
+            return Err("snapshot (the session id) is required".into());
+        }
+        Ok(Box::new(SnapshotUndoNode { name: name.into(), config: config.clone() }))
+    }
+}
+impl Node for SnapshotUndoNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn node_type(&self) -> &'static str {
+        "SnapshotUndoNode"
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        SnapshotUndoFactory.schema().outputs
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(self.config.clone()))
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let entity = self.config["entity"].as_str().unwrap();
+        let policy = ctx
+            .service::<HashMap<String, WritePolicy>>("backend_write_policies")
+            .and_then(|p| p.get(entity))
+            .ok_or("policy missing")?;
+        if policy.immutable
+            || policy.created_at.is_some()
+            || policy.updated_at.is_some()
+            || policy.revision.is_some()
+            || !policy.transition_dates.is_empty()
+        {
+            return Err("a synchronisation cannot bypass managed write policies".into());
+        }
+        let scope: BTreeMap<String, CypherValue> = serde_json::from_value(self.config["scope"].clone())
+            .map_err(|e| format!("scope: {e}"))?;
+        let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").ok_or("catalog missing")?.clone();
+        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let report = cat
+            .undo_snapshot_finish(entity, &scope, self.config["snapshot"].as_str().unwrap())
             .map_err(|e| e.to_string())?;
         ctx.set_output("report", PortValue::new(serde_json::to_value(report).map_err(|e| e.to_string())?));
         Ok(())

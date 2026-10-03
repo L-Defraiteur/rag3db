@@ -146,6 +146,15 @@ pub struct SnapshotFinish {
     /// `false` : un plan (`plan_snapshot_finish`), rien n'est encore écrit ;
     /// `removed` et `transitioned` disent alors ce qui le sera.
     pub applied: bool,
+    /// Les retirées **mises de côté** (`keepFor`) : elles reviendront sans
+    /// réembarquement si elles reparaissent identiques, et la fin s'annule
+    /// tant que leurs copies vivent. Vide sous `keepFor: 0`.
+    #[serde(default)]
+    pub set_aside: Vec<String>,
+    /// L'état de chaque transitionnée avant la fin — ce que rend
+    /// l'annulation.
+    #[serde(default)]
+    pub previous_states: BTreeMap<String, String>,
 }
 
 impl Catalog {
@@ -544,32 +553,38 @@ impl Catalog {
         // le plan (un lot arrivé entre les deux) a reparu : elle reste. Une
         // ligne déjà partie n'est pas annoncée retirée par cette fin.
         if !report.removed.is_empty() {
-            // La marque, et l'appartenance au périmètre relue : une ligne que
-            // l'autre session d'un autre périmètre a portée depuis le plan vit
-            // ailleurs, sa marque n'est simplement plus la nôtre.
-            let marks: HashMap<String, (String, bool)> = self
+            // La ligne entière (pour la copie), sa marque, et l'appartenance
+            // au périmètre relue : une ligne que la session d'un autre
+            // périmètre a portée depuis le plan vit ailleurs.
+            let mut rows: HashMap<String, BTreeMap<String, CypherValue>> = self
                 .get_many(&entity_name, &report.removed)?
                 .into_iter()
-                .filter_map(|row| {
-                    let uuid = row.get("_uuid")?.as_str()?.to_string();
-                    let mark = row.get("_snapshot").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-                    let dedans = self.dans_le_perimetre(&row, &report.scope);
-                    Some((uuid, (mark, dedans)))
-                })
+                .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
                 .collect();
             let planned = std::mem::take(&mut report.removed);
+            let mut to_remove = Vec::new();
             for uuid in planned {
-                match marks.get(&uuid) {
-                    None => report.kept.push((uuid, "introuvable à la relecture".into())),
-                    Some((mark, _)) if mark_verdict(mark, &report.session) != MarkVerdict::Unseen => {
-                        report.kept.push((uuid, "reparue depuis le plan (portée ou écrite pendant la session)".into()))
-                    }
-                    Some((_, false)) => report.kept.push((uuid, QUITTE_LE_PERIMETRE.into())),
-                    Some(_) => {
-                        self.mettre_en_file_la_suppression(&entity_name, &uuid)?;
-                        report.removed.push(uuid);
-                    }
+                let Some(row) = rows.remove(&uuid) else {
+                    report.kept.push((uuid, "introuvable à la relecture".into()));
+                    continue;
+                };
+                let mark = row.get("_snapshot").and_then(|v| v.as_str()).unwrap_or_default();
+                if mark_verdict(mark, &report.session) != MarkVerdict::Unseen {
+                    report.kept.push((uuid, "reparue depuis le plan (portée ou écrite pendant la session)".into()));
+                    continue;
                 }
+                if !self.dans_le_perimetre(&row, &report.scope) {
+                    report.kept.push((uuid, QUITTE_LE_PERIMETRE.into()));
+                    continue;
+                }
+                to_remove.push(row);
+                report.removed.push(uuid);
+            }
+            // **La copie avant le retrait**, et avant toute mise en file : si
+            // elle échoue, rien n'est retiré.
+            report.set_aside = self.set_aside(&entity_name, &report.session, &to_remove)?;
+            for uuid in &report.removed {
+                self.mettre_en_file_la_suppression(&entity_name, uuid)?;
             }
         }
         if !report.transitioned.is_empty() {
@@ -603,6 +618,14 @@ impl Catalog {
                     report.kept.push((uuid, QUITTE_LE_PERIMETRE.into()));
                     continue;
                 }
+                // L'état d'avant, pour l'annulation ; vide vaut l'initial.
+                let before = row
+                    .get(&lc.field)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(&lc.initial)
+                    .to_string();
+                report.previous_states.insert(uuid.clone(), before);
                 // La ligne entière, sans ses colonnes internes : le hash de
                 // contenu se calcule sur ce qu'on écrit. La garde de la
                 // machine à états juge à l'écriture.
@@ -632,19 +655,25 @@ impl Catalog {
             // changé, application) ; l'échec d'une suppression ne se provoque
             // pas aujourd'hui : la boucle n'est pas couverte, elle n'est pas
             // morte pour autant.
+            let mut still_live = Vec::new();
             for del in &res.delete_results {
                 if let Some(cause) = &del.echec {
                     if let Some(pos) = report.removed.iter().position(|u| u == &del.uuid) {
                         let uuid = report.removed.remove(pos);
+                        report.set_aside.retain(|u| u != &uuid);
+                        still_live.push(uuid.clone());
                         report.kept.push((uuid, format!("suppression refusée : {cause}")));
                     }
                 }
             }
+            // Une ligne restée en place n'a pas de copie à garder.
+            self.clear_aside(&entity_name, &still_live)?;
             for update in &res.update_results {
                 if let crate::records::UpdateStatus::Failed(cause) = &update.status {
                     if let Some(pos) = report.transitioned.iter().position(|u| u == &update.uuid) {
                         let uuid = report.transitioned.remove(pos);
                         report.kept.push((uuid, format!("refusée à l'écriture : {cause}")));
+                        report.previous_states.remove(&update.uuid);
                     }
                 }
             }
@@ -661,9 +690,15 @@ impl Catalog {
                 ])
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
-        // La fin ferme la session.
+        // La fin ferme la session, et se garde pour son annulation.
         self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
         self.oublier_les_sessions(&entity_name);
+        self.record_snapshot_finish(&report)?;
+        // La dette de la mise de côté, payée à chaque fin par une passe
+        // bornée. Un échec ne défait pas une fin appliquée : il se dit.
+        if let Err(e) = self.purge_snapshot_aside(&entity_name) {
+            report.warnings.push(format!("purge de la mise de côté : {e}"));
+        }
         Ok(report)
     }
 

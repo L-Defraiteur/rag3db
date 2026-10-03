@@ -1,0 +1,9 @@
+%% tool: undo_snapshot
+%% description: Annule en bloc une fin de synchronisation appliquée : les lignes qu'elle a retirées reviennent depuis la mise de côté, sans réembarquement ; celles qu'elle a fait passer par une transition retrouvent leur état d'avant. Possible tant que les copies vivent (keepFor), une fois par fin.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: scope json! -- Les valeurs du périmètre de la session finie.
+%% param: snapshot string! -- L'identifiant de la session dont la fin s'annule.
+%% result: undo.report
+
+graph LR
+    undo["SnapshotUndoNode(entity=$entity, scope=$scope, snapshot=$snapshot)"]

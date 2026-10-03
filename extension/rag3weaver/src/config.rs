@@ -551,9 +551,11 @@ pub struct SnapshotConfig {
     /// Ce que devient une ligne disparue.
     #[serde(default)]
     pub on_missing: OnMissing,
-    /// Réservé à la corbeille (garder une ligne retirée un temps, pour la
-    /// rendre sans la réembarquer si elle reparaît). Pas encore implémentée :
-    /// une valeur est refusée plutôt qu'ignorée.
+    /// **La mise de côté avant purge** : combien de temps une ligne retirée
+    /// par une fin reste gardée, pour revenir sans réembarquement si elle
+    /// reparaît identique, et pour qu'une fin s'annule en bloc. Une durée
+    /// suivie de son unité — `7d`, `12h`, `30m`, `45s` — ou `0` pour ne rien
+    /// garder. Absente : 7 jours (Lucie, 3 octobre 2026).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep_for: Option<String>,
 }
@@ -562,6 +564,40 @@ impl SnapshotConfig {
     fn default_max_missing_ratio() -> f64 {
         0.5
     }
+
+    /// La durée de garde par défaut : 7 jours.
+    pub const DEFAULT_KEEP_FOR_MS: i64 = 7 * 24 * 3600 * 1000;
+
+    /// `keepFor` en millisecondes ; `0` : la mise de côté est coupée.
+    pub fn keep_for_ms(&self) -> Result<i64, String> {
+        match &self.keep_for {
+            None => Ok(Self::DEFAULT_KEEP_FOR_MS),
+            Some(v) => parse_keep_for(v),
+        }
+    }
+}
+
+/// `7d`, `12h`, `30m`, `45s`, `0`. Une unité est exigée hors de `0` : « 7 »
+/// seul ne dit pas s'il s'agit de jours ou de secondes.
+fn parse_keep_for(v: &str) -> Result<i64, String> {
+    let v = v.trim();
+    if v == "0" {
+        return Ok(0);
+    }
+    let refus = || format!("snapshot : keepFor '{v}' illisible — une durée et son unité (7d, 12h, 30m, 45s), ou 0");
+    let unit = v.chars().last().ok_or_else(refus)?;
+    let n: i64 = v[..v.len() - unit.len_utf8()].trim().parse().map_err(|_| refus())?;
+    let ms = match unit {
+        'd' => 24 * 3600 * 1000,
+        'h' => 3600 * 1000,
+        'm' => 60 * 1000,
+        's' => 1000,
+        _ => return Err(refus()),
+    };
+    if n < 0 {
+        return Err(refus());
+    }
+    n.checked_mul(ms).ok_or_else(refus)
 }
 
 /// Ce que devient une ligne qu'un instantané complet ne porte plus.
@@ -582,8 +618,7 @@ pub enum OnMissing {
 
 impl SnapshotConfig {
     /// Les champs du périmètre existent, la proportion est une proportion, la
-    /// transition est déclarée, et la mise de côté (`keepFor`) n'existe pas
-    /// encore : une valeur est refusée plutôt qu'ignorée.
+    /// transition est déclarée, `keepFor` se lit.
     pub fn validate(
         &self,
         fields: &HashMap<String, SimpleFieldDef>,
@@ -612,9 +647,7 @@ impl SnapshotConfig {
                 ));
             }
         }
-        if self.keep_for.is_some() {
-            return Err("snapshot : keepFor (la mise de côté avant purge) n'est pas encore implémenté".into());
-        }
+        self.keep_for_ms()?;
         Ok(())
     }
 }
@@ -1838,5 +1871,32 @@ mod tests_field_weights_compat {
             serde_json::from_str(r#"{"limit": 5}"#).expect("des options d'avant se relisent");
         assert!(options.field_weights.is_empty());
         assert_eq!(options.limit, 5);
+    }
+}
+
+#[cfg(test)]
+mod tests_keep_for {
+    use super::*;
+
+    fn avec(v: Option<&str>) -> SnapshotConfig {
+        SnapshotConfig {
+            scope: vec![],
+            max_missing_ratio: 0.5,
+            on_missing: OnMissing::Delete,
+            keep_for: v.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn keep_for_se_lit_en_millisecondes() {
+        assert_eq!(avec(None).keep_for_ms(), Ok(7 * 24 * 3600 * 1000), "7 jours par défaut");
+        assert_eq!(avec(Some("0")).keep_for_ms(), Ok(0));
+        assert_eq!(avec(Some("2d")).keep_for_ms(), Ok(2 * 24 * 3600 * 1000));
+        assert_eq!(avec(Some("12h")).keep_for_ms(), Ok(12 * 3600 * 1000));
+        assert_eq!(avec(Some("30m")).keep_for_ms(), Ok(30 * 60 * 1000));
+        assert_eq!(avec(Some(" 45s ")).keep_for_ms(), Ok(45 * 1000));
+        for illisible in ["7", "", "d", "-1d", "7w", "1.5d", "99999999999999999d"] {
+            assert!(avec(Some(illisible)).keep_for_ms().is_err(), "« {illisible} »");
+        }
     }
 }

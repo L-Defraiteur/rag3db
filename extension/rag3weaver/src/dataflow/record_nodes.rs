@@ -1804,6 +1804,27 @@ impl Node for EmbedNode {
         let pre_filter = dense_works.len() + sparse_works.len() + dual_works.len();
         dense_works.retain(dense_a_faire);
         sparse_works.retain(sparse_a_faire);
+
+        // **Un vecteur connu ne se recalcule pas** : la mise de côté avant
+        // purge rend ceux des chunks d'une ligne reparue identique — même
+        // modèle, même texte (`_text_hash`), même dimension. Le creux, qui ne
+        // se relit pas dans l'index, est recalculé ; le dual aussi, puisqu'il
+        // rend les deux d'un coup.
+        let mut known_dense: Vec<(String, String, String, Vec<f32>)> = Vec::new();
+        if let (Some(known), Some(entry)) = (
+            ctx.service::<Arc<crate::catalog::KnownVectors>>(crate::catalog::SERVICE_KNOWN_VECTORS).cloned(),
+            current_entry.as_ref(),
+        ) {
+            if known.slug == entry.slug() {
+                dense_works.retain(|w| match known.by_chunk.get(&w.uuid) {
+                    Some((hash, vector)) if hash == &w.text_hash && vector.len() == embedding_dim => {
+                        known_dense.push((w.uuid.clone(), w.text_hash.clone(), w.entity_name.clone(), vector.clone()));
+                        false
+                    }
+                    _ => true,
+                });
+            }
+        }
         // Le dual produit les deux : il repasse si **l'un des deux** manque.
         dual_works.retain(|w| dense_a_faire(w) || sparse_a_faire(w));
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
@@ -1817,6 +1838,33 @@ impl Node for EmbedNode {
         // Les vecteurs gardés en mémoire (mode Enrich), par uuid.
         let mut dense_done: HashMap<String, Vec<f32>> = HashMap::new();
         let mut sparse_done: HashMap<String, SparseVector> = HashMap::new();
+
+        // Les vecteurs connus se posent comme des vecteurs calculés : avec la
+        // ligne en mode Enrich, par `embed_set` (vecteur et marqueur ensemble)
+        // sinon.
+        ctx.metric("dense_known", known_dense.len() as f64);
+        if enrich {
+            for (uuid, _, _, vector) in known_dense {
+                dense_done.insert(uuid, vector);
+            }
+        } else if !known_dense.is_empty() {
+            let mut groups: HashMap<String, Vec<CypherValue>> = HashMap::new();
+            for (uuid, hash, entity_name, vector) in known_dense {
+                let mut map = BTreeMap::new();
+                map.insert("uuid".into(), CypherValue::String(uuid));
+                map.insert("hash".into(), CypherValue::String(hash));
+                map.insert("emb".into(), CypherValue::List(vector.iter().map(|&f| CypherValue::Float(f as f64)).collect()));
+                groups.entry(entity_name).or_default().push(CypherValue::Map(map));
+            }
+            for (entity_name, items) in groups {
+                let (col, marker) = storage_for(&entity_name);
+                conn.execute_with_params(
+                    &dialect.embed_set(&entity_name, &col, &marker),
+                    &[QueryParam { name: "items".into(), value: CypherValue::List(items) }],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
 
         // ── Dense embedding (GPU mini-batches) ──
         if !dense_works.is_empty() {

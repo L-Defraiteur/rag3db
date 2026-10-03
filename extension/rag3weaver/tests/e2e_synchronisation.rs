@@ -159,10 +159,12 @@ fn la_declaration_est_verifiee() {
     inconnu.scope = vec!["dossier".into()];
     assert!(catalog.register_entity("Fiche", fiche(inconnu, None)).is_err(), "champ de périmètre inconnu");
 
-    let mut corbeille = perimetre_classeur();
-    corbeille.keep_for = Some("7d".into());
-    let err = catalog.register_entity("Fiche", fiche(corbeille, None)).unwrap_err().to_string();
-    assert!(err.contains("keepFor"), "{err}");
+    for illisible in ["7", "dix jours", "-1d", "7w"] {
+        let mut garde = perimetre_classeur();
+        garde.keep_for = Some(illisible.into());
+        let err = catalog.register_entity("Fiche", fiche(garde, None)).unwrap_err().to_string();
+        assert!(err.contains("keepFor"), "« {illisible} » : {err}");
+    }
 
     let mut sans_cycle = perimetre_classeur();
     sans_cycle.on_missing = OnMissing::Transition("archiver".into());
@@ -809,3 +811,295 @@ fn un_perimetre_est_borne_a_la_cellule_courante() {
     assert_eq!((fin.in_scope, fin.seen, fin.removed.len()), (2, 1, 1), "{fin:?}");
     assert_eq!(cles(&catalog, "A"), ["a1", "b1", "b2"]);
 }
+
+// ─── La mise de côté avant purge ────────────────────────────────────────────
+//
+// Page de conception : `docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`.
+// Une ligne retirée par une fin est copiée — la ligne, et les vecteurs denses
+// de ses chunks — avant d'être retirée vraiment. Reparue identique, elle
+// revient sans réembarquement ; une fin s'annule en bloc tant que ses copies
+// n'ont pas été purgées.
+
+/// Les copies vivantes (non purgées) de l'entité `Fiche`.
+fn mises_de_cote(catalog: &Catalog) -> Vec<String> {
+    let mut v: Vec<String> = catalog
+        .execute_raw("MATCH (a:_snapshot_aside) WHERE a._entity = 'Fiche' AND a._row <> '' RETURN a._uuid")
+        .unwrap()
+        .rows
+        .into_iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+        .collect();
+    v.sort();
+    v
+}
+
+/// Un embarqueur qui compte les textes qu'on lui donne : c'est le seul témoin
+/// fiable d'un réembarquement.
+struct Compteur(rag3weaver::embedder::HashEmbedder, std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+impl rag3weaver::embedder::Embedder for Compteur {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::embedder::EmbedError> {
+        self.1.fetch_add(texts.len(), std::sync::atomic::Ordering::SeqCst);
+        self.0.embed(texts)
+    }
+    fn dim(&self) -> usize {
+        self.0.dim()
+    }
+    fn is_mock(&self) -> bool {
+        false
+    }
+    fn name(&self) -> &str {
+        "compteur"
+    }
+}
+
+/// Un catalogue dont l'entité `Fiche` porte le signal dense, et le compte des
+/// textes embarqués.
+fn catalogue_vectoriel(snapshot: SnapshotConfig) -> (Catalog, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let ext = format!(
+        "{}/extension/vector/build/libvector.rag3db_extension",
+        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
+        })
+    );
+    rag3weaver::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let compte = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let config = CatalogConfig {
+        name: Some("mise-de-cote".into()),
+        entities: HashMap::new(),
+        relations: HashMap::new(),
+        embedding_dim: 8,
+        ..Default::default()
+    };
+    let embarqueur = Compteur(rag3weaver::embedder::HashEmbedder::new(8), compte.clone());
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(embarqueur), config);
+    catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    let mut entite = fiche(snapshot, None);
+    entite.signals = SearchSignals::BM25 | SearchSignals::VECTOR;
+    catalog.register_entity("Fiche", entite).unwrap();
+    (catalog, compte)
+}
+
+fn embarques(compte: &std::sync::atomic::AtomicUsize) -> usize {
+    compte.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+fn rechercher(catalog: Catalog, requete: &str, signals: SearchSignals) -> (Catalog, Vec<String>) {
+    use rag3weaver::search::{Consistency, SearchOptions};
+    let partage = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let res = Catalog::rechercher(
+        &partage,
+        "Fiche",
+        requete,
+        SearchOptions { consistency: Consistency::Immediate, signals: Some(signals), ..Default::default() },
+    )
+    .unwrap();
+    let catalog = std::sync::Arc::try_unwrap(partage).ok().unwrap().into_inner().unwrap();
+    (catalog, res.results.into_iter().map(|r| r.uuid).collect())
+}
+
+/// **Reparue identique, elle revient sans réembarquement**, et ressort dans
+/// la recherche plein texte comme dans la recherche dense.
+#[test]
+#[ignore]
+fn une_ligne_reparue_identique_revient_sans_reembarquement() {
+    let (mut catalog, compte) = catalogue_vectoriel(perimetre_classeur());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let a3 = uuid(&catalog, "a3");
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed, [a3.clone()]);
+    assert_eq!(fin.set_aside, [a3.clone()], "la ligne retirée est mise de côté");
+    assert_eq!(mises_de_cote(&catalog), [a3.clone()]);
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
+
+    let avant = embarques(&compte);
+    let s3 = ouvrir(&mut catalog, "A");
+    let rows = lignes(&["a1", "a2", "a3"], "A");
+    let scope = catalog.snapshot_scope_of("Fiche", &rows).unwrap();
+    let res = catalog.ingest_entities("Fiche", rows).unwrap();
+    assert_eq!(res.restored, [a3.clone()], "{res:?}");
+    catalog.mark_snapshot("Fiche", &scope, &s3, &[uuid(&catalog, "a1"), uuid(&catalog, "a2"), a3.clone()]).unwrap();
+    assert_eq!(embarques(&compte), avant, "aucun texte réembarqué");
+    assert!(mises_de_cote(&catalog).is_empty(), "la copie est consommée");
+    let fin = finir(&mut catalog, "A", &s3, SnapshotFinishOptions::default()).unwrap();
+    assert!(fin.missing.is_empty(), "{fin:?}");
+
+    let (catalog, plein_texte) = rechercher(catalog, "a3", SearchSignals::BM25);
+    assert!(plein_texte.contains(&a3), "a3 ressort en plein texte : {plein_texte:?}");
+    let (_, dense) = rechercher(catalog, "La fiche a3 du classeur A.", SearchSignals::VECTOR);
+    assert_eq!(dense.first(), Some(&a3), "a3 ressort en dense, vecteur rendu : {dense:?}");
+}
+
+/// **Par le chemin de masse aussi** : une table vidée se repeuple par COPY,
+/// l'embarquement passant avant l'insertion (`EmbedMode::Enrich`) ; les
+/// vecteurs connus s'y posent avec la ligne.
+#[test]
+#[ignore]
+fn une_table_videe_puis_repeuplee_ne_reembarque_rien() {
+    let (mut catalog, compte) = catalogue_vectoriel(perimetre_classeur());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    let vide = ouvrir(&mut catalog, "A");
+    let fin = finir(&mut catalog, "A", &vide, SnapshotFinishOptions { allow_empty: true, force: true }).unwrap();
+    assert_eq!(fin.set_aside.len(), 2, "{fin:?}");
+    assert!(cles(&catalog, "A").is_empty());
+
+    let avant = embarques(&compte);
+    let res = catalog.ingest_entities("Fiche", lignes(&["a1", "a2"], "A")).unwrap();
+    assert_eq!(res.restored.len(), 2, "{res:?}");
+    assert_eq!(embarques(&compte), avant, "aucun texte réembarqué");
+    // Les vecteurs sont en base, marqueur posé. On ne les cherche pas en
+    // dense ici : sur une table vidée puis repeuplée par le chemin de masse,
+    // la recherche dense ne rend rien **avec ou sans mise de côté**
+    // (`keepFor: 0` pareil, 3 octobre 2026), et une simple lecture des
+    // chunks avant la recherche suffit à la faire répondre — un défaut à
+    // part, signalé, hors de ce chantier.
+    let rows = catalog
+        .execute_raw("MATCH (c:Fiche_Chunk) RETURN c._embed_hash__compteur = c._text_hash, size(c.embedding__compteur)")
+        .unwrap()
+        .rows;
+    assert_eq!(rows.len(), 2);
+    for r in rows {
+        assert_eq!(r, [CypherValue::Bool(true), CypherValue::Int(8)], "vecteur et marqueur rendus");
+    }
+}
+
+/// **Reparue modifiée** : la copie est périmée, elle est jetée, et la ligne
+/// s'ingère normalement — réembarquée.
+#[test]
+#[ignore]
+fn une_ligne_reparue_modifiee_s_ingere_et_jette_la_copie() {
+    let (mut catalog, compte) = catalogue_vectoriel(perimetre_classeur());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let a3 = uuid(&catalog, "a3");
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    assert_eq!(mises_de_cote(&catalog), [a3.clone()]);
+
+    let avant = embarques(&compte);
+    let mut modifiee = ligne("a3", "A", None);
+    modifiee.insert("texte".into(), CypherValue::String("Une autre fiche a3, réécrite.".into()));
+    let res = catalog.ingest_entities("Fiche", vec![modifiee]).unwrap();
+    assert!(res.restored.is_empty(), "{res:?}");
+    assert!(embarques(&compte) > avant, "le contenu a changé : il est embarqué");
+    assert!(mises_de_cote(&catalog).is_empty(), "la copie périmée est jetée");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
+}
+
+/// **`keepFor: 0`** : rien n'est copié, la fin retire comme avant.
+#[test]
+#[ignore]
+fn keep_for_zero_ne_copie_rien() {
+    let mut catalog = catalogue();
+    let mut sans_garde = perimetre_classeur();
+    sans_garde.keep_for = Some("0".into());
+    catalog.register_entity("Fiche", fiche(sans_garde, None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed, [uuid(&catalog, "a3")]);
+    assert!(fin.set_aside.is_empty(), "{fin:?}");
+    assert!(mises_de_cote(&catalog).is_empty());
+}
+
+/// **La purge** retire les copies plus vieilles que `keepFor`, et pas les
+/// autres ; une fin purgée ne s'annule plus, et le refus le dit.
+#[test]
+#[ignore]
+fn la_purge_retire_les_copies_plus_vieilles_que_keep_for() {
+    let mut catalog = catalogue();
+    let mut une_heure = perimetre_classeur();
+    une_heure.keep_for = Some("1h".into());
+    catalog.register_entity("Fiche", fiche(une_heure, None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    let s3 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s3, lignes(&["a1"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s3, SnapshotFinishOptions::default()).unwrap();
+    let (a2, a3) = (uuid(&catalog, "a2"), uuid(&catalog, "a3"));
+    assert_eq!(mises_de_cote(&catalog), { let mut v = vec![a2.clone(), a3.clone()]; v.sort(); v });
+
+    let maintenant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let heure = 3600 * 1000;
+    assert_eq!(catalog.purge_snapshot_aside_at("Fiche", maintenant + heure - 60_000).unwrap(), 0, "rien n'a une heure");
+    assert_eq!(catalog.purge_snapshot_aside_at("Fiche", maintenant + heure + 60_000).unwrap(), 2);
+    assert!(mises_de_cote(&catalog).is_empty());
+
+    let err = catalog.undo_snapshot_finish("Fiche", &perimetre("A"), &fin.session).unwrap_err().to_string();
+    assert!(err.contains("purgée"), "le refus dit pourquoi : {err}");
+}
+
+/// **Une fin s'annule en bloc** : les lignes qu'elle a retirées reviennent.
+#[test]
+#[ignore]
+fn une_fin_qui_retire_s_annule_en_bloc() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3", "a4"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed.len(), 2);
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
+
+    let annulation = catalog.undo_snapshot_finish("Fiche", &perimetre("A"), &fin.session).unwrap();
+    let mut rendues = annulation.restored.clone();
+    rendues.sort();
+    let mut attendues = fin.removed.clone();
+    attendues.sort();
+    assert_eq!(rendues, attendues, "{annulation:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3", "a4"]);
+    assert_eq!(colonne(&catalog, &uuid(&catalog, "a3"), "texte").as_str(), Some("La fiche a3 du classeur A."));
+    assert!(mises_de_cote(&catalog).is_empty());
+    // Une seconde annulation n'a plus rien à rendre, et le dit.
+    let err = catalog.undo_snapshot_finish("Fiche", &perimetre("A"), &fin.session).unwrap_err().to_string();
+    assert!(err.contains("déjà annulée"), "{err}");
+}
+
+/// **Une fin qui transitionne s'annule aussi** : chaque ligne retrouve son
+/// état d'avant, et perd sa marque d'absence.
+#[test]
+#[ignore]
+fn une_fin_qui_transitionne_s_annule_en_bloc() {
+    let (mut catalog, s) = archivage();
+    let fin = finir(&mut catalog, "A", &s, SnapshotFinishOptions::default()).unwrap();
+    assert!(!fin.transitioned.is_empty(), "{fin:?}");
+    for u in &fin.transitioned {
+        assert_eq!(etat(&catalog, u), "archivee");
+    }
+    let annulation = catalog.undo_snapshot_finish("Fiche", &perimetre("A"), &fin.session).unwrap();
+    let mut rendues = annulation.reverted.clone();
+    rendues.sort();
+    let mut attendues = fin.transitioned.clone();
+    attendues.sort();
+    assert_eq!(rendues, attendues, "{annulation:?}");
+    for u in &fin.transitioned {
+        assert_eq!(etat(&catalog, u), "active", "l'état d'avant revient");
+        let marque = colonne(&catalog, u, "_absent_since");
+        assert!(matches!(marque, CypherValue::Null), "la marque d'absence part : {marque:?}");
+    }
+}
+
+/// **Une ligne mise de côté ne sort nulle part** : ni en plein texte, ni en
+/// dense, ni par `get`.
+#[test]
+#[ignore]
+fn une_ligne_mise_de_cote_ne_sort_dans_aucune_recherche() {
+    let (mut catalog, _) = catalogue_vectoriel(perimetre_classeur());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let a3 = uuid(&catalog, "a3");
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    assert_eq!(mises_de_cote(&catalog), [a3.clone()]);
+    assert!(catalog.get_many("Fiche", &[a3.clone()]).unwrap().is_empty(), "get ne la rend pas");
+    // Chaque recherche répond — sur les fiches restées — sans quoi son
+    // silence ne prouverait rien.
+    let (catalog, plein_texte) = rechercher(catalog, "fiche", SearchSignals::BM25);
+    assert!(!plein_texte.is_empty() && !plein_texte.contains(&a3), "{plein_texte:?}");
+    let (_, dense) = rechercher(catalog, "La fiche a3 du classeur A.", SearchSignals::VECTOR);
+    assert!(!dense.is_empty() && !dense.contains(&a3), "{dense:?}");
+}
+
