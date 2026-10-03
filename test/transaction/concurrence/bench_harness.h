@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -64,9 +65,19 @@ enum class Refusal : uint8_t {
     CheckpointTimeout,
     FileLock,
     Interrupted,
+    // Les erreurs des verrous à venir (note de conception, §2), reconnues par les
+    // fragments annoncés à la session cœur C++ le 3 octobre : tant qu'elles n'existent
+    // pas, aucun cas ne les reçoit.
+    Deadlock,
+    LockTimeout,
+    SerializationFailure,
+    // Une fonction ou un réglage que le moteur ne connaît pas encore (acquire_locks,
+    // lock_timeout) : « rouge, la fonction n'existe pas », distinct d'un mauvais
+    // comportement.
+    MissingFunction,
     Unexpected,
 };
-constexpr size_t NUM_REFUSALS = 8;
+constexpr size_t NUM_REFUSALS = 12;
 
 inline std::string_view refusalName(Refusal refusal) {
     switch (refusal) {
@@ -84,13 +95,45 @@ inline std::string_view refusalName(Refusal refusal) {
         return "file lock";
     case Refusal::Interrupted:
         return "interrupted";
+    case Refusal::Deadlock:
+        return "deadlock";
+    case Refusal::LockTimeout:
+        return "lock timeout";
+    case Refusal::SerializationFailure:
+        return "serialization failure";
+    case Refusal::MissingFunction:
+        return "missing function";
     case Refusal::Unexpected:
         return "UNEXPECTED";
     }
     return "?";
 }
 
+inline bool containsIgnoringCase(std::string_view text, std::string_view fragment) {
+    return std::search(text.begin(), text.end(), fragment.begin(), fragment.end(),
+               [](char a, char b) { return std::tolower(a) == std::tolower(b); }) != text.end();
+}
+
 inline Refusal classifyRefusal(std::string_view message) {
+    // D'abord : une fonction ou un réglage inconnu. Son message porte le nom demandé
+    // (« Invalid option name: lock_timeout ») et ne doit pas passer pour l'erreur qu'il
+    // nomme. Messages relevés le 3 octobre.
+    if (containsIgnoringCase(message, "Invalid option name") ||
+        (containsIgnoringCase(message, "function") &&
+            containsIgnoringCase(message, "does not exist")) ||
+        containsIgnoringCase(message, "is not defined")) {
+        return Refusal::MissingFunction;
+    }
+    if (containsIgnoringCase(message, "deadlock")) {
+        return Refusal::Deadlock;
+    }
+    if (containsIgnoringCase(message, "lock") && containsIgnoringCase(message, "timeout") &&
+        !containsIgnoringCase(message, "Timeout waiting for active transactions")) {
+        return Refusal::LockTimeout;
+    }
+    if (containsIgnoringCase(message, "could not serialize")) {
+        return Refusal::SerializationFailure;
+    }
     if (message.find("Write-write conflict") != std::string_view::npos) {
         return Refusal::WriteWriteConflict;
     }

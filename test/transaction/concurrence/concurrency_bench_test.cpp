@@ -398,6 +398,11 @@ private:
                 for (const auto& line : integrity::canonicalDump(childConnection)) {
                     out << line << "\n";
                 }
+                out.close();
+                // Mourir ici, base ouverte. Jusqu'au 3 octobre au soir, le SIGKILL venait
+                // après la fin de ce bloc : la base était détruite, donc fermée proprement
+                // (point de reprise final), et la variante Crash ne rejouait aucun journal.
+                kill(getpid(), SIGKILL);
             } catch (const std::exception& e) {
                 out << "CHILD FAILED: " << e.what() << "\n";
             }
@@ -422,6 +427,13 @@ private:
             }
         }
         std::filesystem::remove(hotDumpPath);
+        // Le témoin que l'arrêt est brutal : un journal non vide attend d'être rejoué.
+        const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+        const auto walSize =
+            std::filesystem::exists(walPath) ? std::filesystem::file_size(walPath) : 0;
+        std::cerr << "  -- journal to replay: " << walSize << " bytes\n";
+        EXPECT_GT(walSize, 0u) << "[check: journal-to-replay] the writer process closed its "
+                                  "database before dying: nothing is replayed";
         if (!reopen()) {
             return {};
         }
@@ -609,6 +621,11 @@ static constexpr const char* DELETE_SOURCE = "MATCH (a:Item {id: 1}) DELETE a;";
 static constexpr const char* DELETE_DESTINATION = "MATCH (b:Item {id: 2}) DELETE b;";
 static constexpr const char* DETACH_DELETE_SOURCE = "MATCH (a:Item {id: 1}) DETACH DELETE a;";
 
+// À RÉÉCRIRE PAR A4′ : avec l'attente sur verrou, l'ordre de commit {1, 0} devient
+// impossible ici — l'écrivain 1, bloqué dans son écriture derrière le verrou de
+// l'écrivain 0, ne peut pas valider le premier (le premier à valider l'attendrait
+// jusqu'au délai de 30 s). Les cas C2_*RelationCommitsFirst et C6_UpdateCommitsFirst
+// seront réécrits avec mark / waitFor, sur le modèle de lock_bench_test.cpp.
 TEST_P(ConcurrencyBench, C2_DeleteCommitsFirst) {
     runCase(deleteVersusNewRelation(DELETE_SOURCE, {0, 1}));
 }
@@ -730,6 +747,10 @@ TEST_P(ConcurrencyBench, C4_Transfers) {
 // réouverture, 52/200 après arrêt brutal — les deux valident. C'est la course du chemin
 // de suppression sans verrou (marche A5) ; le cas est donc probabiliste
 // (probabilistic.txt), et son témoin sous ThreadSanitizer sort 9 passes sur 10.
+// À RÉÉCRIRE PAR A4′ : les deux DELETE partent en même temps ; avec le verrou exclusif
+// de ligne, celui qui attend ne peut pas valider dans l'ordre {0, 1} s'il est
+// l'écrivain 0. C1 n'a pas besoin de réécriture : il passera, avec 2 s d'attente de plus
+// (commitInOrderByEvents).
 TEST_P(ConcurrencyBench, C5_DoubleDelete) {
     runCase({.numWorkers = 2,
         .setup =
@@ -803,6 +824,11 @@ static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
             }};
 }
 
+// À RÉÉCRIRE PAR A4′ : avec l'attente sur verrou, l'ordre de commit {1, 0} devient
+// impossible ici — l'écrivain 1, bloqué dans son écriture derrière le verrou de
+// l'écrivain 0, ne peut pas valider le premier (le premier à valider l'attendrait
+// jusqu'au délai de 30 s). Les cas C2_*RelationCommitsFirst et C6_UpdateCommitsFirst
+// seront réécrits avec mark / waitFor, sur le modèle de lock_bench_test.cpp.
 TEST_P(ConcurrencyBench, C6_DeleteCommitsFirst) {
     runCase(deleteVersusUpdate({0, 1}));
 }

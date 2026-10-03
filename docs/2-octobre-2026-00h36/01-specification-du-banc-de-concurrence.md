@@ -341,3 +341,71 @@ un chemin fixe. Un build TSan avec l'extension écraserait celle du build Releas
 le banc Release chargerait alors une extension instrumentée, ou l'inverse. Il faudrait
 un worktree à part pour le build TSan, ou un répertoire de sortie de l'extension
 propre à chaque build, ce qui touche le CMake du dépôt. C'est à décider.
+
+## 12. Les témoins des verrous, et une correction (3 octobre au soir)
+
+### Une correction d'abord : la variante Crash ne rejouait aucun journal
+
+Jusqu'au 3 octobre au soir, le processus fils de la variante Crash (`runThenCrash`)
+déclarait sa base dans un bloc `try` et se tuait **après** ce bloc. La base était donc
+détruite, c'est-à-dire fermée proprement, avec un point de reprise final, avant le
+SIGKILL. Pour tout cas où le moteur ne plante pas de lui-même, « après arrêt brutal et
+rejeu » voulait dire en fait « après fermeture propre et réouverture ».
+
+**Ce qui était faux, et qui est retiré** : l'affirmation de l'étape 2 selon laquelle
+les corruptions de C1 à C3 « passent le rejeu à l'identique » et que « le rejeu du
+journal réinsère la clé en double sans rien refuser ». Avec un vrai arrêt brutal :
+- **C1 ne se rouvre plus.** Une clé primaire en double validée sous concurrence fait
+  échouer le rejeu (« Found duplicated primary key value 7 »), et la base est
+  inutilisable. C'est déterministe, et cela n'a pas besoin d'index vectoriel : la
+  forme de H4, en sûr.
+- **C2 en DETACH DELETE, relation validée d'abord** : le rejeu « répare » la relation
+  pendante, et les réponses diffèrent avant et après l'arrêt.
+
+Le fils meurt maintenant base ouverte. Un témoin empêche l'erreur de revenir en
+silence : avant de rouvrir, le père exige un journal non vide à rejouer
+(`journal-to-replay`). Les journaux observés vont de 171 octets à 238 Ko.
+
+L'erreur a été trouvée en écrivant le cas du `DROP_VECTOR_INDEX` rejoué : il restait
+vert alors que la recette de la session de l'arbre principal rougissait.
+
+### Les cas du §6 de la note sur les verrous
+
+Fichier `lock_bench_test.cpp`. Écrits sous les choix tranchés : annonce en tête,
+option A, verrou partagé sur les extrémités. Les erreurs à venir sont reconnues par
+les fragments convenus avec la session cœur C++ :
+- « deadlock » ;
+- « lock » et « timeout », pour `CALL lock_timeout=<ms>` ;
+- « could not serialize » ;
+- « Interrupted » ;
+- `CALL acquire_locks('Table', [clés])`.
+
+Une fonction ou un réglage inconnu (`acquire-locks-exists`, `lock-timeout-exists`) est
+un rouge distinct d'un mauvais comportement. Il est reconnu en premier, puisque son
+message porte le nom demandé.
+
+| § | cas | marche | aujourd'hui |
+|---|---|---|---|
+| 1 | même clé, même ligne (même colonne et autre colonne), suppression contre mise à jour, suppression contre nouvelle relation : le second attend (sa fin d'écriture vient après la fin de la transaction du premier), puis l'erreur nommée, ou il passe si le premier annule | V1, A3′, A4′ | rouge : `waited` partout, plus l'issue propre à chaque cas |
+| 2 | l'unicité quand l'instantané précède le commit de l'autre | A3′ | rouge (`C1_SnapshotPredatesCommit`, existant) |
+| 3 | la même ligne, deux colonnes | A4′ | rouge (`SameRowTwoColumnsSingleThread`, et sa variante qui attend) |
+| 4 | l'interblocage : exactement une erreur « deadlock », l'autre valide | V1 | rouge : pas de « deadlock », un « Write-write conflict » immédiat |
+| 5 | l'annonce {1, 2} contre {2, 1} : aucune erreur, les deux valident l'une après l'autre | V2 | rouge : `acquire_locks` n'existe pas |
+| 6 | le rollback, et la transaction en échec puis ROLLBACK, libèrent le verrou | V1 (avec T0) | rouge : `waited` |
+| 7 | l'interruption (`CALL timeout`) et le délai (`CALL lock_timeout`) pendant une attente, chacun avec son erreur, après le délai | V1 | rouge ; le délai : le réglage n'existe pas |
+| 8 | le nœud-carrefour : huit écrivains, aucun n'attend l'autre | garde-fou de l'écart 3 | **vert**, et doit le rester |
+| 9 | rouvrir puis interroger l'index vectoriel : séquentiel, et pendant le chargement de l'extension (30 fois chacun) | — | vert |
+| 9 bis | index écrit par CHECKPOINT, DROP_VECTOR_INDEX dans le seul journal, mort : le recréer lève « Index … is not loaded yet » | correctif du rejeu | **rouge, déterministe** |
+
+Deux cas dépendaient de l'ordonnancement ; ils sont rendus déterministes sans changer
+ce qu'ils exigeront des verrous :
+- l'interblocage : l'écrivain 1 demande sa seconde ligne 200 ms après l'écrivain 0 ;
+- la transaction en échec : l'attendant écrit après l'instruction en échec du
+  détenteur.
+
+Les quinze cas sont stables sur vingt lancements.
+
+**Les scripts que A4′ devra réécrire** avec mark / waitFor, parce qu'avec l'attente
+leur ordre de commit devient impossible (celui qui attend ne peut pas valider le
+premier) : C5, C6_UpdateCommitsFirst, et les trois C2_*RelationCommitsFirst. C1 passe
+tel quel, avec 2 s d'attente de plus. La note est écrite dans les cas.

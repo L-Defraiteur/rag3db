@@ -232,7 +232,11 @@ l'index (une recherche exhaustive rend exactement les lignes vivantes), l'exécu
 dans un fils (un plantage ou une base qui ne se rouvre plus deviennent des rouges nommés),
 le build du banc avec `-DBUILD_EXTENSIONS=vector`. H1 (deux insertions de vecteurs) est
 vert depuis `b23309848` (A2) ; H3 (voisinages qui se recouvrent) et l'index construit sur
-cent lignes qui perd un nœud sont rouges ; H4 est probabiliste (§6).
+cent lignes qui perd un nœud sont rouges ; H4 est probabiliste (§6). Les témoins des verrous
+(note du 3 octobre, §6) sont fusionnés le même soir (`banc-verrous`, spécification §12) :
+`lock_bench_test.cpp`, rangés dans `known_red.txt` sous la marche qui doit les rendre
+verts (V1, A3′, A4′, V2), avec un rouge distinct quand la fonction n'existe pas encore
+(`acquire_locks`, `lock_timeout`) ; le nœud-carrefour est un garde-fou vert.
 
 **Budget de reprise du lecteur en lecture seule : décidé le 3 octobre, il reste
 à 250 ms** (`PATIENCE_OUVERTURE_MS`). Le pic à 567 ms mesuré à `20a8f6ee8` venait
@@ -696,7 +700,9 @@ sessions, pas d'une vérification.
   rag3weaver retire puis recrée ses index autour d'un chargement en masse.
   `WALReplayer::replayDropCatalogEntryRecord` (`src/storage/wal/wal_replayer.cpp`) ne
   rejoue que l'entrée du catalogue ; le retrait de la table n'est fait qu'à l'exécution,
-  par la fonction de l'extension.
+  par la fonction de l'extension. Cas déterministe au banc de concurrence :
+  `IndexReopen.DropAfterCheckpointThenCrashLeavesAnUnloadedIndex` (rouge, dans
+  `known_red.txt` ; il reproduit le défaut seulement si le processus meurt base ouverte).
 - **L'index vectoriel peut laisser une ligne injoignable dès sa construction**
   (extension vector, trouvé le 3 octobre par la session cœur C++, non corrigé). Une
   ligne indexée qu'aucune recherche n'atteint : un trou de rappel silencieux, sans
@@ -772,6 +778,14 @@ sessions, pas d'une vérification.
   `docs/2-octobre-2026-00h36/02-threadsanitizer-premiere-passe.txt`. Les virements
   qui ne conservaient pas la somme (étape 2) étaient un défaut **du banc**, pas du
   moteur : corrigé.
+- **Une clé primaire en double validée sous le mode multi-écrivains rend la base
+  impossible à rouvrir après un arrêt brutal** (banc, C1, variante Crash, 3 octobre au
+  soir). C'est déterministe : le rejeu refuse le doublon (« Found duplicated primary key
+  value 7 »). Cela **corrige** ce que le banc disait depuis l'étape 2 (« le rejeu
+  réinsère le doublon sans erreur ») : la variante Crash fermait la base proprement avant
+  de tuer le fils, et ne rejouait aucun journal. C'est corrigé, avec un témoin
+  (`journal-to-replay`). La marche A3′ ferme le doublon ; la question de ce que le rejeu
+  doit faire d'un journal qui en porte déjà un reste à poser à la session cœur C++.
 - **Sous le mode multi-écrivains, une table indexée par HNSW peut rendre la base
   inutilisable** (banc de concurrence, cas H4, 3 octobre). Quatre écrivains mélangent
   insertions, suppressions et nouveaux vecteurs sur une table qui porte un index HNSW.

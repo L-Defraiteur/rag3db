@@ -1,5 +1,6 @@
 # Les rouges attendus du banc de concurrence : un nom complet gtest, puis l'ensemble
-# exact des étiquettes « [check: …] » de ses échecs — la raison du rouge.
+# exact des étiquettes « [check: …] » de ses échecs — la raison du rouge. Chaque groupe
+# dit la marche qui doit le rendre vert.
 # La passe compare le résultat à cette liste (test ctest concurrence_test.known_red) :
 # un rouge absent d'ici, un nom d'ici qui passe au vert, ou un rouge connu dont les
 # étiquettes changent (un rouge qui change de cause) la font échouer. Un échec sans
@@ -7,24 +8,26 @@
 # Une ligne ne se retire, ou ne change d'étiquettes, que dans le commit de la marche qui
 # corrige le cas. Les cas probabilistes sont dans probabilistic.txt.
 #
-# C1 — deux insertions de la même clé primaire validées toutes les deux (marche A3).
-# Survit au point de reprise et au rejeu, à l'identique.
+# Marche A3′ (verrou de clé, unicité contre le dernier état validé) — C1 : deux insertions de la
+# même clé validées toutes les deux. Après un VRAI arrêt brutal (variante Crash corrigée le
+# 3 octobre au soir), la base ne se rouvre plus : le rejeu refuse le doublon.
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash database-reopens
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
 Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash database-reopens
 #
-# C1 — la même clé sans chevauchement, depuis un instantané antérieur au commit de
-# l'autre (relecture du cœur C++) : le contrôle d'unicité doit regarder le dernier
-# état validé (marche A3).
+# Marche A3′ — la même clé sans chevauchement, depuis un instantané antérieur au commit de
+# l'autre : le contrôle d'unicité doit regarder le dernier état validé.
 Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
 Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash one-commit,primary-key-index-agrees,primary-key-unique
+Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash database-reopens
 #
-# C2 — relation vers un nœud supprimé par une transaction concurrente (marche A4) :
-# la source, la destination, et la source par DETACH DELETE, dans les deux ordres.
+# Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
+# nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux
+# ordres). C2_DetachRelationCommitsFirst/Thread_Crash : le rejeu « répare » la relation
+# pendante, les réponses changent avant et après l'arrêt.
 Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
@@ -42,12 +45,10 @@ Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Reopen one-commit,
 Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
 Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
+Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Crash one-commit,same-answers
 #
-#
-# C6 — suppression et mise à jour de la même ligne validées toutes les deux ; la
-# mise à jour est perdue. Reproduit sans harnais, dans un seul fil. L'attendu est en
-# suspens jusqu'à la note sur les verrous (voir le commentaire du cas).
+# Marche A4′ — C6 : suppression et mise à jour de la même ligne validées toutes les deux.
+# Attendu sous l'option A (tranchée le 3 octobre) : jamais les deux.
 MinimalReproduction.C6_DeleteCommitsFirstSingleThread not-both-commit
 MinimalReproduction.C6_UpdateCommitsFirstSingleThread not-both-commit
 Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Hot one-commit
@@ -57,20 +58,51 @@ Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot one-commit
 Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen one-commit
 Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
 #
-# Deux mises à jour de la même ligne sur deux colonnes, validées toutes les deux : le
-# conflit n'est cherché que colonne par colonne (relecture du cœur C++ ; marche A4′).
+# Marche A4′ — deux mises à jour de la même ligne sur deux colonnes, validées toutes les
+# deux : le verrou est à la ligne.
 MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
 #
-# H3 — deux suppressions de documents sans rapport, dont les voisinages dans le graphe de
-# l'index se recouvrent : le second reçoit un « Write-write conflict » (la suppression
-# réécrit les arêtes des voisins). Déduit par l'étude HNSW, §3 ; vu le 3 octobre. Rouge
-# tant que la suppression recoud les voisins pendant l'instruction ; la maintenance de
-# l'index au commit (étude, §4) le fera passer au vert.
+# Marche V1 puis A3′ / A4′ — l'attente prouvée par l'ordre des événements (lock_bench_test.cpp,
+# §6.1 de la note) : aujourd'hui l'écriture du second finit aussitôt (étiquette waited).
+LockBench.SameKeyWaitsThenGetsDuplicateKey waited,waiter-does-not-commit,waiter-gets-duplicated-key,waiter-refused
+LockBench.SameKeyWaitsThenInsertsAfterRollback waited
+LockBench.SameRowUpdateWaitsThenGetsSerializationError waited,waiter-gets-serialization-error
+LockBench.SameRowUpdateWaitsThenWritesAfterRollback waited,waiter-commits,waiter-value,waiter-writes
+LockBench.SameRowOtherColumnWaitsThenGetsSerializationError waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
+LockBench.DeleteThenUpdateWaitsThenGetsSerializationError waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
+LockBench.DeleteThenNewRelationWaitsThenGetsSerializationError rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible,waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
+#
+# Marche V1 — l'interblocage : exactement une erreur « deadlock », l'autre valide.
+LockBench.DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits no-immediate-conflict,one-deadlock-error
+#
+# Marche V2 — l'annonce en tête. ROUGE : LA FONCTION N'EXISTE PAS (acquire-locks-exists), en
+# plus du comportement.
+LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn acquire-locks-exists,all-updates,both-commit,in-turn,no-error
+#
+# Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
+LockBench.FailedTransactionReleasesItsLocksAtRollback waited
+#
+# Marche V1 — l'interruption pendant une attente : « Interrupted » après le délai, transaction
+# annulée.
+LockBench.InterruptedWaitGivesInterruptedAndRollsBack waited-the-delay,waiter-gets-interrupted
+#
+# Marche V1 — le délai d'attente d'un verrou. ROUGE : LE RÉGLAGE N'EXISTE PAS
+# (lock-timeout-exists, CALL lock_timeout), en plus du comportement.
+LockBench.LockTimeoutGivesNamedErrorAndRollsBack lock-timeout-exists,waited-the-delay,waiter-gets-lock-timeout
+#
+# Maintenance de l'index HNSW au commit (étude HNSW, §4) — H3 : deux suppressions sans rapport
+# dont les voisinages se recouvrent ; le second reçoit un « Write-write conflict ».
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
 #
-# Un index HNSW construit sur les 100 premières lignes d'embeddings-8-1k.csv laisse le
-# nœud 13 injoignable, sans aucune concurrence. Un cas limite des petits index, pas une
-# proportion du corpus : le nœud manque à 98 et à 100 lignes, pas à 90, 95, 99, 101,
-# 102, 105, 110, 128, 200, ni à mille (session cœur C++ et balayage du banc, 3 octobre).
+# Correctif de la construction HNSW — un index construit sur les 100 premières lignes
+# d'embeddings-8-1k.csv laisse le nœud 13 injoignable, sans aucune concurrence. Un cas limite
+# des petits index : à 98 et à 100 lignes, pas à 90, 95, 99, 101, 102, 105, 110, 128, 200, ni
+# à mille.
 MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete
+#
+# Correctif du rejeu de DROP_VECTOR_INDEX — un index écrit par CHECKPOINT puis supprimé dans
+# le seul journal, et la mort du processus : au rejeu, le catalogue n'a plus l'index mais la
+# table garde un exemplaire non chargé, et le recréer lève « Index … is not loaded yet »
+# (cause isolée par la session de l'arbre principal, 3 octobre).
+IndexReopen.DropAfterCheckpointThenCrashLeavesAnUnloadedIndex index-loaded,index-recreated,query-succeeds
