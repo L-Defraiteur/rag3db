@@ -124,10 +124,27 @@ IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError wa
 # N'EXISTE PAS (acquire-locks-exists).
 IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks-exists,both-commit,in-turn,no-error
 #
-# MODE EN SERVICE (un seul écrivain) — correctif du rejeu dans une table indexée par HNSW :
-# un index créé dans la session qui meurt (même suivi d'un CHECKPOINT), puis une insertion
-# ou une suppression, puis la mort : la base fait planter le processus qui l'ouvre
-# (SIGSEGV dans NodeTable::initInsertState au rejeu, avant tout LOAD EXTENSION). Vu par
-# une ouverture dans un processus neuf, comme un service qui redémarre (3 octobre au soir).
+# MARCHE « REPRISE AVEC INDEX D'EXTENSION » — mode en service, un seul écrivain ; à part des
+# verrous. Le journal ne porte plus le LOAD EXTENSION (un point de reprise après le
+# chargement de l'extension, ou la création d'un index, qui en écrit un), puis une écriture
+# dans la table indexée, puis la mort : la base fait planter le processus qui l'ouvre
+# (SIGSEGV dans NodeTable::initInsertState au rejeu, avant tout LOAD EXTENSION). Vu par une
+# ouverture dans un processus neuf, comme un service qui redémarre (3 octobre au soir).
+# Garde 1 : la base s'ouvre avec toutes ses lignes, l'index « à rebâtir » le dit par une
+# erreur nommée (fragment provisoire « rebuild ») ; garde 2 : l'index est juste sans
+# rebâtir. Quand la garde 2 arrivera, les témoins IndexToRebuildIsNamed deviendront rouges
+# pour une autre raison : elle les retirera dans son commit.
 SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery database-opens-without-crash
 SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact database-opens-without-crash
+Writes/ExtensionIndexRecovery.OpensWithEveryCommittedRow/Insert database-opens-without-crash
+Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/Insert database-opens-without-crash
+Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert database-opens-without-crash
+Writes/ExtensionIndexRecovery.SecondDeathAfterRecovery/Insert database-opens-without-crash
+Writes/ExtensionIndexRecovery.OpensWithEveryCommittedRow/Delete database-opens-without-crash
+Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/Delete database-opens-without-crash
+Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete database-opens-without-crash
+Writes/ExtensionIndexRecovery.SecondDeathAfterRecovery/Delete database-opens-without-crash
+# La mise à jour d'un vecteur ne plante pas et l'index reste exact ; seul le témoin de la
+# garde 1 est rouge (la recherche ne refuse rien) — question posée à la session cœur C++ :
+# la garde 1 doit-elle s'appliquer quand l'index est juste ?
+Writes/ExtensionIndexRecovery.IndexToRebuildIsNamed/UpdateVector create-names-index-to-rebuild,search-names-index-to-rebuild

@@ -489,3 +489,33 @@ correctif ; la session cœur C++ a le cas minimal et la pile.
 La sonde ne rend que les plantages. Une ouverture qui échoue par une erreur, comme le
 doublon de C1 au rejeu, reste le rouge `database-reopens`, nommé par la réouverture
 ordinaire.
+
+### La reprise avec un index d'extension : la condition élargie, et les gardes
+
+La session cœur C++ a élargi la condition. Le plantage à l'ouverture ne tient pas à la
+création de l'index dans la session morte. Il tient à ce que **le journal ne porte plus
+le `LOAD EXTENSION`** : n'importe quel point de reprise après le chargement de
+l'extension, puis une écriture dans la table indexée, puis la mort. La création d'index
+plantait toujours parce qu'elle écrit elle-même un point de reprise.
+
+Le fixture `ExtensionIndexRecovery` est paramétré par l'écriture (insertion,
+suppression, mise à jour d'un vecteur). L'index vient d'une session précédente ; la
+session suivante charge l'extension, fait un `CHECKPOINT`, écrit, puis meurt. Quatre
+tests par écriture, stables sur trois passes :
+
+| test | insertion | suppression | mise à jour d'un vecteur |
+|---|---|---|---|
+| la base s'ouvre avec toutes ses lignes (commun aux deux gardes) | rouge : plante à l'ouverture | rouge : idem | vert |
+| garde 1 : l'index « à rebâtir » est nommé à la recherche et à la création, et DROP puis CREATE le rebâtissent | rouge : idem | rouge : idem | rouge : la recherche ne refuse rien |
+| garde 2 : l'index est juste sans rebâtir | rouge : idem | rouge : idem | vert |
+| une seconde mort après la première réouverture | rouge : idem | rouge : idem | vert |
+
+Le nom de l'erreur de la garde 1 est demandé à la session cœur C++. En attendant, le
+fragment provisoire est « rebuild ». La mise à jour d'un vecteur se reprend déjà juste ;
+reste à savoir si la garde 1 doit s'y appliquer, question posée. Quand la garde 2
+arrivera, elle retirera les témoins de la garde 1, qui deviendront rouges pour une autre
+raison.
+
+Une première version de ces cas comptait mal les vecteurs mis à jour : 58 lignes
+d'origine avaient déjà 7 en première composante. Le banc a été isolé avant d'accuser le
+moteur : les mises à jour survivaient bien au rejeu.

@@ -636,6 +636,188 @@ TEST_F(SingleWriterCrash, DeathDuringDeletesOfAnIndexFromAnEarlierSessionKeepsTh
     }
 }
 
+// ── La reprise avec un index d'extension (marche à part, pas les verrous) ─────────────
+// Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à
+// l'ouverture vient de ce que le journal ne porte plus le LOAD EXTENSION — n'importe quel
+// point de reprise après le chargement de l'extension, puis une écriture dans la table
+// indexée, puis la mort. (La création d'index plantait toujours parce qu'elle écrit
+// elle-même un point de reprise.) Ici : l'index vient d'une session précédente ; la
+// session suivante charge l'extension, fait un CHECKPOINT, écrit, et meurt.
+// Les attendus des deux gardes que la session cœur C++ code :
+// - garde 1 : la base s'ouvre avec toutes ses lignes validées, l'index est « à rebâtir » :
+//   la recherche et la création refusent par une erreur nommée (fragment provisoire
+//   « rebuild », en attendant son nom), DROP puis CREATE le rebâtissent ;
+// - garde 2, plus tard : l'index est juste dès la réouverture, sans rebâtir. Quand elle
+//   arrivera, les témoins de la garde 1 (IndexToRebuildIsNamed) deviendront rouges : la
+//   garde 2 les retirera dans son commit.
+enum class IndexedWrite { Insert, Delete, UpdateVector };
+
+std::string indexedWriteName(IndexedWrite write) {
+    switch (write) {
+    case IndexedWrite::Insert:
+        return "Insert";
+    case IndexedWrite::Delete:
+        return "Delete";
+    case IndexedWrite::UpdateVector:
+        return "UpdateVector";
+    }
+    return "?";
+}
+
+class ExtensionIndexRecovery : public SingleWriterCrash,
+                               public ::testing::WithParamInterface<IndexedWrite> {
+public:
+    static constexpr int64_t NUM_DOCS = 1000;
+
+    // L'index, créé dans une session précédente, fermée proprement.
+    void createIndexInAnEarlierSession() {
+        conn.reset();
+        database.reset();
+        rag3db::main::Database earlier(databasePath, *systemConfig);
+        rag3db::main::Connection connection(&earlier);
+        loadVectorExtension(connection);
+        mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
+        mustQuery(connection, stringFormat("UNWIND range(0, {}) AS i CREATE (:Doc {id: i, vec: "
+                                           "[CAST(i % 17 AS FLOAT), CAST(i % 23 AS FLOAT), "
+                                           "CAST(i % 29 AS FLOAT), CAST(i AS FLOAT)]});",
+                                  NUM_DOCS - 1));
+        mustQuery(connection,
+            "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    }
+
+    // L'écriture du cas, dans une session qui a chargé l'extension puis fait un
+    // point de reprise ; « round » décale les lignes touchées pour une seconde mort.
+    static void writeAfterCheckpoint(rag3db::main::Connection& connection, IndexedWrite write,
+        int64_t round) {
+        loadVectorExtension(connection);
+        mustQuery(connection, "CALL auto_checkpoint=false;");
+        mustQuery(connection, "CHECKPOINT;");
+        const auto first = round * 20;
+        switch (write) {
+        case IndexedWrite::Insert:
+            mustQuery(connection,
+                stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: [9.0, 9.0, "
+                             "9.0, CAST(i AS FLOAT)]});",
+                    5000 + first, 5000 + first + 19));
+            break;
+        case IndexedWrite::Delete:
+            mustQuery(connection, stringFormat("MATCH (n:Doc) WHERE n.id >= {} AND n.id < {} "
+                                               "DELETE n;",
+                                      first, first + 20));
+            break;
+        case IndexedWrite::UpdateVector:
+            mustQuery(connection, stringFormat("MATCH (n:Doc) WHERE n.id >= {} AND n.id < {} "
+                                               "SET n.vec = [7.0, 7.0, 7.0, 7.0];",
+                                      100 + first, 100 + first + 20));
+            break;
+        }
+    }
+
+    // Ce que la table doit contenir après « rounds » écritures validées.
+    void expectEveryCommittedRow(IndexedWrite write, int64_t rounds) {
+        const auto expected = write == IndexedWrite::Insert ? NUM_DOCS + 20 * rounds :
+                              write == IndexedWrite::Delete ? NUM_DOCS - 20 * rounds :
+                                                              NUM_DOCS;
+        EXPECT_EQ(queryInt("MATCH (n:Doc) RETURN count(n);"), expected) << "[check: row-count] ";
+        if (write == IndexedWrite::UpdateVector) {
+            // Le vecteur entier, à partir de l'identifiant 100 : 58 lignes d'origine ont
+            // déjà 7 en première composante, et l'identifiant 7 vaut [7, 7, 7, 7].
+            EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 100 AND n.vec = [7.0, 7.0, 7.0, "
+                               "7.0] RETURN count(n);"),
+                20 * rounds)
+                << "[check: updated-vectors] ";
+        }
+    }
+
+    // Ouvre après une mort, comme un service qui redémarre : processus neuf, puis
+    // réouverture ici, l'extension chargée.
+    bool reopenAfterDeath() { return reopen(true /* vectorExtension */); }
+
+    void dieAfterWriting(IndexedWrite write, int64_t round) {
+        runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+            writeAfterCheckpoint(connection, write, round);
+        });
+        expectJournalToReplay();
+    }
+};
+
+// Commun aux deux gardes : la base s'ouvre, sans planter, avec toutes ses lignes validées.
+TEST_P(ExtensionIndexRecovery, OpensWithEveryCommittedRow) {
+    createIndexInAnEarlierSession();
+    dieAfterWriting(GetParam(), 0);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    expectEveryCommittedRow(GetParam(), 1);
+}
+
+// Garde 1 : l'index est « à rebâtir », et le dit par une erreur nommée à la recherche
+// comme à la création ; DROP puis CREATE le rebâtissent, exact.
+TEST_P(ExtensionIndexRecovery, IndexToRebuildIsNamed) {
+    createIndexInAnEarlierSession();
+    dieAfterWriting(GetParam(), 0);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    auto search = conn->query(
+        "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN node.id;");
+    const auto searchError = search->isSuccess() ? "" : search->getErrorMessage();
+    std::cerr << "  search: " << (searchError.empty() ? "ok" : searchError) << "\n";
+    EXPECT_TRUE(containsIgnoringCase(searchError, "rebuild"))
+        << "[check: search-names-index-to-rebuild] ";
+    auto create = conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := "
+                              "'l2', skip_if_exists := true);");
+    const auto createError = create->isSuccess() ? "" : create->getErrorMessage();
+    std::cerr << "  create: " << (createError.empty() ? "ok" : createError) << "\n";
+    EXPECT_TRUE(containsIgnoringCase(createError, "rebuild"))
+        << "[check: create-names-index-to-rebuild] ";
+    auto drop = conn->query("CALL DROP_VECTOR_INDEX('Doc', 'doc_index');");
+    auto rebuild =
+        conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    EXPECT_TRUE(drop->isSuccess() && rebuild->isSuccess())
+        << "[check: drop-and-create-rebuild] "
+        << (drop->isSuccess() ? rebuild->getErrorMessage() : drop->getErrorMessage());
+    drop.reset();
+    rebuild.reset();
+    search.reset();
+    create.reset();
+    expectIntegrity();
+}
+
+// Garde 2, plus tard : l'index est juste dès la réouverture, sans rebâtir.
+TEST_P(ExtensionIndexRecovery, IndexExactWithoutRebuild) {
+    createIndexInAnEarlierSession();
+    dieAfterWriting(GetParam(), 0);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    auto search = conn->query(
+        "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN node.id;");
+    EXPECT_TRUE(search->isSuccess()) << "[check: search-works] " << search->getErrorMessage();
+    search.reset();
+    expectIntegrity();
+}
+
+// Une seconde mort après la première réouverture : ouverture, écriture, mort, ouverture.
+TEST_P(ExtensionIndexRecovery, SecondDeathAfterRecovery) {
+    createIndexInAnEarlierSession();
+    dieAfterWriting(GetParam(), 0);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    dieAfterWriting(GetParam(), 1);
+    if (!reopenAfterDeath()) {
+        return;
+    }
+    expectEveryCommittedRow(GetParam(), 2);
+}
+
+INSTANTIATE_TEST_SUITE_P(Writes, ExtensionIndexRecovery,
+    ::testing::Values(IndexedWrite::Insert, IndexedWrite::Delete, IndexedWrite::UpdateVector),
+    [](const ::testing::TestParamInfo<IndexedWrite>& info) {
+        return indexedWriteName(info.param);
+    });
+
 // Le processus neuf d'une sonde d'ouverture (probeOpenInFreshProcess) : lancé par exec du
 // banc lui-même, il ouvre la base dont le chemin est dans CONCURRENCE_OPEN_PROBE, charge
 // l'extension vector si on le lui demande, fait une requête, et sort. Sauté dans une passe

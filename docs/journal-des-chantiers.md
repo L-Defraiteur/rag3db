@@ -799,7 +799,13 @@ sessions, pas d'une vérification.
   pile chez la session cœur C++. Les autres correctifs de reprise tiennent sous un vrai
   arrêt : enregistrements de plus de 4 Ko, fin déchirée, mort à cinq instants d'un point
   de reprise, point de reprise échoué, COPY tout ou rien, suppressions d'A5 (spécification
-  du banc, §13).
+  du banc, §13). **Condition élargie** (session cœur C++) : ce n'est pas la création
+  de l'index dans la session morte, c'est un journal qui ne porte plus le `LOAD
+  EXTENSION` — n'importe quel point de reprise après son chargement, puis une insertion
+  ou une suppression dans la table indexée, puis la mort. La mise à jour d'un vecteur,
+  elle, se reprend juste. Témoins au banc, avec une seconde mort et les attendus des deux
+  gardes (« à rebâtir » nommé, puis index juste sans rebâtir), sous la marche à part
+  « reprise avec index d'extension » de `known_red.txt`.
 - **Une clé primaire en double validée sous le mode multi-écrivains rend la base
   impossible à rouvrir après un arrêt brutal** (banc, C1, variante Crash, 3 octobre au
   soir). C'est déterministe : le rejeu refuse le doublon (« Found duplicated primary key
