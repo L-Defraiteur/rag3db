@@ -4,7 +4,7 @@ Session « embarquements » : worktree `/home/lucied/git_workspaces/rag3db-embar
 (crate `extension/rag3weaver`), target à elle dans ce worktree. Elle tient le
 service de modèles sur l'autre poste, le régulateur d'écran, l'estimation et
 l'indexation en fond, l'état d'avancement, la déclaration commune des modèles,
-et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 0 h 45.
+et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 2 h.
 
 ## Fait aujourd'hui, sur master
 
@@ -24,6 +24,7 @@ Dans l'ordre de fusion.
 | `0330578b6`, `3645e0799` | **Lot 6 : le modèle de langage** dans la déclaration commune (`models.llm`), posé dans le chat par la session du chat | Dernière capacité hors de la déclaration ; éprouvé de bout en bout avec Gemini par Vertex. |
 | `45c88e3a5` | **L'invariant des vecteurs** (`tests/e2e_invariant_des_vecteurs.rs`), la dette périmée, `write_vectors` | Lot de l'orchestration : le moteur perd des lignes de l'index HNSW quand un `SET` remplace un vecteur. La suite a surtout trouvé un défaut à nous — voir plus bas. |
 | `3da4bb05a` | **Fichiers générés écartés avec leur raison** (`src/generated.rs`, `workspace.generated`) | Lot de l'orchestration : 95 fichiers et 5,4 Mo sur ce dépôt n'apprennent rien à un agent. Deux signaux sur trois ; détail dans la page 03. |
+| `867ce5560` | **Le signal creux dans `IndexState`** (`sparse` : niveau et pourcentage, à part du dense) | Demande de la session du chat : la dette creuse était comptée mais invisible à la ligne d'état et au mode auto. |
 | `1d3319f65`, `a7b241faa` | **Profil d'ingestion complet** (`src/ingest_profile.rs`, `[sync-profile]`, `[ingest-total]`) | 140 s de l'indexation n'étaient dans aucune ligne de profil. |
 
 Les pages : `docs/3-octobre-2026-14h26/01` (une seule carte partagée avec
