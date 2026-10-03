@@ -64,6 +64,47 @@ fn check_relative(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Le chemin complet d'un fichier du workspace, **réellement** sous la
+/// racine : un lien symbolique dont la cible canonisée sort de la racine
+/// n'est ni lu ni écrit à travers — le produit cloud charge des dépôts
+/// inconnus, et un lien vers `/etc/…` sortirait par la lecture puis par
+/// l'index. `check_relative` garde le texte (`..`, absolu) ; ici c'est le
+/// disque qui décide : le maillon existant le plus profond, canonisé, doit
+/// rester sous la racine canonisée — la canonisation résout toute la chaîne
+/// de liens d'un coup. Un chemin dont rien n'existe ne détourne rien.
+fn full_path_within(root: &Path, rel: &str) -> Result<PathBuf, String> {
+    let full = root.join(rel);
+    let root_canon = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let mut link = full.as_path();
+    while link != root {
+        // `symlink_metadata` d'abord : un lien **mort** existe sans que sa
+        // cible existe, et `canonicalize` ne sait rien en dire — mais une
+        // écriture le suivrait et **créerait** la cible, hors du projet.
+        // Strict : un agent n'a aucune raison d'écrire à travers un lien mort.
+        if let Ok(meta) = link.symlink_metadata() {
+            match link.canonicalize() {
+                Ok(canon) if canon.starts_with(&root_canon) => break,
+                Ok(_) => {
+                    return Err(format!(
+                        "'{rel}' traverse un lien symbolique qui sort du projet — hors de portée"
+                    ));
+                }
+                Err(_) if meta.file_type().is_symlink() => {
+                    return Err(format!(
+                        "'{rel}' traverse un lien symbolique mort — hors de portée"
+                    ));
+                }
+                Err(e) => return Err(format!("'{rel}' : {e}")),
+            }
+        }
+        match link.parent() {
+            Some(parent) => link = parent,
+            None => break,
+        }
+    }
+    Ok(full)
+}
+
 /// **La règle des secrets** : un chemin qui ressemble à un secret ne part ni
 /// dans l'index ni dans une liste de fichiers. Rend la raison, nommée. Une
 /// seule liste pour tout le crate — l'estimation d'une indexation la reprend.
@@ -131,6 +172,7 @@ impl WorkingTree {
     pub fn list_with_exclusions(&self) -> Result<(Vec<String>, Vec<(String, &'static str)>), String> {
         let mut out = Vec::new();
         let mut ecartes = Vec::new();
+        let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
         let walker = ignore::WalkBuilder::new(&self.root)
             .hidden(false)
             .filter_entry(|e| {
@@ -140,9 +182,31 @@ impl WorkingTree {
             .build();
         for entry in walker {
             let entry = entry.map_err(|e| format!("{}: {e}", self.root.display()))?;
+            let path = entry.path();
+            let rel = path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().to_string();
+            // La marche ne suit pas les liens : ils arrivent ici comme liens,
+            // et c'est leur cible canonisée qui décide. Sous la racine, un
+            // lien-fichier est un fichier du projet ; dehors, il est écarté
+            // avec sa raison — l'estimation le comptera, comme un secret
+            // probable. (Un lien-dossier interne n'est pas parcouru : le
+            // chargement des sources ne le suit pas non plus.)
+            if entry.path_is_symlink() {
+                match path.canonicalize() {
+                    Ok(canon) if canon.starts_with(&root_canon) => {
+                        if canon.is_file() {
+                            match probable_secret(&rel) {
+                                Some(raison) => ecartes.push((rel, raison)),
+                                None => out.push(rel),
+                            }
+                        }
+                    }
+                    Ok(_) => ecartes.push((rel, "lien symbolique hors du projet")),
+                    // Un lien mort ne montre rien : rien à lister.
+                    Err(_) => {}
+                }
+                continue;
+            }
             if entry.file_type().is_some_and(|t| t.is_file()) {
-                let path = entry.path();
-                let rel = path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().to_string();
                 match probable_secret(&rel) {
                     Some(raison) => ecartes.push((rel, raison)),
                     None => out.push(rel),
@@ -167,16 +231,27 @@ impl FileSource for WorkingTree {
         if !self.all_files {
             return self.list_respecting_rules();
         }
-        fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
+        fn walk(dir: &Path, root: &Path, root_canon: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
             for entry in std::fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
                 let name = entry.file_name().to_string_lossy().to_string();
+                // `is_dir`/`is_file` suivent les liens : un lien sortant
+                // serait listé. La cible canonisée décide, comme dans la
+                // marche par défaut — et un lien-dossier n'est pas parcouru.
+                if entry.file_type()?.is_symlink() {
+                    if let Ok(canon) = path.canonicalize() {
+                        if canon.starts_with(root_canon) && canon.is_file() {
+                            out.push(path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string());
+                        }
+                    }
+                    continue;
+                }
                 if path.is_dir() {
                     if SKIPPED_DIRS.contains(&name.as_str()) || name.starts_with('.') {
                         continue;
                     }
-                    walk(&path, root, out)?;
+                    walk(&path, root, root_canon, out)?;
                 } else if path.is_file() {
                     out.push(path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string());
                 }
@@ -184,13 +259,14 @@ impl FileSource for WorkingTree {
             Ok(())
         }
         let mut out = Vec::new();
-        walk(&self.root, &self.root, &mut out).map_err(|e| format!("{}: {e}", self.root.display()))?;
+        let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
+        walk(&self.root, &self.root, &root_canon, &mut out).map_err(|e| format!("{}: {e}", self.root.display()))?;
         out.sort();
         Ok(out)
     }
     fn read(&self, path: &str) -> Result<Option<String>, String> {
         check_relative(path)?;
-        let full = self.root.join(path);
+        let full = full_path_within(&self.root, path)?;
         match std::fs::read(&full) {
             Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -201,7 +277,7 @@ impl FileSource for WorkingTree {
     /// lecteur concurrent voit l'ancien ou le nouveau, jamais un mélange.
     fn write(&self, path: &str, content: &str) -> Result<(), String> {
         check_relative(path)?;
-        let full = self.root.join(path);
+        let full = full_path_within(&self.root, path)?;
         if let Some(parent) = full.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
@@ -1289,6 +1365,91 @@ mod tests {
         assert!(ToolFormat::parse("md").is_err(), "l'enum de la fiche dit markdown | json, le parseur aussi");
     }
 
+
+    /// **Un lien dont la cible sort de la racine n'est ni listé, ni lu, ni
+    /// écrit à travers.** Le produit cloud téléchargera des dépôts inconnus :
+    /// un lien vers `/etc/…` entrerait dans l'index et sortirait par la
+    /// recherche. Il figure dans les écartés, avec sa raison — comme un
+    /// secret probable.
+    #[cfg(unix)]
+    #[test]
+    fn un_lien_qui_sort_ne_se_lit_ni_ne_s_ecrit_ni_ne_se_liste() {
+        let racine = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        std::fs::write(dehors.path().join("secret.txt"), "dehors").unwrap();
+        std::os::unix::fs::symlink(dehors.path().join("secret.txt"), racine.path().join("lien.txt"))
+            .unwrap();
+        std::os::unix::fs::symlink(dehors.path(), racine.path().join("sortie")).unwrap();
+        let arbre = WorkingTree::new(racine.path());
+
+        let e = arbre.read("lien.txt").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+        // Le lien peut être un dossier au milieu du chemin : même refus.
+        let e = arbre.read("sortie/secret.txt").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+
+        let e = arbre.write("lien.txt", "écrasé").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+        assert_eq!(
+            std::fs::read_to_string(dehors.path().join("secret.txt")).unwrap(),
+            "dehors",
+            "rien n'a traversé"
+        );
+
+        let (fichiers, ecartes) = arbre.list_with_exclusions().unwrap();
+        assert!(!fichiers.iter().any(|f| f.contains("lien") || f.contains("sortie")), "{fichiers:?}");
+        assert!(
+            ecartes.iter().any(|(f, r)| f == "lien.txt" && r.contains("lien symbolique")),
+            "{ecartes:?}"
+        );
+
+        let tout = WorkingTree::new(racine.path()).all_files().list().unwrap();
+        assert!(!tout.iter().any(|f| f.contains("lien") || f.contains("sortie")), "{tout:?}");
+    }
+
+    /// **Un lien mort se refuse strictement.** Sa cible n'existe pas encore,
+    /// donc la canonisation ne dit rien — mais `std::fs::write` le suivrait
+    /// et **créerait** la cible, hors du projet. Un agent n'a aucune raison
+    /// d'écrire à travers un lien mort.
+    #[cfg(unix)]
+    #[test]
+    fn un_lien_mort_ne_se_traverse_pas() {
+        let racine = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        let cible = dehors.path().join("nouveau.txt");
+        std::os::unix::fs::symlink(&cible, racine.path().join("piege.txt")).unwrap();
+        std::os::unix::fs::symlink(dehors.path().join("inexistant"), racine.path().join("sortie-morte"))
+            .unwrap();
+        let arbre = WorkingTree::new(racine.path());
+
+        let e = arbre.write("piege.txt", "créé dehors").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+        assert!(!cible.exists(), "rien n'a été créé hors du projet");
+
+        // Le lien-dossier mort à mi-chemin : même refus, rien de créé.
+        let e = arbre.write("sortie-morte/x.txt", "créé dehors").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+        assert!(!dehors.path().join("inexistant").exists(), "{e}");
+
+        let e = arbre.read("piege.txt").unwrap_err();
+        assert!(e.contains("lien symbolique"), "{e}");
+    }
+
+    /// Un lien **interne** — cible sous la racine — continue de marcher : il
+    /// se lit et il est listé. C'est l'état du dépôt de l'utilisateur.
+    #[cfg(unix)]
+    #[test]
+    fn un_lien_interne_continue_de_marcher() {
+        let racine = tempfile::tempdir().unwrap();
+        std::fs::write(racine.path().join("vrai.txt"), "dedans").unwrap();
+        std::os::unix::fs::symlink(racine.path().join("vrai.txt"), racine.path().join("alias.txt"))
+            .unwrap();
+        let arbre = WorkingTree::new(racine.path());
+        assert_eq!(arbre.read("alias.txt").unwrap().as_deref(), Some("dedans"));
+        let (fichiers, ecartes) = arbre.list_with_exclusions().unwrap();
+        assert!(fichiers.contains(&"alias.txt".to_string()), "{fichiers:?}");
+        assert!(ecartes.is_empty(), "{ecartes:?}");
+    }
 
     fn snapshot() -> Snapshot {
         Snapshot::new(
