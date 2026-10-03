@@ -220,3 +220,47 @@ True
 -STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 20, efs := 500) RETURN count(node.id);
 ---- 1
 12
+
+# Les points d'entrée de l'index vivent hors transaction. Une suppression annulée par
+# ROLLBACK rend les lignes et leurs arêtes, pas le point d'entrée qu'elle avait retiré :
+# l'index se croyait vide et ne rendait plus rien, et l'insertion suivante commençait un
+# graphe neuf qui n'atteignait pas les anciens nœuds.
+-CASE DeleteAllThenRollback
+-LOAD_DYNAMIC_EXTENSION vector
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index','vec', metric := 'l2');
+---- ok
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH (e:embeddings) DELETE e;
+---- ok
+-STATEMENT ROLLBACK;
+---- ok
+-STATEMENT MATCH (e:embeddings) RETURN count(e);
+---- 1
+1000
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+333
+444
+133
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 1000, efs := 2000) RETURN count(node.id);
+---- 1
+1000
+-STATEMENT UNWIND range(5000, 5010) AS i CREATE (:embeddings {id: i, vec: [9.0,9.0,9.0,9.0,9.0,9.0,9.0,9.0]});
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+333
+444
+133
+-STATEMENT CALL QUERY_VECTOR_INDEX('embeddings', 'e_hnsw_index', [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557], 1011, efs := 3000) RETURN count(node.id);
+---- 1
+1011
