@@ -1912,3 +1912,49 @@ fn une_mise_a_jour_au_niveau_donnee_laisse_une_dette_de_decoupage_qui_se_solde()
     let encore = catalog.lock().unwrap().rattraper_le_decoupage(None, 512, false).expect("rattrapage");
     assert_eq!(encore, 0, "plus rien en retard");
 }
+
+/// **L'avancement se lit en base** : après une ingestion arrêtée au plein
+/// texte, tous les morceaux attendent leur vecteur et la ligne le dit ; une
+/// fois la dette soldée, elle dit que c'est prêt. Le débit noté se relit.
+#[test]
+#[ignore]
+fn l_avancement_de_l_index_se_lit_en_base() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    use rag3weaver::estimate::Rate;
+
+    let mut catalog = setup_simple_catalog(4);
+    let vide = catalog.index_progress().expect("avancement d'un index vide");
+    assert!(vide.complete(), "{vide:?}");
+
+    catalog
+        .ingest_entities_jusqu_a(
+            "Product",
+            vec![
+                make_product("Rust Book", "A comprehensive guide to Rust programming language.", "Memory safety.", 49.99),
+                make_product("French Chef Knife", "Professional kitchen knife.", "Slicing and dicing.", 129.99),
+            ],
+            D::RECHERCHE_TEXTE,
+        )
+        .expect("ingestion jusqu'au plein texte");
+
+    let avant = catalog.index_progress().expect("avancement");
+    eprintln!("[avancement] {}", avant.line(None, 500));
+    assert!(avant.chunks() >= 2, "{avant:?}");
+    assert_eq!(avant.dense_missing(), avant.chunks(), "aucun vecteur n'est encore là : {avant:?}");
+    assert_eq!(avant.dense_percent(), 0);
+    assert!(avant.line(None, 500).starts_with("plein texte prêt · vecteurs 0 sur"), "{}", avant.line(None, 500));
+
+    let soldes = catalog.embarquer_le_retard(D::TOUT, 512, None).expect("rattrapage");
+    assert_eq!(soldes, avant.chunks());
+    let apres = catalog.index_progress().expect("avancement");
+    eprintln!("[avancement] {}", apres.line(None, 500));
+    assert_eq!(apres.dense_missing(), 0, "{apres:?}");
+    assert!(apres.line(None, 500).contains("vecteurs prêts"), "{}", apres.line(None, 500));
+
+    // Le débit mesuré se note et se relit ; le dernier remplace le précédent.
+    assert_eq!(catalog.embedding_rate("granite-278m", "local").unwrap(), None);
+    catalog.note_embedding_rate("granite-278m", "local", Rate { chars_per_second: 78_000.0 }).unwrap();
+    catalog.note_embedding_rate("granite-278m", "local", Rate { chars_per_second: 81_500.0 }).unwrap();
+    assert_eq!(catalog.embedding_rate("granite-278m", "local").unwrap(), Some(Rate { chars_per_second: 81_500.0 }));
+    assert_eq!(catalog.embedding_rate("granite-278m", "127.0.0.1:7979").unwrap(), None);
+}
