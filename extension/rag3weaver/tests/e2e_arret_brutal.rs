@@ -821,12 +821,33 @@ fn une_mort_apres_insertion_vectorielle() {
         // donc rien de la réparation n'a été éprouvé. Taire ce cas, c'est
         // rendre un vert qui parle d'autre chose que de la question posée —
         // ce qui est précisément arrivé la veille.
+        //
+        // **Et ce rouge deviendra l'attendu**, le jour où la garde 2 du cœur
+        // C++ arrivera (le rejeu charge l'extension avant de rejouer) : l'index
+        // sera juste dès la réouverture, sans rien rebâtir. Annoncé par la
+        // session cœur C++ le 4 octobre 2026.
+        //
+        // **Mais ce ne sera pas une simple inversion**, et c'est le piège à
+        // éviter ce jour-là. La garde 2 ne peut que demander au rejeu de
+        // charger ce qui est noté : si le chargement échoue — un déploiement
+        // qui oublie le fichier d'extension, un chemin qui bouge, une version
+        // qui ne se charge plus —, le rejeu continue sans elle et c'est la
+        // garde 1 qui joue. Donc l'attendu devient **l'un ou l'autre selon que
+        // l'extension se charge**, et ce témoin-ci devra être joué en deux
+        // variantes : fichier d'extension en place (sain d'emblée) et fichier
+        // déplacé avant la réouverture (détaché puis rebâti).
+        //
+        // Ce cas-là n'est pas écrit aujourd'hui, exprès : un attendu écrit pour
+        // un remède qu'on n'a pas vu est un attendu qu'il faudra réécrire. Ce
+        // qui est écrit, c'est qu'il **manque**.
         Verdict::OuvreEtJuste { lignes } => panic!(
             "le témoin n'a pas atteint l'état qu'il éprouve : l'index n'était pas détaché \
              ({lignes} lignes, base ouverte, recherche vectorielle déjà saine avant le \
              montage). La réparation n'est donc **pas** mesurée par cette exécution. \
              Vérifier que le journal a bien été replié avant la mort (le `CHECKPOINT` du \
-             scénario « insertion »).\ndossier conservé : {}",
+             scénario « insertion »). SI LA GARDE 2 DU CŒUR C++ EST ARRIVÉE, ce n'est \
+             pas un échec : l'attendu de ce cas devient `OuvreEtJuste`, et c'est cette \
+             branche qu'il faut inverser.\ndossier conservé : {}",
             dossier.display()
         ),
         // L'index est resté détaché après le montage : la réparation

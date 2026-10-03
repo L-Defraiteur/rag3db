@@ -48,6 +48,7 @@ pub mod code_nodes;
 #[cfg(feature = "code")]
 pub mod index_nodes;
 pub mod catalog_read;
+pub mod react_nodes;
 pub mod usage_nodes;
 pub mod neighborhood_nodes;
 /// **Le balayage des fichiers** : la recherche quand l'index ne sait pas (encore).

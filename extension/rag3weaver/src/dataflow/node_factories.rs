@@ -1416,6 +1416,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
+    registry.register(Box::new(super::react_nodes::ReactTransitionNodeFactory));
     registry.register(Box::new(super::usage_nodes::UsagesNodeFactory));
     registry.register(Box::new(super::neighborhood_nodes::NeighborhoodNodeFactory));
     registry.register(Box::new(FieldWeightNodeFactory));
@@ -1476,7 +1477,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 43 + if cfg!(feature = "code") { 13 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 44 + if cfg!(feature = "code") { 13 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1676,6 +1677,7 @@ mod tests {
                 "SelectRecordsNode" => serde_json::json!({"entity":"Product","filter":{"field":{"key":"name","value":"x"}}}),
                 "RelatedResultsNode" => serde_json::json!({"signal":"related"}),
                 "FetchRelatedNode" => serde_json::json!({ "relation": "HAS_VARIANT" }),
+                "ReactTransitionNode" => serde_json::json!({ "target": "Memory", "transition": "review", "relation": "ANCHORED_TO" }),
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),
                 "FlushNode" | "SparseCommitNode" => serde_json::json!({ "table": "Product" }),
