@@ -1,0 +1,12 @@
+%% tool: estimate
+%% description: Dit ce que coûtera l'indexation du projet AVANT de la lancer : fichiers retenus et écartés (avec la raison), modèle d'embarquement choisi et pourquoi, durée prévue des vecteurs, et si `index` demandera une confirmation. N'écrit rien. À prendre avant `index`, et chaque fois qu'on doute de ce qu'un dossier contient.
+%% param: probe bool = true -- Sonder le débit de l'embarqueur (une à deux secondes) si aucun n'est encore noté ; sans cela la durée est dite inconnue.
+%% result: estimate.result
+%%
+%% **Une lecture.** Les fichiers sont comptés par leur nom et leur taille,
+%% sans être lus ; la source écarte d'elle-même ce que le dossier ignore et
+%% les secrets probables. La durée vient d'un débit mesuré sur l'embarqueur
+%% réellement attaché — pas d'une table.
+
+graph LR
+    estimate["EstimateNode(probe=$probe)"]

@@ -134,6 +134,34 @@ impl Catalog {
         Ok(IndexProgress { model: self.current_embedding_entry().name.clone(), tables, writes_pending: self.pending.total_count() })
     }
 
+    /// L'embarqueur de ce catalogue vit-il ailleurs (un démon, un service) ?
+    pub fn embedder_is_remote(&self) -> bool {
+        self.embedder.distant()
+    }
+
+    /// D'où vient le calcul, pour ranger un débit : `service` ou `local`.
+    fn embedder_origin(&self) -> &'static str {
+        if self.embedder.distant() {
+            "service"
+        } else {
+            "local"
+        }
+    }
+
+    /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
+    pub fn known_embedding_rate(&self) -> Result<Option<Rate>, CatalogError> {
+        self.embedding_rate(self.embedder.name(), self.embedder_origin())
+    }
+
+    /// **Sonde** l'embarqueur de ce catalogue sur `samples`, et note le débit.
+    pub fn probe_embedding_rate(&self, samples: &[String]) -> Result<Option<Rate>, CatalogError> {
+        let rate = crate::estimate::probe_rate(self.embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
+        if let Some(rate) = rate {
+            self.note_embedding_rate(self.embedder.name(), self.embedder_origin(), rate)?;
+        }
+        Ok(rate)
+    }
+
     /// Note le débit mesuré d'un embarqueur. Le dernier mesuré remplace le
     /// précédent : c'est le poste d'aujourd'hui qu'on veut prévoir.
     pub fn note_embedding_rate(&self, model: &str, origin: &str, rate: Rate) -> Result<(), CatalogError> {
