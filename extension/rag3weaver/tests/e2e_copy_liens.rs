@@ -77,3 +77,52 @@ fn deux_proprietes_texte_ne_s_echangent_pas_au_chargement_en_masse() {
         "chaque propriété dans sa colonne"
     );
 }
+
+/// **Une propriété texte qui porte une virgule, un guillemet ou un saut de
+/// ligne passe par le COPY** (3 octobre 2026). Sans les options de lecture du
+/// COPY des nœuds, le renifleur du moteur décidait seul qu'il n'y avait pas
+/// de guillemets : `"other,type"` comptait pour deux colonnes, le COPY était
+/// refusé, et tous les liens repartaient par le chemin par lots — 56 s et
+/// 145 s sur le dépôt entier, mesurés par la session embarquements.
+#[test]
+#[ignore]
+fn une_propriete_a_virgule_ne_fait_pas_refuser_le_copy() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let config = CatalogConfig { name: Some("copy-virgule".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    catalog.register_entity("Gauche", bout()).unwrap();
+    catalog.register_entity("Droite", bout()).unwrap();
+    let texte = || -> FieldDef { serde_json::from_value(serde_json::json!({"type": "string"})).unwrap() };
+    catalog.register_relation_with("Lien", "Gauche", "Droite", HashMap::from([("usages".to_string(), texte())])).unwrap();
+
+    let gauches: Vec<String> = (0..30).map(|i| format!("g{i}")).collect();
+    let droites: Vec<String> = (0..30).map(|i| format!("d{i}")).collect();
+    catalog.ingest_entities("Gauche", gauches.iter().map(|n| ligne(n)).collect()).unwrap();
+    catalog.ingest_entities("Droite", droites.iter().map(|n| ligne(n)).collect()).unwrap();
+    // Les valeurs piégées **après** 800 lignes sans guillemet : le renifleur
+    // ne lit que le début du fichier (sur le dépôt entier, le premier
+    // guillemet tombait à la ligne 727).
+    let pieges = ["other,type", "dit \"oui\"", "deux\nlignes"];
+    let valeur = |k: usize| if k < 800 { "simple" } else { pieges[k % pieges.len()] };
+    let mut attendu: BTreeMap<String, i64> = BTreeMap::new();
+    for (i, g) in gauches.iter().enumerate() {
+        let ug = catalog.entity_uuid("Gauche", &ligne(g)).unwrap();
+        for (j, d) in droites.iter().enumerate() {
+            let ud = catalog.entity_uuid("Droite", &ligne(d)).unwrap();
+            let v = valeur(i * droites.len() + j);
+            *attendu.entry(v.to_string()).or_default() += 1;
+            let props = BTreeMap::from([("usages".to_string(), CypherValue::String(v.into()))]);
+            catalog.link_jusqu_a("Lien", RefOrUuid::Uuid(ug.clone()), RefOrUuid::Uuid(ud), props, Disponibilites::AUCUNE).unwrap();
+        }
+    }
+    let res = catalog.drain();
+    assert_eq!(res.failed, 0, "{:?}", res.warnings);
+    assert!(!res.warnings.iter().any(|w| w.contains("refusé")), "le COPY ne doit pas être refusé : {:?}", res.warnings);
+    let mut lu = catalog.execute_raw("MATCH ()-[r:Lien]->() RETURN r.usages, count(*)").unwrap().rows;
+    lu.sort_by_key(|r| format!("{r:?}"));
+    let mut attendu: Vec<Vec<CypherValue>> =
+        attendu.into_iter().map(|(v, n)| vec![CypherValue::String(v), CypherValue::Int(n)]).collect();
+    attendu.sort_by_key(|r| format!("{r:?}"));
+    assert_eq!(lu, attendu, "chaque valeur intacte, 900 liens");
+}

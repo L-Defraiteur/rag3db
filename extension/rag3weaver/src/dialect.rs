@@ -1021,7 +1021,15 @@ impl SchemaDialect for Rag3dbDialect {
         // sans erreur (3 octobre 2026, `e2e_copy_liens`). Les deux premières
         // colonnes du fichier restent les bouts.
         let colonnes = if prop_columns.is_empty() { String::new() } else { format!(" ({})", prop_columns.join(", ")) };
-        Some(format!("COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}')"))
+        // **Les options de lecture du COPY des nœuds** : les cellules sont
+        // écrites par le même `cellule_csv`. Sans elles, le renifleur du
+        // moteur décidait seul des guillemets — `"other,type"` comptait pour
+        // deux colonnes (COPY refusé, repli par lots : 56 s et 145 s sur le
+        // dépôt entier), ou une cellule changeait de valeur sans erreur, et
+        // un saut de ligne restait échappé (3 octobre 2026, `e2e_copy_liens`).
+        Some(format!(
+            "COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}', escaped_newlines=true, auto_detect=false, null_strings=['{CSV_NULL}'])"
+        ))
     }
 
     fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {
