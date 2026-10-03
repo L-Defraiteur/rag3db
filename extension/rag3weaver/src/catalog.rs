@@ -1662,10 +1662,16 @@ impl Catalog {
             // Les propriétés manquantes arrivent par ALTER : une relation
             // déclarée hier sans `kind` ne doit pas empêcher d'ouvrir la base.
             let known = existing.properties.clone().unwrap_or_default();
-            for (name, def) in &properties {
-                if known.contains_key(name) {
-                    continue;
-                }
+            // Par ordre de nom : le chemin COPY des liens écrit les colonnes
+            // de propriétés triées par nom, sans liste de colonnes. Ajoutées
+            // dans l'ordre d'une HashMap, deux colonnes texte pouvaient
+            // s'échanger sans erreur. Cela ne règle que les ajouts d'un même
+            // appel : une colonne ajoutée plus tard, de nom plus petit, reste
+            // derrière les autres (le COPY devrait nommer ses colonnes).
+            let mut nouvelles: Vec<(&String, &crate::config::FieldDef)> =
+                properties.iter().filter(|(name, _)| !known.contains_key(*name)).collect();
+            nouvelles.sort_by(|a, b| a.0.cmp(b.0));
+            for (name, def) in nouvelles {
                 let col = crate::dialect::ColumnDef {
                     name: name.clone(),
                     col_type: crate::dialect::ColumnType::from_field_type(&def.field_type),
