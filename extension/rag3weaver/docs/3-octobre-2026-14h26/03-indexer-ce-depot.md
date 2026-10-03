@@ -287,6 +287,47 @@ vingt secondes »** pour un projet de la taille de `src/` de la crate (4 Mo),
 ce qui est le cas courant. Le chiffre est celui d'un binaire de test sur un
 poste chargé : il se remesure à chaque prise.
 
+### La cible devient 90 secondes : ce que donne un seul paquet
+
+Lucie, le 3 octobre au soir : « ça commence à être acceptable mais pas encore
+assez ; on devrait viser 1 min 30 max ». Les trois minutes de la section
+précédente ne sont plus la cible.
+
+Mesuré à 23 h 40, **sans rien changer au code** que la taille des paquets
+(`RAG3WEAVER_ESTIMATE_BATCH_FILES=100000` : toute la source en un paquet au
+lieu de 107) : **132 s** pour être cherchable par mots, relations comprises —
+contre 352 s. Le prix : **16,1 Go de mémoire résidente au pic**. La passe a
+tourné en même temps qu'une mesure d'une autre session : le chiffre est
+plutôt pessimiste.
+
+| Poste (un seul paquet, 132 s) | Temps |
+|---|---|
+| Analyse : l'analyseur | 22,5 s |
+| Analyse : notre aval (texte propre, clés, rendez-vous), sur un seul fil | 21 s |
+| Vidages de la file des liens en route (quatre, au seuil de 200 000) | 33 s |
+| Graphe des entités : insertion 8 s, plein texte 7 s, morceaux 4 s, liaison 3 s, points de reprise ~4 s | 26 s |
+| Symboles | 10 s |
+| Chargement final des relations | 8 s |
+| Mise en file des relations, marques de session | 8 s |
+| Blobs de l'index plein texte (quatre poussées au lieu de 404) | 2 s |
+
+Ce que la mesure apprend :
+
+- **Le coût était dans le nombre de paquets, pas dans le travail.** Presque
+  tout ce qu'on comptait optimiser — les blobs, les points de reprise, les
+  symboles par paquet — disparaît de lui-même quand il n'y a qu'un paquet.
+- **Il manque une quarantaine de secondes pour 90 s**, et deux prises les
+  portent : notre aval de l'analyse (21 s séquentiels, parallélisables par
+  fichier) et les liens (41 s).
+- **La mémoire décide de la forme.** Seize gigaoctets ne passent pas sur un
+  poste modeste : la forme tenable est un paquet borné par sa taille en
+  octets, pas « tout ». Les points intermédiaires de la courbe restent à
+  mesurer.
+- **Les deux chemins ne construisent pas le même graphe** : 819 808
+  relations en un paquet, 438 104 par paquets de 64. L'analyseur relie entre
+  fichiers tout ce qu'on lui donne ensemble. Lequel est juste se tranche
+  avant de choisir la forme (session de l'arbre principal).
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
