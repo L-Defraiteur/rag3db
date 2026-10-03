@@ -232,6 +232,23 @@ pub fn file_config() -> EntityConfig {
     }
 }
 
+fn test_role_name(r: &codeparsers::scope_extraction::types::TestRole) -> &'static str {
+    use codeparsers::scope_extraction::types::TestRole;
+    match r {
+        TestRole::Case => "case",
+        TestRole::Suite => "suite",
+        TestRole::Support => "support",
+    }
+}
+
+fn test_certainty_name(c: &codeparsers::scope_extraction::types::TestCertainty) -> &'static str {
+    use codeparsers::scope_extraction::types::TestCertainty;
+    match c {
+        TestCertainty::Certain => "certain",
+        TestCertainty::Convention => "convention",
+    }
+}
+
 pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     let mut fields = HashMap::new();
     fields.insert("name".into(), title(FieldType::String));
@@ -269,6 +286,16 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     fields.insert("repo_path".into(), field(FieldType::String));
     fields.insert("parent_name".into(), field(FieldType::String));
     fields.insert("language".into(), field(FieldType::String));
+    // **Ce que les tests sont** (codeparsers, `ScopeInfo.test`) : des champs
+    // comme les autres, vides pour un scope qui n'est pas de test — vides et
+    // non nuls, le cœur refusant un `SET` à champ nul qu'un `CREATE` accepte.
+    // `test_role` : case (un test), suite, support (code qui n'existe que
+    // pour les tests) ; `test_certainty` : certain (la syntaxe le dit) ou
+    // convention (seul le nom) ; `test_name` : le nom du test quand ce n'est
+    // pas celui du scope (`CalcTest.Adds` pour un `TEST` de gtest).
+    fields.insert("test_role".into(), field(FieldType::String));
+    fields.insert("test_certainty".into(), field(FieldType::String));
+    fields.insert("test_name".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
     // Les enfants repliés dans `content` : de quoi rendre un extrait avec
@@ -502,6 +529,14 @@ pub struct ScopeRecord {
     pub file_path: String,
     pub parent_name: String,
     pub language: String,
+    /// La marque de test (vide si le scope n'en est pas un) : voir
+    /// [`scope_config`].
+    #[serde(default)]
+    pub test_role: String,
+    #[serde(default)]
+    pub test_certainty: String,
+    #[serde(default)]
+    pub test_name: String,
     pub start_line: usize,
     pub end_line: usize,
     pub start_byte: usize,
@@ -783,6 +818,9 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             file_path: name.clone(),
             parent_name: String::new(),
             language,
+            test_role: String::new(),
+            test_certainty: String::new(),
+            test_name: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
             start_byte: sc.scope_start_byte,
@@ -873,6 +911,9 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 file_path: indexed_name.clone(),
                 parent_name: s.parent.clone().unwrap_or_default(),
                 language: language.clone(),
+                test_role: s.test.as_ref().map_or_else(String::new, |t| test_role_name(&t.role).to_string()),
+                test_certainty: s.test.as_ref().map_or_else(String::new, |t| test_certainty_name(&t.certainty).to_string()),
+                test_name: s.test.as_ref().and_then(|t| t.name.clone()).unwrap_or_default(),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
                 start_byte: s.scope_start_byte,
@@ -1332,6 +1373,9 @@ impl ScopeRecord {
             ("repo_path".into(), s(&self.repo_path)),
             ("parent_name".into(), s(&self.parent_name)),
             ("language".into(), s(&self.language)),
+            ("test_role".into(), s(&self.test_role)),
+            ("test_certainty".into(), s(&self.test_certainty)),
+            ("test_name".into(), s(&self.test_name)),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
             ("start_byte".into(), i(self.start_byte)),
@@ -1866,6 +1910,21 @@ mod tests {
     use super::*;
 
     const RUST_SRC: &str = "use serde::Serialize;\n\npub struct Point {\n    x: i32,\n}\n\nimpl Point {\n    pub fn norm(&self) -> i32 {\n        self.x.abs()\n    }\n}\n\npub fn twice(p: &Point) -> i32 {\n    p.norm() * 2\n}\n";
+
+    /// **Un scope de test le dit dans ses champs ; les autres les ont vides.**
+    #[test]
+    fn un_scope_de_test_porte_sa_marque_les_autres_des_champs_vides() {
+        let src = "pub fn add(a: u32) -> u32 { a }\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn adds() {\n        assert_eq!(add(1), 1);\n    }\n}\n";
+        let a = analyze("/virtual", vec![("t.rs".into(), src.into())]);
+        let par_nom = |n: &str| a.scopes.iter().find(|s| s.name == n).unwrap_or_else(|| panic!("scope {n}"));
+        let adds = par_nom("adds");
+        assert_eq!((adds.test_role.as_str(), adds.test_certainty.as_str()), ("case", "certain"));
+        assert_eq!(par_nom("tests").test_role, "suite");
+        let add = par_nom("add");
+        assert!(add.test_role.is_empty() && add.test_certainty.is_empty() && add.test_name.is_empty());
+        let data = add.data();
+        assert_eq!(data.get("test_role"), Some(&s("")), "vide et non nul");
+    }
 
     /// **Une arête d'usage porte comment on se sert de la cible, et où.**
     /// `twice` prend un `&Point` (ligne 13) : son `CONSUMES` vers `Point` dit
