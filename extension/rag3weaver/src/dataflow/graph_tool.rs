@@ -1858,7 +1858,7 @@ mod tests {
                 NodeDef {
                     name: "fuse".into(),
                     node_type: "FuseResultsNode".into(),
-                    config: json!({"weights": "bm25:0.6,vector:0.4"}),
+                    config: json!({"default_weights": "bm25:0.6,vector:0.4"}),
                 },
                 NodeDef {
                     name: "rerank".into(),

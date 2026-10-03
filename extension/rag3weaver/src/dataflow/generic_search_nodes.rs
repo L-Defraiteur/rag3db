@@ -1114,6 +1114,14 @@ pub enum DuplicatePolicy {
     Keep,
 }
 
+/// L'étage qui a fourni le bloc de fusion (voir `base_de_fusion`).
+#[derive(Clone, Copy, PartialEq)]
+enum SourceDesPoids {
+    Appelant,
+    Entite,
+    Moteur,
+}
+
 pub struct FuseResultsNode {
     duplicates: DuplicatePolicy,
     node_name: String,
@@ -1195,15 +1203,34 @@ impl FuseResultsNode {
     /// une **déclaration** — celle de l'appelant ou d'une base de
     /// connaissances — et le gabarit ne la retouche pas ; seule sa
     /// troncature (`top_k`) reste, ce n'est pas un poids.
-    fn signal_config(&self, label: &str, base: &FusionConfig, gabarit_decide: bool) -> SignalConfig {
+    fn signal_config(&self, label: &str, base: &FusionConfig, source: SourceDesPoids) -> SignalConfig {
         let mut cfg = base.signal_config(label);
-        if gabarit_decide {
-            if let Some(w) = self.weights.get(label) {
-                cfg.weight = *w;
+        match source {
+            // L'appelant a parlé : rien ne le retouche.
+            SourceDesPoids::Appelant => {}
+            // L'entité a déclaré : seul un **choix** du graphe la retouche.
+            SourceDesPoids::Entite => {
+                if let Some(w) = self.weights.get(label) {
+                    cfg.weight = *w;
+                }
             }
-            if self.boost.contains(label) {
-                cfg.role = SignalRole::Boost;
+            // Personne n'a déclaré : le choix, sinon le défaut du gabarit.
+            SourceDesPoids::Moteur => {
+                if let Some(w) = self.weights.get(label) {
+                    cfg.weight = *w;
+                } else if let Some(w) = self.default_weights.get(label) {
+                    cfg.weight = *w;
+                }
             }
+        }
+        // Le rôle `Boost` décrit le **câblage** du graphe — un reranker
+        // branché en `signals` module au lieu de fusionner. Structurel, il
+        // s'applique quel que soit l'étage des poids : l'éteindre quand une
+        // entité ou l'appelant déclarait sa fusion cassait le graphe, pas
+        // les poids (latent jusqu'au 2 octobre 2026, personne ne combinait
+        // boost et fusion déclarée).
+        if self.boost.contains(label) {
+            cfg.role = SignalRole::Boost;
         }
         if self.top_k.is_some() {
             cfg.top_k = self.top_k;
@@ -1211,27 +1238,28 @@ impl FuseResultsNode {
         cfg
     }
 
-    /// **D'où viennent les poids.** L'appelant d'abord (`options.fusion`), puis
-    /// la déclaration d'une base de connaissances (son `fusion` dans la
-    /// config), puis le gabarit, puis le défaut du moteur. Le monolithe
-    /// faisait `options.fusion.unwrap_or(target.default_fusion)` ; ce nœud
-    /// ignorait les deux — B4 de la réconciliation du 6 septembre 2026.
+    /// **D'où viennent les poids — l'échelle du 2 octobre 2026 (pas C).**
+    /// Du plus fort au plus faible : l'appelant (`options.fusion`), le
+    /// **choix** du graphe (`weights`), la fusion **déclarée** par l'entité
+    /// (`fusion` de sa config, transportée en `Option` — jamais aplatie, la
+    /// leçon du 18 septembre), le **défaut** du gabarit (`default_weights`),
+    /// le moteur. Distinguer le choix du défaut est ce qui donne les deux
+    /// pouvoirs : l'auteur de graphe qui écrit `weights` obtient toujours
+    /// (l'exigence de Lucie), l'auteur d'entité continue de battre le défaut
+    /// générique de `search_base.mmd`.
     ///
-    /// La fusion **déclarée** par la cible vaut pour toutes — la garde
-    /// `has_source_refs` était un raccourci (retirée le 18 septembre), mais
-    /// « déclarée » reste la condition : `default_fusion` est l'`Option` de la
-    /// config d'entité, pas un défaut aplati. Une cible qui ne déclare rien
-    /// laisse le gabarit décider — l'aplatir en `FusionConfig::default()`
-    /// éteignait les `weights` du gabarit (retrouvé le 18 septembre au soir :
-    /// l'outil des agents fusionnait 0,3/0,7 au lieu du 0,6/0,4 de sa fiche,
-    /// et la correspondance exacte coulait sous le vecteur).
-    fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, bool) {
+    /// Ce helper rend le **bloc** de base (stratégie, rrf_k, rôles) et son
+    /// étage ; les poids par étiquette se superposent dans `signal_config`.
+    fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, SourceDesPoids) {
         match qp {
-            Some(qp) if qp.options.fusion.is_some() => (qp.options.fusion.clone().unwrap(), false),
-            Some(qp) if qp.target.as_ref().is_some_and(|t| t.default_fusion.is_some()) => {
-                (qp.target.as_ref().unwrap().default_fusion.clone().unwrap(), false)
+            Some(qp) if qp.options.fusion.is_some() => {
+                (qp.options.fusion.clone().unwrap(), SourceDesPoids::Appelant)
             }
-            _ => (FusionConfig::default(), true),
+            Some(qp) if qp.target.as_ref().is_some_and(|t| t.default_fusion.is_some()) => (
+                qp.target.as_ref().unwrap().default_fusion.clone().unwrap(),
+                SourceDesPoids::Entite,
+            ),
+            _ => (FusionConfig::default(), SourceDesPoids::Moteur),
         }
     }
 }
@@ -1289,8 +1317,8 @@ impl Node for FuseResultsNode {
         // La requête, si le gabarit l'a câblée : c'est elle qui dit d'où
         // viennent les poids.
         let qp = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv));
-        let (base, gabarit_decide) = Self::base_de_fusion(qp.as_ref());
-        let (strategy, rrf_k) = if gabarit_decide {
+        let (base, source) = Self::base_de_fusion(qp.as_ref());
+        let (strategy, rrf_k) = if source == SourceDesPoids::Moteur {
             (self.strategy, self.rrf_k)
         } else {
             (base.strategy, base.rrf_k)
@@ -1301,7 +1329,7 @@ impl Node for FuseResultsNode {
         let mut originals: HashMap<String, Vec<(String, UnifiedResult)>> = HashMap::new();
         let mut lists = Vec::new();
         for (label, rows) in groups {
-            let mut cfg = self.signal_config(&label, &base, gabarit_decide);
+            let mut cfg = self.signal_config(&label, &base, source);
             let mut seen = HashSet::new();
             let mut scored = Vec::new();
             // top_k bounds occurrences before either deduplication or evidence collection.
