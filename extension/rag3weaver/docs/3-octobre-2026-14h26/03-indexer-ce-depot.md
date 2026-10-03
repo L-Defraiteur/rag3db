@@ -146,6 +146,34 @@ optimisé rendrait — ces mesures sont prises sur un binaire de test non
 optimisé — et l'avancement dit donc des fichiers faits, pas un temps restant,
 pendant ce premier temps.
 
+### Où part le temps des mots, et ce que change un binaire optimisé
+
+Une passe de plus, le 3 octobre à 22 h : le même dépôt, mots seulement, en
+binaire **optimisé** (`--release`), avec le profil d'ingestion. **643 s** —
+pas mieux que les 523 s du binaire de test. L'optimisation ne change rien
+parce que les dépendances (moteur, lucivy, tokenizers) sont déjà optimisées
+dans le binaire de test ; l'écart entre les deux passes est la charge du
+poste (douze à treize processus actifs pendant la mesure), pas le binaire.
+**La promesse des deux à trois minutes n'est donc pas tenue** sur un dépôt de
+cette taille : on est à huit à dix minutes.
+
+| Poste | Temps | Remarque |
+|---|---|---|
+| Vidages de la file des relations | 214 s | Sept vidages d'environ 200 000 liens. Cinq prennent **2 s** chacun ; deux prennent **57 s et 145 s** pour la même taille. Sans ces deux-là : ~12 s. |
+| Ingestion des symboles | 108 s | 107 paquets, une seconde chacun. |
+| Insertion des nœuds et des morceaux | 94 s | |
+| Index plein texte (lucivy, 8 fils) | 26 s | La borne à 8 fils ne coûte pas : ce poste n'est pas le goulot. |
+| Marques de découpe | 18 s | |
+| Points de reprise | 3 s | |
+| Non ventilé | ~180 s | L'analyse des fichiers (codeparsers), la lecture, les marques de session : aucun de ces temps n'est publié aujourd'hui. |
+
+Où chercher, dans l'ordre : les **deux vidages aberrants** (200 s à eux
+deux, un tiers de la passe — même nombre de liens que les cinq autres, qui
+prennent deux secondes), puis **ce qui n'est pas ventilé** (il faut d'abord
+le mesurer), puis les symboles. Trois COPY de morceaux sont aussi refusés à
+la première ingestion (« vector with ANY type ») et retombent sur le chemin
+ligne à ligne.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
