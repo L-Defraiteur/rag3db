@@ -398,12 +398,15 @@ sessions, pas d'une vérification.
   revue de la session lifecycle) : l'identité d'une ligne ne dépend pas du
   périmètre, la session unique par périmètre ne la protégeait donc pas.
   **Corrigé** : l'application relit le périmètre et la cellule, sur les deux
-  chemins. **Reste ouverte la classe des écritures hors session** (une ligne
-  réécrite ou recréée dans le périmètre, ou écrite pendant la session avant
-  le plan, garde une marque qui n'est pas celle de la session et serait
-  retirée) : tranché le 3 octobre, une écriture dans un périmètre en session
-  prendra la marque de cette session — branche suivante, devant la mise de
-  côté.
+  chemins. **La classe des écritures hors session est fermée aussi** (une
+  ligne réécrite ou recréée dans le périmètre, ou écrite pendant la session
+  avant le plan, gardait une marque qui n'était pas celle de la session et
+  était retirée) : une écriture dans un périmètre en session prend la marque
+  de cette session (`{session}+w`), comptée à part (`written`), une marque
+  qui ne descend jamais, lue par `mark_verdict` seul ; relu par la session
+  lifecycle. **Le prix, assumé** : un écrivain qui réécrit périodiquement une
+  ligne que la source n'a plus empêche son retrait, sans bruit. Une écriture
+  en Cypher brut ne marque pas.
 - **La suppression ne retire jamais les vecteurs creux de l'index lucistore**
   (lu, non vérifié par exécution — 3 octobre) : `DeleteRecordNode` supprime
   les chunks en base et l'entrée plein texte, mais aucun `SparseHandle::remove`
