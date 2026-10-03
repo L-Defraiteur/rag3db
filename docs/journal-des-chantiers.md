@@ -517,14 +517,22 @@ Ce qui l'a attrapé n'est pas le harnais : c'est que l'autre session a **annonc�
 qu'elle n'avait pas attendu**. Sans son message, j'aurais rendu un verdict sur
 un mélange.
 
-Conséquence, prise par la session de l'arbre principal : relever la date **et
-la taille** des deux bibliothèques au début et à la fin, et **refuser de
-conclure** si elles ont changé — « le moteur a été remplacé pendant la passe,
-ce résultat ne vaut rien, rejoue ». La taille en plus de la date, pour qu'un
-`touch` sans rebâti ne déclenche pas un faux refus. Et la règle de voisinage
-qui va avec : **annoncer, attendre les « libre » des passes en vol, puis
-rebâtir** — l'annonce seule ne suffit pas, puisque la passe en vol ne peut pas
-l'entendre.
+Conséquence, **livrée** par la session de l'arbre principal dans
+`run_e2e.sh` : une **somme du contenu** (`cksum`) des deux bibliothèques, au
+début et à la fin, et la passe sort en échec si elle a changé — « le moteur a
+été remplacé pendant la passe : ce résultat ne vaut rien, rejoue ». Éprouvé
+contre une copie privée modifiée en cours de passe.
+
+J'avais proposé la date et la taille ; la somme est meilleure, et pour une
+raison mesurée plutôt que raisonnée : **deux rebâtis de cette nuit avaient la
+même taille à l'octet**, et un `touch` change la date sans rebâtir. Ma version
+aurait donc raté un vrai échange et crié au faux. À retenir pour la forme : un
+contrôle d'identité se fait sur le **contenu**, et les métadonnées qui
+l'approchent (date, taille) sont des indices, pas des preuves.
+
+Et la règle de voisinage qui va avec : **annoncer, attendre les « libre » des
+passes en vol, puis rebâtir** — l'annonce seule ne suffit pas, puisque la passe
+en vol ne peut pas l'entendre.
 
 **Et la forme commune aux cinq**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
