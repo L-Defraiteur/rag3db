@@ -49,7 +49,7 @@ Branches encore en cours, toutes poussées (les noms
 | `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
 | `regime-carte-partagee` (`48d43fdce`) | `../rag3db-embarquements` | embarquements | **3 octobre** : régulateur de rafale (durée visée + pause) branché dans l'ingestion et le démon, écran ménagé par défaut quand la seule carte le porte, `CardClass::Integrated` dite par le pilote, troisième déclencheur de 107m, et `RAG3WEAVER_EMBED_SERVICE` (s'attacher à un service d'embarquement, tests compris). Tests unitaires verts, `e2e_undo` vert par le service distant. Le service tourne sur luciepc : `extension/rag3weaver/docs/3-octobre-2026-14h26/02-le-service-d-embarquement-sur-l-autre-poste.md`. | Mesurer deux ou trois couples (rafale, pause) sur ce poste, carte libre et Lucie devant l'écran ; elle choisit le défaut ; rebaser, puis fusion. |
 
-**Session cœur C++, 3 octobre 2026 — quatre branches poussées, en attente de relecture
+**Session cœur C++, 3 octobre 2026 — cinq branches poussées, en attente de relecture
 et de livraison** (arbre `../rag3db-moteur`, build `build/moteur`). La session n'a pas pu
 joindre l'orchestration après la relance des terminaux : l'état est ici.
 
@@ -57,13 +57,20 @@ joindre l'orchestration après la relance des terminaux : l'état est ici.
 |---|---|---|---|
 | `t0-transaction-en-echec` | `849e86cc0` | Marche T0 : après une erreur dans `BEGIN … COMMIT`, tout est refusé jusqu'au `ROLLBACK` (`TransactionContext::MANUAL_TRANSACTION_FAILED`) ; l'erreur de syntaxe compte comme les autres, alignée sur PostgreSQL. Sept cas de la batterie Cypher reçoivent le `ROLLBACK` qui ferme le bloc. | Sur `4a338bf42` : batterie Cypher 1862/1862, `transaction_test`, `api_test`, copie, stockage verts, banc conforme (le cas rouge passé au vert, sa ligne retirée). Sur `849e86cc0` : `transaction_test` 72/72, `api_test` 102/102, répertoires `exceptions` et `transaction`. **La batterie complète est à rejouer une fois à la livraison.** |
 | `test-c-api-octets-magiques` | `ca2c0d187` | `c_api_test` : les deux `GetStorageVersion` étaient rouges depuis le renommage `c647fbb33` (le test lisait quatre octets et attendait « RAG3DB »). Le test est corrigé, pas le moteur. | `c_api_test` 136/136. La suite entre dans la liste de livraison. |
-| `a2-remappage-des-offsets-au-commit` | `2f3ae46b6` | Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit, et les insertions sont journalisées au commit avec leurs offsets définitifs. Deux corrections par rapport à Vela (tables internes des index ; `DETACH DELETE` d'un nœud neuf). C3 quitte `known_red.txt`. | Passe complète verte : `transaction_test` 67/67, `api_test` 102/102, copie 19/19, stockage 77/77, vector 70/70 et 59/59, batterie Cypher 1862/1862, banc conforme. |
+| `a2-remappage-des-offsets-au-commit` | `f8d73398a` | Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit, et les insertions sont journalisées au commit avec leurs offsets définitifs. Deux corrections par rapport à Vela (tables internes des index ; `DETACH DELETE` d'un nœud neuf). C3 quitte `known_red.txt`. Second commit `f8d73398a` : au commit, un offset définitif n'est plus pris pour une ligne locale — deux transactions qui inséraient des vecteurs faisaient planter le second `COMMIT`. | Sur `2f3ae46b6`, passe complète verte : `transaction_test` 67/67, `api_test` 102/102, copie 19/19, stockage 77/77, vector 70/70 et 59/59, batterie Cypher 1862/1862, banc conforme. Sur `f8d73398a` : `transaction_test`, banc, vector 71/71 et 60/60, répertoires d'écriture de la batterie Cypher. |
 | `champ-nul-d-une-liste-de-structures` | `3789201de` | Un champ `NULL` d'une liste de structures littérales prend le type que les autres éléments lui donnent (il devenait STRING et la liste était refusée). | Batterie Cypher 1866/1866, `api_test` 104/104. |
 
-**Une décision à prendre, née de la dernière branche** — voir §4 : le refus de
+| `hnsw-point-d-entree-apres-rollback` | `d64c74b18` | Un `DELETE` annulé par `ROLLBACK` laissait l'index vectoriel muet (mille lignes, zéro résultat), avec un seul écrivain : le point d'entrée vit hors transaction. La recherche et l'insertion ne tiennent plus un point d'entrée invalide pour la preuve d'un index vide. Extension seule, le cœur n'est pas touché. | Extension vector 71/71 sur disque, 60/60 en mémoire. |
+
+L'étude de l'index vectoriel sous plusieurs écrivains est écrite :
+`docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md`. Elle propose de faire
+toute la maintenance de l'index au commit (environ trois jours), et dit qu'en attendant
+une table indexée ne devrait pas recevoir deux écrivains à la fois.
+
+**Une décision à prendre, née de la branche du champ nul** — voir §4 : le refus de
 `UNWIND $rows … SET n.c = r.c` quand `c` est nul dans toutes les lignes.
 
-**Ordre de fusion** : les quatre branches sont indépendantes et partent chacune de
+**Ordre de fusion** : les cinq branches sont indépendantes et partent chacune de
 `master`. T0 et A2 retirent chacune une ligne différente de `known_red.txt` ; T0 et la
 branche du champ nul ajoutent chacune un fichier à la liste de `transaction_test` ou à
 `prepare_test.cpp` sans se toucher. A2 et T0 ajoutent toutes deux un fichier à
@@ -71,9 +78,8 @@ branche du champ nul ajoutent chacune un fichier à la liste de `transaction_tes
 
 **Suite de la session, après la réponse de Lucie sur les trois écarts de la note sur les
 verrous** (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) : le
-gestionnaire de verrous, A3′, A4′, l'annonce en tête de transaction. Restent dus sans
-attendre : la section HNSW sous plusieurs écrivains (les points d'entrée de l'index
-vivent hors transaction).
+gestionnaire de verrous, A3′, A4′, l'annonce en tête de transaction. La maintenance de
+l'index vectoriel au commit vient après le gestionnaire de verrous, avant A6.
 
 Le plan : `docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md`
 (§12, l'ordre des marches) ; côté crate :
