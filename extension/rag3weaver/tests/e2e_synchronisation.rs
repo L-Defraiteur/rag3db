@@ -550,3 +550,37 @@ fn une_ligne_reparue_depuis_le_plan_n_est_pas_retiree() {
     assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("reparue")), "{fin:?}");
     assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
 }
+
+// ─── Les cellules (_org / _project) ─────────────────────────────────────────
+
+/// Un périmètre de synchronisation est borné à la **cellule courante** : deux
+/// cellules, même entité, mêmes valeurs de périmètre ; une synchronisation
+/// dans l'une ne voit pas les lignes de l'autre, ne les retire pas, et les deux
+/// peuvent ouvrir une session sur le même périmètre en même temps.
+#[test]
+#[ignore]
+fn un_perimetre_est_borne_a_la_cellule_courante() {
+    use rag3weaver::scope::Scope;
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
+    // La première synchronisation de beta ne voit que ses lignes.
+    let sb = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &sb, lignes(&["b1", "b2"], "A")).unwrap();
+    // Une session est aussi ouverte dans alpha sur le même périmètre.
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    let sa = ouvrir(&mut catalog, "A");
+    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
+    let fin = finir(&mut catalog, "A", &sb, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!((fin.in_scope, fin.seen), (2, 2), "beta ne voit que ses deux lignes : {fin:?}");
+    assert!(fin.missing.is_empty(), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "b1", "b2"], "alpha n'a pas bougé");
+    // alpha, ensuite, ne voit pas les lignes de beta.
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    lot(&mut catalog, &sa, lignes(&["a1"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &sa, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!((fin.in_scope, fin.seen, fin.removed.len()), (2, 1, 1), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "b1", "b2"]);
+}
