@@ -342,6 +342,45 @@ générique est une **session de synchronisation** (début, lots, fin) avec un
 périmètre déclaré par l'entité ; un backend qui veut un « dépôt » ou un
 « dossier » le déclare comme n'importe quelle entité.
 
+### Mémoire longue : l'ordre des lots change (3 octobre 2026, au soir)
+
+Proposition et banc : `extension/rag3weaver/docs/3-octobre-2026-20h41/01-…`.
+Livré : le gabarit `templates/backends/memory` (Memory, Subject, les deux
+relations, la machine à états), le banc `scripts/test_banc_memoire.py` avec ses
+72 paires de contrôle versionnées, et l'ingestion qui émet `EntitiesChanged`.
+
+**Le nœud de décision à modèle descend derrière le réacteur, le crochet après
+outil et le jardinier.** La raison, et elle est mesurée sur trois jeux :
+
+- **ranger** un texte parmi des sujets existants est un problème d'**ordre**,
+  et le cosinus le résout aussi bien que le modèle de décision (14/16, 19/32,
+  22/30). Le premier appel de `remember` n'a donc besoin d'aucun modèle ;
+- **décider qu'il faut créer** ne marche par **aucune** piste essayée, sur
+  aucun jeu : ni l'option « aucun de ces sujets », ni la faiblesse du meilleur
+  score, ni un seuil transportable. Rien de mesuré ne fait mieux que
+  « demander toujours », l'appelant tranchant, la création étant réparable ;
+- sur les mémoires, le verdict s'améliore nettement avec le pourquoi en plus
+  du titre (AUC 0,80 → 0,92), mais sur peu de cas.
+
+Donc le nœud garde son étage 2 sur « demander toujours », aucun modèle
+branché, et le critère comme la liste de choix restent des **données du
+graphe** : la découpe de la décision est tenue ouverte par Lucie — « ça reste
+une expérimentation, faut pas courir avec avant d'avoir trouvé si une bonne
+manière de s'en servir existe ».
+
+**Une correction à porter quand le lot des sujets viendra** : `Subject` doit
+être une **entité dérivée**. La mesure dit que le bon classement vient du
+*texte complet* du sujet — sa description **et ce qu'il porte** ; avec les noms
+seuls, 8/7/15. Une description écrite une fois ne contient pas ce qu'on range
+dessous. La pièce existe déjà (`DerivedConfig`, `gather`, `DeriveNode`, et
+l'invalidation par `_render_hash`), donc un sujet grossirait tout seul et son
+vecteur suivrait, sans nœud de plus.
+
+**Et une forme à retenir pour le nœud** : le texte du juge n'est pas le texte
+du vecteur. Le classement veut le titre court (cosinus 0,99 sur les titres,
+0,83 avec le pourquoi) ; le verdict veut le titre **et** le pourquoi (0,80 →
+0,92). Deux étages, deux textes.
+
 ### Le produit, en parallèle des écritures parallèles (Lucie, 3 octobre 2026)
 
 « Si nous faut tout ça pour être compétitifs, mais oui ok pour avancer en

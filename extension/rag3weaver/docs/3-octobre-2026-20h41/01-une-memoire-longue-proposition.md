@@ -646,6 +646,67 @@ toujours » est le seul réglage que la mesure soutienne aujourd'hui.** C'est
 déjà ce que la conception prévoit, et Lucie l'avait demandé avant que ces
 chiffres existent.
 
+### 7.10 Trois jeux plus tard : ce qui est acquis, et ce que ça change
+
+Mesuré sur trois jeux à la fois — celui de l'auteur, le journal des chantiers,
+et un jeu public à étiquettes humaines.
+
+**1. Ranger est un problème d'ordre, et on l'a déjà.** Le cosinus fait aussi
+bien que le modèle de décision : 14 sur 16, 19 sur 32, 22 sur 30. Donc le
+premier appel de `remember`, celui qui montre les proches, **n'a besoin
+d'aucun modèle de plus**.
+
+**Mais à une condition que ma déclaration ne remplit pas, et c'est ma
+correction.** Le bon résultat s'obtient en comparant le texte au **texte
+complet du sujet** — sa description *et ce qu'il porte*. Avec les noms seuls :
+8, 7, 15. Or mon `Subject.about` est une description courte, écrite une fois,
+qui **ne contient pas** ce qu'on a rangé dessous. Elle est donc plus près du
+cas « nom seul » que du bon.
+
+> **Un sujet doit être une entité dérivée.** Son texte cherchable n'est pas
+> écrit, il est **rendu** depuis sa racine et ses voisines — c'est-à-dire
+> depuis les mémoires qui s'y ancrent.
+
+Et la pièce existe, livrée par le repli des bases de connaissances :
+`DerivedConfig`, les règles `gather`, `DeriveNode`, et le court-circuit par
+`_render_hash` qui réinvalide le rendu quand l'ensemble ancré change. Un sujet
+grossit donc tout seul à mesure qu'on lui accroche des notes, et son vecteur
+suit — sans un nœud de plus.
+
+C'est aussi, accessoirement, la réponse à ce qui fait **vieillir** un sujet :
+un sujet dont plus rien ne dépend cesse d'être rendu.
+
+**2. Décider qu'il faut créer ne marche par aucune piste, sur aucun jeu** : ni
+l'option « aucun de ces sujets » (3 sur 8, 2 sur 15, 3 sur 12), ni la faiblesse
+du meilleur score (AUC de 0,53 à 0,80), ni un seuil qui se transporte. **Rien
+de mesuré ne fait mieux que « demander toujours » avec création réparable.**
+
+Donc le protocole à verbe unique dont le premier appel refuse en montrant les
+proches n'est **pas un pis-aller** : c'est la meilleure réponse connue, et
+c'est l'appelant — agent ou personne — qui tranche entre rejoindre un proche et
+créer.
+
+**3. Et une distinction que je n'avais pas : le texte du juge n'est pas le
+texte du vecteur.** Sur mes paires, le modèle de décision passe de 0,80 à
+**0,92** d'AUC quand on lui donne le pourquoi en plus du titre, et reconnaît
+cinq redites sur six au lieu de trois. **Le cosinus fait l'inverse** : 0,99 sur
+les titres, 0,83 avec le pourquoi.
+
+Le nœud doit donc nourrir ses deux étages avec **deux textes différents** :
+
+| Étage | Ce qu'il reçoit | Pourquoi |
+|---|---|---|
+| 1. classement | le titre, court | le vecteur se dilue dans le paragraphe |
+| 2. verdict | le titre **et** le pourquoi | juger « même chose » demande la raison |
+
+Ce n'est pas un réglage, c'est la forme du nœud. Et ça n'a rien d'évident : la
+tentation est de passer le même objet aux deux, puisque c'est la même mémoire.
+
+**4. L'ordre des lots change**, et la raison est au journal des chantiers : le
+nœud de décision **à modèle** descend derrière le réacteur, le crochet après
+outil et le jardinier. Rien de mesuré ne le rend utile aujourd'hui, et les
+trois autres servent sans lui.
+
 **Les trois zones, et leur asymétrie assumée.** Les coûts ne sont pas
 symétriques, donc les zones ne doivent pas l'être :
 

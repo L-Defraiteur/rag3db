@@ -215,6 +215,9 @@ def main():
                  'Une ligne avant chaque compilation : le dossier de build est partagé entre les sessions.',
                  'annoncer cargo avant de le prendre'),
             ]
+            # Six contradictions, autant que de redites : c'est le verdict sur
+            # lequel la mesure hors de la main de son auteur restait la plus
+            # mince, et deux paires ne portent rien.
             contradictions = [
                 ('on peut mettre un target cargo dans /tmp',
                  'Le repertoire temporaire est sur disque et tient un gros dossier de compilation.',
@@ -222,6 +225,18 @@ def main():
                 ('compiler sur tous les coeurs ne gêne personne',
                  'Prendre tous les processeurs pour compiler ne dégrade pas l usage de la machine.',
                  'laisser deux coeurs libres'),
+                ('il faut demander avant de lancer la batterie',
+                 'La suite complète ne se lance jamais sans un accord préalable.',
+                 'la passe complète se lance sans demander'),
+                ('le journal de la passe est effacé à la sortie',
+                 'Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine.',
+                 'le journal survit à la passe'),
+                ('on prend le compilateur sans rien dire',
+                 'Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé.',
+                 'annoncer cargo avant de le prendre'),
+                ('un bon score suffit à fusionner deux choses',
+                 'Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche.',
+                 'ne pas fusionner sans preuve'),
             ]
             par_claim = {f['claim']: f['why'] for f in faits}
             paires = []

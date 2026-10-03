@@ -574,5 +574,293 @@
       "claim": "ne pas fusionner sans preuve",
       "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
     }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "il faut demander avant de lancer la batterie",
+      "why": "La suite complète ne se lance jamais sans un accord préalable."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "le journal de la passe est effacé à la sortie",
+      "why": "Le compte rendu vit dans un fichier temporaire supprimé quand la passe se termine."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "on prend le compilateur sans rien dire",
+      "why": "Chacun lance ses compilations quand il veut : le dossier de build n est pas partagé."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "/tmp est de la mémoire vive",
+      "why": "tmpfs de 61 Gio sur ce poste : aucun target cargo dans le scratchpad."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "la passe complète se lance sans demander",
+      "why": "Depuis le 6 septembre, le debug de performance est fini."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "laisser deux coeurs libres",
+      "why": "Jamais tous les coeurs : c est la compilation qui fige le poste."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "le journal survit à la passe",
+      "why": "run_e2e ecrit target/e2e-last.log dans les deux branches, et nomme les tests en échec."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "different",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "annoncer cargo avant de le prendre",
+      "why": "Le target est partagé : une ligne avant chaque passe, sinon deux sessions se marchent dessus."
+    }
+  },
+  {
+    "genre": "contradiction",
+    "verite": "contredit",
+    "nouveau": {
+      "claim": "un bon score suffit à fusionner deux choses",
+      "why": "Au-delà d un seuil, deux éléments proches se rapprochent d eux-mêmes, sans que personne tranche."
+    },
+    "existant": {
+      "claim": "ne pas fusionner sans preuve",
+      "why": "Un rapprochement se propose ; c est quelqu un qui tranche, jamais le seuil seul."
+    }
   }
 ]
