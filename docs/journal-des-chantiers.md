@@ -195,7 +195,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Décidé (§4) ; **la mesure des poids de fusion ne commence pas** avant la référence du banc `e2e_banc_etage` en granite-278m, avant / après les suppressions — avant = `a66bb0b9d`, après = `01791e347` (45 → 43 questions : les deux sur le parcours en largeur n'ont plus de cible) —, à jouer dès que les poids granite-278m sont sur ce poste. |
 | Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
 | Deck builder MTG (produit) | `experiments/mtga`, `master` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
-| Synchronisation par périmètre | **première étape sur `master` (3 octobre)** : `SnapshotConfig` (périmètre, `maxMissingRatio`, `onMissing: delete \| {transition}`), une session à la fois par périmètre et par cellule (`begin_snapshot` rend l'identifiant, `takeover`, `abort_snapshot`), marque `_snapshot`, fin en deux temps (`plan_snapshot_finish` / `apply_snapshot_finish`) et ses garde-fous, marque d'absence `_absent_since`, schéma v8 ; `tests/e2e_synchronisation.rs`, `scripts/test_backend_snapshot.py`, `scripts/test_migration_v8.py` | **Seconde étape faite (3 octobre)** : la mise de côté avant purge (`keepFor`, 7 jours par défaut, `0` pour la couper ; `_snapshot_aside`, le retour sans réembarquement, la purge bornée par SET) et l'annulation en bloc d'une fin (`undo_snapshot_finish`, outil `undo_snapshot`) — ce qui est codé et ses écarts : §8 de `extension/rag3weaver/docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`. Reste : rebrancher `reingest_file` (dette de généricité ci-dessous) ; PostgreSQL sans vecteurs mis de côté. |
+| Synchronisation par périmètre | **première étape sur `master` (3 octobre)** : `SnapshotConfig` (périmètre, `maxMissingRatio`, `onMissing: delete \| {transition}`), une session à la fois par périmètre et par cellule (`begin_snapshot` rend l'identifiant, `takeover`, `abort_snapshot`), marque `_snapshot`, fin en deux temps (`plan_snapshot_finish` / `apply_snapshot_finish`) et ses garde-fous, marque d'absence `_absent_since`, schéma v8 ; `tests/e2e_synchronisation.rs`, `scripts/test_backend_snapshot.py`, `scripts/test_migration_v8.py` | **Seconde étape faite (3 octobre)** : la mise de côté avant purge (`keepFor`, 7 jours par défaut, `0` pour la couper ; `_snapshot_aside`, le retour sans réembarquement, la purge bornée par SET) et l'annulation en bloc d'une fin (`undo_snapshot_finish`, outil `undo_snapshot`) — ce qui est codé et ses écarts : §8 de `extension/rag3weaver/docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`. Le code l'utilise (3 octobre, `src/code_sync.rs`, deux grains emboîtés). Reste : PostgreSQL sans vecteurs mis de côté. |
 | Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
@@ -209,10 +209,13 @@ du code »), par lecture des noms de champs — peut-être pas exhaustif. Rien
 n'est corrigé ; règle : une organisation se déclare dans `EntityConfig`,
 jamais en dur.
 
-- `code_tools.rs`, `reingest_file` : le seul chemin qui supprime aujourd'hui
-  les lignes disparues ; entité `SCOPE` et champs `file_path`, `key`,
-  `source` en dur. À remplacer par la synchronisation par périmètre déclaré
-  (ci-dessus, « supprimer les lignes disparues »).
+- ~~`code_tools.rs`, `reingest_file`~~ — **fait le 3 octobre** : l'entité
+  `Scope` déclare sa synchronisation (la source en grain large, le fichier en
+  grain fin) et `File` la sienne ; une édition est une fin immédiate sur le
+  grain du fichier, `code_sync::sync_source` synchronise une source entière
+  et retire enfin les fichiers supprimés (`src/code_sync.rs`). Reste, hors de
+  ce chantier : les arêtes sortantes d'un scope gardé ne sont jamais
+  nettoyées (un appel retiré du corps laisse son `CONSUMES`).
 - `work_domain.rs`, `Selector` : `sources` / `repos` / `languages` / `under`
   deviennent des filtres sur les champs `source`, `repo`, `language` et un
   champ de chemin. Le domaine de travail est un vocabulaire de code, pas un
