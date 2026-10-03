@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 06 h 00.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 07 h 00.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -60,7 +60,27 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (06 h)
+## En cours (07 h)
+
+**T5 auto + bac à sable, l'épreuve finale du lot 3 : 7 itérations,
+19 448 jetons, UN refus lu, zéro fuite** — contre 15 / ~80 000 sous la
+garde seule. L'agent conclut juste et le dit proprement. Le mode sans
+humain est tenable.
+
+**Pièce 2 livrée (9ebfeb8bf)** : la ligne de statut de l'index par
+l'application — op index_state du backend (try_lock, busy plutôt
+qu'attente), événement index_status du chat après chaque tour,
+affichage « [index] mots · vecteurs N % · creux N % » hors du texte de
+l'agent.
+
+**Pièce 3 en attente de codeparsers** : la section « avant d'éditer »
+(crochet after de read_file, tirée d'impact). L'obstacle nommé : impact
+est par NOM, read_file par CHEMIN — demandé un mode par-fichier de
+NeighborhoodNode (l'impact agrégé du fichier) plutôt que dupliquer sa
+logique de traversée en gabarit. Mon côté prêt : attachement, budget,
+silence par la porte read_catalog (text+relations), latence à mesurer.
+
+## Ancien (06 h)
 
 **Les trois lots de l'orchestration sont FERMÉS.** Lot 3 livré
 (0d4c6b5e6 + 4a313daae) : le bac à sable Landlock — BacASable dans
