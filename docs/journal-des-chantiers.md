@@ -170,7 +170,7 @@ Wizards ne sont pas clarifiées (`extension/rag3weaver/docs/20-09-2026/15-…`).
 | Repli des KB en entités dérivées | `master`, pas A et B faits | **Pas C** : poids de fusion par entité, pondération par genre dans `Scope`, gabarits de dérivées au catalogue. Décidé (§4) ; **la mesure des poids de fusion ne commence pas** avant la référence du banc `e2e_banc_etage` en granite-278m, avant / après les suppressions — avant = `a66bb0b9d`, après = `01791e347` (45 → 43 questions : les deux sur le parcours en largeur n'ont plus de cible) —, à jouer dès que les poids granite-278m sont sur ce poste. |
 | Chemin de masse des lots de naissances | `fa70cf8f3`, désactivé (`RAG3WEAVER_COPY_NAISSANCES`) | Trouver pourquoi le `COPY` des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (`ajuster_l_index_pour_le_retard`), relecture `select_node_ids`. |
 | Deck builder MTG (produit) | `experiments/mtga`, `master` | Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les `search_*`) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat dont la taille ne suit pas la liste (capture attendue) ; option Gemini via Vertex. |
-| Synchronisation par périmètre | **première étape sur `master` (3 octobre)** : `SnapshotConfig` (périmètre, `maxMissingRatio`, `onMissing: delete \| {transition}`), une session à la fois par périmètre et par cellule (`begin_snapshot` rend l'identifiant, `takeover`, `abort_snapshot`), marque `_snapshot`, fin en deux temps (`plan_snapshot_finish` / `apply_snapshot_finish`) et ses garde-fous, marque d'absence `_absent_since`, schéma v8 ; `tests/e2e_synchronisation.rs`, `scripts/test_backend_snapshot.py`, `scripts/test_migration_v8.py` | **Seconde étape** : la mise de côté avant purge (`keepFor`, 7 jours par défaut, `0` pour la couper) et l'annulation en bloc d'une fin — page de conception `extension/rag3weaver/docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`. Puis rebrancher `reingest_file` (dette de généricité ci-dessous). |
+| Synchronisation par périmètre | **première étape sur `master` (3 octobre)** : `SnapshotConfig` (périmètre, `maxMissingRatio`, `onMissing: delete \| {transition}`), une session à la fois par périmètre et par cellule (`begin_snapshot` rend l'identifiant, `takeover`, `abort_snapshot`), marque `_snapshot`, fin en deux temps (`plan_snapshot_finish` / `apply_snapshot_finish`) et ses garde-fous, marque d'absence `_absent_since`, schéma v8 ; `tests/e2e_synchronisation.rs`, `scripts/test_backend_snapshot.py`, `scripts/test_migration_v8.py` | **Seconde étape faite (3 octobre)** : la mise de côté avant purge (`keepFor`, 7 jours par défaut, `0` pour la couper ; `_snapshot_aside`, le retour sans réembarquement, la purge bornée par SET) et l'annulation en bloc d'une fin (`undo_snapshot_finish`, outil `undo_snapshot`) — ce qui est codé et ses écarts : §8 de `extension/rag3weaver/docs/3-octobre-2026-15h04/01-mise-de-cote-avant-purge.md`. Reste : rebrancher `reingest_file` (dette de généricité ci-dessous) ; PostgreSQL sans vecteurs mis de côté. |
 | Champ `folds` des scopes | `1e5eea234` | Ré-ingérer le code pour le remplir. |
 | Base MTG | poste | À reconstruire (environ 8 Go, dont 6 récupérables). |
 | Récupération des lignes supprimées dans rag3db | proposé, pas fait | Les blobs d'index sont bornés par une purge côté rag3weaver (`d1aa7d296`) en attendant. |
@@ -407,12 +407,13 @@ sessions, pas d'une vérification.
   lifecycle. **Le prix, assumé** : un écrivain qui réécrit périodiquement une
   ligne que la source n'a plus empêche son retrait, sans bruit. Une écriture
   en Cypher brut ne marque pas.
-- **La suppression ne retire jamais les vecteurs creux de l'index lucistore**
-  (lu, non vérifié par exécution — 3 octobre) : `DeleteRecordNode` supprime
-  les chunks en base et l'entrée plein texte, mais aucun `SparseHandle::remove`
-  n'existe dans le crate ; l'entrée creuse reste à l'offset du chunk supprimé.
-  À vérifier avec bge-m3 (servi depuis l'autre poste), avec la mise de côté,
-  qui touche les mêmes suppressions.
+- **La suppression ne retirait jamais les vecteurs creux de l'index
+  lucistore : corrigé le 3 octobre**, confirmé par exécution avec bge-m3
+  avant (3 entrées sur 3 après un retrait ; 4 pour 3 chunks vivants après une
+  mise à jour qui redécoupe). `DeleteRecordNode` et `RechunkDeleteNode`
+  retirent désormais du handle les offsets des chunks avant de les supprimer
+  (`retirer_le_creux_des_chunks`) ; test
+  `le_creux_d_une_ligne_retiree_quitte_l_index`, éprouvé par mutation.
 - **Après une table vidée puis repeuplée par le chemin de masse, la recherche
   dense ne rendait rien : corrigé le 3 octobre**, dans **notre** greffe de
   suppression dans l'index HNSW (l'amont n'y supprime rien), par la session
