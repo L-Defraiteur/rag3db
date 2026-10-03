@@ -14,8 +14,11 @@
 //!   précédé d'une ligne d'état — il est partiel ;
 //! - **prêt** : le résultat seul ; « rien trouvé » y est une réponse.
 //!
-//! L'état se lit par [`Catalog::index_state`] : une lecture de méta, pas un
-//! comptage.
+//! L'état se lit par [`Catalog::index_state_for`] **de l'entité lue** — le
+//! pivot du gabarit —, jamais par l'état global : dans le chat réel, le
+//! journal de la conversation s'écrit dans la même base dès le premier
+//! message, l'état global quitte « jamais », et la porte ne refusait plus
+//! (3 octobre 2026). Une lecture de méta, pas un comptage.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -47,15 +50,16 @@ pub fn partial_status(text: Level, relations: Level) -> Option<String> {
     }
 }
 
-/// Prendre le catalogue pour le lire, ou dire pourquoi pas.
-pub fn read_catalog(catalog: &Arc<Mutex<Catalog>>) -> CatalogRead<'_> {
+/// Prendre le catalogue pour lire `entity`, ou dire pourquoi pas.
+pub fn read_catalog<'a>(catalog: &'a Arc<Mutex<Catalog>>, entity: &str) -> CatalogRead<'a> {
     let Ok(cat) = catalog.try_lock() else {
         return CatalogRead::Refused(BUSY.into());
     };
-    let status = match cat.index_state() {
+    let status = match cat.index_state_for(entity) {
         Ok(state) if state.text == Level::Never => return CatalogRead::Refused(NEVER_INDEXED.into()),
         Ok(state) => partial_status(state.text, state.relations),
-        // L'état ne se lit pas : on lit quand même, sans rien promettre.
+        // L'état ne se lit pas (entité inconnue du catalogue, méta
+        // illisible) : on lit quand même, sans rien promettre.
         Err(_) => None,
     };
     CatalogRead::Ready { catalog: cat, status }

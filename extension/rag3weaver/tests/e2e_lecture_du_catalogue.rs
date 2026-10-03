@@ -63,6 +63,33 @@ fn jamais_indexe_un_refus_qui_dit_quoi_faire() {
     }
 }
 
+/// Trouvé dans le chat réel : le journal de la conversation s'écrit dans la
+/// même base dès le premier message, et l'état **global** quitte « jamais ».
+/// La porte lit l'état de l'entité qu'elle lit — le pivot —, pas celui de
+/// la base.
+#[test]
+#[ignore]
+fn jamais_indexe_meme_quand_la_base_porte_autre_chose() {
+    let catalog = setup();
+    let maintenant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    catalog
+        .lock()
+        .unwrap()
+        .note_index_state(IndexState {
+            text: Level::Ready,
+            vectors: Level::Ready,
+            relations: Level::Ready,
+            vectors_percent: 100,
+            vectors_seconds_left: None,
+            updated_ms: maintenant,
+        })
+        .unwrap();
+    for (outil, rendu) in appeler(&catalog, "helper") {
+        eprintln!("[{outil}] {rendu}");
+        assert_eq!(rendu, NEVER_INDEXED, "{outil} : la base est prête, le code n'a jamais été indexé");
+    }
+}
+
 #[test]
 #[ignore]
 fn occupe_une_ligne_jamais_une_attente() {
@@ -85,7 +112,7 @@ fn en_cours_le_resultat_avec_sa_ligne_d_etat() {
         let mut c = cat;
         c.ingest_code(&analyze("/projet", vec![("lib.rs".into(), SRC.into())])).unwrap();
         let maintenant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
-        c.note_index_state(IndexState {
+        c.note_index_state_for("Symbol", IndexState {
             text: Level::Running,
             vectors: Level::Running,
             relations: Level::Running,

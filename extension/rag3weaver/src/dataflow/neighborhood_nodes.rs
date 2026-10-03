@@ -537,7 +537,7 @@ impl Node for NeighborhoodNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         use super::catalog_read::{read_catalog, refusal, with_status, CatalogRead};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("NeighborhoodNode: service 'catalog' absent")?;
-        let (report, status) = match read_catalog(&catalog) {
+        let (report, status) = match read_catalog(&catalog, &self.cfg.start.pivot) {
             CatalogRead::Refused(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());

@@ -431,7 +431,7 @@ impl Node for UsagesNode {
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("UsagesNode: service 'catalog' absent")?;
         // Jamais un vide sans dire d'où il vient : occupé, jamais indexé,
         // ou partiel, le rendu le dit.
-        let (report, status) = match read_catalog(&catalog) {
+        let (report, status) = match read_catalog(&catalog, &self.cfg.pivot) {
             CatalogRead::Refused(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
