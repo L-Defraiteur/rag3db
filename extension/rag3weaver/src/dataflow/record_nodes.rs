@@ -22,7 +22,8 @@ use crate::events::{CatalogEvent, EventBus};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::config::CatalogConfig;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
-use crate::embedder::{lot_budget, souffler, stable_batches};
+use crate::burst::{self, Batches, BurstGate, BurstPacer};
+use crate::embedder::souffler;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::hash::content_hash;
 use crate::node_id_cache::{InternalNodeId, NodeIdCache};
@@ -1528,7 +1529,7 @@ struct PipelineStats {
 
 fn embed_pipeline<W: Sync, V: Send>(
     works: &[W],
-    plages: Vec<std::ops::Range<usize>>,
+    lots: Batches,
     text_of: impl Fn(&W) -> &str + Sync + Send,
     distant: bool,
     embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
@@ -1536,37 +1537,67 @@ fn embed_pipeline<W: Sync, V: Send>(
 ) -> Result<PipelineStats, String> {
     let embed_ms = std::sync::atomic::AtomicU64::new(0);
     let mut write_ms = 0u64;
-    let producteurs = std::env::var("RAG3WEAVER_EMBED_THREADS")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .filter(|n| *n > 0)
-        .unwrap_or(2)
-        .min(plages.len().max(1));
     let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(std::ops::Range<usize>, V), String>>(2);
     let suivant = std::sync::atomic::AtomicUsize::new(0);
     std::thread::scope(|s| {
         let text_of = &text_of;
-        let plages = &plages;
+        let lots = &lots;
         let suivant = &suivant;
         let embed_ms = &embed_ms;
-        for _ in 0..producteurs {
-            let tx = tx.clone();
-            s.spawn(move || loop {
-                let i = suivant.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let Some(plage) = plages.get(i).cloned() else { return };
-                let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
-                let t = std::time::Instant::now();
-                let rendu = embed(&texts);
-                embed_ms.fetch_add(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
-                // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
-                if !distant {
-                    souffler(t.elapsed());
+        match lots {
+            Batches::Fixed(plages) => {
+                let producteurs = std::env::var("RAG3WEAVER_EMBED_THREADS")
+                    .ok()
+                    .and_then(|v| v.trim().parse::<usize>().ok())
+                    .filter(|n| *n > 0)
+                    .unwrap_or(2)
+                    .min(plages.len().max(1));
+                for _ in 0..producteurs {
+                    let tx = tx.clone();
+                    s.spawn(move || loop {
+                        let i = suivant.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(plage) = plages.get(i).cloned() else { return };
+                        let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
+                        let t = std::time::Instant::now();
+                        let rendu = embed(&texts);
+                        embed_ms.fetch_add(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+                        // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
+                        if !distant {
+                            souffler(t.elapsed());
+                        }
+                        let echec = rendu.is_err();
+                        if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
+                            return;
+                        }
+                    });
                 }
-                let echec = rendu.is_err();
-                if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
-                    return;
-                }
-            });
+            }
+            // **Une carte que l'écran partage : un seul producteur.** Deux
+            // fils qui soumettent chacun leur lot se recouvrent, et le trou
+            // de l'un est la rafale de l'autre. Le lot se taille au moment de
+            // partir, sur la durée du précédent (`crate::burst`).
+            Batches::Paced { lens, budget, settings } => {
+                let tx = tx.clone();
+                s.spawn(move || {
+                    let mut gate = BurstGate::new(BurstPacer::new(*settings, budget.max_chars));
+                    let mut start = 0usize;
+                    while start < lens.len() {
+                        let plage = burst::next_paced_batch(lens, start, *budget, gate.budget());
+                        start = plage.end;
+                        let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
+                        gate.wait();
+                        let t = std::time::Instant::now();
+                        let rendu = embed(&texts);
+                        let took = t.elapsed();
+                        embed_ms.fetch_add(took.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+                        gate.done(lens[plage.clone()].iter().sum(), took);
+                        let echec = rendu.is_err();
+                        if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
+                            return;
+                        }
+                    }
+                });
+            }
         }
         drop(tx);
         for message in rx {
@@ -1800,7 +1831,7 @@ impl Node for EmbedNode {
             // fil écrit le précédent en base. Mesuré le 6 septembre 2026 : la
             // carte était à 36 % en moyenne pendant une ingestion, le reste
             // du temps elle attendait le JSON et les écritures.
-            let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
+            let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !embedder.distant());
             let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
             let stats = embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
@@ -1869,7 +1900,7 @@ impl Node for EmbedNode {
                 // les résultats se relisent par position.
                 sparse_works.sort_by_key(|w| w.text.len());
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
-                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
+                let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !sparse_emb.distant());
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
                 let stats = embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
@@ -1989,7 +2020,7 @@ impl Node for EmbedNode {
                 dual_works.sort_by_key(|w| w.text.len());
 
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
-                let plages = stable_batches(&lens, lot_budget(embedder.budget_conseille(), self.gpu_batch_size));
+                let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !dual_emb.distant());
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
                 let stats = embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {

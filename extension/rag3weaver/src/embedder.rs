@@ -924,9 +924,16 @@ pub fn budget_batches(lens: &[usize], max_items: usize, max_chars: usize) -> Vec
 /// carte partagée avec le compositeur aussi (issue 01 du 6 septembre 2026).
 pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> LotBudget {
     let explicite = std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);
+    lot_budget_si(conseille, defaut_items, explicite, crate::regime::Regime::courant().carte_partagee(), embed_char_budget())
+}
+
+/// [`lot_budget`], l'environnement en paramètres. `lot_budget_si(c, n, None,
+/// false, EMBED_CHAR_BUDGET)` est **ce que le modèle tient d'un coup** : le
+/// plafond du régulateur de rafale (`crate::burst`).
+pub fn lot_budget_si(conseille: Option<(usize, usize)>, defaut_items: usize, explicite: Option<usize>, carte_partagee: bool, sans_conseil: usize) -> LotBudget {
     match (conseille, explicite) {
         (_, Some(chars)) => LotBudget { max_items: defaut_items.max(1), max_chars: chars, max_area: LotBudget::AREA_DEFAUT, stable: false },
-        (Some((seq, jetons)), None) if !crate::regime::Regime::courant().carte_partagee() => LotBudget {
+        (Some((seq, jetons)), None) if !carte_partagee => LotBudget {
             max_items: seq.max(1),
             max_chars: seq.max(1) * jetons.max(1) * 3,
             // **La surface d'attention borne aussi.** 256 séquences de 512
@@ -946,7 +953,7 @@ pub fn lot_budget(conseille: Option<(usize, usize)>, defaut_items: usize) -> Lot
         // d'avant : par le démon, l'arrondi ne rapporte rien (le démon
         // redécoupe de son côté) et coûte un lot sur cinq — 36 → 43 s sur
         // src/dataflow, mesuré le 6 septembre 2026.
-        _ => LotBudget { max_items: defaut_items.max(1), max_chars: embed_char_budget(), max_area: LotBudget::AREA_DEFAUT, stable: false },
+        _ => LotBudget { max_items: defaut_items.max(1), max_chars: sans_conseil, max_area: LotBudget::AREA_DEFAUT, stable: false },
     }
 }
 

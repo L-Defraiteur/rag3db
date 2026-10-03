@@ -93,6 +93,10 @@ pub struct EmbedDaemon {
     lot_max: usize,
     /// La carte est unique : une passe à la fois. Voir l'en-tête.
     passe: Mutex<()>,
+    /// La porte des rafales, quand la carte est partagée avec l'affichage
+    /// ([`crate::burst`]). Une seule pour tous les clients : c'est la carte
+    /// qu'on cadence, pas la requête.
+    gate: Option<Mutex<crate::burst::BurstGate>>,
 }
 
 impl EmbedDaemon {
@@ -111,7 +115,19 @@ impl EmbedDaemon {
             lot_max: 32,
             expose: false,
             passe: Mutex::new(()),
+            gate: None,
         }
+    }
+
+    /// **Ménager l'écran** : des rafales d'une durée visée, un trou entre
+    /// deux. `None` garde le rythme d'avant (budget fixe, rapport cyclique).
+    /// Le binaire passe [`crate::burst::active`] ; un test passe ce qu'il veut.
+    pub fn burst(mut self, settings: Option<crate::burst::BurstSettings>) -> Self {
+        self.gate = settings.map(|settings| {
+            let ceiling = crate::burst::ceiling(self.embedder.budget_conseille(), self.lot_max).max_chars;
+            Mutex::new(crate::burst::BurstGate::new(crate::burst::BurstPacer::new(settings, ceiling)))
+        });
+        self
     }
 
     /// Le même modèle sait aussi rendre le creux en une passe : on l'expose.
@@ -165,13 +181,7 @@ impl EmbedDaemon {
         let lens: Vec<usize> = tries.iter().map(|t| t.len()).collect();
         let mut sortie: Vec<Option<T>> = (0..textes.len()).map(|_| None).collect();
         let mut pos = 0usize;
-        for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
-            let debut = std::time::Instant::now();
-            let lot = {
-                let _passe = self.passe.lock();
-                embarquer(&tries[plage.clone()])
-            }?;
-            souffler(debut.elapsed());
+        let mut ranger = |plage: std::ops::Range<usize>, lot: Vec<T>| -> Result<(), EmbedError> {
             if lot.len() != plage.len() {
                 return Err(EmbedError::ProviderError(format!(
                     "{} vecteurs pour {} textes",
@@ -182,6 +192,42 @@ impl EmbedDaemon {
             for v in lot {
                 sortie[ordre[pos]] = Some(v);
                 pos += 1;
+            }
+            Ok(())
+        };
+        match &self.gate {
+            None => {
+                for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
+                    let debut = std::time::Instant::now();
+                    let lot = {
+                        let _passe = self.passe.lock();
+                        embarquer(&tries[plage.clone()])
+                    }?;
+                    souffler(debut.elapsed());
+                    ranger(plage, lot)?;
+                }
+            }
+            // **Carte partagée avec l'affichage.** Le lot se taille sous le
+            // verrou, sur la durée du précédent — de n'importe quel client ;
+            // le trou s'attend *avant* la rafale et sous le verrou, sinon le
+            // client suivant le comblerait. La réponse, elle, n'attend rien.
+            Some(gate) => {
+                let budget = crate::burst::ceiling(self.embedder.budget_conseille(), self.lot_max);
+                let mut start = 0usize;
+                while start < lens.len() {
+                    let (plage, lot) = {
+                        let _passe = self.passe.lock();
+                        let mut gate = gate.lock().unwrap_or_else(|e| e.into_inner());
+                        let plage = crate::burst::next_paced_batch(&lens, start, budget, gate.budget());
+                        gate.wait();
+                        let debut = std::time::Instant::now();
+                        let lot = embarquer(&tries[plage.clone()]);
+                        gate.done(lens[plage.clone()].iter().sum(), debut.elapsed());
+                        (plage, lot)
+                    };
+                    start = plage.end;
+                    ranger(plage, lot?)?;
+                }
             }
         }
         Ok(sortie.into_iter().map(|v| v.expect("chaque texte a son vecteur")).collect())
@@ -728,6 +774,51 @@ mod tests {
 
         // Et le découpage ne change rien à ce que le client reçoit.
         assert_eq!(v.len(), 100);
+        for (i, t) in textes.iter().enumerate() {
+            assert_eq!(v[i], vec![t.len() as f32], "ordre rompu au rang {i}");
+        }
+    }
+
+    /// **Sur une carte que l'écran partage, le démon taille ses rafales sur
+    /// la durée** : la première part petite, les suivantes grossissent
+    /// jusqu'à durer ce qu'on vise, et le client reçoit la même chose.
+    #[test]
+    fn le_demon_cadence_ses_rafales_sur_la_duree() {
+        /// Dure cinq microsecondes par caractère, et note chaque appel.
+        #[derive(Debug, Default)]
+        struct Lent(Mutex<Vec<usize>>);
+
+        impl Embedder for Lent {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                let chars: usize = texts.iter().map(|t| t.len()).sum();
+                self.0.lock().unwrap().push(chars);
+                std::thread::sleep(std::time::Duration::from_micros(5 * chars as u64));
+                Ok(texts.iter().map(|t| vec![t.len() as f32]).collect())
+            }
+            fn dim(&self) -> usize {
+                1
+            }
+            fn name(&self) -> &str {
+                "lent"
+            }
+        }
+
+        let lent = Arc::new(Lent::default());
+        // 40 ms visés, à 5 µs le caractère : 8 000 caractères par rafale.
+        let settings = crate::burst::BurstSettings {
+            target: std::time::Duration::from_millis(40),
+            pause: std::time::Duration::from_millis(5),
+        };
+        let demon = EmbedDaemon::new(lent.clone()).lot_max(64).burst(Some(settings));
+        let textes: Vec<String> = (0..240).map(|i| "x".repeat(200 + i % 7)).collect();
+        let v = demon.par_lots(&textes, |lot| lent.embed(lot)).expect("par_lots");
+
+        let appels = lent.0.lock().unwrap().clone();
+        assert!(appels[0] <= crate::burst::PROBE_CHARS, "le premier lot part petit : {appels:?}");
+        let plus_gros = *appels.iter().max().unwrap();
+        assert!(plus_gros > 2 * appels[0], "les lots grossissent vers la durée visée : {appels:?}");
+        assert!(plus_gros <= 8_192, "sans conseil du modèle, le plafond d'avant tient : {appels:?}");
+        assert_eq!(v.len(), 240);
         for (i, t) in textes.iter().enumerate() {
             assert_eq!(v[i], vec![t.len() as f32], "ordre rompu au rang {i}");
         }
