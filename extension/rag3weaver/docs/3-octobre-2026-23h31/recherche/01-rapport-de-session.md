@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 04 h 00.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 05 h 00.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -60,7 +60,22 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (04 h)
+## En cours (05 h)
+
+**Le lot 3 — bac à sable de run_command** : la proposition est au dépôt
+(03-bac-a-sable-proposition.md), le code commence (crate landlock,
+variante executer_confine d'Atelier, clé sandbox au manifeste, le mode
+auto qui refuse de s'armer sans).
+
+**Fermé depuis 04 h — le lot 2 en entier** (1afd8bfbe) : la pièce de
+câblage workspace.index_signals (clé explicite, générique, validée dans
+les deux sens — y compris models.sparse que rien ne lit) ; le manifeste
+du poste déclare le creux et la tuyauterie indexe les trois signaux en
+vrai ; README : coût, dette d'une base existante, cloud sans creux tant
+que son service n'existe pas. Demande à embarquements : le creux dans
+index_state_for (niveau séparé recommandé).
+
+## Ancien (04 h)
 
 **La pièce de câblage du creux** (cadrée par l'orchestration) : une clé
 EXPLICITE du manifeste monte le signal creux sur l'entité d'un index
