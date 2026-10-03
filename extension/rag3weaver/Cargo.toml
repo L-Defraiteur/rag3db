@@ -80,6 +80,10 @@ env_logger = "0.11"
 # burn (GPU-agnostique : Vulkan/WebGPU/Metal/CUDA — feature flag)
 burn = { version = "0.22.0-pre.3", optional = true, default-features = false, features = ["std", "wgpu"] }
 burn-store = { version = "0.22.0-pre.3", optional = true }
+# **Ce que le pilote dit d'une carte** (`regime::card_class`) : intégrée ou
+# dédiée, `/sys` ne le sait pas. La version exacte que burn tire déjà — une
+# ligne de dépendance, pas une seconde copie de wgpu dans l'arbre.
+wgpu = { version = "=30.0.0", optional = true, default-features = false, features = ["vulkan"] }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
 
 # Parseurs de code (tree-sitter, 12 langages) : entités File / Scope et
@@ -134,7 +138,7 @@ postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types",
 # Embedder BGE-M3 via burn — pas de candle, pas de CUDA, pas de hf-hub.
 # Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
 # depuis un .bpk fourni par l'appelant (cf generated/README.md).
-burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan", "burn-autotune", "burn-fusion"]
+burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan", "burn-autotune", "burn-fusion", "dep:wgpu"]
 # **Autotune et fusion, nommées chez nous.** Deux features de burn qu'on croyait
 # avoir et qu'on n'avait pas : `burn` est pris sans ses defaults, et seule
 # `burn-rocm` les rallumait — d'où le « facteur 14 » du 28 août (une chauffe

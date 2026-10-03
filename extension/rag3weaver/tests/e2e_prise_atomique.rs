@@ -966,7 +966,7 @@ fn le_choix_du_premier_index_se_note_une_fois_et_se_relit() {
         a.register_entity("Produit", produit_entite()).unwrap();
         assert!(a.embedding_choice().unwrap().is_none(), "rien avant qu'on ait dit pourquoi");
         // Le cœur sur une vraie carte : 278m, et la raison le dit.
-        let choix = recommended_model(1_642, 10 * 1024 * 1024, CardClass::Dedicated { vram_bytes: 31 << 30 });
+        let choix = recommended_model(1_642, 10 * 1024 * 1024, CardClass::Dedicated { vram_bytes: 31 << 30 }, false);
         a.note_embedding_choice(&choix).unwrap();
         let note = a.embedding_choice().unwrap().expect("noté");
         assert_eq!(note.model, "granite-278m");
