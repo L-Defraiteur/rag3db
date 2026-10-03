@@ -2302,7 +2302,7 @@ impl Catalog {
     // ── Persistence (_catalog_meta) ─────────────────────────────────────
 
     /// Persist a key-value pair to `_catalog_meta`.
-    fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
+    pub(crate) fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
         let stmt = self.dialect.upsert_meta("key", "value");
         self.conn.execute_with_params(
             &stmt,

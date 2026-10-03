@@ -1014,9 +1014,14 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn copy_links_from_csv(&self, rel_table: &str, ends: (&str, &str), prop_columns: &[&str], path: &str) -> Option<String> {
-        let _ = prop_columns;
         let (from, to) = ends;
-        Some(format!("COPY {rel_table} FROM '{path}' (from='{from}', to='{to}')"))
+        // **Les colonnes nommées**, dans l'ordre où le CSV les écrit : sans
+        // elles, le moteur remplit les propriétés dans l'ordre de la table —
+        // celui des `ALTER` successifs —, et deux colonnes texte s'échangent
+        // sans erreur (3 octobre 2026, `e2e_copy_liens`). Les deux premières
+        // colonnes du fichier restent les bouts.
+        let colonnes = if prop_columns.is_empty() { String::new() } else { format!(" ({})", prop_columns.join(", ")) };
+        Some(format!("COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}')"))
     }
 
     fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {

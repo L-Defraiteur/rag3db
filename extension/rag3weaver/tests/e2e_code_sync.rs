@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use rag3weaver::catalog::SnapshotFinishOptions;
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema, source_id, SCOPE};
-use rag3weaver::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
+use rag3weaver::code_sync::{sync_source, RelationsMode, SourceSyncOptions, SourceSyncProgress, SyncPhase};
 use rag3weaver::code_tools::{edit_file, EditOp, FileSource, Snapshot};
 use rag3weaver::connection::{CypherValue, DbConnection};
 use rag3weaver::embedder::HashEmbedder;
@@ -113,7 +113,8 @@ fn synchroniser_une_source_retire_les_fichiers_supprimes() {
     let premiere = sync_source(&mut catalog, &Snapshot::new("depot", source_a_trois_fichiers()), &options, &mut |p: SourceSyncProgress| paquets.push(p)).unwrap();
     assert_eq!((premiere.files_listed, premiere.files_ingested), (3, 3), "{premiere:?}");
     assert!(premiere.scopes.removed.is_empty() && premiere.files.removed.is_empty(), "{premiere:?}");
-    assert_eq!(paquets.iter().map(|p| p.files_done).collect::<Vec<_>>(), [2, 3], "{paquets:?}");
+    let par_paquet: Vec<usize> = paquets.iter().filter(|p| p.phase == SyncPhase::Nodes).map(|p| p.files_done).collect();
+    assert_eq!(par_paquet, [2, 3], "{paquets:?}");
     assert_eq!(fichiers(&catalog).len(), 3);
 
     // b.rs est supprimé de la source.
@@ -251,4 +252,70 @@ fn un_nom_ambigu_qui_redevient_unique_gagne_ses_aretes() {
     let appels = appels_de(&catalog, "appelant");
     assert_eq!(appels.len(), 1, "le nom redevenu unique est résolu : {appels:?}");
     assert!(appels[0].ends_with("a.rs"), "{appels:?}");
+}
+
+/// Une source un peu plus riche : des appels entre fichiers, des méthodes.
+fn source_reliee() -> Vec<(String, String)> {
+    vec![
+        ("geo.rs".to_string(), "pub struct Point { x: f64 }\nimpl Point {\n    pub fn norme(&self) -> f64 { self.x }\n}\n".to_string()),
+        ("calc.rs".to_string(), "pub fn total(p: Point) -> f64 { p.norme() + base() }\n".to_string()),
+        ("base.rs".to_string(), "pub fn base() -> f64 { 1.0 }\npub fn autre() -> f64 { base() }\n".to_string()),
+        ("main.rs".to_string(), "fn main() { total(Point { x: 1.0 }); autre(); }\n".to_string()),
+    ]
+}
+
+/// Le graphe par relation : (relation, nombre d'arêtes).
+fn graphe(catalog: &Catalog) -> Vec<(String, i64)> {
+    let mut v = Vec::new();
+    for rel in ["DEFINED_IN", "CONSUMES", "CONSUMED_BY", "PARENT_OF", "HAS_PARENT", "IMPLEMENTS", "DEFINES", "MENTIONS"] {
+        let n = catalog
+            .execute_raw(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)"))
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap();
+        v.push((rel.to_string(), n));
+    }
+    v
+}
+
+/// **Les relations en masse donnent le même graphe** que paquet par paquet :
+/// les mêmes arêtes, relation par relation — la résolution par `Symbol` faite
+/// une fois à la fin vaut la résolution de lot en lot.
+#[test]
+#[ignore]
+fn les_relations_en_masse_donnent_le_meme_graphe() {
+    let mut par_paquet = catalogue();
+    let mut en_masse = catalogue();
+    let o = |m| SourceSyncOptions { batch_files: 1, relations: Some(m), ..Default::default() };
+    let a = sync_source(&mut par_paquet, &Snapshot::new("depot", source_reliee()), &o(RelationsMode::PerBatch), &mut |_| {}).unwrap();
+    let b = sync_source(&mut en_masse, &Snapshot::new("depot", source_reliee()), &o(RelationsMode::Bulk), &mut |_| {}).unwrap();
+    assert_eq!((a.relations_mode, b.relations_mode), (Some(RelationsMode::PerBatch), Some(RelationsMode::Bulk)));
+    assert_eq!(a.relations, b.relations, "le rapport compte la même chose dans les deux modes");
+    let ga = graphe(&par_paquet);
+    assert!(ga.iter().any(|(r, n)| r == "CONSUMES" && *n > 0), "la source a des appels : {ga:?}");
+    assert_eq!(ga, graphe(&en_masse), "même graphe, relation par relation");
+}
+
+/// **Le mode se choisit seul** : une source neuve en masse, une source déjà
+/// indexée paquet par paquet ; les phases se suivent, et la marque « relations
+/// en cours » est effacée à la fin.
+#[test]
+#[ignore]
+fn le_mode_des_relations_se_choisit_selon_la_source() {
+    let mut catalog = catalogue();
+    let mut phases = Vec::new();
+    let premiere = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
+    assert_eq!(premiere.relations_mode, Some(RelationsMode::Bulk));
+    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Done], "{phases:?}");
+    let marques = catalog
+        .execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relations_pending:' AND m._value <> '' RETURN m._key")
+        .unwrap()
+        .rows;
+    assert!(marques.is_empty(), "la marque est effacée à la fin : {marques:?}");
+
+    let mut phases = Vec::new();
+    let seconde = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
+    assert_eq!(seconde.relations_mode, Some(RelationsMode::PerBatch));
+    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Done], "{phases:?}");
 }

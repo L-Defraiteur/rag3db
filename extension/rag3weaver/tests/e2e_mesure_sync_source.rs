@@ -9,7 +9,7 @@
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema};
-use rag3weaver::code_sync::{sync_source, SourceSyncOptions};
+use rag3weaver::code_sync::{sync_source, RelationsMode, SourceSyncOptions};
 use rag3weaver::code_tools::WorkingTree;
 use rag3weaver::connection::DbConnection;
 use rag3weaver::disponibilite::Disponibilites;
@@ -27,11 +27,21 @@ fn mesure_la_duree_par_paquet() {
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
 
-    let options = SourceSyncOptions { batch_files: 64, exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
+    // `MESURE_RELATIONS=bulk|per_batch` choisit le mode (défaut : le choix
+    // automatique, en masse pour cette première indexation).
+    let relations = match std::env::var("MESURE_RELATIONS").as_deref() {
+        Ok("bulk") => Some(RelationsMode::Bulk),
+        Ok("per_batch") => Some(RelationsMode::PerBatch),
+        _ => None,
+    };
+    let options = SourceSyncOptions { batch_files: 64, exige: Disponibilites::RECHERCHE_TEXTE, relations, ..Default::default() };
     let debut = std::time::Instant::now();
     let mut dernier = std::time::Instant::now();
     let mut durees = Vec::new();
     let rapport = sync_source(&mut catalog, &WorkingTree::new(racine.join("src")), &options, &mut |p| {
+        if p.phase != rag3weaver::code_sync::SyncPhase::Nodes {
+            return;
+        }
         let ms = dernier.elapsed().as_millis();
         dernier = std::time::Instant::now();
         durees.push(ms);
@@ -41,11 +51,13 @@ fn mesure_la_duree_par_paquet() {
     let n = durees.len();
     let tiers = |a: usize, b: usize| durees[a..b].iter().sum::<u128>() / (b - a).max(1) as u128;
     eprintln!(
-        "MESURE sync_source : {} fichiers, {} scopes, {} relations en {} s ; ms par paquet, par tiers : {} / {} / {}",
+        "MESURE sync_source ({:?}) : {} fichiers, {} scopes, {} relations en {} s (chargement final {} ms) ; ms par paquet, par tiers : {} / {} / {}",
+        rapport.relations_mode,
         rapport.files_ingested,
         rapport.scopes_written,
         rapport.relations,
         debut.elapsed().as_secs(),
+        rapport.relations_bulk_ms,
         tiers(0, n / 3),
         tiers(n / 3, 2 * n / 3),
         tiers(2 * n / 3, n)

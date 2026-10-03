@@ -130,6 +130,43 @@ pub struct SourceSyncOptions {
     /// la dette de vecteurs en base).
     #[serde(skip, default = "tout")]
     pub exige: Disponibilites,
+    /// Comment poser les relations. `None` : en masse
+    /// ([`RelationsMode::Bulk`]) quand la source n'a encore rien en base,
+    /// paquet par paquet sinon.
+    pub relations: Option<RelationsMode>,
+}
+
+/// **Comment une synchronisation pose les relations.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RelationsMode {
+    /// Avec chaque paquet : les liens sont là au fil de l'eau. Pour une
+    /// source déjà indexée, où seuls les fichiers changés en apportent.
+    PerBatch,
+    /// À la fin, en une fois : les paquets ne posent que les nœuds et le plein
+    /// texte ; les relations et les rendez-vous de la résolution attendent en
+    /// file — vidée par COPY au-delà de [`BULK_QUEUE_LIMIT`] liens, pour borner
+    /// la mémoire — et la résolution par `Symbol` tourne une fois, sur toute
+    /// la source. Pour une première indexation.
+    Bulk,
+}
+
+/// Au-delà de ce nombre de liens en file, le chemin de masse les pose (par
+/// COPY) sans attendre la fin : la mémoire reste bornée sur un poste modeste
+/// — de l'ordre de la centaine de Mo pour 200 000 liens.
+pub const BULK_QUEUE_LIMIT: usize = 200_000;
+
+/// Où en est une synchronisation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncPhase {
+    /// Les paquets : nœuds et plein texte (et relations, en `PerBatch`).
+    #[default]
+    Nodes,
+    /// Le chargement final des relations et la résolution (`Bulk`).
+    Relations,
+    /// Tout est posé.
+    Done,
 }
 
 fn tout() -> Disponibilites {
@@ -138,7 +175,7 @@ fn tout() -> Disponibilites {
 
 impl Default for SourceSyncOptions {
     fn default() -> Self {
-        Self { batch_files: 64, plan_only: false, takeover: false, allow_empty: false, force: false, exige: Disponibilites::TOUT }
+        Self { batch_files: 64, plan_only: false, takeover: false, allow_empty: false, force: false, exige: Disponibilites::TOUT, relations: None }
     }
 }
 
@@ -149,6 +186,9 @@ pub struct SourceSyncProgress {
     pub files_done: usize,
     pub files_total: usize,
     pub scopes_written: usize,
+    /// Les liens en file, pas encore posés (`Bulk`).
+    pub relations_pending: usize,
+    pub phase: SyncPhase,
 }
 
 /// Ce qu'une synchronisation de source a fait.
@@ -162,6 +202,9 @@ pub struct SourceSyncReport {
     pub scopes_written: usize,
     pub relations: usize,
     pub failed: usize,
+    /// Le mode qui a servi, et la durée du chargement final en `Bulk`.
+    pub relations_mode: Option<RelationsMode>,
+    pub relations_bulk_ms: u128,
     /// La fin, par entité : plan seul si `plan_only`, appliquée sinon.
     pub scopes: SnapshotFinish,
     pub files: SnapshotFinish,
@@ -187,7 +230,24 @@ pub fn sync_source(
             return Err(e.to_string());
         }
     };
-    let resultat = synchroniser(catalog, source, options, progress, &grain, &s_scopes, &s_files, source_id);
+    let mode = match options.relations {
+        Some(m) => m,
+        None if source_deja_indexee(catalog, &source_id)? => RelationsMode::PerBatch,
+        None => RelationsMode::Bulk,
+    };
+    // **La marque « relations en cours »**, posée dès le début du mode de
+    // masse : un lecteur (l'avancement, la recherche, un autre processus)
+    // sait que les relations de cette source ne sont pas encore là, au lieu
+    // de lire un graphe vide. Sa valeur porte la session, pour qu'une marque
+    // laissée par un processus tué se reconnaisse.
+    let marque = format!("relations_pending:{}/{}:{source_id}", catalog.scope().org, catalog.scope().project);
+    if mode == RelationsMode::Bulk {
+        catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")).map_err(|e| e.to_string())?;
+    }
+    let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id);
+    if mode == RelationsMode::Bulk {
+        let _ = catalog.persist_meta_key(&marque, "");
+    }
     if resultat.is_err() || options.plan_only {
         let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
         let _ = catalog.abort_snapshot(FILE, &grain, &s_files);
@@ -200,6 +260,8 @@ fn synchroniser(
     catalog: &mut Catalog,
     source: &dyn FileSource,
     options: &SourceSyncOptions,
+    mode: RelationsMode,
+    marque: &str,
     progress: &mut dyn FnMut(SourceSyncProgress),
     grain: &BTreeMap<String, CypherValue>,
     s_scopes: &str,
@@ -219,7 +281,9 @@ fn synchroniser(
         .filter(|p| !matches!(crate::code::verdict(p, 0), crate::code::Verdict::Ecarte(_)))
         .cloned()
         .collect();
-    let mut report = SourceSyncReport { source: source_id, files_listed: listed.len(), ..Default::default() };
+    let mut report =
+        SourceSyncReport { source: source_id, files_listed: listed.len(), relations_mode: Some(mode), ..Default::default() };
+    let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     for paquet in retenus.chunks(options.batch_files.max(1)) {
         let mut sources = Vec::with_capacity(paquet.len());
@@ -235,7 +299,11 @@ fn synchroniser(
                 f.absolute_path.clear();
             }
         }
-        let ingere = catalog.ingest_code_jusqu_a(&analysis, options.exige).map_err(|e| e.to_string())?;
+        let ingere = match mode {
+            RelationsMode::PerBatch => catalog.ingest_code_jusqu_a(&analysis, options.exige),
+            RelationsMode::Bulk => catalog.ingest_code_differe(&analysis, options.exige, &mut noms_differes),
+        }
+        .map_err(|e| e.to_string())?;
         // Ce que le paquet porte, marqué de la session : vu, pas seulement
         // écrit pendant elle.
         let uuids_scopes = analysis
@@ -254,12 +322,34 @@ fn synchroniser(
         catalog.mark_snapshot(FILE, grain, s_files, &uuids_files).map_err(|e| e.to_string())?;
         report.files_ingested += analysis.files.len();
         report.scopes_written += ingere.scopes;
-        report.relations += ingere.relations;
         report.failed += ingere.failed;
+        // Les relations de l'analyse, dans les deux modes : posées (par
+        // paquet) ou mises en file (en masse) — le même compte.
+        report.relations += ingere.relations;
+        if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > BULK_QUEUE_LIMIT {
+            // La mémoire bornée : la file est posée par COPY sans attendre.
+            let pose = catalog.drain_jusqu_a(options.exige);
+            report.failed += pose.failed;
+        }
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
+        avancement.relations_pending = catalog.pending_work().relations.len();
+        if mode == RelationsMode::Bulk {
+            let _ = catalog.persist_meta_key(marque, &format!("{s_scopes}|{}", avancement.relations_pending));
+        }
         progress(avancement);
     }
+    if mode == RelationsMode::Bulk {
+        avancement.phase = SyncPhase::Relations;
+        progress(avancement);
+        let debut = std::time::Instant::now();
+        let fin = catalog.finir_les_relations_differees(&noms_differes, options.exige).map_err(|e| e.to_string())?;
+        report.failed += fin.failed;
+        report.relations_bulk_ms = debut.elapsed().as_millis();
+        avancement.relations_pending = 0;
+    }
+    avancement.phase = SyncPhase::Done;
+    progress(avancement);
     let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
     let plan_scopes = catalog.plan_snapshot_finish(SCOPE, grain, s_scopes, garde).map_err(|e| e.to_string())?;
     let plan_files = catalog.plan_snapshot_finish(FILE, grain, s_files, garde).map_err(|e| e.to_string())?;
@@ -294,4 +384,16 @@ fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, S
     noms.sort();
     noms.dedup();
     Ok(noms)
+}
+
+/// La source a-t-elle déjà des scopes en base ? Sinon, c'est une première
+/// indexation : le chemin de masse.
+fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
+    let res = catalog
+        .execute_raw_with_params(
+            "MATCH (s:Scope) WHERE s.source = $source RETURN s._uuid LIMIT 1",
+            &[crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(!res.rows.is_empty())
 }

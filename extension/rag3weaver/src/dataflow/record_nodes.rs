@@ -560,7 +560,23 @@ struct ResolvedLink {
 }
 
 /// Au-delà de ce nombre d'arêtes dans une relation, le lot part par COPY.
-const COPY_SEUIL: usize = 2_000;
+/// `RAG3WEAVER_LINK_COPY_THRESHOLD` le règle, pour mesurer.
+///
+/// **200, pas 2 000** (3 octobre 2026). Mesuré sur `src/` du moteur (1 643
+/// fichiers, paquets de 64), dans la même série : 48 s avec 200, 92 s avec
+/// 2 000 (sous une charge plus basse), et une durée par paquet presque plate
+/// au lieu de croître — chaque paquet ne porte que quelques centaines
+/// d'arêtes par relation, qui partaient par MERGE, dont le coût grandit avec
+/// la base. La vérification d'existence du COPY reste de quelques dizaines de
+/// millisecondes. À 50, rien de mieux.
+const COPY_SEUIL: usize = 200;
+
+fn copy_seuil() -> usize {
+    std::env::var("RAG3WEAVER_LINK_COPY_THRESHOLD")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(COPY_SEUIL)
+}
 
 /// **Un fichier CSV à nous seuls.** Le processus, un compteur, et l'instant :
 /// deux graphes dans le même processus — deux tests, deux fils — qui posent
@@ -957,7 +973,7 @@ impl Node for LinkRecordNode {
             // arêtes en 47 ms au lieu de 158 s (6 septembre 2026). La
             // sémantique de MERGE est gardée : dédoublonnage dans le lot, et
             // les paires déjà posées écartées quand la table n'est pas vide.
-            if indices.len() >= COPY_SEUIL {
+            if indices.len() >= copy_seuil() {
                 if let Some((from, to)) = ends.as_ref() {
                     match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, &prop_refs, indices, &resolved, &items, &mut presents_connus) {
                         Ok(true) => {

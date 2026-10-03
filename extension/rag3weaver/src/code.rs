@@ -1302,6 +1302,59 @@ impl Catalog {
         analysis: &CodeAnalysis,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<CodeIngestReport, CatalogError> {
+        self.ingest_code_interne(analysis, exige, None)
+    }
+
+    /// **Les nœuds maintenant, les relations plus tard** : les lignes (File,
+    /// Scope, Library, Symbol) et leur plein texte sont posés ; les relations
+    /// de l'analyse et les rendez-vous `DEFINES` / `MENTIONS` restent **en
+    /// file**, et les noms touchés s'ajoutent à `noms`.
+    /// [`finir_les_relations_differees`](Self::finir_les_relations_differees)
+    /// les pose ensuite en une fois — chaque relation dépasse alors largement
+    /// le seuil du chemin par COPY — et résout tous les noms d'un coup.
+    /// C'est le chemin de masse d'une première indexation : une suite de
+    /// petits lots de liens par MERGE coûtait de plus en plus cher à mesure
+    /// que la base grossissait.
+    pub fn ingest_code_differe(
+        &mut self,
+        analysis: &CodeAnalysis,
+        exige: crate::disponibilite::Disponibilites,
+        noms: &mut std::collections::BTreeSet<String>,
+    ) -> Result<CodeIngestReport, CatalogError> {
+        self.ingest_code_interne(analysis, exige, Some(noms))
+    }
+
+    /// La fin du chemin de masse : le drain des relations et des rendez-vous
+    /// en file, puis la résolution de tous les noms touchés.
+    pub fn finir_les_relations_differees(
+        &mut self,
+        noms: &std::collections::BTreeSet<String>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<CodeIngestReport, CatalogError> {
+        let mut report = CodeIngestReport::default();
+        let phase = std::time::Instant::now();
+        let linked = self.drain_jusqu_a(exige);
+        report.relations = linked.processed;
+        report.failed += linked.failed;
+        report.relations_ms = phase.elapsed().as_millis();
+        let phase = std::time::Instant::now();
+        let noms: Vec<String> = noms.iter().cloned().collect();
+        let resolu = self.resoudre_les_symboles(&noms, exige)?;
+        report.linked_across_batches = resolu.linked_across_batches;
+        report.ambiguous = resolu.ambiguous;
+        report.still_pending = resolu.still_pending;
+        report.failed += resolu.failed;
+        report.symbols = noms.len();
+        report.symbols_ms = phase.elapsed().as_millis();
+        Ok(report)
+    }
+
+    fn ingest_code_interne(
+        &mut self,
+        analysis: &CodeAnalysis,
+        exige: crate::disponibilite::Disponibilites,
+        mut differes: Option<&mut std::collections::BTreeSet<String>>,
+    ) -> Result<CodeIngestReport, CatalogError> {
         let mut report = CodeIngestReport::default();
         let phase = std::time::Instant::now();
 
@@ -1337,16 +1390,22 @@ impl Catalog {
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
             par_relation.entry(r.rel.as_str()).or_default().push((from, to, BTreeMap::new()));
         }
+        let en_file: usize = par_relation.values().map(Vec::len).sum();
         for (rel, liens) in par_relation {
             self.mettre_en_file_les_liens(rel, liens)?;
         }
-        let linked = self.drain_jusqu_a(exige);
-        report.relations = linked.processed;
-        report.failed += linked.failed;
+        if differes.is_some() {
+            // En file : posées à la fin, en masse.
+            report.relations = en_file;
+        } else {
+            let linked = self.drain_jusqu_a(exige);
+            report.relations = linked.processed;
+            report.failed += linked.failed;
+        }
         report.relations_ms = phase.elapsed().as_millis();
 
         let phase = std::time::Instant::now();
-        self.resolve_across_batches(analysis, &mut report, exige)?;
+        self.resolve_across_batches(analysis, &mut report, exige, differes.as_deref_mut())?;
         report.symbols_ms = phase.elapsed().as_millis();
         Ok(report)
     }
@@ -1367,6 +1426,7 @@ impl Catalog {
         analysis: &CodeAnalysis,
         report: &mut CodeIngestReport,
         exige: crate::disponibilite::Disponibilites,
+        differes: Option<&mut std::collections::BTreeSet<String>>,
     ) -> Result<(), CatalogError> {
         use std::collections::{BTreeMap as Map, BTreeSet};
 
@@ -1429,6 +1489,12 @@ impl Catalog {
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
         etape("mise en file DEFINES/MENTIONS", &mut t);
+        if let Some(noms) = differes {
+            // Le chemin de masse : les rendez-vous restent en file, la
+            // résolution attend que toute la source soit là.
+            noms.extend(names.iter().map(|n| n.to_string()));
+            return Ok(());
+        }
         let drained = self.drain_jusqu_a(exige);
         report.failed += drained.failed;
         etape("drain des rendez-vous", &mut t);
