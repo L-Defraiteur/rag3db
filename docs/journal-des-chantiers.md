@@ -213,8 +213,14 @@ sessions, pas d'une vérification.
   ne demande pas de `CHECKPOINT` mais subit ceux du commit, et continue après
   un échec : il est exposé. Prévu : le moteur refuse tout jusqu'à réouverture
   (à vérifier contre PostgreSQL), puis rag3weaver apprend à rouvrir.
-- **Les poids de l'OCR (ppocrv6-tiny) manquent sur ce poste** et ne sont
-  publiés nulle part ; à régénérer ou à rapporter de l'ancien poste.
+- **Les poids d'origine sont revenus de l'ancien poste** (3 octobre, copie
+  par ssh, empreintes conformes à `generated/README.md`) : l'OCR
+  `ppocrv6-tiny` est en place dans `~/.cache/rag3weaver/` (il n'est toujours
+  publié nulle part), ainsi que `msmarco-minilm` et `mmarco-mminilm` ; les
+  granite du 6 septembre sont dans `~/.cache/rag3weaver/origine-6-septembre/`,
+  **à côté** des régénérés qui restent installés. À décider par Lucie :
+  remettre les originaux en place et les publier à la place des régénérés ;
+  publier l'OCR.
 - **Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026**
   par l'étape 1 du banc de concurrence (branche `banc-de-concurrence`,
   `37a44e351`, 20 passes sur 20). Sous `debug_enable_multi_writes` : deux ou
