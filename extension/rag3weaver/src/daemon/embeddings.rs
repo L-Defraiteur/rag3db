@@ -337,6 +337,12 @@ fn sparse_json(v: &SparseVector) -> serde_json::Value {
 
 // ─── Le client ───────────────────────────────────────────────────────────────
 
+/// **L'adresse d'un service d'embarquement déjà en place** — sur ce poste ou
+/// sur un autre, par un tunnel. Posée, elle est honorée partout où l'on
+/// embarque : les backends, les suites e2e, le banc. Voir
+/// [`DaemonEmbedder::from_service`].
+pub const SERVICE_VARIABLE: &str = "RAG3WEAVER_EMBED_SERVICE";
+
 /// **Un embedder qui vit dans un autre processus.**
 ///
 /// Se comporte comme n'importe quel [`Embedder`] — c'est tout l'intérêt : ni le
@@ -402,6 +408,34 @@ impl DaemonEmbedder {
         let choice = choose(files, source_bytes, card, sole, explicit.as_deref());
         let serveur = Self::serveur(adresse, programme).env(MODEL_VARIABLE, choice.model.clone());
         (serveur, choice)
+    }
+
+    /// **Le service d'embarquement que quelqu'un d'autre fait tourner**, si
+    /// [`SERVICE_VARIABLE`] est posée : une adresse, ou plusieurs séparées
+    /// par des virgules — un service sert un modèle, deux modèles font deux
+    /// adresses. `None` : rien n'est posé, l'appelant fait comme avant.
+    ///
+    /// On **s'y attache, rien d'autre** : jamais lancé, jamais arrêté, jamais
+    /// remplacé — ce n'est pas le nôtre, et il peut vivre sur une autre
+    /// machine au bout d'un tunnel. Si aucune adresse ne sert `model`, c'est
+    /// un refus qui dit ce que chacune sert : des vecteurs d'un autre modèle
+    /// dans un index ne se voient qu'à la recherche, trop tard.
+    pub fn from_service(model: &str) -> Option<Result<Self, String>> {
+        let addresses = std::env::var(SERVICE_VARIABLE).ok().filter(|v| !v.trim().is_empty())?;
+        Some(Self::from_addresses(&addresses, model))
+    }
+
+    /// [`Self::from_service`], les adresses en paramètre — pour les tests.
+    pub fn from_addresses(addresses: &str, model: &str) -> Result<Self, String> {
+        let mut seen = Vec::new();
+        for address in addresses.split(',').map(str::trim).filter(|a| !a.is_empty()) {
+            match Self::joindre(address) {
+                Ok(d) if d.identite.modele == model => return Ok(d),
+                Ok(d) => seen.push(format!("{address} sert {}", d.identite.modele)),
+                Err(e) => seen.push(format!("{address} ne répond pas ({e})")),
+            }
+        }
+        Err(format!("{SERVICE_VARIABLE} : aucun service ne sert {model} — {}", seen.join(" ; ")))
     }
 
     /// S'attacher à un démon qui **répond déjà**.
@@ -823,6 +857,41 @@ mod tests {
         for (i, t) in textes.iter().enumerate() {
             assert_eq!(v[i], vec![t.len() as f32], "ordre rompu au rang {i}");
         }
+    }
+
+    /// **Le service se choisit par le modèle qu'il sert**, et un modèle que
+    /// personne ne sert est un refus qui dit ce qu'on a trouvé.
+    #[test]
+    fn le_service_se_choisit_par_le_modele_et_refuse_clairement() {
+        #[derive(Debug)]
+        struct Nomme(&'static str, usize);
+        impl Embedder for Nomme {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                Ok(texts.iter().map(|_| vec![0.0; self.1]).collect())
+            }
+            fn dim(&self) -> usize {
+                self.1
+            }
+            fn name(&self) -> &str {
+                self.0
+            }
+        }
+        let a = demon(EmbedDaemon::new(Arc::new(Nomme("modele-a", 4))));
+        let b = demon(EmbedDaemon::new(Arc::new(Nomme("modele-b", 8))));
+        let mort = port_libre();
+        let adresses = format!("{mort}, {a},{b}");
+
+        let c = DaemonEmbedder::from_addresses(&adresses, "modele-b").expect("le second sert modele-b");
+        assert_eq!((c.identite().modele.as_str(), Embedder::dim(&c)), ("modele-b", 8));
+        assert_eq!(DaemonEmbedder::from_addresses(&adresses, "modele-a").expect("modele-a").identite().modele, "modele-a");
+
+        let refus = DaemonEmbedder::from_addresses(&adresses, "modele-c").expect_err("personne ne sert modele-c");
+        assert!(refus.contains(SERVICE_VARIABLE) && refus.contains("aucun service ne sert modele-c"), "{refus}");
+        assert!(refus.contains(&format!("{a} sert modele-a")) && refus.contains(&format!("{b} sert modele-b")), "{refus}");
+        assert!(refus.contains(&format!("{mort} ne répond pas")), "{refus}");
+
+        // S'attacher ne dérange pas le service : il répond toujours après.
+        assert!(DaemonEmbedder::joindre(&a).is_ok() && DaemonEmbedder::joindre(&b).is_ok());
     }
 
     /// **Un embarqueur distant se déclare distant**, sur les trois traits.

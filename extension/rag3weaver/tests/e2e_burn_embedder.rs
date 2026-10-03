@@ -25,6 +25,9 @@
 //! cargo test --features rag3db-native,burn-embedder --test e2e_burn_embedder \
 //!   -- --ignored --test-threads=1
 //! ```
+//!
+//! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
+//! c'est l'embarqueur burn lui-même qu'elle éprouve (`tests/common`, `SUITES_LOCALES`).
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
 
