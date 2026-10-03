@@ -2489,6 +2489,45 @@ impl Node for SparseCommitNode {
     }
 }
 
+/// **Retirer de l'index creux les chunks des lignes `parents`**, avant de les
+/// supprimer en base. Le creux ne vit que dans l'index lucistore, par offset
+/// de chunk : une suppression qui ne l'en retire pas y laisse des entrées
+/// orphelines (3 octobre 2026, `le_creux_d_une_ligne_retiree_quitte_l_index`),
+/// et une ligne revenue y serait comptée deux fois. Rend le nombre retiré.
+fn retirer_le_creux_des_chunks(
+    ctx: &NodeContext,
+    conn: &Arc<dyn DbConnection>,
+    dialect: &Arc<dyn crate::dialect::SchemaDialect>,
+    chunk_table: &str,
+    parents: &[String],
+) -> Result<usize, String> {
+    let Some(handle) = ctx
+        .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles")
+        .and_then(|h| h.get(chunk_table))
+        .cloned()
+    else {
+        return Ok(0);
+    };
+    if parents.is_empty() || handle.is_empty() {
+        return Ok(0);
+    }
+    let list = CypherValue::List(parents.iter().map(|u| CypherValue::String(u.clone())).collect());
+    let res = conn
+        .execute_with_params(&dialect.select_chunk_offsets(chunk_table), &[QueryParam { name: "uuids".into(), value: list }])
+        .map_err(|e| e.to_string())?;
+    let mut retires = 0usize;
+    for row in &res.rows {
+        let Some(offset) = row.first().and_then(|v| v.as_i64()) else { continue };
+        if handle.remove(offset as u64).map_err(|e| format!("sparse remove failed: {e}"))? {
+            retires += 1;
+        }
+    }
+    if retires > 0 {
+        handle.commit_inner().map_err(|e| format!("sparse commit failed: {e}"))?;
+    }
+    Ok(retires)
+}
+
 // ─── RechunkDeleteNode ─────────────────────────────────────────────────────
 
 /// Delete old chunks for entities about to be re-chunked.
@@ -2552,8 +2591,10 @@ impl Node for RechunkDeleteNode {
             let uuid_list = CypherValue::List(
                 uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
             );
-            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
                 .ok_or("RechunkDeleteNode: 'dialect' service not registered")?;
+            let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
+            ctx.metric("sparse_removed", creux as f64);
             let cypher = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
             let result = conn
                 .execute_with_params(
@@ -2713,6 +2754,8 @@ impl Node for DeleteRecordNode {
                 let uuid_list = CypherValue::List(
                     uuids.iter().map(|u| CypherValue::String(u.clone())).collect(),
                 );
+                let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
+                ctx.metric("sparse_removed", creux as f64);
                 let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
                 let result = conn
                     .execute_with_params(

@@ -1165,6 +1165,15 @@ fn le_creux_d_une_ligne_retiree_quitte_l_index() {
     let res = catalog.ingest_entities("Fiche", vec![texte("a3", "cormoran")]).unwrap();
     assert_eq!(res.restored, [a3.clone()], "{res:?}");
     let apres_retour = entrees(&catalog);
+    // Une fiche mise à jour avec un autre texte est redécoupée
+    // (`RechunkDeleteNode`) : ses anciens chunks quittent l'index creux, les
+    // nouveaux y entrent. (Une réingestion, elle, réécrit les mêmes chunks en
+    // place, au même offset : elle ne passe pas par là.)
+    let a1 = uuid(&catalog, "a1");
+    catalog.update("Fiche", &a1, texte("a1", "pélican")).unwrap();
+    catalog.drain();
+    let apres_reecriture = entrees(&catalog);
+    assert_eq!(apres_reecriture, apres_retour, "une réécriture ne laisse pas d'entrée orpheline");
     let (_, creux) = rechercher(catalog, "cormoran", SearchSignals::SPARSE);
     eprintln!("CREUX après retour : {apres_retour} entrées, recherche {creux:?}");
     assert_eq!(apres_retour, pleines, "la ligne revenue a son creux, une fois");

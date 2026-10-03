@@ -680,6 +680,10 @@ pub trait SchemaDialect: Send + Sync {
     /// Get node offset for entities (no SET, just return item.uuid + offset).
     fn embed_get_offset(&self, table: &str) -> String;
 
+    /// Les offsets des chunks des lignes `$uuids` (`_parent_uuid`) — la clé
+    /// de leurs entrées dans l'index creux, à retirer avant de les supprimer.
+    fn select_chunk_offsets(&self, chunk_table: &str) -> String;
+
     // ── KB operations ────────────────────────────────────────────────
 
     /// Gather fields from entities by item.uuid, returning item.uuid + entity fields.
@@ -1354,6 +1358,11 @@ impl SchemaDialect for Rag3dbDialect {
              MATCH (n:{table} {{_uuid: item.uuid}}) \
              RETURN item.uuid, {offset} AS offset"
         )
+    }
+
+    fn select_chunk_offsets(&self, chunk_table: &str) -> String {
+        let offset = self.node_offset_expr("c");
+        format!("MATCH (c:{chunk_table}) WHERE c._parent_uuid IN $uuids RETURN {offset}")
     }
 
     fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String {
@@ -2166,6 +2175,11 @@ impl SchemaDialect for PostgresDialect {
              WHERE {table}._uuid = v.uuid \
              RETURNING v.uuid, {offset} AS offset"
         )
+    }
+
+    fn select_chunk_offsets(&self, chunk_table: &str) -> String {
+        let offset = self.node_offset_expr(chunk_table);
+        format!("SELECT {offset} FROM {chunk_table} WHERE _parent_uuid = ANY($uuids)")
     }
 
     fn embed_get_offset(&self, table: &str) -> String {
