@@ -3903,3 +3903,68 @@ fn typed_payload_param(value: CypherValue, ty: Option<&crate::config::FieldType>
         _ => value,
     }
 }
+
+#[cfg(test)]
+mod tests_rafales {
+    use super::*;
+    use crate::burst::BurstSettings;
+    use std::time::Duration;
+
+    /// Un vecteur qui ne dépend que du texte : ce qu'un modèle rend quand le
+    /// lot ne compte pas.
+    fn vecteur(texte: &str) -> Vec<f32> {
+        let somme: u32 = texte.bytes().map(u32::from).sum();
+        vec![texte.len() as f32, somme as f32, (somme % 97) as f32 / 97.0]
+    }
+
+    /// Passe `works` par le pipeline ; rend ce qui a été écrit, dans l'ordre
+    /// d'écriture, et la taille de chaque lot soumis.
+    fn passer(works: &[String], lots: Batches) -> (Vec<(String, Vec<u32>)>, Vec<usize>) {
+        let tailles = Mutex::new(Vec::new());
+        let embed = |textes: &[String]| -> Result<Vec<Vec<f32>>, String> {
+            tailles.lock().unwrap().push(textes.len());
+            Ok(textes.iter().map(|t| vecteur(t)).collect())
+        };
+        let mut ecrits = Vec::new();
+        embed_pipeline(works, lots, |w| w.as_str(), false, &embed, |chunk, vecteurs: Vec<Vec<f32>>| {
+            assert_eq!(chunk.len(), vecteurs.len());
+            for (w, v) in chunk.iter().zip(vecteurs) {
+                ecrits.push((w.clone(), v.iter().map(|x| x.to_bits()).collect()));
+            }
+            Ok(())
+        })
+        .expect("pipeline");
+        (ecrits, tailles.into_inner().unwrap())
+    }
+
+    /// **Le régulateur ne change que la taille des lots.** Le même corpus,
+    /// découpé d'avance puis cadencé : chaque texte est écrit une fois, avec
+    /// le même vecteur au bit près. Cadencé, l'ordre d'écriture est celui du
+    /// corpus — un seul producteur.
+    ///
+    /// Avec un vrai modèle en Flex32, la composition du lot déplace un
+    /// vecteur d'au plus quelques 1e-5 (rembourrage au plus long du lot) :
+    /// mesuré le 3 octobre 2026 sur granite-278m, 4,4e-5 entre un texte seul
+    /// et le même dans un lot — autant qu'entre deux cartes. C'était déjà
+    /// vrai de tout changement de budget de lot.
+    #[test]
+    fn le_regulateur_ne_change_que_la_taille_des_lots() {
+        let mut works: Vec<String> = (0..500).map(|i| format!("{}#{i}", "x".repeat(37 * (i % 23) + 5))).collect();
+        works.sort_by_key(|w| w.len());
+        let lens: Vec<usize> = works.iter().map(|w| w.len()).collect();
+        let reglages = BurstSettings { target: Duration::from_millis(5), pause: Duration::ZERO };
+
+        let (mut davance, lots_davance) = passer(&works, burst::plan_with(&lens, Some((128, 512)), 32, None));
+        let (cadence, lots_cadences) = passer(&works, burst::plan_with(&lens, Some((128, 512)), 32, Some(reglages)));
+
+        // Cadencé : dans l'ordre du corpus, chacun une fois.
+        assert_eq!(cadence.iter().map(|(w, _)| w).collect::<Vec<_>>(), works.iter().collect::<Vec<_>>());
+        // D'avance, deux producteurs : l'ordre des lots n'est pas garanti, le contenu si.
+        davance.sort_by_key(|(w, _)| works.iter().position(|x| x == w));
+        assert_eq!(davance, cadence, "mêmes textes, mêmes vecteurs au bit près");
+        // Et le régulateur a bien agi : il n'a pas découpé comme d'avance.
+        assert_ne!(lots_davance.len(), lots_cadences.len(), "{lots_davance:?} / {lots_cadences:?}");
+        assert_eq!(lots_cadences.iter().sum::<usize>(), 500);
+    }
+}
+
