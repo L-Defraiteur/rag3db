@@ -1,0 +1,9 @@
+%% tool: begin_snapshot
+%% description: Ouvre une session de synchronisation sur un périmètre et rend son identifiant, à porter par chaque lot et par la fin. Une seule session à la fois par périmètre ; une session restée ouverte se reprend par takeover.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: scope json! -- Les valeurs du périmètre, une par champ déclaré par l'entité ({} pour l'entité entière).
+%% param: takeover bool = false -- Reprendre une session restée ouverte sur ce périmètre (synchronisation abandonnée).
+%% result: open.session
+
+graph LR
+    open["SnapshotSessionNode(entity=$entity, scope=$scope, action=begin, takeover=$takeover)"]
