@@ -93,7 +93,7 @@ pub use code_nodes::{
     ListFilesNode, ListFilesNodeFactory, ParseCodeNode, ParseCodeNodeFactory, ReadFileNode, ReadFileNodeFactory,
 };
 #[cfg(feature = "code")]
-pub use index_nodes::{EstimateNode, EstimateNodeFactory};
+pub use index_nodes::{EstimateNode, EstimateNodeFactory, IndexNode, IndexNodeFactory};
 pub use llm_nodes::{LlmNode, LlmNodeFactory, LLM_SERVICE, NODE_REGISTRY_SERVICE};
 pub use checkpoint::{
     CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,

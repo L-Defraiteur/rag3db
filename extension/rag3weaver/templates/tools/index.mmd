@@ -1,0 +1,15 @@
+%% tool: index
+%% description: Indexe le projet en fond et vous rend la main : le plein texte d'abord (on peut chercher par mots dès qu'il est prêt), les vecteurs ensuite. Rend le chemin d'un journal à suivre avec `wait`. Refuse sans `confirm=true` quand l'estimation dépasse le seuil — prenez `estimate` avant pour savoir ce que ça coûtera.
+%% param: confirm bool = false -- Lancer même si l'estimation dépasse le seuil de confirmation.
+%% result: index.result
+%%
+%% **Le reçu est un journal.** Suivez-le par
+%% `wait(journal, pattern='indexation terminée|indexation échouée')` ; avec
+%% `timeout_s=0`, `wait` rend l'état sans attendre. Les lignes disent où l'on
+%% en est : `plein texte : 1024 fichiers sur 6735`, puis
+%% `plein texte prêt · vecteurs 8200 sur 20100 (40 %, granite-278m) · reste environ 3 min`.
+%%
+%% Relancer `index` sur un projet déjà indexé ne reprend que ce qui a changé.
+
+graph LR
+    index["IndexNode(confirm=$confirm)"]
