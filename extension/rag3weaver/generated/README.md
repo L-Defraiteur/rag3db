@@ -389,7 +389,7 @@ Pas dans ce dépôt. `~/.cache/rag3weaver/granite-{107m,278m}/model.bpk`, avec l
 | sha256, **fichier d'origine du 6 septembre 2026 — installé et publié** | `a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3` | `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1` |
 | `tokenizer.json` | 9 081 351 octets, sha256 `2a0d7366dd7780ea36cc42431dd74cd79289b783ab01acd33013fcc96865a8e9` | 9 081 382 octets, sha256 `7fc9e475f2ac473f070052d92b0c46ec2b91d9cd672935feb6fd837a65d33f78` |
 | source : `model.onnx` d'IBM | 1 112 413 925 octets, sha256 `aefac97b384f92932a61a19900d41c870679d5b8e6ceb682768eb153d0e31c7d` | 428 102 968 octets, sha256 `387e6f91dce3c651cb3dc06661d74fb1d3947f20ed9c3ecf49d2b3b77086b954` |
-| publié (dépôt **privé** ; le fichier d'origine depuis le 3 octobre 2026) | `Lucie666/granite-embedding-278m-multilingual-burnpack` | `Lucie666/granite-embedding-107m-multilingual-burnpack` |
+| publié (dépôt public depuis le 3 octobre 2026, avec le fichier d'origine) | `Lucie666/granite-embedding-278m-multilingual-burnpack` | `Lucie666/granite-embedding-107m-multilingual-burnpack` |
 
 **Pourquoi deux empreintes.** Les fichiers du 6 septembre n'avaient pas été
 publiés et étaient restés sur l'ancien poste : ils ont été régénérés le

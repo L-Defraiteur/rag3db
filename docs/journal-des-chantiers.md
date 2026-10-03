@@ -216,11 +216,10 @@ sessions, pas d'une vérification.
 - **Les poids ne dépendent plus d'aucun disque** (3 octobre 2026). Les
   granite d'origine du 6 septembre, rapportés de l'ancien poste par ssh, sont
   installés (suite granite 11 sur 11) et publiés à la place des régénérés dans
-  les deux dépôts privés de Hugging Face, empreintes distantes conformes ; les
+  les deux dépôts Hugging Face, passés en public le même jour, empreintes distantes conformes ; les
   régénérés restent dans `~/.cache/rag3weaver/regeneres-2-octobre/`. L'OCR
   `ppocrv6-tiny` était déjà publié, en public, contrairement à ce que disait
-  la notice (corrigée) ; les sept autres modèles aussi. Reste au mot de
-  Lucie : passer les deux dépôts granite en public.
+  la notice (corrigée) ; les sept autres modèles aussi.
 - **Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026**
   par l'étape 1 du banc de concurrence (branche `banc-de-concurrence`,
   `37a44e351`, 20 passes sur 20). Sous `debug_enable_multi_writes` : deux ou
