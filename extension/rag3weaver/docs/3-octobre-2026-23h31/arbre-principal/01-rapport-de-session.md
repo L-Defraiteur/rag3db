@@ -40,23 +40,44 @@ Dans l'ordre de fusion.
 - **Les poids de pertinence se déclarent** (`FieldWeight`), aucune règle de
   classement neuve. « La correspondance exacte du nom en tête » attend Lucie.
 
-## En cours
+## En cours (mis à jour le 4 octobre, vers minuit et demi)
 
-1. **Le report de la poussée des blobs d'index** (`flush_blob_store`, 119 s
-   sur 352). Il est accepté aux conditions de l'orchestration :
-   - une marque durable « plein texte en retard », posée avant de différer et
-     levée après la poussée finale, reconnue à l'ouverture ;
-   - hors synchronisation, rien ne change ;
-   - la preuve par SIGKILL dans `e2e_arret_brutal` (session mémoire), en plein
-     texte seul.
-2. **La proposition « 90 s »** (demande de Lucie : viser 1 min 30 au plus) :
-   un budget par poste, avec rag3db-eb, et le chiffrage du premier index en
-   chargement de bout en bout. Proposition avant le code.
-3. **Reconnaître « is behind its table » à l'ouverture** (garde 1 du cœur
-   C++, `fcd9a7882`) : DROP puis CREATE, et le dire au reçu d'ouverture.
-4. **Renommer** `an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`
-   pour dire ce qu'il prouve (une panique rattrapée), et donner son scénario à
-   `e2e_arret_brutal`.
+Fusionné depuis le premier jet :
+- `a5cef54cc` (journal) : décision du **résolveur unique** entre fichiers.
+- `2914d470e` : `run_e2e.sh` dit contre quel moteur il tourne, et refuse un
+  moteur plus vieux que ses sources.
+- `build/lecteurs-csv` rebâti sur `a5cef54cc`, garde 1 et DROP au rejeu
+  compris.
+
+1. **Le résolveur unique** (décidé, au journal). codeparsers (rag3db-c0) livre
+   deux options : `cross_file` (résolution dans le fichier seulement),
+   `project_files` et `import_source` sur chaque référence. De mon côté :
+   - départager les définisseurs par le chemin d'import (`crate::estimate` →
+     `src/estimate.rs`) ;
+   - remplir `project_files` depuis le WorkingTree ;
+   - le test « paquets de 1, de 64, d'un seul tenant → même graphe » ;
+   - la justesse avant/après, au banc des relations et sur `e2e_code`.
+
+   Mesures qui l'ont décidé : 15 justes sur 50 dans l'écart, deux
+   échantillons indépendants. Sur `src/` de rag3weaver : 59 152 relations par
+   64, 72 721 d'un seul tenant.
+2. **Le mode « premier index » par gros paquets bornés en octets**, ensuite.
+   Le dépôt entier en un paquet fait 132 s pour 16 Go au pic (rag3db-eb).
+   Mes deux mesures d'un seul tenant (analyse 44 s, plein texte 306 s) sont à
+   refaire : elles ont tourné en même temps qu'une autre passe lourde.
+3. **Renommer** `an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`
+   (une panique rattrapée, pas une mort).
+
+Dégagé par l'orchestration :
+- **« is behind its table » à l'ouverture** : rag3db-dc. Elle touche
+  `restore_dropped_vector_indexes` et l'étape 10 ter d'`initialize` ; je n'y
+  touche pas.
+- **SET vecteur → vecteur et l'invariant « toute ligne à vecteur est
+  joignable »** : rag3db-eb, dans `EmbedNode`.
+- **Report des blobs** : gelé (2 s en un paquet), au journal.
+
+Règle du poste : une mesure lourde à la fois (plusieurs Go ou plus de 8 fils),
+annoncée à rag3db-eb et rag3db-c0, qui répondent « libre » puis « fini ».
 
 ## Ce qui attend quelqu'un
 
