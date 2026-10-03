@@ -71,6 +71,14 @@ impl Survey {
     pub fn skipped_files(&self) -> usize {
         self.skipped.values().map(|(n, _)| n).sum()
     }
+
+    /// Ajoute ce que la source a écarté d'elle-même, avant la politique.
+    pub fn with_exclusions<'a>(mut self, excluded: impl IntoIterator<Item = &'a (String, &'static str)>) -> Self {
+        for (_, reason) in excluded {
+            self.skipped.entry(reason.to_string()).or_insert((0, 0)).0 += 1;
+        }
+        self
+    }
 }
 
 /// Compte une source. `files` : `(chemin, taille en octets)`.
@@ -92,17 +100,21 @@ pub fn survey<'a>(files: impl IntoIterator<Item = (&'a str, u64)>, policy: impl 
     s
 }
 
-/// Les chemins et les tailles d'un dossier, **sans lire les fichiers**.
-pub fn working_tree_files(tree: &crate::code_tools::WorkingTree) -> Result<Vec<(String, u64)>, String> {
-    use crate::code_tools::FileSource;
-    Ok(tree
-        .list()?
+/// Les chemins et les tailles d'un dossier, **sans lire les fichiers**, et ce
+/// que la source a écarté avant toute politique — secrets probables, avec la
+/// raison (`WorkingTree::list_with_exclusions` : la liste unique du crate).
+/// Les fichiers ignorés par les règles du dossier n'y sont pas : ce n'est pas
+/// le dépôt.
+pub fn working_tree_files(tree: &crate::code_tools::WorkingTree) -> Result<(Vec<(String, u64)>, Vec<(String, &'static str)>), String> {
+    let (paths, excluded) = tree.list_with_exclusions()?;
+    let files = paths
         .into_iter()
         .map(|path| {
             let bytes = std::fs::metadata(tree.root().join(&path)).map(|m| m.len()).unwrap_or(0);
             (path, bytes)
         })
-        .collect())
+        .collect();
+    Ok((files, excluded))
 }
 
 /// Les chemins et les tailles d'une source quelconque. Elle ne sait pas dire
@@ -247,8 +259,14 @@ pub fn service_attached() -> bool {
 /// `rate` : le débit **brut** de l'embarqueur (noté en base, ou tout juste
 /// sondé) ; `remote` : il vit ailleurs (`Embedder::distant`), le régulateur
 /// d'ici ne le ralentit pas.
-pub fn estimate_here(files: &[(String, u64)], policy: impl Fn(&str, u64) -> Kept, rate: Option<Rate>, remote: bool) -> Estimate {
-    let survey = survey(files.iter().map(|(p, b)| (p.as_str(), *b)), policy);
+pub fn estimate_here(
+    files: &[(String, u64)],
+    excluded: &[(String, &'static str)],
+    policy: impl Fn(&str, u64) -> Kept,
+    rate: Option<Rate>,
+    remote: bool,
+) -> Estimate {
+    let survey = survey(files.iter().map(|(p, b)| (p.as_str(), *b)), policy).with_exclusions(excluded);
     let service = service_attached();
     let card = computing_card(service, crate::regime::card_class_of_this_machine());
     let sole = !service && crate::regime::sole_card_of_this_machine_drives_display();
@@ -283,6 +301,11 @@ mod tests {
         assert_eq!(s.kept["texte"], (1, 3_000));
         assert_eq!(s.skipped_files(), 2);
         assert!(s.skipped.values().any(|(_, b)| *b == 9 * MO), "les données écartées gardent leur poids : {s:?}");
+        // Ce que la source a écarté d'elle-même s'ajoute, avec sa raison.
+        let excluded = vec![(".env".to_string(), "secret probable"), ("id_rsa".to_string(), "secret probable")];
+        let s = s.with_exclusions(&excluded);
+        assert_eq!(s.skipped["secret probable"].0, 2);
+        assert_eq!(s.skipped_files(), 4);
     }
 
     /// **Rien de propre au code** : un dossier de documents, sa politique.
