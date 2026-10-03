@@ -135,7 +135,9 @@ const BASE_NODES: &[&str] = &[
     "WaitOutputNode",
 ];
 
-const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode"];
+// Le balayage lit les fichiers de la source : il demande le même droit que
+// `read` et `grep` — c'est pour lui que `search_code` déclare `read_files`.
+const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 

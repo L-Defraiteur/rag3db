@@ -292,6 +292,7 @@ mod tests {
             target,
             embedding: None,
             sparse: None,
+            scan: false,
         }
     }
 

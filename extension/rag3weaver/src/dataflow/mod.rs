@@ -46,6 +46,11 @@ pub mod ocr_nodes;
 pub mod code_nodes;
 #[cfg(feature = "code")]
 pub mod index_nodes;
+/// **Le balayage des fichiers** : la recherche quand l'index ne sait pas (encore).
+#[cfg(feature = "code")]
+pub mod scan_nodes;
+#[cfg(feature = "code")]
+pub use scan_nodes::ScanFilesNode;
 pub mod migrations;
 pub mod services;
 
@@ -62,7 +67,7 @@ pub use search_nodes::{
     ComposeNode, FetchRelatedNode, KBQuerySourceNode,
 };
 pub use generic_search_nodes::{
-    SearchSourceNode, VectorSearchNode, BM25SearchNode,
+    adaptive_search_decision, SearchMode, SearchSourceNode, VectorSearchNode, BM25SearchNode,
     SparseSearchNode, FuseResultsNode, RerankNode, ResolveParentNode, PaginateNode,
 };
 pub use services::{ConnService, ServiceRegistry};

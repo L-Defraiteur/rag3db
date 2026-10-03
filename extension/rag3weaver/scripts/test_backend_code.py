@@ -81,10 +81,29 @@ class Host:
         self.p.wait(timeout=30)
 
 
+def binaire_frais():
+    """Un binaire plus vieux qu'une source est un faux vert garanti : le
+    script éprouverait la passe d'avant. Deux sessions s'y sont fait prendre
+    le 3 octobre (construction échouée, scripts tous PASS)."""
+    bati = BACKEND.stat().st_mtime
+    plus_recent = None
+    for racine in [CRATE / "src", CRATE / "templates"]:
+        for f in racine.rglob("*"):
+            if f.is_file() and f.stat().st_mtime > bati:
+                plus_recent = f
+                break
+        if plus_recent:
+            break
+    if plus_recent:
+        fail(f"binaire plus vieux que {plus_recent.relative_to(CRATE)} — rebâtissez : "
+             "cargo build --bin rag3weaver-backend --features daemon,rag3db-native,code")
+
+
 def main():
     if not BACKEND.exists():
         fail(f"binaire absent : {BACKEND} (cargo build --bin rag3weaver-backend "
              "--features daemon,rag3db-native,code)")
+    binaire_frais()
     tmp = tempfile.mkdtemp(prefix="backend-code-")
     try:
         # ── La politique de poste : l'arbre réel ────────────────────────────
@@ -97,6 +116,15 @@ def main():
         desc = {t["name"]: t["description"] for t in d["tools"]}
         assert desc["search_code"] != desc["grep_files"], "chaque outil dit le sien"
         assert "motif littéral" in desc["grep_files"].lower() or "littéral" in desc["grep_files"], desc["grep_files"]
+
+        # ── Le mode auto : avant toute indexation, le balayage répond ───────
+        # Même question qu'après : c'est la réponse qui change de chemin, et
+        # la ligne d'état qui le dit.
+        r = host.ask(op="call", name="search_code",
+                     arguments={"query": "depart", "options": {}})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "main.rs" in t, f"le balayage trouve le mot exact : {r}"
+        assert "balayage" in t, f"la ligne d'état avoue le balayage : {r}"
 
         # read lit le workspace.
         r = host.ask(op="call", name="read_file", arguments={"path": "main.rs"})
@@ -139,10 +167,13 @@ def main():
                                 "timeout_s": 120})
         t = json.dumps(r, ensure_ascii=False)
         assert "indexation terminée" in t, f"l'indexation aboutit : {r}"
-        # Et la recherche répond sur l'index ainsi construit.
+        # Et la recherche répond sur l'index ainsi construit — sans ligne de
+        # balayage : l'index prêt est l'état normal, il se tait.
         r = host.ask(op="call", name="search_code",
                      arguments={"query": "arrivee", "options": {"consistency": "strict"}})
-        assert "main.rs" in json.dumps(r), f"la recherche répond après l'indexation : {r}"
+        t = json.dumps(r, ensure_ascii=False)
+        assert "main.rs" in t, f"la recherche répond après l'indexation : {r}"
+        assert "balayage" not in t, f"l'index prêt répond sans ligne de balayage : {r}"
         # wait ne sort pas du dossier des journaux : la traversée se refuse.
         traverse = str(Path(journal).parent / ".." / ".." / "etc" / "passwd")
         r = host.ask(op="call", name="wait_output",
@@ -153,6 +184,12 @@ def main():
         # ── La politique cloud : l'instantané ───────────────────────────────
         manifest = prepare(tmp, "snapshot.json")
         host = Host(manifest)
+        # Le mode auto balaye aussi un instantané en mémoire, tant que rien
+        # n'est indexé.
+        r = host.ask(op="call", name="search_code",
+                     arguments={"query": "depart", "options": {}})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "main.rs" in t and "balayage" in t, f"balayage sur l'instantané : {r}"
         avant = (manifest.parent / "workspace/main.rs").read_text()
         r = host.ask(op="call", name="read_file", arguments={"path": "main.rs"})
         assert "depart()" in json.dumps(r), r
@@ -186,7 +223,7 @@ def main():
               "édition + réindexation cherchable, porte des commandes, indexation en "
               "fond suivie par son journal (état sans attendre, fin par motif, recherche "
               "qui répond, traversée refusée), instantané en mémoire sans toucher le "
-              "disque et indexé sans run_commands, outil absent refusé.")
+              "disque et indexé sans run_commands, outil absent refusé, mode auto : balayage avant l'index (poste et instantané) avec sa ligne d'état, index silencieux une fois prêt.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

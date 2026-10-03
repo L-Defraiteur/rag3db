@@ -15,10 +15,13 @@
   "entities": {},
   "tools": {
     "search_code": {
-      "graph": "../../tools/search_structured.mmd",
-      "description": "Chercher dans le code indexé, par mots et par sens : une question en langue naturelle ou un identifiant. À prendre d'abord — c'est l'index qui sait où regarder ; grep ne sert que pour un motif littéral exact.",
+      "graph": "../../tools/search_workspace.mmd",
+      "description": "Chercher dans le code, par mots et par sens — à prendre d'abord. L'outil choisit seul : l'index quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est indexé ; la réponse dit d'où elle vient. grep ne sert que pour un motif littéral exact.",
       "bindings": {
         "target": "Scope"
+      },
+      "policy": {
+        "read_files": true
       }
     },
     "read_file": {

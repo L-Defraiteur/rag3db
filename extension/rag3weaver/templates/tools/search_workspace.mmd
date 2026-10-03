@@ -1,0 +1,50 @@
+%% tool: search_workspace
+%% description: Cherche dans un espace de travail, et choisit seul comment : l'index (mots et sens) quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est encore indexé. La réponse dit toujours d'où elle vient — une ligne d'état quand l'index n'est pas entier.
+%% param: target string! -- Entité où chercher (un binding du manifeste, en général).
+%% param: query string! -- Description naturelle, nom, identifiant.
+%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency.
+%% param: mode string = "auto" -- auto (l'état de l'index décide), indexed (toujours l'index), scan (toujours le balayage).
+%% result: render.results
+%%
+%% **La décision se prend une fois, à la source.** `SearchSourceNode` lit
+%% l'état de l'index (une lecture de méta, `try_lock` — une indexation qui
+%% tient le verrou ne s'attend jamais : occupé = balayage) et la décision
+%% descend par la requête. Les nœuds de signal se taisent en mode balayage,
+%% `ScanFilesNode` se tait hors de lui : le graphe est statique, c'est la
+%% valeur neutre qui tient lieu de conditionnelle, comme
+%% `RerankNode(candidates=0)` ou `FetchRelatedNode(relation='')`.
+%%
+%% **Le balayage rend la même forme que la recherche** — mêmes résultats,
+%% même rendu, même méta — classé (mots trouvés, puis proximité), borné au
+%% budget de rendu, et la méta dit combien d'autres. Les exclusions du
+%% dossier et la règle des secrets s'appliquent comme à l'indexation.
+%%
+%% Ce graphe demande la politique `read_files` : le balayage lit les
+%% fichiers de la source, comme `read` ou `grep`.
+
+graph LR
+    source["SearchSourceNode(target_name=$target, query=$query, options=$options, mode=$mode)"]
+    bm25["BM25SearchNode"]
+    vector["VectorSearchNode"]
+    scan["ScanFilesNode"]
+    fuse["FuseResultsNode(weights='bm25:0.5,vector:0.5')"]
+    paginate["PaginateNode"]
+    resolve["ResolveParentNode"]
+    render["RenderResultsNode"]
+    source -->|query| bm25
+    source -->|query| vector
+    source -->|query| scan
+    source -->|query| fuse
+    source -->|query| paginate
+    source -->|query| resolve
+    source -->|query| render
+    source -->|meta| render
+    bm25 -->|meta| render
+    vector -->|meta| render
+    scan -->|meta| render
+    bm25 -->|results:bm25| fuse
+    vector -->|results:vector| fuse
+    fuse -->|results| paginate
+    paginate -->|results| resolve
+    resolve -->|results| render
+    scan -->|results| render

@@ -70,6 +70,7 @@ impl Node for KBQuerySourceNode {
                 target: None,
                 embedding: None,
                 sparse: None,
+                scan: false,
             }),
         );
         Ok(())

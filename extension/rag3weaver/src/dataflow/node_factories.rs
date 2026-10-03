@@ -729,7 +729,14 @@ impl NodeFactory for SearchSourceNodeFactory {
                 Some(crate::search::RerankOptions { candidates: n as usize })
             };
         }
-        Ok(Box::new(SearchSourceNode::new(name, target_name, query, options)))
+        let mut node = SearchSourceNode::new(name, target_name, query, options);
+        if let Some(m) = config.get("mode").and_then(|v| v.as_str()).filter(|m| !m.is_empty()) {
+            node = node.with_mode(
+                crate::dataflow::generic_search_nodes::SearchMode::parse(m)
+                    .map_err(|e| format!("SearchSourceNode: {e}"))?,
+            );
+        }
+        Ok(Box::new(node))
     }
 
     fn node_type(&self) -> &'static str {
@@ -783,6 +790,19 @@ impl NodeFactory for SearchSourceNodeFactory {
                     default: Some(serde_json::json!(5000)),
                     description: "Délai maximum d'attente des écritures des autres processus, en strict",
                     choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "mode",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("auto")),
+                    description: "Comment choisir entre l'index et les fichiers : auto (l'état de l'index décide — balayage si rien n'est indexé), indexed (toujours l'index), scan (toujours le balayage)",
+                    choices: Some(Choices::Fixed(vec![
+                        "auto".to_string(),
+                        "indexed".to_string(),
+                        "scan".to_string(),
+                    ])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1443,6 +1463,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::code_nodes::EditFileNodeFactory));
         registry.register(Box::new(super::index_nodes::EstimateNodeFactory));
         registry.register(Box::new(super::index_nodes::IndexNodeFactory));
+        registry.register(Box::new(ScanFilesNodeFactory));
         registry.register(Box::new(super::template_nodes::PlaceTemplateNodeFactory));
         registry.register(Box::new(super::template_nodes::AdoptTemplateNodeFactory));
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
@@ -1452,7 +1473,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 40 + if cfg!(feature = "code") { 12 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 40 + if cfg!(feature = "code") { 13 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1739,5 +1760,38 @@ mod tests {
             derives.len(),
             derives.join("\n  ")
         );
+    }
+}
+
+/// Fabrique de [`ScanFilesNode`](super::scan_nodes::ScanFilesNode).
+#[cfg(feature = "code")]
+pub struct ScanFilesNodeFactory;
+
+#[cfg(feature = "code")]
+impl NodeFactory for ScanFilesNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        _config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        Ok(Box::new(super::scan_nodes::ScanFilesNode::new(name)))
+    }
+    fn node_type(&self) -> &'static str {
+        "ScanFilesNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "ScanFilesNode",
+            description: "Balaye les fichiers de la source quand la requête est en mode \
+                          balayage (posé par SearchSourceNode) : mots exacts, classés par \
+                          mots trouvés puis proximité, bornés au budget de rendu — la méta \
+                          dit combien d'autres. Hors mode balayage, il se tait.",
+            inputs: vec![PortDef { name: "query", port_type: PortType::Query, required: true }],
+            outputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: false },
+                PortDef { name: "meta", port_type: PortType::Meta, required: false },
+            ],
+            config_params: vec![],
+        }
     }
 }

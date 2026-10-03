@@ -54,6 +54,72 @@ pub struct SearchSourceNode {
     target_name: String,
     query: String,
     options: SearchOptions,
+    mode: SearchMode,
+}
+
+/// Comment la recherche choisit entre l'index et les fichiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchMode {
+    /// La source décide d'après l'état de l'index : jamais indexé → balayage
+    /// des fichiers ; partiel → l'index, avec une ligne qui dit ce qui est
+    /// prêt ; prêt → l'index, en silence. C'est le défaut : un agent n'a pas
+    /// à savoir où en est l'indexation pour poser sa question.
+    #[default]
+    Auto,
+    /// Toujours l'index, comme avant ce mode — aucun balayage, aucune ligne.
+    Indexed,
+    /// Toujours le balayage des fichiers, index ou pas.
+    Scan,
+}
+
+impl SearchMode {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "auto" => Ok(Self::Auto),
+            "indexed" => Ok(Self::Indexed),
+            "scan" => Ok(Self::Scan),
+            other => Err(format!("mode inconnu : '{other}' (auto | indexed | scan)")),
+        }
+    }
+}
+
+/// **La décision du mode auto**, pure : l'état lu (ou pas) et la présence
+/// d'une source de fichiers donnent le mode et, quand quelque chose mérite
+/// d'être dit, la ligne d'état. `None` en état veut dire « illisible ou
+/// occupé » — une indexation qui tient le verrou, par exemple : on ne
+/// l'attend jamais, on balaye. Quand tout est prêt, pas de ligne : le
+/// silence est l'état normal, et la ligne rend sous « ⚠ ».
+pub fn adaptive_search_decision(
+    state: Option<crate::catalog::IndexState>,
+    has_file_source: bool,
+) -> (bool, Option<String>) {
+    use crate::catalog::Level;
+    let scan_line = |pourquoi: &str| {
+        Some(format!(
+            "index : {pourquoi} — réponse par balayage des fichiers (mots exacts seulement) ; \
+             lancez `index` pour chercher par sens"
+        ))
+    };
+    match state {
+        None if has_file_source => (true, scan_line("occupé ou illisible")),
+        None => (false, Some("index : état illisible — recherche sur ce qui est posé".into())),
+        Some(s) => match (s.text, s.vectors) {
+            (Level::Never, _) if has_file_source => (true, scan_line("jamais construit")),
+            (Level::Never, _) => (
+                false,
+                Some("index : jamais construit — lancez `index` avant de chercher".into()),
+            ),
+            (Level::Ready, Level::Ready) => (false, None),
+            (text, _) => (
+                false,
+                Some(format!(
+                    "index : partiel — plein texte {}, vecteurs {} % ; les résultats viennent de ce qui est prêt",
+                    if text == Level::Ready { "prêt" } else { "en cours" },
+                    s.vectors_percent
+                )),
+            ),
+        },
+    }
 }
 
 impl SearchSourceNode {
@@ -63,7 +129,12 @@ impl SearchSourceNode {
             target_name: target_name.to_string(),
             query: query.to_string(),
             options,
+            mode: SearchMode::Auto,
         }
+    }
+    pub fn with_mode(mut self, mode: SearchMode) -> Self {
+        self.mode = mode;
+        self
     }
 }
 
@@ -104,6 +175,79 @@ impl Node for SearchSourceNode {
         let catalog = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog").cloned()
             .ok_or("SearchSourceNode: 'catalog' service not found")?;
+
+        // ── Le mode se décide ici, une fois, et descend par la requête ──────
+        // Deux lecteurs d'état indépendants pourraient diverger pendant une
+        // course (l'un lit « jamais », l'autre « en cours ») et rendre des
+        // doublons index + balayage.
+        #[cfg(feature = "code")]
+        let has_source = ctx
+            .service::<Arc<dyn crate::code_tools::FileSource>>(crate::code_tools::FILE_SOURCE_SERVICE)
+            .is_some();
+        #[cfg(not(feature = "code"))]
+        let has_source = false;
+        let (scan_mode, ligne_etat) = match self.mode {
+            SearchMode::Indexed => (false, None),
+            SearchMode::Scan if has_source => (true, None),
+            SearchMode::Scan => (
+                false,
+                Some("mode scan demandé sans source de fichiers — recherche sur l'index".to_string()),
+            ),
+            // `try_lock` : une indexation qui tient le verrou ne s'attend
+            // jamais — l'échec est une réponse (« occupé »), pas une erreur.
+            SearchMode::Auto => {
+                let state = catalog.try_lock().ok().and_then(|cat| cat.index_state().ok());
+                adaptive_search_decision(state, has_source)
+            }
+        };
+
+        if scan_mode {
+            // Les nœuds de signal se taisent (signals NONE, et `scan` posé
+            // pour ceux qui n'ont pas de cible résolue) ; `ScanFilesNode`
+            // répondra. La cible se résout si le catalogue est libre — sans
+            // elle, les étages passent leur tour proprement.
+            let mut options = self.options.clone();
+            options.signals = Some(crate::search::SearchSignals::NONE);
+            let target = catalog
+                .try_lock()
+                .ok()
+                .and_then(|cat| cat.resolve_search_target(&self.target_name).ok());
+            if let Some(l) = &ligne_etat {
+                ctx.warn(l);
+            }
+            ctx.set_output(
+                "query",
+                PortValue::new(QueryPayload {
+                    target_name: self.target_name.clone(),
+                    query: self.query.clone(),
+                    options,
+                    target,
+                    embedding: None,
+                    sparse: None,
+                    scan: true,
+                }),
+            );
+            ctx.set_output(
+                "meta",
+                PortValue::new(crate::search::SearchMeta {
+                    query: self.query.clone(),
+                    target: self.target_name.clone(),
+                    signals: crate::search::SearchSignals::NONE,
+                    consistency: self.options.consistency,
+                    partial: false,
+                    pending_count: 0,
+                    vector_count: 0,
+                    bm25_count: 0,
+                    sparse_count: 0,
+                    fused_count: 0,
+                    reranked_count: 0,
+                    warnings: ligne_etat.into_iter().collect(),
+                    search_time_ms: 0,
+                    diagnostics: None,
+                }),
+            );
+            return Ok(());
+        }
 
         let target = {
             let catalog = catalog.lock().unwrap();
@@ -217,6 +361,11 @@ impl Node for SearchSourceNode {
             };
             (reste, partiel, w, embedding, sparse)
         };
+        // La ligne d'état du mode auto en tête : c'est elle qui explique un
+        // résultat plus pauvre que prévu (vecteurs en cours, index occupé).
+        if let Some(l) = ligne_etat {
+            avertissements.insert(0, l);
+        }
         for a in &avertissements {
             ctx.warn(a);
         }
@@ -230,6 +379,7 @@ impl Node for SearchSourceNode {
                 target: Some(target.clone()),
                 embedding,
                 sparse,
+                scan: false,
             }),
         );
 
@@ -340,7 +490,14 @@ impl Node for VectorSearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options, vecteurs) = extract_query_and_target(ctx, "VectorSearchNode")?;
+        let (query_str, target, options, vecteurs) = match extract_query_and_target(ctx, "VectorSearchNode")? {
+            // Mode balayage : ce signal se tait, la source de fichiers répond.
+            SignalInput::Scan => {
+                ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+                return Ok(());
+            }
+            SignalInput::Query(q, t, o, v) => (q, t, o, v),
+        };
         let limite = budget_de_recherche(self.limit, &options);
 
         // Une cible sans vecteurs n'est pas une panne, c'est une cible sans
@@ -664,7 +821,14 @@ impl Node for BM25SearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options, _vecteurs) = extract_query_and_target(ctx, "BM25SearchNode")?;
+        let (query_str, target, options, _vecteurs) = match extract_query_and_target(ctx, "BM25SearchNode")? {
+            // Mode balayage : ce signal se tait, la source de fichiers répond.
+            SignalInput::Scan => {
+                ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+                return Ok(());
+            }
+            SignalInput::Query(q, t, o, v) => (q, t, o, v),
+        };
         // Même règle que pour le vecteur et le sparse : une cible qui ne
         // déclare pas BM25 rend vide et le dit, elle ne casse pas le graphe.
         if !declares(&target, &options, "bm25") {
@@ -928,7 +1092,14 @@ impl Node for SparseSearchNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let debut = std::time::Instant::now();
-        let (query_str, target, options, vecteurs) = extract_query_and_target(ctx, "SparseSearchNode")?;
+        let (query_str, target, options, vecteurs) = match extract_query_and_target(ctx, "SparseSearchNode")? {
+            // Mode balayage : ce signal se tait, la source de fichiers répond.
+            SignalInput::Scan => {
+                ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+                return Ok(());
+            }
+            SignalInput::Query(q, t, o, v) => (q, t, o, v),
+        };
         let limite = budget_de_recherche(self.limit, &options);
 
         // Ce que l'agent doit entendre — par la méta, pas par le journal du
@@ -1787,13 +1958,17 @@ impl Node for ResolveParentNode {
         let qp = ctx.take_input("query")
             .and_then(|pv| take_or_clone::<QueryPayload>(pv))
             .ok_or("ResolveParentNode: no 'query' input with resolved SearchTarget")?;
-        let target = qp.target
-            .ok_or("ResolveParentNode: Query has no resolved SearchTarget")?;
 
+        // Rien à résoudre sur rien — avant d'exiger la cible : en mode
+        // balayage (catalogue occupé), la requête descend sans cible résolue
+        // et les signaux sont vides ; ce nœud n'a pas à casser le graphe.
         if results.is_empty() {
             ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
             return Ok(());
         }
+
+        let target = qp.target
+            .ok_or("ResolveParentNode: Query has no resolved SearchTarget")?;
 
         let conn = ctx
             .service::<ConnService>("conn")
@@ -1886,20 +2061,31 @@ impl Node for ResolveParentNode {
 /// Les vecteurs de la requête, quand la source les a embarqués.
 type VecteursDeRequete = (Option<Vec<f32>>, Option<crate::sparse_index::SparseVector>);
 
+/// Ce qu'un nœud de signal reçoit : une requête à chercher, ou l'ordre de se
+/// taire — le mode balayage répond par les fichiers, pas par l'index, et la
+/// cible peut même ne pas être résolue (catalogue occupé).
+enum SignalInput {
+    Scan,
+    Query(String, SearchTarget, crate::search::SearchOptions, VecteursDeRequete),
+}
+
 fn extract_query_and_target(
     ctx: &mut NodeContext,
     node_type: &str,
-) -> Result<(String, SearchTarget, crate::search::SearchOptions, VecteursDeRequete), String> {
+) -> Result<SignalInput, String> {
     let qp = ctx.take_input("query")
         .and_then(|pv| take_or_clone::<QueryPayload>(pv))
         .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
+    if qp.scan {
+        return Ok(SignalInput::Scan);
+    }
     let vecteurs = (qp.embedding, qp.sparse);
     match qp.target {
         // Les options **voyagent avec la requête**. Elles étaient jetées ici
         // jusqu'au 27 août : un graphe composé à la main filtrait ou ne
         // filtrait pas selon le nœud branché, sans rien dire
         // (`e2e_code::the_per_signal_path_drops_the_search_options_today`).
-        Some(t) => Ok((qp.query, t, qp.options, vecteurs)),
+        Some(t) => Ok(SignalInput::Query(qp.query, t, qp.options, vecteurs)),
         None => Err(format!("{node_type}: Query has no resolved SearchTarget (use SearchSourceNode upstream)")),
     }
 }
@@ -2045,6 +2231,37 @@ mod tests {
     use super::super::port::PortType;
     use super::*;
     use std::collections::BTreeMap;
+
+    /// **La décision du mode auto, cas par cas.** Pure : l'état lu décide,
+    /// et la ligne d'état n'existe que quand elle apprend quelque chose.
+    #[test]
+    fn la_decision_du_mode_auto() {
+        use crate::catalog::{IndexState, Level};
+        let etat = |text, vectors, pct| {
+            Some(IndexState { text, vectors, vectors_percent: pct, updated_ms: 0 })
+        };
+        // Jamais indexé, une source : balayage, et la ligne dit quoi faire.
+        let (scan, ligne) = adaptive_search_decision(etat(Level::Never, Level::Never, 0), true);
+        assert!(scan);
+        let l = ligne.unwrap();
+        assert!(l.contains("jamais construit") && l.contains("index"), "{l}");
+        // État illisible (le verrou est tenu) : balayage — on n'attend jamais.
+        let (scan, ligne) = adaptive_search_decision(None, true);
+        assert!(scan && ligne.unwrap().contains("occupé"));
+        // Partiel : l'index répond, la ligne avoue où en sont les vecteurs.
+        let (scan, ligne) = adaptive_search_decision(etat(Level::Ready, Level::Running, 40), true);
+        assert!(!scan);
+        let l = ligne.unwrap();
+        assert!(l.contains("40 %") && l.contains("plein texte prêt"), "{l}");
+        // Tout prêt : l'index, en silence — la ligne rendrait sous « ⚠ ».
+        let (scan, ligne) = adaptive_search_decision(etat(Level::Ready, Level::Ready, 100), true);
+        assert!(!scan && ligne.is_none());
+        // Sans source de fichiers, jamais de balayage, quel que soit l'état.
+        let (scan, _) = adaptive_search_decision(etat(Level::Never, Level::Never, 0), false);
+        assert!(!scan);
+        let (scan, _) = adaptive_search_decision(None, false);
+        assert!(!scan);
+    }
 
     use crate::connection::CypherValue;
     use crate::search::SearchOptions;
@@ -2266,6 +2483,7 @@ mod tests {
             target: None,
             embedding: None,
             sparse: None,
+            scan: false,
         }));
         let mut node = RerankNode::new("rerank").with_candidates(0);
         node.execute(&mut ctx).unwrap();
@@ -2290,6 +2508,7 @@ mod tests {
             target: None,
             embedding: None,
             sparse: None,
+            scan: false,
         };
 
         let mut ctx = NodeContext::new();
@@ -2561,7 +2780,7 @@ mod tests {
     }
 
     fn query_payload(q: &str) -> QueryPayload {
-        QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None, embedding: None, sparse: None }
+        QueryPayload { target_name: "T".into(), query: q.into(), options: SearchOptions::default(), target: None, embedding: None, sparse: None, scan: false }
     }
 
     /// **Le budget d'un signal** : la limite du nœud si le gabarit l'a

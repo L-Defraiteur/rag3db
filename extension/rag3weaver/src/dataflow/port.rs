@@ -185,6 +185,12 @@ pub struct QueryPayload {
     pub embedding: Option<Vec<f32>>,
     /// Le vecteur sparse de la requête, même règle.
     pub sparse: Option<crate::sparse_index::SparseVector>,
+    /// **Mode balayage** : l'index ne sait pas (encore) répondre, la source
+    /// de fichiers répondra. Posé une seule fois par `SearchSourceNode` — la
+    /// décision descend par la requête pour que les étages ne la reprennent
+    /// pas chacun : deux lecteurs d'état pourraient diverger pendant une
+    /// course. Les nœuds de signal se taisent, `ScanFilesNode` agit.
+    pub scan: bool,
 }
 
 // ─── Fan-in merge ───────────────────────────────────────────────────────────
