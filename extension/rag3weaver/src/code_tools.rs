@@ -1114,6 +1114,11 @@ pub struct EditResult {
     pub content_hash: String,
     /// Ce que la ré-ingestion du fichier a fait, s'il y avait un catalogue.
     pub reingest: Option<ReingestReport>,
+    /// **L'index n'a pas suivi** : la ré-ingestion a échoué, et l'édition ne
+    /// l'est pas pour autant — le fichier est écrit. La cause, dite ; une
+    /// synchronisation de la source le réindexera.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_pending: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1155,7 +1160,12 @@ impl EditResult {
                     out.push_str(" (removals left to the synchronisation of the whole source in progress)");
                 }
             }
-            None => out.push_str("\n(no catalogue: index not updated)"),
+            None => match &self.index_pending {
+                Some(e) => out.push_str(&format!(
+                    "\nFile written; the index did not follow ({e}) — a synchronisation of the source will reindex it"
+                )),
+                None => out.push_str("\n(no catalogue: index not updated)"),
+            },
         }
         out.push('\n');
         out
@@ -1216,9 +1226,15 @@ pub fn edit_file(
         .or_else(|| if before_text != after_text { Some(before_text.lines().count().min(after_text.lines().count()) + 1) } else { None });
     source.write(path, &after_text)?;
     let content_hash = crate::hash::content_hash(&after_text);
-    let reingest = match catalog {
-        Some(catalog) => Some(reingest_file(catalog, source, path, &after_text)?),
-        None => None,
+    // **Une édition n'échoue pas parce que l'index ne suit pas** : le
+    // fichier est écrit, c'est ce qui a été demandé ; la ré-ingestion qui
+    // échoue se dit dans le rendu, et l'index suivra.
+    let (reingest, index_pending) = match catalog {
+        Some(catalog) => match reingest_file(catalog, source, path, &after_text) {
+            Ok(r) => (Some(r), None),
+            Err(e) => (None, Some(e)),
+        },
+        None => (None, None),
     };
     Ok(EditResult {
         path: path.to_string(),
@@ -1229,6 +1245,7 @@ pub fn edit_file(
         first_changed_line,
         content_hash,
         reingest,
+        index_pending,
     })
 }
 
