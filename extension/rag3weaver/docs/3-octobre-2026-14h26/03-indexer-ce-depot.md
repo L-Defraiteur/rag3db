@@ -214,6 +214,56 @@ la réécriture des requêtes par lot, en cours, devrait y toucher), **les
 puis **l'analyse**, qui se parallélise par fichier. Le plein texte et les
 relations ne sont plus le sujet.
 
+### Ventilé en entier : 352 s, et le plus gros poste n'était dans aucun profil
+
+Le 3 octobre à 23 h 20, après deux changements : la réécriture des requêtes
+par lot (session de l'arbre principal : toutes les formes `UNWIND … MATCH`
+passent par jointure au lieu de balayer les tables) et des chronomètres posés
+sur **tout** le chemin d'ingestion, cumulés par étape (`[ingest-total]`).
+
+| Passe | Cherchable par mots (relations comprises) |
+|---|---|
+| Relations paquet par paquet | 1 798 s |
+| Chargement en masse à la fin | 523 s |
+| Vidages aberrants fermés | 499 s |
+| **Requêtes par lot réécrites** | **352 s** |
+
+La cible reste deux à trois minutes : **il manque environ 170 s**.
+
+| Poste (passe de 352 s) | Temps | Avant la réécriture |
+|---|---|---|
+| **Pousser les blobs de l'index plein texte en base** | **119 s** | 194 s |
+| Analyse des fichiers (dont 46 s dans l'analyseur, déjà parallèle) | 55 s | 51 s |
+| Ingestion des symboles | 56 s | 114 s |
+| Nœud plein texte (lucivy, 8 fils) | 29 s | 29 s |
+| Points de reprise du graphe | ~30 s | ~24 s |
+| Vidages de la file des liens en route | 27 s | 30 s |
+| Insertion des nœuds et des morceaux | 29 s | 108 s |
+| Chargement final des relations | 12 s | 10 s |
+| Relire ce qui est en base (inchangés) | 11 s | 42 s |
+| Marques de session, liaison des morceaux | 20 s | 22 s |
+
+Ce que la ventilation a corrigé dans le diagnostic précédent :
+
+- **Les 140 s « hors de tout nœud » étaient la poussée des blobs d'index.**
+  Après chaque appel d'ingestion — quatre par paquet, 404 sur ce dépôt — les
+  fichiers de l'index plein texte sont écrits en base : c'est ce qui rend
+  l'index relisible après un arrêt brutal. Une demi-seconde à chaque fois,
+  et aucune ligne de profil ne la montrait.
+- **Les points de reprise du graphe ne sont pas le sujet** : une trentaine de
+  secondes, pas cent quarante.
+- **L'analyse ne se parallélise pas davantage chez nous** : l'analyseur
+  travaille déjà par fichier en parallèle, et notre part en aval est de neuf
+  secondes.
+
+La prochaine prise est donc la poussée des blobs : ne la faire, pendant une
+synchronisation de source, qu'aux vidages de la file et à la fin. Elle ne se
+diffère pas gratuitement — une reprise ne réindexe pas les lignes déjà en
+base, donc un arrêt brutal laisserait un index en retard sans que rien le
+dise. La session de l'arbre principal la prend, avec une marque durable
+« plein texte en retard » et la preuve par un arrêt brutal réel. Hors
+synchronisation, rien ne change.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
