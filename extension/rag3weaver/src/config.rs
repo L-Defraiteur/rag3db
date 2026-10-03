@@ -480,6 +480,14 @@ pub struct EntityConfig {
     /// et aucun graphe n'a à le savoir. Un poids, jamais un filtre.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub field_weights: Vec<crate::search::FieldWeight>,
+    /// **Des libellés déclarés pour des valeurs de champ**, que le rendu
+    /// montre à côté du nom — « (test) » pour `test_role = case` — au lieu
+    /// d'un `champ=valeur` brut. Générique : une table par champ, une
+    /// entrée par valeur ; un champ listé ici ne repart pas dans les
+    /// champs bruts de la fiche. Décision de l'orchestration du 4 octobre
+    /// (la marque de test lisible), déclarée plutôt que codée.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub value_labels: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
 
     /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
     /// indexée en plein texte et cherchable, mais sans ligne dans
@@ -818,6 +826,7 @@ impl Default for EntityConfig {
             derived: None,
             fusion: None,
             field_weights: Vec::new(),
+            value_labels: std::collections::BTreeMap::new(),
             content_kind: ContentKind::Document,
             source_lines: None,
             snapshot: None,

@@ -712,6 +712,13 @@ impl SearchTarget {
 // ─── SearchMeta ───────────────────────────────────────────────────────────────
 
 /// Metadata about a search operation.
+/// **Le préfixe de la ligne d'état de l'index.** La source de recherche la
+/// pose dans les avertissements avec ce préfixe ; le rendu la reconnaît et
+/// la met EN TÊTE de fiche (les deux passes d'agent ont montré qu'un ⚠ en
+/// pied de fiche n'est relayé par personne). Une seule constante, deux
+/// lecteurs : pas de dérive.
+pub const INDEX_STATUS_PREFIX: &str = "index : ";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMeta {

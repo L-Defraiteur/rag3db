@@ -16,7 +16,8 @@
 -#}
 {%- if count == 0 -%}
 **No results.**
-{%- if warnings %}
+{% if status %}_{{ status }}_
+{% endif %}{%- if warnings %}
 {% for w in warnings %}
 ⚠️ {{ w }}
 {%- endfor %}
@@ -25,7 +26,8 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {% endif -%}
 {%- else -%}
 {%- if query %}# Search: "{{ query }}"{% if target %} — `{{ target }}`{% endif %}
-
+{% if status %}_{{ status }}_
+{% endif %}
 {% endif -%}
 **Results:** {{ count }}
 {%- if warnings %}
@@ -43,7 +45,7 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 ┌ `{{ r.group.frame }}`
 {%- endif %}
 {% endif %}
-### {{ r.rank }}. {{ r.title }}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.signal %} · {{ r.signal }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}
+### {{ r.rank }}. {{ r.title }}{% for l in r.labels %} ({{ l }}){% endfor %}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.signal %} · {{ r.signal }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}
 {% if r.location %}📍 `{{ r.location }}`
 {% endif -%}
 {%- if r.signature %}🔹 `{{ r.signature }}`
@@ -67,7 +69,7 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 ```
 {% for r in results -%}
 {%- if r.relations -%}
-{{ r.title }}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.path %} @ {{ r.path }}{% endif %}
+{{ r.title }}{% for l in r.labels %} ({{ l }}){% endfor %}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.path %} @ {{ r.path }}{% endif %}
 {% for g in r.relations -%}
 {{ "└── " if loop.last else "├── " }}[{{ g.relation }}]
 {%- set pipe = "    " if loop.last else "│   " %}

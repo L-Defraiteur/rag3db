@@ -183,10 +183,12 @@ fn title_of(
 fn fields_of(
     data: Option<&std::collections::BTreeMap<String, CypherValue>>,
     title: &str,
+    labelled: &[&str],
 ) -> Vec<String> {
     let Some(data) = data else { return Vec::new() };
     data.iter()
         .filter(|(k, _)| !is_internal(k) && !CONSUMED.contains(&k.as_str()))
+        .filter(|(k, _)| !labelled.contains(&k.as_str()))
         .filter_map(|(k, v)| scalar(v).map(|s| (k, s)))
         .filter(|(_, s)| s != title)
         .map(|(k, s)| format!("{k}={s}"))
@@ -240,6 +242,13 @@ pub struct ResultsView {
     /// fidèlement — et personne ne le lisait (issue 02 du 29 août 2026).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// **La ligne d'état de l'index**, extraite des avertissements par son
+    /// préfixe ([`crate::search::INDEX_STATUS_PREFIX`]) et rendue EN TÊTE
+    /// de fiche : les deux passes d'agent ont montré qu'aucun modèle ne
+    /// relaie un ⚠ en pied de fiche. Index prêt = pas de ligne, rien ne
+    /// change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -264,6 +273,11 @@ pub struct ResultView {
     pub doc: Option<String>,
     /// Les colonnes restantes, `clé=valeur`, sans les internes ni les nulles.
     pub fields: Vec<String>,
+    /// Les libellés déclarés pour les valeurs de champs de ce résultat
+    /// (`EntityConfig.value_labels`) — rendus « (test) » à côté du nom ;
+    /// le champ source ne repart pas dans `fields`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
     pub snippets: Vec<String>,
     pub more_snippets: usize,
     /// Présent **seulement sur le premier** d'un groupe : c'est lui qui porte
@@ -446,7 +460,7 @@ pub fn build_view_with(
             let loc = location(Some(&child.data), lens).filter(|l| *l != child_title);
             let view = NeighbourView {
                 entity: child.entity.clone(),
-                fields: fields_of(Some(&child.data), &child_title),
+                fields: fields_of(Some(&child.data), &child_title, &[]),
                 location: loc,
                 title: child_title,
             };
@@ -468,10 +482,31 @@ pub fn build_view_with(
             })
             .collect();
 
+        // Les libellés déclarés pour cette entité : « (test) » plutôt que
+        // `test_role=case`, et le champ source consommé.
+        let (labels, labelled_fields): (Vec<String>, Vec<&str>) = configs
+            .and_then(|c| r.entity.as_deref().and_then(|e| c.get(e)))
+            .map(|config| {
+                let mut out = Vec::new();
+                let mut used = Vec::new();
+                for (field, table) in &config.value_labels {
+                    used.push(field.as_str());
+                    if let Some(CypherValue::String(v)) =
+                        r.data.as_ref().and_then(|d| d.get(field))
+                    {
+                        if let Some(label) = table.get(v) {
+                            out.push(label.clone());
+                        }
+                    }
+                }
+                (out, used)
+            })
+            .unwrap_or_default();
         views.push(ResultView {
             rank: rank + 1,
             name: name.clone(),
-            fields: fields_of(r.data.as_ref(), &name),
+            labels,
+            fields: fields_of(r.data.as_ref(), &name, &labelled_fields),
             title,
             entity,
             kind,
@@ -495,6 +530,7 @@ pub fn build_view_with(
         payload: payload_view(serde_json::to_value(results).expect("serializable results"), configs),
         query: None,
         target: None,
+        status: None,
         count: results.len(),
         results: views,
         types,
@@ -971,7 +1007,13 @@ impl Node for RenderResultsNode {
             // tu crois ».** C'est la même règle que le domaine juste en
             // dessous, appliquée au moteur de recherche.
             if let Some(m) = &meta {
-                view.warnings = m.warnings.clone();
+                let (etat, reste): (Vec<String>, Vec<String>) = m
+                    .warnings
+                    .iter()
+                    .cloned()
+                    .partition(|w| w.starts_with(crate::search::INDEX_STATUS_PREFIX));
+                view.status = etat.into_iter().next();
+                view.warnings = reste;
             }
             // **Le domaine dit ce qu'il ne montre pas.** Sans cette ligne, un
             // agent ne peut pas distinguer « ça n'existe pas » de « ce n'est
@@ -1366,6 +1408,52 @@ mod tests {
         // Et n'importe quel gabarit écrit à la main.
         let mien = render_view(&view, "{% for r in results %}{{ r.name }}@{{ r.location }}{% endfor %}").unwrap();
         assert_eq!(mien, "take@port.rs:120-140");
+    }
+
+    /// **La ligne d'état rend EN TÊTE, pas en ⚠.** Les deux passes d'agent
+    /// ont montré qu'aucun modèle ne relaie un avertissement de pied de
+    /// fiche ; l'état de l'index est la première chose qu'une fiche dit.
+    #[test]
+    fn la_ligne_d_etat_rend_en_tete_et_quitte_les_avertissements() {
+        let mut view = build_view(&[], 200, true, &PathLens::Origin);
+        // Comme à l'exécution : l'extraction sépare l'état des ⚠.
+        let brut = vec![
+            format!("{}jamais construit — lancez `index` avant de chercher", crate::search::INDEX_STATUS_PREFIX),
+            "un autre avertissement".to_string(),
+        ];
+        let (etat, reste): (Vec<String>, Vec<String>) =
+            brut.into_iter().partition(|w| w.starts_with(crate::search::INDEX_STATUS_PREFIX));
+        view.status = etat.into_iter().next();
+        view.warnings = reste;
+        for tpl in [DEFAULT_TEMPLATE, COMPACT_TEMPLATE] {
+            let rendu = render_view(&view, tpl).unwrap();
+            let etat_pos = rendu.find("jamais construit").expect("la ligne d'état est rendue");
+            let warn_pos = rendu.find("un autre avertissement").expect("le ⚠ reste");
+            assert!(etat_pos < warn_pos, "l'état vient en tête : {rendu}");
+            assert!(!rendu.contains("⚠️ _index"), "l'état n'est plus un ⚠ : {rendu}");
+        }
+    }
+
+    /// **Un libellé déclaré pour une valeur de champ** : « (test) » à côté
+    /// du nom, et le champ brut consommé — déclaré dans l'entité, pas codé.
+    #[test]
+    fn un_libelle_de_valeur_rend_a_cote_du_nom() {
+        let mut results = vec![scope("take", "PortValue", 120, 140, 0.81)];
+        if let Some(d) = results[0].data.as_mut() {
+            d.insert("test_role".into(), CypherValue::String("case".into()));
+        }
+        results[0].entity = Some("Scope".into());
+        let mut configs = std::collections::HashMap::new();
+        let mut config = crate::config::EntityConfig::default();
+        config.value_labels.insert(
+            "test_role".into(),
+            [("case".to_string(), "test".to_string())].into_iter().collect(),
+        );
+        configs.insert("Scope".to_string(), config);
+        let view = build_view_with(&results, 300, true, &PathLens::default(), Some(&configs));
+        let rendu = render_view(&view, DEFAULT_TEMPLATE).unwrap();
+        assert!(rendu.contains("PortValue::take (test)"), "le libellé au nom : {rendu}");
+        assert!(!rendu.contains("test_role=case"), "le champ brut est consommé : {rendu}");
     }
 
     /// Les trois façons de nommer un gabarit, et l'erreur quand il n'en est

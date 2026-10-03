@@ -338,6 +338,21 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // pour ces questions-là que la valeur reste douce. Un graphe
         // (`weights` du nœud) ou un appelant la surchargent par l'échelle du
         // pas C.
+        // La marque de test, lisible : « (test) » à côté du nom plutôt que
+        // `test_role=case` — un libellé déclaré pour une valeur de champ,
+        // pas une règle du moteur (orchestration, 4 octobre).
+        value_labels: [(
+            "test_role".to_string(),
+            [
+                ("case".to_string(), "test".to_string()),
+                ("suite".to_string(), "suite de tests".to_string()),
+                ("support".to_string(), "support de test".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+        )]
+        .into_iter()
+        .collect(),
         field_weights: vec![
             crate::search::FieldWeight {
                 field: "scope_type".into(),

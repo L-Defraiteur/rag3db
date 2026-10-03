@@ -7,7 +7,8 @@
 -#}
 {%- if count == 0 -%}
 **No results.**
-{%- if warnings %}
+{% if status %}_{{ status }}_
+{% endif %}{%- if warnings %}
 {% for w in warnings %}
 ⚠️ {{ w }}
 {%- endfor %}
@@ -16,7 +17,8 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {% endif -%}
 {%- else -%}
 **{{ count }} result{{ "" if count == 1 else "s" }}**
-{%- if warnings %}
+{% if status %}_{{ status }}_
+{% endif %}{%- if warnings %}
 {% for w in warnings %}⚠️ {{ w }}
 {% endfor -%}
 {% endif %}
@@ -24,7 +26,7 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {%- if r.group %}
 `{{ r.group.title }}` · {{ r.group.file }} — {{ r.group.count }} matches
 {% endif %}
-{{ r.rank }}. `{{ r.title }}` — {{ r.entity }} · {{ r.score }}{% if r.location %} · {{ r.location }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}{% if r.signal %} · {{ r.signal }}{% endif %}
+{{ r.rank }}. `{{ r.title }}`{% for l in r.labels %} ({{ l }}){% endfor %} — {{ r.entity }} · {{ r.score }}{% if r.location %} · {{ r.location }}{% endif %}{% if r.relation %} · via {{ r.relation }}{% endif %}{% if r.signal %} · {{ r.signal }}{% endif %}
 {% if r.fields %}   {{ r.fields | join(" · ") }}
 {% endif -%}
 {%- for s in r.snippets %}   > {{ s }}

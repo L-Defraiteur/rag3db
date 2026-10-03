@@ -96,24 +96,35 @@ pub fn adaptive_search_decision(
     use crate::catalog::Level;
     let scan_line = |pourquoi: &str| {
         Some(format!(
-            "index : {pourquoi} — réponse par balayage des fichiers (mots exacts seulement) ; \
-             lancez `index` pour chercher par sens"
+            "{}{pourquoi} — réponse par balayage des fichiers (mots exacts seulement) ; \
+             lancez `index` pour chercher par sens",
+            crate::search::INDEX_STATUS_PREFIX
         ))
     };
     match state {
         None if has_file_source => (true, scan_line("occupé ou illisible")),
-        None => (false, Some("index : état illisible — recherche sur ce qui est posé".into())),
+        None => (
+            false,
+            Some(format!(
+                "{}état illisible — recherche sur ce qui est posé",
+                crate::search::INDEX_STATUS_PREFIX
+            )),
+        ),
         Some(s) => match (s.text, s.vectors) {
             (Level::Never, _) if has_file_source => (true, scan_line("jamais construit")),
             (Level::Never, _) => (
                 false,
-                Some("index : jamais construit — lancez `index` avant de chercher".into()),
+                Some(format!(
+                    "{}jamais construit — lancez `index` avant de chercher",
+                    crate::search::INDEX_STATUS_PREFIX
+                )),
             ),
             (Level::Ready, Level::Ready) => (false, None),
             (text, _) => (
                 false,
                 Some(format!(
-                    "index : partiel — plein texte {}, vecteurs {} %{} ; les résultats viennent de ce qui est prêt",
+                    "{}partiel — plein texte {}, vecteurs {} %{} ; les résultats viennent de ce qui est prêt",
+                    crate::search::INDEX_STATUS_PREFIX,
                     if text == Level::Ready { "prêt" } else { "en cours" },
                     s.vectors_percent,
                     s.vectors_seconds_left
