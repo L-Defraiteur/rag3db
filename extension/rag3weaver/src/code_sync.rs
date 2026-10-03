@@ -193,7 +193,11 @@ pub fn reingest_file(
         Some(root) => (root.to_string(), false),
         None => ("/".to_string(), true),
     };
-    let mut analysis = crate::code::analyze_with(&root, vec![(path.to_string(), content.to_string())], &cursor);
+    // Les chemins du projet : un import vers un autre fichier n'est pas une
+    // bibliothèque. Une source qui ne sait pas se lister analyse sans eux.
+    let projet = source.list().ok();
+    let mut analysis =
+        crate::code::analyze_in_project(&root, vec![(path.to_string(), content.to_string())], &cursor, projet.as_deref());
     for f in &mut analysis.files {
         f.cursor = cursor.clone();
         if virtual_source {
@@ -593,7 +597,7 @@ fn synchroniser(
         }
         profil.add("lire les fichiers", t);
         let t = std::time::Instant::now();
-        let mut analysis = crate::code::analyze_with(&root, sources, &cursor);
+        let mut analysis = crate::code::analyze_in_project(&root, sources, &cursor, Some(&retenus));
         profil.add("analyser (codeparsers)", t);
         for f in &mut analysis.files {
             f.cursor = cursor.clone();

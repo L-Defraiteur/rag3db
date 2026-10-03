@@ -126,3 +126,43 @@ fn une_propriete_a_virgule_ne_fait_pas_refuser_le_copy() {
     attendu.sort_by_key(|r| format!("{r:?}"));
     assert_eq!(lu, attendu, "chaque valeur intacte, 900 liens");
 }
+
+/// **Aucune donnée n'est lue NULL par le COPY** (4 octobre 2026). Le mot que
+/// le COPY lit comme NULL était une constante du code, `__rag3weaver_null__` ;
+/// indexer `dialect.rs` en faisait un symbole, et ce symbole devenait NULL au
+/// chargement en masse. Le mot est maintenant tiré au démarrage du processus.
+/// Ici, l'ancien mot circule comme une valeur ordinaire, par le COPY des
+/// nœuds et par celui des liens, et revient intact.
+#[test]
+#[ignore]
+fn l_ancien_mot_du_null_revient_intact_du_copy() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let config = CatalogConfig { name: Some("copy-null".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    catalog.register_entity("Gauche", bout()).unwrap();
+    catalog.register_entity("Droite", bout()).unwrap();
+    let texte = || -> FieldDef { serde_json::from_value(serde_json::json!({"type": "string"})).unwrap() };
+    catalog.register_relation_with("Lien", "Gauche", "Droite", HashMap::from([("p".to_string(), texte())])).unwrap();
+    let mot = "__rag3weaver_null__";
+    // Au-delà des seuils : les nœuds (table vide) et les liens partent par COPY.
+    let gauches: Vec<String> = (0..30).map(|i| if i == 0 { mot.to_string() } else { format!("g{i}") }).collect();
+    let droites: Vec<String> = (0..30).map(|i| format!("d{i}")).collect();
+    catalog.ingest_entities("Gauche", gauches.iter().map(|n| ligne(n)).collect()).unwrap();
+    catalog.ingest_entities("Droite", droites.iter().map(|n| ligne(n)).collect()).unwrap();
+    for g in &gauches {
+        let ug = catalog.entity_uuid("Gauche", &ligne(g)).unwrap();
+        for d in &droites {
+            let ud = catalog.entity_uuid("Droite", &ligne(d)).unwrap();
+            let props = BTreeMap::from([("p".to_string(), CypherValue::String(mot.into()))]);
+            catalog.link_jusqu_a("Lien", RefOrUuid::Uuid(ug.clone()), RefOrUuid::Uuid(ud), props, Disponibilites::AUCUNE).unwrap();
+        }
+    }
+    let res = catalog.drain();
+    assert_eq!(res.failed, 0, "{:?}", res.warnings);
+    assert!(catalog.take_bulk_load_refusals().is_empty());
+    let noeud = catalog.execute_raw(&format!("MATCH (g:Gauche) WHERE g.nom = '{mot}' RETURN count(g)")).unwrap().rows;
+    assert_eq!(noeud, vec![vec![CypherValue::Int(1)]], "le nœud garde son nom");
+    let liens = catalog.execute_raw(&format!("MATCH ()-[r:Lien]->() WHERE r.p = '{mot}' RETURN count(r)")).unwrap().rows;
+    assert_eq!(liens, vec![vec![CypherValue::Int(900)]], "chaque lien garde sa propriété");
+}
