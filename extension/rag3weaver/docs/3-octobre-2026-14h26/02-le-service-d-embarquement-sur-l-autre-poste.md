@@ -191,11 +191,68 @@ les tunnels (§ 4) et reposer la variable (§ 5).
 qui échoue sur « aucun service ne sert … ne répond pas » : relancer la ligne
 `ssh -f -N …` correspondante.
 
+## 7 bis. Le modèle de décision, par llama-server
+
+Ajouté le 3 octobre au soir. La session optimiseur a mesuré les modèles de
+décision (`docs/optimiseur/3-octobre-2026-20h55/02-…`) : JevK5-4B est le seul
+utilisable, à deux secondes la décision sur processeur. Il est servi de
+luciepc, sur la même carte libre, **par llama-server et non par notre
+moteur**.
+
+| | modèle | écoute sur luciepc | port local d'ici (tunnel) |
+|---|---|---|---|
+| service 4 | JevK5-4B v0.3, Q8_0 (4,5 Go) | `127.0.0.1:7881` | `127.0.0.1:7982` |
+
+- **La mémoire tient** : avant lui la carte `0000:04:00.0` portait 13 507 Mio
+  (les trois modèles d'embarquement) sur 32 624 ; après, 18 323. Rien à
+  arrêter. La carte de `seat1` n'a pas bougé (6 749 Mio).
+- **Le binaire** est celui qui était déjà sur le poste,
+  `~/git_workspaces/llama.cpp/build/bin/llama-server` (commit `d2462f8`, juin
+  2026, bâti avec Vulkan). On ne bâtit ni ne modifie rien dans ce dossier.
+  Il voit trois périphériques ; `Vulkan0` est la carte libre (reconnue à sa
+  mémoire disponible, puis vérifiée par la mémoire prise au chargement).
+- **Les poids** : `~/.cache/rag3weaver/decision/` là-bas, téléchargés du dépôt
+  public `alibiserikbay/JevK5-GGUF` — `jevk5-4b-v0.3-Q8_0.gguf` (sha256
+  `aea433883bc7…979d4a30`) et `jevk5-4b-v0.3-Q4_K_M.gguf` (`94ca0d7745c4…8938c882`).
+
+Lancer (sur luciepc) :
+
+```bash
+setsid nohup ~/git_workspaces/llama.cpp/build/bin/llama-server \
+  -m ~/.cache/rag3weaver/decision/jevk5-4b-v0.3-Q8_0.gguf -c 8192 -ngl 99 --device Vulkan0 \
+  --host 127.0.0.1 --port 7881 > ~/.cache/rag3weaver/service-decision.log 2>&1 < /dev/null &
+curl -s http://127.0.0.1:7881/health     # {"status":"ok"} en trois secondes
+```
+
+Arrêter : `kill -TERM $(pidof llama-server)`. Changer de modèle : arrêter,
+relancer avec l'autre fichier — un seul modèle à la fois sur ce port.
+
+Le tunnel (sur ce poste) :
+
+```bash
+ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 127.0.0.1:7982:127.0.0.1:7881 lucied@luciepc
+```
+
+Ce que le client appelle : `GET /health`, `POST /tokenize`, `POST /completion`
+(un jeton, quarante log-probabilités). Vérifié par le tunnel : la réponse
+porte `completion_probabilities[0].top_logprobs`, et un `/completion` prend
+109 ms sur un prompt de seize jetons — contre deux secondes sur processeur.
+
+**Ce service n'est pas désigné par `RAG3WEAVER_EMBED_SERVICE`** : cette
+variable ne connaît que l'embarquement. Son adresse se donne à la main à qui
+s'en sert, en attendant l'abstraction « un modèle, en service ou en local »
+(proposition à venir).
+
+Après un redémarrage de luciepc : relancer la commande ci-dessus avec les
+trois démons d'embarquement (§ 3) ; après un redémarrage de ce poste :
+refaire le tunnel avec les trois autres (§ 4).
+
 ## 8. Ce qui reste ouvert
 
 - Les démons ne sont pas des services systemd : un redémarrage de luciepc
   demande la relance à la main. À faire si l'usage dure.
-- Trois modèles chargés tiennent environ 10 Gio sur les 31 de la carte.
+- Quatre modèles chargés (trois d'embarquement, un de décision) tiennent
+  environ 18 Gio sur les 31 de la carte.
 - Une enveloppe d'embarqueur doit relayer `distant()` : celle des tests ne
   le faisait pas, et le client cadençait ses rafales pour une carte qui
   n'était pas la sienne (`e2e_charge_ingestion` : 1 019 s, puis 123 s).
