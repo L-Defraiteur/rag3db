@@ -397,12 +397,17 @@ pub trait SchemaDialect: Send + Sync {
         format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL")
     }
 
+    /// Une colonne entière à NULL, sur toute la table (une migration).
+    fn set_column_null(&self, table: &str, field: &str) -> String {
+        format!("MATCH (n:{table}) SET n.{field} = NULL")
+    }
+
     /// **Poser la marque d'absence** sur `$uuids`, à `$since`, sauf là où elle
     /// est déjà : c'est la *première* absence constatée qu'elle garde.
     fn mark_absent_since(&self, table: &str) -> String {
         format!(
             "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
-             WHERE n._absent_since IS NULL SET n._absent_since = $since"
+             WHERE n._absent_since IS NULL OR n._absent_since = 0 SET n._absent_since = $since"
         )
     }
 
@@ -1721,7 +1726,11 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn mark_absent_since(&self, table: &str) -> String {
-        format!("UPDATE {table} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND _absent_since IS NULL")
+        format!("UPDATE {table} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND (_absent_since IS NULL OR _absent_since = 0)")
+    }
+
+    fn set_column_null(&self, table: &str, field: &str) -> String {
+        format!("UPDATE {table} SET {field} = NULL")
     }
 
     fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
