@@ -32,6 +32,16 @@ pub struct WorkspaceConfig {
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
     pub commands: CommandGate,
+    /// Enregistrer le schéma de code (`File`/`Scope`…) à l'ouverture — la
+    /// vérité vit dans le moteur (`register_code_schema`), pas dupliquée en
+    /// JSON : un schéma de payload ne sait pas dire `Text`, et une copie
+    /// dériverait. Les entités **métier** restent déclaratives.
+    #[serde(default = "vrai")]
+    pub index: bool,
+}
+
+fn vrai() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -107,6 +117,8 @@ const BASE_NODES: &[&str] = &[
     "FetchRelatedNode",
     "ComposeNode",
     "GroupFrameNode",
+    // La carte du catalogue : une lecture, sûre pour tout outil.
+    "SchemaNode",
 ];
 
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode"];
@@ -283,6 +295,7 @@ mod tests {
             root: "sources".into(),
             read_only,
             commands: CommandGate::Off,
+            index: true,
         }
     }
 

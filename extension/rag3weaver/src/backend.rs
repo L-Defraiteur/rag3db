@@ -661,6 +661,14 @@ impl PreparedBackend {
             cat.register_entity(name, config.clone())
                 .map_err(|e| e.to_string())?;
         }
+        // Le schéma de code, par le moteur : la vérité de `scope_config` ne
+        // se duplique pas en JSON (elle dériverait) — un workspace déclaré
+        // l'enregistre, sauf refus explicite (`index: false`).
+        #[cfg(feature = "code")]
+        if self.manifest.workspace.as_ref().is_some_and(|w| w.index) {
+            crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
+                .map_err(|e| e.to_string())?;
+        }
         for (name, r) in &self.manifest.relations {
             cat.register_relation_with(
                 name,

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "name": "code-cloud",
+  "database": "data/code.rag3db",
+  "embeddings": {
+    "model": "granite-278m",
+    "dimensions": 768
+  },
+  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "workspace": {
+    "source": "snapshot",
+    "root": "workspace"
+  },
+  "entities": {},
+  "tools": {
+    "search_code": {
+      "graph": "../../tools/search_structured.mmd",
+      "description": "Chercher dans le code indexé, par mots et par sens : une question en langue naturelle ou un identifiant. À prendre d'abord — c'est l'index qui sait où regarder ; grep ne sert que pour un motif littéral exact.",
+      "bindings": {
+        "target": "Scope"
+      }
+    },
+    "read_file": {
+      "graph": "../../tools/read.mmd",
+      "description": "Lire un fichier du workspace par son chemin relatif, avec numéros de lignes. À prendre après search ou grep, pour voir le contexte exact avant d'éditer.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "grep_files": {
+      "graph": "../../tools/grep.mmd",
+      "description": "Motif littéral ou regex sur les fichiers du workspace. À prendre pour une chaîne exacte (un message d'erreur, un nom précis) ; pour une question de sens, search_code fait mieux.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "list_files": {
+      "graph": "../../tools/list.mmd",
+      "description": "Lister les chemins du workspace sous un préfixe. À prendre pour s'orienter ; les fichiers écartés (règles d'exclusion, secrets probables) n'y figurent pas.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "schema": {
+      "graph": "../../tools/schema.mmd",
+      "description": "La carte du catalogue : les entités, leurs champs, leurs relations. À prendre pour savoir ce que search_code peut cibler."
+    },
+    "edit_file": {
+      "graph": "../../tools/edit.mmd",
+      "description": "Éditer un fichier de l'instantané (en mémoire : le dépôt d'origine ne bouge pas). La réindexation du fichier suit l'édition.",
+      "policy": {
+        "write_files": true
+      }
+    }
+  }
+}
