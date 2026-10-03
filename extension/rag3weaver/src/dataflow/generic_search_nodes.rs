@@ -119,16 +119,25 @@ pub fn adaptive_search_decision(
                     crate::search::INDEX_STATUS_PREFIX
                 )),
             ),
-            (Level::Ready, Level::Ready) => (false, None),
+            (Level::Ready, Level::Ready)
+                if s.sparse.as_ref().is_none_or(|sp| sp.level == Level::Ready) =>
+            {
+                (false, None)
+            }
             (text, _) => (
                 false,
                 Some(format!(
-                    "{}partiel — plein texte {}, vecteurs {} %{} ; les résultats viennent de ce qui est prêt",
+                    "{}partiel — plein texte {}, vecteurs {} %{}{} ; les résultats viennent de ce qui est prêt",
                     crate::search::INDEX_STATUS_PREFIX,
                     if text == Level::Ready { "prêt" } else { "en cours" },
                     s.vectors_percent,
                     s.vectors_seconds_left
                         .map(|sec| format!(" (reste environ {} min)", sec.div_ceil(60)))
+                        .unwrap_or_default(),
+                    s.sparse
+                        .as_ref()
+                        .filter(|sp| sp.level != Level::Ready)
+                        .map(|sp| format!(", creux {} %", sp.percent))
                         .unwrap_or_default()
                 )),
             ),

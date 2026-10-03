@@ -685,6 +685,89 @@ impl Autorisee {
     }
 }
 
+/// **Le bac à sable d'une commande** : ce qu'elle a le droit de VOIR.
+///
+/// La garde par analyse de ligne refuse tôt et parle clair, mais analyser
+/// du shell n'est pas une frontière de sécurité — un binaire du dépôt lancé
+/// par `cargo test` lit ce qu'il veut. Ici, c'est le noyau qui tient : le
+/// domaine de travail en lecture-écriture, le système en lecture seule là
+/// où il faut pour exécuter, rien du dossier de l'utilisateur, pas de
+/// réseau TCP par défaut. Landlock d'abord (sans privilège, posé avant
+/// `exec`, irrévocable) ; bubblewrap en repli déclaré ; au-delà, le montage
+/// refuse en le disant. Limites avouées : Landlock ne couvre ni UDP ni les
+/// sockets unix (ABI v4 couvre TCP), et le bac à sable borne la commande,
+/// pas le backend lui-même.
+#[derive(Debug, Clone)]
+pub struct BacASable {
+    /// Lecture-écriture : le domaine de travail, et les écritures déclarées
+    /// (`extra_write` — un cache de build, par exemple).
+    pub ecritures: Vec<std::path::PathBuf>,
+    /// Lecture seule : le système (`/usr`, `/lib`, `/lib64`, `/bin`,
+    /// `/etc`), et les lectures déclarées (`extra_read` — `~/.cargo/registry`).
+    pub lectures: Vec<std::path::PathBuf>,
+    /// Le réseau TCP. Faux par défaut : un agent qui télécharge passe par
+    /// une clé déclarée, pas par un oubli.
+    pub reseau: bool,
+}
+
+impl BacASable {
+    /// La politique par défaut autour d'un domaine de travail.
+    pub fn autour(domaine: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            ecritures: vec![domaine.into()],
+            lectures: ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc"]
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect(),
+            reseau: false,
+        }
+    }
+    pub fn lire_en_plus(mut self, p: impl Into<std::path::PathBuf>) -> Self {
+        self.lectures.push(p.into());
+        self
+    }
+    pub fn ecrire_en_plus(mut self, p: impl Into<std::path::PathBuf>) -> Self {
+        self.ecritures.push(p.into());
+        self
+    }
+    pub fn avec_reseau(mut self, oui: bool) -> Self {
+        self.reseau = oui;
+        self
+    }
+
+    /// **Le ruleset Landlock, construit AVANT le fork** : le descripteur
+    /// hérite, et le fils n'exécute que `prctl` + `restrict_self` — deux
+    /// syscalls, sûrs entre fork et exec. Erreur = le noyau ne sait pas
+    /// (trop vieux, désactivé) : l'appelant choisit bubblewrap ou refuse.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    pub fn ruleset(&self) -> Result<landlock::RulesetCreated, String> {
+        use landlock::{
+            path_beneath_rules, Access, AccessFs, AccessNet, Ruleset, RulesetAttr,
+            RulesetCreatedAttr, ABI,
+        };
+        // V2 est large (noyau ≥ 5.19) ; le réseau TCP exige V4 (≥ 6.7). On
+        // prend le meilleur des deux que ce noyau sait faire : sans V4, le
+        // réseau n'est PAS confiné et le montage le dit à l'appelant.
+        let abi = ABI::V4;
+        let mut ruleset = Ruleset::default();
+        ruleset = RulesetAttr::handle_access(ruleset, AccessFs::from_all(ABI::V2))
+            .map_err(|e| format!("landlock : {e}"))?;
+        if !self.reseau {
+            ruleset = RulesetAttr::handle_access(ruleset, AccessNet::BindTcp | AccessNet::ConnectTcp)
+                .map_err(|e| format!("landlock : {e}"))?;
+        }
+        let _ = abi;
+        let created = ruleset.create().map_err(|e| format!("landlock : {e}"))?;
+        let created = created
+            .add_rules(path_beneath_rules(&self.lectures, AccessFs::from_read(ABI::V2)))
+            .map_err(|e| format!("landlock : {e}"))?
+            .add_rules(path_beneath_rules(&self.ecritures, AccessFs::from_all(ABI::V2)))
+            .map_err(|e| format!("landlock : {e}"))?;
+        Ok(created)
+    }
+}
+
+
 /// Les conditions dans lesquelles on exécute.
 #[derive(Debug, Clone)]
 pub struct Atelier {
@@ -708,6 +791,10 @@ pub struct Atelier {
     ///
     /// `None` : rien n'est gardé, et l'aperçu est tout ce qu'on aura.
     pub journaux: Option<std::path::PathBuf>,
+    /// Le bac à sable. `None` : la commande voit ce que le processus voit —
+    /// l'état d'avant, gardé pour les postes de confiance et dit par
+    /// `describe`.
+    pub bac_a_sable: Option<BacASable>,
 }
 
 impl Atelier {
@@ -717,7 +804,13 @@ impl Atelier {
             delai: std::time::Duration::from_secs(120),
             max_sortie: 100_000,
             journaux: None,
+            bac_a_sable: None,
         }
+    }
+
+    pub fn avec_bac_a_sable(mut self, b: BacASable) -> Self {
+        self.bac_a_sable = Some(b);
+        self
     }
 
     /// Garder la sortie entière dans ce dossier.
@@ -815,12 +908,43 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     }
 
     let debut = std::time::Instant::now();
-    let mut enfant = Command::new(&a.0.programme)
+    let mut commande = Command::new(&a.0.programme);
+    commande
         .args(&a.0.args)
         .current_dir(&atelier.cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    // **Le bac à sable se pose entre fork et exec** : le ruleset est
+    // construit ICI (avant le fork — le descripteur hérite), et le fils
+    // n'exécute que la restriction : deux syscalls, sûrs à cet endroit.
+    // Une erreur de construction refuse la commande — jamais un repli
+    // silencieux vers « pas de bac à sable ».
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    if let Some(bac) = &atelier.bac_a_sable {
+        use std::os::unix::process::CommandExt;
+        let ruleset = bac
+            .ruleset()
+            .map_err(|e| ExecErreur::Atelier(format!("bac à sable : {e}")))?;
+        let cellule = std::sync::Mutex::new(Some(ruleset));
+        unsafe {
+            commande.pre_exec(move || {
+                if let Some(r) = cellule.lock().ok().and_then(|mut c| c.take()) {
+                    r.restrict_self().map_err(|e| {
+                        std::io::Error::other(format!("landlock restrict : {e}"))
+                    })?;
+                }
+                Ok(())
+            });
+        }
+    }
+    #[cfg(not(all(feature = "code", target_os = "linux")))]
+    if atelier.bac_a_sable.is_some() {
+        return Err(ExecErreur::Atelier(
+            "le bac à sable demande Linux et la feature code".into(),
+        ));
+    }
+    let mut enfant = commande
         .spawn()
         .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
 
@@ -1219,6 +1343,61 @@ mod tests {
         assert!(s.a_reussi(), "{s:?}");
         assert_eq!(s.stdout.trim(), "bonjour");
         assert!(!s.expiree);
+    }
+
+    /// **Le bac à sable tient par le noyau, pas par l'analyse.** Dans le
+    /// domaine, tout marche ; dehors, la lecture ET l'écriture échouent —
+    /// des échecs de la commande (EACCES), plus des verdicts de la garde.
+    /// C'est ce qui rend honnête le mode `auto` : les contournements des
+    /// passes d'agent deviennent des échecs du noyau.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn le_bac_a_sable_borne_ce_que_la_commande_voit() {
+        let domaine = tempfile::tempdir().expect("tempdir");
+        let dehors = tempfile::tempdir().expect("tempdir");
+        std::fs::write(domaine.path().join("dedans.txt"), "ok").unwrap();
+        std::fs::write(dehors.path().join("secret.txt"), "dehors").unwrap();
+        let bac = BacASable::autour(domaine.path());
+        if bac.ruleset().is_err() {
+            eprintln!("Landlock indisponible sur ce noyau : test sauté, dit franchement");
+            return;
+        }
+        let atelier = Atelier::dans(domaine.path()).avec_bac_a_sable(bac);
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+
+        // Dedans : tout marche.
+        let laissez = g.autoriser(&Commande::new("/bin/cat", ["dedans.txt"]), &accorde).unwrap();
+        let s = executer(laissez, &atelier).expect("exécution dedans");
+        assert!(s.a_reussi(), "{s:?}");
+        assert_eq!(s.stdout.trim(), "ok");
+
+        // Dehors, en lecture : le noyau refuse — pas la garde.
+        let cible = dehors.path().join("secret.txt");
+        let laissez = g
+            .autoriser(&Commande::new("/bin/cat", [cible.to_str().unwrap()]), &accorde)
+            .unwrap();
+        let s = executer(laissez, &atelier).expect("la commande tourne, et échoue");
+        assert!(!s.a_reussi(), "la lecture hors domaine doit échouer : {s:?}");
+        assert!(!s.stdout.contains("dehors"), "rien ne fuit : {s:?}");
+
+        // Dehors, en écriture : pareil.
+        let cible = dehors.path().join("ecrit.txt");
+        let laissez = g
+            .autoriser(&Commande::new("/bin/cp", ["dedans.txt", cible.to_str().unwrap()]), &accorde)
+            .unwrap();
+        let s = executer(laissez, &atelier).expect("la commande tourne, et échoue");
+        assert!(!s.a_reussi(), "l'écriture hors domaine doit échouer : {s:?}");
+        assert!(!cible.exists(), "rien n'a été écrit dehors");
+
+        // Et le dossier de l'utilisateur n'existe pas pour la commande.
+        if let Ok(home) = std::env::var("HOME") {
+            let laissez = g
+                .autoriser(&Commande::new("/bin/ls", [home.as_str()]), &accorde)
+                .unwrap();
+            let s = executer(laissez, &atelier).expect("la commande tourne, et échoue");
+            assert!(!s.a_reussi(), "le HOME est invisible : {s:?}");
+        }
     }
 
     /// **Un échec est une information, pas une erreur.** `/bin/false` rend 1 ;

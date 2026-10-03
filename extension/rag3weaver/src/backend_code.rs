@@ -45,6 +45,13 @@ pub struct WorkspaceConfig {
     /// déclaration que rien ne lit est la famille de défauts qu'on chasse.
     #[serde(default)]
     pub index_signals: std::collections::BTreeMap<String, Vec<String>>,
+    /// **Le bac à sable des commandes** : ce que `run` a le droit de VOIR,
+    /// tenu par le noyau (Landlock) — le domaine en lecture-écriture, le
+    /// système en lecture seule, rien du dossier de l'utilisateur, pas de
+    /// réseau TCP sans la clé. `commands: "auto"` REFUSE de s'armer sans
+    /// bac à sable : c'est la condition qui rend ce mode honnête.
+    #[serde(default)]
+    pub sandbox: SandboxConfig,
     /// Le schéma **nommé** que ce workspace indexe — `"code"` enregistre le
     /// schéma de code du moteur (`register_code_schema`) à l'ouverture ;
     /// absent, rien ne s'enregistre. Un nom plutôt qu'une copie JSON : la
@@ -86,6 +93,45 @@ pub enum CommandGate {
     Approval,
     /// La liste librement ; le reste, la sentinelle tranche.
     Auto,
+}
+
+/// Le bac à sable déclaré au manifeste. Voir [`crate::commande::BacASable`].
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SandboxConfig {
+    /// `landlock` (défaut) : le noyau tient, ou le chargement refuse en le
+    /// disant ; `off` : pas de bac à sable — un poste de confiance peut le
+    /// vouloir, et `commands: "auto"` le refuse. (`bubblewrap` : pas encore
+    /// branché — refusé en le disant plutôt que promis.)
+    #[serde(default)]
+    pub mode: SandboxMode,
+    /// Ouvre le réseau TCP aux commandes. Faux par défaut.
+    #[serde(default)]
+    pub network: bool,
+    /// Lectures en plus du système (ex. `~/.cargo/registry`). `~` s'étend.
+    #[serde(default)]
+    pub extra_read: Vec<String>,
+    /// Écritures en plus du domaine (ex. `~/.cargo/registry/cache`).
+    #[serde(default)]
+    pub extra_write: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SandboxMode {
+    #[default]
+    Landlock,
+    Off,
+}
+
+/// Le `~` des chemins déclarés, étendu — un manifeste parle à un humain.
+pub fn etendre_tilde(p: &str) -> std::path::PathBuf {
+    if let Some(reste) = p.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return std::path::Path::new(&home).join(reste);
+        }
+    }
+    std::path::PathBuf::from(p)
 }
 
 /// **La politique d'un outil** : ce qu'il a le droit de faire — c'est elle
@@ -183,6 +229,25 @@ const HOOK_FORBIDDEN: &[&str] = &[
     "RunCommandNode",
     "EditFileNode",
 ];
+
+/// Le bac à sable d'un workspace, prêt à poser sur l'Atelier — `None` en
+/// mode `off`.
+pub fn build_bac_a_sable(
+    sandbox: &SandboxConfig,
+    domaine: &std::path::Path,
+) -> Option<crate::commande::BacASable> {
+    if sandbox.mode == SandboxMode::Off {
+        return None;
+    }
+    let mut bac = crate::commande::BacASable::autour(domaine).avec_reseau(sandbox.network);
+    for p in &sandbox.extra_read {
+        bac = bac.lire_en_plus(etendre_tilde(p));
+    }
+    for p in &sandbox.extra_write {
+        bac = bac.ecrire_en_plus(etendre_tilde(p));
+    }
+    Some(bac)
+}
 
 /// Les types de nœuds qu'un crochet peut traverser, selon sa politique.
 pub fn hook_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
@@ -363,6 +428,7 @@ mod tests {
             read_only,
             commands: CommandGate::Off,
             index_signals: std::collections::BTreeMap::new(),
+            sandbox: SandboxConfig::default(),
             index: Some("code".into()),
             generated: Default::default(),
         }

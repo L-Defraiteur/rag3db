@@ -368,6 +368,39 @@ impl PreparedBackend {
                     }
                 }
             }
+            // **`auto` sans bac à sable refuse** : la sentinelle peut accorder
+            // librement, il faut que le noyau tienne — c'est la condition qui
+            // rend ce mode honnête. Et le mode landlock se prouve au
+            // chargement : un noyau qui ne sait pas le dit ici, pas au
+            // milieu d'un tour d'agent.
+            #[cfg(feature = "code")]
+            {
+                use crate::backend_code::{CommandGate, SandboxMode};
+                if w.commands == CommandGate::Auto && w.sandbox.mode == SandboxMode::Off {
+                    return Err(
+                        "workspace.commands: \"auto\" exige un bac à sable — retirez \
+                         \"sandbox\": {\"mode\": \"off\"}, ou passez en \"approval\""
+                            .into(),
+                    );
+                }
+                #[cfg(target_os = "linux")]
+                if w.sandbox.mode == SandboxMode::Landlock {
+                    if let Err(e) = crate::commande::BacASable::autour("/").ruleset() {
+                        return Err(format!(
+                            "le bac à sable Landlock ne se monte pas sur ce noyau ({e}) — \
+                             déclarez \"sandbox\": {{\"mode\": \"off\"}} en le sachant"
+                        ));
+                    }
+                }
+                #[cfg(not(target_os = "linux"))]
+                if w.sandbox.mode == SandboxMode::Landlock && w.commands != CommandGate::Off {
+                    return Err(
+                        "le bac à sable Landlock demande Linux — \"sandbox\": \
+                         {\"mode\": \"off\"} en le sachant"
+                            .into(),
+                    );
+                }
+            }
             if index_veut_creux
                 && !manifest.models.contains_key(&crate::model_source::Capability::Sparse)
             {
@@ -1604,6 +1637,19 @@ impl Backend {
             }
             if let Some(garde) = &self.garde {
                 services.register(crate::dataflow::run_nodes::GARDE_SERVICE, garde.clone());
+                if let Some(w) = &self.prepared.manifest.workspace {
+                    let racine = if w.root.is_absolute() {
+                        w.root.clone()
+                    } else {
+                        self.prepared.directory.join(&w.root)
+                    };
+                    if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine) {
+                        services.register(
+                            crate::dataflow::run_nodes::BAC_A_SABLE_SERVICE,
+                            std::sync::Arc::new(bac),
+                        );
+                    }
+                }
             }
         }
         services.register("rhai_scripts", self.prepared.scripts.clone());

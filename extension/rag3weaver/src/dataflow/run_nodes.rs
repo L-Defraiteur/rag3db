@@ -27,6 +27,9 @@ use super::port::{PortDef, PortType, PortValue};
 
 /// Le service qui porte la porte : `Arc<Garde>`.
 pub const GARDE_SERVICE: &str = "garde";
+/// Le bac à sable du workspace, si le manifeste en déclare un : posé sur
+/// chaque exécution. Voir [`crate::commande::BacASable`].
+pub const BAC_A_SABLE_SERVICE: &str = "bac_a_sable";
 
 /// Plafond dur, quoi que demande l'appelant. Un agent qui met une heure
 /// bloque un fil pendant une heure.
@@ -163,10 +166,15 @@ impl Node for RunCommandNode {
 
         // Autorisée : chaque partie a son laissez-passer, on les exécute dans
         // l'ordre. `&&` s'arrête au premier échec, comme un shell le ferait.
-        let atelier = Atelier::dans(&racine)
+        let mut atelier = Atelier::dans(&racine)
             .avec_delai(std::time::Duration::from_secs(self.delai_s))
             .avec_max_sortie(self.max_sortie)
             .avec_journaux(dossier_journaux().join(ctx.run_id()));
+        // Le bac à sable du manifeste, s'il y en a un : le noyau borne ce
+        // que la commande voit — la garde refuse tôt et parle, le bac tient.
+        if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE) {
+            atelier = atelier.avec_bac_a_sable(bac.as_ref().clone());
+        }
 
         let mut rapport = String::new();
         for (c, _) in &verdict.parties {
