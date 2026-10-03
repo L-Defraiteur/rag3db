@@ -1414,6 +1414,9 @@ impl Catalog {
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
         }
+        // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
+        // mentionneurs — pour ne reposer que les arêtes neuves.
+        let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("DEFINES", definitions)?;
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
@@ -1423,6 +1426,7 @@ impl Catalog {
             let props = BTreeMap::from([("kind".to_string(), s(kind))]);
             mentions.push((from, to, props));
         }
+        let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
         etape("mise en file DEFINES/MENTIONS", &mut t);
         let drained = self.drain_jusqu_a(exige);
@@ -1433,10 +1437,35 @@ impl Catalog {
         // une par relation, en `UNWIND` sur tous les symboles du lot. Une
         // requête par symbole coûtait 2,5 fois le temps d'ingestion.
         let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
-        let definers_by_symbol = self.linked_from_many("DEFINES", &uuids)?;
-        let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", &uuids, true)?;
-        etape("relecture des rendez-vous", &mut t);
-        for sym in &uuids {
+        self.materialiser_les_symboles(&uuids, Some((&scopes_du_lot, &mentionneurs_du_lot)), report)?;
+        etape("relecture et mise en file des arêtes", &mut t);
+        let linked = self.drain_jusqu_a(exige);
+        etape("drain des arêtes résolues", &mut t);
+        report.failed += linked.failed;
+        Ok(())
+    }
+
+    /// **Poser les arêtes résolues** de ces symboles : un seul définisseur →
+    /// chaque mentionneur gagne l'arête du genre inscrit au rendez-vous ;
+    /// plusieurs → on s'abstient ; aucun → le nom reste en attente.
+    ///
+    /// `lot` : ce qu'un lot apporte (ses scopes, ses mentionneurs). Avec lui,
+    /// on ne pose que les arêtes **neuves** — toutes celles d'un définisseur
+    /// du lot (il vient d'apparaître ou de changer), et celles des seuls
+    /// mentionneurs du lot vers un définisseur qui était déjà là. Sans lui,
+    /// toutes. Reposer à chaque lot toutes les arêtes des noms courants
+    /// (`new`, `len`, `get`…) rendait l'ingestion d'une source quadratique :
+    /// de 2,0 à 5,7 s par paquet de 64 fichiers d'un tiers à l'autre, sur
+    /// `src/` du moteur (3 octobre 2026).
+    fn materialiser_les_symboles(
+        &mut self,
+        uuids: &[String],
+        lot: Option<(&std::collections::HashSet<String>, &std::collections::HashSet<String>)>,
+        report: &mut CodeIngestReport,
+    ) -> Result<(), CatalogError> {
+        let definers_by_symbol = self.linked_from_many("DEFINES", uuids)?;
+        let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<(String, String)> = Vec::new();
             let definers = definers_by_symbol.get(sym).unwrap_or(&no_definer);
@@ -1451,8 +1480,12 @@ impl Catalog {
                 report.still_pending += 1;
                 continue;
             };
+            let tous = lot.is_none_or(|(scopes, _)| scopes.contains(target));
             for (mentioner, kind) in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
                 if &mentioner == target {
+                    continue;
+                }
+                if !tous && !lot.is_some_and(|(_, mentionneurs)| mentionneurs.contains(&mentioner)) {
                     continue;
                 }
                 // L'arête est du genre inscrit au rendez-vous. Seul `CONSUMES`
@@ -1466,11 +1499,32 @@ impl Catalog {
                 report.linked_across_batches += 1;
             }
         }
-        etape("mise en file des arêtes résolues", &mut t);
-        let linked = self.drain_jusqu_a(exige);
-        etape("drain des arêtes résolues", &mut t);
-        report.failed += linked.failed;
         Ok(())
+    }
+
+    /// **Résoudre de nouveau des noms**, toutes leurs arêtes : après le
+    /// retrait de scopes, un nom ambigu peut être redevenu unique, et ses
+    /// mentionneurs — d'autres fichiers, qu'aucun lot ne repasse — doivent
+    /// gagner leur arête. Les synchronisations du code
+    /// (`code_sync::reingest_file`, `code_sync::sync_source`) l'appellent
+    /// avec les noms des scopes qu'elles viennent de retirer.
+    pub fn resoudre_les_symboles(
+        &mut self,
+        names: &[String],
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<CodeIngestReport, CatalogError> {
+        let mut report = CodeIngestReport::default();
+        if names.is_empty() {
+            return Ok(report);
+        }
+        let uuids: Vec<String> = names
+            .iter()
+            .map(|n| self.entity_uuid(SYMBOL, &BTreeMap::from([("name".to_string(), s(n))])))
+            .collect::<Result<_, _>>()?;
+        self.materialiser_les_symboles(&uuids, None, &mut report)?;
+        let linked = self.drain_jusqu_a(exige);
+        report.failed += linked.failed;
+        Ok(report)
     }
 
     /// Pour chaque uuid donné, ceux qui le pointent par `rel` — en une seule
@@ -1501,7 +1555,9 @@ impl Catalog {
         }
         let kind_expr = if with_kind { ", r.kind" } else { "" };
         let cypher = format!(
-            "UNWIND $uuids AS uid MATCH (n {{_uuid: uid}})<-[r:{rel}]-(m) RETURN uid, m._uuid{kind_expr}"
+            // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
+            // toutes les tables, à chaque symbole de chaque lot.
+            "UNWIND $uuids AS uid MATCH (n:{SYMBOL} {{_uuid: uid}})<-[r:{rel}]-(m) RETURN uid, m._uuid{kind_expr}"
         );
         let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self

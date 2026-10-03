@@ -214,3 +214,41 @@ fn une_edition_reussit_meme_si_l_index_ne_suit_pas() {
     assert!(r.reingest.is_none() && r.index_pending.is_some(), "{r:?}");
     assert!(r.to_markdown().contains("the index did not follow"), "{}", r.to_markdown());
 }
+
+/// Les arêtes `CONSUMES` qui partent du scope `nom`.
+fn appels_de(catalog: &Catalog, nom: &str) -> Vec<String> {
+    let mut v: Vec<String> = catalog
+        .execute_raw(&format!("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) WHERE a.name = '{nom}' RETURN b.file_path"))
+        .unwrap()
+        .rows
+        .into_iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+        .collect();
+    v.sort();
+    v
+}
+
+/// **Un nom ambigu qui redevient unique** : `cible` est défini dans a.rs et
+/// b.rs, c.rs l'appelle — la résolution s'abstient. b.rs disparaît de la
+/// source : à la fin de la synchronisation, le nom n'a plus qu'un
+/// définisseur, et l'appel de c.rs doit gagner son arête — même si aucun
+/// paquet ne repasse sur a.rs après le retrait.
+#[test]
+#[ignore]
+fn un_nom_ambigu_qui_redevient_unique_gagne_ses_aretes() {
+    let mut catalog = catalogue();
+    let fichiers = vec![
+        ("a.rs".to_string(), "pub fn cible() {}\n".to_string()),
+        ("b.rs".to_string(), "pub fn cible() {}\n".to_string()),
+        ("c.rs".to_string(), "pub fn appelant() { cible(); }\n".to_string()),
+    ];
+    let options = SourceSyncOptions { batch_files: 1, ..Default::default() };
+    sync_source(&mut catalog, &Snapshot::new("depot", fichiers.clone()), &options, &mut |_| {}).unwrap();
+    assert!(appels_de(&catalog, "appelant").is_empty(), "ambigu : on s'abstient");
+
+    let sans_b: Vec<(String, String)> = fichiers.into_iter().filter(|(p, _)| p != "b.rs").collect();
+    sync_source(&mut catalog, &Snapshot::new("depot", sans_b), &SourceSyncOptions { force: true, ..options }, &mut |_| {}).unwrap();
+    let appels = appels_de(&catalog, "appelant");
+    assert_eq!(appels.len(), 1, "le nom redevenu unique est résolu : {appels:?}");
+    assert!(appels[0].ends_with("a.rs"), "{appels:?}");
+}

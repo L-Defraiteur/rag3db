@@ -77,6 +77,7 @@ pub fn reingest_file(
     // est en cours de synchronisation : alors elle s'en charge.
     let mut deleted = 0usize;
     let mut deferred_to = None;
+    let mut noms_retires = Vec::new();
     match catalog.begin_snapshot(SCOPE, &grain, true) {
         Ok(open) => {
             let uuids = analysis
@@ -88,15 +89,19 @@ pub fn reingest_file(
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| e.to_string())?;
             catalog.mark_snapshot(SCOPE, &grain, &open.session, &uuids).map_err(|e| e.to_string())?;
-            let fin = catalog
-                .finish_snapshot(SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
+            let plan = catalog
+                .plan_snapshot_finish(SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
                 .map_err(|e| e.to_string())?;
+            noms_retires = noms_des_scopes(catalog, &plan.removed)?;
+            let fin = catalog.apply_snapshot_finish(plan).map_err(|e| e.to_string())?;
             deleted = fin.removed.len();
         }
         Err(CatalogError::SnapshotRefused(raison)) => deferred_to = Some(raison),
         Err(e) => return Err(e.to_string()),
     }
     let report = catalog.ingest_code_jusqu_a(&analysis, exige).map_err(|e| e.to_string())?;
+    // Un nom dont un définisseur vient de partir a pu redevenir unique.
+    catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
     Ok(ReingestReport {
         scopes_upserted: report.scopes,
         scopes_deleted: deleted,
@@ -265,7 +270,28 @@ fn synchroniser(
     }
     // Les scopes d'abord : un fichier supprimé emporte ses `DEFINED_IN`, ses
     // scopes sont déjà partis.
+    let noms_retires = noms_des_scopes(catalog, &plan_scopes.removed)?;
     report.scopes = catalog.apply_snapshot_finish(plan_scopes).map_err(|e| e.to_string())?;
     report.files = catalog.apply_snapshot_finish(plan_files).map_err(|e| e.to_string())?;
+    // Un nom dont un définisseur vient de partir a pu redevenir unique : ses
+    // mentionneurs, qu'aucun paquet ne repasse, gagnent leur arête.
+    let resolu = catalog.resoudre_les_symboles(&noms_retires, options.exige).map_err(|e| e.to_string())?;
+    report.relations += resolu.linked_across_batches;
     Ok(report)
+}
+
+/// Les noms des scopes `uuids`, relus avant leur retrait.
+fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, String> {
+    if uuids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut noms: Vec<String> = catalog
+        .get_many(SCOPE, uuids)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter_map(|r| r.get("name").and_then(|v| v.as_str()).map(str::to_string))
+        .collect();
+    noms.sort();
+    noms.dedup();
+    Ok(noms)
 }
