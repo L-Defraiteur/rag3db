@@ -10,16 +10,21 @@
 // En mode Processus, chaque écrivain est un processus créé par fork() qui ouvre sa
 // propre Database : le père ne doit en tenir aucune ouverte à ce moment-là.
 
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -55,9 +60,10 @@ enum class Refusal : uint8_t {
     WriterRefused,
     CheckpointTimeout,
     FileLock,
+    Interrupted,
     Unexpected,
 };
-constexpr size_t NUM_REFUSALS = 7;
+constexpr size_t NUM_REFUSALS = 8;
 
 inline std::string_view refusalName(Refusal refusal) {
     switch (refusal) {
@@ -73,6 +79,8 @@ inline std::string_view refusalName(Refusal refusal) {
         return "checkpoint timeout";
     case Refusal::FileLock:
         return "file lock";
+    case Refusal::Interrupted:
+        return "interrupted";
     case Refusal::Unexpected:
         return "UNEXPECTED";
     }
@@ -98,11 +106,16 @@ inline Refusal classifyRefusal(std::string_view message) {
     if (message.find("Could not set lock on file") != std::string_view::npos) {
         return Refusal::FileLock;
     }
+    if (message.find("Interrupted") != std::string_view::npos) {
+        return Refusal::Interrupted;
+    }
     return Refusal::Unexpected;
 }
 
 constexpr uint32_t MAX_WORKERS = 16;
 constexpr size_t MESSAGE_CAPACITY = 512;
+constexpr uint32_t MAX_EVENTS = 256;
+constexpr size_t LABEL_CAPACITY = 48;
 
 // Entre processus, une atomique n'est sûre que si elle n'a pas de verrou caché.
 static_assert(std::atomic<uint32_t>::is_always_lock_free);
@@ -116,12 +129,32 @@ struct WorkerReport {
     char firstUnexpected[MESSAGE_CAPACITY]{};
 };
 
+// Un événement daté, écrit par un écrivain (Worker::mark). L'ordre des index est
+// l'ordre réel des marques ; l'horloge est monotone et commune aux processus d'une
+// même machine. ready passe à 1 quand l'événement est entièrement écrit.
+struct EventRecord {
+    std::atomic<uint32_t> ready{0};
+    uint32_t worker = 0;
+    int64_t micros = 0;
+    char label[LABEL_CAPACITY]{};
+};
+
+inline int64_t monotonicMicros() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 struct SharedArea {
     std::atomic<uint32_t> barrierArrived{0};
     std::atomic<uint32_t> barrierGeneration{0};
     std::atomic<uint32_t> barrierTimedOut{0};
     // Un drapeau libre pour les scénarios (C8 : les écrivains ont fini).
     std::atomic<uint32_t> flag{0};
+    // Le délai de garde du cas a expiré : le moteur a bloqué un écrivain trop longtemps.
+    std::atomic<uint32_t> guardExpired{0};
+    std::atomic<uint32_t> numEvents{0};
+    std::array<EventRecord, MAX_EVENTS> events{};
     uint32_t numWorkers = 0;
     std::array<WorkerReport, MAX_WORKERS> workers{};
 };
@@ -174,6 +207,13 @@ public:
     bool run(const std::string& query) {
         if (connection == nullptr) {
             recordFailure("no connection: the database could not be opened");
+            return false;
+        }
+        // Après l'échec d'une instruction, le moteur a déjà annulé la transaction : une
+        // instruction de plus partirait en auto-commit et serait validée seule. Elle
+        // n'est donc pas envoyée. (Exécuté le 3 octobre : c'est ce qui faisait monter la
+        // somme de C4 à l'étape 2 — un défaut du banc, pas du moteur.)
+        if (inTransaction && transactionFailed) {
             return false;
         }
         auto result = connection->query(query);
@@ -264,6 +304,51 @@ public:
         }
     }
 
+    // Marque un événement : c'est ce qui permet de prouver après coup qu'un écrivain a
+    // attendu (sa fin d'instruction vient après la fin de celui qu'il attendait) ou
+    // qu'il n'a pas attendu.
+    void mark(std::string_view label) {
+        const auto index = area.numEvents.fetch_add(1);
+        if (index >= MAX_EVENTS) {
+            return;
+        }
+        auto& event = area.events[index];
+        event.worker = workerIndex;
+        event.micros = monotonicMicros();
+        const auto length = std::min(label.size(), LABEL_CAPACITY - 1);
+        std::memcpy(event.label, label.data(), length);
+        event.label[length] = '\0';
+        event.ready.store(1, std::memory_order_release);
+    }
+
+    // Attend qu'un autre écrivain ait marqué un événement. Remplace la barrière quand
+    // l'autre peut être bloqué par le moteur et ne jamais l'atteindre. Rend faux au
+    // délai, sans bloquer la passe.
+    bool waitFor(uint32_t worker, std::string_view label, std::chrono::milliseconds timeout) {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline) {
+            const auto count = std::min(area.numEvents.load(), MAX_EVENTS);
+            for (auto i = 0u; i < count; ++i) {
+                const auto& event = area.events[i];
+                if (event.ready.load(std::memory_order_acquire) != 0 && event.worker == worker &&
+                    label == event.label) {
+                    return true;
+                }
+            }
+            std::this_thread::yield();
+        }
+        return false;
+    }
+
+    // Une instruction encadrée par deux marques : « <label>:start » puis
+    // « <label>:done » ou « <label>:failed ».
+    bool runMarked(const std::string& query, const std::string& label) {
+        mark(label + ":start");
+        const bool succeeded = run(query);
+        mark(label + (succeeded ? ":done" : ":failed"));
+        return succeeded;
+    }
+
     void recordFailure(const std::string& message) {
         const auto refusal = classifyRefusal(message);
         if (refusal == Refusal::Unexpected &&
@@ -304,19 +389,66 @@ inline void applyBenchSettings(main::Connection& connection) {
     }
 }
 
-// Lance area.numWorkers écrivains sur la même base et attend qu'ils aient fini.
+// Le délai de garde par défaut d'un cas : au-delà, le moteur est tenu pour bloqué.
+constexpr std::chrono::milliseconds DEFAULT_GUARD{60'000};
+// Après l'interruption des connexions, le temps laissé aux écrivains pour sortir avant
+// que le processus de test ne s'arrête de lui-même, en rouge.
+constexpr std::chrono::milliseconds GUARD_GRACE{5'000};
+
+// Lance area.numWorkers écrivains sur la même base et attend qu'ils aient fini, au plus
+// jusqu'au délai de garde. À l'échéance : area.guardExpired, puis les connexions sont
+// interrompues (fils) ou les processus tués (processus). Si des fils restent bloqués
+// malgré l'interruption, le processus de test s'arrête : un moteur qui se bloque doit
+// donner un rouge, pas une passe qui ne finit pas.
 // Rend faux si un processus écrivain n'est pas sorti normalement.
 inline bool launch(LaunchMode mode, const Opener& opener, SharedArea& area,
-    const Scenario& scenario) {
+    const Scenario& scenario, std::chrono::milliseconds guard = DEFAULT_GUARD) {
+    const auto deadline = std::chrono::steady_clock::now() + guard;
     switch (mode) {
     case LaunchMode::Thread: {
+        std::mutex connectionsMutex;
+        std::vector<main::Connection*> connections;
+        std::atomic<uint32_t> finished{0};
         std::vector<std::thread> threads;
         for (auto i = 0u; i < area.numWorkers; ++i) {
             threads.emplace_back([&, i] {
                 main::Connection connection(opener.shared);
+                {
+                    std::lock_guard lock{connectionsMutex};
+                    connections.push_back(&connection);
+                }
                 Worker worker(i, &connection, area);
                 scenario(worker);
+                {
+                    std::lock_guard lock{connectionsMutex};
+                    std::erase(connections, &connection);
+                }
+                finished.fetch_add(1);
             });
+        }
+        while (finished.load() < area.numWorkers && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (finished.load() < area.numWorkers) {
+            area.guardExpired.store(1);
+            {
+                std::lock_guard lock{connectionsMutex};
+                for (auto* connection : connections) {
+                    connection->interrupt();
+                }
+            }
+            const auto graceEnd = std::chrono::steady_clock::now() + GUARD_GRACE;
+            while (
+                finished.load() < area.numWorkers && std::chrono::steady_clock::now() < graceEnd) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            if (finished.load() < area.numWorkers) {
+                std::fprintf(stderr,
+                    "[bench] GUARD: writers still blocked after interruption; stopping the "
+                    "test process so that the pass ends red instead of hanging\n");
+                std::fflush(stderr);
+                std::_Exit(3);
+            }
         }
         for (auto& thread : threads) {
             thread.join();
@@ -352,15 +484,59 @@ inline bool launch(LaunchMode mode, const Opener& opener, SharedArea& area,
             children.push_back(pid);
         }
         bool allExited = true;
-        for (const auto pid : children) {
-            int status = 0;
-            waitpid(pid, &status, 0);
-            allExited = allExited && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        std::vector<bool> reaped(children.size(), false);
+        auto remaining = children.size();
+        while (remaining > 0) {
+            for (auto c = 0u; c < children.size(); ++c) {
+                if (reaped[c]) {
+                    continue;
+                }
+                int status = 0;
+                if (waitpid(children[c], &status, WNOHANG) == children[c]) {
+                    reaped[c] = true;
+                    --remaining;
+                    allExited = allExited && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+                }
+            }
+            if (remaining > 0 && std::chrono::steady_clock::now() >= deadline &&
+                area.guardExpired.load() == 0) {
+                area.guardExpired.store(1);
+                for (auto c = 0u; c < children.size(); ++c) {
+                    if (!reaped[c]) {
+                        kill(children[c], SIGKILL);
+                    }
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         return allExited;
     }
     }
     return false;
+}
+
+// L'index d'un événement marqué, ou -1.
+inline int eventIndex(const SharedArea& area, uint32_t worker, std::string_view label) {
+    const auto count = std::min(area.numEvents.load(), MAX_EVENTS);
+    for (auto i = 0u; i < count; ++i) {
+        if (area.events[i].worker == worker && label == area.events[i].label) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+// Les événements dans leur ordre réel, avec le temps écoulé depuis le premier.
+inline std::string describeEvents(const SharedArea& area) {
+    std::string out;
+    const auto count = std::min(area.numEvents.load(), MAX_EVENTS);
+    const auto origin = count > 0 ? area.events[0].micros : 0;
+    for (auto i = 0u; i < count; ++i) {
+        const auto& event = area.events[i];
+        out += "  event #" + std::to_string(i) + " writer " + std::to_string(event.worker) + " +" +
+               std::to_string(event.micros - origin) + "us " + event.label + "\n";
+    }
+    return out;
 }
 
 inline uint32_t totalCommits(const SharedArea& area) {
@@ -409,6 +585,10 @@ inline std::string describe(const SharedArea& area) {
     if (area.barrierTimedOut.load() != 0) {
         out += "  BARRIER TIMED OUT\n";
     }
+    if (area.guardExpired.load() != 0) {
+        out += "  GUARD EXPIRED: the engine blocked a writer past the case's guard\n";
+    }
+    out += describeEvents(area);
     return out;
 }
 

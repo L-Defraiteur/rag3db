@@ -12,7 +12,7 @@
 // 1) ; son témoin rouge est IntegrityCheckerWitness.
 //
 // Niveau 1 : par Cypher seulement (API publique), utilisable depuis n'importe quel
-// processus.
+// processus. Niveau 2 : par les internes, voir checkLevel2.
 
 #include <string>
 #include <vector>
@@ -35,6 +35,18 @@ constexpr const char* SOURCE_KEY_PROPERTY = "src_id";
 constexpr const char* DESTINATION_KEY_PROPERTY = "dst_id";
 
 std::vector<Violation> checkLevel1(main::Connection& connection);
+
+// Niveau 2 : par les internes du stockage, dans une transaction de lecture ouverte sur
+// la connexion. Il ne passe pas par le planificateur :
+// - chaque ligne visible (lue par Cypher) se retrouve par l'index de clé primaire à son
+//   propre offset (lookupPK) — un doublon visible y échoue forcément ;
+// - le nombre de lignes visibles vu par le stockage (isVisibleNoLock sur tous les
+//   offsets, supprimés compris) est celui que Cypher voit ;
+// - la CSR, balayée dans chaque direction stockée depuis TOUS les offsets du côté lié,
+//   supprimés compris, porte les mêmes relations dans les deux sens, et chaque
+//   extrémité est une ligne visible.
+// Clés primaires INT64 seulement (celles du banc) ; une autre est signalée, pas sautée.
+std::vector<Violation> checkLevel2(main::Connection& connection);
 
 // Toutes les lignes et toutes les relations, sans identifiant interne, triées : deux
 // bases qui donnent les mêmes réponses ont le même vidage. Une relation pendante y

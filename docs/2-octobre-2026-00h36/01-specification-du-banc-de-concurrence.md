@@ -133,3 +133,52 @@ Le niveau 2 voit ce que Cypher ne voit pas : une relation pendante n'apparaît p
 - **Lecteur concurrent** : tant que `lecteur-reverifie-a-l-ouverture` n'est pas sur master, le vérificateur lit après la fin des écrivains, ou dans leur processus, jamais depuis un lecteur concurrent.
 - **Ordre de livraison** : étape 1, le lanceur Fil, le niveau 1 et C0 à C3, puis le tableau attendu/observé ; étape 2, le niveau 2, C4 à C9, le lanceur Processus et la triple vérification ; étape 3, ThreadSanitizer.
 - HNSW hors du banc A1.
+
+## 8. Ce que les étapes 1 et 2 ont ajouté (3 octobre)
+
+- **Règle du vérificateur : ne jamais lire une propriété d'une extrémité pour compter
+  ou lister des relations.** Lire `a.id` dans `MATCH (a)-[r]->(b)` joint la table des
+  nœuds de a et efface en silence une relation dont a est supprimé, alors que
+  `count(r)` la compte encore. La première version du vérificateur a rendu un faux
+  vert sur C2 par ce chemin. Son témoin rouge est
+  `IntegrityCheckerWitness.SeesARelationWhoseSourceWasDeletedBehindTheExecutor`. Il
+  supprime un nœud par `NodeTable::delete_`, sans le contrôle de l'exécuteur, et
+  exige que les deux niveaux voient la relation pendante. Ce rouge est fabriqué : il
+  ne dépend d'aucun défaut du moteur.
+- **Niveau 2 du vérificateur** (`checkLevel2`), dans une transaction de lecture et
+  sans le planificateur :
+  - chaque ligne visible se retrouve à son offset par l'index de clé primaire ;
+  - le stockage et Cypher voient le même nombre de lignes visibles ;
+  - la CSR, balayée dans les deux sens depuis tous les offsets, suppressions
+    comprises, porte les mêmes relations, et chacune a deux extrémités visibles.
+- **Après une erreur dans une transaction explicite, le moteur annule la transaction
+  et repasse en auto-commit** : l'instruction suivante est validée seule. Le banc
+  n'envoie donc plus rien après un échec (`Worker::run`). C'est ce défaut du banc qui
+  faisait monter la somme de C4 à l'étape 2 ; C4 est vert. Le comportement du moteur
+  est un écart avec PostgreSQL, qui refuse toute instruction jusqu'au ROLLBACK. Il
+  est signalé, et il n'est pas érigé en rouge sans décision.
+- **C7** : cinq manches par test. Sur vingt passes, il est rouge 18/20 à chaud, 19/20
+  après réouverture et 15/20 après arrêt brutal : ce n'est pas unanime. Il porte le
+  label `concurrence-probabiliste` (`probabilistic.txt`) et la comparaison l'ignore.
+  Son rouge est un vrai rouge ; son vert ne prouve rien.
+- **C8** : au plus trois CHECKPOINT et 100 insertions par écrivain, de 11 à 17 s par
+  variante. Le délai d'attente du point de reprise (5 s) est privé : l'accès sera
+  demandé quand la marche A7 s'ouvrira.
+- **Les cas d'attente sur verrou.** Décision de Lucie : l'écrivain attendra sur un
+  verrou par clé au lieu d'échouer. Trois cas sont à écrire après la note de la
+  session cœur C++ :
+  - le premier écrivain annule : le second, qui attendait, réussit ;
+  - le premier valide : le second reçoit la clé en double ;
+  - un interblocage se termine par une erreur nommée, dans un délai borné.
+
+  Leur mécanique existe et se teste elle-même (`HarnessMechanics`) :
+  - `Worker::mark` et `runMarked` tiennent un journal d'événements datés, dans
+    l'ordre réel ;
+  - `Worker::waitFor` attend l'événement d'un autre écrivain, puisqu'un écrivain
+    bloqué n'atteindrait pas une barrière ;
+  - un délai de garde par cas (60 s par défaut) interrompt les connexions, ou tue
+    les processus, à l'échéance. Si un fil reste bloqué malgré l'interruption, le
+    processus de test s'arrête en rouge.
+
+  Constat : le drapeau d'interruption n'est pas regardé pendant l'évaluation d'un
+  `range()` géant. Une attente de verrou devra le regarder.
