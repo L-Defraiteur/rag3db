@@ -92,7 +92,7 @@ produite. Ce qu'elle autorise, c'est d'**éliminer**, pas de choisir.
 | Quoi | Qui | État |
 |---|---|---|
 | rebâtir `build/lecteurs-csv` dans un creux, annoncé aux sessions qui le lient | arbre principal | demandé par l'orchestration |
-| l'âge de la bibliothèque imprimé par `run_e2e.sh`, et refus d'une bibliothèque plus vieille que les sources C++ | arbre principal | à proposer |
+| l'âge de la bibliothèque imprimé par `run_e2e.sh`, et refus d'une bibliothèque plus vieille que les sources C++ | `rag3db-50` | proposé, avec le piège qui la motive |
 | reconnaître un index détaché à l'ouverture et le rebâtir en le disant | arbre principal | après la garde 1 |
 | le crochet après outil (`context` : identités résolues, source, cellule, lignes) | recherche | contrat acté, code après la passe Gemini |
 | un modèle de décision, quand une bonne manière de s'en servir existera | optimiseur | diagnostic en cours |
