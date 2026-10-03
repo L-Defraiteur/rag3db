@@ -73,11 +73,38 @@ comme incitation. La consigne seule ne suffit pas : les deux passes d'agent du
 ligne qu'on ne les oblige pas à lire, et qu'un modèle faible ne tient pas deux
 tours. D'où un refus qui porte l'appel exact à refaire, lisible en un tour.
 
+**Et ce n'est pas un refus, c'est une demande de précision** (Lucie :
+« faut pas non plus qu'il se sente interdit d'écrire une mémoire, faut que ça
+soit vraiment explicité : rappelle avec confirm, en précisant le sujet que tu
+retiens »). La forme du message décide de ce que fera l'agent, donc elle est
+une pièce de la conception et pas une formulation :
+
+- **Aucun vocabulaire d'erreur** — ni « refusé », ni « impossible », ni « non
+  autorisé ». Un agent qui lit un refus retient qu'il ne doit pas écrire ; et
+  la passe Gemini du 3 octobre a montré l'autre travers, un modèle fort qui
+  prend un refus pour un obstacle à contourner. Le message dit que **rien
+  n'est écrit encore** et que **les deux choix sont bons**.
+- **Il dit quoi faire, mot pour mot** : « Un sujet proche existe : *X* —
+  *extrait de ce qu'il contient*. Rappelle `remember` en précisant le sujet
+  que tu retiens : `subject: "X"` pour ranger ta mémoire sous ce sujet, ou
+  `subject: "<ton sujet>", confirm: true` pour créer le tien. » L'agent
+  renvoie le **même** appel avec un champ de plus : rien à reconstruire, donc
+  un modèle faible le suit en un tour.
+- **La mémoire n'est jamais perdue** : le rappel reprend le texte tel quel, et
+  le message le dit — le contenu est gardé, il n'attend que le choix du sujet.
+- **Côté statut, un résultat ordinaire qui demande un complément, pas une
+  erreur.** À voir avec la session recherche : le harnais du chat doit les
+  distinguer, pour que sa règle « après refus répétés » ne s'applique pas ici.
+
 Cela remplace « dans le doute, créer et demander après » : dans le doute,
-**demander à l'appelant avant**, par le refus. Le jardinier reste pour ce qui
+**demander à l'appelant avant**, par cette demande. Le jardinier reste pour ce qui
 passe quand même. Même forme pour une mémoire proche d'une mémoire existante.
 Ce que le banc devra mesurer : confirmations déclenchées à tort (la friction),
-doublons créés malgré tout, sujets rejoints à tort.
+doublons créés malgré tout, sujets rejoints à tort — et, celle qui juge la
+**forme** du message plutôt que le seuil : après une demande de confirmation,
+l'agent **rappelle-t-il**, dans un sens ou dans l'autre, ou abandonne-t-il
+l'écriture ? L'abandon est l'échec que Lucie veut éviter, et c'est le seul des
+quatre chiffres qu'un bon seuil ne peut pas sauver.
 
 **L'étage 2 du nœud de décision reste sur « demander toujours »**, aucun
 modèle branché, critère et liste de choix en **données du graphe**. Trois
