@@ -87,5 +87,8 @@ Binder exception: test already exists in catalog.
 ---- ok
 ---- error
 Binder exception: test already exists in catalog.
+# Une erreur dans BEGIN ... COMMIT laisse le bloc en échec : ROLLBACK le ferme.
+-STATEMENT ROLLBACK
+---- ok
 -STATEMENT CALL show_tables() RETURN *;
 ---- 0

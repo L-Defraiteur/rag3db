@@ -448,6 +448,10 @@ ClientContext::PrepareResult ClientContext::prepareNoLock(
     prepareTimer.start();
     try {
         preparedStatement->preparedSummary.statementType = parsedStatement->getStatementType();
+        // COMMIT and ROLLBACK are how a failed block is closed: they go through.
+        if (parsedStatement->getStatementType() != StatementType::TRANSACTION) {
+            transactionContext->throwIfManualTransactionFailed();
+        }
         auto readWriteAnalyzer = StatementReadWriteAnalyzer(this);
         TransactionHelper::runFuncInTransaction(
             *transactionContext, [&]() -> void { readWriteAnalyzer.visit(*parsedStatement); },
@@ -501,6 +505,10 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
     try {
         bool isTransactionStatement =
             preparedStatement->getStatementType() == StatementType::TRANSACTION;
+        // A statement prepared before the failure must be refused like any other.
+        if (!isTransactionStatement) {
+            transactionContext->throwIfManualTransactionFailed();
+        }
         TransactionHelper::runFuncInTransaction(
             *transactionContext,
             [&]() -> void {
@@ -589,7 +597,14 @@ void ClientContext::TransactionHelper::runFuncInTransaction(TransactionContext& 
         context.clearTransaction();
         throw;
     } catch (std::exception&) {
-        context.rollback();
+        if (isTransactionStatement) {
+            // A COMMIT or ROLLBACK that fails ends the block: there is nothing left to close.
+            context.rollback();
+        } else {
+            // In a BEGIN ... COMMIT block this leaves the connection refusing statements until
+            // ROLLBACK, instead of silently back in auto-commit.
+            context.rollbackAfterStatementFailure();
+        }
         throw;
     }
 }

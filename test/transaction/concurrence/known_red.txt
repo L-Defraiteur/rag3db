@@ -61,10 +61,6 @@ Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot one-commit
 Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen one-commit
 Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
 #
-# La transaction en échec : après une instruction en erreur dans BEGIN … COMMIT, les
-# suivantes sont validées une à une en auto-commit (PostgreSQL et Neo4j les refusent).
-MinimalReproduction.FailedTransactionRefusesFurtherStatements nothing-after-error,refused-after-error,rollback-closes
-#
 # Deux mises à jour de la même ligne sur deux colonnes, validées toutes les deux : le
 # conflit n'est cherché que colonne par colonne (relecture du cœur C++ ; marche A4′).
 MinimalReproduction.SameRowTwoColumnsSingleThread one-commit

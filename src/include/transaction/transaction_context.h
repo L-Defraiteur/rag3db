@@ -45,6 +45,23 @@ public:
 
     void commit();
     void rollback();
+    // Rolls back after a statement failed. If the transaction was opened by BEGIN, the connection
+    // then refuses every statement until ROLLBACK (see MANUAL_TRANSACTION_FAILED).
+    void rollbackAfterStatementFailure();
+
+    // The start of the error every statement gets between the failure of a statement inside a
+    // BEGIN ... COMMIT block and the ROLLBACK that closes the block. Without this state the
+    // statements that follow the failure ran one by one in auto-commit, and a client that did not
+    // read every result lost atomicity without knowing. PostgreSQL does the same ("current
+    // transaction is aborted, commands ignored until end of transaction block").
+    static constexpr const char* MANUAL_TRANSACTION_FAILED =
+        "The transaction was rolled back because a statement in it failed";
+    bool isManualTransactionFailed() const { return manualTransactionFailed; }
+    // Closes the failed block: what ROLLBACK does, and COMMIT too, since there is nothing left
+    // to commit.
+    void closeFailedManualTransaction() { manualTransactionFailed = false; }
+    // Throws MANUAL_TRANSACTION_FAILED if the connection is in a failed block.
+    void throwIfManualTransactionFailed() const;
 
     TransactionMode getTransactionMode() const { return mode; }
     bool hasActiveTransaction() const { return activeTransaction != nullptr; }
@@ -62,6 +79,7 @@ private:
     main::ClientContext& clientContext;
     TransactionMode mode;
     Transaction* activeTransaction;
+    bool manualTransactionFailed = false;
 };
 
 } // namespace transaction

@@ -409,6 +409,9 @@ a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12
 -STATEMENT CREATE (t:test {id:1});
 ---- error
 Runtime exception: Found duplicated primary key value 1, which violates the uniqueness constraint of the primary key column.
+# Une erreur dans BEGIN ... COMMIT laisse le bloc en échec : ROLLBACK le ferme.
+-STATEMENT ROLLBACK
+---- ok
 
 -CASE MultipleCreations
 -STATEMENT CREATE NODE TABLE test(id INT64, PRIMARY KEY(id));

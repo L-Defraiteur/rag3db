@@ -24,6 +24,26 @@ bool Transaction::getNextTuplesInternal(ExecutionContext* context) {
     hasExecuted = true;
     auto clientContext = context->clientContext;
     auto transactionContext = TransactionContext::Get(*clientContext);
+    if (transactionContext->isManualTransactionFailed()) {
+        // A statement failed inside BEGIN ... COMMIT: the transaction is already rolled back,
+        // and the block stays open, refusing everything, until it is closed here.
+        switch (transactionAction) {
+        case TransactionAction::ROLLBACK: {
+            transactionContext->closeFailedManualTransaction();
+            return true;
+        }
+        case TransactionAction::COMMIT: {
+            // Nothing is left to commit. The block is closed, and the client is told so.
+            transactionContext->closeFailedManualTransaction();
+            throw TransactionManagerException(
+                stringFormat("{}: nothing was committed. The transaction is now closed.",
+                    TransactionContext::MANUAL_TRANSACTION_FAILED));
+        }
+        default: {
+            transactionContext->throwIfManualTransactionFailed();
+        }
+        }
+    }
     validateActiveTransaction(*transactionContext);
     switch (transactionAction) {
     case TransactionAction::BEGIN_READ: {
