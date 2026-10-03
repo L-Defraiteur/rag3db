@@ -26,6 +26,7 @@ graph LR
     source["SearchSourceNode(target_name=$target, query=$query, options=$options, mode=$mode)"]
     bm25["BM25SearchNode"]
     vector["VectorSearchNode"]
+    sparse["SparseSearchNode"]
     scan["ScanFilesNode"]
     fuse["FuseResultsNode(weights='bm25:0.5,vector:0.5')"]
     paginate["PaginateNode"]
@@ -33,6 +34,7 @@ graph LR
     render["RenderResultsNode"]
     source -->|query| bm25
     source -->|query| vector
+    source -->|query| sparse
     source -->|query| scan
     source -->|query| fuse
     source -->|query| paginate
@@ -41,9 +43,11 @@ graph LR
     source -->|meta| render
     bm25 -->|meta| render
     vector -->|meta| render
+    sparse -->|meta| render
     scan -->|meta| render
     bm25 -->|results:bm25| fuse
     vector -->|results:vector| fuse
+    sparse -->|results:sparse| fuse
     fuse -->|results| paginate
     paginate -->|results| resolve
     resolve -->|results| render
