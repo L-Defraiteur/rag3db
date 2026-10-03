@@ -35,6 +35,11 @@ public:
         ASSERT_FALSE(res->isSuccess());
     }
 
+    // Le douzième point de reprise de deux tables est refusé à sa k-ième allocation, pour
+    // k = 1, 1 + stride, … jusqu'à ce qu'il réussisse ; après chaque panne on ferme, on
+    // rouvre et on vérifie le contenu exact. Définie plus bas.
+    void sweepFailuresOverALaterCheckpoint(bool checkpointOnClose, uint64_t stride);
+
     void runTest(const FlakyCheckpointer& flakyCheckpointer) {
         runFlakyCheckpoint(flakyCheckpointer);
         createDBAndConn();
@@ -176,6 +181,11 @@ TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpo
     if (inMemMode || systemConfig->checkpointThreshold == 0) {
         GTEST_SKIP();
     }
+    sweepFailuresOverALaterCheckpoint(false /* checkpointOnClose */, 1 /* stride */);
+}
+
+void FlakyCheckpointerTest::sweepFailuresOverALaterCheckpoint(bool checkpointOnClose,
+    uint64_t stride) {
     static constexpr auto NUM_CYCLES = 12;
     static constexpr auto NUM_ROWS_PER_CYCLE = 25;
     static constexpr int64_t NUM_ROWS = NUM_CYCLES * NUM_ROWS_PER_CYCLE;
@@ -189,7 +199,7 @@ TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpo
     };
     auto numFailures = 0u;
     auto numFailuresInStoragePhase = 0u;
-    for (uint64_t k = 1;; k++) {
+    for (uint64_t k = 1;; k += stride) {
         ASSERT_LT(k, 5000u) << "le point de reprise n'en finit pas d'allouer";
         // Une base neuve, sur un gestionnaire de tampons qu'on peut faire échouer.
         conn.reset();
@@ -210,7 +220,8 @@ TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpo
             });
         conn = std::make_unique<main::Connection>(database.get());
         bufferManager->setClientContext(getClientContext(*conn));
-        conn->query("CALL force_checkpoint_on_close=false;");
+        conn->query(stringFormat("CALL force_checkpoint_on_close={};",
+            checkpointOnClose ? "true" : "false"));
         conn->query("CALL auto_checkpoint=false");
         for (const auto& table : tables) {
             ASSERT_TRUE(conn->query(stringFormat(
@@ -243,21 +254,30 @@ TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpo
         const auto allocationWasRefused = failureFrequency != k;
         failureFrequency = UINT64_MAX;
         if (checkpointed && !allocationWasRefused) {
-            // Moins de k allocations : le balayage a couvert tout le point de reprise.
+            // Moins de k allocations : le balayage a couvert tout le point de reprise. La
+            // base se ferme ici, tant que vivent les variables que ses doublures regardent.
+            bufferManager->setClientContext(nullptr);
+            conn.reset();
+            database.reset();
             break;
         }
+        const auto failedInStoragePhase = !checkpointed && inStoragePhase;
         if (!checkpointed) {
             numFailures++;
-            if (inStoragePhase) {
+            if (failedInStoragePhase) {
                 numFailuresInStoragePhase++;
             }
         }
-        // La « panne » : on rouvre, sur un gestionnaire de tampons ordinaire.
+        // La « panne » : on ferme et on rouvre, sur un gestionnaire de tampons ordinaire.
+        // Avec checkpointOnClose, c'est une fermeture normale, celle d'un appelant qui
+        // a reçu l'erreur et qui ferme proprement. La doublure ne doit plus suivre une
+        // connexion qui disparaît.
+        bufferManager->setClientContext(nullptr);
         conn.reset();
         createDBAndConn();
         for (const auto& table : tables) {
             const auto where = stringFormat(" (panne à l'allocation {}, table {}{})", k, table,
-                inStoragePhase ? ", pendant la phase de stockage" : "");
+                failedInStoragePhase ? ", pendant la phase de stockage" : "");
             ASSERT_EQ(single(stringFormat("MATCH (a:{}) RETURN COUNT(a);", table)), NUM_ROWS)
                 << where;
             ASSERT_EQ(single(stringFormat("MATCH (a:{}) RETURN COUNT(DISTINCT a.id);", table)),
@@ -283,6 +303,121 @@ TEST_F(FlakyCheckpointerTest, RecoverFromFailureAtEveryAllocationOfALaterCheckpo
     EXPECT_GT(numFailuresInStoragePhase, 0u);
     std::cout << "  points de reprise interrompus : " << numFailures << ", dont "
               << numFailuresInStoragePhase << " pendant la phase de stockage" << std::endl;
+}
+
+// Après un point de reprise échoué, la base ne sert plus rien avant d'avoir été
+// rouverte. Ce que le point de reprise raté a écrit dans le fichier fantôme n'est
+// lu par aucune transaction ordinaire, alors que les structures en mémoire ont
+// déjà avancé : continuer, c'est lire faux en silence (mesuré avant ce refus :
+// 275 clés distinctes pour 300 lignes, puis un plantage). La reprise par le
+// journal, elle, est juste. C'est ce que fait PostgreSQL d'un échec d'écriture de
+// ses fichiers de données : il s'arrête et reprend par son journal.
+class FailedCheckpointTest : public FlakyCheckpointerTest {
+public:
+    static constexpr auto NUM_CYCLES = 12;
+    static constexpr auto NUM_ROWS_PER_CYCLE = 25;
+    static constexpr int64_t NUM_ROWS = NUM_CYCLES * NUM_ROWS_PER_CYCLE;
+
+    // Une table qui a déjà vécu, puis un point de reprise qui échoue après sa
+    // phase de stockage. Ensuite le moteur retrouve son point de reprise ordinaire.
+    void failACheckpointOnATableWithHistory() {
+        ASSERT_TRUE(
+            conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")->isSuccess());
+        auto numRows = 0;
+        for (auto cycle = 0; cycle < NUM_CYCLES; cycle++) {
+            for (auto i = 0; i < NUM_ROWS_PER_CYCLE; i++, numRows++) {
+                auto res = conn->query(
+                    stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", numRows, numRows));
+                ASSERT_TRUE(res->isSuccess()) << res->getErrorMessage();
+            }
+            if (cycle < NUM_CYCLES - 1) {
+                ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+            }
+        }
+        FlakyCheckpointer([](main::ClientContext& context) {
+            return std::make_unique<FlakyCheckpointerFailsOnSerialization>(context);
+        }).setCheckpointer(*getClientContext(*conn));
+        auto res = conn->query("CHECKPOINT;");
+        ASSERT_FALSE(res->isSuccess());
+        // L'échec lui-même dit sa cause, et porte déjà le nom que porteront les refus.
+        EXPECT_NE(res->getErrorMessage().find("checkpoint failed."), std::string::npos)
+            << res->getErrorMessage();
+        EXPECT_NE(res->getErrorMessage().find(TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT),
+            std::string::npos)
+            << res->getErrorMessage();
+        FlakyCheckpointer([](main::ClientContext& context) {
+            return std::make_unique<Checkpointer>(context);
+        }).setCheckpointer(*getClientContext(*conn));
+    }
+
+    int64_t single(const std::string& query) {
+        auto res = conn->query(query);
+        EXPECT_TRUE(res->isSuccess()) << query << " : " << res->getErrorMessage();
+        return res->isSuccess() && res->hasNext() ?
+                   res->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    }
+
+    // Le contenu exact du dernier commit acquitté.
+    void expectExactContent() {
+        EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), NUM_ROWS);
+        EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(DISTINCT a.id);"), NUM_ROWS);
+        EXPECT_EQ(single("MATCH (a:test) RETURN SUM(a.id);"), NUM_ROWS * (NUM_ROWS - 1) / 2);
+        EXPECT_EQ(single("MATCH (a:test) WHERE a.name <> 'name_' + cast(a.id AS STRING) "
+                         "RETURN COUNT(a);"),
+            0);
+        for (auto id = 0; id < NUM_ROWS; id++) {
+            ASSERT_EQ(single(stringFormat("MATCH (a:test) WHERE a.id = {} RETURN COUNT(a);", id)),
+                1)
+                << "clé " << id;
+        }
+    }
+
+    static void expectRefused(main::Connection& connection, const std::string& query) {
+        auto res = connection.query(query);
+        ASSERT_FALSE(res->isSuccess()) << query << " a été servi après un point de reprise échoué";
+        EXPECT_NE(res->getErrorMessage().find(TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT),
+            std::string::npos)
+            << query << " : " << res->getErrorMessage();
+    }
+};
+
+TEST_F(FailedCheckpointTest, EveryStatementIsRefusedUntilTheDatabaseIsReopened) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    conn->query("CALL force_checkpoint_on_close=false;");
+    conn->query("CALL auto_checkpoint=false");
+    failACheckpointOnATableWithHistory();
+    // Ni lecture, ni écriture, ni point de reprise, ni transaction explicite, sur
+    // cette connexion comme sur une neuve.
+    expectRefused(*conn, "MATCH (a:test) RETURN COUNT(a);");
+    expectRefused(*conn, "CREATE (a:test {id: 100000, name: 'after'});");
+    expectRefused(*conn, "CHECKPOINT;");
+    expectRefused(*conn, "BEGIN TRANSACTION;");
+    main::Connection other(database.get());
+    expectRefused(other, "MATCH (a:test) RETURN COUNT(a);");
+    // Rouverte, elle rend le dernier commit acquitté, et elle sert de nouveau.
+    createDBAndConn();
+    expectExactContent();
+    ASSERT_TRUE(conn->query(stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", NUM_ROWS,
+                                NUM_ROWS))
+                    ->isSuccess());
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), NUM_ROWS + 1);
+}
+
+// La fermeture fait d'ordinaire un point de reprise. Après un point de reprise
+// échoué elle ne doit pas en tenter un second sur un état en mémoire qui ne
+// correspond plus aux fichiers : elle laisse le journal, que la réouverture rejoue.
+// Le même balayage que plus haut, une allocation sur cinq, mais la base est fermée
+// normalement après l'échec, point de reprise à la fermeture allumé.
+TEST_F(FailedCheckpointTest, ClosingDoesNotCheckpointAgain) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    sweepFailuresOverALaterCheckpoint(true /* checkpointOnClose */, 5 /* stride */);
 }
 
 class FlakyCheckpointerFailsOnWritingHeader final : public Checkpointer {

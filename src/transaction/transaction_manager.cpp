@@ -3,7 +3,9 @@
 #include <thread>
 
 #include "common/exception/checkpoint.h"
+#include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
+#include "common/string_format.h"
 #include "main/attached_database.h"
 #include "main/client_context.h"
 #include "main/database.h"
@@ -23,6 +25,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
     // ensures calls to other public functions are not restricted.
     std::unique_lock publicFunctionLck{mtxForSerializingPublicFunctionCalls};
     std::unique_lock newTransactionLck{mtxForStartingNewTransactions};
+    throwIfCheckpointFailedNoLock();
     switch (type) {
     case TransactionType::READ_ONLY: {
         auto transaction =
@@ -106,7 +109,17 @@ void TransactionManager::checkpoint(main::ClientContext& clientContext) {
     if (clientContext.isInMemory()) {
         return;
     }
+    throwIfCheckpointFailedNoLock();
     checkpointNoLock(clientContext);
+}
+
+void TransactionManager::throwIfCheckpointFailedNoLock() const {
+    if (checkpointFailed) {
+        throw TransactionManagerException(common::stringFormat(
+            "{}: what it holds in memory no longer matches its files. No committed transaction "
+            "is lost: the journal is replayed when the database is reopened.",
+            REOPEN_AFTER_FAILED_CHECKPOINT));
+    }
 }
 
 TransactionManager* TransactionManager::Get(const main::ClientContext& context) {
@@ -178,8 +191,17 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext) {
     try {
         checkpointer->writeCheckpoint();
     } catch (std::exception& e) {
+        // Nothing is served after this, see checkpointFailed. A timeout while waiting for the
+        // transactions to leave, above, wrote nothing and does not come here.
+        checkpointFailed = true;
         checkpointer->rollback();
-        throw CheckpointException{e};
+        // The caller must be able to tell this error from an ordinary one: it carries the same
+        // name as the refusals that follow, after its cause.
+        throw CheckpointException{RuntimeException(common::stringFormat(
+            "{} {}: the checkpoint did not complete. Transactions already written to the "
+            "journal are replayed when the database is reopened; a statement whose durability "
+            "is its own checkpoint (COPY FROM) is not, and must be run again.",
+            e.what(), REOPEN_AFTER_FAILED_CHECKPOINT))};
     }
 }
 

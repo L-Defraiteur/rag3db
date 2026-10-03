@@ -32,6 +32,22 @@ struct BMExceptionRecoveryTestConfig {
     uint64_t checkResult;
 };
 
+// Après un COPY dont le point de reprise a échoué, puis une réouverture : le COPY est
+// atomique — soit rien n'en reste, soit tout y est (si aucune allocation n'a été refusée).
+// S'il n'en reste rien, on le rejoue, et il doit tout rendre.
+static std::unique_ptr<main::QueryResult> redoCopyIfItLeftNothing(main::Connection* conn,
+    const std::string& countQuery, const std::string& copyQuery, int64_t fullCount) {
+    auto result = conn->query(countQuery);
+    EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    const auto count = result->getNext()->getValue(0)->getValue<int64_t>();
+    EXPECT_TRUE(count == 0 || count == fullCount) << "un COPY à moitié là : " << count;
+    if (count == 0) {
+        auto redone = conn->query(copyQuery);
+        EXPECT_TRUE(redone->isSuccess()) << redone->getErrorMessage();
+    }
+    return conn->query(countQuery);
+}
+
 class CopyTest : public BaseGraphTest {
 public:
     void TearDown() override {
@@ -305,7 +321,18 @@ TEST_F(CopyTest, NodeCopyBMExceptionDuringCheckpointRecovery) {
                 return true;
             },
         .checkFunc =
-            [](main::Connection* conn) { return conn->query("MATCH (a:account) RETURN COUNT(*)"); },
+            [](main::Connection* conn) {
+                // Un COPY n'est pas dans le journal : sa durabilité est son point de reprise.
+                // Celui-ci a échoué, l'instruction a rendu une erreur, et la base fermée
+                // ensuite ne tente plus de point de reprise : rouverte, il ne reste RIEN du
+                // COPY, et le rejouer rend tout. Avant, c'est le point de reprise de
+                // fermeture qui sauvait ces lignes, sur un état en mémoire qui n'est plus sûr.
+                return redoCopyIfItLeftNothing(conn, "MATCH (a:account) RETURN COUNT(*)",
+                    common::stringFormat(
+                        "COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
+                        RAG3DB_ROOT_DIRECTORY),
+                    81306);
+            },
         .checkResult = 81306};
     BMExceptionRecoveryTest(cfg);
 }
@@ -339,8 +366,17 @@ TEST_F(CopyTest, RelCopyCheckpointBMExceptionRecovery) {
                 return true;
             },
         .checkFunc =
-            [](main::Connection* conn) {
-                return conn->query("MATCH (a:account)-[:follows]->(b:account) RETURN COUNT(*)");
+            [this](main::Connection*) {
+                // Même contrat que NodeCopyBMExceptionDuringCheckpointRecovery. Rejouer ce
+                // COPY demande la mémoire tampon par défaut, pas celle, petite, des tests.
+                resetDB(main::SystemConfig{}.bufferPoolSize);
+                return redoCopyIfItLeftNothing(conn.get(),
+                    "MATCH (a:account)-[:follows]->(b:account) RETURN COUNT(*)",
+                    common::stringFormat("COPY follows FROM "
+                                         "'{}/dataset/snap/twitter/csv/twitter-edges.csv' "
+                                         "(DELIM=' ')",
+                        RAG3DB_ROOT_DIRECTORY),
+                    2420766);
             },
         .checkResult = 2420766};
     BMExceptionRecoveryTest(cfg);
