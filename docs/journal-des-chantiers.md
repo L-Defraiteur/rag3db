@@ -368,6 +368,101 @@ posé d'office, neutre sans déclaration — prouvé au banc par contre-épreuve
 référence du corpus 5 278 : tel quel 0,333, G 0,409). Mesures de pondération
 et gabarits de dérivées en cours ; rien posé dans `Scope`.
 
+### Décisions du 3 octobre 2026 au soir (Lucie, relevées par l'orchestration)
+
+Relevé de ce qui s'est décidé en conversation ce soir-là, pour que rien ne
+vive seulement dans des messages. Chaque ligne nomme qui porte la suite.
+
+**Règles de travail.**
+- Un lot fini et vert se fusionne dans master sans attendre, dans rag3db comme
+  dans le sous-module codeparsers : « y a que nous dessus et tout est
+  expérimental ». Restent : pas de push en force, rien hors de ses dépôts sans
+  son mot.
+- Les choix réversibles se tranchent sans lui remonter : « toujours prendre le
+  meilleur chemin possible et laisser la voie aux autres options ».
+- L'adresse gmail est son adresse personnelle, à utiliser partout ; seule la
+  professionnelle est interdite.
+- `LUCIVY_SCHEDULER_THREADS=8` sur toute passe qui ouvre un catalogue tant
+  qu'elle travaille sur le poste : l'ordonnanceur de lucivy démarre sinon sur
+  tous les cœurs.
+
+**Les verrous** (`docs/3-octobre-2026-15h47/01-…`, les trois écarts, tranchés
+par délégation) : l'annonce en tête de transaction, oui ; hors annonce, on
+reste en instantané par transaction, avec une erreur nommée à rejouer ; créer
+une relation prend un verrou partagé sur ses extrémités. Le nom de l'erreur
+est stable et le mode du verrou est un paramètre, pour laisser les autres
+options ouvertes. Porte : cœur C++, après A5 bis, l'insertion des relations
+et H4.
+
+**A5 bis** : la garde simple se livre malgré son coût (jusqu'à 20 % sur des
+recherches vectorielles parallèles pures, mesuré sous charge) ; la garde fine
+devient une marche à part, décidée sur une mesure au calme. Porte : cœur C++.
+
+**Indexer un dépôt.**
+- Mesuré : ce dépôt entier, 6 735 fichiers et 418 761 relations, 1 798 s pour
+  être cherchable par mots, 710 s de vecteurs ; la cause est l'insertion des
+  relations, qui croît avec la base.
+- Le premier index d'une source se fait **en masse** pour les relations
+  (question de Lucie : « gros dossier, on fait tout d'un coup ») : les paquets
+  posent nœuds et texte, les relations attendent, un seul chargement à la fin,
+  puis la résolution des symboles. L'incrémental reste pour les éditions et
+  les sources déjà indexées, **et s'optimise aussi** (seuil du chargement par
+  `COPY` à mesurer plus bas ; correctif du moteur). Portent : arbre principal
+  (masse, seuil), cœur C++ (moteur).
+- **Une édition pendant l'indexation** ne la ralentit jamais : fichier pas
+  encore passé, il est lu à son paquet dans son état édité ; fichier déjà
+  passé, il entre dans une file et se reprend en incrémental à la toute fin.
+  Porte : arbre principal.
+- **La recherche choisit seule son mode** selon l'état de l'index : balayage
+  des fichiers quand rien n'est indexé, plein texte quand les mots sont prêts,
+  fusion quand tout l'est ; une ligne d'état le dit ; un paramètre permet de
+  forcer. Porte : session recherche.
+- `WorkingTree` respecte les règles d'exclusion du dossier et garde les
+  fichiers cachés non ignorés ; les secrets probables sont écartés par une
+  règle nommée.
+- Point ouvert : pas de recherche dans le même processus pendant la phase du
+  texte.
+
+**Le backend de code** : deux manifestes (poste, cloud), un schéma **nommé**
+au manifeste (`"index": "code"`, rien d'enregistré sans la clé), une politique
+par outil. Question ouverte : descriptions d'outils en français, rendus du
+moteur en anglais.
+
+**Codeparsers** (sous-module) : le genre d'usage et la ligne sortent sur
+chaque relation ; il sera rangé en **propriétés sur l'arête existante**, pas
+en relation « appelle » neuve. La résolution entre homonymes est rendue
+déterministe ; 1 552 fausses arêtes retirées sur `src/dataflow`
+(`extension/rag3weaver/docs/3-octobre-2026-20h30/`). Les références du banc
+de recherche d'avant ne sont plus comparables : refaire une référence.
+
+**Visions** (`extension/rag3weaver/docs/3-octobre-2026-20h16/` et
+`…-20h37/`) : explorer les relations (usages, chemins entre résultats, poids
+par proximité, voisinage, structure) ; sept idées pour le produit code, toutes
+retenues, avec le crochet après outil (idée de Lucie pour « le même motif
+existe ailleurs ») et des notes accrochées au code, datées et versionnées ;
+les propriétés d'arête, dont la provenance.
+
+**Mémoire longue** (`…-20h37/02`, proposition `…-20h41/01`) : produit ouvert
+en parallèle. Choix pris par délégation, chacun un réglage du manifeste :
+premier usage l'agent de code, avec un scénario sans dépôt au banc ; tout
+agent écrit, l'origine marquée, une déduction n'écrase jamais une parole ; la
+personne voit une page à la demande et une ligne au rendu ; dans le doute, le
+nœud de décision crée et demande après, jamais de fusion silencieuse. Les
+sujets abstraits sont une entité de rendez-vous (`Subject`). Porte : session
+mémoire (ex-lifecycle).
+
+**Modèle de décision** : un nœud générique, modèle branchable ; critère ferme
+de Lucie : rien que nous devions entraîner nous-mêmes. Candidats vérifiés à la
+source (`extension/rag3weaver/docs/optimiseur/3-octobre-2026-20h55/`), mesure
+en cours contre ce que nous avons déjà (cosinus granite, reranker). Porte :
+session optimiseur.
+
+**Toujours en attente de Lucie** : le couple de fusion 0,45/0,55 ; « envoie »
+pour tracel-ai (dans la fenêtre de l'optimiseur) ; le réglage rafale/pause
+devant l'écran ; le seuil de confirmation d'`index` et la politique cloud ; la
+demande au support GitHub ; le ménage des branches distantes ; dans la vision
+des relations, la cohésion active par défaut ou non.
+
 ### `SET` refuse un champ nul partout qu'un `CREATE` accepte (cœur C++, 3 octobre)
 
 `UNWIND $rows AS r MATCH (t:T {id: r.id}) SET t.v = r.v`, avec `v` nul dans toutes les
