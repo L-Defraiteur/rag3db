@@ -230,6 +230,24 @@ générique est une **session de synchronisation** (début, lots, fin) avec un
 périmètre déclaré par l'entité ; un backend qui veut un « dépôt » ou un
 « dossier » le déclare comme n'importe quelle entité.
 
+### Le produit, en parallèle des écritures parallèles (Lucie, 3 octobre 2026)
+
+« Si nous faut tout ça pour être compétitifs, mais oui ok pour avancer en
+parallèle sur les deux produits code. » Les écritures parallèles continuent
+(session cœur C++) ; en même temps, les deux produits — un agent de code en
+cloud ou dans le chat, qui télécharge un dépôt git ; un agent en ligne de
+commande, avec accès au disque, qui ingère dépôts, dossiers et documents — se
+préparent comme **un seul moteur et deux politiques d'ingestion** :
+
+- session de l'arbre principal : les deux grains de synchronisation (option A,
+  emboîtés, jamais ouverts ensemble — partie dessus sans le mot exprès de
+  Lucie, à lui confirmer), `reingest_file` sur la synchronisation déclarée, la
+  synchronisation d'un dépôt entier ; puis l'assemblage du backend de code ;
+- session embarquements : l'entrée « indexer ce dépôt » (estimation, choix du
+  modèle, avancement, seuil de confirmation) — proposition d'abord ;
+- session recherche : la surface d'outils de l'agent de code sur le backend
+  déclaratif — proposition d'abord.
+
 ## 4. Décisions en attente de Lucie
 
 Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
