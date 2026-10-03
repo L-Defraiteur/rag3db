@@ -74,21 +74,20 @@ fn ce_depot_s_estime_avant_de_s_indexer() {
 ///
 /// Par défaut le corpus est `src/` de la crate — une à deux minutes, ce
 /// qu'une batterie supporte. `RAG3WEAVER_ESTIMATE_REPO=1` prend le dépôt
-/// entier : mesuré le 3 octobre 2026 (6 735 fichiers, 59,6 Mo, 121 820
-/// morceaux, binaire de test non optimisé, granite-278m par le service
-/// distant), **1 798 s** pour être cherchable par mots — les 1 024 premiers
-/// fichiers en 19 s, puis l'insertion des relations coûte de plus en plus
-/// cher à mesure que la base grossit (418 761 relations ; confié à la session
-/// cœur C++).
+/// entier. Mesuré le 3 octobre 2026 au soir (6 799 fichiers, 60,6 Mo,
+/// 123 750 morceaux, 384 790 relations, binaire de test non optimisé,
+/// granite-278m par le service distant, relations chargées en masse) :
+/// **514 s** pour les mots, **10 s** pour les relations. Avant le chargement
+/// en masse, la même passe prenait 1 798 s.
 ///
 /// `RAG3WEAVER_ESTIMATE_VECTORS=1` solde ensuite la dette et chronomètre :
 /// c'est ce que l'estimation avait prévu, confronté à ce qui arrive. Même
-/// mesure : 710 s pour 121 820 morceaux, 569 s prévus par la sonde.
+/// mesure : 692 s pour 123 750 morceaux, 651 s prévus par la sonde.
 #[test]
 #[ignore]
 fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
-    use rag3weaver::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
+    use rag3weaver::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
     use rag3weaver::code_tools::Snapshot;
     use rag3weaver::disponibilite::Disponibilites as D;
     use rag3weaver::estimate::Kept;
@@ -124,15 +123,30 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     let options = SourceSyncOptions { batch_files: 64, exige: D::RECHERCHE_TEXTE, ..Default::default() };
     let t = Instant::now();
     let mut last = 0usize;
+    // Les trois temps, séparés : les mots (les paquets), les relations (le
+    // chargement final, en masse), puis — plus bas — les vecteurs.
+    let mut words_seconds: Option<f64> = None;
     let report = sync_source(&mut catalog, &Snapshot::new("rag3db", kept), &options, &mut |p: SourceSyncProgress| {
-        if p.files_done >= last + 1_000 || p.files_done == p.files_total {
+        if p.phase == SyncPhase::Relations && words_seconds.is_none() {
+            words_seconds = Some(t.elapsed().as_secs_f64());
+            eprintln!("[mots] les mots sont là en {:.0} s ; relations : {} liens à poser", t.elapsed().as_secs_f64(), p.relations_pending);
+        } else if p.phase == SyncPhase::Nodes && (p.files_done >= last + 1_000 || p.files_done == p.files_total) {
             last = p.files_done;
-            eprintln!("[mots] {} / {} fichiers, {} scopes, {:.0} s", p.files_done, p.files_total, p.scopes_written, t.elapsed().as_secs_f64());
+            eprintln!("[mots] {} / {} fichiers, {} scopes, {} liens en file, {:.0} s", p.files_done, p.files_total, p.scopes_written, p.relations_pending, t.elapsed().as_secs_f64());
         }
     })
     .expect("synchronisation jusqu'au plein texte");
     let text_seconds = t.elapsed().as_secs_f64();
-    eprintln!("[mots] cherchable par mots en {text_seconds:.0} s — {} fichiers, {} scopes, {} relations", report.files_ingested, report.scopes_written, report.relations);
+    eprintln!(
+        "[mots] synchronisé en {text_seconds:.0} s — mots {:.0} s, relations {:.0} s ({:?}, chargement final {} ms) — {} fichiers, {} scopes, {} relations",
+        words_seconds.unwrap_or(text_seconds),
+        text_seconds - words_seconds.unwrap_or(text_seconds),
+        report.relations_mode,
+        report.relations_bulk_ms,
+        report.files_ingested,
+        report.scopes_written,
+        report.relations
+    );
 
     let progress = catalog.index_progress().expect("avancement");
     let chars_per_chunk = chars / progress.chunks().max(1);

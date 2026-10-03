@@ -233,15 +233,15 @@ pub fn spawn_index(
 }
 
 fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &std::path::Path, kept_bytes: u64) -> Result<(), String> {
-    use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
+    use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
     use crate::disponibilite::Disponibilites;
 
     use crate::catalog::{IndexState, Level};
     let now = crate::dataflow::checkpoint::timestamp_ms;
     // L'état que la recherche lit à chaque appel. Une réindexation ne fait
     // pas régresser un niveau déjà prêt : l'ancien contenu reste cherchable.
-    let note = |guard: &Catalog, text: Level, vectors: Level, percent: u8| {
-        guard.note_index_state(IndexState { text, vectors, vectors_percent: percent, updated_ms: now() }).map_err(|e| e.to_string())
+    let note = |guard: &Catalog, text: Level, before: IndexState| {
+        guard.note_index_state(IndexState { text, updated_ms: now(), ..before }).map_err(|e| e.to_string())
     };
 
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
@@ -250,15 +250,23 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         let before = guard.index_state().map_err(|e| e.to_string())?;
         if before.text != Level::Ready {
-            note(&guard, Level::Running, before.vectors, before.vectors_percent)?;
+            note(&guard, Level::Running, before)?;
         }
-        sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| {
-            log(journal, &format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written));
+        sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| match p.phase {
+            // Les paquets : les mots. En masse, les liens s'accumulent en file.
+            SyncPhase::Nodes if p.relations_pending > 0 => log(
+                journal,
+                &format!("plein texte : {} fichiers sur {} ({} scopes) · {} liens en file", p.files_done, p.files_total, p.scopes_written, p.relations_pending),
+            ),
+            SyncPhase::Nodes => log(journal, &format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written)),
+            // Les mots sont là ; le graphe arrive d'un coup.
+            SyncPhase::Relations => log(journal, &format!("plein texte prêt · relations : {} liens à poser", p.relations_pending)),
+            SyncPhase::Done => {}
         })?
     };
     log(
         journal,
-        &format!("plein texte prêt : {} fichiers, {} scopes, {} relations", report.files_ingested, report.scopes_written, report.relations),
+        &format!("plein texte prêt : {} fichiers, {} scopes, {} relations posées", report.files_ingested, report.scopes_written, report.relations),
     );
 
     // Second temps : la dette de vecteurs, par passes ; le catalogue est
@@ -266,10 +274,14 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     let (rate, start) = {
         let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         let start = guard.index_progress().map_err(|e| e.to_string())?;
-        guard.note_index_state(IndexState::from_progress(&start, now())).map_err(|e| e.to_string())?;
         (guard.known_embedding_rate().map_err(|e| e.to_string())?, start)
     };
     let chars_per_chunk = (kept_bytes as usize / start.chunks().max(1)).max(1);
+    catalog
+        .lock()
+        .map_err(|_| "catalogue empoisonné".to_string())?
+        .note_index_state(IndexState::from_progress(&start, now()).with_time_left(&start, rate, chars_per_chunk))
+        .map_err(|e| e.to_string())?;
     // Une ligne par changement : un journal qui se répète noie ce qu'il dit.
     let mut last_line = String::new();
     let mut say = |line: String| {
@@ -289,7 +301,7 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
             let progress = guard.index_progress().map_err(|e| e.to_string())?;
             // Chaque passe rafraîchit l'état : « en cours » reste cru tant
             // que quelqu'un travaille.
-            let mut state = IndexState::from_progress(&progress, now());
+            let mut state = IndexState::from_progress(&progress, now()).with_time_left(&progress, rate, chars_per_chunk);
             if n > 0 && state.vectors == Level::Never {
                 state.vectors = Level::Running;
             }

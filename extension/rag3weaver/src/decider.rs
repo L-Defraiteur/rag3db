@@ -57,8 +57,25 @@ impl std::error::Error for DecideError {}
 
 /// **Décider** : une probabilité par option, dans l'ordre des options, de
 /// somme 1.
+///
+/// **La calibration appartient à qui pose la question.** Le même modèle ne
+/// se calibre pas pareil d'un critère à l'autre (mesuré le 3 octobre 2026 :
+/// un seuil sans fausse fusion à 0,50 pour un critère, 0,07 pour un autre) ;
+/// une température unique par modèle écraserait cet écart. Le nœud, qui
+/// connaît le critère, la donne par [`Decider::decide_at`] ; [`Decider::decide`]
+/// prend celle du fournisseur.
 pub trait Decider: Send + Sync {
-    fn decide(&self, prompt: &str, options: &[String]) -> Result<Vec<f64>, DecideError>;
+    /// Décide à cette température de softmax sur les options (1 : tel quel).
+    fn decide_at(&self, prompt: &str, options: &[String], temperature: f64) -> Result<Vec<f64>, DecideError>;
+
+    /// La température du fournisseur quand l'appelant n'en donne pas.
+    fn default_temperature(&self) -> f64 {
+        1.0
+    }
+
+    fn decide(&self, prompt: &str, options: &[String]) -> Result<Vec<f64>, DecideError> {
+        self.decide_at(prompt, options, self.default_temperature())
+    }
 
     fn name(&self) -> &str {
         "decider"
@@ -66,8 +83,11 @@ pub trait Decider: Send + Sync {
 }
 
 impl<T: Decider + ?Sized> Decider for std::sync::Arc<T> {
-    fn decide(&self, prompt: &str, options: &[String]) -> Result<Vec<f64>, DecideError> {
-        (**self).decide(prompt, options)
+    fn decide_at(&self, prompt: &str, options: &[String], temperature: f64) -> Result<Vec<f64>, DecideError> {
+        (**self).decide_at(prompt, options, temperature)
+    }
+    fn default_temperature(&self) -> f64 {
+        (**self).default_temperature()
     }
     fn name(&self) -> &str {
         (**self).name()
@@ -123,7 +143,7 @@ pub fn option_probabilities(top: &[(String, f64)], options: &[String], temperatu
 pub struct MockDecider(pub Vec<f64>);
 
 impl Decider for MockDecider {
-    fn decide(&self, _prompt: &str, options: &[String]) -> Result<Vec<f64>, DecideError> {
+    fn decide_at(&self, _prompt: &str, options: &[String], _temperature: f64) -> Result<Vec<f64>, DecideError> {
         if self.0.len() != options.len() {
             return Err(DecideError::Invalid(format!("{} probabilités pour {} options", self.0.len(), options.len())));
         }
@@ -166,7 +186,7 @@ impl LlamaServerDecider {
         })
     }
 
-    /// La calibration du softmax sur les options (défaut 1).
+    /// La calibration du softmax quand l'appelant n'en donne pas (défaut 1).
     pub fn with_temperature(mut self, temperature: f64) -> Self {
         self.temperature = temperature;
         self
@@ -234,8 +254,11 @@ impl LlamaServerDecider {
 
 #[cfg(feature = "daemon")]
 impl Decider for LlamaServerDecider {
-    fn decide(&self, prompt: &str, options: &[String]) -> Result<Vec<f64>, DecideError> {
-        option_probabilities(&self.next_token_logprobs(prompt)?, options, self.temperature)
+    fn decide_at(&self, prompt: &str, options: &[String], temperature: f64) -> Result<Vec<f64>, DecideError> {
+        option_probabilities(&self.next_token_logprobs(prompt)?, options, temperature)
+    }
+    fn default_temperature(&self) -> f64 {
+        self.temperature
     }
     fn name(&self) -> &str {
         &self.model
@@ -401,5 +424,32 @@ mod tests {
         eprintln!("[decide] {origin:?} : A {:.3}, B {:.3} en {:?}", p[0], p[1], t.elapsed());
         assert!(p[0] > p[1], "{p:?}");
         assert!((p.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+    }
+
+    /// La calibration se donne à l'appel : le même décideur, deux critères.
+    #[test]
+    fn la_temperature_se_donne_par_appel() {
+        struct Fixe;
+        impl Decider for Fixe {
+            fn decide_at(&self, _: &str, options: &[String], temperature: f64) -> Result<Vec<f64>, DecideError> {
+                option_probabilities(&top(&[("A", 0.9f64.ln()), ("B", 0.1f64.ln())]), options, temperature)
+            }
+            fn default_temperature(&self) -> f64 {
+                2.0
+            }
+        }
+        let o = options(&["A", "B"]);
+        let net = Fixe.decide_at("…", &o, 1.0).unwrap();
+        let plat = Fixe.decide_at("…", &o, 4.0).unwrap();
+        assert!(net[0] > plat[0] && plat[0] > 0.5, "{net:?} {plat:?}");
+        // Sans température donnée : celle du fournisseur, pas 1.
+        assert_eq!(Fixe.decide("…", &o).unwrap(), Fixe.decide_at("…", &o, 2.0).unwrap());
+        // Et par un Arc, comme un nœud le reçoit du registre de services.
+        let partage: std::sync::Arc<dyn Decider> = std::sync::Arc::new(Fixe);
+        assert_eq!(partage.default_temperature(), 2.0);
+        assert_eq!(partage.decide("…", &o).unwrap(), plat_at(&partage, &o, 2.0));
+        fn plat_at(d: &std::sync::Arc<dyn Decider>, o: &[String], t: f64) -> Vec<f64> {
+            d.decide_at("…", o, t).unwrap()
+        }
     }
 }

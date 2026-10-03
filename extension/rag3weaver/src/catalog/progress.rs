@@ -16,6 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Catalog, CatalogError};
+use crate::connection::{CypherValue, QueryParam};
 use crate::estimate::Rate;
 
 /// Une table de morceaux et ce qu'il lui manque.
@@ -39,6 +40,11 @@ pub struct IndexProgress {
     /// Ce processus a encore des écritures en file : le plein texte de ces
     /// lignes-là n'est pas prêt.
     pub writes_pending: usize,
+    /// Les relations qu'une synchronisation en masse n'a pas encore posées
+    /// (`code_sync`, marque `relations_pending:…`). `None` : aucune
+    /// synchronisation n'en retient — le graphe est celui des lignes.
+    #[serde(default)]
+    pub relations_pending: Option<usize>,
 }
 
 impl IndexProgress {
@@ -64,7 +70,7 @@ impl IndexProgress {
 
     /// Tout ce qui est écrit est cherchable par tous les signaux.
     pub fn complete(&self) -> bool {
-        self.writes_pending == 0 && self.dense_missing() == 0 && self.sparse_missing() == 0
+        self.writes_pending == 0 && self.relations_pending.is_none() && self.dense_missing() == 0 && self.sparse_missing() == 0
     }
 
     /// **La ligne qu'un agent lit**, et que `wait` attrape. `rate` : le débit
@@ -73,6 +79,12 @@ impl IndexProgress {
         let text = match self.writes_pending {
             0 => "plein texte prêt".to_string(),
             n => format!("plein texte : {n} écritures en file"),
+        };
+        // Trois états, pas deux : les mots, puis les relations, puis les
+        // vecteurs. Le segment n'apparaît que si des relations attendent.
+        let text = match self.relations_pending {
+            None => text,
+            Some(n) => format!("{text} · relations : {n} liens à poser"),
         };
         let chunks = self.chunks();
         let missing = self.dense_missing();
@@ -126,10 +138,22 @@ pub enum Level {
 pub struct IndexState {
     pub text: Level,
     pub vectors: Level,
+    /// Les relations : `running` tant qu'une synchronisation en masse en
+    /// retient — le graphe n'est pas complet, « rien trouvé » en suivant un
+    /// lien ne veut pas dire « rien ».
+    #[serde(default = "ready")]
+    pub relations: Level,
     /// Les vecteurs faits, en pourcentage.
     pub vectors_percent: u8,
+    /// Ce qu'il reste de vecteurs, en secondes, quand un débit est connu.
+    #[serde(default)]
+    pub vectors_seconds_left: Option<u64>,
     /// Quand cet état a été écrit (millisecondes Unix).
     pub updated_ms: u64,
+}
+
+fn ready() -> Level {
+    Level::Ready
 }
 
 /// Au-delà, un état « en cours » sans nouvelles n'est plus cru.
@@ -151,14 +175,29 @@ impl IndexState {
                 (_, 0) => Level::Ready,
                 _ => Level::Running,
             },
+            relations: match (chunks, progress.relations_pending) {
+                (0, None) => Level::Never,
+                (_, None) => Level::Ready,
+                (_, Some(_)) => Level::Running,
+            },
             vectors: level(progress.dense_missing()),
             vectors_percent: if chunks == 0 { 0 } else { progress.dense_percent() },
+            vectors_seconds_left: None,
             updated_ms: now_ms,
         }
     }
 
+    /// Le reste des vecteurs en temps, quand on connaît le débit.
+    pub fn with_time_left(mut self, progress: &IndexProgress, rate: Option<Rate>, chars_per_chunk: usize) -> Self {
+        self.vectors_seconds_left = match (progress.dense_missing(), rate) {
+            (0, _) | (_, None) => None,
+            (missing, Some(rate)) => Some(rate.duration_for((missing * chars_per_chunk) as u64).as_secs()),
+        };
+        self
+    }
+
     pub fn running(&self) -> bool {
-        self.text == Level::Running || self.vectors == Level::Running
+        self.text == Level::Running || self.relations == Level::Running || self.vectors == Level::Running
     }
 
     /// Un état « en cours » trop vieux pour être cru.
@@ -202,7 +241,34 @@ impl Catalog {
                 table,
             });
         }
-        Ok(IndexProgress { model: self.current_embedding_entry().name.clone(), tables, writes_pending: self.pending.total_count() })
+        Ok(IndexProgress {
+            model: self.current_embedding_entry().name.clone(),
+            tables,
+            writes_pending: self.pending.total_count(),
+            relations_pending: self.relations_pending()?,
+        })
+    }
+
+    /// Les liens qu'une synchronisation en masse retient encore, toutes
+    /// sources confondues. La marque vaut `{session}|{liens}` ; vide, la
+    /// synchronisation est finie (ou a échoué, et l'a effacée).
+    fn relations_pending(&self) -> Result<Option<usize>, CatalogError> {
+        const PREFIX: &str = "relations_pending:";
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self
+            .conn
+            .execute_with_params(&stmt, &[QueryParam::new("prefix", CypherValue::String(PREFIX.into()))])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut pending = None;
+        for row in &result.rows {
+            let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) else { continue };
+            if !k.starts_with(PREFIX) || v.trim().is_empty() {
+                continue;
+            }
+            let links = v.rsplit('|').next().and_then(|n| n.trim().parse::<usize>().ok()).unwrap_or(0);
+            pending = Some(pending.unwrap_or(0) + links);
+        }
+        Ok(pending)
     }
 
     /// **L'état de l'index, à bas coût** : l'état noté par l'indexation, en
@@ -214,7 +280,15 @@ impl Catalog {
         let now = crate::dataflow::checkpoint::timestamp_ms();
         if let Some(noted) = self.read_meta_key(INDEX_STATE_KEY)?.and_then(|v| serde_json::from_str::<IndexState>(&v).ok()) {
             if !noted.is_stale(now) {
-                return Ok(noted);
+                // Les relations se lisent à leur marque, que la
+                // synchronisation tient elle-même à jour : une lecture de
+                // méta de plus, toujours pas un comptage.
+                let relations = match (noted.text, self.relations_pending()?) {
+                    (Level::Never, None) => Level::Never,
+                    (_, None) => Level::Ready,
+                    (_, Some(_)) => Level::Running,
+                };
+                return Ok(IndexState { relations, ..noted });
             }
         }
         let counted = IndexState::from_progress(&self.index_progress()?, now);
@@ -293,6 +367,7 @@ mod tests {
             model: "granite-278m".into(),
             tables: vec![TableProgress { table: "Scope_Chunk".into(), chunks, dense_missing, sparse_missing }],
             writes_pending,
+            relations_pending: None,
         }
     }
 
@@ -350,15 +425,46 @@ mod tests {
 
     #[test]
     fn un_etat_en_cours_sans_nouvelles_n_est_plus_cru() {
-        let en_cours = IndexState { text: Level::Ready, vectors: Level::Running, vectors_percent: 40, updated_ms: 1_000 };
+        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, updated_ms: 1_000 };
         assert!(!en_cours.is_stale(1_000 + STATE_STALE_MS));
         assert!(en_cours.is_stale(1_001 + STATE_STALE_MS), "un processus tué ne laisse pas « en cours » pour toujours");
         // Un état abouti ne périme pas : rien ne le rafraîchit, et c'est normal.
-        let pret = IndexState { text: Level::Ready, vectors: Level::Ready, vectors_percent: 100, updated_ms: 1_000 };
+        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, updated_ms: 1_000 };
         assert!(!pret.is_stale(u64::MAX));
         // Et il se lit tel qu'il s'écrit.
         let json = serde_json::to_string(&en_cours).unwrap();
         assert!(json.contains("\"vectors\":\"running\""), "{json}");
         assert_eq!(serde_json::from_str::<IndexState>(&json).unwrap(), en_cours);
+    }
+
+    /// **Trois états** : les mots, les relations, les vecteurs. Pendant un
+    /// chargement en masse, la ligne et l'état disent que le graphe n'est
+    /// pas encore complet.
+    #[test]
+    fn les_relations_en_attente_se_disent_dans_la_ligne_et_dans_l_etat() {
+        let mut p = progress(20_100, 20_100, None, 0);
+        p.relations_pending = Some(418_761);
+        assert!(!p.complete());
+        assert_eq!(p.line(None, 500), "plein texte prêt · relations : 418761 liens à poser · vecteurs 0 sur 20100 (0 %, granite-278m)");
+        let state = IndexState::from_progress(&p, 1);
+        assert_eq!((state.text, state.relations, state.vectors), (Level::Ready, Level::Running, Level::Never));
+        assert!(state.running());
+        // Une fois posées, le segment disparaît et le niveau est prêt.
+        p.relations_pending = None;
+        assert_eq!(IndexState::from_progress(&p, 1).relations, Level::Ready);
+        assert!(!p.line(None, 500).contains("relations"));
+        // Un état noté avant ce niveau se relit : les relations y sont prêtes.
+        let ancien: IndexState = serde_json::from_str(r#"{"text":"ready","vectors":"running","vectors_percent":40,"updated_ms":5}"#).unwrap();
+        assert_eq!((ancien.relations, ancien.vectors_seconds_left), (Level::Ready, None));
+    }
+
+    #[test]
+    fn le_reste_des_vecteurs_se_dit_en_secondes_quand_le_debit_est_connu() {
+        let p = progress(20_100, 11_900, None, 0);
+        let rate = Rate { chars_per_second: 30_000.0 };
+        assert_eq!(IndexState::from_progress(&p, 1).with_time_left(&p, Some(rate), 500).vectors_seconds_left, Some(198));
+        assert_eq!(IndexState::from_progress(&p, 1).with_time_left(&p, None, 500).vectors_seconds_left, None);
+        let fini = progress(20_100, 0, None, 0);
+        assert_eq!(IndexState::from_progress(&fini, 1).with_time_left(&fini, Some(rate), 500).vectors_seconds_left, None);
     }
 }

@@ -101,39 +101,50 @@ sa forme est fixée et cette proposition se branche dessus en trois points.
 
 ### En combien de temps est-on cherchable par mots ?
 
-**Mesuré le 3 octobre au soir**, une fois l'ingestion de code capable de
-s'arrêter au plein texte (`sync_source` avec `exige = RECHERCHE_TEXTE`, livré
-par la session de l'arbre principal). Le premier jet de cette page donnait un
-calcul — « environ une minute » — et il était **faux d'un facteur trente**
-pour le dépôt entier ; il reste ici, daté, pour qu'on voie d'où vient
-l'écart.
+**Mesuré le 3 octobre au soir**, deux fois : une fois l'ingestion de code
+capable de s'arrêter au plein texte (`sync_source` avec
+`exige = RECHERCHE_TEXTE`), puis après le chargement en masse des relations
+— les deux livrés par la session de l'arbre principal. Le premier jet de
+cette page donnait un calcul, « environ une minute » : la première mesure l'a
+trouvé **faux d'un facteur trente** sur le dépôt entier, la seconde le ramène
+à un facteur neuf. Les trois chiffres restent ici, datés.
 
-| Corpus (binaire de test non optimisé, granite-278m par le service distant) | Cherchable par mots | Vecteurs ensuite |
-|---|---|---|
-| `src/` de la crate : 122 fichiers, 4 Mo, 9 528 morceaux, 49 648 relations | **17 s** | ~1 min prévue |
-| Ce dépôt : 6 735 fichiers, 59,6 Mo, 121 820 morceaux, 418 761 relations | **1 798 s** (30 min) | **710 s** mesurés, 569 s prévus par la sonde |
+| Corpus (binaire de test non optimisé, granite-278m par le service distant) | Cherchable par mots | Relations | Vecteurs |
+|---|---|---|---|
+| `src/` de la crate : 122 fichiers, 4 Mo, 9 528 morceaux | **17 s** | comprises | ~1 min prévue |
+| Ce dépôt, première mesure : 6 735 fichiers, 59,6 Mo, 418 761 relations posées paquet par paquet | 1 798 s (30 min) | comprises | 710 s mesurés, 569 s prévus |
+| **Ce dépôt, après le chargement en masse des relations** : 6 799 fichiers, 60,6 Mo, 123 750 morceaux, 384 790 relations | **514 s** (8 min 30) | **10 s** | **692 s** mesurés, 651 s prévus |
 
-Trois choses à en retenir.
+Quatre choses à en retenir.
 
 - **L'exigence est tenue** : à la fin de la passe « plein texte », aucun
-  vecteur n'est calculé (0 sur 121 820) et une recherche par mots répond. La
-  première mesure, avant correctif, en trouvait 83 % de faits — un rattrapage
-  tournait dans la liaison des symboles.
-- **Le temps du plein texte ne croît pas comme la taille.** Les 1 024
-  premiers fichiers passent en 19 s ; les mille suivants en 53 s, puis 151,
-  283, 422, 367 et 503 s. Ce qui croît est l'insertion des relations par le
-  moteur, de plus en plus chère à mesure que la base grossit ; isolé par la
-  session de l'arbre principal, confié à la session cœur C++. Au rythme des
-  premiers paquets, le dépôt entier prendrait environ deux minutes : c'est ce
-  qu'il faut retrouver.
-- **L'estimation des vecteurs tient à 20 % près** : 569 s prévus, 710 s
-  mesurés. L'écart est le prix de l'écriture en base et de la reconstruction
-  de l'index, que la sonde ne voit pas ; chaque indexation note son débit
-  réel, la suivante prévoit mieux.
+  vecteur n'est calculé et une recherche par mots répond. La toute première
+  mesure, avant correctif, en trouvait 83 % de faits — un rattrapage tournait
+  dans la liaison des symboles.
+- **Le temps des mots ne croissait pas comme la taille, et c'est corrigé.**
+  À la première mesure, les 1 024 premiers fichiers passaient en 19 s puis
+  chaque millier coûtait 53, 151, 283, 422 s : l'insertion des relations
+  paquet par paquet. La session de l'arbre principal les met maintenant en
+  file pendant les paquets et les charge en masse à la fin ; par millier de
+  fichiers, cumulé : 19, 66, 158, 244, 323, 400, 514 s. Ramené aux scopes
+  c'est à peu près plat — 5 ms par scope au premier millier, 7 en moyenne.
+  Le temps total pour chercher par mots passe de 1 798 s à 523 s.
+- **Les relations arrivent d'un coup, en dix secondes**, après les mots.
+  Entre-temps la file est vidée chaque fois qu'elle dépasse 200 000 liens
+  (deux fois sur ce dépôt), pour borner la mémoire : ces vidages sont comptés
+  dans le temps des mots.
+- **L'estimation des vecteurs tient à 6 % près** : 651 s prévus, 692 s
+  mesurés (20 % à la première mesure, où la sonde ne voyait pas la
+  reconstruction de l'index). Chaque indexation note son débit réel ; la
+  suivante prévoit mieux.
 
-Tant que l'insertion des relations n'est pas corrigée, **« le plein texte
-d'abord » ne rend l'attente supportable que pour un petit dépôt** : sur
-celui-ci, les vecteurs (12 min) arrivent plus vite que les mots (30 min).
+**Où en est la promesse.** Sur ce dépôt, on cherche par mots au bout de huit
+minutes et demie, le graphe est là dix secondes plus tard, et les vecteurs
+onze à douze minutes après : le plein texte d'abord fait gagner plus de la
+moitié de l'attente. Ce n'est pas encore les deux minutes qu'un moteur
+optimisé rendrait — ces mesures sont prises sur un binaire de test non
+optimisé — et l'avancement dit donc des fichiers faits, pas un temps restant,
+pendant ce premier temps.
 
 ## 4. Les deux politiques
 
