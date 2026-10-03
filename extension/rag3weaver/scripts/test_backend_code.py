@@ -13,6 +13,7 @@ RAG3WEAVER_EMBED_SERVICE, ou le démon local, au choix de l'environnement.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -116,6 +117,37 @@ def main():
         # une commande hors liste : le refus ne casse pas le protocole.
         r = host.ask(op="call", name="run_command", arguments={"command": "rm -rf /"})
         assert not r.get("ok", True) or "refus" in json.dumps(r).lower(), f"la porte tient : {r}"
+
+        # ── index + wait : l'indexation en fond se suit par son journal ─────
+        # (Le refus sans confirm=true ne se déclenche que sur un débit déjà
+        # mesuré en base — jamais sur une base neuve ; il est couvert en lib.)
+        r = host.ask(op="call", name="index", arguments={})
+        assert r.get("ok"), f"index démarre : {r}"
+        m = re.search(r"journal : (\S+)", json.dumps(r).replace("\\n", "\n"))
+        assert m, f"le reçu est un journal : {r}"
+        journal = m.group(1)
+        # timeout_s=0 : lire l'état sans attendre — la réponse est immédiate,
+        # « Trouvé » ou « Pas encore », jamais une erreur.
+        r = host.ask(op="call", name="wait_output",
+                     arguments={"journal": journal, "pattern": "indexation", "timeout_s": 0})
+        assert r.get("ok"), f"l'état se lit sans attendre : {r}"
+        # Puis la fin, par son motif ; « échouée » dans le même motif pour que
+        # l'échec se voie au lieu d'expirer en silence.
+        r = host.ask(op="call", name="wait_output",
+                     arguments={"journal": journal,
+                                "pattern": "indexation terminée|indexation échouée",
+                                "timeout_s": 120})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "indexation terminée" in t, f"l'indexation aboutit : {r}"
+        # Et la recherche répond sur l'index ainsi construit.
+        r = host.ask(op="call", name="search_code",
+                     arguments={"query": "arrivee", "options": {"consistency": "strict"}})
+        assert "main.rs" in json.dumps(r), f"la recherche répond après l'indexation : {r}"
+        # wait ne sort pas du dossier des journaux : la traversée se refuse.
+        traverse = str(Path(journal).parent / ".." / ".." / "etc" / "passwd")
+        r = host.ask(op="call", name="wait_output",
+                     arguments={"journal": traverse, "pattern": "root", "timeout_s": 1})
+        assert not r.get("ok", True), f"la traversée se refuse : {r}"
         host.close()
 
         # ── La politique cloud : l'instantané ───────────────────────────────
@@ -137,8 +169,10 @@ def main():
         host.close()
 
         print("PASS: descriptions distinctes, lecture, chemin hors workspace refusé, "
-              "édition + réindexation cherchable, porte des commandes, instantané en "
-              "mémoire sans toucher le disque, outil absent refusé.")
+              "édition + réindexation cherchable, porte des commandes, indexation en "
+              "fond suivie par son journal (état sans attendre, fin par motif, recherche "
+              "qui répond, traversée refusée), instantané en mémoire sans toucher le "
+              "disque, outil absent refusé.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

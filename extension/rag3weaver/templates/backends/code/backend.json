@@ -63,14 +63,15 @@
     },
     "wait_output": {
       "graph": "../../tools/wait.mmd",
-      "description": "Attendre qu'une ligne apparaisse dans le journal d'une commande de fond (timeout_s=0 : lire l'état sans attendre).",
-      "policy": {
-        "run_commands": true
-      }
+      "description": "Attendre qu'une ligne apparaisse dans un journal (commande de fond ou indexation) ; timeout_s=0 : lire l'état sans attendre. Pour l'indexation : pattern='indexation terminée|indexation échouée'."
     },
     "estimate": {
       "graph": "../../tools/estimate.mmd",
       "description": "Estimer ce que l'indexation du workspace coûterait : fichiers retenus et écartés (avec leurs raisons, secrets probables compris), modèle choisi et pourquoi, durée prévue. À prendre avant d'indexer — rien n'est écrit."
+    },
+    "index": {
+      "graph": "../../tools/index.mmd",
+      "description": "Indexer le workspace en fond (plein texte d'abord, vecteurs ensuite) et rendre la main : le reçu est un journal à suivre avec wait. Refuse sans confirm=true au-delà du seuil — prenez estimate avant. Pendant le plein texte, le catalogue reste tenu : la recherche répond avec ce qui est déjà prêt."
     }
   }
 }

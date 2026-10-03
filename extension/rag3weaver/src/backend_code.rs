@@ -124,11 +124,20 @@ const BASE_NODES: &[&str] = &[
     // L'estimation d'indexation : liste par la source (noms et tailles,
     // aucun fichier lu hors sonde), rien n'écrit — sûre pour tout outil.
     "EstimateNode",
+    // L'indexation en fond : n'écrit qu'en base, par le catalogue, et rend
+    // un journal. Refuse d'elle-même sans confirmation quand l'estimation
+    // dépasse le seuil — le produit cloud doit pouvoir indexer sans
+    // `run_commands`.
+    "IndexNode",
+    // L'attente sur un journal : bornée au dossier des journaux par une
+    // garde canonisée (`..` et liens symboliques refusés) — elle ne lit
+    // rien d'autre, donc elle n'a pas à attendre `run_commands`.
+    "WaitOutputNode",
 ];
 
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode"];
-const RUN_NODES: &[&str] = &["RunCommandNode", "WaitOutputNode"];
+const RUN_NODES: &[&str] = &["RunCommandNode"];
 
 /// Les types de nœuds que cette politique permet.
 pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
