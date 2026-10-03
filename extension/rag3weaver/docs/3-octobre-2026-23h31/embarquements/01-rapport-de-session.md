@@ -23,7 +23,7 @@ Dans l'ordre de fusion.
 | `4cb2d04cc` | **Lot 5 : le démon porte le relecteur et l'OCR** | Un seul démon à relancer sur le poste qui sert. |
 | `0330578b6`, `3645e0799` | **Lot 6 : le modèle de langage** dans la déclaration commune (`models.llm`), posé dans le chat par la session du chat | Dernière capacité hors de la déclaration ; éprouvé de bout en bout avec Gemini par Vertex. |
 | `45c88e3a5` | **L'invariant des vecteurs** (`tests/e2e_invariant_des_vecteurs.rs`), la dette périmée, `write_vectors` | Lot de l'orchestration : le moteur perd des lignes de l'index HNSW quand un `SET` remplace un vecteur. La suite a surtout trouvé un défaut à nous — voir plus bas. |
-| (ce commit) | **Fichiers générés écartés avec leur raison** (`src/generated.rs`, `workspace.generated`) | Lot de l'orchestration : 95 fichiers et 5,4 Mo sur ce dépôt n'apprennent rien à un agent. Deux signaux sur trois ; détail dans la page 03. |
+| `3da4bb05a` | **Fichiers générés écartés avec leur raison** (`src/generated.rs`, `workspace.generated`) | Lot de l'orchestration : 95 fichiers et 5,4 Mo sur ce dépôt n'apprennent rien à un agent. Deux signaux sur trois ; détail dans la page 03. |
 | `1d3319f65`, `a7b241faa` | **Profil d'ingestion complet** (`src/ingest_profile.rs`, `[sync-profile]`, `[ingest-total]`) | 140 s de l'indexation n'étaient dans aucune ligne de profil. |
 
 Les pages : `docs/3-octobre-2026-14h26/01` (une seule carte partagée avec
