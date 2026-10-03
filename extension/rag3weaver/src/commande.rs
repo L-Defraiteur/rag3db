@@ -459,11 +459,21 @@ pub struct Garde {
     mode: Mode,
     sentinelle: Box<dyn Sentinelle>,
     acquis: Autorisations,
+    /// Les sorties du domaine refusées d'affilée — remis à zéro par tout
+    /// verdict accordé. Un modèle fort épuise les formulations après un
+    /// refus (passe Gemini du 3 octobre : quinze itérations pour y
+    /// renoncer) ; au deuxième de la même intention, le motif le dit.
+    hors_domaine_consecutifs: std::sync::atomic::AtomicUsize,
 }
 
 impl Garde {
     pub fn new(mode: Mode) -> Self {
-        Self { mode, sentinelle: Box::new(SentinelleDeBase), acquis: Autorisations::new() }
+        Self {
+            mode,
+            sentinelle: Box::new(SentinelleDeBase),
+            acquis: Autorisations::new(),
+            hors_domaine_consecutifs: std::sync::atomic::AtomicUsize::new(0),
+        }
     }
 
     /// Une autre sentinelle — celle à modèle, ou la vôtre.
@@ -490,12 +500,24 @@ impl Garde {
         if !ctx.accorde_par_l_utilisateur {
             if let Some(domaine) = &ctx.domaine {
                 if let Some((arg, raison)) = argument_hors_domaine(c, domaine) {
+                    use std::sync::atomic::Ordering;
+                    let n = self.hors_domaine_consecutifs.fetch_add(1, Ordering::Relaxed) + 1;
+                    let mut motif =
+                        format!("`{arg}` : {raison} — seul un humain peut l'accorder.");
+                    if n >= 2 {
+                        // Compté par intention (la sortie du domaine), pas par
+                        // ligne exacte : les variantes sont la même demande.
+                        motif.push_str(
+                            " L'accès hors du domaine de travail ne s'accorde pas \
+                             par une autre formulation — passez à autre chose.",
+                        );
+                    }
                     let demande = Verdict {
                         decision: Decision::Demande,
                         portee: Portee::CetteFois,
                         fondement: Fondement::Configuration,
                         faits: observer(c),
-                        motif: format!("`{arg}` : {raison} — seul un humain peut l'accorder."),
+                        motif,
                     };
                     // En standard il n'y a personne pour répondre.
                     return if self.mode == Mode::Standard {
@@ -546,6 +568,11 @@ impl Garde {
             _ => v,
         };
         self.acquis.retenir(c, &v);
+        if v.decision == Decision::Autorise {
+            // Une commande accordée clôt la série : le prochain écart
+            // redevient un premier écart.
+            self.hors_domaine_consecutifs.store(0, std::sync::atomic::Ordering::Relaxed);
+        }
         v
     }
 }
@@ -1405,6 +1432,28 @@ mod tests {
         let g = Garde::new(Mode::Standard);
         let v = g.juger(&cmd("cat", &["../backend.json"]), &ctx_dans(dossier.path()));
         assert_eq!(v.decision, Decision::Refuse, "{}", v.motif);
+    }
+
+    /// **Au deuxième refus de la même intention, le motif ferme la porte aux
+    /// variantes** — et une commande accordée entre deux rouvre un premier
+    /// écart. Comptée par intention (la sortie du domaine), pas par ligne.
+    #[test]
+    fn au_deuxieme_refus_le_motif_ferme_la_porte_aux_variantes() {
+        let dossier = tempfile::tempdir().unwrap();
+        std::fs::write(dossier.path().join("x.rs"), "ok").unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(dossier.path());
+        let ligne = "ne s'accorde pas";
+
+        let v1 = g.juger(&cmd("cat", &["../a"]), &ctx);
+        assert!(!v1.motif.contains(ligne), "premier écart : pas encore la ligne : {}", v1.motif);
+        let v2 = g.juger(&cmd("ls", &["/"]), &ctx);
+        assert!(v2.motif.contains(ligne), "deuxième, autre formulation, même intention : {}", v2.motif);
+
+        // Un accord remet le compte à zéro.
+        assert_eq!(g.juger(&cmd("cat", &["x.rs"]), &ctx).decision, Decision::Autorise);
+        let v3 = g.juger(&cmd("cat", &["../b"]), &ctx);
+        assert!(!v3.motif.contains(ligne), "après un accord, premier écart à nouveau : {}", v3.motif);
     }
 
     /// Un oui explicite de l'humain prime : il a vu la commande, domaine
