@@ -13,12 +13,19 @@
 // de reprise passe. La revérification à l'ouverture ne le protège pas ; il faut
 // une époque écrite dans le fichier (marche suivante).
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <string>
 
 #include "api_test/private_api_test.h"
+#include "common/checksum.h"
 #include "common/exception/runtime.h"
+#include "common/string_format.h"
+#include "storage/storage_utils.h"
 #include "flaky_checkpointer.h"
 #include "gmock/gmock.h"
 #include "storage/checkpointer.h"
@@ -333,5 +340,65 @@ TEST_F(ReadOnlyOpenTest, CheckpointInItsStoragePhaseIsRefusedNotMisread) {
         } else {
             EXPECT_THAT(reader.error, HasSubstr(WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN));
         }
+    }
+}
+
+// Une mesure, pas un test : ce que coûte la revérification quand le journal est
+// gros. Désactivée (50 s) ; elle se lance par
+//   transaction_test --gtest_also_run_disabled_tests --gtest_filter='*MeasureCost*'
+// Elle fait grossir le journal par paliers de 16 Mo et imprime, à chaque palier,
+// la durée d'une ouverture en lecture seule et, à part, celle des trois passes de
+// somme de contrôle qu'une telle ouverture fait sur le journal. Mesuré le
+// 3 octobre 2026 : 0,35 ms par Mo, 6 à 7 % de l'ouverture de 16 à 262 Mo.
+TEST_F(ReadOnlyOpenTest, DISABLED_MeasureCostOfRevalidationOnABigJournal) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    using clock = std::chrono::steady_clock;
+    const auto ms = [](clock::duration d) {
+        return std::chrono::duration_cast<std::chrono::microseconds>(d).count() / 1000.0;
+    };
+    systemConfig->bufferPoolSize = 4ull * 1024 * 1024 * 1024;
+    createDBAndConn();
+    run("CALL force_checkpoint_on_close=false");
+    run("CALL auto_checkpoint=false");
+    run("CREATE NODE TABLE big(id INT64 PRIMARY KEY, payload STRING)");
+    const auto walPath = StorageUtils::getWALFilePath(databasePath);
+    for (auto batch = 0; batch < 16; batch++) {
+        run(stringFormat("UNWIND range({}, {}) AS i CREATE (:big {id: i, payload: "
+                         "repeat(cast(i + 100000 AS STRING), 100)})",
+            batch * 25000, batch * 25000 + 24999));
+        const auto size = std::filesystem::file_size(walPath);
+        // trois ouvertures, on garde la plus courte
+        double best = 1e18;
+        for (auto i = 0; i < 3; i++) {
+            const auto start = clock::now();
+            openReader();
+            best = std::min(best, ms(clock::now() - start));
+            ASSERT_TRUE(reader.opened()) << reader.error;
+            reader.conn.reset();
+            reader.db.reset();
+        }
+        // les trois passes de somme de contrôle que fait une ouverture, seules
+        double bestChecksum = 1e18;
+        for (auto i = 0; i < 3; i++) {
+            const auto start = clock::now();
+            for (auto pass = 0; pass < 3; pass++) {
+                std::ifstream in(walPath, std::ios::binary);
+                std::vector<uint8_t> buffer(1 << 20);
+                uint64_t result = 0;
+                while (in.read(reinterpret_cast<char*>(buffer.data()), buffer.size()) ||
+                       in.gcount() > 0) {
+                    result = result * 1099511628211ull +
+                             checksum(buffer.data(), static_cast<size_t>(in.gcount()));
+                }
+                EXPECT_NE(result, 1u);
+            }
+            bestChecksum = std::min(bestChecksum, ms(clock::now() - start));
+        }
+        std::cout << stringFormat("  journal {} Mo : ouverture {} ms, dont 3 passes de somme {} ms",
+                         std::to_string(size / (1024.0 * 1024.0)), std::to_string(best),
+                         std::to_string(bestChecksum))
+                  << std::endl;
     }
 }
