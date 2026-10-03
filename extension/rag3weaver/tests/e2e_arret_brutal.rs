@@ -801,53 +801,32 @@ fn une_mort_apres_insertion_vectorielle() {
     let verdict = relire(&dossier, cas, 6);
     println!("▸ verdict : {verdict:?}");
 
-    // **Ce que la garde 1 promet**, et rien de plus : la base s'ouvre, la table
-    // a ses six lignes, et l'index se **déclare** en retard au lieu de planter.
-    //
-    // L'index juste sans rien rebâtir est l'attendu de la garde 2 : il n'est
-    // pas écrit ici, parce que sa cause vient d'être reformulée et qu'un
-    // attendu écrit pour un remède qu'on ne connaît pas encore est un attendu
-    // qu'il faudra réécrire.
+    // **Depuis la garde 2 du moteur (4 octobre 2026), l'attendu de ce cas est
+    // l'index juste d'emblée** : chaque extension chargée est notée à côté de
+    // la base (`<base>.extensions`), la reprise la charge avant de rejouer le
+    // journal, et l'index suit la table sans rien rebâtir. Branche inversée
+    // par la session cœur C++ dans le commit de la garde 2, avec l'accord de
+    // la session mémoire. La réparation d'ouverture (index détaché puis rebâti,
+    // la garde 1) ne joue plus ici ; son témoin est le cas où la reprise n'a
+    // pas l'extension — `<base>.extensions` supprimé avant la réouverture —,
+    // à écrire par la session mémoire.
     match verdict {
-        // **Le seul vert qui prouve quelque chose.** L'index était détaché —
-        // la recherche vectorielle refusait par « is behind its table » avant
-        // le montage — et il rend des lignes après. Mesuré le 4 octobre 2026,
-        // les deux pôles dans la même exécution.
-        Verdict::OuvreIndexRebati { lignes } => {
+        Verdict::OuvreEtJuste { lignes } => {
             assert_eq!(lignes, 6, "les six lignes doivent être là");
         }
-        // **Pas un succès : le témoin n'a pas atteint son état.** La base
-        // s'ouvre et les lignes sont là, mais l'index n'était pas détaché,
-        // donc rien de la réparation n'a été éprouvé. Taire ce cas, c'est
-        // rendre un vert qui parle d'autre chose que de la question posée —
-        // ce qui est précisément arrivé la veille.
+        // L'index a dû être rebâti : la reprise n'avait pas l'extension. La
+        // garde 2 n'a pas joué — la liste n'a pas été écrite, ou pas relue.
         //
-        // **Et ce rouge deviendra l'attendu**, le jour où la garde 2 du cœur
-        // C++ arrivera (le rejeu charge l'extension avant de rejouer) : l'index
-        // sera juste dès la réouverture, sans rien rebâtir. Annoncé par la
-        // session cœur C++ le 4 octobre 2026.
-        //
-        // **Mais ce ne sera pas une simple inversion**, et c'est le piège à
-        // éviter ce jour-là. La garde 2 ne peut que demander au rejeu de
-        // charger ce qui est noté : si le chargement échoue — un déploiement
-        // qui oublie le fichier d'extension, un chemin qui bouge, une version
-        // qui ne se charge plus —, le rejeu continue sans elle et c'est la
-        // garde 1 qui joue. Donc l'attendu devient **l'un ou l'autre selon que
-        // l'extension se charge**, et ce témoin-ci devra être joué en deux
-        // variantes : fichier d'extension en place (sain d'emblée) et fichier
-        // déplacé avant la réouverture (détaché puis rebâti).
-        //
-        // Ce cas-là n'est pas écrit aujourd'hui, exprès : un attendu écrit pour
-        // un remède qu'on n'a pas vu est un attendu qu'il faudra réécrire. Ce
-        // qui est écrit, c'est qu'il **manque**.
-        Verdict::OuvreEtJuste { lignes } => panic!(
-            "le témoin n'a pas atteint l'état qu'il éprouve : l'index n'était pas détaché \
-             ({lignes} lignes, base ouverte, recherche vectorielle déjà saine avant le \
-             montage). La réparation n'est donc **pas** mesurée par cette exécution. \
-             Vérifier que le journal a bien été replié avant la mort (le `CHECKPOINT` du \
-             scénario « insertion »). SI LA GARDE 2 DU CŒUR C++ EST ARRIVÉE, ce n'est \
-             pas un échec : l'attendu de ce cas devient `OuvreEtJuste`, et c'est cette \
-             branche qu'il faut inverser.\ndossier conservé : {}",
+        // La garde 2 ne peut que demander au rejeu de charger ce qui est noté :
+        // si le chargement échoue — un déploiement qui oublie le fichier
+        // d'extension, un chemin qui bouge, `<base>.extensions` perdu —, le
+        // rejeu continue sans elle et c'est la garde 1 qui joue (index détaché
+        // puis rebâti). Cette seconde variante **manque** ici ; elle est à
+        // écrire par la session mémoire (note d'origine du 4 octobre 2026).
+        Verdict::OuvreIndexRebati { lignes } => panic!(
+            "la garde 2 du moteur n'a pas joué : l'index était détaché et a été rebâti \
+             ({lignes} lignes) alors que la reprise devait charger l'extension notée dans \
+             `<base>.extensions` et le tenir à jour.\ndossier conservé : {}",
             dossier.display()
         ),
         // L'index est resté détaché après le montage : la réparation
@@ -860,7 +839,7 @@ fn une_mort_apres_insertion_vectorielle() {
             dossier.display()
         ),
         autre => panic!(
-            "attendu : une base qui s'ouvre, six lignes, et un index détaché puis rebâti ; \
+            "attendu : une base qui s'ouvre, six lignes, et un index juste d'emblée ; \
              reçu : {autre:?}\ndossier conservé pour examen : {}",
             dossier.display()
         ),

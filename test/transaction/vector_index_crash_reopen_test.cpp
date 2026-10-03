@@ -3,6 +3,12 @@
 // multi-écrivains. Trouvé par le banc de concurrence le 3 octobre 2026 : la base ne
 // s'ouvrait plus (SIGSEGV dans NodeTable::initInsertState, au rejeu du journal).
 //
+// Deux gardes. La seconde : chaque extension chargée est notée dans un fichier à côté de la
+// base, que la reprise relit avant de rejouer ; l'index est alors tenu à jour par le rejeu et
+// reste juste. La première, quand la seconde ne peut pas jouer (le fichier de liste perdu,
+// le fichier de l'extension disparu) : la base s'ouvre quand même, la table a ses lignes, et
+// l'index se dit en retard jusqu'à ce qu'on le retire et le rebâtisse.
+//
 // Deux précautions, sans lesquelles ces tests seraient verts pour rien :
 //   - le processus meurt base ouverte (SIGKILL), sans destructeur ni point de reprise ;
 //   - la base se rouvre dans un processus neuf (exec de ce même binaire), parce qu'un
@@ -181,6 +187,7 @@ protected:
             GTEST_SKIP() << "needs an on-disk database";
         }
         systemConfig->maxDBSize = 1024ull * 1024 * 1024 * 1024;
+        sessionExtension = extension;
     }
 
     static void must(rag3db::main::Connection& connection, const std::string& query) {
@@ -203,7 +210,7 @@ protected:
                 auto database =
                     std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
                 rag3db::main::Connection connection(database.get());
-                must(connection, "LOAD EXTENSION '" + extension + "';");
+                must(connection, "LOAD EXTENSION '" + sessionExtension + "';");
                 must(connection, "CALL auto_checkpoint=false;");
                 for (const auto& statement : statements) {
                     must(connection, statement);
@@ -222,6 +229,24 @@ protected:
         } else {
             ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0) << "status " << status;
         }
+    }
+
+    // Le fichier d'où les sessions chargent l'extension. Par défaut celui du dépôt ; une
+    // copie quand le cas veut le faire disparaître avant la réouverture.
+    std::string sessionExtension;
+
+    void sessionsLoadACopyOfTheExtension() {
+        sessionExtension = databasePath + ".copie-de-l-extension";
+        std::filesystem::copy_file(extension, sessionExtension,
+            std::filesystem::copy_options::overwrite_existing);
+    }
+    void theCopyOfTheExtensionDisappears() { std::filesystem::remove(sessionExtension); }
+    void theListOfExtensionsDisappears() {
+        std::filesystem::remove(rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath));
+    }
+    bool theListOfExtensionsIsThere() const {
+        return std::filesystem::exists(
+            rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath));
     }
 
     static std::string vectorOf(int64_t id) {
@@ -278,19 +303,21 @@ protected:
     }
 };
 
+// ---- La seconde garde : l'extension est notée à côté de la base, la reprise la charge. ----
+
 // L'index est créé par la session qui meurt : c'est la première indexation d'un dépôt. La
 // création de l'index écrit un point de reprise ; le journal ne porte donc plus le chargement
-// de l'extension, seulement l'insertion. La base s'ouvre, la ligne est là, et l'index se dit
-// en retard jusqu'à ce qu'on le rebâtisse.
+// de l'extension, seulement l'insertion. La reprise trouve l'extension dans la liste, la
+// charge, et l'index suit la table.
 TEST_F(VectorIndexCrashReopenTest, IndexCreatedByTheSessionThatDies) {
     session({createTable, fill, createIndex, insertDoc(600)}, true);
     ASSERT_TRUE(journalIsThere());
-    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+    ASSERT_TRUE(theListOfExtensionsIsThere());
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_INTACT);
 }
 
-// L'index vient d'une session d'avant ; la session qui meurt n'a fait que charger l'extension
-// et insérer. Son journal porte encore le chargement de l'extension : le rejeu la charge,
-// tient l'index à jour, et rien n'est à rebâtir.
+// Le journal porte encore le chargement de l'extension (aucun point de reprise depuis) : le
+// rejeu la charge de lui-même.
 TEST_F(VectorIndexCrashReopenTest, TheJournalStillLoadsTheExtension) {
     indexedBaseFromAnEarlierSession();
     session({insertDoc(600)}, true);
@@ -298,13 +325,13 @@ TEST_F(VectorIndexCrashReopenTest, TheJournalStillLoadsTheExtension) {
     EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_INTACT);
 }
 
-// La même, mais un point de reprise a eu lieu dans la session qui meurt, avant l'écriture :
-// le journal ne porte plus le chargement de l'extension. C'est le cas qui dit la condition.
+// Un point de reprise dans la session qui meurt, avant l'écriture : le journal ne porte plus
+// le chargement de l'extension. C'est le cas qui disait la condition du défaut.
 TEST_F(VectorIndexCrashReopenTest, AnInsertAfterACheckpointInTheDyingSession) {
     indexedBaseFromAnEarlierSession();
     session({"CHECKPOINT;", insertDoc(600)}, true);
     ASSERT_TRUE(journalIsThere());
-    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_INTACT);
 }
 
 TEST_F(VectorIndexCrashReopenTest, ADeleteAfterACheckpointInTheDyingSession) {
@@ -312,24 +339,84 @@ TEST_F(VectorIndexCrashReopenTest, ADeleteAfterACheckpointInTheDyingSession) {
     session({"CHECKPOINT;", "MATCH (d:Doc {id: 7}) DELETE d;"}, true);
     ASSERT_TRUE(journalIsThere());
     // La ligne 7 n'est plus là : chercher son vecteur rend une autre ligne.
-    EXPECT_EQ(openInAFreshProcess(499, vectorOf(7), -7), INDEX_REBUILT);
+    EXPECT_EQ(openInAFreshProcess(499, vectorOf(7), -7), INDEX_INTACT);
 }
 
 TEST_F(VectorIndexCrashReopenTest, AVectorUpdateAfterACheckpointInTheDyingSession) {
     indexedBaseFromAnEarlierSession();
     session({"CHECKPOINT;", "MATCH (d:Doc {id: 7}) SET d.vec = " + updatedVector + ";"}, true);
     ASSERT_TRUE(journalIsThere());
+    EXPECT_EQ(openInAFreshProcess(500, updatedVector, 7), INDEX_INTACT);
+}
+
+// Une seconde mort après la première réouverture : l'index suit toujours.
+TEST_F(VectorIndexCrashReopenTest, ASecondDeathAfterTheFirstRecovery) {
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", insertDoc(600)}, true);
+    ASSERT_TRUE(journalIsThere());
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600, true), OPENED);
+    session({"CHECKPOINT;", insertDoc(601)}, true);
+    ASSERT_TRUE(journalIsThere());
+    EXPECT_EQ(openInAFreshProcess(502, vectorOf(601), 601), INDEX_INTACT);
+}
+
+// ---- La première garde : quand la reprise n'a pas l'extension. ----
+
+// La liste a été perdue (une base copiée sans elle) : la base s'ouvre, la ligne est là, et
+// l'index se dit en retard jusqu'à ce qu'on le rebâtisse.
+TEST_F(VectorIndexCrashReopenTest, WithoutTheListAnInsertLeavesTheIndexToRebuild) {
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", insertDoc(600)}, true);
+    ASSERT_TRUE(journalIsThere());
+    theListOfExtensionsDisappears();
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+}
+
+TEST_F(VectorIndexCrashReopenTest, WithoutTheListADeleteLeavesTheIndexToRebuild) {
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", "MATCH (d:Doc {id: 7}) DELETE d;"}, true);
+    ASSERT_TRUE(journalIsThere());
+    theListOfExtensionsDisappears();
+    EXPECT_EQ(openInAFreshProcess(499, vectorOf(7), -7), INDEX_REBUILT);
+}
+
+TEST_F(VectorIndexCrashReopenTest, WithoutTheListAVectorUpdateLeavesTheIndexToRebuild) {
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", "MATCH (d:Doc {id: 7}) SET d.vec = " + updatedVector + ";"}, true);
+    ASSERT_TRUE(journalIsThere());
+    theListOfExtensionsDisappears();
     EXPECT_EQ(openInAFreshProcess(500, updatedVector, 7), INDEX_REBUILT);
 }
 
-// Deux ouvertures par des processus qui meurent sans fermer, puis une seconde session qui
-// écrit encore et meurt à son tour. La reprise écrit elle-même un point de reprise à la fin
-// du rejeu : dès la première ouverture c'est la base, et non plus le journal, qui dit que
-// l'index est à rebâtir. L'index rebâti porte les deux écritures.
+// Le fichier de l'extension a disparu (un déploiement qui l'oublie, un chemin qui bouge) : la
+// liste le désigne encore, la reprise ne peut pas le charger. Elle continue sans lui.
+TEST_F(VectorIndexCrashReopenTest, TheNotedExtensionFileIsGone) {
+    sessionsLoadACopyOfTheExtension();
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", insertDoc(600)}, true);
+    ASSERT_TRUE(journalIsThere());
+    theCopyOfTheExtensionDisappears();
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+}
+
+// Le même, quand c'est le journal qui porte encore le chargement de l'extension : avant, le
+// rejeu relançait l'erreur de chargement et la base ne s'ouvrait pas du tout.
+TEST_F(VectorIndexCrashReopenTest, TheExtensionFileNamedByTheJournalIsGone) {
+    sessionsLoadACopyOfTheExtension();
+    indexedBaseFromAnEarlierSession();
+    session({insertDoc(600)}, true);
+    ASSERT_TRUE(journalIsThere());
+    theCopyOfTheExtensionDisappears();
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+}
+
+// L'état « en retard » tient à deux réouvertures par des processus qui meurent sans fermer,
+// à une seconde mort après une nouvelle écriture, et à un point de reprise par-dessus.
 TEST_F(VectorIndexCrashReopenTest, TheLateStateSurvivesReopeningsAndASecondDeath) {
     indexedBaseFromAnEarlierSession();
     session({"CHECKPOINT;", insertDoc(600)}, true);
     ASSERT_TRUE(journalIsThere());
+    theListOfExtensionsDisappears();
     EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600, true), OPENED);
     EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600, true), OPENED);
     session({insertDoc(601)}, true);
@@ -337,8 +424,18 @@ TEST_F(VectorIndexCrashReopenTest, TheLateStateSurvivesReopeningsAndASecondDeath
     EXPECT_EQ(openInAFreshProcess(502, vectorOf(601), 601), INDEX_REBUILT);
 }
 
-// Le rejeu d'une mise à jour ou d'une suppression doit atteindre un index chargé : le journal
-// porte encore le chargement de l'extension, et l'index doit suivre la table.
+TEST_F(VectorIndexCrashReopenTest, TheLateStateSurvivesACheckpoint) {
+    indexedBaseFromAnEarlierSession();
+    session({"CHECKPOINT;", insertDoc(600)}, true);
+    ASSERT_TRUE(journalIsThere());
+    theListOfExtensionsDisappears();
+    // Une ouverture sans l'extension, fermée proprement : le journal est rejoué, un point de
+    // reprise passe par-dessus, seule la base dit encore que l'index est à rebâtir.
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600, true), OPENED);
+    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+}
+
+// Le rejeu d'une mise à jour ou d'une suppression atteint un index chargé.
 TEST_F(VectorIndexCrashReopenTest, AReplayedVectorUpdateReachesALoadedIndex) {
     indexedBaseFromAnEarlierSession();
     session({"MATCH (d:Doc {id: 7}) SET d.vec = " + updatedVector + ";"}, true);
@@ -351,16 +448,6 @@ TEST_F(VectorIndexCrashReopenTest, AReplayedDeleteReachesALoadedIndex) {
     session({"MATCH (d:Doc {id: 7}) DELETE d;"}, true);
     ASSERT_TRUE(journalIsThere());
     EXPECT_EQ(openInAFreshProcess(499, vectorOf(7), -7), INDEX_INTACT);
-}
-
-// Et après un point de reprise par-dessus l'état « en retard » (une session qui s'ouvre et se
-// ferme proprement) : le journal est vide, seule la base dit encore que l'index est à rebâtir.
-TEST_F(VectorIndexCrashReopenTest, TheLateStateSurvivesACheckpoint) {
-    indexedBaseFromAnEarlierSession();
-    session({"CHECKPOINT;", insertDoc(600)}, true);
-    ASSERT_TRUE(journalIsThere());
-    session({"CHECKPOINT;"}, false);
-    EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
 }
 
 // Hors de tout rejeu : un processus qui ouvre la base sans charger l'extension et écrit dans

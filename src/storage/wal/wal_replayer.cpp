@@ -290,6 +290,11 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // The data file is read: before replaying the journal on top of it, make sure it is
             // still the one the journal belongs to.
             verifyNoCheckpointCrossed();
+            // Il y a un journal à rejouer : il lui faut les extensions dont viennent les
+            // index des tables où il écrit, et il ne les porte plus si un point de reprise
+            // est passé depuis leur chargement.
+            extension::ExtensionManager::Get(clientContext)
+                ->loadExtensionsNotedBesideTheDatabase(&clientContext);
             runReadOnlyOpenHook(ReadOnlyOpenPhase::DATA_FILE_READ);
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer = initDeserializer(*fileInfo, clientContext, enableChecksums);
@@ -658,6 +663,10 @@ void WALReplayer::replayNodeDeletionRecord(const WALRecord& walRecord) const {
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
     table.delete_(transaction::Transaction::Get(clientContext), *deleteState);
+    // Ce que l'exécuteur fait en fin de suppression, et que le rejeu oubliait : laisser les
+    // index réparer ce que la ligne retirée reliait. Sans cela un index chargé au rejeu
+    // perdait des lignes après une suppression rejouée.
+    table.finalizeDelete(transaction::Transaction::Get(clientContext), *deleteState);
 }
 
 void WALReplayer::replayNodeUpdateRecord(const WALRecord& walRecord) const {
@@ -745,8 +754,11 @@ void WALReplayer::replayUpdateSequenceRecord(const WALRecord& walRecord) const {
 
 void WALReplayer::replayLoadExtensionRecord(const WALRecord& walRecord) const {
     const auto& loadExtensionRecord = walRecord.constCast<LoadExtensionRecord>();
+    // Une extension dont le fichier a disparu n'empêche pas d'ouvrir la base : la reprise
+    // continue sans elle, et un index qu'elle n'a pas pu tenir à jour se déclare à rebâtir.
     extension::ExtensionManager::Get(clientContext)
-        ->loadExtension(loadExtensionRecord.path, &clientContext);
+        ->loadExtensionForRecovery("" /* nom inconnu du journal */, loadExtensionRecord.path,
+            &clientContext);
 }
 
 void WALReplayer::removeWALAndShadowFiles() const {

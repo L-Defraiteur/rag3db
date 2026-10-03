@@ -6,6 +6,7 @@
 #include "common/exception/binder.h"
 #include "common/exception/runtime.h"
 #include "common/types/types.h"
+#include "extension/extension_manager.h"
 #include "simsimd.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -30,10 +31,20 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
                           ->getTable(tableEntry->getTableID())
                           ->cast<storage::NodeTable>();
     if (!nodeTable.getIndexHolder(indexName).has_value()) {
+        // Si la reprise a essayé de charger une extension et n'y est pas arrivée, c'est ici
+        // que l'appelant l'apprend : un avertissement que personne ne lirait ne servirait à
+        // rien.
+        std::string why;
+        for (const auto& failure :
+            extension::ExtensionManager::Get(context)->getRecoveryLoadFailures()) {
+            why += common::stringFormat(" At recovery, extension {}could not be loaded from {}: {}.",
+                failure.name.empty() ? std::string() : failure.name + " ", failure.path,
+                failure.error);
+        }
         throw common::RuntimeException{common::stringFormat(
             "Index {} {} {}: rows were recovered from the journal while its extension was not "
-            "loaded. Drop it and build it again.",
-            indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableEntry->getName())};
+            "loaded. Drop it and build it again.{}",
+            indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableEntry->getName(), why)};
     }
 }
 

@@ -69,6 +69,11 @@ public:
     static std::string getWALFilePath(const std::string& path) {
         return common::stringFormat("{}.{}", path, common::StorageConstants::WAL_FILE_SUFFIX);
     }
+    // La liste des extensions chargées, posée à côté de la base comme le journal l'est : voir
+    // ExtensionManager::loadExtensionsNotedBesideTheDatabase.
+    static std::string getExtensionsFilePath(const std::string& path) {
+        return common::stringFormat("{}.extensions", path);
+    }
     static std::string getShadowFilePath(const std::string& path) {
         return common::stringFormat("{}.{}", path, common::StorageConstants::SHADOWING_SUFFIX);
     }

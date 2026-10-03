@@ -650,8 +650,8 @@ TEST_F(SingleWriterCrash, DeathDuringDeletesOfAnIndexFromAnEarlierSessionKeepsTh
 //   session cœur C++), DROP puis CREATE le rebâtissent ; vrai aussi pour la mise à jour
 //   d'un vecteur ;
 // - garde 2, plus tard : l'index est juste dès la réouverture, sans rebâtir. Quand elle
-//   arrivera, les témoins de la garde 1 (IndexToRebuildIsNamed) deviendront rouges : la
-//   garde 2 les retirera dans son commit.
+//   est arrivée (4 octobre), les témoins de la garde 1 (IndexToRebuildIsNamed) ont reçu la
+//   condition qui la fait encore jouer : la liste des extensions perdue.
 enum class IndexedWrite { Insert, Delete, UpdateVector };
 
 std::string indexedWriteName(IndexedWrite write) {
@@ -781,6 +781,10 @@ TEST_P(ExtensionIndexRecovery, OpensWithEveryCommittedRow) {
 TEST_P(ExtensionIndexRecovery, IndexToRebuildIsNamed) {
     createIndexInAnEarlierSession();
     dieAfterWriting(GetParam(), 0);
+    // Depuis la garde 2, la reprise charge l'extension notée à côté de la base et l'index
+    // reste juste. La garde 1 ne joue plus que si la reprise n'a pas l'extension : ici, la
+    // liste a été perdue (session cœur C++, 4 octobre).
+    std::filesystem::remove(rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath));
     if (!reopenAfterDeath()) {
         return;
     }

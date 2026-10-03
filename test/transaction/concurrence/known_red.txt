@@ -125,24 +125,15 @@ IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError wa
 IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks-exists,both-commit,in-turn,no-error
 #
 # MARCHE « REPRISE AVEC INDEX D'EXTENSION » — mode en service, un seul écrivain ; à part des
-# verrous. Le journal ne porte plus le LOAD EXTENSION (un point de reprise après le
-# chargement de l'extension, ou la création d'un index, qui en écrit un), puis une écriture
-# dans la table indexée, puis la mort. Vu par une ouverture dans un processus neuf, comme un
-# service qui redémarre (3 octobre au soir).
-# GARDE 1, LIVRÉE : la base s'ouvre avec toutes ses lignes (elle faisait planter le processus
-# qui l'ouvrait, SIGSEGV dans NodeTable::initInsertState au rejeu), et l'index « à rebâtir »
-# le dit par une erreur nommée (fragment « is behind its table »,
-# HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE). Ses témoins sont verts et ont quitté cette liste.
-# GARDE 2, À FAIRE : l'index est juste sans rebâtir. Ses témoins sont rouges parce que la
-# recherche refuse par le nom de la garde 1 (search-works ; « untagged » pour les deux cas
-# qui échouent sur une requête sans étiquette). Quand la garde 2 arrivera, les témoins
-# IndexToRebuildIsNamed deviendront rouges pour une autre raison : elle les retirera dans son
-# commit.
-SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery untagged
-SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact untagged
-Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert search-works,untagged
-Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete search-works,untagged
-Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/UpdateVector index-knows-new-vectors,search-works,untagged
+# verrous. LIVRÉE (4 octobre), ses témoins sont verts et ont quitté cette liste.
+# Garde 2 : chaque extension chargée est notée à côté de la base (<base>.extensions) ; la
+# reprise la charge avant de rejouer, et l'index reste juste sans rebâtir — insertion,
+# suppression, mise à jour d'un vecteur. Le rejeu d'une suppression fait aussi l'étape de
+# réparation de l'index qu'il oubliait.
+# Garde 1 : quand la reprise n'a pas l'extension (la liste perdue, le fichier disparu), la
+# base s'ouvre avec toutes ses lignes et l'index « à rebâtir » le dit par une erreur nommée
+# (fragment « is behind its table »). Ses témoins IndexToRebuildIsNamed retirent la liste
+# avant de rouvrir.
 #
 # Marche « mise à jour de l'index : contrôle en fin d'instruction » (index vectoriel juste
 # en service, hors des verrous ; vector_index_update_test.cpp). Un seul écrivain, ni arrêt ni
