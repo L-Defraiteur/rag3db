@@ -1,0 +1,11 @@
+# Les cas du banc dont le rouge dépend de l'ordonnancement : lancés et rapportés sous
+# le label concurrence-probabiliste, jamais comparés par concurrence_test.known_red
+# (ni dans un sens ni dans l'autre). Un test qui rougit une fois sur deux ne doit
+# jamais se lire comme un vert : son vert ne prouve rien, son rouge est un vrai rouge.
+#
+# C7 — mélange aléatoire, cinq manches (3 octobre, 20 passes) : rouge 18/20 à chaud,
+# 19/20 après réouverture, 15/20 après arrêt brutal ; violations vues : clés en double
+# et relations pendantes.
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Hot
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash

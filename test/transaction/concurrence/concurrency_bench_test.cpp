@@ -104,6 +104,8 @@ struct BenchCase {
     bool runsInProcesses = false;
     bool onlyInProcesses = false;
     bool autoCheckpoint = false;
+    // Au-delà, le moteur est tenu pour bloqué et le cas est rouge (voir launch).
+    std::chrono::milliseconds guard = DEFAULT_GUARD;
 };
 
 class ConcurrencyBench : public EmptyDBTest, public ::testing::WithParamInterface<BenchParam> {
@@ -185,19 +187,20 @@ public:
         EXPECT_TRUE(violations.empty()) << "integrity violations, see the raw report";
         EXPECT_EQ(totalRefusals(area, Refusal::Unexpected), 0u) << "an unexpected error";
         EXPECT_EQ(area.barrierTimedOut.load(), 0u) << "a writer never reached the barrier";
+        EXPECT_EQ(area.guardExpired.load(), 0u) << "the engine blocked a writer past the guard";
         benchCase.expect(*this, area);
     }
 
 private:
     void launchHere(LaunchMode launcher, const BenchCase& benchCase, SharedArea& area) {
         if (launcher == LaunchMode::Thread) {
-            launch(launcher, Opener{database.get()}, area, benchCase.scenario);
+            launch(launcher, Opener{database.get()}, area, benchCase.scenario, benchCase.guard);
         } else {
             // Les écrivains ouvrent eux-mêmes la base : le test doit l'avoir fermée.
             conn.reset();
             database.reset();
             EXPECT_TRUE(launch(launcher, Opener{nullptr, databasePath, *systemConfig}, area,
-                benchCase.scenario))
+                benchCase.scenario, benchCase.guard))
                 << "a writer process did not exit normally";
             createDBAndConn();
         }
@@ -206,6 +209,8 @@ private:
 
     std::vector<integrity::Violation> verify(const std::string& moment) {
         auto violations = integrity::checkLevel1(*conn);
+        const auto level2 = integrity::checkLevel2(*conn);
+        violations.insert(violations.end(), level2.begin(), level2.end());
         std::cerr << "  -- integrity " << moment << ":\n" << integrity::describe(violations);
         return violations;
     }
@@ -248,7 +253,8 @@ private:
                 if (benchCase.autoCheckpoint) {
                     childConnection.query("CALL auto_checkpoint=true;");
                 }
-                launch(LaunchMode::Thread, Opener{&childDatabase}, area, benchCase.scenario);
+                launch(LaunchMode::Thread, Opener{&childDatabase}, area, benchCase.scenario,
+                    benchCase.guard);
                 for (const auto& line : integrity::canonicalDump(childConnection)) {
                     out << line << "\n";
                 }
@@ -567,17 +573,29 @@ TEST_P(ConcurrencyBench, C6_UpdateCommitsFirst) {
 // C7 — mélange aléatoire sur un petit domaine de clés : créations (doublons
 // possibles), suppressions DETACH, relations, mises à jour, une transaction sur huit
 // annulée volontairement. Invariant : tout le vérificateur. Le filet des marches
-// suivantes ; rouge tant que C1 ou C2 l'est, mais seulement probable : il dépend de
-// l'ordonnancement.
+// suivantes.
+// Pourquoi cinq manches : à l'étape 2, une seule manche a été vue verte puis rouge sur
+// la même graine — l'ordonnancement décide. Un test qui rougit une fois sur deux ne
+// doit jamais se lire comme un vert. Le cas joue donc cinq manches, chacune sur ses
+// propres tables (Item0/Link0 … Item4/Link4), et il est rouge si une seule viole un
+// invariant. Mesuré le 3 octobre sur vingt passes : rouge 18/20 à chaud, 19/20 après
+// réouverture, 15/20 après arrêt brutal. Pas unanime : il porte le label
+// concurrence-probabiliste (probabilistic.txt) et n'est pas comparé ; son rouge est un
+// vrai rouge, son vert ne prouve rien.
 TEST_P(ConcurrencyBench, C7_RandomMix) {
     static constexpr int64_t numKeys = 12;
+    static constexpr uint32_t numRounds = 5;
     const auto iterations = benchIterations(150);
     runCase({.numWorkers = 4,
         .setup =
             [](ConcurrencyBench& bench) {
-                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
-                bench.mustRun(
-                    "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+                for (auto round = 0u; round < numRounds; ++round) {
+                    bench.mustRun(stringFormat(
+                        "CREATE NODE TABLE Item{}(id INT64 PRIMARY KEY, writer INT64);", round));
+                    bench.mustRun(stringFormat("CREATE REL TABLE Link{}(FROM Item{} TO Item{}, "
+                                               "src_id INT64, dst_id INT64);",
+                        round, round, round));
+                }
             },
         .scenario =
             [iterations](Worker& worker) {
@@ -585,36 +603,41 @@ TEST_P(ConcurrencyBench, C7_RandomMix) {
                 std::uniform_int_distribution<int64_t> key(0, numKeys - 1);
                 std::uniform_int_distribution<int> operation(0, 3);
                 std::uniform_int_distribution<int> numOperations(1, 3);
-                for (auto i = 0u; i < iterations; ++i) {
-                    worker.begin();
-                    for (auto n = numOperations(random); n > 0; --n) {
-                        const auto k = key(random);
-                        switch (operation(random)) {
-                        case 0:
-                            worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});", k,
-                                worker.index()));
-                            break;
-                        case 1:
-                            worker.run(stringFormat("MATCH (n:Item {id: {}}) DETACH DELETE n;", k));
-                            break;
-                        case 2: {
-                            const auto other = key(random);
-                            worker.run(
-                                stringFormat("MATCH (a:Item {id: {}}), (b:Item {id: {}}) "
-                                             "CREATE (a)-[:Link {src_id: {}, dst_id: {}}]->(b);",
-                                    k, other, k, other));
-                        } break;
-                        default:
-                            worker.run(stringFormat("MATCH (n:Item {id: {}}) SET n.writer = {};", k,
-                                worker.index()));
-                            break;
+                for (auto round = 0u; round < numRounds; ++round) {
+                    for (auto i = 0u; i < iterations; ++i) {
+                        worker.begin();
+                        for (auto n = numOperations(random); n > 0; --n) {
+                            const auto k = key(random);
+                            switch (operation(random)) {
+                            case 0:
+                                worker.run(stringFormat("CREATE (:Item{} {id: {}, writer: {}});",
+                                    round, k, worker.index()));
+                                break;
+                            case 1:
+                                worker.run(stringFormat(
+                                    "MATCH (n:Item{} {id: {}}) DETACH DELETE n;", round, k));
+                                break;
+                            case 2: {
+                                const auto other = key(random);
+                                worker.run(stringFormat(
+                                    "MATCH (a:Item{} {id: {}}), (b:Item{} {id: {}}) "
+                                    "CREATE (a)-[:Link{} {src_id: {}, dst_id: {}}]->(b);",
+                                    round, k, round, other, round, k, other));
+                            } break;
+                            default:
+                                worker.run(
+                                    stringFormat("MATCH (n:Item{} {id: {}}) SET n.writer = {};",
+                                        round, k, worker.index()));
+                                break;
+                            }
+                        }
+                        if (random() % 8 == 0) {
+                            worker.rollback();
+                        } else {
+                            worker.commit();
                         }
                     }
-                    if (random() % 8 == 0) {
-                        worker.rollback();
-                    } else {
-                        worker.commit();
-                    }
+                    worker.sync();
                 }
             },
         .expect = [](ConcurrencyBench&, const SharedArea&) {}});
@@ -622,17 +645,20 @@ TEST_P(ConcurrencyBench, C7_RandomMix) {
 
 // C8 — point de reprise sous écrivains. Trois écrivains insèrent des clés disjointes,
 // chacune dans sa transaction, avec le point de reprise automatique allumé et un seuil
-// bas ; le quatrième lance CHECKPOINT en boucle jusqu'à ce qu'ils aient fini.
+// bas ; le quatrième lance au plus trois CHECKPOINT pendant qu'ils écrivent.
 // Invariant : chaque insertion acquittée est là, une fois et une seule ; les refus de
 // point de reprise sont lus (délai d'attente). Attendu vert pour l'intégrité.
-// Mesuré à l'étape 2 avec le délai du moteur (5 s) : 17 points de reprise sur 24
-// expirent, et chaque attente gèle les écrivains pendant 5 s (94 s pour ce cas). Le
-// délai se règle par TransactionManager::setCheckPointWaitTimeoutForTransactionsToLeave-
-// InMicros, privé (seul le runner de tests y a accès) : ce cas garde donc 5 s et dure
-// plusieurs minutes. Ce gel est le sujet de la marche A7.
+// Mesuré à l'étape 2, avec CHECKPOINT en boucle et 300 insertions par écrivain : 17
+// points de reprise sur 24 expirent au délai du moteur (5 s), et chaque attente gèle les
+// écrivains (94 à 189 s pour ce cas). Le délai se règle par TransactionManager::
+// setCheckPointWaitTimeoutForTransactionsToLeaveInMicros, privé : décision de
+// l'orchestration (3 octobre), le cas est borné à trois CHECKPOINT et 100 insertions,
+// et l'accès au délai sera demandé quand la marche A7, dont ce gel est le sujet,
+// s'ouvrira.
 TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
     static constexpr uint32_t numWriters = 3;
-    const auto iterations = benchIterations(300);
+    static constexpr uint32_t maxCheckpoints = 3;
+    const auto iterations = benchIterations(100);
     runCase({.numWorkers = numWriters + 1,
         .setup =
             [](ConcurrencyBench& bench) {
@@ -642,7 +668,9 @@ TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
         .scenario =
             [iterations](Worker& worker) {
                 if (worker.index() == numWriters) {
-                    while (worker.shared().flag.load() < numWriters) {
+                    for (auto attempt = 0u;
+                        attempt < maxCheckpoints && worker.shared().flag.load() < numWriters;
+                        ++attempt) {
                         worker.run("CHECKPOINT;");
                         std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     }

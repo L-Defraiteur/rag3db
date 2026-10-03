@@ -1,6 +1,8 @@
 # Lance tout le banc, puis compare l'ensemble des cas rouges à known_red.txt.
 # Échoue sur tout écart : un rouge nouveau, un rouge connu devenu vert, un rouge
-# connu sauté ou absent. Usage : cmake -DBENCH=… -DKNOWN_RED_FILE=… -DRESULT_FILE=… -P …
+# connu sauté ou absent. Les cas de probabilistic.txt sont ignorés, dans un sens
+# comme dans l'autre.
+# Usage : cmake -DBENCH=… -DKNOWN_RED_FILE=… -DPROBABILISTIC_FILE=… -DRESULT_FILE=… -P …
 
 file(REMOVE ${RESULT_FILE})
 execute_process(COMMAND ${BENCH} --gtest_output=json:${RESULT_FILE}
@@ -35,9 +37,10 @@ foreach (s RANGE ${last_suite})
 endforeach()
 
 file(STRINGS ${KNOWN_RED_FILE} known_red ENCODING UTF-8 REGEX "^[^#]")
+file(STRINGS ${PROBABILISTIC_FILE} probabilistic ENCODING UTF-8 REGEX "^[^#]")
 set(problems)
 foreach (name IN LISTS red)
-    if (NOT name IN_LIST known_red)
+    if (NOT name IN_LIST known_red AND NOT name IN_LIST probabilistic)
         list(APPEND problems "new red: ${name}")
     endif()
 endforeach()
