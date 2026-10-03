@@ -258,6 +258,12 @@ enum Verdict {
     /// S'ouvre, les lignes sont là, et **l'index se déclare en retard** —
     /// « is behind its table ». C'est ce que la garde 1 promet.
     OuvreIndexEnRetard { lignes: usize },
+    /// S'ouvre, et **l'index était détaché puis a été rebâti par le chemin du
+    /// produit** — la recherche vectorielle refusait avant le montage et rend
+    /// des lignes après. C'est le seul vert qui prouve la réparation ; un
+    /// [`Verdict::OuvreEtJuste`] sur ce cas-là veut dire que le témoin n'a pas
+    /// atteint l'état qu'il prétend éprouver.
+    OuvreIndexRebati { lignes: usize },
     /// Une erreur, nommée, rendue proprement.
     ErreurNommee(String),
     /// Le processus est mort — signal ou code non nul sans message.
@@ -276,10 +282,34 @@ fn relire(dossier: &Path, cas: &str, attendu: usize) -> Verdict {
         String::from_utf8_lossy(&sortie.stdout),
         String::from_utf8_lossy(&sortie.stderr)
     );
+    // **Ce que le relecteur a vu doit remonter.** Il imprime ses sondes dans un
+    // processus fils dont la sortie est capturée ici ; sans ce relais elles
+    // n'existent que dans une chaîne que personne ne lit — exactement le
+    // défaut qu'on a passé la soirée à nommer, « une information existe et
+    // rien ne la consulte ». La première passe avec les sondes ne m'a rien
+    // appris pour cette seule raison.
+    for l in texte.lines().filter(|l| {
+        [
+            "INDEX_VUS=",
+            "INDEX_CIBLE=",
+            "VECTEUR=",
+            "SONDE_CREATE=",
+            "CATALOGUE=",
+            "VECTEUR_APRES=",
+        ]
+            .iter()
+            .any(|p| l.starts_with(p))
+    }) {
+        println!("\u{25b8} [sonde] {l}");
+    }
+
     if let Some(l) = texte.lines().find(|l| l.starts_with("VERDICT=")) {
         let corps = l.trim_start_matches("VERDICT=");
         if let Some(reste) = corps.strip_prefix("JUSTE ") {
             return Verdict::OuvreEtJuste { lignes: reste.trim().parse().unwrap_or(0) };
+        }
+        if let Some(reste) = corps.strip_prefix("REBATI ") {
+            return Verdict::OuvreIndexRebati { lignes: reste.trim().parse().unwrap_or(0) };
         }
         if let Some(reste) = corps.strip_prefix("EN_RETARD ") {
             return Verdict::OuvreIndexEnRetard { lignes: reste.trim().parse().unwrap_or(0) };
@@ -332,6 +362,100 @@ fn jouer_le_relecteur() -> Option<()> {
     }
     let lignes = lignes as usize;
 
+    // ── L'état brut de l'index, avant toute redéclaration ────────────────
+    //
+    // Trois questions **séparées**, parce que leurs réponses demandent des
+    // remèdes différents et qu'un « ça marche » global les confond : l'index
+    // est-il encore là ? peut-on y chercher ? peut-on le recréer ?
+    //
+    // **L'ordre n'est pas libre.** La sonde `CREATE … skip_if_exists` *répare*
+    // un index absent ; elle doit donc venir après les deux observations,
+    // sinon elle efface ce qu'elles allaient voir. C'est aussi pourquoi elle
+    // est imprimée : une sonde qui modifie ce qu'elle mesure doit le dire.
+    //
+    // Pourquoi d'abord en Cypher brut et pas par le catalogue : le montage
+    // redéclare le schéma, et son `CREATE_VECTOR_INDEX` recrée l'index. Le
+    // 3 octobre au soir, c'est ce qui a rendu un vert illisible — il ne
+    // distinguait pas « la garde a réparé » de « je l'ai recréé moi-même ».
+    let lignes_index: Vec<Vec<String>> = match boxed.execute("CALL SHOW_INDEXES() RETURN *") {
+        Ok(r) => {
+            let v: Vec<Vec<String>> = r
+                .rows
+                .iter()
+                .map(|l| {
+                    l.iter()
+                        .map(|c| c.as_str().map(|s| s.to_string()).unwrap_or_else(|| format!("{c:?}")))
+                        .collect()
+                })
+                .collect();
+            println!(
+                "INDEX_VUS={}",
+                v.iter().map(|l| l.join("/")).collect::<Vec<_>>().join(" | ")
+            );
+            v
+        }
+        Err(e) => {
+            println!("INDEX_VUS=refus: {e}");
+            Vec::new()
+        }
+    };
+
+    // La cible : la ligne qui parle de `Fiche_Chunk`, et dans cette ligne la
+    // cellule qui n'est ni le nom de table ni un type connu. Heuristique
+    // assumée — et c'est pour ça qu'elle est imprimée : si elle se trompe,
+    // `INDEX_VUS` juste au-dessus permet de le voir sans relancer.
+    let cible = lignes_index
+        .iter()
+        .find(|l| l.iter().any(|c| c == "Fiche_Chunk"))
+        .and_then(|l| {
+            l.iter()
+                .find(|c| {
+                    !c.is_empty()
+                        && c.as_str() != "Fiche_Chunk"
+                        && !c.eq_ignore_ascii_case("HNSW")
+                        && !c.eq_ignore_ascii_case("VECTOR")
+                        && !c.eq_ignore_ascii_case("FTS")
+                })
+                .cloned()
+        });
+    match &cible {
+        Some(nom) => println!("INDEX_CIBLE={nom}"),
+        None => println!(
+            "INDEX_CIBLE=inconnu — les deux sondes suivantes ne sont pas jouées \
+             (ce n'est pas « elles passent » : c'est « on ne sait pas »)"
+        ),
+    }
+
+    let mut vecteur_avant = "non jouée (index cible inconnu)".to_string();
+    if let Some(nom) = &cible {
+        // 1. Chercher dedans. C'est la question de l'agent : une recherche
+        //    vectorielle rend-elle quelque chose, ou refuse-t-elle ?
+        //
+        //    Et on **garde** sa réponse : c'est elle qui dira, à la fin, si ce
+        //    témoin a bien atteint l'état qu'il prétend éprouver. Un test qui
+        //    imprime sa sonde sans la relire juge sur autre chose qu'elle.
+        vecteur_avant = match boxed.execute(&format!(
+            "CALL QUERY_VECTOR_INDEX('Fiche_Chunk', '{nom}', [0.1, 0.2, 0.3, 0.4], 3) \
+             RETURN node._uuid"
+        )) {
+            Ok(r) => format!("ok {} lignes", r.rows.len()),
+            Err(e) => format!("refus: {e}"),
+        };
+        println!("VECTEUR={vecteur_avant}");
+
+        // 2. Le recréer sans l'avoir retiré. C'est l'appel que fait l'étape 4
+        //    d'`initialize`, et celui que le moteur refuse sur un index
+        //    détaché — `skip_if_exists` ou non.
+        let recreation = boxed.execute(&format!(
+            "CALL CREATE_VECTOR_INDEX('Fiche_Chunk', '{nom}', 'embedding__mockembedder', \
+             metric := 'cosine', skip_if_exists := true)"
+        ));
+        match recreation {
+            Ok(_) => println!("SONDE_CREATE=ok (l'index était sain, ou absent et vient d'être recréé)"),
+            Err(e) => println!("SONDE_CREATE=refus: {e}"),
+        }
+    }
+
     // **La garde 1 promet trois choses** : la base s'ouvre, la table a ses
     // lignes, et l'index se déclare en retard au lieu de planter. Les deux
     // premières sont dites ci-dessus ; la troisième se sonde ici.
@@ -341,6 +465,7 @@ fn jouer_le_relecteur() -> Option<()> {
     // catalogue — qui crée ses index à l'initialisation — qui rencontrera
     // l'index détaché. Ce que ce montage fait ou ne fait pas est précisément ce
     // qu'il reste à écrire côté produit.
+    let cible_apres = cible.clone();
     let montage = std::panic::catch_unwind(|| {
         let conn = Rag3dbConnection::new(&base_dans(&dossier).display().to_string())
             .map_err(|e| e.to_string())?;
@@ -356,20 +481,58 @@ fn jouer_le_relecteur() -> Option<()> {
         let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
         catalog.initialize().map_err(|e| e.to_string())?;
         catalog.register_entity("Fiche", fiche(true)).map_err(|e| e.to_string())?;
-        Ok::<(), String>(())
+        // **Le verdict utile : peut-on chercher APRÈS le montage ?**
+        //
+        // Les sondes d'avant disaient l'état *trouvé* ; celle-ci dit l'état
+        // *laissé*. Et c'est elle qui manquait : le 4 octobre 2026, le montage
+        // annonçait `CATALOGUE=ok` dans la même seconde où une recherche
+        // vectorielle refusait par « is behind its table ». Un montage qui
+        // passe ne prouve pas qu'on peut chercher — il prouve seulement que
+        // personne n'a regardé.
+        //
+        // Sur la connexion du catalogue, pas sur la nôtre : la réparation a
+        // lieu dans celle-là, et une autre connexion pourrait en avoir une vue
+        // en retard.
+        let apres = match &cible_apres {
+            Some(nom) => match catalog.execute_raw(&format!(
+                "CALL QUERY_VECTOR_INDEX('Fiche_Chunk', '{nom}', [0.1, 0.2, 0.3, 0.4], 3) \
+                 RETURN node._uuid"
+            )) {
+                Ok(r) => format!("ok {} lignes", r.rows.len()),
+                Err(e) => format!("refus: {e}"),
+            },
+            None => "non jouée (index cible inconnu)".to_string(),
+        };
+        Ok::<String, String>(apres)
     });
-    let montage = match montage {
-        Ok(Ok(())) => "ok".to_string(),
-        Ok(Err(e)) => format!("erreur: {e}"),
-        Err(_) => "panique".to_string(),
+    let (montage, vecteur_apres) = match montage {
+        Ok(Ok(apres)) => ("ok".to_string(), apres),
+        Ok(Err(e)) => (format!("erreur: {e}"), "non jouée (le montage a échoué)".to_string()),
+        Err(_) => ("panique".to_string(), "non jouée (le montage a paniqué)".to_string()),
     };
     println!("CATALOGUE={montage}");
-    let en_retard = montage.contains("is behind its table");
+    println!("VECTEUR_APRES={vecteur_apres}");
+    // **L'état laissé, pas l'état trouvé.** Le montage pouvait annoncer `ok`
+    // sur une base dont la recherche refusait : juger sur lui seul, c'était
+    // juger sur ce que personne ne regardait. On garde les deux sources — un
+    // montage qui remonte le refus, et une recherche qui refuse encore après —
+    // parce qu'un verdict doit se tromper du côté sévère.
+    let en_retard = montage.contains("is behind its table")
+        || vecteur_apres.contains("is behind its table");
+
+    // **« Juste » et « rebâti » ne sont pas le même vert.** Le premier dit que
+    // rien n'était cassé — donc que le témoin n'a pas atteint son état. Le
+    // second dit que l'index était détaché et que le chemin du produit l'a
+    // réparé : c'est le seul qui prouve quelque chose.
+    let etait_detache = vecteur_avant.contains("is behind its table");
+    let repare = etait_detache && vecteur_apres.starts_with("ok");
 
     if lignes != attendu {
         println!("VERDICT=INDEX_FAUX {lignes} {attendu}");
     } else if en_retard {
         println!("VERDICT=EN_RETARD {lignes}");
+    } else if repare {
+        println!("VERDICT=REBATI {lignes}");
     } else {
         println!("VERDICT=JUSTE {lignes}");
     }
@@ -646,18 +809,37 @@ fn une_mort_apres_insertion_vectorielle() {
     // attendu écrit pour un remède qu'on ne connaît pas encore est un attendu
     // qu'il faudra réécrire.
     match verdict {
-        Verdict::OuvreIndexEnRetard { lignes } => {
+        // **Le seul vert qui prouve quelque chose.** L'index était détaché —
+        // la recherche vectorielle refusait par « is behind its table » avant
+        // le montage — et il rend des lignes après. Mesuré le 4 octobre 2026,
+        // les deux pôles dans la même exécution.
+        Verdict::OuvreIndexRebati { lignes } => {
             assert_eq!(lignes, 6, "les six lignes doivent être là");
         }
-        // Accepté aussi : si un jour le montage ne rencontre plus l'index
-        // détaché du tout, c'est que rag3weaver le reconnaît et le rebâtit —
-        // la marche attendue côté produit.
-        Verdict::OuvreEtJuste { lignes } => {
-            assert_eq!(lignes, 6, "les six lignes doivent être là");
-            println!("▸ le montage ne voit plus d'index en retard : rebâti de lui-même ?");
-        }
+        // **Pas un succès : le témoin n'a pas atteint son état.** La base
+        // s'ouvre et les lignes sont là, mais l'index n'était pas détaché,
+        // donc rien de la réparation n'a été éprouvé. Taire ce cas, c'est
+        // rendre un vert qui parle d'autre chose que de la question posée —
+        // ce qui est précisément arrivé la veille.
+        Verdict::OuvreEtJuste { lignes } => panic!(
+            "le témoin n'a pas atteint l'état qu'il éprouve : l'index n'était pas détaché \
+             ({lignes} lignes, base ouverte, recherche vectorielle déjà saine avant le \
+             montage). La réparation n'est donc **pas** mesurée par cette exécution. \
+             Vérifier que le journal a bien été replié avant la mort (le `CHECKPOINT` du \
+             scénario « insertion »).\ndossier conservé : {}",
+            dossier.display()
+        ),
+        // L'index est resté détaché après le montage : la réparation
+        // d'ouverture n'a pas joué. C'est le rouge que ce test existe pour
+        // rendre, et il nomme le coupable.
+        Verdict::OuvreIndexEnRetard { lignes } => panic!(
+            "l'index est resté détaché après le chemin du produit ({lignes} lignes) : \
+             `Catalog::ensure_vector_index` n'a pas reconnu le refus, ou le `DROP` devant \
+             le `CREATE` n'a pas eu lieu.\ndossier conservé : {}",
+            dossier.display()
+        ),
         autre => panic!(
-            "la garde 1 promet une base qui s'ouvre et un index qui se déclare en retard ; \
+            "attendu : une base qui s'ouvre, six lignes, et un index détaché puis rebâti ; \
              reçu : {autre:?}\ndossier conservé pour examen : {}",
             dossier.display()
         ),

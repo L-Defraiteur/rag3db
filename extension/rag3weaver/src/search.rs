@@ -954,7 +954,22 @@ pub fn search_vector_via_backend(
         )
     } else {
         backend.vector_search(entity, index_name, column, embedding, limit)
-    }.map_err(|e| CatalogError::DbError(e))?;
+    }
+    .map_err(|e| {
+        // **Un index détaché ne se dit pas « erreur de base ».** Le moteur
+        // nous le nomme, et un écrivain le rebâtit à l'ouverture ; si l'on est
+        // ici, c'est qu'on lit une base que personne n'a rouverte en écriture.
+        // Le refus doit dire ça, au lieu d'envoyer son appelant chercher la
+        // panne ailleurs.
+        if e.contains(crate::catalog::INDEX_BEHIND_ITS_TABLE) {
+            CatalogError::IndexDetache {
+                table: entity.to_string(),
+                index: index_name.to_string(),
+            }
+        } else {
+            CatalogError::DbError(e)
+        }
+    })?;
 
     Ok(hits.into_iter().map(|h| SearchResult {
         uuid: h.uuid,

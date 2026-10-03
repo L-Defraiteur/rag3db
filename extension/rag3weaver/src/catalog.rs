@@ -51,6 +51,17 @@ use crate::dataflow::services::ServiceRegistry;
 
 // ─── CatalogError ──────────────────────────────────────────────────────────
 
+/// **Le fragment par lequel le moteur dit « cet index est derrière sa table ».**
+///
+/// Ce n'est pas un message de circonstance qu'on reconnaîtrait au petit
+/// bonheur : c'est une constante nommée du moteur,
+/// `HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE` dans
+/// `extension/vector/src/include/index/hnsw_index_utils.h`, posée là **pour**
+/// qu'un appelant la reconnaisse — le commentaire qui l'accompagne dit même la
+/// suite à faire : retirer l'index, le rebâtir. On s'accroche au fragment et
+/// pas à la phrase entière, qui porte des noms de table.
+pub const INDEX_BEHIND_ITS_TABLE: &str = "is behind its table";
+
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
     #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
@@ -61,6 +72,20 @@ pub enum CatalogError {
     /// pose rien. Le verbe refusé est nommé.
     #[error("catalogue ouvert en lecture seule : {0} refusé")]
     LectureSeule(String),
+    /// **Un index vectoriel au catalogue, mais que sa table ne porte plus.**
+    /// Le rejeu du journal après une mort brutale écrit dans la table pendant
+    /// que l'extension vectorielle n'est pas chargée : l'entrée reste,
+    /// l'exemplaire disparaît. Le moteur refuse alors de chercher dedans
+    /// **et** de le recréer sans l'avoir retiré — par
+    /// [`INDEX_BEHIND_ITS_TABLE`].
+    ///
+    /// Un écrivain répare ça à l'ouverture
+    /// ([`Catalog::rebuild_detached_vector_indexes`]). Cette erreur ne sort
+    /// donc que là où personne ne peut réparer : une base ouverte en lecture.
+    /// Elle dit quoi faire, parce qu'un refus qui ne dit pas quoi faire envoie
+    /// son appelant chercher la panne ailleurs.
+    #[error("l'index vectoriel « {index} » de « {table} » est détaché de sa table (une mort brutale, puis un rejeu sans l'extension vectorielle) : rouvrir la base en écriture le rebâtit à l'ouverture — en lecture seule, la recherche vectorielle n'a rien de juste à rendre")]
+    IndexDetache { table: String, index: String },
     /// **Un index se cherche avec le modèle qui l'a construit.** Les vecteurs
     /// de granite-107m et ceux de BGE-M3 ne vivent pas dans le même espace ;
     /// les mélanger rend des scores plausibles et faux, sans rien dire.
@@ -1043,6 +1068,12 @@ impl Catalog {
         // vectoriel détruit : on le rebâtit avant de servir la moindre requête.
         self.restore_dropped_vector_indexes()?;
 
+        // 10 quater. Et ce qu'une mort brutale a emporté : un index retiré par
+        //     le rejeu du journal, ou laissé derrière sa table. Aucun drapeau
+        //     ne le dit — c'est le moteur qu'on interroge, par la sonde qui le
+        //     répare du même geste.
+        self.rebuild_detached_vector_indexes()?;
+
         // 10 bis. Multi-tenant (doc 37) : tables _Org/_Project, colonnes de scope
         // sur les bases d'avant, nœuds de la cellule courante.
         for ddl in crate::schema::generate_scope_tables_ddl(self.dialect.as_ref()) {
@@ -1452,7 +1483,46 @@ impl Catalog {
     }
 
     /// Reconstruit un index vectoriel sur une table pleine, et lève le drapeau.
+    ///
+    /// **Le `DROP` devant n'est pas une précaution, c'est une correction.**
+    /// `CREATE_VECTOR_INDEX` porte `skip_if_exists := true`, ce qui donne
+    /// envie de le croire idempotent. Il ne l'est pas sur un index *détaché* :
+    /// le moteur le refuse par [`INDEX_BEHIND_ITS_TABLE`], `skip_if_exists` ou
+    /// non. Or c'est exactement l'état qu'une mort brutale peut laisser — donc
+    /// l'appel que faisait la restauration d'ouverture
+    /// ([`Self::restore_dropped_vector_indexes`]) était celui qui ne pouvait
+    /// pas marcher, et son échec remontait jusqu'à faire **refuser
+    /// l'ouverture** : pire que le défaut qu'elle corrigeait.
+    ///
+    /// Le `DROP` porte `skip_if_not_exists := true`, et les trois appelants
+    /// sont des endroits où l'index est *censé* être absent — celui qui vient
+    /// de le détruire, celui qui croit qu'il l'est, et celui qui vient de
+    /// l'entendre refuser. Un `DROP` de plus n'y coûte rien, et répare les
+    /// trois chemins d'une ligne.
     fn rebuild_vector_index(&self, table: &str, column: &str, index: &str) -> Result<(), CatalogError> {
+        let retrait = self.dialect.drop_vector_index(table, index);
+        if let Err(e) = self.conn.execute(&retrait) {
+            // **Le seul refus attendu se tait ; tout le reste remonte.** Les
+            // deux dialectes rendent aujourd'hui un `DROP` qui tolère
+            // l'absence (`skip_if_not_exists := true`, `DROP INDEX IF
+            // EXISTS`), donc le cas nominal — un index déjà absent — ne lève
+            // rien. On absorbe quand même, parce que si ce `skip_if_not_exists`
+            // disparaît un jour du dialecte, le défaut qui apparaît est une
+            // **ouverture refusée** : le pire des deux côtés.
+            //
+            // Le jeu de motifs est celui de `poser_index`, et pas celui
+            // d'`alter_absorbing` : ce dernier absorbe tout ce qui contient
+            // « exist », donc aussi « existe déjà » — ce qu'on ne veut pas
+            // taire ici, puisqu'un index qui existe encore après un `DROP`
+            // signifie que le retrait n'a pas eu lieu.
+            let msg = e.to_string().to_lowercase();
+            let deja_absent = msg.contains("does not exist")
+                || msg.contains("42703")
+                || msg.contains("not found");
+            if !deja_absent {
+                return Err(CatalogError::DbError(e.to_string()));
+            }
+        }
         let ddl = self.dialect.create_vector_index(table, column, index);
         self.conn
             .execute(&ddl)
@@ -1503,6 +1573,137 @@ impl Catalog {
             );
             self.rebuild_vector_index(&table, &column, &index)?;
         }
+        Ok(())
+    }
+
+    /// Tous les index vectoriels déclarés, **tous modèles confondus** :
+    /// `(table de chunks, colonne, index)`.
+    ///
+    /// Le pendant d'[`Self::vector_indexes_of`], qui ne rend que ceux du
+    /// modèle courant — parce qu'un lot n'écrit de vecteurs que dans
+    /// celui-là. Ici la question n'est pas « où va-t-on écrire » mais
+    /// « qu'est-ce qu'une mort brutale a pu emporter », et elle a pu emporter
+    /// l'index d'un modèle d'avant. Celui-là, **personne** ne le recrée : les
+    /// DDL d'ouverture ne portent que le schéma déclaré, et le drapeau
+    /// `vector_index_dropped:` ne connaît que les index que *nous* avons
+    /// retirés.
+    fn all_vector_indexes(&self) -> Vec<(String, String, String)> {
+        let Ok(modeles) = self.registered_embedding_models() else {
+            return vec![];
+        };
+        let mut entites: Vec<String> = self
+            .entity_configs
+            .iter()
+            .filter(|(_, c)| c.has_simple_pipeline() && c.signals.vector())
+            .map(|(nom, _)| nom.clone())
+            .collect();
+        entites.sort();
+        let mut sortie = Vec::new();
+        for entite in entites {
+            let table = format!("{entite}_Chunk");
+            for entry in &modeles {
+                let s = crate::embedding_storage::VectorStorage::resolve(&table, entry);
+                sortie.push((table.clone(), s.column, s.index));
+            }
+        }
+        sortie
+    }
+
+    /// **À l'ouverture : un index vectoriel absent ou détaché se reconnaît, se
+    /// rebâtit, et le dit.**
+    ///
+    /// Le cas, qui n'est pas celui du drapeau : après une mort brutale, le
+    /// rejeu du journal écrit dans la table pendant que l'extension
+    /// vectorielle n'est pas encore chargée. Le moteur retire alors l'index,
+    /// ou le laisse derrière sa table ; dans les deux cas rien de ce que
+    /// *nous* avons écrit ne le dit.
+    ///
+    /// **Pourquoi une sonde et pas un drapeau.** La restauration voisine lit
+    /// `vector_index_dropped:`, un drapeau que nous posons nous-mêmes. Le
+    /// rejeu du moteur n'en pose aucun. La sonde, c'est le
+    /// `CREATE … skip_if_exists` lui-même, et c'est pour ça qu'elle ne coûte
+    /// rien : muette sur un index sain, réparatrice sur un index absent,
+    /// refusée par le fragment sur un détaché. Une seule question, qui est
+    /// aussi sa réponse.
+    ///
+    /// **Pourquoi à l'ouverture et pas à la première recherche.** Une
+    /// recherche qui répare paie la réparation dans la latence d'un agent, et
+    /// n'a personne à qui le dire. À l'ouverture, le reçu la porte.
+    ///
+    /// Un catalogue en lecture ne rebâtit pas — il n'en a pas le droit, et une
+    /// base qu'un écrivain rouvrira se répare là. Il se tait ici, et c'est la
+    /// recherche vectorielle qui refuse en nommant quoi faire
+    /// ([`CatalogError::IndexDetache`]) : jamais moins de lignes en silence.
+    fn rebuild_detached_vector_indexes(&self) -> Result<(), CatalogError> {
+        if self.lecture_seule {
+            return Ok(());
+        }
+        for (table, column, index) in self.all_vector_indexes() {
+            self.ensure_vector_index(&table, &column, &index)?;
+        }
+        Ok(())
+    }
+
+    /// **Poser un index vectoriel, et reconnaître le seul refus qui se répare.**
+    ///
+    /// Le passage obligé : c'est le seul endroit du catalogue qui exécute un
+    /// `CREATE_VECTOR_INDEX`, pour que la reconnaissance du refus n'ait pas à
+    /// être répétée — ni oubliée au prochain appelant.
+    ///
+    /// **Ce qu'il corrige, mesuré le 4 octobre 2026.** Sur un index détaché,
+    /// `CREATE_VECTOR_INDEX` refuse par [`INDEX_BEHIND_ITS_TABLE`] malgré
+    /// `skip_if_exists`, et l'ancien chemin (`poser_index`) transformait ce
+    /// refus en un avertissement que personne ne lit. Le montage du catalogue
+    /// annonçait donc `ok` sur une base dont la recherche vectorielle allait
+    /// refuser en Cypher brut — `CATALOGUE=ok` d'un côté, « is behind its
+    /// table » de l'autre, dans la même seconde, par
+    /// `tests/e2e_arret_brutal.rs`. L'information existait, et rien ne la
+    /// consultait.
+    ///
+    /// Et la raison pour laquelle rien ne le voyait : nous demandions
+    /// **« l'index existe-t-il ? »**, à quoi le catalogue répond oui — l'entrée
+    /// y reste. La question juste est **« la table le porte-t-elle ? »**, et
+    /// seul le moteur sait y répondre. D'où une sonde qui est un ordre : on ne
+    /// lui demande pas l'état, on lui demande de poser l'index, et c'est son
+    /// refus qui renseigne.
+    ///
+    /// Tout autre refus garde l'ancien comportement — un avertissement, sans
+    /// interrompre une ouverture pour un index qu'on saura absent.
+    fn ensure_vector_index(&self, table: &str, column: &str, index: &str) -> Result<(), CatalogError> {
+        let ddl = self.dialect.create_vector_index(table, column, index);
+        let Err(refus) = self.conn.execute(&ddl) else {
+            return Ok(());
+        };
+        let refus = refus.to_string();
+        if !refus.contains(INDEX_BEHIND_ITS_TABLE) {
+            self.emit_event(CatalogEvent::Warning {
+                context: "index".into(),
+                message: format!("index vectoriel non posé — {ddl} : {refus}"),
+            });
+            return Ok(());
+        }
+        let depart = std::time::Instant::now();
+        self.rebuild_vector_index(table, column, index)?;
+        let duree_ms = depart.elapsed().as_millis();
+        // La durée se dit **avec le volume**. Sur une base d'essai le rebâti
+        // est instantané, et un « 3 ms » sans les lignes qui vont avec ferait
+        // croire que c'est toujours gratuit — sur une grosse base, ce n'est
+        // pas vrai, et c'est la ligne qui préviendra.
+        let lignes = self
+            .conn
+            .execute(&format!("MATCH (n:{table}) RETURN count(n)"))
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+            .unwrap_or(-1);
+        let dit = format!(
+            "index vectoriel « {index} » rebâti : il était détaché de « {table} » \
+             après un arrêt brutal — {lignes} lignes, {duree_ms} ms"
+        );
+        eprintln!("[rag3weaver] {dit}");
+        self.emit_event(CatalogEvent::Warning {
+            context: format!("ouverture/{table}"),
+            message: dit,
+        });
         Ok(())
     }
 
@@ -2291,9 +2492,12 @@ impl Catalog {
         self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &column, "NULL"))?;
         let marker = ColumnDef { name: s.marker.clone(), col_type: ColumnType::Text };
         self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &marker, "''"))?;
-        // Par `poser_index` : les deux dialectes rendent ce DDL idempotent, donc
-        // une erreur ici est un index vectoriel absent, pas un doublon.
-        self.poser_index(vec![self.dialect.create_vector_index(table, &s.column, &s.index)]);
+        // **Pas par `poser_index`.** Son commentaire portait ici une prémisse
+        // fausse — « les deux dialectes rendent ce DDL idempotent, donc une
+        // erreur est un index absent, pas un doublon ». Sur un index
+        // *détaché*, `CREATE_VECTOR_INDEX` refuse malgré `skip_if_exists`, et
+        // ce refus-là se répare.
+        self.ensure_vector_index(table, &s.column, &s.index)?;
         Ok(())
     }
 
