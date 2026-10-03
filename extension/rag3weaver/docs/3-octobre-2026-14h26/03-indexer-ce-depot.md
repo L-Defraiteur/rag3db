@@ -264,6 +264,29 @@ dise. La session de l'arbre principal la prend, avec une marque durable
 « plein texte en retard » et la preuve par un arrêt brutal réel. Hors
 synchronisation, rien ne change.
 
+### Trois minutes sont-elles atteignables sur ce dépôt ?
+
+Ce que demanderaient les 170 s qui manquent, poste par poste, à partir des
+352 s mesurées. Les gains sont des estimations lues sur la ventilation, pas
+des mesures.
+
+| Prise | Ce qu'il faut | Gain plausible | Reste après |
+|---|---|---|---|
+| Les blobs d'index (119 s) | Pousser aux vidages et à la fin, avec la marque « plein texte en retard » — en cours chez la session de l'arbre principal. | ~100 s | ~250 s |
+| Les points de reprise du graphe (30 s) | Un mode plus léger pour une première indexation en masse : elle se reprend par sa session de synchronisation, pas par l'état de chaque nœud. | ~25 s | ~225 s |
+| Les symboles (56 s) | Les ingérer une fois à la fin, comme les relations, au lieu de 107 fois. | 30 à 40 s | ~190 s |
+| L'analyse (55 s, dont 46 dans l'analyseur) | Chez l'analyseur, qui est déjà parallèle par fichier : le gain dépend du nombre de fils qu'on lui laisse, et le poste ne nous appartient pas. | incertain | — |
+| Le nœud plein texte (29 s) et les vidages de la file (39 s) | Rien d'évident : c'est le travail lui-même. | — | — |
+
+**La réponse honnête** : avec les trois premières prises, ce dépôt descend
+vers **trois minutes à trois minutes et demie** ; les trois minutes rondes
+demandent en plus un gain chez l'analyseur. Tant que ces prises ne sont pas
+posées et mesurées, la promesse qu'on peut tenir est **« cherchable par mots
+en quatre à cinq minutes »** pour un dépôt de 60 Mo — et **« en moins de
+vingt secondes »** pour un projet de la taille de `src/` de la crate (4 Mo),
+ce qui est le cas courant. Le chiffre est celui d'un binaire de test sur un
+poste chargé : il se remesure à chaque prise.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
