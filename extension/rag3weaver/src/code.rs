@@ -767,6 +767,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
     // (`own_texts`) : l'analyseur ne le rend pas.
     let raw: HashMap<String, String> = content_map.clone();
     let parser = ProjectParser::new(ProjectParserOptions { verbose: false });
+    let t_parse = std::time::Instant::now();
     let result = parser.parse_project(ParseProjectOptions {
         root: root.to_string(),
         files,
@@ -783,6 +784,7 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
             ..Default::default()
         }),
     });
+    crate::ingest_profile::add("analyse · parse_project (codeparsers, par fichier en parallèle)", t_parse);
     for e in &result.errors {
         skipped.push((relative(root, &e.file), e.error.clone()));
     }
@@ -1553,6 +1555,7 @@ impl Catalog {
         report.failed += libs.failed;
 
         report.entities_ms = phase.elapsed().as_millis();
+        crate::ingest_profile::add("code · ingérer File, Scope, Library", phase);
         let phase = std::time::Instant::now();
 
         // La source des fichiers de ce lot : elle fait partie de leur identité,
@@ -1588,10 +1591,12 @@ impl Catalog {
             report.failed += linked.failed;
         }
         report.relations_ms = phase.elapsed().as_millis();
+        crate::ingest_profile::add("code · relations de l'analyse (identifiants, mise en file)", phase);
 
         let phase = std::time::Instant::now();
         self.resolve_across_batches(analysis, &mut report, exige, differes.as_deref_mut())?;
         report.symbols_ms = phase.elapsed().as_millis();
+        crate::ingest_profile::add("code · symboles (ingestion Symbol + rendez-vous)", phase);
         Ok(report)
     }
 

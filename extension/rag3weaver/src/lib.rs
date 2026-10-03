@@ -181,6 +181,8 @@ pub mod burst;
 /// Dire ce que ça va coûter avant d'indexer : comptes, modèle, durée,
 /// confirmation. Une lecture, générique — voir l'en-tête du module.
 pub mod estimate;
+/// Les chronomètres cumulés de l'ingestion (`RAG3WEAVER_INGEST_PROFILE`).
+pub mod ingest_profile;
 /// Un modèle, en service ou en local : la déclaration commune à toute
 /// capacité, et sa résolution en un client.
 pub mod model_source;
