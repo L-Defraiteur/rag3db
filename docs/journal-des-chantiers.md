@@ -645,6 +645,58 @@ sessions, pas d'une vérification.
   rend désormais l'origine du calcul avec le client (lot 1, fait pour
   l'embarquement dense).
 
+- **`UNWIND $items AS item MATCH (n {_uuid: item.champ})` balaie la table entière**
+  (planificateur, trouvé le 3 octobre par la session cœur C++, non corrigé ; un
+  contournement existe). Toute écriture par lot qui retrouve ses nœuds par la clé primaire
+  à travers le champ d'une structure déroulée — `batch_set`, `batch_link_labeled` sous le
+  seuil du `COPY` — coûte en proportion du nombre de **nœuds** de la table, pas du nombre
+  de lignes du lot ni du nombre de relations. Le plan (`EXPLAIN`) : `SCAN_NODE_TABLE` de
+  la table entière, `CROSS_PRODUCT` avec la liste, puis `FILTER` ; pour un lien, deux
+  balayages et deux produits cartésiens. Mesuré en C++ seul (Release, base de test en
+  mémoire, lot de 300, à 2 000 / 20 000 / 200 000 nœuds par table) :
+
+  | Forme | Plan | Temps par lot |
+  |---|---|---|
+  | une clé par appel, `MATCH (n {_uuid: $u})` (300 appels) | recherche par l'index | 8 / 11 / 12 ms |
+  | `UNWIND $items AS item MATCH (n {_uuid: item._uuid}) SET …` | `CROSS_PRODUCT` + `FILTER` | 2,3 / 16 / 169 ms |
+  | `UNWIND $uuids AS u MATCH (n {_uuid: u})` | `HASH_JOIN` | 0,3 / 0,8 / 5,8 ms |
+  | `MATCH (n) WHERE n._uuid IN $uuids` | balayage filtré | 1,7 / 17 ms |
+  | **`UNWIND $items AS item WITH item._uuid AS u MATCH (n {_uuid: u}) SET …`** | `HASH_JOIN` | 1,1 / 1,7 / 6,5 ms |
+  | lien, forme d'aujourd'hui (structure, `MERGE`) | deux `CROSS_PRODUCT` | 24 / 348 ms, échec à 200 000 |
+  | **lien : `… WITH item.from_uuid AS f, item.to_uuid AS t MATCH (a {_uuid: f}) WITH a, t MATCH (b {_uuid: t}) CREATE (a)-[:REL]->(b)`** | `HASH_JOIN` | 2,0 / 2,8 ms, échec à 200 000 |
+
+  La table de relations, elle, peut grossir sans rien changer (plat de 0 à 120 000
+  relations) : la croissance mesurée par la session de l'arbre principal venait des tables
+  de nœuds qui grandissaient pendant la passe. Les échecs sont « Buffer manager exception:
+  … The buffer pool is full » dans une base de test dont le tampon fait 73 Mo : le plafond
+  est celui du test, mais ces plans matérialisent une quantité qui croît avec la table.
+  **La cause** : la recherche par l'index n'existe que pour une clé constante (littéral,
+  paramètre : `isConstantExpression`, `src/optimizer/filter_push_down_optimizer.cpp`) ; un
+  prédicat qui dépend de la ligne extérieure est planifié à part, joint par produit
+  cartésien puis filtré (`planRegularMatch`, `src/planner/plan/plan_subquery.cpp`) ; et le
+  rattrapage en jointure de hachage (`visitCrossProductReplace`) ne reconnaît qu'une
+  colonne nommée, pas `STRUCT_EXTRACT(item, …)`. **Le contournement** : sortir les champs
+  en variables simples par un `WITH` avant le `MATCH` (lignes en gras) ; pour un lien,
+  enchaîner les deux `MATCH` par `WITH a, t` — côte à côte, le plan retombe sur le produit
+  cartésien des deux tables — et écrire `CREATE`, pas `MERGE` : la même forme avec `MERGE`
+  est refusée, « Cannot evaluate expression with type VARIABLE », second défaut, non
+  examiné. Vérifier par `EXPLAIN` qu'on lit `HASH_JOIN` et non `CROSS_PRODUCT`. **Le vrai
+  correctif** : une recherche par clé par ligne. Ladybug l'a faite (`e92346c97`, « Row-Driven
+  Primary-Key Lookup for MATCH », sous le tag `ladybug-main-2026-08-31`, puis sept
+  correctifs) ; son histoire est séparée de la nôtre, c'est un port et non un
+  cherry-pick, et il ne couvre qu'un motif à un seul nœud. Quatre à six jours, estimation
+  non étayée ; derrière les verrous. Brouillons de mesure :
+  `~/.cache/rag3db-moteur-notes/croissance-relations/`.
+- **Au rejeu du journal, un `DROP_VECTOR_INDEX` retire l'index du catalogue mais pas de
+  la table** (moteur, cas minimal de la session de l'arbre principal, 3 octobre ; en
+  cours de correction par la session cœur C++). Un index écrit par un point de reprise,
+  puis retiré, puis un arrêt sans fermeture : à la réouverture `SHOW_INDEXES` ne le montre
+  plus, mais `CREATE_VECTOR_INDEX` lève « Index … is not loaded yet ». C'est le rouge
+  intermittent d'`an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens`, et
+  rag3weaver retire puis recrée ses index autour d'un chargement en masse.
+  `WALReplayer::replayDropCatalogEntryRecord` (`src/storage/wal/wal_replayer.cpp`) ne
+  rejoue que l'entrée du catalogue ; le retrait de la table n'est fait qu'à l'exécution,
+  par la fonction de l'extension.
 - **L'index vectoriel peut laisser une ligne injoignable dès sa construction**
   (extension vector, trouvé le 3 octobre par la session cœur C++, non corrigé). Une
   ligne indexée qu'aucune recherche n'atteint : un trou de rappel silencieux, sans
