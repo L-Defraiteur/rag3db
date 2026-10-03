@@ -107,3 +107,48 @@ ne le départage pas.
 Ma pente : (a) aujourd'hui — rien ne bouge sans mesure du versant
 identifiants —, et (c-light) comme prototype mesurable de (c). Le choix est
 à Lucie.
+
+
+## 4. Ajout du 3 octobre au soir — le réglage global, cherché par la mesure
+
+Lucie a écarté la détection de forme (« pas de détection auto ; un réglage
+global qui favorise légèrement identifiants ») — et relevé que la coupe
+« identifiant vs sémantique » était fausse : les mots entre les séparateurs
+ont un sens, le vecteur les sert aussi. La mesure lui donne raison.
+
+Six couples, deux versants, **pondération par genre de `Scope` comprise**
+(déclarée entre-temps — ces chiffres ne se comparent donc pas aux 0,264 /
+0,332 du §1, mesurés sans elle) ; la ligne I : dix identifiants exacts du
+corpus (`merge_port_values` — le cas du 27 août — en tête), requête = le
+nom, bonne réponse = son scope.
+
+| bm25/vector | H phrases (MRR·R@1·R@5 /43) | I identifiants (MRR·R@1·R@5 /10) |
+|---|---|---|
+| 0,6/0,4 (gabarit) | 0,322 · 11 · 16 | 0,883 · 8 · 10 |
+| 0,55/0,45 | 0,327 · 11 · 16 | 0,883 · 8 · 10 |
+| 0,5/0,5 | 0,371 · 12 · 20 | 0,883 · 8 · 10 |
+| **0,45/0,55** | **0,385 · 13 · 23** | **0,883 · 8 · 10** |
+| 0,4/0,6 | 0,384 · 13 · 23 | 0,883 · 8 · 10 |
+| 0,3/0,7 (ancien moteur) | 0,389 · 13 · 23 | 0,900 · 8 · 10 |
+| témoin : vecteur seul | 0,406 · 13 · 27 (tel quel) | 0,775 · 6 · 10 |
+
+**La lecture.** Le versant identifiants est **plat** : l'identifiant exact
+est rang 1 du plein texte quel que soit son poids, et le vecteur granite le
+classe bien aussi (témoin 10/10 en R@5) — la fusion RRF le garde donc en
+tête à tous les couples. La crainte du 18 septembre (« 0,3/0,7 perd la
+correspondance exacte ») ne se matérialise pas sur ce corpus : elle venait
+d'un petit corpus et du bug de la fusion aplatie. Le versant phrases, lui,
+veut le moins de bm25 possible : le plateau (0,385, R@1 13, R@5 23)
+commence à **0,45/0,55** et ne gagne plus que 0,004 jusqu'à 0,3/0,7 — et
+même à 0,3/0,7, l'hybride reste sous le vecteur seul (0,389 contre 0,406) :
+sur des questions en langue naturelle, le bm25 coûte toujours un peu.
+
+**Recommandation** (le choix est à Lucie, le gabarit n'a pas bougé) :
+**0,45/0,55** — le premier point du plateau des phrases, donc le plus de
+plein texte qu'on puisse garder sans les payer : la marge de sécurité
+maximale pour les identifiants que ce banc ne couvre pas (10 noms, un seul
+corpus). « Favorise légèrement les identifiants » au sens utile : non pas
+plus de poids (la mesure dit qu'ils n'en ont pas besoin), mais plus de
+marge. Si Lucie choisit un couple, la validation devra rejouer `e2e_code`
+avec le gabarit modifié — son canari du 27 août vit sur un petit corpus où
+le vecteur noyait, le monde où la crainte était vraie.

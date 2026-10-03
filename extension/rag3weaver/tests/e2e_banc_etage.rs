@@ -283,7 +283,12 @@ impl Mesure {
         }
     }
     fn ligne(&self, etiquette: &str) -> String {
-        format!("| {etiquette} | {:.3} | {} | {} |", self.mrr / QUESTIONS.len() as f64, self.r1, self.r5)
+        self.ligne_sur(etiquette, QUESTIONS.len())
+    }
+    /// La même ligne, sur un autre jeu : la ligne I (identifiants) n'a pas
+    /// le dénominateur des 43 questions.
+    fn ligne_sur(&self, etiquette: &str, n: usize) -> String {
+        format!("| {etiquette} | {:.3} | {} | {} |", self.mrr / n as f64, self.r1, self.r5)
     }
 }
 
@@ -387,28 +392,65 @@ fn banc_etage_qui_perd() {
         par_poids.push((format!("P(default → {x}) — l'ombre pondérée de G"), p_ombre));
     }
 
-    // ── H : les poids de fusion en hybride — 0,6/0,4 contre 0,3/0,7 ─────
-    // La mesure que Lucie attend depuis le 18 septembre. Le sparse n'y
-    // entre pas : granite-278m n'a pas de sortie sparse — à dire dans le
-    // tableau plutôt que de le laisser croire mesuré.
-    let mut hybrides: Vec<(String, Mesure)> = Vec::new();
+    // ── H et I : les poids de fusion en hybride, sur les deux versants ──
+    // La mesure que Lucie attend depuis le 18 septembre, affinée le
+    // 3 octobre : « favorise légèrement les identifiants » se cherche entre
+    // 0,6/0,4 (protège les identifiants, coûte aux phrases) et 0,3/0,7
+    // (l'inverse). H joue les 43 questions en langue naturelle ; I joue des
+    // identifiants exacts du corpus — le versant qui n'avait qu'un « ça
+    // passe », chiffré. Le sparse n'entre pas : granite-278m n'a pas de
+    // sortie sparse — dit plutôt que laissé croire mesuré. Depuis la
+    // pondération par genre déclarée dans `Scope` (3 octobre), ces lignes se
+    // mesurent pondération comprise : cohérentes entre elles, pas avec les
+    // chiffres d'avant la déclaration.
+    const IDENTIFIANTS: [&str; 10] = [
+        "merge_port_values",
+        "fuse_signals",
+        "resolve_search_target",
+        "register_search_services",
+        "embarquer_la_requete",
+        "base_de_fusion",
+        "appliquer_la_consigne_pour",
+        "search_bm25_chunked",
+        "parse_mermaid_template",
+        "rendre_le_retard",
+    ];
+    let hybride_de = |b: f64, v: f64| -> SearchOptions {
+        let mut o = options_vecteur();
+        o.signals = Some(SearchSignals::HYBRID);
+        o.fusion = Some(FusionConfig {
+            bm25: SignalConfig { weight: b, ..SignalConfig::default() },
+            vector: SignalConfig { weight: v, ..SignalConfig::default() },
+            ..FusionConfig::default()
+        });
+        o
+    };
+    let mut hybrides: Vec<(String, Mesure, Mesure)> = Vec::new();
     for (etiquette, b, v) in [
-        ("H(bm25 0,6 / vector 0,4) — le gabarit", 0.6, 0.4),
-        ("H(bm25 0,3 / vector 0,7) — l'ancien moteur", 0.3, 0.7),
+        ("0,6/0,4 — le gabarit", 0.6, 0.4),
+        ("0,55/0,45", 0.55, 0.45),
+        ("0,5/0,5", 0.5, 0.5),
+        ("0,45/0,55", 0.45, 0.55),
+        ("0,4/0,6", 0.4, 0.6),
+        ("0,3/0,7 — l'ancien moteur", 0.3, 0.7),
     ] {
-        let mut h = Mesure::default();
+        let mut phrases = Mesure::default();
         for (q, attendus) in QUESTIONS {
-            let mut o = options_vecteur();
-            o.signals = Some(SearchSignals::HYBRID);
-            o.fusion = Some(FusionConfig {
-                bm25: SignalConfig { weight: b, ..SignalConfig::default() },
-                vector: SignalConfig { weight: v, ..SignalConfig::default() },
-                ..FusionConfig::default()
-            });
-            let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche hybride");
-            h.noter(&noms(&r), attendus);
+            let r = Catalog::rechercher(&reel, SCOPE, q, hybride_de(b, v)).expect("recherche hybride");
+            phrases.noter(&noms(&r), attendus);
         }
-        hybrides.push((etiquette.to_string(), h));
+        let mut idents = Mesure::default();
+        for nom in IDENTIFIANTS {
+            let r = Catalog::rechercher(&reel, SCOPE, nom, hybride_de(b, v)).expect("recherche d'identifiant");
+            idents.noter(&noms(&r), &[nom]);
+        }
+        hybrides.push((etiquette.to_string(), phrases, idents));
+    }
+    // Le témoin : les identifiants en vecteur seul — le chiffre du problème.
+    let mut idents_vecteur = Mesure::default();
+    for nom in IDENTIFIANTS {
+        let r = Catalog::rechercher(&reel, SCOPE, nom, options_vecteur()).expect("identifiant au vecteur");
+        idents_vecteur.noter(&noms(&r), &[nom]);
     }
 
     // ── M2 : cosinus exact contre tous les chunks, même résolution ──────
@@ -542,9 +584,11 @@ fn banc_etage_qui_perd() {
     for (etiquette, m) in &par_poids {
         eprintln!("{}", m.ligne(etiquette));
     }
-    for (etiquette, m) in &hybrides {
-        eprintln!("{}", m.ligne(etiquette));
+    for (etiquette, phrases, idents) in &hybrides {
+        eprintln!("{}", phrases.ligne(&format!("H phrases ({etiquette})")));
+        eprintln!("{}", idents.ligne_sur(&format!("I identifiants ({etiquette})"), IDENTIFIANTS.len()));
     }
+    eprintln!("{}", idents_vecteur.ligne_sur("I identifiants (vecteur seul — témoin)", IDENTIFIANTS.len()));
     eprintln!("(hybride sans sparse : granite-278m n'a pas de sortie sparse — le poids sparse reste à mesurer avec un modèle qui en a une)");
     eprintln!("\nM3 : le bon parent est dans les 20 chunks bruts pour {bon_parent_dans_les_20}/{} questions.", QUESTIONS.len());
 
