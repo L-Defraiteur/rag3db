@@ -52,11 +52,16 @@ pub struct SnapshotFinish {
     /// Absentes gardées, avec la raison (la transition ne part pas de leur
     /// état).
     pub kept: Vec<(String, String)>,
-    /// Les relations emportées avec les lignes retirées ; `None` quand le
+    /// Les relations déclarées que le retrait emportera, **comptées au plan,
+    /// avant l'écriture** : une estimation d'avant, pas un constat — une
+    /// ligne dont la suppression échoue garde les siennes. `None` quand le
     /// dialecte ne sait pas les compter.
-    pub relations_removed: Option<usize>,
+    pub relations_to_remove: Option<usize>,
     /// Les avertissements de l'écriture.
     pub warnings: Vec<String>,
+    /// `false` : un plan (`plan_snapshot_finish`), rien n'est encore écrit ;
+    /// `removed` et `transitioned` disent alors ce qui le sera.
+    pub applied: bool,
 }
 
 impl Catalog {
@@ -126,9 +131,25 @@ impl Catalog {
     /// **La fin d'une session** : les lignes du périmètre que la session n'a
     /// pas portées sont absentes ; selon `onMissing`, elles sont retirées ou
     /// passent par la transition déclarée. Les garde-fous refusent avant
-    /// toute écriture.
+    /// toute écriture. C'est `plan_snapshot_finish` puis
+    /// `apply_snapshot_finish`.
     pub fn finish_snapshot(
         &mut self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+        session: &str,
+        options: SnapshotFinishOptions,
+    ) -> Result<SnapshotFinish, CatalogError> {
+        let plan = self.plan_snapshot_finish(entity_name, scope, session, options)?;
+        self.apply_snapshot_finish(plan)
+    }
+
+    /// **Ce qu'une fin ferait, sans rien écrire** : les comptes, les
+    /// garde-fous (qui refusent ici déjà), et pour chaque absente ce qui lui
+    /// arrivera. Le plan est relu et appliqué par `apply_snapshot_finish` ;
+    /// entre les deux, la base peut changer — l'application le rapporte.
+    pub fn plan_snapshot_finish(
+        &self,
         entity_name: &str,
         scope: &BTreeMap<String, CypherValue>,
         session: &str,
@@ -245,11 +266,8 @@ impl Catalog {
                     let n = res.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
                     total = total.map(|t| t + n);
                 }
-                report.relations_removed = total;
-                for uuid in report.missing.clone() {
-                    self.mettre_en_file_la_suppression(entity_name, &uuid)?;
-                    report.removed.push(uuid);
-                }
+                report.relations_to_remove = total;
+                report.removed = report.missing.clone();
             }
             OnMissing::Transition(name) => {
                 let lc = entity_config.lifecycle.as_ref().ok_or_else(|| {
@@ -293,28 +311,90 @@ impl Catalog {
                             ));
                             continue;
                         }
-                        LifecycleVerdict::Allowed => {}
+                        LifecycleVerdict::Allowed => report.transitioned.push(uuid),
                     }
-                    // La ligne entière, sans ses colonnes internes : le hash
-                    // de contenu se calcule sur ce qu'on écrit.
-                    let mut data: BTreeMap<String, CypherValue> = row
-                        .iter()
-                        .filter(|(k, _)| !k.starts_with('_') && !crate::scope::is_scope_column(k))
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                    data.insert(lc.field.clone(), CypherValue::String(transition.to.clone()));
-                    self.mettre_en_file_la_mise_a_jour(entity_name, &uuid, data)?;
-                    report.transitioned.push(uuid);
                 }
             }
         }
-        // Une fin est une unité : elle rend une fois tout posé, quel que soit
-        // le régime d'écriture du catalogue.
+        Ok(report)
+    }
+
+    /// **Appliquer un plan de fin.** Les retraits et les transitions planifiés
+    /// sont posés puis drainés — une fin est une unité, elle rend une fois
+    /// tout posé, quel que soit le régime d'écriture. La base a pu changer
+    /// depuis le plan : une ligne disparue entre-temps est gardée et nommée,
+    /// et une transition refusée par la garde à l'écriture aussi, avec sa
+    /// cause. Le rapport ne dit que ce qui a eu lieu.
+    pub fn apply_snapshot_finish(&mut self, plan: SnapshotFinish) -> Result<SnapshotFinish, CatalogError> {
+        let mut report = plan;
+        if report.applied {
+            return Err(CatalogError::ValidationFailed("snapshot : ce plan a déjà été appliqué".into()));
+        }
+        report.applied = true;
+        let entity_name = report.entity.clone();
+        self.check_ecriture("finish_snapshot")?;
+        for uuid in &report.removed {
+            self.mettre_en_file_la_suppression(&entity_name, uuid)?;
+        }
+        if !report.transitioned.is_empty() {
+            let entity_config = self
+                .entity_configs()
+                .get(&entity_name)
+                .cloned()
+                .ok_or_else(|| CatalogError::UnknownEntity(entity_name.clone()))?;
+            let (lc, name) = match (&entity_config.lifecycle, entity_config.snapshot.as_ref().map(|s| &s.on_missing)) {
+                (Some(lc), Some(OnMissing::Transition(name))) => (lc.clone(), name.clone()),
+                _ => return Err(CatalogError::SchemaError("snapshot : transitions planifiées sans transition déclarée".into())),
+            };
+            let to = lc
+                .transitions
+                .iter()
+                .find(|t| t.name == name)
+                .map(|t| t.to.clone())
+                .ok_or_else(|| CatalogError::SchemaError(format!("snapshot : transition '{name}' non déclarée")))?;
+            let current: HashMap<String, BTreeMap<String, CypherValue>> = self
+                .get_many(&entity_name, &report.transitioned)?
+                .into_iter()
+                .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
+                .collect();
+            let planned = std::mem::take(&mut report.transitioned);
+            for uuid in planned {
+                let Some(row) = current.get(&uuid) else {
+                    report.kept.push((uuid, "introuvable à la relecture".into()));
+                    continue;
+                };
+                // La ligne entière, sans ses colonnes internes : le hash de
+                // contenu se calcule sur ce qu'on écrit. La garde de la
+                // machine à états juge à l'écriture.
+                let mut data: BTreeMap<String, CypherValue> = row
+                    .iter()
+                    .filter(|(k, _)| !k.starts_with('_') && !crate::scope::is_scope_column(k))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                data.insert(lc.field.clone(), CypherValue::String(to.clone()));
+                self.mettre_en_file_la_mise_a_jour(&entity_name, &uuid, data)?;
+                report.transitioned.push(uuid);
+            }
+        }
         if !(report.removed.is_empty() && report.transitioned.is_empty()) {
             let res = self.drain();
             // Le rapport ne dit que ce qui a eu lieu : une transition refusée
             // au drain (l'état relu à un autre instant) quitte `transitioned`
-            // pour `kept`, avec la cause que porte `UpdateStatus::Failed`.
+            // pour `kept`, avec la cause que porte `UpdateStatus::Failed` ;
+            // une suppression qui échoue quitte `removed` de même — une
+            // ligne qu'on croit retirée ne serait jamais retentée. Le refus à
+            // l'écriture est éprouvé par `e2e_synchronisation` (plan, état
+            // changé, application) ; l'échec d'une suppression ne se provoque
+            // pas aujourd'hui : la boucle n'est pas couverte, elle n'est pas
+            // morte pour autant.
+            for del in &res.delete_results {
+                if let Some(cause) = &del.echec {
+                    if let Some(pos) = report.removed.iter().position(|u| u == &del.uuid) {
+                        let uuid = report.removed.remove(pos);
+                        report.kept.push((uuid, format!("suppression refusée : {cause}")));
+                    }
+                }
+            }
             for update in &res.update_results {
                 if let crate::records::UpdateStatus::Failed(cause) = &update.status {
                     if let Some(pos) = report.transitioned.iter().position(|u| u == &update.uuid) {
