@@ -772,7 +772,14 @@ impl PreparedBackend {
             ),
             None => (None, None),
         };
+        // Un modèle de décision déclaré se joint à l'ouverture : un service
+        // injoignable se dit ici, pas au premier outil qui s'en sert.
+        let decider = match self.manifest.models.get(&crate::model_source::Capability::Decide) {
+            Some(source) => Some(crate::decider::connect_decider(source)?.0),
+            None => None,
+        };
         Ok(Backend {
+            decider,
             prepared: self,
             catalog: Arc::new(Mutex::new(cat)),
             #[cfg(feature = "code")]
@@ -1005,6 +1012,9 @@ pub struct Backend {
     /// La porte des commandes déclarée ; absente, `run` refuse tout.
     #[cfg(feature = "code")]
     garde: Option<Arc<crate::commande::Garde>>,
+    /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
+    /// la clé `crate::decider::DECIDER_SERVICE`.
+    decider: Option<Arc<dyn crate::decider::Decider>>,
 }
 impl Backend {
     /// Library API shared by applications and future transports. No MCP dispatch.
@@ -1223,6 +1233,9 @@ impl Backend {
             .unwrap()
             .register_search_services(&mut services);
         services.register("catalog", self.catalog.clone());
+        if let Some(decider) = &self.decider {
+            services.register(crate::decider::DECIDER_SERVICE, decider.clone());
+        }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
         // refusent d'eux-mêmes.
@@ -1473,6 +1486,7 @@ mod tests {
             catalog.register_entity(name, config).unwrap();
         }
         let backend = Backend {
+            decider: None,
             prepared,
             catalog: Arc::new(Mutex::new(catalog)),
             #[cfg(feature = "code")]
@@ -1661,6 +1675,7 @@ mod tests {
         let file_source =
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
+            decider: None,
             prepared,
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),

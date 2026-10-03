@@ -184,6 +184,9 @@ pub mod estimate;
 /// Un modèle, en service ou en local : la déclaration commune à toute
 /// capacité, et sa résolution en un client.
 pub mod model_source;
+/// La décision : un texte, des options, une probabilité par option —
+/// premier client neuf de `model_source`.
+pub mod decider;
 /// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
 /// entités, des graphes, des composants, et des motifs qui s'appliquent aux
 /// trois. Voir `docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md`.
