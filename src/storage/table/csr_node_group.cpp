@@ -75,7 +75,7 @@ void CSRNodeGroup::initializeScanState(const Transaction* transaction,
         nodeGroupScanState.numCachedRows = 0;
         nodeGroupScanState.nextCachedRowToScan = 0;
         nodeGroupScanState.source = CSRNodeGroupScanSource::COMMITTED_PERSISTENT;
-    } else if (csrIndex) {
+    } else if (hasCSRIndex()) {
         initScanForCommittedInMem(relScanState, nodeGroupScanState);
     } else {
         nodeGroupScanState.source = CSRNodeGroupScanSource::NONE;
@@ -143,7 +143,7 @@ NodeGroupScanResult CSRNodeGroup::scan(const Transaction* transaction,
         switch (nodeGroupScanState.source) {
         case CSRNodeGroupScanSource::COMMITTED_PERSISTENT: {
             auto result = scanCommittedPersistent(transaction, relScanState, nodeGroupScanState);
-            if (result == NODE_GROUP_SCAN_EMPTY_RESULT && csrIndex) {
+            if (result == NODE_GROUP_SCAN_EMPTY_RESULT && hasCSRIndex()) {
                 initScanForCommittedInMem(relScanState, nodeGroupScanState);
                 continue;
             }
@@ -252,6 +252,7 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMem(const Transaction* transact
                 tableState.cachedBoundNodeSelVector[tableState.currBoundNodeIdx];
             const auto boundNodeOffset = tableState.nodeIDVector->readNodeOffset(boundNodePos);
             const auto offsetInGroup = boundNodeOffset % StorageConfig::NODE_GROUP_SIZE;
+            std::shared_lock lck{csrIndexMtx};
             nodeGroupScanState.inMemCSRList = csrIndex->indices[offsetInGroup];
         }
         if (!nodeGroupScanState.inMemCSRList.isSequential) {
@@ -338,6 +339,7 @@ void CSRNodeGroup::appendChunkedCSRGroup(const Transaction* transaction,
     }
     auto startRow = NodeGroup::append(transaction, columnIDs, chunkedGroupForProperties, 0,
         chunkedGroup.getNumRows());
+    std::unique_lock lck{csrIndexMtx};
     if (!csrIndex) {
         csrIndex = std::make_unique<CSRIndex>();
     }
@@ -353,6 +355,7 @@ void CSRNodeGroup::append(const Transaction* transaction, const std::vector<colu
     row_idx_t numRows) {
     const auto startRow =
         NodeGroup::append(transaction, columnIDs, chunks, startRowInChunks, numRows);
+    std::unique_lock lck{csrIndexMtx};
     if (!csrIndex) {
         csrIndex = std::make_unique<CSRIndex>();
     }

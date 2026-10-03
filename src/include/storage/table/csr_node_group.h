@@ -1,5 +1,6 @@
 #pragma once
 
+#include <shared_mutex>
 #include <array>
 #include <bitset>
 
@@ -284,7 +285,16 @@ private:
 
 private:
     std::unique_ptr<ChunkedNodeGroup> persistentChunkGroup;
+    // The index of the relationships committed in memory is created by the first commit that
+    // appends to this group and grows with each one, while scans of other connections read it
+    // and copy its lists. Appends take this mutex exclusively, scans share it. The checkpoint
+    // needs nothing more: no transaction runs while it rewrites or frees the index.
+    mutable std::shared_mutex csrIndexMtx;
     std::unique_ptr<CSRIndex> csrIndex;
+    bool hasCSRIndex() const {
+        std::shared_lock lck{csrIndexMtx};
+        return csrIndex != nullptr;
+    }
 };
 
 } // namespace storage

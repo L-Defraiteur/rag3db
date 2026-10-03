@@ -217,7 +217,7 @@ std::unique_ptr<ChunkedNodeGroup> InMemChunkedCSRNodeGroup::flush(
     ChunkedCSRHeader newCSRHeader{std::move(csrOffset), std::move(csrLength)};
     auto flushedChunkedGroup = std::make_unique<ChunkedCSRNodeGroup>(std::move(newCSRHeader),
         std::move(flushedChunks), 0 /*startRowIdx*/);
-    flushedChunkedGroup->versionInfo = std::make_unique<VersionInfo>();
+    flushedChunkedGroup->setVersionInfo(std::make_unique<VersionInfo>());
     KU_ASSERT(numRows == flushedChunkedGroup->getNumRows());
     flushedChunkedGroup->versionInfo->append(transaction->getID(), 0, numRows);
     return flushedChunkedGroup;
@@ -280,7 +280,7 @@ std::unique_ptr<ChunkedCSRNodeGroup> ChunkedCSRNodeGroup::deserialize(MemoryMana
     deSer.deserializeValue<bool>(hasVersions);
     if (hasVersions) {
         deSer.validateDebuggingInfo(key, "version_info");
-        chunkedGroup->versionInfo = VersionInfo::deserialize(deSer);
+        chunkedGroup->setVersionInfo(VersionInfo::deserialize(deSer));
     }
     return chunkedGroup;
 }

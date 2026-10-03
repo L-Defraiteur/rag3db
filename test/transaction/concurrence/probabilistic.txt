@@ -10,17 +10,6 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Hot
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash
 #
-# C5 — double suppression de la même ligne (3 octobre, 200 répétitions par variante) :
-# rouge 2/200 à chaud, 2/200 après réouverture, 52/200 après arrêt brutal — les deux
-# suppressions valident, sans conflit d'écriture. C'est la course du chemin de
-# suppression sans verrou que le plan déduisait (marche A5). Hypothèse non vérifiée sur
-# l'écart : dans la variante Crash, le processus fils ouvre une base dont les lignes
-# viennent du disque, sans informations de version en mémoire, que les deux
-# suppressions créent en même temps.
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Hot
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Reopen
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Crash
-#
 # H4 — le mélange de C7 sur une table indexée par HNSW (3 octobre) : le processus
 # écrivain meurt (SIGSEGV, ou SIGABRT sur « corrupted double-linked list »), et la base
 # ne se rouvre parfois plus (« Found duplicated primary key value » au rejeu).
