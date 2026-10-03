@@ -23,6 +23,22 @@
 //! poste se calibre en quelques lots, et le même code sert l'iGPU d'un
 //! portable comme une carte dédiée qu'on partage.
 //!
+//! # Ce que le régulateur change, et ce qu'il ne change pas
+//!
+//! Il ne change que **la taille des lots** : chaque texte est embarqué une
+//! fois, écrit une fois, avec son marqueur. Avec un embarqueur déterministe
+//! les vecteurs sont identiques au bit près
+//! (`le_regulateur_ne_change_que_la_taille_des_lots`).
+//!
+//! Avec un vrai modèle en Flex32, **la composition d'un lot déplace un
+//! vecteur de quelques 1e-5** : le lot est rembourré à son texte le plus
+//! long, et la demi-précision n'arrondit pas pareil selon ce rembourrage.
+//! Mesuré le 3 octobre 2026 sur granite-278m, 64 textes : 4,4e-5 d'écart
+//! absolu maximal entre un texte seul et le même dans un lot, zéro quand on
+//! rejoue le même découpage. C'est l'ordre de grandeur de l'écart entre deux
+//! cartes, et c'était déjà vrai de tout changement de budget de lot : ce
+//! n'est pas un bug du régulateur.
+//!
 //! # Ce qui est pur ici, et ce qui ne l'est pas
 //!
 //! [`BurstPacer`] ne lit pas l'heure et ne dort pas : on lui **donne** la
@@ -250,7 +266,24 @@ pub enum Batches {
 /// `holds_card` : cet appelant soumet lui-même à la carte (l'embarqueur
 /// n'est pas `distant`). Sinon c'est celui qui la tient qui règle le rythme.
 pub fn plan(lens: &[usize], advice: Option<(usize, usize)>, default_items: usize, holds_card: bool) -> Batches {
-    plan_with(lens, advice, default_items, if holds_card { active() } else { None })
+    if !holds_card {
+        let explicit = std::env::var("RAG3WEAVER_EMBED_CHAR_BUDGET").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);
+        return plan_remote(lens, advice, default_items, explicit);
+    }
+    plan_with(lens, advice, default_items, active())
+}
+
+/// **Le découpage pour un embarqueur distant** : le lot que son modèle
+/// conseille, quelle que soit la carte d'ici.
+///
+/// Rétrécir les lots ménage la carte *de celui qui calcule* ; quand c'est un
+/// service, c'est à lui de la protéger, et il le fait (`EmbedDaemon::par_lots`
+/// redécoupe ce qu'il reçoit). Mesuré le 3 octobre 2026 : sous `confort`, le
+/// client envoyait au service d'un autre poste des lots de 2 048 caractères —
+/// deux morceaux par requête — et la carte distante attendait à 28 %.
+/// Un `RAG3WEAVER_EMBED_CHAR_BUDGET` écrit garde le dernier mot.
+pub fn plan_remote(lens: &[usize], advice: Option<(usize, usize)>, default_items: usize, explicit: Option<usize>) -> Batches {
+    Batches::Fixed(stable_batches(lens, lot_budget_si(advice, default_items, explicit, false, EMBED_CHAR_BUDGET)))
 }
 
 /// [`plan`], les réglages en paramètre — pour les tests.
@@ -590,5 +623,20 @@ mod tests {
             start = lot.end;
         }
         assert_eq!(start, lens.len());
+    }
+
+    /// Un embarqueur distant reçoit le lot que son modèle conseille : la
+    /// carte d'ici, partagée ou non, n'a rien à y voir.
+    #[test]
+    fn un_embarqueur_distant_recoit_le_lot_du_modele() {
+        let lens = vec![1_000usize; 300];
+        let Batches::Fixed(lots) = plan_remote(&lens, Some((32, 512)), 32, None) else { panic!("découpé d'avance") };
+        assert_eq!(lots[0], 0..32, "32 séquences, pas deux : {:?}", &lots[..2]);
+        // Sans conseil, l'optimum mesuré — pas le budget prudent du régime.
+        let Batches::Fixed(lots) = plan_remote(&lens, None, 32, None) else { panic!("découpé d'avance") };
+        assert_eq!(lots[0], 0..8);
+        // Un budget écrit garde le dernier mot.
+        let Batches::Fixed(lots) = plan_remote(&lens, Some((32, 512)), 32, Some(2_048)) else { panic!("découpé d'avance") };
+        assert_eq!(lots[0], 0..2);
     }
 }
