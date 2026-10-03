@@ -59,7 +59,14 @@ session cœur C++ et une passe `known_red` verte). **Depuis, `concurrence_test.k
 entre dans la liste de livraison de toute marche du moteur.** Les branches
 `banc-de-concurrence` (`00b2a0263`) et `banc-de-concurrence-sur-7928974` sur `origin`
 sont des états d'avant rebase, laissées sans force : à supprimer par Lucie. Les six
-remarques de la relecture se traitent sur une branche neuve.
+remarques de la relecture sont fusionnées le 3 octobre (`banc-remarques-de-relecture`,
+en avance rapide, comparaison `known_red` verte contre le moteur de la marche 1, du
+refus après un point de reprise échoué et du correctif HNSW : aucun rouge connu n'a
+bougé). Depuis, `known_red.txt` épingle la raison de chaque rouge (étiquettes
+`[check: …]`) : une marche qui corrige un cas retire sa ligne dans son commit. La passe
+ThreadSanitizer du banc (`concurrence_tsan.signatures`) ne vit que dans un build TSan.
+**La course de A5 fait planter le processus** (SIGSEGV dans `VersionInfo::isSelected`
+et `isDeleted`, piles dans la spécification du banc, §10).
 
 **Budget de reprise du lecteur en lecture seule : décidé le 3 octobre, il reste
 à 250 ms** (`PATIENCE_OUVERTURE_MS`). Le pic à 567 ms mesuré à `20a8f6ee8` venait

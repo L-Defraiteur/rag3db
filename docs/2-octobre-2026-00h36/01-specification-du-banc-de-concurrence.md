@@ -290,3 +290,8 @@ Relecture de `455939802` par la session cœur C++, qui l'a jugé fusionnable tel
     et C6 se stabilisent dès la première passe.
 
   Elle dure de 50 à 60 s.
+
+**Règle, posée le 3 octobre** : tout cas ou tout contrôle du banc qui dépend du sens de
+parcours d'une relation doit forcer ce sens par une indication de jointure (`HINT`) et
+le vérifier par `EXPLAIN`. Un `WITH` ou l'ordre d'écriture du motif ne forcent rien :
+l'optimiseur choisit, et un mauvais choix efface en silence ce que le cas cherche.
