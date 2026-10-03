@@ -4996,6 +4996,21 @@ impl Catalog {
                 // Les copies lues sont vidées une fois l'écriture faite.
                 self.clear_aside(entity_name, &aside_return.consumed)?;
                 self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+                // **Dire ce qui a changé**, et seulement au succès : une
+                // ingestion qui échoue n'a rien changé, et l'annoncer ferait
+                // relire des mémoires pour rien.
+                //
+                // `uuids_ingeres` et non `uuids_du_lot` : le second porte tout
+                // le lot, parce qu'une ligne inchangée a quand même été **vue**
+                // par la session ; le premier ne porte que ce qui est descendu
+                // dans le graphe, les refus de la machine à états retirés. Vu
+                // n'est pas changé.
+                if !uuids_ingeres.is_empty() {
+                    self.emit_event(CatalogEvent::EntitiesChanged {
+                        entity: entity_name.to_string(),
+                        uuids: uuids_ingeres.clone(),
+                    });
+                }
                 // Les lignes refusées par la machine à états ne sont jamais
                 // descendues dans le graphe : elles sortent du compte des
                 // traitées et entrent dans celui des échecs, avec leur cause.

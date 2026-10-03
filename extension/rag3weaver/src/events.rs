@@ -255,6 +255,26 @@ pub enum Event {
         uuid: String,
         chunks_created: usize,
     },
+    /// **Ce qu'une ingestion a réellement écrit, et qui avait changé.**
+    ///
+    /// Posé pour la mémoire longue : une mémoire accrochée à une chose doit
+    /// passer « à revoir » quand la chose **change**. La synchronisation, elle,
+    /// ne sait que ce qui **manque** — or le cas courant est un fichier édité,
+    /// pas un fichier disparu. `split_unchanged` connaît déjà la réponse :
+    /// séparer le changé de l'inchangé est son travail. Cet événement ne
+    /// calcule rien, il le dit.
+    ///
+    /// **Ce n'est pas la marque de session.** `marquer_les_ecritures` porte sur
+    /// *tout* le lot, parce qu'une ligne inchangée a quand même été **vue** ;
+    /// ici on ne porte que ce qui est descendu dans le graphe, une fois les
+    /// refus de la machine à états retirés. Vu ≠ changé, et confondre les deux
+    /// ferait relire des mémoires que rien n'a touchées.
+    ///
+    /// Émis **au succès seulement** : une ingestion qui échoue n'a rien changé.
+    EntitiesChanged {
+        entity: String,
+        uuids: Vec<String>,
+    },
     EntityUpdated {
         entity: String,
         uuid: String,
@@ -286,6 +306,7 @@ impl Event {
             Self::SearchStarted { .. } | Self::SearchCompleted { .. } => topic::SEARCH,
             Self::LlmCall { .. } | Self::ToolCallStarted { .. } | Self::ToolCallFinished { .. } => topic::AGENT,
             Self::TurnCompacted { .. } | Self::Consumed { .. } => topic::AGENT,
+            Self::EntitiesChanged { .. } => topic::CATALOG,
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             _ => topic::CATALOG,
@@ -338,6 +359,10 @@ impl Event {
                 "resource": resource, "provider": provider,
                 "units": units.iter().map(|(u, n)| json!({ "unit": u.as_str(), "amount": n }))
                     .collect::<Vec<_>>(),
+            }),
+            Self::EntitiesChanged { entity, uuids } => json!({
+                "kind": "EntitiesChanged", "entity": entity, "uuids": uuids,
+                "count": uuids.len(),
             }),
             Self::TurnCompacted { run, rewritten, kept, dropped } => json!({
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,

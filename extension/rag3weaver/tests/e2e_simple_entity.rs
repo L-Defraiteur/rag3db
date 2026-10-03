@@ -1958,3 +1958,90 @@ fn l_avancement_de_l_index_se_lit_en_base() {
     assert_eq!(catalog.embedding_rate("granite-278m", "local").unwrap(), Some(Rate { chars_per_second: 81_500.0 }));
     assert_eq!(catalog.embedding_rate("granite-278m", "127.0.0.1:7979").unwrap(), None);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ce qu'une ingestion a changé, et qu'elle le dise
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Les `EntitiesChanged` vus sur le sujet `catalog`, à plat.
+///
+/// Une macro et non une fonction : le récepteur de `Catalog::subscribe` est un
+/// `Stream`, pas un `Iterator`, et le nommer ferait entrer une dépendance de
+/// plus dans les tests pour six lignes.
+macro_rules! changees {
+    ($bus:expr) => {{
+        let mut vus: Vec<String> = Vec::new();
+        while let Ok(event) = $bus.try_recv() {
+            if let rag3weaver::CatalogEvent::EntitiesChanged { uuids, .. } = event {
+                vus.extend(uuids);
+            }
+        }
+        vus.sort();
+        vus
+    }};
+}
+
+/// **Une mémoire accrochée à une chose doit savoir quand la chose change.**
+///
+/// La synchronisation ne sait que ce qui **manque** ; l'ingestion sait ce qui a
+/// **changé**, et c'est le cas courant — un fichier édité, pas disparu.
+/// `split_unchanged` connaît déjà la réponse : cet événement ne la calcule pas,
+/// il la dit.
+///
+/// Trois choses à prouver, et la troisième est celle qui a demandé une
+/// relecture : **ce qui est refusé n'a pas changé**.
+#[test]
+#[ignore]
+fn une_ingestion_dit_ce_qu_elle_a_change() {
+    let mut catalog = setup_simple_catalog(4);
+    catalog.register_entity("Ticket", ticket_config()).unwrap();
+    let mut bus = catalog.subscribe();
+
+    let ticket = |titre: &str, corps: &str, etat: &str| {
+        let mut d = BTreeMap::new();
+        d.insert("title".to_string(), CypherValue::String(titre.into()));
+        d.insert("body".to_string(), CypherValue::String(corps.into()));
+        d.insert("status".to_string(), CypherValue::String(etat.into()));
+        d
+    };
+    let uuid_de = |catalog: &Catalog, titre: &str| {
+        catalog.entity_uuid("Ticket", &ticket(titre, "", "open")).unwrap()
+    };
+
+    // 1. Trois naissances : les trois ont changé.
+    catalog.ingest_entities("Ticket", vec![
+        ticket("un", "le premier corps", "open"),
+        ticket("deux", "le deuxième corps", "open"),
+        ticket("trois", "le troisième corps", "open"),
+    ]).unwrap();
+    let mut attendu = vec![uuid_de(&catalog, "un"), uuid_de(&catalog, "deux"), uuid_de(&catalog, "trois")];
+    attendu.sort();
+    assert_eq!(changees!(bus), attendu, "trois naissances, trois changements");
+
+    // 2. **La même chose : rien n'a changé, donc rien n'est dit.** C'est la
+    // moitié qui compte : un événement émis à chaque ingestion ferait relire
+    // toutes les mémoires à chaque passe, et ne vaudrait rien.
+    catalog.ingest_entities("Ticket", vec![
+        ticket("un", "le premier corps", "open"),
+        ticket("deux", "le deuxième corps", "open"),
+    ]).unwrap();
+    assert!(changees!(bus).is_empty(), "une ré-ingestion identique ne change rien");
+
+    // 3. Une ligne change, une autre non : seule la première est dite.
+    catalog.ingest_entities("Ticket", vec![
+        ticket("un", "le premier corps, réécrit", "open"),
+        ticket("deux", "le deuxième corps", "open"),
+    ]).unwrap();
+    assert_eq!(changees!(bus), vec![uuid_de(&catalog, "un")], "seule la ligne réécrite");
+
+    // 4. **Ce que la machine à états refuse n'a pas changé.** `open -> closed`
+    // n'est pas déclarée : la ligne ne descend pas dans le graphe, donc elle
+    // n'a rien changé et ne doit pas être annoncée. Émettre juste après le
+    // court-circuit de l'inchangé l'aurait dite changée — un rapport ne dit
+    // que ce qui a eu lieu.
+    let flush = catalog.ingest_entities("Ticket", vec![
+        ticket("trois", "le troisième corps", "closed"),
+    ]).unwrap();
+    assert_eq!(flush.failed, 1, "la transition open -> closed n'est pas déclarée : {flush:?}");
+    assert!(changees!(bus).is_empty(), "une ligne refusée n'a rien changé");
+}

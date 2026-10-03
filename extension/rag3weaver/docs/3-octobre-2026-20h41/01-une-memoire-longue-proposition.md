@@ -402,6 +402,16 @@ protocole de §2.2 avec un autre critère**. Je ne propose pas un second
 dispositif anti-doublon : la force de l'idée de Lucie est que c'est la même
 décision. Un seul nœud, un seul protocole, deux critères.
 
+**La découpe de cette décision n'est pas arrêtée, et elle ne doit pas l'être
+par ce document** (voir §7.7). La mesure dit que « variante » est l'étiquette
+que tout le monde rate ; elle ne dit pas quelle découpe la remplace. Un choix
+à deux, deux oui/non enchaînés, un « sous-sujet de » : trois formes possibles,
+et on n'a pas de quoi trancher.
+
+Donc la seule chose que la conception fixe, c'est que **le critère et la liste
+fermée sont des données du graphe**, pas du code. Changer la découpe doit être
+une ligne de gabarit, pas un correctif.
+
 ### 7.3 Ce qui fait vieillir une note sans ancre concrète
 
 - **La date**, déjà là.
@@ -518,6 +528,70 @@ latence, c'est une contention — et sur ce poste, un démon sur la carte
 intégrée fige l'écran. La voie encodeur, à 150–420 millions de paramètres en
 une passe, n'a pas ce défaut. C'est un argument qui ne figure dans aucun
 tableau de performances.
+
+### 7.7 Ce que la mesure a tranché
+
+La session optimiseur a mesuré
+([son document](../optimiseur/3-octobre-2026-20h55/02-les-modeles-de-decision-mesures.md)).
+Quatre choses sont désormais établies, et deux changent la conception.
+
+**« Un ordre n'est pas un verdict » est vérifié sur nos phrases, avec un
+chiffre.** Le cosinus et le reranker trouvent le bon candidat parmi dix à
+chaque fois ; mais le cosinus note en moyenne une **contradiction à 0,85** et
+une **redite à 0,83**. Deux relations opposées, deux notes qu'un seuil ne
+sépare pas. Les deux étages ne sont donc pas une précaution d'architecte,
+c'est la seule forme qui marche.
+
+**Les seuils par critère passent de prudents à nécessaires.** Un seul modèle
+remplit la condition de score comparable, et chez lui le seuil sans fausse
+fusion vaut **0,50 pour les sujets et 0,07 pour les mémoires**. Un seuil
+global aurait fusionné à tort sur l'un ou refusé tout sur l'autre.
+
+**L'abstention n'existe pas, il faut donc que la zone la fabrique.** Aucun
+modèle ne s'abstient quand on lui en offre l'option. Ma condition 5 traitait
+ça comme un repli ; c'est le seul chemin. Le nœud **possède** l'abstention,
+il ne la demande pas.
+
+**Un signal fort sur « variante », et une conclusion que j'ai tirée trop
+vite.** Le verdict à quatre options de `remember` tient à 85 % ; celui des
+sujets en *même / variante / sans rapport* tombe à 64 %, et c'est « variante »
+que tout le monde rate — la frontière est discutable **même entre nous**.
+J'en ai conclu qu'il fallait deux options nettes. **C'était prématuré**, et
+Lucie l'a arrêté : la mesure dit qu'une découpe particulière est difficile,
+elle ne dit pas laquelle la remplace. Un choix à deux, deux oui/non enchaînés,
+un « sous-sujet de » — trois formes au moins, et rien pour choisir.
+
+Ce qui reste vrai, et qui suffit : **une option sur laquelle des humains ne
+s'accordent pas n'a rien à faire dans une liste fermée offerte à un modèle.**
+C'est une contrainte sur la façon de valider une découpe, pas la désignation
+d'une découpe.
+
+**Donc rien n'est figé, et le nœud est écrit pour ça** : l'étage 2 reste sur
+« demander toujours », aucun modèle n'est branché, et le critère comme la liste
+de choix sont des **données du graphe**. Un diagnostic de formulation est en
+cours ; quand il rendra, changer la découpe devra coûter une ligne de gabarit.
+Le mot de Lucie : « ça reste une expérimentation, faut pas courir avec avant
+d'avoir trouvé si une bonne manière de s'en servir existe. »
+
+**Le coût, et une conséquence pour le nombre fixe de candidats.** Le seul
+modèle qui décide coûte 2 s par décision sur processeur, **4,4 s à dix
+candidats**, et passe par `llama-server`. Les petits encodeurs répondent en
+54–117 ms mais ne décident pas sur nos critères (45 % et 31 % pour trois
+choix, le hasard étant à 33 %). Donc le nombre fixe d'options du §7.5 point 4
+est aussi un **réglage de latence**, et les deux exigences poussent dans le
+même sens : **peu de candidats**. Trois vaut mieux que dix, pour la
+comparabilité comme pour le temps.
+
+**Les réserves de la mesure, et ce qui les lève.** 42 et 20 paires, étiquetées
+par une seule personne, et **les seuils réglés sur les paires mêmes qui
+servent à juger** — donc les AUC annoncés sont une borne haute, pas une
+performance attendue. Rien n'a été mesuré sur la carte.
+
+C'est exactement le trou que le banc de §4 bouche, et ce n'était pas prévu
+pour ça : son scénario est **écrit**, donc il produit des paires dont la
+réponse est connue *sans que personne les ait étiquetées*. Elles sont donc un
+jeu de contrôle indépendant des seuils. Les deux travaux se tiennent : la
+mesure donne les seuils, le banc dit s'ils tiennent ailleurs.
 
 **Les trois zones, et leur asymétrie assumée.** Les coûts ne sont pas
 symétriques, donc les zones ne doivent pas l'être :
