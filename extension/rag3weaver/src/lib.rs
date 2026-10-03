@@ -173,6 +173,8 @@ pub mod scope;
 pub mod embedding_storage;
 /// Par quel modèle on commence — l'heuristique du premier index (7 septembre 2026).
 pub mod embedding_choice;
+/// La rafale se règle en durée, pas en caractères — pour une carte que l'affichage partage (3 octobre 2026).
+pub mod burst;
 /// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
 /// entités, des graphes, des composants, et des motifs qui s'appliquent aux
 /// trois. Voir `docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md`.
