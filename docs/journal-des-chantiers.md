@@ -187,6 +187,13 @@ quatre commits anciens en portent encore — un de février 2026, trois de
 l'amont Kuzu de 2025 — et ne sont pas réécrits : cela changerait tous les
 hash du dépôt public.
 
+**3 octobre 2026** : étapes 1 et 2 du pas C livrées et fusionnées — l'échelle
+de préséance sur la fusion (`weights` choix / `default_weights` défaut,
+`search_base` migré) et `FieldWeightNode` (pondération par valeur de champ,
+posé d'office, neutre sans déclaration — prouvé au banc par contre-épreuve,
+référence du corpus 5 278 : tel quel 0,333, G 0,409). Mesures de pondération
+et gabarits de dérivées en cours ; rien posé dans `Scope`.
+
 ## 5. Hors de ce dépôt
 
 À confirmer par qui s'en souvient : ces lignes viennent de la mémoire des

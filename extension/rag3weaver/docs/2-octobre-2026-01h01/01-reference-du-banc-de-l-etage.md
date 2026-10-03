@@ -107,3 +107,14 @@ questions), deux fois avec chaque fichier :
   de référence : un écart de cet ordre ne se lit pas.
 - Les références à retenir : **tel quel 0,333, G 0,412 ± 0,002, M2 0,342,
   M1b 0,390.**
+
+
+## Addendum du 3 octobre 2026 — la référence suit son corpus
+
+Le pas C (étapes 1 et 2, branche `pas-c-ponderations`) ajoute ~650 lignes à
+`src/` : le corpus vivant passe de 5 247 à **5 278 scopes**, et G glisse de
+0,412 à **0,409** (R@1 13 et R@5 27 inchangés). Prouvé par contre-épreuve —
+une passe sans le nœud `weigh` (gabarit d'avant, même corpus) rend
+exactement le même 0,409 : c'est le corpus, pas le nœud, qui est neutre au
+millième près. **La référence de ce corpus-ci : tel quel 0,333 / 9 / 24 ;
+G 0,409 / 13 / 27.** Toute mesure du pas C se compare à celle-là.
