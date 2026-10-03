@@ -44,6 +44,8 @@ pub mod llm_nodes;
 pub mod ocr_nodes;
 #[cfg(feature = "code")]
 pub mod code_nodes;
+#[cfg(feature = "code")]
+pub mod index_nodes;
 pub mod migrations;
 pub mod services;
 
@@ -90,6 +92,8 @@ pub use code_nodes::{
     CodeIngestNode, CodeIngestNodeFactory, EditFileNode, EditFileNodeFactory, GrepNode, GrepNodeFactory,
     ListFilesNode, ListFilesNodeFactory, ParseCodeNode, ParseCodeNodeFactory, ReadFileNode, ReadFileNodeFactory,
 };
+#[cfg(feature = "code")]
+pub use index_nodes::{EstimateNode, EstimateNodeFactory};
 pub use llm_nodes::{LlmNode, LlmNodeFactory, LLM_SERVICE, NODE_REGISTRY_SERVICE};
 pub use checkpoint::{
     CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,
