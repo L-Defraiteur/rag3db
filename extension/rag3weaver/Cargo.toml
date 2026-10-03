@@ -405,7 +405,9 @@ cubek-tile = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
 [[bin]]
 name = "rag3weaver-backend"
 path = "src/bin/rag3weaver-backend.rs"
-required-features = ["daemon", "rag3db-native"]
+# `code` depuis le 3 octobre 2026 : les nœuds de la surface agent de code
+# existent dans le binaire — la politique par outil les tient.
+required-features = ["daemon", "rag3db-native", "code"]
 
 [[bin]]
 name = "rag3weaver-chat"
