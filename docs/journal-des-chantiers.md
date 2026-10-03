@@ -41,13 +41,11 @@ travailler ; chacune a rendu un rapport et un knowledge dump dans
 `…/orchestration/01-rapport-de-session.md`, §6.** `master` est à jour, vert,
 l'arbre principal est sur `master`.
 
-Cinq branches en cours, toutes poussées, aucune fusionnée (les noms
+Branches encore en cours, toutes poussées (les noms
 `rag3db-xx` changent à chaque relance : se fier au sujet) :
 
 | Branche | Arbre | Session (sujet) | État au 2 octobre, 01 h 25 | Premier geste |
 |---|---|---|---|---|
-| `lecteur-reverifie-a-l-ouverture` (`6bc8ce632`) | `../rag3db-moteur` | cœur C++ | Marche 1 « en cours » : crochet de test, quatre tests déterministes, revérification ; tests ciblés 17/17, suites complètes non rejouées. | Rebaser, rejouer les suites, rendre le tableau ; la livraison se fait depuis l'arbre principal. |
-| `reprise-apres-panne-index-cle-primaire` (`a486fde9c`) | `../rag3db-moteur` | cœur C++ | Le correctif est sur `master` (`6bf46150b`) ; reste un commit de test seul (panne pendant la phase de stockage, 38 s). | Relire, fusionner avec la marche 1. |
 | `pas-c-ponderations` (`130984f61`) | `../rag3db-pas-c` | recherche | Quatre tests de l'ordre de priorité écrits, logique à coder. | Coder les étapes 1 et 2, arrêt avant fusion. |
 | `regime-carte-partagee` (`48d43fdce`) | `../rag3db-embarquements` | embarquements | **3 octobre** : régulateur de rafale (durée visée + pause) branché dans l'ingestion et le démon, écran ménagé par défaut quand la seule carte le porte, `CardClass::Integrated` dite par le pilote, troisième déclencheur de 107m, et `RAG3WEAVER_EMBED_SERVICE` (s'attacher à un service d'embarquement, tests compris). Tests unitaires verts, `e2e_undo` vert par le service distant. Le service tourne sur luciepc : `extension/rag3weaver/docs/3-octobre-2026-14h26/02-le-service-d-embarquement-sur-l-autre-poste.md`. | Mesurer deux ou trois couples (rafale, pause) sur ce poste, carte libre et Lucie devant l'écran ; elle choisit le défaut ; rebaser, puis fusion. |
 
@@ -63,9 +61,21 @@ entre dans la liste de livraison de toute marche du moteur.** Les branches
 sont des états d'avant rebase, laissées sans force : à supprimer par Lucie. Les six
 remarques de la relecture se traitent sur une branche neuve.
 
+La **marche 1** (le lecteur revérifie à l'ouverture) est fusionnée dans `master`
+le 3 octobre 2026, en avance rapide depuis la branche locale `livraison-marche-1` :
+le commit de test de `reprise-apres-panne-index-cle-primaire`, les quatre tests
+rouges, puis `94f336ef5` et `cb8579761` fondus en un commit `feat(lecteur)`. Passe
+de livraison : transaction_test 63/63, api_test 102/102, `LecteursConcurrents.*`
+cinq fois vert (0 incohérence, 1 à 2 refus transitoires par passe),
+`concurrence_test.known_red` vert, lib 1111, douze suites e2e, sept scripts du
+backend. `un_lecteur_qui_insiste_pendant_qu_on_ecrit` (ignoré, non livré) joué dix
+fois : 0 refus, 80 lectures sur 80, 0 incohérence à chaque passe. Les branches
+`lecteur-reverifie-a-l-ouverture`, `lecteur-reverifie-a-l-ouverture-sur-7928974`
+et `reprise-apres-panne-index-cle-primaire` sur `origin` sont à supprimer par Lucie.
+
 `synchronisation-par-perimetre` est fusionnée dans `master` le 3 octobre 2026
-(dernière branche `-4`, en avance rapide). Les branches `synchronisation-par-perimetre`,
-`-2` et `-3` sur `origin` sont des états d'avant rebase, laissées sans force : à
+(dernière branche `-5`, en avance rapide). Les branches `synchronisation-par-perimetre`,
+`-2`, `-3` et `-4` sur `origin` sont des états d'avant rebase, laissées sans force : à
 supprimer par Lucie, comme `origin/fin-de-journal-dechiree`.
 
 `origin/fin-de-journal-dechiree` est périmée (son contenu est sur `master`
@@ -300,8 +310,15 @@ sessions, pas d'une vérification.
   dépôts privés (accord de Lucie). Les originaux sont peut-être sur l'ancien
   poste : une note sur la clé USB de Lucie dit quoi y copier ; s'ils
   reviennent, ce sont eux qu'on garde.
-- **`LecteursConcurrents.CeQueLeLecteurVoitEstCoherent` est rouge sur
-  `master`** (`api_test`, vu le 2 octobre) : le lecteur en lecture seule est
+- **`LecteursConcurrents.CeQueLeLecteurVoitEstCoherent` : corrigé à
+  l'ouverture par la marche 1** (3 octobre). Une ouverture en lecture seule
+  qu'un point de reprise a traversée est refusée par
+  `WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN`, refus transitoire qui se
+  retente ; le test est vert cinq fois sur cinq. **Reste ouvert** : un lecteur
+  qui *reste* ouvert pendant qu'un point de reprise passe, et deux points de
+  reprise complets dans une seule ouverture — il y faut une époque écrite
+  dans le fichier, c'est la marche 5. Historique :
+  *était rouge sur `master`* (`api_test`, vu le 2 octobre) : le lecteur en lecture seule est
   refusé avec « Found duplicated primary key value » au lieu du seul refus
   attendu. Présent avec et sans les deux correctifs du journal, à chaque
   passe : il leur est antérieur, et aucun contrôle de livraison ne jouait
