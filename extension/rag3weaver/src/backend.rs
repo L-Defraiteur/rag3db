@@ -1519,6 +1519,9 @@ impl Backend {
                     crate::code_tools::FILE_SOURCE_SERVICE,
                     source.clone(),
                 );
+                if let Some(w) = &self.prepared.manifest.workspace {
+                    services.register(crate::generated::GENERATED_POLICY_SERVICE, w.generated.clone());
+                }
             }
             if let Some(garde) = &self.garde {
                 services.register(crate::dataflow::run_nodes::GARDE_SERVICE, garde.clone());

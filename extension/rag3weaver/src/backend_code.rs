@@ -41,6 +41,13 @@ pub struct WorkspaceConfig {
     /// nature ; un dossier de documents nommera le sien.
     #[serde(default)]
     pub index: Option<String>,
+    /// Les fichiers générés, écartés de l'indexation et de son estimation
+    /// avec leur raison (`crate::generated`). Absente : les défauts —
+    /// dossier `generated`, marqueur en tête de fichier ; `{"skip": false}`
+    /// lève la règle, `dirs` et `markers` la règlent pour un dossier qui
+    /// n'est pas du code.
+    #[serde(default)]
+    pub generated: crate::generated::GeneratedPolicy,
 }
 
 /// Les schémas de workspace que le moteur sait enregistrer.
@@ -343,6 +350,7 @@ mod tests {
             read_only,
             commands: CommandGate::Off,
             index: Some("code".into()),
+            generated: Default::default(),
         }
     }
 

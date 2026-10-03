@@ -119,6 +119,46 @@ pub fn working_tree_files(tree: &crate::code_tools::WorkingTree) -> Result<(Vec<
     Ok((files, excluded))
 }
 
+/// **Les fichiers générés**, parmi ceux que `keep` retient : chemin → raison
+/// ([`crate::generated::GeneratedPolicy`]). Un dossier ne lit que la tête de
+/// chaque fichier ; une autre source lit — elle ne sait pas faire moins.
+#[cfg(feature = "code")]
+pub fn generated_among(
+    source: &dyn crate::code_tools::FileSource,
+    files: &[(String, u64)],
+    policy: &crate::generated::GeneratedPolicy,
+    keep: impl Fn(&str, u64) -> Kept,
+) -> std::collections::HashMap<String, &'static str> {
+    use std::io::Read;
+    let mut generated = std::collections::HashMap::new();
+    if !policy.skip {
+        return generated;
+    }
+    let cursor = source.cursor();
+    let root = cursor.strip_prefix("worktree:").map(std::path::PathBuf::from);
+    for (path, bytes) in files {
+        if !matches!(keep(path, *bytes), Kept::Yes(_)) {
+            continue;
+        }
+        if let Some(reason) = policy.reason_by_path(path) {
+            generated.insert(path.clone(), reason);
+            continue;
+        }
+        let head = match &root {
+            Some(root) => {
+                let mut buffer = vec![0u8; policy.head_bytes];
+                let read = std::fs::File::open(root.join(path)).and_then(|mut f| f.read(&mut buffer)).unwrap_or(0);
+                String::from_utf8_lossy(&buffer[..read]).into_owned()
+            }
+            None => source.read(path).ok().flatten().unwrap_or_default(),
+        };
+        if let Some(reason) = policy.reason(path, &head) {
+            generated.insert(path.clone(), reason);
+        }
+    }
+    generated
+}
+
 /// Les chemins et les tailles d'une source quelconque. Elle ne sait pas dire
 /// une taille sans lire : on lit — c'est le prix d'une source qui n'est pas
 /// un dossier.

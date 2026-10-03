@@ -146,6 +146,7 @@ pub mod gcp_auth;
 pub mod openai_llm;
 pub mod events;
 pub mod filter;
+pub mod generated;
 pub mod fts_handle;
 pub mod disponibilite;
 pub mod hash;

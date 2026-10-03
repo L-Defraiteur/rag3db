@@ -315,6 +315,10 @@ pub struct SourceSyncOptions {
     /// ([`RelationsMode::Bulk`]) quand la source n'a encore rien en base,
     /// paquet par paquet sinon.
     pub relations: Option<RelationsMode>,
+    /// Les fichiers générés, écartés avant l'analyse et comptés au rapport
+    /// (`SourceSyncReport::files_set_aside`). Les défauts écartent ;
+    /// `GeneratedPolicy::off()` lève la règle.
+    pub generated: crate::generated::GeneratedPolicy,
 }
 
 /// **Comment une synchronisation pose les relations.**
@@ -358,7 +362,16 @@ fn tout() -> Disponibilites {
 
 impl Default for SourceSyncOptions {
     fn default() -> Self {
-        Self { batch_files: 64, plan_only: false, takeover: false, allow_empty: false, force: false, exige: Disponibilites::TOUT, relations: None }
+        Self {
+            batch_files: 64,
+            plan_only: false,
+            takeover: false,
+            allow_empty: false,
+            force: false,
+            exige: Disponibilites::TOUT,
+            relations: None,
+            generated: Default::default(),
+        }
     }
 }
 
@@ -402,6 +415,10 @@ pub struct SourceSyncReport {
     /// juste mais lent, et il ne doit plus passer sans un mot.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bulk_load_refused: Vec<String>,
+    /// **Les fichiers écartés par une règle déclarée**, par raison — les
+    /// générés (`SourceSyncOptions::generated`). Ils ne sont pas analysés.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub files_set_aside: BTreeMap<String, usize>,
 }
 
 /// **Synchroniser une source entière** : voir le module. Les sessions sont
@@ -565,6 +582,12 @@ fn synchroniser(
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
             if let Some(content) = source.read(path)? {
+                // Un fichier généré n'entre pas dans l'analyse, et ça se
+                // compte : la fin de session retire ce qu'il avait laissé.
+                if let Some(reason) = options.generated.reason(path, &content) {
+                    *report.files_set_aside.entry(reason.to_string()).or_default() += 1;
+                    continue;
+                }
                 sources.push((path.clone(), content));
             }
         }

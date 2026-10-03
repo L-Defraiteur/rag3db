@@ -38,6 +38,7 @@ use super::port::{PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code_tools::{source_service, FileSource, ToolFormat, WorkingTree};
 use crate::estimate::{code_policy, estimate_here, source_files, working_tree_files, Estimate, Kept, Rate};
+use crate::generated::{GeneratedPolicy, GENERATED_POLICY_SERVICE};
 
 /// Combien de morceaux la sonde embarque, et leur taille en caractères.
 const PROBE_SAMPLES: usize = 64;
@@ -68,6 +69,12 @@ impl EstimateNode {
     }
 }
 
+/// La politique des fichiers générés que le backend a rangée en service
+/// (`workspace.generated` du manifeste) ; sans elle, les défauts.
+fn generated_policy(ctx: &NodeContext) -> GeneratedPolicy {
+    ctx.service::<GeneratedPolicy>(GENERATED_POLICY_SERVICE).cloned().unwrap_or_default()
+}
+
 /// Les noms et les tailles de la source. Un dossier se liste sans rien lire,
 /// exclusions comprises ; une autre source se lit — elle ne sait pas dire une
 /// taille autrement.
@@ -79,13 +86,13 @@ fn files_of(source: &dyn FileSource) -> Result<(Vec<(String, u64)>, Vec<(String,
 }
 
 /// Des morceaux pris dans les premiers fichiers retenus : la matière de la sonde.
-fn probe_samples(source: &dyn FileSource, files: &[(String, u64)]) -> Vec<String> {
+fn probe_samples(source: &dyn FileSource, files: &[(String, u64)], policy: &dyn Fn(&str, u64) -> Kept) -> Vec<String> {
     let mut samples = Vec::new();
     for (path, bytes) in files {
         if samples.len() >= PROBE_SAMPLES {
             break;
         }
-        if !matches!(code_policy(path, *bytes), Kept::Yes(_)) {
+        if !matches!(policy(path, *bytes), Kept::Yes(_)) {
             continue;
         }
         let Ok(Some(content)) = source.read(path) else { continue };
@@ -111,7 +118,8 @@ impl Node for EstimateNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("EstimateNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
-        let estimate = estimate_of(source.as_ref(), catalog.as_ref(), self.probe).map_err(|e| format!("EstimateNode: {e}"))?;
+        let estimate =
+            estimate_of(source.as_ref(), catalog.as_ref(), self.probe, &generated_policy(ctx)).map_err(|e| format!("EstimateNode: {e}"))?;
         ctx.metric("files", estimate.survey.files as f64);
         ctx.metric("bytes", estimate.survey.bytes as f64);
         ctx.metric("skipped", estimate.survey.skipped_files() as f64);
@@ -130,21 +138,33 @@ impl Node for EstimateNode {
 /// L'estimation d'une source, pour les deux nœuds. Le débit est celui que le
 /// catalogue a noté, sinon une sonde — notée à son tour, pour que
 /// l'estimation suivante ne la refasse pas. Sans catalogue : pas de durée.
-fn estimate_of(source: &dyn FileSource, catalog: Option<&Arc<Mutex<Catalog>>>, probe: bool) -> Result<Estimate, String> {
+fn estimate_of(
+    source: &dyn FileSource,
+    catalog: Option<&Arc<Mutex<Catalog>>>,
+    probe: bool,
+    generated: &GeneratedPolicy,
+) -> Result<Estimate, String> {
     let (files, excluded) = files_of(source)?;
+    // Les générés sortent de la politique avec leur raison et leur poids :
+    // ni comptés, ni sondés, ni indexés ensuite.
+    let generated = crate::estimate::generated_among(source, &files, generated, code_policy);
+    let policy = |path: &str, bytes: u64| match generated.get(path) {
+        Some(reason) => Kept::No(reason),
+        None => code_policy(path, bytes),
+    };
     let (rate, remote) = match catalog {
         None => (None, false),
         Some(catalog) => {
             let guard = catalog.lock().unwrap();
             let rate = match guard.known_embedding_rate().map_err(|e| e.to_string())? {
                 Some(rate) => Some(rate),
-                None if probe => guard.probe_embedding_rate(&probe_samples(source, &files)).map_err(|e| format!("sonde : {e}"))?,
+                None if probe => guard.probe_embedding_rate(&probe_samples(source, &files, &policy)).map_err(|e| format!("sonde : {e}"))?,
                 None => None,
             };
             (rate, guard.embedder_is_remote())
         }
     };
-    Ok(estimate_here(&files, &excluded, code_policy, rate, remote))
+    Ok(estimate_here(&files, &excluded, policy, rate, remote))
 }
 
 pub struct EstimateNodeFactory;
@@ -225,14 +245,21 @@ pub fn spawn_index(
     source: Arc<dyn FileSource>,
     journal: std::path::PathBuf,
     kept_bytes: u64,
+    generated: GeneratedPolicy,
 ) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes) {
+    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated) {
         Ok(()) => log(&journal, DONE_LINE),
         Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),
     })
 }
 
-fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &std::path::Path, kept_bytes: u64) -> Result<(), String> {
+fn run_index(
+    catalog: &Arc<Mutex<Catalog>>,
+    source: &dyn FileSource,
+    journal: &std::path::Path,
+    kept_bytes: u64,
+    generated: GeneratedPolicy,
+) -> Result<(), String> {
     use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
     use crate::disponibilite::Disponibilites;
 
@@ -242,7 +269,7 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     const ENTITIES: [&str; 4] = [crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY, crate::code::SYMBOL];
 
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
-    let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
+    let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, generated, ..Default::default() };
     let report = {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         guard.note_indexing_started(&ENTITIES).map_err(|e| e.to_string())?;
@@ -273,6 +300,10 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
         journal,
         &format!("plein texte prêt : {} fichiers, {} scopes, {} relations posées", report.files_ingested, report.scopes_written, report.relations),
     );
+
+    for (reason, n) in &report.files_set_aside {
+        log(journal, &format!("{n} fichiers écartés : {reason}"));
+    }
 
     // Second temps : la dette de vecteurs, par passes ; le catalogue est
     // rendu entre deux, une recherche par mots passe.
@@ -379,14 +410,15 @@ impl Node for IndexNode {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("IndexNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("IndexNode: 'catalog' service not found")?;
-        let estimate = estimate_of(source.as_ref(), Some(&catalog), true).map_err(|e| format!("IndexNode: {e}"))?;
+        let generated = generated_policy(ctx);
+        let estimate = estimate_of(source.as_ref(), Some(&catalog), true, &generated).map_err(|e| format!("IndexNode: {e}"))?;
         if let Some(refusal) = confirmation_refusal(&estimate, self.confirm) {
             return Err(format!("index : {refusal}"));
         }
         let journal = new_index_journal().map_err(|e| format!("IndexNode: journal : {e}"))?;
         log(&journal, &format!("indexation lancée : {} fichiers, {}", estimate.survey.files, estimate.model));
         // Détaché : c'est le journal qui porte la suite, pas ce tour de parole.
-        drop(spawn_index(catalog, source, journal.clone(), estimate.survey.bytes));
+        drop(spawn_index(catalog, source, journal.clone(), estimate.survey.bytes, generated));
         ctx.metric("files", estimate.survey.files as f64);
         let path = journal.to_string_lossy().to_string();
         let value = match self.format {
@@ -496,6 +528,44 @@ mod tests {
         assert!(text.starts_with("1 fichiers retenus"), "{text}");
         assert!(text.contains("1 écartés"), "le .env est écarté par la source, et ça se dit : {text}");
         assert!(text.contains("durée inconnue"), "{text}");
+    }
+
+    /// Un fichier généré est écarté avec sa raison et son poids, dans un
+    /// dossier comme dans une source en mémoire ; la politique du manifeste,
+    /// rangée en service, lève la règle.
+    #[test]
+    fn les_fichiers_generes_sont_ecartes_avec_leur_raison_et_la_regle_se_leve() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("src/generated")).unwrap();
+        std::fs::write(dir.path().join("src/main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.path().join("src/parser.rs"), "// Generated from Cypher.g4 by ANTLR 4.13.1\nfn p() {}\n").unwrap();
+        std::fs::write(dir.path().join("src/generated/model.rs"), "pub fn model() {}\n").unwrap();
+        let tree: Arc<dyn FileSource> = Arc::new(WorkingTree::new(dir.path()));
+        let snapshot: Arc<dyn FileSource> = Arc::new(Snapshot::new(
+            "depot",
+            [
+                ("src/main.rs".to_string(), "fn main() {}\n".to_string()),
+                ("src/parser.rs".to_string(), "// Generated from Cypher.g4 by ANTLR 4.13.1\nfn p() {}\n".to_string()),
+                ("src/generated/model.rs".to_string(), "pub fn model() {}\n".to_string()),
+            ],
+        ));
+        for source in [tree, snapshot] {
+            let mut ctx = context(source.clone());
+            EstimateNode::new("estimate").execute(&mut ctx).expect("estimate");
+            let text = result(&mut ctx).as_str().unwrap_or_default().to_string();
+            assert!(text.starts_with("1 fichiers retenus"), "{text}");
+            assert!(text.contains(crate::generated::REASON_MARKER), "{text}");
+            assert!(text.contains(crate::generated::REASON_DIR), "{text}");
+
+            let mut services = ServiceRegistry::new();
+            services.register(FILE_SOURCE_SERVICE, source);
+            services.register(GENERATED_POLICY_SERVICE, GeneratedPolicy::off());
+            let mut ctx = NodeContext::with_services(Arc::new(services));
+            EstimateNode::new("estimate").execute(&mut ctx).expect("estimate");
+            let text = result(&mut ctx).as_str().unwrap_or_default().to_string();
+            assert!(text.starts_with("3 fichiers retenus"), "règle levée : {text}");
+            assert!(!text.contains("généré"), "{text}");
+        }
     }
 
     #[test]

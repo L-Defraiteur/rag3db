@@ -67,6 +67,49 @@ fn ce_depot_s_estime_avant_de_s_indexer() {
     }
 }
 
+/// **Ce que la règle des fichiers générés retire de ce dépôt** : la mesure,
+/// et deux gardes — les générés connus sortent, le code écrit à la main reste.
+#[test]
+#[ignore]
+fn ce_depot_dit_ses_fichiers_generes() {
+    use rag3weaver::estimate::{generated_among, Kept};
+    use rag3weaver::generated::GeneratedPolicy;
+    let tree = WorkingTree::new(repository_root());
+    let (files, _) = working_tree_files(&tree).expect("liste du dépôt");
+    let t = std::time::Instant::now();
+    let generated = generated_among(&tree, &files, &GeneratedPolicy::default(), code_policy);
+    let lu = t.elapsed();
+    let kept: Vec<&(String, u64)> = files.iter().filter(|(p, b)| matches!(code_policy(p, *b), Kept::Yes(_))).collect();
+    let mut by_reason: std::collections::BTreeMap<&str, (usize, u64)> = Default::default();
+    let mut heaviest: Vec<(u64, &str)> = Vec::new();
+    for (path, bytes) in &files {
+        if let Some(reason) = generated.get(path) {
+            let e = by_reason.entry(reason).or_default();
+            e.0 += 1;
+            e.1 += bytes;
+            heaviest.push((*bytes, path));
+        }
+    }
+    heaviest.sort_by(|a, b| b.cmp(a));
+    let total: u64 = kept.iter().map(|(_, b)| *b).sum();
+    eprintln!("[générés] {} fichiers retenus par la politique ({:.1} Mo) ; têtes lues en {lu:?}", kept.len(), total as f64 / 1e6);
+    for (reason, (n, bytes)) in &by_reason {
+        eprintln!("[générés] {n} fichiers, {:.1} Mo : {reason}", *bytes as f64 / 1e6);
+    }
+    for (bytes, path) in heaviest.iter().take(12) {
+        eprintln!("[générés]   {:>5} Ko  {path}", bytes / 1024);
+    }
+    for expected in ["third_party/antlr4_cypher/cypher_parser.cpp", "extension/rag3weaver/generated/bge_m3_onnx.rs"] {
+        assert!(generated.contains_key(expected), "{expected} est généré, et doit sortir");
+    }
+    for written in ["extension/rag3weaver/src/catalog.rs", "extension/rag3weaver/src/generated.rs", "src/include/binder/bound_import_database.h"] {
+        assert!(!generated.contains_key(written), "{written} est écrit à la main, et doit rester");
+    }
+    let outside: Vec<&String> =
+        generated.keys().filter(|p| !p.contains("third_party/") && !p.contains("/generated/")).collect();
+    eprintln!("[générés] hors third_party et generated : {outside:?}");
+}
+
 /// **Cherchable par mots avant ses vecteurs** — la mesure que la proposition
 /// n'avait pu que calculer. Le dépôt entier (fichiers suivis, retenus par la
 /// politique) est synchronisé en exigeant seulement le plein texte ; les
@@ -236,7 +279,7 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let journal = new_index_journal().expect("journal");
     let source: Arc<dyn FileSource> = Arc::new(tree);
     let t = std::time::Instant::now();
-    spawn_index(catalog.clone(), source, journal.clone(), estimate.survey.bytes).join().expect("le fil d'indexation");
+    spawn_index(catalog.clone(), source, journal.clone(), estimate.survey.bytes, Default::default()).join().expect("le fil d'indexation");
     let lines: Vec<String> = std::fs::read_to_string(&journal).expect("journal").lines().map(String::from).collect();
     eprintln!("[index] {} lignes en {:.0} s :", lines.len(), t.elapsed().as_secs_f64());
     for l in lines.iter().take(3).chain(lines.iter().rev().take(4).rev()) {

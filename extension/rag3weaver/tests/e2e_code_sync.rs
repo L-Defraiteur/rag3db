@@ -101,6 +101,31 @@ fn source_a_trois_fichiers() -> Vec<(String, String)> {
     ]
 }
 
+/// **Un fichier généré n'est pas indexé, et le rapport le compte** ; la règle
+/// levée, il l'est ; la règle remise, ce qu'il avait laissé est retiré.
+#[test]
+#[ignore]
+fn un_fichier_genere_est_ecarte_compte_et_la_regle_se_leve() {
+    use rag3weaver::generated::{GeneratedPolicy, REASON_MARKER};
+    let mut catalog = catalogue();
+    let mut source = source_a_trois_fichiers();
+    source.push(("parser.rs".to_string(), "// Generated from Cypher.g4 by ANTLR 4.13.1\npub fn parse_generated() {}\n".to_string()));
+    let ecarte = sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    assert_eq!((ecarte.files_listed, ecarte.files_ingested), (4, 3), "{ecarte:?}");
+    assert_eq!(ecarte.files_set_aside.get(REASON_MARKER), Some(&1), "{ecarte:?}");
+    assert_eq!(scopes_nommes(&catalog, "parse_generated"), 0);
+
+    let levee = SourceSyncOptions { generated: GeneratedPolicy::off(), ..Default::default() };
+    let tout = sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &levee, &mut |_| {}).unwrap();
+    assert_eq!(tout.files_ingested, 4, "{tout:?}");
+    assert!(tout.files_set_aside.is_empty(), "{tout:?}");
+    assert_eq!(scopes_nommes(&catalog, "parse_generated"), 1);
+
+    let remise = sync_source(&mut catalog, &Snapshot::new("depot", source), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    assert_eq!(remise.files.removed.len(), 1, "le fichier généré quitte l'index : {:?}", remise.files);
+    assert_eq!(scopes_nommes(&catalog, "parse_generated"), 0);
+}
+
 /// **Synchroniser une source entière** retire ce qui en a disparu : un
 /// fichier supprimé part, avec ses scopes ; le reste reste, et l'avancement
 /// se dit paquet par paquet.
