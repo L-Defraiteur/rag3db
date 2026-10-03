@@ -1,0 +1,3974 @@
+{
+ "url": "http://127.0.0.1:7982",
+ "journal": {
+  "commit": "13131d572",
+  "sections": [
+   [
+    "Branches ouvertes",
+    10
+   ],
+   [
+    "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    4
+   ],
+   [
+    "Reste à faire sur du travail déjà fusionné ou poussé",
+    8
+   ],
+   [
+    "Hors de ce dépôt",
+    4
+   ],
+   [
+    "Bugs connus, non corrigés",
+    22
+   ]
+  ],
+  "cas": 47,
+  "alternative|deux_exemples|dernier": [
+   {
+    "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de ",
+    "attendu": "Branches ouvertes",
+    "propose": "pas-c-ponderations (130984f61)",
+    "rendu": null,
+    "p": 0.634170763621894,
+    "p_second": 0.2714186808431433,
+    "p_neuf": 0.634170763621894
+   },
+   {
+    "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur",
+    "attendu": "Branches ouvertes",
+    "propose": "regime-carte-partagee-2",
+    "rendu": null,
+    "p": 0.517213726647949,
+    "p_second": 0.4274511113524458,
+    "p_neuf": 0.517213726647949
+   },
+   {
+    "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexe",
+    "attendu": "Branches ouvertes",
+    "propose": "index-en-fond (fusionnée)",
+    "rendu": "Branches ouvertes",
+    "p": 0.49613141210691586,
+    "p_second": 0.4283838500861251,
+    "p_neuf": 0.4283838500861251
+   },
+   {
+    "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modè",
+    "attendu": "Branches ouvertes",
+    "propose": "(services sur luciepc)",
+    "rendu": "Branches ouvertes",
+    "p": 0.7306881580160005,
+    "p_second": 0.23489126559518025,
+    "p_neuf": 0.23489126559518025
+   },
+   {
+    "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../r",
+    "attendu": "Branches ouvertes",
+    "propose": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+    "rendu": null,
+    "p": 0.7263796322762811,
+    "p_second": 0.1907303987522901,
+    "p_neuf": 0.7263796322762811
+   },
+   {
+    "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc4049",
+    "attendu": "Branches ouvertes",
+    "propose": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+    "rendu": null,
+    "p": 0.6841603150873777,
+    "p_second": 0.2024992119006748,
+    "p_neuf": 0.6841603150873777
+   },
+   {
+    "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (Trans",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+    "rendu": null,
+    "p": 0.6501639627042336,
+    "p_second": 0.30085821262819235,
+    "p_neuf": 0.6501639627042336
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+    "rendu": null,
+    "p": 0.8422252529698293,
+    "p_second": 0.10255953146065469,
+    "p_neuf": 0.8422252529698293
+   },
+   {
+    "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ing",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.6225541795821447,
+    "p_second": 0.35195088957080783,
+    "p_neuf": 0.35195088957080783
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+    "rendu": null,
+    "p": 0.5169285638434944,
+    "p_second": 0.43545916405472174,
+    "p_neuf": 0.5169285638434944
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+    "rendu": null,
+    "p": 0.5502267762907043,
+    "p_second": 0.4163131052097874,
+    "p_neuf": 0.5502267762907043
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les docs des expériences, noms de cartes compris",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.788326147771653,
+    "p_second": 0.18243672655684137,
+    "p_neuf": 0.18243672655684137
+   },
+   {
+    "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par ",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Repli des KB en entités dérivées",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.45424449191154287,
+    "p_second": 0.42081872194697173,
+    "p_neuf": 0.42081872194697173
+   },
+   {
+    "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES)",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Chemin de masse des lots de naissances",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5391645461086249,
+    "p_second": 0.3976549087643201,
+    "p_neuf": 0.3976549087643201
+   },
+   {
+    "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à ch",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Deck builder MTG (produit)",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.8114501784234758,
+    "p_second": 0.17759905249299876,
+    "p_neuf": 0.17759905249299876
+   },
+   {
+    "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (pé",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Synchronisation par périmètre",
+    "rendu": null,
+    "p": 0.7883506902189719,
+    "p_second": 0.10253046145057576,
+    "p_neuf": 0.7883506902189719
+   },
+   {
+    "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables).",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Base MTG",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.8066226111538771,
+    "p_second": 0.16586592015723628,
+    "p_neuf": 0.16586592015723628
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Récupération des lignes supprimées dans rag3db",
+    "rendu": null,
+    "p": 0.6188115257723552,
+    "p_second": 0.13254004596174582,
+    "p_neuf": 0.6188115257723552
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+    "rendu": null,
+    "p": 0.5441656098509627,
+    "p_second": 0.42575211891395426,
+    "p_neuf": 0.5441656098509627
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Écritures parallèles",
+    "rendu": null,
+    "p": 0.781585549896698,
+    "p_second": 0.17838727888445435,
+    "p_neuf": 0.781585549896698
+   },
+   {
+    "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weave",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Forks burn, cubecl, cubek",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.8591637617647596,
+    "p_second": 0.11371393317237428,
+    "p_neuf": 0.11371393317237428
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Adresse professionnelle sur les forks",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.8176718531330575,
+    "p_second": 0.16515669431174002,
+    "p_neuf": 0.16515669431174002
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": "Hors de ce dépôt",
+    "propose": "PR amont burn / cubek",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.7191026382213955,
+    "p_second": 0.25651008269948833,
+    "p_neuf": 0.25651008269948833
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Amont Vela",
+    "rendu": null,
+    "p": 0.5437623602826553,
+    "p_second": 0.3412557537438008,
+    "p_neuf": 0.5437623602826553
+   },
+   {
+    "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.8865444928064228,
+    "p_second": 0.10044056676318187,
+    "p_neuf": 0.10044056676318187
+   },
+   {
+    "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), mê",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.8371096390653401,
+    "p_second": 0.15509840506908407,
+    "p_neuf": 0.15509840506908407
+   },
+   {
+    "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 o",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.8100414667956467,
+    "p_second": 0.1650568099873189,
+    "p_neuf": 0.1650568099873189
+   },
+   {
+    "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'es",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7707946601127971,
+    "p_second": 0.2149145921111827,
+    "p_neuf": 0.2149145921111827
+   },
+   {
+    "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identif",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'extension de plein texte range des offsets provisoires",
+    "rendu": null,
+    "p": 0.6106111311378177,
+    "p_second": 0.16357463781655052,
+    "p_neuf": 0.6106111311378177
+   },
+   {
+    "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (mo",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.6490304135537711,
+    "p_second": 0.32854942855604946,
+    "p_neuf": 0.32854942855604946
+   },
+   {
+    "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs has",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'identité d'une ligne ne dépend pas de la cellule",
+    "rendu": null,
+    "p": 0.8980953140839151,
+    "p_second": 0.043064129901443114,
+    "p_neuf": 0.8980953140839151
+   },
+   {
+    "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transac",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+    "rendu": null,
+    "p": 0.8087926475689433,
+    "p_second": 0.10240996187619689,
+    "p_neuf": 0.8087926475689433
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.8228469463849638,
+    "p_second": 0.08109008430921147,
+    "p_neuf": 0.8228469463849638
+   },
+   {
+    "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.6219123607604163,
+    "p_second": 0.24022007678756782,
+    "p_neuf": 0.6219123607604163
+   },
+   {
+    "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.5775517550392407,
+    "p_second": 0.38267710940224053,
+    "p_neuf": 0.5775517550392407
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.8022863008396522,
+    "p_second": 0.08716973285138646,
+    "p_neuf": 0.8022863008396522
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.8586174327446571,
+    "p_second": 0.07620672787392851,
+    "p_neuf": 0.8586174327446571
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.7668208843823013,
+    "p_second": 0.1730447328118337,
+    "p_neuf": 0.7668208843823013
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.5188497601987625,
+    "p_second": 0.2310092121759165,
+    "p_neuf": 0.5188497601987625
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.5593535396108718,
+    "p_second": 0.3707656591357927,
+    "p_neuf": 0.5593535396108718
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.690107032429913,
+    "p_second": 0.16869044198649252,
+    "p_neuf": 0.690107032429913
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.5775253443627978,
+    "p_second": 0.18097675577005295,
+    "p_neuf": 0.18085937513881578
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Branches ouvertes",
+    "p": 0.4982519289484574,
+    "p_second": 0.2170053251938895,
+    "p_neuf": 0.2170053251938895
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Branches ouvertes",
+    "p": 0.5288967700716638,
+    "p_second": 0.19845920272856943,
+    "p_neuf": 0.0785871264559786
+   },
+   {
+    "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er oc",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9123032558522702,
+    "p_second": 0.03826735254917124,
+    "p_neuf": 0.9123032558522702
+   },
+   {
+    "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais ",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.7108385931288514,
+    "p_second": 0.1954695834181263,
+    "p_neuf": 0.7108385931288514
+   },
+   {
+    "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio.",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.8169928978805663,
+    "p_second": 0.1511812509847545,
+    "p_neuf": 0.8169928978805663
+   }
+  ],
+  "alternative|deux_exemples|premier": [
+   {
+    "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de ",
+    "attendu": "Branches ouvertes",
+    "propose": "pas-c-ponderations (130984f61)",
+    "rendu": null,
+    "p": 0.6575543609689667,
+    "p_second": 0.21329426641999316,
+    "p_neuf": 0.6575543609689667
+   },
+   {
+    "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur",
+    "attendu": "Branches ouvertes",
+    "propose": "regime-carte-partagee-2",
+    "rendu": "Branches ouvertes",
+    "p": 0.49261481755307346,
+    "p_second": 0.3716368610229143,
+    "p_neuf": 0.3716368610229143
+   },
+   {
+    "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexe",
+    "attendu": "Branches ouvertes",
+    "propose": "index-en-fond (fusionnée)",
+    "rendu": "Branches ouvertes",
+    "p": 0.48607418021492727,
+    "p_second": 0.2585196221670514,
+    "p_neuf": 0.2585196221670514
+   },
+   {
+    "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modè",
+    "attendu": "Branches ouvertes",
+    "propose": "(services sur luciepc)",
+    "rendu": "Branches ouvertes",
+    "p": 0.8575074388614459,
+    "p_second": 0.07154972959350697,
+    "p_neuf": 0.07154972959350697
+   },
+   {
+    "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../r",
+    "attendu": "Branches ouvertes",
+    "propose": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+    "rendu": null,
+    "p": 0.5923423854805291,
+    "p_second": 0.1904566229687913,
+    "p_neuf": 0.5923423854805291
+   },
+   {
+    "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc4049",
+    "attendu": "Branches ouvertes",
+    "propose": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+    "rendu": null,
+    "p": 0.5058069383564804,
+    "p_second": 0.21437407998671604,
+    "p_neuf": 0.5058069383564804
+   },
+   {
+    "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (Trans",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5193408285108484,
+    "p_second": 0.44218169702432664,
+    "p_neuf": 0.44218169702432664
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+    "rendu": null,
+    "p": 0.6580944679631394,
+    "p_second": 0.215418195923998,
+    "p_neuf": 0.6580944679631394
+   },
+   {
+    "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ing",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.8055484910423065,
+    "p_second": 0.1536361528353215,
+    "p_neuf": 0.1536361528353215
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.74010060023108,
+    "p_second": 0.1956437570306664,
+    "p_neuf": 0.1956437570306664
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.520029066743125,
+    "p_second": 0.3132220163049461,
+    "p_neuf": 0.3132220163049461
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les docs des expériences, noms de cartes compris",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.8248878680369219,
+    "p_second": 0.1400745959305507,
+    "p_neuf": 0.1400745959305507
+   },
+   {
+    "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par ",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Repli des KB en entités dérivées",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.40112716163698936,
+    "p_second": 0.3008584935314372,
+    "p_neuf": 0.3008584935314372
+   },
+   {
+    "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES)",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Chemin de masse des lots de naissances",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7876030771180708,
+    "p_second": 0.1568554032160267,
+    "p_neuf": 0.1568554032160267
+   },
+   {
+    "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à ch",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Deck builder MTG (produit)",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.7156730495295459,
+    "p_second": 0.2723366669682109,
+    "p_neuf": 0.2723366669682109
+   },
+   {
+    "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (pé",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Synchronisation par périmètre",
+    "rendu": null,
+    "p": 0.5570616933002498,
+    "p_second": 0.21158573123306382,
+    "p_neuf": 0.5570616933002498
+   },
+   {
+    "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables).",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Base MTG",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.7560231119161092,
+    "p_second": 0.18187814381610198,
+    "p_neuf": 0.18187814381610198
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Récupération des lignes supprimées dans rag3db",
+    "rendu": null,
+    "p": 0.42154026680488826,
+    "p_second": 0.27059545587713046,
+    "p_neuf": 0.42154026680488826
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+    "rendu": "Branches ouvertes",
+    "p": 0.6527621441013036,
+    "p_second": 0.2900230536067878,
+    "p_neuf": 0.2900230536067878
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Écritures parallèles",
+    "rendu": null,
+    "p": 0.6833017722986781,
+    "p_second": 0.23064591240009752,
+    "p_neuf": 0.6833017722986781
+   },
+   {
+    "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weave",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Forks burn, cubecl, cubek",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.8790227701486271,
+    "p_second": 0.09189282790509389,
+    "p_neuf": 0.09189282790509389
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Adresse professionnelle sur les forks",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.6488401468322555,
+    "p_second": 0.31919048367994,
+    "p_neuf": 0.31919048367994
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": "Hors de ce dépôt",
+    "propose": "PR amont burn / cubek",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.7082671847899256,
+    "p_second": 0.26383616050145775,
+    "p_neuf": 0.26383616050145775
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Amont Vela",
+    "rendu": "Branches ouvertes",
+    "p": 0.4596099991704775,
+    "p_second": 0.38607369187722756,
+    "p_neuf": 0.38607369187722756
+   },
+   {
+    "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7450287281715889,
+    "p_second": 0.2502854390684846,
+    "p_neuf": 0.2502854390684846
+   },
+   {
+    "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), mê",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.743199175765682,
+    "p_second": 0.24579918782782817,
+    "p_neuf": 0.24579918782782817
+   },
+   {
+    "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 o",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7644784524535476,
+    "p_second": 0.2222384597378098,
+    "p_neuf": 0.2222384597378098
+   },
+   {
+    "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'es",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7939361845185915,
+    "p_second": 0.19029592023590572,
+    "p_neuf": 0.19029592023590572
+   },
+   {
+    "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identif",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'extension de plein texte range des offsets provisoires",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.3990121932676884,
+    "p_second": 0.30152672369333994,
+    "p_neuf": 0.30152672369333994
+   },
+   {
+    "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (mo",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.6777605048086506,
+    "p_second": 0.2962910833671612,
+    "p_neuf": 0.2962910833671612
+   },
+   {
+    "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs has",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'identité d'une ligne ne dépend pas de la cellule",
+    "rendu": null,
+    "p": 0.7276032115290704,
+    "p_second": 0.12226978262973533,
+    "p_neuf": 0.7276032115290704
+   },
+   {
+    "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transac",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.462574410124599,
+    "p_second": 0.41486210855268446,
+    "p_neuf": 0.41486210855268446
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.36104273068052156,
+    "p_second": 0.24690789114681214,
+    "p_neuf": 0.36104273068052156
+   },
+   {
+    "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.4710013328670741,
+    "p_second": 0.28040504696363777,
+    "p_neuf": 0.28040504696363777
+   },
+   {
+    "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.753372326629714,
+    "p_second": 0.21611181793274678,
+    "p_neuf": 0.21611181793274678
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.4674903298435296,
+    "p_second": 0.2681241356770159,
+    "p_neuf": 0.4674903298435296
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.6337924086410771,
+    "p_second": 0.25243198258184996,
+    "p_neuf": 0.6337924086410771
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.5948288301370702,
+    "p_second": 0.29812519481253674,
+    "p_neuf": 0.5948288301370702
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.3732595579652255,
+    "p_second": 0.2932865200238401,
+    "p_neuf": 0.22854484261896657
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": "Branches ouvertes",
+    "p": 0.5703938051003393,
+    "p_second": 0.24597832548126972,
+    "p_neuf": 0.24597832548126972
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.34489410024003864,
+    "p_second": 0.29695055990936575,
+    "p_neuf": 0.34489410024003864
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.47272531271643425,
+    "p_second": 0.30804749610230125,
+    "p_neuf": 0.08216670016951624
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Branches ouvertes",
+    "p": 0.43797964483172713,
+    "p_second": 0.2952410608279651,
+    "p_neuf": 0.09638199919932255
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Branches ouvertes",
+    "p": 0.5612884715115269,
+    "p_second": 0.15266750479635272,
+    "p_neuf": 0.08569837507531339
+   },
+   {
+    "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er oc",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.5916587513517207,
+    "p_second": 0.2224368087143241,
+    "p_neuf": 0.5916587513517207
+   },
+   {
+    "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais ",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.5443375028174222,
+    "p_second": 0.3152191898016168,
+    "p_neuf": 0.5443375028174222
+   },
+   {
+    "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio.",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.4457375268201136,
+    "p_second": 0.41842028270106063,
+    "p_neuf": 0.4457375268201136
+   }
+  ],
+  "alternative|nom|dernier": [
+   {
+    "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de ",
+    "attendu": "Branches ouvertes",
+    "propose": "pas-c-ponderations (130984f61)",
+    "rendu": null,
+    "p": 0.6276132604405997,
+    "p_second": 0.21294703919339103,
+    "p_neuf": 0.6276132604405997
+   },
+   {
+    "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur",
+    "attendu": "Branches ouvertes",
+    "propose": "regime-carte-partagee-2",
+    "rendu": null,
+    "p": 0.649344420912953,
+    "p_second": 0.1423253389305987,
+    "p_neuf": 0.649344420912953
+   },
+   {
+    "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexe",
+    "attendu": "Branches ouvertes",
+    "propose": "index-en-fond (fusionnée)",
+    "rendu": null,
+    "p": 0.5787129732717228,
+    "p_second": 0.3445856372399198,
+    "p_neuf": 0.5787129732717228
+   },
+   {
+    "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modè",
+    "attendu": "Branches ouvertes",
+    "propose": "(services sur luciepc)",
+    "rendu": null,
+    "p": 0.7531688440225659,
+    "p_second": 0.1091467844087547,
+    "p_neuf": 0.7531688440225659
+   },
+   {
+    "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../r",
+    "attendu": "Branches ouvertes",
+    "propose": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+    "rendu": null,
+    "p": 0.6745806495017719,
+    "p_second": 0.14980286917446373,
+    "p_neuf": 0.6745806495017719
+   },
+   {
+    "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc4049",
+    "attendu": "Branches ouvertes",
+    "propose": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+    "rendu": null,
+    "p": 0.47705157443723595,
+    "p_second": 0.1698339399081992,
+    "p_neuf": 0.47705157443723595
+   },
+   {
+    "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (Trans",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+    "rendu": null,
+    "p": 0.5591398752777231,
+    "p_second": 0.2516339458509303,
+    "p_neuf": 0.5591398752777231
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+    "rendu": null,
+    "p": 0.6254960516002398,
+    "p_second": 0.2184230271206771,
+    "p_neuf": 0.6254960516002398
+   },
+   {
+    "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ing",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.6110525043728054,
+    "p_second": 0.3290826551628891,
+    "p_neuf": 0.3290826551628891
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+    "rendu": null,
+    "p": 0.7213061794625436,
+    "p_second": 0.14262943068799602,
+    "p_neuf": 0.7213061794625436
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.48787077122330336,
+    "p_second": 0.4262109328447254,
+    "p_neuf": 0.4262109328447254
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les docs des expériences, noms de cartes compris",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.6292574145832271,
+    "p_second": 0.3134796457503101,
+    "p_neuf": 0.3134796457503101
+   },
+   {
+    "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par ",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Repli des KB en entités dérivées",
+    "rendu": null,
+    "p": 0.5055929478016721,
+    "p_second": 0.4206244441870586,
+    "p_neuf": 0.5055929478016721
+   },
+   {
+    "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES)",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Chemin de masse des lots de naissances",
+    "rendu": null,
+    "p": 0.35274921340493315,
+    "p_second": 0.3357515627315246,
+    "p_neuf": 0.35274921340493315
+   },
+   {
+    "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à ch",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Deck builder MTG (produit)",
+    "rendu": null,
+    "p": 0.713226329329674,
+    "p_second": 0.22354230042509543,
+    "p_neuf": 0.713226329329674
+   },
+   {
+    "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (pé",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Synchronisation par périmètre",
+    "rendu": null,
+    "p": 0.7338028823401291,
+    "p_second": 0.1691082598442742,
+    "p_neuf": 0.7338028823401291
+   },
+   {
+    "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables).",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Base MTG",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.551954089243731,
+    "p_second": 0.2800917133743758,
+    "p_neuf": 0.2800917133743758
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Récupération des lignes supprimées dans rag3db",
+    "rendu": null,
+    "p": 0.5186266673422304,
+    "p_second": 0.16390059053563946,
+    "p_neuf": 0.5186266673422304
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+    "rendu": null,
+    "p": 0.6652301742333739,
+    "p_second": 0.19080825275404867,
+    "p_neuf": 0.6652301742333739
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Écritures parallèles",
+    "rendu": null,
+    "p": 0.764175747618718,
+    "p_second": 0.17724129207731412,
+    "p_neuf": 0.764175747618718
+   },
+   {
+    "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weave",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Forks burn, cubecl, cubek",
+    "rendu": null,
+    "p": 0.44931941603508324,
+    "p_second": 0.2065723297387782,
+    "p_neuf": 0.44931941603508324
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Adresse professionnelle sur les forks",
+    "rendu": null,
+    "p": 0.6370229100611607,
+    "p_second": 0.12901040271771214,
+    "p_neuf": 0.6370229100611607
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": "Hors de ce dépôt",
+    "propose": "PR amont burn / cubek",
+    "rendu": null,
+    "p": 0.7380608423338658,
+    "p_second": 0.09347732861236237,
+    "p_neuf": 0.7380608423338658
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Amont Vela",
+    "rendu": null,
+    "p": 0.5110503091935216,
+    "p_second": 0.26920278689510163,
+    "p_neuf": 0.5110503091935216
+   },
+   {
+    "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.7304770495300413,
+    "p_second": 0.22599677682273003,
+    "p_neuf": 0.22599677682273003
+   },
+   {
+    "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), mê",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+    "rendu": null,
+    "p": 0.6568411143232875,
+    "p_second": 0.26714204025005034,
+    "p_neuf": 0.6568411143232875
+   },
+   {
+    "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 o",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5304482800472853,
+    "p_second": 0.354279925011283,
+    "p_neuf": 0.354279925011283
+   },
+   {
+    "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'es",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+    "rendu": null,
+    "p": 0.5809657435920221,
+    "p_second": 0.29432184198457206,
+    "p_neuf": 0.5809657435920221
+   },
+   {
+    "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identif",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'extension de plein texte range des offsets provisoires",
+    "rendu": null,
+    "p": 0.3577622177664174,
+    "p_second": 0.22898052030050078,
+    "p_neuf": 0.3577622177664174
+   },
+   {
+    "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (mo",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+    "rendu": null,
+    "p": 0.4765988762998664,
+    "p_second": 0.4451294138022509,
+    "p_neuf": 0.4765988762998664
+   },
+   {
+    "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs has",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'identité d'une ligne ne dépend pas de la cellule",
+    "rendu": null,
+    "p": 0.7653927124820731,
+    "p_second": 0.09607933270830422,
+    "p_neuf": 0.7653927124820731
+   },
+   {
+    "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transac",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+    "rendu": null,
+    "p": 0.6845024892091917,
+    "p_second": 0.10855739619482968,
+    "p_neuf": 0.6845024892091917
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.6951944695412829,
+    "p_second": 0.18085954222797002,
+    "p_neuf": 0.6951944695412829
+   },
+   {
+    "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.5336844900008447,
+    "p_second": 0.2414660219698201,
+    "p_neuf": 0.5336844900008447
+   },
+   {
+    "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.7531851126667838,
+    "p_second": 0.0982244910625838,
+    "p_neuf": 0.7531851126667838
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.8133895701429802,
+    "p_second": 0.12095837638946902,
+    "p_neuf": 0.8133895701429802
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.7367934412969629,
+    "p_second": 0.1606548655232091,
+    "p_neuf": 0.7367934412969629
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.7770163898874272,
+    "p_second": 0.1280429109888419,
+    "p_neuf": 0.7770163898874272
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.6162957307844836,
+    "p_second": 0.2407270053117522,
+    "p_neuf": 0.6162957307844836
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.6438329887043263,
+    "p_second": 0.18646806521862544,
+    "p_neuf": 0.6438329887043263
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.669784759350638,
+    "p_second": 0.24565298128159624,
+    "p_neuf": 0.669784759350638
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.6037543307326384,
+    "p_second": 0.18702440603214462,
+    "p_neuf": 0.18702440603214462
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.27926108265534233,
+    "p_second": 0.22036849309309123,
+    "p_neuf": 0.27926108265534233
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Branches ouvertes",
+    "p": 0.3526737209582628,
+    "p_second": 0.28396332169657734,
+    "p_neuf": 0.20241541434716942
+   },
+   {
+    "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er oc",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.812658775049679,
+    "p_second": 0.08947864894763323,
+    "p_neuf": 0.812658775049679
+   },
+   {
+    "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais ",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.5830932837678513,
+    "p_second": 0.22337246708962116,
+    "p_neuf": 0.5830932837678513
+   },
+   {
+    "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio.",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.6254231950828522,
+    "p_second": 0.23761609439704173,
+    "p_neuf": 0.6254231950828522
+   }
+  ],
+  "quel_sujet|nom|dernier": [
+   {
+    "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de ",
+    "attendu": "Branches ouvertes",
+    "propose": "pas-c-ponderations (130984f61)",
+    "rendu": null,
+    "p": 0.43553923736549216,
+    "p_second": 0.35307935136242796,
+    "p_neuf": 0.43553923736549216
+   },
+   {
+    "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur",
+    "attendu": "Branches ouvertes",
+    "propose": "regime-carte-partagee-2",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.6638127908280743,
+    "p_second": 0.21352565795946302,
+    "p_neuf": 0.21352565795946302
+   },
+   {
+    "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexe",
+    "attendu": "Branches ouvertes",
+    "propose": "index-en-fond (fusionnée)",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.7505255393461686,
+    "p_second": 0.1209663312184354,
+    "p_neuf": 0.1209663312184354
+   },
+   {
+    "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modè",
+    "attendu": "Branches ouvertes",
+    "propose": "(services sur luciepc)",
+    "rendu": null,
+    "p": 0.7942129144883541,
+    "p_second": 0.0833924291385056,
+    "p_neuf": 0.7942129144883541
+   },
+   {
+    "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../r",
+    "attendu": "Branches ouvertes",
+    "propose": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.3387126559168278,
+    "p_second": 0.30030689670224847,
+    "p_neuf": 0.30030689670224847
+   },
+   {
+    "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc4049",
+    "attendu": "Branches ouvertes",
+    "propose": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.32645832681132103,
+    "p_second": 0.2753404418940399,
+    "p_neuf": 0.1891691231242308
+   },
+   {
+    "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (Trans",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+    "rendu": null,
+    "p": 0.48252168021842995,
+    "p_second": 0.3829890517973581,
+    "p_neuf": 0.48252168021842995
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+    "rendu": null,
+    "p": 0.46799625187324956,
+    "p_second": 0.18150562169632684,
+    "p_neuf": 0.46799625187324956
+   },
+   {
+    "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ing",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.8398106317998449,
+    "p_second": 0.07199186821224197,
+    "p_neuf": 0.07199186821224197
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.5531288118014571,
+    "p_second": 0.291734352809918,
+    "p_neuf": 0.291734352809918
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+    "rendu": null,
+    "p": 0.3144712966562803,
+    "p_second": 0.29364104995936424,
+    "p_neuf": 0.3144712966562803
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les docs des expériences, noms de cartes compris",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.5748340644981399,
+    "p_second": 0.2294904008092449,
+    "p_neuf": 0.2294904008092449
+   },
+   {
+    "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par ",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Repli des KB en entités dérivées",
+    "rendu": null,
+    "p": 0.741481347808022,
+    "p_second": 0.2027480561764565,
+    "p_neuf": 0.741481347808022
+   },
+   {
+    "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES)",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Chemin de masse des lots de naissances",
+    "rendu": null,
+    "p": 0.4116025069221031,
+    "p_second": 0.28618878234697376,
+    "p_neuf": 0.4116025069221031
+   },
+   {
+    "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à ch",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Deck builder MTG (produit)",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.46622540922961503,
+    "p_second": 0.40439457251726557,
+    "p_neuf": 0.40439457251726557
+   },
+   {
+    "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (pé",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Synchronisation par périmètre",
+    "rendu": null,
+    "p": 0.8410651910964261,
+    "p_second": 0.06228939610853979,
+    "p_neuf": 0.8410651910964261
+   },
+   {
+    "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables).",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Base MTG",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.5957050837103671,
+    "p_second": 0.1872062803116776,
+    "p_neuf": 0.15528514011162775
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Récupération des lignes supprimées dans rag3db",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.367014891284435,
+    "p_second": 0.3062343822076706,
+    "p_neuf": 0.3062343822076706
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.49431681865400373,
+    "p_second": 0.4112049241618726,
+    "p_neuf": 0.4112049241618726
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Écritures parallèles",
+    "rendu": null,
+    "p": 0.8831162869627426,
+    "p_second": 0.07615063570658334,
+    "p_neuf": 0.8831162869627426
+   },
+   {
+    "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weave",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Forks burn, cubecl, cubek",
+    "rendu": "Branches ouvertes",
+    "p": 0.4712563192423958,
+    "p_second": 0.18758975132286607,
+    "p_neuf": 0.17219190560261652
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Adresse professionnelle sur les forks",
+    "rendu": null,
+    "p": 0.4001766118931893,
+    "p_second": 0.3059949018416089,
+    "p_neuf": 0.4001766118931893
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": "Hors de ce dépôt",
+    "propose": "PR amont burn / cubek",
+    "rendu": null,
+    "p": 0.4346244492752746,
+    "p_second": 0.20711532449644485,
+    "p_neuf": 0.4346244492752746
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Amont Vela",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.5289823295471902,
+    "p_second": 0.3115854130497715,
+    "p_neuf": 0.09971601650958195
+   },
+   {
+    "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.8032460337588958,
+    "p_second": 0.09308528012826003,
+    "p_neuf": 0.09308528012826003
+   },
+   {
+    "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), mê",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5556988331524138,
+    "p_second": 0.308439853856841,
+    "p_neuf": 0.308439853856841
+   },
+   {
+    "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 o",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.755319702178403,
+    "p_second": 0.10020894918488911,
+    "p_neuf": 0.06052446867102602
+   },
+   {
+    "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'es",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.3159622980241235,
+    "p_second": 0.3117230659627305,
+    "p_neuf": 0.3117230659627305
+   },
+   {
+    "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identif",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'extension de plein texte range des offsets provisoires",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5833478781784852,
+    "p_second": 0.2086198150231091,
+    "p_neuf": 0.2086198150231091
+   },
+   {
+    "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (mo",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5017076848001094,
+    "p_second": 0.4262139243698352,
+    "p_neuf": 0.4262139243698352
+   },
+   {
+    "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs has",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'identité d'une ligne ne dépend pas de la cellule",
+    "rendu": null,
+    "p": 0.8132008707715728,
+    "p_second": 0.0776916146476004,
+    "p_neuf": 0.8132008707715728
+   },
+   {
+    "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transac",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5635371834579626,
+    "p_second": 0.3046995495759529,
+    "p_neuf": 0.3046995495759529
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.2999770511779884,
+    "p_second": 0.24127199457207824,
+    "p_neuf": 0.13109097580547732
+   },
+   {
+    "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.30491789467565766,
+    "p_second": 0.30071143840989156,
+    "p_neuf": 0.16935149421154866
+   },
+   {
+    "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.5287019706458124,
+    "p_second": 0.18341888293246963,
+    "p_neuf": 0.1516746847380027
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.6817953663643894,
+    "p_second": 0.12966678174813143,
+    "p_neuf": 0.6817953663643894
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.7298213192250743,
+    "p_second": 0.11311451818564644,
+    "p_neuf": 0.7298213192250743
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.7561055157166202,
+    "p_second": 0.08345660418644144,
+    "p_neuf": 0.7561055157166202
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.4515370474719105,
+    "p_second": 0.29714193671631045,
+    "p_neuf": 0.4515370474719105
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.7347546715386157,
+    "p_second": 0.11799973607920951,
+    "p_neuf": 0.7347546715386157
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.5048026200623197,
+    "p_second": 0.297807470445828,
+    "p_neuf": 0.5048026200623197
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.48103262941203984,
+    "p_second": 0.24512792964664235,
+    "p_neuf": 0.01698775119418068
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.3909403146375135,
+    "p_second": 0.30597918179688954,
+    "p_neuf": 0.04948660006563953
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.44805360192675975,
+    "p_second": 0.30487077990459527,
+    "p_neuf": 0.018278373572516757
+   },
+   {
+    "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er oc",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.7808585944424944,
+    "p_second": 0.09433380668521328,
+    "p_neuf": 0.7808585944424944
+   },
+   {
+    "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais ",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.6159250011691402,
+    "p_second": 0.2556375704667963,
+    "p_neuf": 0.6159250011691402
+   },
+   {
+    "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio.",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.8884465260224609,
+    "p_second": 0.044336582956724525,
+    "p_neuf": 0.8884465260224609
+   }
+  ],
+  "quel_sujet|deux_exemples|dernier": [
+   {
+    "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de ",
+    "attendu": "Branches ouvertes",
+    "propose": "pas-c-ponderations (130984f61)",
+    "rendu": null,
+    "p": 0.9449571225875989,
+    "p_second": 0.03420883939367785,
+    "p_neuf": 0.9449571225875989
+   },
+   {
+    "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur",
+    "attendu": "Branches ouvertes",
+    "propose": "regime-carte-partagee-2",
+    "rendu": null,
+    "p": 0.927107583107914,
+    "p_second": 0.03596846227208173,
+    "p_neuf": 0.927107583107914
+   },
+   {
+    "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexe",
+    "attendu": "Branches ouvertes",
+    "propose": "index-en-fond (fusionnée)",
+    "rendu": null,
+    "p": 0.7428045500067862,
+    "p_second": 0.12740916806526392,
+    "p_neuf": 0.7428045500067862
+   },
+   {
+    "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modè",
+    "attendu": "Branches ouvertes",
+    "propose": "(services sur luciepc)",
+    "rendu": null,
+    "p": 0.5253899990241265,
+    "p_second": 0.4311133553773665,
+    "p_neuf": 0.5253899990241265
+   },
+   {
+    "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../r",
+    "attendu": "Branches ouvertes",
+    "propose": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+    "rendu": null,
+    "p": 0.9025976272996774,
+    "p_second": 0.04730152548107498,
+    "p_neuf": 0.9025976272996774
+   },
+   {
+    "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc4049",
+    "attendu": "Branches ouvertes",
+    "propose": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+    "rendu": null,
+    "p": 0.9405740938008523,
+    "p_second": 0.020233212862485077,
+    "p_neuf": 0.9405740938008523
+   },
+   {
+    "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (Trans",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+    "rendu": null,
+    "p": 0.9359730441447734,
+    "p_second": 0.05160101783201212,
+    "p_neuf": 0.9359730441447734
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": "Branches ouvertes",
+    "propose": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+    "rendu": null,
+    "p": 0.9360195050052278,
+    "p_second": 0.030516042568956465,
+    "p_neuf": 0.9360195050052278
+   },
+   {
+    "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ing",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.5027274818564894,
+    "p_second": 0.46291843611826083,
+    "p_neuf": 0.46291843611826083
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+    "rendu": null,
+    "p": 0.6700451482429303,
+    "p_second": 0.2968015002930818,
+    "p_neuf": 0.6700451482429303
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+    "rendu": null,
+    "p": 0.9814029262946501,
+    "p_second": 0.007394691399236388,
+    "p_neuf": 0.9814029262946501
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "propose": "Les docs des expériences, noms de cartes compris",
+    "rendu": null,
+    "p": 0.8014177827813057,
+    "p_second": 0.17287785074836945,
+    "p_neuf": 0.8014177827813057
+   },
+   {
+    "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par ",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Repli des KB en entités dérivées",
+    "rendu": null,
+    "p": 0.93975890646458,
+    "p_second": 0.029689647870895782,
+    "p_neuf": 0.93975890646458
+   },
+   {
+    "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES)",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Chemin de masse des lots de naissances",
+    "rendu": null,
+    "p": 0.9434808100682859,
+    "p_second": 0.042588910427596126,
+    "p_neuf": 0.9434808100682859
+   },
+   {
+    "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à ch",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Deck builder MTG (produit)",
+    "rendu": null,
+    "p": 0.873235097540977,
+    "p_second": 0.11758777673545986,
+    "p_neuf": 0.873235097540977
+   },
+   {
+    "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (pé",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Synchronisation par périmètre",
+    "rendu": null,
+    "p": 0.9438229409165226,
+    "p_second": 0.02573591725296193,
+    "p_neuf": 0.9438229409165226
+   },
+   {
+    "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables).",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Base MTG",
+    "rendu": null,
+    "p": 0.8585927570468049,
+    "p_second": 0.11132429672268652,
+    "p_neuf": 0.8585927570468049
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Récupération des lignes supprimées dans rag3db",
+    "rendu": null,
+    "p": 0.9260554639174461,
+    "p_second": 0.026312640610840834,
+    "p_neuf": 0.9260554639174461
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+    "rendu": null,
+    "p": 0.888128426810881,
+    "p_second": 0.0990532029858029,
+    "p_neuf": 0.888128426810881
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "propose": "Écritures parallèles",
+    "rendu": null,
+    "p": 0.9699411491323208,
+    "p_second": 0.0173939131005526,
+    "p_neuf": 0.9699411491323208
+   },
+   {
+    "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weave",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Forks burn, cubecl, cubek",
+    "rendu": null,
+    "p": 0.582478360446609,
+    "p_second": 0.3833428334052594,
+    "p_neuf": 0.582478360446609
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Adresse professionnelle sur les forks",
+    "rendu": null,
+    "p": 0.6905464937276453,
+    "p_second": 0.2899907522195816,
+    "p_neuf": 0.6905464937276453
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": "Hors de ce dépôt",
+    "propose": "PR amont burn / cubek",
+    "rendu": null,
+    "p": 0.617686836907889,
+    "p_second": 0.35844480322111655,
+    "p_neuf": 0.617686836907889
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": "Hors de ce dépôt",
+    "propose": "Amont Vela",
+    "rendu": null,
+    "p": 0.7189042467744793,
+    "p_second": 0.12827042576962933,
+    "p_neuf": 0.7189042467744793
+   },
+   {
+    "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+    "rendu": null,
+    "p": 0.5663336064506896,
+    "p_second": 0.42777762701022987,
+    "p_neuf": 0.5663336064506896
+   },
+   {
+    "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), mê",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+    "rendu": null,
+    "p": 0.5112949940222125,
+    "p_second": 0.48397401263868667,
+    "p_neuf": 0.5112949940222125
+   },
+   {
+    "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 o",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+    "rendu": null,
+    "p": 0.7742182923080563,
+    "p_second": 0.2146836128280395,
+    "p_neuf": 0.7742182923080563
+   },
+   {
+    "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'es",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+    "rendu": null,
+    "p": 0.8917002514350384,
+    "p_second": 0.08748446690462715,
+    "p_neuf": 0.8917002514350384
+   },
+   {
+    "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identif",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'extension de plein texte range des offsets provisoires",
+    "rendu": null,
+    "p": 0.962113085973172,
+    "p_second": 0.015244891689588612,
+    "p_neuf": 0.962113085973172
+   },
+   {
+    "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (mo",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+    "rendu": null,
+    "p": 0.8642815785823643,
+    "p_second": 0.1284413414816151,
+    "p_neuf": 0.8642815785823643
+   },
+   {
+    "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs has",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "L'identité d'une ligne ne dépend pas de la cellule",
+    "rendu": null,
+    "p": 0.9752700237442928,
+    "p_second": 0.007571431269051693,
+    "p_neuf": 0.9752700237442928
+   },
+   {
+    "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transac",
+    "attendu": "Bugs connus, non corrigés",
+    "propose": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+    "rendu": null,
+    "p": 0.6405985189818303,
+    "p_second": 0.3393170778705234,
+    "p_neuf": 0.6405985189818303
+   },
+   {
+    "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; ",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.35519207067410014,
+    "p_second": 0.2419252080592338,
+    "p_neuf": 0.35519207067410014
+   },
+   {
+    "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.3866077288039901,
+    "p_second": 0.2158268150601943,
+    "p_neuf": 0.3866077288039901
+   },
+   {
+    "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers",
+    "attendu": null,
+    "propose": "Branches ouvertes",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.5665761673567805,
+    "p_second": 0.2681550334744878,
+    "p_neuf": 0.2681550334744878
+   },
+   {
+    "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.49867002275433503,
+    "p_second": 0.2007871490562026,
+    "p_neuf": 0.49867002275433503
+   },
+   {
+    "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client ",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.8819730109308022,
+    "p_second": 0.04579838278146843,
+    "p_neuf": 0.8819730109308022
+   },
+   {
+    "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault",
+    "attendu": null,
+    "propose": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.6878451273329587,
+    "p_second": 0.16035053805623836,
+    "p_neuf": 0.6878451273329587
+   },
+   {
+    "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index son",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.5332706797127307,
+    "p_second": 0.3023069471762861,
+    "p_neuf": 0.5332706797127307
+   },
+   {
+    "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.6013423799680259,
+    "p_second": 0.319333457912049,
+    "p_neuf": 0.6013423799680259
+   },
+   {
+    "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut po",
+    "attendu": null,
+    "propose": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": "Hors de ce dépôt",
+    "p": 0.5219717950430953,
+    "p_second": 0.3693493771329196,
+    "p_neuf": 0.3693493771329196
+   },
+   {
+    "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weav",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.44572968441962335,
+    "p_second": 0.29558980879089786,
+    "p_neuf": 0.03750403093305493
+   },
+   {
+    "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembr",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.36286836156731284,
+    "p_second": 0.19719482014097864,
+    "p_neuf": 0.18298697706620976
+   },
+   {
+    "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — ",
+    "attendu": null,
+    "propose": "Hors de ce dépôt",
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.5902581118282345,
+    "p_second": 0.18561180817990203,
+    "p_neuf": 0.04398692263841148
+   },
+   {
+    "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er oc",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9652016186603969,
+    "p_second": 0.01560857359029045,
+    "p_neuf": 0.9652016186603969
+   },
+   {
+    "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais ",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.7652792484602127,
+    "p_second": 0.10680125365934358,
+    "p_neuf": 0.7652792484602127
+   },
+   {
+    "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio.",
+    "attendu": null,
+    "propose": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9523908369022478,
+    "p_second": 0.017222670743644083,
+    "p_neuf": 0.9523908369022478
+   }
+  ]
+ },
+ "cas_de_pres": {
+  "sans_textes": {
+   "options": [
+    "t0",
+    "t1",
+    "t2",
+    "t3",
+    "new"
+   ],
+   "noms": [
+    "identité git",
+    "identifiants et secrets",
+    "arbre partagé entre sessions",
+    "régime GPU"
+   ],
+   "probs": {
+    "t0": 0.8147311000342197,
+    "t1": 0.08216762296829938,
+    "t2": 0.03283423628211538,
+    "t3": 0.004961477916264828,
+    "new": 0.06530556279910071
+   },
+   "prompt": "<|im_start|>system\nApply the supplied criterion to the supplied evidence. Choose exactly one listed option. Respond with only its uppercase letter, with no explanation or reasoning.<|im_end|>\n<|im_start|>user\n{\"evidence\": \"Text: Dans un clone neuf, poser l'adresse personnelle en local avant le premier commit.\", \"criterion\": \"Which topic fits this text best?\", \"options\": [{\"letter\": \"A\", \"description\": \"t0: identité git — Quelle identité signe les commits et sous quel compte on pousse.\"}, {\"letter\": \"B\", \"description\": \"t1: identifiants et secrets — Où vivent les jetons et comment on s'en sert sans les montrer.\"}, {\"letter\": \"C\", \"description\": \"t2: arbre partagé entre sessions — Les règles pour travailler à plusieurs sessions dans le même dépôt.\"}, {\"letter\": \"D\", \"description\": \"t3: régime GPU — Comment on ménage la carte graphique pendant les passes qui embarquent.\"}, {\"letter\": \"E\", \"description\": \"new: new topic «adresse des commits» (no text has been filed under it yet)\"}]}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+   "jetons": 241,
+   "top": [
+    [
+     "A",
+     -0.08536281436681747
+    ],
+    [
+     "B",
+     -3.22139310836792
+    ],
+    [
+     "E",
+     -3.5353713035583496
+    ],
+    [
+     "C",
+     -4.475327968597412
+    ],
+    [
+     "D",
+     -7.058640956878662
+    ],
+    [
+     "T",
+     -8.144448280334473
+    ],
+    [
+     "F",
+     -9.996703147888184
+    ],
+    [
+     "G",
+     -10.61655044555664
+    ]
+   ]
+  },
+  "deux_textes": {
+   "options": [
+    "t0",
+    "t1",
+    "t2",
+    "t3",
+    "new"
+   ],
+   "noms": [
+    "identité git",
+    "identifiants et secrets",
+    "arbre partagé entre sessions",
+    "régime GPU"
+   ],
+   "probs": {
+    "t0": 0.2985288632626676,
+    "t1": 0.0037958393351535656,
+    "t2": 0.0021458986862434005,
+    "t3": 0.0009766146860855113,
+    "new": 0.69455278402985
+   },
+   "prompt": "<|im_start|>system\nApply the supplied criterion to the supplied evidence. Choose exactly one listed option. Respond with only its uppercase letter, with no explanation or reasoning.<|im_end|>\n<|im_start|>user\n{\"evidence\": \"Text: Dans un clone neuf, poser l'adresse personnelle en local avant le premier commit.\", \"criterion\": \"Which topic fits this text best?\", \"options\": [{\"letter\": \"A\", \"description\": \"t0: identité git — Quelle identité signe les commits et sous quel compte on pousse. Texts already filed under it: «L'identité git globale du poste est l'adresse professionnelle : vérifier user.email dans tout clone neuf.» ; «Pas de trailer d'attribution dans les messages de commit.»\"}, {\"letter\": \"B\", \"description\": \"t1: identifiants et secrets — Où vivent les jetons et comment on s'en sert sans les montrer. Texts already filed under it: «Les identifiants des services distants sont dans le coffre du dépôt, ignoré par git.» ; «Une suite distante à zéro test passé est un saut à corriger, jamais une ligne verte.»\"}, {\"letter\": \"C\", \"description\": \"t2: arbre partagé entre sessions — Les règles pour travailler à plusieurs sessions dans le même dépôt. Texts already filed under it: «Commiter par chemins nommés : l'index est partagé.» ; «Les documents passent par un worktree détaché de la branche principale.»\"}, {\"letter\": \"D\", \"description\": \"t3: régime GPU — Comment on ménage la carte graphique pendant les passes qui embarquent. Texts already filed under it: «Cycle à 70 % sur toute passe qui embarque.» ; «Le démon sur la carte de l'écran fige l'écran pendant les passes de bout en bout.»\"}, {\"letter\": \"E\", \"description\": \"new: new topic «adresse des commits» (no text has been filed under it yet)\"}]}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+   "jetons": 422,
+   "top": [
+    [
+     "E",
+     -0.27539679408073425
+    ],
+    [
+     "A",
+     -1.4296936988830566
+    ],
+    [
+     "B",
+     -7.396595478057861
+    ],
+    [
+     "C",
+     -8.176259994506836
+    ],
+    [
+     "D",
+     -9.252391815185547
+    ],
+    [
+     "T",
+     -9.316340446472168
+    ],
+    [
+     "F",
+     -9.777548789978027
+    ],
+    [
+     "H",
+     -10.781826972961426
+    ]
+   ]
+  }
+ },
+ "variantes": {
+  "sans_textes": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.08323964456948464,
+    "jetons": 241
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.057783371409492246,
+    "jetons": 247
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.040415448307388135,
+    "jetons": 243
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.7131048921430042,
+    "jetons": 245
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.15496629263509612,
+    "jetons": 235
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.6904975702781684,
+    "jetons": 238
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.11730199873987607,
+    "jetons": 261
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.31654962180999335,
+    "jetons": 242
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.05094424112613934,
+    "jetons": 247
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.2881986395342229,
+    "jetons": 249
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.3336402789392137,
+    "jetons": 251
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.017203288544103613,
+    "jetons": 252
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.046761804670649,
+    "jetons": 249
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.08489942364474061,
+    "jetons": 239
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.043220001433695594,
+    "jetons": 252
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.08412158044033162,
+    "jetons": 248
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": "tests",
+    "p_neuf": 0.14484722550883636,
+    "jetons": 252
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9428556130046022,
+    "jetons": 237
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9429210391190671,
+    "jetons": 250
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8171117109296627,
+    "jetons": 262
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7675422335715932,
+    "jetons": 254
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7062739699906324,
+    "jetons": 238
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.444332367685044,
+    "jetons": 242
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8828903166075858,
+    "jetons": 251
+   }
+  ],
+  "deux_textes": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6662824496978108,
+    "jetons": 422
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6600032509725877,
+    "jetons": 437
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.18613415705553632,
+    "jetons": 422
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.9551669091761968,
+    "jetons": 429
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.839183929140318,
+    "jetons": 406
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.5664559608921516,
+    "jetons": 417
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.18229262382964342,
+    "jetons": 454
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.7071499384111942,
+    "jetons": 426
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.43952114297014805,
+    "jetons": 423
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.5958470891218981,
+    "jetons": 425
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.5326462944976809,
+    "jetons": 445
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.12615868771562308,
+    "jetons": 449
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.25939320551972267,
+    "jetons": 439
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.3632495261274456,
+    "jetons": 415
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.30945032764637087,
+    "jetons": 434
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.3171494513564099,
+    "jetons": 448
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7393777405330797,
+    "jetons": 427
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9418583408944294,
+    "jetons": 416
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9532113575282294,
+    "jetons": 429
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7563830061486596,
+    "jetons": 465
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9270796170340173,
+    "jetons": 435
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8340668617040219,
+    "jetons": 422
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.6588972825642674,
+    "jetons": 424
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9582395491736136,
+    "jetons": 432
+   }
+  ],
+  "longueur_seule": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.21425161311577554,
+    "jetons": 333
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.5860143984281175,
+    "jetons": 339
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.07756615793918474,
+    "jetons": 335
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.8530521578624028,
+    "jetons": 337
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.45037649843416566,
+    "jetons": 327
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.7599629230332093,
+    "jetons": 330
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.2065029138190333,
+    "jetons": 353
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.5076734961026842,
+    "jetons": 334
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.11994651521911222,
+    "jetons": 339
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.41839673966308893,
+    "jetons": 341
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.47367367000927707,
+    "jetons": 343
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.09004962728459223,
+    "jetons": 344
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.06456682008408327,
+    "jetons": 341
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.1757671884327334,
+    "jetons": 331
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.10643851801967726,
+    "jetons": 344
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.13859529362793202,
+    "jetons": 340
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": "tests",
+    "p_neuf": 0.4343328144610914,
+    "jetons": 344
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9499905693281512,
+    "jetons": 329
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9721890985769442,
+    "jetons": 342
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8887672272797317,
+    "jetons": 354
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8184462424289453,
+    "jetons": 346
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8670372794116903,
+    "jetons": 330
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.6449824504402039,
+    "jetons": 334
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9464781484949597,
+    "jetons": 343
+   }
+  ],
+  "textes_au_bon_seulement": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.4533852206486884,
+    "jetons": 286
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6203437860075033,
+    "jetons": 292
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.09423938754443399,
+    "jetons": 291
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.9206792341667819,
+    "jetons": 293
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.5696643476304935,
+    "jetons": 275
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.5559899164728244,
+    "jetons": 278
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.25420172860349327,
+    "jetons": 306
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.43721197769759207,
+    "jetons": 287
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.378317444374284,
+    "jetons": 287
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.6067517860973413,
+    "jetons": 289
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.42628199445746945,
+    "jetons": 309
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.06609174534183775,
+    "jetons": 310
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.23038442110416288,
+    "jetons": 295
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.17369025668034616,
+    "jetons": 285
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.22641655253123694,
+    "jetons": 298
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.33101783292877135,
+    "jetons": 299
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": "tests",
+    "p_neuf": 0.18899105274911804,
+    "jetons": 252
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9312625929619217,
+    "jetons": 237
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9481878058708426,
+    "jetons": 250
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8024840630691069,
+    "jetons": 262
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7775836075304248,
+    "jetons": 254
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7050844268907348,
+    "jetons": 238
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.4445818146379747,
+    "jetons": 242
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8723636872059487,
+    "jetons": 251
+   }
+  ],
+  "textes_aux_autres_seulement": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.45728279153020696,
+    "jetons": 377
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.2637359723877777,
+    "jetons": 392
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.12957723676836727,
+    "jetons": 374
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.9546998154583829,
+    "jetons": 381
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8211981814614833,
+    "jetons": 366
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8013543148282629,
+    "jetons": 377
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.16758697551396642,
+    "jetons": 409
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.7686586035192297,
+    "jetons": 381
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.1440888707212348,
+    "jetons": 383
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.5258608638991887,
+    "jetons": 385
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.5776602011729112,
+    "jetons": 387
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.03830391807534971,
+    "jetons": 391
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.12223179916613032,
+    "jetons": 393
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.2383852688481894,
+    "jetons": 369
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.18518196681694848,
+    "jetons": 388
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.17314310717720482,
+    "jetons": 397
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7477071568284691,
+    "jetons": 427
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9495097250564921,
+    "jetons": 416
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9590499924467506,
+    "jetons": 429
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7581669102619412,
+    "jetons": 465
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9250357385966539,
+    "jetons": 435
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8247803345956146,
+    "jetons": 422
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.6349664303768963,
+    "jetons": 424
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9576490616063922,
+    "jetons": 432
+   }
+  ],
+  "textes_proches": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6283502339271708,
+    "jetons": 422
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6563667487999488,
+    "jetons": 420
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.064753977024955,
+    "jetons": 421
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.7582361769939165,
+    "jetons": 428
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.757506276823002,
+    "jetons": 405
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.6259125967534753,
+    "jetons": 404
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.20353971973290555,
+    "jetons": 442
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.6624108673971526,
+    "jetons": 422
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.37711846668841326,
+    "jetons": 408
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.19711573580057198,
+    "jetons": 428
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.4948021700314818,
+    "jetons": 432
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.20529268463453088,
+    "jetons": 438
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.33505822806413943,
+    "jetons": 427
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.39830332396608553,
+    "jetons": 409
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.3127424022885086,
+    "jetons": 428
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.1908088380234251,
+    "jetons": 422
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.5677936735431816,
+    "jetons": 437
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9475592795775809,
+    "jetons": 423
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9712222059286036,
+    "jetons": 429
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.6028825403759154,
+    "jetons": 437
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9322916481320302,
+    "jetons": 430
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.828082575059898,
+    "jetons": 417
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.5821890016975473,
+    "jetons": 409
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9427426419736347,
+    "jetons": 432
+   }
+  ],
+  "textes_dits_exemples": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.11039101436217652,
+    "jetons": 426
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.22150857687439204,
+    "jetons": 441
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.043962838721477805,
+    "jetons": 426
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.7227847415656223,
+    "jetons": 433
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.3900419557602237,
+    "jetons": 410
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.5522653553714821,
+    "jetons": 421
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.07434527291087384,
+    "jetons": 458
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.24804824436034706,
+    "jetons": 430
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.05286625455333246,
+    "jetons": 427
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.21292480631714336,
+    "jetons": 429
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.3286945630609405,
+    "jetons": 449
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.032914498737245626,
+    "jetons": 453
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.09225418759931768,
+    "jetons": 443
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.21897864152704943,
+    "jetons": 419
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.12111305294291212,
+    "jetons": 438
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.10833491484741684,
+    "jetons": 452
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": "tests",
+    "p_neuf": 0.29071016265988964,
+    "jetons": 431
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9142931144780904,
+    "jetons": 420
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9358769956432006,
+    "jetons": 433
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7324116448173111,
+    "jetons": 469
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.4935460360937755,
+    "jetons": 439
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.2771089145968287,
+    "jetons": 426
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.32365942288451577,
+    "jetons": 428
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9293797864517535,
+    "jetons": 436
+   }
+  ],
+  "neuf_long": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.626937462861232,
+    "jetons": 446
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.6534907396773567,
+    "jetons": 461
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.1519930331752403,
+    "jetons": 446
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.8743807932866602,
+    "jetons": 453
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8087237314735414,
+    "jetons": 430
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.5981508424178662,
+    "jetons": 441
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.24767764047267896,
+    "jetons": 478
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.602790953795138,
+    "jetons": 450
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.5222996076777506,
+    "jetons": 447
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.7266565818486636,
+    "jetons": 449
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.6082028278488342,
+    "jetons": 469
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.12496358314552937,
+    "jetons": 473
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.23137015105672915,
+    "jetons": 463
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.37385971362969533,
+    "jetons": 439
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.46006862440734914,
+    "jetons": 458
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.287778809830361,
+    "jetons": 472
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.6558719753667599,
+    "jetons": 451
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9214286497096147,
+    "jetons": 440
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.958331366867794,
+    "jetons": 453
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8412685618864064,
+    "jetons": 489
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9066017520208431,
+    "jetons": 459
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8582006514166282,
+    "jetons": 446
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7923557010853207,
+    "jetons": 448
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.961797689439342,
+    "jetons": 456
+   }
+  ],
+  "sans_textes_neuf_long": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.12517430480715266,
+    "jetons": 265
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": "identité git",
+    "p_neuf": 0.15437241056313727,
+    "jetons": 271
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.09965183409862614,
+    "jetons": 267
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.8120529123165622,
+    "jetons": 269
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.3239030921851651,
+    "jetons": 259
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8074944226058259,
+    "jetons": 262
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.22414002295441196,
+    "jetons": 285
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.5680613185216076,
+    "jetons": 266
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": "arbre partagé entre sessions",
+    "p_neuf": 0.10285992948231046,
+    "jetons": 271
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.5187146269349988,
+    "jetons": 273
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.538592330795358,
+    "jetons": 275
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.05594651938551015,
+    "jetons": 276
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.09031657444523901,
+    "jetons": 273
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.12968386103873672,
+    "jetons": 263
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.11414585252755234,
+    "jetons": 276
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.15790035511266093,
+    "jetons": 272
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": "tests",
+    "p_neuf": 0.303985768934965,
+    "jetons": 276
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9280098916726031,
+    "jetons": 261
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9497944342502701,
+    "jetons": 274
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.903256652924669,
+    "jetons": 286
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8424336307505236,
+    "jetons": 278
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8566546931938215,
+    "jetons": 262
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.7740312334639039,
+    "jetons": 266
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9284066356374315,
+    "jetons": 275
+   }
+  ],
+  "neuf_au_milieu": [
+   {
+    "id": "r01",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.7396785298053843,
+    "jetons": 422
+   },
+   {
+    "id": "r02",
+    "attendu": "identité git",
+    "rendu": null,
+    "p_neuf": 0.8358421096781412,
+    "jetons": 437
+   },
+   {
+    "id": "r03",
+    "attendu": "compilation et charge du poste",
+    "rendu": "compilation et charge du poste",
+    "p_neuf": 0.14347979301459213,
+    "jetons": 422
+   },
+   {
+    "id": "r04",
+    "attendu": "compilation et charge du poste",
+    "rendu": null,
+    "p_neuf": 0.9732919836059832,
+    "jetons": 429
+   },
+   {
+    "id": "r05",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8877207805072512,
+    "jetons": 406
+   },
+   {
+    "id": "r06",
+    "attendu": "tests",
+    "rendu": null,
+    "p_neuf": 0.8097593593973916,
+    "jetons": 417
+   },
+   {
+    "id": "r07",
+    "attendu": "régime GPU",
+    "rendu": "régime GPU",
+    "p_neuf": 0.24832849837863916,
+    "jetons": 454
+   },
+   {
+    "id": "r08",
+    "attendu": "régime GPU",
+    "rendu": null,
+    "p_neuf": 0.7833841823342065,
+    "jetons": 426
+   },
+   {
+    "id": "r09",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.6735613968721764,
+    "jetons": 423
+   },
+   {
+    "id": "r10",
+    "attendu": "arbre partagé entre sessions",
+    "rendu": null,
+    "p_neuf": 0.7066005842986472,
+    "jetons": 425
+   },
+   {
+    "id": "r11",
+    "attendu": "modèles d'embarquement",
+    "rendu": null,
+    "p_neuf": 0.6237595339537335,
+    "jetons": 445
+   },
+   {
+    "id": "r12",
+    "attendu": "modèles d'embarquement",
+    "rendu": "modèles d'embarquement",
+    "p_neuf": 0.10269440517275236,
+    "jetons": 449
+   },
+   {
+    "id": "r13",
+    "attendu": "moteur de base de données",
+    "rendu": "moteur de base de données",
+    "p_neuf": 0.2659388488909138,
+    "jetons": 439
+   },
+   {
+    "id": "r14",
+    "attendu": "moteur de base de données",
+    "rendu": null,
+    "p_neuf": 0.5735400585699013,
+    "jetons": 415
+   },
+   {
+    "id": "r15",
+    "attendu": "recherche plein texte",
+    "rendu": "recherche plein texte",
+    "p_neuf": 0.4410038783712576,
+    "jetons": 434
+   },
+   {
+    "id": "r16",
+    "attendu": "identifiants et secrets",
+    "rendu": "identifiants et secrets",
+    "p_neuf": 0.42907106555193225,
+    "jetons": 448
+   },
+   {
+    "id": "n01",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9185380564241348,
+    "jetons": 427
+   },
+   {
+    "id": "n02",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9725043432661779,
+    "jetons": 416
+   },
+   {
+    "id": "n03",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.987257526825677,
+    "jetons": 429
+   },
+   {
+    "id": "n04",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8742021267531993,
+    "jetons": 465
+   },
+   {
+    "id": "n05",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9644896322588675,
+    "jetons": 435
+   },
+   {
+    "id": "n06",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9696937868756905,
+    "jetons": 422
+   },
+   {
+    "id": "n07",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.8955178701597536,
+    "jetons": 424
+   },
+   {
+    "id": "n08",
+    "attendu": null,
+    "rendu": null,
+    "p_neuf": 0.9839711153403842,
+    "jetons": 432
+   }
+  ]
+ }
+}

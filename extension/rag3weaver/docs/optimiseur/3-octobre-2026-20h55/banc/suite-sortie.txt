@@ -1,0 +1,16 @@
+journal · alternative, deux_exemples, créer en dernier : rejoint le bon 13/32, crée à tort 16, range ailleurs 3 ; neufs : crée 12/15, fusionne à tort 3
+journal · alternative, deux_exemples, créer en premier : rejoint le bon 17/32, crée à tort 8, range ailleurs 7 ; neufs : crée 8/15, fusionne à tort 7
+journal · alternative, nom, créer en dernier : rejoint le bon 5/32, crée à tort 26, range ailleurs 1 ; neufs : crée 13/15, fusionne à tort 2
+journal · quel_sujet, nom, créer en dernier : rejoint le bon 11/32, crée à tort 12, range ailleurs 9 ; neufs : crée 9/15, fusionne à tort 6
+journal · quel_sujet, deux_exemples, créer en dernier : rejoint le bon 1/32, crée à tort 31, range ailleurs 0 ; neufs : crée 10/15, fusionne à tort 5
+variante sans_textes : rejoint le bon 13/16, crée à tort 2 ; neufs créés 7/8 ; P(neuf) moyen sur les textes à ranger 0.20 ; 247 jetons
+variante deux_textes : rejoint le bon 8/16, crée à tort 8 ; neufs créés 8/8 ; P(neuf) moyen sur les textes à ranger 0.48 ; 431 jetons
+variante longueur_seule : rejoint le bon 10/16, crée à tort 6 ; neufs créés 7/8 ; P(neuf) moyen sur les textes à ranger 0.33 ; 339 jetons
+variante textes_au_bon_seulement : rejoint le bon 9/16, crée à tort 7 ; neufs créés 7/8 ; P(neuf) moyen sur les textes à ranger 0.40 ; 278 jetons
+variante textes_aux_autres_seulement : rejoint le bon 10/16, crée à tort 6 ; neufs créés 8/8 ; P(neuf) moyen sur les textes à ranger 0.40 ; 400 jetons
+variante textes_proches : rejoint le bon 9/16, crée à tort 7 ; neufs créés 8/8 ; P(neuf) moyen sur les textes à ranger 0.43 ; 424 jetons
+variante textes_dits_exemples : rejoint le bon 11/16, crée à tort 3 ; neufs créés 6/8 ; P(neuf) moyen sur les textes à ranger 0.22 ; 435 jetons
+variante neuf_long : rejoint le bon 7/16, crée à tort 9 ; neufs créés 8/8 ; P(neuf) moyen sur les textes à ranger 0.49 ; 455 jetons
+variante sans_textes_neuf_long : rejoint le bon 10/16, crée à tort 5 ; neufs créés 7/8 ; P(neuf) moyen sur les textes à ranger 0.30 ; 271 jetons
+variante neuf_au_milieu : rejoint le bon 6/16, crée à tort 10 ; neufs créés 8/8 ; P(neuf) moyen sur les textes à ranger 0.58 ; 431 jetons
+écrit

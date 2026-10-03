@@ -8,6 +8,10 @@ manière de s'en servir existe ». Ce document ne désigne pas de vainqueur et
 ne recommande rien pour le produit : il dit ce qui bouge quand on change la
 façon de poser la question.
 
+> **Corrigé par [le document 04](04-hors-du-jeu-qui-l-a-vu-naitre.md).** Rejouées sur des jeux qui ne sont
+> pas de ma main, la forme à 15 sur 16 et le seuil de 0,07 ne tiennent pas, et le « 6 sur 6 » de GLiNER
+> non plus. Ce qui suit reste vrai du jeu sur lequel il a été mesuré.
+
 **Ce qui ressort : la façon de poser la question compte plus que le modèle.**
 Sur les mêmes textes et les mêmes sujets, JevK5 rejoint le bon sujet 2 fois
 sur 16 quand on lui fait comparer deux noms, et 15 fois sur 16 quand on lui

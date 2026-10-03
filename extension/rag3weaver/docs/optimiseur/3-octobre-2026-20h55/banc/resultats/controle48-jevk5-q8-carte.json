@@ -1,0 +1,679 @@
+{
+ "modele": "jevk5-q8-carte",
+ "seuil": 0.07,
+ "source": "test_banc_memoire.py, master 5d1a3189b, listes recopiées",
+ "paires": [
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.3143461400688121,
+   "probs": {
+    "same": 0.3143461400688121,
+    "completes": 0.3589805633527536,
+    "contradicts": 0.2668561416600537,
+    "new": 0.0598171549183805
+   }
+  },
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.03846073139583352,
+   "probs": {
+    "same": 0.03846073139583352,
+    "completes": 0.23777390835607048,
+    "contradicts": 0.07540443340912763,
+    "new": 0.6483609268389684
+   }
+  },
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.04534617792611837,
+   "probs": {
+    "same": 0.04534617792611837,
+    "completes": 0.039570934751146244,
+    "contradicts": 0.059976670163003704,
+    "new": 0.8551062171597316
+   }
+  },
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.1323826715360835,
+   "probs": {
+    "same": 0.1323826715360835,
+    "completes": 0.13917141905601826,
+    "contradicts": 0.06251851342439002,
+    "new": 0.6659273959835083
+   }
+  },
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.04180363434889178,
+   "probs": {
+    "same": 0.04180363434889178,
+    "completes": 0.07459500752340777,
+    "contradicts": 0.07087337699766631,
+    "new": 0.8127279811300342
+   }
+  },
+  {
+   "nouveau": "le dossier temporaire vit en RAM",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.028081021273203825,
+   "probs": {
+    "same": 0.028081021273203825,
+    "completes": 0.5247718372234751,
+    "contradicts": 0.11458080275169052,
+    "new": 0.3325663387516306
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.032315460972222654,
+   "probs": {
+    "same": 0.032315460972222654,
+    "completes": 0.7933936140905653,
+    "contradicts": 0.1102066728661118,
+    "new": 0.06408425207110015
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.020671778850999863,
+   "probs": {
+    "same": 0.020671778850999863,
+    "completes": 0.5234486383244894,
+    "contradicts": 0.06553078374718523,
+    "new": 0.3903487990773255
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.04654420342257598,
+   "probs": {
+    "same": 0.04654420342257598,
+    "completes": 0.08324813126230904,
+    "contradicts": 0.06841365800304731,
+    "new": 0.8017940073120676
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.0332017875965079,
+   "probs": {
+    "same": 0.0332017875965079,
+    "completes": 0.15037511924476543,
+    "contradicts": 0.06159361203553666,
+    "new": 0.75482948112319
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.04852304984025355,
+   "probs": {
+    "same": 0.04852304984025355,
+    "completes": 0.16800520804144808,
+    "contradicts": 0.2701512521362359,
+    "new": 0.5133204899820625
+   }
+  },
+  {
+   "nouveau": "rien de lourd dans le repertoire temporaire",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.025116675523485756,
+   "probs": {
+    "same": 0.025116675523485756,
+    "completes": 0.5297686714249796,
+    "contradicts": 0.15650347336370646,
+    "new": 0.28861117968782807
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.05729562571757452,
+   "probs": {
+    "same": 0.05729562571757452,
+    "completes": 0.11328104936499293,
+    "contradicts": 0.3213264799945654,
+    "new": 0.5080968449228672
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.13487652901550767,
+   "probs": {
+    "same": 0.13487652901550767,
+    "completes": 0.18325384216818594,
+    "contradicts": 0.12170789266712476,
+    "new": 0.5601617361491816
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.0658828328270373,
+   "probs": {
+    "same": 0.0658828328270373,
+    "completes": 0.0954227044257493,
+    "contradicts": 0.09467037440353929,
+    "new": 0.7440240883436741
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.08061794081838326,
+   "probs": {
+    "same": 0.08061794081838326,
+    "completes": 0.10337354342872941,
+    "contradicts": 0.11952529391204549,
+    "new": 0.6964832218408418
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.07387507855191017,
+   "probs": {
+    "same": 0.07387507855191017,
+    "completes": 0.10076818597937777,
+    "contradicts": 0.37510567706155634,
+    "new": 0.4502510584071556
+   }
+  },
+  {
+   "nouveau": "la batterie se joue sans rien demander",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "contradicts",
+   "p_same": 0.04991751668045482,
+   "probs": {
+    "same": 0.04991751668045482,
+    "completes": 0.1584529722069265,
+    "contradicts": 0.518587501512241,
+    "new": 0.27304200960037767
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.026066516546932785,
+   "probs": {
+    "same": 0.026066516546932785,
+    "completes": 0.48369808903367323,
+    "contradicts": 0.1305894481791729,
+    "new": 0.35964594624022106
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.023854015028320342,
+   "probs": {
+    "same": 0.023854015028320342,
+    "completes": 0.24048453817669385,
+    "contradicts": 0.08576327907359936,
+    "new": 0.6498981677213864
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "laisser deux coeurs libres",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.08631879920683594,
+   "probs": {
+    "same": 0.08631879920683594,
+    "completes": 0.05557715222251301,
+    "contradicts": 0.32580400077981514,
+    "new": 0.532300047790836
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.026770957800007312,
+   "probs": {
+    "same": 0.026770957800007312,
+    "completes": 0.06836329088826783,
+    "contradicts": 0.03545361778179685,
+    "new": 0.869412133529928
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.05022450775866092,
+   "probs": {
+    "same": 0.05022450775866092,
+    "completes": 0.1586744771133789,
+    "contradicts": 0.15702223107161162,
+    "new": 0.6340787840563485
+   }
+  },
+  {
+   "nouveau": "garder deux processeurs pour la machine",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.03187109481887351,
+   "probs": {
+    "same": 0.03187109481887351,
+    "completes": 0.4438662219036565,
+    "contradicts": 0.3116544114543875,
+    "new": 0.21260827182308242
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.02252176741756595,
+   "probs": {
+    "same": 0.02252176741756595,
+    "completes": 0.3932661594202912,
+    "contradicts": 0.20458521295195295,
+    "new": 0.3796268602101899
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.010942614045689593,
+   "probs": {
+    "same": 0.010942614045689593,
+    "completes": 0.8912066230001138,
+    "contradicts": 0.0409177458009871,
+    "new": 0.056933017153209614
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.0441741308683116,
+   "probs": {
+    "same": 0.0441741308683116,
+    "completes": 0.06746619957266006,
+    "contradicts": 0.06519096986466989,
+    "new": 0.8231686996943585
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "le journal survit à la passe",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.050266568476300774,
+   "probs": {
+    "same": 0.050266568476300774,
+    "completes": 0.6281436411649932,
+    "contradicts": 0.1237018050590282,
+    "new": 0.1978879852996778
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.045986898642508524,
+   "probs": {
+    "same": 0.045986898642508524,
+    "completes": 0.1393253899074645,
+    "contradicts": 0.10406033481752018,
+    "new": 0.7106273766325067
+   }
+  },
+  {
+   "nouveau": "le compte rendu de la passe reste sur le disque",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "completes",
+   "p_same": 0.04127238226968619,
+   "probs": {
+    "same": 0.04127238226968619,
+    "completes": 0.5190824806001274,
+    "contradicts": 0.19928158899638804,
+    "new": 0.24036354813379834
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.044021771081125496,
+   "probs": {
+    "same": 0.044021771081125496,
+    "completes": 0.11222940970668553,
+    "contradicts": 0.23099632473098794,
+    "new": 0.6127524944812011
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.054739671502102134,
+   "probs": {
+    "same": 0.054739671502102134,
+    "completes": 0.3127392112556905,
+    "contradicts": 0.23121223226406387,
+    "new": 0.4013088849781435
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.06953658105009539,
+   "probs": {
+    "same": 0.06953658105009539,
+    "completes": 0.08208713486300022,
+    "contradicts": 0.2687336993579329,
+    "new": 0.5796425847289715
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "new",
+   "p_same": 0.056222001946886674,
+   "probs": {
+    "same": 0.056222001946886674,
+    "completes": 0.0890321315437918,
+    "contradicts": 0.13187051026630803,
+    "new": 0.7228753562430135
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "meme",
+   "genre": "redite",
+   "choix": "contradicts",
+   "p_same": 0.10079696413425239,
+   "probs": {
+    "same": 0.10079696413425239,
+    "completes": 0.19718519149242922,
+    "contradicts": 0.3608477375760667,
+    "new": 0.34117010679725174
+   }
+  },
+  {
+   "nouveau": "dire qu on prend le compilateur",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "redite",
+   "choix": "contradicts",
+   "p_same": 0.056251658997900085,
+   "probs": {
+    "same": 0.056251658997900085,
+    "completes": 0.2918431374054244,
+    "contradicts": 0.41199903174047064,
+    "new": 0.2399061718562048
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "contredit",
+   "genre": "contradiction",
+   "choix": "completes",
+   "p_same": 0.02668135514397753,
+   "probs": {
+    "same": 0.02668135514397753,
+    "completes": 0.6942542514949974,
+    "contradicts": 0.17455651442208833,
+    "new": 0.10450787893893672
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "completes",
+   "p_same": 0.022989471914630237,
+   "probs": {
+    "same": 0.022989471914630237,
+    "completes": 0.6150689460141762,
+    "contradicts": 0.08273018051325377,
+    "new": 0.27921140155793983
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "laisser deux coeurs libres",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.032939360662872376,
+   "probs": {
+    "same": 0.032939360662872376,
+    "completes": 0.04958344399587625,
+    "contradicts": 0.06418296683927088,
+    "new": 0.8532942285019804
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.03183943035264328,
+   "probs": {
+    "same": 0.03183943035264328,
+    "completes": 0.14644357304853606,
+    "contradicts": 0.051499792559525435,
+    "new": 0.7702172040392953
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "completes",
+   "p_same": 0.06376031197627034,
+   "probs": {
+    "same": 0.06376031197627034,
+    "completes": 0.3272090534066626,
+    "contradicts": 0.2947660679685061,
+    "new": 0.314264566648561
+   }
+  },
+  {
+   "nouveau": "on peut mettre un target cargo dans /tmp",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "completes",
+   "p_same": 0.01969064509377608,
+   "probs": {
+    "same": 0.01969064509377608,
+    "completes": 0.48189716908458075,
+    "contradicts": 0.358308885270754,
+    "new": 0.14010330055088915
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "/tmp est de la mémoire vive",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.05243303193009208,
+   "probs": {
+    "same": 0.05243303193009208,
+    "completes": 0.08804849269938009,
+    "contradicts": 0.12924392549003658,
+    "new": 0.7302745498804913
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "la passe complète se lance sans demander",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.07968486448178475,
+   "probs": {
+    "same": 0.07968486448178475,
+    "completes": 0.061546886265195694,
+    "contradicts": 0.06634423139191777,
+    "new": 0.7924240178611018
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "laisser deux coeurs libres",
+   "verite": "contredit",
+   "genre": "contradiction",
+   "choix": "contradicts",
+   "p_same": 0.045733970395018496,
+   "probs": {
+    "same": 0.045733970395018496,
+    "completes": 0.11075627624179694,
+    "contradicts": 0.6939381744449642,
+    "new": 0.14957157891822026
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "le journal survit à la passe",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.06938190818469521,
+   "probs": {
+    "same": 0.06938190818469521,
+    "completes": 0.06592200928386924,
+    "contradicts": 0.04378541352696358,
+    "new": 0.8209106690044721
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "annoncer cargo avant de le prendre",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "new",
+   "p_same": 0.0821951218111335,
+   "probs": {
+    "same": 0.0821951218111335,
+    "completes": 0.04809615077443766,
+    "contradicts": 0.1362371119894265,
+    "new": 0.7334716154250023
+   }
+  },
+  {
+   "nouveau": "compiler sur tous les coeurs ne gêne personne",
+   "existant": "ne pas fusionner sans preuve",
+   "verite": "different",
+   "genre": "contradiction",
+   "choix": "contradicts",
+   "p_same": 0.07166868960645725,
+   "probs": {
+    "same": 0.07166868960645725,
+    "completes": 0.20316818054947466,
+    "contradicts": 0.4003190823486967,
+    "new": 0.3248440474953715
+   }
+  }
+ ]
+}

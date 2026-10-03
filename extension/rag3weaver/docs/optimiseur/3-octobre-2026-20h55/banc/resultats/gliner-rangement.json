@@ -1,0 +1,2056 @@
+{
+ "rangement": {
+  "f1_nom_neuf_dernier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identifiants et secrets",
+     "p": 0.6474496126174927,
+     "p_second": 0.24428443610668182,
+     "p_neuf": 0.24428443610668182
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.7049190998077393,
+     "p_second": 0.11714550107717514,
+     "p_neuf": 0.7049190998077393
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9609934687614441,
+     "p_second": 0.035330213606357574,
+     "p_neuf": 0.9609934687614441
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9999721050262451,
+     "p_second": 1.658737710386049e-05,
+     "p_neuf": 0.9999721050262451
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.887553334236145,
+     "p_second": 0.04094359651207924,
+     "p_neuf": 0.887553334236145
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5614418387413025,
+     "p_second": 0.17106717824935913,
+     "p_neuf": 0.17106717824935913
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "conception et périmètre",
+     "p": 0.32375428080558777,
+     "p_second": 0.2711198627948761,
+     "p_neuf": 0.15193329751491547
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.8849700689315796,
+     "p_second": 0.06675601750612259,
+     "p_neuf": 0.8849700689315796
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.9962469935417175,
+     "p_second": 0.002712428569793701,
+     "p_neuf": 0.9962469935417175
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.8327654600143433,
+     "p_second": 0.08820395171642303,
+     "p_neuf": 0.08820395171642303
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9955717325210571,
+     "p_second": 0.0014883080730214715,
+     "p_neuf": 0.0012353436322882771
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "moteur de base de données",
+     "p": 0.4485740661621094,
+     "p_second": 0.2012108564376831,
+     "p_neuf": 0.08063967525959015
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "identifiants et secrets",
+     "p": 0.5498046278953552,
+     "p_second": 0.3421556353569031,
+     "p_neuf": 0.3421556353569031
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.9951803684234619,
+     "p_second": 0.0021459085401147604,
+     "p_neuf": 0.9951803684234619
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.9994603991508484,
+     "p_second": 0.00042146642226725817,
+     "p_neuf": 0.9994603991508484
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": null,
+     "p": 0.5041746497154236,
+     "p_second": 0.16896523535251617,
+     "p_neuf": 0.5041746497154236
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6731182336807251,
+     "p_second": 0.17055334150791168,
+     "p_neuf": 0.6731182336807251
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9975370168685913,
+     "p_second": 0.0009213706362061203,
+     "p_neuf": 0.9975370168685913
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9999239444732666,
+     "p_second": 3.380062116775662e-05,
+     "p_neuf": 0.9999239444732666
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5601351857185364,
+     "p_second": 0.1707201451063156,
+     "p_neuf": 0.5601351857185364
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9999327659606934,
+     "p_second": 3.40340739057865e-05,
+     "p_neuf": 0.9999327659606934
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9258553981781006,
+     "p_second": 0.0446493960916996,
+     "p_neuf": 0.9258553981781006
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.29919639229774475,
+     "p_second": 0.29533651471138,
+     "p_neuf": 0.29919639229774475
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9982964396476746,
+     "p_second": 0.0007838225574232638,
+     "p_neuf": 0.9982964396476746
+    }
+   ],
+   "ms": 67.65991500287782
+  },
+  "f1_nom_neuf_premier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identifiants et secrets",
+     "p": 0.4581538438796997,
+     "p_second": 0.4204159677028656,
+     "p_neuf": 0.4204159677028656
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.7690511345863342,
+     "p_second": 0.10469989478588104,
+     "p_neuf": 0.7690511345863342
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.6733096241950989,
+     "p_second": 0.29422029852867126,
+     "p_neuf": 0.6733096241950989
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9999071359634399,
+     "p_second": 4.134383561904542e-05,
+     "p_neuf": 0.9999071359634399
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.8979172706604004,
+     "p_second": 0.03565071150660515,
+     "p_neuf": 0.8979172706604004
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.4712415337562561,
+     "p_second": 0.1981062889099121,
+     "p_neuf": 0.1981062889099121
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.3306778073310852,
+     "p_second": 0.23386162519454956,
+     "p_neuf": 0.3306778073310852
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.778186023235321,
+     "p_second": 0.1489468365907669,
+     "p_neuf": 0.778186023235321
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.997102677822113,
+     "p_second": 0.0020964988507330418,
+     "p_neuf": 0.997102677822113
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7912572622299194,
+     "p_second": 0.0832284465432167,
+     "p_neuf": 0.0832284465432167
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9937071204185486,
+     "p_second": 0.0023838600609451532,
+     "p_neuf": 0.002328014001250267
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "moteur de base de données",
+     "p": 0.4357568919658661,
+     "p_second": 0.21610093116760254,
+     "p_neuf": 0.04754047840833664
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "identifiants et secrets",
+     "p": 0.6143336296081543,
+     "p_second": 0.3037649393081665,
+     "p_neuf": 0.3037649393081665
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.9835452437400818,
+     "p_second": 0.005726563278585672,
+     "p_neuf": 0.9835452437400818
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.9995924830436707,
+     "p_second": 0.0003168277908116579,
+     "p_neuf": 0.9995924830436707
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": null,
+     "p": 0.6368367075920105,
+     "p_second": 0.1231476217508316,
+     "p_neuf": 0.6368367075920105
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.723922848701477,
+     "p_second": 0.18721404671669006,
+     "p_neuf": 0.723922848701477
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9904131293296814,
+     "p_second": 0.003619964001700282,
+     "p_neuf": 0.9904131293296814
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9998608827590942,
+     "p_second": 6.79580116411671e-05,
+     "p_neuf": 0.9998608827590942
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.4696060121059418,
+     "p_second": 0.19741536676883698,
+     "p_neuf": 0.4696060121059418
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9997323155403137,
+     "p_second": 0.0001353708648821339,
+     "p_neuf": 0.9997323155403137
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8968107104301453,
+     "p_second": 0.06365140527486801,
+     "p_neuf": 0.8968107104301453
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.37196722626686096,
+     "p_second": 0.24612675607204437,
+     "p_neuf": 0.37196722626686096
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9915775060653687,
+     "p_second": 0.003634211840108037,
+     "p_neuf": 0.9915775060653687
+    }
+   ],
+   "ms": 54.48177050129743
+  },
+  "f1_description": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.6771767735481262,
+     "p_second": 0.23909518122673035,
+     "p_neuf": 0.6771767735481262
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.5183908939361572,
+     "p_second": 0.16283954679965973,
+     "p_neuf": 0.5183908939361572
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7230062484741211,
+     "p_second": 0.10045179724693298,
+     "p_neuf": 0.10045179724693298
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.974821925163269,
+     "p_second": 0.009449378587305546,
+     "p_neuf": 0.974821925163269
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.4389444589614868,
+     "p_second": 0.23691964149475098,
+     "p_neuf": 0.23691964149475098
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5247393846511841,
+     "p_second": 0.2108822464942932,
+     "p_neuf": 0.16684205830097198
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.24568946659564972,
+     "p_second": 0.23757266998291016,
+     "p_neuf": 0.11175662279129028
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.5663889050483704,
+     "p_second": 0.17575998604297638,
+     "p_neuf": 0.5663889050483704
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.8185710310935974,
+     "p_second": 0.10387731343507767,
+     "p_neuf": 0.8185710310935974
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.44302114844322205,
+     "p_second": 0.2400367110967636,
+     "p_neuf": 0.1194995567202568
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9425143003463745,
+     "p_second": 0.02773963287472725,
+     "p_neuf": 0.009704827331006527
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "régime GPU",
+     "p": 0.4122913181781769,
+     "p_second": 0.2515212893486023,
+     "p_neuf": 0.1526007205247879
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.4692590534687042,
+     "p_second": 0.35499879717826843,
+     "p_neuf": 0.4692590534687042
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.46039214730262756,
+     "p_second": 0.36794373393058777,
+     "p_neuf": 0.36794373393058777
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.9651763439178467,
+     "p_second": 0.020492464303970337,
+     "p_neuf": 0.9651763439178467
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.49659276008605957,
+     "p_second": 0.32004454731941223,
+     "p_neuf": 0.32004454731941223
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.44415780901908875,
+     "p_second": 0.32678893208503723,
+     "p_neuf": 0.44415780901908875
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7035186290740967,
+     "p_second": 0.15763014554977417,
+     "p_neuf": 0.7035186290740967
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9786170125007629,
+     "p_second": 0.007387946825474501,
+     "p_neuf": 0.9786170125007629
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": "identifiants et secrets",
+     "p": 0.37192538380622864,
+     "p_second": 0.2983687222003937,
+     "p_neuf": 0.20110270380973816
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9828086495399475,
+     "p_second": 0.0077973916195333,
+     "p_neuf": 0.9828086495399475
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6858645677566528,
+     "p_second": 0.22751101851463318,
+     "p_neuf": 0.6858645677566528
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.3689098656177521,
+     "p_second": 0.3602149188518524,
+     "p_neuf": 0.3689098656177521
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7931540012359619,
+     "p_second": 0.10380095988512039,
+     "p_neuf": 0.7931540012359619
+    }
+   ],
+   "ms": 90.7306305016391
+  },
+  "f1_deux_textes": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.5255451202392578,
+     "p_second": 0.17472070455551147,
+     "p_neuf": 0.17472070455551147
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "identité git",
+     "p": 0.5943562984466553,
+     "p_second": 0.1311996579170227,
+     "p_neuf": 0.09176100045442581
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.6176466345787048,
+     "p_second": 0.20337902009487152,
+     "p_neuf": 0.0690506100654602
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.7600571513175964,
+     "p_second": 0.09450191259384155,
+     "p_neuf": 0.7600571513175964
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "moteur de base de données",
+     "p": 0.47896715998649597,
+     "p_second": 0.28804707527160645,
+     "p_neuf": 0.08876288682222366
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "moteur de base de données",
+     "p": 0.36194318532943726,
+     "p_second": 0.33792564272880554,
+     "p_neuf": 0.08390558511018753
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "conception et périmètre",
+     "p": 0.324089914560318,
+     "p_second": 0.30172696709632874,
+     "p_neuf": 0.06837842613458633
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.3038754463195801,
+     "p_second": 0.25870180130004883,
+     "p_neuf": 0.14389817416667938
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "identité git",
+     "p": 0.4344261884689331,
+     "p_second": 0.3667631447315216,
+     "p_neuf": 0.3667631447315216
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.28858888149261475,
+     "p_second": 0.23537838459014893,
+     "p_neuf": 0.051725052297115326
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.7453950047492981,
+     "p_second": 0.18582768738269806,
+     "p_neuf": 0.008603954687714577
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "régime GPU",
+     "p": 0.3232893943786621,
+     "p_second": 0.2725377082824707,
+     "p_neuf": 0.07604102790355682
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.34235280752182007,
+     "p_second": 0.26109474897384644,
+     "p_neuf": 0.34235280752182007
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "identité git",
+     "p": 0.49331381916999817,
+     "p_second": 0.20808377861976624,
+     "p_neuf": 0.1171494647860527
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.6309084296226501,
+     "p_second": 0.14358027279376984,
+     "p_neuf": 0.6309084296226501
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identité git",
+     "p": 0.4025917053222656,
+     "p_second": 0.2918003499507904,
+     "p_neuf": 0.13578999042510986
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.37338438630104065,
+     "p_second": 0.29846805334091187,
+     "p_neuf": 0.193276047706604
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": "identité git",
+     "p": 0.5481418371200562,
+     "p_second": 0.19904012978076935,
+     "p_neuf": 0.19904012978076935
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7723402380943298,
+     "p_second": 0.0776137113571167,
+     "p_neuf": 0.7723402380943298
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": "moteur de base de données",
+     "p": 0.2836456000804901,
+     "p_second": 0.2777688205242157,
+     "p_neuf": 0.06256623566150665
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7493313550949097,
+     "p_second": 0.1072285994887352,
+     "p_neuf": 0.7493313550949097
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": "identité git",
+     "p": 0.6289961934089661,
+     "p_second": 0.11462939530611038,
+     "p_neuf": 0.11462939530611038
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": "recherche plein texte",
+     "p": 0.3592901825904846,
+     "p_second": 0.2895523011684418,
+     "p_neuf": 0.15325680375099182
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.4487166106700897,
+     "p_second": 0.18317128717899323,
+     "p_neuf": 0.4487166106700897
+    }
+   ],
+   "ms": 232.16158099967288
+  },
+  "f1_aucun": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identifiants et secrets",
+     "p": 0.9387327432632446,
+     "p_second": 0.026152191683650017,
+     "p_neuf": 0.026152191683650017
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.41676974296569824,
+     "p_second": 0.33727410435676575,
+     "p_neuf": 0.41676974296569824
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.9646210670471191,
+     "p_second": 0.017929449677467346,
+     "p_neuf": 0.017929449677467346
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.5693793296813965,
+     "p_second": 0.21747443079948425,
+     "p_neuf": 0.21747443079948425
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.5511773824691772,
+     "p_second": 0.13953837752342224,
+     "p_neuf": 0.5511773824691772
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.6229796409606934,
+     "p_second": 0.14316606521606445,
+     "p_neuf": 0.14316606521606445
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "conception et périmètre",
+     "p": 0.3483901619911194,
+     "p_second": 0.26442521810531616,
+     "p_neuf": 0.18173685669898987
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.3686632215976715,
+     "p_second": 0.35383132100105286,
+     "p_neuf": 0.35383132100105286
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5421645045280457,
+     "p_second": 0.20589616894721985,
+     "p_neuf": 0.17583706974983215
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.788286566734314,
+     "p_second": 0.12776896357536316,
+     "p_neuf": 0.12776896357536316
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9948132038116455,
+     "p_second": 0.0024245947133749723,
+     "p_neuf": 0.0024245947133749723
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "moteur de base de données",
+     "p": 0.3882811665534973,
+     "p_second": 0.2732924520969391,
+     "p_neuf": 0.12057570368051529
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "identifiants et secrets",
+     "p": 0.8782423138618469,
+     "p_second": 0.05318964645266533,
+     "p_neuf": 0.024242917075753212
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.3196132481098175,
+     "p_second": 0.279676228761673,
+     "p_neuf": 0.3196132481098175
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": "recherche plein texte",
+     "p": 0.43742039799690247,
+     "p_second": 0.3809546232223511,
+     "p_neuf": 0.3809546232223511
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.38557490706443787,
+     "p_second": 0.19196517765522003,
+     "p_neuf": 0.14667348563671112
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.46332067251205444,
+     "p_second": 0.41409942507743835,
+     "p_neuf": 0.07550935447216034
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.29071664810180664,
+     "p_second": 0.2643287777900696,
+     "p_neuf": 0.29071664810180664
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": "recherche plein texte",
+     "p": 0.6728440523147583,
+     "p_second": 0.17839454114437103,
+     "p_neuf": 0.17839454114437103
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.611379086971283,
+     "p_second": 0.18281327188014984,
+     "p_neuf": 0.611379086971283
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5603010654449463,
+     "p_second": 0.17682041227817535,
+     "p_neuf": 0.5603010654449463
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.45099392533302307,
+     "p_second": 0.29386305809020996,
+     "p_neuf": 0.45099392533302307
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6440054774284363,
+     "p_second": 0.18583612143993378,
+     "p_neuf": 0.6440054774284363
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.32829955220222473,
+     "p_second": 0.32077261805534363,
+     "p_neuf": 0.32829955220222473
+    }
+   ],
+   "ms": 55.45795500074746
+  },
+  "f1_dix_sujets": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": "identifiants et secrets",
+     "p": 0.5641017556190491,
+     "p_second": 0.2841012477874756,
+     "p_neuf": 0.2841012477874756
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.5855267643928528,
+     "p_second": 0.1703861951828003,
+     "p_neuf": 0.5855267643928528
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.911904513835907,
+     "p_second": 0.07128394395112991,
+     "p_neuf": 0.911904513835907
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.9999326467514038,
+     "p_second": 2.807801320159342e-05,
+     "p_neuf": 0.9999326467514038
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": null,
+     "p": 0.7702941298484802,
+     "p_second": 0.044075895100831985,
+     "p_neuf": 0.7702941298484802
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5349125266075134,
+     "p_second": 0.15763311088085175,
+     "p_neuf": 0.08146201074123383
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.34042951464653015,
+     "p_second": 0.17448663711547852,
+     "p_neuf": 0.34042951464653015
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": null,
+     "p": 0.7949894070625305,
+     "p_second": 0.08505498617887497,
+     "p_neuf": 0.7949894070625305
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.99765944480896,
+     "p_second": 0.0005130994250066578,
+     "p_neuf": 0.99765944480896
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "compilation et charge du poste",
+     "p": 0.596367359161377,
+     "p_second": 0.13152237236499786,
+     "p_neuf": 0.13152237236499786
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9886921644210815,
+     "p_second": 0.004474882502108812,
+     "p_neuf": 0.0007860196637921035
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "moteur de base de données",
+     "p": 0.2885156571865082,
+     "p_second": 0.15864641964435577,
+     "p_neuf": 0.08586099743843079
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.4167645275592804,
+     "p_second": 0.4163193702697754,
+     "p_neuf": 0.4167645275592804
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.9661669135093689,
+     "p_second": 0.01659410446882248,
+     "p_neuf": 0.9661669135093689
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.9995717406272888,
+     "p_second": 0.00025579050998203456,
+     "p_neuf": 0.9995717406272888
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": null,
+     "p": 0.5676823258399963,
+     "p_second": 0.1442011296749115,
+     "p_neuf": 0.5676823258399963
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6498081088066101,
+     "p_second": 0.18687620759010315,
+     "p_neuf": 0.6498081088066101
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9815657138824463,
+     "p_second": 0.007454827427864075,
+     "p_neuf": 0.9815657138824463
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9998418092727661,
+     "p_second": 6.6213688114658e-05,
+     "p_neuf": 0.9998418092727661
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": "recherche plein texte",
+     "p": 0.2942870557308197,
+     "p_second": 0.23395146429538727,
+     "p_neuf": 0.23395146429538727
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9995150566101074,
+     "p_second": 0.00018809466564562172,
+     "p_neuf": 0.9995150566101074
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.8182237148284912,
+     "p_second": 0.06386702507734299,
+     "p_neuf": 0.8182237148284912
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": "recherche plein texte",
+     "p": 0.3254733383655548,
+     "p_second": 0.16198967397212982,
+     "p_neuf": 0.10792133957147598
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.9962484240531921,
+     "p_second": 0.0010119297076016665,
+     "p_neuf": 0.9962484240531921
+    }
+   ],
+   "ms": 67.992382493685
+  },
+  "f2_creer_dernier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.9321543574333191,
+     "p_second": 0.04864782094955444,
+     "p_neuf": 0.9321543574333191
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.2747974693775177,
+     "p_second": 0.2734549343585968,
+     "p_neuf": 0.2747974693775177
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7414525747299194,
+     "p_second": 0.10394085198640823,
+     "p_neuf": 0.06465711444616318
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.900861918926239,
+     "p_second": 0.04319743439555168,
+     "p_neuf": 0.900861918926239
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.47711992263793945,
+     "p_second": 0.1870342493057251,
+     "p_neuf": 0.1870342493057251
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5594202876091003,
+     "p_second": 0.2666413486003876,
+     "p_neuf": 0.08060360699892044
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "conception et périmètre",
+     "p": 0.26292935013771057,
+     "p_second": 0.24696877598762512,
+     "p_neuf": 0.13803677260875702
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.28876152634620667,
+     "p_second": 0.2708589434623718,
+     "p_neuf": 0.2708589434623718
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.4073593318462372,
+     "p_second": 0.3425360918045044,
+     "p_neuf": 0.3425360918045044
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": null,
+     "p": 0.2854543626308441,
+     "p_second": 0.27690666913986206,
+     "p_neuf": 0.2854543626308441
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.9293014407157898,
+     "p_second": 0.029834678396582603,
+     "p_neuf": 0.009250235743820667
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "moteur de base de données",
+     "p": 0.32264310121536255,
+     "p_second": 0.31463634967803955,
+     "p_neuf": 0.2482271045446396
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": null,
+     "p": 0.3988339900970459,
+     "p_second": 0.34884828329086304,
+     "p_neuf": 0.3988339900970459
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.4980875849723816,
+     "p_second": 0.279360294342041,
+     "p_neuf": 0.279360294342041
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.6454820036888123,
+     "p_second": 0.24273867905139923,
+     "p_neuf": 0.6454820036888123
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.656646728515625,
+     "p_second": 0.1736137717962265,
+     "p_neuf": 0.09967363625764847
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.5460720658302307,
+     "p_second": 0.31422850489616394,
+     "p_neuf": 0.10748907178640366
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6208155155181885,
+     "p_second": 0.19607652723789215,
+     "p_neuf": 0.6208155155181885
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.37276390194892883,
+     "p_second": 0.1997682899236679,
+     "p_neuf": 0.37276390194892883
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.3885124623775482,
+     "p_second": 0.30318865180015564,
+     "p_neuf": 0.3885124623775482
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7009573578834534,
+     "p_second": 0.21691448986530304,
+     "p_neuf": 0.7009573578834534
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.7873833775520325,
+     "p_second": 0.14329904317855835,
+     "p_neuf": 0.7873833775520325
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5097231268882751,
+     "p_second": 0.2751561999320984,
+     "p_neuf": 0.5097231268882751
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": "conception et périmètre",
+     "p": 0.5323532223701477,
+     "p_second": 0.28930237889289856,
+     "p_neuf": 0.28930237889289856
+    }
+   ],
+   "ms": 109.54925399710191
+  },
+  "f2_creer_premier": {
+   "lignes": [
+    {
+     "id": "r01",
+     "attendu": "identité git",
+     "rendu": null,
+     "p": 0.8493980169296265,
+     "p_second": 0.09942470490932465,
+     "p_neuf": 0.8493980169296265
+    },
+    {
+     "id": "r02",
+     "attendu": "identité git",
+     "rendu": "moteur de base de données",
+     "p": 0.2916617691516876,
+     "p_second": 0.27539730072021484,
+     "p_neuf": 0.2539237439632416
+    },
+    {
+     "id": "r03",
+     "attendu": "compilation et charge du poste",
+     "rendu": "compilation et charge du poste",
+     "p": 0.7104524970054626,
+     "p_second": 0.12613092362880707,
+     "p_neuf": 0.05234041064977646
+    },
+    {
+     "id": "r04",
+     "attendu": "compilation et charge du poste",
+     "rendu": null,
+     "p": 0.851048469543457,
+     "p_second": 0.07369833439588547,
+     "p_neuf": 0.851048469543457
+    },
+    {
+     "id": "r05",
+     "attendu": "tests",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5693771839141846,
+     "p_second": 0.2297273576259613,
+     "p_neuf": 0.08257902413606644
+    },
+    {
+     "id": "r06",
+     "attendu": "tests",
+     "rendu": "tests",
+     "p": 0.5217249989509583,
+     "p_second": 0.3141067922115326,
+     "p_neuf": 0.07133843749761581
+    },
+    {
+     "id": "r07",
+     "attendu": "régime GPU",
+     "rendu": "conception et périmètre",
+     "p": 0.28070518374443054,
+     "p_second": 0.2551707923412323,
+     "p_neuf": 0.15716445446014404
+    },
+    {
+     "id": "r08",
+     "attendu": "régime GPU",
+     "rendu": "compilation et charge du poste",
+     "p": 0.2737633287906647,
+     "p_second": 0.2053820937871933,
+     "p_neuf": 0.18802513182163239
+    },
+    {
+     "id": "r09",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.4457371234893799,
+     "p_second": 0.24598902463912964,
+     "p_neuf": 0.24598902463912964
+    },
+    {
+     "id": "r10",
+     "attendu": "arbre partagé entre sessions",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.26507294178009033,
+     "p_second": 0.24728280305862427,
+     "p_neuf": 0.15250511467456818
+    },
+    {
+     "id": "r11",
+     "attendu": "modèles d'embarquement",
+     "rendu": "modèles d'embarquement",
+     "p": 0.8958754539489746,
+     "p_second": 0.044355764985084534,
+     "p_neuf": 0.014650296419858932
+    },
+    {
+     "id": "r12",
+     "attendu": "modèles d'embarquement",
+     "rendu": "régime GPU",
+     "p": 0.34382233023643494,
+     "p_second": 0.3219239115715027,
+     "p_neuf": 0.1674727499485016
+    },
+    {
+     "id": "r13",
+     "attendu": "moteur de base de données",
+     "rendu": "moteur de base de données",
+     "p": 0.4411523938179016,
+     "p_second": 0.26508137583732605,
+     "p_neuf": 0.24672135710716248
+    },
+    {
+     "id": "r14",
+     "attendu": "moteur de base de données",
+     "rendu": "arbre partagé entre sessions",
+     "p": 0.5461185574531555,
+     "p_second": 0.23403626680374146,
+     "p_neuf": 0.23403626680374146
+    },
+    {
+     "id": "r15",
+     "attendu": "recherche plein texte",
+     "rendu": null,
+     "p": 0.5166994333267212,
+     "p_second": 0.2839696705341339,
+     "p_neuf": 0.5166994333267212
+    },
+    {
+     "id": "r16",
+     "attendu": "identifiants et secrets",
+     "rendu": "identifiants et secrets",
+     "p": 0.605656623840332,
+     "p_second": 0.1759803146123886,
+     "p_neuf": 0.13123780488967896
+    },
+    {
+     "id": "n01",
+     "attendu": null,
+     "rendu": "tests",
+     "p": 0.5465776324272156,
+     "p_second": 0.2746642529964447,
+     "p_neuf": 0.14612135291099548
+    },
+    {
+     "id": "n02",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.5073240399360657,
+     "p_second": 0.25290635228157043,
+     "p_neuf": 0.5073240399360657
+    },
+    {
+     "id": "n03",
+     "attendu": null,
+     "rendu": "conception et périmètre",
+     "p": 0.31191131472587585,
+     "p_second": 0.22278308868408203,
+     "p_neuf": 0.22278308868408203
+    },
+    {
+     "id": "n04",
+     "attendu": null,
+     "rendu": "moteur de base de données",
+     "p": 0.3939352333545685,
+     "p_second": 0.23791831731796265,
+     "p_neuf": 0.17713719606399536
+    },
+    {
+     "id": "n05",
+     "attendu": null,
+     "rendu": "moteur de base de données",
+     "p": 0.40859678387641907,
+     "p_second": 0.39309239387512207,
+     "p_neuf": 0.39309239387512207
+    },
+    {
+     "id": "n06",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.6161027550697327,
+     "p_second": 0.2550657093524933,
+     "p_neuf": 0.6161027550697327
+    },
+    {
+     "id": "n07",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.43368592858314514,
+     "p_second": 0.3061005771160126,
+     "p_neuf": 0.43368592858314514
+    },
+    {
+     "id": "n08",
+     "attendu": null,
+     "rendu": null,
+     "p": 0.4775793254375458,
+     "p_second": 0.3771381378173828,
+     "p_neuf": 0.4775793254375458
+    }
+   ],
+   "ms": 112.722540005052
+  }
+ },
+ "journal": {
+  "f1_nom_neuf_dernier": [
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9993711113929749
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.999268114566803
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9983313679695129
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9985526204109192
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9980717897415161
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9888217449188232
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9369034171104431
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9807816743850708
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9161989092826843
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9736331701278687
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9820771217346191
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9921132326126099
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9881559610366821
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9994847774505615
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9758214354515076
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9873579740524292
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.939545214176178
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9883453845977783
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9890366196632385
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9993901252746582
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.8920474052429199
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9998657703399658
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9974703788757324
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9297391772270203
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9778052568435669
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9956076741218567
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.8445621728897095
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9907628893852234
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9923761487007141
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9529557228088379
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9997273087501526
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.999549925327301
+   },
+   {
+    "attendu": null,
+    "rendu": "Hors de ce dépôt",
+    "p": 0.3998083770275116
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.32496964931488037
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.4119173288345337
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.4737143814563751
+   },
+   {
+    "attendu": null,
+    "rendu": "Branches ouvertes",
+    "p": 0.7055397033691406
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.3028847277164459
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.31367090344429016
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.35858646035194397
+   },
+   {
+    "attendu": null,
+    "rendu": "Branches ouvertes",
+    "p": 0.4375647008419037
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.3972179591655731
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.41247397661209106
+   },
+   {
+    "attendu": null,
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.4418709874153137
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.6457617878913879
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.5218381881713867
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.30699822306632996
+   }
+  ],
+  "f1_nom_neuf_premier": [
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.997822642326355
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9957703948020935
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9903867244720459
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9966294169425964
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9903914928436279
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9459624886512756
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.9550195336341858
+   },
+   {
+    "attendu": "Branches ouvertes",
+    "rendu": null,
+    "p": 0.980963945388794
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9080738425254822
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9278145432472229
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9100291728973389
+   },
+   {
+    "attendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "rendu": null,
+    "p": 0.9950148463249207
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9955602884292603
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9990471005439758
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9589883685112
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9909816384315491
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.8702725768089294
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9908902049064636
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9939911961555481
+   },
+   {
+    "attendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "rendu": null,
+    "p": 0.9991788268089294
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9789295792579651
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9997817873954773
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.993104875087738
+   },
+   {
+    "attendu": "Hors de ce dépôt",
+    "rendu": null,
+    "p": 0.9000632762908936
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9859144687652588
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9928025603294373
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.8887426257133484
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9975065588951111
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9916749596595764
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9663799405097961
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.9997150301933289
+   },
+   {
+    "attendu": "Bugs connus, non corrigés",
+    "rendu": null,
+    "p": 0.999413251876831
+   },
+   {
+    "attendu": null,
+    "rendu": "Hors de ce dépôt",
+    "p": 0.4237028956413269
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.2952752411365509
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.36879023909568787
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.4358333945274353
+   },
+   {
+    "attendu": null,
+    "rendu": "Branches ouvertes",
+    "p": 0.7562031149864197
+   },
+   {
+    "attendu": null,
+    "rendu": "Branches ouvertes",
+    "p": 0.26338979601860046
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.3217722177505493
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.3559613525867462
+   },
+   {
+    "attendu": null,
+    "rendu": "Branches ouvertes",
+    "p": 0.41525179147720337
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.37284380197525024
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.4116204082965851
+   },
+   {
+    "attendu": null,
+    "rendu": "Bugs connus, non corrigés",
+    "p": 0.42855769395828247
+   },
+   {
+    "attendu": null,
+    "rendu": null,
+    "p": 0.5236465930938721
+   },
+   {
+    "attendu": null,
+    "rendu": "Reste à faire sur du travail déjà fusionné ou poussé",
+    "p": 0.5277391076087952
+   },
+   {
+    "attendu": null,
+    "rendu": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+    "p": 0.3085761070251465
+   }
+  ]
+ }
+}

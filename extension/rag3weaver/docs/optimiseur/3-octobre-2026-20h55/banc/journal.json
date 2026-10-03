@@ -1,0 +1,224 @@
+{
+ "source": "docs/journal-des-chantiers.md",
+ "commit": "13131d572",
+ "note": "Jeu bâti par script : sujet = titre de section, sujet neuf proposé = en-tête de l'entrée. Aucune étiquette posée à la main.",
+ "sections": [
+  {
+   "nom": "Branches ouvertes",
+   "entrees": [
+    {
+     "en_tete": "pas-c-ponderations (130984f61)",
+     "texte": "pas-c-ponderations (130984f61) — ../rag3db-pas-c — recherche — Quatre tests de l'ordre de priorité écrits, logique à coder. — Coder les étapes 1 et 2, arrêt avant fusion."
+    },
+    {
+     "en_tete": "regime-carte-partagee-2",
+     "texte": "regime-carte-partagee-2 — ../rag3db-embarquements — embarquements — 3 octobre : régulateur de rafale (durée visée + pause, défaut provisoire 50 ms / 150 ms) dans l'ingestion et le démon, écran ménagé par défaut quand la seule carte le porte, CardClass::Integrated dite par le pilote, troisième déclencheur de 107m, et RA"
+    },
+    {
+     "en_tete": "index-en-fond (fusionnée)",
+     "texte": "index-en-fond (fusionnée) — ../rag3db-embarquements — embarquements — 3 octobre : « indexer ce dépôt » sur master — estimate et index (src/estimate.rs, src/dataflow/index_nodes.rs, templates/tools/estimate.mmd et index.mmd), l'avancement (Catalog::index_progress). index rend un journal au contrat de run_bg ; dernière l"
+    },
+    {
+     "en_tete": "(services sur luciepc)",
+     "texte": "(services sur luciepc) — — — embarquements — 3 octobre au soir, décidé par Lucie : le modèle de décision JevK5-4B est servi de luciepc comme les granite, parce qu'il prend deux secondes par décision sur processeur ici et 109 ms sur la carte libre là-bas. Par llama-server (binaire déjà présent, rien bâti), 127.0.0.1:788"
+    },
+    {
+     "en_tete": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparse",
+     "texte": "codeparsers-genre-d-usage (sous-module codeparsers, dépôt L-Defraiteur/codeparsers) — ../rag3db-codeparsers — codeparsers — 3 octobre : sur master de codeparsers et pointé par rag3db (04187fed8) jusqu'à f0faa82 : C# épinglé, genre d'usage et ligne sur chaque relation, résolution déterministe, 1 552 fausses arêtes retir"
+    },
+    {
+     "en_tete": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste)",
+     "texte": "c_api_test : deux tests faux depuis le renommage du fork (le moteur était juste) — 3bc404937"
+    },
+    {
+     "en_tete": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLB",
+     "texte": "Marche T0 : après une erreur dans BEGIN … COMMIT, tout est refusé jusqu'au ROLLBACK (TransactionContext::MANUAL_TRANSACTION_FAILED), erreur de syntaxe comprise — 88f57e2ba, 4c13619d1, et a34538c9a pour trois cas de l'extension vector"
+    },
+    {
+     "en_tete": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au",
+     "texte": "Marche A2 : les offsets provisoires des nœuds d'une transaction sont remappés au commit ; les insertions sont journalisées au commit ; au commit, un offset définitif n'est plus pris pour une ligne locale — e81423a28, 875da1772"
+    },
+    {
+     "en_tete": "Un champ NULL d'une liste de structures littérales prend le type des autres élém",
+     "texte": "Un champ NULL d'une liste de structures littérales prend le type des autres éléments — 17c1ae41d, 909c2573c"
+    },
+    {
+     "en_tete": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un surv",
+     "texte": "Index vectoriel : un DELETE annulé par ROLLBACK ne le laisse plus muet ; un survivant vers lequel ne menaient que des nœuds supprimés reste atteignable — e64839489, 13284a0fe"
+    }
+   ]
+  },
+  {
+   "nom": "Ce qui est dans git, et ce qui n'y est pas (expérience MTG)",
+   "entrees": [
+    {
+     "en_tete": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparatio",
+     "texte": "Le moteur, le backend déclaratif, le harnais, le chat, les scripts de préparation et d'ingestion — experiments/mtga/data/ : bases, snapshots, collection capturée, decks générés, journaux de conversation"
+    },
+    {
+     "en_tete": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit",
+     "texte": "Le manifeste backend.json, les schémas, les graphes, les règles Rhai, le gabarit de rendu — backend/harness/cards.json et wildcards.json : faits extraits, régénérés par scripts/prepare_deck_harness.py"
+    },
+    {
+     "en_tete": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite",
+     "texte": "Les branchements vers les sources locales : mtga-reader, Player.log, les SQLite du client Arena — .venv, node_modules, rag3bridge/target, les poids des modèles"
+    },
+    {
+     "en_tete": "Les docs des expériences, noms de cartes compris",
+     "texte": "Les docs des expériences, noms de cartes compris — Les identifiants : .vault"
+    }
+   ]
+  },
+  {
+   "nom": "Reste à faire sur du travail déjà fusionné ou poussé",
+   "entrees": [
+    {
+     "en_tete": "Repli des KB en entités dérivées",
+     "texte": "Repli des KB en entités dérivées — master, pas A et B faits — Pas C : poids de fusion par entité, pondération par genre dans Scope, gabarits de dérivées au catalogue. Décidé (§4) ; la mesure des poids de fusion ne commence pas avant la référence du banc e2e_banc_etage en granite-278m, avant / après les suppressions — a"
+    },
+    {
+     "en_tete": "Chemin de masse des lots de naissances",
+     "texte": "Chemin de masse des lots de naissances — fa70cf8f3, désactivé (RAG3WEAVER_COPY_NAISSANCES) — Trouver pourquoi le COPY des chunks croît avec la table. Pistes : reconstruction de l'index vectoriel à chaque lot (ajuster_l_index_pour_le_retard), relecture select_node_ids."
+    },
+    {
+     "en_tete": "Deck builder MTG (produit)",
+     "texte": "Deck builder MTG (produit) — experiments/mtga, master — Descriptions d'outils propres à chaque entité (description d'entité dans le manifeste, au lieu du même texte pour tous les search_*) ; compter artefacts et créatures de mana comme sources de couleur dans le harnais (accordé, pas fait) ; barre de défilement du chat"
+    },
+    {
+     "en_tete": "Synchronisation par périmètre",
+     "texte": "Synchronisation par périmètre — première étape sur master (3 octobre) : SnapshotConfig (périmètre, maxMissingRatio, onMissing: delete \\ — {transition}), une session à la fois par périmètre et par cellule (begin_snapshot rend l'identifiant, takeover, abort_snapshot), marque _snapshot, fin en deux temps (plan_snapshot_fi"
+    },
+    {
+     "en_tete": "Base MTG",
+     "texte": "Base MTG — poste — À reconstruire (environ 8 Go, dont 6 récupérables)."
+    },
+    {
+     "en_tete": "Récupération des lignes supprimées dans rag3db",
+     "texte": "Récupération des lignes supprimées dans rag3db — proposé, pas fait — Les blobs d'index sont bornés par une purge côté rag3weaver (d1aa7d296) en attendant."
+    },
+    {
+     "en_tete": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée",
+     "texte": "Un modèle d'embarquement requalifié en ancien = une transition d'état déclarée — promis le 18 septembre à la session optimiseur, jamais confié — Attendait que Lifecycle soit appliqué à l'écriture : c'est fait (780acfd2d). À cadrer avec les sessions optimiseur et lifecycle."
+    },
+    {
+     "en_tete": "Écritures parallèles",
+     "texte": "Écritures parallèles — objectif décidé par Lucie le 2 octobre : « on fait ce qu'il faut pour écritures parallèles, peu importe ce que ça coûte » — Cible tranchée par Lucie : « oui jusque B, et A d'abord si dans même chemin » — B, plusieurs processus écrivains sur le même fichier ; A, plusieurs transactions d'écriture d"
+    }
+   ]
+  },
+  {
+   "nom": "Hors de ce dépôt",
+   "entrees": [
+    {
+     "en_tete": "Forks burn, cubecl, cubek",
+     "texte": "Forks burn, cubecl, cubek — github.com/L-Defraiteur/{burn,cubecl,cubek}, branche rag3weaver/pre.3 — Utilisés tels quels (burn 21674205 depuis le 2 octobre)."
+    },
+    {
+     "en_tete": "Adresse professionnelle sur les forks",
+     "texte": "Adresse professionnelle sur les forks — L-Defraiteur/{burn,cubecl,cubek}, branche rag3weaver/pre.3 — Corrigé le 2 octobre sur décision de Lucie : les neuf commits qui portaient son adresse professionnelle sont recréés à l'adresse personnelle (mêmes diffs), branches poussées avec bail, pre.2 supprimées, épinglage remont"
+    },
+    {
+     "en_tete": "PR amont burn / cubek",
+     "texte": "PR amont burn / cubek — à ouvrir — Sept préparées par la session optimiseur au 18 septembre ; aucune envoyée. Lucie, 2 octobre : d'accord pour les proposer, après vérification que l'amont n'a pas déjà corrigé — vérifié le 2 octobre : aucune des sept n'est corrigée en amont, textes et correctifs prêts (extension/rag3wea"
+    },
+    {
+     "en_tete": "Amont Vela",
+     "texte": "Amont Vela — remote vela, branche storage/concurrent-checkpoint-recovery (27 septembre) — En cours de relecture par la session cœur C++ (2 octobre), voir « Un seul écrivain à la fois » au §3. Le WAL illisible, lui, venait de notre bug d'écriture, corrigé (§6)."
+    }
+   ]
+  },
+  {
+   "nom": "Bugs connus, non corrigés",
+   "entrees": [
+    {
+     "en_tete": "L'index vectoriel peut laisser une ligne injoignable dès sa construction",
+     "texte": "L'index vectoriel peut laisser une ligne injoignable dès sa construction (extension vector, trouvé le 3 octobre par la session cœur C++, non corrigé). Une ligne indexée qu'aucune recherche n'atteint : un trou de rappel silencieux, sans aucune suppression. Reproduction, déterministe : les cent premières lignes de datase"
+    },
+    {
+     "en_tete": "QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k",
+     "texte": "**QUERY_VECTOR_INDEX … RETURN count(*) rend toujours k** (extension vector, 3 octobre), même quand l'index a moins de k lignes : le résultat est complété jusqu'à k avant la jointure avec la table. count(node.id) est juste."
+    },
+    {
+     "en_tete": "L'élagage immédiat des voisins plante dans le chemin de suppression",
+     "texte": "L'élagage immédiat des voisins plante dans le chemin de suppression (extension vector, 3 octobre) : appeler createRels depuis finalizeDelete pour ajouter une arête à un nœud déjà plein mène à un SIGSEGV dans shrinkForNode. Non élucidé ; le correctif 13284a0fe l'évite en écrivant les arêtes directement."
+    },
+    {
+     "en_tete": "Les points d'entrée de l'index vectoriel vivent hors transaction",
+     "texte": "Les points d'entrée de l'index vectoriel vivent hors transaction (extension vector) : c'est la cause du défaut du ROLLBACK corrigé le 3 octobre par un contournement (e64839489), et de la course que décrit docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md. La vraie correction est la maintenance de l'index au"
+    },
+    {
+     "en_tete": "L'extension de plein texte range des offsets provisoires",
+     "texte": "L'extension de plein texte range des offsets provisoires dans ses tables internes (identifiants de document en entiers) : la marche A2 ne les remappe pas. Elle n'est dans aucun build et rag3weaver ne s'en sert pas."
+    },
+    {
+     "en_tete": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING",
+     "texte": "Une colonne nulle sur toutes les lignes d'une liste de paramètres est lue comme STRING (moteur, trouvé le 3 octobre par e2e_undo). Reproduction : CREATE NODE TABLE T(id STRING PRIMARY KEY, n INT64), CREATE (:T {id: 'a'}), puis UNWIND $items AS i MATCH (t:T {id: i.id}) SET t.n = i.n avec $items = [{id: 'a', n: NULL}] : "
+    },
+    {
+     "en_tete": "L'identité d'une ligne ne dépend pas de la cellule",
+     "texte": "L'identité d'une ligne ne dépend pas de la cellule (crate) : uuid_for hache les champs hashsafe seuls. La même clé ingérée dans deux cellules donne la même ligne, dont la seconde ingestion réécrit _org / _project. e2e_scope l'évite par des noms distincts par cellule. La synchronisation, bornée à la cellule, n'y ajoute "
+    },
+    {
+     "en_tete": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc",
+     "texte": "Les défauts du mode multi-écrivains et des transactions, prouvés par le banc (test/transaction/concurrence/, fusionné le 3 octobre) : la liste à jour est known_red.txt, les rouges déterministes, et probabilistic.txt, les rouges qui dépendent de l'ordonnancement. On y trouve : la clé primaire en double (C1), la relation"
+    },
+    {
+     "en_tete": "Sous le mode multi-écrivains, une table indexée par HNSW peut rendre la base inutilisable",
+     "texte": "Sous le mode multi-écrivains, une table indexée par HNSW peut rendre la base inutilisable (banc de concurrence, cas H4, 3 octobre). Quatre écrivains mélangent insertions, suppressions et nouveaux vecteurs sur une table qui porte un index HNSW. Sur 40 exécutions (20 à chaud, 20 avec arrêt brutal), le processus écrivain "
+    },
+    {
+     "en_tete": "Après un point de reprise échoué, le processus qui continue perd des clés en silence puis plante",
+     "texte": "Après un point de reprise échoué, le processus qui continue perd des clés en silence puis plante (mesuré sur master, 2 octobre ; patch d'expérience dans …/2-octobre-2026-01h07/moteur-concurrence/). Corrigé côté moteur le 3 octobre : le gestionnaire de transactions retient l'échec, et tout début de transaction ou point "
+    },
+    {
+     "en_tete": "les_lots_stables_comptent_des_puissances_de_deux (lib) échoue sous le régime doux",
+     "texte": "les_lots_stables_comptent_des_puissances_de_deux (lib) échoue sous le régime doux (3 octobre) : il appelle lot_budget, qui lit RAG3WEAVER_EMBED_CHAR_BUDGET, que toute passe pose à 4096 ; seul, il échoue à chaque fois avec la variable et passe sans. Les passes d'avant étaient vertes par chance d'ordre : un test voisin r"
+    },
+    {
+     "en_tete": "Une fin de synchronisation retirait une ligne sortie de son périmètre entre le plan et l'application",
+     "texte": "Une fin de synchronisation retirait une ligne sortie de son périmètre entre le plan et l'application (trouvé le 3 octobre en répondant à la revue de la session lifecycle) : l'identité d'une ligne ne dépend pas du périmètre, la session unique par périmètre ne la protégeait donc pas. Corrigé : l'application relit le péri"
+    },
+    {
+     "en_tete": "La suppression ne retirait jamais les vecteurs creux de l'index lucistore : corrigé le 3 octobre",
+     "texte": "La suppression ne retirait jamais les vecteurs creux de l'index lucistore : corrigé le 3 octobre, confirmé par exécution avec bge-m3 avant (3 entrées sur 3 après un retrait ; 4 pour 3 chunks vivants après une mise à jour qui redécoupe). DeleteRecordNode et RechunkDeleteNode retirent désormais du handle les offsets des "
+    },
+    {
+     "en_tete": "Après une table vidée puis repeuplée par le chemin de masse, la recherche dense ne rendait rien : corrigé le 3 octobre",
+     "texte": "Après une table vidée puis repeuplée par le chemin de masse, la recherche dense ne rendait rien : corrigé le 3 octobre, dans notre greffe de suppression dans l'index HNSW (l'amont n'y supprime rien), par la session cœur C++ (hnsw-point-d-entree-apres-suppression). Trois défauts : le nettoyage de fin d'instruction ne to"
+    },
+    {
+     "en_tete": "Les poids ne dépendent plus d'aucun disque",
+     "texte": "Les poids ne dépendent plus d'aucun disque (3 octobre 2026). Les granite d'origine du 6 septembre, rapportés de l'ancien poste par ssh, sont installés (suite granite 11 sur 11) et publiés à la place des régénérés dans les deux dépôts Hugging Face, passés en public le même jour, empreintes distantes conformes ; les régé"
+    },
+    {
+     "en_tete": "Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026",
+     "texte": "Le mode multi-écrivains corrompt en silence — prouvé le 2 octobre 2026 par l'étape 1 du banc de concurrence (branche banc-de-concurrence, 37a44e351, 20 passes sur 20). Sous debug_enable_multi_writes : deux ou trois écrivains insèrent la même clé primaire et tous valident (la clé existe deux et trois fois) ; une suppres"
+    },
+    {
+     "en_tete": "Les poids granite ne sont ni sur ce poste ni publiés",
+     "texte": "Les poids granite ne sont ni sur ce poste ni publiés (vu le 2 octobre) : ~/.cache/rag3weaver/ n'a que bge-m3, minilm et multilingual-minilm ; granite-278m (le modèle par défaut), granite-107m et l'OCR ppocrv6-tiny n'ont jamais été mis sur Hugging Face. Conséquence : le banc de recherche (e2e_banc_etage) ne donne aucune"
+    },
+    {
+     "en_tete": "LecteursConcurrents.CeQueLeLecteurVoitEstCoherent : corrigé à l'ouverture par la marche 1",
+     "texte": "LecteursConcurrents.CeQueLeLecteurVoitEstCoherent : corrigé à l'ouverture par la marche 1 (3 octobre). Une ouverture en lecture seule qu'un point de reprise a traversée est refusée par WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN, refus transitoire qui se retente ; le test est vert cinq fois sur cinq. Reste ouvert : "
+    },
+    {
+     "en_tete": "Reprise après un point de reprise interrompu : corrigée",
+     "texte": "Reprise après un point de reprise interrompu : corrigée (2 octobre, 6bf46150b, trouvée par la session cœur C++). Sur une table qui avait déjà connu des points de reprise, un point de reprise interrompu laissait l'index de clé primaire réécrit en place, et la base ne se rouvrait plus (« Found duplicated primary key »). "
+    },
+    {
+     "en_tete": "WAL illisible : la vraie cause est un bug d'écriture",
+     "texte": "WAL illisible : la vraie cause est un bug d'écriture, pas l'arrêt brutal (trouvé le 1er octobre 2026). resizeBufferIfNeeded (src/storage/wal/checksum_writer.cpp, même défaut dans checksum_reader.cpp) remplace le tampon de 4096 octets sans recopier ce qui y était : tout enregistrement de plus de 4 Kio perd son début, et"
+    },
+    {
+     "en_tete": "Persistance des abilities imbriquées",
+     "texte": "Persistance des abilities imbriquées : après réouverture, des textes rattachés au mauvais élément. Bloquant pour les filtres sur ce champ."
+    },
+    {
+     "en_tete": "SIGSEGV avec un buffer pool de 1 Gio",
+     "texte": "SIGSEGV avec un buffer pool de 1 Gio ; contournement : 8 à 15 Gio."
+    }
+   ]
+  }
+ ]
+}
