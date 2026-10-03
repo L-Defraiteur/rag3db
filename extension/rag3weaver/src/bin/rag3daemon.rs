@@ -36,17 +36,27 @@ fn main() -> std::process::ExitCode {
 fn servir() -> Result<(), String> {
     let (adresse, base, expose) = arguments()?;
 
-    let conn: Arc<dyn DbConnection> = if base == MEMOIRE {
-        Arc::new(Rag3dbConnection::in_memory().map_err(|e| format!("base en mémoire : {e}"))?)
+    let conn = if base == MEMOIRE {
+        Rag3dbConnection::in_memory().map_err(|e| format!("base en mémoire : {e}"))?
     } else {
-        Arc::new(Rag3dbConnection::new(&base).map_err(|e| {
+        Rag3dbConnection::new(&base).map_err(|e| {
             format!(
                 "ouverture de {base} : {e}\n  \
                  (une base rag3db ne s'ouvre que par un processus à la fois — \
                  un autre démon la tient peut-être déjà)"
             )
-        })?)
+        })?
     };
+    // Crochet de test (`e2e_rag3daemon`) : la k-ième requête rencontre la base
+    // comme après un point de reprise échoué.
+    if let Some(k) = std::env::var("RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_REQUEST")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|k| *k > 0)
+    {
+        conn.failed_checkpoint_hook().after(k - 1);
+    }
+    let conn: Arc<dyn DbConnection> = Arc::new(conn);
 
     let demon = DbDaemon::new(conn).base(&base).expose(expose);
     // Sur la sortie d'erreur, donc dans le journal du serveur : c'est là qu'on

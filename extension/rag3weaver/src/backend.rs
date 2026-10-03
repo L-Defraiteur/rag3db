@@ -1082,6 +1082,12 @@ impl Backend {
         Ok(json!({"messages": messages}))
     }
 
+    /// La base doit-elle être rouverte ? Voir [`Catalog::must_reopen`] ; un
+    /// hôte le demande après chaque requête.
+    pub fn must_reopen(&self) -> Option<String> {
+        self.catalog.lock().unwrap_or_else(|p| p.into_inner()).must_reopen()
+    }
+
     pub fn shutdown(&mut self) -> Result<(), String> {
         self.catalog
             .lock()

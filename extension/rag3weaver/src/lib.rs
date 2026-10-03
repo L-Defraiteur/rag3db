@@ -242,7 +242,7 @@ pub use search_strategy::{
 };
 pub use validator::{validate_schema, KBFieldRef};
 #[cfg(feature = "rag3db-native")]
-pub use rag3db_connection::Rag3dbConnection;
+pub use rag3db_connection::{FailedCheckpointHook, Rag3dbConnection};
 
 /// JSON Schema storage mapping and typed filter descriptors.
 pub mod json_schema;

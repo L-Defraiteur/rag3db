@@ -286,3 +286,40 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
 
     let _ = std::fs::remove_dir_all(&dossier);
 }
+
+/// **Après un point de reprise échoué**, le démon répond l'erreur puis
+/// s'arrête (`EXIT_MUST_REOPEN`) pour être relancé sur une base rouverte ; son
+/// client reconnaît le nom à travers le fil et refuse ensuite tout. La panne
+/// est injectée par le crochet de test de la connexion du démon.
+#[test]
+#[ignore]
+fn le_demon_dont_la_base_doit_etre_rouverte_repond_puis_s_arrete() {
+    use rag3weaver::connection::REOPEN_AFTER_FAILED_CHECKPOINT;
+    let adresse = port_libre();
+    let journal = std::env::temp_dir().join(format!("rag3weaver-e2e-rag3daemon-rouvrir-{}", std::process::id()));
+    let serveur = DaemonConnection::serveur(&adresse, env!("CARGO_BIN_EXE_rag3daemon"), ":memoire:")
+        .journal_dans(&journal)
+        .env("RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_REQUEST", "2")
+        .fin(Fin::Arreter);
+    let client = DaemonConnection::assurer(&serveur).expect("assurer");
+    assert!(client.execute("RETURN 1").is_ok(), "la première requête est servie");
+    let err = client.execute("RETURN 2").unwrap_err().to_string();
+    assert!(err.contains(REOPEN_AFTER_FAILED_CHECKPOINT), "le nom traverse le fil : {err}");
+    assert!(client.must_reopen().is_some(), "le client sait que la base doit être rouverte");
+    let encore = client.execute("RETURN 3").unwrap_err().to_string();
+    assert!(encore.contains(REOPEN_AFTER_FAILED_CHECKPOINT), "et refuse ensuite sans demander : {encore}");
+
+    // Le démon s'en va de lui-même, en le disant dans son journal.
+    let mut parti = false;
+    for _ in 0..50 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if DaemonConnection::joindre(&adresse).is_err() {
+            parti = true;
+            break;
+        }
+    }
+    assert!(parti, "le démon dont la base doit être rouverte s'arrête");
+    let log = std::fs::read_to_string(journal.join("rag3daemon.log")).unwrap_or_default();
+    assert!(log.contains("la base doit être rouverte"), "le journal du démon le dit : {log}");
+    let _ = std::fs::remove_dir_all(&journal);
+}

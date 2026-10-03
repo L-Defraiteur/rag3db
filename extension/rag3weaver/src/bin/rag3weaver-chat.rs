@@ -21,9 +21,13 @@ struct BackendProcess {
     child: Child,
     input: ChildStdin,
     output: BufReader<ChildStdout>,
+    argv: Vec<String>,
+    /// Une base qui doit être rouverte relance le backend **une fois** ; si
+    /// la panne se répète (un disque plein échoue de nouveau), on s'arrête.
+    restarted: bool,
 }
 impl BackendProcess {
-    fn start(argv: &[String]) -> Result<Self, String> {
+    fn spawn(argv: &[String]) -> Result<(Child, ChildStdin, BufReader<ChildStdout>), String> {
         let mut child = Command::new(&argv[0])
             .args(&argv[1..])
             .stdin(Stdio::piped())
@@ -31,11 +35,38 @@ impl BackendProcess {
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(|e| format!("backend start: {e}"))?;
-        Ok(Self {
-            input: child.stdin.take().unwrap(),
-            output: BufReader::new(child.stdout.take().unwrap()),
-            child,
-        })
+        let input = child.stdin.take().unwrap();
+        let output = BufReader::new(child.stdout.take().unwrap());
+        Ok((child, input, output))
+    }
+    fn start(argv: &[String]) -> Result<Self, String> {
+        let (child, input, output) = Self::spawn(argv)?;
+        Ok(Self { child, input, output, argv: argv.to_vec(), restarted: false })
+    }
+    /// **La base a dû être rouverte** : le backend s'est arrêté avec
+    /// `EXIT_MUST_REOPEN`. Relancé une fois, et dit ; l'appel qui a échoué
+    /// n'est **pas** rejoué — une transaction validée malgré l'erreur ne
+    /// doit pas l'être deux fois, c'est à l'appelant de juger.
+    fn after_must_reopen(&mut self, error: &str) -> String {
+        let _ = self.child.wait();
+        if self.restarted {
+            return format!(
+                "{error} — la panne se répète après une relance : le backend n'est pas relancé une seconde fois \
+                 (disque plein ? voir son journal)"
+            );
+        }
+        self.restarted = true;
+        match Self::spawn(&self.argv) {
+            Ok((child, input, output)) => {
+                (self.child, self.input, self.output) = (child, input, output);
+                eprintln!("▸ la base a dû être rouverte : le backend est relancé (une fois)");
+                format!(
+                    "{error} — le backend a été relancé sur la base rouverte ; cet appel n'a pas abouti \
+                     et n'est pas rejoué : à refaire s'il le faut"
+                )
+            }
+            Err(e) => format!("{error} — relance du backend impossible : {e}"),
+        }
     }
     fn request(&mut self, request: Value) -> Result<Value, String> {
         writeln!(self.input, "{request}")
@@ -48,10 +79,20 @@ impl BackendProcess {
             .map_err(|e| e.to_string())?
             == 0
         {
+            // Sorti sans répondre : avec le code de la réouverture, on relance.
+            if let Ok(status) = self.child.wait() {
+                if status.code() == Some(rag3weaver::connection::EXIT_MUST_REOPEN) {
+                    return Err(self.after_must_reopen("la base doit être rouverte"));
+                }
+            }
             return Err("backend stopped unexpectedly".into());
         }
         let response: Value =
             serde_json::from_str(&line).map_err(|e| format!("backend protocol: {e}"))?;
+        if response["mustReopen"] == true {
+            let error = response["error"].as_str().unwrap_or("la base doit être rouverte").to_string();
+            return Err(self.after_must_reopen(&error));
+        }
         if response["ok"] != true {
             return Err(response["error"].as_str().unwrap_or("backend error").into());
         }

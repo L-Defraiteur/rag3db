@@ -19,7 +19,28 @@ pub enum DbError {
 
     #[error("type error: {0}")]
     TypeError(String),
+
+    /// **La base doit être fermée puis rouverte** : un point de reprise y a
+    /// échoué, et le moteur refuse tout jusqu'à la réouverture
+    /// ([`REOPEN_AFTER_FAILED_CHECKPOINT`]). Rien n'est sûr d'ici là — ni
+    /// retenter, ni rejouer.
+    #[error("must reopen: {0}")]
+    MustReopen(String),
 }
+
+/// **Le nom stable du refus du moteur** après un point de reprise échoué —
+/// le début de `TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT`
+/// (`src/include/transaction/transaction_manager.h`). C'est sur lui, et sur
+/// lui seul, qu'une erreur du moteur est reconnue.
+pub const REOPEN_AFTER_FAILED_CHECKPOINT: &str =
+    "A checkpoint of this database failed, so it must be closed and reopened";
+
+/// **Le code de sortie d'un hôte dont la base doit être rouverte** (75,
+/// `EX_TEMPFAIL`) : `rag3weaver-backend` et `rag3daemon` répondent l'erreur,
+/// puis s'arrêtent avec ce code pour que leur lanceur les relance — un
+/// processus neuf est la seule façon sûre de lâcher la base et tout ce que
+/// la mémoire en savait, comme PostgreSQL après un PANIC.
+pub const EXIT_MUST_REOPEN: i32 = 75;
 
 /// A Cypher-compatible value. Mirrors the types that rag3db (Kuzu) supports.
 ///
@@ -185,6 +206,13 @@ pub trait DbConnection: Send + Sync {
         cypher: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError>;
+
+    /// **Cette base doit-elle être rouverte ?** `Some(message du moteur)`
+    /// une fois qu'un point de reprise y a échoué : la connexion refuse
+    /// alors tout, et son propriétaire doit la lâcher et en rouvrir une.
+    fn must_reopen(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Alias for backward compat — DbConnection is now sync natively.

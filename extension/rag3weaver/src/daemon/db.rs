@@ -235,6 +235,18 @@ impl Service for DbDaemon {
                 Err(e) => (400, erreur(&e)),
                 Ok(r) => match self.cypher(r) {
                     Ok(res) => (200, serde_json::to_string(&res).unwrap_or_default()),
+                    // **Un point de reprise a échoué** : la base doit être
+                    // rouverte. On répond — le client reconnaît le nom — puis
+                    // on s'en va avec `EXIT_MUST_REOPEN`, comme pour `quitter` ;
+                    // celui qui assure le démon le relancera.
+                    Err(e) if self.conn.must_reopen().is_some() => {
+                        eprintln!("✗ rag3daemon : la base doit être rouverte — arrêt ({e})");
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            std::process::exit(crate::connection::EXIT_MUST_REOPEN);
+                        });
+                        (422, erreur(&e))
+                    }
                     // 422 et non 500 : une requête refusée par la base est un
                     // défaut de la requête, pas du démon. Le client doit
                     // pouvoir faire la différence.
@@ -257,6 +269,9 @@ pub struct DaemonConnection {
     agent: ureq::Agent,
     identite: Identite,
     _attache: Option<crate::serveur::Attache>,
+    /// Le démon a dit que sa base doit être rouverte : ce client refuse
+    /// ensuite tout, et son catalogue doit être lâché.
+    reopen: std::sync::Mutex<Option<String>>,
 }
 
 impl std::fmt::Debug for DaemonConnection {
@@ -296,7 +311,7 @@ impl DaemonConnection {
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
         let agent = agent();
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { base_url: base_url(adresse), agent, identite, _attache: attache })
+        Ok(Self { base_url: base_url(adresse), agent, identite, _attache: attache, reopen: Default::default() })
     }
 
     /// Ce que le démon déclare servir.
@@ -305,6 +320,9 @@ impl DaemonConnection {
     }
 
     fn envoyer(&self, r: RequeteFil) -> Result<QueryResult, DbError> {
+        if let Some(reason) = self.must_reopen() {
+            return Err(DbError::MustReopen(reason));
+        }
         let corps = serde_json::to_string(&r).map_err(|e| DbError::QueryError(e.to_string()))?;
         let texte = poster(&self.agent, &self.base_url, "/cypher", corps).map_err(|e| match e {
             // Une requête refusée par la base reste une erreur de requête, même
@@ -314,6 +332,14 @@ impl DaemonConnection {
                 DbError::QueryError(format!("rag3daemon {statut} : {}", message(&corps)))
             }
             autre => DbError::ConnectionError(autre.to_string()),
+        })
+        .map_err(|e| match e {
+            // Le même nom, reconnu à travers le fil.
+            DbError::QueryError(m) if m.contains(crate::connection::REOPEN_AFTER_FAILED_CHECKPOINT) => {
+                self.reopen.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| m.clone());
+                DbError::MustReopen(m)
+            }
+            autre => autre,
         })?;
         let res: ResultatFil =
             serde_json::from_str(&texte).map_err(|e| DbError::TypeError(e.to_string()))?;
@@ -354,6 +380,10 @@ impl DbConnection for DaemonConnection {
                 .map(|p| ParamFil { name: p.name.clone(), value: ValeurFil::from(&p.value) })
                 .collect(),
         })
+    }
+
+    fn must_reopen(&self) -> Option<String> {
+        self.reopen.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 }
 

@@ -27,6 +27,35 @@ pub struct Rag3dbConnection {
     // SAFETY: conn borrows from db. Declared first so it drops first.
     conn: rag3db::Connection<'static>,
     db: Arc<rag3db::Database>,
+    /// Partagé par toutes les connexions d'une même `Database` : un point de
+    /// reprise échoué empoisonne la base, pas une connexion.
+    reopen: Arc<ReopenState>,
+}
+
+/// **Crochet de test** : faire répondre la base exactement comme le moteur
+/// après un point de reprise échoué — par le même chemin de reconnaissance.
+/// Le crate n'a aucun autre moyen de faire échouer un point de reprise ; la
+/// vraie panne est éprouvée par les tests C++ du moteur.
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct FailedCheckpointHook(Arc<ReopenState>);
+
+impl FailedCheckpointHook {
+    /// Servir encore `n` instructions, puis répondre à la suivante par le
+    /// refus du moteur.
+    pub fn after(&self, n: usize) {
+        self.0.inject_after.store(n as i64, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// **L'état « à rouvrir » d'une base**, partagé par ses connexions.
+#[derive(Default)]
+struct ReopenState {
+    /// Le message du moteur, posé à la première reconnaissance.
+    reason: std::sync::Mutex<Option<String>>,
+    /// Crochet de test : nombre d'instructions encore servies avant de
+    /// répondre comme un point de reprise échoué ; négatif, inactif.
+    inject_after: std::sync::atomic::AtomicI64,
 }
 
 // rag3db::Connection is already Send+Sync (unsafe impl in the crate).
@@ -117,7 +146,7 @@ impl Rag3dbConnection {
             rag3db::Database::in_memory(Self::in_memory_config())
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
-        Self::connect(db)
+        Self::connect(db, Self::fresh_reopen_state())
     }
 
     /// Réservation d'espace d'adressage virtuel d'une base **en mémoire** :
@@ -168,10 +197,16 @@ impl Rag3dbConnection {
             rag3db::Database::new(path, config)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
-        Self::connect(db)
+        Self::connect(db, Self::fresh_reopen_state())
     }
 
-    fn connect(db: Arc<rag3db::Database>) -> Result<Self, DbError> {
+    fn fresh_reopen_state() -> Arc<ReopenState> {
+        let state = ReopenState::default();
+        state.inject_after.store(-1, std::sync::atomic::Ordering::SeqCst);
+        Arc::new(state)
+    }
+
+    fn connect(db: Arc<rag3db::Database>, reopen: Arc<ReopenState>) -> Result<Self, DbError> {
         // SAFETY: db is heap-allocated (Arc), address is stable.
         // conn is declared before db in the struct, so it drops first.
         // We never expose the inner Database or Connection separately.
@@ -182,22 +217,67 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db })
+        Ok(Self { conn, db, reopen })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
     /// The returned connection shares the same Database instance (same tables, same catalog).
     pub fn create_sync_connection(&self) -> Result<Arc<dyn crate::connection::SyncDbConnection>, DbError> {
-        let conn = Self::connect(self.db.clone())?;
+        let conn = Self::connect(self.db.clone(), self.reopen.clone())?;
         Ok(Arc::new(conn))
+    }
+
+    /// **Le seul point où une erreur du moteur entre dans le crate.** Le refus
+    /// après un point de reprise échoué y est reconnu par son nom
+    /// ([`REOPEN_AFTER_FAILED_CHECKPOINT`](crate::connection::REOPEN_AFTER_FAILED_CHECKPOINT))
+    /// et empoisonne la base : toutes ses connexions refusent ensuite tout,
+    /// sans plus rien envoyer au moteur.
+    fn engine_error(&self, e: impl std::fmt::Display) -> DbError {
+        let message = e.to_string();
+        if message.contains(crate::connection::REOPEN_AFTER_FAILED_CHECKPOINT) {
+            let mut reason = self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner());
+            reason.get_or_insert_with(|| message.clone());
+            return DbError::MustReopen(message);
+        }
+        DbError::QueryError(message)
+    }
+
+    /// Refuser d'emblée sur une base empoisonnée ; servir le crochet de test.
+    ///
+    /// **Son coût, avant chaque instruction** : un verrou de `Mutex` jamais
+    /// disputé (la raison, posée une fois) et une lecture d'atomique — des
+    /// dizaines de nanosecondes, contre des microsecondes au moins pour la
+    /// moindre requête. Une ingestion lente se cherche ailleurs.
+    fn before_engine(&self) -> Result<(), DbError> {
+        if let Some(reason) = self.must_reopen() {
+            return Err(DbError::MustReopen(reason));
+        }
+        use std::sync::atomic::Ordering;
+        if self.reopen.inject_after.load(Ordering::SeqCst) >= 0
+            && self.reopen.inject_after.fetch_sub(1, Ordering::SeqCst) == 0
+        {
+            return Err(self.engine_error(format!(
+                "Runtime exception: {} before it is used again (injecté par le crochet de test)",
+                crate::connection::REOPEN_AFTER_FAILED_CHECKPOINT
+            )));
+        }
+        Ok(())
+    }
+
+    /// **Crochet de test**, gardé avant de confier la connexion à un
+    /// catalogue : voir [`FailedCheckpointHook`].
+    #[doc(hidden)]
+    pub fn failed_checkpoint_hook(&self) -> FailedCheckpointHook {
+        FailedCheckpointHook(self.reopen.clone())
     }
 
     /// Execute a raw Cypher query (sync, used internally).
     fn query_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
+        self.before_engine()?;
         let mut result = self
             .conn
             .query(cypher)
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| self.engine_error(e))?;
 
         let columns = result.get_column_names();
         let mut rows = Vec::new();
@@ -214,10 +294,11 @@ impl Rag3dbConnection {
         cypher: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
+        self.before_engine()?;
         let mut stmt = self
             .conn
             .prepare(cypher)
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| self.engine_error(e))?;
 
         for p in params { p.value.validate_parameter_types().map_err(DbError::TypeError)?; }
 
@@ -229,7 +310,7 @@ impl Rag3dbConnection {
         let mut result = self
             .conn
             .execute(&mut stmt, rag3db_params)
-            .map_err(|e| DbError::QueryError(e.to_string()))?;
+            .map_err(|e| self.engine_error(e))?;
 
         let columns = result.get_column_names();
         let mut rows = Vec::new();
@@ -252,6 +333,10 @@ impl DbConnection for Rag3dbConnection {
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
         self.query_with_params_sync(cypher, params)
+    }
+
+    fn must_reopen(&self) -> Option<String> {
+        self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 }
 

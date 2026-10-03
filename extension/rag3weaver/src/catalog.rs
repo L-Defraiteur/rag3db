@@ -95,6 +95,12 @@ pub enum CatalogError {
     /// trop de lignes absentes) : rien n'a été retiré.
     #[error("synchronisation refusée : {0}")]
     SnapshotRefused(String),
+    /// **La base doit être fermée puis rouverte** : un point de reprise y a
+    /// échoué, et ce catalogue refuse désormais tout. Son propriétaire le
+    /// lâche et en ouvre un neuf sur la même base — le chemin d'une reprise
+    /// après arrêt brutal. Rien n'est retenté ni rejoué ici.
+    #[error("la base doit être rouverte : {0}")]
+    MustReopen(String),
 }
 
 /// Le verdict de la machine à états pour une ligne (`Catalog::lifecycle_verdict`).
@@ -7396,11 +7402,35 @@ impl Catalog {
     // ── Private helpers ────────────────────────────────────────────────
 
     fn check_initialized(&self) -> Result<(), CatalogError> {
+        if let Some(reason) = self.must_reopen() {
+            return Err(CatalogError::MustReopen(reason));
+        }
         if !self.initialized {
             Err(CatalogError::NotInitialized)
         } else {
             Ok(())
         }
+    }
+
+    /// **Ce catalogue doit-il être lâché, et sa base rouverte ?** `Some` dès
+    /// qu'un point de reprise de la base a échoué (`DbConnection::must_reopen`) :
+    /// le message du moteur, et ce que la file en mémoire perd — les
+    /// opérations mises en file et pas encore drainées ne sont pas dans la
+    /// base, comme après un arrêt brutal ; leurs appelants les reposeront.
+    ///
+    /// C'est la question qu'un hôte pose après toute erreur : la réponse ne
+    /// dépend pas du chemin par lequel l'erreur est remontée.
+    pub fn must_reopen(&self) -> Option<String> {
+        let reason = self
+            .conn
+            .must_reopen()
+            .or_else(|| self.sync_conn.as_ref().and_then(|c| c.must_reopen()))?;
+        let pending = self.pending.total_count();
+        Some(if pending == 0 {
+            reason
+        } else {
+            format!("{reason} — {pending} opération(s) en file, non drainée(s), perdue(s) avec ce catalogue : à reposer après réouverture")
+        })
     }
 
     fn check_entity(&self, name: &str) -> Result<&EntityDef, CatalogError> {
