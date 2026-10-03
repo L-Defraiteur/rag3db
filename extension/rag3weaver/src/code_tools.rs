@@ -1038,6 +1038,11 @@ pub struct ReingestReport {
     pub scopes_deleted: usize,
     pub relations: usize,
     pub failed: usize,
+    /// Les scopes disparus du fichier ne sont pas retirés ici : une
+    /// synchronisation de la source entière tient le périmètre, et c'est à sa
+    /// fin qu'ils partent. Le refus qui le dit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_to: Option<String>,
 }
 
 impl EditResult {
@@ -1054,13 +1059,18 @@ impl EditResult {
             out.push_str(&format!(" — first change at line {l} (read with offset={} to check)", l.saturating_sub(3).max(1)));
         }
         match &self.reingest {
-            Some(r) => out.push_str(&format!(
-                "\nIndex updated: {} scopes upserted, {} removed, {} relations{}",
-                r.scopes_upserted,
-                r.scopes_deleted,
-                r.relations,
-                if r.failed > 0 { format!(", {} failed", r.failed) } else { String::new() }
-            )),
+            Some(r) => {
+                out.push_str(&format!(
+                    "\nIndex updated: {} scopes upserted, {} removed, {} relations{}",
+                    r.scopes_upserted,
+                    r.scopes_deleted,
+                    r.relations,
+                    if r.failed > 0 { format!(", {} failed", r.failed) } else { String::new() }
+                ));
+                if r.deferred_to.is_some() {
+                    out.push_str(" (removals left to the synchronisation of the whole source in progress)");
+                }
+            }
             None => out.push_str("\n(no catalogue: index not updated)"),
         }
         out.push('\n');
@@ -1138,50 +1148,10 @@ pub fn edit_file(
     })
 }
 
-/// Ré-ingère un seul fichier : analyse seule (références locales et
-/// `DEFINED_IN` ; l'inter-fichiers attend la résolution contre la base),
-/// suppression des scopes disparus, upsert du reste.
+/// Ré-ingère un seul fichier, par la synchronisation déclarée de l'entité
+/// `Scope` : voir [`crate::code_sync::reingest_file`].
 pub fn reingest_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, content: &str) -> Result<ReingestReport, String> {
-    use crate::code::{FILE, SCOPE};
-    let cursor = source.cursor();
-    let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
-        Some(root) => (root.to_string(), false),
-        None => ("/".to_string(), true),
-    };
-    let mut analysis = crate::code::analyze_with(&root, vec![(path.to_string(), content.to_string())], &cursor);
-    for f in &mut analysis.files {
-        f.cursor = cursor.clone();
-        if virtual_source {
-            f.absolute_path.clear();
-        }
-    }
-    // Scopes connus du fichier, moins ceux que l'analyse produit encore.
-    let (src_id, indexed_path) = indexed_name(source, path);
-    let known = catalog
-        .find_by_field(SCOPE, "file_path", CypherValue::String(indexed_path.clone()), &["key", "source"])
-        .map_err(|e| e.to_string())?;
-    let known: Vec<_> = known
-        .into_iter()
-        .filter(|r| col(r, "source").and_then(|v| v.as_str()).unwrap_or("") == src_id)
-        .collect();
-    let new_keys: std::collections::HashSet<&str> = analysis.scopes.iter().map(|s| s.key.as_str()).collect();
-    let mut deleted = 0usize;
-    for row in &known {
-        let Some(key) = col(row, "key").and_then(|v| v.as_str()) else { continue };
-        if !new_keys.contains(key) {
-            let uuid = catalog
-                .entity_uuid(SCOPE, &BTreeMap::from([("key".to_string(), CypherValue::String(key.to_string()))]))
-                .map_err(|e| e.to_string())?;
-            // Le lot déclaré : `ingest_code` draine juste après.
-            catalog
-                .delete_jusqu_a(SCOPE, &uuid, crate::disponibilite::Disponibilites::AUCUNE)
-                .map_err(|e| e.to_string())?;
-            deleted += 1;
-        }
-    }
-    let _ = FILE;
-    let report = catalog.ingest_code(&analysis).map_err(|e| e.to_string())?;
-    Ok(ReingestReport { scopes_upserted: report.scopes, scopes_deleted: deleted, relations: report.relations, failed: report.failed })
+    crate::code_sync::reingest_file(catalog, source, path, content, crate::disponibilite::Disponibilites::TOUT)
 }
 
 /// Ce que les nœuds mettent sur leur port : JSON structuré, ou markdown

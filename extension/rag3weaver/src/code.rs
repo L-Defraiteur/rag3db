@@ -311,6 +311,17 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // La vue par parent : les méthodes d'un même impl rendues ensemble,
         // sous sa signature, que l'impl soit ou non un résultat.
         group_by: Some(crate::config::GroupBy { relation: "HAS_PARENT".into(), frame_field: "signature".into() }),
+        // **La synchronisation déclarée** : la source entière est le grain
+        // large, le fichier le grain fin. Une édition finit son fichier
+        // (`code_sync::reingest_file`) ; une synchronisation de la source
+        // retire ce qui a disparu, fichiers supprimés compris.
+        snapshot: Some(crate::config::SnapshotConfig {
+            scope: vec!["source".into()],
+            fine_scope: vec!["file_path".into()],
+            max_missing_ratio: 0.5,
+            on_missing: crate::config::OnMissing::Delete,
+            keep_for: None,
+        }),
         ..Default::default()
     }
 }
@@ -1269,16 +1280,28 @@ impl Catalog {
     /// par `link` (uuid dérivés des clés, comme le catalogue les dérivera),
     /// puis `drain`. Le schéma doit être déclaré ([`register_code_schema`]).
     pub fn ingest_code(&mut self, analysis: &CodeAnalysis) -> Result<CodeIngestReport, CatalogError> {
+        self.ingest_code_jusqu_a(analysis, crate::disponibilite::Disponibilites::TOUT)
+    }
+
+    /// [`ingest_code`](Self::ingest_code), en disant **ce qui doit être prêt**
+    /// quand il rend : `RECHERCHE_TEXTE` écrit les lignes et le plein texte,
+    /// et laisse la dette de vecteurs en base, que
+    /// [`embarquer_le_retard`](Self::embarquer_le_retard) solde.
+    pub fn ingest_code_jusqu_a(
+        &mut self,
+        analysis: &CodeAnalysis,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<CodeIngestReport, CatalogError> {
         let mut report = CodeIngestReport::default();
         let phase = std::time::Instant::now();
 
-        let files = self.ingest_entities(FILE, analysis.files.iter().map(FileRecord::data).collect())?;
+        let files = self.ingest_entities_jusqu_a(FILE, analysis.files.iter().map(FileRecord::data).collect(), exige)?;
         report.files = files.processed;
         report.failed += files.failed;
-        let scopes = self.ingest_entities(SCOPE, analysis.scopes.iter().map(ScopeRecord::data).collect())?;
+        let scopes = self.ingest_entities_jusqu_a(SCOPE, analysis.scopes.iter().map(ScopeRecord::data).collect(), exige)?;
         report.scopes = scopes.processed;
         report.failed += scopes.failed;
-        let libs = self.ingest_entities(LIBRARY, analysis.libraries.iter().map(LibraryRecord::data).collect())?;
+        let libs = self.ingest_entities_jusqu_a(LIBRARY, analysis.libraries.iter().map(LibraryRecord::data).collect(), exige)?;
         report.libraries = libs.processed;
         report.failed += libs.failed;
 
@@ -1307,7 +1330,7 @@ impl Catalog {
         for (rel, liens) in par_relation {
             self.mettre_en_file_les_liens(rel, liens)?;
         }
-        let linked = self.drain();
+        let linked = self.drain_jusqu_a(exige);
         report.relations = linked.processed;
         report.failed += linked.failed;
         report.relations_ms = phase.elapsed().as_millis();

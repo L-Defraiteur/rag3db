@@ -105,6 +105,9 @@ pub mod code;
 /// `read` et `grep` sur une `FileSource`, annotés par le graphe.
 #[cfg(feature = "code")]
 pub mod code_tools;
+/// Le code sur la synchronisation déclarée : une édition, une source entière.
+#[cfg(feature = "code")]
+pub mod code_sync;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
