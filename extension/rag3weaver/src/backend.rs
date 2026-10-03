@@ -42,6 +42,11 @@ pub struct BackendManifest {
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
+    /// La surface de code (3 octobre 2026) : quelle source de fichiers, sous
+    /// quelle racine, avec quelle porte de commandes. Absente : aucun outil
+    /// de code ne peut lire ni écrire — le défaut sûr.
+    #[serde(default)]
+    pub workspace: Option<crate::backend_code::WorkspaceConfig>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -241,6 +246,26 @@ impl PreparedBackend {
             .parent()
             .unwrap()
             .to_path_buf();
+        if let Some(w) = &manifest.workspace {
+            if cfg!(not(feature = "code")) {
+                return Err(
+                    "la clé `workspace` demande un binaire bâti avec la feature `code` — \
+                     rebâtir avec elle, ou retirer la clé du manifeste"
+                        .into(),
+                );
+            }
+            let root = if w.root.is_absolute() {
+                w.root.clone()
+            } else {
+                directory.join(&w.root)
+            };
+            if !root.is_dir() {
+                return Err(format!(
+                    "workspace : la racine {} n'existe pas — donnez un dossier existant, relatif au manifeste ou absolu",
+                    root.display()
+                ));
+            }
+        }
         let (mut nodes, _) = builtin_graph_tools().map_err(|e| e.to_string())?;
         nodes.register(Box::new(crate::backend_nodes::EntityRecordFactory));
         nodes.register(Box::new(crate::backend_nodes::EntityBatchFactory));
@@ -627,9 +652,21 @@ impl PreparedBackend {
             )
             .map_err(|e| e.to_string())?;
         }
+        #[cfg(feature = "code")]
+        let (file_source, garde) = match &self.manifest.workspace {
+            Some(w) => (
+                Some(crate::backend_code::build_source(w, &self.directory, &self.manifest.name)?),
+                crate::backend_code::build_garde(w),
+            ),
+            None => (None, None),
+        };
         Ok(Backend {
             prepared: self,
             catalog: Arc::new(Mutex::new(cat)),
+            #[cfg(feature = "code")]
+            file_source,
+            #[cfg(feature = "code")]
+            garde,
         })
     }
 }
@@ -849,6 +886,13 @@ impl PreparedBackend {
 pub struct Backend {
     pub prepared: PreparedBackend,
     pub catalog: Arc<Mutex<Catalog>>,
+    /// La source de fichiers du `workspace` déclaré — construite à
+    /// l'ouverture (un instantané lit l'arbre une fois).
+    #[cfg(feature = "code")]
+    file_source: Option<Arc<dyn crate::code_tools::FileSource>>,
+    /// La porte des commandes déclarée ; absente, `run` refuse tout.
+    #[cfg(feature = "code")]
+    garde: Option<Arc<crate::commande::Garde>>,
 }
 impl Backend {
     /// Library API shared by applications and future transports. No MCP dispatch.
@@ -1087,6 +1131,21 @@ impl Backend {
             .unwrap()
             .register_search_services(&mut services);
         services.register("catalog", self.catalog.clone());
+        // La surface de code déclarée : la source et la porte du manifeste,
+        // montées comme sur le chemin agent — sans elles, les nœuds de code
+        // refusent d'eux-mêmes.
+        #[cfg(feature = "code")]
+        {
+            if let Some(source) = &self.file_source {
+                services.register::<Arc<dyn crate::code_tools::FileSource>>(
+                    crate::code_tools::FILE_SOURCE_SERVICE,
+                    source.clone(),
+                );
+            }
+            if let Some(garde) = &self.garde {
+                services.register(crate::dataflow::run_nodes::GARDE_SERVICE, garde.clone());
+            }
+        }
         services.register("rhai_scripts", self.prepared.scripts.clone());
         services.register(
             "backend_relations",
@@ -1324,6 +1383,10 @@ mod tests {
         let backend = Backend {
             prepared,
             catalog: Arc::new(Mutex::new(catalog)),
+            #[cfg(feature = "code")]
+            file_source: None,
+            #[cfg(feature = "code")]
+            garde: None,
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
