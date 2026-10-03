@@ -97,6 +97,17 @@ pub enum CatalogError {
     SnapshotRefused(String),
 }
 
+/// Le verdict de la machine à états pour une ligne (`Catalog::lifecycle_verdict`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LifecycleVerdict {
+    /// L'état ne change pas : rien à vérifier.
+    Same,
+    /// Une naissance dans un état déclaré, ou une transition déclarée.
+    Allowed,
+    /// Refusé, avec la cause et ce qui aurait été permis.
+    Refused(String),
+}
+
 // Re-export result types (defined in records.rs, used widely)
 pub use crate::records::{DeleteResult, UpdateResult, UpdateStatus};
 
@@ -4507,39 +4518,40 @@ impl Catalog {
                 continue;
             };
             match Self::lifecycle_verdict(entity_name, lc, &uuid, &to, previous_states.get(&uuid).map(String::as_str)) {
-                Ok(()) => kept.push(rec),
-                Err(cause) => refused.push(cause),
+                LifecycleVerdict::Same | LifecycleVerdict::Allowed => kept.push(rec),
+                LifecycleVerdict::Refused(cause) => refused.push(cause),
             }
         }
         (kept, refused)
     }
 
-    /// **La règle d'une ligne**, partagée par l'ingestion et la vérification
-    /// d'un lot avant écriture : une naissance doit prendre un état déclaré ;
-    /// un état qui change doit suivre une transition déclarée. Le refus dit ce
-    /// qui aurait été permis.
-    fn lifecycle_verdict(
+    /// **La règle d'une ligne**, écrite une seule fois et rendue **en donnée** :
+    /// l'ingestion écarte un refus, un lot refuse tout, une fin de
+    /// synchronisation le rapporte. Une naissance doit prendre un état
+    /// déclaré ; un état qui change doit suivre une transition déclarée. Le
+    /// refus dit ce qui aurait été permis.
+    pub(crate) fn lifecycle_verdict(
         entity_name: &str,
         lc: &crate::config::Lifecycle,
         uuid: &str,
         to: &str,
         from: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> LifecycleVerdict {
         match from {
             None => {
                 if lc.states().contains(&to) {
-                    Ok(())
+                    LifecycleVerdict::Allowed
                 } else {
-                    Err(format!(
+                    LifecycleVerdict::Refused(format!(
                         "{entity_name} '{uuid}' : état '{to}' non déclaré (déclarés : {})",
                         lc.states().join(", ")
                     ))
                 }
             }
-            Some(from) if from == to => Ok(()),
+            Some(from) if from == to => LifecycleVerdict::Same,
             Some(from) => {
                 if lc.allows(from, to).is_some() {
-                    return Ok(());
+                    return LifecycleVerdict::Allowed;
                 }
                 let allowed: Vec<String> = lc
                     .next_from(from)
@@ -4551,7 +4563,7 @@ impl Catalog {
                 } else {
                     format!("depuis '{from}' : {}", allowed.join(", "))
                 };
-                Err(format!(
+                LifecycleVerdict::Refused(format!(
                     "{entity_name} '{uuid}' : transition '{from}' → '{to}' non déclarée ({allowed})"
                 ))
             }
@@ -4593,7 +4605,10 @@ impl Catalog {
             .zip(&uuids)
             .filter_map(|(record, uuid)| {
                 let to = record.get(&lc.field)?.as_str()?;
-                Self::lifecycle_verdict(entity_name, lc, uuid, to, previous.get(uuid).map(String::as_str)).err()
+                match Self::lifecycle_verdict(entity_name, lc, uuid, to, previous.get(uuid).map(String::as_str)) {
+                    LifecycleVerdict::Refused(cause) => Some(cause),
+                    LifecycleVerdict::Same | LifecycleVerdict::Allowed => None,
+                }
             })
             .collect())
     }

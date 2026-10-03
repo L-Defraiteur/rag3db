@@ -393,14 +393,14 @@ pub trait SchemaDialect: Send + Sync {
 
     /// **Marquer les lignes d'une session de synchronisation** :
     /// `_snapshot = $session` sur les lignes de `$uuids`.
-    fn marquer_session(&self, table: &str) -> String {
+    fn mark_snapshot_session(&self, table: &str) -> String {
         format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session")
     }
 
     /// **Les lignes d'un périmètre de synchronisation** : chaque champ du
     /// périmètre égal à son paramètre `$p0`, `$p1`… (aucun : la table
     /// entière). Rend `_uuid`, `_snapshot`, puis `extra` dans l'ordre.
-    fn select_perimetre(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
+    fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
         let filtre = scope.iter().enumerate()
             .map(|(i, f)| format!("n.{f} = $p{i}"))
             .collect::<Vec<_>>()
@@ -414,8 +414,8 @@ pub trait SchemaDialect: Send + Sync {
     /// **Combien de liens de la relation `rel` touchent ces lignes**, dans
     /// les deux sens — ce que `DETACH DELETE` emportera de cette relation.
     /// `None` quand le dialecte ne sait pas le dire.
-    fn compter_relations_de(&self, table: &str, rel: &str) -> Option<String> {
-        Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r:{rel}]-() RETURN count(r)"))
+    fn count_relations_of(&self, table: &str, rel: &str) -> Option<String> {
+        Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r:{rel}]-() RETURN count(DISTINCT r)"))
     }
 
     /// **Les dérivées en dette de rendu** : `_render_hash` nul ou vide. Rend
@@ -1707,11 +1707,11 @@ impl SchemaDialect for PostgresDialect {
         format!("UPDATE {derived_table} SET _render_hash = '' WHERE _source_uuid = ANY($uuids)")
     }
 
-    fn marquer_session(&self, table: &str) -> String {
+    fn mark_snapshot_session(&self, table: &str) -> String {
         format!("UPDATE {table} SET _snapshot = $session WHERE _uuid = ANY($uuids)")
     }
 
-    fn select_perimetre(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
+    fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
         let filtre = scope.iter().enumerate()
             .map(|(i, f)| format!("{f} = $p{i}"))
             .collect::<Vec<_>>()
@@ -1722,7 +1722,7 @@ impl SchemaDialect for PostgresDialect {
         format!("SELECT {} FROM {table}{ou}", rend.join(", "))
     }
 
-    fn compter_relations_de(&self, _table: &str, _rel: &str) -> Option<String> {
+    fn count_relations_of(&self, _table: &str, _rel: &str) -> Option<String> {
         // Les relations sont des tables : il faudrait les énumérer toutes.
         None
     }

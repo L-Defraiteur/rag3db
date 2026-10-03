@@ -233,20 +233,23 @@ fn les_relations_partent_avec_la_ligne_et_sont_comptees() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
     catalog.register_relation("RENVOIE_A", "Fiche", "Fiche").unwrap();
-    lot(&mut catalog, "s1", ["a1", "a2", "a3"].iter().map(|c| ligne(c, "A", None)).collect());
+    lot(&mut catalog, "s1", ["a1", "a2", "a3", "a4"].iter().map(|c| ligne(c, "A", None)).collect());
     let uuid = |c: &str| catalog.entity_uuid("Fiche", &ligne(c, "A", None)).unwrap();
-    let (a1, a2, a3) = (uuid("a1"), uuid("a2"), uuid("a3"));
+    let (a1, a3, a4) = (uuid("a1"), uuid("a3"), uuid("a4"));
     catalog.link("RENVOIE_A", a1.clone(), a3.clone(), BTreeMap::new()).unwrap();
-    catalog.link("RENVOIE_A", a3.clone(), a2.clone(), BTreeMap::new()).unwrap();
-    catalog.link("RENVOIE_A", a1, a2, BTreeMap::new()).unwrap();
+    // Un lien entre deux absentes : compté une fois.
+    catalog.link("RENVOIE_A", a3.clone(), a4.clone(), BTreeMap::new()).unwrap();
+    catalog.link("RENVOIE_A", a4.clone(), a1, BTreeMap::new()).unwrap();
     catalog.drain();
 
     lot(&mut catalog, "s2", ["a1", "a2"].iter().map(|c| ligne(c, "A", None)).collect());
     let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
-    assert_eq!(fin.removed, [a3]);
-    assert_eq!(fin.relations_removed, Some(2), "a1 → a3 et a3 → a2");
+    let mut attendues = vec![a3, a4];
+    attendues.sort();
+    assert_eq!(fin.removed, attendues);
+    assert_eq!(fin.relations_removed, Some(3), "a1 → a3, a3 → a4 (une fois), a4 → a1");
     let reste = catalog.execute_raw("MATCH ()-[r:RENVOIE_A]->() RETURN count(r)").unwrap();
-    assert_eq!(reste.rows[0][0].as_i64(), Some(1));
+    assert_eq!(reste.rows[0][0].as_i64(), Some(0));
 }
 
 // ─── onMissing : une transition ─────────────────────────────────────────────
@@ -304,4 +307,75 @@ fn un_perimetre_vide_couvre_l_entite_entiere() {
     assert!(cles(&catalog, "C").is_empty());
     // Le périmètre donné doit être celui déclaré.
     assert!(finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).is_err());
+}
+
+// ─── La marque et la file d'écriture ────────────────────────────────────────
+
+/// Après un lot, **toutes** ses lignes portent la session — nouvelles par le
+/// chemin de masse (table vide), nouvelles par MERGE, inchangées — dans les
+/// deux régimes d'écriture ; une fin qui suit ne retire rien.
+#[test]
+#[ignore]
+fn chaque_ligne_d_un_lot_porte_la_session_dans_chaque_regime() {
+    for regime in [RegimeEcriture::AuTick, RegimeEcriture::ParLot] {
+        let mut catalog = catalogue();
+        catalog.regime_d_ecriture(regime);
+        catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+        // Premier lot sur table vide : le chemin de masse.
+        lot(&mut catalog, "s1", ["a1", "a2"].iter().map(|c| ligne(c, "A", None)).collect());
+        // Second lot : a1 et a2 inchangées, a3 nouvelle (MERGE, table non vide).
+        lot(&mut catalog, "s2", ["a1", "a2", "a3"].iter().map(|c| ligne(c, "A", None)).collect());
+        let marques: Vec<String> = catalog
+            .execute_raw("MATCH (f:Fiche) RETURN f._snapshot")
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|r| r[0].as_str().unwrap_or_default().to_string())
+            .collect();
+        assert_eq!(marques, ["s2", "s2", "s2"], "{regime:?}");
+        let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+        assert!(fin.missing.is_empty(), "{regime:?} : {fin:?}");
+    }
+}
+
+// ─── Deux sessions sur le même périmètre (comportement d'aujourd'hui) ───────
+
+/// **Ce qui se passe aujourd'hui** : deux sessions simultanées sur le même
+/// périmètre se voient mutuellement comme absentes. Tant qu'aucun garde ne
+/// l'empêche, la fin de la première retire une ligne que la seconde vient de
+/// porter — et la proportion maximale ne l'attrape pas sous la moitié. Ce test
+/// fixe le défaut ; il changera avec le garde choisi.
+#[test]
+#[ignore]
+fn deux_sessions_simultanees_se_retirent_mutuellement_aujourd_hui() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    lot(&mut catalog, "sa", ["a1", "a2", "a3", "a4"].iter().map(|c| ligne(c, "A", None)).collect());
+    // Une seconde session commence et porte a1.
+    lot(&mut catalog, "sb", vec![ligne("a1", "A", None)]);
+    // La fin de la première voit a1 absente (marquée sb) et la retire.
+    let fin = finir(&mut catalog, "A", "sa", SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.removed.len(), 1);
+    assert_eq!(cles(&catalog, "A"), ["a2", "a3", "a4"], "a1, portée par sb, est retirée à tort");
+}
+
+/// Un état **vide** (une machine déclarée sur une entité déjà en service) est
+/// un état inconnu : il vaut l'état initial, et le rapport le dit dans ces
+/// termes — pas « impossible depuis '' ».
+#[test]
+#[ignore]
+fn un_etat_vide_vaut_l_etat_initial() {
+    let mut catalog = catalogue();
+    let mut snapshot = perimetre_classeur();
+    snapshot.on_missing = OnMissing::Transition("archiver".into());
+    snapshot.max_missing_ratio = 1.0;
+    catalog.register_entity("Fiche", fiche(snapshot, Some(cycle()))).unwrap();
+    lot(&mut catalog, "s1", vec![ligne("a1", "A", Some("active")), ligne("a2", "A", Some("active"))]);
+    // Une ligne d'avant la machine : état vide.
+    catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a2' SET f.etat = ''").unwrap();
+    lot(&mut catalog, "s2", vec![ligne("a1", "A", Some("active"))]);
+    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.kept.len(), 1, "{fin:?}");
+    assert!(fin.kept[0].1.contains("depuis 'brouillon'"), "{:?}", fin.kept);
+    assert!(fin.transitioned.is_empty());
 }
