@@ -100,20 +100,63 @@ le cas ordinaire d'un utilisateur. La détection existe
 défaut d'un poste à une carte doit être `confort`. C'est un choix de produit,
 à Lucie.
 
-## 5. L'heuristique du modèle
+## 5. Un défaut à part entière : un iGPU classé « carte dédiée »
 
-`card_class` lit 4 096 Mio, le plancher est 4 Gio, et le test est strict :
-**ce poste est classé « carte dédiée »**, donc granite-278m. À un mébioctet
-près au BIOS, il basculait en « faible ». Deux défauts :
+`card_class` (`regime.rs`) lit `mem_info_vram_total` = 4 096 Mio ; le plancher
+de `CardClass::from_vram` est 4 Gio et le test est strict (`v < plancher`) :
+**ce poste est classé `Dedicated`**. À un mébioctet de réglage BIOS près, il
+basculait en `Weak`. Le classement d'une carte ne doit pas dépendre d'une
+égalité fortuite.
 
-- `mem_info_vram_total` d'un iGPU est une réserve, pas une capacité. Le
-  critère de mémoire ne dit rien d'une carte à mémoire partagée.
-- **« partagée avec l'affichage » n'y est pas**, alors que c'est ce qui
-  compte ici : 107m va 5,7 fois plus vite, donc ses rafales durent 5,7 fois
-  moins à lot égal. Au réglage du §3, 107m coûte ×1,3 quand 278m coûte ×2.
+Le fond du défaut : **la mémoire ne dit pas ce qu'est un iGPU.**
+`mem_info_vram_total` y est la réserve posée au BIOS, pas une capacité ; le
+GTT (112 Gio ici) ne la dit pas non plus — c'est la mémoire du système que la
+carte *peut* emprunter, pas ce qu'elle a. Et sysfs n'offre rien de propre :
+`boot_vga` est vide, la classe PCI est `0x038000` (« contrôleur d'affichage,
+autre »).
+
+**Ce qui distingue vraiment un iGPU, c'est le pilote qui le dit** : Vulkan
+rend `PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU` pour la Radeon 8060S
+(`vulkaninfo --summary`, lu sur ce poste), et wgpu le remonte dans
+`AdapterInfo::device_type`. Le code le sait déjà à moitié — `BurnDevice`
+distingue `DiscreteGpu` d'`IntegratedGpu` (`igpu:N`). C'est cette valeur que
+`card_class` devrait lire, à la place d'une inférence sur la mémoire : une
+classe `Integrated` à côté de `Dedicated`, `Weak` et `None`, et le plancher de
+VRAM réservé aux cartes dédiées, où il a un sens.
+
+## 6. L'heuristique du modèle
+
+Classé « carte dédiée », ce poste reçoit granite-278m. **« Partagée avec
+l'affichage » n'entre pas dans l'heuristique**, alors que c'est ce qui compte
+ici : 107m va 5,7 fois plus vite, donc ses rafales durent 5,7 fois moins à
+lot égal. Au réglage du §3, 107m coûte ×1,3 quand 278m coûte ×2.
 
 **Proposition** : un troisième déclencheur pour 107m au premier index —
 *la seule carte du poste porte l'affichage*. Le coût est connu (6 à 7 points
 de MRR, banc de l'optimiseur) ; le gain est un poste qui reste utilisable
 pendant qu'il indexe. À trancher par Lucie avec les deux autres : 50 000
 documents, carte faible ou absente.
+
+## 7. La forme du code, préparée — rien n'est écrit
+
+Si le défaut d'un poste à une carte devient le régime qui ménage l'écran, la
+rafale s'y règle en **durée**. Deux questions à avoir tranchées avant.
+
+**Comment le tester sans carte.** Un embarqueur factice dont la durée par lot
+est fixée par le test — tant de microsecondes par caractère, simulées par une
+horloge injectée plutôt que par un vrai sommeil, pour que le test soit
+instantané et déterministe. On vérifie alors, sans GPU : que la taille des
+lots converge vers la durée cible en trois ou quatre lots ; qu'un modèle
+six fois plus rapide reçoit des lots six fois plus gros ; qu'un lot aberrant
+(un chunk énorme, une recompilation de noyaux) ne fait pas osciller la suite —
+la correction est bornée, pas plus d'un doublement ni d'une division par deux
+d'un lot à l'autre ; que les bornes dures tiennent (un élément au moins, la
+surface d'attention au plus).
+
+**Le premier lot, quand il n'y a pas de mesure.** Il part **petit** — les
+2 048 caractères d'aujourd'hui, la valeur prudente — et sert de sonde : le
+pire cas est une première rafale plus courte que nécessaire, jamais un gel.
+Partir du conseil du modèle et corriger ensuite, ce serait offrir à
+l'utilisateur une première rafale de 1,5 s pour apprendre qu'elle était trop
+longue. La calibration vit avec l'embarqueur, pas avec le processus : un
+second appel repart de la dernière taille connue, pas de la sonde.
