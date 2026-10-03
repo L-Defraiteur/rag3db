@@ -1689,7 +1689,9 @@ impl Catalog {
                     // s'il est le seul.
                     let du_type: Vec<&String> = definers
                         .iter()
-                        .filter(|d| parents.get(*d).is_some_and(|p| m.qualifier_types.contains(p)))
+                        .filter(|d| {
+                            parents.get(*d).is_some_and(|p| m.qualifier_types.iter().any(|t| nom_de_type(t) == nom_de_type(p)))
+                        })
                         .collect();
                     match du_type.as_slice() {
                         [un] => (*un).clone(),
@@ -1827,6 +1829,12 @@ impl Catalog {
         }
         Ok(out)
     }
+}
+
+/// Le nom d'un type sans ses paramètres : l'`impl<'a> Wrap<'a>` a pour
+/// parent `Wrap<'a>`, la variable qui l'appelle est lue `Wrap`.
+fn nom_de_type(t: &str) -> &str {
+    t.split('<').next().unwrap_or(t).trim()
 }
 
 /// Un rendez-vous relu : qui mentionne, le genre d'arête inscrit, l'usage à
