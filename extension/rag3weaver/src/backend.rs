@@ -92,6 +92,8 @@ impl EmbeddingService {
             api_key_env: self.api_key_env.clone(),
             fallback: Fallback::Refuse,
             dimensions: Some(self.dimensions),
+            context_tokens: None,
+            params: Default::default(),
         }
     }
 }

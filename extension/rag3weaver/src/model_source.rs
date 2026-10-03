@@ -160,11 +160,30 @@ pub struct ModelSource {
     /// La dimension des vecteurs, pour les capacités qui en rendent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dimensions: Option<usize>,
+    /// La fenêtre de contexte, pour un modèle de langage : un fait du modèle,
+    /// comme `dimensions` l'est d'un embarqueur.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_tokens: Option<usize>,
+    /// Ce qu'un protocole demande en plus et que la déclaration commune n'a
+    /// pas à connaître : `project` et `location` pour `vertex`. La frontière
+    /// passe ici — un paramètre que deux capacités partagent devient un champ.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub params: std::collections::BTreeMap<String, String>,
 }
 
 impl ModelSource {
     pub fn local(model: impl Into<String>) -> Self {
-        Self { provider: Provider::Local, model: model.into(), address: Addresses::default(), protocol: None, api_key_env: None, fallback: Fallback::Refuse, dimensions: None }
+        Self {
+            provider: Provider::Local,
+            model: model.into(),
+            address: Addresses::default(),
+            protocol: None,
+            api_key_env: None,
+            fallback: Fallback::Refuse,
+            dimensions: None,
+            context_tokens: None,
+            params: Default::default(),
+        }
     }
     pub fn service(model: impl Into<String>) -> Self {
         Self { provider: Provider::Service, ..Self::local(model) }
@@ -490,6 +509,65 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
     resolve(Capability::Ocr, source, &builders, &process_env)
 }
 
+// ─── Le modèle de langage ────────────────────────────────────────────────────
+
+/// **Le modèle de langage d'une déclaration**, et d'où il calcule.
+///
+/// Une seule forme : `compatible`, par deux protocoles.
+/// - `openai` (défaut) : un point d'accès compatible OpenAI à `address` — un
+///   service tiers, ou un llama-server sur ce poste ou un autre. La clé vient
+///   de la variable nommée par `api_key_env`.
+/// - `vertex` : Gemini par Vertex AI. Pas d'adresse : elle se construit du
+///   projet (`params.project`, sinon `GOOGLE_CLOUD_PROJECT`) et du lieu
+///   (`params.location`, `global` par défaut) ; le jeton vient de
+///   `gcp_auth::TokenSource`. **Limite** : il est pris à la connexion et dure
+///   une heure.
+///
+/// Ni `local` ni `service` : un modèle de langage sur ce poste est un
+/// llama-server, donc `compatible` à une adresse locale.
+#[cfg(feature = "openai-llm")]
+pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm, Origin), String> {
+    use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
+    let what = format!("models.llm ({})", source.model);
+    if source.model.trim().is_empty() {
+        return Err("models.llm : un modèle est requis".into());
+    }
+    let with_context = |llm: OpenAiLlm| match source.context_tokens {
+        Some(n) => llm.with_context_len(n),
+        None => llm,
+    };
+    if source.provider == Provider::Compatible && source.protocol.as_deref() == Some("vertex") {
+        let project = source
+            .params
+            .get("project")
+            .cloned()
+            .or_else(|| process_env("GOOGLE_CLOUD_PROJECT"))
+            .ok_or_else(|| format!("{what} : le protocole vertex demande `params.project`, ou GOOGLE_CLOUD_PROJECT"))?;
+        let location = source.params.get("location").cloned().unwrap_or_else(|| "global".to_string());
+        let token = crate::gcp_auth::TokenSource::from_env().and_then(|s| s.token()).map_err(|e| format!("{what} : jeton Vertex : {e}"))?;
+        let llm = with_context(OpenAiLlm::vertex(&project, &location, token, &source.model));
+        return Ok((llm, Origin::Compatible(format!("vertex:{project}/{location}"))));
+    }
+    let compatible = |address: &str, s: &ModelSource| -> Result<OpenAiLlm, String> {
+        match s.protocol.as_deref().unwrap_or("openai") {
+            "openai" => {
+                if !(address.starts_with("http://") || address.starts_with("https://")) {
+                    return Err(format!("`{address}` n'est pas une adresse http(s)"));
+                }
+                let mut llm = OpenAiLlm::new(address, &s.model);
+                if let Some(variable) = &s.api_key_env {
+                    llm = llm.with_auth(Auth::Bearer(secret_from_env(variable).map_err(|e| e.to_string())?));
+                }
+                Ok(llm)
+            }
+            other => Err(format!("protocole `{other}` inconnu pour un modèle de langage (openai, vertex)")),
+        }
+    };
+    let builders: Builders<OpenAiLlm> = Builders { local: None, service: None, compatible: Some(&compatible) };
+    let (llm, origin) = resolve(Capability::Llm, source, &builders, &process_env)?;
+    Ok((with_context(llm), origin))
+}
+
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
 /// sinon `~/.cache/rag3weaver/<dossier>/<fichier>`.
 #[cfg(feature = "burn-embedder")]
@@ -649,5 +727,41 @@ mod tests {
             let e = connect_ocr(&ModelSource::local("un-autre")).err().expect("inconnu");
             assert!(e.contains("ppocrv6-tiny"), "{e}");
         }
+    }
+
+    /// Le modèle de langage se déclare comme les autres : compatible OpenAI à
+    /// une adresse (écrite ou par `RAG3WEAVER_SERVICE_LLM`), avec sa fenêtre.
+    #[cfg(feature = "openai-llm")]
+    #[test]
+    fn le_modele_de_langage_se_declare_comme_les_autres() {
+        use crate::llm::Llm;
+        let s: ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "compatible", "model": "qwen2.5-7b-instruct", "address": "http://127.0.0.1:7983/v1", "context_tokens": 32768
+        }))
+        .unwrap();
+        let (llm, origin) = connect_llm(&s).expect("la déclaration suffit");
+        assert_eq!(origin, Origin::Compatible("http://127.0.0.1:7983/v1".into()));
+        assert_eq!((llm.name(), llm.context_len()), ("qwen2.5-7b-instruct", 32_768));
+        assert_eq!(Capability::Llm.variable(), "RAG3WEAVER_SERVICE_LLM");
+
+        // Sans adresse nulle part, une adresse qui n'en est pas une, un
+        // protocole inconnu, une forme qui n'existe pas : chaque refus dit quoi.
+        let sans = ModelSource { provider: Provider::Compatible, ..ModelSource::local("m") };
+        if process_env("RAG3WEAVER_SERVICE_LLM").is_none() {
+            assert!(connect_llm(&sans).err().expect("pas d'adresse").contains("RAG3WEAVER_SERVICE_LLM"));
+        }
+        let mal = ModelSource { address: Addresses::parse("127.0.0.1:7983"), ..sans.clone() };
+        assert!(connect_llm(&mal).err().expect("pas http").contains("http(s)"));
+        let autre = ModelSource { protocol: Some("grpc".into()), address: Addresses::parse("http://x"), ..sans.clone() };
+        assert!(connect_llm(&autre).err().expect("protocole").contains("openai, vertex"));
+        let local = connect_llm(&ModelSource::local("m")).err().expect("pas de forme locale");
+        assert!(local.contains("models.llm") && local.contains("pas de forme locale"), "{local}");
+        // Les paramètres propres à un protocole se lisent, et un champ inconnu reste une erreur.
+        let v: ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "compatible", "protocol": "vertex", "model": "google/gemini-3.5-flash", "params": {"project": "p", "location": "europe-west1"}
+        }))
+        .unwrap();
+        assert_eq!((v.params["project"].as_str(), v.params["location"].as_str()), ("p", "europe-west1"));
+        assert!(serde_json::from_value::<ModelSource>(serde_json::json!({"model": "m", "project": "p"})).is_err());
     }
 }
