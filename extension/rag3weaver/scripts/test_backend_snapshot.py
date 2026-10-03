@@ -60,6 +60,8 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
         'tools':{
             'ingest_cards':{'graph':str(CRATE/'templates/tools/ingest_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'finish_cards':{'graph':str(CRATE/'templates/tools/finish_snapshot.mmd'),'bindings':{'entity':'Card'}},
+            'begin_cards':{'graph':str(CRATE/'templates/tools/begin_snapshot.mmd'),'bindings':{'entity':'Card'}},
+            'abort_cards':{'graph':str(CRATE/'templates/tools/abort_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'list_cards':{'graph':str(CRATE/'templates/tools/select_structured.mmd'),'bindings':{'entity':'Card'}}}}
     (tmp/'backend.json').write_text(json.dumps(manifest))
     with host(tmp/'backend.json') as ask:
@@ -67,19 +69,35 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
             r=ask(name='ingest_cards',arguments={'records':cards,'snapshot':session}); assert r['ok'],r; return r['result']['result']
         def finish(session,binder,**opts):
             return ask(name='finish_cards',arguments={'scope':{'binder':binder},'snapshot':session,**opts})
-        first=ingest('s1',[card('a1','A'),card('a2','A'),card('a3','A')])
-        assert first['snapshot']=='s1' and first['scope']=={'binder':'A'},first
-        ingest('s1',[card('b1','B')])
+        def begin(binder,**opts):
+            r=ask(name='begin_cards',arguments={'scope':{'binder':binder},**opts}); return r
+        sa=begin('A'); assert sa['ok'],sa; s1=sa['result']['result']['session']
+        # One session at a time per scope; another scope is free.
+        again=begin('A'); assert not again['ok'] and s1 in again['error'],again
+        sb=begin('B'); assert sb['ok'],sb; b1=sb['result']['result']['session']
+        first=ingest(s1,[card('a1','A'),card('a2','A'),card('a3','A')])
+        assert first['snapshot']==s1 and first['scope']=={'binder':'A'},first
+        ingest(b1,[card('b1','B')])
         # A batch carries one scope.
-        mixed=ask(name='ingest_cards',arguments={'records':[card('a4','A'),card('b2','B')],'snapshot':'s1'})
+        mixed=ask(name='ingest_cards',arguments={'records':[card('a4','A'),card('b2','B')],'snapshot':s1})
         assert not mixed['ok'] and 'un seul périmètre' in mixed['error'],mixed
+        # A session id the engine did not give is refused.
+        stale=ask(name='ingest_cards',arguments={'records':[card('a1','A')],'snapshot':'made-up'})
+        assert not stale['ok'],stale
+        assert finish(s1,'A')['ok'] and finish(b1,'B')['ok']
         # Session s2 of binder A no longer carries a3.
-        ingest('s2',[card('a1','A'),card('a2','A')])
-        done=finish('s2','A'); assert done['ok'],done
+        s2=begin('A')['result']['result']['session']
+        ingest(s2,[card('a1','A'),card('a2','A')])
+        done=finish(s2,'A'); assert done['ok'],done
         report=done['result']['result']
         assert report['inScope']==3 and report['seen']==2 and len(report['removed'])==1,report
         assert keys(ask,'A')==['a1','a2'] and keys(ask,'B')==['b1'],(keys(ask,'A'),keys(ask,'B'))
-        # An empty session is refused, nothing removed.
-        empty=finish('s3','A'); assert not empty['ok'] and 'instantané vide' in empty['error'],empty
+        # An empty session is refused, nothing removed; abort closes it.
+        s3=begin('A')['result']['result']['session']
+        empty=finish(s3,'A'); assert not empty['ok'] and 'instantané vide' in empty['error'],empty
         assert keys(ask,'A')==['a1','a2']
-print('PASS: synchronisation by scope — sessions, one scope per batch, removal within the scope, empty session refused.')
+        aborted=ask(name='abort_cards',arguments={'scope':{'binder':'A'},'snapshot':s3}); assert aborted['ok'],aborted
+        # A session left open is taken over explicitly.
+        s4=begin('A')['result']['result']['session']
+        took=begin('A',takeover=True); assert took['ok'] and took['result']['result']['replaced']==s4,took
+print('PASS: synchronisation by scope — engine sessions (one per scope, takeover, abort), one scope per batch, removal within the scope, empty session refused.')
