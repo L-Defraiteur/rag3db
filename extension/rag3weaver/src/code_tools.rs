@@ -64,17 +64,98 @@ fn check_relative(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// **La règle des secrets** : un chemin qui ressemble à un secret ne part ni
+/// dans l'index ni dans une liste de fichiers. Rend la raison, nommée. Une
+/// seule liste pour tout le crate — l'estimation d'une indexation la reprend.
+/// Les gabarits (`.env.example`, `.env.sample`, `.env.template`) en sont
+/// exclus : ils documentent, ils ne contiennent rien.
+pub fn probable_secret(path: &str) -> Option<&'static str> {
+    let nom = path.rsplit('/').next().unwrap_or(path);
+    let bas = nom.to_ascii_lowercase();
+    let gabarit = [".example", ".sample", ".template", ".dist"].iter().any(|s| bas.ends_with(s));
+    if (bas == ".env" || bas.starts_with(".env.")) && !gabarit {
+        return Some("fichier d'environnement (.env)");
+    }
+    if [".pem", ".key", ".p12", ".pfx", ".jks", ".keystore"].iter().any(|s| bas.ends_with(s)) {
+        return Some("clé ou certificat privé");
+    }
+    if ["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"].iter().any(|k| bas == *k || (bas.starts_with(k) && !bas.ends_with(".pub"))) {
+        return Some("clé SSH privée");
+    }
+    if [".netrc", ".npmrc", ".pypirc", "credentials.json", "service-account.json"].contains(&bas.as_str()) {
+        return Some("fichier d'identifiants");
+    }
+    None
+}
+
 /// L'arbre de travail : le disque, sous une racine.
+///
+/// **Ce qu'il liste** (3 octobre 2026) : par défaut, les fichiers que les
+/// règles d'exclusion du dossier ne retirent pas, comme ripgrep — `.gitignore`
+/// (dans un dépôt git), `.ignore`, `.git/info/exclude`, l'exclusion globale de
+/// git. Les fichiers cachés **en sont** (`.github/`, `.cargo/` : ce qu'un agent
+/// de code vient chercher), `.git/` jamais ; les **secrets probables** sont
+/// écartés par une règle nommée ([`probable_secret`]), pas par l'effet de bord
+/// « caché », et [`WorkingTree::list_with_exclusions`] dit lesquels. Les
+/// fichiers neufs pas encore ajoutés à git en sont : un agent qui vient d'en
+/// créer un doit le retrouver. Mesuré sur ce dépôt : 278 759 fichiers retenus
+/// sans les règles, contre 6 113 suivis par git — les builds, les cibles, les
+/// données. Un dossier sans git ni `.ignore` prend tout, sauf les secrets
+/// probables. [`WorkingTree::all_files`] reprend la marche sans règles.
 pub struct WorkingTree {
     root: PathBuf,
+    all_files: bool,
 }
 
 impl WorkingTree {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self { root: root.into(), all_files: false }
+    }
+    /// Tout prendre, sans les règles d'exclusion ni le filtre du caché —
+    /// seulement les dossiers de `SKIPPED_DIRS` et les dossiers cachés, comme
+    /// avant le 3 octobre 2026.
+    pub fn all_files(mut self) -> Self {
+        self.all_files = true;
+        self
     }
     pub fn root(&self) -> &Path {
         &self.root
+    }
+}
+
+impl WorkingTree {
+    /// La marche avec les règles d'exclusion (crate `ignore`, celui de
+    /// ripgrep), plus `SKIPPED_DIRS` et `.git/` ; rend aussi ce que la règle
+    /// des secrets a écarté, avec sa raison — pour qu'une estimation dise
+    /// « 3 écartés : secrets probables » plutôt que rien.
+    pub fn list_with_exclusions(&self) -> Result<(Vec<String>, Vec<(String, &'static str)>), String> {
+        let mut out = Vec::new();
+        let mut ecartes = Vec::new();
+        let walker = ignore::WalkBuilder::new(&self.root)
+            .hidden(false)
+            .filter_entry(|e| {
+                let nom = e.file_name().to_string_lossy();
+                !(e.file_type().is_some_and(|t| t.is_dir()) && (nom == ".git" || SKIPPED_DIRS.contains(&nom.as_ref())))
+            })
+            .build();
+        for entry in walker {
+            let entry = entry.map_err(|e| format!("{}: {e}", self.root.display()))?;
+            if entry.file_type().is_some_and(|t| t.is_file()) {
+                let path = entry.path();
+                let rel = path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().to_string();
+                match probable_secret(&rel) {
+                    Some(raison) => ecartes.push((rel, raison)),
+                    None => out.push(rel),
+                }
+            }
+        }
+        out.sort();
+        ecartes.sort();
+        Ok((out, ecartes))
+    }
+
+    fn list_respecting_rules(&self) -> Result<Vec<String>, String> {
+        Ok(self.list_with_exclusions()?.0)
     }
 }
 
@@ -83,6 +164,9 @@ impl FileSource for WorkingTree {
         format!("worktree:{}", self.root.display())
     }
     fn list(&self) -> Result<Vec<String>, String> {
+        if !self.all_files {
+            return self.list_respecting_rules();
+        }
         fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
             for entry in std::fs::read_dir(dir)? {
                 let entry = entry?;

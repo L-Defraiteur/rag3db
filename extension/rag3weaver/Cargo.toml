@@ -89,6 +89,9 @@ image = { version = "0.25", optional = true, default-features = false, features 
 # Parseurs de code (tree-sitter, 12 langages) : entités File / Scope et
 # relations résolues. Crate du dépôt, feature `code`.
 codeparsers = { path = "codeparsers", optional = true }
+# Les règles d'exclusion d'un dossier (.gitignore, .ignore, exclusions
+# globales), comme ripgrep : `WorkingTree` les respecte par défaut.
+ignore = { version = "0.4", optional = true }
 regex = { version = "1", optional = true }
 
 # ─── Fournisseurs LLM distants (feature `openai-llm`) ────────────────────────
@@ -161,7 +164,7 @@ burn-fusion = ["burn/fusion"]
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
 # PP-OCRv6 sur burn est sous `burn-ocr`.
 ocr = ["dep:image"]
-code = ["dep:codeparsers", "dep:regex"]
+code = ["dep:codeparsers", "dep:regex", "dep:ignore"]
 # PP-OCRv6 tiny (détection DB + reconnaissance CTC) sur burn — sans tokenizers.
 # Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
 # poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).
