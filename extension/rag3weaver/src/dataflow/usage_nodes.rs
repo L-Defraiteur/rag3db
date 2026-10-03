@@ -159,7 +159,7 @@ pub struct RelInfo {
     pub props: Vec<String>,
 }
 
-fn rel_info(catalog: &Catalog, name: &str) -> Result<RelInfo, String> {
+pub fn rel_info(catalog: &Catalog, name: &str) -> Result<RelInfo, String> {
     let def = catalog.get_relation_def(name).ok_or_else(|| format!("UsagesNode: relation inconnue « {name} »"))?;
     Ok(RelInfo {
         name: name.to_string(),
@@ -427,10 +427,16 @@ impl Node for UsagesNode {
         crate::dataflow::node_registry::ports_declares(&UsagesNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        use super::catalog_read::{read_catalog, refusal, with_status, CatalogRead};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("UsagesNode: service 'catalog' absent")?;
-        let report = {
-            let cat = catalog.lock().map_err(|e| format!("UsagesNode: {e}"))?;
-            usages_of(&cat, &self.cfg, &self.name, &self.path)?
+        // Jamais un vide sans dire d'où il vient : occupé, jamais indexé,
+        // ou partiel, le rendu le dit.
+        let (report, status) = match read_catalog(&catalog) {
+            CatalogRead::Refused(message) => {
+                ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
+                return Ok(());
+            }
+            CatalogRead::Ready { catalog: cat, status } => (usages_of(&cat, &self.cfg, &self.name, &self.path)?, status),
         };
         ctx.metric("definitions", report.definitions.len() as f64);
         ctx.metric("usages", report.usages.len() as f64);
@@ -439,7 +445,7 @@ impl Node for UsagesNode {
         } else {
             serde_json::Value::String(report.markdown(&self.usage, self.limit))
         };
-        ctx.set_output("result", PortValue::new(value));
+        ctx.set_output("result", PortValue::new(with_status(status.as_deref(), value, self.json)));
         Ok(())
     }
 }

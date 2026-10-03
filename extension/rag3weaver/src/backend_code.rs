@@ -125,6 +125,7 @@ const BASE_NODES: &[&str] = &[
     // aucun fichier lu hors sonde), rien n'écrit — sûre pour tout outil.
     "EstimateNode",
     "UsagesNode",
+    "NeighborhoodNode",
     // L'indexation en fond : n'écrit qu'en base, par le catalogue, et rend
     // un journal. Refuse d'elle-même sans confirmation quand l'estimation
     // dépasse le seuil — le produit cloud doit pouvoir indexer sans

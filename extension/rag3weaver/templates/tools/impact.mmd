@@ -1,0 +1,19 @@
+%% tool: impact
+%% description: Ce qu'une modification de ce nom peut toucher, AVANT d'éditer : le code qui en dépend, directement puis à deux ou trois sauts, et les tests qui le traversent — nommés, avec leur fichier, prêts à être rejoués. Un utilitaire appelé de partout est montré mais pas traversé. Un nom défini plusieurs fois part de toutes ses définitions ; `path` restreint celles qu'on regarde.
+%% param: name string! -- Le nom de la fonction, du type ou de la méthode qu'on va modifier.
+%% param: path string = "" -- Ne partir que des définitions sous ce chemin (préfixe de fichier).
+%% param: depth int = 2 -- Sauts suivis, de 1 à 3.
+%% param: budget int = 200 -- Nœuds rendus au plus ; au-delà, ils sont comptés.
+%% result: impact.result
+
+graph LR
+    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, also_path='HAS_PARENT>|IMPLEMENTS>|PARENT_OF>', also_same=name, also_label='Par le trait (peut-être) : ce qui appelle la méthode du trait que cette méthode implémente', group_title='Tests qui la traversent', rest_title='Code qui en dépend', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, max_degree=50)"]
+
+%% Le schéma de code (src/code.rs) : les `CONSUMES`, `INHERITS_FROM` et
+%% `IMPLEMENTS` **entrants** — qui consomme, qui hérite, qui implémente —,
+%% et `test_role` / `test_name` / `test_certainty` sur `Scope` (codeparsers,
+%% marque de test). Le départ supplémentaire : la méthode modifiée → son
+%% bloc `impl` (`HAS_PARENT`) → le trait qu'il implémente (`IMPLEMENTS`) → la
+%% méthode du trait du même nom (`PARENT_OF`) ; ce qui l'appelle peut
+%% atteindre la méthode modifiée par un `dyn Trait`. Le nœud est générique :
+%% il ne sait rien de ces relations.
