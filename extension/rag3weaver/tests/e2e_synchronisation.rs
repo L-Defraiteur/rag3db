@@ -55,6 +55,13 @@ fn cycle() -> Lifecycle {
     }
 }
 
+fn par_archivage() -> SnapshotConfig {
+    let mut snapshot = perimetre_classeur();
+    snapshot.on_missing = OnMissing::Transition("archiver".into());
+    snapshot.max_missing_ratio = 1.0;
+    snapshot
+}
+
 fn catalogue() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
     let config = CatalogConfig {
@@ -81,17 +88,37 @@ fn ligne(cle: &str, classeur: &str, etat: Option<&str>) -> BTreeMap<String, Cyph
     m
 }
 
-/// Un lot d'une session : écrit, puis marqué — ce que fera `EntityBatchNode`.
-fn lot(catalog: &mut Catalog, session: &str, rows: Vec<BTreeMap<String, CypherValue>>) {
-    catalog.snapshot_scope_of("Fiche", &rows).unwrap();
-    let uuids: Vec<String> = rows.iter().map(|r| catalog.entity_uuid("Fiche", r).unwrap()).collect();
-    let res = catalog.ingest_entities("Fiche", rows).unwrap();
-    assert_eq!(res.failed, 0, "{:?}", res.warnings);
-    catalog.mark_snapshot("Fiche", session, &uuids).unwrap();
+fn lignes(cles: &[&str], classeur: &str) -> Vec<BTreeMap<String, CypherValue>> {
+    cles.iter().map(|c| ligne(c, classeur, None)).collect()
 }
 
 fn perimetre(classeur: &str) -> BTreeMap<String, CypherValue> {
     BTreeMap::from([("classeur".to_string(), CypherValue::String(classeur.into()))])
+}
+
+fn uuid(catalog: &Catalog, cle: &str) -> String {
+    catalog.entity_uuid("Fiche", &ligne(cle, "?", None)).unwrap()
+}
+
+/// Ouvrir une session sur un classeur ; l'identifiant vient du moteur.
+fn ouvrir(catalog: &mut Catalog, classeur: &str) -> String {
+    catalog.begin_snapshot("Fiche", &perimetre(classeur), false).unwrap().session
+}
+
+/// Un lot d'une session : écrit, puis marqué — ce que fait `EntityBatchNode`.
+fn lot(catalog: &mut Catalog, session: &str, rows: Vec<BTreeMap<String, CypherValue>>) -> Result<(), CatalogError> {
+    let scope = catalog.snapshot_scope_of("Fiche", &rows)?;
+    let uuids: Vec<String> = rows.iter().map(|r| catalog.entity_uuid("Fiche", r).unwrap()).collect();
+    let res = catalog.ingest_entities("Fiche", rows)?;
+    assert_eq!(res.failed, 0, "{:?}", res.warnings);
+    catalog.mark_snapshot("Fiche", &scope, session, &uuids)
+}
+
+/// Une synchronisation entière d'un classeur : ouvrir, un lot, finir.
+fn peupler(catalog: &mut Catalog, classeur: &str, rows: Vec<BTreeMap<String, CypherValue>>) {
+    let session = ouvrir(catalog, classeur);
+    lot(catalog, &session, rows).unwrap();
+    finir(catalog, classeur, &session, SnapshotFinishOptions::default()).unwrap();
 }
 
 fn cles(catalog: &Catalog, classeur: &str) -> Vec<String> {
@@ -106,14 +133,16 @@ fn cles(catalog: &Catalog, classeur: &str) -> Vec<String> {
     v
 }
 
-fn etat(catalog: &Catalog, uuid: &str) -> String {
+fn colonne(catalog: &Catalog, uuid: &str, nom: &str) -> CypherValue {
     catalog
-        .execute_raw(&format!("MATCH (f:Fiche {{_uuid: '{uuid}'}}) RETURN f.etat"))
+        .execute_raw(&format!("MATCH (f:Fiche {{_uuid: '{uuid}'}}) RETURN f.{nom}"))
         .unwrap()
         .rows[0][0]
-        .as_str()
-        .unwrap()
-        .to_string()
+        .clone()
+}
+
+fn etat(catalog: &Catalog, uuid: &str) -> String {
+    colonne(catalog, uuid, "etat").as_str().unwrap().to_string()
 }
 
 fn finir(catalog: &mut Catalog, classeur: &str, session: &str, options: SnapshotFinishOptions) -> Result<SnapshotFinish, CatalogError> {
@@ -156,22 +185,24 @@ fn la_declaration_est_verifiee() {
 fn une_fin_retire_les_absentes_du_seul_perimetre() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
-    lot(&mut catalog, "s1", ["a1", "a2", "a3", "a4"].iter().map(|c| ligne(c, "A", None)).collect());
-    lot(&mut catalog, "s1", ["b1", "b2"].iter().map(|c| ligne(c, "B", None)).collect());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3", "a4"], "A"));
+    peupler(&mut catalog, "B", lignes(&["b1", "b2"], "B"));
 
     // Une nouvelle session du classeur A ne porte plus a4.
-    lot(&mut catalog, "s2", ["a1", "a2", "a3"].iter().map(|c| ligne(c, "A", None)).collect());
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2", "a3"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
     assert_eq!((fin.in_scope, fin.seen), (4, 3));
-    assert_eq!(fin.removed.len(), 1);
+    assert_eq!(fin.removed, [uuid(&catalog, "a4")]);
     assert_eq!(fin.missing, fin.removed);
     assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
     // Le classeur B, hors du périmètre, n'a pas bougé.
     assert_eq!(cles(&catalog, "B"), ["b1", "b2"]);
 
-    // Une seconde fin de la même session ne retire plus rien.
-    let encore = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
-    assert!(encore.missing.is_empty() && encore.removed.is_empty());
+    // La fin a fermé la session : une seconde fin, un lot de plus sont refusés.
+    let err = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap_err();
+    assert!(matches!(err, CatalogError::SnapshotRefused(_)), "{err}");
+    assert!(lot(&mut catalog, &s2, lignes(&["a1"], "A")).is_err());
 }
 
 #[test]
@@ -194,15 +225,16 @@ fn un_lot_porte_un_seul_perimetre() {
 fn un_instantane_vide_ne_vide_pas_le_perimetre() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
-    lot(&mut catalog, "s1", ["a1", "a2"].iter().map(|c| ligne(c, "A", None)).collect());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
 
     // La session s2 n'a rien porté (panne, source vide) : refus, rien retiré.
-    let err = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap_err();
+    let s2 = ouvrir(&mut catalog, "A");
+    let err = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap_err();
     assert!(matches!(err, CatalogError::SnapshotRefused(_)), "{err}");
     assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
 
     // Vouloir vraiment vider le classeur : les deux échappatoires, explicites.
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions { allow_empty: true, force: true }).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions { allow_empty: true, force: true }).unwrap();
     assert_eq!(fin.removed.len(), 2);
     assert!(cles(&catalog, "A").is_empty());
 }
@@ -212,15 +244,16 @@ fn un_instantane_vide_ne_vide_pas_le_perimetre() {
 fn trop_d_absentes_demande_force() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
-    lot(&mut catalog, "s1", ["a1", "a2", "a3"].iter().map(|c| ligne(c, "A", None)).collect());
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
 
     // Un instantané tronqué qui paraît complet : 2 absentes sur 3.
-    lot(&mut catalog, "s2", vec![ligne("a1", "A", None)]);
-    let err = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap_err().to_string();
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1"], "A")).unwrap();
+    let err = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap_err().to_string();
     assert!(err.contains("maxMissingRatio") && err.contains("force"), "{err}");
-    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"], "rien retiré");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"], "rien retiré, la session reste ouverte");
 
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions { force: true, ..Default::default() }).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions { force: true, ..Default::default() }).unwrap();
     assert_eq!(fin.removed.len(), 2);
     assert_eq!(cles(&catalog, "A"), ["a1"]);
 }
@@ -233,17 +266,17 @@ fn les_relations_partent_avec_la_ligne_et_sont_comptees() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
     catalog.register_relation("RENVOIE_A", "Fiche", "Fiche").unwrap();
-    lot(&mut catalog, "s1", ["a1", "a2", "a3", "a4"].iter().map(|c| ligne(c, "A", None)).collect());
-    let uuid = |c: &str| catalog.entity_uuid("Fiche", &ligne(c, "A", None)).unwrap();
-    let (a1, a3, a4) = (uuid("a1"), uuid("a3"), uuid("a4"));
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3", "a4"], "A"));
+    let (a1, a3, a4) = (uuid(&catalog, "a1"), uuid(&catalog, "a3"), uuid(&catalog, "a4"));
     catalog.link("RENVOIE_A", a1.clone(), a3.clone(), BTreeMap::new()).unwrap();
     // Un lien entre deux absentes : compté une fois.
     catalog.link("RENVOIE_A", a3.clone(), a4.clone(), BTreeMap::new()).unwrap();
     catalog.link("RENVOIE_A", a4.clone(), a1, BTreeMap::new()).unwrap();
     catalog.drain();
 
-    lot(&mut catalog, "s2", ["a1", "a2"].iter().map(|c| ligne(c, "A", None)).collect());
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
     let mut attendues = vec![a3, a4];
     attendues.sort();
     assert_eq!(fin.removed, attendues);
@@ -252,27 +285,24 @@ fn les_relations_partent_avec_la_ligne_et_sont_comptees() {
     assert_eq!(reste.rows[0][0].as_i64(), Some(0));
 }
 
-// ─── onMissing : une transition ─────────────────────────────────────────────
+// ─── onMissing : une transition, et la marque d'absence ─────────────────────
 
 #[test]
 #[ignore]
 fn une_absente_passe_par_la_transition_ou_reste_nommee() {
     let mut catalog = catalogue();
-    let mut snapshot = perimetre_classeur();
-    snapshot.on_missing = OnMissing::Transition("archiver".into());
-    snapshot.max_missing_ratio = 1.0;
-    catalog.register_entity("Fiche", fiche(snapshot, Some(cycle()))).unwrap();
-    lot(&mut catalog, "s1", vec![
+    catalog.register_entity("Fiche", fiche(par_archivage(), Some(cycle()))).unwrap();
+    peupler(&mut catalog, "A", vec![
         ligne("a1", "A", Some("active")),
         ligne("a2", "A", Some("active")),
         ligne("a3", "A", Some("brouillon")),
     ]);
+    let (a2, a3) = (uuid(&catalog, "a2"), uuid(&catalog, "a3"));
 
     // s2 ne porte que a1 : a2 (active) s'archive, a3 (brouillon) ne le peut pas.
-    lot(&mut catalog, "s2", vec![ligne("a1", "A", Some("active"))]);
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
-    let a2 = catalog.entity_uuid("Fiche", &ligne("a2", "A", None)).unwrap();
-    let a3 = catalog.entity_uuid("Fiche", &ligne("a3", "A", None)).unwrap();
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, vec![ligne("a1", "A", Some("active"))]).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
     assert_eq!(fin.transitioned, [a2.clone()]);
     assert_eq!(fin.kept.len(), 1);
     assert_eq!(fin.kept[0].0, a3);
@@ -282,12 +312,46 @@ fn une_absente_passe_par_la_transition_ou_reste_nommee() {
     assert_eq!(etat(&catalog, &a2), "archivee");
     assert_eq!(etat(&catalog, &a3), "brouillon");
 
-    // Idempotent : la seconde fin trouve a2 déjà archivée, ne change rien.
-    let encore = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+    // La marque d'absence : sur la ligne que l'absence a fait changer d'état,
+    // pas sur celle restée en place.
+    let depuis = colonne(&catalog, &a2, "_absent_since").as_i64().expect("_absent_since posée");
+    assert!(depuis > 0);
+    assert!(matches!(colonne(&catalog, &a3, "_absent_since"), CypherValue::Null));
+
+    // Idempotent : une session suivante trouve a2 déjà archivée, ne change
+    // rien, et la marque garde la *première* absence.
+    let s3 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s3, vec![ligne("a1", "A", Some("active"))]).unwrap();
+    let encore = finir(&mut catalog, "A", &s3, SnapshotFinishOptions::default()).unwrap();
     assert!(encore.transitioned.is_empty(), "{encore:?}");
     assert_eq!(encore.already, [a2.clone()]);
     assert_eq!(encore.kept.len(), 1);
     assert_eq!(etat(&catalog, &a2), "archivee");
+    assert_eq!(colonne(&catalog, &a2, "_absent_since").as_i64(), Some(depuis));
+
+    // a2 reparaît dans un lot : sa marque d'absence s'efface.
+    let s4 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s4, vec![ligne("a1", "A", Some("active")), ligne("a2", "A", Some("archivee"))]).unwrap();
+    assert!(matches!(colonne(&catalog, &a2, "_absent_since"), CypherValue::Null));
+}
+
+/// Un état **vide** (une machine déclarée sur une entité déjà en service) est
+/// un état inconnu : il vaut l'état initial, et le rapport le dit dans ces
+/// termes — pas « impossible depuis '' ».
+#[test]
+#[ignore]
+fn un_etat_vide_vaut_l_etat_initial() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(par_archivage(), Some(cycle()))).unwrap();
+    peupler(&mut catalog, "A", vec![ligne("a1", "A", Some("active")), ligne("a2", "A", Some("active"))]);
+    // Une ligne d'avant la machine : état vide.
+    catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a2' SET f.etat = ''").unwrap();
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, vec![ligne("a1", "A", Some("active"))]).unwrap();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.kept.len(), 1, "{fin:?}");
+    assert!(fin.kept[0].1.contains("depuis 'brouillon'"), "{:?}", fin.kept);
+    assert!(fin.transitioned.is_empty());
 }
 
 // ─── Un périmètre vide : l'entité entière ───────────────────────────────────
@@ -299,14 +363,18 @@ fn un_perimetre_vide_couvre_l_entite_entiere() {
     let mut entiere = perimetre_classeur();
     entiere.scope = vec![];
     catalog.register_entity("Fiche", fiche(entiere, None)).unwrap();
-    lot(&mut catalog, "s1", vec![ligne("a1", "A", None), ligne("b1", "B", None), ligne("c1", "C", None)]);
+    let tout = BTreeMap::new();
+    let s1 = catalog.begin_snapshot("Fiche", &tout, false).unwrap().session;
+    lot(&mut catalog, &s1, vec![ligne("a1", "A", None), ligne("b1", "B", None), ligne("c1", "C", None)]).unwrap();
+    catalog.finish_snapshot("Fiche", &tout, &s1, SnapshotFinishOptions::default()).unwrap();
     // Sans périmètre, un lot peut mêler les classeurs.
-    lot(&mut catalog, "s2", vec![ligne("a1", "A", None), ligne("b1", "B", None)]);
-    let fin = catalog.finish_snapshot("Fiche", &BTreeMap::new(), "s2", SnapshotFinishOptions::default()).unwrap();
+    let s2 = catalog.begin_snapshot("Fiche", &tout, false).unwrap().session;
+    lot(&mut catalog, &s2, vec![ligne("a1", "A", None), ligne("b1", "B", None)]).unwrap();
+    // Le périmètre donné doit être celui déclaré.
+    assert!(finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).is_err());
+    let fin = catalog.finish_snapshot("Fiche", &tout, &s2, SnapshotFinishOptions::default()).unwrap();
     assert_eq!((fin.in_scope, fin.seen, fin.removed.len()), (3, 2, 1));
     assert!(cles(&catalog, "C").is_empty());
-    // Le périmètre donné doit être celui déclaré.
-    assert!(finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).is_err());
 }
 
 // ─── La marque et la file d'écriture ────────────────────────────────────────
@@ -322,9 +390,10 @@ fn chaque_ligne_d_un_lot_porte_la_session_dans_chaque_regime() {
         catalog.regime_d_ecriture(regime);
         catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
         // Premier lot sur table vide : le chemin de masse.
-        lot(&mut catalog, "s1", ["a1", "a2"].iter().map(|c| ligne(c, "A", None)).collect());
+        peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
         // Second lot : a1 et a2 inchangées, a3 nouvelle (MERGE, table non vide).
-        lot(&mut catalog, "s2", ["a1", "a2", "a3"].iter().map(|c| ligne(c, "A", None)).collect());
+        let s2 = ouvrir(&mut catalog, "A");
+        lot(&mut catalog, &s2, lignes(&["a1", "a2", "a3"], "A")).unwrap();
         let marques: Vec<String> = catalog
             .execute_raw("MATCH (f:Fiche) RETURN f._snapshot")
             .unwrap()
@@ -332,69 +401,97 @@ fn chaque_ligne_d_un_lot_porte_la_session_dans_chaque_regime() {
             .into_iter()
             .map(|r| r[0].as_str().unwrap_or_default().to_string())
             .collect();
-        assert_eq!(marques, ["s2", "s2", "s2"], "{regime:?}");
-        let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
+        assert_eq!(marques, [s2.clone(), s2.clone(), s2.clone()], "{regime:?}");
+        let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
         assert!(fin.missing.is_empty(), "{regime:?} : {fin:?}");
     }
 }
 
-// ─── Deux sessions sur le même périmètre (comportement d'aujourd'hui) ───────
+// ─── Une session à la fois par périmètre ────────────────────────────────────
 
-/// **Ce qui se passe aujourd'hui** : deux sessions simultanées sur le même
-/// périmètre se voient mutuellement comme absentes. Tant qu'aucun garde ne
-/// l'empêche, la fin de la première retire une ligne que la seconde vient de
-/// porter — et la proportion maximale ne l'attrape pas sous la moitié. Ce test
-/// fixe le défaut ; il changera avec le garde choisi.
+/// Une seconde session sur un périmètre déjà ouvert est refusée, en disant
+/// laquelle est ouverte et depuis quand ; un autre périmètre de la même
+/// entité se synchronise en même temps sans gêne — c'est le cas d'usage.
 #[test]
 #[ignore]
-fn deux_sessions_simultanees_se_retirent_mutuellement_aujourd_hui() {
+fn la_seconde_session_sur_un_meme_perimetre_est_refusee() {
     let mut catalog = catalogue();
     catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
-    lot(&mut catalog, "sa", ["a1", "a2", "a3", "a4"].iter().map(|c| ligne(c, "A", None)).collect());
-    // Une seconde session commence et porte a1.
-    lot(&mut catalog, "sb", vec![ligne("a1", "A", None)]);
-    // La fin de la première voit a1 absente (marquée sb) et la retire.
-    let fin = finir(&mut catalog, "A", "sa", SnapshotFinishOptions::default()).unwrap();
-    assert_eq!(fin.removed.len(), 1);
-    assert_eq!(cles(&catalog, "A"), ["a2", "a3", "a4"], "a1, portée par sb, est retirée à tort");
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3", "a4"], "A"));
+    peupler(&mut catalog, "B", lignes(&["b1", "b2"], "B"));
+
+    let sa = ouvrir(&mut catalog, "A");
+    let err = catalog.begin_snapshot("Fiche", &perimetre("A"), false).unwrap_err().to_string();
+    assert!(err.contains(&sa) && err.contains("depuis") && err.contains("takeover"), "{err}");
+
+    // Le classeur B, en même temps : permis, et chacun retire chez lui.
+    let sb = ouvrir(&mut catalog, "B");
+    lot(&mut catalog, &sa, lignes(&["a1", "a2", "a3"], "A")).unwrap();
+    lot(&mut catalog, &sb, lignes(&["b1"], "B")).unwrap();
+    let fin_b = finir(&mut catalog, "B", &sb, SnapshotFinishOptions::default()).unwrap();
+    let fin_a = finir(&mut catalog, "A", &sa, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin_a.removed, [uuid(&catalog, "a4")]);
+    assert_eq!(fin_b.removed, [uuid(&catalog, "b2")]);
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
+    assert_eq!(cles(&catalog, "B"), ["b1"]);
 }
 
-/// Un état **vide** (une machine déclarée sur une entité déjà en service) est
-/// un état inconnu : il vaut l'état initial, et le rapport le dit dans ces
-/// termes — pas « impossible depuis '' ».
+/// Un lot, un plan ou une fin qui porte un identifiant périmé est refusé.
 #[test]
 #[ignore]
-fn un_etat_vide_vaut_l_etat_initial() {
+fn un_identifiant_perime_est_refuse() {
     let mut catalog = catalogue();
-    let mut snapshot = perimetre_classeur();
-    snapshot.on_missing = OnMissing::Transition("archiver".into());
-    snapshot.max_missing_ratio = 1.0;
-    catalog.register_entity("Fiche", fiche(snapshot, Some(cycle()))).unwrap();
-    lot(&mut catalog, "s1", vec![ligne("a1", "A", Some("active")), ligne("a2", "A", Some("active"))]);
-    // Une ligne d'avant la machine : état vide.
-    catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a2' SET f.etat = ''").unwrap();
-    lot(&mut catalog, "s2", vec![ligne("a1", "A", Some("active"))]);
-    let fin = finir(&mut catalog, "A", "s2", SnapshotFinishOptions::default()).unwrap();
-    assert_eq!(fin.kept.len(), 1, "{fin:?}");
-    assert!(fin.kept[0].1.contains("depuis 'brouillon'"), "{:?}", fin.kept);
-    assert!(fin.transitioned.is_empty());
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+    let s = ouvrir(&mut catalog, "A");
+    let err = lot(&mut catalog, "invente-par-l-appelant", lignes(&["a1"], "A")).unwrap_err().to_string();
+    assert!(err.contains(&s), "le refus nomme la session ouverte : {err}");
+    assert!(finir(&mut catalog, "A", "invente-par-l-appelant", SnapshotFinishOptions::default()).is_err());
+    // Une session d'un autre périmètre ne vaut pas pour celui-ci.
+    let sb = ouvrir(&mut catalog, "B");
+    assert!(lot(&mut catalog, &sb, lignes(&["a1"], "A")).is_err());
+}
+
+/// Une session abandonnée se reprend par un geste explicite : la reprise rend
+/// un identifiant neuf, l'ancien ne vaut plus rien. Et un abandon ferme la
+/// session sans rien retirer.
+#[test]
+#[ignore]
+fn une_session_abandonnee_se_reprend_ou_s_abandonne() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2"], "A"));
+
+    let vieille = ouvrir(&mut catalog, "A");
+    let reprise = catalog.begin_snapshot("Fiche", &perimetre("A"), true).unwrap();
+    assert_ne!(reprise.session, vieille);
+    assert_eq!(reprise.replaced.as_deref(), Some(vieille.as_str()));
+    assert!(lot(&mut catalog, &vieille, lignes(&["a1"], "A")).is_err(), "l'ancienne est périmée");
+    lot(&mut catalog, &reprise.session, lignes(&["a1", "a2"], "A")).unwrap();
+    finir(&mut catalog, "A", &reprise.session, SnapshotFinishOptions::default()).unwrap();
+
+    // Abandon : la session se ferme, rien n'est retiré, une autre peut s'ouvrir.
+    let s = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s, lignes(&["a1"], "A")).unwrap();
+    catalog.abort_snapshot("Fiche", &perimetre("A"), &s).unwrap();
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2"]);
+    assert!(finir(&mut catalog, "A", &s, SnapshotFinishOptions::default()).is_err());
+    ouvrir(&mut catalog, "A");
 }
 
 // ─── Le plan, puis l'application : la base a pu changer entre les deux ─────
 
-fn archivage() -> Catalog {
+fn archivage() -> (Catalog, String) {
     let mut catalog = catalogue();
-    let mut snapshot = perimetre_classeur();
-    snapshot.on_missing = OnMissing::Transition("archiver".into());
-    snapshot.max_missing_ratio = 1.0;
-    catalog.register_entity("Fiche", fiche(snapshot, Some(cycle()))).unwrap();
-    lot(&mut catalog, "s1", vec![
+    catalog.register_entity("Fiche", fiche(par_archivage(), Some(cycle()))).unwrap();
+    peupler(&mut catalog, "A", vec![
         ligne("a1", "A", Some("active")),
         ligne("a2", "A", Some("active")),
         ligne("a3", "A", Some("active")),
     ]);
-    lot(&mut catalog, "s2", vec![ligne("a1", "A", Some("active"))]);
-    catalog
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, vec![ligne("a1", "A", Some("active"))]).unwrap();
+    (catalog, s2)
 }
 
 /// Une absente planifiée pour la transition, disparue avant l'application :
@@ -402,12 +499,12 @@ fn archivage() -> Catalog {
 #[test]
 #[ignore]
 fn une_absente_disparue_entre_le_plan_et_l_application_est_nommee() {
-    let mut catalog = archivage();
-    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), "s2", SnapshotFinishOptions::default()).unwrap();
+    let (mut catalog, s2) = archivage();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
     assert!(!plan.applied);
     assert_eq!(plan.transitioned.len(), 2, "{plan:?}");
     catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a2' DETACH DELETE f").unwrap();
-    let a2 = catalog.entity_uuid("Fiche", &ligne("a2", "A", None)).unwrap();
+    let a2 = uuid(&catalog, "a2");
     let fin = catalog.apply_snapshot_finish(plan).unwrap();
     assert!(fin.applied);
     assert!(!fin.transitioned.contains(&a2), "{fin:?}");
@@ -421,15 +518,35 @@ fn une_absente_disparue_entre_le_plan_et_l_application_est_nommee() {
 #[test]
 #[ignore]
 fn une_transition_refusee_a_l_ecriture_quitte_le_rapport_des_transitionnees() {
-    let mut catalog = archivage();
-    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), "s2", SnapshotFinishOptions::default()).unwrap();
+    let (mut catalog, s2) = archivage();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
     // a3 repasse en brouillon : archiver (active → archivee) ne part plus de là.
     catalog.execute_raw("MATCH (f:Fiche) WHERE f.cle = 'a3' SET f.etat = 'brouillon'").unwrap();
-    let a3 = catalog.entity_uuid("Fiche", &ligne("a3", "A", None)).unwrap();
+    let a3 = uuid(&catalog, "a3");
     let fin = catalog.apply_snapshot_finish(plan).unwrap();
     assert!(!fin.transitioned.contains(&a3), "{fin:?}");
     assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("refusée à l'écriture")), "{fin:?}");
     assert_eq!(etat(&catalog, &a3), "brouillon");
     // Un plan ne s'applique qu'une fois.
     assert!(catalog.apply_snapshot_finish(fin).is_err());
+}
+
+/// Une ligne planifiée pour le retrait que la session porte entre le plan et
+/// l'application (un lot arrivé entre les deux) a reparu : elle reste.
+#[test]
+#[ignore]
+fn une_ligne_reparue_depuis_le_plan_n_est_pas_retiree() {
+    let mut catalog = catalogue();
+    catalog.register_entity("Fiche", fiche(perimetre_classeur(), None)).unwrap();
+    peupler(&mut catalog, "A", lignes(&["a1", "a2", "a3"], "A"));
+    let s2 = ouvrir(&mut catalog, "A");
+    lot(&mut catalog, &s2, lignes(&["a1", "a2"], "A")).unwrap();
+    let plan = catalog.plan_snapshot_finish("Fiche", &perimetre("A"), &s2, SnapshotFinishOptions::default()).unwrap();
+    let a3 = uuid(&catalog, "a3");
+    assert_eq!(plan.removed, [a3.clone()]);
+    lot(&mut catalog, &s2, lignes(&["a3"], "A")).unwrap();
+    let fin = catalog.apply_snapshot_finish(plan).unwrap();
+    assert!(fin.removed.is_empty(), "{fin:?}");
+    assert!(fin.kept.iter().any(|(u, r)| u == &a3 && r.contains("reparue")), "{fin:?}");
+    assert_eq!(cles(&catalog, "A"), ["a1", "a2", "a3"]);
 }
