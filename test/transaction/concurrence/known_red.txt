@@ -123,3 +123,11 @@ IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError wa
 # annonces de clés différentes s'attendent puis valident sans erreur. ROUGE : LA FONCTION
 # N'EXISTE PAS (acquire-locks-exists).
 IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks-exists,both-commit,in-turn,no-error
+#
+# MODE EN SERVICE (un seul écrivain) — correctif du rejeu dans une table indexée par HNSW :
+# un index créé dans la session qui meurt (même suivi d'un CHECKPOINT), puis une insertion
+# ou une suppression, puis la mort : la base fait planter le processus qui l'ouvre
+# (SIGSEGV dans NodeTable::initInsertState au rejeu, avant tout LOAD EXTENSION). Vu par
+# une ouverture dans un processus neuf, comme un service qui redémarre (3 octobre au soir).
+SingleWriterCrash.VectorIndexCreatedOnlyInTheJournalIsUsableAfterRecovery database-opens-without-crash
+SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact database-opens-without-crash

@@ -6,7 +6,7 @@
 
 add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     minimal_reproduction_test.cpp integrity_checker_test.cpp harness_mechanics_test.cpp
-    lock_bench_test.cpp)
+    lock_bench_test.cpp single_writer_crash_test.cpp)
 target_link_libraries(concurrence_test PRIVATE test_helper test_runner graph_test)
 if (ENABLE_BACKTRACES)
     target_link_libraries(concurrence_test PRIVATE register_backtrace_signal_handler)

@@ -786,6 +786,20 @@ sessions, pas d'une vérification.
   `docs/2-octobre-2026-00h36/02-threadsanitizer-premiere-passe.txt`. Les virements
   qui ne conservaient pas la somme (étape 2) étaient un défaut **du banc**, pas du
   moteur : corrigé.
+- **MODE EN SERVICE — une base dont un index HNSW a été créé dans la session qui meurt
+  fait planter le processus qui l'ouvre** (banc, famille « arrêt brutal, un seul
+  écrivain », 3 octobre au soir ; déterministe). Un index créé dans la session, même
+  suivi d'un CHECKPOINT, puis une insertion ou une suppression dans la table, puis la
+  mort : à la réouverture, SIGSEGV dans `NodeTable::initInsertState`, au rejeu du
+  journal, dans le constructeur de `Database`, donc avant tout `LOAD EXTENSION`. Un index
+  créé dans une session précédente ne le provoque pas. Pour rag3weaver, c'est le premier
+  chargement : il crée l'index puis continue d'insérer, et une mort avant la fermeture
+  propre laisse une base qui ne s'ouvre plus. Il n'est visible qu'en ouvrant la base dans
+  un processus neuf : un processus qui a déjà chargé l'extension la garde. Cas minimal et
+  pile chez la session cœur C++. Les autres correctifs de reprise tiennent sous un vrai
+  arrêt : enregistrements de plus de 4 Ko, fin déchirée, mort à cinq instants d'un point
+  de reprise, point de reprise échoué, COPY tout ou rien, suppressions d'A5 (spécification
+  du banc, §13).
 - **Une clé primaire en double validée sous le mode multi-écrivains rend la base
   impossible à rouvrir après un arrêt brutal** (banc, C1, variante Crash, 3 octobre au
   soir). C'est déterministe : le rejeu refuse le doublon (« Found duplicated primary key

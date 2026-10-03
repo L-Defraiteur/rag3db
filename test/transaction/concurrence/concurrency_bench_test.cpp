@@ -245,6 +245,20 @@ public:
         }
     }
 
+    // Après la mort d'un processus écrivain : ouvrir la base dans un processus neuf, comme un
+    // service qui redémarre. Un plantage à l'ouverture est le rouge
+    // database-opens-without-crash, et la suite du cas est sautée.
+    bool probeAfterDeath() {
+        const auto probe = probeOpenInFreshProcess(databasePath,
+            currentCase != nullptr && currentCase->vectorExtension);
+        if (probe.empty()) {
+            return true;
+        }
+        ADD_FAILURE() << "[check: database-opens-without-crash] " << probe;
+        databaseLost = true;
+        return false;
+    }
+
 private:
     const BenchCase* currentCase = nullptr;
     bool databaseLost = false;
@@ -310,6 +324,9 @@ private:
         }
         std::filesystem::remove(reportPath);
         std::cerr << "  -- integrity in the writer process:\n" << integrity::describe(violations);
+        if (!exitedNormally && !probeAfterDeath()) {
+            return violations;
+        }
         if (!reopen()) {
             return violations;
         }
@@ -427,6 +444,9 @@ private:
             }
         }
         std::filesystem::remove(hotDumpPath);
+        if (!probeAfterDeath()) {
+            return {};
+        }
         // Le témoin que l'arrêt est brutal : un journal non vide attend d'être rejoué.
         const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
         const auto walSize =

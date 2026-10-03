@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -500,6 +501,48 @@ struct Opener {
 inline void disableCoreDumps() {
     const rlimit none{0, 0};
     setrlimit(RLIMIT_CORE, &none);
+}
+
+// Ouvre une copie de la base dans un processus NEUF (fork puis exec du banc lui-même, sur le
+// test OpenProbe.OpenFromEnvironment) et dit s'il a planté : "" sinon, la description sinon. Un
+// processus neuf, parce qu'un processus qui a déjà chargé l'extension vector la garde chargée : le
+// rejeu y trouvait l'index, là où un service qui redémarre plante à l'ouverture (3 octobre au
+// soir). Une copie, parce que l'ouverture rejoue le journal et pourrait changer la base que le test
+// va rouvrir ensuite.
+inline std::string probeOpenInFreshProcess(const std::string& databasePath, bool vectorExtension) {
+    namespace fs = std::filesystem;
+    const fs::path database(databasePath);
+    const auto copy = database.parent_path() / ("open-probe-" + std::to_string(getpid()));
+    fs::remove_all(copy);
+    fs::create_directories(copy);
+    const auto stem = database.filename().string();
+    for (const auto& entry : fs::directory_iterator(database.parent_path())) {
+        if (entry.is_regular_file() && entry.path().filename().string().starts_with(stem)) {
+            fs::copy_file(entry.path(), copy / entry.path().filename());
+        }
+    }
+    const auto pid = fork();
+    if (pid == 0) {
+        disableCoreDumps();
+        const auto target = (copy / stem).string();
+        setenv("CONCURRENCE_OPEN_PROBE", target.c_str(), 1);
+        setenv("CONCURRENCE_OPEN_PROBE_VECTOR", vectorExtension ? "1" : "0", 1);
+        const char* argv[] = {"/proc/self/exe", "--gtest_filter=OpenProbe.OpenFromEnvironment",
+            nullptr};
+        execv("/proc/self/exe", const_cast<char* const*>(argv));
+        _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    fs::remove_all(copy);
+    // Seul un plantage est rendu. Une ouverture qui échoue par une erreur (une exception,
+    // code de sortie non nul) n'en est pas un : la réouverture ordinaire qui suit nommera
+    // l'erreur (database-reopens).
+    if (WIFSIGNALED(status)) {
+        return "opening the database crashes the process: signal " +
+               std::to_string(WTERMSIG(status));
+    }
+    return "";
 }
 
 // L'extension vector, bâtie dans l'arbre source (-DBUILD_EXTENSIONS=vector), comme la

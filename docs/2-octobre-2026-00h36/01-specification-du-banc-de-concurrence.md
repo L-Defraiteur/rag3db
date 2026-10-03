@@ -443,3 +443,49 @@ validé par deux connexions dans un seul fil, sous le mode multi-écrivains, pui
 fils meurt base ouverte. La reprise doit ouvrir la base, avec une seule ligne de clé 7,
 plutôt que la rendre inouvrable. Il est rouge et déterministe ; la forme du nom donné
 à la clé refusée reste à décider.
+
+## 13. L'arrêt brutal, un seul écrivain (3 octobre au soir)
+
+Demandé par l'orchestration : les correctifs de reprise livrés n'avaient été éprouvés
+que par un échec injecté ou une fermeture sans point de reprise final ; aucun test ne
+tuait le processus. Le fichier est `single_writer_crash_test.cpp`, mode multi-écrivains
+éteint. Chaque cas :
+- fait travailler un fils base ouverte et le tue par SIGKILL, lui-même à un instant
+  précis ou le père après un délai ;
+- exige un journal non vide quand il doit en rester un ;
+- rouvre **d'abord dans un processus neuf** (`probeOpenInFreshProcess`, fork puis exec du
+  banc sur une copie de la base), comme un service qui redémarre.
+
+L'ouverture dans un processus neuf n'est pas un détail. Un processus qui a déjà chargé
+l'extension vector la garde chargée, et le rejeu y trouve l'index. Les variantes Crash
+de H1 à H3, rouvertes dans le processus du test, ne voyaient pas le plantage qu'un vrai
+redémarrage montre.
+
+Pour mourir à un instant d'un point de reprise, un `DyingCheckpointer` se tue avant ou
+après une de ses phases ; il est installé par `FlakyCheckpointer`, sans toucher `src/`.
+La mort à chaque allocation, à l'intérieur de la phase de stockage, n'est pas atteignable
+ainsi. Elle est signalée à la session cœur C++ comme non couverte.
+
+| cas | correctif éprouvé | verdict (trois passes) |
+|---|---|---|
+| enregistrements de plus de 4 Ko (20 000 caractères, liste de 3 000 entiers) | `955b1b136` | vert |
+| fin de journal déchirée : huit morts à un délai tiré, tout commit acquitté gardé, aucun lot coupé | `a66bb0b9d` | vert |
+| mort pendant un point de reprise, à cinq instants, après un premier point de reprise, des insertions, des suppressions et des mises à jour | `6bf46150b`, `093702c7f` | vert (après l'application des pages fantômes, le journal peut être vide : légitime) |
+| point de reprise échoué (il refuse ensuite toute écriture), puis mort | `7072183db` | vert |
+| index vectoriel créé dans la session qui meurt, puis des insertions | — | **ROUGE : la base fait planter le processus qui l'ouvre** |
+| mort pendant un COPY de nœuds, puis de relations (six délais) | — | vert : tout ou rien |
+| mort pendant des suppressions et des recherches vectorielles, index créé dans la session morte | A5, A5 bis | **ROUGE : même plantage à l'ouverture** |
+| la même chose, index créé dans une session précédente | A5, A5 bis | vert : l'index reste exact |
+| `DROP_VECTOR_INDEX` dans le seul journal | (correctif en cours) | rouge, cas `IndexReopen` |
+
+**Le défaut en service** : un index HNSW créé dans la session qui meurt, même suivi d'un
+CHECKPOINT, puis une insertion ou une suppression dans la table, puis la mort. La base
+fait alors planter le processus qui l'ouvre (SIGSEGV dans `NodeTable::initInsertState`,
+au rejeu, dans le constructeur de `Database`, donc avant tout `LOAD EXTENSION`). C'est
+déterministe. Un index créé dans une session précédente ne le provoque pas. C'est le
+premier chargement de rag3weaver. Les deux rouges sont dans `known_red.txt`, sous leur
+correctif ; la session cœur C++ a le cas minimal et la pile.
+
+La sonde ne rend que les plantages. Une ouverture qui échoue par une erreur, comme le
+doublon de C1 au rejeu, reste le rouge `database-reopens`, nommé par la réouverture
+ordinaire.
