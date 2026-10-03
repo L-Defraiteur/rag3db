@@ -371,6 +371,84 @@ générique est une **session de synchronisation** (début, lots, fin) avec un
 périmètre déclaré par l'entité ; un backend qui veut un « dépôt » ou un
 « dossier » le déclare comme n'importe quelle entité.
 
+## Audit des `CatalogEvent::Warning` — ce que le catalogue dit à personne
+
+4 octobre 2026, demandé par l'orchestration après le défaut de l'index détaché
+(`CATALOGUE=ok` pendant qu'une recherche vectorielle refusait). La classe est
+nommée depuis la veille : **une information existe, et rien ne la consulte**.
+
+**Le fait qui donne son poids au tableau : en production, personne ne lit un
+`CatalogEvent::Warning`.** Le seul endroit du dépôt qui filtre cette variante
+est un test (`src/catalog.rs:9019`), et `Catalog::subscribe()` n'est appelé que
+par des tests (`catalog.rs:9045`, `:9070`, `tests/e2e_batch_observe.rs:270`).
+Les `runtime.subscribe()` du fichier écoutent le **runtime dataflow**, pas ce
+flux. Donc tout site ci-dessous qui masque un échec le masque **entièrement** :
+il n'y a pas de journal où le retrouver.
+
+26 sites dans `src/catalog.rs`, 3 dans `src/agent.rs`, aucun ailleurs. Trois
+genres :
+
+### A. Une déclaration acceptée qui ne fait rien
+
+| Site | Ce qui est tu | Ce qu'il faudrait |
+|---|---|---|
+| `:710` | `boost` posé sur un champ — « accepté et jamais appliqué » | un **refus de `validate`**, comme celui d'un signal sémantique sans champ de contenu : le précédent existe dans `config.rs` |
+| `:1985` | `special_ops` d'une KB — « désérialisé et jamais lu » | idem, ou le reçu d'ouverture |
+| `:1995` | poids par champ d'une KB — « copiés dans les métadonnées et plus jamais relus » | idem |
+
+Ce ne sont pas des échecs d'opération : ce sont des **déclarations sans effet**.
+Quelqu'un écrit `boost` dans son schéma, croit peser son classement, et rien ne
+le détrompe — jamais. Le message est déjà parfaitement écrit ; il n'a pas de
+lecteur.
+
+### B. Une capacité absente, et la durabilité avec elle
+
+| Site | Ce qui est tu |
+|---|---|
+| `:974` | aucun magasin de checkpoints pour ce dialecte — **« la reprise après incident est indisponible »** |
+| `:1006` | aucun magasin de blobs — **« les index FTS et sparse ne seront pas persistés »** |
+
+Les deux plus graves du tableau. Une base peut tourner sans reprise après
+incident et sans persistance d'index, et le seul endroit qui le dit est un flux
+que personne n'écoute. Leur place est le **reçu d'ouverture**, celui que le lot
+de l'index vectoriel vient de commencer à remplir.
+
+### C. Une opération a échoué, et on continue
+
+Par ordre de dégât décroissant — le critère étant « une lecture ultérieure
+sera-t-elle fausse, incomplète, ou seulement lente ? »
+
+| Site | Ce qui est tu | Dégât |
+|---|---|---|
+| `:2663` | marque de travail non publiée — **« un lecteur d'un autre processus croira la base à jour »** | **faux** : le message nomme lui-même sa victime |
+| `:6762` | textes tronqués à la limite de jetons — « n'est donc pas trouvable par le vecteur, alors que la ligne est complète en base » | **incomplet et invisible** : la recherche rend moins, la base a tout |
+| `:4495`, `:4547`, `:4576` | `split_unchanged` sauté : entité absente de la configuration, relecture impossible, 0 ligne relue | **faux, et vérifié** : les trois rendent `previous_states` **vide**, et `lifecycle_verdict` traite un `from: None` comme une **naissance** — donc n'importe quel état déclaré passe. La garde de cycle de vie est contournée en silence. Le code le sait déjà : « d'avant sort d'ici, un silence fait passer une transition interdite », juste au-dessus de `:4547` |
+| `:4642` | chunks illisibles — « rien n'est court-circuité » | **lenteur seule** : celui-là rend `previous_states_de(…, &stored)` avec un `stored` bien relu. La garde tient. À ne pas confondre avec les trois ci-dessus, ce que le voisinage des messages invite à faire |
+| `:3142`, `:6723` | retard d'embarquement non rattrapé — « des chunks restent sans vecteur » | **incomplet, mais partiellement consulté** : `index_state_for` et l'exigence « dense » le rattrapent |
+| `:5621`, `:5680` | dette de rendu non posée, re-rendu en échec | **périmé durablement** : une entité dérivée reste vieille sans que rien ne le dise |
+| `:2713`, `:6488` | marque non effacée, marque posée par sécurité | **lenteur** : des lecteurs `Strict` attendent pour rien |
+| `:1347` | index secondaire non posé | **lenteur seule**, et son commentaire le dit déjà |
+| `:3189`, `:3197`, `:3321`, `:3329`, `:5466` | relais d'avertissements venus d'un runtime | hérité — à juger avec leur émetteur |
+| `:1679`, `:1703` | index vectoriel : refus non réparable, et le rebâti réussi | **traité** par le lot du 4 octobre |
+
+### Ce que j'en fais, et ce que je ne fais pas
+
+Je ne corrige rien ici sans le dire à la session qui tient le fichier. Deux
+propositions, dans cet ordre :
+
+1. **Un reçu d'ouverture** qui porte B en entier et la part de C qui change la
+   durabilité. Il existe déjà en germe : le lot de l'index vectoriel y dit
+   « index rebâti : *n* lignes, *d* ms ». Lui donner B, c'est une structure à
+   remplir, pas un mécanisme à inventer.
+2. **A devient des refus de `validate`.** C'est le moins coûteux des deux et le
+   plus sûr : une déclaration qui ne fait rien doit être refusée à l'écriture
+   du schéma, pas signalée à l'ouverture de la base.
+
+Et une règle à opposer au prochain `Warning` qu'on voudra écrire : **un
+avertissement est une erreur dont on a choisi de ne pas mourir.** Ce choix se
+justifie par un lecteur nommé. Sans lecteur, ce n'est pas un avertissement,
+c'est un silence avec du texte dedans.
+
 ## Méthode : quatre façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal`.

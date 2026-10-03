@@ -280,7 +280,7 @@ dépile celui d'une autre session sans que rien ne s'en voie chez elle.
    neuf** — rien ne consomme le port `events` sauf `TraceSinkNode`, et un
    graphe-outil n'a pas de conditionnelle. En attente du mot de Lucie.
 3. l'**ancre** (`ANCHORED_TO`) — et **à lire avant de la coder** :
-   `docs/4-octobre-2026-00h09/01-vision-le-fil-de-travail.md`. Lucie veut
+   `docs/4-octobre-2026-00h09/01-vision-des-memoires-par-gabarit-et-des-fiches-qui-pointent-vers-tout.md`. Lucie veut
    ancrer une mémoire sur le **schéma** (la table, pas une de ses lignes), sur
    quelque chose **hors de la base** (un chemin, une PR, une branche), et
    rejoindre tout cela en un point — `Subject` vu comme un fil de travail. La
