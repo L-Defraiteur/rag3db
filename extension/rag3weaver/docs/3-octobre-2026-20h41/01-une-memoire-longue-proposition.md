@@ -1,0 +1,502 @@
+# Une mémoire longue pour des agents — proposition
+
+3 octobre 2026. Réponse à la [vision](../3-octobre-2026-20h37/02-vision-memoire-longue.md)
+et aux [décisions accrochées au code](../3-octobre-2026-20h37/01-visions-pour-le-produit-code.md) §3.
+Conception seulement : rien n'est codé, aucune mesure n'est inventée.
+
+Le fil tient en une phrase : **la mémoire longue n'a presque pas besoin de
+moteur neuf. Elle a besoin que des pièces déjà livrées servent à autre chose
+que ce pour quoi elles ont été faites** — et le gabarit `notebook` montre
+qu'une bonne partie se déclare déjà sans code.
+
+> **Deux corrections d'entrée, par honnêteté.** En préparant ceci j'ai cru
+> deux choses fausses. La **mise de côté existe** — un module entier,
+> `src/catalog/aside.rs`, livré le 3 octobre, avec son annulation ; je l'avais
+> vue refusée sur une branche plus ancienne. Et **une entité de note existe
+> déjà**, dans `templates/backends/notebook/`, avec sa machine à états. Les
+> deux changent cette proposition : elle part de l'existant au lieu de le
+> redemander.
+
+---
+
+## 1. L'entité `Memory`
+
+### 1.0 On ne part pas de zéro : `notebook` est le brouillon
+
+`templates/backends/notebook/backend.json` déclare déjà une entité `Note` :
+`key` en titre et en `hashsafe`, `text` en contenu, `bm25 + vector`, une
+machine à états `working → reviewed → working`, et des champs écrits
+automatiquement (`created_at`, `updated_at`, `revision`, `reviewed_at`). Avec
+`put_note`, `get_note`, `search_notes`, et une entité `Snapshot` immuable.
+
+C'est la preuve de la thèse : **tout ça s'est déclaré sans une ligne de Rust.**
+`Memory` est `Note` qui grandit. Ce qu'elle ajoute, et rien de plus :
+l'origine, la portée, l'ancre engendrée, les deux signaux de « à revoir », et
+le nœud de décision.
+
+### 1.1 Les champs
+
+| Champ | Type | Rôle |
+|---|---|---|
+| `claim` | String, **titre**, `hashsafe` | l'affirmation, courte |
+| `why` | Text, **contenu** | le pourquoi ; c'est lui qui se découpe et s'embarque |
+| `kind` | String, `choices` | `fact` / `preference` / `decision` / `pointer` |
+| `origin` | String, `choices` | `said` / `inferred` |
+| `said_as` | Text | les mots de la personne, quand `origin = said` |
+| `reach` | String, `choices` | `person` / `project` / `team` |
+| `state` | String | le champ de la machine à états (§1.3) |
+| `at`, `revision` | écrits par `writes` | la date et la révision vue, sans code |
+
+**Ce qui s'embarque : `why`.** Et `claim` l'est **gratuitement** : le titre est
+préfixé à chaque chunk pour l'embarquement (256 caractères sur 1 500). Une
+affirmation courte entre donc dans le vecteur par le préfixe — inutile de
+l'embarquer à part.
+
+**Ce qui se cherche par mots : `claim` et `why`**, par l'index plein texte de
+la table **parente**. Donc `bm25 + vector`, comme `Note`.
+
+**Ce qui se filtre :** `kind`, `origin`, `reach`, `state`, `at`. La date passe
+par les bornes locales du 27 août (`local_range`), jamais par un préfixe de
+chaîne — filtrer une date par préfixe est faux du décalage de fuseau.
+
+**L'identité : `hashsafe: ["claim", "reach"]`.** Une même affirmation dans deux
+portées sont deux mémoires ; la même dans la même portée est **la même ligne**.
+Donc une redite ré-ingérée ne crée pas de doublon **même si le protocole de §2
+est contourné**. C'est le filet sous le filet, et c'est ce que `Note` fait déjà
+avec `key`.
+
+**Le coût se demande au lieu de se deviner** (`EntityConfig::cost_for`, 18
+septembre) : un `why` d'un paragraphe fait un chunk, donc dix mille mémoires
+font dix mille embarquements.
+
+### 1.2 Les relations : comment une ancre vise n'importe quoi
+
+Le moteur est net : `register_relation_with` exige un couple `(depuis, vers)`,
+et ré-enregistrer le même nom avec un autre couple est une **erreur dure**. Une
+ancre « vers n'importe quelle entité » n'est donc pas **une** relation.
+
+**Mais la traversée, elle, est déjà polymorphe** : `FetchRelatedNode` fait un
+`MATCH` sur des nœuds **non étiquetés** et lit `label(m)` à l'exécution. Le
+moteur sait donc rendre une cible de type variable ; c'est la *déclaration* qui
+ne le permet pas. Tout le problème est là, et il est plus petit qu'il n'y
+paraît.
+
+| Voie | Gain | Perte |
+|---|---|---|
+| Une relation par type de cible, à la main | des arêtes vraies | N déclarations à tenir |
+| Une entité pivot `Anchor { entité, uuid }` | une seule déclaration | **ce n'est plus une arête** : plus de parcours, plus de synchronisation de lien, une jointure sur une chaîne |
+| **`ANCHORED_TO` engendrée à l'enregistrement** | des arêtes vraies, une déclaration à écrire | du code au registre |
+
+**Je retiens la troisième** : une entité déclare `anchorable: true`, et
+`register_entity` enregistre alors `ANCHORED_TO: Memory → <elle>`. Les N
+relations existent dans le schéma — donc parcours, synchronisation de liens et
+« à revoir » fonctionnent — mais personne ne les écrit, et la généricité vit
+dans la **déclaration**. C'est la règle de la maison : une organisation
+nouvelle se décrit dans `EntityConfig`, jamais en dur.
+
+Le pivot est la fausse bonne idée du lot : il a l'air plus générique et il jette
+exactement ce pour quoi on a un graphe. Le code a d'ailleurs déjà choisi comme
+moi deux fois — `Symbol` est une entité de rendez-vous, pas un pivot à champs.
+
+**Une contrainte que le moteur impose, et qu'il faut écrire** : `find_relation`
+rend la **première** relation reliant deux entités, en itérant une table de
+hachage — l'ordre n'est pas déterministe. Donc **au plus une relation par
+couple `(depuis, vers)`** tant qu'on veut filtrer d'une entité sur les champs
+d'une autre. Concrètement : pas de `MENTIONS: Memory → Subject` à côté
+d'`ANCHORED_TO: Memory → Subject`. Si les deux sont voulues un jour, la
+seconde devra passer par une entité intermédiaire.
+
+### 1.3 L'état est une machine à états déclarée
+
+```
+field: "state", initial: "current"
+transitions:
+  review     current   -> to_review     (l'ancre a changé ou a disparu)
+  confirm    to_review -> current       (regardée, encore vraie)
+  supersede  current   -> superseded     (une neuve la remplace)
+  supersede_reviewed  to_review -> superseded
+  set_aside  current   -> set_aside
+  set_aside_reviewed  to_review -> set_aside
+```
+
+Quatre choses gratuites :
+
+- une transition non déclarée **ne passe pas**, aux **deux** chemins
+  d'écriture — la mise à jour et l'ingestion ;
+- un état inatteignable est refusé **à la déclaration**, avant la première
+  ligne ;
+- `superseded` et `set_aside` sont terminaux **par construction** : aucun champ
+  « final » à tenir en accord, l'absence de transition sortante le dit ;
+- le refus **nomme ce qui aurait été permis**, donc un agent n'a pas à relire
+  la déclaration pour comprendre un mur.
+
+**Les ancres sont nues, et ce n'est pas un choix de style.** La vision propose
+de mettre l'origine et la date en propriétés d'arête. Trois faits du moteur
+l'interdisent :
+
+1. une propriété d'arête **ne se cherche ni ne se filtre** — ni
+   `FetchRelatedNode`, qui traverse une arête anonyme sans rendre ses
+   propriétés, ni `FilterParser`, qui n'adresse que des champs de nœuds ;
+2. `RelationBatchNode` **refuse** une relation à propriétés, en disant quoi
+   faire : *« snapshot links require a property-free relation; use an entry
+   entity for payload »* — donc une ancre à propriétés ne se synchronise pas,
+   et c'est d'elle que dépend le « à revoir » ;
+3. le seul lecteur de propriété d'arête du crate est du Cypher écrit à la
+   main, hors du dataflow.
+
+Et de toute façon origine et date sont des propriétés de **la mémoire** : elle
+n'en a qu'une, quel que soit le nombre de choses qu'elle touche. La seule
+propriété vraiment par lien serait la révision de *cette* ancre-là ; je
+préfère dire qu'une mémoire qui a besoin de deux ancres à deux révisions est
+**deux mémoires**.
+
+`REPLACES: Memory → Memory` est nue aussi : la raison vit sur la neuve.
+
+---
+
+## 2. Les quatre verbes
+
+### 2.1 Ce qui s'écrit avec l'existant
+
+Les cinquante-huit nœuds visibles à un graphe-outil suffisent, sauf pour un
+point.
+
+| Verbe | Forme | Nœud neuf ? |
+|---|---|---|
+| `recall` | `SearchSourceNode` + les trois signaux + `FuseResultsNode` + filtre `state` + `RenderResultsNode` ; par ancre, `FetchRelatedNode` | non — c'est `search_structured.mmd` avec un filtre |
+| `revise` | `InsertRecordNode` (la neuve) + `LinkRecordNode` (`REPLACES`) + `UpdateRecordNode` (l'ancienne) | non |
+| `forget` | `UpdateRecordNode` vers `set_aside`, et `aside.rs` fait le reste | non |
+| `remember` | chercher, montrer les proches, **exiger le choix** | **oui** : le nœud de décision (§7.5) |
+
+Et la mise de côté est **déjà** ce qu'il faut : `set_aside` copie la ligne *et
+les vecteurs de ses chunks*, `take_from_aside` les rend sans réembarquer si
+l'identité et l'empreinte n'ont pas bougé, la purge est bornée par lots, et
+`undo_snapshot_finish` annule en bloc tant que les copies vivent. `forget`
+n'a rien à inventer.
+
+### 2.2 `remember` : un seul verbe, et le premier appel est un refus qui montre
+
+J'ai d'abord proposé deux verbes — `remember` qui propose, `apply_memory` qui
+écrit — sur le modèle de la coupure plan / application de la synchronisation.
+**L'inventaire du crate me fait changer d'avis, et pour une raison mesurée.**
+
+> `search_expand` a été fusionné dans `search` le 28 août : **zéro appel sur
+> quarante**, parce qu'« un agent qui hésite entre deux outils proches en
+> prend zéro ».
+
+C'est une mesure, pas une opinion, et elle vise exactement ce que j'allais
+faire. S'y ajoute une doctrine écrite dans `place.mmd` : *« un outil qui
+confirme sans montrer oblige son appelant à une seconde requête »*. Et un
+précédent qui refroidit : le `needs_confirmation` d'`estimate` est **purement
+informatif**, aucun code ne bloque dessus.
+
+Donc : **un seul verbe, appelé deux fois, et le premier appel est un refus qui
+porte le contenu.**
+
+```
+remember(claim, why, kind, reach, anchor?)          -- sans « choice »
+  -> REFUS, qui contient :
+     les proches (affirmation, date, état, distance),
+     un identifiant de proposition,
+     la liste fermée des suites, et l'appel exact à refaire
+
+remember(…, proposal, choice)                        -- « choice » dans une liste fermée
+  -> écrit une fois
+```
+
+Pourquoi un modèle faible suivra :
+
+1. **Un seul nom d'outil.** Aucune hésitation, donc le défaut mesuré de
+   `search_expand` ne s'applique pas.
+2. **La liste des choix est fermée** (`%% choices: choice = complete |
+   replace | create`). Le moteur refuse une valeur hors liste **avec la liste
+   dans l'erreur** (`check_choices`, `kind = "bad_choice"`), et un décodage
+   contraint ne peut pas en inventer.
+3. **`choice` est obligatoire** (`%% param: choice string!`), donc son absence
+   est un refus du moteur, pas un oubli silencieux.
+4. **Le refus montre.** Il ne dit pas « confirme », il donne les proches et
+   l'appel à refaire, arguments remplis. C'est la doctrine de `place.mmd`
+   respectée, pas contournée.
+5. **Une proposition se périme et ne s'applique qu'une fois** — elle retient
+   l'état des proches ; l'appliquer après qu'ils ont bougé est refusé en
+   disant de recommencer. Même garde que le plan périmé de la synchronisation,
+   qui est éprouvée.
+6. **Le premier appel n'écrit rien.** Un modèle qui s'arrête là ne crée
+   **aucun désordre** : l'échec est le silence, pas un doublon.
+
+Le sixième est le choix de conception, et son prix doit être nommé : un modèle
+qui ne confirme jamais laisse la mémoire vide, et ça ne se voit pas. **Donc
+« propositions jamais appliquées » est une des mesures du banc** (§4.2). Un
+échec silencieux qu'on mesure cesse d'être silencieux.
+
+---
+
+## 3. « À revoir » : deux signaux, pas un
+
+La vision attribue le « à revoir » à la synchronisation. **C'est juste à
+moitié**, et la moitié manquante est la plus fréquente.
+
+> La synchronisation sait ce qui **manque**. C'est l'**ingestion** qui sait ce
+> qui a **changé**.
+
+- **Une ancre qui disparaît** : la fin de session la connaît — son rapport
+  liste `removed`, `transitioned`, `kept`, et `onMissing: {transition}` existe.
+- **Une ancre qui change sans disparaître** — un fichier édité, une fonction
+  réécrite, le cas courant : la fin ne la voit pas. Mais `split_unchanged` la
+  connaît : séparer ce qui a changé de ce qui n'a pas changé est littéralement
+  son travail, et il rend déjà les deux ensembles.
+
+La mécanique, petite :
+
+1. l'ingestion et la fin **émettent** ce qui a bougé (uuids, entité) — la fin
+   le sait déjà, l'ingestion doit le dire ;
+2. un **réacteur** (`each` / `batch`, livrés) écoute, remonte les
+   `ANCHORED_TO` entrantes par `FetchRelatedNode` en direction `Incoming`, et
+   transitionne par `review` ;
+3. la transition passe par la garde, donc elle ne peut pas sauter un état.
+
+Deux comportements qui tombent juste sans rien coder :
+
+- **`review` n'écrase pas `superseded` ni `set_aside`** : ces états sont
+  terminaux, la transition n'existe pas depuis eux, la garde refuse et la ligne
+  est **nommée** dans le rapport ;
+- une mémoire déjà `to_review` dont l'ancre rechange reste `to_review` :
+  `depuis == vers` n'est pas un passage, la garde le laisse passer sans rien
+  écrire.
+
+**Et une pièce à ne pas confondre avec celle-là.** `_absent_since` existe
+(schéma v8), est posée sur les lignes transitionnées par une fin, et effacée
+dès qu'une ligne reparaît — par trois chemins. Mais **personne ne la lit en
+production**, et comme elle est préfixée `_` elle n'est pas un champ déclaré,
+donc **`FilterParser` ne peut pas l'adresser**. Elle ne peut donc pas servir
+de critère à `recall` tant qu'elle reste interne. C'est une information utile
+telle quelle — « cet état vient d'une absence, pas de quelqu'un » — et c'est
+la mémoire qui lui donnerait son premier lecteur, à condition de la déclarer.
+
+---
+
+## 4. Le banc
+
+### 4.1 Le scénario, cinq sessions, sans modèle d'abord
+
+« L'agent » est un script qui appelle les verbes avec des choix fixés. La
+vérité est donc connue **par construction** — ce qui sert deux fois (§7.5).
+
+| Session | Ce qui arrive | Ce qu'on attend |
+|---|---|---|
+| 1 | trois faits, deux ancrés, un global | trois mémoires, zéro doublon |
+| 2 | une correction d'un fait | la neuve `current`, l'ancienne `superseded`, le lien `REPLACES` |
+| 3 | une redite, dite autrement | le proche est trouvé ; `complete` ou refus, **pas** une quatrième ligne |
+| 4 | l'ancre du fait 1 est **éditée** ; celle du fait 2 **disparaît** | les deux passent `to_review`, par les **deux** signaux de §3 |
+| 5 | une question qui touche le fait corrigé | la `current` revient, la `superseded` **non** |
+
+La session 4 est la seule qui vaille vraiment : elle est le seul endroit où les
+deux signaux se distinguent, et c'est le point que la vision confond.
+
+### 4.2 Les mesures
+
+Les quatre de la vision, plus une que la conception rend nécessaire :
+
+1. **doublons créés** ;
+2. **rappels utiles** — la mémoire attendue est dans ce qui revient ;
+3. **périmés servis comme vrais** — une `superseded` ou une `to_review` rendue
+   sans sa marque. **La plus importante** : c'est le défaut qui fait perdre
+   confiance, et une mémoire en qui on n'a pas confiance ne sert à rien ;
+4. **contradictions vues** ;
+5. **propositions jamais appliquées** — l'échec silencieux de §2.2.
+
+Puis le même scénario avec un modèle, les mêmes mesures : la tuyauterie étant
+déjà prouvée, l'écart mesure le modèle et rien d'autre. C'est la règle de
+Lucie, appliquée telle quelle.
+
+**Le scénario est séquentiel exprès** : les écritures parallèles ne sont pas
+finies, et un banc ne doit pas reposer sur ce qui n'est pas livré.
+
+---
+
+## 5. Ce qui manque au moteur, dans l'ordre
+
+| # | Ce qu'il faut | Pourquoi là | Estimation |
+|---|---|---|---|
+| 1 | `Memory` **en partant de `notebook`** : les champs, `anchorable`, la machine à états, les gabarits des quatre verbes | c'est de la déclaration, pas du moteur | ½ jour |
+| 2 | `ANCHORED_TO` engendrée à l'enregistrement d'une entité `anchorable` | la seule pièce de moteur de §1.2 | 2 heures |
+| 3 | l'ingestion **émet** son ensemble changé | la moitié manquante du « à revoir » | ½ jour |
+| 4 | le réacteur qui transitionne les mémoires ancrées | il sert les deux signaux | 2 heures après 3 |
+| 5 | le **nœud de décision**, étage classement d'abord (§7.5) | `remember` et les sujets en dépendent | 1 jour |
+| 6 | déclarer `_absent_since` pour qu'elle soit filtrable, si `recall` doit s'en servir | sinon elle reste invisible | 2 heures |
+| 7 | le crochet après outil | **pas à moi** : session recherche, `backend.rs` | — |
+| 8 | le jardinier, la détection de contradiction | ils vivent de tout ce qui précède | après |
+
+**Ce qui ne figure pas dans cette liste, et que je croyais devoir y mettre :
+la mise de côté.** Elle est livrée, avec son annulation.
+
+---
+
+## 6. Mes désaccords avec la vision
+
+**a. L'origine et la date ne sont pas des propriétés d'arête** (§1.3). Trois
+faits du moteur le disent, dont un refus explicite de `RelationBatchNode` qui
+indique même le remède.
+
+**b. `session` n'est pas une portée.** La règle 6 la liste, puis dit que ce qui
+ne vaut que pour la conversation en cours ne s'écrit pas. Une portée qu'on
+refuse d'écrire n'est pas une portée : trois niveaux, pas quatre.
+
+**c. Le « à revoir » a deux sources, pas une** (§3). C'est le désaccord qui
+change le plus de choses dans le travail.
+
+**d. La règle 7 est mon problème d'août qui revient par la fenêtre.** « Le
+rappel est une recherche, pas un chargement, avec un budget » — mais un
+crochet qui déverse les `why` dans chaque résultat d'outil, c'est « tout est
+chargé tout le temps » sous un autre nom. La forme est déjà livrée : le crochet
+rend **les affirmations seules**, et le `why` se demande par un renvoi. C'est
+`absorb` et `recall` de la session.
+
+**e. « Plusieurs agents qui notent » n'est pas dans ce que le moteur donne
+déjà.** La vision le range là en renvoyant aux écritures parallèles « en
+cours ». Elles ne le sont pas. Tant qu'elles ne le sont pas, deux agents qui
+notent en même temps ne sont pas un cas soutenu.
+
+**f. Et un désaccord avec moi-même, pour mémoire.** J'avais écrit que la mise
+de côté n'existait pas. Elle existe depuis le 3 octobre, avec plus que ce que
+la vision promettait — les vecteurs sont gardés et rendus sans réembarquement.
+J'avais vérifié sur une branche antérieure et conclu une absence d'un endroit
+où elle n'était pas encore. La règle que j'en retire, et qui vaut pour tout ce
+document : **avant d'annoncer qu'une chose manque, vérifier à la source la plus
+récente.**
+
+---
+
+## 7. Les sujets abstraits
+
+Demande de Lucie : une note sur une stratégie, un principe, une préférence, qui
+n'a **aucun** fichier ni entité où s'accrocher.
+
+### 7.1 Le sujet est une entité de rendez-vous — mais pas la config de `Symbol`
+
+La piste est juste et le précédent est le bon : `Symbol` est le point de
+rendez-vous des noms, et c'est exactement pour permettre à n'importe quel scope
+de viser une cible que la relation ne connaît pas encore.
+
+**Mais sa configuration ne se copie pas.** `Symbol` est `BM25` et
+`chunked: false` parce qu'un nom de vingt caractères n'a rien à gagner d'un
+vecteur — et le défaut `HYBRID` lui avait fait calculer 3 275 embarquements que
+personne n'avait voulus. Un sujet, lui, porte une **description** : il a donc
+quelque chose à embarquer, donc il lui faut des chunks, car une entité qui
+déclare un signal vecteur **sans** chunks est refusée à la déclaration.
+
+`Subject` est donc une petite config à la `Memory`, pas à la `Symbol` :
+`name` en titre cherché par mots, `about` en contenu embarqué, `at` et `state`.
+Et `Subject` déclare `anchorable: true` : l'ancre d'une note abstraite est
+alors **une ancre comme les autres**. C'est le test que le mécanisme de §1.2
+est vraiment générique — s'il fallait un cas particulier pour les sujets, il ne
+le serait pas.
+
+`RELATES_TO: Subject → Subject` et les ancres vers du concret viennent plus
+tard sans migration : `register_relation_with` fait un `ALTER` additif.
+
+### 7.2 Le bordel des étiquettes : le même protocole, pas un second
+
+Un sujet se choisit parmi les proches à l'écriture — c'est-à-dire **le
+protocole de §2.2 avec un autre critère**. Je ne propose pas un second
+dispositif anti-doublon : la force de l'idée de Lucie est que c'est la même
+décision. Un seul nœud, un seul protocole, deux critères.
+
+### 7.3 Ce qui fait vieillir une note sans ancre concrète
+
+- **La date**, déjà là.
+- **Une note plus récente sur le même sujet qui la contredit** — mais
+  « contredit » demande la détection, la pièce la plus dure du produit. Un
+  substitut mécanique, disponible tout de suite : *sur le même sujet, même
+  `kind`, même portée, une note plus récente fait passer l'ancienne en
+  `to_review`* — pas en `superseded`, puisqu'on n'a rien prouvé. Aucun modèle,
+  et l'erreur penche vers « regarde ça » plutôt que « j'ai tranché ».
+
+### 7.4 Des sujets peuvent-ils émerger ?
+
+Oui, et le moteur a la pièce : des grappes de notes proches. **Mais je ne les
+nommerais pas automatiquement.** Une grappe sans nom est une grappe, pas un
+sujet ; le jardinier **propose** un nom, quelqu'un le valide. C'est encore
+« proposer, ne pas fusionner ».
+
+### 7.5 Le nœud de décision générique
+
+**La distinction qui décide de tout : un reranker donne un ordre, pas un
+verdict.** Il note des paires (question, candidat), donc il répond très bien à
+« lequel est le plus proche » et **pas du tout** à « est-ce la même chose ». Or
+`même / complète / contredit / neuve` est une classification. Confondre les
+deux est le piège de ce genre de nœud.
+
+Donc **deux étages** — et c'est ce qui permet de livrer utile tout de suite :
+
+| Étage | Ce qu'il fait | Ce qu'on a |
+|---|---|---|
+| 1. classement | ordonner les candidats par proximité au critère | le trait `Reranker`, son mock, trois rerankers burn, et `RerankNode` déjà dans le dataflow |
+| 2. verdict | un choix dans une liste fermée, avec un score | **rien** : c'est l'étage à brancher |
+
+L'étage 1 existe **et il est déjà un nœud**. Le nœud de décision peut donc
+naître avec un étage 2 réglé sur « demander toujours » — le défaut sûr — et
+gagner son modèle ensuite sans que la forme bouge.
+
+**Ce que le nœud exige du modèle.** Je ne choisis pas le modèle ; je dis les
+conditions :
+
+1. **Une liste fermée, tenue hors de sa bonne volonté** : décodage contraint,
+   lecture des logits des choix, ou un schéma d'énumération côté API. Jamais du
+   texte libre analysé après coup. Le moteur a déjà la forme —
+   `Choices::Fixed` devient un `enum` dans le schéma JSON, et une valeur hors
+   liste est refusée **avec la liste**.
+2. **Un score comparable à critère fixe.** C'est la condition dure : deux
+   seuils ne veulent rien dire si le score n'est pas comparable d'un appel à
+   l'autre. Les seuils sont donc **par critère**, jamais globaux.
+3. **L'abstention comme sortie de première classe**, pas comme un score bas.
+   Un modèle qui sait dire « je ne sais pas » vaut mieux qu'un seuil sur une
+   assurance. S'il ne sait pas s'abstenir, la zone incertaine *est* son
+   abstention.
+4. **Déterminisme** : même entrée, même sortie, sinon les mesures du banc ne
+   veulent rien dire.
+5. **Une passe**, plusieurs langues, et une latence qui tient dans le temps
+   d'une écriture — pas dans celui d'une recherche.
+
+**Les trois zones, et leur asymétrie assumée.** Les coûts ne sont pas
+symétriques, donc les zones ne doivent pas l'être :
+
+- **fusionner** est difficilement réversible → zone haute seulement ;
+- **créer** est bon marché et réparable → le jardinier fusionnera ;
+- donc **la zone incertaine se résout en « créer »**, et la question remonte
+  **sans bloquer** : les outils asynchrones et la pause existent depuis août,
+  donc « la question remonte à la personne » est une poignée résolue plus tard,
+  pas un agent figé.
+
+Jamais de fusion silencieuse à faible confiance : c'est la demande de Lucie, et
+la forme ci-dessus la rend **structurelle** au lieu de la confier à un réglage
+qu'on peut desserrer.
+
+**Les mesures propres au nœud**, à part des cinq de §4.2 : sujets doublonnés
+créés, sujets fusionnés à tort, **taux d'abstention**, et l'accord avec un
+jugement humain sur un échantillon.
+
+Et une conséquence à dire : **« fusionnés à tort » n'est mesurable que contre
+une vérité.** Le banc scripté de §4 la donne gratuitement — dans un scénario
+écrit, on sait lesquelles paires sont la même chose. Sans lui, cette mesure
+n'existe pas ; c'est une raison de plus de l'écrire avant le reste.
+
+**Le choix du modèle reste ouvert.** Des alternatives en poids ouverts m'ont
+été signalées ; elles ne sont **pas vérifiées** et ce n'est pas à cette
+proposition de les retenir. La session optimiseur vérifie dépôts, licences et
+architectures, puis mesure deux candidats sur des paires de sujets. Les cinq
+conditions ci-dessus sont ce que son tableau doit permettre de trancher — en
+particulier la deuxième, qui est celle qu'un tableau de performances ne montre
+jamais.
+
+---
+
+## 8. Ce qui attend un choix de Lucie
+
+Les trois de la vision — premier usage visé, qui écrit sans confirmation, ce
+que la personne voit — et un quatrième que cette proposition ajoute :
+
+4. **Que fait la zone incertaine du nœud de décision.** Créer et demander
+   après (ce que je propose) : aucun agent n'est bloqué, des doublons existent
+   et le jardinier les traite. Ou demander avant et attendre : aucun doublon,
+   l'agent s'arrête. C'est un choix de produit, pas de technique.
