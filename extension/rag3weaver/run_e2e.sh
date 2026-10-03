@@ -255,7 +255,10 @@ fi
 # qui ressemble à un total complet (25 août 2026 : « 89 passed » pour 17
 # suites sur 28).
 CARGO_ARGS+=(--no-fail-fast)
-CARGO_ARGS+=(-- --ignored --nocapture)
+# **Tous les tests de la suite**, ignorés ou non : `--ignored` seul écartait
+# ceux sans `#[ignore]`, et une suite qui n'en a pas rendait « 0 passed »
+# sans un mot (`usages_rendu`, 3 octobre 2026).
+CARGO_ARGS+=(-- --include-ignored --nocapture)
 
 if [ -n "$TEST_FILTER" ]; then
   CARGO_ARGS+=("$TEST_FILTER")
@@ -268,6 +271,26 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 # dans un même processus dépassent les 128 TiB adressables et `in_memory()`
 # échoue au hasard. Le script ne force rien : c'est le défaut de la
 # bibliothèque qui est testé ici. RAG3DB_MAX_DB_SIZE reste surchargeable.
+
+# **Zéro test n'est pas une réussite** — dans les deux modes. Sans filtre,
+# chaque suite demandée doit jouer au moins un test ; avec un filtre, c'est la
+# passe entière (un filtre qui ne désigne rien est une faute de frappe, pas
+# un succès). Rend 1 et le dit si la règle est enfreinte.
+suites_vides() {
+  local journal="$1" vides total
+  vides=$(grep -c '^test result: .* 0 passed; 0 failed;' "$journal" || true)
+  total=0
+  for n in $(grep -oP '^test result: .* \K\d+(?= passed)' "$journal"); do total=$((total + n)); done
+  if [ -z "$TEST_FILTER" ] && [ "${vides:-0}" -gt 0 ]; then
+    echo "✗ ${vides} suite(s) n'ont joué aucun test : feature manquante, ou fichier sans test ?"
+    return 1
+  fi
+  if [ -n "$TEST_FILTER" ] && [ "${total:-0}" -eq 0 ]; then
+    echo "✗ le filtre « $TEST_FILTER » n'a désigné aucun test"
+    return 1
+  fi
+  return 0
+}
 
 echo "▸ Running: cargo test ${CARGO_ARGS[*]}"
 
@@ -451,6 +474,10 @@ if [ "$SUMMARY" = true ]; then
     say "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
+  if ! suites_vides "$TMPLOG" > /dev/null; then
+    say "  %s\n" "$(suites_vides "$TMPLOG")"
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
   say "═══════════════════════════════════════════════\n"
 
   # **Ce que la passe a coûté à la machine.** Un total de tests verts ne dit
@@ -471,6 +498,9 @@ else
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
   echo ""
+  if ! suites_vides "$E2E_LOG"; then
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
   if [ -n "$CHARGE_PID" ]; then
     kill "$CHARGE_PID" 2>/dev/null || true
     CHARGE_PID=""
