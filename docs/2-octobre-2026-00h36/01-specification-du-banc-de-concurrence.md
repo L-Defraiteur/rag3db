@@ -154,9 +154,17 @@ Le niveau 2 voit ce que Cypher ne voit pas : une relation pendante n'apparaît p
 - **Après une erreur dans une transaction explicite, le moteur annule la transaction
   et repasse en auto-commit** : l'instruction suivante est validée seule. Le banc
   n'envoie donc plus rien après un échec (`Worker::run`). C'est ce défaut du banc qui
-  faisait monter la somme de C4 à l'étape 2 ; C4 est vert. Le comportement du moteur
-  est un écart avec PostgreSQL, qui refuse toute instruction jusqu'au ROLLBACK. Il
-  est signalé, et il n'est pas érigé en rouge sans décision.
+  faisait monter la somme de C4 à l'étape 2 ; C4 est vert. Côté moteur, c'est un
+  défaut : PostgreSQL refuse toute instruction jusqu'au ROLLBACK, Neo4j marque la
+  transaction comme échouée, et le principe du projet est de faire comme eux
+  (orchestration, 3 octobre). D'où le rouge
+  `MinimalReproduction.FailedTransactionRefusesFurtherStatements` : après l'erreur,
+  toute instruction doit être refusée par une erreur nommée jusqu'au ROLLBACK, et rien
+  de ce qui suit l'erreur ne doit être validé.
+- **Le dossier temporaire des bases** : le nom d'un test paramétré contient des « / »,
+  et les bases passent donc par des répertoires intermédiaires partagés par tous les
+  processus de test. Le banc ne les supprime plus : le faire quand ils étaient vides
+  a probablement fait échouer une passe parallèle (déduit du code, non reproduit).
 - **C7** : cinq manches par test. Sur vingt passes, il est rouge 18/20 à chaud, 19/20
   après réouverture et 15/20 après arrêt brutal : ce n'est pas unanime. Il porte le
   label `concurrence-probabiliste` (`probabilistic.txt`) et la comparaison l'ignore.
@@ -182,3 +190,36 @@ Le niveau 2 voit ce que Cypher ne voit pas : une relation pendante n'apparaît p
 
   Constat : le drapeau d'interruption n'est pas regardé pendant l'évaluation d'un
   `range()` géant. Une attente de verrou devra le regarder.
+
+## 9. Étape 3 : ThreadSanitizer (3 octobre)
+
+**Construire et lancer.** Le build est séparé, dans son propre répertoire, et ne
+porte aucune suppression pour le moteur :
+
+```bash
+cmake -S . -B build/tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTS=TRUE \
+  -DBUILD_SHELL=FALSE -DBUILD_BENCHMARK=OFF -DENABLE_THREAD_SANITIZER=TRUE
+cmake --build build/tsan -j 8 --target concurrence_test          # 314 s, moteur compris
+CONCURRENCE_ITERATIONS=20 TSAN_OPTIONS="halt_on_error=0 log_path=<dossier>/tsan" \
+  ./build/tsan/test/transaction/concurrence/concurrence_test \
+  --gtest_filter='*Thread_Hot*:*Thread_Reopen*:MinimalReproduction.*:IntegrityCheckerWitness.*:HarnessMechanics.EventsKeepTheRealOrder:HarnessMechanics.GuardInterrupts*'
+```
+
+Cette passe dure 38 s. Le lanceur Fil tourne seul : les variantes Crash et Processus
+reposent sur `fork`, et le banc ne les fait pas tourner sous TSan.
+
+**Résultat : 24 avertissements, sur neuf lignes du moteur.** Un rapport par ligne,
+avec les deux côtés de l'accès, est dans `02-threadsanitizer-premiere-passe.txt`.
+Chaque cas a été relancé seul pour savoir lequel déclenche quoi :
+
+| cas | courses |
+|---|---|
+| C5 double suppression | `VectorVersionInfo::delete_` (`version_info.cpp:98, 108, 112`), deux suppressions sans verrou — la marche A5. Sous TSan : 9 passes sur 10 |
+| C6 suppression contre mise à jour | `VectorVersionInfo::isDeleted` (`version_info.cpp:194, 204`), lu par la mise à jour pendant que la suppression écrit. Vue une fois, puis 0 sur 10 |
+| C7 mélange | tout ce qui précède, plus `CSRNodeGroup::append` (`csr_node_group.cpp:357`), `VectorVersionInfo::append` (`:75`), `delete_` (`:119`), `isSelected` (`:149`) et `isInserted` (`:231`) |
+| non attribué | `VectorVersionInfo::setDeleteCommitTS` (`version_info.cpp:143`, l'estampille de la suppression posée au commit, contre une lecture) : vu dans la passe complète, dans aucun relancement cas par cas |
+| C0 à C4, C8, reproductions minimales, témoin, mécanique | aucun avertissement |
+
+TSan n'est pas encore branché dans ctest. Un rouge TSan n'est pas déterministe non
+plus : il ne voit une course que si les deux accès ont effectivement lieu sans relation
+d'ordre. Le brancher demande de décider quels cas y tournent, et ce qu'on y compare.

@@ -34,3 +34,6 @@ Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Crash
 Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash
 MinimalReproduction.C6_DeleteCommitsFirstSingleThread
 MinimalReproduction.C6_UpdateCommitsFirstSingleThread
+# La transaction en échec : après une instruction en erreur dans BEGIN … COMMIT, les
+# suivantes sont validées une à une en auto-commit (PostgreSQL et Neo4j les refusent).
+MinimalReproduction.FailedTransactionRefusesFurtherStatements

@@ -3,6 +3,8 @@
 // qu'un défaut du banc ne puisse pas en être la cause. Chacune imprime sa trace brute.
 //
 // Ce qu'elles ont tranché le 3 octobre :
+// - la transaction en échec (FailedTransactionRefusesFurtherStatements) : après une
+//   erreur, le moteur repasse en auto-commit ; défaut du moteur (rouge).
 // - C6 est un défaut du moteur : dans un seul fil, sans concurrence, la suppression et
 //   la mise à jour d'une même ligne valident toutes deux (rouge).
 // - C4 était un défaut du banc : sans le harnais, aucune configuration ne dérive
@@ -293,6 +295,39 @@ TEST_F(MinimalReproduction, C6_DeleteCommitsFirstSingleThread) {
 
 TEST_F(MinimalReproduction, C6_UpdateCommitsFirstSingleThread) {
     deleteAndUpdateSingleThread(*this, *database, false);
+}
+
+// La transaction en échec. Constaté en démontant C4 (3 octobre) : après une instruction
+// en erreur dans BEGIN … COMMIT, le moteur annule la transaction et repasse en
+// auto-commit ; l'instruction suivante est validée seule, et le ROLLBACK du client
+// répond « No active transaction ». Un client qui enchaîne sans lire chaque erreur perd
+// l'atomicité en silence. PostgreSQL refuse toute instruction jusqu'au ROLLBACK
+// (« current transaction is aborted ») ; Neo4j marque la transaction comme échouée.
+// Principe du projet (Lucie, 2 octobre) : faire comme eux — c'est donc un défaut.
+// Invariant : après l'erreur, toute instruction est refusée par une erreur nommée
+// jusqu'au ROLLBACK, et rien de ce qui suit l'erreur n'est validé.
+TEST_F(MinimalReproduction, FailedTransactionRefusesFurtherStatements) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    mustRun("CREATE (:Item {id: 1, v: 0});");
+    const auto run = [&](const char* query) {
+        auto result = conn->query(query);
+        std::cerr << "  " << query << " -> "
+                  << (result->isSuccess() ? "ok" : "ERROR " + result->getErrorMessage()) << "\n";
+        return result->isSuccess();
+    };
+    EXPECT_TRUE(run("BEGIN TRANSACTION;"));
+    EXPECT_FALSE(run("CREATE (:Item {id: 1, v: 9});")) << "the duplicated key must fail";
+    EXPECT_FALSE(run("CREATE (:Item {id: 2, v: 0});"))
+        << "a statement after the error must be refused until ROLLBACK";
+    EXPECT_FALSE(run("MATCH (n:Item {id: 1}) SET n.v = 5;"))
+        << "a statement after the error must be refused until ROLLBACK";
+    EXPECT_TRUE(run("ROLLBACK;")) << "ROLLBACK must close the failed transaction";
+    auto rows = conn->query("MATCH (n:Item) RETURN n.id, n.v ORDER BY n.id;");
+    std::cerr << "  rows after: " << rows->toString();
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 1)
+        << "nothing after the error may be committed";
+    EXPECT_EQ(queryInt("MATCH (n:Item {id: 1}) RETURN n.v;"), 0)
+        << "nothing after the error may be committed";
 }
 
 } // namespace
