@@ -530,7 +530,14 @@ fn synchroniser(
         Some(root) => (root.to_string(), false),
         None => ("/".to_string(), true),
     };
+    // `RAG3WEAVER_INGEST_PROFILE` : ce que la synchronisation fait autour de
+    // l'ingestion — lister, lire, analyser, marquer, finir — n'était dans
+    // aucune ligne de profil (180 s sur 643, mesuré le 3 octobre 2026). Des
+    // temps cumulés, publiés à la fin ; aucun changement de comportement.
+    let mut profil = SyncProfile::default();
+    let t = std::time::Instant::now();
     let listed = source.list()?;
+    profil.add("lister la source", t);
     // Le tri au nom seul, comme `analyze_source` : ne pas lire un gros
     // fichier binaire pour l'écarter ensuite.
     let retenus: Vec<String> = listed
@@ -546,24 +553,31 @@ fn synchroniser(
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
         marquer_lus(&report.source, paquet);
+        let t = std::time::Instant::now();
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
             if let Some(content) = source.read(path)? {
                 sources.push((path.clone(), content));
             }
         }
+        profil.add("lire les fichiers", t);
+        let t = std::time::Instant::now();
         let mut analysis = crate::code::analyze_with(&root, sources, &cursor);
+        profil.add("analyser (codeparsers)", t);
         for f in &mut analysis.files {
             f.cursor = cursor.clone();
             if virtual_source {
                 f.absolute_path.clear();
             }
         }
+        let t = std::time::Instant::now();
         let ingere = match mode {
             RelationsMode::PerBatch => catalog.ingest_code_jusqu_a(&analysis, options.exige),
             RelationsMode::Bulk => catalog.ingest_code_differe(&analysis, options.exige, &mut noms_differes),
         }
         .map_err(|e| e.to_string())?;
+        profil.add("ingérer le paquet (détail : [ingest-profile])", t);
+        let t = std::time::Instant::now();
         // Ce que le paquet porte, marqué de la session : vu, pas seulement
         // écrit pendant elle.
         let uuids_scopes = analysis
@@ -578,8 +592,11 @@ fn synchroniser(
             .map(|f| catalog.entity_uuid(FILE, &f.data()))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
+        profil.add("calculer les identifiants du paquet", t);
+        let t = std::time::Instant::now();
         catalog.mark_snapshot(SCOPE, grain, s_scopes, &uuids_scopes).map_err(|e| e.to_string())?;
         catalog.mark_snapshot(FILE, grain, s_files, &uuids_files).map_err(|e| e.to_string())?;
+        profil.add("marquer la session (mark_snapshot)", t);
         report.files_ingested += analysis.files.len();
         report.scopes_written += ingere.scopes;
         report.failed += ingere.failed;
@@ -588,7 +605,9 @@ fn synchroniser(
         report.relations += ingere.relations;
         if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > BULK_QUEUE_LIMIT {
             // La mémoire bornée : la file est posée par COPY sans attendre.
+            let t = std::time::Instant::now();
             let pose = catalog.drain_jusqu_a(options.exige);
+            profil.add("vider la file des liens en route", t);
             report.failed += pose.failed;
         }
         avancement.files_done += paquet.len();
@@ -607,16 +626,21 @@ fn synchroniser(
         let fin = catalog.finir_les_relations_differees(&noms_differes, options.exige).map_err(|e| e.to_string())?;
         report.failed += fin.failed;
         report.relations_bulk_ms = debut.elapsed().as_millis();
+        profil.add("charger les relations à la fin", debut);
         avancement.relations_pending = 0;
     }
     let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
+    let t = std::time::Instant::now();
     let plan_scopes = catalog.plan_snapshot_finish(SCOPE, grain, s_scopes, garde).map_err(|e| e.to_string())?;
     let plan_files = catalog.plan_snapshot_finish(FILE, grain, s_files, garde).map_err(|e| e.to_string())?;
+    profil.add("planifier la fin (ce qui a disparu)", t);
     if options.plan_only {
         report.scopes = plan_scopes;
         report.files = plan_files;
+        profil.publish();
         return Ok((report, avancement));
     }
+    let t = std::time::Instant::now();
     // Les scopes d'abord : un fichier supprimé emporte ses `DEFINED_IN`, ses
     // scopes sont déjà partis.
     let noms_retires = noms_des_scopes(catalog, &plan_scopes.removed)?;
@@ -626,7 +650,35 @@ fn synchroniser(
     // mentionneurs, qu'aucun paquet ne repasse, gagnent leur arête.
     let resolu = catalog.resoudre_les_symboles(&noms_retires, options.exige).map_err(|e| e.to_string())?;
     report.relations += resolu.linked_across_batches;
+    profil.add("appliquer la fin et résoudre les symboles", t);
+    profil.publish();
     Ok((report, avancement))
+}
+
+/// Les temps de la synchronisation hors ingestion, cumulés sur toute la
+/// source et publiés une fois (`RAG3WEAVER_INGEST_PROFILE`).
+#[derive(Default)]
+struct SyncProfile {
+    stages: Vec<(&'static str, std::time::Duration)>,
+}
+
+impl SyncProfile {
+    fn add(&mut self, stage: &'static str, since: std::time::Instant) {
+        let took = since.elapsed();
+        match self.stages.iter_mut().find(|(s, _)| *s == stage) {
+            Some((_, total)) => *total += took,
+            None => self.stages.push((stage, took)),
+        }
+    }
+
+    fn publish(&self) {
+        if std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_none() {
+            return;
+        }
+        for (stage, total) in &self.stages {
+            eprintln!("[sync-profile] {:>7} ms  {stage}", total.as_millis());
+        }
+    }
 }
 
 /// Les noms des scopes `uuids`, relus avant leur retrait.
