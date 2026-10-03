@@ -147,6 +147,29 @@ pub mod burn {
                 Self::Distant(e) => e.name(),
             }
         }
+        /// **Relayés, les trois.** Ils ne l'étaient pas : un `Bge::Distant`
+        /// passait pour un embarqueur local, et le client soufflait — puis
+        /// cadençait ses rafales — pour une carte qui n'était pas la sienne.
+        /// Mesuré le 3 octobre 2026 : `e2e_charge_ingestion` par un service
+        /// distant, 1 019 s au lieu de quelques minutes.
+        fn budget_conseille(&self) -> Option<(usize, usize)> {
+            match self {
+                Self::Local(e) => e.budget_conseille(),
+                Self::Distant(e) => e.budget_conseille(),
+            }
+        }
+        fn troncatures(&self) -> Option<(usize, usize)> {
+            match self {
+                Self::Local(e) => e.troncatures(),
+                Self::Distant(e) => e.troncatures(),
+            }
+        }
+        fn distant(&self) -> bool {
+            match self {
+                Self::Local(e) => Embedder::distant(e),
+                Self::Distant(e) => Embedder::distant(e),
+            }
+        }
     }
 
     impl DualEmbedder for Bge {
@@ -165,6 +188,12 @@ pub mod burn {
                 Self::Distant(e) => DualEmbedder::dim(e),
             }
         }
+        fn distant(&self) -> bool {
+            match self {
+                Self::Local(e) => DualEmbedder::distant(e),
+                Self::Distant(e) => DualEmbedder::distant(e),
+            }
+        }
     }
 
     impl SparseEmbedder for Bge {
@@ -172,6 +201,12 @@ pub mod burn {
             match self {
                 Self::Local(e) => e.embed_sparse(texts),
                 Self::Distant(e) => e.embed_sparse(texts),
+            }
+        }
+        fn distant(&self) -> bool {
+            match self {
+                Self::Local(e) => SparseEmbedder::distant(e),
+                Self::Distant(e) => SparseEmbedder::distant(e),
             }
         }
     }
