@@ -1,5 +1,6 @@
 #pragma once
 
+#include <shared_mutex>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -163,7 +164,9 @@ public:
     void resetNumRowsFromChunks();
     void truncate(common::offset_t numRows);
     void setVersionInfo(std::unique_ptr<VersionInfo> versionInfo) {
+        std::unique_lock lck{versionInfoMtx};
         this->versionInfo = std::move(versionInfo);
+        mayHaveVersionInfo.store(this->versionInfo != nullptr, std::memory_order_release);
     }
     void resetVersionAndUpdateInfo();
 
@@ -215,7 +218,13 @@ public:
         common::row_idx_t startRow, common::length_t numRowsToCheck) const;
     common::row_idx_t getNumDeletions(const transaction::Transaction* transaction,
         common::row_idx_t startRow, common::length_t numRowsToCheck) const;
-    bool hasVersionInfo() const { return versionInfo != nullptr; }
+    bool hasVersionInfo() const {
+        if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+            return false;
+        }
+        std::shared_lock lck{versionInfoMtx};
+        return versionInfo != nullptr;
+    }
 
     static std::unique_ptr<ChunkedNodeGroup> flushEmpty(MemoryManager& mm,
         const std::vector<common::LogicalType>& columnTypes, bool enableCompression,
@@ -253,7 +262,22 @@ protected:
     uint64_t capacity;
     std::atomic<common::row_idx_t> numRows;
     std::vector<std::unique_ptr<ColumnChunk>> chunks;
+    // The version info is created on the first deletion or transactional insertion, freed when
+    // it is no longer needed, and allocates its arrays lazily. It is read by every scan and lookup
+    // of the rows, from any connection, while a writer does any of that: every access goes
+    // through this mutex, shared to read, exclusive to write, create or free. Without it a reader
+    // could follow a pointer the writer was replacing, and the process crashed (seen in
+    // VersionInfo::isSelected and VersionInfo::isDeleted).
+    mutable std::shared_mutex versionInfoMtx;
     std::unique_ptr<VersionInfo> versionInfo;
+    // False as long as no version info was ever created: a reader then skips the mutex. Most
+    // rows are in that case — everything a checkpoint has written and nothing has touched since.
+    // Raised before the version info is created, and only lowered when it is freed, both under
+    // the mutex: a reader that sees false sees the rows as they were before any change in
+    // progress, which is what its snapshot is entitled to.
+    std::atomic<bool> mayHaveVersionInfo{false};
+    // Creates the version info if needed. The caller holds versionInfoMtx exclusively.
+    VersionInfo& getOrCreateVersionInfoNoLock();
 };
 
 } // namespace storage

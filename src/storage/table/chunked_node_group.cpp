@@ -89,6 +89,7 @@ ChunkedNodeGroup::ChunkedNodeGroup(MemoryManager& mm, ChunkedNodeGroup& base,
     : format{base.format}, residencyState{base.residencyState}, startRowIdx{base.startRowIdx},
       capacity{base.capacity}, numRows{base.numRows.load()},
       versionInfo(std::move(base.versionInfo)) {
+    mayHaveVersionInfo.store(versionInfo != nullptr, std::memory_order_release);
     bool enableCompression = false;
     KU_ASSERT(!baseColumnIDs.empty());
 
@@ -123,8 +124,10 @@ void ChunkedNodeGroup::resetNumRowsFromChunks() {
 }
 
 void ChunkedNodeGroup::resetVersionAndUpdateInfo() {
-    if (versionInfo) {
+    {
+        std::unique_lock lck{versionInfoMtx};
         versionInfo.reset();
+        mayHaveVersionInfo.store(false, std::memory_order_release);
     }
     for (const auto& chunk : chunks) {
         chunk->resetUpdateInfo();
@@ -162,10 +165,8 @@ uint64_t ChunkedNodeGroup::append(const Transaction* transaction,
         handleAppendException(chunks, numRows);
     }
     if (transaction->shouldAppendToUndoBuffer()) {
-        if (!versionInfo) {
-            versionInfo = std::make_unique<VersionInfo>();
-        }
-        versionInfo->append(transaction->getID(), numRows, numRowsToAppendInChunk);
+        std::unique_lock lck{versionInfoMtx};
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numRowsToAppendInChunk);
     }
     numRows += numRowsToAppendInChunk;
     return numRowsToAppendInChunk;
@@ -211,10 +212,8 @@ offset_t ChunkedNodeGroup::append(const Transaction* transaction,
         handleAppendException(chunks, numRows);
     }
     if (transaction->getID() != Transaction::DUMMY_TRANSACTION_ID) {
-        if (!versionInfo) {
-            versionInfo = std::make_unique<VersionInfo>();
-        }
-        versionInfo->append(transaction->getID(), numRows, numToAppendInChunkedGroup);
+        std::unique_lock lck{versionInfoMtx};
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numToAppendInChunkedGroup);
     }
     numRows += numToAppendInChunkedGroup;
     return numToAppendInChunkedGroup;
@@ -236,10 +235,8 @@ offset_t ChunkedNodeGroup::append(const Transaction* transaction,
         handleAppendException(chunks, numRows);
     }
     if (transaction->shouldAppendToUndoBuffer()) {
-        if (!versionInfo) {
-            versionInfo = std::make_unique<VersionInfo>();
-        }
-        versionInfo->append(transaction->getID(), numRows, numToAppendInChunkedGroup);
+        std::unique_lock lck{versionInfoMtx};
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numToAppendInChunkedGroup);
     }
     numRows += numToAppendInChunkedGroup;
     return numToAppendInChunkedGroup;
@@ -300,11 +297,16 @@ void ChunkedNodeGroup::scan(const Transaction* transaction, const TableScanState
         return;
     }
 
-    if (versionInfo) {
-        versionInfo->getSelVectorToScan(transaction->getStartTS(), transaction->getID(),
-            anchorSelVector, rowIdxInGroup, numRowsToScan);
-    } else {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
         anchorSelVector.setToUnfiltered(numRowsToScan);
+    } else {
+        std::shared_lock lck{versionInfoMtx};
+        if (versionInfo) {
+            versionInfo->getSelVectorToScan(transaction->getStartTS(), transaction->getID(),
+                anchorSelVector, rowIdxInGroup, numRowsToScan);
+        } else {
+            anchorSelVector.setToUnfiltered(numRowsToScan);
+        }
     }
 
     if (anchorSelVector.getSelSize() > 0) {
@@ -346,7 +348,19 @@ template void ChunkedNodeGroup::scanCommitted<ResidencyState::ON_DISK>(Transacti
 template void ChunkedNodeGroup::scanCommitted<ResidencyState::IN_MEMORY>(Transaction* transaction,
     TableScanState& scanState, InMemChunkedNodeGroup& output) const;
 
+VersionInfo& ChunkedNodeGroup::getOrCreateVersionInfoNoLock() {
+    if (!versionInfo) {
+        mayHaveVersionInfo.store(true, std::memory_order_release);
+        versionInfo = std::make_unique<VersionInfo>();
+    }
+    return *versionInfo;
+}
+
 bool ChunkedNodeGroup::hasDeletions(const Transaction* transaction) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::shared_lock lck{versionInfoMtx};
     return versionInfo && versionInfo->hasDeletions(transaction);
 }
 
@@ -358,9 +372,14 @@ row_idx_t ChunkedNodeGroup::getNumUpdatedRows(const Transaction* transaction,
 bool ChunkedNodeGroup::lookup(const Transaction* transaction, const TableScanState& state,
     const NodeGroupScanState& nodeGroupScanState, offset_t rowIdxInChunk, sel_t posInOutput) const {
     KU_ASSERT(rowIdxInChunk + 1 <= numRows);
-    const bool hasValuesToRead = versionInfo ? versionInfo->isSelected(transaction->getStartTS(),
-                                                   transaction->getID(), rowIdxInChunk) :
-                                               true;
+    bool hasValuesToRead = true;
+    if (mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        std::shared_lock lck{versionInfoMtx};
+        if (versionInfo) {
+            hasValuesToRead = versionInfo->isSelected(transaction->getStartTS(),
+                transaction->getID(), rowIdxInChunk);
+        }
+    }
     if (!hasValuesToRead) {
         return false;
     }
@@ -390,10 +409,8 @@ void ChunkedNodeGroup::update(const Transaction* transaction, row_idx_t rowIdxIn
 }
 
 bool ChunkedNodeGroup::delete_(const Transaction* transaction, row_idx_t rowIdxInChunk) {
-    if (!versionInfo) {
-        versionInfo = std::make_unique<VersionInfo>();
-    }
-    return versionInfo->delete_(transaction->getID(), rowIdxInChunk);
+    std::unique_lock lck{versionInfoMtx};
+    return getOrCreateVersionInfoNoLock().delete_(transaction->getID(), rowIdxInChunk);
 }
 
 void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& addColumnState,
@@ -411,6 +428,10 @@ void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& a
 }
 
 bool ChunkedNodeGroup::isDeleted(const Transaction* transaction, row_idx_t rowInChunk) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::shared_lock lck{versionInfoMtx};
     if (!versionInfo) {
         return false;
     }
@@ -418,6 +439,10 @@ bool ChunkedNodeGroup::isDeleted(const Transaction* transaction, row_idx_t rowIn
 }
 
 bool ChunkedNodeGroup::isInserted(const Transaction* transaction, row_idx_t rowInChunk) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return rowInChunk < getNumRows();
+    }
+    std::shared_lock lck{versionInfoMtx};
     if (!versionInfo) {
         return rowInChunk < getNumRows();
     }
@@ -431,6 +456,10 @@ bool ChunkedNodeGroup::hasAnyUpdates(const Transaction* transaction, column_id_t
 
 row_idx_t ChunkedNodeGroup::getNumDeletions(const Transaction* transaction, row_idx_t startRow,
     length_t numRowsToCheck) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    std::shared_lock lck{versionInfoMtx};
     if (versionInfo) {
         return versionInfo->getNumDeletions(transaction, startRow, numRowsToCheck);
     }
@@ -471,7 +500,7 @@ std::unique_ptr<ChunkedNodeGroup> InMemChunkedNodeGroup::flush(Transaction* tran
     }
     auto flushedChunkedGroup =
         std::make_unique<ChunkedNodeGroup>(std::move(flushedChunks), 0 /*startRowIdx*/);
-    flushedChunkedGroup->versionInfo = std::make_unique<VersionInfo>();
+    flushedChunkedGroup->setVersionInfo(std::make_unique<VersionInfo>());
     KU_ASSERT(flushedChunkedGroup->getNumRows() == numRows);
     flushedChunkedGroup->versionInfo->append(transaction->getID(), 0, numRows);
     return flushedChunkedGroup;
@@ -513,13 +542,16 @@ bool ChunkedNodeGroup::hasUpdates() const {
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
 void ChunkedNodeGroup::commitInsert(row_idx_t startRow, row_idx_t numRowsToCommit,
     transaction_t commitTS) {
+    std::unique_lock lck{versionInfoMtx};
     versionInfo->commitInsert(startRow, numRowsToCommit, commitTS);
 }
 
 void ChunkedNodeGroup::rollbackInsert(row_idx_t startRow, row_idx_t numRows_, transaction_t) {
+    std::unique_lock lck{versionInfoMtx};
     if (startRow == 0) {
         truncate(0);
         versionInfo.reset();
+        mayHaveVersionInfo.store(false, std::memory_order_release);
         return;
     }
     if (startRow >= numRows) {
@@ -533,11 +565,13 @@ void ChunkedNodeGroup::rollbackInsert(row_idx_t startRow, row_idx_t numRows_, tr
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
 void ChunkedNodeGroup::commitDelete(row_idx_t startRow, row_idx_t numRows_,
     transaction_t commitTS) {
+    std::unique_lock lck{versionInfoMtx};
     versionInfo->commitDelete(startRow, numRows_, commitTS);
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
 void ChunkedNodeGroup::rollbackDelete(row_idx_t startRow, row_idx_t numRows_, transaction_t) {
+    std::unique_lock lck{versionInfoMtx};
     versionInfo->rollbackDelete(startRow, numRows_);
 }
 
@@ -556,6 +590,7 @@ void ChunkedNodeGroup::serialize(Serializer& serializer) const {
     serializer.writeDebuggingInfo("startRowIdx");
     serializer.write(startRowIdx);
     serializer.writeDebuggingInfo("has_version_info");
+    std::shared_lock lck{versionInfoMtx};
     serializer.write<bool>(versionInfo != nullptr);
     if (versionInfo) {
         serializer.writeDebuggingInfo("version_info");
@@ -579,7 +614,7 @@ std::unique_ptr<ChunkedNodeGroup> ChunkedNodeGroup::deserialize(MemoryManager& m
     deSer.deserializeValue<bool>(hasVersions);
     if (hasVersions) {
         deSer.validateDebuggingInfo(key, "version_info");
-        chunkedGroup->versionInfo = VersionInfo::deserialize(deSer);
+        chunkedGroup->setVersionInfo(VersionInfo::deserialize(deSer));
     }
     return chunkedGroup;
 }
