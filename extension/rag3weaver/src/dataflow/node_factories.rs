@@ -53,6 +53,128 @@ named_factory!(
 
 // ─── Macro-generated factories (named_factory!) ─────────────────────────────
 
+/// Factory for FieldWeightNode (config: field, weights, default, default_weights).
+pub struct FieldWeightNodeFactory;
+
+impl NodeFactory for FieldWeightNodeFactory {
+    fn create(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+    ) -> Result<Box<dyn super::node::Node>, String> {
+        let mut node = super::field_weight::FieldWeightNode::new(name);
+        let field = config.get("field").and_then(|v| v.as_str());
+        let default = match config.get("default") {
+            Some(v) => v.as_f64().ok_or("FieldWeightNode: 'default' must be a number")?,
+            None => 1.0,
+        };
+        // Une table de poids : objet JSON {"valeur": w} ou chaîne "valeur:w,…",
+        // les mêmes deux formes que les poids de fusion.
+        let table = |v: &serde_json::Value, cle: &str| -> Result<std::collections::BTreeMap<String, f64>, String> {
+            let mut m = std::collections::BTreeMap::new();
+            match v {
+                serde_json::Value::Object(o) => {
+                    for (k, w) in o {
+                        m.insert(
+                            k.clone(),
+                            w.as_f64().ok_or_else(|| format!("FieldWeightNode: weight of '{k}' must be a number"))?,
+                        );
+                    }
+                }
+                serde_json::Value::String(s) => {
+                    for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+                        let (k, w) = part
+                            .split_once(':')
+                            .ok_or_else(|| format!("FieldWeightNode: {cle} entry '{part}' must be 'value:weight'"))?;
+                        m.insert(
+                            k.trim().to_string(),
+                            w.trim().parse().map_err(|_| format!("FieldWeightNode: weight of '{k}' must be a number"))?,
+                        );
+                    }
+                }
+                _ => return Err(format!("FieldWeightNode: '{cle}' must be an object or 'value:weight,…'")),
+            }
+            Ok(m)
+        };
+        if let Some(w) = config.get("weights") {
+            let field = field.ok_or("FieldWeightNode: 'weights' requires 'field'")?;
+            node = node.with_choice(crate::search::FieldWeight {
+                field: field.to_string(),
+                weights: table(w, "weights")?,
+                default,
+            });
+        }
+        if let Some(w) = config.get("default_weights") {
+            let field = field.ok_or("FieldWeightNode: 'default_weights' requires 'field'")?;
+            node = node.with_fallback(crate::search::FieldWeight {
+                field: field.to_string(),
+                weights: table(w, "default_weights")?,
+                default,
+            });
+        }
+        Ok(Box::new(node))
+    }
+
+    fn node_type(&self) -> &'static str {
+        "FieldWeightNode"
+    }
+
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "FieldWeightNode",
+            description: "Reweighs results by a field's value (a weight, never a filter); \
+                          'weights' is a graph CHOICE (beats the entity), 'default_weights' \
+                          a template DEFAULT (only when nobody declares)",
+            inputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: true },
+                PortDef { name: "query", port_type: PortType::Query, required: false },
+            ],
+            outputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: false },
+                PortDef { name: "meta", port_type: PortType::Meta, required: false },
+            ],
+            config_params: vec![
+                ConfigParam {
+                    name: "field",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "The result-data field whose value picks the weight",
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "weights",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Graph CHOICE: 'value:weight,…' (beats the entity's declaration)",
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "default_weights",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Template DEFAULT: 'value:weight,…' (applies only when nobody declares)",
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "default",
+                    param_type: ConfigParamType::Float,
+                    required: false,
+                    default: Some(serde_json::json!(1.0)),
+                    description: "Weight of a value missing from the table (1.0 = neutral)",
+                    choices: None,
+                    json_schema: None,
+                },
+            ],
+        }
+    }
+}
+
 named_factory!(
     InsertRecordNodeFactory,
     InsertRecordNode,
@@ -1274,6 +1396,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
+    registry.register(Box::new(FieldWeightNodeFactory));
     registry.register(Box::new(GroupFrameNodeFactory));
     // Trace : le consommateur du bus d'événements, en graphe.
     registry.register(Box::new(super::trace_nodes::EventSourceNodeFactory));
@@ -1327,7 +1450,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 39 + if cfg!(feature = "code") { 10 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 40 + if cfg!(feature = "code") { 10 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

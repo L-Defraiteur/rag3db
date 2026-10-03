@@ -426,12 +426,14 @@ fn the_agent_publishes_and_a_parallel_trace_graph_records() {
     assert_eq!(catalog.lock().unwrap().count(TRACE_ENTITY).unwrap(), n);
     // `search` **contient** le graphe de base depuis le 28 août 2026 : quatre
     // nœuds extérieurs (inner, fetch, compose, render), et le `SearchTool`
-    // qu'il contient est un run à lui seul — son début, sa fin, et ses neuf
-    // nœuds (source, bm25, vector, sparse, fuse, rerank, paginate, resolve,
-    // render ; `paginate` et `sparse` depuis le 6 septembre 2026), plus le
-    // nœud `frame` de l'étage `search` (la vue par parent, même jour). Seize
-    // en tout. Chaque appel au modèle est suivi de sa consommation (3).
-    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 16, "{n} événements tracés");
+    // qu'il contient est un run à lui seul — son début, sa fin, et ses dix
+    // nœuds (source, bm25, vector, sparse, fuse, weigh, rerank, paginate,
+    // resolve, render ; `paginate` et `sparse` depuis le 6 septembre 2026,
+    // `weigh` — la pondération par champ, neutre sans déclaration — depuis
+    // le 3 octobre), plus le nœud `frame` de l'étage `search` (la vue par
+    // parent). Dix-sept en tout. Chaque appel au modèle est suivi de sa
+    // consommation (3).
+    assert_eq!(n, 2 + 3 + 3 + 4 + 2 + 17, "{n} événements tracés");
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25),
@@ -735,7 +737,8 @@ fn a_reactor_traces_the_agent_from_its_own_thread() {
     // 25 depuis le 6 septembre 2026 : `PaginateNode` et `SparseSearchNode`
     // dans le graphe de base.
     // 26 depuis la vue par parent (`GroupFrameNode` dans `search`).
-    let expected = 26;
+    // 27 depuis `weigh` (la pondération par champ, 3 octobre 2026).
+    let expected = 27;
     let start = Instant::now();
     loop {
         let n = catalog.lock().unwrap().count(TRACE_ENTITY).unwrap();

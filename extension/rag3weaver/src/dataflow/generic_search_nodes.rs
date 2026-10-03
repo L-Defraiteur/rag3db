@@ -2433,6 +2433,7 @@ mod tests {
             default_fusion: fusion,
             has_source_refs: false,
             filter_indirection: None,
+            field_weights: vec![],
         }
     }
 

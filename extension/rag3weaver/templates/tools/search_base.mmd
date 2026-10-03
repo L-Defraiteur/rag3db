@@ -95,6 +95,7 @@ graph LR
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
     fuse["FuseResultsNode(default_weights='bm25:0.6,vector:0.4')"]
+    weigh["FieldWeightNode"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
     resolve["ResolveParentNode"]
@@ -104,6 +105,7 @@ graph LR
     source -->|query| vector
     source -->|query| sparse
     source -->|query| fuse
+    source -->|query| weigh
     source -->|query| rerank
     source -->|query| paginate
     source -->|query| resolve
@@ -112,11 +114,13 @@ graph LR
     bm25 -->|meta| render
     vector -->|meta| render
     sparse -->|meta| render
+    weigh -->|meta| render
     rerank -->|meta| render
     bm25 -->|results:bm25| fuse
     vector -->|results:vector| fuse
     sparse -->|results:sparse| fuse
-    fuse -->|results| rerank
+    fuse -->|results| weigh
+    weigh -->|results| rerank
     rerank -->|results| paginate
     paginate -->|results| resolve
     resolve -->|results| render

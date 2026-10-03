@@ -475,6 +475,12 @@ pub struct EntityConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fusion: Option<crate::search::FusionConfig>,
 
+    /// Pondération par valeur de champ, déclarée par l'entité (pas C du
+    /// 2 octobre 2026) : « les fichiers entiers pèsent moins » se dit ici,
+    /// et aucun graphe n'a à le savoir. Un poids, jamais un filtre.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub field_weights: Vec<crate::search::FieldWeight>,
+
     /// `Some(false)` : cette entité **n'a pas de chunks**. Elle est écrite,
     /// indexée en plein texte et cherchable, mais sans ligne dans
     /// `{Entity}_Chunk` ni lien `CHUNKED_FROM`.
@@ -665,6 +671,7 @@ impl Default for EntityConfig {
             checkpoint: None,
             derived: None,
             fusion: None,
+            field_weights: Vec::new(),
             content_kind: ContentKind::Document,
             source_lines: None,
         }

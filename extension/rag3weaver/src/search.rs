@@ -181,6 +181,28 @@ impl FusionConfig {
     }
 }
 
+/// **Pondération par valeur de champ** (pas C, 2 octobre 2026) : un poids,
+/// jamais un filtre — le score se multiplie, rien ne sort de la liste.
+/// Déclarée par l'entité (`EntityConfig.field_weights`), par l'appelant
+/// (`SearchOptions.field_weights`) ou par un graphe (`FieldWeightNode`),
+/// selon l'échelle : appelant > choix du graphe > entité > défaut du
+/// gabarit > neutre.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldWeight {
+    /// Le champ lu dans les données enrichies du résultat.
+    pub field: String,
+    /// Poids par valeur du champ.
+    pub weights: std::collections::BTreeMap<String, f64>,
+    /// Le poids d'une valeur hors table (1,0 = neutre).
+    #[serde(default = "default_field_weight")]
+    pub default: f64,
+}
+
+fn default_field_weight() -> f64 {
+    1.0
+}
+
 /// Binary flags selecting which search signals to activate.
 ///
 /// Combine with `|`: `SearchSignals::BM25 | SearchSignals::SPARSE`.
@@ -425,6 +447,11 @@ pub struct SearchOptions {
     pub signals: Option<SearchSignals>,
     /// Override KB's default fusion config. If None, derived from KBConfig.
     pub fusion: Option<FusionConfig>,
+    /// Pondérations par valeur de champ de l'appelant — l'étage le plus
+    /// fort de l'échelle du 2 octobre : un champ déclaré ici écrase toute
+    /// autre déclaration du même champ.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub field_weights: Vec<FieldWeight>,
     /// Controls how results are shaped (aggregated, source-resolved, or detailed).
     pub result_mode: ResultMode,
     /// When true, populate SearchMeta.diagnostics with detailed per-hit BM25
@@ -457,6 +484,7 @@ impl Default for SearchOptions {
             fuzzy_distance: 1,
             signals: None,
             fusion: None,
+            field_weights: Vec::new(),
             result_mode: ResultMode::default(),
             diagnostics: false,
             scope: None,
@@ -624,6 +652,9 @@ pub struct SearchTarget {
     /// `SearchOptions.fusion`). `None` = nothing declared : le gabarit du
     /// graphe décide (ses `weights` s'appliquent).
     pub default_fusion: Option<FusionConfig>,
+    /// Pondérations par champ déclarées par l'entité — jamais aplaties :
+    /// vide = muet, le gabarit peut parler (la leçon du 18 septembre).
+    pub field_weights: Vec<FieldWeight>,
     /// Whether chunks have `_source_entity` / `_source_uuid` (KB only).
     pub has_source_refs: bool,
     /// For BM25 filter resolution via a title entity (KB only).

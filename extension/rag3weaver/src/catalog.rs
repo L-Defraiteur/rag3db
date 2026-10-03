@@ -3965,6 +3965,7 @@ impl Catalog {
                 enrich_fields,
                 default_signals: ec.signals,
                 default_fusion: ec.fusion.clone(),
+                field_weights: ec.field_weights.clone(),
                 has_source_refs: derivee.is_some(),
                 filter_indirection: derivee.map(|d| (d.from.clone(), crate::schema::derived_rel_name(name))),
             });

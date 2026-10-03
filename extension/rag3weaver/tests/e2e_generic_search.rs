@@ -1208,6 +1208,73 @@ fn la_source_prend_sa_requete_au_port_quand_il_est_cable() {
     assert!(qp.target.is_some(), "la cible est résolue par la source");
 }
 
+
+/// **La pondération par champ, de bout en bout** (pas C du 2 octobre 2026) :
+/// l'entité déclare « les gadgets pèsent moins », le nœud `weigh` posé
+/// d'office dans `search_base` l'applique sans qu'aucun graphe ait à le
+/// savoir ; et l'appelant la renverse — l'échelle, en production.
+#[test]
+#[ignore]
+fn la_ponderation_de_l_entite_reordonne_et_l_appelant_la_renverse() {
+    use rag3weaver::search::FieldWeight;
+    use std::sync::Mutex;
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_empty_config(4));
+    catalog.initialize().unwrap();
+
+    let mut fields = HashMap::new();
+    fields.insert("name".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
+    fields.insert("description".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
+    fields.insert("kind".into(), SimpleFieldDef { field_type: FieldType::String, ..Default::default() });
+    let config = EntityConfig {
+        fields,
+        signals: SearchSignals::BM25,
+        return_fields: Some(vec!["kind".into(), "name".into()]),
+        field_weights: vec![FieldWeight {
+            field: "kind".into(),
+            weights: [("gadget".to_string(), 0.1)].into_iter().collect(),
+            default: 1.0,
+        }],
+        ..Default::default()
+    };
+    catalog.register_entity("Gizmo", config).unwrap();
+    let doc = |nom: &str, kind: &str| {
+        let mut m = BTreeMap::new();
+        m.insert("name".to_string(), CypherValue::String(nom.into()));
+        m.insert("description".to_string(), CypherValue::String("a shiny widget for measuring widgets".into()));
+        m.insert("kind".to_string(), CypherValue::String(kind.into()));
+        m
+    };
+    catalog.ingest_entities("Gizmo", vec![doc("Alpha", "gadget"), doc("Beta", "tool")]).unwrap();
+    let cat = Arc::new(Mutex::new(catalog));
+    let tetes = |options: SearchOptions| -> Vec<String> {
+        Catalog::rechercher(&cat, "Gizmo", "shiny widget", options)
+            .unwrap()
+            .results
+            .iter()
+            .filter_map(|x| x.data.as_ref()?.get("name")?.as_str().map(str::to_string))
+            .collect()
+    };
+
+    // Deux textes identiques : seul le poids du genre départage.
+    let options = SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() };
+    let noms = tetes(options.clone());
+    assert_eq!(noms.first().map(String::as_str), Some("Beta"), "le gadget déclaré pèse moins : {noms:?}");
+    assert_eq!(noms.len(), 2, "un poids, jamais un filtre : {noms:?}");
+
+    // L'appelant renverse la déclaration : les outils pèsent moins.
+    let mut inverse = options;
+    inverse.field_weights = vec![FieldWeight {
+        field: "kind".into(),
+        weights: [("tool".to_string(), 0.05)].into_iter().collect(),
+        default: 1.0,
+    }];
+    let noms = tetes(inverse);
+    assert_eq!(noms.first().map(String::as_str), Some("Alpha"), "l'appelant renverse : {noms:?}");
+}
+
 // ═══ Le lanceur : un seul chemin de recherche ═══════════════════════════════
 
 /// **Le lanceur tient la page et les comptes.** Héritier de B13 : depuis le

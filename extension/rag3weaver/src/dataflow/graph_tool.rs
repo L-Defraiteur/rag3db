@@ -1861,6 +1861,11 @@ mod tests {
                     config: json!({"default_weights": "bm25:0.6,vector:0.4"}),
                 },
                 NodeDef {
+                    name: "weigh".into(),
+                    node_type: "FieldWeightNode".into(),
+                    config: json!({}),
+                },
+                NodeDef {
                     name: "rerank".into(),
                     node_type: "RerankNode".into(),
                     config: json!({"keep_signal": true}),
@@ -1898,17 +1903,20 @@ mod tests {
                 // deux métas sur un même port se fusionnent.
                 EdgeDef { from_node: "vector".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "sparse".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
+                EdgeDef { from_node: "weigh".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
                 EdgeDef { from_node: "sparse".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "sparse".into() },
                 // D'où viennent les poids : l'appelant, la base de
                 // connaissances, ou le gabarit — la fusion doit voir la requête.
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "fuse".into(), to_port: "query".into() },
+                EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "weigh".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "rerank".into(), to_port: "query".into() },
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "paginate".into(), to_port: "query".into() },
                 // Ce que le rerank a à dire — « aucun reranker configuré » —
                 // arrive enfin jusqu'à l'agent.
                 EdgeDef { from_node: "rerank".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
-                EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
+                EdgeDef { from_node: "fuse".into(), from_port: "results".into(), to_node: "weigh".into(), to_port: "results".into() },
+                EdgeDef { from_node: "weigh".into(), from_port: "results".into(), to_node: "rerank".into(), to_port: "results".into() },
                 EdgeDef { from_node: "rerank".into(), from_port: "results".into(), to_node: "paginate".into(), to_port: "results".into() },
                 EdgeDef { from_node: "paginate".into(), from_port: "results".into(), to_node: "resolve".into(), to_port: "results".into() },
                 EdgeDef { from_node: "resolve".into(), from_port: "results".into(), to_node: "render".into(), to_port: "results".into() },
@@ -1992,8 +2000,9 @@ mod tests {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
-        assert_eq!(def.nodes.len(), 9);
-        assert_eq!(def.edges.len(), 20);
+        // Dix nœuds et vingt-trois arêtes depuis `weigh` (3 octobre 2026).
+        assert_eq!(def.nodes.len(), 10);
+        assert_eq!(def.edges.len(), 23);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────
@@ -2505,7 +2514,7 @@ mod tests {
         let g = base.build(&inner, &json!({"target": "Product", "query": "rust"})).unwrap();
         let mut names = g.node_names();
         names.sort_unstable();
-        assert_eq!(names, vec!["bm25", "fuse", "paginate", "render", "rerank", "resolve", "source", "sparse", "vector"]);
+        assert_eq!(names, vec!["bm25", "fuse", "paginate", "render", "rerank", "resolve", "source", "sparse", "vector", "weigh"]);
     }
 
     /// **`search_base` n'est offert à personne.** Un gabarit peut exister pour
