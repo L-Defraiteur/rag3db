@@ -1,5 +1,28 @@
 //! « Indexer ce dépôt », côté outils : `EstimateNode` — dire ce que ça va
-//! coûter avant d'indexer. `IndexNode` viendra ici, avec son reçu.
+//! coûter avant d'indexer — et `IndexNode` — indexer en fond, et rendre un
+//! reçu.
+//!
+//! # Le reçu est un journal
+//!
+//! `index` ne porte pas l'indexation dans un tour de parole : il la lance et
+//! rend le chemin d'un journal, au même contrat que ceux de `run_bg`
+//! (`run_nodes::dossier_journaux`). L'avancement s'y écrit en lignes ; `wait`
+//! les attrape par son motif, et avec `timeout_s=0` les lit sans attendre. La
+//! dernière ligne est [`DONE_LINE`], ou commence par [`FAILED_PREFIX`].
+//!
+//! # Ce que l'avancement dit, et ce qu'il ne promet pas
+//!
+//! Deux temps : le plein texte d'abord (`sync_source` en exigeant
+//! `RECHERCHE_TEXTE`), les vecteurs ensuite, par passes. Mesuré le 3 octobre
+//! 2026, le premier temps **croît plus vite que la taille** du dépôt —
+//! l'insertion des relations par le moteur — : 17 s pour 122 fichiers, 30 min
+//! pour 6 735. Le journal dit donc où l'on en est en fichiers, pas un temps
+//! restant qu'il ne saurait pas tenir. Pour les vecteurs, le reste se dit en
+//! temps : le débit est mesuré.
+//!
+//! Pendant le premier temps, le catalogue est tenu par la synchronisation ;
+//! pendant le second, il est rendu entre deux passes, et une recherche par
+//! mots passe.
 //!
 //! Le nœud ne fait que réunir ce que le service lui donne — la source de
 //! fichiers, le catalogue — et appeler [`crate::estimate`]. Il **ne lit aucun
@@ -14,7 +37,7 @@ use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, N
 use super::port::{PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code_tools::{source_service, FileSource, ToolFormat, WorkingTree};
-use crate::estimate::{code_policy, estimate_here, source_files, working_tree_files, Kept};
+use crate::estimate::{code_policy, estimate_here, source_files, working_tree_files, Estimate, Kept, Rate};
 
 /// Combien de morceaux la sonde embarque, et leur taille en caractères.
 const PROBE_SAMPLES: usize = 64;
@@ -87,28 +110,8 @@ impl Node for EstimateNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let source = source_service(ctx).ok_or("EstimateNode: 'file_source' service not found")?;
-        let (files, excluded) = files_of(source.as_ref()).map_err(|e| format!("EstimateNode: {e}"))?;
-
-        // Le débit : celui que le catalogue a noté, sinon une sonde — notée à
-        // son tour, pour que l'estimation suivante ne la refasse pas.
-        let (rate, remote) = match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
-            None => (None, false),
-            Some(catalog) => {
-                let guard = catalog.lock().unwrap();
-                let known = guard.known_embedding_rate().map_err(|e| format!("EstimateNode: {e}"))?;
-                let rate = match known {
-                    Some(rate) => Some(rate),
-                    None if self.probe => {
-                        let samples = probe_samples(source.as_ref(), &files);
-                        guard.probe_embedding_rate(&samples).map_err(|e| format!("EstimateNode: sonde : {e}"))?
-                    }
-                    None => None,
-                };
-                (rate, guard.embedder_is_remote())
-            }
-        };
-
-        let estimate = estimate_here(&files, &excluded, code_policy, rate, remote);
+        let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
+        let estimate = estimate_of(source.as_ref(), catalog.as_ref(), self.probe).map_err(|e| format!("EstimateNode: {e}"))?;
         ctx.metric("files", estimate.survey.files as f64);
         ctx.metric("bytes", estimate.survey.bytes as f64);
         ctx.metric("skipped", estimate.survey.skipped_files() as f64);
@@ -122,6 +125,26 @@ impl Node for EstimateNode {
         ctx.set_output("result", PortValue::new(value));
         Ok(())
     }
+}
+
+/// L'estimation d'une source, pour les deux nœuds. Le débit est celui que le
+/// catalogue a noté, sinon une sonde — notée à son tour, pour que
+/// l'estimation suivante ne la refasse pas. Sans catalogue : pas de durée.
+fn estimate_of(source: &dyn FileSource, catalog: Option<&Arc<Mutex<Catalog>>>, probe: bool) -> Result<Estimate, String> {
+    let (files, excluded) = files_of(source)?;
+    let (rate, remote) = match catalog {
+        None => (None, false),
+        Some(catalog) => {
+            let guard = catalog.lock().unwrap();
+            let rate = match guard.known_embedding_rate().map_err(|e| e.to_string())? {
+                Some(rate) => Some(rate),
+                None if probe => guard.probe_embedding_rate(&probe_samples(source, &files)).map_err(|e| format!("sonde : {e}"))?,
+                None => None,
+            };
+            (rate, guard.embedder_is_remote())
+        }
+    };
+    Ok(estimate_here(&files, &excluded, code_policy, rate, remote))
 }
 
 pub struct EstimateNodeFactory;
@@ -153,6 +176,226 @@ impl NodeFactory for EstimateNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(true)),
                     description: "Sonder le débit de l'embarqueur (une à deux secondes) quand aucun n'est noté ; sans sonde ni débit noté, la durée est dite inconnue",
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "format",
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("markdown")),
+                    description: "markdown (compact, pour le modèle) | json (structuré)",
+                    choices: Some(Choices::fixed(["markdown", "json"])),
+                    json_schema: None,
+                },
+            ],
+        }
+    }
+}
+
+// ─── IndexNode ───────────────────────────────────────────────────────────────
+
+/// La dernière ligne d'un journal d'indexation qui a abouti. C'est le motif
+/// que `wait` attend ; il ne change pas.
+pub const DONE_LINE: &str = "indexation terminée";
+/// Le début de la dernière ligne d'un journal d'indexation qui a échoué.
+pub const FAILED_PREFIX: &str = "indexation échouée";
+
+/// Un journal neuf, là où `wait` accepte d'attendre.
+pub fn new_index_journal() -> std::io::Result<std::path::PathBuf> {
+    let dir = super::run_nodes::dossier_journaux().join("index");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("{}-{}.out", crate::dataflow::checkpoint::timestamp_ms(), std::process::id()));
+    std::fs::write(&path, "")?;
+    Ok(path)
+}
+
+fn log(journal: &std::path::Path, line: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(journal) {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
+/// **Indexer en fond.** Rend la main tout de suite ; le journal dit la suite.
+/// `kept_bytes` : les octets retenus par l'estimation, pour dire le reste des
+/// vecteurs en temps.
+pub fn spawn_index(
+    catalog: Arc<Mutex<Catalog>>,
+    source: Arc<dyn FileSource>,
+    journal: std::path::PathBuf,
+    kept_bytes: u64,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes) {
+        Ok(()) => log(&journal, DONE_LINE),
+        Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),
+    })
+}
+
+fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &std::path::Path, kept_bytes: u64) -> Result<(), String> {
+    use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
+    use crate::disponibilite::Disponibilites;
+
+    // Premier temps : les lignes et le plein texte, les vecteurs en dette.
+    let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
+    let report = {
+        let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| {
+            log(journal, &format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written));
+        })?
+    };
+    log(
+        journal,
+        &format!("plein texte prêt : {} fichiers, {} scopes, {} relations", report.files_ingested, report.scopes_written, report.relations),
+    );
+
+    // Second temps : la dette de vecteurs, par passes ; le catalogue est
+    // rendu entre deux, une recherche par mots passe.
+    let (rate, start) = {
+        let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        (guard.known_embedding_rate().map_err(|e| e.to_string())?, guard.index_progress().map_err(|e| e.to_string())?)
+    };
+    let chars_per_chunk = (kept_bytes as usize / start.chunks().max(1)).max(1);
+    // Une ligne par changement : un journal qui se répète noie ce qu'il dit.
+    let mut last_line = String::new();
+    let mut say = |line: String| {
+        if line != last_line {
+            log(journal, &line);
+            last_line = line;
+        }
+    };
+    say(start.line(rate, chars_per_chunk));
+    let t = std::time::Instant::now();
+    let mut embedded = 0usize;
+    let mut last_percent = start.dense_percent();
+    loop {
+        let (n, progress) = {
+            let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+            let n = guard.embarquer_le_retard(Disponibilites::TOUT, 512, None).map_err(|e| e.to_string())?;
+            (n, guard.index_progress().map_err(|e| e.to_string())?)
+        };
+        if n == 0 {
+            say(progress.line(rate, chars_per_chunk));
+            break;
+        }
+        embedded += n;
+        if progress.dense_percent() != last_percent {
+            last_percent = progress.dense_percent();
+            say(progress.line(rate, chars_per_chunk));
+        }
+    }
+    // Ce que cette indexation a mesuré en vrai, écritures comprises : la
+    // prochaine estimation prévoira mieux que la sonde.
+    if let Some(measured) = Rate::from_sample(embedded * chars_per_chunk, t.elapsed()) {
+        if embedded >= 512 {
+            let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+            guard.note_measured_embedding_rate(measured).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Le refus d'`index` quand l'estimation dépasse le seuil et que l'appelant
+/// n'a pas confirmé : il dit ce que ça coûte et quoi faire.
+pub fn confirmation_refusal(estimate: &Estimate, confirm: bool) -> Option<String> {
+    (estimate.needs_confirmation && !confirm).then(|| {
+        format!(
+            "confirmation requise avant d'indexer — rien n'a été écrit.\n{}\nPour lancer quand même : index avec confirm=true.",
+            estimate.text()
+        )
+    })
+}
+
+/// `index` : estime, refuse sans confirmation au-delà du seuil, sinon lance
+/// l'indexation en fond et rend son journal. **Output** `result`
+/// (PortType::Map). Services : `file_source` et `catalog` (requis).
+pub struct IndexNode {
+    node_name: String,
+    confirm: bool,
+    format: ToolFormat,
+}
+
+impl IndexNode {
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string(), confirm: false, format: ToolFormat::Markdown }
+    }
+    pub fn with_confirm(mut self, confirm: bool) -> Self {
+        self.confirm = confirm;
+        self
+    }
+    pub fn with_format(mut self, format: ToolFormat) -> Self {
+        self.format = format;
+        self
+    }
+}
+
+impl Node for IndexNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "IndexNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({ "confirm": self.confirm })))
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&IndexNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let source = source_service(ctx).ok_or("IndexNode: 'file_source' service not found")?;
+        let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("IndexNode: 'catalog' service not found")?;
+        let estimate = estimate_of(source.as_ref(), Some(&catalog), true).map_err(|e| format!("IndexNode: {e}"))?;
+        if let Some(refusal) = confirmation_refusal(&estimate, self.confirm) {
+            return Err(format!("index : {refusal}"));
+        }
+        let journal = new_index_journal().map_err(|e| format!("IndexNode: journal : {e}"))?;
+        log(&journal, &format!("indexation lancée : {} fichiers, {}", estimate.survey.files, estimate.model));
+        // Détaché : c'est le journal qui porte la suite, pas ce tour de parole.
+        drop(spawn_index(catalog, source, journal.clone(), estimate.survey.bytes));
+        ctx.metric("files", estimate.survey.files as f64);
+        let path = journal.to_string_lossy().to_string();
+        let value = match self.format {
+            ToolFormat::Markdown => serde_json::Value::String(format!(
+                "indexation lancée en fond.\njournal : {path}\n{}\nSuivre : wait(journal, pattern='{DONE_LINE}|{FAILED_PREFIX}') — avec timeout_s=0 pour lire l'état sans attendre.",
+                estimate.text()
+            )),
+            ToolFormat::Json => serde_json::json!({ "journal": path, "done": DONE_LINE, "failed": FAILED_PREFIX, "estimate": estimate }),
+        };
+        ctx.set_output("result", PortValue::new(value));
+        Ok(())
+    }
+}
+
+pub struct IndexNodeFactory;
+
+impl NodeFactory for IndexNodeFactory {
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let mut node = IndexNode::new(name);
+        if let Some(c) = config.get("confirm").and_then(|v| v.as_bool()) {
+            node = node.with_confirm(c);
+        }
+        if let Some(f) = config.get("format").and_then(|v| v.as_str()) {
+            node = node.with_format(ToolFormat::parse(f).map_err(|e| format!("IndexNode: {e}"))?);
+        }
+        Ok(Box::new(node))
+    }
+    fn node_type(&self) -> &'static str {
+        "IndexNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "IndexNode",
+            description: "Indexes the file source in the background: full text first, vectors afterwards. Refuses without confirm=true when the estimate exceeds the declared threshold. Returns the path of a journal that `wait` can follow.",
+            inputs: vec![],
+            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            config_params: vec![
+                ConfigParam {
+                    name: "confirm",
+                    param_type: ConfigParamType::Bool,
+                    required: false,
+                    default: Some(serde_json::json!(false)),
+                    description: "Lancer même si l'estimation dépasse le seuil de confirmation",
                     choices: None,
                     json_schema: None,
                 },
@@ -225,5 +468,36 @@ mod tests {
     fn le_format_inconnu_est_refuse_a_la_fabrique() {
         assert!(EstimateNodeFactory.create("e", &serde_json::json!({"format": "yaml"})).is_err());
         assert!(EstimateNodeFactory.create("e", &serde_json::json!({"probe": false})).is_ok());
+    }
+
+    /// **Le refus dit ce que ça coûte et quoi faire**, et ne refuse que ce
+    /// qui dépasse le seuil sans confirmation.
+    #[test]
+    fn index_refuse_sans_confirmation_au_dela_du_seuil() {
+        use crate::embedding_choice::Choice;
+        use crate::estimate::{survey, CONFIRM_ABOVE};
+        let s = survey([("a.rs", 35_000_000u64)], code_policy);
+        let choice = Choice { model: "granite-278m".into(), reason: "le défaut".into() };
+        let slow = Estimate::new(s.clone(), choice.clone(), Some(Rate { chars_per_second: 20_000.0 }), CONFIRM_ABOVE);
+        let refusal = confirmation_refusal(&slow, false).expect("au-delà du seuil, sans confirmation");
+        assert!(refusal.contains("rien n'a été écrit") && refusal.contains("environ 29 min") && refusal.contains("confirm=true"), "{refusal}");
+        assert_eq!(confirmation_refusal(&slow, true), None, "confirmé : on lance");
+        let fast = Estimate::new(s.clone(), choice.clone(), Some(Rate { chars_per_second: 500_000.0 }), CONFIRM_ABOVE);
+        assert_eq!(confirmation_refusal(&fast, false), None, "sous le seuil : rien à confirmer");
+        let unknown = Estimate::new(s, choice, None, CONFIRM_ABOVE);
+        assert_eq!(confirmation_refusal(&unknown, false), None, "on ne bloque pas sur une durée inconnue");
+    }
+
+    #[test]
+    fn index_exige_un_catalogue_et_son_journal_est_attendable() {
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", [("a.rs".to_string(), "fn a() {}\n".to_string())]));
+        let mut ctx = context(source);
+        let e = IndexNode::new("index").execute(&mut ctx).expect_err("pas de catalogue");
+        assert!(e.contains("catalog"), "{e}");
+        // Le journal naît là où `wait` accepte d'attendre.
+        let journal = new_index_journal().expect("journal");
+        assert!(journal.starts_with(crate::dataflow::run_nodes::dossier_journaux()), "{}", journal.display());
+        let _ = std::fs::remove_file(&journal);
+        assert!(IndexNodeFactory.create("i", &serde_json::json!({"confirm": true})).is_ok());
     }
 }

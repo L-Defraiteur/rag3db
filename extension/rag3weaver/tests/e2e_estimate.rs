@@ -172,3 +172,67 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         assert_eq!(p.dense_missing(), 0, "{p:?}");
     }
 }
+
+/// **`index` en fond, de bout en bout** : un dossier est indexé par
+/// `spawn_index`, le journal dit le plein texte puis les vecteurs, finit par
+/// la ligne que `wait` attend, et l'index est complet. Le débit constaté est
+/// noté pour l'estimation suivante.
+#[test]
+#[ignore]
+fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
+    use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
+    use rag3weaver::code_tools::FileSource;
+    use rag3weaver::dataflow::index_nodes::{new_index_journal, spawn_index, DONE_LINE, FAILED_PREFIX};
+    use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
+    use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+    use std::sync::Mutex;
+
+    let corpus = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/daemon");
+    let tree = WorkingTree::new(&corpus);
+    let (files, excluded) = working_tree_files(&tree).expect("liste");
+    let estimate = estimate_here(&files, &excluded, code_policy, None, true);
+
+    let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    boxed
+        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", repository_root().display()))
+        .expect("extension vector");
+    let config = CatalogConfig { name: Some("index".into()), embedding_dim: embedder.dim(), ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+
+    let journal = new_index_journal().expect("journal");
+    let source: Arc<dyn FileSource> = Arc::new(tree);
+    let t = std::time::Instant::now();
+    spawn_index(catalog.clone(), source, journal.clone(), estimate.survey.bytes).join().expect("le fil d'indexation");
+    let lines: Vec<String> = std::fs::read_to_string(&journal).expect("journal").lines().map(String::from).collect();
+    eprintln!("[index] {} lignes en {:.0} s :", lines.len(), t.elapsed().as_secs_f64());
+    for l in lines.iter().take(3).chain(lines.iter().rev().take(4).rev()) {
+        eprintln!("[index]   {l}");
+    }
+    assert!(!lines.iter().any(|l| l.starts_with(FAILED_PREFIX)), "{lines:?}");
+    assert_eq!(lines.last().map(String::as_str), Some(DONE_LINE), "la ligne que `wait` attend");
+    let ready = lines.iter().position(|l| l.starts_with("plein texte prêt :")).expect("le plein texte est annoncé prêt");
+    let first_vectors = lines.iter().position(|l| l.contains("· vecteurs")).expect("puis les vecteurs");
+    assert!(ready < first_vectors, "le plein texte d'abord : {lines:?}");
+    assert!(lines[lines.len() - 2].contains("vecteurs prêts"), "{lines:?}");
+
+    let progress = catalog.lock().unwrap().index_progress().expect("avancement");
+    assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
+    let found = Catalog::rechercher(&catalog, SCOPE, "EmbedDaemon", SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25 | SearchSignals::VECTOR),
+        ..Default::default()
+    })
+    .expect("recherche");
+    assert!(!found.results.is_empty());
+    if progress.chunks() >= 512 {
+        let rate = catalog.lock().unwrap().known_embedding_rate().expect("débit");
+        eprintln!("[index] débit constaté et noté : {:?}", rate.map(|r| r.chars_per_second as u64));
+        assert!(rate.is_some(), "une indexation note ce qu'elle a mesuré");
+    }
+    let _ = std::fs::remove_file(&journal);
+}

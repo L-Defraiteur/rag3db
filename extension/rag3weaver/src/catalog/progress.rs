@@ -153,6 +153,12 @@ impl Catalog {
         self.embedding_rate(self.embedder.name(), self.embedder_origin())
     }
 
+    /// Note le débit **constaté** de l'embarqueur de ce catalogue — ce qu'une
+    /// indexation vient de mesurer en vrai, écritures comprises.
+    pub fn note_measured_embedding_rate(&self, rate: Rate) -> Result<(), CatalogError> {
+        self.note_embedding_rate(self.embedder.name(), self.embedder_origin(), rate)
+    }
+
     /// **Sonde** l'embarqueur de ce catalogue sur `samples`, et note le débit.
     pub fn probe_embedding_rate(&self, samples: &[String]) -> Result<Option<Rate>, CatalogError> {
         let rate = crate::estimate::probe_rate(self.embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
