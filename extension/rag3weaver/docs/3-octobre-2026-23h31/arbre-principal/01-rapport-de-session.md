@@ -40,44 +40,39 @@ Dans l'ordre de fusion.
 - **Les poids de pertinence se déclarent** (`FieldWeight`), aucune règle de
   classement neuve. « La correspondance exacte du nom en tête » attend Lucie.
 
-## En cours (mis à jour le 4 octobre, vers minuit et demi)
+## En cours (mis à jour le 4 octobre, vers 1 h 30)
 
-Fusionné depuis le premier jet :
-- `a5cef54cc` (journal) : décision du **résolveur unique** entre fichiers.
-- `2914d470e` : `run_e2e.sh` dit contre quel moteur il tourne, et refuse un
-  moteur plus vieux que ses sources.
-- `build/lecteurs-csv` rebâti sur `a5cef54cc`, garde 1 et DROP au rejeu
-  compris.
+Fusionné depuis minuit :
+- `63d154730` **Le résolveur unique** (codeparsers `fichier-seul` @ `d567e7c`).
+  Le graphe ne dépend plus de la taille du paquet ; banc « dépend de »
+  1,00/0,64 → 1,00/0,85 ; relations d'analyse sur `e2e_code`
+  22 066 → 12 632, avec 5 vraies bibliothèques. Bases existantes : à
+  réindexer de zéro (journal).
+- `973c7c432` : `run_e2e.sh` refuse de conclure si le moteur change pendant
+  la passe (somme du contenu au début et à la fin).
+- `e1c746c31` : un catalogue sans magasin de blobs ou de points de reprise ne
+  s'ouvre plus (`DurableStoreMissing`). Ces deux avertissements n'avaient
+  aucun lecteur.
+- `build/lecteurs-csv` rebâti sur `e3daa2836` (correctif moteur `c8fdaf196`).
 
-1. **Le résolveur unique** (décidé, au journal). codeparsers (rag3db-c0) livre
-   deux options : `cross_file` (résolution dans le fichier seulement),
-   `project_files` et `import_source` sur chaque référence. De mon côté :
-   - départager les définisseurs par le chemin d'import (`crate::estimate` →
-     `src/estimate.rs`) ;
-   - remplir `project_files` depuis le WorkingTree ;
-   - le test « paquets de 1, de 64, d'un seul tenant → même graphe » ;
-   - la justesse avant/après, au banc des relations et sur `e2e_code`.
+À faire, dans l'ordre de l'orchestration :
+1. **Le premier index par gros paquets bornés en octets** (cible de Lucie :
+   90 s pour le dépôt entier). rag3db-eb fait la remesure de référence sur
+   master (64, 512, 2 048, d'un tenant) ; puis ce qu'il faut regrouper (les
+   liens, l'aval séquentiel de l'analyse, les symboles).
+2. **Le pointeur `declarations`** (codeparsers `44c4310`, C++ seulement),
+   avec de mon côté :
+   - le rendez-vous HAS_PARENT d'une définition hors de son fichier ;
+   - la propriété `declarations` (JSON `{name, line, signature, kind}`) sur
+     le scope conteneur, que rag3db-c0 lit dans `usages`.
+3. **Les 24 autres avertissements sans lecteur** (journal, audit de
+   rag3db-dc).
 
-   Mesures qui l'ont décidé : 15 justes sur 50 dans l'écart, deux
-   échantillons indépendants. Sur `src/` de rag3weaver : 59 152 relations par
-   64, 72 721 d'un seul tenant.
-2. **Le mode « premier index » par gros paquets bornés en octets**, ensuite.
-   Le dépôt entier en un paquet fait 132 s pour 16 Go au pic (rag3db-eb).
-   Mes deux mesures d'un seul tenant (analyse 44 s, plein texte 306 s) sont à
-   refaire : elles ont tourné en même temps qu'une autre passe lourde.
-3. ~~Renommer~~ fait : `a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`
-   (une panique rattrapée, pas une mort).
-
-Dégagé par l'orchestration :
-- **« is behind its table » à l'ouverture** : rag3db-dc. Elle touche
-  `restore_dropped_vector_indexes` et l'étape 10 ter d'`initialize` ; je n'y
-  touche pas.
-- **SET vecteur → vecteur et l'invariant « toute ligne à vecteur est
-  joignable »** : rag3db-eb, dans `EmbedNode`.
-- **Report des blobs** : gelé (2 s en un paquet), au journal.
-
-Règle du poste : une mesure lourde à la fois (plusieurs Go ou plus de 8 fils),
-annoncée à rag3db-eb et rag3db-c0, qui répondent « libre » puis « fini ».
+Règles apprises cette nuit :
+- Rebâtir `build/lecteurs-csv` seulement après les « libre » des sessions qui
+  la lient. Un rebâti dans la foulée a ruiné une batterie.
+- Avant de pousser, lire ce que le rebase a apporté, et rejouer si c'est du
+  code.
 
 ## Ce qui attend quelqu'un
 
