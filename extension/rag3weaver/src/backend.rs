@@ -204,6 +204,15 @@ pub struct AfterToolHook {
     /// crochet.
     #[serde(default)]
     pub policy: crate::backend_code::ToolPolicy,
+    /// **Ce que l'outil a résolu, exposé au crochet** : le port de l'outil
+    /// (ex. `{"node": "render", "port": "results"}`) dont les `uuid` des
+    /// résultats sont passés au gabarit sous `$result_uuids` — s'il les
+    /// déclare. Jamais de re-calcul : un crochet qui relancerait la
+    /// recherche pour retrouver les identités en divergerait (règle de la
+    /// session mémoire). Les pseudo-uuids du balayage (`scan:…`) sont
+    /// écartés : ils ne désignent rien en base.
+    #[serde(default)]
+    pub results_port: Option<OutputPort>,
 }
 
 fn titre_a_voir_aussi() -> String {
@@ -253,7 +262,7 @@ pub enum PayloadView {
     Identity,
     Editable,
 }
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OutputPort {
     pub node: String,
@@ -523,6 +532,20 @@ impl PreparedBackend {
                 }
                 if hook.max_lines == 0 {
                     return Err(format!("{name}: crochet after : max_lines doit être au moins 1"));
+                }
+                let veut_uuids = hook_tool.params().iter().any(|p| p.name == "result_uuids");
+                if veut_uuids && hook.results_port.is_none() {
+                    return Err(format!(
+                        "{name}: crochet after : le gabarit déclare result_uuids — dites d'où \
+                         ils viennent : \"results_port\": {{\"node\": \"render\", \
+                         \"port\": \"results\"}}"
+                    ));
+                }
+                if !veut_uuids && hook.results_port.is_some() {
+                    return Err(format!(
+                        "{name}: crochet after : results_port déclaré mais le gabarit ne \
+                         demande pas result_uuids — retirez l'un ou ajoutez l'autre"
+                    ));
                 }
                 after_hooks.insert(name.clone(), hook_tool);
             }
@@ -1233,7 +1256,16 @@ impl Backend {
         let policy = NodeTypePolicy::only(
             crate::backend_code::allowed_nodes(&attachment.policy),
         );
-        let mut response = self.execute_graph(tool, &def, &attachment.metadata, &policy)?;
+        // Le crochet qui veut les uuids des résultats les capture au passage
+        // de l'outil, par un port de métadonnées de plus — jamais un
+        // re-calcul.
+        let mut metadata_ports = attachment.metadata.clone();
+        if let Some(port) = attachment.after.as_ref().and_then(|h| h.results_port.as_ref()) {
+            if !metadata_ports.iter().any(|p| p.node == port.node && p.port == port.port) {
+                metadata_ports.push(port.clone());
+            }
+        }
+        let mut response = self.execute_graph(tool, &def, &metadata_ports, &policy)?;
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(&harness.after, &context);
         report.warnings.extend(before.warnings);
@@ -1298,6 +1330,33 @@ impl Backend {
         if declares.contains("threshold") {
             if let Some(t) = hook.threshold {
                 hargs.entry("threshold".to_string()).or_insert(json!(t));
+            }
+        }
+        if declares.contains("result_uuids") {
+            if let Some(port) = &hook.results_port {
+                let cle = format!("{}.{}", port.node, port.port);
+                let uuids: Vec<String> = response["metadata"][&cle]
+                    .as_array()
+                    .map(|rs| {
+                        rs.iter()
+                            .filter_map(|r| r["uuid"].as_str())
+                            .filter(|u| !u.starts_with("scan:"))
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                hargs.insert("result_uuids".to_string(), json!(uuids));
+                // La métadonnée empruntée pour le crochet ne reste dans la
+                // réponse que si l'outil la déclarait lui-même.
+                let declaree = self
+                    .prepared
+                    .manifest
+                    .tools
+                    .get(tool_name)
+                    .is_some_and(|a| a.metadata.iter().any(|p| p.node == port.node && p.port == port.port));
+                if !declaree {
+                    response["metadata"].as_object_mut().map(|m| m.remove(&cle));
+                }
             }
         }
         // Un paramètre du gabarit absent des arguments garde son défaut ;
@@ -2082,6 +2141,13 @@ mod tests {
         let erreur = prepared.err().expect("un crochet qui lance se refuse au chargement");
         assert!(erreur.contains("crochet"), "{erreur}");
         assert!(erreur.contains("RunCommandNode"), "le refus nomme le nœud : {erreur}");
+
+        // (d) Un gabarit qui demande les uuids des résultats sans dire d'où
+        // ils viennent : refus au chargement, qui nomme results_port.
+        let avide = "%% tool: apres_essai\n%% description: essai\n%% param: result_uuids json! -- les identités résolues\n%% result: src.query\n\ngraph LR\n    src[\"KBQuerySourceNode(kb_name='k', query='q', options=$result_uuids)\"]\n";
+        let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), avide);
+        let erreur = prepared.err().expect("result_uuids sans results_port se refuse");
+        assert!(erreur.contains("results_port"), "le refus dit quoi déclarer : {erreur}");
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
