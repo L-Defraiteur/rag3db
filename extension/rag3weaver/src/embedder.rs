@@ -1038,22 +1038,31 @@ mod tests_rythme_et_lots {
         // **La surface d'attention** : 256 textes de 1 500 caractères (~500
         // jetons) sous une surface de 64 × 512² / 2 → 32 par lot, pas 64.
         let longs = vec![1500; 256];
-        let l = stable_batches(&longs, lot_budget(Some((64, 512)), 32));
+        let l = stable_batches(&longs, lot_budget_si(Some((64, 512)), 32, None, false, EMBED_CHAR_BUDGET));
         assert!(l.iter().all(|r| r.len() <= 32), "{:?}", l.iter().map(|r| r.len()).collect::<Vec<_>>());
         assert!(l.iter().any(|r| r.len() == 32));
     }
 
-    /// **Le modèle décide de son lot** ; l'environnement garde le dernier mot.
+    /// **Le modèle décide de son lot** ; un réglage écrit garde le dernier
+    /// mot, une carte partagée aussi. Sur des valeurs passées en paramètres :
+    /// ce test lisait et retirait `RAG3WEAVER_EMBED_CHAR_BUDGET`, et son
+    /// voisin n'était vert que par l'ordre d'exécution (3 octobre 2026).
     #[test]
     fn le_lot_suit_le_modele_sauf_reglage_explicite() {
-        std::env::remove_var("RAG3WEAVER_EMBED_CHAR_BUDGET");
-        let b = lot_budget(Some((256, 512)), 32);
-        if !crate::regime::Regime::courant().carte_partagee() {
-            assert_eq!((b.max_items, b.max_chars), (256, 256 * 512 * 3));
-            assert_eq!(b.max_area, 256 * 512 * 512 / 2);
-        }
-        assert_eq!(lot_budget(None, 32).max_chars, embed_char_budget());
-        assert!(!lot_budget(None, 32).stable, "sans conseil, pas d'arrondi");
+        let b = lot_budget_si(Some((256, 512)), 32, None, false, EMBED_CHAR_BUDGET);
+        assert_eq!((b.max_items, b.max_chars), (256, 256 * 512 * 3));
+        assert_eq!(b.max_area, 256 * 512 * 512 / 2);
+        assert!(b.stable);
+        // Un budget écrit gagne sur le conseil du modèle.
+        let ecrit = lot_budget_si(Some((256, 512)), 32, Some(4_096), false, EMBED_CHAR_BUDGET);
+        assert_eq!((ecrit.max_items, ecrit.max_chars, ecrit.stable), (32, 4_096, false));
+        // Une carte partagée : le budget du régime, pas le conseil.
+        let partagee = lot_budget_si(Some((256, 512)), 32, None, true, 2_048);
+        assert_eq!((partagee.max_items, partagee.max_chars), (32, 2_048));
+        // Sans conseil : le budget donné, sans arrondi.
+        let sans = lot_budget_si(None, 32, None, false, EMBED_CHAR_BUDGET);
+        assert_eq!(sans.max_chars, EMBED_CHAR_BUDGET);
+        assert!(!sans.stable, "sans conseil, pas d'arrondi");
     }
 
     /// **Le rapport cyclique, en règle de trois.**

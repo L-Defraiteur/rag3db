@@ -552,6 +552,11 @@ fn templates_dir() -> std::path::PathBuf {
 /// Le séparateur et le `..` sont donc refusés, et la lecture est confinée au
 /// répertoire des gabarits.
 pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, String> {
+    resolve_template_in(spec, &templates_dir())
+}
+
+/// [`resolve_template`], le répertoire des gabarits en paramètre.
+pub fn resolve_template_in(spec: &str, templates_dir: &std::path::Path) -> Result<std::borrow::Cow<'static, str>, String> {
     if let Some(builtin) = builtin_template(spec) {
         return Ok(std::borrow::Cow::Borrowed(builtin));
     }
@@ -561,10 +566,10 @@ pub fn resolve_template(spec: &str) -> Result<std::borrow::Cow<'static, str>, St
     if spec.contains('/') || spec.contains('\\') || spec.contains("..") {
         return Err(format!(
             "gabarit '{spec}' : un nom, pas un chemin — les gabarits écrits à la main vivent dans {} (voir ${TEMPLATES_DIR_ENV})",
-            templates_dir().display()
+            templates_dir.display()
         ));
     }
-    let chemin = templates_dir().join(format!("{spec}.md.jinja"));
+    let chemin = templates_dir.join(format!("{spec}.md.jinja"));
     std::fs::read_to_string(&chemin)
         .map(std::borrow::Cow::Owned)
         .map_err(|e| format!(
@@ -1422,9 +1427,7 @@ mod tests {
         let dir = std::env::temp_dir().join("rag3weaver-gabarits-test");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("mien.md.jinja"), "{{ count }} trouvés").unwrap();
-        std::env::set_var(TEMPLATES_DIR_ENV, &dir);
-        assert_eq!(resolve_template("mien").unwrap(), "{{ count }} trouvés");
-        std::env::remove_var(TEMPLATES_DIR_ENV);
+        assert_eq!(resolve_template_in("mien", &dir).unwrap(), "{{ count }} trouvés");
 
         let mut node = RenderResultsNodeFactory
             .create("render", &serde_json::json!({"template": "gabarit-qui-n-existe-pas"}));

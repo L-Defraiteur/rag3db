@@ -3954,7 +3954,7 @@ mod tests_rafales {
         let lens: Vec<usize> = works.iter().map(|w| w.len()).collect();
         let reglages = BurstSettings { target: Duration::from_millis(5), pause: Duration::ZERO };
 
-        let (mut davance, lots_davance) = passer(&works, burst::plan_with(&lens, Some((128, 512)), 32, None));
+        let (mut davance, lots_davance) = passer(&works, Batches::Fixed(crate::embedder::stable_batches(&lens, burst::ceiling(Some((128, 512)), 32))));
         let (cadence, lots_cadences) = passer(&works, burst::plan_with(&lens, Some((128, 512)), 32, Some(reglages)));
 
         // Cadencé : dans l'ordre du corpus, chacun une fois.
