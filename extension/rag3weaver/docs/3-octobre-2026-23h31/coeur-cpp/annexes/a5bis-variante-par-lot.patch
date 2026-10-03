@@ -1,0 +1,207 @@
+diff --git a/src/include/storage/table/node_group.h b/src/include/storage/table/node_group.h
+index cafae1dfe..7b66ccb7e 100644
+--- a/src/include/storage/table/node_group.h
++++ b/src/include/storage/table/node_group.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <cstdint>
++#include <shared_mutex>
+ 
+ #include "common/uniq_lock.h"
+ #include "storage/enums/residency_state.h"
+@@ -153,6 +154,16 @@ public:
+         common::sel_t posInSel = 0) const;
+     bool lookupNoLock(const transaction::Transaction* transaction, const TableScanState& state,
+         common::sel_t posInSel = 0) const;
++    // La lecture d'une ligne sans le verrou du groupe, pour qui lit beaucoup et en parallèle
++    // (la recherche HNSW lit un vecteur par nœud visité) : elle ne tient que la garde
++    // partagée contre l'ajout en mémoire.
++    bool lookupSharedLock(const transaction::Transaction* transaction,
++        const TableScanState& state, common::sel_t posInSel = 0) const;
++    // La même garde, à tenir par l'appelant le temps de plusieurs lookupNoLock sur ce
++    // groupe : la prendre ligne par ligne coûte, mesuré, un sixième du temps d'une recherche.
++    std::shared_lock<std::shared_mutex> lockAgainstInMemAppend() const {
++        return std::shared_lock{inMemAppendMtx};
++    }
+     // TODO(Guodong): These should be merged together with `lookup`.
+     bool lookupMultiple(const common::UniqLock& lock, const transaction::Transaction* transaction,
+         const TableScanState& state) const;
+@@ -263,6 +274,12 @@ protected:
+     common::row_idx_t capacity;
+     std::vector<common::LogicalType> dataTypes;
+     GroupCollection<ChunkedNodeGroup> chunkedGroups;
++    // La garde des lectures qui ne prennent pas le verrou de chunkedGroups (lookupSharedLock,
++    // isVisibleNoLock). L'ajout en mémoire la prend en exclusif : il allonge la liste des
++    // blocs et réalloue le tampon d'une colonne à longueur variable, qu'un lecteur ne doit
++    // pas avoir sous la main à ce moment-là. Toujours prise après le verrou de
++    // chunkedGroups, jamais l'inverse : un lecteur qui la tient ne demande pas ce verrou.
++    mutable std::shared_mutex inMemAppendMtx;
+ };
+ 
+ } // namespace storage
+diff --git a/src/storage/table/csr_node_group.cpp b/src/storage/table/csr_node_group.cpp
+index 0098777ea..a69d6fed3 100644
+--- a/src/storage/table/csr_node_group.cpp
++++ b/src/storage/table/csr_node_group.cpp
+@@ -293,7 +293,11 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemSequential(const Transaction
+         const auto lock = chunkedGroups.lock();
+         chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+     }
+-    chunkedGroup->scan(transaction, tableState, nodeGroupScanState, startRowInChunk, numRows);
++    {
++        // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
++        const std::shared_lock appendGuard{inMemAppendMtx};
++        chunkedGroup->scan(transaction, tableState, nodeGroupScanState, startRowInChunk, numRows);
++    }
+     nodeGroupScanState.nextRowToScan += numRows;
+     return NodeGroupScanResult{startRow, numRows};
+ }
+@@ -310,6 +314,9 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
+     ChunkedNodeGroup* chunkedGroup = nullptr;
+     node_group_idx_t currentChunkIdx = INVALID_NODE_GROUP_IDX;
+     sel_t numSelected = 0;
++    // Le commit d'un autre fil peut ajouter des lignes à un bloc pendant qu'on le lit : la
++    // garde se tient d'une ligne à l'autre tant qu'on reste dans le même bloc.
++    std::shared_lock appendGuard{inMemAppendMtx, std::defer_lock};
+     while (nextRow < numRows) {
+         const auto rowIdx =
+             nodeGroupScanState.inMemCSRList.rowIndices[nextRow + nodeGroupScanState.nextRowToScan];
+@@ -317,8 +324,15 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
+             StorageUtils::getQuotientRemainder(rowIdx, StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+         if (chunkIdx != currentChunkIdx) {
+             currentChunkIdx = chunkIdx;
+-            const auto lock = chunkedGroups.lock();
+-            chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
++            // La garde se rend avant de demander le verrou du groupe, jamais l'inverse.
++            if (appendGuard.owns_lock()) {
++                appendGuard.unlock();
++            }
++            {
++                const auto lock = chunkedGroups.lock();
++                chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
++            }
++            appendGuard.lock();
+         }
+         KU_ASSERT(chunkedGroup);
+         numSelected += chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
+diff --git a/src/storage/table/node_group.cpp b/src/storage/table/node_group.cpp
+index 163606e98..1fc309892 100644
+--- a/src/storage/table/node_group.cpp
++++ b/src/storage/table/node_group.cpp
+@@ -1,5 +1,8 @@
+ #include "storage/table/node_group.h"
+ 
++#include <mutex>
++#include <shared_mutex>
++
+ #include "common/assert.h"
+ #include "common/types/types.h"
+ #include "common/uniq_lock.h"
+@@ -47,6 +50,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
+     const std::vector<column_id_t>& columnIDs, std::span<const ColumnChunkData*> chunkedGroup,
+     row_idx_t startRowIdx, row_idx_t numRowsToAppend) {
+     const auto lock = chunkedGroups.lock();
++    const std::unique_lock appendGuard{inMemAppendMtx};
+     const auto numRowsBeforeAppend = getNumRows();
+     if (chunkedGroups.isEmpty(lock)) {
+         chunkedGroups.appendGroup(lock,
+@@ -80,6 +84,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
+     const std::vector<column_id_t>& columnIDs, std::span<const ColumnChunk*> chunkedGroup,
+     row_idx_t startRowIdx, row_idx_t numRowsToAppend) {
+     const auto lock = chunkedGroups.lock();
++    const std::unique_lock appendGuard{inMemAppendMtx};
+     const auto numRowsBeforeAppend = getNumRows();
+     if (chunkedGroups.isEmpty(lock)) {
+         chunkedGroups.appendGroup(lock,
+@@ -112,6 +117,7 @@ row_idx_t NodeGroup::append(const Transaction* transaction,
+ void NodeGroup::append(const Transaction* transaction, const std::vector<ValueVector*>& vectors,
+     const row_idx_t startRowIdx, const row_idx_t numRowsToAppend) {
+     const auto lock = chunkedGroups.lock();
++    const std::unique_lock appendGuard{inMemAppendMtx};
+     const auto numRowsBeforeAppend = getNumRows();
+     if (chunkedGroups.isEmpty(lock)) {
+         chunkedGroups.appendGroup(lock,
+@@ -347,6 +353,12 @@ bool NodeGroup::lookup(const Transaction* transaction, const TableScanState& sta
+     return lookupNoLock(transaction, state, posInSel);
+ }
+ 
++bool NodeGroup::lookupSharedLock(const Transaction* transaction, const TableScanState& state,
++    sel_t posInSel) const {
++    const std::shared_lock appendGuard{inMemAppendMtx};
++    return lookupNoLock(transaction, state, posInSel);
++}
++
+ bool NodeGroup::lookupMultiple(const Transaction* transaction, const TableScanState& state) const {
+     const auto lock = chunkedGroups.lock();
+     return lookupMultiple(lock, transaction, state);
+@@ -401,6 +413,7 @@ void NodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pa
+ 
+ void NodeGroup::rollbackInsert(row_idx_t startRow) {
+     const auto lock = chunkedGroups.lock();
++    const std::unique_lock appendGuard{inMemAppendMtx};
+     const auto numEmptyTrailingGroups = chunkedGroups.getNumEmptyTrailingGroups(lock);
+     chunkedGroups.removeTrailingGroups(lock, numEmptyTrailingGroups);
+     numRows = startRow;
+@@ -725,6 +738,9 @@ bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGrou
+ }
+ 
+ bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdxInGroup) const {
++    // Sans le verrou de chunkedGroups, mais sous la garde partagée : la liste des blocs
++    // peut s'allonger sous un lecteur.
++    const std::shared_lock appendGuard{inMemAppendMtx};
+     const auto* chunkedGroup = findChunkedGroupFromRowIdxNoLock(rowIdxInGroup);
+     if (!chunkedGroup) {
+         return false;
+diff --git a/src/storage/table/node_table.cpp b/src/storage/table/node_table.cpp
+index aa584bed8..4f386e13d 100644
+--- a/src/storage/table/node_table.cpp
++++ b/src/storage/table/node_table.cpp
+@@ -1,5 +1,7 @@
+ #include "storage/table/node_table.h"
+ 
++#include <shared_mutex>
++
+ #include "catalog/catalog_entry/node_table_catalog_entry.h"
+ #include "common/cast.h"
+ #include "common/data_chunk/data_chunk_state.h"
+@@ -369,7 +371,7 @@ bool NodeTable::lookup(const Transaction* transaction, const TableScanState& sca
+     if constexpr (lock) {
+         return scanState.nodeGroup->lookup(transaction, scanState);
+     } else {
+-        return scanState.nodeGroup->lookupNoLock(transaction, scanState);
++        return scanState.nodeGroup->lookupSharedLock(transaction, scanState);
+     }
+ }
+ 
+@@ -382,6 +384,10 @@ template<bool lock>
+ bool NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanState) const {
+     const auto numRowsToRead = scanState.nodeIDVector->state->getSelSize();
+     sel_t numRowsRead = 0;
++    // Sans le verrou du groupe, la garde contre l'ajout en mémoire se tient d'une ligne à
++    // l'autre tant qu'on reste dans le même groupe ; elle se rend avant d'en changer,
++    // initScanState pouvant demander le verrou du groupe.
++    std::shared_lock<std::shared_mutex> appendGuard;
+     for (auto i = 0u; i < numRowsToRead; i++) {
+         const auto nodeIDPos = scanState.nodeIDVector->state->getSelVector()[i];
+         if (scanState.nodeIDVector->isNull(nodeIDPos)) {
+@@ -403,6 +409,9 @@ bool NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanSta
+             // If the scan state is already initialized for the same source and node group, we can
+             // skip re-initialization.
+         } else {
++            if (appendGuard.owns_lock()) {
++                appendGuard.unlock();
++            }
+             scanState.source = source;
+             scanState.nodeGroupIdx = nodeGroupIdx;
+             initScanState(transaction, scanState);
+@@ -411,6 +420,9 @@ bool NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanSta
+         if constexpr (lock) {
+             numRowsRead += scanState.nodeGroup->lookup(transaction, scanState, i);
+         } else {
++            if (!appendGuard.owns_lock()) {
++                appendGuard = scanState.nodeGroup->lockAgainstInMemAppend();
++            }
+             numRowsRead += scanState.nodeGroup->lookupNoLock(transaction, scanState, i);
+         }
+     }

@@ -1,0 +1,31 @@
+diff --git a/extension/vector/src/index/hnsw_graph.cpp b/extension/vector/src/index/hnsw_graph.cpp
+index 40322d164..c81ac0112 100644
+--- a/extension/vector/src/index/hnsw_graph.cpp
++++ b/extension/vector/src/index/hnsw_graph.cpp
+@@ -124,7 +124,7 @@ std::unique_ptr<GetEmbeddingsScanState> OnDiskEmbeddings::constructScanState() c
+ EmbeddingHandle OnDiskEmbeddings::getEmbedding(common::offset_t offset,
+     GetEmbeddingsScanState& embeddingScanState) const {
+     auto& scanState = embeddingScanState.cast<OnDiskEmbeddingScanState>().getScanState();
+-    if (!nodeTable.isVisibleNoLock(transaction, offset)) {
++    if (!nodeTable.isVisible(transaction, offset)) {
+         return EmbeddingHandle::createNullHandle();
+     }
+     scanState.nodeIDVector->setValue(0, common::internalID_t{offset, nodeTable.getTableID()});
+@@ -145,7 +145,7 @@ EmbeddingHandle OnDiskEmbeddings::getEmbedding(common::offset_t offset,
+     } else {
+         nodeTable.initScanState(transaction, scanState);
+     }
+-    const auto result = nodeTable.lookup<false>(transaction, scanState);
++    const auto result = nodeTable.lookup<true>(transaction, scanState);
+     KU_ASSERT(scanState.outputVectors.size() == 1 &&
+               scanState.outputVectors[0]->state->getSelVector()[0] == 0);
+     if (!result || scanState.outputVectors[0]->isNull(0)) {
+@@ -178,7 +178,7 @@ std::vector<EmbeddingHandle> OnDiskEmbeddings::getEmbeddings(
+     KU_ASSERT(
+         scanState.outputVectors[0]->dataType.getLogicalTypeID() == common::LogicalTypeID::ARRAY);
+     [[maybe_unused]] const auto lookupSuccess =
+-        nodeTable.lookupMultiple<false>(transaction, scanState);
++        nodeTable.lookupMultiple<true>(transaction, scanState);
+     KU_ASSERT(lookupSuccess);
+     std::vector<EmbeddingHandle> embeddings;
+     embeddings.reserve(offsets.size());
