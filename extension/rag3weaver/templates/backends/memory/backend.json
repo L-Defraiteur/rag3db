@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "name": "memory",
+  "database": "data/memory.rag3db",
+  "embeddings": {
+    "address": "",
+    "model": "bge-m3",
+    "dimensions": 1024
+  },
+  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "entities": {
+    "Memory": {
+      "schema": "schemas/memory.json",
+      "config": {
+        "fields": {
+          "claim": {
+            "type": "string",
+            "isTitle": true
+          },
+          "why": {
+            "type": "string",
+            "isContent": true
+          },
+          "kind": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "reach": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "claim",
+          "reach"
+        ],
+        "returnFields": [
+          "claim",
+          "kind",
+          "origin",
+          "reach",
+          "state",
+          "revision"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "state",
+          "initial": "current",
+          "transitions": [
+            {
+              "name": "review",
+              "from": "current",
+              "to": "to_review"
+            },
+            {
+              "name": "confirm",
+              "from": "to_review",
+              "to": "current"
+            },
+            {
+              "name": "supersede",
+              "from": "current",
+              "to": "superseded"
+            },
+            {
+              "name": "supersede_reviewed",
+              "from": "to_review",
+              "to": "superseded"
+            },
+            {
+              "name": "set_aside",
+              "from": "current",
+              "to": "set_aside"
+            },
+            {
+              "name": "set_aside_reviewed",
+              "from": "to_review",
+              "to": "set_aside"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision",
+        "transition_dates": [
+          {
+            "field": "state",
+            "to": "to_review",
+            "timestamp_field": "reviewed_at"
+          }
+        ]
+      }
+    },
+    "Subject": {
+      "schema": "schemas/subject.json",
+      "config": {
+        "fields": {
+          "name": {
+            "type": "string",
+            "isTitle": true
+          },
+          "about": {
+            "type": "string",
+            "isContent": true
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "name"
+        ],
+        "returnFields": [
+          "name",
+          "state",
+          "revision"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "state",
+          "initial": "current",
+          "transitions": [
+            {
+              "name": "set_aside",
+              "from": "current",
+              "to": "set_aside"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
+    }
+  },
+  "relations": {
+    "ANCHORED_TO": {
+      "from": "Memory",
+      "to": "Subject"
+    },
+    "REPLACES": {
+      "from": "Memory",
+      "to": "Memory"
+    }
+  },
+  "tools": {
+    "put_memory": {
+      "graph": "../notebook/graphs/put.mmd",
+      "bindings": {
+        "entity": "Memory"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Memory",
+          "view": "editable"
+        }
+      }
+    },
+    "get_memory": {
+      "graph": "../notebook/graphs/get.mmd",
+      "bindings": {
+        "entity": "Memory"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Memory",
+          "view": "identity"
+        }
+      }
+    },
+    "put_subject": {
+      "graph": "../notebook/graphs/put.mmd",
+      "bindings": {
+        "entity": "Subject"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Subject",
+          "view": "editable"
+        }
+      }
+    },
+    "recall": {
+      "graph": "../../tools/search_structured.mmd",
+      "bindings": {
+        "target": "Memory"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "recall_subjects": {
+      "graph": "../../tools/search_structured.mmd",
+      "bindings": {
+        "target": "Subject"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    }
+  }
+}

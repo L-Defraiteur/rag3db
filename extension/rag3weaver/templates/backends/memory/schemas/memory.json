@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["claim", "why", "kind", "origin", "said_as", "reach", "state", "revision", "created_at", "updated_at", "reviewed_at"],
+  "properties": {
+    "claim": {"type": "string", "minLength": 1, "description": "L'affirmation, courte. Une phrase, pas un paragraphe."},
+    "why": {"type": "string", "minLength": 1, "description": "Le pourquoi. C'est lui qui se découpe et s'embarque."},
+    "kind": {"type": "string", "enum": ["fact", "preference", "decision", "pointer"]},
+    "origin": {"type": "string", "enum": ["said", "inferred"], "description": "Dit par la personne, ou déduit. Une déduction n'écrase jamais une parole."},
+    "said_as": {"type": ["string", "null"], "description": "Les mots de la personne, quand origin vaut said."},
+    "reach": {"type": "string", "enum": ["person", "project", "team"], "description": "Trois portées. Ce qui ne vaut que pour la conversation en cours ne s'écrit pas, donc « session » n'en est pas une."},
+    "state": {"type": "string", "enum": ["current", "to_review", "superseded", "set_aside"]},
+    "revision": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "reviewed_at": {"type": ["integer", "null"], "description": "Dernier passage à to_review, millisecondes UTC serveur"}
+  }
+}

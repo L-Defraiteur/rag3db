@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["name", "about", "state", "revision", "created_at", "updated_at"],
+  "properties": {
+    "name": {"type": "string", "minLength": 1, "description": "Le nom du sujet. Point de rendez-vous, comme Symbol l'est pour les noms de code."},
+    "about": {"type": "string", "minLength": 1, "description": "Une description courte. C'est elle qui s'embarque — et c'est pourquoi un sujet a des chunks, là où Symbol n'en a pas."},
+    "state": {"type": "string", "enum": ["current", "set_aside"]},
+    "revision": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"}
+  }
+}

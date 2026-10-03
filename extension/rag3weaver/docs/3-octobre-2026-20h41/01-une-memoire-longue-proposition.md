@@ -439,24 +439,85 @@ naître avec un étage 2 réglé sur « demander toujours » — le défaut sûr
 gagner son modèle ensuite sans que la forme bouge.
 
 **Ce que le nœud exige du modèle.** Je ne choisis pas le modèle ; je dis les
-conditions :
+conditions. Les faits vérifiés par la session optimiseur
+([son tableau](../optimiseur/3-octobre-2026-20h55/01-les-modeles-de-decision-verifies-a-la-source.md),
+aucune mesure encore) les rendent plus précises qu'à ma première écriture, et
+font apparaître une tension qu'il faut nommer.
 
-1. **Une liste fermée, tenue hors de sa bonne volonté** : décodage contraint,
+1. **Un choix parmi des options nommées, pas un oui/non.** Les trois primitives
+   communes aux candidats sont le oui/non, le choix parmi N options décrites, et
+   un score ordonné — critère et options donnés **à l'appel**, rien n'est figé à
+   l'entraînement. On prend la deuxième, et pour une raison que l'un des auteurs
+   écrit lui-même : son oui/non « peut suivre ses étiquettes d'options plutôt que
+   l'état », et son score ordonné est sa primitive la plus faible. Des options
+   nommées — « même sujet », « variante », « sujet nouveau » — sont donc le
+   terrain le plus sûr.
+2. **Une liste fermée, tenue hors de sa bonne volonté** : décodage contraint,
    lecture des logits des choix, ou un schéma d'énumération côté API. Jamais du
    texte libre analysé après coup. Le moteur a déjà la forme —
    `Choices::Fixed` devient un `enum` dans le schéma JSON, et une valeur hors
    liste est refusée **avec la liste**.
-2. **Un score comparable à critère fixe.** C'est la condition dure : deux
-   seuils ne veulent rien dire si le score n'est pas comparable d'un appel à
-   l'autre. Les seuils sont donc **par critère**, jamais globaux.
-3. **L'abstention comme sortie de première classe**, pas comme un score bas.
+3. **Un budget d'options déclaré par le modèle, pas découvert par l'échec.**
+   Les limites relevées vont de 16 à 255 par passe, et les petits encodeurs
+   recommandent d'en rester à une dizaine. C'est précisément le travail de
+   l'étage 1 : le classement **tronque** la liste au budget du modèle de
+   verdict. Le nœud doit donc lire ce budget comme une propriété du modèle
+   branché.
+4. **Un nombre d'options fixe, et c'est une conséquence qu'on ne voit pas tout
+   de suite.** La probabilité est partout un softmax sur les options, divisé par
+   une température. Un softmax dont le **dénominateur change** avec le nombre de
+   candidats ne rend pas des scores comparables d'un appel à l'autre : deux
+   seuils posés sur trois candidats ne veulent plus rien dire sur sept. Donc
+   l'étage 1 ne rend pas « les proches », il rend **toujours le même nombre** de
+   candidats, complété si besoin. Sans ça, les zones se déplacent sous nos pieds.
+5. **L'abstention comme sortie de première classe**, pas comme un score bas.
    Un modèle qui sait dire « je ne sais pas » vaut mieux qu'un seuil sur une
    assurance. S'il ne sait pas s'abstenir, la zone incertaine *est* son
    abstention.
-4. **Déterminisme** : même entrée, même sortie, sinon les mesures du banc ne
+6. **Déterminisme** : même entrée, même sortie, sinon les mesures du banc ne
    veulent rien dire.
-5. **Une passe**, plusieurs langues, et une latence qui tient dans le temps
-   d'une écriture — pas dans celui d'une recherche.
+7. **Le français est une exigence, pas un confort.** Un seul des six candidats
+   se déclare multilingue. Nos mémoires et nos documents sont en français : un
+   modèle « English only » ne lit pas la matière du produit.
+8. **Atteignable depuis notre exécution** : ONNX pour la voie encodeur, ou
+   `llama-server` pour la voie à quelques milliards de paramètres. Un candidat
+   livré avec un runtime Go seul n'est pas branchable chez nous — c'est un
+   critère de sélection, pas un détail d'emballage.
+
+### 7.6 La tension à nommer, et comment on en sort
+
+Les deux exigences les plus dures — un score comparable (4) et le français
+(7) — sont aujourd'hui satisfaites par des **ensembles disjoints** de
+candidats : le seul qui se déclare multilingue est aussi celui qui annonce ses
+températures laissées à 1,0, donc **non calibré**, et un autre dit que sa
+calibration n'a jamais été rapportée.
+
+Conclusion, et elle change la conception plutôt que d'attendre un modèle
+parfait :
+
+> **Le nœud n'exige pas un modèle calibré. Il exige que la calibration nous
+> appartienne.**
+
+Les deux seuils ne sont pas des constantes lues dans une carte de modèle : ce
+sont des **réglages par critère et par modèle**, ajustés sur un jeu de paires
+dont on connaît la réponse. Et ce jeu, le banc scripté de §4 le produit
+gratuitement, puisque dans un scénario écrit on sait lesquelles paires sont la
+même chose.
+
+D'où une mesure de plus, propre au nœud et facile : **l'invariance aux
+étiquettes.** On permute l'ordre et la formulation des options et le verdict
+ne doit pas changer. C'est exactement le défaut qu'un auteur avoue — suivre
+les étiquettes au lieu de l'état — et il se mesure en une passe. Un modèle qui
+échoue là ne peut pas porter la décision, quelle que soit son exactitude
+annoncée.
+
+Dernier point, opérationnel plutôt que technique : la voie à quelques
+milliards de paramètres passe par `llama-server` et **partage la carte** avec
+le service d'embarquement et le modèle de dialogue. Ce n'est pas qu'une
+latence, c'est une contention — et sur ce poste, un démon sur la carte
+intégrée fige l'écran. La voie encodeur, à 150–420 millions de paramètres en
+une passe, n'a pas ce défaut. C'est un argument qui ne figure dans aucun
+tableau de performances.
 
 **Les trois zones, et leur asymétrie assumée.** Les coûts ne sont pas
 symétriques, donc les zones ne doivent pas l'être :
