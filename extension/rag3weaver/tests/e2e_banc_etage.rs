@@ -31,7 +31,7 @@ use rag3weaver::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType,
 use rag3weaver::connection::{CypherValue, QueryParam};
 use rag3weaver::filter::{FilterCondition, FilterValue};
 use rag3weaver::embedder::{Embedder, HashEmbedder};
-use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
+use rag3weaver::search::{Consistency, FieldWeight, FusionConfig, SearchOptions, SearchSignals, SignalConfig};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 const CORPUS: &[(&str, &str)] = &[
@@ -342,6 +342,63 @@ fn banc_etage_qui_perd() {
         par_genre.noter(&noms(&r), attendus);
     }
 
+    // ── P : la pondération par genre — un poids, pas un filtre (pas C) ──
+    // Deux formes, trois valeurs, dans le même run : la demande (fichier
+    // entier et espace de noms dévalués à x) et l'ombre pondérée de G
+    // (function/method à 1, tout le reste à x par `default`). L'étage
+    // appelant applique exactement la même table que la déclaration
+    // d'entité : la mesure vaut pour les deux sans toucher `Scope`.
+    let mut par_poids: Vec<(String, Mesure)> = Vec::new();
+    for x in [0.8, 0.6, 0.4] {
+        let mut p_demande = Mesure::default();
+        let mut p_ombre = Mesure::default();
+        for (q, attendus) in QUESTIONS {
+            let mut o = options_vecteur();
+            o.field_weights = vec![FieldWeight {
+                field: "scope_type".into(),
+                weights: [("file".to_string(), x), ("namespace".to_string(), x)].into_iter().collect(),
+                default: 1.0,
+            }];
+            let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche pondérée");
+            p_demande.noter(&noms(&r), attendus);
+
+            let mut o = options_vecteur();
+            o.field_weights = vec![FieldWeight {
+                field: "scope_type".into(),
+                weights: [("function".to_string(), 1.0), ("method".to_string(), 1.0)].into_iter().collect(),
+                default: x,
+            }];
+            let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche pondérée");
+            p_ombre.noter(&noms(&r), attendus);
+        }
+        par_poids.push((format!("P(file,ns → {x}) — la demande, pondérée pas filtrée"), p_demande));
+        par_poids.push((format!("P(default → {x}) — l'ombre pondérée de G"), p_ombre));
+    }
+
+    // ── H : les poids de fusion en hybride — 0,6/0,4 contre 0,3/0,7 ─────
+    // La mesure que Lucie attend depuis le 18 septembre. Le sparse n'y
+    // entre pas : granite-278m n'a pas de sortie sparse — à dire dans le
+    // tableau plutôt que de le laisser croire mesuré.
+    let mut hybrides: Vec<(String, Mesure)> = Vec::new();
+    for (etiquette, b, v) in [
+        ("H(bm25 0,6 / vector 0,4) — le gabarit", 0.6, 0.4),
+        ("H(bm25 0,3 / vector 0,7) — l'ancien moteur", 0.3, 0.7),
+    ] {
+        let mut h = Mesure::default();
+        for (q, attendus) in QUESTIONS {
+            let mut o = options_vecteur();
+            o.signals = Some(SearchSignals::HYBRID);
+            o.fusion = Some(FusionConfig {
+                bm25: SignalConfig { weight: b, ..SignalConfig::default() },
+                vector: SignalConfig { weight: v, ..SignalConfig::default() },
+                ..FusionConfig::default()
+            });
+            let r = Catalog::rechercher(&reel, SCOPE, q, o).expect("recherche hybride");
+            h.noter(&noms(&r), attendus);
+        }
+        hybrides.push((etiquette.to_string(), h));
+    }
+
     // ── M2 : cosinus exact contre tous les chunks, même résolution ──────
     // Le vecteur de la requête est celui du catalogue ; la comparaison est
     // exhaustive au lieu du HNSW ; les 20 meilleurs chunks remontent à leur
@@ -470,6 +527,13 @@ fn banc_etage_qui_perd() {
     eprintln!("{}", m3.ligne("M3 — les 20 chunks bruts du HNSW, avant résolution"));
     eprintln!("{}", m1b.ligne("M1b — le texte de M1 sur les 4 819 scopes de src/"));
     eprintln!("{}", par_genre.ligne("G — tel quel, scope_type dans function | method"));
+    for (etiquette, m) in &par_poids {
+        eprintln!("{}", m.ligne(etiquette));
+    }
+    for (etiquette, m) in &hybrides {
+        eprintln!("{}", m.ligne(etiquette));
+    }
+    eprintln!("(hybride sans sparse : granite-278m n'a pas de sortie sparse — le poids sparse reste à mesurer avec un modèle qui en a une)");
     eprintln!("\nM3 : le bon parent est dans les 20 chunks bruts pour {bon_parent_dans_les_20}/{} questions.", QUESTIONS.len());
 
     assert!(rapport.scopes > 0, "rien n'a été indexé");
