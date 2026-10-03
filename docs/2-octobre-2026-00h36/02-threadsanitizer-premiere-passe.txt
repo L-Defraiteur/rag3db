@@ -1,0 +1,348 @@
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Read of size 1 at 0x720c00011b11 by thread T41 (mutexes: read M0):
+    #0 rag3db::storage::VectorVersionInfo::isDeleted() const src/storage/table/version_info.cpp:194
+    #1 rag3db::storage::VersionInfo::isDeleted() const src/storage/table/version_info.cpp:569
+    #2 rag3db::storage::ChunkedNodeGroup::isDeleted() const src/storage/table/chunked_node_group.cpp:417
+    #3 rag3db::storage::NodeGroup::isVisibleNoLock() const src/storage/table/node_group.cpp:733
+    #4 rag3db::storage::NodeTable::isVisibleNoLock() const src/storage/table/node_table.cpp:753
+    #5 operator() src/storage/table/node_table.cpp:766
+  Previous write of size 1 at 0x720c00011b11 by thread T42:
+    #0 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:98
+    #1 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #2 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #3 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #4 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Location is heap block of size 40 at 0x720c00011af0 allocated by main thread:
+    #2 rag3db::storage::VersionInfo::getOrCreateVersionInfo() src/storage/table/version_info.cpp:417
+    #3 rag3db::storage::VersionInfo::append() src/storage/table/version_info.cpp:442
+    #4 rag3db::storage::ChunkedNodeGroup::append() src/storage/table/chunked_node_group.cpp:242
+    #5 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:104
+    #6 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #7 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #5 rag3db::storage::HashIndexLocalStorage<long>::lookup() src/include/storage/local_storage/local_hash_index.h:33
+    #6 rag3db::storage::HashIndex<long>::lookupInternal() src/include/storage/index/hash_index.h:103
+    #7 bool rag3db::storage::PrimaryKeyIndex::lookup<long>() src/include/storage/index/hash_index.h:386
+    #8 operator()<long int> src/storage/index/hash_index.cpp:556
+    #9 visit<rag3db::storage::PrimaryKeyIndex::lookup()::<lambda(T)>, rag3db::storage::PrimaryKeyIndex::lookup(const rag3db::transaction::Transaction*, rag3db::common::ValueVector*, uint64_t, rag3db::common::offset_t&, rag3db::storage::visible_func)::<lambda(auto:26)> > src/include/common/type_utils.h:255
+    #10 rag3db::storage::PrimaryKeyIndex::lookup() src/storage/index/hash_index.cpp:552
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:194 in rag3db::storage::VectorVersionInfo::isDeleted(unsigned long, unsigned long, unsigned long) const
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Read of size 8 at 0x720c00011af8 by thread T41 (mutexes: read M0):
+    #3 rag3db::storage::VectorVersionInfo::isDeleted() const src/storage/table/version_info.cpp:204
+    #4 rag3db::storage::VersionInfo::isDeleted() const src/storage/table/version_info.cpp:569
+    #5 rag3db::storage::ChunkedNodeGroup::isDeleted() const src/storage/table/chunked_node_group.cpp:417
+    #6 rag3db::storage::NodeGroup::isVisibleNoLock() const src/storage/table/node_group.cpp:733
+    #7 rag3db::storage::NodeTable::isVisibleNoLock() const src/storage/table/node_table.cpp:753
+    #8 operator() src/storage/table/node_table.cpp:766
+  Previous write of size 8 at 0x720c00011af8 by thread T42:
+    #4 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #5 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #6 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #7 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #8 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #9 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+  Location is heap block of size 40 at 0x720c00011af0 allocated by main thread:
+    #2 rag3db::storage::VersionInfo::getOrCreateVersionInfo() src/storage/table/version_info.cpp:417
+    #3 rag3db::storage::VersionInfo::append() src/storage/table/version_info.cpp:442
+    #4 rag3db::storage::ChunkedNodeGroup::append() src/storage/table/chunked_node_group.cpp:242
+    #5 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:104
+    #6 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #7 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #5 rag3db::storage::HashIndexLocalStorage<long>::lookup() src/include/storage/local_storage/local_hash_index.h:33
+    #6 rag3db::storage::HashIndex<long>::lookupInternal() src/include/storage/index/hash_index.h:103
+    #7 bool rag3db::storage::PrimaryKeyIndex::lookup<long>() src/include/storage/index/hash_index.h:386
+    #8 operator()<long int> src/storage/index/hash_index.cpp:556
+    #9 visit<rag3db::storage::PrimaryKeyIndex::lookup()::<lambda(T)>, rag3db::storage::PrimaryKeyIndex::lookup(const rag3db::transaction::Transaction*, rag3db::common::ValueVector*, uint64_t, rag3db::common::offset_t&, rag3db::storage::visible_func)::<lambda(auto:26)> > src/include/common/type_utils.h:255
+    #10 rag3db::storage::PrimaryKeyIndex::lookup() src/storage/index/hash_index.cpp:552
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:204 in rag3db::storage::VectorVersionInfo::isDeleted(unsigned long, unsigned long, unsigned long) const
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Write of size 1 at 0x720c0001e111 by thread T81:
+    #0 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:98
+    #1 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #2 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #3 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #4 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Previous write of size 1 at 0x720c0001e111 by thread T82:
+    #0 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:98
+    #1 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #2 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #3 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #4 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Location is heap block of size 40 at 0x720c0001e0f0 allocated by main thread:
+    #2 rag3db::storage::VersionInfo::getOrCreateVersionInfo() src/storage/table/version_info.cpp:417
+    #3 rag3db::storage::VersionInfo::append() src/storage/table/version_info.cpp:442
+    #4 rag3db::storage::ChunkedNodeGroup::append() src/storage/table/chunked_node_group.cpp:242
+    #5 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:104
+    #6 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #7 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:98 in rag3db::storage::VectorVersionInfo::delete_(unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Read of size 8 at 0x720c0001e0f8 by thread T81:
+    #3 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:108
+    #4 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #5 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #6 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #7 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #8 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Previous write of size 8 at 0x720c0001e0f8 by thread T82:
+    #4 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #5 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #6 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #7 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #8 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #9 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+  Location is heap block of size 40 at 0x720c0001e0f0 allocated by main thread:
+    #2 rag3db::storage::VersionInfo::getOrCreateVersionInfo() src/storage/table/version_info.cpp:417
+    #3 rag3db::storage::VersionInfo::append() src/storage/table/version_info.cpp:442
+    #4 rag3db::storage::ChunkedNodeGroup::append() src/storage/table/chunked_node_group.cpp:242
+    #5 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:104
+    #6 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #7 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:108 in rag3db::storage::VectorVersionInfo::delete_(unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Read of size 8 at 0x72a0000e4000 by thread T81:
+    #0 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:112
+    #1 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #2 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #3 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #4 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Previous write of size 8 at 0x72a0000e4000 by thread T82:
+    #2 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #3 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #4 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #5 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #6 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #7 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+  Location is heap block of size 16384 at 0x72a0000e4000 allocated by thread T82:
+    #2 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #3 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #4 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #5 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #6 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #7 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:112 in rag3db::storage::VectorVersionInfo::delete_(unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Write of size 8 at 0x722800005958 by thread T112 (mutexes: write M0):
+    #4 rag3db::storage::CSRNodeGroup::append() src/storage/table/csr_node_group.cpp:357
+    #5 rag3db::storage::RelTable::prepareCommitForNodeGroup() src/storage/table/rel_table.cpp:499
+    #6 rag3db::storage::RelTable::commit() src/storage/table/rel_table.cpp:446
+    #7 rag3db::storage::LocalStorage::commit() src/storage/local_storage/local_storage.cpp:74
+    #8 rag3db::transaction::Transaction::commit() src/transaction/transaction.cpp:64
+    #9 rag3db::transaction::TransactionManager::commit() src/transaction/transaction_manager.cpp:67
+  Previous read of size 8 at 0x722800005958 by thread T111:
+    #3 rag3db::storage::CSRNodeGroup::initializeScanState() const src/storage/table/csr_node_group.cpp:78
+    #4 rag3db::storage::RelTableScanState::initStateForCommitted() src/storage/table/rel_table.cpp:90
+    #5 rag3db::storage::RelTableScanState::initState() src/storage/table/rel_table.cpp:63
+    #6 rag3db::storage::RelTable::initScanState() const src/storage/table/rel_table.cpp:166
+    #7 rag3db::storage::RelTable::detachDelete() src/storage/table/rel_table.cpp:293
+    #8 rag3db::processor::NodeTableDeleteInfo::detachDeleteFromRelTable() const src/processor/operator/persistent/delete_executor.cpp:48
+  Location is heap block of size 160 at 0x7228000058c0 allocated by thread T112:
+    #2 rag3db::storage::NodeGroupCollection::getOrCreateNodeGroup() src/storage/table/node_group_collection.cpp:171
+    #3 rag3db::storage::RelTableData::getOrCreateNodeGroup() const src/include/storage/table/rel_table_data.h:91
+    #4 rag3db::storage::RelTable::commit() src/storage/table/rel_table.cpp:443
+    #5 rag3db::storage::LocalStorage::commit() src/storage/local_storage/local_storage.cpp:74
+    #6 rag3db::transaction::Transaction::commit() src/transaction/transaction.cpp:64
+    #7 rag3db::transaction::TransactionManager::commit() src/transaction/transaction_manager.cpp:67
+    #5 rag3db::transaction::TransactionManager::beginTransaction() src/transaction/transaction_manager.cpp:24
+    #6 rag3db::transaction::TransactionContext::beginTransactionInternal() src/transaction/transaction_context.cpp:83
+    #7 rag3db::transaction::TransactionContext::beginRecoveryTransaction() src/transaction/transaction_context.cpp:44
+    #8 rag3db::extension::ExtensionManager::autoLoadLinkedExtensions() src/extension/extension_manager.cpp:95
+    #9 rag3db::storage::Checkpointer::readCheckpoint() src/storage/checkpointer.cpp:200
+    #10 rag3db::storage::WALReplayer::replay() const src/storage/wal/wal_replayer.cpp:96
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/csr_node_group.cpp:357 in rag3db::storage::CSRNodeGroup::append(rag3db::transaction::Transaction const*, std::vector<unsigned int, std::allocator<unsigned int> > const&, unsigned long, std::span<rag3db::storage::ColumnChunk const*, 18446744073709551615ul>, unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Write of size 8 at 0x72a000190050 by thread T118:
+    #0 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:119
+    #1 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #2 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #3 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #4 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::processor::SingleLabelNodeDeleteExecutor::delete_() src/processor/operator/persistent/delete_executor.cpp:79
+  Previous read of size 8 at 0x72a000190050 by thread T117 (mutexes: read M0):
+    #0 rag3db::storage::VectorVersionInfo::isDeleted() const src/storage/table/version_info.cpp:204
+    #1 rag3db::storage::VersionInfo::isDeleted() const src/storage/table/version_info.cpp:569
+    #2 rag3db::storage::ChunkedNodeGroup::isDeleted() const src/storage/table/chunked_node_group.cpp:417
+    #3 rag3db::storage::NodeGroup::isVisible() const src/storage/table/node_group.cpp:723
+    #4 rag3db::storage::NodeTable::isVisible() const src/storage/table/node_table.cpp:744
+    #5 operator() src/storage/table/node_table.cpp:400
+  Location is heap block of size 16384 at 0x72a000190000 allocated by thread T118:
+    #2 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #3 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #4 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #5 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #6 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #7 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::storage::HashIndexLocalStorage<long>::lookup() src/include/storage/local_storage/local_hash_index.h:33
+    #6 rag3db::storage::HashIndex<long>::lookupInternal() src/include/storage/index/hash_index.h:103
+    #7 bool rag3db::storage::PrimaryKeyIndex::lookup<long>() src/include/storage/index/hash_index.h:386
+    #8 operator()<long int> src/storage/index/hash_index.cpp:556
+    #9 visit<rag3db::storage::PrimaryKeyIndex::lookup()::<lambda(T)>, rag3db::storage::PrimaryKeyIndex::lookup(const rag3db::transaction::Transaction*, rag3db::common::ValueVector*, uint64_t, rag3db::common::offset_t&, rag3db::storage::visible_func)::<lambda(auto:26)> > src/include/common/type_utils.h:255
+    #10 rag3db::storage::PrimaryKeyIndex::lookup() src/storage/index/hash_index.cpp:552
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:119 in rag3db::storage::VectorVersionInfo::delete_(unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Write of size 8 at 0x72a00002c030 by thread T117 (mutexes: write M0, write M1):
+    #0 rag3db::storage::VectorVersionInfo::setDeleteCommitTS() src/storage/table/version_info.cpp:143
+    #1 rag3db::storage::VectorVersionInfo::setDeleteCommitTS() src/storage/table/version_info.cpp:135
+    #2 rag3db::storage::VersionInfo::commitDelete() src/storage/table/version_info.cpp:643
+    #3 rag3db::storage::ChunkedNodeGroup::commitDelete() src/storage/table/chunked_node_group.cpp:536
+    #7 rag3db::storage::NodeGroup::applyFuncToChunkedGroups() const src/storage/table/node_group.cpp:767
+    #8 rag3db::storage::NodeTableVersionRecordHandler::applyFuncToChunkedGroups() const src/storage/table/node_table.cpp:30
+  Previous read of size 8 at 0x72a00002c030 by thread T118 (mutexes: read M2):
+    #0 rag3db::storage::VectorVersionInfo::isDeleted() const src/storage/table/version_info.cpp:204
+    #1 rag3db::storage::VersionInfo::isDeleted() const src/storage/table/version_info.cpp:569
+    #2 rag3db::storage::ChunkedNodeGroup::isDeleted() const src/storage/table/chunked_node_group.cpp:417
+    #3 rag3db::storage::NodeGroup::isVisible() const src/storage/table/node_group.cpp:723
+    #4 rag3db::storage::NodeTable::isVisible() const src/storage/table/node_table.cpp:744
+    #5 operator() src/storage/table/node_table.cpp:400
+  Location is heap block of size 16384 at 0x72a00002c000 allocated by thread T117:
+    #2 rag3db::storage::VectorVersionInfo::initDeletionVersionArray() src/storage/table/version_info.cpp:316
+    #3 rag3db::storage::VectorVersionInfo::delete_() src/storage/table/version_info.cpp:110
+    #4 rag3db::storage::VersionInfo::delete_() src/storage/table/version_info.cpp:461
+    #5 rag3db::storage::ChunkedNodeGroup::delete_() src/storage/table/chunked_node_group.cpp:396
+    #6 rag3db::storage::NodeGroup::delete_() src/storage/table/node_group.cpp:378
+    #7 rag3db::storage::NodeTable::delete_() src/storage/table/node_table.cpp:557
+    #5 rag3db::transaction::TransactionManager::beginTransaction() src/transaction/transaction_manager.cpp:24
+    #6 rag3db::transaction::TransactionContext::beginTransactionInternal() src/transaction/transaction_context.cpp:83
+    #7 rag3db::transaction::TransactionContext::beginRecoveryTransaction() src/transaction/transaction_context.cpp:44
+    #8 rag3db::extension::ExtensionManager::autoLoadLinkedExtensions() src/extension/extension_manager.cpp:95
+    #9 rag3db::storage::Checkpointer::readCheckpoint() src/storage/checkpointer.cpp:200
+    #10 rag3db::storage::WALReplayer::replay() const src/storage/wal/wal_replayer.cpp:96
+    #5 rag3db::common::UniqLock::UniqLock() src/include/common/uniq_lock.h:10
+    #6 rag3db::storage::GroupCollection<rag3db::storage::ChunkedNodeGroup>::lock() const src/include/storage/table/group_collection.h:21
+    #7 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:82
+    #8 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #9 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #10 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:64
+    #5 rag3db::storage::HashIndexLocalStorage<long>::lookup() src/include/storage/local_storage/local_hash_index.h:33
+    #6 rag3db::storage::HashIndex<long>::lookupInternal() src/include/storage/index/hash_index.h:103
+    #7 bool rag3db::storage::PrimaryKeyIndex::lookup<long>() src/include/storage/index/hash_index.h:386
+    #8 operator()<long int> src/storage/index/hash_index.cpp:556
+    #9 visit<rag3db::storage::PrimaryKeyIndex::lookup()::<lambda(T)>, rag3db::storage::PrimaryKeyIndex::lookup(const rag3db::transaction::Transaction*, rag3db::common::ValueVector*, uint64_t, rag3db::common::offset_t&, rag3db::storage::visible_func)::<lambda(auto:26)> > src/include/common/type_utils.h:255
+    #10 rag3db::storage::PrimaryKeyIndex::lookup() src/storage/index/hash_index.cpp:552
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:143 in rag3db::storage::VectorVersionInfo::setDeleteCommitTS(unsigned long, unsigned long, unsigned long)
+-----
+WARNING: ThreadSanitizer: data race (pid=984159)
+  Read of size 8 at 0x72a00021c048 by thread T118 (mutexes: read M0):
+    #0 rag3db::storage::VectorVersionInfo::isInserted() const src/storage/table/version_info.cpp:231
+    #1 rag3db::storage::VersionInfo::isInserted() const src/storage/table/version_info.cpp:581
+    #2 rag3db::storage::ChunkedNodeGroup::isInserted() const src/storage/table/chunked_node_group.cpp:424
+    #3 rag3db::storage::NodeGroup::isVisibleNoLock() const src/storage/table/node_group.cpp:734
+    #4 rag3db::storage::NodeTable::isVisibleNoLock() const src/storage/table/node_table.cpp:753
+    #5 operator() src/storage/table/node_table.cpp:766
+  Previous write of size 8 at 0x72a00021c048 by thread T117 (mutexes: write M1, write M2):
+    #0 rag3db::storage::VectorVersionInfo::setInsertCommitTS() src/storage/table/version_info.cpp:131
+    #1 rag3db::storage::VectorVersionInfo::setInsertCommitTS() src/storage/table/version_info.cpp:123
+    #2 rag3db::storage::VersionInfo::commitInsert() src/storage/table/version_info.cpp:609
+    #3 rag3db::storage::ChunkedNodeGroup::commitInsert() src/storage/table/chunked_node_group.cpp:516
+    #7 rag3db::storage::NodeGroup::applyFuncToChunkedGroups() const src/storage/table/node_group.cpp:767
+    #8 rag3db::storage::NodeTableVersionRecordHandler::applyFuncToChunkedGroups() const src/storage/table/node_table.cpp:30
+  Location is heap block of size 16384 at 0x72a00021c000 allocated by thread T117:
+    #2 rag3db::storage::VectorVersionInfo::initInsertionVersionArray() src/storage/table/version_info.cpp:311
+    #3 rag3db::storage::VectorVersionInfo::append() src/storage/table/version_info.cpp:85
+    #4 rag3db::storage::VersionInfo::append() src/storage/table/version_info.cpp:447
+    #5 rag3db::storage::ChunkedNodeGroup::append() src/storage/table/chunked_node_group.cpp:242
+    #6 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:104
+    #7 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #5 rag3db::storage::HashIndexLocalStorage<long>::lookup() src/include/storage/local_storage/local_hash_index.h:33
+    #6 rag3db::storage::HashIndex<long>::lookupInternal() src/include/storage/index/hash_index.h:103
+    #7 bool rag3db::storage::PrimaryKeyIndex::lookup<long>() src/include/storage/index/hash_index.h:386
+    #8 operator()<long int> src/storage/index/hash_index.cpp:556
+    #9 visit<rag3db::storage::PrimaryKeyIndex::lookup()::<lambda(T)>, rag3db::storage::PrimaryKeyIndex::lookup(const rag3db::transaction::Transaction*, rag3db::common::ValueVector*, uint64_t, rag3db::common::offset_t&, rag3db::storage::visible_func)::<lambda(auto:26)> > src/include/common/type_utils.h:255
+    #10 rag3db::storage::PrimaryKeyIndex::lookup() src/storage/index/hash_index.cpp:552
+    #5 rag3db::transaction::TransactionManager::beginTransaction() src/transaction/transaction_manager.cpp:24
+    #6 rag3db::transaction::TransactionContext::beginTransactionInternal() src/transaction/transaction_context.cpp:83
+    #7 rag3db::transaction::TransactionContext::beginRecoveryTransaction() src/transaction/transaction_context.cpp:44
+    #8 rag3db::extension::ExtensionManager::autoLoadLinkedExtensions() src/extension/extension_manager.cpp:95
+    #9 rag3db::storage::Checkpointer::readCheckpoint() src/storage/checkpointer.cpp:200
+    #10 rag3db::storage::WALReplayer::replay() const src/storage/wal/wal_replayer.cpp:96
+    #5 rag3db::common::UniqLock::UniqLock() src/include/common/uniq_lock.h:10
+    #6 rag3db::storage::GroupCollection<rag3db::storage::ChunkedNodeGroup>::lock() const src/include/storage/table/group_collection.h:21
+    #7 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:82
+    #8 rag3db::storage::NodeGroup::append() src/storage/table/node_group.cpp:32
+    #9 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:98
+    #10 rag3db::storage::NodeGroupCollection::append() src/storage/table/node_group_collection.cpp:64
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+    #3 rag3db::processor::QueryProcessor::QueryProcessor() src/processor/processor.cpp:21
+    #5 rag3db::main::Database::initMembers() src/main/database.cpp:120
+    #6 rag3db::main::Database::Database() src/main/database.cpp:92
+    #7 rag3db::main::Database::Database() src/main/database.cpp:87
+SUMMARY: ThreadSanitizer: data race src/storage/table/version_info.cpp:231 in rag3db::storage::VectorVersionInfo::isInserted(unsigned long, unsigned long, unsigned long) const
+-----

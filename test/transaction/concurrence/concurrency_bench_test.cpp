@@ -121,19 +121,13 @@ public:
         applyBenchSettings(*conn);
     }
 
-    void TearDown() override {
-        const auto testDirectory = std::filesystem::path(databasePath).parent_path();
-        EmptyDBTest::TearDown();
-        // Le nom d'un test paramétré contient des « / » : le chemin de la base prend des
-        // répertoires intermédiaires que le nettoyage de base ne retire pas.
-        std::error_code ignored;
-        for (auto dir = testDirectory.parent_path();
-            dir != TestHelper::getRootTempDir() && dir.has_parent_path(); dir = dir.parent_path()) {
-            if (!std::filesystem::remove(dir, ignored)) {
-                break;
-            }
-        }
-    }
+    // Le nom d'un test paramétré contient des « / » : le chemin de la base passe par des
+    // répertoires intermédiaires (Launchers/, Launchers/ConcurrencyBench.<cas>/) que
+    // tous les processus de test partagent. On ne les supprime pas : le 3 octobre, les
+    // supprimer quand ils étaient vides a probablement fait échouer une passe parallèle
+    // (un autre processus créait sa base dedans au même instant). Ils restent, vides et
+    // stables ; seul le dossier propre à la base, au nom horodaté, est retiré.
+    void TearDown() override { EmptyDBTest::TearDown(); }
 
     void mustRun(const std::string& query) {
         auto result = conn->query(query);
@@ -504,8 +498,11 @@ TEST_P(ConcurrencyBench, C4_Transfers) {
 }
 
 // C5 — double suppression de la même ligne. Invariant : une seule suppression valide,
-// l'autre est refusée par « Write-write conflict ». Attendu vert (version_info.cpp) ;
-// sous TSan, le chemin sans verrou de cette suppression est la marche A5.
+// l'autre est refusée par « Write-write conflict ». Les deux DELETE partent en même
+// temps. Mesuré le 3 octobre sur 200 répétitions : rouge 2/200 à chaud, 2/200 après
+// réouverture, 52/200 après arrêt brutal — les deux valident. C'est la course du chemin
+// de suppression sans verrou (marche A5) ; le cas est donc probabiliste
+// (probabilistic.txt), et son témoin déterministe attendu est ThreadSanitizer.
 TEST_P(ConcurrencyBench, C5_DoubleDelete) {
     runCase({.numWorkers = 2,
         .setup =
