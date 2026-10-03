@@ -272,3 +272,51 @@ TEST_F(ApiTest, ParameterInListQuantifier) {
     auto groundTruth = std::vector<std::string>{"True|False"};
     ASSERT_EQ(groundTruth, TestHelper::convertResultToString(*result));
 }
+
+// Une liste de lignes passée en paramètre, dont un champ est nul : la forme
+// `UNWIND $rows AS r CREATE (…)` des écritures par lots. Un client ne sait pas quel type
+// donner à un NULL ; ce qu'il choisit ne doit pas empêcher de le poser dans une colonne typée.
+static std::unique_ptr<Value> rowWithNullableField(int64_t id, std::unique_ptr<Value> v) {
+    std::vector<StructField> fields;
+    fields.emplace_back("id", LogicalType::INT64());
+    fields.emplace_back("v", v->getDataType().copy());
+    std::vector<std::unique_ptr<Value>> children;
+    children.push_back(std::make_unique<Value>(id));
+    children.push_back(std::move(v));
+    return std::make_unique<Value>(LogicalType::STRUCT(std::move(fields)), std::move(children));
+}
+
+static std::unique_ptr<Value> listOfRows(std::vector<std::unique_ptr<Value>> rows) {
+    auto type = LogicalType::LIST(rows[0]->getDataType().copy());
+    return std::make_unique<Value>(std::move(type), std::move(rows));
+}
+
+static void insertRowsAndExpect(rag3db::main::Connection& conn, std::unique_ptr<Value> rows,
+    const std::vector<std::string>& expected) {
+    ASSERT_TRUE(conn.query("CREATE NODE TABLE T(id INT64 PRIMARY KEY, v INT64);")->isSuccess());
+    auto prepared = conn.prepare("UNWIND $rows AS r CREATE (:T {id: r.id, v: r.v});");
+    ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
+    std::unordered_map<std::string, std::unique_ptr<Value>> params;
+    params["rows"] = std::move(rows);
+    auto result = conn.executeWithParams(prepared.get(), std::move(params));
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    auto content = conn.query("MATCH (t:T) RETURN t.id, t.v ORDER BY t.id;");
+    ASSERT_TRUE(content->isSuccess()) << content->getErrorMessage();
+    ASSERT_EQ(expected, TestHelper::convertResultToString(*content, true /* checkOrder */));
+}
+
+TEST_F(ApiTest, RowsParameterWithAFieldNullEverywhereTypedAsString) {
+    std::vector<std::unique_ptr<Value>> rows;
+    rows.push_back(rowWithNullableField(1,
+        std::make_unique<Value>(Value::createNullValue(LogicalType::STRING()))));
+    rows.push_back(rowWithNullableField(2,
+        std::make_unique<Value>(Value::createNullValue(LogicalType::STRING()))));
+    insertRowsAndExpect(*conn, listOfRows(std::move(rows)), {"1|", "2|"});
+}
+
+TEST_F(ApiTest, RowsParameterWithAFieldNullEverywhereUntyped) {
+    std::vector<std::unique_ptr<Value>> rows;
+    rows.push_back(rowWithNullableField(1, std::make_unique<Value>(Value::createNullValue())));
+    rows.push_back(rowWithNullableField(2, std::make_unique<Value>(Value::createNullValue())));
+    insertRowsAndExpect(*conn, listOfRows(std::move(rows)), {"1|", "2|"});
+}
