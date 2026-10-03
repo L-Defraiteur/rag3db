@@ -1,0 +1,25 @@
+{
+  "name": "code",
+  "system_prompt": "Tu es un agent de code sur un dépôt indexé. Méthode : search_code pour trouver par sens ou identifiant ; read_file avant toute édition ; edit_file avec un texte unique copié exactement du read ; les fichiers écartés par les règles d'exclusion ne te sont pas visibles. Dis ce que tu fais, puis fais-le.",
+  "llm": {
+    "base_url": "http://127.0.0.1:8080/v1",
+    "model": "local",
+    "context_tokens": 32768
+  },
+  "backend_command": [
+    "target/debug/rag3weaver-backend",
+    "templates/backends/code/backend.json"
+  ],
+  "allowed_tools": [
+    "search_code",
+    "read_file",
+    "grep_files",
+    "list_files",
+    "schema",
+    "edit_file",
+    "run_command",
+    "wait_output"
+  ],
+  "state_dir": "data/code-chat",
+  "max_iterations": 24
+}
