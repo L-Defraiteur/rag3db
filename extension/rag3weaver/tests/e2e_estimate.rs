@@ -181,6 +181,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
 #[ignore]
 fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
+    use rag3weaver::catalog::Level;
     use rag3weaver::code_tools::FileSource;
     use rag3weaver::dataflow::index_nodes::{new_index_journal, spawn_index, DONE_LINE, FAILED_PREFIX};
     use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
@@ -202,6 +203,8 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let before = catalog.index_state().expect("état d'un index vide");
+    assert_eq!((before.text, before.vectors), (Level::Never, Level::Never), "{before:?}");
     let catalog = Arc::new(Mutex::new(catalog));
 
     let journal = new_index_journal().expect("journal");
@@ -222,6 +225,9 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
 
     let progress = catalog.lock().unwrap().index_progress().expect("avancement");
     assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
+    let after = catalog.lock().unwrap().index_state().expect("état");
+    eprintln!("[index] état lu par la recherche : {}", serde_json::to_string(&after).unwrap());
+    assert_eq!((after.text, after.vectors, after.vectors_percent), (Level::Ready, Level::Ready, 100), "{after:?}");
     let found = Catalog::rechercher(&catalog, SCOPE, "EmbedDaemon", SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::BM25 | SearchSignals::VECTOR),

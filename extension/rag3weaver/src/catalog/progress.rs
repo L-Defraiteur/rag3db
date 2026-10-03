@@ -98,6 +98,77 @@ impl IndexProgress {
     }
 }
 
+/// Où en est un niveau de l'index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Level {
+    /// Rien n'a été indexé à ce niveau.
+    Never,
+    /// Il y a de quoi chercher, mais pas tout : une indexation est en cours,
+    /// ou une dette reste à solder.
+    Running,
+    /// Tout ce qui est écrit est cherchable à ce niveau.
+    Ready,
+}
+
+/// **L'état de l'index, lisible à chaque recherche.** Une seule lecture de
+/// méta — pas un comptage : c'est ce qu'une recherche consulte pour choisir
+/// son mode (grep avant, plein texte pendant, fusion après).
+///
+/// L'indexation l'écrit à chaque changement ([`Catalog::note_index_state`]).
+/// **Limite** : une écriture qui ne passe pas par elle — l'édition d'un
+/// fichier, un lot — ne le met pas à jour ; l'état « prêt » veut dire « prêt à
+/// la dernière indexation ». Les comptes ([`Catalog::index_progress`]) disent
+/// toujours vrai, au prix d'un comptage.
+/// Un état « en cours » que plus personne ne rafraîchit — un processus tué —
+/// est reconnu à son âge et recompté ([`IndexState::is_stale`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexState {
+    pub text: Level,
+    pub vectors: Level,
+    /// Les vecteurs faits, en pourcentage.
+    pub vectors_percent: u8,
+    /// Quand cet état a été écrit (millisecondes Unix).
+    pub updated_ms: u64,
+}
+
+/// Au-delà, un état « en cours » sans nouvelles n'est plus cru.
+pub const STATE_STALE_MS: u64 = 10 * 60 * 1_000;
+
+impl IndexState {
+    /// L'état que disent les comptes.
+    pub fn from_progress(progress: &IndexProgress, now_ms: u64) -> Self {
+        let chunks = progress.chunks();
+        let level = |missing: usize| match (chunks, missing) {
+            (0, _) => Level::Never,
+            (_, 0) => Level::Ready,
+            (n, m) if m >= n => Level::Never,
+            _ => Level::Running,
+        };
+        Self {
+            text: match (chunks, progress.writes_pending) {
+                (0, 0) => Level::Never,
+                (_, 0) => Level::Ready,
+                _ => Level::Running,
+            },
+            vectors: level(progress.dense_missing()),
+            vectors_percent: if chunks == 0 { 0 } else { progress.dense_percent() },
+            updated_ms: now_ms,
+        }
+    }
+
+    pub fn running(&self) -> bool {
+        self.text == Level::Running || self.vectors == Level::Running
+    }
+
+    /// Un état « en cours » trop vieux pour être cru.
+    pub fn is_stale(&self, now_ms: u64) -> bool {
+        self.running() && now_ms.saturating_sub(self.updated_ms) > STATE_STALE_MS
+    }
+}
+
+const INDEX_STATE_KEY: &str = "index_state";
+
 /// Le débit noté pour un modèle et une origine (`local`, ou l'adresse d'un
 /// service).
 fn rate_key(model: &str, origin: &str) -> String {
@@ -132,6 +203,32 @@ impl Catalog {
             });
         }
         Ok(IndexProgress { model: self.current_embedding_entry().name.clone(), tables, writes_pending: self.pending.total_count() })
+    }
+
+    /// **L'état de l'index, à bas coût** : l'état noté par l'indexation, en
+    /// une lecture de méta. Sans état noté — un index rempli par un autre
+    /// chemin — ou devant un état « en cours » périmé, on compte
+    /// ([`Self::index_progress`]) et on note le résultat, pour que l'appel
+    /// suivant ne recompte pas.
+    pub fn index_state(&self) -> Result<IndexState, CatalogError> {
+        let now = crate::dataflow::checkpoint::timestamp_ms();
+        if let Some(noted) = self.read_meta_key(INDEX_STATE_KEY)?.and_then(|v| serde_json::from_str::<IndexState>(&v).ok()) {
+            if !noted.is_stale(now) {
+                return Ok(noted);
+            }
+        }
+        let counted = IndexState::from_progress(&self.index_progress()?, now);
+        self.note_index_state(counted)?;
+        Ok(counted)
+    }
+
+    /// Note l'état de l'index. Appelé par l'indexation à chaque changement.
+    pub fn note_index_state(&self, state: IndexState) -> Result<(), CatalogError> {
+        if self.lecture_seule {
+            return Ok(());
+        }
+        let json = serde_json::to_string(&state).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(INDEX_STATE_KEY, &json)
     }
 
     /// L'embarqueur de ce catalogue vit-il ailleurs (un démon, un service) ?
@@ -234,5 +331,34 @@ mod tests {
         let mut p = progress(100, 50, None, 0);
         p.tables.push(TableProgress { table: "Note_Chunk".into(), chunks: 100, dense_missing: 0, sparse_missing: Some(10) });
         assert_eq!((p.chunks(), p.dense_missing(), p.sparse_missing(), p.dense_percent()), (200, 50, 10, 75));
+    }
+
+    #[test]
+    fn l_etat_distingue_jamais_en_cours_et_pret_par_niveau() {
+        let jamais = IndexState::from_progress(&progress(0, 0, None, 0), 1);
+        assert_eq!((jamais.text, jamais.vectors, jamais.vectors_percent), (Level::Never, Level::Never, 0));
+        // Les lignes sont là, aucun vecteur : cherchable par mots seulement.
+        let mots = IndexState::from_progress(&progress(1_000, 1_000, None, 0), 1);
+        assert_eq!((mots.text, mots.vectors, mots.vectors_percent), (Level::Ready, Level::Never, 0));
+        let pendant = IndexState::from_progress(&progress(1_000, 600, None, 0), 1);
+        assert_eq!((pendant.text, pendant.vectors, pendant.vectors_percent), (Level::Ready, Level::Running, 40));
+        let pret = IndexState::from_progress(&progress(1_000, 0, None, 0), 1);
+        assert_eq!((pret.text, pret.vectors, pret.vectors_percent), (Level::Ready, Level::Ready, 100));
+        // Des écritures en file : le plein texte n'est pas complet.
+        assert_eq!(IndexState::from_progress(&progress(1_000, 0, None, 5), 1).text, Level::Running);
+    }
+
+    #[test]
+    fn un_etat_en_cours_sans_nouvelles_n_est_plus_cru() {
+        let en_cours = IndexState { text: Level::Ready, vectors: Level::Running, vectors_percent: 40, updated_ms: 1_000 };
+        assert!(!en_cours.is_stale(1_000 + STATE_STALE_MS));
+        assert!(en_cours.is_stale(1_001 + STATE_STALE_MS), "un processus tué ne laisse pas « en cours » pour toujours");
+        // Un état abouti ne périme pas : rien ne le rafraîchit, et c'est normal.
+        let pret = IndexState { text: Level::Ready, vectors: Level::Ready, vectors_percent: 100, updated_ms: 1_000 };
+        assert!(!pret.is_stale(u64::MAX));
+        // Et il se lit tel qu'il s'écrit.
+        let json = serde_json::to_string(&en_cours).unwrap();
+        assert!(json.contains("\"vectors\":\"running\""), "{json}");
+        assert_eq!(serde_json::from_str::<IndexState>(&json).unwrap(), en_cours);
     }
 }

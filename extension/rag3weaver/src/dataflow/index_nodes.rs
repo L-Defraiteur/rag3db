@@ -236,10 +236,22 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
     use crate::disponibilite::Disponibilites;
 
+    use crate::catalog::{IndexState, Level};
+    let now = crate::dataflow::checkpoint::timestamp_ms;
+    // L'état que la recherche lit à chaque appel. Une réindexation ne fait
+    // pas régresser un niveau déjà prêt : l'ancien contenu reste cherchable.
+    let note = |guard: &Catalog, text: Level, vectors: Level, percent: u8| {
+        guard.note_index_state(IndexState { text, vectors, vectors_percent: percent, updated_ms: now() }).map_err(|e| e.to_string())
+    };
+
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
     let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
     let report = {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        let before = guard.index_state().map_err(|e| e.to_string())?;
+        if before.text != Level::Ready {
+            note(&guard, Level::Running, before.vectors, before.vectors_percent)?;
+        }
         sync_source(&mut guard, source, &options, &mut |p: SourceSyncProgress| {
             log(journal, &format!("plein texte : {} fichiers sur {} ({} scopes)", p.files_done, p.files_total, p.scopes_written));
         })?
@@ -253,7 +265,9 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
     // rendu entre deux, une recherche par mots passe.
     let (rate, start) = {
         let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-        (guard.known_embedding_rate().map_err(|e| e.to_string())?, guard.index_progress().map_err(|e| e.to_string())?)
+        let start = guard.index_progress().map_err(|e| e.to_string())?;
+        guard.note_index_state(IndexState::from_progress(&start, now())).map_err(|e| e.to_string())?;
+        (guard.known_embedding_rate().map_err(|e| e.to_string())?, start)
     };
     let chars_per_chunk = (kept_bytes as usize / start.chunks().max(1)).max(1);
     // Une ligne par changement : un journal qui se répète noie ce qu'il dit.
@@ -272,7 +286,15 @@ fn run_index(catalog: &Arc<Mutex<Catalog>>, source: &dyn FileSource, journal: &s
         let (n, progress) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
             let n = guard.embarquer_le_retard(Disponibilites::TOUT, 512, None).map_err(|e| e.to_string())?;
-            (n, guard.index_progress().map_err(|e| e.to_string())?)
+            let progress = guard.index_progress().map_err(|e| e.to_string())?;
+            // Chaque passe rafraîchit l'état : « en cours » reste cru tant
+            // que quelqu'un travaille.
+            let mut state = IndexState::from_progress(&progress, now());
+            if n > 0 && state.vectors == Level::Never {
+                state.vectors = Level::Running;
+            }
+            guard.note_index_state(state).map_err(|e| e.to_string())?;
+            (n, progress)
         };
         if n == 0 {
             say(progress.line(rate, chars_per_chunk));

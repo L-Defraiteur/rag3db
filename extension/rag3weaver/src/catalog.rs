@@ -20,7 +20,7 @@ use crate::search;
 mod aside;
 mod progress;
 mod synchronisation;
-pub use progress::{IndexProgress, TableProgress};
+pub use progress::{IndexProgress, IndexState, Level, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
 use crate::hash::content_hash;
