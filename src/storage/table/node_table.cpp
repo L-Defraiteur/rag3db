@@ -875,10 +875,10 @@ void NodeTable::addIndex(std::unique_ptr<Index> index) {
 }
 
 void NodeTable::dropIndex(const std::string& name) {
-    KU_ASSERT(getIndex(name) != nullptr);
+    // L'index peut ne pas être chargé (au rejeu du journal, son extension ne l'est pas
+    // encore), ou ne pas être là du tout (créé puis retiré dans le même journal).
     for (auto it = indexes.begin(); it != indexes.end(); ++it) {
         if (StringUtils::caseInsensitiveEquals(it->getName(), name)) {
-            KU_ASSERT(it->isLoaded());
             indexes.erase(it);
             return;
         }

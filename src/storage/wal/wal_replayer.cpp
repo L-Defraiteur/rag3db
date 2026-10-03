@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "binder/binder.h"
+#include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/catalog_entry/scalar_macro_catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
@@ -491,6 +492,18 @@ void WALReplayer::replayDropCatalogEntryRecord(const WALRecord& walRecord) const
         catalog->dropSequence(transaction, entryID);
     } break;
     case CatalogEntryType::INDEX_ENTRY: {
+        // À l'exécution, c'est la fonction qui retire l'index (DROP_VECTOR_INDEX, …) qui
+        // l'ôte aussi de la table ; le journal ne garde que l'entrée du catalogue. Le rejeu
+        // doit donc faire les deux, sinon la table garde un index que le catalogue ne
+        // connaît plus, que personne ne chargera et qu'on ne peut plus recréer.
+        for (const auto indexEntry : catalog->getIndexEntries(transaction)) {
+            if (indexEntry->getOID() != entryID) {
+                continue;
+            }
+            auto table = StorageManager::Get(clientContext)->getTable(indexEntry->getTableID());
+            table->cast<NodeTable>().dropIndex(indexEntry->getIndexName());
+            break;
+        }
         catalog->dropIndex(transaction, entryID);
     } break;
     case CatalogEntryType::SCALAR_MACRO_ENTRY: {

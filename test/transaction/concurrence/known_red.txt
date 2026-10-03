@@ -113,12 +113,6 @@ Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread
 # à mille.
 MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete
 #
-# Correctif du rejeu de DROP_VECTOR_INDEX — un index écrit par CHECKPOINT puis supprimé dans
-# le seul journal, et la mort du processus : au rejeu, le catalogue n'a plus l'index mais la
-# table garde un exemplaire non chargé, et le recréer lève « Index … is not loaded yet »
-# (cause isolée par la session de l'arbre principal, 3 octobre).
-IndexReopen.DropAfterCheckpointThenCrashLeavesAnUnloadedIndex index-loaded,index-recreated,query-succeeds
-#
 # Marche V1, genre « index » — tout écrivain d'une table indexée prend l'index de la table en
 # exclusif : l'écrivain en auto-commit attend puis valide ; en bloc, il attend puis valide ou
 # reçoit « could not serialize ». Aujourd'hui, sans verrou : waited.
