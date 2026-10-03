@@ -328,6 +328,24 @@ Ce que la mesure apprend :
   fichiers tout ce qu'on lui donne ensemble. Lequel est juste se tranche
   avant de choisir la forme (session de l'arbre principal).
 
+### Deux nouvelles du 4 octobre qui déplacent ce budget
+
+Relayées par l'orchestration, mesurées par la session codeparsers ; pas
+encore remesurées ici.
+
+- **L'analyse du dépôt entier passe de 34,7 s à 12,8 s** par paquets de 64,
+  et à **5,9 s en un appel « fichier seul »** : un quadratique retiré de
+  l'extraction des scopes (branche `fichier-seul`, en cours d'intégration
+  dans l'arbre principal). Des 22,5 s d'analyseur du paquet unique, il en
+  resterait donc une demi-douzaine.
+- **L'analyseur ne résout plus que dans le fichier** ; les liens entre
+  fichiers passent par les rendez-vous. Le graphe ne dépend plus de la
+  taille du paquet : l'écart 819 808 contre 438 104 relations disparaît par
+  construction, et de gros paquets bornés en octets deviennent sûrs.
+
+La remesure du dépôt entier se fera quand le résolveur unique sera sur
+master, en une passe annoncée.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide

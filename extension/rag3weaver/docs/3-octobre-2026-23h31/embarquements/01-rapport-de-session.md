@@ -4,7 +4,7 @@ Session « embarquements » : worktree `/home/lucied/git_workspaces/rag3db-embar
 (crate `extension/rag3weaver`), target à elle dans ce worktree. Elle tient le
 service de modèles sur l'autre poste, le régulateur d'écran, l'estimation et
 l'indexation en fond, l'état d'avancement, la déclaration commune des modèles,
-et les mesures du dépôt entier. Mis à jour le 3 octobre 2026, vers 23 h 45.
+et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 0 h 45.
 
 ## Fait aujourd'hui, sur master
 
@@ -21,6 +21,8 @@ Dans l'ordre de fusion.
 | `bfbd57d1a` | **Lot 3 : le creux et le dual** branchés dans un backend | Un backend comptait le signal creux pour exiger un service, puis ne branchait jamais d'embarqueur creux. |
 | `0202a2ee6` | **Lot 4 : relecteur et OCR** déclarés en local | Les nœuds existaient, le backend ne leur donnait aucun service. |
 | `4cb2d04cc` | **Lot 5 : le démon porte le relecteur et l'OCR** | Un seul démon à relancer sur le poste qui sert. |
+| `0330578b6`, `3645e0799` | **Lot 6 : le modèle de langage** dans la déclaration commune (`models.llm`), posé dans le chat par la session du chat | Dernière capacité hors de la déclaration ; éprouvé de bout en bout avec Gemini par Vertex. |
+| `45c88e3a5` | **L'invariant des vecteurs** (`tests/e2e_invariant_des_vecteurs.rs`), la dette périmée, `write_vectors` | Lot de l'orchestration : le moteur perd des lignes de l'index HNSW quand un `SET` remplace un vecteur. La suite a surtout trouvé un défaut à nous — voir plus bas. |
 | `1d3319f65`, `a7b241faa` | **Profil d'ingestion complet** (`src/ingest_profile.rs`, `[sync-profile]`, `[ingest-total]`) | 140 s de l'indexation n'étaient dans aucune ligne de profil. |
 
 Les pages : `docs/3-octobre-2026-14h26/01` (une seule carte partagée avec
@@ -55,7 +57,31 @@ relance), `03` (« indexer ce dépôt » : proposition, puis toutes les mesures)
   150 ms (`BurstSettings::DEFAULT`), seuil de confirmation d'`index` à cinq
   minutes (`estimate::CONFIRM_ABOVE`).
 
+## L'invariant des vecteurs : ce que la suite a dit (4 octobre, 0 h 30)
+
+- **Un défaut à nous, corrigé.** Après une édition posée sans embarquement,
+  300 vecteurs sur 600 restaient ceux de l'ancien texte : l'édition ne vide
+  que `_embed_hash`, pas le marqueur du modèle courant, et la dette ne
+  comptait que les marqueurs vides. La dette compte maintenant un marqueur
+  différent de `_text_hash`.
+- **Le défaut du moteur nous touche peu.** Le produit pose ses vecteurs par
+  lots de 32 ; le moteur perd surtout par gros lots (522 à 549 joignables sur
+  1000 par lots de 512, 988 une fois par lots de 64, 1000 par lots de 32 et
+  ligne à ligne ; une fois 169 sur 600 en dimension 32). Jouée une fois sans
+  contournement, la réédition de mille lignes gardait 1000 joignables : la
+  suite garde le chemin, elle ne démontre pas que le contournement sert.
+- **Le contournement** est dans une seule fonction, `write_vectors`
+  (`dataflow/record_nodes.rs`) : une ligne qui porte déjà un vecteur repasse
+  par NULL, seule dans son instruction. À enlever là quand le moteur sera
+  corrigé. « Sûr ligne à ligne » repose sur les mesures du cœur C++.
+- Les cas sont donnés à la session du banc pour ses témoins du moteur.
+
 ## En cours
+
+- **Le lot suivant** (orchestration, 4 octobre) : écarter les fichiers
+  générés de l'estimation et de l'indexation, avec leur raison — une règle
+  nommée du manifeste, comptée par `estimate`, qu'une option lève ; mesurer
+  ce qu'elle retire sur ce dépôt.
 
 - **Le démon bge-m3 de luciepc sert aussi le relecteur et l'OCR** depuis
   23 h 45 (worktree de service à `4cb2d04cc`, relancé dans un creux des
@@ -68,8 +94,9 @@ relance), `03` (« indexer ce dépôt » : proposition, puis toutes les mesures)
   poste pour un chargement de bout en bout ; deux mesures me reviennent :
   `analyze_with` sur le dépôt entier en un appel (durée, pic de mémoire), et
   le plein texte bâti d'un coup (durée, taille des blobs).
-- **La remesure du dépôt entier** après le report des blobs d'index (chez la
-  session de l'arbre principal).
+- **La remesure du dépôt entier** quand le résolveur unique sera sur master
+  (et le report des blobs d'index) : à annoncer aux deux sessions qui
+  mesurent, attendre leur « libre ».
 
 ## Ce qui attend quelqu'un
 

@@ -125,6 +125,18 @@ dépendances (`[profile.dev.package."*"] opt-level = 3`).
 
 ## 5. Défauts connus et limites
 
+- **Remplacer un vecteur par `SET` perd des lignes dans l'index HNSW**
+  (défaut du moteur, pas corrigé). Tout remplacement passe par
+  `write_vectors` (`dataflow/record_nodes.rs`) : NULL puis le vecteur, une
+  ligne par instruction. Ne jamais écrire un `SET` de vecteur ailleurs ;
+  ne jamais repasser par NULL par lots (599 sur 1000). Le compte des pertes
+  change d'une passe à l'autre : un témoin se rejoue plusieurs fois.
+- **La dette de vecteurs** = marqueur nul, vide, **ou différent de
+  `_text_hash`** (depuis `45c88e3a5`). Vaut pour le marqueur de chaque
+  modèle et pour `_sparse_hash`.
+- **`ingest_entities` sur une ligne modifiée ne supprime pas les morceaux en
+  trop** quand le nouveau texte en fait moins : vu au repérage, pas traité.
+
 - **Les défauts provisoires** : rafale 50 ms / pause 150 ms ; seuil de
   confirmation cinq minutes. Aucun n'a été choisi par Lucie.
 - **La recherche attend pendant le premier temps de l'indexation** :
@@ -148,6 +160,14 @@ dépendances (`[profile.dev.package."*"] opt-level = 3`).
   des deux côtés, c'est le modèle, pas le protocole.
 
 ## 6. Ce qui a été essayé sans succès, ou trouvé faux
+
+- **Une suite du produit ne reproduit pas le défaut du `SET` de vecteur** :
+  les lots de 32 du produit ne perdent rien dans mes passes, même en
+  géométrie alignée (dimension 4) et sans contournement. Pour voir le
+  défaut il faut le moteur seul et des lots de 512.
+- **Une substitution par expression régulière sur `record_nodes.rs`** a
+  mangé du code entre deux sites qui se ressemblaient : remplacer par texte
+  exact, site par site.
 
 - **« Cherchable par mots en une minute »** : un calcul, faux d'un facteur
   trente à la première mesure. Ne plus annoncer un temps qu'on n'a pas mesuré.
