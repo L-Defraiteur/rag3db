@@ -995,6 +995,15 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
         let typ = self.type_name(&col.col_type);
+        // **Un défaut NULL ne s'écrit pas** : c'est déjà le défaut, et une
+        // colonne ajoutée avec `DEFAULT NULL` explicite fait refuser tout
+        // COPY qui l'omet (« Trying to create a vector with ANY type » — le
+        // NULL n'y prend jamais le type de la colonne ; 3 octobre 2026). Les
+        // morceaux d'une première indexation en plein texte omettent leur
+        // colonne de vecteurs : leur COPY retombait sur le MERGE ligne à ligne.
+        if default_literal.eq_ignore_ascii_case("NULL") {
+            return format!("ALTER TABLE {table} ADD {} {typ}", col.name);
+        }
         format!("ALTER TABLE {table} ADD {} {typ} DEFAULT {default_literal}", col.name)
     }
 

@@ -397,6 +397,11 @@ pub struct SourceSyncReport {
     /// Les fichiers édités pendant l'indexation, après leur passage, et
     /// repris à la fin.
     pub files_resumed: Vec<String>,
+    /// **Les chargements en masse refusés** pendant cette synchronisation,
+    /// repris ligne à ligne, et leur cause. Vide d'ordinaire : un repli est
+    /// juste mais lent, et il ne doit plus passer sans un mot.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bulk_load_refused: Vec<String>,
 }
 
 /// **Synchroniser une source entière** : voir le module. Les sessions sont
@@ -411,6 +416,8 @@ pub fn sync_source(
     let cursor = source.cursor();
     let source_id = crate::code::source_id(&cursor);
     let mut inscription = Inscription::new(&source_id);
+    // Les replis comptés sont ceux de cette synchronisation.
+    let _ = catalog.take_bulk_load_refusals();
     let (mut report, mut avancement) = synchroniser_la_source(catalog, source, options, progress, &source_id)?;
     // **La reprise**, à la toute fin, sessions closes : chaque fichier édité
     // après son passage est ré-ingéré sur son grain, ou retiré s'il n'existe
@@ -431,6 +438,7 @@ pub fn sync_source(
             progress(avancement);
         }
     }
+    report.bulk_load_refused = catalog.take_bulk_load_refusals();
     avancement.phase = SyncPhase::Done;
     progress(avancement);
     Ok(report)

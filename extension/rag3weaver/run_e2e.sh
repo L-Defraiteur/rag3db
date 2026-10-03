@@ -280,7 +280,9 @@ suites_vides() {
   local journal="$1" vides total
   vides=$(grep -c '^test result: .* 0 passed; 0 failed;' "$journal" || true)
   total=0
-  for n in $(grep -oP '^test result: .* \K\d+(?= passed)' "$journal"); do total=$((total + n)); done
+  # Les tests joués, réussis ou non : un filtre qui désigne un test en échec
+  # désigne bien quelque chose.
+  for n in $(grep '^test result:' "$journal" | grep -oP '\d+(?= (passed|failed);)'); do total=$((total + n)); done
   if [ -z "$TEST_FILTER" ] && [ "${vides:-0}" -gt 0 ]; then
     echo "✗ ${vides} suite(s) n'ont joué aucun test : feature manquante, ou fichier sans test ?"
     return 1

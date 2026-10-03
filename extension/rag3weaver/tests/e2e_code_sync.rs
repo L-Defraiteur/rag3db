@@ -505,3 +505,24 @@ fn un_fichier_supprime_apres_son_passage_part_a_la_reprise() {
         assert_eq!(rapport.files_resumed, ["geo.rs"], "{rapport:?}");
     }
 }
+
+/// **Aucun chargement en masse ne se replie en silence** : une première
+/// indexation, dans les deux modes de relations et en plein texte seul comme
+/// avec les vecteurs, passe tout par COPY. Un repli (COPY refusé, repris
+/// ligne à ligne) se lit dans `bulk_load_refused` et fait échouer ce test.
+/// Le 3 octobre 2026, les morceaux d'une première indexation en plein texte
+/// retombaient sur le MERGE : leur colonne de vecteurs, ajoutée par
+/// `ALTER … DEFAULT NULL`, faisait refuser tout COPY qui l'omettait.
+#[test]
+#[ignore]
+fn une_premiere_indexation_ne_se_replie_pas_en_silence() {
+    use rag3weaver::disponibilite::Disponibilites;
+    for exige in [Disponibilites::RECHERCHE_TEXTE, Disponibilites::TOUT] {
+        for mode in [RelationsMode::Bulk, RelationsMode::PerBatch] {
+            let mut catalog = catalogue();
+            let options = SourceSyncOptions { batch_files: 2, exige, relations: Some(mode), ..Default::default() };
+            let r = sync_source(&mut catalog, &Snapshot::new("replis", source_reliee()), &options, &mut |_| {}).unwrap();
+            assert!(r.bulk_load_refused.is_empty(), "{mode:?}, plein texte seul = {} : {:?}", exige == Disponibilites::RECHERCHE_TEXTE, r.bulk_load_refused);
+        }
+    }
+}

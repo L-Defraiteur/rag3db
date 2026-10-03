@@ -711,6 +711,41 @@ sessions, pas d'une vérification.
   par la fonction de l'extension. Cas déterministe au banc de concurrence :
   `IndexReopen.DropAfterCheckpointThenCrashLeavesAnUnloadedIndex` (rouge, dans
   `known_red.txt` ; il reproduit le défaut seulement si le processus meurt base ouverte).
+- **Aucun test Rust de rag3weaver ne fait « écrire, mourir par SIGKILL, rouvrir dans un
+  autre processus »** (relevé par la session de l'arbre principal, 3 octobre). Ses tests
+  de reprise sont de trois familles :
+  - **A. Réouverture dans le même processus.** L'extension y est déjà chargée, et le
+    défaut du rejeu sans `LOAD EXTENSION` y est invisible. Ce sont
+    `e2e_code::an_interrupted_bulk_load_is_repaired_when_the_catalog_reopens` (la mort
+    y est une panique rattrapée, suivie d'une fermeture propre), `e2e_rouvrir` (deux
+    tests), `e2e_idempotent_registration` (trois tests), `e2e_search::phase6_sparse_mmap_persistence`
+    et `e2e_entites_derivees::la_dette_de_rendu_se_voit_en_base_et_se_rattrape`. Ils
+    prouvent la persistance du schéma et la réparation après une panique rattrapée,
+    **pas** la reprise après une mort.
+  - **B. Processus neuf, mais après une fermeture propre** : les scripts
+    `test_backend_*` et `test_chat_must_reopen`. Leurs `kill()` ne servent qu'au délai
+    dépassé.
+  - **C. Vrai processus tué** : `e2e_prise_atomique` et
+    `e2e_rag3daemon::deux_processus_partagent_la_base_par_le_demon`. Ils éprouvent le
+    partage entre processus, pas la reprise d'une base.
+  **Suite décidée** : pas de seconde suite. Le scénario du chargement en masse
+  interrompu (index retirés avant le COPY, mort au milieu, restauration attendue à
+  l'ouverture) entre comme cas dans `e2e_arret_brutal`, la suite de la session mémoire.
+  Le test du code sera renommé pour dire ce qu'il prouve : une panique rattrapée.
+- **Une colonne ajoutée par `ALTER … DEFAULT NULL` fait refuser tout COPY qui l'omet**
+  (moteur, cas minimal de la session de l'arbre principal, 3 octobre ; contourné côté
+  rag3weaver, pas corrigé dans le moteur). Une table, puis `ALTER TABLE T ADD v <type>
+  DEFAULT NULL` (FLOAT[4], STRING ou INT64), puis `COPY T (colonnes sans v)` : « Trying to
+  a create a vector with ANY type. This should not happen. Data type is expected to be
+  resolved during binding ». Sans `DEFAULT`, ou avec `DEFAULT ''`, le COPY passe. Chez
+  nous, les morceaux d'une première indexation en plein texte omettent leur colonne de
+  vecteurs : leur COPY retombait sur le MERGE ligne à ligne, sans un mot. Le dialecte
+  rag3db n'écrit plus de `DEFAULT NULL`, puisque c'est déjà le défaut. Les bases déjà
+  créées gardent la clause sur les colonnes existantes : le COPY ne s'y tente que sur une
+  table vide, ce qui rend le cas rare. Les replis sont désormais comptés
+  (`Catalog::take_bulk_load_refusals`, `SourceSyncReport.bulk_load_refused`), et
+  `e2e_code_sync::une_premiere_indexation_ne_se_replie_pas_en_silence` échoue s'il s'en
+  produit un.
 - **L'index vectoriel peut laisser une ligne injoignable dès sa construction**
   (extension vector, trouvé le 3 octobre par la session cœur C++, non corrigé). Une
   ligne indexée qu'aucune recherche n'atteint : un trou de rappel silencieux, sans

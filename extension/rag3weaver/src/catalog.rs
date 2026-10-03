@@ -271,6 +271,12 @@ pub struct Catalog {
     /// Vrai pendant l'application d'une fin : ses propres écritures (les
     /// transitions) ne sont pas des vues et ne marquent pas.
     pub(crate) dans_une_fin: bool,
+    /// **Les chargements en masse refusés**, repris par le chemin lent : la
+    /// cause de chacun, relevée dans les avertissements des drains. Un repli
+    /// muet a coûté 200 s sur 643 au dépôt entier sans que personne le voie
+    /// (3 octobre 2026) ; il se compte maintenant, et la synchronisation le
+    /// dit dans son rapport ([`Catalog::take_bulk_load_refusals`]).
+    replis_en_masse: Vec<String>,
     /// Fail injection for testing: if set, the named node will fail during checkpoint execution.
     fail_node: Option<String>,
     /// Schema dialect for multi-backend DDL/DML generation.
@@ -376,6 +382,7 @@ impl Catalog {
             sync_conn: None,
             sessions_ouvertes: HashMap::new(),
             dans_une_fin: false,
+            replis_en_masse: Vec::new(),
             fail_node: None,
             dialect: Arc::new(crate::dialect::Rag3dbDialect),
             search_backend: None,
@@ -2980,7 +2987,9 @@ impl Catalog {
                     message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
                 });
             }
-            for a in ramasser_les_avertissements(&mut ecoute) {
+            let vus = ramasser_les_avertissements(&mut ecoute);
+            self.relever_les_replis(&vus);
+            for a in vus {
                 self.emit_event(CatalogEvent::Warning {
                     context: "rattrapage".to_string(),
                     message: a,
@@ -3110,7 +3119,9 @@ impl Catalog {
                     message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
                 });
             }
-            for a in ramasser_les_avertissements(&mut ecoute) {
+            let vus = ramasser_les_avertissements(&mut ecoute);
+            self.relever_les_replis(&vus);
+            for a in vus {
                 self.emit_event(CatalogEvent::Warning {
                     context: "rattrapage_decoupage".to_string(),
                     message: a,
@@ -5060,6 +5071,7 @@ impl Catalog {
                 // descendues dans le graphe : elles sortent du compte des
                 // traitées et entrent dans celui des échecs, avec leur cause.
                 let mut warnings = ramasser_les_avertissements(&mut ecoute);
+                self.relever_les_replis(&warnings);
                 warnings.extend(refus.iter().cloned());
                 let mut res = FlushResult {
                     processed: record_count - refus.len(),
@@ -6221,6 +6233,21 @@ impl Catalog {
         self.drainer(true, true, None)
     }
 
+    /// **Les chargements en masse refusés depuis le dernier appel**, et leur
+    /// cause : chacun a été repris par le chemin lent, ce qui est juste mais
+    /// coûteux. Vide quand tout est passé par COPY ou n'en relevait pas.
+    pub fn take_bulk_load_refusals(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.replis_en_masse)
+    }
+
+    /// Relevés au seul endroit où les avertissements des nœuds sont
+    /// ramassés, pour qu'aucun chemin de drain n'y échappe.
+    fn relever_les_replis(&mut self, avertissements: &[String]) {
+        self.replis_en_masse.extend(
+            avertissements.iter().filter(|w| w.contains(crate::dataflow::record_nodes::REPLI_EN_MASSE)).cloned(),
+        );
+    }
+
     /// **Draine la fermeture d'une cible**, jusqu'aux disponibilités demandées,
     /// et laisse en file ce qui n'est pas en lien avec elle.
     ///
@@ -6344,6 +6371,7 @@ impl Catalog {
         // Dans les deux branches : un drain qui échoue a d'autant plus de
         // raisons d'avoir prévenu avant de mourir.
         let avertissements = ramasser_les_avertissements(&mut ecoute);
+        self.relever_les_replis(&avertissements);
         let echecs = Self::relever_les_echecs(&canal);
 
         let reussi = result.is_ok();
@@ -6696,6 +6724,7 @@ impl Catalog {
         let mut ecoute = runtime.subscribe();
         let resultat = runtime.execute(&mut graph);
         let avertissements = ramasser_les_avertissements(&mut ecoute);
+        self.relever_les_replis(&avertissements);
         let echecs = Self::relever_les_echecs(&canal);
 
         // Ce qui reste en file a changé : la marque le redit.

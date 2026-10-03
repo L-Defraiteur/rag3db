@@ -320,7 +320,7 @@ impl Node for InsertRecordNode {
                     }
                     Ok(None) => {}
                     Err(cause) => {
-                        ctx.warn(&format!("insertion dans « {entity_name} » : chargement en masse refusé ({cause}), retour au MERGE"));
+                        ctx.warn(&format!("insertion dans « {entity_name} » : {REPLI_EN_MASSE} ({cause}), retour au MERGE"));
                     }
                 }
             }
@@ -570,6 +570,11 @@ struct ResolvedLink {
 /// la base. La vérification d'existence du COPY reste de quelques dizaines de
 /// millisecondes. À 50, rien de mieux.
 const COPY_SEUIL: usize = 200;
+
+/// Le fragment stable de l'avertissement d'un chargement en masse refusé,
+/// repris par le chemin lent : le catalogue le compte
+/// ([`crate::catalog::Catalog::take_bulk_load_refusals`]).
+pub(crate) const REPLI_EN_MASSE: &str = "chargement en masse refusé";
 
 fn copy_seuil() -> usize {
     std::env::var("RAG3WEAVER_LINK_COPY_THRESHOLD")
@@ -987,7 +992,7 @@ impl Node for LinkRecordNode {
                         }
                         Ok(false) => {}
                         Err(cause) => {
-                            ctx.warn(&format!("lien « {rel_name} » : chargement en masse refusé ({cause}), retour au chemin par lots"));
+                            ctx.warn(&format!("lien « {rel_name} » : {REPLI_EN_MASSE} ({cause}), retour au chemin par lots"));
                         }
                     }
                 }
