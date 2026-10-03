@@ -1215,7 +1215,7 @@ fn la_source_prend_sa_requete_au_port_quand_il_est_cable() {
 /// savoir ; et l'appelant la renverse — l'échelle, en production.
 #[test]
 #[ignore]
-fn la_ponderation_de_l_entite_reordonne_et_l_appelant_la_renverse() {
+fn entity_weights_reorder_and_caller_overrides() {
     use rag3weaver::search::FieldWeight;
     use std::sync::Mutex;
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
@@ -1249,7 +1249,7 @@ fn la_ponderation_de_l_entite_reordonne_et_l_appelant_la_renverse() {
     };
     catalog.ingest_entities("Gizmo", vec![doc("Alpha", "gadget"), doc("Beta", "tool")]).unwrap();
     let cat = Arc::new(Mutex::new(catalog));
-    let tetes = |options: SearchOptions| -> Vec<String> {
+    let top_names = |options: SearchOptions| -> Vec<String> {
         Catalog::rechercher(&cat, "Gizmo", "shiny widget", options)
             .unwrap()
             .results
@@ -1260,19 +1260,19 @@ fn la_ponderation_de_l_entite_reordonne_et_l_appelant_la_renverse() {
 
     // Deux textes identiques : seul le poids du genre départage.
     let options = SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() };
-    let noms = tetes(options.clone());
-    assert_eq!(noms.first().map(String::as_str), Some("Beta"), "le gadget déclaré pèse moins : {noms:?}");
-    assert_eq!(noms.len(), 2, "un poids, jamais un filtre : {noms:?}");
+    let names = top_names(options.clone());
+    assert_eq!(names.first().map(String::as_str), Some("Beta"), "le gadget déclaré pèse moins : {names:?}");
+    assert_eq!(names.len(), 2, "un poids, jamais un filtre : {names:?}");
 
     // L'appelant renverse la déclaration : les outils pèsent moins.
-    let mut inverse = options;
-    inverse.field_weights = vec![FieldWeight {
+    let mut reversed = options;
+    reversed.field_weights = vec![FieldWeight {
         field: "kind".into(),
         weights: [("tool".to_string(), 0.05)].into_iter().collect(),
         default: 1.0,
     }];
-    let noms = tetes(inverse);
-    assert_eq!(noms.first().map(String::as_str), Some("Alpha"), "l'appelant renverse : {noms:?}");
+    let names = top_names(reversed);
+    assert_eq!(names.first().map(String::as_str), Some("Alpha"), "l'appelant renverse : {names:?}");
 }
 
 // ═══ Le lanceur : un seul chemin de recherche ═══════════════════════════════

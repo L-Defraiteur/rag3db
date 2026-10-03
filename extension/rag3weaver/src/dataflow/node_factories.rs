@@ -70,7 +70,7 @@ impl NodeFactory for FieldWeightNodeFactory {
         };
         // Une table de poids : objet JSON {"valeur": w} ou chaîne "valeur:w,…",
         // les mêmes deux formes que les poids de fusion.
-        let table = |v: &serde_json::Value, cle: &str| -> Result<std::collections::BTreeMap<String, f64>, String> {
+        let table = |v: &serde_json::Value, key: &str| -> Result<std::collections::BTreeMap<String, f64>, String> {
             let mut m = std::collections::BTreeMap::new();
             match v {
                 serde_json::Value::Object(o) => {
@@ -85,14 +85,14 @@ impl NodeFactory for FieldWeightNodeFactory {
                     for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
                         let (k, w) = part
                             .split_once(':')
-                            .ok_or_else(|| format!("FieldWeightNode: {cle} entry '{part}' must be 'value:weight'"))?;
+                            .ok_or_else(|| format!("FieldWeightNode: {key} entry '{part}' must be 'value:weight'"))?;
                         m.insert(
                             k.trim().to_string(),
                             w.trim().parse().map_err(|_| format!("FieldWeightNode: weight of '{k}' must be a number"))?,
                         );
                     }
                 }
-                _ => return Err(format!("FieldWeightNode: '{cle}' must be an object or 'value:weight,…'")),
+                _ => return Err(format!("FieldWeightNode: '{key}' must be an object or 'value:weight,…'")),
             }
             Ok(m)
         };

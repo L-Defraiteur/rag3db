@@ -1116,10 +1116,10 @@ pub enum DuplicatePolicy {
 
 /// L'étage qui a fourni le bloc de fusion (voir `base_de_fusion`).
 #[derive(Clone, Copy, PartialEq)]
-enum SourceDesPoids {
-    Appelant,
-    Entite,
-    Moteur,
+enum WeightSource {
+    Caller,
+    Entity,
+    Engine,
 }
 
 pub struct FuseResultsNode {
@@ -1203,19 +1203,19 @@ impl FuseResultsNode {
     /// une **déclaration** — celle de l'appelant ou d'une base de
     /// connaissances — et le gabarit ne la retouche pas ; seule sa
     /// troncature (`top_k`) reste, ce n'est pas un poids.
-    fn signal_config(&self, label: &str, base: &FusionConfig, source: SourceDesPoids) -> SignalConfig {
+    fn signal_config(&self, label: &str, base: &FusionConfig, source: WeightSource) -> SignalConfig {
         let mut cfg = base.signal_config(label);
         match source {
             // L'appelant a parlé : rien ne le retouche.
-            SourceDesPoids::Appelant => {}
+            WeightSource::Caller => {}
             // L'entité a déclaré : seul un **choix** du graphe la retouche.
-            SourceDesPoids::Entite => {
+            WeightSource::Entity => {
                 if let Some(w) = self.weights.get(label) {
                     cfg.weight = *w;
                 }
             }
             // Personne n'a déclaré : le choix, sinon le défaut du gabarit.
-            SourceDesPoids::Moteur => {
+            WeightSource::Engine => {
                 if let Some(w) = self.weights.get(label) {
                     cfg.weight = *w;
                 } else if let Some(w) = self.default_weights.get(label) {
@@ -1250,16 +1250,16 @@ impl FuseResultsNode {
     ///
     /// Ce helper rend le **bloc** de base (stratégie, rrf_k, rôles) et son
     /// étage ; les poids par étiquette se superposent dans `signal_config`.
-    fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, SourceDesPoids) {
+    fn base_de_fusion(qp: Option<&QueryPayload>) -> (FusionConfig, WeightSource) {
         match qp {
             Some(qp) if qp.options.fusion.is_some() => {
-                (qp.options.fusion.clone().unwrap(), SourceDesPoids::Appelant)
+                (qp.options.fusion.clone().unwrap(), WeightSource::Caller)
             }
             Some(qp) if qp.target.as_ref().is_some_and(|t| t.default_fusion.is_some()) => (
                 qp.target.as_ref().unwrap().default_fusion.clone().unwrap(),
-                SourceDesPoids::Entite,
+                WeightSource::Entity,
             ),
-            _ => (FusionConfig::default(), SourceDesPoids::Moteur),
+            _ => (FusionConfig::default(), WeightSource::Engine),
         }
     }
 }
@@ -1318,7 +1318,7 @@ impl Node for FuseResultsNode {
         // viennent les poids.
         let qp = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv));
         let (base, source) = Self::base_de_fusion(qp.as_ref());
-        let (strategy, rrf_k) = if source == SourceDesPoids::Moteur {
+        let (strategy, rrf_k) = if source == WeightSource::Engine {
             (self.strategy, self.rrf_k)
         } else {
             (base.strategy, base.rrf_k)
@@ -2420,7 +2420,7 @@ mod tests {
         assert_eq!(monter(true), vec!["v", "b"], "avec, l'appelant décide");
     }
 
-    fn cible_de_test(fusion: Option<FusionConfig>) -> crate::search::SearchTarget {
+    fn test_target(fusion: Option<FusionConfig>) -> crate::search::SearchTarget {
         crate::search::SearchTarget {
             name: "T".into(),
             parent_table: "T".into(),
@@ -2437,7 +2437,7 @@ mod tests {
         }
     }
 
-    fn fusion_tout_sur_vector() -> FusionConfig {
+    fn fusion_all_on_vector() -> FusionConfig {
         FusionConfig {
             bm25: SignalConfig { weight: 0.0, ..SignalConfig::default() },
             vector: SignalConfig { weight: 1.0, ..SignalConfig::default() },
@@ -2448,7 +2448,7 @@ mod tests {
     /// **L'échelle du 2 octobre** (pas C) : `default_weights` est le défaut
     /// du gabarit — il pèse quand personne ne déclare.
     #[test]
-    fn fuse_default_weights_pesent_sans_declaration() {
+    fn fuse_default_weights_apply_without_declaration() {
         let mut ctx = NodeContext::new();
         ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
         ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
@@ -2464,12 +2464,12 @@ mod tests {
     /// `search_base` porte ses 0,6/0,4 en `default_weights`, et une entité
     /// déclarante reste entendue par l'outil des agents.
     #[test]
-    fn fuse_l_entite_bat_le_defaut_du_gabarit() {
+    fn fuse_entity_beats_template_default() {
         let mut ctx = NodeContext::new();
         ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
         ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
         let mut qp = query_payload("q");
-        qp.target = Some(cible_de_test(Some(fusion_tout_sur_vector())));
+        qp.target = Some(test_target(Some(fusion_all_on_vector())));
         ctx.set_input("query", PortValue::new(qp));
         let mut node = FuseResultsNode::new("fuse")
             .with_default_weight("bm25", 1.0)
@@ -2482,12 +2482,12 @@ mod tests {
     /// … mais le **choix** du graphe (`weights`) bat l'entité : c'est
     /// l'exigence de Lucie — les pondérations se règlent dans les graphes.
     #[test]
-    fn fuse_le_choix_du_graphe_bat_l_entite() {
+    fn fuse_graph_choice_beats_entity() {
         let mut ctx = NodeContext::new();
         ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
         ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
         let mut qp = query_payload("q");
-        qp.target = Some(cible_de_test(Some(fusion_tout_sur_vector())));
+        qp.target = Some(test_target(Some(fusion_all_on_vector())));
         ctx.set_input("query", PortValue::new(qp));
         let mut node = FuseResultsNode::new("fuse")
             .with_weight("bm25", 1.0)
@@ -2499,13 +2499,13 @@ mod tests {
 
     /// Et l'appelant bat tout : le choix du graphe comme l'entité.
     #[test]
-    fn fuse_l_appelant_bat_le_choix_du_graphe_et_l_entite() {
+    fn fuse_caller_beats_graph_choice_and_entity() {
         let mut ctx = NodeContext::new();
         ctx.set_input("bm25", PortValue::new(vec![tagged("b", 0.9, "bm25")]));
         ctx.set_input("vector", PortValue::new(vec![tagged("v", 0.9, "vector")]));
         let mut qp = query_payload("q");
-        qp.options.fusion = Some(fusion_tout_sur_vector());
-        qp.target = Some(cible_de_test(Some(FusionConfig {
+        qp.options.fusion = Some(fusion_all_on_vector());
+        qp.target = Some(test_target(Some(FusionConfig {
             bm25: SignalConfig { weight: 1.0, ..SignalConfig::default() },
             vector: SignalConfig { weight: 0.0, ..SignalConfig::default() },
             ..FusionConfig::default()

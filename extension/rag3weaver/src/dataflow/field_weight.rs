@@ -80,7 +80,7 @@ impl Node for FieldWeightNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FieldWeightNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let debut = std::time::Instant::now();
+        let start = std::time::Instant::now();
         let mut results = ctx
             .take_input("results")
             .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
@@ -88,9 +88,9 @@ impl Node for FieldWeightNode {
         let qp = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv));
         let mut warnings: Vec<String> = Vec::new();
 
-        self.appliquer(&mut results, qp.as_ref(), ctx, &mut warnings);
+        self.apply(&mut results, qp.as_ref(), ctx, &mut warnings);
 
-        let nombre = results.len();
+        let count = results.len();
         ctx.set_output("results", PortValue::new(results));
         ctx.set_output(
             "meta",
@@ -104,10 +104,10 @@ impl Node for FieldWeightNode {
                 vector_count: 0,
                 bm25_count: 0,
                 sparse_count: 0,
-                fused_count: nombre,
+                fused_count: count,
                 reranked_count: 0,
                 warnings,
-                search_time_ms: debut.elapsed().as_millis() as u64,
+                search_time_ms: start.elapsed().as_millis() as u64,
                 diagnostics: None,
             }),
         );
@@ -120,33 +120,33 @@ impl FieldWeightNode {
     /// champ gagne : l'appelant, le choix du graphe, l'entité, le défaut du
     /// gabarit. Puis le produit des poids s'applique à chaque résultat et la
     /// liste se réordonne. Les trois absences s'avouent (doc de module).
-    fn appliquer(
+    fn apply(
         &self,
         results: &mut [UnifiedResult],
         qp: Option<&QueryPayload>,
         ctx: &mut NodeContext,
         warnings: &mut Vec<String>,
     ) {
-        let vide: Vec<FieldWeight> = Vec::new();
-        let appelant = qp.map(|q| &q.options.field_weights).unwrap_or(&vide);
-        let entite = qp
+        let empty: Vec<FieldWeight> = Vec::new();
+        let caller = qp.map(|q| &q.options.field_weights).unwrap_or(&empty);
+        let entity = qp
             .and_then(|q| q.target.as_ref())
             .map(|t| &t.field_weights)
-            .unwrap_or(&vide);
+            .unwrap_or(&empty);
 
-        let mut effectifs: Vec<&FieldWeight> = Vec::new();
-        let mut pris: std::collections::HashSet<&str> = std::collections::HashSet::new();
-        for fw in appelant
+        let mut effective: Vec<&FieldWeight> = Vec::new();
+        let mut taken: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for fw in caller
             .iter()
             .chain(self.choice.iter())
-            .chain(entite.iter())
+            .chain(entity.iter())
             .chain(self.fallback.iter())
         {
-            if pris.insert(fw.field.as_str()) {
-                effectifs.push(fw);
+            if taken.insert(fw.field.as_str()) {
+                effective.push(fw);
             }
         }
-        if effectifs.is_empty() {
+        if effective.is_empty() {
             // Neutre à coût nul : le cas de `search_base` sans déclaration.
             return;
         }
@@ -157,46 +157,46 @@ impl FieldWeightNode {
         if let (Some(qp), Some(catalog)) =
             (qp, ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned())
         {
-            let champs = {
+            let known_fields = {
                 let cat = catalog.lock().unwrap();
                 cat.entity_configs()
                     .get(&qp.target_name)
                     .map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
             };
-            if let Some(champs) = champs {
-                effectifs.retain(|fw| {
-                    let connu = champs.contains(&fw.field);
-                    if !connu {
+            if let Some(known_fields) = known_fields {
+                effective.retain(|fw| {
+                    let known = known_fields.contains(&fw.field);
+                    if !known {
                         warnings.push(format!(
                             "FieldWeightNode: le champ « {} » n'existe pas sur {} — pondération neutre",
                             fw.field, qp.target_name
                         ));
                     }
-                    connu
+                    known
                 });
             }
         }
 
-        let mut sans_donnee: std::collections::BTreeSet<String> = Default::default();
+        let mut missing_data: std::collections::BTreeSet<String> = Default::default();
         for r in results.iter_mut() {
-            for fw in &effectifs {
-                let poids = match r.data.as_ref().and_then(|d| d.get(&fw.field)) {
+            for fw in &effective {
+                let weight = match r.data.as_ref().and_then(|d| d.get(&fw.field)) {
                     Some(v) => match v.as_str() {
-                        Some(valeur) => fw.weights.get(valeur).copied().unwrap_or(fw.default),
+                        Some(value) => fw.weights.get(value).copied().unwrap_or(fw.default),
                         // Une valeur qui n'est pas du texte : hors table, le défaut.
                         None => fw.default,
                     },
                     None => {
-                        sans_donnee.insert(fw.field.clone());
+                        missing_data.insert(fw.field.clone());
                         1.0
                     }
                 };
-                r.score *= poids;
+                r.score *= weight;
             }
         }
-        for champ in sans_donnee {
+        for field in missing_data {
             warnings.push(format!(
-                "FieldWeightNode: le champ « {champ} » absent des données d'au moins un résultat — pondération neutre pour ceux-là"
+                "FieldWeightNode: le champ « {field} » absent des données d'au moins un résultat — pondération neutre pour ceux-là"
             ));
         }
         results.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.uuid.cmp(&b.uuid)));
@@ -221,7 +221,7 @@ mod tests {
         }
     }
 
-    fn resultat(uuid: &str, score: f64, kind: Option<&str>) -> UnifiedResult {
+    fn make_result(uuid: &str, score: f64, kind: Option<&str>) -> UnifiedResult {
         let mut r = UnifiedResult {
             uuid: uuid.into(),
             score,
@@ -243,7 +243,7 @@ mod tests {
         r
     }
 
-    fn cible_avec(field_weights: Vec<FieldWeight>) -> crate::search::SearchTarget {
+    fn target_with(field_weights: Vec<FieldWeight>) -> crate::search::SearchTarget {
         crate::search::SearchTarget {
             name: "T".into(),
             parent_table: "T".into(),
@@ -260,7 +260,7 @@ mod tests {
         }
     }
 
-    fn jouer(
+    fn run_node(
         node: FieldWeightNode,
         results: Vec<UnifiedResult>,
         qp: Option<QueryPayload>,
@@ -272,12 +272,12 @@ mod tests {
             ctx.set_input("query", PortValue::new(qp));
         }
         node.execute(&mut ctx).unwrap();
-        let mut sorties = ctx.drain_outputs();
-        let out = sorties
+        let mut outputs = ctx.drain_outputs();
+        let out = outputs
             .remove("results")
             .and_then(|pv| take_or_clone::<Vec<UnifiedResult>>(pv))
             .expect("results en sortie");
-        let meta = sorties
+        let meta = outputs
             .remove("meta")
             .and_then(|pv| take_or_clone::<SearchMeta>(pv))
             .expect("meta en sortie");
@@ -297,11 +297,11 @@ mod tests {
 
     /// La table multiplie et réordonne ; rien ne sort de la liste.
     #[test]
-    fn la_table_multiplie_et_reordonne() {
+    fn table_multiplies_and_reorders() {
         let node = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 0.5)], 1.0));
-        let (out, _) = jouer(
+        let (out, _) = run_node(
             node,
-            vec![resultat("a", 0.9, Some("file")), resultat("b", 0.8, Some("class"))],
+            vec![make_result("a", 0.9, Some("file")), make_result("b", 0.8, Some("class"))],
             None,
         );
         assert_eq!(out.len(), 2, "un poids, jamais un filtre");
@@ -312,11 +312,11 @@ mod tests {
 
     /// Une valeur hors table prend `default`.
     #[test]
-    fn une_valeur_hors_table_prend_le_defaut() {
+    fn value_outside_table_takes_default() {
         let node = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 1.0)], 0.1));
-        let (out, _) = jouer(
+        let (out, _) = run_node(
             node,
-            vec![resultat("a", 0.9, Some("class")), resultat("b", 0.5, Some("file"))],
+            vec![make_result("a", 0.9, Some("class")), make_result("b", 0.5, Some("file"))],
             None,
         );
         assert_eq!(out[0].uuid, "b", "la valeur hors table a pris 0,1");
@@ -325,11 +325,11 @@ mod tests {
 
     /// Une donnée absente est neutre, et s'avoue dans la méta.
     #[test]
-    fn une_donnee_absente_est_neutre_et_avouee() {
+    fn missing_data_is_neutral_and_admitted() {
         let node = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 0.1)], 0.1));
-        let (out, meta) = jouer(
+        let (out, meta) = run_node(
             node,
-            vec![resultat("a", 0.9, None), resultat("b", 0.5, Some("file"))],
+            vec![make_result("a", 0.9, None), make_result("b", 0.5, Some("file"))],
             None,
         );
         assert_eq!(out[0].uuid, "a");
@@ -344,47 +344,47 @@ mod tests {
     /// **L'échelle par champ** : l'appelant > le choix du graphe > l'entité
     /// > le défaut du gabarit ; la première déclaration d'un champ gagne.
     #[test]
-    fn l_echelle_par_champ() {
-        let deux = || vec![resultat("a", 0.9, Some("file")), resultat("b", 0.8, Some("class"))];
-        let devant = |node: FieldWeightNode, qp: Option<QueryPayload>| -> String {
-            jouer(node, deux(), qp).0[0].uuid.clone()
+    fn per_field_precedence_ladder() {
+        let two = || vec![make_result("a", 0.9, Some("file")), make_result("b", 0.8, Some("class"))];
+        let first = |node: FieldWeightNode, qp: Option<QueryPayload>| -> String {
+            run_node(node, two(), qp).0[0].uuid.clone()
         };
 
         // Le défaut du gabarit pèse seul.
         let n = FieldWeightNode::new("weigh").with_fallback(fw("kind", &[("file", 0.1)], 1.0));
-        assert_eq!(devant(n, None), "b", "le défaut du gabarit pèse sans déclaration");
+        assert_eq!(first(n, None), "b", "le défaut du gabarit pèse sans déclaration");
 
         // L'entité bat le défaut du gabarit.
         let n = FieldWeightNode::new("weigh").with_fallback(fw("kind", &[("file", 0.1)], 1.0));
-        let qp = payload(Some(cible_avec(vec![fw("kind", &[("class", 0.1)], 1.0)])), SearchOptions::default());
-        assert_eq!(devant(n, Some(qp)), "a", "l'entité bat le défaut du gabarit");
+        let qp = payload(Some(target_with(vec![fw("kind", &[("class", 0.1)], 1.0)])), SearchOptions::default());
+        assert_eq!(first(n, Some(qp)), "a", "l'entité bat le défaut du gabarit");
 
         // Le choix du graphe bat l'entité.
         let n = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 0.1)], 1.0));
-        let qp = payload(Some(cible_avec(vec![fw("kind", &[("class", 0.1)], 1.0)])), SearchOptions::default());
-        assert_eq!(devant(n, Some(qp)), "b", "le choix du graphe bat l'entité");
+        let qp = payload(Some(target_with(vec![fw("kind", &[("class", 0.1)], 1.0)])), SearchOptions::default());
+        assert_eq!(first(n, Some(qp)), "b", "le choix du graphe bat l'entité");
 
         // L'appelant bat le choix du graphe.
         let n = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 0.1)], 1.0));
         let mut options = SearchOptions::default();
         options.field_weights = vec![fw("kind", &[("class", 0.1)], 1.0)];
-        let qp = payload(Some(cible_avec(vec![])), options);
-        assert_eq!(devant(n, Some(qp)), "a", "l'appelant bat le choix du graphe");
+        let qp = payload(Some(target_with(vec![])), options);
+        assert_eq!(first(n, Some(qp)), "a", "l'appelant bat le choix du graphe");
     }
 
     /// Un champ que l'entité déclare s'applique même quand le nœud en
     /// choisit un autre : les étages se superposent par champ.
     #[test]
-    fn les_champs_des_etages_se_superposent() {
-        let mut r1 = resultat("a", 0.9, Some("file"));
+    fn fields_from_different_tiers_stack() {
+        let mut r1 = make_result("a", 0.9, Some("file"));
         r1.data.as_mut().unwrap().insert("lang".into(), CypherValue::String("rust".into()));
-        let mut r2 = resultat("b", 0.8, Some("class"));
+        let mut r2 = make_result("b", 0.8, Some("class"));
         r2.data.as_mut().unwrap().insert("lang".into(), CypherValue::String("python".into()));
 
         // L'entité dévalue python ; le nœud dévalue file : les deux pèsent.
         let node = FieldWeightNode::new("weigh").with_choice(fw("kind", &[("file", 0.5)], 1.0));
-        let qp = payload(Some(cible_avec(vec![fw("lang", &[("python", 0.1)], 1.0)])), SearchOptions::default());
-        let (out, _) = jouer(node, vec![r1, r2], Some(qp));
+        let qp = payload(Some(target_with(vec![fw("lang", &[("python", 0.1)], 1.0)])), SearchOptions::default());
+        let (out, _) = run_node(node, vec![r1, r2], Some(qp));
         assert!((out.iter().find(|r| r.uuid == "a").unwrap().score - 0.45).abs() < 1e-12);
         assert!((out.iter().find(|r| r.uuid == "b").unwrap().score - 0.08).abs() < 1e-12);
     }

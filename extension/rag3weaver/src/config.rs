@@ -1716,3 +1716,27 @@ pub fn validate_payload_type(ty: &FieldType, depth: usize) -> Result<(), String>
         _ => Ok(()),
     }
 }
+
+#[cfg(test)]
+mod tests_field_weights_compat {
+    use super::EntityConfig;
+    use crate::search::SearchOptions;
+
+    /// **Une base déjà en service se relit.** Les configs stockées avant le
+    /// pas C (3 octobre 2026) n'ont pas `fieldWeights` : elles doivent se
+    /// relire, le champ vide — `#[serde(default)]` au niveau du type le
+    /// garantit, et ce test le prouve pour que personne ne l'enlève.
+    #[test]
+    fn pre_field_weights_json_still_deserializes() {
+        let ec: EntityConfig = serde_json::from_str(
+            r#"{"fields": {"name": {"fieldType": "string", "isTitle": true}}}"#,
+        )
+        .expect("une config d'avant le pas C se relit");
+        assert!(ec.field_weights.is_empty());
+
+        let options: SearchOptions =
+            serde_json::from_str(r#"{"limit": 5}"#).expect("des options d'avant se relisent");
+        assert!(options.field_weights.is_empty());
+        assert_eq!(options.limit, 5);
+    }
+}
