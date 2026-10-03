@@ -23,7 +23,12 @@ fn run() -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = prepared.manifest.embeddings.connect()?;
+    // Un backend en mots seuls n'exige pas de service d'embarquement.
+    let embedder = if prepared.needs_embeddings() {
+        Some(prepared.manifest.embeddings.connect()?)
+    } else {
+        None
+    };
     let conn = Rag3dbConnection::new(&database).map_err(|e| e.to_string())?;
     // Crochet de test (`scripts/test_backend_must_reopen.py`) : le k-ième
     // appel d'outil rencontre la base comme après un point de reprise échoué.

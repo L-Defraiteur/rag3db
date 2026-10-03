@@ -605,6 +605,26 @@ impl PreparedBackend {
             tool_entities,
         })
     }
+    /// Ce backend a-t-il besoin d'un service d'embarquement ? Oui dès
+    /// qu'une entité déclare un signal vecteur ou sparse, ou qu'un
+    /// workspace nomme le schéma de code (dont les scopes s'embarquent).
+    /// Un backend en mots seuls démarre sans service — et son banc tourne
+    /// sans carte.
+    pub fn needs_embeddings(&self) -> bool {
+        if self
+            .manifest
+            .workspace
+            .as_ref()
+            .and_then(|w| w.index.as_deref())
+            .is_some()
+        {
+            return true;
+        }
+        self.entities
+            .values()
+            .any(|config| config.signals.vector() || config.signals.sparse())
+    }
+
     pub fn path(&self, path: &Path) -> PathBuf {
         self.directory.join(path)
     }
@@ -635,20 +655,40 @@ impl PreparedBackend {
     pub fn open(
         self,
         conn: Box<dyn DbConnection>,
-        embedder: Box<dyn Embedder>,
+        embedder: Option<Box<dyn Embedder>>,
     ) -> Result<Backend, String> {
-        if embedder.is_mock()
-            || embedder.name() != self.manifest.embeddings.model
-            || embedder.dim() != self.manifest.embeddings.dimensions
-        {
-            return Err("embedding model identity differs from manifest".into());
+        // Un backend en mots seuls démarre sans service d'embarquement ;
+        // un backend qui déclare du vecteur le refuse en le nommant.
+        let sans_service = embedder.is_none();
+        if sans_service && self.needs_embeddings() {
+            return Err(
+                "ce backend déclare des signaux vecteur ou sparse (ou un workspace indexé) : \
+                 un service d'embarquement est requis — donnez embeddings.address, ou \
+                 RAG3WEAVER_EMBED_SERVICE"
+                    .into(),
+            );
         }
+        let embedder = match embedder {
+            Some(e) => {
+                if e.is_mock()
+                    || e.name() != self.manifest.embeddings.model
+                    || e.dim() != self.manifest.embeddings.dimensions
+                {
+                    return Err("embedding model identity differs from manifest".into());
+                }
+                e
+            }
+            None => Box::new(crate::embedder::MockEmbedder::new(
+                self.manifest.embeddings.dimensions,
+            )),
+        };
         let mut cat = Catalog::new(
             conn,
             embedder,
             CatalogConfig {
                 name: Some(self.manifest.name.clone()),
                 embedding_dim: self.manifest.embeddings.dimensions,
+                allow_mock_embedder: sans_service,
                 checkpoint_dir: Some(
                     self.path(&self.manifest.database)
                         .with_extension("checkpoints"),
@@ -1655,6 +1695,70 @@ mod tests {
                 .contains("arrivee()"),
             "l'arbre de travail est édité sur le disque"
         );
+    }
+
+    /// **Un backend en mots seuls démarre sans service d'embarquement** —
+    /// signalé par la session mémoire : connect était appelé à l'ouverture
+    /// sans regarder les signaux, et une adresse injoignable empêchait un
+    /// backend bm25-only de démarrer. Et l'inverse : un backend qui déclare
+    /// du vecteur refuse l'absence de service en la nommant.
+    #[test]
+    fn un_backend_en_mots_seuls_demarre_sans_service() {
+        // Le notebook, ramené aux mots seuls, avec une adresse injoignable.
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+        let dir = tempfile::tempdir().unwrap();
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        copier(&src, dir.path());
+        std::fs::copy(
+            src.join("../../tools/search_structured.mmd"),
+            dir.path().join("search_structured.mmd"),
+        )
+        .unwrap();
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+        manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
+        manifest["embeddings"]["address"] = json!("127.0.0.1:9");
+        let root = std::env::var("RAG3DB_ROOT")
+            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
+        manifest["vector_extension"] =
+            json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let prepared = PreparedBackend::load(&chemin).unwrap();
+        assert!(!prepared.needs_embeddings(), "aucun signal vecteur déclaré");
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let backend = prepared
+            .open(Box::new(conn), None)
+            .expect("un backend en mots seuls démarre sans service");
+        let r = backend
+            .call_tool("put_note", json!({"record": {"key": "k1", "text": "le four ne chauffe plus", "labels": [], "stage": "working"}}))
+            .unwrap();
+        assert!(r.get("ok").map(|v| v != false).unwrap_or(true), "{r}");
+
+        // L'inverse : le notebook d'origine (vecteur déclaré) refuse en nommant.
+        let prepared = PreparedBackend::load(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook/backend.json"),
+        )
+        .unwrap();
+        assert!(prepared.needs_embeddings());
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let erreur = match prepared.open(Box::new(conn), None) {
+            Err(e) => e,
+            Ok(_) => panic!("du vecteur déclaré sans service doit se refuser"),
+        };
+        assert!(erreur.contains("embarquement"), "{erreur}");
+        assert!(erreur.contains("RAG3WEAVER_EMBED_SERVICE"), "le refus dit quoi faire : {erreur}");
     }
 
     /// Sans aucune description déclarée, rien ne change : les textes des
