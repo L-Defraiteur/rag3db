@@ -3,7 +3,7 @@
 Relevé de connaissances sur le moteur. Ce qui est affirmé porte un fichier, un commit ou
 une mesure ; ce qui ne l'est pas est dit « non vérifié ». Les numéros de ligne datent du
 3 octobre 2026 et bougent : chercher le nom de la fonction.
-**Dernière mise à jour : 3 octobre 2026, vers minuit.**
+**Dernière mise à jour : 4 octobre 2026, dans la nuit.**
 
 Le relevé du 2 octobre (journal, point de reprise, lecteurs concurrents, mode
 multi-écrivains) reste valable :
@@ -53,6 +53,33 @@ multi-écrivains) reste valable :
   « Reading past the end of the file …wal with size 0 at offset 0 », avant comme après mes
   correctifs (2 sur 20 des deux côtés).
 
+**La garde 2, repérage fait, rien de codé** (agent de repérage, non revérifié ligne à
+ligne) :
+- Un point de reprise supprime le fichier du journal (`WAL::reset`, appelé en fin de
+  `Checkpointer::writeCheckpoint`) ; une fermeture propre ne laisse donc aucun journal.
+- Le rejeu ne garde que les enregistrements suivis d'un COMMIT : un `LOAD EXTENSION`
+  réécrit en tête du journal devrait être enveloppé (BEGIN, LOAD, COMMIT), et
+  `loadExtension` exige une transaction active.
+- **Forme A, la liste persistée avec la base** : l'en-tête porte une version de stockage
+  (39, `storage_version_info.h`) contrôlée par égalité stricte ; la page n'est pas remise à
+  zéro, donc un champ ajouté demande soit un marqueur, soit de monter la version (les
+  anciens binaires n'ouvrent plus). Le catalogue est une suite fixe de neuf ensembles, sans
+  queue optionnelle. À l'ouverture, en-tête et catalogue sont lus avant le rejeu : une
+  liste y serait disponible à temps.
+- **Forme B, l'enregistrement réécrit en tête du journal** : aucun format ne change, mais
+  le journal n'est plus jamais vide — chaque ouverture, lecture seule comprise, fait un
+  rejeu complet ; la revérification de l'ouverture en lecture seule compare l'en-tête et
+  une somme des premiers octets du journal, qu'un journal recréé à l'identique pourrait
+  tromper (inférence) ; une huitaine de tests supposent « pas de journal après un point de
+  reprise ».
+- **Dans les deux formes** : si le fichier de l'extension manque, l'ouverture doit continuer
+  et laisser la garde 1 faire. Aujourd'hui `replayLoadExtensionRecord` relance l'erreur :
+  **un journal qui porte un `LOAD EXTENSION` dont le fichier a disparu empêche d'ouvrir la
+  base**.
+- `ExtensionManager` garde par extension son nom, son chemin résolu et sa source ; les
+  extensions liées statiquement sont chargées d'office avant le rejeu
+  (`Checkpointer::readCheckpoint`).
+
 ## 2. L'index vectoriel (HNSW) et notre greffe
 
 - L'insertion dans l'index se fait **au commit** (`needCommitInsert`,
@@ -77,6 +104,21 @@ multi-écrivains) reste valable :
   - `QUERY_VECTOR_INDEX … RETURN count(*)` rend toujours `k` ;
   - appeler `createRels` depuis `finalizeDelete` plante dans `shrinkForNode` ;
   - sous plusieurs écrivains : conflits d'écriture entre voisins (H3), état corrompu (H4).
+- **La mise à jour** (`OnDiskHNSWIndex::update`) retire les arêtes sortantes de la ligne
+  (`deleteFromGraph`), répare les points d'entrée, puis la réinsère (`insertInternal`).
+  L'état de mise à jour (`HNSWUpdateState`) est **recréé à chaque ligne** : on ne peut rien
+  y accumuler d'une ligne à l'autre d'une même instruction. Il n'existe pas de `finalize`
+  pour la mise à jour, contrairement à la suppression.
+- **Le tampon des vecteurs lus** (`OnDiskEmbeddingScanState`,
+  `extension/vector/src/include/index/hnsw_graph.h`) tient 2048 vecteurs à la fois, gérés
+  en pile par des poignées (`EmbeddingHandle`) ; aucune ne fuit d'une ligne à l'autre
+  (compté).
+- **Les arêtes se lisent par `graph::OnDiskGraph`** (`scanNeighbors`, `shrinkForNode`) :
+  d'abord les relations validées, puis celles de la transaction (`LocalRelTable::scan`),
+  dans les mêmes vecteurs de sortie. Dans une instruction à plusieurs lignes, la lecture des
+  arêtes de la transaction rendait le même voisin répété ; cause première non élucidée
+  (rapport de session).
+- Ladybug n'a ni mise à jour ni suppression dans son HNSW.
 - L'étude : `docs/3-octobre-2026-15h47/02-hnsw-sous-plusieurs-ecrivains.md`.
 
 ## 3. Le planificateur
@@ -146,6 +188,13 @@ Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), 
   rougissait pas sans.
 - **Isoler la croissance du `MERGE` avec la liste en littéral** : le temps est dominé par
   l'analyse de la requête, rien n'en sort.
+
+- **`SET` de vecteur, pistes fermées** : une fuite de poignées de vecteurs (il n'y en a
+  pas) ; les doublons de vecteurs (vingt lignes mises sur le vecteur d'une autre restent
+  joignables) ; recontrôler après chaque ligne tout ce que l'instruction a touché (l'état
+  est recréé à chaque ligne, l'accumulation ne vit pas) ; un témoin du défaut de lecture des
+  relations locales par `MATCH` ou par `OnDiskGraph` sur un cas simple (vert avant comme
+  après le correctif : il ne prouve rien).
 
 ## 7. Les mesures gardées
 

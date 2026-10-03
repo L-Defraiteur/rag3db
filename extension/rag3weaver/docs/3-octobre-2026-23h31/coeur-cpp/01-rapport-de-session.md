@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 3 octobre 2026, vers minuit.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, dans la nuit.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -27,25 +27,69 @@ A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec u
 ## Ce qui est en cours
 
 **Le `SET` d'un vecteur vers un autre perd des lignes dans l'index** (en service, sans
-arrêt). Mesure en C++ seul, 1000 lignes de dimension 4, recherche exhaustive :
+arrêt). Branche locale `set-de-vecteur-et-index`, **rien de commité** ; l'état de travail
+est dans `annexes/set-de-vecteur/` (`etat-de-travail-complet.patch` s'applique sur master
+`fcd9a7882` et suivants).
 
-| Variante | ligne à ligne | lots de 512 |
+Ce qui est établi (C++ seul, 1000 lignes de dimension 4, recherche exhaustive depuis une
+sonde, lignes joignables sur 1000) :
+
+| Variante, sur master | ligne à ligne | lots de 512 |
 |---|---|---|
 | `SET` depuis NULL, les mille lignes | 1000 | 1000 |
 | `SET` vers un autre vecteur, les mille lignes | 969 | 532 |
 | vingt `SET` vers le même vecteur | 1000 | 998 |
-| vingt `SET` vers le vecteur d'une autre ligne | 1000 | 1000 |
+| supprimer puis réinsérer la ligne | 1000 | 1000 |
+| repasser par NULL (deux `SET`) | 1000 | 599 |
+| retirer l'index, `SET`, recréer l'index | — | 1000 |
 
-Le chemin principal de rag3weaver (morceaux insérés sans vecteur, puis vecteurs posés) n'est
-pas touché. Le réembarquement d'une ligne gardée l'est. Branche locale
-`set-de-vecteur-et-index`, rien de commité. À faire : regarder ce que Ladybug a fait de la
-mise à jour dans son HNSW ; mesurer en dimension 768, à mille et dix mille lignes, avant et
-après ; dire s'il existe un contournement sûr côté rag3weaver (supprimer puis réinsérer, ou
-repasser par NULL). La ligne lointaine injoignable à la construction est peut-être la même
-famille.
+- **Le compte n'est pas stable d'une passe à l'autre** (le tirage des niveaux de l'index) :
+  la session du banc a mesuré 779, 593, 772 pour la même variante. Tout témoin doit être
+  joué plusieurs fois, avec le seuil « toutes joignables ».
+- Le chemin principal de rag3weaver (morceaux insérés sans vecteur, puis vecteurs posés)
+  n'est pas touché. Le réembarquement d'une ligne gardée l'est ; la session de l'arbre
+  principal le dit rare et n'ajoute pas de contournement. **Contournement sûr s'il en faut
+  un** : supprimer puis réinsérer la ligne ; en masse, retirer et recréer l'index.
+  Repasser par NULL n'est pas sûr par lots.
+- Ladybug n'a ni mise à jour ni suppression dans son HNSW : rien à reprendre, tout ce
+  chemin est notre greffe `98e35566a`.
 
-Un agent de repérage a été lancé sur la garde 2 (où persister la liste des extensions
-chargées) ; son rapport servira après le `SET`.
+Trois causes, où j'en suis de chacune :
+1. **`OnDiskHNSWIndex::update` ne gardait pas joignables les anciens voisins** de la ligne
+   (la suppression le fait depuis `13284a0fe`). Corrigé dans l'état de travail
+   (`correctif-1-voisins-joignables.patch`). Effet mesuré seul : ligne à ligne 969 → 1000,
+   vingt vers le même vecteur en une instruction 998 → 1000.
+2. **Dans une instruction à plusieurs lignes, l'index relit de travers ses arêtes non
+   validées** : le nœud qu'il vient de réinsérer rend 59 fois le même voisin au lieu de 59
+   voisins. Les arêtes écrites sont justes (relues après le commit) ; c'est la lecture dans
+   la transaction qui est fausse, et tout ce qui relit ses voisins (élagage, réparation)
+   travaille alors sur du faux. `correctif-2-selection-des-relations-locales.patch`
+   (`LocalRelTable::scan` pose `setToUnfiltered` au lieu de changer la seule taille du
+   vecteur de sélection) rend la lecture juste. **Mais je n'ai pas compris par où le
+   vecteur de sélection arrive périmé** : mon témoin au niveau du moteur
+   (`uncommitted_rels_scan_test.cpp`, par `MATCH` et par `graph::OnDiskGraph`) est vert
+   avant comme après. À faire : trouver ce qui distingue le chemin de l'index (une
+   instruction à plusieurs lignes, `detachDelete` de toutes les arêtes sortantes puis
+   réinsertion) de ce témoin.
+3. **Une grosse transaction de mises à jour échouait** sur « bitset::set: __position (which
+   is 2049) >= _Nb (which is 2048) » (mille `SET` en une instruction, ou vers la 465e ligne
+   d'un `BEGIN … COMMIT`). Disparu avec le correctif 2 : c'était sans doute la lecture
+   fausse qui faisait demander plus de 2048 vecteurs d'un coup. Non vérifié autrement.
+
+Avec les correctifs 1 et 2, plus aucune instruction n'échoue, mais **il reste des pertes**
+(par exemple 865 ligne à ligne, 491 par lots de 512 dans une passe ; 1000 et 964 dans une
+autre) : quand toutes les lignes sont mises à jour, l'élagage des voisins retire des arêtes
+entrantes à des nœuds que personne ne recontrôle. Piste : un passage de contrôle en fin
+d'instruction sur tout ce qu'elle a touché — il faut pour cela un `finalize` de la mise à
+jour, comme celui de la suppression ; l'état de mise à jour de l'index est aujourd'hui
+recréé à chaque ligne. À regarder aussi : `shrinkForNode` reprend ses voisins à partir du
+second (`for (auto i = 1u; …)`), donc laisse tomber le plus proche — code de l'amont, non
+examiné.
+
+Pas encore fait : la dimension 768, les dix mille lignes, la ligne lointaine injoignable à
+la construction.
+
+Le repérage de la garde 2 est rendu (voir le relevé de connaissances, §1).
 
 ## L'ordre, et pourquoi
 

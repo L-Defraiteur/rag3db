@@ -1,0 +1,18 @@
+diff --git a/src/storage/local_storage/local_rel_table.cpp b/src/storage/local_storage/local_rel_table.cpp
+index 749f9770a..cfe6e7bd6 100644
+--- a/src/storage/local_storage/local_rel_table.cpp
++++ b/src/storage/local_storage/local_rel_table.cpp
+@@ -359,7 +359,12 @@ bool LocalRelTable::scan(const Transaction* transaction, TableScanState& state)
+             localScanState.rowIdxVector->setValue<row_idx_t>(i,
+                 localScanState.rowIndices[localScanState.nextRowToScan + i]);
+         }
+-        localScanState.rowIdxVector->state->getSelVectorUnsafe().setSelSize(numToScan);
++        // Les positions 0 à numToScan - 1, dites explicitement. Le vecteur de sélection est
++        // celui de la sortie, partagé avec le balayage des relations validées : celui-ci
++        // peut l'avoir laissé filtré (des relations validées supprimées par cette même
++        // transaction), et n'en changer que la taille ferait écrire chaque relation locale à
++        // une position périmée — le lecteur recevait alors le même voisin répété.
++        localScanState.rowIdxVector->state->getSelVectorUnsafe().setToUnfiltered(numToScan);
+         [[maybe_unused]] auto lookupRes =
+             localNodeGroup->lookupMultiple(transaction, localScanState);
+         localScanState.nextRowToScan += numToScan;

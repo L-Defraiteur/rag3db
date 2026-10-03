@@ -1,0 +1,99 @@
+diff --git a/extension/vector/src/include/index/hnsw_index.h b/extension/vector/src/include/index/hnsw_index.h
+index eb446dc59..48635d767 100644
+--- a/extension/vector/src/include/index/hnsw_index.h
++++ b/extension/vector/src/include/index/hnsw_index.h
+@@ -329,6 +329,9 @@ public:
+ 
+     struct HNSWUpdateState final : UpdateState {
+         HNSWInsertState insertState;
++        // ESSAI : tout ce que l'instruction a touché (lignes mises à jour, anciens voisins).
++        std::unordered_set<common::offset_t> touched;
++        std::vector<common::offset_t> updated;
+         HNSWUpdateState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
+             catalog::TableCatalogEntry* upperRelTableEntry,
+             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
+diff --git a/extension/vector/src/index/hnsw_index.cpp b/extension/vector/src/index/hnsw_index.cpp
+index 88c4b6137..dbb4c2b47 100644
+--- a/extension/vector/src/index/hnsw_index.cpp
++++ b/extension/vector/src/index/hnsw_index.cpp
+@@ -976,6 +976,62 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
+             scanState.get()};
+         insertInternal(transaction, offset, handle, state.insertState);
+     }
++    // 3. The nodes the old position led to have lost an incoming edge each. One of them may
++    // have been reachable through this node only: check them all, as finalizeDelete does for
++    // the neighbours of a deleted node.
++    state.touched.insert(offset);
++    state.updated.push_back(offset);
++    for (const auto nbr : lowerNbrs) {
++        state.touched.insert(nbr);
++    }
++    if (std::getenv("DIAG_ARETES")) {
++        // Les arêtes sortantes de chaque ligne déjà mise à jour par cette instruction, et
++        // combien de nœuds mènent encore à elle parmi tout ce qui a été touché.
++        {
++            // Le nœud 0, relu à chaque appel : dans la transaction qui l'a mis à jour, puis
++            // dans les suivantes, une fois ses arêtes validées.
++            const auto zero = scanNeighbors(transaction, 0, false, state.insertState);
++            std::unordered_set<common::offset_t> distinctZero(zero.begin(), zero.end());
++            std::string ids;
++            for (size_t k = 0; k < zero.size() && k < 8; k++) {
++                ids += std::to_string(zero[k]) + " ";
++            }
++            fprintf(stderr, "[aretes] nœud 0 vu pendant la mise à jour de %lu : %zu sortantes, %zu distinctes [%s…]\n",
++                static_cast<unsigned long>(offset), zero.size(), distinctZero.size(), ids.c_str());
++        }
++        std::string line = "[aretes] après " + std::to_string(offset) + " :";
++        for (const auto node : state.updated) {
++            const auto out = scanNeighbors(transaction, node, false, state.insertState);
++            std::unordered_set<common::offset_t> distinct(out.begin(), out.end());
++            size_t in = 0;
++            for (const auto other : state.touched) {
++                if (other == node) {
++                    continue;
++                }
++                const auto edges = scanNeighbors(transaction, other, false, state.insertState);
++                if (std::ranges::find(edges, node) != edges.end()) {
++                    in++;
++                }
++            }
++            line += " [";
++            for (size_t k = 0; k < out.size() && k < 6; k++) {
++                line += std::to_string(out[k]) + " ";
++            }
++            line += "…]";
++            line += " " + std::to_string(node) + "(sortantes " + std::to_string(out.size()) +
++                    ", distinctes " + std::to_string(distinct.size()) + ", entrantes vues " +
++                    std::to_string(in) + ")";
++        }
++        fprintf(stderr, "%s\n", line.c_str());
++    }
++    if (std::getenv("ESSAI_SANS_TABLE")) {
++        return;
++    }
++    for (const auto node : state.touched) {
++        keepNodeReachable(transaction, node,
++            scanNeighbors(transaction, node, false /*isUpperLayer*/, state.insertState),
++            false /*isUpperLayer*/, state.insertState);
++    }
+ }
+ 
+ std::vector<common::offset_t> OnDiskHNSWIndex::scanNeighbors(Transaction* /*transaction*/,
+diff --git a/src/storage/local_storage/local_rel_table.cpp b/src/storage/local_storage/local_rel_table.cpp
+index 749f9770a..cfe6e7bd6 100644
+--- a/src/storage/local_storage/local_rel_table.cpp
++++ b/src/storage/local_storage/local_rel_table.cpp
+@@ -359,7 +359,12 @@ bool LocalRelTable::scan(const Transaction* transaction, TableScanState& state)
+             localScanState.rowIdxVector->setValue<row_idx_t>(i,
+                 localScanState.rowIndices[localScanState.nextRowToScan + i]);
+         }
+-        localScanState.rowIdxVector->state->getSelVectorUnsafe().setSelSize(numToScan);
++        // Les positions 0 à numToScan - 1, dites explicitement. Le vecteur de sélection est
++        // celui de la sortie, partagé avec le balayage des relations validées : celui-ci
++        // peut l'avoir laissé filtré (des relations validées supprimées par cette même
++        // transaction), et n'en changer que la taille ferait écrire chaque relation locale à
++        // une position périmée — le lecteur recevait alors le même voisin répété.
++        localScanState.rowIdxVector->state->getSelVectorUnsafe().setToUnfiltered(numToScan);
+         [[maybe_unused]] auto lookupRes =
+             localNodeGroup->lookupMultiple(transaction, localScanState);
+         localScanState.nextRowToScan += numToScan;
