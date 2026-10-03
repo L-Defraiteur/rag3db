@@ -166,13 +166,27 @@ def main():
         # run n'existe pas dans ce manifeste : l'outil inconnu se refuse.
         r = host.ask(op="call", name="run_command", arguments={"command": "ls"})
         assert not r.get("ok", True), f"outil absent refusé : {r}"
+        # Le cloud suit l'indexation SANS run_commands : index et wait sont
+        # en base déclarative — c'est tout l'objet de leur déménagement.
+        r = host.ask(op="call", name="index", arguments={})
+        assert r.get("ok"), f"index démarre sur l'instantané : {r}"
+        m = re.search(r"journal : (\S+)", json.dumps(r).replace("\\n", "\n"))
+        assert m, f"le reçu est un journal : {r}"
+        r = host.ask(op="call", name="wait_output",
+                     arguments={"journal": m.group(1),
+                                "pattern": "indexation terminée|indexation échouée",
+                                "timeout_s": 120})
+        assert "indexation terminée" in json.dumps(r, ensure_ascii=False), f"l'indexation aboutit : {r}"
+        r = host.ask(op="call", name="search_code",
+                     arguments={"query": "arrivee", "options": {"consistency": "strict"}})
+        assert "main.rs" in json.dumps(r), f"la recherche répond sur l'instantané indexé : {r}"
         host.close()
 
         print("PASS: descriptions distinctes, lecture, chemin hors workspace refusé, "
               "édition + réindexation cherchable, porte des commandes, indexation en "
               "fond suivie par son journal (état sans attendre, fin par motif, recherche "
               "qui répond, traversée refusée), instantané en mémoire sans toucher le "
-              "disque, outil absent refusé.")
+              "disque et indexé sans run_commands, outil absent refusé.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
