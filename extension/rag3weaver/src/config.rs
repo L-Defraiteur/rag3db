@@ -566,9 +566,51 @@ pub enum OnMissing {
     /// relations (comptées).
     #[default]
     Delete,
-    /// Passée à cet état de la machine à états de l'entité, par une
-    /// transition déclarée : la ligne reste, son historique aussi.
-    State(String),
+    /// La transition de ce nom, déclarée par la machine à états de
+    /// l'entité : la ligne reste, son historique aussi. On nomme le passage,
+    /// pas l'état visé — la machine dit par où on passe. Une ligne absente
+    /// dans un état d'où cette transition ne part pas est **gardée et nommée**
+    /// dans le rapport de fin, pas supprimée.
+    Transition(String),
+}
+
+impl SnapshotConfig {
+    /// Les champs du périmètre existent, la proportion est une proportion, la
+    /// transition est déclarée, et la mise de côté (`keepFor`) n'existe pas
+    /// encore : une valeur est refusée plutôt qu'ignorée.
+    pub fn validate(
+        &self,
+        fields: &HashMap<String, SimpleFieldDef>,
+        lifecycle: Option<&Lifecycle>,
+    ) -> Result<(), String> {
+        for f in &self.scope {
+            if !fields.contains_key(f) {
+                return Err(format!("snapshot : le champ de périmètre '{f}' n'est pas un champ de cette entité"));
+            }
+        }
+        if !(self.max_missing_ratio > 0.0 && self.max_missing_ratio <= 1.0) {
+            return Err(format!(
+                "snapshot : maxMissingRatio doit être dans ]0, 1], reçu {}",
+                self.max_missing_ratio
+            ));
+        }
+        if let OnMissing::Transition(name) = &self.on_missing {
+            let Some(lc) = lifecycle else {
+                return Err(format!("snapshot : onMissing nomme la transition '{name}', mais l'entité n'a pas de lifecycle"));
+            };
+            if !lc.transitions.iter().any(|t| &t.name == name) {
+                let names: Vec<&str> = lc.transitions.iter().map(|t| t.name.as_str()).collect();
+                return Err(format!(
+                    "snapshot : la transition '{name}' n'est pas déclarée (déclarées : {})",
+                    names.join(", ")
+                ));
+            }
+        }
+        if self.keep_for.is_some() {
+            return Err("snapshot : keepFor (la mise de côté avant purge) n'est pas encore implémenté".into());
+        }
+        Ok(())
+    }
 }
 
 /// Voir [`EntityConfig::content_kind`].
@@ -1058,6 +1100,9 @@ impl EntityConfig {
         }
         if let Some(lc) = &self.lifecycle {
             lc.validate(&self.fields)?;
+        }
+        if let Some(snapshot) = &self.snapshot {
+            snapshot.validate(&self.fields, self.lifecycle.as_ref())?;
         }
         for (name, f) in &self.fields {
             if crate::scope::is_scope_column(name) {

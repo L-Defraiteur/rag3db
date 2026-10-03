@@ -16,6 +16,9 @@ use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::events::{CatalogEvent, EventBus};
 use crate::filter::{FilterCondition, FilterParser};
 use crate::search;
+
+mod synchronisation;
+pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions};
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
 use crate::records::{DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
@@ -88,6 +91,10 @@ pub enum CatalogError {
     EmbedError(String),
     #[error("filter error: {0}")]
     FilterError(String),
+    /// Une fin de synchronisation refusée par un garde-fou (instantané vide,
+    /// trop de lignes absentes) : rien n'a été retiré.
+    #[error("synchronisation refusée : {0}")]
+    SnapshotRefused(String),
 }
 
 // Re-export result types (defined in records.rs, used widely)
@@ -3726,6 +3733,38 @@ impl Catalog {
             eprintln!(
                 "[rag3weaver] schéma v{SCHEMA_VERSION}: _chunked_hash ajouté sur \
                  {decoupes_ajoutes} table(s) d'entités, copié depuis _content_hash"
+            );
+        }
+
+        // ── v8 : `_snapshot` sur les tables d'entités ──────────────────
+        //
+        // Vide sur les lignes existantes : aucune n'a été portée par une
+        // session de synchronisation. Une fin de synchronisation ne regarde
+        // que le périmètre qu'on lui donne, et refuse un instantané vide.
+        let marque = crate::dialect::ColumnDef {
+            name: "_snapshot".into(),
+            col_type: crate::dialect::ColumnType::Text,
+        };
+        let mut marques_ajoutees = 0usize;
+        for table in tables.iter().filter(|t| !t.ends_with("_Chunk") && !t.ends_with("_Index")) {
+            let ddl = self.dialect.alter_add_column_default(table, &marque, "''");
+            match self.conn.execute(&ddl) {
+                Ok(_) => marques_ajoutees += 1,
+                Err(e) => {
+                    let msg = e.to_string().to_lowercase();
+                    if !(msg.contains("exist") || msg.contains("already has")
+                        || msg.contains("not found") || msg.contains("does not")) {
+                        return Err(CatalogError::DbError(format!(
+                            "migration _snapshot {table}: {e}"
+                        )));
+                    }
+                }
+            }
+        }
+        if marques_ajoutees > 0 {
+            eprintln!(
+                "[rag3weaver] schéma v{SCHEMA_VERSION}: _snapshot ajouté sur \
+                 {marques_ajoutees} table(s) d'entités"
             );
         }
 
