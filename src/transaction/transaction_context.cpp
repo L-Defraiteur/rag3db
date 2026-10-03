@@ -1,6 +1,7 @@
 #include "transaction/transaction_context.h"
 
 #include "common/exception/transaction_manager.h"
+#include "common/string_format.h"
 #include "main/client_context.h"
 #include "main/database.h"
 #include "transaction/transaction_manager.h"
@@ -67,6 +68,23 @@ void TransactionContext::rollback() {
     clientContext.getDatabase()->getTransactionManager()->rollback(clientContext,
         activeTransaction);
     clearTransaction();
+}
+
+void TransactionContext::rollbackAfterStatementFailure() {
+    if (!hasActiveTransaction()) {
+        return;
+    }
+    const auto wasManual = mode == TransactionMode::MANUAL;
+    rollback();
+    manualTransactionFailed = wasManual;
+}
+
+void TransactionContext::throwIfManualTransactionFailed() const {
+    if (manualTransactionFailed) {
+        throw TransactionManagerException(stringFormat(
+            "{}: nothing it wrote remains, and nothing can run in it. Send ROLLBACK to close it.",
+            MANUAL_TRANSACTION_FAILED));
+    }
 }
 
 void TransactionContext::clearTransaction() {

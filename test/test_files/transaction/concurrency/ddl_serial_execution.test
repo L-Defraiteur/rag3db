@@ -152,6 +152,9 @@ Catalog exception: t does not exist in catalog.
 -STATEMENT CALL table_info('t') RETURN *;
 ---- error
 Catalog exception: t does not exist in catalog.
+# Une erreur dans BEGIN ... COMMIT laisse le bloc en échec : ROLLBACK le ferme.
+-STATEMENT ROLLBACK
+---- ok
 -STATEMENT CALL table_info('t') RETURN *;
 ---- 2
 0|a|INT32|NULL|True

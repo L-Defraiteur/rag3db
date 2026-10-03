@@ -8,6 +8,9 @@
 -STATEMENT CREATE (a:person {ID:2});
 ---- error
 Runtime exception: Found duplicated primary key value 2, which violates the uniqueness constraint of the primary key column.
+# Une erreur dans BEGIN ... COMMIT laisse le bloc en échec : ROLLBACK le ferme.
+-STATEMENT ROLLBACK
+---- ok
 -STATEMENT CREATE (a:person {ID:200});
 ---- ok
 -STATEMENT MATCH (a:person) WHERE a.ID > 10 RETURN a.ID;
