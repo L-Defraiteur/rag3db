@@ -178,6 +178,9 @@ pub mod embedding_storage;
 pub mod embedding_choice;
 /// La rafale se règle en durée, pas en caractères — pour une carte que l'affichage partage (3 octobre 2026).
 pub mod burst;
+/// Dire ce que ça va coûter avant d'indexer : comptes, modèle, durée,
+/// confirmation. Une lecture, générique — voir l'en-tête du module.
+pub mod estimate;
 /// **Le catalogue de gabarits** : ce qu'on pose au lieu de l'écrire — des
 /// entités, des graphes, des composants, et des motifs qui s'appliquent aux
 /// trois. Voir `docs/vision_roadmap_09_2026/08-des-catalogues-de-gabarits.md`.
