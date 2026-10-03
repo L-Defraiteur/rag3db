@@ -731,6 +731,28 @@ impl PreparedBackend {
         );
         cat.set_moteur_texte(MoteurTexte::Lucivy);
         cat.set_fts_positions(self.manifest.fts_positions.unwrap_or(true));
+        // **Le creux, enfin branché.** Le backend comptait le signal `sparse`
+        // pour exiger un service, puis ne donnait jamais d'embarqueur creux
+        // au catalogue (trouvé le 3 octobre 2026) : le signal restait muet.
+        // Déclaré sans `models.sparse`, c'est maintenant un refus qui dit
+        // quoi écrire ; et le dual n'est pris que si c'est le même modèle des
+        // deux côtés — sinon dense et creux viendraient de deux espaces.
+        let veut_le_creux = self.entities.values().any(|config| config.signals.sparse());
+        match (self.manifest.models.get(&crate::model_source::Capability::Sparse), veut_le_creux) {
+            (None, true) if !sans_service => {
+                return Err("ce backend déclare un signal sparse : `models.sparse` est requis \
+                            (par exemple {\"provider\": \"service\", \"model\": \"bge-m3\"})"
+                    .into());
+            }
+            (Some(source), _) => {
+                let (clients, _) = crate::model_source::connect_sparse(source)?;
+                cat.set_sparse_embedder(clients.sparse);
+                if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
+                    cat.set_dual_embedder(dual);
+                }
+            }
+            (None, _) => {}
+        }
         let ext = self.path(&self.manifest.vector_extension);
         cat.execute_raw(&format!(
             "LOAD EXTENSION '{}'",

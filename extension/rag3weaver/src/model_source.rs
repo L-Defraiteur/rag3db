@@ -56,9 +56,16 @@ impl Capability {
 
     /// Les variables lues, dans l'ordre : la commune, puis l'alias
     /// d'avant — `RAG3WEAVER_EMBED_SERVICE`, que des passes en cours posent.
+    ///
+    /// Le creux est servi par le même démon que le dense : sans variable à
+    /// lui, il lit celles de l'embarquement — un poste qui a posé
+    /// `RAG3WEAVER_SERVICE_EMBED` n'a rien à poser de plus.
     pub fn variables(self) -> Vec<String> {
         let mut v = vec![self.variable()];
-        if self == Self::Embed {
+        if self == Self::Sparse {
+            v.push(Self::Embed.variable());
+        }
+        if matches!(self, Self::Embed | Self::Sparse) {
             v.push("RAG3WEAVER_EMBED_SERVICE".to_string());
         }
         v
@@ -248,7 +255,7 @@ pub fn resolve<T>(
                             break;
                         }
                         Ok((_, served)) => seen.push(format!("{address} sert {served}")),
-                        Err(e) => seen.push(format!("{address} ne répond pas ({e})")),
+                        Err(e) => seen.push(format!("{address} : {e}")),
                     }
                 }
                 found.ok_or_else(|| format!("aucun service ne sert {} — {}", source.model, seen.join(" ; ")))
@@ -332,19 +339,7 @@ pub fn local_embedder(model: &str) -> Result<Box<dyn crate::embedder::Embedder>,
         "granite-278m" => ("granite-278m", "RAG3WEAVER_GRANITE_278M"),
         other => return Err(format!("modèle local `{other}` inconnu (granite-278m, granite-107m, bge-m3)")),
     };
-    let artifact = |suffix: &str, file: &str| -> Result<std::path::PathBuf, String> {
-        let variable = format!("{prefix}_{suffix}");
-        let path = match std::env::var(&variable) {
-            Ok(v) => std::path::PathBuf::from(v),
-            Err(_) => std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into())).join(".cache/rag3weaver").join(folder).join(file),
-        };
-        if path.exists() {
-            Ok(path)
-        } else {
-            Err(format!("{} est introuvable — donnez {variable}, ou placez le fichier là", path.display()))
-        }
-    };
-    let (weights, tokenizer) = (artifact("BPK", "model.bpk")?, artifact("TOKENIZER", "tokenizer.json")?);
+    let (weights, tokenizer) = (local_artifact(folder, prefix, "BPK", "model.bpk")?, local_artifact(folder, prefix, "TOKENIZER", "tokenizer.json")?);
     let device = BurnDevice::for_role(BurnRole::Embedder);
     let built: Box<dyn crate::embedder::Embedder> = match model {
         "bge-m3" => Box::new(crate::burn_bge_m3_embedder::BurnBgeM3Embedder::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
@@ -352,6 +347,78 @@ pub fn local_embedder(model: &str) -> Result<Box<dyn crate::embedder::Embedder>,
         _ => Box::new(crate::BurnGranite278m::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
     };
     Ok(built)
+}
+
+// ─── Le creux, et le dual ────────────────────────────────────────────────────
+
+/// Ce qu'une déclaration `models.sparse` rend : l'embarqueur creux, et — quand
+/// le même modèle sait rendre dense et creux en une passe — le dual.
+pub struct SparseClients {
+    pub sparse: std::sync::Arc<dyn crate::embedder::SparseEmbedder>,
+    pub dual: Option<std::sync::Arc<dyn crate::embedder::DualEmbedder>>,
+}
+
+/// **L'embarqueur creux d'une déclaration**, et d'où il calcule.
+///
+/// - `service` : un démon `rag3weaver-embeddings` qui sert le creux pour ce
+///   modèle (bge-m3). Un démon qui sert le bon modèle sans le creux est
+///   refusé en le disant.
+/// - `local` : BGE-M3 sur burn, dans ce processus.
+/// - `compatible` : aucune forme aujourd'hui — le contrat OpenAI ne rend pas
+///   de vecteurs creux.
+pub fn connect_sparse(source: &ModelSource) -> Result<(SparseClients, Origin), String> {
+    #[cfg(feature = "burn-embedder")]
+    let local = |s: &ModelSource| -> Result<SparseClients, String> {
+        if s.model != "bge-m3" {
+            return Err(format!("modèle creux local `{}` inconnu (bge-m3)", s.model));
+        }
+        let weights = local_artifact("bge-m3", "RAG3WEAVER_BGE_M3", "BPK", "model.bpk")?;
+        let tokenizer = local_artifact("bge-m3", "RAG3WEAVER_BGE_M3", "TOKENIZER", "tokenizer.json")?;
+        let device = crate::burn_device::BurnDevice::for_role(crate::burn_device::BurnRole::Embedder);
+        let model = std::sync::Arc::new(
+            crate::burn_bge_m3_embedder::BurnBgeM3Embedder::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?,
+        );
+        Ok(SparseClients { sparse: model.clone(), dual: Some(model) })
+    };
+    #[cfg(feature = "daemon")]
+    let service = |address: &str| -> Result<(SparseClients, String), String> {
+        let d = crate::daemon::DaemonEmbedder::joindre(address).map_err(|e| e.to_string())?;
+        let served = d.identite().modele.clone();
+        if !d.sait_sparse() {
+            return Err(format!("sert {served} sans le creux"));
+        }
+        let dual = d.sait_dual();
+        let d = std::sync::Arc::new(d);
+        Ok((SparseClients { sparse: d.clone(), dual: dual.then(|| d as std::sync::Arc<dyn crate::embedder::DualEmbedder>) }, served))
+    };
+    let builders: Builders<SparseClients> = Builders {
+        #[cfg(feature = "burn-embedder")]
+        local: Some(&local),
+        #[cfg(not(feature = "burn-embedder"))]
+        local: None,
+        #[cfg(feature = "daemon")]
+        service: Some(&service),
+        #[cfg(not(feature = "daemon"))]
+        service: None,
+        compatible: None,
+    };
+    resolve(Capability::Sparse, source, &builders, &process_env)
+}
+
+/// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
+/// sinon `~/.cache/rag3weaver/<dossier>/<fichier>`.
+#[cfg(feature = "burn-embedder")]
+fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &str) -> Result<std::path::PathBuf, String> {
+    let variable = format!("{prefix}_{suffix}");
+    let path = match std::env::var(&variable) {
+        Ok(v) => std::path::PathBuf::from(v),
+        Err(_) => std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into())).join(".cache/rag3weaver").join(folder).join(file),
+    };
+    if path.exists() {
+        Ok(path)
+    } else {
+        Err(format!("{} est introuvable — donnez {variable}, ou placez le fichier là", path.display()))
+    }
 }
 
 #[cfg(test)]
@@ -408,6 +475,10 @@ mod tests {
         assert_eq!(written.addresses(Capability::Embed, &both), ["d:1"]);
         // Une autre capacité ne lit pas l'alias de l'embarquement.
         assert!(s.addresses(Capability::Rerank, &old).is_empty());
+        // Le creux, servi par le même démon, lit les variables de l'embarquement
+        // quand il n'a pas la sienne.
+        assert_eq!(Capability::Sparse.variables(), ["RAG3WEAVER_SERVICE_SPARSE", "RAG3WEAVER_SERVICE_EMBED", "RAG3WEAVER_EMBED_SERVICE"]);
+        assert_eq!(s.addresses(Capability::Sparse, &old), ["a:1", "b:1"]);
     }
 
     #[test]
@@ -424,7 +495,7 @@ mod tests {
         let s = ModelSource { address: Addresses::parse("mort:1, a:1"), ..ModelSource::service("granite-107m") };
         let e = resolve(Capability::Embed, &s, &all(), &no_env).unwrap_err();
         assert!(e.contains("models.embed (granite-107m)") && e.contains("aucun service ne sert granite-107m"), "{e}");
-        assert!(e.contains("a:1 sert granite-278m") && e.contains("mort:1 ne répond pas"), "{e}");
+        assert!(e.contains("a:1 sert granite-278m") && e.contains("mort:1 : connexion refusée"), "{e}");
         // Sans adresse nulle part : on dit quelles variables poser.
         let e = resolve(Capability::Embed, &ModelSource::service("granite-278m"), &all(), &no_env).unwrap_err();
         assert!(e.contains("RAG3WEAVER_SERVICE_EMBED") && e.contains("RAG3WEAVER_EMBED_SERVICE"), "{e}");

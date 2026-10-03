@@ -634,12 +634,15 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
-- **Un backend qui déclare un signal creux n'a pas d'embarqueur creux** (trouvé
-  le 3 octobre 2026 par l'inventaire des fournisseurs de modèles). Le backend
-  compte le signal pour exiger un service (`needs_embeddings`), puis n'appelle
-  jamais `set_sparse_embedder` ni `set_dual_embedder` : seuls les tests le font.
-  À corriger avec `models.sparse` (lot 3 de
-  `extension/rag3weaver/docs/3-octobre-2026-21h22/01-un-modele-en-service-ou-en-local.md`).
+- ~~Un backend qui déclare un signal creux n'a pas d'embarqueur creux~~ —
+  **corrigé le 3 octobre 2026** (lot 3 de « un modèle, en service ou en
+  local »). `models.sparse` se déclare comme les autres ; le backend branche
+  le creux, et le dual quand c'est le même modèle des deux côtés. Un signal
+  `sparse` déclaré sans `models.sparse` est refusé au démarrage en disant quoi
+  écrire. Preuve sur un vrai backend : `scripts/test_backend_sparse.py`.
+  **Reste** : les graphes de recherche des gabarits de backend
+  (`search_structured.mmd`) n'ont pas de branche `sparse` — le signal est
+  branché, mais il faut un graphe qui l'interroge (`search_base.mmd` l'a).
 - **Un backend n'a jamais de relecteur ni d'OCR** (même inventaire).
   `RerankNode` et `OcrNode` existent ; le backend n'appelle ni `set_reranker` ni
   `set_ocr`, donc aucun service ne leur est donné. Lot 4 de la même page.

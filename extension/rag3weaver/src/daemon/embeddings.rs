@@ -899,6 +899,37 @@ mod tests {
         assert!(DaemonEmbedder::joindre(&a).is_ok() && DaemonEmbedder::joindre(&b).is_ok());
     }
 
+    /// **`models.sparse` se résout comme l'embarquement** : le démon qui sert
+    /// le creux pour ce modèle est pris, avec le dual s'il sait ; celui qui
+    /// sert le bon modèle sans le creux est refusé en le disant.
+    #[test]
+    fn le_creux_se_declare_et_se_resout_par_le_modele_servi() {
+        use crate::model_source::{connect_sparse, Addresses, ModelSource, Origin};
+        let regle = Arc::new(Regle(8));
+        let dense_seul = demon(EmbedDaemon::new(regle.clone()));
+        let complet = demon(EmbedDaemon::new(regle.clone()).avec_dual(regle.clone()).avec_sparse(regle.clone()));
+        let creux_seul = demon(EmbedDaemon::new(regle.clone()).avec_sparse(regle));
+
+        let source = |adresses: String| ModelSource { address: Addresses::parse(&adresses), ..ModelSource::service("regle") };
+        let (clients, origine) = connect_sparse(&source(format!("{dense_seul}, {complet}"))).expect("le second sert le creux");
+        assert_eq!(origine, Origin::Service(complet.clone()));
+        assert!(clients.dual.is_some(), "il sait le dual, on le rend");
+        assert_eq!(clients.sparse.embed_sparse(&["abc".to_string()]).expect("creux").len(), 1);
+        assert!(clients.sparse.distant());
+
+        // Le creux sans le dual : rendu, sans dual.
+        let (clients, _) = connect_sparse(&source(creux_seul)).expect("creux seul");
+        assert!(clients.dual.is_none());
+
+        // Le bon modèle, sans le creux : un refus qui dit pourquoi.
+        let refus = connect_sparse(&source(dense_seul.clone())).err().expect("pas de creux");
+        assert!(refus.contains("models.sparse (regle)") && refus.contains("sans le creux"), "{refus}");
+        // Un autre modèle demandé : le refus dit ce qui est servi.
+        let autre = ModelSource { address: Addresses::parse(&complet), ..ModelSource::service("bge-m3") };
+        let refus = connect_sparse(&autre).err().expect("pas ce modèle");
+        assert!(refus.contains("aucun service ne sert bge-m3") && refus.contains("sert regle"), "{refus}");
+    }
+
     /// **Un embarqueur distant se déclare distant**, sur les trois traits.
     ///
     /// C'est ce qui empêche les rapports cycliques de se multiplier : le
