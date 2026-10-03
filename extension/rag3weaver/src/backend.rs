@@ -138,6 +138,11 @@ pub struct ToolAttachment {
     /// texte.
     #[serde(default)]
     pub description: Option<String>,
+    /// Ce que cet outil a le droit de faire (fichiers, commandes) — tout
+    /// `false` par défaut : la base déclarative seule, comme avant. C'est la
+    /// politique qui fait deux produits d'un même moteur.
+    #[serde(default)]
+    pub policy: crate::backend_code::ToolPolicy,
     #[serde(default)]
     pub harness: ToolHarness,
     #[serde(default)]
@@ -520,6 +525,19 @@ impl PreparedBackend {
             );
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
+        }
+        // La politique de chaque outil se vérifie au chargement : un graphe
+        // qui déborde sa politique, ou une politique sans le workspace
+        // qu'elle exige, se refuse en disant quoi faire.
+        for (name, attachment) in &manifest.tools {
+            if let Some(tool) = tools.get(name) {
+                crate::backend_code::validate_tool_policy(
+                    name,
+                    tool.template().nodes.iter().map(|n| n.node_type.clone()),
+                    &attachment.policy,
+                    manifest.workspace.as_ref(),
+                )?;
+            }
         }
         // Les entités décrites que chaque outil vise : par ses payloads, par
         // un binding qui nomme une entité, ou par ses nœuds de sélection et
@@ -1003,32 +1021,12 @@ impl Backend {
         let def = tool
             .instantiate(&Value::Object(args))
             .map_err(|e| e.to_string())?;
-        let policy = NodeTypePolicy::only([
-            "RhaiNode",
-            "EntityRecordNode",
-            "EntityBatchNode",
-            "SnapshotFinishNode",
-            "SnapshotUndoNode",
-            "SnapshotSessionNode",
-            "RelationBatchNode",
-            "KBQuerySourceNode",
-            "SelectRecordsNode",
-            "RelatedResultsNode",
-            "IntersectResultsNode",
-            "LabelResultsNode",
-            "SearchSourceNode",
-            "BM25SearchNode",
-            "VectorSearchNode",
-            "SparseSearchNode",
-            "FuseResultsNode",
-            "RerankNode",
-            "PaginateNode",
-            "ResolveParentNode",
-            "RenderResultsNode",
-            "FetchRelatedNode",
-            "ComposeNode",
-            "GroupFrameNode",
-        ]);
+        // La politique **déclarée** de l'outil — vérifiée au chargement, elle
+        // tient ici le runtime : la base déclarative, plus ce que l'outil a
+        // déclaré (fichiers, commandes).
+        let policy = NodeTypePolicy::only(
+            crate::backend_code::allowed_nodes(&attachment.policy),
+        );
         let mut response = self.execute_graph(tool, &def, &attachment.metadata, &policy)?;
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(&harness.after, &context);
@@ -1494,6 +1492,137 @@ mod tests {
         assert!(
             filtre.as_str().unwrap().starts_with("Une note de travail"),
             "le schéma du filtre commence par l'entité : {filtre}"
+        );
+    }
+
+    /// Le notebook copié avec un workspace et les outils de code attachés —
+    /// deux manifestes du même moteur, la politique seule les distingue.
+    fn fixture_code(
+        source: &str,
+        read_only: bool,
+        outils: Value,
+    ) -> (tempfile::TempDir, Result<PreparedBackend, String>) {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+        let dir = tempfile::tempdir().unwrap();
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        copier(&src, dir.path());
+        let outils_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        for mmd in ["read.mmd", "edit.mmd", "run.mmd"] {
+            std::fs::copy(outils_dir.join(mmd), dir.path().join(mmd)).unwrap();
+        }
+        std::fs::copy(src.join("../../tools/search_structured.mmd"), dir.path().join("search_structured.mmd")).unwrap();
+        let sources = dir.path().join("sources");
+        std::fs::create_dir(&sources).unwrap();
+        std::fs::write(sources.join("main.rs"), "fn main() { depart(); }\n").unwrap();
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+        manifest["workspace"] = json!({"source": source, "root": "sources", "read_only": read_only});
+        for (nom, attachement) in outils.as_object().unwrap() {
+            manifest["tools"][nom] = attachement.clone();
+        }
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let p = PreparedBackend::load(&chemin);
+        (dir, p)
+    }
+
+    /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
+    /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
+    /// politique et le chemin des fichiers, pas la persistance.
+    fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
+        use crate::connection::CallbackConnection;
+        use crate::embedder::HashEmbedder;
+        let conn = CallbackConnection::new(|_, _| Ok(crate::connection::QueryResult::default()));
+        let mut catalog = Catalog::new(
+            Box::new(conn),
+            Box::new(HashEmbedder::new(8)),
+            CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
+        );
+        catalog.initialize().unwrap();
+        // Les nœuds de code consultent File/Scope : le schéma de code
+        // s'enregistre, la connexion à vide absorbe les DDL.
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let workspace = prepared.manifest.workspace.clone().unwrap();
+        let file_source =
+            crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
+        Backend {
+            prepared,
+            catalog: Arc::new(Mutex::new(catalog)),
+            file_source: Some(file_source),
+            garde: crate::backend_code::build_garde(&workspace),
+        }
+    }
+
+    /// **La politique refuse au chargement, en disant quoi faire** — la
+    /// leçon du deck builder : nommer le paramètre à changer, pas la règle.
+    #[test]
+    fn la_politique_refuse_en_disant_quoi_faire() {
+        // edit attaché sans write_files : le refus nomme la capacité.
+        let (_d, p) = fixture_code("working_tree", false, json!({
+            "edit_file": {"graph": "edit.mmd", "policy": {"read_files": true}}
+        }));
+        let erreur = p.err().unwrap();
+        assert!(erreur.contains("write_files"), "{erreur}");
+        assert!(erreur.contains("ajoutez"), "le refus dit quoi faire : {erreur}");
+
+        // write_files sur un workspace read_only : incohérence dite au load.
+        let (_d, p) = fixture_code("working_tree", true, json!({
+            "edit_file": {"graph": "edit.mmd", "policy": {"write_files": true}}
+        }));
+        let erreur = p.err().unwrap();
+        assert!(erreur.contains("read_only"), "{erreur}");
+
+        // run sans porte : la clé à changer est nommée.
+        let (_d, p) = fixture_code("working_tree", false, json!({
+            "run_command": {"graph": "run.mmd", "policy": {"run_commands": true}}
+        }));
+        let erreur = p.err().unwrap();
+        assert!(erreur.contains("workspace.commands"), "{erreur}");
+    }
+
+    /// **Le même moteur, deux politiques** : l'une lit un instantané sans
+    /// rien pouvoir écrire, l'autre édite un arbre de travail — et le disque
+    /// le prouve.
+    #[test]
+    fn le_meme_moteur_sous_deux_politiques() {
+        // La politique cloud : un instantané, lecture seule.
+        let (dir, p) = fixture_code("snapshot", true, json!({
+            "read_file": {"graph": "read.mmd", "policy": {"read_files": true}}
+        }));
+        let backend = backend_de_code(dir.path(), p.unwrap());
+        let lu = backend
+            .call_tool("read_file", json!({"path": "main.rs"}))
+            .unwrap();
+        assert!(
+            lu["result"].as_str().unwrap_or_default().contains("depart()"),
+            "l'instantané se lit : {lu}"
+        );
+
+        // La politique de poste : l'arbre réel, l'édition permise.
+        let (dir, p) = fixture_code("working_tree", false, json!({
+            "read_file": {"graph": "read.mmd", "policy": {"read_files": true}},
+            "edit_file": {"graph": "edit.mmd", "policy": {"write_files": true}}
+        }));
+        let backend = backend_de_code(dir.path(), p.unwrap());
+        backend
+            .call_tool("edit_file", json!({"path": "main.rs", "old": "depart()", "new": "arrivee()"}))
+            .unwrap();
+        assert!(
+            std::fs::read_to_string(dir.path().join("sources/main.rs"))
+                .unwrap()
+                .contains("arrivee()"),
+            "l'arbre de travail est édité sur le disque"
         );
     }
 

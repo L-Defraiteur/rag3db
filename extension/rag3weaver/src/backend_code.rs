@@ -56,6 +56,144 @@ pub enum CommandGate {
     Auto,
 }
 
+/// **La politique d'un outil** : ce qu'il a le droit de faire — c'est elle
+/// qui fait deux produits d'un même moteur. Tout `false` par défaut : un
+/// manifeste d'avant ne change pas, et un outil de code se déclare.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolPolicy {
+    /// Lire des fichiers du workspace (`read`, `grep`, `list`).
+    #[serde(default)]
+    pub read_files: bool,
+    /// Écrire des fichiers du workspace (`edit`) — la réindexation qui suit
+    /// une édition écrit aussi en base, par le catalogue : ce n'est pas un
+    /// nœud de plus, c'est le même geste.
+    #[serde(default)]
+    pub write_files: bool,
+    /// Lancer des commandes (`run`, `run_bg`, `wait`) — derrière la porte
+    /// déclarée par `workspace.commands`.
+    #[serde(default)]
+    pub run_commands: bool,
+}
+
+/// La base déclarative, permise à tout outil de backend : les nœuds
+/// d'écriture d'entités et de synchronisation, la sélection, la recherche
+/// et le rendu. (La liste vivait en dur dans `backend.rs` — elle porte
+/// notamment les nœuds d'instantané et de lot que les outils `begin_` /
+/// `ingest_` / `finish_` / `abort_` / `undo_snapshot` traversent.)
+const BASE_NODES: &[&str] = &[
+    "RhaiNode",
+    "EntityRecordNode",
+    "EntityBatchNode",
+    "SnapshotFinishNode",
+    "SnapshotUndoNode",
+    "SnapshotSessionNode",
+    "RelationBatchNode",
+    "KBQuerySourceNode",
+    "SelectRecordsNode",
+    "RelatedResultsNode",
+    "IntersectResultsNode",
+    "LabelResultsNode",
+    "SearchSourceNode",
+    "BM25SearchNode",
+    "VectorSearchNode",
+    "SparseSearchNode",
+    "FuseResultsNode",
+    "FieldWeightNode",
+    "RerankNode",
+    "PaginateNode",
+    "ResolveParentNode",
+    "RenderResultsNode",
+    "FetchRelatedNode",
+    "ComposeNode",
+    "GroupFrameNode",
+];
+
+const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode"];
+const WRITE_NODES: &[&str] = &["EditFileNode"];
+const RUN_NODES: &[&str] = &["RunCommandNode", "WaitOutputNode"];
+
+/// Les types de nœuds que cette politique permet.
+pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
+    let mut nodes: Vec<&'static str> = BASE_NODES.to_vec();
+    if policy.read_files {
+        nodes.extend_from_slice(READ_NODES);
+    }
+    if policy.write_files {
+        nodes.extend_from_slice(WRITE_NODES);
+    }
+    if policy.run_commands {
+        nodes.extend_from_slice(RUN_NODES);
+    }
+    nodes
+}
+
+/// La capacité qui couvrirait un type de nœud — pour qu'un refus dise quoi
+/// faire, pas seulement la règle violée (la leçon du deck builder).
+fn capacite_pour(node_type: &str) -> Option<&'static str> {
+    if READ_NODES.contains(&node_type) {
+        Some("read_files")
+    } else if WRITE_NODES.contains(&node_type) {
+        Some("write_files")
+    } else if RUN_NODES.contains(&node_type) {
+        Some("run_commands")
+    } else {
+        None
+    }
+}
+
+/// Valide au **chargement** qu'un graphe d'outil tient dans sa politique et
+/// que le manifeste porte ce qu'elle exige — chaque refus dit quoi faire.
+pub fn validate_tool_policy(
+    tool_name: &str,
+    node_types: impl IntoIterator<Item = String>,
+    policy: &ToolPolicy,
+    workspace: Option<&WorkspaceConfig>,
+) -> Result<(), String> {
+    let permis = allowed_nodes(policy);
+    for node_type in node_types {
+        if permis.contains(&node_type.as_str()) {
+            continue;
+        }
+        return Err(match capacite_pour(&node_type) {
+            Some(capacite) => format!(
+                "l'outil « {tool_name} » contient {node_type} mais sa politique ne déclare pas \
+                 {capacite} : ajoutez \"policy\": {{\"{capacite}\": true}} à son attachement, ou retirez le nœud"
+            ),
+            None => format!(
+                "l'outil « {tool_name} » contient {node_type}, qui n'est pas un nœud d'outil de backend"
+            ),
+        });
+    }
+    let veut_fichiers = policy.read_files || policy.write_files;
+    if veut_fichiers && workspace.is_none() {
+        return Err(format!(
+            "l'outil « {tool_name} » déclare une politique de fichiers mais le manifeste n'a pas \
+             de clé workspace : déclarez workspace {{ source, root }} — c'est elle qui dit où lire et écrire"
+        ));
+    }
+    if policy.write_files {
+        if let Some(w) = workspace {
+            if w.read_only {
+                return Err(format!(
+                    "l'outil « {tool_name} » déclare write_files mais le workspace est read_only : \
+                     retirez read_only, ou retirez l'outil d'écriture"
+                ));
+            }
+        }
+    }
+    if policy.run_commands {
+        let porte = workspace.map(|w| w.commands).unwrap_or(CommandGate::Off);
+        if porte == CommandGate::Off {
+            return Err(format!(
+                "l'outil « {tool_name} » déclare run_commands mais la porte est fermée : \
+                 mettez workspace.commands à standard, approbation ou auto"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(feature = "code")]
 mod monte {
     use std::path::Path;
