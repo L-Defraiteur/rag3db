@@ -1015,6 +1015,29 @@ pub fn analyze_with(root: &str, sources: Vec<(String, String)>, cursor: &str) ->
                 if id.is_empty() || id == sc.name || libraries.contains(id) {
                     continue;
                 }
+                // **Un accès de champ ne prend pas de rendez-vous** avec une
+                // fonction homonyme (`r.chunk`, `self.config`) :
+                // le résolveur de codeparsers écarte déjà une référence
+                // qualifiée par une variable de type inconnu, cette voie le
+                // fait aussi (banc des relations, 3 octobre 2026). Un appel
+                // par `self`, un chemin (`Outil::f()`, `module::f()`, lu sur
+                // la ligne), un import, une variable typée gardent le leur.
+                if let Some(q) = r.qualifier.as_deref() {
+                    let instance = matches!(q, "self" | "this");
+                    let appel = r.usage == Some(UsageKind::Call);
+                    let variable = !q.is_empty()
+                        && q.chars().all(|c| c.is_alphanumeric() || c == '_')
+                        && q.starts_with(|c: char| c.is_lowercase() || c == '_');
+                    let chemin = r.context.as_deref().is_some_and(|ctx| ctx.contains(&format!("{q}::{id}")));
+                    let importe = matches!(r.kind, Some(K::Import));
+                    // Seul l'accès de **champ** est écarté : un appel de méthode
+                    // sur une variable sans type lu (`cat.begin_snapshot(…)`)
+                    // garde son rendez-vous par le nom — le banc l'a montré, le
+                    // retirer perdait de vrais appelants.
+                    if !appel && (instance || (variable && !chemin && !importe && r.qualifier_type.is_none())) {
+                        continue;
+                    }
+                }
                 let site = UsageSite { usage: r.usage.clone().unwrap_or(UsageKind::Other), line: Some(r.line) };
                 let liste = sites.entry(id.to_string()).or_default();
                 if !liste.contains(&site) {
@@ -2067,6 +2090,23 @@ mod tests {
         assert!(add.test_role.is_empty() && add.test_certainty.is_empty() && add.test_name.is_empty());
         let data = add.data();
         assert_eq!(data.get("test_role"), Some(&s("")), "vide et non nul");
+    }
+
+    /// **Un accès de champ ne prend pas de rendez-vous avec une fonction
+    /// homonyme.** `r.chunk` (un champ, `r` sans type lu) se reliait à la
+    /// méthode `chunk`, `self.config` (un champ) à un scope `config` ; le banc
+    /// des relations l'a montré (3 octobre 2026). Un appel par `self`, un
+    /// chemin (`Outil::fabrique()`), un import gardent le leur.
+    #[test]
+    fn un_acces_de_champ_ne_prend_pas_de_rendez_vous() {
+        let src = "pub struct S { config: u32 }\n\nimpl S {\n    pub fn lit(&self) -> u32 {\n        self.config\n    }\n    pub fn appelle(&self) -> u32 {\n        self.compute()\n    }\n}\n\npub fn somme(items: &[Item]) -> u32 {\n    items.iter().map(|r| r.chunk).sum()\n}\n\npub fn fabrique_un() -> u32 {\n    Outil::fabrique()\n}\n";
+        let a = analyze("/virtual", vec![("s.rs".into(), src.into())]);
+        let cle = |nom: &str| a.scopes.iter().find(|s| s.name == nom).unwrap_or_else(|| panic!("scope {nom}")).key.clone();
+        let a_un = |scope: &str, nom: &str| a.pending.iter().any(|(k, n, _)| *k == cle(scope) && n == nom);
+        assert!(!a_un("lit", "config"), "self.config est un champ : {:?}", a.pending);
+        assert!(!a_un("somme", "chunk"), "r.chunk est un champ d'une variable sans type : {:?}", a.pending);
+        assert!(a_un("appelle", "compute"), "self.compute() est un appel : {:?}", a.pending);
+        assert!(a_un("fabrique_un", "fabrique"), "Outil::fabrique() est un chemin : {:?}", a.pending);
     }
 
     /// **Une arête d'usage porte comment on se sert de la cible, et où.**
