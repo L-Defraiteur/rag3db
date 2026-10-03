@@ -247,12 +247,68 @@ Après un redémarrage de luciepc : relancer la commande ci-dessus avec les
 trois démons d'embarquement (§ 3) ; après un redémarrage de ce poste :
 refaire le tunnel avec les trois autres (§ 4).
 
+## 7 ter. Un petit modèle de langage, pour éprouver les protocoles
+
+Ajouté le 3 octobre à 22 h 30. La passe « agent faible » du backend de code
+passe par le chat et un point d'accès compatible OpenAI ; ce poste n'a que
+des modèles de 60 Go, qu'on ne lance pas pendant que Lucie travaille. Un
+petit modèle généraliste **qui sait appeler des outils** est donc servi de
+luciepc, sur la même carte libre.
+
+| | modèle | écoute sur luciepc | port local d'ici (tunnel) |
+|---|---|---|---|
+| service 5 | Qwen2.5-7B-Instruct, Q4_K_M (4,7 Go) | `127.0.0.1:7882` | `127.0.0.1:7983` |
+
+- **Le choix** : poids ouverts, licence Apache-2.0 (lue sur la fiche du
+  modèle et dans son fichier `LICENSE`), sept milliards de paramètres en
+  quatre bits, appels d'outils gérés par le gabarit du modèle (`--jinja`).
+  « Faible » est voulu : c'est un modèle pour éprouver les protocoles, pas
+  pour coder.
+- **La mémoire** : 18 331 Mio avant, 24 459 après, sur 32 624. La carte de
+  `seat1` n'a pas bougé. Il reste environ 8 Gio.
+- **Les poids** : `~/.cache/rag3weaver/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf`
+  là-bas, du dépôt public `bartowski/Qwen2.5-7B-Instruct-GGUF` (sha256
+  `65b8fcd92af6…ceaaa1423`).
+
+Lancer (sur luciepc) :
+
+```bash
+setsid nohup ~/git_workspaces/llama.cpp/build/bin/llama-server \
+  -m ~/.cache/rag3weaver/llm/Qwen2.5-7B-Instruct-Q4_K_M.gguf -c 32768 -ngl 99 --device Vulkan0 --jinja \
+  --alias qwen2.5-7b-instruct --host 127.0.0.1 --port 7882 > ~/.cache/rag3weaver/service-llm.log 2>&1 < /dev/null &
+```
+
+Arrêter celui-ci sans toucher au modèle de décision : `ss -ltnp | grep 7882`
+donne son pid, puis `kill -TERM <pid>` (`pidof llama-server` en rend deux).
+
+Le tunnel (sur ce poste) :
+
+```bash
+ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 127.0.0.1:7983:127.0.0.1:7882 lucied@luciepc
+```
+
+S'en servir : `base_url: http://127.0.0.1:7983/v1`, `model:
+qwen2.5-7b-instruct`, sans clé, fenêtre de 32 768 jetons. Vérifié par le
+tunnel sur `/v1/chat/completions` : un appel d'outil (`finish_reason:
+tool_calls`) en 0,6 s, puis la réponse en texte une fois le résultat de
+l'outil rendu.
+
+**Pour le déclarer par `models.llm`** (lot 6 de la proposition, pas codé) :
+la déclaration existe déjà — `{"provider": "compatible", "protocol":
+"openai", "model": "qwen2.5-7b-instruct", "address":
+"http://127.0.0.1:7983/v1"}`, ou l'adresse par `RAG3WEAVER_SERVICE_LLM`. Il
+manque trois choses : un constructeur qui rende un `OpenAiLlm` depuis cette
+déclaration (comme `connect_embedder`) ; la fenêtre de contexte, que la
+déclaration commune ne porte pas et que le chat déclare aujourd'hui
+(`context_tokens`) ; et que la section `llm` du chat devienne un alias de
+`models.llm`, comme `embeddings` l'est devenu de `models.embed`.
+
 ## 8. Ce qui reste ouvert
 
 - Les démons ne sont pas des services systemd : un redémarrage de luciepc
   demande la relance à la main. À faire si l'usage dure.
-- Quatre modèles chargés (trois d'embarquement, un de décision) tiennent
-  environ 18 Gio sur les 31 de la carte.
+- Cinq modèles chargés (trois d'embarquement, un de décision, un de
+  langage) tiennent environ 24 Gio sur les 32 de la carte.
 - Une enveloppe d'embarqueur doit relayer `distant()` : celle des tests ne
   le faisait pas, et le client cadençait ses rafales pour une carte qui
   n'était pas la sienne (`e2e_charge_ingestion` : 1 019 s, puis 123 s).
