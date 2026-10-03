@@ -17,8 +17,11 @@
     "list_files",
     "schema",
     "edit_file",
+    "estimate",
+    "index",
     "run_command",
-    "wait_output"
+    "wait_output",
+    "usages"
   ],
   "state_dir": "data/code-chat",
   "max_iterations": 24

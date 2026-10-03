@@ -75,6 +75,10 @@
     "index": {
       "graph": "../../tools/index.mmd",
       "description": "Indexer le workspace en fond (plein texte d'abord, vecteurs ensuite) et rendre la main : le reçu est un journal à suivre avec wait. Refuse sans confirm=true au-delà du seuil — prenez estimate avant. Pendant le plein texte, le catalogue reste tenu : la recherche répond avec ce qui est déjà prêt."
+    },
+    "usages": {
+      "graph": "../../tools/usages.mmd",
+      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence."
     }
   }
 }

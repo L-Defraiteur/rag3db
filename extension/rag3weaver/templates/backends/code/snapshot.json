@@ -67,6 +67,10 @@
     "wait_output": {
       "graph": "../../tools/wait.mmd",
       "description": "Attendre qu'une ligne apparaisse dans un journal (commande de fond ou indexation) ; timeout_s=0 : lire l'état sans attendre. Pour l'indexation : pattern='indexation terminée|indexation échouée'."
+    },
+    "usages": {
+      "graph": "../../tools/usages.mmd",
+      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence."
     }
   }
 }
