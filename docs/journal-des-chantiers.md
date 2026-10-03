@@ -477,6 +477,34 @@ veille et l'erreur sort dans `code.rs`, un fichier qu'on n'a jamais ouvert.
 Après chaque rebase qui amène du code : `git submodule update --init`, ou
 `git config submodule.recurse true` dans le worktree.
 
+**Et le remède échoue**, dans ce worktree-ci — mesuré le 4 octobre 2026, le
+piège s'étant présenté pour de bon :
+
+```
+Impossible de rapatrier dans le chemin de sous-module 'extension/rag3weaver/codeparsers'
+fatal : transport 'file' non permis
+```
+
+Son `origin` est le **chemin local** de l'arbre principal, et git refuse le
+transport `file` pour un sous-module depuis la CVE-2022-39253. Donc
+`git submodule update` ne peut pas faire son travail ici, et il le dit d'une
+façon qui ne ressemble pas à « ton pointeur est en retard ».
+
+Ce qui marche, et qui ne demande ni de desserrer `protocol.file.allow` ni de
+cloner 2,6 Go : **un `fetch` ordinaire depuis l'arbre principal, puis le
+commit exact**. La restriction porte sur le clone d'un sous-module, pas sur un
+`fetch`.
+
+```sh
+cd extension/rag3weaver/codeparsers
+git fetch origin <sha du pointeur>      # origin = l'arbre principal
+git checkout -q <sha du pointeur>
+```
+
+Le `<sha>` se lit par `git ls-tree HEAD extension/rag3weaver/codeparsers`, et
+`git -C … rev-parse HEAD` dit où l'on est : **les deux doivent coïncider**,
+c'est la seule vérification qui attrape ce piège.
+
 **2. `git stash` est partagé entre les worktrees.** C'est une pile **par
 dépôt**, pas par arbre de travail. Un `stash` qui n'empile rien suivi d'un
 `pop` dépile **celui d'une autre session**, l'applique chez vous et le retire
