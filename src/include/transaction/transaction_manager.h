@@ -48,6 +48,12 @@ public:
 
     static TransactionManager* Get(const main::ClientContext& context);
 
+    // The start of the error that every statement gets once a checkpoint of this database has
+    // failed while writing, until the database is closed and reopened. See checkpointNoLock.
+    static constexpr const char* REOPEN_AFTER_FAILED_CHECKPOINT =
+        "A checkpoint of this database failed, so it must be closed and reopened before it is "
+        "used again";
+
 private:
     bool hasNoActiveTransactions() const;
     void checkpointNoLock(main::ClientContext& clientContext);
@@ -77,6 +83,16 @@ private:
     uint64_t checkpointWaitTimeoutInMicros = common::DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS;
 
     init_checkpointer_func_t initCheckpointerFunc;
+
+    // Set when a checkpoint failed while writing. From then on what this process holds in memory
+    // no longer matches the files: the failed checkpoint already advanced the in-memory
+    // structures, and what it wrote to the shadow file is read by no ordinary transaction.
+    // Serving anything would read wrong data, and a later checkpoint would make it durable. So
+    // every transaction and every checkpoint, including the one on close, is refused until the
+    // database is reopened: the reopening replays the journal over the data file of the last
+    // complete checkpoint, which is sound. Guarded by mtxForSerializingPublicFunctionCalls.
+    bool checkpointFailed = false;
+    void throwIfCheckpointFailedNoLock() const;
 };
 } // namespace transaction
 } // namespace rag3db
