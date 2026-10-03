@@ -385,14 +385,18 @@ Pas dans ce dépôt. `~/.cache/rag3weaver/granite-{107m,278m}/model.bpk`, avec l
 | | granite-278m | granite-107m |
 |---|---|---|
 | `model.bpk`, taille | 1 112 227 840 octets | 428 007 424 octets |
-| sha256, **régénéré le 2 octobre 2026** | `69aed115297450766add7d305d7eaa597aa744a611ded245ca3a8a7a8e52723f` | `8cb4d5db10a9e80375314713c9744dfca482ff724f45b5294861fd74b4b8ca0c` |
-| sha256 du 6 septembre 2026 (fichier perdu) | `a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3` | `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1` |
+| sha256 de la régénération du 2 octobre 2026 (gardée de côté) | `69aed115297450766add7d305d7eaa597aa744a611ded245ca3a8a7a8e52723f` | `8cb4d5db10a9e80375314713c9744dfca482ff724f45b5294861fd74b4b8ca0c` |
+| sha256, **fichier d'origine du 6 septembre 2026 — installé et publié** | `a54628b51156caa158a4ede09f1c4d1577e4f94be9229e8455bef4787fa342d3` | `7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1` |
 | `tokenizer.json` | 9 081 351 octets, sha256 `2a0d7366dd7780ea36cc42431dd74cd79289b783ab01acd33013fcc96865a8e9` | 9 081 382 octets, sha256 `7fc9e475f2ac473f070052d92b0c46ec2b91d9cd672935feb6fd837a65d33f78` |
 | source : `model.onnx` d'IBM | 1 112 413 925 octets, sha256 `aefac97b384f92932a61a19900d41c870679d5b8e6ceb682768eb153d0e31c7d` | 428 102 968 octets, sha256 `387e6f91dce3c651cb3dc06661d74fb1d3947f20ed9c3ecf49d2b3b77086b954` |
-| publié (dépôt **privé**, 2 octobre 2026) | `Lucie666/granite-embedding-278m-multilingual-burnpack` | `Lucie666/granite-embedding-107m-multilingual-burnpack` |
+| publié (dépôt **privé** ; le fichier d'origine depuis le 3 octobre 2026) | `Lucie666/granite-embedding-278m-multilingual-burnpack` | `Lucie666/granite-embedding-107m-multilingual-burnpack` |
 
 **Pourquoi deux empreintes.** Les fichiers du 6 septembre n'avaient pas été
-publiés et sont restés sur l'ancien poste : il a fallu les régénérer. Même
+publiés et étaient restés sur l'ancien poste : ils ont été régénérés le
+2 octobre. Les originaux ont été rapportés le 3 octobre et remis en place : ce
+sont eux qui sont installés et publiés ; les régénérés restent dans
+`~/.cache/rag3weaver/regeneres-2-octobre/`, comme preuve qu'on sait les
+refaire. Même
 ONNX (les dépôts d'IBM n'ont pas bougé depuis août 2025), même `burn-onnx
 0.22.0-pre.3`, **même taille à l'octet**, et le code généré est identique à
 celui de ce dossier une fois passé par `patch_attention.py` (seul le
@@ -410,6 +414,10 @@ composante par composante à celui d'onnxruntime 1.30.0 (CPU, f32) sur le
 |---|---|---|
 | f32 | 3·10⁻⁷ | 3·10⁻⁷ |
 | Flex32 (défaut) | 4,6·10⁻⁵ | 7,6·10⁻⁵ |
+
+Ces deux lignes mesurent les fichiers régénérés. Les fichiers d'origine,
+mesurés le 3 octobre sur le même poste en Flex32 : 4,9·10⁻⁵ (278m) et
+7,4·10⁻⁵ (107m) ; suite granite 11 sur 11.
 
 Les références sont dans `tests/fixtures/granite/reference-{278m,107m}.json`
 (phrases, nombre de jetons, vecteurs), produites par
@@ -887,8 +895,10 @@ sha256         c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd
 PP-OCRv6_tiny_rec, dans l'ordre : l'index CTC `i ∈ 1..=6904` est la ligne `i`, `0` est
 le blank, `6905` l'espace (`use_space_char`). Les trois fichiers vont dans
 `~/.cache/rag3weaver/ppocrv6-tiny/` (`RAG3WEAVER_PPOCR_DIR` pour un autre dossier) ;
-`BurnPpOcr::from_cache_dir` les lit. Publication HF : à venir (dépôt Lucie666, avec
-l'attribution Apache-2.0 PaddleOCR, les ONNX patchés et cette recette).
+`BurnPpOcr::from_cache_dir` les lit. Publiés, avec
+l'attribution Apache-2.0 PaddleOCR et les deux ONNX :
+**https://huggingface.co/Lucie666/ppocrv6-tiny-burnpack** (public ; empreintes
+de `det.bpk` et `rec.bpk` vérifiées le 3 octobre 2026).
 
 ### Interface
 
