@@ -19,13 +19,22 @@
 //!   l'écriture la compte pour la session large, et les scopes disparus du
 //!   fichier partent à la fin de celle-ci.
 //!
+//! - [`sync_source`] : la **synchronisation d'une source entière**. Elle ouvre
+//!   une session sur le grain large de `Scope` et de `File`, ingère la source
+//!   par paquets de fichiers en marquant ce qu'elle porte, puis finit : ce qui
+//!   a disparu de la source — scopes, et fichiers supprimés — part, par la
+//!   mise de côté. C'est la brique que les produits appellent pour « indexer
+//!   ce dépôt » et le tenir à jour.
+//!
 //! Le module est neuf exprès : `code.rs` et `code_tools.rs` sont indexés par
 //! le banc de recherche (corpus vivant).
 
 use std::collections::BTreeMap;
 
-use crate::catalog::{Catalog, CatalogError, SnapshotFinishOptions};
-use crate::code::SCOPE;
+use serde::{Deserialize, Serialize};
+
+use crate::catalog::{Catalog, CatalogError, SnapshotFinish, SnapshotFinishOptions};
+use crate::code::{FILE, SCOPE};
 use crate::code_tools::{FileSource, ReingestReport};
 use crate::connection::CypherValue;
 use crate::disponibilite::Disponibilites;
@@ -95,4 +104,168 @@ pub fn reingest_file(
         failed: report.failed,
         deferred_to,
     })
+}
+
+/// Ce qu'on demande à une synchronisation de source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SourceSyncOptions {
+    /// Fichiers par paquet d'ingestion.
+    pub batch_files: usize,
+    /// S'arrêter au plan : la source est ingérée (c'est l'avancement), mais
+    /// rien n'est retiré et les sessions sont abandonnées. Le rapport dit ce
+    /// qui le serait — l'estimation avant de confirmer.
+    pub plan_only: bool,
+    /// Reprendre une synchronisation abandonnée de la même source.
+    pub takeover: bool,
+    /// Les échappatoires des garde-fous de la fin, explicites.
+    pub allow_empty: bool,
+    pub force: bool,
+    /// Ce qui doit être prêt quand un paquet rend (`RECHERCHE_TEXTE` laisse
+    /// la dette de vecteurs en base).
+    #[serde(skip, default = "tout")]
+    pub exige: Disponibilites,
+}
+
+fn tout() -> Disponibilites {
+    Disponibilites::TOUT
+}
+
+impl Default for SourceSyncOptions {
+    fn default() -> Self {
+        Self { batch_files: 64, plan_only: false, takeover: false, allow_empty: false, force: false, exige: Disponibilites::TOUT }
+    }
+}
+
+/// L'avancement d'une synchronisation, rendu après chaque paquet.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceSyncProgress {
+    pub files_done: usize,
+    pub files_total: usize,
+    pub scopes_written: usize,
+}
+
+/// Ce qu'une synchronisation de source a fait.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceSyncReport {
+    pub source: String,
+    /// Fichiers listés par la source, et ceux retenus pour l'analyse.
+    pub files_listed: usize,
+    pub files_ingested: usize,
+    pub scopes_written: usize,
+    pub relations: usize,
+    pub failed: usize,
+    /// La fin, par entité : plan seul si `plan_only`, appliquée sinon.
+    pub scopes: SnapshotFinish,
+    pub files: SnapshotFinish,
+}
+
+/// **Synchroniser une source entière** : voir le module. Les sessions sont
+/// abandonnées si quoi que ce soit échoue avant la fin — rien n'est retiré
+/// d'une synchronisation incomplète.
+pub fn sync_source(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    options: &SourceSyncOptions,
+    progress: &mut dyn FnMut(SourceSyncProgress),
+) -> Result<SourceSyncReport, String> {
+    let cursor = source.cursor();
+    let source_id = crate::code::source_id(&cursor);
+    let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
+    let s_scopes = catalog.begin_snapshot(SCOPE, &grain, options.takeover).map_err(|e| e.to_string())?.session;
+    let s_files = match catalog.begin_snapshot(FILE, &grain, options.takeover) {
+        Ok(open) => open.session,
+        Err(e) => {
+            let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
+            return Err(e.to_string());
+        }
+    };
+    let resultat = synchroniser(catalog, source, options, progress, &grain, &s_scopes, &s_files, source_id);
+    if resultat.is_err() || options.plan_only {
+        let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
+        let _ = catalog.abort_snapshot(FILE, &grain, &s_files);
+    }
+    resultat
+}
+
+#[allow(clippy::too_many_arguments)]
+fn synchroniser(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    options: &SourceSyncOptions,
+    progress: &mut dyn FnMut(SourceSyncProgress),
+    grain: &BTreeMap<String, CypherValue>,
+    s_scopes: &str,
+    s_files: &str,
+    source_id: String,
+) -> Result<SourceSyncReport, String> {
+    let cursor = source.cursor();
+    let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
+        Some(root) => (root.to_string(), false),
+        None => ("/".to_string(), true),
+    };
+    let listed = source.list()?;
+    // Le tri au nom seul, comme `analyze_source` : ne pas lire un gros
+    // fichier binaire pour l'écarter ensuite.
+    let retenus: Vec<String> = listed
+        .iter()
+        .filter(|p| !matches!(crate::code::verdict(p, 0), crate::code::Verdict::Ecarte(_)))
+        .cloned()
+        .collect();
+    let mut report = SourceSyncReport { source: source_id, files_listed: listed.len(), ..Default::default() };
+    let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
+    for paquet in retenus.chunks(options.batch_files.max(1)) {
+        let mut sources = Vec::with_capacity(paquet.len());
+        for path in paquet {
+            if let Some(content) = source.read(path)? {
+                sources.push((path.clone(), content));
+            }
+        }
+        let mut analysis = crate::code::analyze_with(&root, sources, &cursor);
+        for f in &mut analysis.files {
+            f.cursor = cursor.clone();
+            if virtual_source {
+                f.absolute_path.clear();
+            }
+        }
+        let ingere = catalog.ingest_code_jusqu_a(&analysis, options.exige).map_err(|e| e.to_string())?;
+        // Ce que le paquet porte, marqué de la session : vu, pas seulement
+        // écrit pendant elle.
+        let uuids_scopes = analysis
+            .scopes
+            .iter()
+            .map(|s| catalog.entity_uuid(SCOPE, &BTreeMap::from([("key".to_string(), CypherValue::String(s.key.clone()))])))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        let uuids_files = analysis
+            .files
+            .iter()
+            .map(|f| catalog.entity_uuid(FILE, &f.data()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        catalog.mark_snapshot(SCOPE, grain, s_scopes, &uuids_scopes).map_err(|e| e.to_string())?;
+        catalog.mark_snapshot(FILE, grain, s_files, &uuids_files).map_err(|e| e.to_string())?;
+        report.files_ingested += analysis.files.len();
+        report.scopes_written += ingere.scopes;
+        report.relations += ingere.relations;
+        report.failed += ingere.failed;
+        avancement.files_done += paquet.len();
+        avancement.scopes_written = report.scopes_written;
+        progress(avancement);
+    }
+    let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
+    let plan_scopes = catalog.plan_snapshot_finish(SCOPE, grain, s_scopes, garde).map_err(|e| e.to_string())?;
+    let plan_files = catalog.plan_snapshot_finish(FILE, grain, s_files, garde).map_err(|e| e.to_string())?;
+    if options.plan_only {
+        report.scopes = plan_scopes;
+        report.files = plan_files;
+        return Ok(report);
+    }
+    // Les scopes d'abord : un fichier supprimé emporte ses `DEFINED_IN`, ses
+    // scopes sont déjà partis.
+    report.scopes = catalog.apply_snapshot_finish(plan_scopes).map_err(|e| e.to_string())?;
+    report.files = catalog.apply_snapshot_finish(plan_files).map_err(|e| e.to_string())?;
+    Ok(report)
 }

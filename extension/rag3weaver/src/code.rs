@@ -218,6 +218,16 @@ pub fn file_config() -> EntityConfig {
         // schéma, autre configuration (doc 04 §10).
         hashsafe: Some(vec!["source".into(), "path".into()]),
         return_fields: Some(vec!["language".into(), "lines_of_code".into(), "cursor".into()]),
+        // Un fichier supprimé de sa source part à la fin de la synchronisation
+        // de celle-ci (`code_sync::sync_source`) ; une édition n'en supprime
+        // pas, le grain fin n'a donc pas lieu d'être ici.
+        snapshot: Some(crate::config::SnapshotConfig {
+            scope: vec!["source".into()],
+            fine_scope: vec![],
+            max_missing_ratio: 0.5,
+            on_missing: crate::config::OnMissing::Delete,
+            keep_for: None,
+        }),
         ..Default::default()
     }
 }

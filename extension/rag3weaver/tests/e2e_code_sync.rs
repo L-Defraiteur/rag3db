@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 use rag3weaver::catalog::SnapshotFinishOptions;
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema, source_id, SCOPE};
+use rag3weaver::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress};
 use rag3weaver::code_tools::{edit_file, EditOp, FileSource, Snapshot};
 use rag3weaver::connection::{CypherValue, DbConnection};
 use rag3weaver::embedder::HashEmbedder;
@@ -78,4 +79,88 @@ fn une_edition_pendant_la_synchronisation_de_la_source_laisse_ses_retraits_a_cel
     assert_eq!((fin.seen, fin.written, fin.removed.len()), (0, 2, 1), "{fin:?}");
     assert_eq!(scopes_nommes(&catalog, "beta"), 0);
     assert_eq!(scopes_nommes(&catalog, "gamma"), 1);
+}
+
+fn fichiers(catalog: &Catalog) -> Vec<String> {
+    let mut v: Vec<String> = catalog
+        .execute_raw("MATCH (f:File) RETURN f.path")
+        .unwrap()
+        .rows
+        .into_iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+        .collect();
+    v.sort();
+    v
+}
+
+fn source_a_trois_fichiers() -> Vec<(String, String)> {
+    vec![
+        ("a.rs".to_string(), "pub fn alpha() {}\n".to_string()),
+        ("b.rs".to_string(), "pub fn beta() {}\npub fn beta_bis() {}\n".to_string()),
+        ("c.rs".to_string(), "pub fn gamma() { alpha(); }\n".to_string()),
+    ]
+}
+
+/// **Synchroniser une source entière** retire ce qui en a disparu : un
+/// fichier supprimé part, avec ses scopes ; le reste reste, et l'avancement
+/// se dit paquet par paquet.
+#[test]
+#[ignore]
+fn synchroniser_une_source_retire_les_fichiers_supprimes() {
+    let mut catalog = catalogue();
+    let options = SourceSyncOptions { batch_files: 2, ..Default::default() };
+    let mut paquets = Vec::new();
+    let premiere = sync_source(&mut catalog, &Snapshot::new("depot", source_a_trois_fichiers()), &options, &mut |p: SourceSyncProgress| paquets.push(p)).unwrap();
+    assert_eq!((premiere.files_listed, premiere.files_ingested), (3, 3), "{premiere:?}");
+    assert!(premiere.scopes.removed.is_empty() && premiere.files.removed.is_empty(), "{premiere:?}");
+    assert_eq!(paquets.iter().map(|p| p.files_done).collect::<Vec<_>>(), [2, 3], "{paquets:?}");
+    assert_eq!(fichiers(&catalog).len(), 3);
+
+    // b.rs est supprimé de la source.
+    let sans_b: Vec<(String, String)> = source_a_trois_fichiers().into_iter().filter(|(p, _)| p != "b.rs").collect();
+    let seconde = sync_source(&mut catalog, &Snapshot::new("depot", sans_b), &options, &mut |_| {}).unwrap();
+    assert_eq!(seconde.files.removed.len(), 1, "le fichier supprimé part : {:?}", seconde.files);
+    assert_eq!(seconde.scopes.removed.len(), 2, "ses deux scopes aussi : {:?}", seconde.scopes);
+    assert_eq!(scopes_nommes(&catalog, "beta"), 0);
+    assert_eq!(scopes_nommes(&catalog, "alpha"), 1);
+    assert_eq!(fichiers(&catalog).len(), 2);
+}
+
+/// **Le plan seul** : la source est ingérée, mais rien n'est retiré ; le
+/// rapport dit ce qui le serait, et les sessions sont rendues.
+#[test]
+#[ignore]
+fn le_plan_seul_ne_retire_rien_et_dit_ce_qui_partirait() {
+    let mut catalog = catalogue();
+    sync_source(&mut catalog, &Snapshot::new("depot", source_a_trois_fichiers()), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let sans_b: Vec<(String, String)> = source_a_trois_fichiers().into_iter().filter(|(p, _)| p != "b.rs").collect();
+    let plan = sync_source(
+        &mut catalog,
+        &Snapshot::new("depot", sans_b.clone()),
+        &SourceSyncOptions { plan_only: true, ..Default::default() },
+        &mut |_| {},
+    )
+    .unwrap();
+    assert!(!plan.scopes.applied && !plan.files.applied);
+    assert_eq!((plan.files.removed.len(), plan.scopes.removed.len()), (1, 2), "{plan:?}");
+    assert_eq!(scopes_nommes(&catalog, "beta"), 1, "rien n'est retiré");
+    // Les sessions sont rendues : une vraie synchronisation peut suivre.
+    let fin = sync_source(&mut catalog, &Snapshot::new("depot", sans_b), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    assert_eq!(fin.files.removed.len(), 1);
+}
+
+/// **Le garde-fou de proportion** : une source dont plus de la moitié des
+/// fichiers a disparu ressemble à une source tronquée — refusé sans
+/// `force`, et rien n'est retiré.
+#[test]
+#[ignore]
+fn une_source_tronquee_est_refusee_sans_force() {
+    let mut catalog = catalogue();
+    sync_source(&mut catalog, &Snapshot::new("depot", source_a_trois_fichiers()), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let seulement_a: Vec<(String, String)> = source_a_trois_fichiers().into_iter().filter(|(p, _)| p == "a.rs").collect();
+    let err = sync_source(&mut catalog, &Snapshot::new("depot", seulement_a.clone()), &SourceSyncOptions::default(), &mut |_| {}).unwrap_err();
+    assert!(err.contains("maxMissingRatio"), "{err}");
+    assert_eq!(fichiers(&catalog).len(), 3, "rien n'est retiré");
+    let force = sync_source(&mut catalog, &Snapshot::new("depot", seulement_a), &SourceSyncOptions { force: true, ..Default::default() }, &mut |_| {}).unwrap();
+    assert_eq!(force.files.removed.len(), 2);
 }
