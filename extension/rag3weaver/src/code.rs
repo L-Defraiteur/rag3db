@@ -289,6 +289,25 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
             start_line: Some("start_line".into()),
             folds: Some("folds".into()),
         }),
+        // **La pondération par genre, tranchée par Lucie le 3 octobre 2026**
+        // (doc des mesures du même jour) : les fonctions et méthodes à 1,0,
+        // tout le reste à 0,85 — l'« ombre pondérée » du filtre G du banc,
+        // qu'elle rejoint à sa variance près (0,407 contre 0,409) en gardant
+        // tout : un poids, jamais un filtre. 0,85 est la plus douce des
+        // valeurs qui y arrivent. **Ce que le banc ne voit pas** : aucune de
+        // ses questions n'a un fichier entier, un module ou un espace de noms
+        // pour bonne réponse — il mesure ce que la dévaluation rend aux
+        // fonctions, pas ce qu'elle coûte à « quel fichier gère X » ; c'est
+        // pour ces questions-là que la valeur reste douce. Un graphe
+        // (`weights` du nœud) ou un appelant la surchargent par l'échelle du
+        // pas C.
+        field_weights: vec![crate::search::FieldWeight {
+            field: "scope_type".into(),
+            weights: [("function".to_string(), 1.0), ("method".to_string(), 1.0)]
+                .into_iter()
+                .collect(),
+            default: 0.85,
+        }],
         // La vue par parent : les méthodes d'un même impl rendues ensemble,
         // sous sa signature, que l'impl soit ou non un résultat.
         group_by: Some(crate::config::GroupBy { relation: "HAS_PARENT".into(), frame_field: "signature".into() }),
