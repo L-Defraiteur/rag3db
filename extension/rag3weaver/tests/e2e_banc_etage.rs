@@ -224,8 +224,12 @@ fn embarqueur() -> (Arc<dyn Embedder>, String) {
         "granite-278m" => (common::burn::GRANITE_278M.clone(), "granite-278m".into()),
         #[cfg(feature = "burn-embedder")]
         "granite-107m" => (common::burn::GRANITE_107M.clone(), "granite-107m".into()),
+        // BGE-M3 porte le creux : c'est le modèle de la mesure de fusion
+        // avec le signal sparse (lot 2, demande de Lucie du 1er octobre).
+        #[cfg(feature = "burn-embedder")]
+        "bge-m3" => (common::burn::BGE_M3.clone() as Arc<dyn Embedder>, "bge-m3".into()),
         "" => (Arc::new(HashEmbedder::new(64)), "HashEmbedder (montage à vide)".into()),
-        autre => panic!("RAG3WEAVER_BANC_MODELE={autre} : granite-278m, granite-107m, ou rien (HashEmbedder)"),
+        autre => panic!("RAG3WEAVER_BANC_MODELE={autre} : granite-278m, granite-107m, bge-m3, ou rien (HashEmbedder)"),
     }
 }
 
@@ -314,6 +318,38 @@ fn banc_etage_qui_perd() {
     // ── Tel quel : src/ par le chemin réel ──────────────────────────────
     let reel = Arc::new(Mutex::new(base(embedder.clone(), "etage-reel")));
     register_code_schema(&mut reel.lock().unwrap(), default_scope_chunking()).unwrap();
+    // Le signal creux est indépendant du dense : RAG3WEAVER_BANC_CREUX=bge-m3
+    // l'active quel que soit le modèle dense — la configuration que le
+    // produit aurait naturellement est granite-278m dense + creux bge-m3
+    // (models.embed et models.sparse sur deux modèles), et un default_weights
+    // avec du creux ne se pose pas sur la foi d'une mesure faite avec un
+    // autre dense que celui du défaut (orchestration, 4 octobre). Avec
+    // RAG3WEAVER_BANC_MODELE=bge-m3, le creux s'active tout seul. Scope est
+    // ré-enregistré avec sparse (le banc éprouve une déclaration que le
+    // produit n'a pas encore) et les embarqueurs creux/dual sont posés AVANT
+    // toute ingestion. NB : avec deux modèles, le dual bge sert le CREUX des
+    // documents ; le dense des documents reste celui de l'embarqueur du
+    // catalogue (granite) — c'est le montage visé.
+    #[cfg(feature = "burn-embedder")]
+    let avec_creux = modele == "bge-m3"
+        || std::env::var("RAG3WEAVER_BANC_CREUX").as_deref() == Ok("bge-m3");
+    #[cfg(not(feature = "burn-embedder"))]
+    let avec_creux = false;
+    #[cfg(feature = "burn-embedder")]
+    if avec_creux {
+        let bge = common::burn::BGE_M3.clone();
+        let mut cat = reel.lock().unwrap();
+        let mut config = rag3weaver::code::scope_config(default_scope_chunking());
+        config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
+        cat.register_entity(SCOPE, config).expect("Scope avec le creux");
+        cat.set_sparse_embedder(bge.clone());
+        // Le dual — dense ET creux en une passe — seulement quand le dense
+        // EST bge : sur un catalogue granite, il écrirait le dense de bge
+        // (1024) dans la colonne granite (768).
+        if modele == "bge-m3" {
+            cat.set_dual_embedder(bge);
+        }
+    }
     let racine = manifest();
     let sources: Vec<(String, String)> = read_sources(&format!("{racine}/src"))
         .expect("lire src/")
@@ -559,6 +595,46 @@ fn banc_etage_qui_perd() {
         }
         hybrides.push((etiquette.to_string(), phrases, idents));
     }
+    // ── HS/IS : la fusion AVEC le signal creux (bge-m3 seulement) ───────
+    // La demande de Lucie du 1er octobre : « mesurer avant de choisir… et
+    // avec le signal sparse ». Le couple retenu provisoirement (0,45/0,55)
+    // contre l'actuel du gabarit (0,5/0,5), sans creux (témoins ci-dessus)
+    // et avec, à deux poids. Les poids RRF sont relatifs : pas de
+    // renormalisation.
+    if avec_creux {
+        let hybride_creux_de = |b: f64, v: f64, sp: f64| -> SearchOptions {
+            let mut o = options_vecteur();
+            o.signals = Some(SearchSignals::HYBRID | SearchSignals::SPARSE);
+            o.fusion = Some(FusionConfig {
+                bm25: SignalConfig { weight: b, ..SignalConfig::default() },
+                vector: SignalConfig { weight: v, ..SignalConfig::default() },
+                sparse: SignalConfig { weight: sp, ..SignalConfig::default() },
+                ..FusionConfig::default()
+            });
+            o
+        };
+        for (etiquette, b, v, sp) in [
+            ("0,5/0,5 + creux 0,2", 0.5, 0.5, 0.2),
+            ("0,5/0,5 + creux 0,4", 0.5, 0.5, 0.4),
+            ("0,45/0,55 + creux 0,2", 0.45, 0.55, 0.2),
+            ("0,45/0,55 + creux 0,4", 0.45, 0.55, 0.4),
+        ] {
+            let mut phrases = Mesure::default();
+            for (q, attendus) in QUESTIONS {
+                let r = Catalog::rechercher(&reel, SCOPE, q, hybride_creux_de(b, v, sp))
+                    .expect("recherche hybride + creux");
+                phrases.noter(&noms(&r), attendus);
+            }
+            let mut idents = Mesure::default();
+            for nom in IDENTIFIANTS {
+                let r = Catalog::rechercher(&reel, SCOPE, nom, hybride_creux_de(b, v, sp))
+                    .expect("identifiant hybride + creux");
+                idents.noter(&noms(&r), &[nom]);
+            }
+            hybrides.push((format!("HS {etiquette}"), phrases, idents));
+        }
+    }
+
     // Le témoin : les identifiants en vecteur seul — le chiffre du problème.
     let mut idents_vecteur = Mesure::default();
     for nom in IDENTIFIANTS {

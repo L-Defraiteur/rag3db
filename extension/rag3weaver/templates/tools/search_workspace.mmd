@@ -28,7 +28,7 @@ graph LR
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
     scan["ScanFilesNode"]
-    fuse["FuseResultsNode(weights='bm25:0.5,vector:0.5')"]
+    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4')"]
     paginate["PaginateNode"]
     resolve["ResolveParentNode"]
     render["RenderResultsNode"]
