@@ -65,6 +65,7 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
             'finish_cards':{'graph':str(CRATE/'templates/tools/finish_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'begin_cards':{'graph':str(CRATE/'templates/tools/begin_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'abort_cards':{'graph':str(CRATE/'templates/tools/abort_snapshot.mmd'),'bindings':{'entity':'Card'}},
+            'undo_cards':{'graph':str(CRATE/'templates/tools/undo_snapshot.mmd'),'bindings':{'entity':'Card'}},
             'list_cards':{'graph':str(CRATE/'templates/tools/select_structured.mmd'),'bindings':{'entity':'Card'}}}}
     (tmp/'backend.json').write_text(json.dumps(manifest))
     with host(tmp/'backend.json') as ask:
@@ -103,4 +104,23 @@ with tempfile.TemporaryDirectory(prefix='rag3-snapshot-') as tmp:
         # A session left open is taken over explicitly.
         s4=begin('A')['result']['result']['session']
         took=begin('A',takeover=True); assert took['ok'] and took['result']['result']['replaced']==s4,took
-print('PASS: synchronisation by scope — engine sessions (one per scope, takeover, abort), one scope per batch, removal within the scope, empty session refused.')
+        # Set aside before purge (keepFor, 7 days by default): a finish that removes keeps a copy,
+        # and undoes as a block.
+        s5=took['result']['result']['session']
+        ingest(s5,[card('a1','A')])
+        done=finish(s5,'A'); assert done['ok'],done
+        removed=done['result']['result']['removed']
+        assert len(removed)==1 and done['result']['result']['setAside']==removed,done
+        assert keys(ask,'A')==['a1']
+        undone=ask(name='undo_cards',arguments={'scope':{'binder':'A'},'snapshot':s5}); assert undone['ok'],undone
+        assert undone['result']['result']['restored']==removed,undone
+        assert keys(ask,'A')==['a1','a2']
+        again=ask(name='undo_cards',arguments={'scope':{'binder':'A'},'snapshot':s5})
+        assert not again['ok'] and 'déjà annulée' in again['error'],again
+        # A row removed then carried again with the same content comes back from its copy, said by the batch.
+        s6=begin('A')['result']['result']['session']; ingest(s6,[card('a1','A')]); assert finish(s6,'A')['ok']
+        s7=begin('A')['result']['result']['session']
+        back=ingest(s7,[card('a1','A'),card('a2','A')])
+        assert back['restored']==removed,back
+        assert finish(s7,'A')['ok'] and keys(ask,'A')==['a1','a2']
+print('PASS: synchronisation by scope — engine sessions (one per scope, takeover, abort), one scope per batch, removal within the scope, empty session refused; set aside before purge, block undo, a removed row coming back from its copy.')

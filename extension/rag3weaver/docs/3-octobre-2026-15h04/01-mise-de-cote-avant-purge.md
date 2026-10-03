@@ -114,3 +114,74 @@ plus `keepFor`. Le refus le dit.
 5. l'annulation en bloc rend les lignes retirées et les états d'avant ;
 6. une ligne mise de côté ne sort dans aucune recherche (plein texte, dense,
    `get`).
+
+## 8. Ce qui est codé (3 octobre, soir), et où le code s'écarte de cette page
+
+Les trois points du §6, tranchés :
+
+- **la table** : une seule, `_snapshot_aside`, pour toutes les entités,
+  clé `{entité}:{uuid}`, posée à chaque ouverture (`CREATE … IF NOT
+  EXISTS`) — une base d'avant la reçoit sans migration ; colonnes `_entity`,
+  `_uuid`, `_content_hash`, `_row` (JSON), `_chunks` (JSON), `_session`,
+  `_removed_at` ;
+- **les vecteurs creux** : recalculés au retour. Ils ne se relisent pas
+  dans l'index (le handle n'a pas de `get`), et ils sont le signal le moins
+  cher ;
+- **le rapport de fin** : persisté dans `_catalog_meta`
+  (`snapshot_finish:{org}/{project}:{entité}:{session}`), avec l'état
+  d'avant de chaque transitionnée (`previousStates`) et une marque
+  d'annulation.
+
+**Écart au §3 : la ligne ne revient pas « depuis la copie », elle s'ingère
+par le chemin de toujours, et seuls ses vecteurs reviennent.** Le
+découpage est déterministe et bon marché ; l'embarquement est le coût.
+`take_from_aside`, avant le graphe d'`ingest_entities`, rend à
+`EmbedNode` (service `known_vectors`) les vecteurs denses mis de côté,
+par uuid de chunk et `_text_hash` : un chunk dont le texte est le même
+n'est pas réembarqué, sur le chemin de masse (`Enrich`) comme sur celui de
+toujours. Avantages : la ligne qui revient porte les champs non contenus
+du lot qui la ramène (pas ceux de la copie), et aucune ligne n'est écrite
+hors du chemin habituel. La copie est vidée une fois l'écriture faite —
+une ingestion qui échoue ne la perd pas. `FlushResult.restored` et le
+rapport du lot (`restored`) nomment les lignes rendues.
+
+Ce qui reste comme dit :
+
+- la copie est faite avant toute mise en file des suppressions ; si elle
+  échoue, rien n'est retiré ; une suppression qui échoue vide sa copie ;
+- la purge est bornée (512 copies par passe), **par SET** (`_row = ''`,
+  `_chunks = ''`), à chaque fin ; `purge_snapshot_aside_at` prend l'instant
+  en paramètre pour les tests ;
+- `undo_snapshot_finish` (outil `undo_snapshot`) réingère les retirées
+  depuis leur copie — donc sans réembarquement — et rend leur état d'avant
+  aux transitionnées dont l'état n'a pas bougé depuis la fin ; une fin
+  s'annule une fois ; refusée, en le disant, si ses copies sont purgées.
+
+Limites nommées :
+
+- **PostgreSQL** : la relecture d'une colonne `vector` en liste de
+  flottants n'est pas éprouvée ; la copie y part sans vecteurs, la ligne
+  revient réembarquée. Le reste des requêtes a sa forme PostgreSQL, non
+  jouée (pas de serveur sur ce poste) ;
+- seul le **modèle courant** est copié ; une ligne revenue sous un autre
+  modèle est réembarquée pour lui ;
+- l'état d'avant d'une transitionnée est écrit **sans la garde** de la
+  machine à états (une annulation n'est pas une transition), et le document
+  plein texte de la ligne garde l'état transitionné jusqu'à sa prochaine
+  écriture ;
+- une ligne rendue revient **sans ses relations** ;
+- un retour par la file (`create`, `drain`) ne consulte pas la mise de
+  côté ; seule `ingest_entities` le fait.
+
+**Trouvé en codant** : la suppression ne retirait jamais le creux de
+l'index lucistore (`DeleteRecordNode`, et `RechunkDeleteNode` à chaque mise
+à jour qui redécoupe) ; corrigé sur la même branche
+(`retirer_le_creux_des_chunks`). Et la recherche dense ne répondait plus
+après une table vidée puis repeuplée — un défaut du moteur, corrigé par
+la session cœur C++ (`e2e_recherche_dense_apres_suppressions`).
+
+Tests : `tests/e2e_synchronisation.rs` (le retour sans réembarquement, par
+les deux chemins ; la copie périmée jetée ; `keepFor: 0` ; la purge ;
+l'annulation des retraits et des transitions ; aucune recherche ne sort une
+ligne mise de côté ; le creux), `scripts/test_backend_snapshot.py`
+(l'annulation et le retour par le backend).
