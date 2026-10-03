@@ -581,12 +581,17 @@ Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
    choix du graphe > entité > défaut du gabarit > moteur, pour la fusion comme
    pour la pondération par champ. En cours : branche `pas-c-ponderations`,
    arbre `../rag3db-pas-c`, session recherche.
-2. Les poids de fusion par défaut : **mesurer avant de choisir**, au banc, aux
-   deux réglages (0,6 / 0,4 du gabarit, 0,3 / 0,7 d'avant) — **et avec le
-   signal sparse**, que le banc n'a jamais mesuré et que le gabarit laisse au
-   défaut du moteur (0,2). Avant de mesurer : `sparse-vector` est figée en
-   4.0.1 alors que lucivy est en 4.3.0 et que `sparse-vector` 4.3.0 est
-   publiée depuis le 13 septembre ; aligner d'abord.
+2. Les poids de fusion par défaut : **FERMÉ le 4 octobre, par la mesure**
+   (91c44a96c ; session recherche). Banc étagé, config produit granite
+   dense + creux bge-m3 par le service : le creux AIDE (H phrases
+   0,340 → 0,369/11/23 à 0,45/0,55 + creux 0,4, le meilleur point de la
+   série ; identifiants 0,850 → 0,900) ; bge dense ne remplace pas
+   granite (0,342 contre 0,405) ; le couple 0,45/0,55 prend son sens une
+   fois le creux là. Adopté aux deux gabarits :
+   `default_weights='bm25:0.45,vector:0.55,sparse:0.4'` — étage passé de
+   « choix » à « défaut », que l'entité et l'appelant priment. Reste la
+   pièce de câblage (le manifeste monte le signal creux sur l'entité d'un
+   index nommé, clé explicite) avant que le creux serve en vrai.
 3. Le texte embarqué (le nom avec le corps) : **plus tard**.
 4. `fuse_results` à trois listes et ses onze tests : **supprimer** — fait
    le 2 octobre (`01791e347`) ; les onze tests, seuls tests unitaires de la
@@ -738,7 +743,7 @@ source (`extension/rag3weaver/docs/optimiseur/3-octobre-2026-20h55/`), mesure
 en cours contre ce que nous avons déjà (cosinus granite, reranker). Porte :
 session optimiseur.
 
-**Toujours en attente de Lucie** : le couple de fusion 0,45/0,55 ; « envoie »
+**Toujours en attente de Lucie** : « envoie »
 pour tracel-ai (dans la fenêtre de l'optimiseur) ; le réglage rafale/pause
 devant l'écran ; le seuil de confirmation d'`index` et la politique cloud ; la
 demande au support GitHub ; le ménage des branches distantes ; dans la vision
