@@ -113,9 +113,12 @@ pub fn adaptive_search_decision(
             (text, _) => (
                 false,
                 Some(format!(
-                    "index : partiel — plein texte {}, vecteurs {} % ; les résultats viennent de ce qui est prêt",
+                    "index : partiel — plein texte {}, vecteurs {} %{} ; les résultats viennent de ce qui est prêt",
                     if text == Level::Ready { "prêt" } else { "en cours" },
-                    s.vectors_percent
+                    s.vectors_percent,
+                    s.vectors_seconds_left
+                        .map(|sec| format!(" (reste environ {} min)", sec.div_ceil(60)))
+                        .unwrap_or_default()
                 )),
             ),
         },
@@ -2238,7 +2241,14 @@ mod tests {
     fn la_decision_du_mode_auto() {
         use crate::catalog::{IndexState, Level};
         let etat = |text, vectors, pct| {
-            Some(IndexState { text, vectors, vectors_percent: pct, updated_ms: 0 })
+            Some(IndexState {
+                text,
+                vectors,
+                relations: Level::Ready,
+                vectors_percent: pct,
+                vectors_seconds_left: None,
+                updated_ms: 0,
+            })
         };
         // Jamais indexé, une source : balayage, et la ligne dit quoi faire.
         let (scan, ligne) = adaptive_search_decision(etat(Level::Never, Level::Never, 0), true);
