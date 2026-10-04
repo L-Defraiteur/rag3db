@@ -170,7 +170,6 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 # lit, on ne le copie pas. Par gravité :
 # — perte de données : les relations d'une région intacte effacées au point de reprise
 #   (Ladybug 0be6fa597, Vela e5e700e73) ;
-UpstreamFixes.RelationsOfAnUntouchedRegionSurviveACheckpoint directions-agree,relations-survive-checkpoint
 # — plantages : point de reprise après ALTER … DROP, définitivement (Vela e5e700e73) ;
 #   lecture après le point de reprise d'une relation créée puis supprimée (Ladybug ba5f38815) ;
 #   MERGE avec deux ON MATCH SET et une clé répétée (a0063158d) ; UNION (26be67f84) ;
@@ -178,7 +177,6 @@ UpstreamFixes.RelationsOfAnUntouchedRegionSurviveACheckpoint directions-agree,re
 #   filtré par un paramètre (8281c845e) ;
 UpstreamFixes.CheckpointAfterDroppingANodeColumn checkpoint-after-reopen,checkpoint-survives
 UpstreamFixes.CheckpointAfterDroppingARelationColumn checkpoint-after-reopen,checkpoint-survives
-UpstreamFixes.ReadAfterCheckpointOfACreatedThenDeletedRelation read-after-checkpoint-survives
 UpstreamFixes.MergeWithTwoOnMatchSetsAndARepeatedKey merge-survives
 UpstreamFixes.UnionArmProjectingAPropertyTwice query-survives
 UpstreamFixes.PathUsedOnlyInsideALambda query-survives

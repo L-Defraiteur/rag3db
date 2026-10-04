@@ -524,6 +524,12 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
             persistentChunkGroup = createNewPersistentChunkGroup(
                 persistentChunkGroup->cast<ChunkedCSRNodeGroup>(), csrState);
         }
+        // Aucune région à réécrire ne veut pas dire « rien en mémoire » : des relations créées
+        // puis supprimées depuis le dernier point de reprise y sont encore, et le parcours
+        // ci-dessus vient de marquer leurs entrées d'index invalides. Elles ne comptent plus
+        // pour rien : la partie en mémoire se vide ici comme à la fin d'un point de reprise
+        // ordinaire. Sans cela, le balayage suivant suivait une entrée invalide hors des blocs.
+        finalizeCheckpoint(lock);
         return;
     }
     if (regionsToCheckpoint.size() == 1 &&
@@ -540,8 +546,12 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
         }
     }
 
+    // Ce qui reste dans le groupe entier, et non dans les seules régions réécrites : une région
+    // sans changement n'est pas dans regionsToCheckpoint, et garde pourtant ses relations. À ne
+    // compter que les régions réécrites, un groupe dont elles finissaient vides était pris
+    // pour vide et libéré en entier — les relations des autres régions étaient perdues.
     uint64_t numTuplesAfterCheckpoint = 0;
-    for (const auto& region : regionsToCheckpoint) {
+    for (const auto& region : leafRegions) {
         for (auto i = region.leftNodeOffset; i <= region.rightNodeOffset; ++i) {
             numTuplesAfterCheckpoint += csrState.newHeader->getCSRLength(i);
         }

@@ -1,6 +1,6 @@
 # Un point de reprise efface les relations des régions non touchées
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(stockage): un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites »
 - **Gravité** : perte
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (il supprime des relations et laisse passer des points de reprise)

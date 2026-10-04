@@ -1,6 +1,6 @@
 # La lecture plante après le point de reprise d'une relation créée puis supprimée
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(stockage): un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites »
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (il crée et supprime des relations)
