@@ -42,6 +42,26 @@ aucun (non atteignable sans crochet)
 
 voir chaque ligne ci-dessus.
 
+## Avancement (4 octobre 2026, banc)
+
+Deux lignes de la cause sont traitées ; le ticket reste ouvert pour les autres.
+
+**Ordre des suppressions à la reprise** : corrigé, avec témoin.
+
+- `WALReplayer::removeWALAndShadowFiles` supprime le journal d'abord, le fichier fantôme ensuite. Une mort entre les deux laisse un fichier fantôme sans journal, que la reprise suivante supprime déjà (chemin « pas de journal »).
+- Tolérance de l'ordre ancien : si le journal finit par CHECKPOINT et que le fichier fantôme manque (laissé ainsi par une mort entre les deux suppressions dans l'ordre ancien), la reprise saute le rejeu des pages au lieu d'échouer.
+- Crochet de test dans `src/` : `WALReplayer::setRecoveryHookForTesting`, appelé à des points nommés, sans effet hors des tests (aucun crochet posé) et jamais en lecture seule. Points posés (`RecoveryPoint`) :
+  - `SHADOW_PAGES_REPLAYED` : pages fantômes recopiées et synchronisées, rien supprimé ;
+  - `JOURNAL_REMOVED` : journal supprimé, fichier fantôme pas encore.
+- Côté banc, un point de mort de plus pendant le point de reprise : `DeathPoint::AfterCheckpointLogged` (journal clos par CHECKPOINT, pages fantômes pas encore appliquées), qui produit l'état qu'une reprise doit rejouer.
+- Témoins (`single_writer_crash_test.cpp`) : `RecoveryDeath.DeathBetweenTheTwoRemovalsAtRecovery` (rouge dans l'ordre ancien : « Cannot open file … db.kz.shadow »), `RecoveryDeath.ShadowFileAlreadyReplayedAndRemoved` (tolérance), `Points/CheckpointDeath…/AfterCheckpointLogged`.
+
+**Synchronisation après le rejeu des pages fantômes** : corrigé, sans témoin.
+
+- `ShadowFile::replayShadowPageRecords` synchronise le fichier de données avant que la reprise supprime quoi que ce soit. Le chemin normal du point de reprise le faisait déjà (`applyShadowPages`) ; seule la reprise l'omettait.
+- Ce qui manque pour le prouver : un crochet de faute dans `src/` qui simule une coupure (écritures non synchronisées perdues). Une mort de processus ne suffit pas, le cache de pages du noyau survit.
+- Coût mesuré à une réouverture avec rejeu (200 000 lignes, base sur btrfs) : avec la synchronisation 76, 89 et 115 ms, sans 69, 71 et 72 ms : environ 20 ms à la médiane, 45 ms au pire. Payé une fois, seulement quand la reprise rejoue des pages fantômes (mort pendant un point de reprise).
+
 ## Pour le fermer
 
 un crochet de test dans `src/` (faute d'E/S injectée, mort à un point nommé), puis un témoin par défaut ; ou un correctif lu sur l'amont pour chacun, sans témoin, avec l'accord de la session cœur C++.

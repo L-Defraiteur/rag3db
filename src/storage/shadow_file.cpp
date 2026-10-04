@@ -136,6 +136,10 @@ void ShadowFile::replayShadowPageRecords(ClientContext& context) {
             record.originalPageIdx * RAG3DB_PAGE_SIZE);
         shadowPageIdx++;
     }
+    // Les pages recopiées doivent être durables avant que la reprise supprime le journal et le
+    // fichier fantôme : après, plus rien ne pourrait les refaire. Le point de reprise ordinaire
+    // le fait déjà (applyShadowPages).
+    dataFileInfo->syncFile();
 }
 
 void ShadowFile::flushAll(main::ClientContext& context) const {

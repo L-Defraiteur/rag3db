@@ -38,7 +38,11 @@
 #include "processor/result/flat_tuple.h"
 #include "storage/checkpointer.h"
 #include "storage/database_header.h"
+#include "storage/shadow_file.h"
+#include "storage/storage_manager.h"
 #include "storage/storage_utils.h"
+#include "storage/wal/wal.h"
+#include "storage/wal/wal_replayer.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -52,6 +56,9 @@ enum class DeathPoint {
     AfterStorage,
     AfterSerialize,
     AfterHeader,
+    // La marque CHECKPOINT est au journal, les pages fantômes ne sont pas encore recopiées :
+    // la reprise devra les rejouer depuis le fichier fantôme.
+    AfterCheckpointLogged,
     AfterApplyingShadowPages,
 };
 
@@ -65,6 +72,8 @@ std::string deathPointName(DeathPoint point) {
         return "AfterSerialize";
     case DeathPoint::AfterHeader:
         return "AfterHeader";
+    case DeathPoint::AfterCheckpointLogged:
+        return "AfterCheckpointLogged";
     case DeathPoint::AfterApplyingShadowPages:
         return "AfterApplyingShadowPages";
     }
@@ -107,6 +116,15 @@ protected:
         }
     }
     void logCheckpointAndApplyShadowPages() override {
+        if (point == DeathPoint::AfterCheckpointLogged) {
+            // Les deux premiers pas de Checkpointer::logCheckpointAndApplyShadowPages, puis la
+            // mort avant la recopie des pages.
+            rag3db::storage::StorageManager::Get(clientContext)
+                ->getShadowFile()
+                .flushAll(clientContext);
+            rag3db::storage::WAL::Get(clientContext)->logAndFlushCheckpoint(&clientContext);
+            dieNow();
+        }
         Checkpointer::logCheckpointAndApplyShadowPages();
         if (point == DeathPoint::AfterApplyingShadowPages) {
             dieNow();
@@ -418,8 +436,99 @@ TEST_P(CheckpointDeath, CommittedDataSurvivesADeathDuringCheckpoint) {
 
 INSTANTIATE_TEST_SUITE_P(Points, CheckpointDeath,
     ::testing::Values(DeathPoint::BeforeStorage, DeathPoint::AfterStorage,
-        DeathPoint::AfterSerialize, DeathPoint::AfterHeader, DeathPoint::AfterApplyingShadowPages),
+        DeathPoint::AfterSerialize, DeathPoint::AfterHeader, DeathPoint::AfterCheckpointLogged,
+        DeathPoint::AfterApplyingShadowPages),
     [](const ::testing::TestParamInfo<DeathPoint>& info) { return deathPointName(info.param); });
+
+// La reprise d'un journal terminé par un CHECKPOINT rejoue les pages du fichier fantôme, puis
+// supprime le journal et le fichier fantôme. Une mort entre les deux suppressions ne doit pas
+// empêcher la base de s'ouvrir (ticket « durabilité sur faute d'entrée-sortie, coupure ou mort
+// au mauvais instant », le cas que la stèle exige). Dans l'ancien ordre (le fichier fantôme
+// d'abord), elle laissait un journal terminé par un CHECKPOINT sans son fichier fantôme, et
+// l'ouverture échouait. Les points d'arrêt sont ceux de WALReplayer::RecoveryPoint.
+class RecoveryDeath : public SingleWriterCrash {
+public:
+    // L'état de départ : la mort d'un point de reprise juste après sa marque au journal.
+    void dieAfterTheCheckpointIsLogged() {
+        runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+            mustQuery(connection, "CALL auto_checkpoint=false;");
+            mustQuery(connection, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+            mustQuery(connection, "UNWIND range(0, 1999) AS i CREATE (:Item {id: i, v: i});");
+            mustQuery(connection, "CHECKPOINT;");
+            mustQuery(connection, "UNWIND range(2000, 3999) AS i CREATE (:Item {id: i, v: i});");
+            mustQuery(connection, "MATCH (n:Item) WHERE n.id % 10 = 7 SET n.v = n.v + 100000;");
+            FlakyCheckpointer dying([](rag3db::main::ClientContext& context) {
+                return std::make_unique<DyingCheckpointer>(context,
+                    DeathPoint::AfterCheckpointLogged);
+            });
+            dying.setCheckpointer(*connection.getClientContext());
+            connection.query("CHECKPOINT;");
+        });
+        expectJournalToReplay();
+    }
+
+    // Une reprise dans un fils, tuée au point donné.
+    void dieDuringRecoveryAt(rag3db::storage::RecoveryPoint point) {
+        conn.reset();
+        database.reset();
+        const auto pid = fork();
+        if (pid == 0) {
+            disableCoreDumps();
+            rag3db::storage::WALReplayer::setRecoveryHookForTesting(
+                [point](rag3db::storage::RecoveryPoint reached) {
+                    if (reached == point) {
+                        dieNow();
+                    }
+                });
+            try {
+                rag3db::main::Database childDatabase(databasePath, *systemConfig);
+            } catch (const std::exception& e) {
+                std::cerr << "  recovery failed: " << e.what() << "\n";
+                _exit(3);
+            }
+            _exit(4);
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+        ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+            << "[check: killed-during-recovery] the recovery did not reach the point";
+    }
+
+    void expectTheData() {
+        EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 4000) << "[check: row-count] ";
+        EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id % 10 = 7 AND n.v = n.id + 100000 RETURN "
+                           "count(n);"),
+            400)
+            << "[check: updates-kept] ";
+        EXPECT_EQ(queryInt("MATCH (n:Item {id: 3998}) RETURN n.v;"), 3998)
+            << "[check: primary-key-lookup] ";
+        expectIntegrity();
+    }
+};
+
+TEST_F(RecoveryDeath, DeathBetweenTheTwoRemovalsAtRecovery) {
+    dieAfterTheCheckpointIsLogged();
+    dieDuringRecoveryAt(rag3db::storage::RecoveryPoint::JOURNAL_REMOVED);
+    if (HasFatalFailure() || !reopen()) {
+        return;
+    }
+    expectTheData();
+}
+
+// L'état qu'une mort dans l'ancien ordre laissait : les pages recopiées, le fichier fantôme
+// supprimé, le journal encore là. La reprise doit savoir qu'il n'y a plus rien à recopier.
+TEST_F(RecoveryDeath, ShadowFileAlreadyReplayedAndRemoved) {
+    dieAfterTheCheckpointIsLogged();
+    dieDuringRecoveryAt(rag3db::storage::RecoveryPoint::SHADOW_PAGES_REPLAYED);
+    if (HasFatalFailure()) {
+        return;
+    }
+    std::filesystem::remove(rag3db::storage::StorageUtils::getShadowFilePath(databasePath));
+    if (!reopen()) {
+        return;
+    }
+    expectTheData();
+}
 
 // 4. Le point de reprise échoué (7072183db) : il échoue dans sa phase de stockage ; la
 // base doit alors tout refuser ; puis le processus meurt. À la réouverture, tout ce qui
@@ -857,6 +966,54 @@ TEST_F(SingleWriterCrash, ExplicitCopyCommitWhileATransactionIsOpen) {
     }
     EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-after-reopen] ";
     expectIntegrity();
+}
+
+// Deux instances de la même base dans un processus. Le verrou de fichier du moteur
+// (fcntl F_SETLK) n'exclut rien à l'intérieur d'un même processus : deux Database sur le même
+// chemin font chacune leur point de reprise, avec deux gestionnaires d'espace libre qui
+// donnent les mêmes pages. C'est la cause trouvée par la session cœur C++ à la corruption
+// d'e2e_code (4 octobre au soir), dont le test rouvre la base pendant que l'instance d'avant
+// finit sa fermeture. Attendu : la seconde ouverture est refusée. Dans un fils, qui sort sans
+// fermer : aucun point de reprise de fermeture n'abîme la base du test.
+TEST_F(SingleWriterCrash, SecondDatabaseOnTheSamePathInOneProcessIsRefused) {
+    mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        disableCoreDumps();
+        try {
+            auto first = std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+            try {
+                auto second =
+                    std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+                // Ni l'une ni l'autre ne se ferme : sortir sans destructeur.
+                second.release();
+                first.release();
+                _exit(5);
+            } catch (const std::exception& e) {
+                std::cerr << "  second open refused: " << e.what() << "\n";
+                first.release();
+                // Le refus attendu est l'erreur nommée, levée avant tout rejeu.
+                _exit(std::string(e.what()).find("is already open for writing in this "
+                                                  "process") != std::string::npos ?
+                          0 :
+                          4);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "  first open failed: " << e.what() << "\n";
+            _exit(3);
+        }
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    createDBAndConn();
+    EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: second-open-refused] "
+        << (WIFSIGNALED(status) ? "killed by signal " + std::to_string(WTERMSIG(status)) :
+            WEXITSTATUS(status) == 5 ? std::string("the second Database opened") :
+            WEXITSTATUS(status) == 4 ? std::string("refused, but not by the named error") :
+                                       "exit code " + std::to_string(WEXITSTATUS(status)));
 }
 
 // Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à
