@@ -62,6 +62,16 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
 
 ## En cours (4 octobre 14h30 — le titre indexé répare tout, sur master)
 
+- **« Avant d'éditer » est branchée (f8d231148)** : le gabarit
+  impact_fichier de c0 au crochet after de read_file (budget 6 lignes) —
+  lire un fichier dit ce qui en dépend avant d'y toucher. Le crochet se
+  tait sur les trois états de la porte read_catalog (partiel, occupé,
+  jamais-indexé, par leurs constantes). Prouvé au script : section avec
+  dépendant compté, silence sans index et sans dépendant ; latence
+  31 ms (micro-corpus ; 82-148 ms annoncés sur src/). c0 ajoute sa
+  section cohésion au banc en #[test] à part (réponses données :
+  fusion produit 0,45/0,55 → 0,420/0,900 au monde nouveau).
+
 - **Le chantier titre est sur master (66dc381c3)**, batterie verte : le
   titre est indexé en plein texte pour TOUTE entité (plus seulement les
   dérivées), un hit dont le titre matche multiplie son score par le
