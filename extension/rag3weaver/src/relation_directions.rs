@@ -43,9 +43,20 @@ fn compte(conn: &dyn DbConnection, requete: &str) -> Result<i64, String> {
         .ok_or_else(|| format!("{requete} : aucun compte"))
 }
 
-/// **Compter chaque table de relation dans les deux sens.** Le sens direct
-/// part de la table de départ (`MATCH (a:From)-[r:T]->(b:To)`), le sens
-/// inverse de la table d'arrivée (`MATCH (b:To)<-[r:T]-(a:From)`).
+/// **Compter chaque table de relation dans les deux sens.** Le moteur lit le
+/// sens qui part d'un nœud **déjà lié** : chaque nœud de départ est lié par un
+/// `WITH`, puis on étend depuis lui (sens direct, rangé par nœud d'origine) ;
+/// de même pour chaque nœud d'arrivée (sens inverse). Écrire la flèche ne
+/// suffit pas : sans nœud lié, le planificateur choisit le sens, et la
+/// première version de cette sonde lisait le même sens deux fois sans le
+/// savoir (session cœur C++, 4 octobre 2026).
+///
+/// **Étalonnée sur la recette du banc, avant le correctif du moteur** : elle
+/// voit la perte, (2, 2) → (1, 0). Mais l'étalon par clé place la perte dans
+/// le sens direct, quand la sonde la range du côté inverse : même avec le
+/// `WITH`, le planificateur peut choisir son sens. **La dissymétrie est sûre,
+/// l'étiquette du sens ne l'est pas** ; pour savoir quel sens est touché,
+/// lier un nœud par sa clé primaire.
 pub fn count_both_directions(conn: &dyn DbConnection) -> Result<Vec<DirectionCount>, String> {
     let tables = conn.execute("CALL show_tables() RETURN *").map_err(|e| format!("show_tables : {e}"))?;
     let mut noms: Vec<String> = tables
@@ -62,8 +73,8 @@ pub fn count_both_directions(conn: &dyn DbConnection) -> Result<Vec<DirectionCou
             .map_err(|e| format!("show_connection({table}) : {e}"))?;
         for r in &couples.rows {
             let (Some(from), Some(to)) = (texte(r.first()), texte(r.get(1))) else { continue };
-            let forward = compte(conn, &format!("MATCH (a:{from})-[r:{table}]->(b:{to}) RETURN count(r)"))?;
-            let backward = compte(conn, &format!("MATCH (b:{to})<-[r:{table}]-(a:{from}) RETURN count(r)"))?;
+            let forward = compte(conn, &format!("MATCH (a:{from}) WITH a MATCH (a)-[r:{table}]->(b:{to}) RETURN count(r)"))?;
+            let backward = compte(conn, &format!("MATCH (b:{to}) WITH b MATCH (b)<-[r:{table}]-(a:{from}) RETURN count(r)"))?;
             out.push(DirectionCount { table: table.clone(), from, to, forward, backward });
         }
     }

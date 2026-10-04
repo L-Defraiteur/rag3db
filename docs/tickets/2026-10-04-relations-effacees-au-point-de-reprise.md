@@ -72,3 +72,36 @@ compter les relations sur toutes les régions du groupe ; le témoin passe au ve
   la position réelle des nœuds Scope (COPY puis MERGE), d'autres régions
   modifiées dans la même table entre les deux points de reprise, ou le sens
   compté. Ce vert ne prouve donc pas que rag3weaver est à l'abri.
+
+### Mise à jour, 4 octobre vers 13 h (arbre principal)
+
+- **Étalonnage, sur le moteur d'avant `80e3f2c32`** : la sonde voit la
+  recette, `knows` (2, 2) → (1, 0) après le second CHECKPOINT et après
+  réouverture. L'étalon lié par clé dit « direct depuis 1024 : 0, inverse
+  vers 1 : 1 » : la perte est dans le sens direct, et la sonde la range de
+  l'autre côté. **La sonde détecte la dissymétrie de façon sûre ; son
+  étiquette de sens ne l'est pas.** La seconde version lie l'extrémité par un
+  `WITH` avant d'étendre, mais le planificateur reste libre.
+- **Sur le moteur corrigé** (`build/lecteurs-csv` rebâti sur `38c82360b`) :
+  la recette est verte, (2, 2) → (1, 1), et l'étalon rend « 1, 1 ».
+- **Le test du produit ne prouvait rien** : les deux scopes qui importent
+  étaient aux décalages 17 et 210, dans la **même** région, bien que la
+  source compte 1 102 scopes. L'ordre de création ne suit pas l'ordre des
+  fichiers. Son vert ne dit donc pas que nos chemins étaient à l'abri. À la
+  lecture, ils peuvent remplir la condition : une édition retire les arêtes
+  d'un fichier par `DELETE r` sans en reposer si l'import a disparu ; une fin
+  de synchronisation retire des scopes. Il suffit que ce soient les seules
+  arêtes de leur région pour cette table.
+- **Une base existante a pu perdre des arêtes** si elle a été écrite, éditée
+  ou resynchronisée sur un moteur d'avant `80e3f2c32`, avec des points de
+  reprise (toute base sur disque). Pour le contrôler, **sur une copie**,
+  jamais sur une base qu'un backend tient :
+
+  ```
+  cp --reflink=always <base> <copie>   # avec <base>.wal, .shadow, .extensions s'ils existent
+  cargo run --release --features rag3db-native,code --example sens_des_relations -- \
+      <copie> <arbre>/extension/vector/build/libvector.rag3db_extension
+  ```
+
+  Sortie en 1 si une table de relation n'a pas le même compte dans les deux
+  sens : la base a perdu des arêtes, et elle se réindexe de zéro.

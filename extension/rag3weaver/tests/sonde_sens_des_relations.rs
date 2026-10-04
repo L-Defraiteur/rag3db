@@ -42,6 +42,13 @@ fn la_recette_du_banc_garde_les_deux_sens_egaux() {
     }
     let apres = count_both_directions(&conn).unwrap();
     eprintln!("[SONDE après le second point de reprise] {apres:?}");
+    // L'étalon : la seule forme qui force le sens, un nœud lié par sa clé.
+    let un = |q: &str| conn.execute(q).unwrap().rows[0][0].clone();
+    eprintln!(
+        "[SONDE étalon par clé] direct depuis 1024 : {:?} ; inverse vers 1 : {:?}",
+        un("MATCH (a:person {id: 1024})-[r:knows]->() RETURN count(r)"),
+        un("MATCH (b:person {id: 1})<-[r:knows]-() RETURN count(r)")
+    );
     drop(conn);
     let rouverte = Rag3dbConnection::new(&dir).expect("réouverture");
     let rouvert = count_both_directions(&rouverte).unwrap();
@@ -92,6 +99,11 @@ fn un_fichier_retire_ne_fait_pas_perdre_les_aretes_des_autres_regions() {
     let options = SourceSyncOptions { batch_files: 64, exige: Disponibilites::RECHERCHE_TEXTE, force: true, ..Default::default() };
     sync_source(&mut catalog, &Snapshot::new("regions", fichiers(false)), &options, &mut |_| {}).unwrap();
     catalog.execute_raw("CHECKPOINT").unwrap();
+    let decalages = catalog
+        .execute_raw("MATCH (s:Scope)-[:USES_LIBRARY]->(:Library) RETURN s.file_path, offset(id(s))")
+        .map(|r| format!("{:?}", r.rows))
+        .unwrap_or_else(|e| e.to_string());
+    eprintln!("[SONDE produit] décalages des scopes qui importent (il faut un < 1 024 et un ≥ 1 024) : {decalages}");
     let avant = count_both_directions(catalog.conn()).unwrap();
     let scopes = catalog.execute_raw("MATCH (s:Scope) RETURN count(s)").unwrap().rows[0][0].clone();
     eprintln!("[SONDE produit] {scopes:?} scopes (il en faut plus de 1 024 : deux régions)");
