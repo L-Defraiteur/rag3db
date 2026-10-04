@@ -156,7 +156,14 @@ chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
   dossier (réexportations) ?
 - **Arbre principal** : fusionner `filtre-impact` (pointeur 4abafd2 et
   filtre dans impact).
-- **Ensuite** : les réexportations (environ un jour, schéma dans code.rs).
+- **Ensuite, quand l'arbre principal est libre** (l'orchestration relance) :
+  les réexportations — ticket « un chemin vers une réexportation reste par
+  le nom », environ un jour, un changement de schéma dans code.rs. En
+  ticket aussi : « des receveurs restent sans type », « les nom seul et
+  segments de module ».
+
+**Arrêt de la session ici (4 octobre, 22 h)**, sur demande de
+l'orchestration.
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les

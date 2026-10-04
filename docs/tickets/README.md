@@ -67,7 +67,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | corrigé | réponse fausse | oui | à vérifier |
 | [L'ordre de synchronisation au point de reprise laisse peut-être des pages non durables](2026-10-04-ordre-de-synchronisation-au-point-de-reprise.md) | ouvert, non vérifié | perte | inconnu | oui si le doute est fondé |
 | [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | corrigé (codeparsers 75077f7 + 46cc492, pointeur 4fe5a3bfc) | réponse fausse | oui | oui (usages, impact, liens) |
-| [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens ; palier A en attente de fusion | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
+| [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens ; dans impact sur `filtre-impact`, à fusionner | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
 | [Un COPY refusé laisse la cardinalité de la table gonflée](2026-10-04-copy-refuse-gonfle-la-cardinalite.md) | ouvert | réponse fausse | oui | à vérifier |
 | [Le point de reprise écrit hors de son bloc après un ajout annulé](2026-10-04-point-de-reprise-ecrit-hors-bloc-apres-un-ajout-annule.md) | corrigé | plantage | oui | oui si un de ses `COPY` est refusé ou annulé |
@@ -77,3 +77,5 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | ouvert | réponse fausse | oui | peu |
 | [Une ligne très loin des autres est injoignable dans un index bâti d'un coup](2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md) | ouvert | réponse fausse | oui | peu probable |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
+| [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
+| [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (usages, Liens, impact) |
