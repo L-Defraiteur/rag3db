@@ -104,6 +104,33 @@ Variance observée ~0,002. Le creux se mesure par RAG3WEAVER_BANC_CREUX
 dense bge 1024 irait dans la colonne granite 768). Le seuil motif 0,97
 reste compatible bge (p10 0,944-0,975 selon le dense).
 
+### Les expériences de l'optimiseur (en cours, 4 octobre midi)
+
+- **Ce que lucivy fait des identifiants** (sources 4.3.0, filtre
+  identique 4.0.1) : RAW_TOKENIZER câblé en dur dans
+  `lucivy-core/src/handle.rs` — SimpleTokenizer (coupe sur tout
+  non-alphanumérique, `_` compris) + CamelCaseSplitFilter (frontières
+  camelCase + lettre↔chiffre, puis fusion des pièces < 4 caractères, max
+  2 chunks : `getElementById` → `getelement`/`byid`) + LowerCaser.
+  **L'identifiant entier n'est jamais émis** — les pièces remplacent le
+  jeton. Rien n'est déclarable par entité.
+- **Patch d'essai** : `~/.cache/rag3weaver-build/lucivy-variantes/
+  ld-lucivy` (copie 4.3.0), `LUCIVY_SPLIT_VARIANTE=entier|fin|
+  entier-fin` — entier = l'original émis en plus (même position,
+  `position_length` = nb pièces, `_` gardé par le tokenizer) ; fin =
+  sans la fusion-à-4. Sans variable : publié à l'identique (19 tests
+  verts). Branché par `[patch.crates-io]` dans le Cargo.toml du worktree
+  — DANS la section existante des forks burn (une deuxième section =
+  « duplicate key ») ; non commité, à retirer après.
+- **Section A du banc** : 7 combinaisons à poids égaux (voies seules,
+  paires, trio), phrases/identifiants séparés ; sans creux, les
+  combinaisons SPARSE sont sautées (passes b).
+- **Piège de compaction** : le résumé m'a resservi la forme ABRÉGÉE de
+  RAG3WEAVER_EMBED_SERVICE (`127.0.0.1:7979,7980,7981`) alors que la
+  note mémoire disait « adresses complètes, jamais ça » — 268 s de passe
+  perdues sur « aucun service ne sert bge-m3 ». Une constante critique
+  se vérifie dans la note mémoire, pas dans le résumé.
+
 ## 5. Le crochet après outil
 
 `after { graph, title ("À voir aussi"), max_lines (12), threshold,

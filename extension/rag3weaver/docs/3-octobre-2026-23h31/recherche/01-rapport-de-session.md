@@ -60,7 +60,47 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (12 h, après la coupure de quota de la nuit)
+## En cours (4 octobre 12h45, les deux expériences de l'optimiseur)
+
+- **La réponse préalable sur lucivy est rendue à 9f, lue dans les
+  sources (4.3.0, filtre identique à 4.0.1)** : tout champ texte passe
+  par RAW_TOKENIZER câblé en dur (`lucivy-core/src/handle.rs`) —
+  SimpleTokenizer (coupe sur non-alphanumérique, donc `_`) +
+  CamelCaseSplitFilter + LowerCaser. Le filtre coupe camelCase et
+  lettre↔chiffre puis FUSIONNE les pièces < 4 caractères (max 2 chunks) :
+  `getElementById` → `getelement`, `byid`. **L'identifiant entier n'est
+  jamais émis** (les pièces remplacent le jeton) et rien n'est
+  déclarable par entité : la variante demande du code dans ld-lucivy.
+- **Le patch local d'essai est écrit et prouvé** (9f d'accord, trois
+  variantes à sa demande) : copie de ld-lucivy 4.3.0 sous
+  `~/.cache/rag3weaver-build/lucivy-variantes/ld-lucivy`, pilotée par
+  `LUCIVY_SPLIT_VARIANTE` — `entier` (l'identifiant d'origine émis en
+  plus, même position, `_` gardé par le tokenizer pour que le snake
+  entier survive), `fin` (sans la fusion-à-4 : get/element/by/id),
+  `entier-fin`. Sans variable : comportement publié à l'identique (19
+  tests du crate verts) ; chaque variante vérifiée par
+  `test_variante_selon_env`. Branché par `[patch.crates-io]` dans le
+  Cargo.toml du worktree, fusionné dans la section existante des forks
+  burn (deux sections = « duplicate key ») — NON COMMITÉ, à retirer
+  après l'expérience.
+- **Section A au banc étagé** : les 7 combinaisons à poids égaux
+  (chaque voie seule, chaque paire, le trio), phrases et identifiants
+  séparés, sur la base granite+creux bge du bloc avec_creux ; jouable
+  aussi sans creux (les passes « b » sautent les combinaisons SPARSE).
+- **Première passe (a) tombée à 268 s — et la cause était chez moi** :
+  « aucun service ne sert bge-m3, 7980 ne répond pas » parce que ma
+  variable était la forme ABRÉGÉE `127.0.0.1:7979,7980,7981`, reprise du
+  résumé de compaction alors que ma propre note mémoire disait déjà
+  « adresses complètes, jamais 7979,7980,7981 ». Diagnostic rendu par eb
+  (rien n'avait redémarré, 7980 sert bge dense+creux). Relance au
+  « fini » de son créneau (cinq passes du dépôt, mesure sensible :
+  aucune compile de ma part entre-temps, consigne 9f) avec
+  `RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981`.
+- **c0 a fusionné impact_fichier (9425feb05)** : branchement du crochet
+  « Avant d'éditer » APRÈS les passes du banc (le rebase invaliderait le
+  binaire précompilé).
+
+## Ancien (12 h, après la coupure de quota de la nuit)
 
 - **Le creux est une option, pas le défaut** (10bdda04d) : position de
   Lucie (gadget bien fait, parité Qdrant, expériences avant de
