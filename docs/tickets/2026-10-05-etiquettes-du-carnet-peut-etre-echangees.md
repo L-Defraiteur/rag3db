@@ -1,6 +1,6 @@
 # Les étiquettes d'un carnet peuvent avoir été échangées, sans moyen sûr de le voir
 
-- **État** : ouvert — en attente de Lucie (a-t-elle des carnets en usage réel ?).
+- **État** : fermé le 5 octobre 2026 — décision de Lucie : aucun carnet en usage réel, rien à faire sur l'existant ; le correctif `25b3b45dc` suffit pour la suite.
 - **Gravité** : perte (une donnée fausse que rien ne rebâtit).
 - **Atteignable en service** : oui, sur toute base de carnet écrite avant `25b3b45dc`.
 - **Touche rag3weaver** : oui (gabarit `templates/backends/notebook`).
@@ -48,3 +48,9 @@ Pas de façon sûre. Ce qui ne marche pas, et les deux indices faibles :
 Savoir si des carnets sont en usage réel (Lucie). S'il y en a : les restaurer depuis une
 sauvegarde antérieure, ou faire relire leurs étiquettes. Sinon : fermer, le correctif
 `25b3b45dc` empêchant les nouveaux cas.
+
+## Décision (5 octobre 2026)
+
+Lucie n'a aucun carnet en usage réel : son seul usage réel est le constructeur de decks
+MTG, dont la base sera refaite. Aucune base de carnet à sauver ni à relire. Le correctif
+`25b3b45dc` empêche les nouveaux échanges ; le ticket est fermé.
