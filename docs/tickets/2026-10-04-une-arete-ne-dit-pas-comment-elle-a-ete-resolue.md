@@ -1,6 +1,6 @@
 # Une arête ne dit pas comment elle a été résolue
 
-- **État** : en cours — filtre dans Liens (master) ; filtre dans impact sur la branche `filtre-impact` (216715158), critère tenu, en attente de fusion ; réexportations à faire
+- **État** : en cours — filtre dans Liens, impact et impact d'un fichier sur master (4351d4567, pointeur 04436e1e4) ; mesures à rejouer après le correctif des chaînes ; réexportations à faire
 - **Gravité** : réponse fausse (une arête devinée se montre comme une arête sûre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous `code.rs`, `usages`, `impact`, liens)

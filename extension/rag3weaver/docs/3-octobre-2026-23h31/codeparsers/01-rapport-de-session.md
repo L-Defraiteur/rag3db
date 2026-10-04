@@ -141,8 +141,11 @@ Depuis, pour faire baisser les « nom » :
 - codeparsers 4abafd2 (palier 3) : champs et retours pelés par leur chaîne,
   constructeurs enveloppants, liaisons à leur position et motifs
   `Some` / `Ok`, lecture de champ Rust écartée. **Le critère tenu** : avec
-  le filtre dans `impact`, « relie » 1,00, `e2e_impact` vert — branche
-  `filtre-impact` (216715158) à fusionner par l'arbre principal.
+  le filtre dans `impact`, « relie » 1,00, `e2e_impact` vert — fusionné
+  par l'arbre principal (pointeur 04436e1e4, filtre 4351d4567), onze suites
+  vertes sur le moteur de 22:37. Exposé au défaut des chaînes faussées au
+  point de reprise jusqu'à son correctif ; chiffres à rejouer de zéro
+  après lui.
 
 Sonde `tests/sonde_marques.rs` : les « nom » passent de 11 769 à 9 210 ;
 `tests/sonde_racines.rs` dit d'où partent les receveurs sans type. Le
@@ -154,8 +157,8 @@ chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
 
 - **Orchestration ou Lucie** : un chemin de module désigne-t-il aussi son
   dossier (réexportations) ?
-- **Arbre principal** : fusionner `filtre-impact` (pointeur 4abafd2 et
-  filtre dans impact).
+- **Moi, après le correctif du défaut des chaînes** : rejouer le banc des
+  relations et les sondes sur une indexation de zéro.
 - **Ensuite, quand l'arbre principal est libre** (l'orchestration relance) :
   les réexportations — ticket « un chemin vers une réexportation reste par
   le nom », environ un jour, un changement de schéma dans code.rs. En
