@@ -578,6 +578,14 @@ fn synchroniser(
     // aucune ligne de profil (180 s sur 643, mesuré le 3 octobre 2026). Des
     // temps cumulés, publiés à la fin ; aucun changement de comportement.
     let mut profil = SyncProfile::default();
+    // **Un premier index arrêté avant sa poussée finale** a laissé des lignes
+    // sans leur plein texte, et sa marque : il est rebâti d'abord, depuis les
+    // lignes. D'ici là, l'état d'index disait « mots : en cours ».
+    let t = std::time::Instant::now();
+    let rebatis = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
+    if !rebatis.is_empty() {
+        profil.add("rebâtir le plein texte laissé par un arrêt", t);
+    }
     let t = std::time::Instant::now();
     let listed = source.list()?;
     profil.add("lister la source", t);
@@ -599,10 +607,23 @@ fn synchroniser(
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     let par_transaction = mode == RelationsMode::Bulk && transaction_par_paquet();
+    // **La poussée des blobs du plein texte, une fois à la fin** : chaque
+    // poussée faisait réécrire toute la table des blobs au point de reprise
+    // suivant (≈ 4 s, 24 s sur 106 à quatre paquets par validation). La
+    // marque durable est posée d'abord, hors transaction ;
+    // `RAG3WEAVER_TX_POUSSEE_PAR_PAQUET=1` garde l'ancienne poussée.
+    let entites_plein_texte = [FILE, SCOPE, LIBRARY, SYMBOL];
+    let poussee_differee = par_transaction && std::env::var("RAG3WEAVER_TX_POUSSEE_PAR_PAQUET").as_deref() != Ok("1");
+    if poussee_differee {
+        catalog.mark_fts_pending(&entites_plein_texte).map_err(|e| e.to_string())?;
+    }
     if par_transaction {
         // Le schéma que le premier paquet créerait à la volée, posé avant :
         // dans la transaction, une annulation l'emporterait avec les lignes.
         catalog.prepare_schema_for_ingest().map_err(|e| e.to_string())?;
+        if poussee_differee {
+            catalog.defer_blob_push(true);
+        }
         // Les naissances par COPY à chaque paquet, la marque de session dans
         // la ligne : plus de COUNT, de relecture ni de marquage par paquet
         // pour une table vide au départ (`Catalog::begin_fresh_ingest`).
@@ -742,6 +763,12 @@ fn synchroniser(
         report.relations_bulk_ms = debut.elapsed().as_millis();
         profil.add("charger les relations à la fin", debut);
         avancement.relations_pending = 0;
+    }
+    if poussee_differee {
+        tuer_avant_la_poussee();
+        let t = std::time::Instant::now();
+        catalog.push_deferred_blobs(&entites_plein_texte).map_err(|e| e.to_string())?;
+        profil.add("pousser le plein texte, une fois", t);
     }
     let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
     let t = std::time::Instant::now();
@@ -905,6 +932,20 @@ fn echouer_dans_le_paquet(rang: usize) -> Result<(), String> {
         return Err(format!("crochet de test : échec au paquet {rang}"));
     }
     Ok(())
+}
+
+/// **Crochet de test** (`RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH=1`) : le processus
+/// se tue par SIGKILL après le dernier paquet et les relations, juste avant
+/// la poussée finale du plein texte.
+#[doc(hidden)]
+fn tuer_avant_la_poussee() {
+    if std::env::var("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH").as_deref() == Ok("1") {
+        eprintln!("[rag3weaver] crochet de test : SIGKILL avant la poussée du plein texte");
+        let _ = std::process::Command::new("kill").args(["-KILL", &std::process::id().to_string()]).status();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
 }
 
 /// **Crochet de test** (`RAG3WEAVER_TEST_KILL_IN_BATCH=<rang>`) : le processus

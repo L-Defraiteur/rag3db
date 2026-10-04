@@ -364,6 +364,22 @@ impl Catalog {
     }
 
     fn state_at(&self, key: &str, count: impl FnOnce() -> Result<IndexProgress, CatalogError>) -> Result<IndexState, CatalogError> {
+        let state = self.state_at_counted(key, count)?;
+        // **Le plein texte laissé sans blobs** (premier index qui retient sa
+        // poussée, arrêté ou en cours) : « mots : en cours » tant que la
+        // marque est là, jamais un « prêt » sur un index vide.
+        let pending = self.fts_pending_entities()?;
+        let touche = match key.strip_prefix("index_state:") {
+            Some(entite) => pending.iter().any(|e| e == entite),
+            None => !pending.is_empty(),
+        };
+        if touche && state.text == Level::Ready {
+            return Ok(IndexState { text: Level::Running, ..state });
+        }
+        Ok(state)
+    }
+
+    fn state_at_counted(&self, key: &str, count: impl FnOnce() -> Result<IndexProgress, CatalogError>) -> Result<IndexState, CatalogError> {
         let now = crate::dataflow::checkpoint::timestamp_ms();
         if let Some(noted) = self.read_meta_key(key)?.and_then(|v| serde_json::from_str::<IndexState>(&v).ok()) {
             // Un « jamais » noté n'est pas cru sur parole : la table a pu être

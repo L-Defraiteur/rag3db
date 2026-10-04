@@ -38,6 +38,9 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 const ROLE: &str = "TX_ARRET_ROLE";
 const BASE: &str = "TX_ARRET_BASE";
 const PAQUET_TUE: usize = 2;
+/// Le « rang » qui demande la mort juste avant la poussée finale du plein
+/// texte, après tous les paquets et les relations.
+const AVANT_LA_POUSSEE: usize = usize::MAX;
 
 fn racine_moteur() -> String {
     std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
@@ -142,6 +145,12 @@ fn role_enfant() {
     let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
     let base = PathBuf::from(base);
     let mut catalog = catalogue(&base);
+    if role == "lecteur" {
+        // Ce qu'une recherche verrait, sans synchroniser : l'état des mots.
+        let etat = catalog.index_state_for("Scope").expect("état d'index");
+        println!("ETAT mots {:?}", etat.text);
+        return;
+    }
     if role == "echoueur" {
         // Le chemin du ROLLBACK : le paquet échoue, la base est empoisonnée,
         // puis lâchée (sa fermeture fait un point de reprise), rouverte dans
@@ -179,12 +188,17 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())
         .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH")
+        .env_remove("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH")
         .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH");
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }
     if let Some(rang) = tuer {
-        cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", rang.to_string());
+        if rang == AVANT_LA_POUSSEE {
+            cmd.env("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH", "1");
+        } else {
+            cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", rang.to_string());
+        }
     }
     if role == "echoueur" {
         cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", "6");
@@ -339,6 +353,38 @@ fn un_paquet_qui_echoue_est_defait_et_la_reprise_rend_les_memes_comptes() {
     let temoin = comptes_rendus("temoin", &sortie);
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
     assert_eq!(repris, temoin, "après un ROLLBACK et une reprise, les comptes d'une passe sans échec");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Une mort juste avant la poussée finale du plein texte** (K = 4) : tous
+/// les paquets et les relations sont validés, mais les blobs du plein texte,
+/// retenus, ne sont pas en base. Une lecture de l'état dit « mots : en
+/// cours » (pas « prêt » sur un index vide) ; la reprise rebâtit le plein
+/// texte depuis les lignes, et les comptes — plein texte compris — sont ceux
+/// d'une passe sans arrêt.
+#[test]
+#[ignore]
+fn une_mort_avant_la_poussee_du_plein_texte_se_reprend_aux_memes_comptes() {
+    let dossier = dossier_sur_disque("avant-poussee");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("ecrivain", &base, Some(AVANT_LA_POUSSEE), true, 4);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL avant la poussée :\n{sortie}");
+    assert!(sortie.contains("SIGKILL avant la poussée du plein texte"), "mort au crochet :\n{sortie}");
+    let (statut, sortie) = lancer_avec("lecteur", &base, None, true, 4);
+    assert!(statut.success(), "{sortie}");
+    assert!(sortie.contains("ETAT mots Running"), "les mots sont « en cours », pas « prêts » :\n{sortie}");
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 4);
+    assert!(statut.success(), "la reprise rebâtit le plein texte et va au bout :\n{sortie}");
+    assert!(sortie.contains("reconstruction depuis les lignes"), "le plein texte a été rebâti :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+    let temoin_dossier = dossier_sur_disque("temoin-avant-poussee");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    assert!(temoin.get("plein texte Scope « pub »").copied().unwrap_or(0) >= 300, "{temoin:?}");
+    assert_eq!(repris, temoin, "après la reconstruction, les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }

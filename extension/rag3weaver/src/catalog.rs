@@ -251,6 +251,10 @@ pub struct Catalog {
     /// indexation y a déjà écrits, et la marque de session que leurs lignes
     /// portent dès leur naissance.
     fresh_ingest: Option<FreshIngest>,
+    /// **La poussée des blobs du plein texte est retenue** (`defer_blob_push`) :
+    /// les segments lucivy restent dans le tampon, et partent en une fois
+    /// (`push_deferred_blobs`).
+    defer_blob_push: bool,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -425,6 +429,7 @@ impl Catalog {
             peut_devoir_un_embarquement: false,
             in_transaction: false,
             fresh_ingest: None,
+            defer_blob_push: false,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -6348,6 +6353,76 @@ impl Catalog {
         self.fresh_ingest.as_ref().is_some_and(|f| f.written.contains_key(entity_name))
     }
 
+    /// **Retenir la poussée des blobs du plein texte**, le temps d'une
+    /// première indexation : chaque poussée faisait réécrire toute la table
+    /// `_index_blobs` au point de reprise suivant (≈ 4 s chacun, mesuré par
+    /// la session cœur C++ le 4 octobre 2026). À n'allumer qu'avec la marque
+    /// durable posée ([`mark_fts_pending`](Self::mark_fts_pending)) : un arrêt
+    /// brutal laisse alors des lignes sans leur plein texte, et la marque le
+    /// dit.
+    pub fn defer_blob_push(&mut self, on: bool) {
+        self.defer_blob_push = on;
+    }
+
+    /// **La marque durable « plein texte à pousser »** de chaque entité,
+    /// posée avant le premier paquet d'une première indexation qui retient
+    /// ses blobs. Tant qu'elle est là, l'état d'index dit « mots : en cours »,
+    /// et la synchronisation suivante rebâtit ce plein texte depuis les
+    /// lignes ([`rebuild_pending_fts`](Self::rebuild_pending_fts)).
+    pub fn mark_fts_pending(&self, entities: &[&str]) -> Result<(), CatalogError> {
+        for e in entities {
+            self.persist_meta_key(&format!("{FTS_PENDING}{e}"), "1")?;
+        }
+        Ok(())
+    }
+
+    /// Les entités dont le plein texte attend sa poussée (ou sa
+    /// reconstruction après un arrêt).
+    pub fn fts_pending_entities(&self) -> Result<Vec<String>, CatalogError> {
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self
+            .conn
+            .execute_with_params(&stmt, &[QueryParam::new("prefix", CypherValue::String(FTS_PENDING.into()))])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut out: Vec<String> = result
+            .rows
+            .iter()
+            .filter_map(|row| match (row.first(), row.get(1)) {
+                (Some(CypherValue::String(k)), Some(CypherValue::String(v))) if !v.trim().is_empty() => {
+                    k.strip_prefix(FTS_PENDING).map(str::to_string)
+                }
+                _ => None,
+            })
+            .collect();
+        out.sort();
+        Ok(out)
+    }
+
+    /// **La poussée finale** : les blobs retenus partent en une fois, puis
+    /// les marques des `entities` sont levées.
+    pub fn push_deferred_blobs(&mut self, entities: &[&str]) -> Result<(), CatalogError> {
+        self.defer_blob_push = false;
+        self.flush_blob_store("poussée différée du plein texte")?;
+        for e in entities {
+            self.persist_meta_key(&format!("{FTS_PENDING}{e}"), "")?;
+        }
+        Ok(())
+    }
+
+    /// **Rebâtir depuis les lignes le plein texte resté sans blobs** après
+    /// un arrêt pendant une première indexation : pour chaque entité
+    /// marquée, l'index est refait par [`reindex`](Self::reindex), puis la
+    /// marque levée. Rend les entités rebâties.
+    pub fn rebuild_pending_fts(&mut self) -> Result<Vec<String>, CatalogError> {
+        let pending = self.fts_pending_entities()?;
+        for e in &pending {
+            eprintln!("[rag3weaver] plein texte de « {e} » laissé sans blobs par un arrêt : reconstruction depuis les lignes");
+            self.reindex(e)?;
+            self.persist_meta_key(&format!("{FTS_PENDING}{e}"), "")?;
+        }
+        Ok(pending)
+    }
+
     /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
     /// est ouverte, le catalogue n'émet aucun DDL (voir `in_transaction`).
     pub fn set_in_transaction(&mut self, open: bool) {
@@ -7030,6 +7105,9 @@ impl Catalog {
             crate::ingest_profile::add("entités · rendre durable le plein texte (fichiers)", t);
         }
         let Some(ref buffer) = self.blob_buffer else { return Ok(()) };
+        if self.defer_blob_push {
+            return Ok(());
+        }
         let t0 = std::time::Instant::now();
         match buffer.flush() {
             Ok(stats) => {
@@ -10712,6 +10790,9 @@ impl Drop for Catalog {
         let _ = self.flush_blob_store("drop"); // Drop can only log; explicit APIs propagate.
     }
 }
+
+/// Le préfixe de la marque durable « plein texte à pousser » d'une entité.
+const FTS_PENDING: &str = "fts_pending:";
 
 /// L'état d'une première indexation (`Catalog::begin_fresh_ingest`).
 #[derive(Debug, Default)]
