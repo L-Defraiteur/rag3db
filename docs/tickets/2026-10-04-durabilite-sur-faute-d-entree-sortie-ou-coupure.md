@@ -69,6 +69,9 @@ Deux lignes de la cause sont traitées ; le ticket reste ouvert pour les autres.
 - Chaque mort laisse entre 0,3 et 3,4 Mo, selon l'avancement du COPY. Après 12 morts, le fichier de données passe de 28 Ko à 14,6–25,9 Mo sur le chemin journalisé, et à 14,9–16 Mo sur l'ancien (deux passes). La croissance est linéaire, sans palier : bornée par mort (la taille du COPY), pas par le nombre de morts.
 - Rien ne la rend : ni la réouverture, ni le point de reprise, ni les écritures qui suivent. Les 200 000 lignes ordinaires font grossir le fichier de 13,2 Mo après les morts, contre 14,3 Mo sans morts : au mieux 1,1 Mo réutilisé, sur 15 à 26 Mo perdus. Les pages écrites par un COPY non validé ne sont connues d'aucun gestionnaire de pages libres après la reprise.
 - Aucune donnée perdue ni lue faux : la base reste intègre (niveaux 1 et 2) après chaque mort.
+- **Classement : confort pour la stèle** (orchestration, 5 octobre). Personne n'y perd une donnée ni ne lit un résultat faux : c'est de l'espace. Ordre de grandeur : mille morts en plein chargement font de 1 à 3 Go.
+- La page du chargement journalisé (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md`, §3, « Un point à tenir ») déduisait que ces pages seraient « reprises naturellement », à éprouver par `data-file-bounded`. La sonde réfute cette déduction, sur les deux chemins.
+- Piste de remède, non codée : à la réouverture, les pages au-delà de ce que le dernier point de reprise connaît du fichier sont libres par définition, puisque le journal porte des lignes et non des pages. Il faut les rendre au gestionnaire de pages libres avant que le rejeu n'en prenne, car le rejeu écrit lui-même des pages neuves. Pour la session cœur C++, à l'étape 4 du chargement journalisé : c'est le même terrain.
 
 ## Pour le fermer
 
