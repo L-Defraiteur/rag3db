@@ -822,7 +822,13 @@ premier index peut prendre de gros paquets, bornés en octets plutôt qu'en
 fichiers. Mesure de la session embarquements : le dépôt entier en un
 paquet fait 132 s (352 par paquets de 64), pour 16 Go au pic.
 
-**Gelé : le report de la poussée des blobs d'index.** C'était 119 s sur 352 par
+**Dégelé le 4 octobre à midi** (mesure de la session embarquements, base
+**sur disque**) : paquets de 512, 823 s contre 120 s en mémoire, dont 346 s
+de poussée des blobs en 56 appels. Sur disque, c'est de nouveau le premier
+poste, à toute taille de paquet. Le gel ci-dessous ne valait que pour une
+base en mémoire.
+
+**Gelé (base en mémoire seulement) : le report de la poussée des blobs d'index.** C'était 119 s sur 352 par
 paquets de 64, à 0,29 s pour chacun des 404 appels d'`ingest_entities`. En un
 seul paquet, la même poussée ne coûte plus que 2 s, en 4 appels (mesure de la
 session embarquements). Le report, avec sa marque durable « plein texte en
