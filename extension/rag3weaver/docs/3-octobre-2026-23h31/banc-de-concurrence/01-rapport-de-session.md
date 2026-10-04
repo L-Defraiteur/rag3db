@@ -93,6 +93,18 @@ amonts (`8c83c3360`, puis le second lot).
     double portait l'identifiant de la dernière relation insérée. Trois défauts en
     sortent, et un seul commit les ferme.
     L'accent grave reste un ticket : 17 fichiers, hors du périmètre.
+13. **L'essai déterministe de la corruption d'`e2e_code` (4 octobre au soir)** : six
+    variations, sans rag3weaver. L'une reproduit à coup sûr, en Release et sans ASan :
+    - la recette : un `COPY` refusé, puis `DROP_VECTOR_INDEX`, réouverture et
+      `CREATE_VECTOR_INDEX` ; le processus meurt (SIGSEGV) avant `1ea49837f` ;
+    - la cause : le `COPY` annulé gonfle la cardinalité (401 pour 200 lignes), et la
+      création bornait son parcours par elle ;
+    - les témoins (`e9b925c94`) : `CreateIndexAfterARefusedCopy`, vert depuis
+      `1ea49837f` ; `RefusedCopyLeavesTheCardinalityTrue`, rouge, sous un nouveau ticket.
+    Le lien avec les deux rapports d'ASan d'`e2e_code` reste une hypothèse, écrite au ticket
+    de la corruption avec ce qu'il faut pour la trancher : environ 18 passes de chaque côté
+    sous ASan, ou une seule lecture de `STATS_INFO` à la réouverture du test fautif. Les
+    cinq autres variations n'ont rien donné.
 
 ## Décisions et pourquoi
 
@@ -136,10 +148,11 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
-- **Le prochain témoin probable** : la corruption de mémoire qui tue `e2e_code` une passe
-  sur quarante (ticket `2026-10-04-memoire-corrompue-dans-e2e-code.md`), quand le cœur C++
-  aura la pile d'AddressSanitizer. La meilleure piste de la revue : Ladybug `1a233d280`,
-  l'écriture hors tampon d'une fonction de graphe pendant une validation.
+- **La corruption d'`e2e_code`** : prouver ou écarter l'hypothèse du `COPY` refusé (ticket
+  de la corruption). La série n'est pas lancée, sur consigne de l'orchestration : le poste
+  sert aux mesures.
+- **La cardinalité après un `COPY` refusé** (ticket
+  `2026-10-04-copy-refuse-gonfle-la-cardinalite.md`) : pour la session cœur C++.
 - **La session cœur C++, sur les amonts** : la perte de relations au point de reprise et
   la lecture après une relation créée puis supprimée sont corrigées (`80e3f2c32`). Restent
   sous la marche : le point de reprise après `ALTER … DROP`, le lecteur retenu par un

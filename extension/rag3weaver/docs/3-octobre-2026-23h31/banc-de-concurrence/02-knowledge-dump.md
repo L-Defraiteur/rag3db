@@ -176,6 +176,20 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
 - **[exécuté] Les tests e2e lancés depuis la racine du worktree** y laissent
   `follows.csv`, `user.csv` et `user.parquet` : à supprimer après chaque passe.
 
+## 5 quinquies. L'essai déterministe de la corruption (4 octobre au soir)
+
+- **[exécuté] Mesurer la condition préalable plutôt que guetter le débordement.** En
+  Release, une lecture d'un octet hors d'un tableau ne se voit pas. La sonde a donc relevé,
+  après chaque variation, la cardinalité (par les internes, dans une transaction en lecture
+  seule), le nombre de lignes et le plus grand décalage. C'est ainsi que le `COPY` refusé
+  est apparu : 401 pour 200. Le plantage a suivi au pas suivant.
+- **[exécuté] La cardinalité ne fait que croître** (`incrementCardinality`) : une
+  suppression ne la fait jamais passer sous le plus grand décalage. Seul un ajout annulé
+  sans retrait des statistiques la fausse, et alors vers le haut.
+- **[exécuté] Une commande en attente à la porte du poste n'est pas bloquée** : elle
+  attend qu'une mesure exclusive finisse. Arrêter la tâche peut laisser des `flock` en
+  attente ; vérifier par `ps` qu'aucun ne reste.
+
 ## 6. Ce qui n'est pas atteignable sans crochet dans `src/`
 
 - **La mort à chaque allocation pendant la phase de stockage d'un point de reprise.**
