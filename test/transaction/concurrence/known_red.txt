@@ -97,9 +97,9 @@ LockBench.FailedTransactionReleasesItsLocksAtRollback waited
 # annulée.
 LockBench.InterruptedWaitGivesInterruptedAndRollsBack waited-the-delay,waiter-gets-interrupted
 #
-# Marche V1 — le délai d'attente d'un verrou. ROUGE : LE RÉGLAGE N'EXISTE PAS
-# (lock-timeout-exists, CALL lock_timeout), en plus du comportement.
-LockBench.LockTimeoutGivesNamedErrorAndRollsBack lock-timeout-exists,waited-the-delay,waiter-gets-lock-timeout
+# Marche A4′ — le délai d'attente d'un verrou. Le réglage existe depuis V1 (CALL lock_timeout) ;
+# reste le comportement : la mise à jour d'une ligne ne prend pas encore de verrou.
+LockBench.LockTimeoutGivesNamedErrorAndRollsBack waited-the-delay,waiter-gets-lock-timeout
 #
 # Marche V1, genre « index » (et maintenance de l'index HNSW au commit, étude HNSW §4) — H3 :
 # deux suppressions sans rapport dont les voisinages se recouvrent ; le second reçoit un

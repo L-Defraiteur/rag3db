@@ -1,5 +1,6 @@
 add_library(rag3db_transaction
         OBJECT
+        lock_manager.cpp
         transaction.cpp
         transaction_context.cpp
         transaction_manager.cpp)

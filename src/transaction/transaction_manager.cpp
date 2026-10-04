@@ -220,6 +220,9 @@ void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
     std::erase_if(activeTransactions, [transactionID](const auto& activeTransaction) {
         return activeTransaction->getID() == transactionID;
     });
+    // La transaction a fini, validée ou annulée : ses verrous sont rendus, et ceux qui les
+    // attendaient passent.
+    lockManager.releaseAll(transactionID);
     // Un point de reprise attend peut-être ce départ.
     transactionsChanged.notify_all();
 }

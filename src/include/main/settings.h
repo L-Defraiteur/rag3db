@@ -26,6 +26,14 @@ struct TimeoutSetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
+// L'attente maximale d'un verrou d'écriture, en millisecondes (CALL lock_timeout=…).
+struct LockTimeoutSetting {
+    static constexpr auto name = "lock_timeout";
+    static constexpr auto inputType = common::LogicalTypeID::UINT64;
+    static void setContext(ClientContext* context, const common::Value& parameter);
+    static common::Value getSetting(const ClientContext* context);
+};
+
 struct ProgressBarSetting {
     static constexpr auto name = "progress_bar";
     static constexpr auto inputType = common::LogicalTypeID::BOOL;

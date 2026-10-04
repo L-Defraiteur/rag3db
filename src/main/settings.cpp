@@ -38,6 +38,15 @@ common::Value TimeoutSetting::getSetting(const ClientContext* context) {
     return common::Value(context->getClientConfig()->timeoutInMS);
 }
 
+void LockTimeoutSetting::setContext(ClientContext* context, const common::Value& parameter) {
+    parameter.validateType(inputType);
+    context->getClientConfigUnsafe()->lockTimeoutInMS = parameter.getValue<uint64_t>();
+}
+
+common::Value LockTimeoutSetting::getSetting(const ClientContext* context) {
+    return common::Value(context->getClientConfig()->lockTimeoutInMS);
+}
+
 void ProgressBarSetting::setContext(ClientContext* context, const common::Value& parameter) {
     parameter.validateType(inputType);
     context->getClientConfigUnsafe()->enableProgressBar = parameter.getValue<bool>();

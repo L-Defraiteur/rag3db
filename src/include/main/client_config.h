@@ -11,6 +11,8 @@ namespace main {
 struct ClientConfigDefault {
     // 0 means timeout is disabled by default.
     static constexpr uint64_t TIMEOUT_IN_MS = 0;
+    // L'attente maximale d'un verrou d'écriture (LockManager::DEFAULT_LOCK_TIMEOUT_IN_MS).
+    static constexpr uint64_t LOCK_TIMEOUT_IN_MS = 30'000;
     static constexpr uint32_t VAR_LENGTH_MAX_DEPTH = 30;
     static constexpr uint64_t SPARSE_FRONTIER_THRESHOLD = 1000;
     static constexpr bool ENABLE_SEMI_MASK = true;
@@ -38,6 +40,9 @@ struct ClientConfig {
     uint64_t numThreads = 1;
     // Timeout (milliseconds).
     uint64_t timeoutInMS = ClientConfigDefault::TIMEOUT_IN_MS;
+    // L'attente maximale d'un verrou d'écriture (millisecondes) : au-delà, la transaction qui
+    // attend reçoit l'erreur « lock timeout ».
+    uint64_t lockTimeoutInMS = ClientConfigDefault::LOCK_TIMEOUT_IN_MS;
     // Variable length maximum depth.
     uint32_t varLengthMaxDepth = ClientConfigDefault::VAR_LENGTH_MAX_DEPTH;
     // Threshold determines when to switch from sparse frontier to dense frontier

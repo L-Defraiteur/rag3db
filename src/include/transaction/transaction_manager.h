@@ -8,6 +8,7 @@
 #include "common/uniq_lock.h"
 #include "storage/checkpointer.h"
 #include "storage/wal/wal.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 
 namespace rag3db {
@@ -59,6 +60,10 @@ public:
         "A checkpoint of this database failed, so it must be closed and reopened before it is "
         "used again";
 
+    // Les verrous des écritures parallèles. Une transaction les prend pendant ses écritures ;
+    // ils sont rendus quand elle quitte le système, validée ou annulée.
+    LockManager& getLockManager() { return lockManager; }
+
 private:
     bool hasNoActiveTransactions() const;
     // Écrit un point de reprise ; publicLock est le verrou public, tenu par l'appelant. Sauf si
@@ -88,6 +93,7 @@ private:
 private:
     storage::WAL& wal;
     std::vector<std::unique_ptr<Transaction>> activeTransactions;
+    LockManager lockManager;
     common::transaction_t lastTransactionID;
     common::transaction_t lastTimestamp;
     // Une seule fonction publique à la fois, sauf pendant l'attente d'un point de reprise, qui
