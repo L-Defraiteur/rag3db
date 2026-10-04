@@ -1029,6 +1029,24 @@ sessions, pas d'une vérification.
   puis réinsérer la ligne ; en masse, retirer l'index, poser les vecteurs, le recréer.
   Repasser par NULL n'est pas sûr par lots (599 sur 1000 avant correction). Notre greffe
   (`98e35566a`) ; Ladybug n'a ni mise à jour ni suppression dans son HNSW.
+  **Témoins au banc (4 octobre, `e8d646716`)** :
+  `test/transaction/concurrence/vector_index_update_test.cpp`, un seul écrivain. Chaque
+  cas est répété sur des tables neuves. L'invariant est double : toute ligne est joignable
+  par une recherche exhaustive, et chaque ligne sort première sur son propre vecteur. Le
+  second contrôle voit des pertes que le premier ne voit pas, y compris sur des lignes non
+  mises à jour.
+  - Après `c8fdaf196`, environ un essai sur deux perd encore des lignes, sous la marche
+    « mise à jour de l'index : contrôle en fin d'instruction » de `known_red.txt` : lots de
+    512, vingt `SET` distincts ligne à ligne, une même ligne cinquante fois, mise à jour
+    puis suppression. Le `SET` ligne à ligne est probabiliste.
+  - Une ligne lointaine dans un nuage serré, index bâti d'un coup sans aucune mise à jour,
+    manque un essai sur trois.
+  - Le chemin du produit est vert : depuis NULL, et le remplacement qui repasse par NULL
+    ligne à ligne.
+  - **`c8fdaf196` a beaucoup ralenti la mise à jour** : dix mille lignes par lots de 512
+    passent de 25 s à 27 min, le ligne à ligne est multiplié par cinq. Signalé au cœur
+    C++ ; ce cas ne tourne que sur demande (`CONCURRENCE_VECTOR_HEAVY=1`).
+  - La comparaison `known_red` dure désormais 14 min 30 s.
 - **`e2e_idempotent_registration` rougit environ une fois sur dix à la réouverture**
   (`register_entity_persists_and_reloads`) : « Runtime exception: Reading past the end of
   the file …/test.db.wal with size 0 at offset 0 ». Mesuré le 3 octobre : 2 rouges sur 20
