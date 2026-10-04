@@ -200,6 +200,57 @@ tenir : il ne modifie jamais le travail de l'autre ; ce qu'il injecte se voit
 (une section nommée, pas un texte fondu) ; il a un budget ; et la personne
 peut lire, corriger et effacer ce qu'il a retenu.
 
+### 9.1 La difficulté, dite par Lucie
+
+> « Le truc ne doit pas travailler à chaque tour, H24, ni injecter H24 du
+> contexte que l'autre a peut-être déjà en tête. Ce n'est pas à faire à la
+> légère : il faut bien organiser ça. »
+
+Deux coûts à tenir, et ils se règlent séparément.
+
+**Quand il travaille.** Pas à chaque tour : sur des **événements**, que le
+harnais sait reconnaître sans modèle.
+
+| Déclencheur | Ce qu'il fait |
+|---|---|
+| la personne corrige l'agent, ou tranche un choix | note la décision, avec ses mots |
+| un lot se termine (une fusion, un test qui passe du rouge au vert) | note ce qui a été fait et pourquoi |
+| un échec répété, puis un changement d'approche | note ce qui n'a pas marché |
+| le contexte de l'agent va être résumé ou la session se ferme | une passe de rattrapage sur ce qui n'a pas été noté |
+| rien de tout cela | rien : il dort |
+
+Entre deux déclencheurs il ne lit rien et n'appelle aucun modèle. Le fil des
+événements est gardé ; il le reprend là où il s'était arrêté, par lots.
+
+**Quand il injecte.** Trois filtres, dans cet ordre, et le silence par défaut :
+
+1. **Pertinence** : seulement ce qui est accroché à ce que l'agent touche
+   maintenant (le fichier lu, l'entité interrogée) — jamais « ce qui pourrait
+   servir ».
+2. **Nouveauté pour cet agent** : ne pas redire ce qu'il a déjà. Le harnais
+   tient le registre de ce qui a été montré dans cette session (les fiches
+   injectées, les fichiers lus, ce que l'agent a lui-même écrit) ; une fiche
+   déjà montrée ne revient pas, sauf si elle a changé ou si le contexte a été
+   résumé depuis.
+3. **Valeur** : une fiche qui contredit ce que l'agent s'apprête à faire, ou
+   qui est marquée « à revoir », passe avant une fiche qui confirme.
+
+Et un budget par session, pas seulement par appel : quelques lignes à la
+fois, un plafond sur l'ensemble. Une section vide ne s'affiche pas.
+
+**Ce qu'on ne sait pas, et qu'il faudra mesurer avant de l'allumer** : ce que
+« l'agent l'a déjà en tête » veut dire quand son contexte est long (une chose
+lue il y a deux cents tours est-elle encore là ?) ; le taux d'injections
+inutiles qu'un agent tolère avant d'ignorer la section — les passes d'agent
+ont montré qu'une ligne répétée finit ignorée ; et ce que coûte l'archiviste
+en appels pour ce qu'il rapporte. Le banc de la mémoire le dira : injections
+faites, injections qui ont changé ce que l'agent a fait, redites.
+
+**L'ordre pour y arriver** : d'abord la moitié « noter », hors ligne, en fin
+de session, sur le journal d'événements — elle ne gêne personne et se juge
+à froid. Puis les déclencheurs. L'injection en dernier, éteinte par défaut,
+allumée fiche par fiche.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. L'ordre du §7, ou la boucle (le registre) d'abord.
