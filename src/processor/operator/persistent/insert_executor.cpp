@@ -106,12 +106,28 @@ nodeID_t NodeInsertExecutor::insert(main::ClientContext* context) {
     return info.getNodeID();
 }
 
-void NodeInsertExecutor::skipInsert() const {
-    for (auto& evaluator : tableInfo.columnDataEvaluators) {
-        evaluator->evaluate();
+void NodeInsertExecutor::skipInsert(nodeID_t createdNodeID, main::ClientContext* context) const {
+    // Le vecteur d'identifiant gardait celui du dernier nœud inséré : un SET ou un RETURN qui
+    // suit aurait lu un autre nœud. On repose celui que le lot a créé pour cette clé.
+    info.updateNodeID(createdNodeID);
+    std::vector<column_id_t> columnIDs;
+    std::vector<ValueVector*> outputVectors;
+    for (auto i = 0u; i < info.columnVectors.size(); ++i) {
+        if (info.columnVectors[i] != nullptr) {
+            columnIDs.push_back(i);
+            outputVectors.push_back(info.columnVectors[i]);
+        }
     }
-    info.nodeIDVector->setNull(info.nodeIDVector->state->getSelVector()[0], false);
-    writeColumnVectors(info.columnVectors, tableInfo.columnDataVectors);
+    if (outputVectors.empty()) {
+        return;
+    }
+    auto transaction = Transaction::Get(*context);
+    storage::NodeTableScanState scanState{info.nodeIDVector, std::move(outputVectors),
+        info.nodeIDVector->state};
+    scanState.setToTable(transaction, tableInfo.table, std::move(columnIDs));
+    tableInfo.table->initScanState(transaction, scanState, createdNodeID.tableID,
+        createdNodeID.offset);
+    tableInfo.table->lookup(transaction, scanState);
 }
 
 bool NodeInsertExecutor::checkConflict(const Transaction* transaction) const {
@@ -182,10 +198,17 @@ internalID_t RelInsertExecutor::insert(main::ClientContext* context) {
     return tableInfo.getRelID();
 }
 
-void RelInsertExecutor::skipInsert() const {
+void RelInsertExecutor::skipInsert(internalID_t createdRelID) const {
     for (auto i = 1u; i < tableInfo.columnDataEvaluators.size(); ++i) {
         tableInfo.columnDataEvaluators[i]->evaluate();
     }
+    // La colonne 0 est l'identifiant de la relation, que seule l'insertion remplit : elle
+    // gardait celui de la dernière relation insérée, et un SET qui suit visait alors une
+    // relation qui ne joint pas ces deux nœuds (mise à jour perdue sans erreur).
+    auto relIDVector = tableInfo.columnDataVectors[0];
+    auto pos = relIDVector->state->getSelVector()[0];
+    relIDVector->setNull(pos, false);
+    relIDVector->setValue<internalID_t>(pos, createdRelID);
     writeColumnVectors(info.columnVectors, tableInfo.columnDataVectors);
 }
 

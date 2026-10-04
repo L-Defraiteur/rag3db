@@ -47,26 +47,37 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapMerge(const LogicalOperator* lo
     for (auto& info : logicalMerge.getOnCreateSetRelInfos()) {
         onCreateRelSetExecutors.push_back(getRelSetExecutor(info, *inSchema));
     }
-    std::vector<std::unique_ptr<NodeSetExecutor>> onMatchNodeSetExecutors;
+    // Une colonne d'identifiant par insertion, dans la table des motifs créés. Avant, il y en
+    // avait une par ON MATCH SET : deux SET sur le même motif se disputaient la colonne de
+    // leur insertion (emplace ne remplace pas), et la seconde n'était jamais écrite ; et une
+    // clause SET hors du MERGE ne retrouvait pas l'identifiant d'un motif créé dans le lot.
+    auto numNodeInserts = logicalMerge.getInsertNodeInfos().size();
+    auto numRelInserts = logicalMerge.getInsertRelInfos().size();
     common::executor_info executorInfo;
-    for (auto i = 0u; i < logicalMerge.getOnMatchSetNodeInfos().size(); i++) {
-        auto& info = logicalMerge.getOnMatchSetNodeInfos()[i];
-        for (auto j = 0u; j < logicalMerge.getInsertNodeInfos().size(); j++) {
+    for (auto j = 0u; j < numNodeInserts + numRelInserts; j++) {
+        executorInfo.emplace(j, j);
+    }
+    std::vector<common::executor_id_t> onMatchInsertIdx;
+    std::vector<std::unique_ptr<NodeSetExecutor>> onMatchNodeSetExecutors;
+    for (auto& info : logicalMerge.getOnMatchSetNodeInfos()) {
+        auto insertIdx = MergeInfo::INVALID_EXECUTOR;
+        for (auto j = 0u; j < numNodeInserts; j++) {
             if (*info.pattern == *logicalMerge.getInsertNodeInfos()[j].pattern) {
-                executorInfo.emplace(j, i);
+                insertIdx = j;
             }
         }
+        onMatchInsertIdx.push_back(insertIdx);
         onMatchNodeSetExecutors.push_back(getNodeSetExecutor(info, *inSchema));
     }
     std::vector<std::unique_ptr<RelSetExecutor>> onMatchRelSetExecutors;
-    for (auto i = 0u; i < logicalMerge.getOnMatchSetRelInfos().size(); i++) {
-        auto& info = logicalMerge.getOnMatchSetRelInfos()[i];
-        for (auto j = 0u; j < logicalMerge.getInsertRelInfos().size(); j++) {
+    for (auto& info : logicalMerge.getOnMatchSetRelInfos()) {
+        auto insertIdx = MergeInfo::INVALID_EXECUTOR;
+        for (auto j = 0u; j < numRelInserts; j++) {
             if (*info.pattern == *logicalMerge.getInsertRelInfos()[j].pattern) {
-                executorInfo.emplace(j + logicalMerge.getInsertNodeInfos().size(),
-                    i + logicalMerge.getOnMatchSetNodeInfos().size());
+                insertIdx = numNodeInserts + j;
             }
         }
+        onMatchInsertIdx.push_back(insertIdx);
         onMatchRelSetExecutors.push_back(getRelSetExecutor(info, *inSchema));
     }
     binder::expression_vector expressions;
@@ -103,10 +114,8 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapMerge(const LogicalOperator* lo
     }
 
     MergeInfo mergeInfo{std::move(keyEvaluators),
-        getFactorizedTableSchema(logicalMerge.getKeys(),
-            logicalMerge.getOnMatchSetNodeInfos().size(),
-            logicalMerge.getOnMatchSetRelInfos().size()),
-        std::move(executorInfo), existenceMarkPos};
+        getFactorizedTableSchema(logicalMerge.getKeys(), numNodeInserts, numRelInserts),
+        std::move(executorInfo), std::move(onMatchInsertIdx), existenceMarkPos};
     return std::make_unique<Merge>(std::move(nodeInsertExecutors), std::move(relInsertExecutors),
         std::move(onCreateNodeSetExecutors), std::move(onCreateRelSetExecutors),
         std::move(onMatchNodeSetExecutors), std::move(onMatchRelSetExecutors), std::move(mergeInfo),

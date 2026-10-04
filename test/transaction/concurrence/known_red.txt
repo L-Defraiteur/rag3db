@@ -168,7 +168,6 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #   filtré par un paramètre (8281c845e) ;
 UpstreamFixes.CheckpointAfterDroppingANodeColumn checkpoint-after-reopen,checkpoint-survives
 UpstreamFixes.CheckpointAfterDroppingARelationColumn checkpoint-after-reopen,checkpoint-survives
-UpstreamFixes.MergeWithTwoOnMatchSetsAndARepeatedKey merge-survives
 # — blocages : l'UUID nul empêche tout point de reprise (Ladybug 231a0b854) ; un CHECKPOINT
 #   retient la validation d'un lecteur jusqu'à son délai, puis échoue (Vela 326d40dbd) ;
 UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-held
@@ -178,8 +177,6 @@ UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-he
 #   batch_link de rag3weaver : le SET d'une relation répétée dans le lot est perdu) ; balayage de
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
-UpstreamFixes.MergeOfARepeatedKeyReturnsTheStoredNode merge-returns-stored-node
-UpstreamFixes.MergeOfARelationRepeatedInTheBatchKeepsTheLastSet merge-set-applied
 UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
 UpstreamFixes.QuotedEmptyCsvFieldIsNotNull quoted-empty-is-not-null
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed

@@ -73,22 +73,30 @@ void Merge::executeOnMatch(ExecutionContext* context) {
 
 void Merge::executeOnCreatedPattern(PatternCreationInfo& patternCreationInfo,
     ExecutionContext* context) {
-    for (auto& executor : nodeInsertExecutors) {
-        executor.skipInsert();
+    // Le motif a été créé plus tôt dans ce lot : chaque insertion repose l'identifiant
+    // qu'elle avait obtenu, pour la clause qui suit le MERGE comme pour les ON MATCH SET.
+    for (auto i = 0u; i < nodeInsertExecutors.size(); i++) {
+        nodeInsertExecutors[i].skipInsert(patternCreationInfo.getPatternID(i),
+            context->clientContext);
     }
-    for (auto& executor : relInsertExecutors) {
-        executor.skipInsert();
+    for (auto i = 0u; i < relInsertExecutors.size(); i++) {
+        relInsertExecutors[i].skipInsert(
+            patternCreationInfo.getPatternID(i + nodeInsertExecutors.size()));
     }
     for (auto i = 0u; i < onMatchNodeSetExecutors.size(); i++) {
         auto& executor = onMatchNodeSetExecutors[i];
-        auto nodeIDToSet = patternCreationInfo.getPatternID(i);
-        executor->setNodeID(nodeIDToSet);
+        auto insertIdx = info.onMatchInsertIdx[i];
+        if (insertIdx != MergeInfo::INVALID_EXECUTOR) {
+            executor->setNodeID(patternCreationInfo.getPatternID(insertIdx));
+        }
         executor->set(context);
     }
     for (auto i = 0u; i < onMatchRelSetExecutors.size(); i++) {
         auto& executor = onMatchRelSetExecutors[i];
-        auto relIDToSet = patternCreationInfo.getPatternID(i + onMatchNodeSetExecutors.size());
-        executor->setRelID(relIDToSet);
+        auto insertIdx = info.onMatchInsertIdx[i + onMatchNodeSetExecutors.size()];
+        if (insertIdx != MergeInfo::INVALID_EXECUTOR) {
+            executor->setRelID(patternCreationInfo.getPatternID(insertIdx));
+        }
         executor->set(context);
     }
 }
