@@ -523,3 +523,45 @@ scripté ne sait pas lequel tourne dessous.
 
 Ce qui donnerait : rhai aujourd'hui ; TypeScript par un moteur embarqué quand
 on veut un langage que les modèles écrivent bien ; WebAssembly pour le lourd.
+
+## 12. Les migrations de schéma, en verbes
+
+> « Peut-être en verbes aussi, comme quand un agent cherche, non ? » — Lucie,
+> 5 octobre, à propos des migrations du schéma de l'utilisateur.
+
+Ce qui existe : le moteur valide et journalise un changement de schéma comme
+toute écriture ; rag3weaver garde une version de schéma et ajoute à
+l'ouverture ses colonnes internes manquantes. Ce qui manque : des migrations
+du schéma de l'utilisateur — ordonnées, rejouables d'une base à l'autre, avec
+la transformation des données.
+
+L'idée : une migration n'est pas un script libre, c'est une suite de **verbes**
+d'un petit vocabulaire, comme les outils de recherche le sont pour chercher.
+
+| Verbe | Ce qu'il fait | Son inverse |
+|---|---|---|
+| ajouter un champ | avec une valeur par défaut ou calculée | retirer le champ |
+| renommer un champ, une entité, une relation | sans toucher aux données | renommer dans l'autre sens |
+| retirer un champ | — | aucun : perte, à dire |
+| changer un type | par une expression (un script d'une ligne) | l'expression inverse, si elle existe |
+| scinder ou fondre une entité | les lignes et leurs relations suivent | l'autre verbe |
+| ajouter ou retirer une relation | — | l'autre verbe |
+
+Ce que cela donne (proposition de l'orchestration, en débat) :
+
+- **Chaque verbe sait s'il perd quelque chose et s'il se défait** : une
+  migration dit d'avance « sans perte, réversible » ou « retire 3 champs,
+  irréversible ».
+- **Un essai à blanc avant d'appliquer** : combien de lignes touchées, ce qui
+  serait perdu, ce qui devra être rebâti (plein texte, vecteurs, découpe) —
+  un nœud d'essai à blanc existe déjà dans le moteur de graphes.
+- **Une confirmation, pas un refus** : l'agent propose la migration par un
+  outil, la personne voit l'essai à blanc et décide.
+- **Appliquée dans une transaction**, puis le schéma déclaré se recharge à
+  chaud ; ce qui est dérivé se rebâtit par l'état d'index (« mots : en
+  cours »), jamais un vide muet.
+- **Les migrations appliquées sont des lignes** : un historique adressable,
+  qu'une fiche de mémoire peut citer (« pourquoi ce champ a été renommé »),
+  et qu'une autre base peut rejouer dans l'ordre.
+- **Un module partagé (§10) porte ses migrations** : mettre à jour une
+  capacité reçue, c'est rejouer ses verbes.
