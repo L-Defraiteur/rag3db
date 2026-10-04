@@ -98,6 +98,10 @@ Inconnue. Pistes, non vérifiées : la lecture optimiste d'une page pendant qu'u
 
 Candidats de la revue des amonts sur le tampon, non reliés à ce défaut : Ladybug `7e4248202`, `eff87c1e1`, `d6adbd2b7` ; Vela `e5e700e73`.
 
+La revue des amonts de la session du banc n'a **aucun correctif sur le site exact** (la variante `ValueVector` de `DictionaryColumn::scanValue`, appelée par `StringColumn::scanUnfiltered`). Deux voisins, non reproduits : Ladybug `254a7444d` (la variante `StringChunkData` de `scanValue`, lecture partielle d'un segment vers un bloc) et Ladybug `a10cecbc7` (`string_column.cpp`, la borne d'une lecture filtrée sur plusieurs segments — une lecture périmée, pas une écriture).
+
+Trois hypothèses de lecture de la session du banc, non vérifiées : puisque la réservation et la copie prennent la même longueur, la destination n'est plus dans le bloc réservé au moment de la copie — (1) le tampon auxiliaire du vecteur est remis à zéro ou libéré entre la réservation et la copie ; (2) deux fils écrivent dans le même vecteur ; (3) dans la boucle de `DictionaryColumn::scan`, la référence `scannedString` est copiée par `setValue` après une réallocation.
+
 ## À relire à sa lumière, une fois la pile obtenue
 
 - L'intermittent d'`e2e_idempotent_registration` : « Reading past the end of the file …wal with size 0 » à la réouverture, 2 fois sur 20, avant comme après les correctifs du rejeu.
