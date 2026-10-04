@@ -255,6 +255,12 @@ pub struct Catalog {
     /// les segments lucivy restent dans le tampon, et partent en une fois
     /// (`push_deferred_blobs`).
     defer_blob_push: bool,
+    /// **Les tables de nœuds repliées sur MERGE dans la transaction en
+    /// cours** : elles y restent jusqu'à sa validation. Le moteur refuse un
+    /// COPY dans une table où la même transaction a déjà inséré des lignes
+    /// hors COPY (NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS) — leurs décalages
+    /// provisoires se recouvraient, et une recherche par clé plantait.
+    merge_in_transaction: HashSet<String>,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -430,6 +436,7 @@ impl Catalog {
             in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
+            merge_in_transaction: HashSet::new(),
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -5204,7 +5211,9 @@ impl Catalog {
         if lot_de_naissances && profil {
             eprintln!("[ingest-profile] {entity_name} : lot de naissances, {record_count} lignes par le chemin de masse");
         }
-        let chemin_de_masse = premiere_ingestion || lot_de_naissances;
+        // Une table repliée sur MERGE dans cette transaction ne repasse pas
+        // par COPY avant sa validation (voir `merge_in_transaction`).
+        let chemin_de_masse = (premiere_ingestion || lot_de_naissances) && !self.merge_in_transaction.contains(entity_name);
 
         // **La machine à états, avant toute écriture.** Ici plutôt que dans un
         // nœud : sur le chemin de masse les lignes partent en CSV, et une
@@ -5452,6 +5461,16 @@ impl Catalog {
                 // traitées et entrent dans celui des échecs, avec leur cause.
                 let mut warnings = ramasser_les_avertissements(&mut ecoute);
                 self.relever_les_replis(&warnings);
+                if self.in_transaction {
+                    let replie = |table: &str| {
+                        warnings.iter().any(|w| {
+                            w.contains(crate::dataflow::record_nodes::REPLI_EN_MASSE) && w.contains(&format!("« {table} »"))
+                        })
+                    };
+                    if !chemin_de_masse || replie(entity_name) || replie(&format!("{entity_name}_Chunk")) {
+                        self.merge_in_transaction.insert(entity_name.to_string());
+                    }
+                }
                 warnings.extend(refus.iter().cloned());
                 let mut res = FlushResult {
                     processed: record_count - refus.len(),
@@ -6430,6 +6449,7 @@ impl Catalog {
     /// est ouverte, le catalogue n'émet aucun DDL (voir `in_transaction`).
     pub fn set_in_transaction(&mut self, open: bool) {
         self.in_transaction = open;
+        self.merge_in_transaction.clear();
     }
 
     /// **Rendre ce catalogue inutilisable**, comme après un point de reprise

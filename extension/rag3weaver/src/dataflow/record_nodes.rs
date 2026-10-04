@@ -657,8 +657,8 @@ fn csv_sait_ecrire(v: &CypherValue) -> bool {
 }
 
 /// **Poser un groupe de lignes par COPY.** `Ok(None)` : pas de chemin de
-/// masse ici (moteur sans COPY, ou une valeur qu'on ne sait pas écrire en
-/// CSV) — l'appelant reste sur le MERGE. `Ok(Some(ids))` : posé ; la table
+/// masse ici (moteur sans COPY) — l'appelant reste sur le MERGE. Une valeur
+/// qu'on ne sait pas écrire en CSV est une `Err` : un repli qui se dit. `Ok(Some(ids))` : posé ; la table
 /// `uuid → identifiant` est relue seulement si `relire_les_identifiants`,
 /// c'est-à-dire quand lucivy ou le handle sparse en ont besoin. Vide sinon.
 fn copier_les_noeuds(
@@ -674,8 +674,12 @@ fn copier_les_noeuds(
     let Some(copie) = dialect.copy_nodes_from_csv(table, columns, &chemin.to_string_lossy()) else {
         return Ok(None);
     };
+    // Une valeur que le CSV ne sait pas porter : le groupe repasse par le
+    // MERGE, et ça se dit (un repli compté) — c'était un repli muet, et sous
+    // une transaction par paquet la table devait le savoir pour ne pas
+    // reprendre le COPY avant sa validation.
     if indices.iter().any(|&i| items[i].data.values().any(|v| !csv_sait_ecrire(v))) {
-        return Ok(None);
+        return Err("une valeur ne s'écrit pas en CSV".to_string());
     }
     let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
     let t0 = std::time::Instant::now();
