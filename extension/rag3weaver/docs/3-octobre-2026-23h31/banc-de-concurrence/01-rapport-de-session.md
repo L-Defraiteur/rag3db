@@ -126,6 +126,27 @@ amonts (`8c83c3360`, puis le second lot).
       et passent au vert avec. **Un écart de méthode** : le commit a été poussé sur un
       empilement qui avait reçu `5c8507577` (rag3db-e3) après ma liste C++. La liste a été
       rejouée aussitôt sur master tel que poussé, et elle est verte.
+16. **Les tickets « bloque » suivants (4 octobre, soirée)** :
+    - le balayage de plusieurs tables de relations dans une transaction : fermé
+      (`88d937160`) ;
+    - l'erreur rendue sur une écriture validée (le `CHECKPOINT` qui retient un lecteur, le
+      `COPY` validé qui rend une erreur) : fermé (`df689b522`, `68ff9d5e2`). Le gestionnaire
+      de transactions attend sur une variable de condition sans tenir le verrou public, et
+      un point de reprise au seuil se reporte au lieu d'attendre. Relu par la session cœur
+      C++ ;
+    - les arrêts au mauvais instant, deux lignes du ticket de durabilité (`a86d4e6a8`,
+      `9e9296422`, relus par la session cœur C++, liste C++ verte). À la reprise, le journal
+      est supprimé avant le fichier fantôme ; un journal clos par `CHECKPOINT` sans fichier
+      fantôme est toléré ; les pages rejouées sont synchronisées avant toute suppression
+      (environ 20 ms à la médiane, 45 ms au pire, sur btrfs, 200 000 lignes). Crochet de test
+      `WALReplayer::setRecoveryHookForTesting`, deux points nommés. Témoins
+      `RecoveryDeath.*`, `CheckpointDeath/AfterCheckpointLogged` et `/AfterJournalCleared`.
+      Le ticket reste ouvert pour ses autres lignes ;
+    - le témoin de la garde de double ouverture (57c8389b4) :
+      `SecondDatabaseOnTheSamePathInOneProcessIsRefused`, vert sur le message nommé ;
+    - la réouverture intermittente sous charge : fermée sous surveillance (`21ae489d9`).
+      C'était la double ouverture dans un même processus, par le dernier `Arc<Database>`
+      que lucivy lâchait sur un fil de fond (ad220d0eb).
 
 ## Décisions et pourquoi
 
@@ -169,12 +190,15 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
-- **Les tickets « bloque » de la stèle confiés au banc**, dans l'ordre : l'erreur rendue sur
-  une écriture validée (le `CHECKPOINT` qui retient un lecteur, et le `COPY` validé qui rend
-  une erreur), le balayage de plusieurs tables de relations dans une transaction, les arrêts
-  au mauvais instant (l'ordre des suppressions à la reprise, le rejeu non synchronisé),
-  l'ordre de synchronisation au point de reprise, la réouverture intermittente. Plus une
-  ligne dans la description de `STATS_INFO`.
+- **Les tickets « bloque » de la stèle qui restent au banc** : l'ordre de synchronisation
+  au point de reprise ; un lecteur en lecture seule refusé 1 à 3 fois sur 80 pendant qu'on
+  écrit (`e2e_prise_atomique::un_lecteur_qui_insiste_pendant_qu_on_ecrit`, relevé par
+  rag3db-50), à qualifier sur les ancêtres de 57c8389b4 et de 68ff9d5e2 ; une ligne dans
+  la description de `STATS_INFO`. Puis les deux témoins du chargement en masse journalisé
+  (§7 de la page de la session cœur C++), que le banc prépare.
+- **Le remède 2a** (l'attente du départ des autres avant la validation d'un `COPY`) se
+  retirera avec le chargement journalisé ; la session cœur C++ préviendra avant de toucher
+  à ses témoins.
 - **La corruption d'`e2e_code`** : l'hypothèse du `COPY` refusé est écartée pour le test
   fautif ; la piste qui reste est un voisin faux dans le graphe de l'index (ticket de la
   corruption).
