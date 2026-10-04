@@ -349,6 +349,8 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         let mut reprises = 0usize;
         let mut nommes = 0usize;
         let mut duree_max_refus = 0u128;
+        // Le premier refus qui n'est pas le refus nommé, pour le dire.
+        let mut autre: Option<String> = None;
         // Le nombre d'ouvertures : 80, ou ce que demande le test de la borne
         // (`RAG3WEAVER_ENFANT_CYCLES`), qui en veut assez pour croiser.
         let cycles = std::env::var("RAG3WEAVER_ENFANT_CYCLES").ok().and_then(|v| v.parse().ok()).unwrap_or(CYCLES);
@@ -360,6 +362,8 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
                 let texte = e.to_string();
                 if texte.contains(rag3weaver::rag3db_connection::CHECKPOINT_CROSSED_READ_ONLY_OPEN) && texte.contains(" fois en ") {
                     nommes += 1;
+                } else if autre.is_none() {
+                    autre = Some(texte.replace('\n', " ").chars().take(300).collect());
                 }
             }
             match ouverture {
@@ -377,6 +381,9 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
         println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents} REPRISES={reprises} NOMMES={nommes} DUREE_MAX_REFUS_MS={duree_max_refus}");
+        if let Some(a) = autre {
+            println!("AUTRE_REFUS={a}");
+        }
         std::process::exit(0);
     }
 
@@ -1109,6 +1116,7 @@ fn un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne() {
     let sortie = enfant.wait_with_output().expect("attendre le lecteur");
     let texte = String::from_utf8_lossy(&sortie.stdout);
     let ligne = texte.lines().find(|l| l.starts_with("REFUS=")).unwrap_or_else(|| panic!("le lecteur n'a rien dit :\n{texte}"));
+    let autre = texte.lines().find(|l| l.starts_with("AUTRE_REFUS=")).unwrap_or("");
     println!("▸ {ligne}   ({i} écritures, un point de reprise toutes les cinq)");
     let lire = |cle: &str| -> u128 {
         ligne
@@ -1122,6 +1130,6 @@ fn un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne() {
     let _ = std::fs::remove_dir_all(&dossier);
     assert_eq!(incoherents, 0, "une ouverture qui réussit lit un compte cohérent");
     assert!(refus >= 1, "la borne d'une milliseconde doit être atteinte sous cet écrivain ({ligne})");
-    assert_eq!(nommes, refus, "chaque refus est le refus nommé, avec le compte des reprises ({ligne})");
+    assert_eq!(nommes, refus, "chaque refus est le refus nommé, avec le compte des reprises ({ligne}) ; {autre}");
     assert!(duree < 2_000, "une ouverture refusée l'est vite : {duree} ms au plus long");
 }

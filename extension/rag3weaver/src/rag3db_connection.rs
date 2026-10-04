@@ -36,7 +36,35 @@ pub struct Rag3dbConnection {
     /// Combien de fois l'ouverture en lecture seule a été reprise parce qu'un
     /// point de reprise d'un autre processus l'avait croisée.
     open_retries: u32,
+    /// Le dernier refus du moteur sur cette connexion, effacé à chaque
+    /// instruction réussie. Une transaction défaite par une instruction ne
+    /// répond plus ensuite que « a statement in it failed » : l'erreur rendue
+    /// porte alors ce refus d'origine, qu'un repli de l'appelant a pu avaler.
+    first_refusal: std::sync::Mutex<Option<String>>,
 }
+
+/// **`RAG3WEAVER_TRACE_CYPHER=1`** : chaque instruction sur la sortie
+/// d'erreur avant de partir au moteur, bornée, et ses paramètres par nom et
+/// taille. Pour donner au cœur C++ les dernières requêtes avant un plantage.
+fn trace_cypher(cypher: &str, params: &[QueryParam]) {
+    static ACTIVE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ACTIVE.get_or_init(|| std::env::var_os("RAG3WEAVER_TRACE_CYPHER").is_some()) {
+        return;
+    }
+    let texte: String = cypher.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(400).collect();
+    let tailles: Vec<String> = params
+        .iter()
+        .map(|p| match &p.value {
+            CypherValue::List(l) => format!("{}=liste[{}]", p.name, l.len()),
+            _ => p.name.clone(),
+        })
+        .collect();
+    eprintln!("[cypher] {texte}{}", if tailles.is_empty() { String::new() } else { format!(" — {}", tailles.join(", ")) });
+}
+
+/// Le refus générique d'une transaction que l'une de ses instructions a
+/// défaite (`transaction_context.h` du moteur).
+const TRANSACTION_ABORTED: &str = "The transaction was rolled back because a statement in it failed";
 
 /// **Crochet de test** : faire répondre la base exactement comme le moteur
 /// après un point de reprise échoué — par le même chemin de reconnaissance.
@@ -325,7 +353,7 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0 })
+        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None) })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
@@ -348,7 +376,23 @@ impl Rag3dbConnection {
             reason.get_or_insert_with(|| message.clone());
             return DbError::MustReopen(message);
         }
+        let mut premier = self.first_refusal.lock().unwrap_or_else(|p| p.into_inner());
+        if message.contains(TRANSACTION_ABORTED) {
+            if let Some(origine) = premier.as_deref() {
+                return DbError::QueryError(format!("{message} — l'instruction qui l'a défaite : {origine}"));
+            }
+            return DbError::QueryError(message);
+        }
+        *premier = Some(message.clone());
         DbError::QueryError(message)
+    }
+
+    /// Une instruction a réussi : le refus retenu ne concerne plus la suite.
+    fn engine_succeeded(&self) {
+        let mut premier = self.first_refusal.lock().unwrap_or_else(|p| p.into_inner());
+        if premier.is_some() {
+            *premier = None;
+        }
     }
 
     /// Refuser d'emblée sur une base empoisonnée ; servir le crochet de test.
@@ -383,10 +427,12 @@ impl Rag3dbConnection {
     /// Execute a raw Cypher query (sync, used internally).
     fn query_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
         self.before_engine()?;
+        trace_cypher(cypher, &[]);
         let mut result = self
             .conn
             .query(cypher)
             .map_err(|e| self.engine_error(e))?;
+        self.engine_succeeded();
 
         let columns = result.get_column_names();
         let mut rows = Vec::new();
@@ -404,6 +450,7 @@ impl Rag3dbConnection {
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
         self.before_engine()?;
+        trace_cypher(cypher, params);
         let mut stmt = self
             .conn
             .prepare(cypher)
@@ -420,6 +467,7 @@ impl Rag3dbConnection {
             .conn
             .execute(&mut stmt, rag3db_params)
             .map_err(|e| self.engine_error(e))?;
+        self.engine_succeeded();
 
         let columns = result.get_column_names();
         let mut rows = Vec::new();

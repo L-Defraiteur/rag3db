@@ -178,6 +178,48 @@ fn bilan(sortie: &str) -> (Vec<String>, bool) {
     (lignes, sain)
 }
 
+/// **Une base défaite par l'ancien moteur, reprise par le nouveau** : le
+/// repreneur sur une copie de `SONDE_VECTEURS_ANCIENNE` (un dossier gardé
+/// par une passe d'avant le correctif). Attendu : pas de plantage ; un refus
+/// nommé (« is behind its table ») ou une reprise saine.
+#[test]
+#[ignore]
+fn une_base_defaite_par_l_ancien_moteur_se_reprend_ou_se_refuse_par_son_nom() {
+    let Ok(ancienne) = std::env::var("SONDE_VECTEURS_ANCIENNE") else {
+        println!("SONDE_VECTEURS_ANCIENNE absente : rien à reprendre");
+        return;
+    };
+    let base = dossier("ancienne");
+    for f in std::fs::read_dir(&ancienne).unwrap().flatten() {
+        std::fs::copy(f.path(), base.parent().unwrap().join(f.file_name())).unwrap();
+    }
+    let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .env(ROLE, "repreneur")
+        .env(BASE, &base)
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
+        .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", "4")
+        .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH");
+    let s = cmd.output().expect("lancer le repreneur");
+    let texte = format!("{}{}", String::from_utf8_lossy(&s.stdout), String::from_utf8_lossy(&s.stderr));
+    let nomme = texte.contains("is behind its table");
+    let fin: String = texte.lines().rev().take(15).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+    println!("▸ repreneur sur l'ancienne base : {:?}, refus nommé : {nomme}\n{fin}", s.status);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        assert!(s.status.signal().is_none(), "le repreneur est mort d'un signal (base gardée : {}) :\n{fin}", base.display());
+    }
+    if s.status.success() {
+        let (lignes, sain) = bilan(&lancer("verificateur", &base, false));
+        println!("▸ après reprise : {lignes:?}");
+        assert!(sain, "reprise acceptée mais index faux (base gardée : {}) : {lignes:?}", base.display());
+    } else {
+        assert!(nomme, "le repreneur a échoué sans le refus nommé (base gardée : {}) :\n{fin}", base.display());
+    }
+    let _ = std::fs::remove_dir_all(base.parent().unwrap());
+}
+
 #[test]
 #[ignore]
 fn apres_un_paquet_defait_l_index_vectoriel_retrouve_chaque_morceau_repris() {
