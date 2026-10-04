@@ -223,6 +223,27 @@ le verrou obtenu, il n'y a plus rien à valider au commit. Le filet est le
 vérificateur du banc, pas du code de production. A2 (le remappage des offsets
 au commit) n'est pas concerné : il reste tel quel.
 
+### Ajout du 4 octobre 2026 — un cycle que le graphe d'attente ne voit pas, et pourquoi on ne le construit pas
+
+Depuis `68ff9d5e2`, la validation d'un `COPY` (dont la durabilité est son propre point de
+reprise) **attend le départ des autres transactions avant de valider**. Si T1 tient un verrou
+de ligne et valide un `COPY`, et que T2 attend ce verrou, T2 ne peut pas partir et T1
+n'avancera pas : un interblocage que le graphe d'attente ne voit pas, tant que cette attente
+se fait hors du gestionnaire.
+
+La règle est celle de PostgreSQL : **toute attente qui peut entrer dans un cycle passe par le
+gestionnaire de verrous**, sinon la détection est aveugle. La réponse envisagée était un
+troisième genre de ressource, « la base ». **Il n'est pas construit** (décision de Lucie, le
+4 octobre au soir, sur la recommandation de l'orchestration) : le `COPY` hors journal est la
+cause commune de cette attente, du point de reprise forcé et des défauts de l'annulation
+corrigés ce jour-là ; le chargement en masse journalisé passe donc **avant** le câblage des
+verrous, et l'attente disparaît avec lui. La ressource du gestionnaire reste générique : un
+genre s'ajoute sans rien changer d'autre, si le besoin revenait.
+
+Autre conséquence du 4 octobre, qui conforte « la table des verrous vit dans la `Database` » :
+un processus ne peut plus ouvrir deux exemplaires écrivains de la même base (`57c8389b4`),
+il n'y a donc bien qu'une table de verrous par base.
+
 ---
 
 ## 4. La même ligne, deux colonnes différentes

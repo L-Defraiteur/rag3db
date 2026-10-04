@@ -93,21 +93,34 @@ intermittente, durabilité à l'arrêt) ; le terrain du `COPY` et de son annulat
 corruption d'`e2e_code` et les verrous restent au cœur C++. Les deux défauts de l'index
 vectoriel sans ticket sont à ouvrir par le banc, qui en a les témoins.
 
-### 3.2 L'ordre (tranché le 4 octobre, 19 h, choix réversibles)
+### 3.2 L'ordre (tranché le 4 octobre ; revu le même soir, choix réversibles)
 
-Lucie : « on se focus sur la stèle ». L'ordre, d'après le découpage du point de reprise
-(les 5 s par paquet étaient celles d'une seule table, `_index_blobs` ; sans elle un point de
-reprise de quatre paquets coûte environ 4 s en tout : le chargement journalisé n'est plus
-sur le chemin des 90 s du premier index) :
+Lucie : « on se focus sur la stèle ». Puis, à 20 h 40, sur la question « c'était quoi le
+remède, on l'a attaqué du bon côté ? » : non. **Le `COPY` hors journal est la cause commune**
+de ce qui a été payé le 4 octobre — le point de reprise forcé, les trois correctifs de
+l'annulation, la perte après un délai, et un cycle d'attente qui aurait demandé un genre de
+verrou de plus. On dessinait les verrous autour d'une verrue qui disparaît avec le journal.
+Le chargement journalisé passe donc avant le câblage des verrous.
 
 1. l'annulation d'un `COPY` (clés de l'index, point de reprise) — fait ;
 2. la corruption d'`e2e_code` — fait : c'était une double ouverture de la base ;
-3. les verrous : V1, A3′, A4′, V2, la maintenance de l'index vectoriel au commit
-   (14 à 20 jours de session) ;
-4. le chargement en masse journalisé (6 à 10 jours) ;
-5. les écritures parallèles (10 à 20 jours, la plus incertaine).
+3. le cœur du gestionnaire de verrous (V1), sans câblage — il ne dépend pas du reste ;
+4. **le chargement en masse journalisé** : la validation d'un `COPY` durable par le journal,
+   plus de point de reprise forcé, plus d'attente du départ des autres (le remède 2a se
+   retire alors, avec ses témoins adaptés). Une page de conception d'abord
+   (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md`) ;
+5. le câblage des verrous : A3′, A4′, V2, la maintenance de l'index vectoriel au commit.
+   Deux témoins attendus d'A3′, nés des limites écrites le 4 octobre : à l'annulation, une
+   transaction ne retire de l'index de clé primaire que les clés de **ses** lignes
+   (aujourd'hui : de toute ligne non validée du bloc, celles d'un autre écrivain comprises) ;
+   et deux validations qui veulent chacune leur point de reprise ne s'attendent pas jusqu'au
+   délai ;
+6. les écritures parallèles.
 
-Les durées sont celles de la session cœur C++, avec une incertitude d'un facteur 1,5.
+V1 se prouve par les tests du gestionnaire lui-même, joués aussi sous ThreadSanitizer ; les
+premiers verts du banc sur les verrous viennent avec A3′. Les durées (session cœur C++,
+incertitude d'un facteur 1,5) : chargement journalisé, à redonner après sa page ; câblage
+des verrous, 11 à 16 jours ; écritures parallèles, 10 à 20 jours.
 
 ## 4. Ce qui n'attend pas la stèle
 
