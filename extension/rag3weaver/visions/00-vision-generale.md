@@ -4,6 +4,44 @@
 visions de ce dossier disent chacune de leur côté ; elle ne décide rien que
 Lucie n'ait décidé. Chaque document du dossier porte sa date dans son nom.
 
+## 0. Le cap
+
+Lucie, 5 octobre 2026 : « Bien qu'on préfère la tuyauterie avant l'interface,
+il faut quand même savoir ce qu'on vise ; sinon on fait un gloubi-boulga pour
+un agent de code sans trouver un truc qui se vend vraiment, ou sans exploiter
+le potentiel de la plomberie. »
+
+**Ce qu'on vise, en une image** : *tu parles à ton code ou à ton site, et il
+change sous tes yeux.* Pas de compte rendu à lire : l'écran montre ce qui se
+passe — la chose qui change, les graphes que l'agent écrit et exécute, les
+fiches qu'il ouvre — et tout se clique. L'ordinateur de Star Trek, les
+tablettes de Westworld. La voix accompagne, elle ne raconte pas.
+
+**Ce qui se vend** (un seul abonnement, §3) :
+
+1. **l'atelier local** — parler à un agent, explorer des fiches et un graphe
+   de code, sans IDE ;
+2. **le backend tout-en-un qui porte son propre atelier** — un site déclaré
+   (contrôleurs, vues, données) que sa propriétaire modifie en lui parlant,
+   en place, sans compilation ni redéploiement ;
+3. **les embarquements servis**, pour qui n'a pas de GPU.
+
+**Pourquoi nous, et pas un agent de code de plus** — ce que la plomberie
+rend possible et qu'un outil posé sur des fichiers ne peut pas faire :
+
+| Parce que la plomberie… | …le produit peut |
+|---|---|
+| range tout dans un seul système, avec une adresse pour chaque chose | rendre tout cliquable : une ligne, une requête, un graphe, un pas d'exécution, une fiche |
+| enregistre chaque exécution nœud par nœud | montrer ce que l'agent fait, au lieu de le lui faire raconter |
+| tient ensemble le graphe, les mots et le sens | donner des fiches vivantes : ce qui a changé, ce qui dépend, ce qui ressemble |
+| ne connaît que des choses déclarées | recharger à chaud, sans compiler : l'agent modifie le site en service |
+| valide et reprend proprement (la stèle) | laisser un agent écrire dans une base en service sans la perdre |
+| saura faire écrire plusieurs à la fois | faire travailler une équipe, chacun avec son agent, sur le même site |
+
+Chaque ligne de gauche est du travail de plomberie déjà fait ou en cours ;
+chaque ligne de droite est ce qu'on montre. Une pièce de plomberie qui
+n'allume aucune ligne de droite attend.
+
 ## 1. L'idée en une phrase
 
 **Tout vit dans un seul système, et tout s'y déclare** : la base (graphe,
@@ -142,17 +180,33 @@ Ce sur quoi les deux s'accordent :
   (`2026-10-04-16h24-montrer-nos-produits.md`, §12) passent par cette même
   couche : le vocabulaire est portable, les garanties se déclarent par base.
 
-## 7. Un ordre, proposé — pas décidé
+## 7. Les marches — proposées par l'orchestration, à valider par Lucie
 
-1. **Le moteur jusqu'à sa stèle**, en fond, par sa session.
-2. **La pointe : les fiches de contexte** sur l'agent de code — ce qui est le
-   plus à nous et le plus démontrable. Première étape retenue par Lucie : les
-   lectures réunies par fichier et tenues vivantes, les éditions en commits
-   avec leur raison.
-3. **Une personne extérieure** devant cette pointe, le plus tôt possible.
-4. Ensuite seulement : l'interface, le dépôt de référence, la démo, le
-   backend déclaré, les intégrations — dans l'ordre que cette première
-   personne aura rendu évident.
+Chaque marche se montre : elle a une preuve qu'on peut voir, et la liste de
+ce qu'elle demande à la plomberie. On ne commence pas une marche pour sa
+plomberie seule.
+
+| # | La marche | Ce qu'on voit quand elle est faite | Ce qu'elle demande |
+|---|---|---|---|
+| 0 | **La stèle du moteur** (en cours) | rien à l'écran : une base qu'on peut tuer, rouvrir et croire | les tickets bloquants, le chargement journalisé, puis les verrous |
+| 1 | **Les fiches de contexte** sur l'agent de code | une tâche longue où l'agent ne relit pas, n'édite pas sur du périmé, et où chaque édition porte sa raison | l'assemblage du prompt du chat, le registre des lectures, les commits de fiche ; rien du moteur au-delà de la marche 0 |
+| 2 | **Voir** : une première page servie par rag3weaver | l'arbre des liens en graphe, une exécution nœud par nœud, une fiche, tout cliquable — en lecture seule | une vue déclarée, un afficheur, le pas d'exécution comme adresse |
+| 3 | **Parler à une page** : l'éditer en place | Lucie dit « ajoute une colonne à cette liste », la page change dans son brouillon, le commit et sa raison sont là ; la voix en option | le contrôleur déclaré, le rechargement à chaud, le brouillon et la publication |
+| 4 | **Les vitrines** | le constructeur de decks Magic ouvert à tous, des rejeux d'agent sur un dépôt connu | la base Magic refaite, un quota, l'authentification du service |
+| 5 | **À plusieurs** | la page de démo que tout le monde édite, remise à zéro chaque jour | les écritures parallèles (fin de la stèle), la présence entre agents |
+
+Ensuite, quand une marche les réclame : les secrets et les intégrations, les
+migrations en verbes, les contributions de modules, d'autres bases par les
+dialectes, l'archiviste.
+
+Deux règles pour tenir ce cap :
+
+- **Lucie est la première utilisatrice** : les marches 1 à 3 tournent d'abord
+  en local, chez elle, sur ses projets. Une personne extérieure dès qu'une
+  marche se montre.
+- **La plomberie se choisit par la marche qu'elle sert** : un défaut du
+  moteur qui corrompt ou qui perd se corrige toujours ; une optimisation ou
+  un confort attend la marche qui en a besoin.
 
 ## 8. Ce qui n'est pas décidé
 
