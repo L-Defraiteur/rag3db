@@ -95,3 +95,42 @@ En liste :
 3. L'édition limitée dans un espace jetable.
 4. Les graphes éditables ; le produit à la Lovable — chacun une vision à
    écrire à part quand elle mûrit.
+
+## 6. Le positionnement, dit par Lucie (4 octobre, 16 h 30)
+
+> « On vend une interface de code locale, "no IDE needed" : le remplaçant d'un
+> IDE moderne, mais orienté purement "tu parles à un agent, tu explores des
+> fiches et un graphe de code". On vend des services d'embedding. On ne vend
+> pour l'instant pas grand-chose d'autre. Et on met en valeur avec une démo à
+> la Lovable accessible gratuitement, surtout pour démontrer la force des
+> fiches de contexte. »
+
+Donc trois pièces :
+
+| Pièce | Rôle | Qui paie |
+|---|---|---|
+| l'interface de code locale, sans IDE | le produit | la personne qui développe |
+| le service d'embarquement | le revenu récurrent, et ce qui rend le premier index rapide sans GPU chez soi | à l'usage |
+| la démo à la Lovable, gratuite | la vitrine : faire voir les fiches de contexte | nous (quota bas) |
+
+Points en débat :
+
+- **« Local » et « service d'embarquement » tirent en sens inverse** : avec le
+  service, des morceaux de code quittent le poste. À dire clairement, et à
+  laisser au choix — le modèle se déclare déjà en service ou en local
+  (`models.embed`), avec le petit modèle pour un GPU faible.
+- **L'embarquement seul se vend peu cher partout** : ce qui se vend, c'est
+  l'ensemble (premier index en minutes, sans réglage). Le produit est
+  l'interface ; le service en est le confort.
+- **« Sans IDE » est une promesse large** : relire un diff, lancer, déboguer,
+  git. Les fiches de fichier avec leurs commits couvrent la relecture ; le
+  reste est à lister avant de l'écrire sur une page. Variante prudente :
+  « à côté de ton IDE » d'abord.
+- **L'interface n'existe pas encore** : le moteur, les outils et le chat
+  existent ; les fiches, le graphe et leur exploration à l'écran sont à
+  bâtir. C'est le plus gros chantier de ce positionnement.
+- **La démo doit montrer ce qui est à nous** : une tâche assez longue pour
+  que les fiches fassent la différence (un contexte qui ne se perd pas), pas
+  une page générée en un tour.
+- **Le modèle de langage** : à la clé de la personne, ou revendu ? Aujourd'hui
+  l'agent se juge avec Gemini ; rien n'est décidé sur qui le paie.
