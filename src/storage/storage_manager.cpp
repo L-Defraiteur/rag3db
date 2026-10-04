@@ -1,5 +1,9 @@
 #include "storage/storage_manager.h"
 
+#include <cstdio>
+
+#include "storage/checkpoint_profile.h"
+
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/file_system/virtual_file_system.h"
@@ -168,14 +172,24 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
     const auto catalog = Catalog::Get(*context);
     const auto nodeTableEntries = catalog->getNodeTableEntries(&DUMMY_CHECKPOINT_TRANSACTION);
     const auto relGroupEntries = catalog->getRelGroupEntries(&DUMMY_CHECKPOINT_TRANSACTION);
+    CheckpointProfile profile;
+    auto nodeMs = 0.0, relMs = 0.0;
 
     for (const auto entry : nodeTableEntries) {
         if (!tables.contains(entry->getTableID())) {
             throw RuntimeException(stringFormat(
                 "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
         }
-        hasChanges =
-            tables.at(entry->getTableID())->checkpoint(context, entry, pageAllocator) || hasChanges;
+        const auto changed = tables.at(entry->getTableID())->checkpoint(context, entry, pageAllocator);
+        hasChanges = changed || hasChanges;
+        if (CheckpointProfile::enabled()) {
+            const auto ms = profile.lap();
+            nodeMs += ms;
+            if (ms >= 1.0) {
+                fprintf(stderr, "[checkpoint-profile]     table %s : %.1f ms%s\n",
+                    entry->getName().c_str(), ms, changed ? "" : " (inchangée)");
+            }
+        }
     }
     for (const auto entry : relGroupEntries) {
         for (auto& info : entry->getRelEntryInfos()) {
@@ -183,12 +197,28 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
                 throw RuntimeException(stringFormat(
                     "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
             }
-            hasChanges =
-                tables.at(info.oid)->checkpoint(context, entry, pageAllocator) || hasChanges;
+            const auto changed = tables.at(info.oid)->checkpoint(context, entry, pageAllocator);
+            hasChanges = changed || hasChanges;
+            if (CheckpointProfile::enabled()) {
+                const auto ms = profile.lap();
+                relMs += ms;
+                if (ms >= 1.0) {
+                    fprintf(stderr, "[checkpoint-profile]     relations %s : %.1f ms%s\n",
+                        entry->getName().c_str(), ms, changed ? "" : " (inchangée)");
+                }
+            }
         }
         entry->vacuumColumnIDs(1);
     }
     reclaimDroppedTables(*catalog);
+    if (CheckpointProfile::enabled()) {
+        const auto restMs = profile.lap();
+        fprintf(stderr,
+            "[checkpoint-profile]   tables=%.1f ms : noeuds=%.1f (%lu tables) relations=%.1f (%lu "
+            "groupes) reste=%.1f\n",
+            profile.total(), nodeMs, static_cast<unsigned long>(nodeTableEntries.size()), relMs,
+            static_cast<unsigned long>(relGroupEntries.size()), restMs);
+    }
     return hasChanges;
 }
 

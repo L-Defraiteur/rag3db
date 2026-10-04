@@ -1,5 +1,9 @@
 #include "transaction/transaction_manager.h"
 
+#include <cstdio>
+
+#include "storage/checkpoint_profile.h"
+
 #include <thread>
 
 #include "common/exception/checkpoint.h"
@@ -67,12 +71,22 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
     case TransactionType::WRITE: {
         lastTimestamp++;
         transaction->commitTS = lastTimestamp;
+        storage::CheckpointProfile profile;
         transaction->commit(&wal);
-        auto shouldCheckpoint = transaction->shouldForceCheckpoint() ||
-                                Checkpointer::canAutoCheckpoint(clientContext, *transaction);
+        const auto commitMs = profile.lap();
+        const auto forced = transaction->shouldForceCheckpoint();
+        auto shouldCheckpoint =
+            forced || Checkpointer::canAutoCheckpoint(clientContext, *transaction);
         clearTransactionNoLock(transaction->getID());
         if (shouldCheckpoint) {
             checkpointNoLock(clientContext);
+        }
+        if (storage::CheckpointProfile::enabled() && (shouldCheckpoint || commitMs >= 50.0)) {
+            const auto checkpointMs = profile.lap();
+            fprintf(stderr,
+                "[commit-profile] total=%.1f ms : validation=%.1f point-de-reprise=%.1f (%s)\n",
+                profile.total(), commitMs, checkpointMs,
+                !shouldCheckpoint ? "aucun" : forced ? "forcé" : "au seuil");
         }
     } break;
         // LCOV_EXCL_START

@@ -1,5 +1,9 @@
 #include "storage/checkpointer.h"
 
+#include <cstdio>
+
+#include "storage/checkpoint_profile.h"
+
 #include "catalog/catalog.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
@@ -71,10 +75,15 @@ void Checkpointer::writeCheckpoint() {
         *StorageManager::Get(clientContext)->getOrInitDatabaseHeader(clientContext);
     // Checkpoint storage. Note that we first checkpoint storage before serializing the catalog, as
     // checkpointing storage may overwrite columnIDs in the catalog.
+    CheckpointProfile profile;
     bool hasStorageChanges = checkpointStorage();
+    const auto storageMs = profile.lap();
     serializeCatalogAndMetadata(databaseHeader, hasStorageChanges);
+    const auto serializeMs = profile.lap();
     writeDatabaseHeader(databaseHeader);
+    const auto headerMs = profile.lap();
     logCheckpointAndApplyShadowPages();
+    const auto applyMs = profile.lap();
 
     // This function will evict all pages that were freed during this checkpoint
     // It must be called before we remove all evicted candidates from the BM
@@ -93,6 +102,14 @@ void Checkpointer::writeCheckpoint() {
     dataFH->getPageManager()->resetVersion();
     storageManager->getWAL().reset();
     storageManager->getShadowFile().reset();
+    if (CheckpointProfile::enabled()) {
+        const auto endMs = profile.lap();
+        fprintf(stderr,
+            "[checkpoint-profile] total=%.1f ms : tables=%.1f catalogue+metadonnees=%.1f "
+            "en-tete=%.1f journal+pages-ombres=%.1f fin=%.1f | fichier=%lu pages\n",
+            profile.total(), storageMs, serializeMs, headerMs, applyMs, endMs,
+            static_cast<unsigned long>(dataFH->getNumPages()));
+    }
 }
 
 bool Checkpointer::checkpointStorage() {
@@ -107,12 +124,16 @@ void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
     const auto catalog = catalog::Catalog::Get(clientContext);
     auto* dataFH = storageManager->getDataFH();
 
+    CheckpointProfile profile;
+    auto catalogPages = 0u, metadataPages = 0u;
     // Serialize the catalog if there are changes
     if (databaseHeader.catalogPageRange.startPageIdx == common::INVALID_PAGE_IDX ||
         catalog->changedSinceLastCheckpoint()) {
         databaseHeader.updateCatalogPageRange(*dataFH->getPageManager(),
             serializeCatalog(*catalog, *storageManager));
+        catalogPages = databaseHeader.catalogPageRange.numPages;
     }
+    const auto catalogMs = profile.lap();
     // Serialize the storage metadata if there are changes
     if (databaseHeader.metadataPageRange.startPageIdx == common::INVALID_PAGE_IDX ||
         hasStorageChanges || catalog->changedSinceLastCheckpoint() ||
@@ -121,6 +142,14 @@ void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
         // So that the freed pages are serialized by the FSM
         databaseHeader.freeMetadataPageRange(*dataFH->getPageManager());
         databaseHeader.metadataPageRange = serializeMetadata(*catalog, *storageManager);
+        metadataPages = databaseHeader.metadataPageRange.numPages;
+    }
+    if (CheckpointProfile::enabled()) {
+        const auto metadataMs = profile.lap();
+        fprintf(stderr,
+            "[checkpoint-profile]   catalogue+metadonnees=%.1f ms : catalogue=%.1f (%u pages) "
+            "metadonnees=%.1f (%u pages)\n",
+            profile.total(), catalogMs, catalogPages, metadataMs, metadataPages);
     }
 }
 
@@ -147,8 +176,11 @@ void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
 void Checkpointer::logCheckpointAndApplyShadowPages() {
     const auto storageManager = StorageManager::Get(clientContext);
     auto& shadowFile = storageManager->getShadowFile();
+    CheckpointProfile profile;
+    const auto numShadowPages = shadowFile.getNumShadowPages();
     // Flush the shadow file.
     shadowFile.flushAll(clientContext);
+    const auto flushMs = profile.lap();
     auto wal = WAL::Get(clientContext);
     // Log the checkpoint to the WAL and flush WAL. This indicates that all shadow pages and
     // files (snapshots of catalog and metadata) have been written to disk. The part that is not
@@ -156,11 +188,21 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     // system crashes before this point, the WAL can still be used to recover the system to a
     // state where the checkpoint can be redone.
     wal->logAndFlushCheckpoint(&clientContext);
+    const auto walMs = profile.lap();
     shadowFile.applyShadowPages(clientContext);
+    const auto applyMs = profile.lap();
     // Clear the wal and also shadowing files.
     auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
     wal->clear();
     shadowFile.clear(*bufferManager);
+    if (CheckpointProfile::enabled()) {
+        const auto clearMs = profile.lap();
+        fprintf(stderr,
+            "[checkpoint-profile]   journal+pages-ombres=%.1f ms : ecriture-ombres=%.1f (%lu "
+            "pages) marque-au-journal=%.1f application=%.1f vidage=%.1f\n",
+            profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), walMs, applyMs,
+            clearMs);
+    }
 }
 
 void Checkpointer::rollback() {

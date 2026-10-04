@@ -38,6 +38,7 @@ public:
         common::page_idx_t originalPage);
 
     FileHandle& getShadowingFH() const { return *shadowingFH; }
+    uint64_t getNumShadowPages() const { return shadowPageRecords.size(); }
 
     void applyShadowPages(main::ClientContext& context) const;
 
