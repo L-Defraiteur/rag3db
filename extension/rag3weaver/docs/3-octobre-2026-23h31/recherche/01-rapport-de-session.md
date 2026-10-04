@@ -62,6 +62,14 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
 
 ## En cours (4 octobre 16h — l'essai de la note d'utilité est rendu : négatif net)
 
+- **« Avant d'éditer » vit aussi sur l'instantané (92dfbf401)** :
+  l'asymétrie backend/snapshot relevée par c0 cachait un vrai bug —
+  path_in_source fabriquait racine+chemin absolu alors que les chemins
+  en base d'un instantané sont RELATIFS (une source sans disque est sa
+  propre identité) : l'impact y rendait toujours vide, en silence.
+  path_in_source suit désormais la nature de la source ; prouvé des
+  deux côtés au script (76 ms sur l'instantané indexé).
+
 - **score() est né et l'essai 3 est joué (61e0ad13b)** :
   score(decider, question, grille, temperature) = Σ pᵢ·i au-dessus de
   decide, testé au MockDecider ; la section U du banc relit les dix
