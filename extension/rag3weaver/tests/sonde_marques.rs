@@ -40,6 +40,17 @@ fn texte(v: Option<&rag3weaver::connection::CypherValue>) -> String {
     v.and_then(|v| v.as_str()).unwrap_or("").to_string()
 }
 
+/// Des noms de méthodes de la bibliothèque standard : une arête « nom » d'un
+/// receveur vers un homonyme du projet est presque sûrement fausse.
+const STD: &[&str] = &[
+    "clone", "collect", "lock", "find", "map", "get", "get_mut", "iter", "iter_mut", "into_iter", "len", "is_empty", "push", "pop", "insert",
+    "remove", "contains", "contains_key", "unwrap", "expect", "as_str", "as_ref", "as_mut", "to_string", "to_owned", "into", "from", "new",
+    "read", "write", "send", "recv", "try_recv", "as_bool", "as_i64", "as_u64", "as_f64", "as_array", "as_object", "join", "split", "trim",
+    "starts_with", "ends_with", "extend", "drain", "clear", "sort", "dedup", "retain", "filter", "next", "take", "skip", "chain", "any", "all",
+    "count", "sum", "min", "max", "entry", "or_default", "or_insert", "keys", "values", "first", "last", "replace", "parse", "format", "flush",
+    "run", "execute", "close", "open", "start", "stop", "wait", "reset", "load", "store", "set", "update", "merge", "apply",
+];
+
 /// La forme d'une référence à `nom` sur la ligne `ligne`.
 fn forme(ligne: &str, nom: &str) -> &'static str {
     let mot = |i: usize| {
@@ -55,9 +66,18 @@ fn forme(ligne: &str, nom: &str) -> &'static str {
     if apres.starts_with('!') {
         return "nom de macro";
     }
+    if ligne.starts_with("#[") || ligne.starts_with("#![") {
+        return "attribut (#[cfg(…)])";
+    }
     if let Some(tete) = avant.strip_suffix("::") {
         let seg = tete.rsplit(|c: char| !(c.is_alphanumeric() || c == '_')).next().unwrap_or("");
-        return if seg.starts_with(char::is_uppercase) { "chemin par un type (T::f)" } else { "chemin par un module (m::f)" };
+        let appel = apres.trim_start().starts_with('(');
+        return match (seg, seg.starts_with(char::is_uppercase), appel) {
+            ("Self", _, _) => "chemin par Self (Self::f)",
+            (_, true, _) => "chemin par un type (T::f)",
+            (_, false, true) => "appel par chemin de module (m::f())",
+            (_, false, false) => "nom par chemin de module (m::T)",
+        };
     }
     if let Some(recv) = avant.strip_suffix('.') {
         let recv = recv.trim_end();
@@ -112,11 +132,18 @@ fn arêtes_par_marque_et_formes_des_noms() {
         .unwrap();
     let mut formes: BTreeMap<&'static str, (usize, Vec<String>)> = BTreeMap::new();
     let mut dans_macro = 0;
+    let (mut receveurs, mut receveurs_std) = (0, 0);
     for x in &r.rows {
         let (fichier, nom, de) = (texte(x.first()), texte(x.get(2)), texte(x.get(3)));
         let ligne = x.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let texte_ligne = contenus.get(&fichier).and_then(|c| c.lines().nth(ligne.saturating_sub(1))).unwrap_or("").trim().to_string();
         let f = forme(&texte_ligne, &nom);
+        if f.starts_with("receveur") && STD.contains(&nom.as_str()) {
+            receveurs_std += 1;
+        }
+        if f.starts_with("receveur") {
+            receveurs += 1;
+        }
         if texte_ligne.contains("!(") {
             dans_macro += 1;
         }
@@ -136,7 +163,8 @@ fn arêtes_par_marque_et_formes_des_noms() {
     for (f, (c, _)) in &tri {
         eprintln!("| {f} | {c} | {:.0} % |", 100.0 * *c as f64 / n.max(1) as f64);
     }
-    eprintln!("\n{dans_macro} des {n} sur une ligne qui contient une macro.\n\nExemples :");
+    eprintln!("\n{dans_macro} des {n} sur une ligne qui contient une macro.");
+    eprintln!("{receveurs_std} des {receveurs} « receveur » visent un nom de méthode de la bibliothèque standard (clone, collect, lock…).\n\nExemples :");
     for (f, (_, ex)) in &tri {
         eprintln!("\n**{f}**");
         for e in ex {
