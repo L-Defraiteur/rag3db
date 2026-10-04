@@ -740,6 +740,122 @@ fn banc_etage_qui_perd() {
         scope_au_boost(1.0);
     }
 
+    // ── U : la note d'utilité comme relecteur (essai 3 de l'optimiseur) ──
+    // Par-dessus la fusion du produit (0,45/0,55) : chaque résultat est noté
+    // sur une grille à quatre niveaux par le modèle de décision (JevK5-4B,
+    // `score` = Σ pᵢ·i au-dessus de `decide`), les résultats se reclassent
+    // par note (tri stable : l'égalité garde l'ordre de fusion), les notes
+    // sous 1,5 partent en queue. Rien d'allumé au produit — une voie de plus
+    // au banc, jouée seulement si RAG3WEAVER_BANC_UTILITE donne l'adresse du
+    // serveur (http://127.0.0.1:7982). La grille est à nous, pas un copié de
+    // jevbox (dépôt sans licence).
+    if let Ok(adresse) = std::env::var("RAG3WEAVER_BANC_UTILITE") {
+        use rag3weaver::decider::{score, LlamaServerDecider};
+        let decider = LlamaServerDecider::new(&adresse, "JevK5-4B").expect("adresse du décideur");
+        let grille: Vec<String> = [
+            "sans rapport avec la question",
+            "du même sujet, mais n'aide pas à y répondre",
+            "répond en partie, ou donne des faits qui aident",
+            "contient précisément ce qui est demandé",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let vivant = score(&decider, "La mer est-elle bleue ?", &grille, 1.0);
+        if let Err(e) = &vivant {
+            eprintln!("[U] décideur muet ({adresse}) : {e} — section sautée");
+        } else {
+            let mut appels = 0usize;
+            let mut duree = std::time::Duration::ZERO;
+            let mut releu = |requete: &str, attendus: &[&str], avant: &mut Mesure, apres: &mut Mesure| {
+                let r = Catalog::rechercher(&reel, SCOPE, requete, hybride_de(0.45, 0.55))
+                    .expect("fusion du produit");
+                let noms_bruts: Vec<String> = r
+                    .results
+                    .iter()
+                    .map(|x| {
+                        x.data
+                            .as_ref()
+                            .and_then(|d| d.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?")
+                            .to_string()
+                    })
+                    .collect();
+                avant.noter(&noms_bruts, attendus);
+                let t0 = std::time::Instant::now();
+                let notes: Vec<f64> = r
+                    .results
+                    .iter()
+                    .map(|x| {
+                        let extrait: String = x
+                            .chunk
+                            .as_ref()
+                            .map(|c| c.text.chars().take(1200).collect())
+                            .unwrap_or_default();
+                        if extrait.is_empty() {
+                            return 1.5; // sans extrait on ne juge pas : neutre
+                        }
+                        appels += 1;
+                        score(
+                            &decider,
+                            &format!("Question : {requete}
+Extrait :
+{extrait}"),
+                            &grille,
+                            1.0,
+                        )
+                        .unwrap_or(1.5)
+                    })
+                    .collect();
+                duree += t0.elapsed();
+                let mut ordre: Vec<usize> = (0..noms_bruts.len()).collect();
+                // Tri stable par note décroissante ; les écartés (< 1,5) en
+                // queue, dans leur ordre de fusion.
+                ordre.sort_by(|&a, &b| {
+                    let (ea, eb) = (notes[a] < 1.5, notes[b] < 1.5);
+                    eb.cmp(&ea).reverse().then(
+                        notes[b].partial_cmp(&notes[a]).unwrap_or(std::cmp::Ordering::Equal),
+                    )
+                });
+                let noms_releus: Vec<String> =
+                    ordre.iter().map(|&i| noms_bruts[i].clone()).collect();
+                apres.noter(&noms_releus, attendus);
+                // Montées et descentes nommées, sur l'attendu.
+                let rang = |liste: &[String]| {
+                    liste.iter().position(|n| attendus.contains(&n.as_str()))
+                };
+                if let (Some(a), Some(b)) = (rang(&noms_bruts), rang(&noms_releus)) {
+                    if a != b {
+                        let sens = if b < a { "monte" } else { "descend" };
+                        eprintln!(
+                            "[U] « {} » : l'attendu {} → {} ({sens})",
+                            requete.chars().take(50).collect::<String>(),
+                            a + 1,
+                            b + 1
+                        );
+                    }
+                }
+            };
+            let (mut ph_avant, mut ph_apres) = (Mesure::default(), Mesure::default());
+            for (q, attendus) in QUESTIONS {
+                releu(q, attendus, &mut ph_avant, &mut ph_apres);
+            }
+            let (mut id_avant, mut id_apres) = (Mesure::default(), Mesure::default());
+            for nom in IDENTIFIANTS {
+                releu(nom, &[nom], &mut id_avant, &mut id_apres);
+            }
+            hybrides.push(("U avant relecture (0,45/0,55)".into(), ph_avant, id_avant));
+            hybrides.push(("U après relecture par la note".into(), ph_apres, id_apres));
+            let n_requetes = QUESTIONS.len() + IDENTIFIANTS.len();
+            eprintln!(
+                "[U] coût : {appels} appels au modèle, {:.2} s par requête en moyenne ({} requêtes)",
+                duree.as_secs_f64() / n_requetes as f64,
+                n_requetes
+            );
+        }
+    }
+
     // Le témoin : les identifiants en vecteur seul — le chiffre du problème.
     let mut idents_vecteur = Mesure::default();
     for nom in IDENTIFIANTS {

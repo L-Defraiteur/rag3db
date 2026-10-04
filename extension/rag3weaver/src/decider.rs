@@ -138,6 +138,43 @@ pub fn option_probabilities(top: &[(String, f64)], options: &[String], temperatu
     Ok(weights.into_iter().map(|w| w / total).collect())
 }
 
+/// **La note d'une grille à niveaux** : l'espérance d'un choix entre les
+/// niveaux, Σ pᵢ·i — un `score` au-dessus de `decide`, rien qui change la
+/// forme du trait ni le modèle (essai 3 du doc optimiseur du 4 octobre).
+///
+/// `grille` : la description de chaque niveau, du plus bas au plus haut ;
+/// la note rendue va de 0 à `grille.len() - 1`. Le prompt proposé au modèle
+/// énumère les niveaux numérotés et demande le chiffre seul ; les options
+/// sont les chiffres. La calibration reste celle de l'appelant
+/// (`temperature`, voir [`Decider::decide_at`]).
+pub fn score(
+    decider: &dyn Decider,
+    question: &str,
+    grille: &[String],
+    temperature: f64,
+) -> Result<f64, DecideError> {
+    if grille.len() < 2 {
+        return Err(DecideError::Invalid(format!(
+            "une grille se note entre au moins deux niveaux ({} donné)",
+            grille.len()
+        )));
+    }
+    let mut prompt = String::from(question);
+    prompt.push_str("
+
+Note, parmi ces niveaux :
+");
+    for (i, niveau) in grille.iter().enumerate() {
+        prompt.push_str(&format!("{i} : {niveau}
+"));
+    }
+    prompt.push_str("Réponds par le chiffre seul.
+");
+    let options: Vec<String> = (0..grille.len()).map(|i| i.to_string()).collect();
+    let p = decider.decide_at(&prompt, &options, temperature)?;
+    Ok(p.iter().enumerate().map(|(i, pi)| pi * i as f64).sum())
+}
+
 /// Un décideur de test : rend ce qu'on lui a donné.
 #[derive(Debug, Clone)]
 pub struct MockDecider(pub Vec<f64>);
@@ -298,6 +335,23 @@ pub fn connect_decider(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_note_est_l_esperance_des_niveaux() {
+        use super::{score, MockDecider};
+        let grille: Vec<String> = ["sans rapport", "même sujet sans aider", "répond en partie", "contient ce qui est demandé"]
+            .iter().map(|s| s.to_string()).collect();
+        // 0·0,1 + 1·0,2 + 2·0,3 + 3·0,4 = 2,0
+        let d = MockDecider(vec![0.1, 0.2, 0.3, 0.4]);
+        let n = score(&d, "la question", &grille, 1.0).unwrap();
+        assert!((n - 2.0).abs() < 1e-12, "{n}");
+        // Toute la masse au plus haut : la note est le plus haut niveau.
+        let d = MockDecider(vec![0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(score(&d, "q", &grille, 1.0).unwrap(), 3.0);
+        // Une grille à un niveau ne se note pas.
+        let d = MockDecider(vec![1.0]);
+        assert!(score(&d, "q", &grille[..1], 1.0).is_err());
+    }
+
     use super::*;
 
     fn options(labels: &[&str]) -> Vec<String> {
