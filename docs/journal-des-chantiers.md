@@ -590,8 +590,15 @@ Posées le 18 septembre 2026, **tranchées par Lucie le 1er octobre 2026** :
    fois le creux là. Adopté aux deux gabarits :
    `default_weights='bm25:0.45,vector:0.55,sparse:0.4'` — étage passé de
    « choix » à « défaut », que l'entité et l'appelant priment. Reste la
-   pièce de câblage (le manifeste monte le signal creux sur l'entité d'un
-   index nommé, clé explicite) avant que le creux serve en vrai.
+   pièce de câblage livrée (workspace.index_signals, 1afd8bfbe). **Et la
+   position de Lucie, 4 octobre** : le creux est une OPTION documentée,
+   pas le défaut — un creux appris sur du texte faiblit sur les jetons
+   hors vocabulaire (identifiants), hors domaine il peut faire pire que
+   BM25 ; « la parité avec ce que propose Qdrant », des expériences avant
+   de préconiser (liste à venir de la session optimiseur, jouée au banc
+   par la session recherche). Le manifeste d'exemple ne l'active plus
+   (10bdda04d) ; les deux clés et la mesure restent au README ; le poids
+   sparse:0.4 des default_weights reste, il ne pèse rien sans signal.
 3. Le texte embarqué (le nom avec le corps) : **plus tard**.
 4. `fuse_results` à trois listes et ses onze tests : **supprimer** — fait
    le 2 octobre (`01791e347`) ; les onze tests, seuls tests unitaires de la

@@ -1,6 +1,6 @@
 # Session recherche — rapport
 
-**Mis à jour : 4 octobre 2026, vers 07 h 00.** Ce fichier se met à jour sur
+**Mis à jour : 4 octobre 2026, vers 12 h 00.** Ce fichier se met à jour sur
 place après chaque lot fusionné.
 
 ## Fait aujourd'hui (3 octobre, soirée), tout sur master
@@ -60,7 +60,23 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (07 h)
+## En cours (12 h, après la coupure de quota de la nuit)
+
+- **Le creux est une option, pas le défaut** (10bdda04d) : position de
+  Lucie (gadget bien fait, parité Qdrant, expériences avant de
+  préconiser) — le manifeste d'exemple ne l'active plus, README porte
+  les clés et la mesure, default_weights inchangé. J'attends la liste
+  d'expériences de l'optimiseur pour le banc.
+- **Correctifs de reprise** (8a022da9e) : e2e_mesure_sync_source lit
+  RAG3DB_ROOT (seule fautive des sept migrées, audit fait, prouvée
+  depuis le worktree) ; les « reopen DB » s'expliquent ; path_in_source
+  fourni aux crochets (le chemin tel que la base l'indexe — file_path
+  est ABSOLU en base, mesuré).
+- **« Avant d'éditer » cadrée de bout en bout** : c0 a son gabarit
+  impact_fichier (égalité sur file_path via path_in_source, 60-121 ms
+  sur 6 000 scopes, summary_group=case) — j'attache à sa fusion.
+
+## Ancien (07 h)
 
 **T5 auto + bac à sable, l'épreuve finale du lot 3 : 7 itérations,
 19 448 jetons, UN refus lu, zéro fuite** — contre 15 / ~80 000 sous la
