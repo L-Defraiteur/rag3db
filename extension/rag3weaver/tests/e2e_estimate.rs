@@ -246,12 +246,37 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     let batch_files = std::env::var("RAG3WEAVER_ESTIMATE_BATCH_FILES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(64);
     eprintln!("[mots] paquets de {batch_files} fichiers");
     let options = SourceSyncOptions { batch_files, exige: D::RECHERCHE_TEXTE, ..Default::default() };
+    // Le pic au fil de l'eau, avec l'étape en cours quand il arrive : un
+    // échantillon de la mémoire résidente toutes les 100 ms.
+    let step = Arc::new(Mutex::new(String::from("avant le premier paquet")));
+    let peak_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let peak_watch = {
+        let (step, stop) = (step.clone(), peak_stop.clone());
+        std::thread::spawn(move || {
+            let mut peak = (0u64, String::new());
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                let rss = std::fs::read_to_string("/proc/self/status")
+                    .ok()
+                    .and_then(|s| s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
+                    .unwrap_or(0);
+                if rss > peak.0 {
+                    peak = (rss, step.lock().unwrap().clone());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            peak
+        })
+    };
     let t = Instant::now();
     let mut last = 0usize;
     // Les trois temps, séparés : les mots (les paquets), les relations (le
     // chargement final, en masse), puis — plus bas — les vecteurs.
     let mut words_seconds: Option<f64> = None;
     let report = sync_source(&mut catalog, &Snapshot::new("rag3db", kept), &options, &mut |p: SourceSyncProgress| {
+        *step.lock().unwrap() = match p.phase {
+            SyncPhase::Nodes => format!("paquet suivant {} fichiers faits, {} liens en file", p.files_done, p.relations_pending),
+            other => format!("{other:?}, {} liens à poser", p.relations_pending),
+        };
         if p.phase == SyncPhase::Relations && words_seconds.is_none() {
             words_seconds = Some(t.elapsed().as_secs_f64());
             eprintln!("[mots] les mots sont là en {:.0} s ; relations : {} liens à poser", t.elapsed().as_secs_f64(), p.relations_pending);
@@ -276,6 +301,9 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     );
 
     eprintln!("[mémoire] {} Mo — synchronisation finie", rss());
+    peak_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let (peak_kb, peak_step) = peak_watch.join().expect("guetteur du pic");
+    eprintln!("[mémoire] pic au fil de l'eau : {} Mo, pendant : {peak_step}", peak_kb / 1024);
     if !auto_checkpoint {
         let t = Instant::now();
         catalog.execute_raw("CHECKPOINT").expect("point de reprise final");
