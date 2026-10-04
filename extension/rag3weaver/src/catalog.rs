@@ -314,6 +314,9 @@ pub struct Catalog {
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
     /// Populated by InsertRecordNode on each INSERT via RETURN ID(n).
     node_id_cache: Arc<RwLock<NodeIdCache>>,
+    /// Les uuids qu'une synchronisation a vraiment posés, par table
+    /// ([`Catalog::begin_proving_presence`]) ; `None` hors de ce temps.
+    proven_present: Option<crate::dataflow::record_nodes::ProvenPresent>,
     /// Cached chunkers keyed by config to avoid re-instantiation.
     chunker_cache: HashMap<ChunkerConfig, Chunker>,
     /// Checkpoint store for crash-recovery of drain executions.
@@ -474,6 +477,7 @@ impl Catalog {
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
+            proven_present: None,
             chunker_cache: HashMap::new(),
             checkpoint_store: None,
             blob_store: None,
@@ -3032,6 +3036,9 @@ impl Catalog {
         services.register("dialect", self.dialect.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
+        if let Some(ref prouves) = self.proven_present {
+            services.register(crate::dataflow::record_nodes::PROVEN_PRESENT, prouves.clone());
+        }
         services.register("embedder", self.embedder.clone());
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
@@ -6573,6 +6580,23 @@ impl Catalog {
         self.flush_blob_store("préparation du schéma")
     }
 
+    /// **Les uuids posés font preuve d'existence**, jusqu'à
+    /// [`end_proving_presence`](Self::end_proving_presence). Chaque ligne
+    /// qu'un `InsertRecordNode` pose vraiment (un COPY réussi, ou une ligne
+    /// que le MERGE a rendue) entre dans l'ensemble de sa table ; chaque
+    /// suppression d'un drain l'en retire. Le COPY des liens ne vérifie plus
+    /// l'existence d'un bout prouvé : il ne demande au moteur que les autres,
+    /// et compte toujours les paires sans bout. Une transaction annulée doit
+    /// appeler `end_proving_presence` : ses lignes n'existent plus.
+    pub fn begin_proving_presence(&mut self) {
+        self.proven_present = Some(Default::default());
+    }
+
+    /// La preuve se ferme : hors de ce temps, rien n'est supposé.
+    pub fn end_proving_presence(&mut self) {
+        self.proven_present = None;
+    }
+
     /// **Une première indexation commence.** Pour chaque entité de
     /// `entities` dont la table (et ses morceaux) est vide maintenant, et que
     /// le moteur sait charger en masse, toute ligne que cette indexation n'a
@@ -7529,6 +7553,9 @@ impl Catalog {
         services.register("dialect", self.dialect.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
+        if let Some(ref prouves) = self.proven_present {
+            services.register(crate::dataflow::record_nodes::PROVEN_PRESENT, prouves.clone());
+        }
         // Ce que lit `InsertRecordNode` et qui manquait ici.
         services.register("fts_handles", self.fts_handles.clone());
         services.register("entity_configs", self.entity_configs.clone());

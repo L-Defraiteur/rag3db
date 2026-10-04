@@ -58,6 +58,36 @@ pub struct InsertRecordNode {
     // Stored during execute() for undo()
     conn: Option<Arc<dyn DbConnection>>,
     dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
+    proven_present: Option<ProvenPresent>,
+}
+
+/// **Les uuids posés par une synchronisation, par table** — la preuve
+/// d'existence que le COPY des liens peut prendre au lieu de la demander au
+/// moteur ([`Catalog::begin_proving_presence`](crate::Catalog::begin_proving_presence)).
+/// Le service n'existe que pendant ce temps.
+pub type ProvenPresent = Arc<Mutex<HashMap<String, HashSet<String>>>>;
+
+/// Le nom du service [`ProvenPresent`].
+pub const PROVEN_PRESENT: &str = "proven_present";
+
+/// Une suppression retire ses uuids de la preuve.
+fn oublier_les_prouves(prouves: Option<&ProvenPresent>, table: &str, uuids: impl IntoIterator<Item = impl AsRef<str>>) {
+    if let Some(p) = prouves {
+        let mut g = p.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(set) = g.get_mut(table) {
+            for u in uuids {
+                set.remove(u.as_ref());
+            }
+        }
+    }
+}
+
+/// Une suppression par parent (les morceaux) : les uuids supprimés ne sont
+/// pas connus, toute la table perd sa preuve.
+fn oublier_la_table(prouves: Option<&ProvenPresent>, table: &str) {
+    if let Some(p) = prouves {
+        p.lock().unwrap_or_else(|e| e.into_inner()).remove(table);
+    }
 }
 
 /// **Le chemin d'écriture d'`InsertRecordNode`.**
@@ -76,7 +106,7 @@ pub enum InsertMode {
 
 impl InsertRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), mode: InsertMode::Upsert, undo_data: None, conn: None, dialect: None }
+        Self { name: name.into(), mode: InsertMode::Upsert, undo_data: None, conn: None, dialect: None, proven_present: None }
     }
 
     pub fn with_mode(mut self, mode: InsertMode) -> Self {
@@ -312,10 +342,12 @@ impl Node for InsertRecordNode {
             // charge le fichier d'un bloc, sans MERGE ligne à ligne. Refusé,
             // le groupe repasse par le chemin de toujours.
             let mut uuid_to_node_id: Option<HashMap<String, String>> = None;
+            let mut par_copy = false;
             if self.mode == InsertMode::Copy {
                 match copier_les_noeuds(conn.as_ref(), dialect.as_ref(), entity_name, &col_refs, indices, &items, a_indexer || porte_du_sparse) {
                     Ok(Some(ids)) => {
                         copied += indices.len();
+                        par_copy = true;
                         uuid_to_node_id = Some(ids);
                     }
                     Ok(None) => {}
@@ -379,6 +411,20 @@ impl Node for InsertRecordNode {
                     identifiants_par_uuid(&result.rows, false)
                 }
             };
+
+            // **La preuve d'existence** : un COPY réussi a posé toutes ses
+            // lignes ; un MERGE, celles qu'il a rendues.
+            if let Some(p) = ctx.service::<ProvenPresent>(PROVEN_PRESENT) {
+                let mut g = p.lock().unwrap_or_else(|e| e.into_inner());
+                let set = g.entry(entity_name.clone()).or_default();
+                for &i in indices {
+                    if let Some(u) = items[i].data.get("_uuid").and_then(|v| v.as_str()) {
+                        if par_copy || uuid_to_node_id.contains_key(u) {
+                            set.insert(u.to_string());
+                        }
+                    }
+                }
+            }
 
             // Resolve refs + cache node IDs
             for &i in indices {
@@ -483,6 +529,7 @@ impl Node for InsertRecordNode {
         let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").cloned()
             .ok_or("InsertRecordNode: 'dialect' service not registered")?;
         self.dialect = Some(dialect.clone());
+        self.proven_present = ctx.service::<ProvenPresent>(PROVEN_PRESENT).cloned();
 
         ctx.trigger("done");
         ctx.set_output("inserted", PortValue::new(
@@ -524,6 +571,7 @@ impl Node for InsertRecordNode {
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
             ).map_err(|e| format!("InsertRecordNode undo failed: {e}"))?;
+            oublier_les_prouves(self.proven_present.as_ref(), entity_name, &uuid_list);
         }
         Ok(())
     }
@@ -856,9 +904,28 @@ fn copier_les_liens(
     // bouts sont là ; les autres sont comptées, pas perdues en silence.
     // **Chaque uuid n'est vérifié qu'une fois par drain** : six relations
     // sur les mêmes scopes demandaient six fois la même liste.
+    // **Un bout prouvé ne se demande pas** : posé par cette synchronisation
+    // (`ProvenPresent`), il est là. Les autres se vérifient comme avant, et
+    // une paire dont un bout manque se compte toujours.
+    let prouves = ctx.service::<ProvenPresent>(PROVEN_PRESENT).cloned();
+    let mut bouts_prouves = 0usize;
     let mut verifier = |table: &str, uuids: &mut Vec<&str>| -> Result<(), String> {
         let connus = presents_connus.entry(table.to_string()).or_default();
         uuids.retain(|u| !connus.contains(*u));
+        if let Some(p) = &prouves {
+            let g = p.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(set) = g.get(table) {
+                uuids.retain(|u| {
+                    if set.contains(*u) {
+                        connus.insert(u.to_string());
+                        bouts_prouves += 1;
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+        }
         for tranche in uuids.chunks(5_000) {
             let param = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.to_string())).collect());
             let lu = conn
@@ -925,7 +992,7 @@ fn copier_les_liens(
     let _ = std::fs::remove_file(&chemin);
     if profil {
         eprintln!(
-            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, existence {} ms, csv {} ms, COPY {} ms{}",
+            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, {bouts_prouves} bouts prouvés, existence {} ms, csv {} ms, COPY {} ms{}",
             ecrites,
             indices.len() - ecrites - absents,
             t_existence.as_millis(),
@@ -938,6 +1005,7 @@ fn copier_les_liens(
     ctx.metric("copied", ecrites as f64);
     ctx.metric("already_linked", (indices.len() - ecrites - absents) as f64);
     ctx.metric("dangling", absents as f64);
+    ctx.metric("proven_ends", bouts_prouves as f64);
     Ok(true)
 }
 
@@ -2767,6 +2835,7 @@ impl Node for RechunkDeleteNode {
             let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
             ctx.metric("sparse_removed", creux as f64);
             let cypher = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
+            oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
             let result = conn
                 .execute_with_params(
                     &cypher,
@@ -2928,6 +2997,7 @@ impl Node for DeleteRecordNode {
                 let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
                 ctx.metric("sparse_removed", creux as f64);
                 let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
+                oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
                 let result = conn
                     .execute_with_params(
                         &del_chunks,
@@ -2985,6 +3055,7 @@ impl Node for DeleteRecordNode {
 
             // Delete entities themselves
             let del_entities = dialect.batch_cascade_delete(entity_name);
+            oublier_les_prouves(ctx.service::<ProvenPresent>(PROVEN_PRESENT), entity_name, uuids.iter());
             conn.execute_with_params(
                 &del_entities,
                 &[QueryParam { name: "uuids".into(), value: uuid_list }],

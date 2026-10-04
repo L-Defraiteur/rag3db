@@ -544,7 +544,14 @@ fn synchroniser_la_source(
     if mode == RelationsMode::Bulk {
         catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")).map_err(|e| e.to_string())?;
     }
+    // **Les lignes posées font preuve d'existence** pour le COPY des liens,
+    // le temps de cette synchronisation, derrière la transaction par paquet
+    // (levier 2 du chargement final). Fermée sur tout chemin de sortie.
+    if transaction_par_paquet() {
+        catalog.begin_proving_presence();
+    }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id);
+    catalog.end_proving_presence();
     if mode == RelationsMode::Bulk {
         let _ = catalog.persist_meta_key(&marque, "");
     }
@@ -910,10 +917,15 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             crate::ingest_profile::add("sync · COMMIT du paquet (et son point de reprise)", t);
             match r {
                 Ok(_) => return Ok(()),
-                Err(e) => format!("valider le paquet : {e}"),
+                Err(e) => {
+                    catalog.end_proving_presence();
+                    format!("valider le paquet : {e}")
+                }
             }
         }
         Err(cause) => {
+            // Défait : les lignes posées n'existent plus, la preuve tombe.
+            catalog.end_proving_presence();
             let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
             format!(
                 "{cause} — le paquet est défait ({})",
