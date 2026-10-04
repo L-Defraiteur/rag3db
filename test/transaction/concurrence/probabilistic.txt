@@ -15,3 +15,9 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
 # ne se rouvre parfois plus (« Found duplicated primary key value » au rejeu).
 Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Hot
 Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash
+#
+# Le SET d'un vecteur vers un autre, ligne à ligne (vector_index_update_test.cpp, 4 octobre,
+# après c8fdaf196) : perd des lignes de l'index un essai sur trois environ, et un essai dure
+# près d'une minute ; assez d'essais pour rougir à coup sûr coûteraient dix minutes. Marche
+# « mise à jour de l'index : contrôle en fin d'instruction ».
+VectorIndexUpdate.SetToAnotherVectorLineByLine

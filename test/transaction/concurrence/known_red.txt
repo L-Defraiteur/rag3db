@@ -143,3 +143,22 @@ SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Insert search-works,untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/Delete search-works,untagged
 Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/UpdateVector index-knows-new-vectors,search-works,untagged
+#
+# Marche « mise à jour de l'index : contrôle en fin d'instruction » (index vectoriel juste
+# en service, hors des verrous ; vector_index_update_test.cpp). Un seul écrivain, ni arrêt ni
+# rejeu : après une mise à jour de vecteurs, une recherche exhaustive ne rend plus toutes les
+# lignes, ou une ligne n'est pas rendue première sur son propre vecteur. Après c8fdaf196 (les
+# anciens voisins restent joignables), un essai sur deux environ perd encore des lignes :
+# chaque cas répète assez d'essais pour rougir à chaque passe (4 octobre, trois passes).
+# Le chemin du produit (depuis NULL, et le remplacement qui repasse par NULL) est vert.
+VectorIndexUpdate.SetToAnotherVectorInBatchesOf512 vector-index-exact
+VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine vector-index-exact
+VectorIndexUpdate.OneRowUpdatedManyTimes vector-index-exact
+VectorIndexUpdate.UpdateThenDelete vector-index-exact
+#
+# Marche « index vectoriel juste en service », construction : une ligne très éloignée d'un
+# nuage serré (500 lignes, une à [9000, 2, 3, 4], toutes les autres coordonnées sous 31),
+# index bâti d'un coup après le remplissage, sans aucune mise à jour : la ligne, ou d'autres,
+# manquent un essai sur trois environ. Vert avec les vecteurs de la recette du cœur C++,
+# dont la dernière coordonnée va jusqu'à 499. Parent de HnswBuiltOnTheFirstHundredRows.
+VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
