@@ -568,6 +568,9 @@ fn synchroniser(
     s_files: &str,
     source_id: String,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
+    // Le plein texte en fichiers se vérifie avant la première transaction :
+    // un dossier d'un processus tué se rebâtit ici, pas au milieu d'un paquet.
+    catalog.verify_fts_files();
     let cursor = source.cursor();
     let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
         Some(root) => (root.to_string(), false),

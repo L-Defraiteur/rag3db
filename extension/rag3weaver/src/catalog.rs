@@ -333,6 +333,10 @@ pub struct Catalog {
     /// Les dossiers du mode `FtsStorage::Files`, gardés pour les rendre
     /// durables à chaque vidage.
     fts_files: Vec<Arc<crate::fts_directory::FtsShardStorage>>,
+    /// Les tables dont le dossier du plein texte a été jeté à l'ouverture
+    /// (génération qui n'est pas celle de la base) : à rebâtir depuis les
+    /// lignes, hors transaction (`open_fts_handles_for`).
+    fts_rebuild: HashSet<String>,
     /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
@@ -465,6 +469,7 @@ impl Catalog {
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
+            fts_rebuild: HashSet::new(),
             fts_storage: Default::default(),
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
@@ -804,6 +809,19 @@ impl Catalog {
     /// encore vivant), on refuse plutôt que de détruire sous leurs pieds — un
     /// `close()` suivi d'une destruction partielle laisse un index incohérent,
     /// et c'est ce qui provoquait un SIGSEGV à la réouverture.
+    /// **Vérifier le plein texte en fichiers** avant d'écrire : ouvre l'index
+    /// de chaque entité ; un dossier dont la génération n'est pas celle de la
+    /// base est rebâti depuis les lignes. À appeler hors transaction (la
+    /// synchronisation d'une source le fait en tête). Sans effet hors du mode
+    /// `FtsStorage::Files`.
+    pub fn verify_fts_files(&mut self) {
+        if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
+            return;
+        }
+        let names: Vec<String> = self.entity_configs.keys().cloned().collect();
+        self.open_fts_handles_for(&names);
+    }
+
     pub fn drop_fts_index(&mut self, table: &str) {
         let Some(handle) = self.fts_handles.remove(table) else { return };
         match Arc::try_unwrap(handle) {
@@ -861,6 +879,22 @@ impl Catalog {
         // Un index par cellule (org, project) : jamais partagé (doc 37 §2.2).
         let index_name = self.scope.index_name(&crate::fts_handle::fts_index_name(table));
 
+        // Le mode fichiers : le dossier n'est cru que si sa génération est
+        // celle que la base a validée avec ses lignes.
+        let mut base_generation = 0u64;
+        if let crate::fts_handle::FtsStorage::Files { base_path } = &self.fts_storage {
+            let dir = std::path::Path::new(base_path).join(&index_name);
+            let marque = self.read_meta_key(&format!("fts_generation:{index_name}")).ok().flatten().and_then(|v| v.parse::<u64>().ok());
+            let sur_disque = crate::fts_directory::generation_on_disk(&dir);
+            base_generation = marque.unwrap_or(0);
+            if marque != sur_disque && (marque.is_some() || dir.exists()) {
+                eprintln!(
+                    "[rag3weaver] plein texte {table} : génération du dossier {sur_disque:?}, de la base {marque:?} — dossier jeté, rebâti depuis les lignes"
+                );
+                let _ = std::fs::remove_dir_all(&dir);
+                self.fts_rebuild.insert(table.to_string());
+            }
+        }
         let files: std::cell::RefCell<Vec<Arc<crate::fts_directory::FtsShardStorage>>> = Default::default();
         let storage = || -> Option<Box<dyn ShardStorage>> {
             match &self.fts_storage {
@@ -881,6 +915,7 @@ impl Catalog {
                     let dir = std::path::Path::new(base_path).join(&index_name);
                     match crate::fts_directory::FtsShardStorage::new(&dir) {
                         Ok(s) => {
+                            s.start_after(base_generation);
                             files.borrow_mut().push(s.clone());
                             Some(Box::new(crate::fts_directory::SharedFtsStorage(s)))
                         }
@@ -6489,6 +6524,16 @@ impl Catalog {
                         let _ = &fields;
                     } else {
                         self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
+                        // Un dossier jeté à l'ouverture se rebâtit ici, hors
+                        // transaction : jamais un plein texte vide servi.
+                        if !self.in_transaction && self.fts_rebuild.remove(&table) {
+                            let t = std::time::Instant::now();
+                            match self.reindex(&name) {
+                                Ok(_) => eprintln!("[rag3weaver] plein texte de {name} rebâti depuis les lignes en {:.1} s", t.elapsed().as_secs_f64()),
+                                Err(e) => eprintln!("[rag3weaver] plein texte de {name} : rebâti impossible : {e}"),
+                            }
+                            self.fts_rebuild.remove(&table);
+                        }
                     }
                 }
             }
@@ -7121,9 +7166,18 @@ impl Catalog {
         if !self.fts_files.is_empty() {
             let t = std::time::Instant::now();
             for storage in &self.fts_files {
-                storage
+                let ecrits = storage
                     .sync_generation()
                     .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : {e}")))?;
+                if ecrits > 0 {
+                    // Le dossier d'abord, durable ; la base ensuite, sur la
+                    // même connexion que les lignes (validée avec elles sous
+                    // la transaction par paquet).
+                    let g = storage
+                        .mark_next_generation()
+                        .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : marque : {e}")))?;
+                    self.persist_meta_key(&format!("fts_generation:{}", storage.key()), &g.to_string())?;
+                }
             }
             crate::ingest_profile::add("entités · rendre durable le plein texte (fichiers)", t);
         }

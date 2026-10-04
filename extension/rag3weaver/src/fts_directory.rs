@@ -12,14 +12,25 @@
 //! ([`FtsShardStorage::sync_generation`]) : les fichiers écrits, puis les
 //! dossiers qui les contiennent.
 //!
-//! **Étape A du protocole** : la marque de génération validée en base avec
-//! les lignes, et la reprise après un arrêt brutal, viennent ensuite. Tant
-//! qu'elles manquent, ce mode a la durabilité de `LocalFs`, pas plus.
+//! **La marque de génération** (étape B) : après chaque synchronisation qui
+//! a écrit quelque chose, le dossier reçoit son numéro de génération
+//! (`_generation`, synchronisé) et le catalogue écrit le même numéro en base
+//! (`fts_generation:<index>`), sur la même connexion — donc, sous la
+//! transaction par paquet, **validé avec les lignes**. À l'ouverture, un
+//! dossier dont la génération n'est pas celle de la base (arrêt entre les
+//! fichiers et la validation, dossier perdu ou copié à moitié) est **jeté et
+//! rebâti depuis les lignes**.
+//!
+//! Écart au protocole écrit (`02-…`) : on ne garde pas la génération N−1 pour
+//! y revenir, on rebâtit — plus simple, plus lent après un arrêt. Et hors de
+//! la transaction par paquet, les lignes sont validées avant le plein texte :
+//! un arrêt entre les deux laisse un index en retard que rien ne détecte.
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ld_lucivy::directory::error::{DeleteError, OpenReadError, OpenWriteError};
@@ -158,12 +169,47 @@ impl Directory for FtsDirectory {
 pub struct FtsShardStorage {
     base_path: PathBuf,
     directories: Mutex<Vec<FtsDirectory>>,
+    /// La dernière génération marquée.
+    generation: AtomicU64,
+}
+
+/// Le fichier de la racine qui porte la génération du dossier.
+pub const GENERATION_FILE: &str = "_generation";
+
+/// La génération écrite dans un dossier d'index, s'il en porte une.
+pub fn generation_on_disk(base_path: &Path) -> Option<u64> {
+    std::fs::read_to_string(base_path.join(GENERATION_FILE)).ok().and_then(|s| s.trim().parse().ok())
 }
 
 impl FtsShardStorage {
     pub fn new(base_path: &Path) -> io::Result<Arc<Self>> {
         std::fs::create_dir_all(base_path)?;
-        Ok(Arc::new(Self { base_path: base_path.to_path_buf(), directories: Mutex::new(Vec::new()) }))
+        let generation = AtomicU64::new(generation_on_disk(base_path).unwrap_or(0));
+        Ok(Arc::new(Self { base_path: base_path.to_path_buf(), directories: Mutex::new(Vec::new()), generation }))
+    }
+
+    /// Le nom du dossier : la clé de sa marque en base.
+    pub fn key(&self) -> String {
+        self.base_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    }
+
+    /// Repartir au moins de cette génération (celle de la base).
+    pub fn start_after(&self, generation: u64) {
+        self.generation.fetch_max(generation, Ordering::SeqCst);
+    }
+
+    /// **Marquer une génération nouvelle** dans le dossier, durablement, et la
+    /// rendre : à écrire ensuite en base, avec les lignes.
+    pub fn mark_next_generation(&self) -> io::Result<u64> {
+        let g = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let path = self.base_path.join(GENERATION_FILE);
+        let tmp = path.with_extension("tmp");
+        let mut f = File::create(&tmp)?;
+        f.write_all(g.to_string().as_bytes())?;
+        f.sync_data()?;
+        std::fs::rename(&tmp, &path)?;
+        File::open(&self.base_path)?.sync_all()?;
+        Ok(g)
     }
 
     fn shard_directory(&self, shard_id: usize) -> Result<FtsDirectory, String> {

@@ -38,6 +38,11 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 const ROLE: &str = "TX_ARRET_ROLE";
 const BASE: &str = "TX_ARRET_BASE";
 const PAQUET_TUE: usize = 2;
+
+thread_local! {
+    /// Les fils de ce fil de test tournent-ils en mode fichiers ?
+    static FICHIERS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
 const AVANT_LA_POUSSEE: usize = usize::MAX;
@@ -76,6 +81,13 @@ fn catalogue(base: &Path) -> Catalog {
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
+    // `TX_ARRET_FTS=fichiers` : le plein texte dans des fichiers à côté de la
+    // base (`FtsStorage::Files`), dont la génération est validée avec les
+    // lignes.
+    if std::env::var("TX_ARRET_FTS").as_deref() == Ok("fichiers") {
+        let dossier = format!("{}.fts", base.display());
+        catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: dossier });
+    }
     catalog.initialize().expect("initialize");
     register_code_schema(&mut catalog, default_scope_chunking()).expect("schéma du code");
     catalog
@@ -183,6 +195,11 @@ fn lancer(role: &str, base: &Path, tuer: bool) -> (std::process::ExitStatus, Str
 /// par validation (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION`).
 fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, par_validation: usize) -> (std::process::ExitStatus, String) {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    if FICHIERS.with(|f| f.get()) {
+        cmd.env("TX_ARRET_FTS", "fichiers");
+    } else {
+        cmd.env_remove("TX_ARRET_FTS");
+    }
     cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
@@ -394,4 +411,57 @@ fn une_mort_avant_la_poussee_du_plein_texte_se_reprend_aux_memes_comptes() {
     assert_eq!(repris, temoin, "après la reconstruction, les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Le plein texte en fichiers, après un arrêt entre les fichiers et la
+/// validation** : l'écrivain meurt au paquet 2, ses fichiers du plein texte
+/// déjà synchronisés et marqués, la transaction des lignes pas encore validée.
+/// Le repreneur trouve un dossier en avance sur la base, le jette, le rebâtit
+/// depuis les lignes, finit la synchronisation ; ses comptes — plein texte
+/// compris — sont ceux d'un témoin sans arrêt, lui aussi en fichiers.
+#[test]
+#[ignore]
+fn en_fichiers_un_arret_entre_les_fichiers_et_la_validation_se_rebatit_aux_bons_comptes() {
+    FICHIERS.with(|f| f.set(true));
+    let dossier = dossier_sur_disque("fichiers-repris");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer("ecrivain", &base, true);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet {PAQUET_TUE} :\n{sortie}");
+    assert!(journal(&dossier).iter().any(|(_, t)| *t > 0), "journal vide : la mort ne prouverait rien");
+    assert!(dossier.join("base.rag3db.fts").exists(), "le dossier du plein texte existe après la mort");
+
+    let (statut, sortie) = lancer("repreneur", &base, false);
+    assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
+    assert!(sortie.contains("dossier jeté, rebâti depuis les lignes"), "le dossier en avance est reconnu :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+
+    let temoin_dossier = dossier_sur_disque("fichiers-temoin");
+    let (statut, sortie) = lancer("temoin", &temoin_dossier.join("base.rag3db"), false);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    println!("▸ comptes repris : {repris:?}");
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
+    assert_eq!(repris, temoin, "en fichiers, la reprise rend les comptes d'une passe sans arrêt, plein texte compris");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Sans arrêt, rien n'est rebâti** : une passe complète en fichiers, puis
+/// un processus neuf qui rouvre et resynchronise — la génération du dossier
+/// est celle de la base, aucun rebâti, mêmes comptes.
+#[test]
+#[ignore]
+fn en_fichiers_une_base_saine_se_rouvre_sans_rebatir() {
+    FICHIERS.with(|f| f.set(true));
+    let dossier = dossier_sur_disque("fichiers-sain");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer("premier", &base, false);
+    assert!(statut.success(), "{sortie}");
+    let premier = comptes_rendus("premier", &sortie);
+    let (statut, sortie) = lancer("second", &base, false);
+    assert!(statut.success(), "{sortie}");
+    assert!(!sortie.contains("rebâti depuis les lignes"), "une base saine ne se rebâtit pas :\n{sortie}");
+    assert_eq!(comptes_rendus("second", &sortie), premier, "mêmes comptes après réouverture");
+    let _ = std::fs::remove_dir_all(&dossier);
 }
