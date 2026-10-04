@@ -1,6 +1,6 @@
 # Une arête ne dit pas comment elle a été résolue
 
-- **État** : ouvert — proposition, pas pour maintenant
+- **État** : en cours — colonne sur master (986565f81) ; filtre et appels par chemin sur la branche `filtre-resolution` (c56ee578b), en attente du rejeu de l'arbre principal
 - **Gravité** : réponse fausse (une arête devinée se montre comme une arête sûre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous `code.rs`, `usages`, `impact`, liens)
@@ -50,3 +50,24 @@ Le lot côté `code.rs` (arbre principal) : la colonne et sa valeur ; puis les
 consommateurs (session codeparsers) ; mesure au banc des relations (la
 précision de « dépend de » doit monter, le rappel ne pas baisser — les
 arêtes `nom` justes existent aussi).
+
+## Où on en est (4 octobre, soir)
+
+- La marque est posée (`choose_target`, cef4c5ae5 ; colonne `resolution`,
+  986565f81) : `fichier`, `type`, `import`, `nom`.
+- Un appel par chemin sans `use` (`crate::a::f()`, `super::x::f()`) était
+  marqué `nom` ; il prend maintenant son qualificatif comme module
+  (c56ee578b).
+- Le filtre est générique (`edge_field`, `edge_guessed`) et déclaré dans
+  `links.mmd` ; `usages` dit « (par le nom) ».
+- **Pas dans `impact`** : banc des relations, deux passes sur le même index —
+  « dépend de » 1,00 / 0,85 → 1,00 / 1,00 (rappel / précision), « tests
+  traversés » 0,89 / 0,92 → 0,89 / 0,99, mais « relie » 1,00 → 0,75, et deux
+  e2e perdent un vrai test. Restent `nom` sans être faux :
+  - un appel de méthode sur une variable sans type lu
+    (`catalog.lock().unwrap().ingest_entities(…)`, `guard.probe_embedding_rate(…)`) ;
+  - un appel par chemin dans les arguments d'une macro (`assert_eq!(crate::b::run(), 2)`) :
+    ticket « le qualificatif d'un chemin se perd dans une macro ».
+
+Pour allumer le filtre dans `impact` : que ces deux voies gagnent une
+marque plus sûre que `nom`, puis la même mesure.
