@@ -706,3 +706,18 @@ Ce qu'elle demande :
   le quota de la démo.
 
 Avis de l'orchestration, de connaissance générale ; rien n'est essayé.
+
+**Ce que la personne voit pendant que l'agent travaille** (Lucie, 5 octobre) :
+« Il peut parler de temps en temps, mais surtout on voit en temps réel tous
+les DAG qu'il écrit, ce qui se passe on le voit visuellement aussi, on peut
+cliquer sur les fiches. »
+
+Donc l'écran d'édition a trois choses vivantes, toutes cliquables :
+
+- **le site lui-même**, qui change en place (le brouillon) ;
+- **les graphes que l'agent écrit ou modifie**, dessinés à mesure, et leur
+  exécution nœud par nœud (§13) ;
+- **les fiches** que l'agent ouvre et remplit — fichiers, déclarations,
+  commits avec leur raison — chacune ouvrable au clic.
+
+La voix n'est qu'un accompagnement ; ce qui fait foi, c'est ce qu'on voit.
