@@ -680,3 +680,29 @@ Ce qu'elle demande :
   la remise à zéro quotidienne limite les dégâts, elle ne suffit pas ;
 - **dire aux gens que leurs demandes sont visibles** de tous avant qu'ils
   écrivent.
+
+### Parler à son site, à voix haute
+
+> « Ça ferait vraiment futuriste. On mettrait du TTS/STT local, avec Whisper
+> ou quoi ; peut-être le builtin du navigateur pour le TTS, et un STT valable
+> multilingue pour la voix. » — Lucie, 5 octobre. Ses images : l'ordinateur
+> de Star Trek — on lui parle, et la visualisation arrive sous les yeux.
+
+- **Entendre (la voix vers le texte) est la moitié qui compte.** Un modèle
+  multilingue du genre Whisper, servi par nous ou tourné en local : c'est une
+  capacité de plus à déclarer, comme les autres (`models.<capacité>` : en
+  service ou en local). La reconnaissance intégrée aux navigateurs existe,
+  mais elle n'est pas dans tous, et chez certains l'audio part chez un
+  tiers : pas une base sûre.
+- **Parler (le texte vers la voix) peut commencer par le navigateur** : sa
+  synthèse intégrée est gratuite et immédiate, de qualité moyenne. Suffisant
+  pour une démo ; un modèle à nous plus tard si la voix devient un produit.
+- **Le site montre, il ne raconte pas** : la réponse d'une demande est
+  d'abord ce qui change à l'écran ; la voix dit une phrase (« c'est fait »,
+  « je propose ceci »), pas un compte rendu.
+- **À prévoir** : un geste pour parler (appuyer pour dire) plutôt qu'une
+  écoute permanente ; dire à la personne que sa voix part vers un service
+  quand ce n'est pas local ; le coût de la reconnaissance par visiteur dans
+  le quota de la démo.
+
+Avis de l'orchestration, de connaissance générale ; rien n'est essayé.
