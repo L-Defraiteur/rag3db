@@ -384,3 +384,26 @@ Limites à garder en tête :
 - **Un nœud nouveau en Rust se compile** — par nous, pas par la personne.
 - **rhai n'a accès qu'à ce qu'on lui donne** (ni fichiers ni réseau par
   défaut) : c'est aussi ce qui rend un module reçu acceptable.
+
+### Et du code compilé chargé à la volée ?
+
+> « Il n'y a pas une logique de DLL en Rust, des bibliothèques dynamiques
+> chargées à la volée ? » — Lucie
+
+Deux voies existent ; avis de l'orchestration, à vérifier avant de s'engager :
+
+| Voie | Ce que c'est | Pour | Contre |
+|---|---|---|---|
+| bibliothèque native (`.so` / `.dll`) | du Rust compilé à part, chargé par le binaire | vitesse native, accès à tout (GPU compris) ; le moteur charge déjà ses extensions ainsi | Rust n'a pas d'interface binaire stable : il faut une frontière en C ou le même compilateur ; aucun bac à sable — un module fait ce qu'il veut et son plantage tue le processus ; décharger est délicat ; un fichier par système |
+| module WebAssembly | du code compilé (Rust ou autre) exécuté dans un bac à sable embarqué | chargé et remplacé à chaud ; isolé — n'a accès qu'à ce qu'on lui donne ; un même fichier pour tous les systèmes ; proche de la vitesse native | une dépendance de plus ; les données traversent une frontière ; pas de GPU |
+
+Trois étages possibles, du plus simple au plus puissant :
+
+1. **rhai** — la logique de liaison, sans rien compiler ;
+2. **WebAssembly** — une logique lourde ou écrite dans un autre langage,
+   compilée par son auteur (ou par un agent), chargée à chaud, isolée :
+   acceptable pour un module reçu ;
+3. **bibliothèque native** — réservée à ce qui vient de nous ou que la
+   personne compile pour elle-même ; jamais pour un module reçu.
+
+Dans les trois cas la personne ne recompile jamais **notre** binaire.
