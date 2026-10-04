@@ -52,3 +52,7 @@ Aucun connu. Ladybug `4ca1d6f5d` ne force plus le point de reprise quand `auto_c
 ## Ce qu'il faut pour le fermer
 
 Décider ce que rend un `COPY` validé dont le point de reprise n'a pas pu se faire — un succès avec avertissement nommé, ou une erreur nommée qui dit « validé, non durable » — puis le témoin.
+
+## Côté rag3weaver (arbre principal, 4 octobre)
+
+Aujourd'hui, une seule connexion fait tout pendant un index (catalogue et magasin de blobs : aucun hôte n'appelle `set_sync_connection`), chaque requête rend ses lignes déjà lues, et le catalogue est tenu sous verrou pendant `sync_source` : rag3weaver ne garde aucune transaction ouverte sur une autre connexion, et ne déclenche pas ce délai lui-même. Le cas devient réel le jour où un hôte fournit une connexion séparée au magasin de blobs, ou quand les écritures parallèles arrivent. Prévu après le correctif : l'erreur reconnue par son nom à un seul endroit ; hors transaction, le COPY rejoué trois fois au plus (`copy_retried` au rapport) ; dans la transaction par paquet, empoisonnement puis reprise, la cause nommée.
