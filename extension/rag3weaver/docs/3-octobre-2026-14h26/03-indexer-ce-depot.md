@@ -82,6 +82,47 @@ l'agent.
 > - Les passes de 13 h 05 à 13 h 40 sont jetées : d'autres sessions
 >   compilaient et testaient pendant elles.
 
+> **La transaction par paquet — 4 octobre, 16 h.** Prototype de la session
+> de l'arbre principal (`RAG3WEAVER_TX_PAR_PAQUET=1`) : chaque paquet, à
+> partir du deuxième, dans `BEGIN … COMMIT`, et la passe finale des
+> relations aussi. Paquets de 512, base sur disque, tampon 8 Gio (règle du
+> produit), chaque passe seule sous le verrou de mesure ; mêmes comptes de
+> fichiers, scopes et relations des deux côtés.
+>
+> | | Sans | Avec |
+> |---|---|---|
+> | Durée | 753 s | **168 à 177 s** (trois passes) |
+> | Points de reprise | 164 | 27 |
+> | Pousser les blobs | 316 s | 6 s |
+> | Pic de mémoire | 13,6 Go | 14,1 à 15,1 Go |
+>
+> Avec 4 Gio de tampon, elle échoue au même endroit que sans elle (paquet 9),
+> au `COMMIT` du paquet : elle ne lève pas le défaut du tampon.
+>
+> **Où partent les 177 s** (passe instrumentée, seuil par défaut ; mesuré
+> sauf mention) :
+>
+> | Poste | Secondes |
+> |---|---|
+> | analyser (codeparsers et notre aval) | 16,4 |
+> | ingérer les 14 paquets | 64,6 |
+> | — dont le graphe d'ingestion (insert 10,1, chunk_insert 9,6, flush_fts 8,6, blobs 5,6, …) | 41,8 |
+> | — dont symboles | 12,5 |
+> | — dont relire l'existant et marquer la session | 9,0 |
+> | vider la file des liens en route | 14,4 |
+> | **valider les 13 paquets (`COMMIT` et le point de reprise qu'il porte)** | **66** (paquet entier 145, moins ingérer et liens en route ; le minuteur des `COMMIT` dit 71,1 en comptant celui de la fin) |
+> | charger les relations à la fin, `COMMIT` final compris (≈ 5) | 14,6 |
+> | le reste (liste, lecture, marques) | ≈ 1 |
+> | **total** | **177** |
+>
+> **Le seuil du point de reprise relevé à 512 Mio ne change presque rien**
+> avec la transaction (172 s, `COMMIT` 66 s) : les points de reprise des
+> `COMMIT` sont ceux qu'imposent les `COPY` du paquet, pas le seuil. Le gain
+> de 40 à 50 s que j'en attendais est réfuté. Ces 66 s — 5 s par paquet — ne
+> se gagnent que côté moteur : un `COPY` qui, dans une transaction, laisse le
+> point de reprise au seuil (le mode « chargement initial » que la session
+> cœur C++ chiffre à un ou deux jours).
+
 Deux produits, un moteur : un agent de code en cloud qui télécharge un dépôt
 git, un agent en ligne de commande qui ingère ce qu'il y a sur le disque. Le
 verbe qui leur manque à tous deux est le même : **dire ce que ça va coûter,
