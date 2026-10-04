@@ -1299,4 +1299,176 @@ TEST(OpenProbe, OpenFromEnvironment) {
     }
 }
 
+// Le chargement en masse journalisé (étape 2 de la session cœur C++, page
+// coeur-cpp/04-le-chargement-en-masse-journalise.md, §7, cas 1 et 2). Avec
+// force_checkpoint_on_copy=false, un COPY de nœuds écrit ses lignes au journal au lieu de
+// forcer un point de reprise. Aucun point de reprise entre-temps : auto_checkpoint=false, et
+// le journal vérifié non vide avant de rouvrir.
+class JournaledCopyDeath : public SingleWriterCrash {
+public:
+    std::string csvPath() const { return databasePath + ".journaled.csv"; }
+
+    void writeCsv(int64_t first, int64_t count) const {
+        std::ofstream csv(csvPath());
+        for (auto id = first; id < first + count; id++) {
+            csv << id << ",name " << id << "\n";
+        }
+    }
+
+    static void journaledSession(rag3db::main::Connection& connection) {
+        mustQuery(connection, "CALL auto_checkpoint=false;");
+        mustQuery(connection, "CALL force_checkpoint_on_copy=false;");
+        mustQuery(connection, "CALL force_checkpoint_on_close=false;");
+    }
+
+    uint64_t dataFileSize() const {
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(databasePath, ec);
+        return ec ? 0 : size;
+    }
+};
+
+// Cas 1 : mort au milieu d'un COPY. Le fils valide cent lignes, pose un marqueur, lance un
+// COPY de 300 000 lignes ; le père le tue un délai donné après le marqueur. Trois morts de
+// suite sur la même base, chacune suivie d'une réouverture : les cent lignes validées sont
+// là, le COPY est tout ou rien, et le fichier de données ne grossit pas d'une mort à
+// l'autre (les pages qu'un COPY tué avait écrites ne s'accumulent pas).
+TEST_F(JournaledCopyDeath, DeathInTheMiddleOfACopyLeavesNothingOfIt) {
+    // Un million de lignes : le COPY dure assez pour que les trois morts tombent dedans,
+    // même sur une machine chargée.
+    constexpr int64_t COPY_ROWS = 1'000'000;
+    writeCsv(0, COPY_ROWS);
+    const auto marker = databasePath + ".copy-started";
+    runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+        journaledSession(connection);
+        mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);");
+        mustQuery(connection, "CHECKPOINT;");
+        mustQuery(connection, "UNWIND range(1000000, 1000099) AS i CREATE (:Doc {id: i, name: "
+                              "'kept ' + CAST(i AS STRING)});");
+    });
+    const std::vector<std::chrono::milliseconds> delays{std::chrono::milliseconds(30),
+        std::chrono::milliseconds(80), std::chrono::milliseconds(150)};
+    std::vector<uint64_t> sizes;
+    int killedMidway = 0;
+    for (size_t round = 0; round < delays.size(); round++) {
+        const auto delay = delays[round];
+        std::filesystem::remove(marker);
+        conn.reset();
+        database.reset();
+        const auto pid = fork();
+        if (pid == 0) {
+            disableCoreDumps();
+            try {
+                rag3db::main::Database childDatabase(databasePath, *systemConfig);
+                rag3db::main::Connection childConnection(&childDatabase);
+                journaledSession(childConnection);
+                // Une ligne validée par ce fils : le journal n'est pas vide à sa mort, même
+                // si le COPY n'a rien validé (la fermeture du père a fait un point de reprise).
+                mustQuery(childConnection, "CREATE (:Doc {id: " + std::to_string(2000000 + round) +
+                                               ", name: 'round'});");
+                std::ofstream(marker) << "1";
+                childConnection.query("COPY Doc FROM '" + csvPath() + "' (header=false);");
+                // Le COPY a fini avant le délai : attendre la mort, base ouverte.
+                while (true) {
+                    pause();
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "  child failed: " << e.what() << "\n";
+                _exit(3);
+            }
+        }
+        for (int i = 0; i < 30000 && !std::filesystem::exists(marker); i++) {
+            usleep(1000);
+        }
+        std::this_thread::sleep_for(delay);
+        kill(pid, SIGKILL);
+        int status = 0;
+        waitpid(pid, &status, 0);
+        ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+            << "[check: killed] the child did not die by SIGKILL";
+        expectJournalToReplay();
+        if (!reopen()) {
+            return;
+        }
+        EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 1000000 AND n.id < 2000000 RETURN "
+                           "count(*);"),
+            100)
+            << "[check: committed-rows-kept] after a death " << delay.count() << " ms into a COPY";
+        EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 2000000 RETURN count(*);"),
+            static_cast<int64_t>(round) + 1)
+            << "[check: committed-rows-kept] the row committed just before the COPY";
+        const auto copied = queryInt("MATCH (n:Doc) WHERE n.id < 1000000 RETURN count(*);");
+        EXPECT_TRUE(copied == 0 || copied == COPY_ROWS)
+            << "[check: copy-all-or-nothing] " << copied << " rows of the COPY after a death "
+            << delay.count() << " ms into it";
+        const auto midway = copied == 0;
+        if (midway) {
+            killedMidway++;
+        } else {
+            // Le COPY avait fini : le défaire pour que la mort suivante tombe encore dedans.
+            mustRun("MATCH (n:Doc) WHERE n.id < 1000000 DELETE n;");
+        }
+        expectIntegrity();
+        conn.reset();
+        database.reset();
+        const auto size = dataFileSize();
+        // Seules les morts au milieu d'un COPY se comparent : un COPY fini a écrit ses
+        // pages pour de bon.
+        if (midway) {
+            sizes.push_back(size);
+        }
+        std::cerr << "  death " << delay.count() << " ms into the COPY: " << copied
+                  << " rows of it, data file " << size << " bytes\n";
+    }
+    EXPECT_GT(killedMidway, 0) << "[check: death-in-the-middle] every COPY finished before its "
+                                  "death: the case did not test a death in the middle";
+    if (sizes.size() >= 2) {
+        EXPECT_LE(sizes.back(), sizes.front() + sizes.front() / 2)
+            << "[check: data-file-bounded] the data file grew from " << sizes.front() << " to "
+            << sizes.back() << " bytes over " << sizes.size() << " deaths in a COPY";
+    }
+    createDBAndConn();
+    // La table accepte encore le même COPY, en entier.
+    mustRun("COPY Doc FROM '" + csvPath() + "' (header=false);");
+    EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id < 1000000 RETURN count(*);"), COPY_ROWS)
+        << "[check: copy-after-the-deaths] ";
+    std::filesystem::remove(marker);
+    std::filesystem::remove(csvPath());
+}
+
+// Cas 2 : mort juste après un COPY validé, suivi d'écritures ordinaires qui relient ses
+// lignes. Toutes les lignes, chaque clé retrouvée par l'index, les deux sens de la table de
+// relations d'accord (contrôle d'intégrité, niveaux 1 et 2), et la base reste inscriptible.
+TEST_F(JournaledCopyDeath, DeathJustAfterACommittedCopyKeepsEveryKeyAndBothDirections) {
+    constexpr int64_t COPY_ROWS = 20'000;
+    writeCsv(0, COPY_ROWS);
+    runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+        journaledSession(connection);
+        mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);");
+        mustQuery(connection, "CREATE REL TABLE Next(FROM Doc TO Doc, step INT64);");
+        mustQuery(connection, "CHECKPOINT;");
+        mustQuery(connection, "COPY Doc FROM '" + csvPath() + "' (header=false);");
+        mustQuery(connection, "MATCH (a:Doc), (b:Doc) WHERE a.id % 10 = 0 AND b.id = a.id + 1 "
+                              "CREATE (a)-[:Next {step: a.id}]->(b);");
+    });
+    expectJournalToReplay();
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (n:Doc) RETURN count(*);"), COPY_ROWS) << "[check: copied-rows] ";
+    EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.name = 'name ' + CAST(n.id AS STRING) RETURN "
+                       "count(*);"),
+        COPY_ROWS)
+        << "[check: copied-values] ";
+    EXPECT_EQ(queryInt("MATCH (a:Doc)-[r:Next]->(b:Doc) WHERE b.id = a.id + 1 AND r.step = a.id "
+                       "RETURN count(*);"),
+        COPY_ROWS / 10)
+        << "[check: relations-on-the-copied-rows] ";
+    EXPECT_EQ(queryInt("MATCH (b:Doc)<-[r:Next]-(a:Doc) RETURN count(*);"), COPY_ROWS / 10)
+        << "[check: relations-backward] ";
+    expectIntegrity();
+    expectStillWritable("CREATE (:Doc {id: 20000, name: 'name 20000'});");
+    std::filesystem::remove(csvPath());
+}
+
 #endif

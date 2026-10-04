@@ -31,7 +31,7 @@ aucun (non atteignable sans crochet)
 - répertoire jamais synchronisé après création ou suppression du journal et du fichier fantôme : `src/storage/wal/wal.cpp`, `src/storage/shadow_file.cpp` (Vela `645d68973`) ;
 - rejeu des pages fantômes non synchronisé avant la suppression du journal : `src/storage/shadow_file.cpp:134-141` (Vela `e5e700e73`, Ladybug `e2ada3f90`) ;
 - suppression du fichier fantôme avant le journal à la reprise : `src/storage/wal/wal_replayer.cpp:752-755` (mêmes commits) ;
-- pages d'un point de reprise raté ou d'un arrêt brutal jamais récupérées : `src/storage/checkpointer.cpp` (Vela `dfee83bf3`, Ladybug `9ca5e8913`) ;
+- pages d'un point de reprise raté ou d'un arrêt brutal jamais récupérées : `src/storage/checkpointer.cpp` (Vela `dfee83bf3`, Ladybug `9ca5e8913`). **Témoin depuis le 4 octobre au soir** : `JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt` (`data-file-bounded`) — trois morts au milieu d'un COPY d'un million de lignes font passer le fichier de données de 1,8 à 5,5–7,8 Mo, sur le chemin journalisé comme sur l'ancien ; rien n'est perdu ni lu faux ;
 - compteur de pages libres sur une plage libérée deux fois : `src/storage/free_space_manager.cpp:34-39` (Ladybug `9ca5e8913` ; aucune double libération trouvée chez nous) ;
 - point de reprise échoué après un DROP qui laisse les colonnes compactées : `src/storage/table/node_table.cpp:808-815` (Ladybug `22ee54a71`) ;
 - verrou d'état de page et file d'éviction : `page_state.h:42-52`, `buffer_manager.cpp` (Ladybug `7e4248202`, `eff87c1e1`, `d6adbd2b7`) ;
