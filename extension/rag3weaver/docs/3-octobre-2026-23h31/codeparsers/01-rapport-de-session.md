@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, nuit (après le banc du résolveur unique).
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 12 h 30.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -41,55 +41,33 @@ estimate_of → probe_rate) : la règle ne vise que les non-appels.
 
 ## En cours
 
-**Le résolveur unique, en fusion** : codeparsers `fichier-seul` @ `d567e7c`,
-intégré par l'arbre principal (branche rag3db `resolveur-unique`), batterie
-complète en cours chez lui. Banc des relations : « dépend de » 1,00 / 0,64
-(master) → 1,00 / 0,85 ; les autres questions inchangées ; égalité des
-graphes entre paquets de 1, 64 et un seul tenant, 3 passes sur 3. Correctifs
-de la nuit, tous dans `fichier-seul` :
-- un accès de champ ne vise plus une méthode homonyme ; une fermeture exclut
-  ce qu'elle capture (`de76555`) ;
-- un type de champ ou de retour déclaré dans le fichier est lu dès
-  l'analyse — le rappel perdu `self.dialect.drop_vector_index()` (`d61b83a`) ;
-- en Rust, un `use` qui part d'un nom du fichier n'est pas une bibliothèque
-  (`d567e7c` — oublié dans `d61b83a`, voir les pièges).
+**Fait depuis la reprise (4 octobre, matin)** :
+- le résolveur unique est sur master (`63d154730`), codeparsers master
+  avancé sur `d567e7c` ;
+- **l'impact d'un fichier** (`9425feb05`) : `NeighborhoodNode(file=…,
+  format=summary, summary_group=case)`, gabarit `impact_fichier.mmd`
+  (`path_in_source`) — pour la section « Avant d'éditer » de la session
+  recherche, qui le branche après ses passes ; 82 à 148 ms sur l'index de
+  `src/` ;
+- **les déclarations dans `usages`** (`76e850b88`) : « défini foo.cpp:3 —
+  déclaré foo.h:5 (dans Foo) », et la déclaration seule quand rien n'est
+  défini ; inerte tant que l'arbre principal n'a pas posé la propriété
+  `declarations` (son lot en cours, avec le pointeur `declarations`) ;
+- **les relations qui dépendent du paquet** : localisées (sonde
+  `relations_selon_le_paquet`, `59e836366`) — les numéros d'homonymes des
+  clés stables de `code.rs`, pas la sortie de codeparsers ; ticket mis à
+  jour, transmis à l'arbre principal ;
+- six tickets ouverts dans `docs/tickets/` (`a5e829d5b`).
 
-**Les paires `.h` / `.cpp`, partie codeparsers faite** : branche
-`declarations` @ `44c4310` (au-dessus de `fichier-seul`). Une méthode
-déclarée est un membre de sa classe (6 395 sur le dépôt), une fonction
-déclarée un membre de son namespace (1 100) ; les noms déclarés ne sont plus
-des références (−61 598) ; `kz::Foo::qux` et `Foo::~Foo` ne sont plus des
-`AnonymousFunction` (2 476 → 738). Reste côté rag3weaver : HAS_PARENT de la
-définition vers sa classe (arbre principal), « déclaré foo.h:5 » dans
-`usages` (moi) — après la fusion de `fichier-seul`, pour ne pas mêler les
-mesures.
+**Prêt, à mesurer** : la cohésion (C1), branche rag3db `liens`
+(`913fad0e3`) — `CohesionNode` en boost de la fusion, poids 0 par défaut ;
+banc `e2e_banc_cohesion` (les 43 questions du banc étagé, graphe hybride,
+W ∈ {0, 0,2, 0,5, 1}). Le banc étagé appelle l'API sans graphe : d'où un
+banc à moi, avec sa propre base à W = 0. Attend le créneau de la session
+recherche.
 
-**Ensuite**, la section Liens (garée, en attente de Lucie).
-
-**(B) La section « Liens »** — branche `liens` (`1ff5a1dcd`), pas sur master.
-
-- `graph_walk.rs` : le moteur commun (sens, saut nu, degrés), extrait du
-  voisinage, qui s'en sert désormais.
-- `LinksNode` : marche en largeur à plusieurs départs, les deux sens, un
-  carrefour (degré > 50) ni traversé ni point de rencontre, cinq liens au
-  plus, texte vide quand rien ne se relie.
-- `templates/tools/links.mmd` : gabarit pour le crochet after de la session
-  recherche, qui passe `result_uuids` (accepté et écrit par elle :
-  `"after": {…, "results_port": {"node": "render", "port": "results"}}`).
-- Oracle : sans plafond, 66 paires sur 66 de la longueur de `SHORTEST`, et
-  chaque arête rendue existe dans son sens.
-
-**Le constat qui attend Lucie** : à quatre sauts, le graphe de code relie
-presque toute paire de résultats par des utilitaires sous le plafond
-(`execute_with_params`, `as_f64`) — « … et 27 autres paires reliées ». À
-deux sauts (lien direct, ou un intermédiaire partagé), les lignes restent
-lisibles et une recherche dispersée ne rend qu'un lien ou rien. Rendus
-réels : `e2e_liens::trois_rendus_reels`, `LIENS_MAX_HOPS=2` pour comparer.
-
-**(C1) Le boost de cohésion** : pas commencé. Feu vert de la session du
-banc de l'étage sur le principe ; référence à jour : 0,405 / 13 / 26
-(granite-278m, doc `22h40/01` de la pile). L'annoncer à l'orchestration et
-à elle avant de jouer, régime doux.
+**Ensuite** : la section Liens (même branche) — la longueur (2 ou 4 sauts)
+attend Lucie.
 
 ## Ce qui attend quelqu'un
 
