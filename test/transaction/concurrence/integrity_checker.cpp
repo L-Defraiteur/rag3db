@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "catalog/catalog.h"
+#include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "common/data_chunk/data_chunk_state.h"
@@ -383,6 +384,51 @@ StoredEdges scanStoredEdges(transaction::Transaction* transaction, storage::Memo
     return edges;
 }
 
+// Les propriétés d'une relation lues dans une direction : offset de relation -> valeurs, dans
+// l'ordre des colonnes demandées. Chaque direction stocke ses propres colonnes de
+// propriétés ; une écriture qui n'en atteint qu'une laisse deux valeurs à la même relation.
+using StoredProperties = std::map<common::offset_t, std::vector<std::string>>;
+
+StoredProperties scanStoredProperties(transaction::Transaction* transaction,
+    storage::MemoryManager* mm, storage::RelTable& relTable, storage::NodeTable& boundTable,
+    common::RelDataDirection direction,
+    const std::vector<std::pair<common::column_id_t, common::LogicalType>>& properties) {
+    const auto boundState = common::DataChunkState::getSingleValueDataChunkState();
+    const auto outState = std::make_shared<common::DataChunkState>();
+    common::ValueVector bound(common::LogicalType::INTERNAL_ID(), mm, boundState);
+    common::ValueVector relID(common::LogicalType::INTERNAL_ID(), mm, outState);
+    std::vector<std::unique_ptr<common::ValueVector>> values;
+    std::vector<common::ValueVector*> outputs{&relID};
+    std::vector<common::column_id_t> columnIDs{storage::REL_ID_COLUMN_ID};
+    for (const auto& [columnID, type] : properties) {
+        values.push_back(std::make_unique<common::ValueVector>(type.copy(), mm, outState));
+        outputs.push_back(values.back().get());
+        columnIDs.push_back(columnID);
+    }
+    storage::RelTableScanState scanState(*mm, &bound, outputs, outState, true /* randomLookup */);
+    scanState.setToTable(transaction, &relTable, columnIDs, {}, direction);
+    StoredProperties stored;
+    const auto numBound = boundTable.getNumTotalRows(transaction);
+    for (common::offset_t offset = 0; offset < numBound; ++offset) {
+        bound.setValue<common::nodeID_t>(0, {offset, boundTable.getTableID()});
+        relTable.initScanState(transaction, scanState);
+        while (relTable.scan(transaction, scanState)) {
+            const auto& selection = outState->getSelVector();
+            for (auto i = 0u; i < selection.getSelSize(); ++i) {
+                const auto position = selection[i];
+                std::vector<std::string> row;
+                for (const auto& vector : values) {
+                    row.push_back(vector->isNull(position) ?
+                                      std::string("NULL") :
+                                      vector->getAsValue(position)->toString());
+                }
+                stored[relID.getValue<common::internalID_t>(position).offset] = std::move(row);
+            }
+        }
+    }
+    return stored;
+}
+
 void checkLevel2InTransaction(main::Connection& connection, const Schema& schema,
     const std::map<std::string, VisibleRows>& visible, std::vector<Violation>& violations) {
     auto* context = connection.getClientContext();
@@ -409,6 +455,17 @@ void checkLevel2InTransaction(main::Connection& connection, const Schema& schema
                     storedVisible, rows.byOffset.size())});
         }
 
+        // L'index n'est éprouvé que pour une clé INT64, décidé par le catalogue : une clé
+        // texte qui commence par des chiffres (un uuid) se lirait sinon comme un entier, et la
+        // recherche d'un entier dans un index de chaînes plante.
+        if (entry->constCast<catalog::NodeTableCatalogEntry>()
+                .getPrimaryKeyDefinition()
+                .getType()
+                .getLogicalTypeID() != common::LogicalTypeID::INT64) {
+            violations.push_back({"level-2-unsupported",
+                stringFormat("table {}: the primary key is not INT64", table.name)});
+            continue;
+        }
         common::ValueVector key(common::LogicalType::INT64(), mm,
             common::DataChunkState::getSingleValueDataChunkState());
         std::string mismatches;
@@ -484,6 +541,50 @@ void checkLevel2InTransaction(main::Connection& connection, const Schema& schema
                 violations.push_back({"stored-directions-agree",
                     stringFormat("table {}: the two CSR directions differ ({} entries):{}",
                         rel.name, numDiffering, detail)});
+            }
+        }
+        // Les propriétés : chaque relation présente dans les deux directions y porte les mêmes
+        // valeurs (constat de la session de l'arbre principal, 4 octobre : 140 relations dont
+        // `resolution` diffère selon le sens de lecture).
+        if (byDirection.size() == 2) {
+            std::vector<std::pair<common::column_id_t, common::LogicalType>> properties;
+            std::vector<std::string> names;
+            for (const auto& property : entry->getProperties()) {
+                if (property.getName() == common::InternalKeyword::ID) {
+                    continue;
+                }
+                properties.emplace_back(entry->getColumnID(property.getName()),
+                    property.getType().copy());
+                names.push_back(property.getName());
+            }
+            if (!properties.empty()) {
+                const auto forward = scanStoredProperties(transaction, mm, relTable, *source,
+                    common::RelDataDirection::FWD, properties);
+                const auto backward = scanStoredProperties(transaction, mm, relTable,
+                    *destination, common::RelDataDirection::BWD, properties);
+                std::string detail;
+                size_t numDiffering = 0;
+                for (const auto& [relOffset, forwardValues] : forward) {
+                    const auto it = backward.find(relOffset);
+                    if (it == backward.end() || it->second == forwardValues) {
+                        continue;
+                    }
+                    if (++numDiffering > MAX_LISTED) {
+                        continue;
+                    }
+                    for (auto i = 0u; i < names.size(); ++i) {
+                        if (forwardValues[i] != it->second[i]) {
+                            detail += stringFormat(" rel@{} {}: forward '{}', backward '{}'",
+                                relOffset, names[i], forwardValues[i], it->second[i]);
+                        }
+                    }
+                }
+                if (numDiffering != 0) {
+                    violations.push_back({"stored-rel-properties-agree",
+                        stringFormat("table {}: {} relations carry different properties in the "
+                                     "two directions:{}",
+                            rel.name, numDiffering, detail)});
+                }
             }
         }
         std::string dangling;

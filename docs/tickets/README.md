@@ -26,6 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une relation porte deux valeurs d'une même propriété selon le sens où on la lit](2026-10-04-proprietes-de-relation-differentes-selon-le-sens.md) | ouvert, bloque la stèle | réponse fausse | oui | oui (CONSUMES, CONSUMED_BY) |
 | [Un point de reprise efface les relations des régions non touchées](2026-10-04-relations-effacees-au-point-de-reprise.md) | corrigé | perte | oui | oui (il supprime des relations et laisse passer des points de reprise) |
 | [Le point de reprise plante, à jamais, après ALTER TABLE … DROP](2026-10-04-point-de-reprise-impossible-apres-drop-de-colonne.md) | corrigé | plantage | oui | non (rag3weaver ne supprime jamais de colonne) |
 | [La lecture plante après le point de reprise d'une relation créée puis supprimée](2026-10-04-lecture-apres-reprise-d-une-relation-creee-puis-supprimee.md) | corrigé | plantage | oui | oui (il crée et supprime des relations) |

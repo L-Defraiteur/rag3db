@@ -190,4 +190,90 @@ TEST_F(UncommittedRelations, MergeBatchFromTheSameNodeWithoutDelete) {
 
 } // namespace
 
+// Les propriétés d'une relation se lisent pareil dans les deux sens, après toute suite
+// d'écritures sur des relations (demandé par l'orchestration, 4 octobre au soir). Constat de
+// la session de l'arbre principal : dans une base de reprise de rag3weaver, 140 relations
+// CONSUMES, et autant de leur réciproque CONSUMED_BY, portent deux valeurs de `resolution`
+// selon le sens de stockage ; le contrôle de niveau 2 (stored-rel-properties-agree) les
+// trouve. Intermittent, recette inconnue. Ce témoin rejoue la forme des écritures du produit
+// (clés INT64 ici, pour que le niveau 2 éprouve aussi l'index) : des nœuds sur disque, la
+// suppression d'un fichier, des nœuds neufs, puis deux lots MERGE … SET sur deux tables
+// réciproques ; il vérifie l'accord dans le processus écrivain, puis après réouverture.
+class RelationPropertiesBothWays : public UncommittedRelations {
+public:
+    static std::string batch(const std::string& rel, int64_t first, int64_t last,
+        const std::string& resolution, bool reverse) {
+        std::string items;
+        for (auto i = first; i < last; ++i) {
+            const auto from = reverse ? i : i + 1;
+            const auto to = reverse ? i + 1 : i;
+            items += std::string(items.empty() ? "" : ", ") + "{from_id: " +
+                     std::to_string(from) + ", to_id: " + std::to_string(to) +
+                     ", line: 4, resolution: '" + resolution + "'}";
+        }
+        return "UNWIND [" + items +
+               "] AS item WITH item, item.from_id AS k0 MATCH (a:Scope {id: k0}) WITH item, a, "
+               "item.to_id AS k1 MATCH (b:Scope {id: k1}) MERGE (a)-[r:" +
+               rel + "]->(b) SET r.line = item.line, r.resolution = item.resolution;";
+    }
+
+    void expectBothWaysAgree(const std::string& when) {
+        const auto violations = integrity::checkLevel2(*conn);
+        std::string checks;
+        for (const auto& violation : violations) {
+            checks += "[check: " + violation.invariant + "] ";
+        }
+        std::cerr << integrity::describe(violations);
+        EXPECT_TRUE(violations.empty()) << when << ": " << checks;
+    }
+
+    // checkpoints : 0 aucun ; 1 entre les deux lots ; 2 seuil automatique minuscule.
+    void run(int checkpoints) {
+        if (checkpoints == 2) {
+            mustRun("CALL auto_checkpoint=true;");
+            mustRun("CALL checkpoint_threshold=4096;");
+        }
+        mustRun("CREATE NODE TABLE Scope(id INT64 PRIMARY KEY, name STRING);");
+        mustRun("CREATE REL TABLE CONSUMES(FROM Scope TO Scope, line INT64, resolution STRING);");
+        mustRun("CREATE REL TABLE CONSUMED_BY(FROM Scope TO Scope, line INT64, resolution STRING);");
+        mustRun("UNWIND range(0, 2398) AS i CREATE (:Scope {id: i, name: 'old'});");
+        mustRun("MATCH (a:Scope), (b:Scope) WHERE a.id = b.id + 1 CREATE (a)-[:CONSUMES {line: 1, "
+                "resolution: 'fichier'}]->(b), (b)-[:CONSUMED_BY {line: 1, resolution: "
+                "'fichier'}]->(a);");
+        mustRun("CHECKPOINT;");
+        // Un fichier réindexé : ses portées supprimées, de nouvelles créées.
+        mustRun("MATCH (s:Scope) WHERE s.id >= 2318 DETACH DELETE s;");
+        mustRun("UNWIND range(2399, 2559) AS i MERGE (s:Scope {id: i}) SET s.name = 'new';");
+        mustRun(batch("CONSUMES", 2399, 2559, "fichier", false));
+        mustRun(batch("CONSUMED_BY", 2399, 2559, "fichier", true));
+        if (checkpoints == 1) {
+            mustRun("CHECKPOINT;");
+        }
+        mustRun(batch("CONSUMES", 2399, 2539, "nom", false));
+        mustRun(batch("CONSUMED_BY", 2399, 2539, "nom", true));
+        expectBothWaysAgree("in the writing process");
+        conn.reset();
+        database.reset();
+        createDBAndConn();
+        expectBothWaysAgree("after reopening");
+        auto count = conn->query("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE r.resolution = "
+                                 "'nom' RETURN count(*);");
+        ASSERT_TRUE(count->isSuccess());
+        EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 140)
+            << "[check: second-batch-applied] ";
+    }
+};
+
+TEST_F(RelationPropertiesBothWays, TwoMergeSetBatchesWithoutCheckpoint) {
+    run(0);
+}
+
+TEST_F(RelationPropertiesBothWays, TwoMergeSetBatchesWithACheckpointBetween) {
+    run(1);
+}
+
+TEST_F(RelationPropertiesBothWays, TwoMergeSetBatchesUnderFrequentAutomaticCheckpoints) {
+    run(2);
+}
+
 #endif
