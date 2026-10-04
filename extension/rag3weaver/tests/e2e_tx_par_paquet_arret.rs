@@ -137,12 +137,19 @@ fn role_enfant() {
 }
 
 fn lancer(role: &str, base: &Path, tuer: bool) -> (std::process::ExitStatus, String) {
+    lancer_avec(role, base, tuer, true)
+}
+
+fn lancer_avec(role: &str, base: &Path, tuer: bool, transaction: bool) -> (std::process::ExitStatus, String) {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
     cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
-        .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
+        .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH");
+    if transaction {
+        cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
+    }
     if tuer {
         cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", PAQUET_TUE.to_string());
     }
@@ -199,4 +206,25 @@ fn un_arret_au_milieu_d_un_paquet_se_reprend_aux_comptes_d_une_passe_sans_arret(
     assert_eq!(repris, temoin, "la reprise rend les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **La transaction par paquet rend le graphe du chemin ordinaire** : même
+/// corpus, une première indexation avec la variable (transaction, naissances
+/// par COPY à chaque paquet, marque de session dans la ligne) et une sans ;
+/// les comptes de nœuds et d'arêtes, dans les deux sens, sont égaux.
+#[test]
+#[ignore]
+fn la_transaction_par_paquet_rend_les_comptes_du_chemin_ordinaire() {
+    let avec = dossier_sur_disque("avec");
+    let sans = dossier_sur_disque("sans");
+    let (statut, sortie) = lancer_avec("avec", &avec.join("base.rag3db"), false, true);
+    assert!(statut.success(), "avec la transaction :\n{sortie}");
+    let comptes_avec = comptes_rendus("avec", &sortie);
+    let (statut, sortie) = lancer_avec("sans", &sans.join("base.rag3db"), false, false);
+    assert!(statut.success(), "sans la transaction :\n{sortie}");
+    let comptes_sans = comptes_rendus("sans", &sortie);
+    assert!(comptes_sans.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{comptes_sans:?}");
+    assert_eq!(comptes_avec, comptes_sans, "mêmes comptes avec et sans la transaction par paquet");
+    let _ = std::fs::remove_dir_all(&avec);
+    let _ = std::fs::remove_dir_all(&sans);
 }

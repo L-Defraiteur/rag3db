@@ -43,7 +43,7 @@ use std::sync::{LazyLock, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Catalog, CatalogError, SnapshotFinish, SnapshotFinishOptions};
-use crate::code::{FILE, SCOPE};
+use crate::code::{FILE, LIBRARY, SCOPE, SYMBOL};
 use crate::code_tools::{FileSource, ReingestReport};
 use crate::connection::CypherValue;
 use crate::disponibilite::Disponibilites;
@@ -603,6 +603,10 @@ fn synchroniser(
         // Le schéma que le premier paquet créerait à la volée, posé avant :
         // dans la transaction, une annulation l'emporterait avec les lignes.
         catalog.prepare_schema_for_ingest().map_err(|e| e.to_string())?;
+        // Les naissances par COPY à chaque paquet, la marque de session dans
+        // la ligne : plus de COUNT, de relecture ni de marquage par paquet
+        // pour une table vide au départ (`Catalog::begin_fresh_ingest`).
+        catalog.begin_fresh_ingest(&[FILE, SCOPE, LIBRARY, SYMBOL], &[(SCOPE, s_scopes), (FILE, s_files)]);
     }
     for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
@@ -651,7 +655,10 @@ fn synchroniser(
         profil.add("ingérer le paquet (détail : [ingest-profile])", t);
         let t = std::time::Instant::now();
         // Ce que le paquet porte, marqué de la session : vu, pas seulement
-        // écrit pendant elle.
+        // écrit pendant elle. Une première indexation l'a déjà posé dans la
+        // ligne, à sa naissance.
+        let marquage = !(catalog.fresh_ingest_covers(SCOPE) && catalog.fresh_ingest_covers(FILE));
+        if marquage {
         let uuids_scopes = analysis
             .scopes
             .iter()
@@ -669,6 +676,7 @@ fn synchroniser(
         catalog.mark_snapshot(SCOPE, grain, s_scopes, &uuids_scopes).map_err(|e| e.to_string())?;
         catalog.mark_snapshot(FILE, grain, s_files, &uuids_files).map_err(|e| e.to_string())?;
         profil.add("marquer la session (mark_snapshot)", t);
+        }
         report.files_ingested += analysis.files.len();
         report.scopes_written += ingere.scopes;
         report.failed += ingere.failed;
@@ -701,6 +709,7 @@ fn synchroniser(
         }
         progress(avancement);
     }
+    catalog.end_fresh_ingest();
     if mode == RelationsMode::Bulk {
         avancement.phase = SyncPhase::Relations;
         progress(avancement);

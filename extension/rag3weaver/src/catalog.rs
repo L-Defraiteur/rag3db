@@ -246,6 +246,11 @@ pub struct Catalog {
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
     /// annulation emporterait sinon le schéma avec les lignes.
     in_transaction: bool,
+    /// **Une première indexation en cours** (`begin_fresh_ingest`) : les
+    /// entités dont la table était vide à son début, les uuids que cette
+    /// indexation y a déjà écrits, et la marque de session que leurs lignes
+    /// portent dès leur naissance.
+    fresh_ingest: Option<FreshIngest>,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -416,6 +421,7 @@ impl Catalog {
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
             in_transaction: false,
+            fresh_ingest: None,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -5105,6 +5111,22 @@ impl Catalog {
             });
         }
 
+        // **Une première indexation en cours** : seules les naissances partent,
+        // avec leur marque de session ; ce que cette indexation a déjà écrit
+        // ne repart pas (`begin_fresh_ingest`).
+        let fraiche = self.fresh_ingest_covers(entity_name);
+        if fraiche {
+            let f = self.fresh_ingest.as_mut().expect("couverte");
+            let ecrits = f.written.get_mut(entity_name).expect("couverte");
+            entity_records.retain(|r| {
+                r.data.get("_uuid").and_then(|v| v.as_str()).is_some_and(|u| ecrits.insert(u.to_string()))
+            });
+            if let Some(mark) = f.marks.get(entity_name) {
+                for r in &mut entity_records {
+                    r.data.insert("_snapshot".into(), CypherValue::String(mark.clone()));
+                }
+            }
+        }
         let record_count = entity_records.len();
 
         // **Première ingestion : le chemin de masse.** La table est vide,
@@ -5116,7 +5138,7 @@ impl Catalog {
         // de toujours. Mesuré le 6 septembre 2026 sur le cœur C++ de rag3db.
         crate::ingest_profile::add("entités · construire les enregistrements (uuid, hash)", t);
         let t = std::time::Instant::now();
-        let premiere_ingestion = self.premiere_ingestion_possible(entity_name, &entity_config);
+        let premiere_ingestion = fraiche || self.premiere_ingestion_possible(entity_name, &entity_config);
         crate::ingest_profile::add("entités · la table est-elle vide ? (COUNT)", t);
         let t = std::time::Instant::now();
         let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
@@ -5185,7 +5207,9 @@ impl Catalog {
             }
         }
         if entity_records.is_empty() {
-            self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+            if !fraiche {
+                self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+            }
             self.flush_blob_store("ingest")?;
             // Un lot entièrement refusé ne doit pas se lire comme un lot
             // entièrement inchangé : c'est la différence entre « rien à
@@ -5376,7 +5400,9 @@ impl Catalog {
                 self.clear_aside(entity_name, &aside_return.consumed)?;
                 crate::ingest_profile::add("entités · vider la mise de côté", t);
                 let t = std::time::Instant::now();
-                self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+                if !fraiche {
+                    self.marquer_les_ecritures(entity_name, &uuids_du_lot)?;
+                }
                 crate::ingest_profile::add("entités · marquer les écritures de la session (relit le lot)", t);
                 crate::ingest_profile::add("entités · TOTAL des appels", t_appel);
                 // **Dire ce qui a changé**, et seulement au succès : une
@@ -6261,6 +6287,46 @@ impl Catalog {
         names.sort();
         self.open_fts_handles_for(&names);
         self.flush_blob_store("préparation du schéma")
+    }
+
+    /// **Une première indexation commence.** Pour chaque entité de
+    /// `entities` dont la table (et ses morceaux) est vide maintenant, et que
+    /// le moteur sait charger en masse, toute ligne que cette indexation n'a
+    /// pas encore écrite est une naissance prouvée : elle part par COPY à
+    /// chaque paquet, sans relire l'existant ni compter la table. Une ligne
+    /// déjà écrite par cette indexation (un symbole, une bibliothèque revus
+    /// d'un paquet à l'autre) n'est pas réécrite : la première valeur reste.
+    /// `marks` : la session de synchronisation de chaque entité, posée dans
+    /// la ligne (`_snapshot`) au lieu d'un marquage après coup — la fin de
+    /// session voit les mêmes marques. Rend les entités retenues.
+    pub fn begin_fresh_ingest(&mut self, entities: &[&str], marks: &[(&str, &str)]) -> Vec<String> {
+        let mut fresh = FreshIngest::default();
+        for name in entities {
+            let Some(config) = self.entity_configs.get(*name).cloned() else { continue };
+            if self.premiere_ingestion_possible(name, &config) {
+                fresh.written.insert(name.to_string(), HashSet::new());
+            }
+        }
+        for (name, mark) in marks {
+            if fresh.written.contains_key(*name) {
+                fresh.marks.insert(name.to_string(), mark.to_string());
+            }
+        }
+        let mut retenues: Vec<String> = fresh.written.keys().cloned().collect();
+        retenues.sort();
+        self.fresh_ingest = Some(fresh);
+        retenues
+    }
+
+    /// **La première indexation est finie** : l'ingestion reprend ses règles
+    /// ordinaires (compter, relire, marquer).
+    pub fn end_fresh_ingest(&mut self) {
+        self.fresh_ingest = None;
+    }
+
+    /// Cette entité est-elle écrite par une première indexation en cours ?
+    pub fn fresh_ingest_covers(&self, entity_name: &str) -> bool {
+        self.fresh_ingest.as_ref().is_some_and(|f| f.written.contains_key(entity_name))
     }
 
     /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
@@ -10614,4 +10680,13 @@ impl Drop for Catalog {
         // `conn` is the last field to drop, so the backend is still reachable.
         let _ = self.flush_blob_store("drop"); // Drop can only log; explicit APIs propagate.
     }
+}
+
+/// L'état d'une première indexation (`Catalog::begin_fresh_ingest`).
+#[derive(Debug, Default)]
+struct FreshIngest {
+    /// Par entité retenue : les uuids déjà écrits par cette indexation.
+    written: HashMap<String, HashSet<String>>,
+    /// Par entité : la marque de session posée dans la ligne.
+    marks: HashMap<String, String>,
 }
