@@ -135,7 +135,63 @@ fichier, les éditions ratées sur un contenu périmé, les appels à `usages` e
 `impact`, les jetons par tâche, et la réussite. Une tâche longue au moins,
 qui traverse une compression : c'est là que la différence doit se voir.
 
-## 7. Ce qui attend un choix de Lucie
+## 7. Le débat du 4 octobre : replier, ou réunir
+
+Le débat n'est pas clos ; cette section garde les positions, pas une
+décision.
+
+**L'idée de départ (Lucie)** : une lecture ou une édition lointaine se
+réduit — plutôt que tout son retour, l'agent voit la fiche (ou la docstring
+plutôt qu'un résumé) et les relations.
+
+**Les objections** :
+
+- la fiche dit ce qu'est une chose, pas ce que l'agent y cherchait : le
+  détail pour lequel il a lu le corps n'est ni dans la docstring ni dans les
+  relations ;
+- une édition n'est pas une lecture : ce qui compte plus tard, c'est ce qui a
+  été changé et pourquoi ;
+- un modèle qui ne voit plus le corps peut le réinventer depuis la docstring
+  et éditer de mémoire ;
+- réécrire un vieux message coûte le cache de tout ce qui suit.
+
+**Où Lucie arrive** : « Ce ne serait plus vraiment l'idée de lui cacher les
+retours exacts, mais de les réunir proprement par fichier : ce serait une
+belle première étape. Et rendre les anciennes lectures vivantes. »
+
+**Ce que cela donne — la première étape** :
+
+- le contenu exact d'un fichier lu vit **une seule fois**, dans une zone par
+  fichier : les plages lues, fusionnées, au contenu **du jour**, éditions
+  comprises ;
+- le fil garde les **événements** (« lu `X` l. 10-80 », « modifié `X` »), plus
+  le contenu : chaque événement pointe vers la zone du fichier ;
+- quand le fichier change, la zone change, et dit ce qui a changé depuis
+  (« l. 34-40 modifiées au tour 20, par toi ») — sans cela l'agent relit son
+  propre raisonnement sur un texte qui n'est plus là ;
+- rien n'est caché : ce qui se gagne, ce sont les doublons (relectures) et
+  les copies périmées.
+
+C'est le curseur du §2 avec le corps : un fichier lu **est** un curseur
+ouvert sur les plages lues.
+
+**Ce qui reste à débattre** :
+
+- quand la zone déborde, que fait-on ? C'est là que l'idée de départ revient,
+  comme politique de débordement et non comme défaut : le fichier le moins
+  touché se replie en fiche + relations, marqué « corps hors contexte ».
+- la ligne « ce que j'en ai retenu » : écrite par l'agent, par l'archiviste,
+  ou pas du tout tant que rien n'est replié ?
+- le fil pointe vers un contenu qui a pu changer : faut-il garder, par
+  événement, la trace de ce qui était lu alors (un diff), ou seulement l'état
+  du jour ?
+- le coût de cache d'une zone qui bouge à chaque édition.
+
+Dans la liste du §6, cette étape se place entre les essais 1 et 2 : elle
+demande la maîtrise de l'assemblage du prompt (notre chat), pas encore les
+gestes `open` / `close` — l'ouverture est la lecture elle-même.
+
+## 8. Ce qui attend un choix de Lucie
 
 1. Lancer l'essai 1 (petit, sans risque) dès qu'une session est libre, ou
    attendre que les fausses arêtes soient corrigées.
