@@ -1,0 +1,220 @@
+diff --git a/src/function/cast_from_string_functions.cpp b/src/function/cast_from_string_functions.cpp
+index 4fe333482..4c17defe6 100644
+--- a/src/function/cast_from_string_functions.cpp
++++ b/src/function/cast_from_string_functions.cpp
+@@ -859,11 +859,11 @@ void CastString::operation(const ku_string_t& input, union_entry_t& result,
+ }
+ 
+ static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
+-    const CSVOption* option) {
++    const CSVOption* option, bool valueWasQuoted) {
+     auto& type = vector->dataType;
+     switch (type.getLogicalTypeID()) {
+     case LogicalTypeID::STRING: {
+-        if (std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
++        if (!valueWasQuoted && std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
+                 [&](const std::string& nullStr) { return nullStr == strVal; })) {
+             vector->setNull(vectorPos, true /* isNull */);
+             return;
+@@ -880,9 +880,9 @@ static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_v
+ }
+ 
+ void CastString::copyStringToVector(ValueVector* vector, uint64_t vectorPos,
+-    std::string_view strVal, const CSVOption* option) {
++    std::string_view strVal, const CSVOption* option, bool valueWasQuoted) {
+     auto& type = vector->dataType;
+-    setVectorNull(vector, vectorPos, strVal, option);
++    setVectorNull(vector, vectorPos, strVal, option, valueWasQuoted);
+     if (vector->isNull(vectorPos)) {
+         return;
+     }
+diff --git a/src/include/function/cast/functions/cast_from_string_functions.h b/src/include/function/cast/functions/cast_from_string_functions.h
+index 32341c815..efd408836 100644
+--- a/src/include/function/cast/functions/cast_from_string_functions.h
++++ b/src/include/function/cast/functions/cast_from_string_functions.h
+@@ -13,8 +13,10 @@ namespace rag3db {
+ namespace function {
+ 
+ struct RAG3DB_API CastString {
++    // valueWasQuoted : le champ CSV portait ses guillemets. "" est alors la chaîne vide, et
++    // le test des chaînes NULL ne s'y applique pas ; un champ vide sans guillemets reste NULL.
+     static void copyStringToVector(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
+-        const CSVOption* option);
++        const CSVOption* option, bool valueWasQuoted = false);
+ 
+     template<typename T>
+     static inline bool tryCast(const ku_string_t& input, T& result) {
+diff --git a/src/include/processor/operator/persistent/reader/csv/base_csv_reader.h b/src/include/processor/operator/persistent/reader/csv/base_csv_reader.h
+index 6dd2899a1..7bee187a9 100644
+--- a/src/include/processor/operator/persistent/reader/csv/base_csv_reader.h
++++ b/src/include/processor/operator/persistent/reader/csv/base_csv_reader.h
+@@ -85,7 +85,8 @@ public:
+ protected:
+     template<typename Driver>
+     bool addValue(Driver&, uint64_t rowNum, common::column_id_t columnIdx, std::string_view strVal,
+-        std::vector<uint64_t>& escapePositions, std::vector<uint64_t>& newlineEscapePositions);
++        std::vector<uint64_t>& escapePositions, std::vector<uint64_t>& newlineEscapePositions,
++        bool valueWasQuoted);
+ 
+     //! Read BOM and header.
+     parse_result_t handleFirstBlock();
+diff --git a/src/include/processor/operator/persistent/reader/csv/driver.h b/src/include/processor/operator/persistent/reader/csv/driver.h
+index e814fca8e..2b960a371 100644
+--- a/src/include/processor/operator/persistent/reader/csv/driver.h
++++ b/src/include/processor/operator/persistent/reader/csv/driver.h
+@@ -44,7 +44,8 @@ public:
+     virtual ~ParsingDriver() = default;
+ 
+     bool done(uint64_t rowNum);
+-    virtual bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value);
++    virtual bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value,
++        bool valueWasQuoted = false);
+     virtual bool addRow(uint64_t rowNum, common::column_id_t columnCount,
+         std::optional<WarningDataWithColumnInfo> warningData);
+ 
+@@ -96,7 +97,8 @@ public:
+     explicit SniffCSVDialectDriver(SerialCSVReader* reader);
+ 
+     bool done(uint64_t rowNum) const;
+-    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value) override;
++    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value,
++        bool valueWasQuoted = false) override;
+     bool addRow(uint64_t rowNum, common::column_id_t columnCount,
+         std::optional<WarningDataWithColumnInfo> warningData) override;
+     void reset();
+@@ -126,7 +128,8 @@ public:
+         const function::ExtraScanTableFuncBindInput* bindInput);
+ 
+     bool done(uint64_t rowNum);
+-    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value) override;
++    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value,
++        bool valueWasQuoted = false) override;
+ 
+ public:
+     std::vector<std::string> firstRow;
+@@ -145,7 +148,8 @@ public:
+         return (0 < rowNum);
+     };
+ 
+-    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value) override;
++    bool addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value,
++        bool valueWasQuoted = false) override;
+ 
+ public:
+     std::vector<std::pair<std::string, common::LogicalType>> columns;
+diff --git a/src/processor/operator/persistent/reader/csv/base_csv_reader.cpp b/src/processor/operator/persistent/reader/csv/base_csv_reader.cpp
+index f312f3889..99ccb70c7 100644
+--- a/src/processor/operator/persistent/reader/csv/base_csv_reader.cpp
++++ b/src/processor/operator/persistent/reader/csv/base_csv_reader.cpp
+@@ -79,7 +79,7 @@ static char decodeNewlineEscape(char letter) {
+ template<typename Driver>
+ bool BaseCSVReader::addValue(Driver& driver, uint64_t rowNum, column_id_t columnIdx,
+     std::string_view strVal, std::vector<uint64_t>& escapePositions,
+-    std::vector<uint64_t>& newlineEscapePositions) {
++    std::vector<uint64_t>& newlineEscapePositions, bool valueWasQuoted) {
+     std::string valueToAdd;
+     // insert the line number into the chunk
+     if (!escapePositions.empty() || !newlineEscapePositions.empty()) {
+@@ -112,7 +112,7 @@ bool BaseCSVReader::addValue(Driver& driver, uint64_t rowNum, column_id_t column
+     if (!utf8proc::Utf8Proc::isValid(valueToAdd.data(), valueToAdd.length())) {
+         handleCopyException("Invalid UTF8-encoded string.", true /* mustThrow */);
+     }
+-    return driver.addValue(rowNum, columnIdx, valueToAdd);
++    return driver.addValue(rowNum, columnIdx, valueToAdd, valueWasQuoted);
+ }
+ 
+ struct SkipRowDriver {
+@@ -120,7 +120,7 @@ struct SkipRowDriver {
+     explicit SkipRowDriver(uint64_t skipNum) : skipNum{skipNum} {}
+     bool done(uint64_t rowNum) const { return rowNum >= skipNum; }
+     bool addRow(uint64_t, column_id_t, std::optional<WarningDataWithColumnInfo>) { return true; }
+-    bool addValue(uint64_t, column_id_t, std::string_view) { return true; }
++    bool addValue(uint64_t, column_id_t, std::string_view, bool) { return true; }
+ 
+     uint64_t skipNum;
+ };
+@@ -157,7 +157,7 @@ struct HeaderDriver {
+     DriverType driverType = DriverType::HEADER;
+     bool done(uint64_t) { return true; }
+     bool addRow(uint64_t, column_id_t, std::optional<WarningDataWithColumnInfo>) { return true; }
+-    bool addValue(uint64_t, column_id_t, std::string_view) { return true; }
++    bool addValue(uint64_t, column_id_t, std::string_view, bool) { return true; }
+ };
+ 
+ void BaseCSVReader::resetNumRowsInCurrentBlock() {
+@@ -362,7 +362,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
+         // Trim one character if we have quotes.
+         if (!addValue(driver, curRowIdx, column,
+                 std::string_view(buffer.get() + start, position - start - hasQuotes),
+-                escapePositions, newlineEscapePositions)) {
++                escapePositions, newlineEscapePositions, hasQuotes)) {
+             goto ignore_error;
+         }
+         column++;
+@@ -384,7 +384,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
+         bool isCarriageReturn = buffer[position] == '\r';
+         if (!addValue(driver, curRowIdx, column,
+                 std::string_view(buffer.get() + start, position - start - hasQuotes),
+-                escapePositions, newlineEscapePositions)) {
++                escapePositions, newlineEscapePositions, hasQuotes)) {
+             goto ignore_error;
+         }
+         column++;
+@@ -576,7 +576,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
+             // Add remaining value to chunk.
+             if (!addValue(driver, curRowIdx, column,
+                     std::string_view(buffer.get() + start, position - start - hasQuotes),
+-                    escapePositions, newlineEscapePositions)) {
++                    escapePositions, newlineEscapePositions, hasQuotes)) {
+                 return {curRowIdx, numErrors};
+             }
+             column++;
+diff --git a/src/processor/operator/persistent/reader/csv/driver.cpp b/src/processor/operator/persistent/reader/csv/driver.cpp
+index 2748005d1..c7680a626 100644
+--- a/src/processor/operator/persistent/reader/csv/driver.cpp
++++ b/src/processor/operator/persistent/reader/csv/driver.cpp
+@@ -20,7 +20,7 @@ bool ParsingDriver::done(uint64_t rowNum) {
+ }
+ 
+ bool ParsingDriver::addValue(uint64_t rowNum, common::column_id_t columnIdx,
+-    std::string_view value) {
++    std::string_view value, bool valueWasQuoted) {
+     uint64_t length = value.length();
+     if (length == 0 && columnIdx == 0) {
+         rowEmpty = true;
+@@ -43,7 +43,7 @@ bool ParsingDriver::addValue(uint64_t rowNum, common::column_id_t columnIdx,
+     }
+     try {
+         function::CastString::copyStringToVector(&chunk.getValueVectorMutable(columnIdx), rowNum,
+-            value, &reader->option);
++            value, &reader->option, valueWasQuoted);
+     } catch (ConversionException& e) {
+         reader->handleCopyException(e.what());
+         return false;
+@@ -122,7 +122,7 @@ SniffCSVDialectDriver::SniffCSVDialectDriver(SerialCSVReader* reader)
+ }
+ 
+ bool SniffCSVDialectDriver::addValue(uint64_t /*rowNum*/, common::column_id_t columnIdx,
+-    std::string_view value) {
++    std::string_view value, bool /*valueWasQuoted*/) {
+     uint64_t length = value.length();
+     if (length == 0 && columnIdx == 0) {
+         rowEmpty = true;
+@@ -202,7 +202,7 @@ bool SniffCSVNameAndTypeDriver::done(uint64_t rowNum) {
+ }
+ 
+ bool SniffCSVNameAndTypeDriver::addValue(uint64_t rowNum, common::column_id_t columnIdx,
+-    std::string_view value) {
++    std::string_view value, bool /*valueWasQuoted*/) {
+     uint64_t length = value.length();
+     if (length == 0 && columnIdx == 0) {
+         rowEmpty = true;
+@@ -268,7 +268,7 @@ SniffCSVHeaderDriver::SniffCSVHeaderDriver(SerialCSVReader* reader,
+ }
+ 
+ bool SniffCSVHeaderDriver::addValue(uint64_t /*rowNum*/, common::column_id_t columnIdx,
+-    std::string_view value) {
++    std::string_view value, bool /*valueWasQuoted*/) {
+     uint64_t length = value.length();
+     if (length == 0 && columnIdx == 0) {
+         rowEmpty = true;

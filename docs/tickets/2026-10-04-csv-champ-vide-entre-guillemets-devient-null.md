@@ -32,6 +32,24 @@ MATCH (t:T) WHERE t.s IS NULL RETURN count(*);   -- attendu 0, obtenu 1
 
 Ladybug `2fc419036` (12 août 2026).
 
+## Une décision avant le correctif (4 octobre)
+
+Le correctif est écrit et éprouvé : une indication « champ entre guillemets » passe du
+lecteur CSV au test des chaînes NULL, qui ne s'applique plus à un champ entre guillemets.
+Le témoin passe au vert. Il est gardé hors de master, en patch
+(`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/annexes/csv-champ-vide-entre-guillemets.patch`), parce qu'il casse un de nos
+propres tests : `test/test_files/copy/escaped_newlines.test` affirme qu'un champ `""`
+(ligne 6 de `dataset/copy-test/escaped-newlines/physical.csv` et `escaped.csv`) se lit
+NULL, des deux côtés.
+
+Choisir entre les deux, c'est décider de ce qu'un `""` veut dire dans nos CSV :
+- la chaîne vide, comme le fait Ladybug et comme l'écrit un EXPORT ; on corrige alors aussi
+  `escaped_newlines.test` ;
+- NULL, comme aujourd'hui ; ce ticket se ferme alors comme « voulu », en le disant dans la
+  documentation de COPY.
+
+À trancher par Lucie.
+
 ## Pour le fermer
 
 le témoin passe au vert.
