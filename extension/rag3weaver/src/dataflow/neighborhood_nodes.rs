@@ -294,10 +294,7 @@ pub fn neighborhood_of(
     // Le départ et le premier saut : comme `usages`, en union avec le
     // rendez-vous (dans le sens entrant seulement : c'est un usage).
     let usages = usages_of(catalog, &cfg.start, name, path_prefix)?;
-    let mut vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
-    let mut atteints: Vec<Reached> = Vec::new();
-    let mut niveau: Vec<String> = Vec::new();
-    let mut cut = 0usize;
+    let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
     let departs: Vec<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
@@ -327,6 +324,59 @@ pub fn neighborhood_of(
         }
     }
 
+    let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth })
+}
+
+/// **L'impact d'un fichier** : le même voisinage, parti de toutes les
+/// lignes dont un champ de chemin vaut `file` (l'entité définie par
+/// `defined_by`, sinon le pivot). Ce qui est dans le fichier lui-même n'est
+/// jamais compté — un fichier qui s'appelle lui-même n'est pas un impact :
+/// seuls les dépendants extérieurs, dédoublonnés, puis leurs propres
+/// dépendants. Pas de rendez-vous par le nom : on part de lignes, pas d'un
+/// nom.
+pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &str, depth: usize, budget: usize, max_degree: usize) -> Result<NeighborhoodReport, String> {
+    let depth = depth.clamp(1, MAX_DEPTH);
+    let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
+    let table = match &cfg.start.defined_by {
+        Some(d) => rel_info(catalog, d)?.from,
+        None => cfg.start.pivot.clone(),
+    };
+    let moteur = Moteur { catalog, cfg, rels };
+    let condition = cfg.start.path_fields.iter().map(|f| format!("s.{f} = $file")).collect::<Vec<_>>().join(" OR ");
+    let q = format!("MATCH (s:{table}) WHERE {condition} RETURN s._uuid, {}", champs("s", cfg));
+    let rows = catalog
+        .execute_raw_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
+        .map_err(Moteur::err)?;
+    let departs: Vec<super::usage_nodes::Item> = rows
+        .rows
+        .iter()
+        .map(|r| {
+            let m = reached_from(r, 1, cfg);
+            super::usage_nodes::Item { uuid: m.uuid, title: m.title, kind: m.kind, path: m.path, line: m.line }
+        })
+        .collect();
+    let vus: HashSet<String> = departs.iter().map(|d| d.uuid.clone()).collect();
+    let uuids: Vec<String> = departs.iter().map(|d| d.uuid.clone()).collect();
+    let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(_, m)| m).collect();
+    let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth })
+}
+
+/// Le parcours par niveaux, commun aux deux départs : dédoublonner, couper
+/// au budget, montrer un carrefour sans le traverser vers le code.
+fn parcourir(
+    moteur: &Moteur<'_>,
+    mut vus: HashSet<String>,
+    premiers: Vec<Reached>,
+    depth: usize,
+    budget: usize,
+    max_degree: usize,
+) -> Result<(Vec<Reached>, usize), String> {
+    let cfg = moteur.cfg;
+    let mut atteints: Vec<Reached> = Vec::new();
+    let mut niveau: Vec<String> = Vec::new();
+    let mut cut = 0usize;
     let mut a_explorer: Vec<Reached> = premiers;
     for lvl in 1..=depth {
         let mut neufs: Vec<Reached> = Vec::new();
@@ -379,7 +429,7 @@ pub fn neighborhood_of(
     }
     // Ce qui reste à explorer quand on s'arrête n'est pas compté : seul le
     // budget coupe ce qui a été trouvé.
-    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth })
+    Ok((atteints, cut))
 }
 
 /// Un même site vu par un membre et par le conteneur qui le contient — un
@@ -419,6 +469,44 @@ impl NeighborhoodReport {
     pub fn grouped(&self) -> Vec<&Reached> {
         let mut vus = HashSet::new();
         self.reached.iter().filter(|r| !r.group.is_empty() && vus.insert(r.uuid.clone())).collect()
+    }
+
+    /// **Le résumé** : les comptes d'abord, puis les premiers du groupe
+    /// déclaré (pour le code, les tests), dans la limite. Rien quand rien
+    /// n'est atteint — une section qui accompagne un autre rendu se tait.
+    /// `only` : la seule valeur du groupe à compter et nommer (pour le code,
+    /// `case` — les tests qu'on relance, pas leurs aides) ; vide, toutes.
+    pub fn summary(&self, group_title: &str, rest_title: &str, limit: usize, only: &str) -> String {
+        if self.reached.is_empty() {
+            return String::new();
+        }
+        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|m| only.is_empty() || m.group == only).collect();
+        let reste: Vec<&Reached> = self.reached.iter().filter(|m| m.group.is_empty()).collect();
+        let directs = reste.iter().filter(|m| m.level == 1).count();
+        let mut out = format!(
+            "{rest_title} : {directs} directement, {} en tout sur {} niveau{}",
+            reste.len(),
+            self.depth,
+            if self.depth > 1 { "x" } else { "" }
+        );
+        if self.cut > 0 {
+            out.push_str(&format!(" (et {} au-delà du budget)", self.cut));
+        }
+        out.push_str(".\n");
+        if groupes.is_empty() {
+            return out;
+        }
+        let noms: Vec<String> = groupes
+            .iter()
+            .take(limit)
+            .map(|m| if m.path.is_empty() { format!("`{}`", m.label) } else { format!("`{}` ({})", m.label, lieu(&m.path, m.line)) })
+            .collect();
+        out.push_str(&format!("{group_title} : {} — {}", groupes.len(), noms.join(", ")));
+        if groupes.len() > limit {
+            out.push_str(&format!(", et {} autres", groupes.len() - limit));
+        }
+        out.push_str(".\n");
+        out
     }
 
     pub fn markdown(&self, group_title: &str, rest_title: &str, also_label: &str, limit: usize) -> String {
@@ -512,6 +600,12 @@ pub struct NeighborhoodNode {
     cfg: NeighborhoodConfig,
     name: String,
     path: String,
+    /// Mode par fichier : départ de toutes les lignes de ce fichier.
+    file: String,
+    /// `summary` : les comptes et les premiers du groupe.
+    summary: bool,
+    /// La valeur du groupe que le résumé compte et nomme (vide : toutes).
+    summary_group: String,
     depth: usize,
     budget: usize,
     max_degree: usize,
@@ -543,13 +637,20 @@ impl Node for NeighborhoodNode {
                 return Ok(());
             }
             CatalogRead::Ready { catalog: cat, status } => {
-                (neighborhood_of(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree)?, status)
+                let r = if self.name.is_empty() {
+                    neighborhood_of_file(&cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
+                } else {
+                    neighborhood_of(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree)?
+                };
+                (r, status)
             }
         };
         ctx.metric("reached", report.reached.len() as f64);
         ctx.metric("grouped", report.grouped().len() as f64);
         let value = if self.json {
             serde_json::to_value(&report).map_err(|e| e.to_string())?
+        } else if self.summary {
+            serde_json::Value::String(report.summary(&self.group_title, &self.rest_title, self.limit, &self.summary_group))
         } else {
             serde_json::Value::String(report.markdown(&self.group_title, &self.rest_title, &self.cfg.also_label, self.limit))
         };
@@ -635,15 +736,25 @@ impl NodeFactory for NeighborhoodNodeFactory {
             return Err(format!("NeighborhoodNode: « {x} » n'est pas un identifiant"));
         }
         let entier = |k: &str, defaut: u64| config.get(k).and_then(|v| v.as_u64()).unwrap_or(defaut);
-        let json = match s("format").as_deref() {
-            None | Some("") | Some("markdown") => false,
-            Some("json") => true,
+        let (json, summary) = match s("format").as_deref() {
+            None | Some("") | Some("markdown") => (false, false),
+            Some("json") => (true, false),
+            Some("summary") => (false, true),
             Some(f) => return Err(format!("NeighborhoodNode: format inconnu « {f} »")),
         };
+        // Un nom, ou un fichier : l'un des deux.
+        let nom = s("name").unwrap_or_default();
+        let fichier = s("file").unwrap_or_default();
+        if nom.is_empty() && fichier.is_empty() {
+            return Err("NeighborhoodNode: « name » ou « file » requis".into());
+        }
         Ok(Box::new(NeighborhoodNode {
             node_name: name.to_string(),
             cfg,
-            name: requis("name")?,
+            name: nom,
+            file: fichier,
+            summary,
+            summary_group: s("summary_group").unwrap_or_default(),
             path: s("path").unwrap_or_default(),
             depth: entier("depth", 2).clamp(1, MAX_DEPTH as u64) as usize,
             budget: entier("budget", 200).clamp(1, MAX_BUDGET as u64) as usize,
@@ -670,8 +781,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
         use ConfigParamType::{Int, String as S};
         let mut direction = p("direction", S, false, Some(serde_json::json!("incoming")), "incoming (ce qui en dépend) | outgoing (ce dont il dépend)");
         direction.choices = Some(Choices::fixed(["incoming", "outgoing"]));
-        let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown | json");
-        format.choices = Some(Choices::fixed(["markdown", "json"]));
+        let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown | json | summary (les comptes, puis les premiers du groupe)");
+        format.choices = Some(Choices::fixed(["markdown", "json", "summary"]));
         NodeSchema {
             node_type: "NeighborhoodNode",
             description: "The neighbourhood of a thing by levels: what depends on it directly, then at two and three hops, along declared relations, with a node budget, a degree cap that shows hubs without traversing them, a grouping field, and an optional extra start reached by a declared path (rendered apart).",
@@ -699,7 +810,9 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("line_field", S, false, Some(serde_json::json!("start_line")), "Champ de ligne"),
                 p("group_title", S, false, Some(serde_json::json!("Groupés")), "Titre de la section des nœuds groupés"),
                 p("rest_title", S, false, Some(serde_json::json!("Touchés")), "Titre des sections par niveau"),
-                p("name", S, true, None, "Le nom de départ"),
+                p("name", S, false, Some(serde_json::json!("")), "Le nom de départ (ou `file`)"),
+                p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),
+                p("file", S, false, Some(serde_json::json!("")), "Mode par fichier : départ de toutes les lignes dont un champ de chemin vaut ce chemin ; ce qui est dans le fichier ne compte pas"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne partir que des définitions sous ce chemin"),
                 p("depth", Int, false, Some(serde_json::json!(2)), "Profondeur, 1 à 3"),
                 p("budget", Int, false, Some(serde_json::json!(200)), "Nœuds rendus au plus (plafond 2000)"),

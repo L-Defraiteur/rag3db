@@ -1,0 +1,15 @@
+%% tool: impact_fichier
+%% description: L'impact d'un fichier, en deux lignes, AVANT de l'éditer : combien de code hors de ce fichier dépend de ce qu'il définit, directement puis à deux sauts, et combien de tests le traversent, les premiers nommés. Rien quand rien n'en dépend. Fait pour un crochet après `read_file`.
+%% param: path_in_source string! -- Le chemin du fichier tel que l'index le garde (absolu : racine de la source + chemin relatif) ; le crochet le fournit.
+%% param: depth int = 2 -- Sauts suivis, de 1 à 3.
+%% param: limit int = 3 -- Tests nommés au plus.
+%% result: impact.result
+
+graph LR
+    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, group_title='Tests qui le traversent', rest_title='Code hors de ce fichier qui en dépend', kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, file=$path_in_source, depth=$depth, budget=200, max_degree=50, limit=$limit, format=summary, summary_group=case)"]
+
+%% Le même nœud qu'`impact`, parti de toutes les lignes du fichier au lieu
+%% d'un nom : ce qui est dans le fichier ne compte pas, seuls les
+%% dépendants extérieurs, dédoublonnés. Le résumé ne nomme que les tests
+%% qu'on relance (`test_role` = `case`), pas leurs aides. Le schéma de code (src/code.rs) :
+%% `repo_path` est le chemin relatif au dépôt, `file_path` le chemin absolu.
