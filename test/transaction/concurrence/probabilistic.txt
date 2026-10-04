@@ -35,3 +35,20 @@ VectorIndexUpdate.TenThousandRowsInBatchesOf512
 # df689b522 (2,14 refus pour 1 000 points de reprise à l'ancêtre, 2,72 sur master : écart
 # non établi). La famine que la marche 5 (une époque écrite dans le fichier) doit réduire.
 ReadOnlyReader.InsistingReaderIsNotStarvedByCheckpoints
+#
+# La reprise de rag3weaver après un paquet défait (single_writer_crash_test.cpp,
+# ProductReloadRecovery, 5 octobre) : index cosinus de 64 dimensions posé sur la table vide,
+# paquets de 32 lignes par COPY journalisé, trois COPY annulés dans une transaction. Après
+# l'annulation, des lignes validées AVANT elle ne sortent plus en tête pour leur vecteur
+# exact (1 à 9 sur 128) : rouge 6 fois sur 10 avec un point de reprise et une mort, 5 sur 10
+# avec une fermeture propre (sans rejeu) ; la fin sans annulation est verte 10 sur 10. Ticket
+# 2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.
+Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackCheckpointThenDeath
+Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackThenClose
+#
+# Les pages d'un COPY tué au milieu ne sont jamais récupérées (ticket de durabilité ; la
+# fuite n'est pas bornée, mesurée par une sonde le 5 octobre). Le témoin compare la taille
+# après trois morts à des délais fixes : rouge 4 fois sur 5, vert quand la troisième mort
+# tombe avant que le COPY ait écrit ses pages (1,78 Mo au lieu de 4,3 à 6,7). Sorti de
+# known_red.txt le 5 octobre, sans correctif : le défaut demeure.
+JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt

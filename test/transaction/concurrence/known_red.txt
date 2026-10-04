@@ -190,8 +190,3 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
-# Les pages d'un COPY tué au milieu ne sont jamais récupérées : le fichier de données passe
-# de 1,8 à 5,5–7,8 Mo en trois morts, sur le chemin journalisé comme sur l'ancien (ticket
-# durabilité, ligne « pages d'un point de reprise raté ou d'un arrêt brutal jamais
-# récupérées », Vela dfee83bf3, Ladybug 9ca5e8913).
-JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt data-file-bounded

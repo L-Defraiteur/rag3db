@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -1275,6 +1276,280 @@ INSTANTIATE_TEST_SUITE_P(Writes, ExtensionIndexRecovery,
     [](const ::testing::TestParamInfo<IndexedWrite>& info) {
         return indexedWriteName(info.param);
     });
+
+// La forme de la reprise de rag3weaver après un paquet défait (5 octobre). La reprise de
+// l'arbre principal y plante, et ce plantage reste inexpliqué : SIGSEGV dans
+// OnDiskHNSWIndex::update → shrinkForNode, sous un SET de vecteur, après un paquet défait et
+// une réouverture avec journal. Ce qu'on en sait par la session cœur C++ :
+// - l'index est posé sur la table vide : cosinus, 64 dimensions, mu 30, ml 60 ;
+// - les lignes arrivent par paquets de 32, en COPY journalisés ;
+// - un paquet échoue, et ROLLBACK annule plusieurs COPY d'une même transaction ;
+// - à la reprise, MERGE … SET repose les vecteurs de lignes déjà validées, puis des SET
+//   posent les autres.
+// Trois fins :
+// - la mort après quatre paquets validés ;
+// - trois COPY annulés, un point de reprise, un paquet de plus validé, puis la mort ;
+// - trois COPY annulés, puis une fermeture propre.
+// La reprise tourne dans un processus fils, pour qu'un plantage n'emporte pas la passe.
+enum class ProductEnd { Death, RolledBackCheckpointThenDeath, RolledBackThenClose };
+
+std::string productEndName(ProductEnd end) {
+    switch (end) {
+    case ProductEnd::Death:
+        return "Death";
+    case ProductEnd::RolledBackCheckpointThenDeath:
+        return "RolledBackCheckpointThenDeath";
+    case ProductEnd::RolledBackThenClose:
+        return "RolledBackThenClose";
+    }
+    return "?";
+}
+
+class ProductReloadRecovery : public SingleWriterCrash,
+                              public ::testing::WithParamInterface<ProductEnd> {
+public:
+    static constexpr int64_t BATCH = 32;
+    static constexpr int DIMENSIONS = 64;
+
+    // Un vecteur de 64 dimensions par ligne et par génération, sans deux directions voisines.
+    static std::string vectorOf(int64_t id, int generation) {
+        std::string text = "[";
+        for (auto j = 0; j < DIMENSIONS; j++) {
+            auto value = static_cast<double>((id * 31 + j * 7 + generation * 13) % 97) / 97.0;
+            if (j == (id + generation * 11) % DIMENSIONS) {
+                value += 2.0;
+            }
+            text += (j ? "," : "") + std::to_string(value);
+        }
+        return text + "]";
+    }
+
+    std::string csvPath(int64_t batch) const {
+        return databasePath + ".batch" + std::to_string(batch) + ".csv";
+    }
+
+    void writeBatches(int64_t numBatches) const {
+        for (auto batch = 0; batch < numBatches; batch++) {
+            std::ofstream csv(csvPath(batch));
+            for (auto id = batch * BATCH; id < (batch + 1) * BATCH; id++) {
+                csv << id << ",\"" << vectorOf(id, 0) << "\"\n";
+            }
+        }
+    }
+
+    void createIndexOnTheEmptyTable() {
+        conn.reset();
+        database.reset();
+        rag3db::main::Database earlier(databasePath, *systemConfig);
+        rag3db::main::Connection connection(&earlier);
+        loadVectorExtension(connection);
+        mustQuery(connection, stringFormat("CREATE NODE TABLE Chunk(id INT64 PRIMARY KEY, emb "
+                                           "FLOAT[{}]);",
+                                  DIMENSIONS));
+        mustQuery(connection, "CALL CREATE_VECTOR_INDEX('Chunk', 'chunk_index', 'emb', mu := 30, "
+                              "ml := 60, pu := 0.05, metric := 'cosine', alpha := 1.1, efc := "
+                              "200);");
+    }
+
+    void load(rag3db::main::Connection& connection, ProductEnd end) const {
+        loadVectorExtension(connection);
+        mustQuery(connection, "CALL auto_checkpoint=false;");
+        mustQuery(connection, "CALL force_checkpoint_on_copy=false;");
+        const auto copy = [&](int64_t batch) {
+            mustQuery(connection, "COPY Chunk FROM '" + csvPath(batch) + "' (header=false);");
+        };
+        for (auto batch = 0; batch < 4; batch++) {
+            mustQuery(connection, "BEGIN TRANSACTION;");
+            copy(batch);
+            mustQuery(connection, "COMMIT;");
+        }
+        if (end == ProductEnd::Death) {
+            return;
+        }
+        mustQuery(connection, "BEGIN TRANSACTION;");
+        for (auto batch = 4; batch < 7; batch++) {
+            copy(batch);
+        }
+        mustQuery(connection, "ROLLBACK;");
+        if (end == ProductEnd::RolledBackCheckpointThenDeath) {
+            mustQuery(connection, "CHECKPOINT;");
+            copy(7);
+        }
+    }
+
+    // Les lignes validées : les paquets 0 à 3, et le paquet 7 après le point de reprise.
+    std::vector<int64_t> expectedIds(ProductEnd end) const {
+        std::vector<int64_t> ids;
+        for (auto id = 0; id < 4 * BATCH; id++) {
+            ids.push_back(id);
+        }
+        if (end == ProductEnd::RolledBackCheckpointThenDeath) {
+            for (auto id = 7 * BATCH; id < 8 * BATCH; id++) {
+                ids.push_back(id);
+            }
+        }
+        return ids;
+    }
+
+    // Dans le fils de la reprise : chaque ligne doit sortir en tête pour le vecteur que
+    // generationOf lui donne ; rend le nombre de lignes manquées.
+    static int64_t missedRows(rag3db::main::Connection& connection,
+        const std::vector<int64_t>& ids, const std::function<int(int64_t)>& generationOf,
+        const char* when) {
+        const auto numRows = static_cast<int64_t>(ids.size());
+        int64_t missed = 0;
+        for (const auto id : ids) {
+            auto result = connection.query("CALL QUERY_VECTOR_INDEX('Chunk', 'chunk_index', " +
+                                           vectorOf(id, generationOf(id)) +
+                                           ", 3, efs := 200) RETURN node.id, distance;");
+            if (!result->isSuccess()) {
+                std::cerr << "  " << when << ": search for " << id << ": "
+                          << result->getErrorMessage() << "\n";
+                return numRows;
+            }
+            int64_t best = -1;
+            double bestDistance = INFINITY;
+            while (result->hasNext()) {
+                auto tuple = result->getNext();
+                const auto distance = std::stod(tuple->getValue(1)->toString());
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = tuple->getValue(0)->getValue<int64_t>();
+                }
+            }
+            if (best != id && ++missed <= 3) {
+                std::cerr << "  " << when << ": row " << id << " gives " << best << "\n";
+            }
+        }
+        std::cerr << "  " << when << ": " << numRows - missed << "/" << numRows
+                  << " rows found by their exact vector\n";
+        return missed;
+    }
+
+    // Le fils de la reprise. Codes : 0 tenu, 4 requête échouée, 5 lignes manquées après le
+    // rejeu, 6 après les SET, 7 après un point de reprise et une réouverture, 8 mauvais compte.
+    int recoverInAChild(const std::vector<int64_t>& ids) {
+        const auto numRows = static_cast<int64_t>(ids.size());
+        const auto pid = fork();
+        if (pid == 0) {
+            disableCoreDumps();
+            const auto run = [&]() -> int {
+                auto childDatabase =
+                    std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+                auto connection = std::make_unique<rag3db::main::Connection>(childDatabase.get());
+                loadVectorExtension(*connection);
+                const auto ok = [&](const std::string& query) {
+                    auto result = connection->query(query);
+                    if (!result->isSuccess()) {
+                        std::cerr << "  " << query.substr(0, 120) << ": "
+                                  << result->getErrorMessage() << "\n";
+                    }
+                    return result->isSuccess();
+                };
+                auto count = connection->query("MATCH (n:Chunk) RETURN count(n);");
+                if (!count->isSuccess() ||
+                    count->getNext()->getValue(0)->getValue<int64_t>() != numRows) {
+                    return 8;
+                }
+                count.reset();
+                if (missedRows(*connection, ids, [](int64_t) { return 0; }, "after the replay")) {
+                    return 5;
+                }
+                // Les vecteurs reposés par MERGE … SET, par paquets, sur des lignes validées.
+                for (auto first = 0; first < numRows; first += BATCH) {
+                    std::string rows;
+                    for (auto i = first; i < std::min(numRows, first + BATCH); i++) {
+                        const auto id = ids[i];
+                        rows += (rows.empty() ? "" : ", ") + stringFormat("{id: {}, v: {}}", id,
+                                                                  vectorOf(id, 1));
+                    }
+                    if (!ok("UNWIND [" + rows + "] AS r MERGE (n:Chunk {id: r.id}) SET n.emb = "
+                                                "r.v;")) {
+                        return 4;
+                    }
+                }
+                // Puis des SET ligne à ligne, vers des vecteurs neufs.
+                for (const auto id : ids) {
+                    if (id % 3 != 0) {
+                        continue;
+                    }
+                    if (!ok(stringFormat("MATCH (n:Chunk {id: {}}) SET n.emb = {};", id,
+                            vectorOf(id, 2)))) {
+                        return 4;
+                    }
+                }
+                const auto generation = [](int64_t id) { return id % 3 == 0 ? 2 : 1; };
+                if (missedRows(*connection, ids, generation, "after the SETs")) {
+                    return 6;
+                }
+                if (!ok("CHECKPOINT;")) {
+                    return 4;
+                }
+                connection.reset();
+                childDatabase.reset();
+                childDatabase =
+                    std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+                connection = std::make_unique<rag3db::main::Connection>(childDatabase.get());
+                loadVectorExtension(*connection);
+                if (missedRows(*connection, ids, generation, "after reopening")) {
+                    return 7;
+                }
+                return 0;
+            };
+            int code = 3;
+            try {
+                code = run();
+            } catch (const std::exception& e) {
+                std::cerr << "  recovery child: " << e.what() << "\n";
+            }
+            _exit(code);
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+        if (WIFSIGNALED(status)) {
+            return 128 + WTERMSIG(status);
+        }
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+};
+
+TEST_P(ProductReloadRecovery, VectorsSetAfterRecoveryAreFound) {
+    const auto end = GetParam();
+    writeBatches(8);
+    createIndexOnTheEmptyTable();
+    if (end == ProductEnd::RolledBackThenClose) {
+        // Une fermeture propre : le point de reprise de la fermeture n'est pas coupé.
+        rag3db::main::Database session(databasePath, *systemConfig);
+        rag3db::main::Connection connection(&session);
+        load(connection, end);
+    } else {
+        runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+            load(connection, end);
+        });
+        expectJournalToReplay();
+    }
+    std::cerr << "  journal at reopening: " << walSize() << " bytes\n";
+    const auto probe = probeOpenInFreshProcess(databasePath, true /* vectorExtension */);
+    ASSERT_TRUE(probe.empty()) << "[check: database-opens-without-crash] " << probe;
+    const auto code = recoverInAChild(expectedIds(end));
+    std::cerr << "  recovery child: " << code << "\n";
+    EXPECT_LT(code, 128) << "[check: recovery-survives] the recovery died by signal "
+                         << code - 128 << " (11 = SIGSEGV)";
+    EXPECT_NE(code, 8) << "[check: row-count] ";
+    EXPECT_NE(code, 4) << "[check: recovery-queries] ";
+    EXPECT_NE(code, 3) << "[check: recovery-runs] ";
+    EXPECT_NE(code, 5) << "[check: rows-found-after-replay] ";
+    EXPECT_NE(code, 6) << "[check: rows-found-after-the-sets] ";
+    EXPECT_NE(code, 7) << "[check: rows-found-after-reopening] ";
+    for (auto batch = 0; batch < 8; batch++) {
+        std::filesystem::remove(csvPath(batch));
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(Ends, ProductReloadRecovery,
+    ::testing::Values(ProductEnd::Death, ProductEnd::RolledBackCheckpointThenDeath,
+        ProductEnd::RolledBackThenClose),
+    [](const ::testing::TestParamInfo<ProductEnd>& info) { return productEndName(info.param); });
 
 // Le processus neuf d'une sonde d'ouverture (probeOpenInFreshProcess) : lancé par exec du
 // banc lui-même, il ouvre la base dont le chemin est dans CONCURRENCE_OPEN_PROBE, charge
