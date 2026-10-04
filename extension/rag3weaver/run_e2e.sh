@@ -62,19 +62,6 @@ if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then
 fi
 [ -n "${RAG3WEAVER_VERROU_TENU:-}" ] && echo "▸ verrou du poste : $RAG3WEAVER_VERROU_TENU"
 
-# ── Pas de démon d'embarquement local sans le dire ──────────────────────────
-#
-# Un démon lancé par une suite survit à la passe (c'est son rôle) et garde
-# la carte : le 4 octobre 2026, celui d'une autre session tenait 3,6 Go de la
-# carte qui porte l'écran. Sans service distant déclaré
-# (`RAG3WEAVER_EMBED_SERVICE`), le lanceur n'en démarre donc aucun : les
-# suites qui veulent BGE-M3 le chargent dans leur processus, rendu à sa fin.
-# `RAG3WEAVER_DEMON_LOCAL=1` lève le refus, pour qui le veut vraiment.
-if [ -z "${RAG3WEAVER_EMBED_SERVICE:-}" ] && [ "${RAG3WEAVER_DEMON_LOCAL:-}" != 1 ]; then
-  export RAG3WEAVER_SANS_DEMON=1
-  echo "▸ aucun service d'embarquement déclaré : pas de démon local (RAG3WEAVER_DEMON_LOCAL=1 pour en lancer un)"
-fi
-
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # **La bibliothèque contre laquelle tout est éprouvé.**
 #
@@ -135,9 +122,40 @@ if [ "${RAG3WEAVER_CHARGE:-1}" != "0" ] && [ -x "$WEAVER/charge.py" ]; then
   "$WEAVER/charge.py" --sortie "$CHARGE_LOG" \
     --intervalle "${RAG3WEAVER_CHARGE_INTERVALLE:-5}" &
   CHARGE_PID=$!
-  trap '[ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true' EXIT
   echo "▸ Charge tracée dans $CHARGE_LOG (tail -f pour suivre)"
 fi
+
+# ── Le démon d'embarquement né pendant la passe s'arrête avec elle ──────────
+#
+# Le démon survit exprès à la suite qui l'a lancé (`Fin::Laisser`,
+# `tests/common/mod.rs`) : le binaire suivant retrouve BGE-M3 déjà chargé, et
+# la passe le charge une fois au lieu d'une par binaire. Cette survie ne sert
+# plus rien après la passe : le 4 octobre 2026, un démon resté en place tenait
+# 2,7 Go de mémoire et 3,6 Go sur la carte qui porte l'écran de Lucie, et
+# l'écran a gelé.
+#
+# Le démon hérite de l'environnement de la suite qui le lance : la marque
+# `RAG3WEAVER_PASSE_E2E` dit lequel est né de *cette* passe. On n'arrête que
+# ceux-là, jamais celui d'une autre passe partagée qui tourne à côté. Par
+# `pidof` et SIGTERM, jamais `pgrep -f` (un motif attrape le shell qui le
+# porte) ; `|| true` parce que `pidof` rend 1 quand il ne trouve rien, ce qui
+# tuerait la passe en silence sous `set -e`. Une passe interrompue nettoie
+# aussi : c'est le piège de sortie.
+export RAG3WEAVER_PASSE_E2E="$$-$(date +%s%N)"
+arreter_les_demons_de_la_passe() {
+  local p
+  for p in $(pidof rag3weaver-embeddings || true); do
+    if tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "RAG3WEAVER_PASSE_E2E=$RAG3WEAVER_PASSE_E2E"; then
+      echo "▸ démon d'embarquement né pendant la passe arrêté (pid $p, SIGTERM)"
+      kill -TERM "$p" 2>/dev/null || true
+    fi
+  done
+}
+a_la_sortie() {
+  [ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true
+  arreter_les_demons_de_la_passe
+}
+trap a_la_sortie EXIT
 
 # Parse flags
 BUILD_ONLY=false
@@ -288,6 +306,32 @@ case ",$FEATURES," in
     ;;
 esac
 
+# ── Les suites dont l'objet est la carte d'ici ─────────────────────────────
+#
+# Quatre familles court-circuitent exprès le service d'embarquement distant
+# (`SUITES_LOCALES`, `tests/common/mod.rs`) : leur objet est l'embarqueur, le
+# démon, ou la vitesse de *ce* poste. Les envoyer au service leur ferait
+# mesurer la carte d'un autre poste, un chiffre juste pour une question qu'on
+# ne leur pose pas. Aucun régime ne les rend donc légères : elles chargent
+# leur modèle sur la carte qui porte l'écran, par le démon ou sur place.
+#
+# Décision de l'orchestration (4 octobre 2026, après un gel d'écran) : une
+# batterie de jour les écarte, `RAG3WEAVER_SANS_CARTE_LOCALE=0` les fait
+# entrer (la nuit, ou sur demande de Lucie ; une livraison qui touche
+# l'embarqueur, le démon ou le moteur burn les exige avant fusion). Une suite
+# nommée par `--test` se joue toujours : on l'a demandée. Une passe qui les
+# écarte se dit « complète hors carte locale », jamais « complète ».
+SUITES_CARTE_LOCALE=(e2e_burn_ e2e_demon_embeddings e2e_mesure_ingestion_code e2e_banc_bge_m3)
+SANS_CARTE_LOCALE="${RAG3WEAVER_SANS_CARTE_LOCALE:-1}"
+ECARTEES_CARTE_LOCALE=()
+est_de_la_carte_locale() {
+  local motif
+  for motif in "${SUITES_CARTE_LOCALE[@]}"; do
+    case "$1" in "$motif"*) return 0 ;; esac
+  done
+  return 1
+}
+
 CARGO_ARGS=(
   --features "$FEATURES"
 )
@@ -305,8 +349,16 @@ else
     if [ "$nom" = "e2e_postgres" ] && [ "$PG_DANS_LA_PASSE" = false ]; then
       continue
     fi
+    if [ "$SANS_CARTE_LOCALE" != 0 ] && est_de_la_carte_locale "$nom"; then
+      ECARTEES_CARTE_LOCALE+=("$nom")
+      continue
+    fi
     CARGO_ARGS+=(--test "$nom")
   done
+  if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
+    echo "▸ ⚠ ${#ECARTEES_CARTE_LOCALE[@]} suites NON JOUÉES (carte locale, RAG3WEAVER_SANS_CARTE_LOCALE=0 pour les jouer) :"
+    echo "    ${ECARTEES_CARTE_LOCALE[*]}"
+  fi
 fi
 
 # Une suite en échec n'arrête pas les autres : sans ça, cargo s'arrête au
@@ -590,12 +642,18 @@ if [ "$SUMMARY" = true ]; then
   if [ "$PG_DANS_LA_PASSE" = false ]; then
     say "  %-30s ÉCARTÉE — %s\n" "e2e_postgres" "$PG_RAISON"
   fi
+  for nom in "${ECARTEES_CARTE_LOCALE[@]}"; do
+    say "  %-30s ÉCARTÉE — carte locale\n" "$nom"
+  done
 
   say "───────────────────────────────────────────────\n"
   if [ "$TOTAL_FAILED" -eq 0 ]; then
     say "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
   else
     say "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
+  fi
+  if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
+    say "  %-30s complète hors carte locale (%d suites écartées)\n" "" "${#ECARTEES_CARTE_LOCALE[@]}"
   fi
   if [ "$NOT_RUN" -gt 0 ]; then
     say "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
@@ -634,6 +692,9 @@ else
   fi
   if ! moteur_inchange; then
     EXIT_CODE=1
+  fi
+  if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
+    echo "Passe complète hors carte locale : ${ECARTEES_CARTE_LOCALE[*]} écartées."
   fi
   if [ -n "$CHARGE_PID" ]; then
     kill "$CHARGE_PID" 2>/dev/null || true
