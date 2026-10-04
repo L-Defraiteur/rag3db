@@ -326,6 +326,12 @@ libre passe de 17,5 à 22,3 Gio. Le binaire doit être bâti avec la feature
 
 ## 8. Ce qui reste ouvert
 
+- **Aucune authentification** : les services n'écoutent que sur `127.0.0.1`
+  et c'est le tunnel ssh qui garde la porte ; tout processus local de l'un
+  ou l'autre poste peut les appeler. Suffisant aujourd'hui (Lucie, 4 octobre
+  2026) ; à corriger avant toute exposition hors d'un tunnel — ticket
+  `docs/tickets/2026-10-04-services-de-modeles-sans-authentification.md`.
+
 - Les démons ne sont pas des services systemd : un redémarrage de luciepc
   demande la relance à la main. À faire si l'usage dure.
 - Cinq modèles chargés (trois d'embarquement, un de décision, un de
