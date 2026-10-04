@@ -419,6 +419,11 @@ pub struct SourceSyncReport {
     /// juste mais lent, et il ne doit plus passer sans un mot.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bulk_load_refused: Vec<String>,
+    /// **Le tampon du moteur** contre lequel cette synchronisation a tourné,
+    /// et sa source (variable, manifeste, règle, défaut du moteur). Un échec
+    /// de mémoire dit ainsi contre quoi il a été obtenu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buffer_pool: Option<String>,
     /// **Les fichiers écartés par une règle déclarée**, par raison — les
     /// générés (`SourceSyncOptions::generated`). Ils ne sont pas analysés.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -575,7 +580,13 @@ fn synchroniser(
         .cloned()
         .collect();
     let mut report =
-        SourceSyncReport { source: source_id, files_listed: listed.len(), relations_mode: Some(mode), ..Default::default() };
+        SourceSyncReport {
+            source: source_id,
+            files_listed: listed.len(),
+            relations_mode: Some(mode),
+            buffer_pool: catalog.conn().buffer_pool(),
+            ..Default::default()
+        };
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     for paquet in retenus.chunks(options.batch_files.max(1)) {

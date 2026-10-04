@@ -55,6 +55,11 @@ pub struct BackendManifest {
     /// de code ne peut lire ni écrire — le défaut sûr.
     #[serde(default)]
     pub workspace: Option<crate::backend_code::WorkspaceConfig>,
+    /// **Le tampon du moteur**, en octets. Absent : la règle du produit
+    /// (`rag3db_connection::buffer_pool_choice`), que la variable
+    /// `RAG3DB_BUFFER_POOL_SIZE` surpasse toujours.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buffer_pool: Option<u64>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

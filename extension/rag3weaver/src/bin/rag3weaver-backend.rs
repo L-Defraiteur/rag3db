@@ -29,7 +29,9 @@ fn run() -> Result<(), String> {
     } else {
         None
     };
-    let conn = Rag3dbConnection::new(&database).map_err(|e| e.to_string())?;
+    let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(prepared.manifest.buffer_pool);
+    eprintln!("[rag3weaver] tampon du moteur : {}", rag3weaver::rag3db_connection::describe_buffer_pool(tampon));
+    let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     // Crochet de test (`scripts/test_backend_must_reopen.py`) : le k-ième
     // appel d'outil rencontre la base comme après un point de reprise échoué.
     let hook = conn.failed_checkpoint_hook();

@@ -213,6 +213,14 @@ pub trait DbConnection: Send + Sync {
     fn must_reopen(&self) -> Option<String> {
         None
     }
+
+    /// **Le tampon du moteur** retenu à l'ouverture, et sa source, dits en
+    /// clair (`rag3db_connection::describe_buffer_pool`) ; `None` pour un
+    /// moteur qui n'en a pas, ou une base ouverte par une configuration
+    /// fournie.
+    fn buffer_pool(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Alias for backward compat — DbConnection is now sync natively.

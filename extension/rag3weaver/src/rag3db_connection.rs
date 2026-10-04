@@ -30,6 +30,9 @@ pub struct Rag3dbConnection {
     /// Partagé par toutes les connexions d'une même `Database` : un point de
     /// reprise échoué empoisonne la base, pas une connexion.
     reopen: Arc<ReopenState>,
+    /// Le tampon retenu à l'ouverture, et sa source ; `None` pour une base
+    /// ouverte avec une configuration fournie par l'appelant.
+    buffer_pool: Option<BufferPoolChoice>,
 }
 
 /// **Crochet de test** : faire répondre la base exactement comme le moteur
@@ -66,7 +69,7 @@ unsafe impl Sync for Rag3dbConnection {}
 impl Rag3dbConnection {
     /// Open (or create) a database at the given path.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, DbError> {
-        Self::with_config(path, Self::default_config())
+        Self::with_manifest_buffer_pool(path, None)
     }
 
     /// **Ouvrir une base en lecture seule.**
@@ -146,7 +149,9 @@ impl Rag3dbConnection {
             rag3db::Database::in_memory(Self::in_memory_config())
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
-        Self::connect(db, Self::fresh_reopen_state())
+        let mut conn = Self::connect(db, Self::fresh_reopen_state())?;
+        conn.buffer_pool = Some(Self::in_memory_choice());
+        Ok(conn)
     }
 
     /// Réservation d'espace d'adressage virtuel d'une base **en mémoire** :
@@ -164,31 +169,53 @@ impl Rag3dbConnection {
     pub const IN_MEMORY_MAX_DB_SIZE: u64 = 1 << 40;
 
     fn in_memory_config() -> rag3db::SystemConfig {
-        let config = Self::default_config();
+        let config = Self::config_with_buffer_pool(Self::in_memory_choice());
         if std::env::var_os("RAG3DB_MAX_DB_SIZE").is_some() {
             return config;
         }
         config.max_db_size(Self::IN_MEMORY_MAX_DB_SIZE)
     }
 
-    /// `SystemConfig::default()`, with two knobs overridable from the
-    /// environment for tooling that constrains the address space:
+    /// `SystemConfig::default()`, with the address-space knob overridable
+    /// from the environment for tooling that constrains it, and the buffer
+    /// pool chosen by [`buffer_pool_choice`]:
     ///
     /// - `RAG3DB_MAX_DB_SIZE` (bytes) — the virtual region kuzu reserves up
     ///   front. The stock reservation is 8 TiB, which valgrind refuses
     ///   (`Mmap for size 8796093022208 failed`).
-    /// - `RAG3DB_BUFFER_POOL_SIZE` (bytes).
-    ///
-    /// Both are read only if set; production never sets them.
     fn default_config() -> rag3db::SystemConfig {
+        Self::config_with_buffer_pool(buffer_pool_choice(None))
+    }
+
+    fn in_memory_choice() -> BufferPoolChoice {
+        // La règle du tampon ne vaut que sur disque : une base en mémoire vit
+        // entière dans son tampon, 8 Gio la borneraient.
+        match buffer_pool_choice(None) {
+            BufferPoolChoice { source: BufferPoolSource::Rule, .. } => {
+                BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault }
+            }
+            autre => autre,
+        }
+    }
+
+    fn config_with_buffer_pool(choice: BufferPoolChoice) -> rag3db::SystemConfig {
         let mut config = rag3db::SystemConfig::default();
         if let Some(v) = std::env::var("RAG3DB_MAX_DB_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
             config = config.max_db_size(v);
         }
-        if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
+        if let Some(v) = choice.bytes {
             config = config.buffer_pool_size(v);
         }
         config
+    }
+
+    /// Open a database on disk with the buffer pool a manifest asks for
+    /// (`bufferPool`, bytes), under the precedence of [`buffer_pool_choice`].
+    pub fn with_manifest_buffer_pool(path: impl AsRef<Path>, manifest: Option<u64>) -> Result<Self, DbError> {
+        let choix = buffer_pool_choice(manifest);
+        let mut conn = Self::with_config(path, Self::config_with_buffer_pool(choix))?;
+        conn.buffer_pool = Some(choix);
+        Ok(conn)
     }
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
@@ -217,13 +244,14 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db, reopen })
+        Ok(Self { conn, db, reopen, buffer_pool: None })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
     /// The returned connection shares the same Database instance (same tables, same catalog).
     pub fn create_sync_connection(&self) -> Result<Arc<dyn crate::connection::SyncDbConnection>, DbError> {
-        let conn = Self::connect(self.db.clone(), self.reopen.clone())?;
+        let mut conn = Self::connect(self.db.clone(), self.reopen.clone())?;
+        conn.buffer_pool = self.buffer_pool;
         Ok(Arc::new(conn))
     }
 
@@ -337,6 +365,10 @@ impl DbConnection for Rag3dbConnection {
 
     fn must_reopen(&self) -> Option<String> {
         self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    fn buffer_pool(&self) -> Option<String> {
+        self.buffer_pool.map(describe_buffer_pool)
     }
 }
 
@@ -476,8 +508,104 @@ fn typed_rag3db_value(v: &CypherValue, ty: &crate::config::FieldType) -> rag3db:
     }
 }
 
+// ─── Le tampon du moteur ───────────────────────────────────────────────────
+
+/// D'où vient la taille du tampon du moteur.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferPoolSource {
+    /// `RAG3DB_BUFFER_POOL_SIZE`, posée par qui lance.
+    Environment,
+    /// La clé `bufferPool` du manifeste.
+    Manifest,
+    /// La règle du produit : [`BUFFER_POOL_RULE_BYTES`] sur un poste d'au
+    /// moins [`BUFFER_POOL_RULE_MIN_RAM`].
+    Rule,
+    /// Rien de posé : le moteur prend 80 % de la mémoire vive.
+    EngineDefault,
+}
+
+/// La taille retenue pour le tampon du moteur, et sa source. `bytes` vaut
+/// `None` quand le moteur choisit lui-même (80 % de la mémoire vive).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufferPoolChoice {
+    pub bytes: Option<u64>,
+    pub source: BufferPoolSource,
+}
+
+/// **8 Gio, posés explicitement.** Décision de l'orchestration du 4 octobre
+/// 2026, en attendant la cause de l'échec mesuré : à 512 fichiers par paquet
+/// sur disque, 4 Gio échouent vers 4 500 fichiers sur un point de reprise,
+/// 8 Gio passent l'indexation de ce dépôt (62 Mo de texte, 6 900 fichiers).
+/// Lucie accepte 8 Go sur son poste. Pas de règle « une fraction de la
+/// mémoire » tant que la cause n'est pas connue.
+pub const BUFFER_POOL_RULE_BYTES: u64 = 8 << 30;
+
+/// Le seuil de la règle : un poste « de 32 Go ». La mémoire que le noyau
+/// annonce est un peu en dessous de la barrette (31,2 Gio pour 32 Go), d'où
+/// 30 Gio.
+pub const BUFFER_POOL_RULE_MIN_RAM: u64 = 30 << 30;
+
+/// **Le tampon du moteur, et d'où il vient.** Par ordre : la variable
+/// `RAG3DB_BUFFER_POOL_SIZE`, la clé `bufferPool` du manifeste (`manifest`),
+/// la règle du produit (8 Gio dès 32 Go de mémoire), sinon le défaut du
+/// moteur. L'estimation d'une indexation l'appelle pour savoir quel tampon
+/// elle aura ; le rapport de synchronisation la reprend.
+pub fn buffer_pool_choice(manifest: Option<u64>) -> BufferPoolChoice {
+    if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
+        return BufferPoolChoice { bytes: Some(v), source: BufferPoolSource::Environment };
+    }
+    if let Some(v) = manifest {
+        return BufferPoolChoice { bytes: Some(v), source: BufferPoolSource::Manifest };
+    }
+    choice_by_rule(total_memory())
+}
+
+/// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
+/// rapport.
+pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
+    let source = match choice.source {
+        BufferPoolSource::Environment => "RAG3DB_BUFFER_POOL_SIZE",
+        BufferPoolSource::Manifest => "manifeste (buffer_pool)",
+        BufferPoolSource::Rule => "règle du produit (8 Gio dès 32 Go)",
+        BufferPoolSource::EngineDefault => "défaut du moteur",
+    };
+    match choice.bytes {
+        Some(b) => format!("{:.1} Gio, {source}", b as f64 / (1u64 << 30) as f64),
+        None => format!("80 % de la mémoire vive, {source}"),
+    }
+}
+
+fn choice_by_rule(total_memory: Option<u64>) -> BufferPoolChoice {
+    match total_memory {
+        Some(ram) if ram >= BUFFER_POOL_RULE_MIN_RAM => {
+            BufferPoolChoice { bytes: Some(BUFFER_POOL_RULE_BYTES), source: BufferPoolSource::Rule }
+        }
+        _ => BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault },
+    }
+}
+
+/// La mémoire vive du poste, en octets (`MemTotal` de `/proc/meminfo`).
+/// `None` hors de Linux : la règle ne joue pas, le moteur choisit.
+fn total_memory() -> Option<u64> {
+    let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
+    let ligne = meminfo.lines().find(|l| l.starts_with("MemTotal:"))?;
+    let kio: u64 = ligne.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kio * 1024)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_regle_du_tampon_pose_8_gio_des_32_go() {
+        use super::*;
+        let gio = 1u64 << 30;
+        assert_eq!(choice_by_rule(Some(125 * gio)), BufferPoolChoice { bytes: Some(8 * gio), source: BufferPoolSource::Rule });
+        // 32 Go de barrettes, 31,2 Gio annoncés par le noyau.
+        assert_eq!(choice_by_rule(Some(31 * gio + gio / 5)).source, BufferPoolSource::Rule);
+        assert_eq!(choice_by_rule(Some(15 * gio)), BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault });
+        assert_eq!(choice_by_rule(None).source, BufferPoolSource::EngineDefault);
+    }
+
 
     /// **La reprise existe, et elle se compte.**
     ///
