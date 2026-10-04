@@ -67,11 +67,20 @@ impl BufferCheck {
     }
 }
 
-/// Le tampon du moteur de ce processus, tel que le moteur le prendra :
-/// `RAG3DB_BUFFER_POOL_SIZE`, sinon son défaut (80 % de la mémoire du poste).
-/// Provisoire : la session de l'arbre principal pose la règle du produit à
-/// l'ouverture de la connexion, et cette lecture passera par elle.
+/// Le tampon du moteur de ce processus, tel que la connexion le prendra :
+/// la règle du produit (`rag3db_connection::buffer_pool_choice` : variable,
+/// règle de 8 Gio dès 32 Go, sinon le défaut du moteur, 80 % de la mémoire).
+/// **Limite** : la clé `buffer_pool` d'un manifeste n'est pas vue d'ici —
+/// l'estimation ne connaît pas le manifeste qui a ouvert la base.
 pub fn buffer_pool_here() -> (u64, String) {
+    #[cfg(feature = "rag3db-native")]
+    {
+        use crate::rag3db_connection::{buffer_pool_choice, describe_buffer_pool};
+        let choice = buffer_pool_choice(None);
+        if let Some(bytes) = choice.bytes {
+            return (bytes, describe_buffer_pool(choice));
+        }
+    }
     if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
         return (v, "RAG3DB_BUFFER_POOL_SIZE".into());
     }
