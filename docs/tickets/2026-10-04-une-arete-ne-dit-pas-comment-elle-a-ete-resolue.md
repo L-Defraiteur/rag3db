@@ -123,6 +123,8 @@ Reste : les réexportations (décision ci-dessus), le « nom seul » (ticket).
 ## Exposition à un défaut du moteur (4 octobre, 22 h 40)
 
 Ticket « une propriété de chaîne d'une relation se lit fausse dans le sens
-direct après un point de reprise » : en attendant son correctif, le filtre de
-Liens (et « dépend de ») peut taire une arête sûre lue « nom » dans le sens
-direct ; impact et usages lisent depuis la cible, sûrs.
+direct après un point de reprise » : en attendant son correctif, aucune
+lecture de `resolution` n'est sûre (Liens, impact, usages), quel que soit le
+sens — c'est le planificateur qui choisit le rangement lu. Les chiffres du
+banc et des sondes de cette page sont à rejouer sur une indexation de zéro
+après le correctif.
