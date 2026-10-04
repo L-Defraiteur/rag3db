@@ -2001,23 +2001,18 @@ impl Catalog {
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
 
         // **Ce qu'on accepte sans l'appliquer, on le dit au moment où on
-        // l'accepte.** `title_boost` et `content_boost` sont copiés dans
-        // la config et jamais relus — vérifié le 25 août 2026, toujours vrai.
-        // Les taire, c'est laisser quelqu'un régler un cadran débranché et
-        // conclure que le moteur ne fait pas la différence.
+        // l'accepte.** `title_boost` est BRANCHÉ depuis le 4 octobre 2026 :
+        // il coule dans le `boost` du champ titre de l'entité dérivée (le
+        // mécanisme unique, voir `derived_kb.rs`) — un hit dont le titre
+        // matche multiplie son score. `content_boost`, lui, reste copié et
+        // jamais relu — le taire serait laisser quelqu'un régler un cadran
+        // débranché et conclure que le moteur ne fait pas la différence.
         //
         // On ne se plaint que d'une valeur **choisie**, pas du défaut : sinon
         // l'avertissement se déclencherait sur chaque KB et cesserait d'être lu.
-        //
-        // La correction n'est pas un correctif mais une **topologie** — une
-        // branche BM25 par champ, pesée à la fusion — parce que lucivy n'a
-        // aucune pondération par champ. Voir `vision_roadmap_09_2026/06` §4.
         {
             let defauts = crate::config::KBConfig::default();
             let mut poses: Vec<String> = Vec::new();
-            if kb_config.title_boost != defauts.title_boost {
-                poses.push(format!("title_boost = {}", kb_config.title_boost));
-            }
             if kb_config.content_boost != defauts.content_boost {
                 poses.push(format!("content_boost = {}", kb_config.content_boost));
             }
@@ -4297,12 +4292,23 @@ impl Catalog {
             // par gabarit, se cherche en plein texte comme celui de l'ancienne
             // ligne d'index (`_title` + `_content`).
             let derivee = ec.derived.as_ref();
-            if derivee.is_some() {
-                if let Some(title) = ec.title_field() {
-                    if !bm25_fields.iter().any(|f| f == title) {
-                        bm25_fields.push(title.to_string());
-                    }
+            // **Le titre est un champ de recherche pour TOUTE entité**, plus
+            // seulement les dérivées (la sonde du 4 octobre : le nom du Scope
+            // n'était pas indexé, la définition ne portait pas son nom). Un
+            // index existant ne gagne le champ qu'en étant rebâti — la
+            // recherche filtre par le schéma du handle, voir search_bm25_chunked.
+            let mut title_field = None;
+            let mut title_boost = 1.0_f64;
+            if let Some(title) = ec.title_field() {
+                if !bm25_fields.iter().any(|f| f == title) {
+                    bm25_fields.push(title.to_string());
                 }
+                title_field = Some(title.to_string());
+                if let Some(b) = ec.fields.get(title).and_then(|d| d.boost) {
+                    title_boost = b;
+                }
+            }
+            if derivee.is_some() {
                 for f in [crate::config::DerivedConfig::SOURCE_ENTITY, crate::config::DerivedConfig::SOURCE_UUID] {
                     if !enrich_fields.iter().any(|e| e == f) {
                         enrich_fields.push(f.to_string());
@@ -4322,6 +4328,8 @@ impl Catalog {
                 field_weights: ec.field_weights.clone(),
                 has_source_refs: derivee.is_some(),
                 filter_indirection: derivee.map(|d| (d.from.clone(), crate::schema::derived_rel_name(name))),
+                title_field,
+                title_boost,
             });
         }
 
@@ -10216,8 +10224,11 @@ mod tests {
         assert_eq!(t.chunk_table, "Product_Chunk");
         assert_eq!(t.chunk_rel, "Product_CHUNKED_FROM");
         assert!(!t.chunk_rel_fwd);
-        // BM25 fields = content fields sorted
-        assert_eq!(t.bm25_fields, vec!["description", "details"]);
+        // BM25 fields = contenus triés + le TITRE (indexé pour toute entité
+        // depuis le 4 octobre — la définition porte son nom).
+        assert_eq!(t.bm25_fields, vec!["description", "details", "name"]);
+        assert_eq!(t.title_field.as_deref(), Some("name"));
+        assert_eq!(t.title_boost, 1.0, "sans boost déclaré, le titre est neutre");
         assert!(!t.has_source_refs);
         assert!(t.filter_indirection.is_none());
         // Enrich fields contain content + title + _content_hash

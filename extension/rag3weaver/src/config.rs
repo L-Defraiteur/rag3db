@@ -282,12 +282,18 @@ pub struct KBConfig {
     #[serde(alias = "keyword_weight")]
     pub keyword_weight: f64,
 
-    /// **Accepté mais non appliqué** (vérifié le 25 août 2026) : gardé dans
-    /// la config, jamais lu ensuite. Voir `docs/vision_roadmap_09_2026/06`.
+    /// **Branché le 4 octobre 2026** : coule dans le `boost` du champ titre
+    /// de l'entité dérivée (`derived_kb.rs`) — une autre écriture du poids de
+    /// champ, pas un second chemin. Un hit dont le titre matche multiplie son
+    /// score par ce facteur. Défaut 1,0 : l'ancien défaut 2,0 n'a jamais été
+    /// appliqué, et le banc du 4 octobre mesure que le boost ne gagne rien
+    /// quand le titre est indexé (il coûte même aux phrases en texte seul) —
+    /// le neutre est la continuité du comportement réel.
     #[serde(alias = "title_boost")]
     pub title_boost: f64,
 
-    /// **Accepté mais non appliqué** — même statut que `title_boost`.
+    /// **Accepté mais non appliqué** (vérifié le 25 août 2026, toujours vrai
+    /// le 4 octobre) : gardé dans la config, jamais lu ensuite.
     #[serde(alias = "content_boost")]
     pub content_boost: f64,
 
@@ -346,7 +352,7 @@ impl Default for KBConfig {
             fusion_strategy: Default::default(),
             rrf_k: default_rrf_k(),
             keyword_weight: 0.3,
-            title_boost: 2.0,
+            title_boost: 1.0,
             content_boost: 1.0,
             chunking: ChunkingConfig::default(),
             special_ops: None,
@@ -415,6 +421,14 @@ pub struct SimpleFieldDef {
     /// valeurs à énumérer, et en promettre une liste serait mentir.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<String>>,
+
+    /// **Poids du champ au classement plein texte** — ne porte aujourd'hui
+    /// que sur le champ TITRE : un résultat dont le titre matche voit son
+    /// score multiplié par ce facteur (1,0 = neutre, absent = 1,0).
+    /// Mesure au banc avant de le poser (4 octobre 2026) ; sur les autres
+    /// champs il reste inerte, et `signaler_les_options_inertes` le dit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boost: Option<f64>,
 }
 
 /// Configuration for a simple entity (registerEntity API).

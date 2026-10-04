@@ -661,6 +661,20 @@ pub struct SearchTarget {
     /// `Some((title_entity, in_rel))` for KBs, `None` for simple entities
     /// where filters apply directly on the parent table.
     pub filter_indirection: Option<(String, String)>,
+    /// Le champ titre du parent, quand il est indexé en plein texte : un
+    /// hit dont le TITRE matche voit son score multiplié par `title_boost`.
+    /// C'est le branchement du `boost` déclaré (le cadran inerte depuis le
+    /// 25 août) — la définition porte enfin son nom (sonde du 4 octobre :
+    /// le nom du Scope n'était pas indexé du tout).
+    #[serde(default)]
+    pub title_field: Option<String>,
+    /// 1,0 = neutre.
+    #[serde(default = "default_title_boost")]
+    pub title_boost: f64,
+}
+
+fn default_title_boost() -> f64 {
+    1.0
 }
 
 impl SearchTarget {
@@ -1850,8 +1864,6 @@ pub fn search_bm25_chunked(
         return Ok(vec![]);
     }
 
-    let json_query = build_bm25_query(query, fields, mode, fuzzy_distance);
-
     // Chemin Rust direct — le seul depuis le débranchement du repli C++.
     //
     // Il existait ici une retombée sur `CALL QUERY_LUCIVY_INDEX` quand aucun
@@ -1868,6 +1880,15 @@ pub fn search_bm25_chunked(
              s'il manque ici, l'entité n'a pas été enregistrée ou le BlobStore n'est pas prêt."
         ))
     })?;
+
+    // **Les champs que CET index connaît.** Un index bâti avant le 4 octobre
+    // n'a pas le champ titre (il ne le gagne qu'en étant rebâti) : interroger
+    // un champ absent du schéma est une erreur lucivy, pas un zéro silencieux.
+    let fields = crate::fts_handle::indexed_text_fields(handle, fields);
+    if fields.is_empty() {
+        return Ok(vec![]);
+    }
+    let json_query = build_bm25_query(query, &fields, mode, fuzzy_distance);
 
     let query_config: lucivy_core::query::QueryConfig =
         serde_json::from_str(&json_query)
@@ -1889,6 +1910,15 @@ pub fn search_bm25_chunked(
     let hits: Vec<(u64, f64, String)> = raw
         .into_iter()
         .map(|(offset, score, hl)| {
+            // **Le titre pèse** : un hit dont le champ titre matche est une
+            // définition (ou un document qui porte le nom cherché), pas une
+            // simple mention — son score se multiplie par le boost déclaré.
+            let score = match &target.title_field {
+                Some(titre) if target.title_boost != 1.0 && hl.contains_key(titre) => {
+                    score * target.title_boost
+                }
+                _ => score,
+            };
             let obj: serde_json::Map<String, serde_json::Value> = hl
                 .into_iter()
                 .map(|(f, spans)| {

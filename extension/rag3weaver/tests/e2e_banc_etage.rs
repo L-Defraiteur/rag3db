@@ -685,6 +685,61 @@ fn banc_etage_qui_perd() {
         }
     }
 
+    // ── N : le titre pesé (chantier du 4 octobre) ───────────────────────
+    // Le nom est indexé pour toute entité depuis ce jour ; un hit dont le
+    // titre matche multiplie son score par le boost déclaré
+    // (SimpleFieldDef.boost du champ titre). Chaque ligne ré-enregistre
+    // Scope avec le boost — sans réindexer : le champ est déjà dans
+    // l'index, seul le SearchTarget change. La ligne 1,0 est le témoin
+    // « indexé sans poids » à comparer au 0,243/0,417 d'avant (non indexé).
+    {
+        let scope_au_boost = |b: f64| {
+            let mut cat = reel.lock().unwrap();
+            let mut config = rag3weaver::code::scope_config(default_scope_chunking());
+            if avec_creux {
+                config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
+            }
+            if let Some(d) = config.fields.get_mut("name") {
+                d.boost = Some(b);
+            }
+            cat.register_entity(SCOPE, config).expect("Scope au titre pesé");
+        };
+        let options_bm25 = || {
+            let mut o = options_vecteur();
+            o.signals = Some(SearchSignals::BM25);
+            o.fusion = None;
+            o
+        };
+        for b in [1.0, 1.5, 2.0, 3.0] {
+            scope_au_boost(b);
+            let mut phrases = Mesure::default();
+            for (q, attendus) in QUESTIONS {
+                let r = Catalog::rechercher(&reel, SCOPE, q, options_bm25()).expect("titre pesé");
+                phrases.noter(&noms(&r), attendus);
+            }
+            let mut idents = Mesure::default();
+            for nom in IDENTIFIANTS {
+                let r = Catalog::rechercher(&reel, SCOPE, nom, options_bm25()).expect("titre pesé id");
+                idents.noter(&noms(&r), &[nom]);
+            }
+            hybrides.push((format!("N texte seul, titre ×{b}"), phrases, idents));
+
+            let mut ph = Mesure::default();
+            for (q, attendus) in QUESTIONS {
+                let r = Catalog::rechercher(&reel, SCOPE, q, hybride_de(0.45, 0.55)).expect("titre pesé H");
+                ph.noter(&noms(&r), attendus);
+            }
+            let mut ih = Mesure::default();
+            for nom in IDENTIFIANTS {
+                let r = Catalog::rechercher(&reel, SCOPE, nom, hybride_de(0.45, 0.55)).expect("titre pesé IH");
+                ih.noter(&noms(&r), &[nom]);
+            }
+            hybrides.push((format!("N H 0,45/0,55, titre ×{b}"), ph, ih));
+        }
+        // La config de base revient pour les sections qui suivent.
+        scope_au_boost(1.0);
+    }
+
     // Le témoin : les identifiants en vecteur seul — le chiffre du problème.
     let mut idents_vecteur = Mesure::default();
     for nom in IDENTIFIANTS {

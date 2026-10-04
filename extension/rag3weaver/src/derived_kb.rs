@@ -114,7 +114,17 @@ pub fn derived_config_for_kb(kb_name: &str, kb_config: &KBConfig, config: &Catal
     render.insert(CONTENT_FIELD.to_string(), contenu);
 
     let mut fields = HashMap::new();
-    fields.insert(TITLE_FIELD.to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
+    // `title_boost` de la KB n'est qu'une AUTRE ÉCRITURE du poids de champ
+    // (la direction : les KB reproductibles par la déclaration ordinaire) :
+    // il coule dans le `boost` du champ titre de la dérivée, le mécanisme
+    // unique — branché le 4 octobre 2026, après avoir été accepté et jamais
+    // appliqué depuis le 25 août. Le défaut 2,0 devient donc effectif.
+    fields.insert(TITLE_FIELD.to_string(), SimpleFieldDef {
+        field_type: FieldType::String,
+        is_title: true,
+        boost: Some(kb_config.title_boost),
+        ..Default::default()
+    });
     fields.insert(CONTENT_FIELD.to_string(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() });
 
     Some(EntityConfig {

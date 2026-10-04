@@ -256,6 +256,8 @@ mod tests {
             default_fusion: None,
             has_source_refs: false,
             filter_indirection: None,
+            title_field: None,
+            title_boost: 1.0,
             field_weights,
         }
     }
