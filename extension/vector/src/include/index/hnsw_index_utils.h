@@ -27,6 +27,17 @@ struct HNSWIndexUtils {
     // ce fragment, retire l'index (DROP_VECTOR_INDEX) et le rebâtit.
     static constexpr const char* INDEX_BEHIND_ITS_TABLE = "is behind its table";
 
+    // Deux gardes de mémoire, actives en Release. Un décalage de nœud hors du tableau des
+    // « déjà visités » d'une recherche, ou hors du graphe en mémoire d'une construction,
+    // écrivait hors de son bloc (corruption de tas, ticket du 4 octobre 2026). Chacune a son
+    // fragment, pour savoir laquelle a parlé ; le message porte le décalage et la taille.
+    static constexpr const char* OFFSET_BEYOND_VISITED_SET = "is beyond the visited set";
+    static constexpr const char* OFFSET_BEYOND_IN_MEM_GRAPH = "is beyond the in-memory graph";
+    [[noreturn]] static void throwOffsetBeyondVisitedSet(common::offset_t offset,
+        common::offset_t size);
+    [[noreturn]] static void throwOffsetBeyondInMemGraph(common::offset_t offset,
+        common::offset_t numNodes);
+
     static bool indexExists(const main::ClientContext& context,
         const transaction::Transaction* transaction, const catalog::TableCatalogEntry* tableEntry,
         const std::string& indexName);

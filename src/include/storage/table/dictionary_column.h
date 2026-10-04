@@ -10,6 +10,12 @@ namespace storage {
 
 class DictionaryColumn {
 public:
+    // Le nom du refus de lire une chaîne dont les décalages lus dans le dictionnaire sont
+    // incohérents (fin avant le début, ou fin au-delà des données). Une garde de mémoire,
+    // active en Release ; le message porte les nombres.
+    static constexpr const char* DICTIONARY_OFFSETS_OUT_OF_ORDER =
+        "Dictionary offsets out of order";
+
     DictionaryColumn(const std::string& name, FileHandle* dataFH, MemoryManager* mm,
         ShadowFile* shadowFile, bool enableCompression);
 

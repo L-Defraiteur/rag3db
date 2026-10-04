@@ -290,7 +290,9 @@ static std::unique_ptr<TableFuncSharedState> initQueryHNSWSharedState(
     auto nodeTable = storage::StorageManager::Get(*context)
                          ->getTable(bindData->nodeTableEntry->getTableID())
                          ->ptrCast<storage::NodeTable>();
-    auto numNodes = nodeTable->getStats(transaction::Transaction::Get(*context)).getTableCard();
+    // Le nombre de lignes de la table, pas la cardinalité de ses statistiques : celle-ci est
+    // une estimation, et le tableau des « déjà visités » est indexé par un décalage de ligne.
+    auto numNodes = nodeTable->getNumTotalRows(transaction::Transaction::Get(*context));
     return std::make_unique<QueryHNSWIndexSharedState>(nodeTable, numNodes);
 }
 

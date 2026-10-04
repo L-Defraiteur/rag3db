@@ -54,8 +54,22 @@ struct VisitedState {
     // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
     void reset() { memset(visited.get(), 0, size); }
     // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
-    void add(common::offset_t offset) { visited[offset] = 1; }
-    bool contains(common::offset_t offset) const { return visited[offset]; }
+    void add(common::offset_t offset) {
+        checkBound(offset);
+        visited[offset] = 1;
+    }
+    bool contains(common::offset_t offset) const {
+        checkBound(offset);
+        return visited[offset];
+    }
+
+private:
+    // Un refus nommé plutôt qu'une lecture ou une écriture hors du tableau.
+    void checkBound(common::offset_t offset) const {
+        if (offset >= size) [[unlikely]] {
+            HNSWIndexUtils::throwOffsetBeyondVisitedSet(offset, size);
+        }
+    }
 };
 
 struct HNSWStorageInfo final : storage::IndexStorageInfo {

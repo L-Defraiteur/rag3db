@@ -162,7 +162,8 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     auto* lowerRelTableEntry =
         catalog->getTableCatalogEntry(transaction, lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
-    auto numNodes = nodeTable->getStats(transaction).getTableCard();
+    // Le nombre de lignes, pas la cardinalité estimée (voir query_hnsw_index.cpp).
+    auto numNodes = nodeTable->getNumTotalRows(transaction);
 
     HNSWSearchState searchState{context, tableEntry, upperRelTableEntry, lowerRelTableEntry,
         *nodeTable, indexColumnID, numNodes, static_cast<uint64_t>(k), QueryHNSWConfig{}};

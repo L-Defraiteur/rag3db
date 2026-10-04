@@ -364,6 +364,11 @@ InMemHNSWIndex::InMemHNSWIndex(const main::ClientContext* context, IndexInfo ind
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const function.
 bool InMemHNSWIndex::insert(common::offset_t offset, CreateInMemHNSWLocalState* localState) {
+    // Le graphe, ses masques et ses vecteurs sont dimensionnés par le nombre de lignes de la
+    // table à la construction ; un décalage au-delà écrivait hors de ces tableaux.
+    if (offset >= lowerLayer->getNumNodes()) [[unlikely]] {
+        HNSWIndexUtils::throwOffsetBeyondInMemGraph(offset, lowerLayer->getNumNodes());
+    }
     auto& scanState = *localState->embeddingsScanState;
     auto queryVector = embeddings->getEmbedding(offset, scanState);
     if (queryVector.isNull()) {

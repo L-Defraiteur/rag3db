@@ -55,11 +55,14 @@ static std::unique_ptr<TableFuncBindData> createInMemHNSWBindFunc(main::ClientCo
     }
     const auto tableID = nodeTableEntry->getTableID();
     HNSWIndexUtils::validateColumnType(*nodeTableEntry, columnName);
-    const auto& table =
+    auto& table =
         storage::StorageManager::Get(*context)->getTable(tableID)->cast<storage::NodeTable>();
     auto propertyID = nodeTableEntry->getPropertyID(columnName);
     auto transaction = transaction::Transaction::Get(*context);
-    auto numNodes = table.getStats(transaction).getTableCard();
+    // Le nombre de lignes de la table, comme InMemHNSWIndex en dimensionne son graphe, pas la
+    // cardinalité estimée de ses statistiques : en retard, des lignes restaient hors de
+    // l'index ; en avance, la construction parcourait des décalages hors du graphe.
+    auto numNodes = table.getNumTotalRows(transaction);
     return std::make_unique<CreateHNSWIndexBindData>(context, indexName, nodeTableEntry, propertyID,
         numNodes, std::move(config));
 }

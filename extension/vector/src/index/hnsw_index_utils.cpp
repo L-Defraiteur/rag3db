@@ -48,6 +48,21 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
     }
 }
 
+void HNSWIndexUtils::throwOffsetBeyondVisitedSet(common::offset_t offset, common::offset_t size) {
+    throw common::RuntimeException{common::stringFormat(
+        "HNSW index: node offset {} {} of {} nodes. The index graph or the row count of its "
+        "table is wrong; drop the index and build it again.",
+        offset, HNSWIndexUtils::OFFSET_BEYOND_VISITED_SET, size)};
+}
+
+void HNSWIndexUtils::throwOffsetBeyondInMemGraph(common::offset_t offset,
+    common::offset_t numNodes) {
+    throw common::RuntimeException{common::stringFormat(
+        "HNSW index: node offset {} {} of {} nodes. The row count the index was sized with is "
+        "behind its table.",
+        offset, HNSWIndexUtils::OFFSET_BEYOND_IN_MEM_GRAPH, numNodes)};
+}
+
 bool HNSWIndexUtils::validateIndexExistence(const main::ClientContext& context,
     const catalog::TableCatalogEntry* tableEntry, const std::string& indexName,
     IndexOperation indexOperation, common::ConflictAction conflictAction) {

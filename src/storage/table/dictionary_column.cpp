@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "common/types/ku_string.h"
 #include "common/types/types.h"
 #include "common/vector/value_vector.h"
@@ -110,8 +112,17 @@ void DictionaryColumn::scan(const SegmentState& offsetState, const SegmentState&
     for (auto pos = 0u; pos < offsetsToScan.size(); pos++) {
         auto startOffset = offsets[offsetsToScan[pos].first - firstOffsetToScan];
         auto endOffset = offsets[offsetsToScan[pos].first - firstOffsetToScan + 1];
+        // Actif en Release : avec un décalage de fin avant celui de début, la longueur
+        // reboucle, rien n'est réservé dans le vecteur, et la lecture écrit page après page
+        // au-delà de son bloc (ticket du 4 octobre 2026). Un refus nommé à la place.
+        if (endOffset < startOffset || endOffset > dataState.metadata.numValues) [[unlikely]] {
+            throw RuntimeException(stringFormat(
+                "{}: string {} runs from byte {} to byte {} in a dictionary of {} bytes and {} "
+                "strings.",
+                DICTIONARY_OFFSETS_OUT_OF_ORDER, offsetsToScan[pos].first, startOffset, endOffset,
+                dataState.metadata.numValues, offsetState.metadata.numValues));
+        }
         auto lengthToScan = endOffset - startOffset;
-        KU_ASSERT(endOffset >= startOffset);
         scanValue(dataState, startOffset, lengthToScan, result, offsetsToScan[pos].second);
         // For each string which has the same index in the dictionary as the one we scanned,
         // copy the scanned string to its position in the result vector
