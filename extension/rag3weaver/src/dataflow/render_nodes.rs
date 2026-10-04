@@ -1353,7 +1353,7 @@ mod tests {
         let md = render_results_markdown(&[r], 300);
         // Le voisin va dans le graphe de dépendances, groupé par relation.
         assert!(md.contains("## Dependency Graph"), "{md}");
-        assert!(md.contains("└── [DEFINED_IN]"), "{md}");
+        assert!(md.contains("└── ~ Defined in ~"), "{md}");
         assert!(md.contains("└── src/dataflow/port.rs (File)"), "{md}");
         assert!(md.contains("lines_of_code=313"), "{md}");
         assert!(!md.contains("cursor"), "un champ nul ne se rend pas : {md}");

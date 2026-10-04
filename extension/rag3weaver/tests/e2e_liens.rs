@@ -112,7 +112,7 @@ fn relie_par_ce_qu_ils_partagent_jamais_par_un_carrefour() {
     // La forme du graphe de dépendances : le pivot (l'intermédiaire
     // `shared`, hors des résultats, avec son lieu), la relation dans le sens
     // vu depuis lui, les deux résultats dessous.
-    let attendu = "```\nshared (function) @ /projet/lib.rs:1 · hors résultats\n└── [CONSUMED_BY]\n    ├── a (function)\n    └── b (function)\n```\n";
+    let attendu = "```\nshared (function) @ /projet/lib.rs:1 · hors résultats\n└── ~ Consumed by ~\n    ├── a (function)\n    └── b (function)\n```\n";
     assert_eq!(rendu, attendu, "un seul arbre, a et b par shared");
     assert!(!rendu.contains("alone"), "l'isolé n'a pas de lien : {rendu}");
     assert!(!rendu.contains("hub"), "les deux appellent un carrefour : ce n'est pas un lien : {rendu}");

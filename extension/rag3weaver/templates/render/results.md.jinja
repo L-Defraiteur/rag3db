@@ -71,7 +71,7 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {%- if r.relations -%}
 {{ r.title }}{% for l in r.labels %} ({{ l }}){% endfor %}{% if r.kind %} ({{ r.kind }}){% endif %} ★ {{ r.score }}{% if r.path %} @ {{ r.path }}{% endif %}
 {% for g in r.relations -%}
-{{ "└── " if loop.last else "├── " }}[{{ g.relation }}]
+{{ "└── " if loop.last else "├── " }}~ {{ g.relation | replace("_", " ") | capitalize }} ~
 {%- set pipe = "    " if loop.last else "│   " %}
 {% for n in g.items -%}
 {{ pipe }}{{ "└── " if loop.last else "├── " }}{{ n.title }} ({{ n.entity }}){% if n.location %} @ {{ n.location }}{% endif %}{% if n.fields %} · {{ n.fields | join(" · ") }}{% endif %}

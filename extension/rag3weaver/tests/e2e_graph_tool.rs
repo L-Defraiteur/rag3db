@@ -224,12 +224,12 @@ fn a_tool_graph_that_contains_another_one_runs_too() {
     // Le sous-graphe `search` a tourné, et l'étage d'expansion a attaché les
     // variantes du livre. Depuis le gabarit par défaut (27 août 2026), les
     // voisins vivent dans la section « Dependency Graph », groupés par
-    // relation : une entête `[HAS_VARIANT]`, puis une ligne d'arbre par voisin.
-    assert!(turn.content.contains("[HAS_VARIANT]"), "{}", turn.content);
+    // relation : une entête `~ Has variant ~`, puis une ligne d'arbre par voisin.
+    assert!(turn.content.contains("~ Has variant ~"), "{}", turn.content);
     let expanded = turn
         .content
         .lines()
-        .filter(|l| (l.contains("└── ") || l.contains("├── ")) && !l.contains('['))
+        .filter(|l| (l.contains("└── ") || l.contains("├── ")) && !l.contains("~ "))
         .count();
     eprintln!("[search + relation] {expanded} voisins attachés");
     assert!(

@@ -367,7 +367,7 @@ fn read_and_grep_as_graph_tools() {
     eprintln!("[grep + CONSUMES]\n{avec}");
     assert!(avec.starts_with("**Pattern:**"), "{avec}");
     assert!(avec.contains("## Graphe"), "{avec}");
-    assert!(avec.contains("└── [CONSUMES]"), "{avec}");
+    assert!(avec.contains("└── ~ Consumes ~"), "{avec}");
     assert!(avec.contains("merge_port_values"), "{avec}");
 
     // Une relation inventée est refusée **avec la liste**, comme partout.
@@ -438,7 +438,7 @@ fn read_and_grep_as_graph_tools() {
     }));
     eprintln!("[arbre DEFINED_IN]\n{arbre}");
     assert!(arbre.contains("## Dependency Graph"), "{arbre}");
-    assert!(arbre.contains("[DEFINED_IN]"), "{arbre}");
+    assert!(arbre.contains("~ Defined in ~"), "{arbre}");
     assert!(arbre.contains("port.rs (File)"), "le voisin est le fichier réel : {arbre}");
     // Les branches de l'arbre, pas des puces : la forme de la maquette.
     assert!(arbre.contains("└── ") || arbre.contains("├── "), "{arbre}");
