@@ -187,6 +187,34 @@ ouvert sur les plages lues.
   du jour ?
 - le coût de cache d'une zone qui bouge à chaque édition.
 
+**L'objection de Lucie à sa propre étape** : « L'agent peut oublier pourquoi
+il avait édité telle chose, vu qu'il ne voit plus le problème dans son
+historique. Peut-être une clarification dans la zone : il voit les diffs et
+l'état final, de la manière la plus concise possible. »
+
+Pistes, non tranchées :
+
+- **le diff porte l'avant** : les lignes retirées sont le code du problème ;
+  état final + diff ne perd donc pas le texte, seulement la raison ;
+- **la raison se donne à l'édition** : un argument `reason` d'une ligne sur
+  l'outil d'édition, comme un message de commit — écrit au moment où l'agent
+  la connaît le mieux, sans appel de plus. Obligatoire ou facultatif : à
+  débattre ;
+- **par fichier, un diff net et un journal de raisons** : le diff net depuis
+  la première lecture (plusieurs éditions de la même plage n'en font qu'une),
+  et une ligne par édition (« tour 20, l. 34-40 : la garde manquait le cas
+  vide ») ;
+- **les essais défaits restent au journal** : un diff net ne montre pas ce
+  qui a été tenté puis retiré, et c'est ce qu'il ne faut pas retenter ;
+- **au-delà d'une taille**, le diff se réduit à son compte (+12 −3) et se
+  rouvre par un outil ;
+- ce journal de raisons est de la matière toute prête pour l'archiviste (L1)
+  et pour un message de commit.
+
+Ce qui ne bouge pas : les retours qui ne sont pas du contenu de fichier (une
+sortie de test, une erreur de compilation) restent dans le fil ; le problème
+qui a motivé l'édition y est donc encore, tant que le fil n'est pas compressé.
+
 Dans la liste du §6, cette étape se place entre les essais 1 et 2 : elle
 demande la maîtrise de l'assemblage du prompt (notre chat), pas encore les
 gestes `open` / `close` — l'ouverture est la lecture elle-même.
