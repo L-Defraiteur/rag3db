@@ -348,6 +348,13 @@ TEST_F(UpstreamFixes, CheckpointOfAColumnHoldingTheNilUuid) {
     auto again = conn->query("CHECKPOINT;");
     EXPECT_TRUE(again->isSuccess())
         << "[check: checkpoint-after-reopen] " << again->getErrorMessage();
+    again.reset();
+    reopen();
+    auto values = conn->query("MATCH (t:T) RETURN t.u ORDER BY t.id;");
+    ASSERT_TRUE(values->isSuccess()) << "[check: query] " << values->getErrorMessage();
+    EXPECT_EQ(values->toString(), "t.u\n00000000-0000-0000-0000-000000000000\n"
+                                  "00000000-0000-0000-0000-000000000001\n")
+        << "[check: uuid-values-kept] ";
 }
 
 // Vela 326d40dbd. Un CHECKPOINT garde le verrou que la validation d'un lecteur demande, et

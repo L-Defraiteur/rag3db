@@ -184,7 +184,6 @@ UpstreamFixes.RelationComparedToALambdaVariable query-survives
 UpstreamFixes.WithGateFilteredByAParameter query-survives
 # — blocages : l'UUID nul empêche tout point de reprise (Ladybug 231a0b854) ; un CHECKPOINT
 #   retient la validation d'un lecteur jusqu'à son délai, puis échoue (Vela 326d40dbd) ;
-UpstreamFixes.CheckpointOfAColumnHoldingTheNilUuid checkpoint-after-reopen,checkpoint-succeeds
 UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-held
 # — réponses fausses : SKIP sans LIMIT (079aa8458) ; terme de WHERE sur paramètres seuls
 #   (8281c845e) ; étiquette d'une variable liée plus tôt (413079079) ; OPTIONAL MATCH qui

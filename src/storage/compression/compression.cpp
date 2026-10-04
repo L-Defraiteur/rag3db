@@ -540,6 +540,14 @@ template<IntegerBitpackingType T>
 BitpackInfo<T> IntegerBitpacking<T>::getPackingInfo(const CompressionMetadata& metadata) {
     auto max = metadata.max.get<T>();
     auto min = metadata.min.get<T>();
+    if constexpr (std::is_same_v<T, int128_t>) {
+        // INT128_MIN n'a pas d'opposé : abs() lèverait une exception. C'est la valeur sous
+        // laquelle l'UUID nul est stocké. Une largeur pleine fait choisir à la colonne le
+        // stockage non compressé (ColumnChunkMetadata), sans arithmétique signée.
+        if (min.high == std::numeric_limits<int64_t>::min() && min.low == 0) {
+            return BitpackInfo<T>{static_cast<uint8_t>(sizeof(T) * 8), false, T{}};
+        }
+    }
     bool hasNegative = false;
     T offset = 0;
     uint8_t bitWidth = 0;

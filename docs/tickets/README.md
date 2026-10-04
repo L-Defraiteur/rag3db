@@ -13,8 +13,8 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
   - touche rag3weaver ou non.
 - **Sections** :
   - ce que c'est, en une phrase ;
-  - la recette minimale (Cypher brut) ;
-  - le témoin (fichier, nom du test) ;
+  - la recette minimale (Cypher brut), ou pourquoi il n'y en a pas ;
+  - le témoin (fichier, nom du test), ou son absence assumée et ce qu'il faudrait pour l'écrire ;
   - la cause, si elle est connue ;
   - le correctif de l'amont s'il existe (à lire, ne pas copier) ;
   - ce qu'il faut pour le fermer.
@@ -34,7 +34,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un chemin utilisé seulement dans un lambda fait planter](2026-10-04-chemin-utilise-seulement-dans-un-lambda.md) | ouvert | plantage | oui | non vérifié |
 | [Comparer une relation à une variable de lambda fait planter](2026-10-04-relation-comparee-a-une-variable-de-lambda.md) | ouvert | plantage | oui | non vérifié |
 | [WITH sans colonne utile filtré par un paramètre fait planter](2026-10-04-with-filtre-par-un-parametre.md) | ouvert | plantage | oui | non (vérifié par l'arbre principal) |
-| [L'UUID nul empêche tout point de reprise](2026-10-04-uuid-nul-empeche-le-point-de-reprise.md) | ouvert | blocage | oui | non vérifié |
+| [L'UUID nul empêche tout point de reprise](2026-10-04-uuid-nul-empeche-le-point-de-reprise.md) | corrigé | blocage | oui | non vérifié |
 | [Un CHECKPOINT retient la validation d'un lecteur jusqu'à son délai](2026-10-04-checkpoint-retient-un-lecteur.md) | ouvert | blocage | oui | probable (lecteurs et points de reprise automatiques) |
 | [Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit](2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md) | ouvert | blocage | oui | oui (première indexation, poussée des blobs du plein texte) |
 | [RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne](2026-10-04-distinct-skip-sans-limit.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
