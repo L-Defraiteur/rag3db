@@ -4,6 +4,7 @@
 #include "common/cast.h"
 #include "common/finally_wrapper.h"
 #include "common/string_format.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "processor/operator/persistent/index_builder.h"
 #include "processor/result/factorized_table_util.h"
@@ -66,6 +67,17 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     nodeSharedState->table = nodeTable;
     nodeSharedState->pkColumnID = pkColumnID;
     nodeSharedState->pkType = pkDefinition.getType().copy();
+    if (const auto localStorage = transaction->getLocalStorage()) {
+        if (const auto localTable = localStorage->getLocalTable(nodeTable->getTableID());
+            localTable && localTable->getNumTotalRows() > 0) {
+            throw RuntimeException(stringFormat(
+                "COPY into table {} is refused: it {}. Commit them first, or run the COPY "
+                "before the other insertions of the transaction.",
+                info->tableName, NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS));
+        }
+    }
+    nodeSharedState->numRowsBeforeCopy =
+        nodeTable->cast<NodeTable>().getNumTotalRows(nullptr /* sans les lignes locales */);
     nodeSharedState->initPKIndex(context);
 }
 
@@ -277,6 +289,19 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
     auto& nodeTable = nodeSharedState->table->cast<NodeTable>();
     for (auto& index : nodeTable.getIndexes()) {
         index.finalize(clientContext);
+    }
+    if (!clientContext->getClientConfig()->forceCheckpointOnCopy && transaction->shouldLogToWAL()) {
+        // Le chargement journalisé : les lignes de ce COPY vont au journal de la transaction,
+        // sous la forme d'une insertion, dans l'ordre de leurs décalages — le COPY écrit ses
+        // blocs par plusieurs fils, c'est l'ordre de la table qui fait foi au rejeu. Avec des
+        // lignes écartées (IGNORE_ERRORS), les décalages ne se rejoueraient pas à l'identique :
+        // ce COPY-là garde son point de reprise.
+        if (sharedState->getNumErroredRows() > 0) {
+            transaction->setForceCheckpoint();
+        } else {
+            nodeTable.logInsertedRowsToWAL(clientContext, nodeSharedState->numRowsBeforeCopy,
+                nodeTable.getNumTotalRows(nullptr /* sans les lignes locales */));
+        }
     }
     // we want to flush all index errors before children call finalize
     // as the children (if they are table function calls) are responsible for populating the errors

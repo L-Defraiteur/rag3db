@@ -532,8 +532,11 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
                     result = localDatabase->queryProcessor->execute(physicalPlan.get(),
                         executionContext.get());
                 } else {
-                    if (preparedStatement->getStatementType() == StatementType::COPY_FROM) {
-                        // Note: We always force checkpoint for COPY_FROM statement.
+                    if (preparedStatement->getStatementType() == StatementType::COPY_FROM &&
+                        clientConfig.forceCheckpointOnCopy) {
+                        // Les lignes d'un COPY ne sont pas au journal : sa durabilité est un
+                        // point de reprise à sa validation. Sans ce réglage, c'est l'opérateur
+                        // du COPY qui décide : il journalise ses lignes, ou force à son tour.
                         Transaction::Get(*this)->setForceCheckpoint();
                     }
                     result = localDatabase->queryProcessor->execute(physicalPlan.get(),

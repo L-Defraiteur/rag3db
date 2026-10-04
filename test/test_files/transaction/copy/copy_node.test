@@ -250,6 +250,14 @@ Copy exception: Found duplicated primary key value 0, which violates the uniquen
 ---- 1
 0
 
+# Les quatre cas « InsertAndCopy » de l'amont inséraient une ligne puis faisaient un COPY dans la
+# même table et la même transaction, et vérifiaient par comptage. Le cas rend en réalité un
+# résultat faux dès qu'on cherche par clé : les lignes locales portent des décalages provisoires
+# que le COPY recouvre, et une recherche, un SET ou une relation visant une ligne du COPY
+# atteignait une ligne locale (ticket du 4 octobre 2026). Le COPY est refusé par son nom tant
+# que le cas n'est pas rendu juste ; ces cas vérifient le refus, puis l'ordre permis (le COPY
+# d'abord). Ils reprendront leur forme d'origine quand le moteur versera les lignes locales
+# avant le COPY.
 -CASE InsertAndCopyCommit
 -STATEMENT CREATE NODE TABLE person (ID INT64, fName STRING, gender INT64, isStudent BOOLEAN, isWorker BOOLEAN, age INT64, eyeSight DOUBLE, birthdate DATE, registerTime TIMESTAMP, lastJobDuration INTERVAL, workedHours INT64[], usedNames STRING[], courseScoresPerTerm INT64[][], grades INT64[4], height float, u UUID, PRIMARY KEY (ID));
 ---- ok
@@ -258,10 +266,25 @@ Copy exception: Found duplicated primary key value 0, which violates the uniquen
 -STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
+---- error
+Runtime exception: COPY into table person is refused: it already holds rows inserted by this transaction. Commit them first, or run the COPY before the other insertions of the transaction.
+-STATEMENT ROLLBACK;
+---- ok
+-STATEMENT MATCH (p:person) RETURN COUNT(*);
+---- 1
+0
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
+---- ok
+-STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT MATCH (p:person) RETURN COUNT(*);
 ---- 1
 6
+-STATEMENT MATCH (p:person {ID: 3}) RETURN p.ID;
+---- 1
+3
 -STATEMENT COMMIT;
 ---- ok
 -STATEMENT MATCH (p:person) RETURN p.ID;
@@ -281,10 +304,8 @@ Copy exception: Found duplicated primary key value 0, which violates the uniquen
 -STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
----- ok
--STATEMENT MATCH (p:person) RETURN COUNT(*);
----- 1
-6
+---- error
+Runtime exception: COPY into table person is refused: it already holds rows inserted by this transaction. Commit them first, or run the COPY before the other insertions of the transaction.
 -STATEMENT ROLLBACK;
 ---- ok
 -STATEMENT MATCH (p:person) RETURN COUNT(*);
@@ -299,10 +320,25 @@ Copy exception: Found duplicated primary key value 0, which violates the uniquen
 -STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
+---- error
+Runtime exception: COPY into table person is refused: it already holds rows inserted by this transaction. Commit them first, or run the COPY before the other insertions of the transaction.
+-STATEMENT ROLLBACK;
+---- ok
+-STATEMENT MATCH (p:person) RETURN COUNT(*);
+---- 1
+0
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
+---- ok
+-STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT MATCH (p:person) RETURN COUNT(*);
 ---- 1
 6
+-STATEMENT MATCH (p:person {ID: 3}) RETURN p.ID;
+---- 1
+3
 -STATEMENT COMMIT;
 ---- ok
 -STATEMENT MATCH (p:person) RETURN p.ID;
@@ -331,10 +367,8 @@ Copy exception: Found duplicated primary key value 0, which violates the uniquen
 -STATEMENT CREATE (p:person {ID: 100000});
 ---- ok
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
----- ok
--STATEMENT MATCH (p:person) RETURN COUNT(*);
----- 1
-6
+---- error
+Runtime exception: COPY into table person is refused: it already holds rows inserted by this transaction. Commit them first, or run the COPY before the other insertions of the transaction.
 -STATEMENT ROLLBACK;
 ---- ok
 -STATEMENT MATCH (p:person) RETURN COUNT(*);

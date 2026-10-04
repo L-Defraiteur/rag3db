@@ -43,6 +43,10 @@ struct ClientConfig {
     // L'attente maximale d'un verrou d'écriture (millisecondes) : au-delà, la transaction qui
     // attend reçoit l'erreur « lock timeout ».
     uint64_t lockTimeoutInMS = ClientConfigDefault::LOCK_TIMEOUT_IN_MS;
+    // Un COPY FROM force-t-il un point de reprise à sa validation ? Vrai tant que le chargement
+    // en masse journalisé n'est pas complet : à faux, un COPY de nœuds écrit ses lignes au
+    // journal et ne force plus rien ; un COPY de relations force encore le sien.
+    bool forceCheckpointOnCopy = true;
     // Variable length maximum depth.
     uint32_t varLengthMaxDepth = ClientConfigDefault::VAR_LENGTH_MAX_DEPTH;
     // Threshold determines when to switch from sparse frontier to dense frontier

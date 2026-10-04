@@ -34,6 +34,15 @@ struct LockTimeoutSetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
+// Transitoire (chargement en masse journalisé) : CALL force_checkpoint_on_copy=false fait
+// journaliser les lignes d'un COPY de nœuds au lieu de forcer un point de reprise.
+struct ForceCheckpointOnCopySetting {
+    static constexpr auto name = "force_checkpoint_on_copy";
+    static constexpr auto inputType = common::LogicalTypeID::BOOL;
+    static void setContext(ClientContext* context, const common::Value& parameter);
+    static common::Value getSetting(const ClientContext* context);
+};
+
 struct ProgressBarSetting {
     static constexpr auto name = "progress_bar";
     static constexpr auto inputType = common::LogicalTypeID::BOOL;

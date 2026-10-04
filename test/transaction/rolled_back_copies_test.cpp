@@ -111,14 +111,15 @@ TEST_F(RolledBackCopiesTest, NoKeyIsLeftInAnEmptyTable) {
     expectTheRolledBackKeysCanBeCreated(0);
 }
 
-// Trois COPY, et des lignes créées entre eux dans la même transaction.
+// Trois COPY, puis une ligne créée dans la même transaction. (Une ligne créée AVANT un COPY de
+// la transaction le fait refuser : voir journaled_copy_test.cpp.)
 TEST_F(RolledBackCopiesTest, NoKeyIsLeftWithWritesBetweenTheCopies) {
     copyKeys(10000, 2500);
     ok("BEGIN TRANSACTION;");
     copyKeys(100, 10);
-    ok("CREATE (:T {k: 'between'});");
     copyKeys(110, 10);
     copyKeys(200, 10);
+    ok("CREATE (:T {k: 'between'});");
     ok("ROLLBACK;");
     expectNoTraceOfTheRolledBackKeys(2500);
     EXPECT_EQ(single("MATCH (t:T {k: 'between'}) RETURN count(t);"), 0);

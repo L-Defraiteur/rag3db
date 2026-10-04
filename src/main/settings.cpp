@@ -47,6 +47,16 @@ common::Value LockTimeoutSetting::getSetting(const ClientContext* context) {
     return common::Value(context->getClientConfig()->lockTimeoutInMS);
 }
 
+void ForceCheckpointOnCopySetting::setContext(ClientContext* context,
+    const common::Value& parameter) {
+    parameter.validateType(inputType);
+    context->getClientConfigUnsafe()->forceCheckpointOnCopy = parameter.getValue<bool>();
+}
+
+common::Value ForceCheckpointOnCopySetting::getSetting(const ClientContext* context) {
+    return common::Value(context->getClientConfig()->forceCheckpointOnCopy);
+}
+
 void ProgressBarSetting::setContext(ClientContext* context, const common::Value& parameter) {
     parameter.validateType(inputType);
     context->getClientConfigUnsafe()->enableProgressBar = parameter.getValue<bool>();

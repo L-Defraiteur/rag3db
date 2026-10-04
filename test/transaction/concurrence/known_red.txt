@@ -181,9 +181,3 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
-# Un COPY après des insertions dans la même table et la même transaction (ticket
-# 2026-10-04-copy-apres-des-insertions-dans-la-meme-transaction) : la clé 5 rend la ligne
-# 1005 ; avec une seule ligne locale, le fils meurt par SIGSEGV (NodeGroup::lookup). Vert
-# dès que le COPY est refusé par son nom, ou que les lignes locales sont versées avant.
-CopyAfterLocalInserts.TwentyLocalRowsThenACopyInTheSameTable copy-after-local-inserts-key
-CopyAfterLocalInserts.OneLocalRowThenACopyInTheSameTable copy-after-local-inserts-runs

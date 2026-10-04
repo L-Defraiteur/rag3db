@@ -68,6 +68,10 @@ struct NodeBatchInsertSharedState final : BatchInsertSharedState {
     // ops.
     std::unique_ptr<storage::InMemChunkedNodeGroup> sharedNodeGroup;
 
+    // Le nombre de lignes de la table quand ce COPY a commencé : ses lignes sont celles qui
+    // suivent, et c'est d'après ce repère qu'il les relit pour les écrire au journal.
+    common::offset_t numRowsBeforeCopy = 0;
+
     explicit NodeBatchInsertSharedState(std::shared_ptr<FactorizedTable> fTable)
         : BatchInsertSharedState{std::move(fTable)}, pkColumnID{0},
           globalIndexBuilder(std::nullopt), tableFuncSharedState{nullptr},

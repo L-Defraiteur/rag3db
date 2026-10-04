@@ -937,6 +937,86 @@ void NodeTable::scanIndexColumns(main::ClientContext* context, IndexScanHelper& 
     }
 }
 
+void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t startOffset,
+    offset_t endOffset) {
+    if (endOffset <= startOffset) {
+        return;
+    }
+    const auto transaction = transaction::Transaction::Get(*context);
+    std::vector<column_id_t> columnIDs;
+    for (column_id_t columnID = 0; columnID < columns.size(); columnID++) {
+        columnIDs.push_back(columnID);
+    }
+    auto dataChunk = constructDataChunkForColumns(columnIDs);
+    std::vector<ValueVector*> vectors;
+    for (auto& vector : dataChunk.valueVectors) {
+        vectors.push_back(vector.get());
+    }
+    auto scanState = std::make_unique<NodeTableScanState>(nullptr, vectors, dataChunk.state);
+    scanState->setToTable(transaction, this, columnIDs, {});
+    scanState->source = TableScanSource::COMMITTED;
+    // Le masque évite de lire les blocs hors de la plage ; il ne filtre pas les lignes d'un
+    // bloc, c'est fait plus bas.
+    const auto semiMask = SemiMaskUtil::createMask(endOffset);
+    semiMask->maskRange(startOffset, endOffset);
+    semiMask->enable();
+    scanState->semiMask = semiMask.get();
+
+    auto& wal = transaction->getLocalWAL();
+    row_idx_t numLogged = 0;
+    const auto firstGroup = StorageUtils::getNodeGroupIdx(startOffset);
+    const auto lastGroup = StorageUtils::getNodeGroupIdx(endOffset - 1);
+    for (auto nodeGroupIdx = firstGroup;
+         nodeGroupIdx <= lastGroup && nodeGroupIdx < nodeGroups->getNumNodeGroups();
+         nodeGroupIdx++) {
+        scanState->nodeGroup = nodeGroups->getNodeGroupNoLock(nodeGroupIdx);
+        if (scanState->nodeGroup->getNumChunkedGroups() == 0) {
+            continue;
+        }
+        scanState->nodeGroupIdx = nodeGroupIdx;
+        scanState->nodeGroup->initializeScanState(transaction, *scanState);
+        const auto groupStartOffset = StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
+        auto& selVector = dataChunk.state->getSelVectorUnsafe();
+        while (true) {
+            // Le balayage attend une sélection neuve à chaque bloc : le filtre du masque la lit
+            // comme l'identité, et on la réécrit plus bas.
+            selVector.setToUnfiltered(DEFAULT_VECTOR_CAPACITY);
+            const auto scanResult = scanState->nodeGroup->scan(transaction, *scanState);
+            if (scanResult == NODE_GROUP_SCAN_EMPTY_RESULT) {
+                break;
+            }
+            // Ne garder que les lignes de la plage : selon le bloc, le balayage rend plus que
+            // ce que le masque demande.
+            const auto numScanned = scanResult.numRows == 0 ? 0 : selVector.getSelSize();
+            std::vector<sel_t> kept;
+            kept.reserve(numScanned);
+            for (sel_t i = 0; i < numScanned; i++) {
+                const auto pos = selVector[i];
+                const auto offset = groupStartOffset + scanResult.startRow + pos;
+                if (offset >= startOffset && offset < endOffset) {
+                    kept.push_back(pos);
+                }
+            }
+            if (kept.empty()) {
+                continue;
+            }
+            auto buffer = selVector.getMutableBuffer();
+            for (size_t i = 0; i < kept.size(); i++) {
+                buffer[i] = kept[i];
+            }
+            selVector.setToFiltered(kept.size());
+            wal.logTableInsertion(tableID, TableType::NODE, kept.size(), vectors);
+            numLogged += kept.size();
+        }
+    }
+    if (numLogged != endOffset - startOffset) {
+        throw RuntimeException(stringFormat(
+            "Bulk load of table {}: {} rows were written to the journal for {} rows added. "
+            "The load is rolled back.",
+            tableName, numLogged, endOffset - startOffset));
+    }
+}
+
 void NodeTable::addIndex(std::unique_ptr<Index> index) {
     if (getIndex(index->getName()).has_value()) {
         throw RuntimeException("Index with name " + index->getName() + " already exists.");

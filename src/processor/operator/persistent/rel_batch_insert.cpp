@@ -59,6 +59,9 @@ void RelBatchInsert::initLocalStateInternal(ResultSet*, ExecutionContext* contex
 }
 
 void RelBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
+    // Les lignes d'un COPY de relations ne sont pas encore au journal : il force son point de
+    // reprise, même quand le réglage force_checkpoint_on_copy est éteint.
+    transaction::Transaction::Get(*context->clientContext)->setForceCheckpoint();
     const auto relBatchInsertInfo = info->ptrCast<RelBatchInsertInfo>();
     const auto clientContext = context->clientContext;
     const auto catalog = Catalog::Get(*clientContext);
