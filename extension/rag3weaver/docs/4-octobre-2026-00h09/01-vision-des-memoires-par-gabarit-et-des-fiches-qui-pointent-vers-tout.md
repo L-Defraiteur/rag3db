@@ -501,6 +501,48 @@ Ce qui reste vrai de la première forme :
   vus dans le sujet ou la mémoire en cours — le reste se retrouve par la
   recherche avant création.
 
+**La règle porte un script** (Lucie) : « peut-être que la règle doit contenir
+un script rhai pour se valider, qui sert de crochet aux prochains ».
+
+La règle d'un genre n'est donc pas une phrase qu'un modèle interprète à
+chaque fois : c'est un petit script, écrit une fois à la création du genre,
+et rejoué ensuite **sans modèle** à chaque `add_ref` de ce genre.
+
+```rhai
+// genre « invoice » : FAC-<année>-<4 chiffres>
+fn validate(value) {
+    let v = value.trim().to_upper();
+    if !v.starts_with("FAC-") || v.len() != 13 { return #{ ok: false, why: "attendu FAC-AAAA-NNNN" }; }
+    #{ ok: true, normal: "invoice:" + v }
+}
+```
+
+- Le moteur a déjà la pièce : rhai est embarqué, `RhaiNode` et les nœuds de
+  validation existent, et un backend déclare ses scripts au manifeste. Un
+  genre de référence est un script de plus dans ce registre.
+- Le script fait **trois choses au plus**, chacune une fonction facultative :
+  reconnaître et normaliser (`validate`) ; dire si la chose existe encore
+  (`resolve`) ; dire ce qui la fait vieillir (`fingerprint`). Le crochet des
+  « prochains » est là : tout `add_ref` du genre, et plus tard l'extraction
+  déterministe dans un texte, passent par lui.
+- `create_ref_type` **éprouve le script avant de l'admettre** : il doit
+  accepter la valeur qui l'a fait naître, refuser des contre-exemples, et ne
+  pas accepter ce qu'un genre existant accepte déjà.
+
+Un script écrit par un modèle et rejoué pour tous est une surface à tenir :
+
+1. **Pur par défaut** : rien que des chaînes en entrée et une table en
+   sortie. Pas de fichier, pas de réseau, pas de commande. `resolve` ne voit
+   le monde que par des fonctions que l'hôte lui prête, bornées à l'espace de
+   travail et au catalogue, en lecture.
+2. **Borné** : un plafond d'opérations, de profondeur et de taille de chaîne
+   par appel (le moteur rhai sait le faire) ; un script qui dépasse échoue,
+   et la référence reste du texte.
+3. **Une erreur du script n'est jamais un refus muet** : elle se dit, et le
+   genre est marqué en défaut.
+4. **Versionné** : un script corrigé remplace l'ancien sans réécrire les
+   références déjà validées ; on peut les repasser.
+
 Ce qu'il faut tenir, parce qu'une règle créée à la volée par un modèle est
 exactement l'endroit où le désordre entre :
 
