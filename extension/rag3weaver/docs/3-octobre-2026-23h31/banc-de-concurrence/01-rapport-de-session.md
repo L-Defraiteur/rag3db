@@ -101,10 +101,18 @@ amonts (`8c83c3360`, puis le second lot).
       création bornait son parcours par elle ;
     - les témoins (`e9b925c94`) : `CreateIndexAfterARefusedCopy`, vert depuis
       `1ea49837f` ; `RefusedCopyLeavesTheCardinalityTrue`, rouge, sous un nouveau ticket.
-    Le lien avec les deux rapports d'ASan d'`e2e_code` reste une hypothèse, écrite au ticket
-    de la corruption avec ce qu'il faut pour la trancher : environ 18 passes de chaque côté
-    sous ASan, ou une seule lecture de `STATS_INFO` à la réouverture du test fautif. Les
-    cinq autres variations n'ont rien donné.
+    Les cinq autres variations n'ont rien donné.
+14. **La passe courte et les correctifs du `COPY` refusé (4 octobre, fin de journée)** :
+    - la sonde du test fautif d'`e2e_code`, non commitée, écarte l'hypothèse pour ce test.
+      À la réouverture, aucune table indexée n'a de cardinalité gonflée ; `Scope_Chunk` a
+      211 lignes, soit la taille du tableau du rapport d'ASan, dans lequel le voisin 255
+      n'existe pas. Il reste un voisin faux rendu par le graphe de l'index, à chercher ;
+    - la session cœur C++ a trouvé deux défauts de plus derrière le `COPY` refusé : le point
+      de reprise qui suit écrit hors bloc, et la clé d'origine d'un doublon sort de l'index.
+      Corrigés en `05788a868`. Témoins au banc (`93f4e81e8`) :
+      `RefusedCopyKeepsTheOriginalKey`, qui tuait le processus à la fermeture avant le
+      correctif, et `CheckpointAfterARefusedCopy`, garde-fou vert en Release ;
+    - les 18 passes sous ASan ne sont pas lancées, puisque l'hypothèse tombe.
 
 ## Décisions et pourquoi
 
@@ -148,9 +156,11 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
-- **La corruption d'`e2e_code`** : prouver ou écarter l'hypothèse du `COPY` refusé (ticket
-  de la corruption). La série n'est pas lancée, sur consigne de l'orchestration : le poste
-  sert aux mesures.
+- **La corruption d'`e2e_code`** : l'hypothèse du `COPY` refusé est écartée pour le test
+  fautif ; la piste qui reste est un voisin faux dans le graphe de l'index (ticket de la
+  corruption).
+- **La stèle du moteur** (`docs/4-octobre-2026-16h57/01-la-stele-du-moteur.md`, §3.1) : le
+  tri des tickets de la session cœur C++ attend ma relecture.
 - **La cardinalité après un `COPY` refusé** (ticket
   `2026-10-04-copy-refuse-gonfle-la-cardinalite.md`) : pour la session cœur C++.
 - **La session cœur C++, sur les amonts** : la perte de relations au point de reprise et
