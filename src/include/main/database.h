@@ -147,6 +147,14 @@ public:
 
     uint64_t getNextQueryID();
 
+    // Le nom du refus d'ouvrir en écriture une base que ce processus tient déjà ouverte en
+    // écriture. Le verrou du fichier (fcntl) n'exclut qu'un autre processus : deux exemplaires
+    // dans le même processus avaient chacun leur tampon, leur journal rejoué et leur
+    // gestionnaire de pages libres, et s'écrivaient l'un sur l'autre (ticket « Une corruption
+    // de mémoire tue e2e_code », 4 octobre 2026).
+    static constexpr const char* ALREADY_OPEN_FOR_WRITING =
+        "is already open for writing in this process";
+
     storage::StorageManager* getStorageManager() { return storageManager.get(); }
 
     transaction::TransactionManager* getTransactionManager() { return transactionManager.get(); }
@@ -180,6 +188,9 @@ private:
     void validatePathInReadOnly() const;
 
 private:
+    // La marque « ouverte en écriture par ce processus ». Premier membre : il part le dernier,
+    // après le point de reprise de fermeture et la fermeture des fichiers.
+    std::shared_ptr<void> openForWritingMark;
     std::string databasePath;
     DBConfig dbConfig;
     std::unique_ptr<common::VirtualFileSystem> vfs;

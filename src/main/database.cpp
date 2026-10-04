@@ -1,5 +1,9 @@
 #include "main/database.h"
 
+#include <filesystem>
+#include <mutex>
+#include <set>
+
 #include "extension/binder_extension.h"
 #include "extension/extension_manager.h"
 #include "extension/mapper_extension.h"
@@ -16,6 +20,8 @@
 #endif
 
 #include "common/exception/exception.h"
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "common/file_system/virtual_file_system.h"
 #include "main/db_config.h"
 #include "processor/processor.h"
@@ -92,6 +98,39 @@ Database::Database(std::string_view databasePath, SystemConfig systemConfig,
     initMembers(databasePath, constructBMFunc);
 }
 
+// Les bases ouvertes en écriture par ce processus, par chemin canonique. Jamais détruits : une
+// Database peut partir après les objets statiques.
+static std::mutex& openForWritingMtx() {
+    static auto* mtx = new std::mutex();
+    return *mtx;
+}
+static std::set<std::string>& pathsOpenForWriting() {
+    static auto* paths = new std::set<std::string>();
+    return *paths;
+}
+
+// Marque la base comme ouverte en écriture, ou refuse si elle l'est déjà. La marque tombe quand
+// le pointeur rendu est détruit.
+static std::shared_ptr<void> markOpenForWriting(const std::string& databasePath) {
+    std::error_code ec;
+    auto key =
+        std::filesystem::weakly_canonical(std::filesystem::absolute(databasePath, ec), ec).string();
+    if (ec || key.empty()) {
+        key = databasePath;
+    }
+    std::lock_guard lck{openForWritingMtx()};
+    if (!pathsOpenForWriting().insert(key).second) {
+        throw RuntimeException(stringFormat(
+            "Database {} {}. Close the first instance before opening it again, or open this "
+            "one read-only: two writing instances would overwrite each other's pages.",
+            databasePath, Database::ALREADY_OPEN_FOR_WRITING));
+    }
+    return std::shared_ptr<void>(nullptr, [key](void*) {
+        std::lock_guard lck{openForWritingMtx()};
+        pathsOpenForWriting().erase(key);
+    });
+}
+
 std::unique_ptr<BufferManager> Database::initBufferManager(const Database& db) {
     return std::make_unique<BufferManager>(db.databasePath,
         StorageUtils::getTmpFilePath(db.databasePath), db.dbConfig.bufferPoolSize,
@@ -110,6 +149,10 @@ void Database::initMembers(std::string_view dbPath, construct_bm_func_t initBmFu
     }
     vfs = std::make_unique<VirtualFileSystem>(databasePath);
     validatePathInReadOnly();
+    if (!dbConfig.readOnly && !DBConfig::isDBPathInMemory(databasePath)) {
+        // Avant d'ouvrir le moindre fichier : la reprise rejoue le journal et écrit.
+        openForWritingMark = markOpenForWriting(databasePath);
+    }
 
     bufferManager = initBmFunc(*this);
     memoryManager = std::make_unique<MemoryManager>(bufferManager.get(), vfs.get());
