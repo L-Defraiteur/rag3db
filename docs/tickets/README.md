@@ -74,3 +74,5 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Après un COPY refusé pour clé en double, la ligne d'origine disparaît de l'index](2026-10-04-cle-d-origine-perdue-apres-un-copy-refuse.md) | corrigé | réponse fausse | oui | par `RAG3WEAVER_COPY_NAISSANCES=1` seulement |
 | [Le qualificatif d'un chemin se perd dans une macro](2026-10-04-le-qualificatif-d-un-chemin-se-perd-dans-une-macro.md) | ouvert | réponse fausse | oui | oui (marque de résolution) |
 | [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (`_index_blobs`, contourné) |
+| [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | ouvert | réponse fausse | oui | peu |
+| [Une ligne très loin des autres est injoignable dans un index bâti d'un coup](2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md) | ouvert | réponse fausse | oui | peu probable |
