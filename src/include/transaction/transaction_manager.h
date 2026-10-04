@@ -51,10 +51,10 @@ public:
 
     // The start of the error that every statement gets once a checkpoint of this database has
     // failed while writing, until the database is closed and reopened. See checkpointNoLock.
-    // L'avertissement d'un point de reprise automatique reporté : l'attente du départ des
-    // transactions a expiré après une validation déjà au journal.
+    // L'avertissement d'un point de reprise automatique reporté parce qu'une autre transaction
+    // était ouverte à la validation (écrit sur stderr).
     static constexpr const char* CHECKPOINT_POSTPONED =
-        "Checkpoint postponed: transactions did not leave in time";
+        "Checkpoint postponed: other transactions are open";
     static constexpr const char* REOPEN_AFTER_FAILED_CHECKPOINT =
         "A checkpoint of this database failed, so it must be closed and reopened before it is "
         "used again";
@@ -73,6 +73,8 @@ private:
     void stopNewTransactionsAndWaitForOthersNoLock(std::unique_lock<std::mutex>& publicLock,
         const Transaction* staying);
     void allowNewTransactionsNoLock();
+    // Un point de reprise automatique reporté, parce qu'une autre transaction est ouverte.
+    void postponeCheckpointNoLock();
 
     bool hasActiveWriteTransactionNoLock() const;
 
@@ -95,6 +97,8 @@ private:
     // transaction ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
     bool checkpointPending = false;
     std::condition_variable transactionsChanged;
+    // La taille du journal au dernier avertissement de report ; 0 après un point de reprise.
+    uint64_t walSizeAtLastPostponeWarning = 0;
     uint64_t checkpointWaitTimeoutInMicros = common::DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS;
 
     init_checkpointer_func_t initCheckpointerFunc;

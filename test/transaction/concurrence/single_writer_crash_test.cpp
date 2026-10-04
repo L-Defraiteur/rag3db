@@ -798,6 +798,67 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
         << "[check: rows-present] ";
 }
 
+// Une rafale d'écritures sous un lecteur resté ouvert, le journal au-delà du seuil : chaque
+// validation reporte son point de reprise sans l'attendre. Dix écritures ne prennent pas dix
+// délais (relecture de la session cœur C++, 4 octobre).
+TEST_F(SingleWriterCrash, BurstOfWritesUnderAnOpenReaderDoesNotWait) {
+    mustRun("CALL auto_checkpoint=false;");
+    mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
+    mustRun("CHECKPOINT;");
+    mustRun("CALL checkpoint_threshold=1;");
+    mustRun("CALL auto_checkpoint=true;");
+    rag3db::main::Connection other(database.get());
+    other.query("BEGIN TRANSACTION READ ONLY;");
+    other.query("MATCH (p:P) RETURN count(*);");
+    const auto start = std::chrono::steady_clock::now();
+    for (auto i = 0; i < 10; ++i) {
+        auto write = conn->query(stringFormat("CREATE (:P {id: {}});", i));
+        EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
+                                        << write->getErrorMessage();
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    other.query("COMMIT;");
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    std::cerr << "  ten writes under an open reader: " << ms << " ms\n";
+    EXPECT_LT(ms, 2000) << "[check: writes-do-not-wait] each write waited for the checkpoint";
+    EXPECT_EQ(queryInt("MATCH (p:P) RETURN count(*);"), 10) << "[check: rows-present] ";
+}
+
+// La forme explicite, celle de la transaction par paquet de rag3weaver : BEGIN ; COPY ;
+// COMMIT, avec une autre transaction ouverte. Le COMMIT rend l'erreur de délai (un COMMIT qui
+// échoue ferme le bloc), et rien ne reste : ni ligne, ni clé, puis point de reprise,
+// réouverture, intégrité.
+TEST_F(SingleWriterCrash, ExplicitCopyCommitWhileATransactionIsOpen) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    const auto csv = writeCsv(databasePath + ".explicit.csv", 0, 1000);
+    rag3db::main::Connection other(database.get());
+    other.query("BEGIN TRANSACTION READ ONLY;");
+    other.query("MATCH (c:C) RETURN count(*);");
+    mustRun("BEGIN TRANSACTION;");
+    auto copy = conn->query("COPY C FROM '" + csv + "' (header=false);");
+    if (!copy->isSuccess()) {
+        // Le COPY n'est pas permis dans un bloc explicite : rien à éprouver par cette forme.
+        std::cerr << "  COPY in a block: " << copy->getErrorMessage() << "\n";
+        conn->query("ROLLBACK;");
+        other.query("COMMIT;");
+        GTEST_SKIP() << "COPY is not allowed in an explicit transaction";
+    }
+    auto commit = conn->query("COMMIT;");
+    std::cerr << "  COMMIT: " << (commit->isSuccess() ? "ok" : commit->getErrorMessage())
+              << "\n";
+    EXPECT_FALSE(commit->isSuccess()) << "[check: commit-waits-and-fails] ";
+    conn->query("ROLLBACK;");
+    other.query("COMMIT;");
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-visible] ";
+    EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 0) << "[check: no-ghost-key] ";
+    mustRun("CHECKPOINT;");
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-after-reopen] ";
+    expectIntegrity();
+}
+
 // Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à
 // l'ouverture vient de ce que le journal ne porte plus le LOAD EXTENSION — n'importe quel
 // point de reprise après le chargement de l'extension, puis une écriture dans la table

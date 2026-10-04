@@ -96,17 +96,13 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         if (forced) {
             checkpointNoLock(clientContext, lck, true /* newTransactionsAlreadyStopped */);
         } else if (shouldCheckpoint) {
-            try {
+            if (!activeTransactions.empty() || checkpointPending) {
+                // L'écriture est validée et au journal. Comme PostgreSQL, un point de reprise
+                // ne retarde ni ne fait échouer une validation : si une autre transaction est
+                // ouverte, il est reporté à une validation suivante, sans attendre.
+                postponeCheckpointNoLock();
+            } else {
                 checkpointNoLock(clientContext, lck);
-            } catch (CheckpointException&) {
-                if (checkpointFailed) {
-                    throw;
-                }
-                // L'attente a expiré : l'écriture est validée et au journal, elle ne doit pas
-                // rendre d'erreur (comme PostgreSQL, un point de reprise ne fait jamais échouer
-                // une validation). Le point de reprise est reporté à la validation suivante.
-                fprintf(stderr, "[%s] le journal fait %llu octets\n", CHECKPOINT_POSTPONED,
-                    static_cast<unsigned long long>(wal.getFileSize()));
             }
         }
         if (storage::CheckpointProfile::enabled() && (shouldCheckpoint || commitMs >= 50.0)) {
@@ -191,6 +187,17 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
     }
 }
 
+void TransactionManager::postponeCheckpointNoLock() {
+    // Une ligne au premier report, puis chaque fois que le journal a doublé : sous un lecteur
+    // long, chaque validation reporte, et une ligne par validation noierait les journaux.
+    const auto walSize = wal.getFileSize();
+    if (walSizeAtLastPostponeWarning == 0 || walSize >= 2 * walSizeAtLastPostponeWarning) {
+        fprintf(stderr, "[%s] the journal holds %llu bytes\n", CHECKPOINT_POSTPONED,
+            static_cast<unsigned long long>(walSize));
+        walSizeAtLastPostponeWarning = std::max<uint64_t>(walSize, 1);
+    }
+}
+
 void TransactionManager::allowNewTransactionsNoLock() {
     checkpointPending = false;
     transactionsChanged.notify_all();
@@ -242,6 +249,7 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
     auto checkpointer = initCheckpointerFunc(clientContext);
     try {
         checkpointer->writeCheckpoint();
+        walSizeAtLastPostponeWarning = 0;
         allowNewTransactionsNoLock();
     } catch (std::exception& e) {
         allowNewTransactionsNoLock();

@@ -35,3 +35,20 @@ Vela `326d40dbd` (dans une fonctionnalité plus large : la rotation du journal).
 ## Pour le fermer
 
 attendre les transactions sans tenir le verrou que leur validation demande ; le témoin passe au vert.
+
+## Ce que le correctif change pour le produit (4 octobre)
+
+- Une validation dont le journal dépasse le seuil ne déclenche son point de reprise que si
+  aucune autre transaction n'est ouverte. Sinon, elle le reporte, sans attendre et sans
+  erreur. Le moteur écrit alors sur **stderr** une ligne
+  `[Checkpoint postponed: other transactions are open] the journal holds N bytes` : au
+  premier report, puis à chaque doublement du journal. Le point de reprise se fait à la
+  première validation qui ne trouve plus d'autre transaction ouverte.
+- Un `CHECKPOINT` explicite, la fermeture et un `COPY` attendent encore le départ des
+  autres transactions, au plus le délai (5 s). Mais l'attente relâche le verrou : un
+  lecteur qui finit peut partir. Au-delà du délai, le `COPY` est annulé, et rien n'est
+  validé.
+- Limite, en mode multi-écrivains (éteint) : deux validations qui veulent chacune leur
+  point de reprise s'attendent jusqu'au délai de la première. Ce n'est pas un
+  interblocage définitif ; à reprendre avec les verrous.
+
