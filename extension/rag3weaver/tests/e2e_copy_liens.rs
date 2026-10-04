@@ -208,3 +208,45 @@ fn une_paire_repetee_dans_un_lot_garde_la_derniere_valeur() {
         "a→b porte la dernière valeur, une seule fois"
     );
 }
+
+/// **Un NULL en tête d'un lot ne fait pas tomber le lot.** Un NULL dans la
+/// liste de paramètres n'a pas de type ; le moteur le lisait en STRING et
+/// toute la colonne prenait ce type, qu'une colonne entière refusait
+/// (`STRUCT_EXTRACT(item,line) has data type STRING but expected INT64`).
+/// Le 4 octobre 2026, deux rendez-vous sans ligne en tête d'un lot de
+/// `MENTIONS` faisaient échouer les cinq du lot, et seul un compteur que
+/// personne ne lisait le disait. Le lot passe sous le seuil du COPY : c'est
+/// le chemin par `UNWIND`.
+#[test]
+#[ignore]
+fn un_null_en_tete_d_un_lot_ne_fait_pas_tomber_le_lot() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let config = CatalogConfig { name: Some("lien-null".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    catalog.register_entity("Gauche", bout()).unwrap();
+    catalog.register_entity("Droite", bout()).unwrap();
+    let entier = || -> FieldDef { serde_json::from_value(serde_json::json!({"type": "int64"})).unwrap() };
+    catalog.register_relation_with("Lien", "Gauche", "Droite", HashMap::from([("line".to_string(), entier())])).unwrap();
+    catalog.ingest_entities("Gauche", vec![ligne("a")]).unwrap();
+    catalog.ingest_entities("Droite", vec![ligne("b"), ligne("c"), ligne("d")]).unwrap();
+    let ua = catalog.entity_uuid("Gauche", &ligne("a")).unwrap();
+    for (vers, line) in [("b", CypherValue::Null), ("c", CypherValue::Int(7)), ("d", CypherValue::Null)] {
+        let uv = catalog.entity_uuid("Droite", &ligne(vers)).unwrap();
+        let props = BTreeMap::from([("line".to_string(), line)]);
+        catalog.link_jusqu_a("Lien", RefOrUuid::Uuid(ua.clone()), RefOrUuid::Uuid(uv), props, Disponibilites::AUCUNE).unwrap();
+    }
+    let res = catalog.drain();
+    assert_eq!(res.failed, 0, "{:?}", res.warnings);
+    let mut lu = catalog.execute_raw("MATCH (a:Gauche)-[r:Lien]->(b:Droite) RETURN b.nom, r.line").unwrap().rows;
+    lu.sort_by_key(|r| format!("{r:?}"));
+    assert_eq!(
+        lu,
+        vec![
+            vec![CypherValue::String("b".into()), CypherValue::Null],
+            vec![CypherValue::String("c".into()), CypherValue::Int(7)],
+            vec![CypherValue::String("d".into()), CypherValue::Null],
+        ],
+        "les trois liens posés, la ligne seulement où elle est connue"
+    );
+}

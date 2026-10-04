@@ -934,10 +934,20 @@ impl Node for LinkRecordNode {
         }
 
         // Group by (rel_name, sorted property keys) for UNWIND batching.
+        // **Seules les propriétés non nulles comptent.** Un NULL dans la liste
+        // de paramètres n'a pas de type : le moteur le lit en STRING, et quand
+        // il ouvre la liste, toute la colonne prend ce type et une colonne
+        // typée la refuse. Le 4 octobre 2026, deux rendez-vous `HAS_PARENT`
+        // sans ligne, en tête d'un lot de `MENTIONS` dont les autres en
+        // avaient une, faisaient tomber les cinq
+        // (`STRUCT_EXTRACT(item,line) has data type STRING but expected
+        // INT64`) : une définition hors de sa classe ne se reliait jamais. Un
+        // lien neuf garde NULL sur la colonne omise.
         let mut groups: HashMap<(String, Vec<String>), Vec<usize>> = HashMap::new();
         for (ri, rl) in resolved.iter().enumerate() {
             let rel = &items[rl.index];
-            let mut prop_keys: Vec<String> = rel.properties.keys().cloned().collect();
+            let mut prop_keys: Vec<String> =
+                rel.properties.iter().filter(|(_, v)| !matches!(v, CypherValue::Null)).map(|(k, _)| k.clone()).collect();
             prop_keys.sort();
             groups
                 .entry((rel.rel_name.clone(), prop_keys))
