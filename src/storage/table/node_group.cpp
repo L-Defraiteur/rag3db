@@ -511,12 +511,15 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemAndOnDisk(MemoryMana
             continue;
         }
         std::vector<ChunkCheckpointState> chunkCheckpointStates;
+        // Deux index : columnID pour le groupe persistant, qui garde toutes ses colonnes ; i
+        // pour state.columns et le groupe des insertions, lus dans l'ordre de state.columnIDs.
+        // Ils diffèrent dès qu'une colonne qui n'est pas la dernière a été supprimée.
         if (columnHasUpdates) {
             scanCommittedUpdatesForColumn(chunkCheckpointStates, memoryManager, lock, columnID,
-                state.columns[columnID]);
+                state.columns[i]);
         }
         if (numInsertedRows > 0) {
-            chunkCheckpointStates.emplace_back(insertChunkedGroup->moveColumnChunk(columnID),
+            chunkCheckpointStates.emplace_back(insertChunkedGroup->moveColumnChunk(i),
                 numPersistentRows, numInsertedRows);
         }
         firstGroup->getColumnChunk(columnID).checkpoint(*state.columns[i],

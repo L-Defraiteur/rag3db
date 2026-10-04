@@ -27,7 +27,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Un point de reprise efface les relations des régions non touchées](2026-10-04-relations-effacees-au-point-de-reprise.md) | corrigé | perte | oui | oui (il supprime des relations et laisse passer des points de reprise) |
-| [Le point de reprise plante, à jamais, après ALTER TABLE … DROP](2026-10-04-point-de-reprise-impossible-apres-drop-de-colonne.md) | ouvert | plantage | oui | non (rag3weaver ne supprime jamais de colonne) |
+| [Le point de reprise plante, à jamais, après ALTER TABLE … DROP](2026-10-04-point-de-reprise-impossible-apres-drop-de-colonne.md) | corrigé | plantage | oui | non (rag3weaver ne supprime jamais de colonne) |
 | [La lecture plante après le point de reprise d'une relation créée puis supprimée](2026-10-04-lecture-apres-reprise-d-une-relation-creee-puis-supprimee.md) | corrigé | plantage | oui | oui (il crée et supprime des relations) |
 | [MERGE avec deux ON MATCH SET et une clé répétée plante](2026-10-04-merge-deux-on-match-set-et-cle-repetee.md) | corrigé | plantage | oui | non (sonde du 4 octobre) |
 | [UNION plante quand une branche projette deux fois la même propriété](2026-10-04-union-propriete-projetee-deux-fois.md) | corrigé | plantage | oui | non vérifié |

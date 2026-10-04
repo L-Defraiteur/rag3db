@@ -1,6 +1,6 @@
 # Le point de reprise plante, à jamais, après ALTER TABLE … DROP
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(stockage): le point de reprise après ALTER TABLE … DROP d'une colonne indexe ses colonnes par leur position »
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (rag3weaver ne supprime jamais de colonne)

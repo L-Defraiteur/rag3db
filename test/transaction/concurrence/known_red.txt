@@ -166,8 +166,6 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #   MERGE avec deux ON MATCH SET et une clé répétée (a0063158d) ; UNION (26be67f84) ;
 #   lambda (0c19d7816) ; comparaison de relations et label() (0f3f03d63, 57dc0b4ed) ; WITH
 #   filtré par un paramètre (8281c845e) ;
-UpstreamFixes.CheckpointAfterDroppingANodeColumn checkpoint-after-reopen,checkpoint-survives
-UpstreamFixes.CheckpointAfterDroppingARelationColumn checkpoint-after-reopen,checkpoint-survives
 # — blocages : l'UUID nul empêche tout point de reprise (Ladybug 231a0b854) ; un CHECKPOINT
 #   retient la validation d'un lecteur jusqu'à son délai, puis échoue (Vela 326d40dbd) ;
 UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-held

@@ -176,9 +176,13 @@ TEST_F(UpstreamFixes, CheckpointAfterDroppingARelationColumn) {
     mustRun("MATCH (x:p {id: 0}), (y:p {id: 1}) CREATE (x)-[:r {a: 1, b: 2}]->(y);");
     mustRun("CHECKPOINT;");
     const auto first = inChild([](rag3db::main::Connection& connection) {
+        // Une insertion et une mise à jour de la relation déjà sur disque : les deux chemins du
+        // point de reprise d'une table de relations.
         if (const auto failed = runOrFail(connection, "ALTER TABLE r DROP a;") +
                                 runOrFail(connection, "MATCH (x:p {id: 1}), (y:p {id: 0}) "
-                                                      "CREATE (x)-[:r {b: 3}]->(y);")) {
+                                                      "CREATE (x)-[:r {b: 3}]->(y);") +
+                                runOrFail(connection, "MATCH ()-[e:r]->() WHERE e.b = 2 "
+                                                      "SET e.b = 7;")) {
             return failed;
         }
         return runOrFail(connection, "CHECKPOINT;");
@@ -190,7 +194,7 @@ TEST_F(UpstreamFixes, CheckpointAfterDroppingARelationColumn) {
     EXPECT_EQ(second, "") << "[check: checkpoint-after-reopen] " << second;
     const auto values = inChild([](rag3db::main::Connection& connection) {
         auto result = connection.query("MATCH ()-[e:r]->() RETURN sum(e.b);");
-        return result->isSuccess() && result->getNext()->getValue(0)->getValue<int64_t>() == 5 ?
+        return result->isSuccess() && result->getNext()->getValue(0)->getValue<int64_t>() == 10 ?
                    0 :
                    5;
     });
