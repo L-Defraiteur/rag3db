@@ -123,6 +123,28 @@ l'agent.
 > point de reprise au seuil (le mode « chargement initial » que la session
 > cœur C++ chiffre à un ou deux jours).
 
+> **La transaction par paquet fusionnée, et ses deux gains — 4 octobre,
+> 16 h 20 à 17 h 05.** Base sur disque, tampon 8 Gio, variable
+> `RAG3WEAVER_TX_PAR_PAQUET=1`, chaque passe seule sous le verrou de mesure.
+>
+> | Ce qui est mesuré | Durée |
+> |---|---|
+> | master `3e267c714`, paquets de 512 | 171 s |
+> | même, paquets de 2 048 | 112 s |
+> | même, d'un tenant | **107 s** (232 s sans la transaction) |
+> | gain 1 — la file des relations vidée une seule fois, à la fin (`a15da9c0d`), 512 | 150 s (le `COMMIT` des paquets passe de 66 à 46 s) |
+> | référence sur le moteur rebâti à 16 h 56, 512 | 155 s |
+> | gain 2 — naissances par `COPY` à chaque paquet, sans relecture ni marquage (`38f1bb3cd`), 512 | 157 s |
+>
+> - **Le gain 1 est réel** et les comptes sont contrôlés à commit égal : le
+>   vidage unique ne perd aucun lien.
+> - **Le gain 2 est absorbé** : l'ingestion gagne 20 s, mais les `COMMIT`
+>   des paquets prennent 23 s de plus — les `COPY` de naissances, dans la
+>   transaction, alourdissent le point de reprise que le `COMMIT` porte.
+> - Tant qu'un `COMMIT` porte un point de reprise complet, c'est lui le poste
+>   à réduire : valider moins souvent (réglage à venir), ou un `COPY` qui ne
+>   force plus son point de reprise (moteur).
+
 Deux produits, un moteur : un agent de code en cloud qui télécharge un dépôt
 git, un agent en ligne de commande qui ingère ce qu'il y a sur le disque. Le
 verbe qui leur manque à tous deux est le même : **dire ce que ça va coûter,
