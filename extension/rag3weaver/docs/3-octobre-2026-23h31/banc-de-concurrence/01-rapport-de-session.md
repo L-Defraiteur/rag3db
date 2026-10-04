@@ -113,6 +113,19 @@ amonts (`8c83c3360`, puis le second lot).
       `RefusedCopyKeepsTheOriginalKey`, qui tuait le processus à la fermeture avant le
       correctif, et `CheckpointAfterARefusedCopy`, garde-fou vert en Release ;
     - les 18 passes sous ASan ne sont pas lancées, puisque l'hypothèse tombe.
+15. **La stèle (4 octobre au soir, « on se focus sur la stèle », Lucie)** :
+    - la relecture du tri des tickets du moteur, avec deux désaccords retenus par
+      l'orchestration : le `CHECKPOINT` qui retient un lecteur passe à bloque (l'écrivain
+      reçoit une erreur alors que sa ligne est validée, vérifié par une sonde) ; la
+      cardinalité gonflée reste confort, à condition que `STATS_INFO` dise qu'il rend une
+      estimation ;
+    - deux tickets ouverts (`4909f4529`) : la mise à jour massive de vecteurs, et la ligne
+      lointaine, encore rouge après `1ea49837f` ;
+    - premier ticket « bloque » fermé : le point de reprise après `ALTER TABLE … DROP`
+      (`308ebd17e`, lu chez Vela e5e700e73). Les deux témoins rougissent sans le correctif
+      et passent au vert avec. **Un écart de méthode** : le commit a été poussé sur un
+      empilement qui avait reçu `5c8507577` (rag3db-e3) après ma liste C++. La liste a été
+      rejouée aussitôt sur master tel que poussé, et elle est verte.
 
 ## Décisions et pourquoi
 
@@ -156,6 +169,12 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
+- **Les tickets « bloque » de la stèle confiés au banc**, dans l'ordre : l'erreur rendue sur
+  une écriture validée (le `CHECKPOINT` qui retient un lecteur, et le `COPY` validé qui rend
+  une erreur), le balayage de plusieurs tables de relations dans une transaction, les arrêts
+  au mauvais instant (l'ordre des suppressions à la reprise, le rejeu non synchronisé),
+  l'ordre de synchronisation au point de reprise, la réouverture intermittente. Plus une
+  ligne dans la description de `STATS_INFO`.
 - **La corruption d'`e2e_code`** : l'hypothèse du `COPY` refusé est écartée pour le test
   fautif ; la piste qui reste est un voisin faux dans le graphe de l'index (ticket de la
   corruption).
