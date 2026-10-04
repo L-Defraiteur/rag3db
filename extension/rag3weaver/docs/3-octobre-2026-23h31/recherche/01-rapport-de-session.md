@@ -60,7 +60,40 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (4 octobre 13h10 — l'ablation est rendue, le fix chat est sur master)
+## En cours (4 octobre 13h30 — le découpeur réfuté, le vrai défaut trouvé)
+
+- **Les passes (b) réfutent l'hypothèse du découpeur** : trois variantes
+  de tokenisation lucivy par patch local (entier gardé / sans fusion-à-4
+  / les deux) — plein texte seul 0,244-0,248 phrases et 0,408-0,433
+  identifiants contre 0,243/0,417 publié ; toujours UN seul identifiant
+  au rang 1. Le gain du creux ne vient pas de la découpe : c'est un
+  signal propre. Le patch repart au placard, rien à publier.
+- **La sonde des dix identifiants a trouvé le vrai défaut** :
+  (1) **le nom du scope n'est PAS indexé en plein texte** —
+  catalog.rs:4261 n'ajoute le title_field aux bm25_fields que pour une
+  entité DÉRIVÉE ; l'index du Scope n'a que content et docstring ;
+  (2) les HUIT modes de requête lucivy (lev d=1 actuel, exact, jaro-
+  winkler 0,9, exact_match, strict, phrase, parse, exact sur content)
+  rendent des rangs IDENTIQUES — le problème n'est pas le rapprochement
+  mais le classement : des scopes de fichier de 3-10 lignes et des
+  voisins courts qui MENTIONNENT l'identifiant battent la définition
+  (normalisation de longueur), la lecture de Lucie mot pour mot ;
+  (3) le chemin réel rag3weaver classe MIEUX que lucivy brut
+  (merge_port_values 3 contre 10) — les field_weights corrigent déjà.
+- **Chantier suivant commandé** : indexer le titre pour TOUTE entité et
+  brancher title_boost (déclaré, inerte depuis le 25 août — 50 garde
+  ces clés hors de son lot de refus, catalog.rs:710/1971-1995 à moi),
+  puis DEFINES et genre/usages au banc — contre dense+creux 0,449/0,950
+  et creux seul 1,000.
+- **Deux rouges de dc corrigés (41708234f)** : e2e_code_sync lisait
+  l'extension vecteur par CARGO_MANIFEST_DIR seul — DEUX sites du même
+  motif (le second arrivé sur master le jour même : un grep par chemin
+  se REJOUE après chaque rebase). Vérifiés verts sur la lib rebâtie
+  (le correctif relations de 50 traverse exactement ces tests). Depuis
+  un worktree frais : RAG3DB_ROOT sur le worktree, sa libvector sort du
+  même cmake que lecteurs-csv.
+
+## Ancien (4 octobre 13h10 — l'ablation est rendue, le fix chat est sur master)
 
 - **L'ablation (a) est rendue (384 s)** et la première leçon est nette :
   le creux N'EST PAS un second plein texte. Phrases : plein texte seul

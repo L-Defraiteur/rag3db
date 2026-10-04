@@ -123,6 +123,35 @@ mesurée sur ce banc (0,449 > 0,405 tel quel > 0,369 meilleur H réglé).
 La passe a duré 384 s tout compris (~56 s partagées avec une analyse de
 c0). Reste (b) : le découpeur amélioré rattrape-t-il le creux ?
 
+### Le verdict des expériences (4 octobre 13h30)
+
+- **Découpeur (passes b)** : entier 0,244/0,417 · fin 0,248/0,433 ·
+  entier-fin 0,247/0,408, contre publié 0,243/0,417 (phrases/idents,
+  plein texte seul). Rien au-delà du bruit, un seul rang 1 partout.
+  L'hypothèse « le creux = un second plein texte mieux découpé » est
+  réfutée ; le patch `~/.cache/rag3weaver-build/lucivy-variantes/`
+  reste en réserve, [patch.crates-io] à RETIRER du Cargo.toml du
+  worktree quand le banc n'en a plus besoin.
+- **Sonde des identifiants** (tests/sonde_identifiants_lucivy.rs,
+  HashEmbedder, 70 s) : le nom du Scope N'EST PAS indexé —
+  catalog.rs:4261 réserve le title_field des bm25_fields aux entités
+  dérivées. Les 8 modes lucivy rendent les mêmes rangs (le défaut est
+  le classement, pas le rapprochement) ; ce qui passe devant : scopes
+  de fichier courts et voisins qui mentionnent. Le chemin réel classe
+  mieux que lucivy brut (field_weights). Lire le nom d'un doc lucivy :
+  par la PREMIÈRE LIGNE du content stocké (la signature) — name n'y est
+  pas.
+- **Leçons de méthode** : un motif se cherche par le CHEMIN (grep
+  extension/vector/build dans tests/), pas par la liste des fichiers
+  déjà en cause — et il se REJOUE après chaque rebase (le second site
+  de e2e_code_sync est arrivé sur master le jour même). run_e2e refuse
+  aussi une EXTENSION vecteur plus vieille que le dernier commit
+  moteur. La formule de dc (journal a1f958214), qui couvre les deux
+  cas : **RAG3DB_ROOT désigne l'arbre où le moteur est bâti** — chez
+  moi le worktree (sa libvector sort du cmake de lecteurs-csv), chez
+  une session qui n'a jamais bâti, l'arbre principal. Ni « le
+  worktree » ni « l'arbre principal » en général.
+
 ### Les expériences de l'optimiseur (en cours, 4 octobre midi)
 
 - **Ce que lucivy fait des identifiants** (sources 4.3.0, filtre
