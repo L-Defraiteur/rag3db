@@ -3,7 +3,7 @@
 Session de l'arbre principal (`/home/lucied/git_workspaces/rag3db`, crate
 `extension/rag3weaver`). Elle tient l'ingestion du code, la synchronisation,
 le chargement en masse et les requêtes par lot du dialecte. Mis à jour le
-4 octobre 2026, vers 16 h.
+4 octobre 2026, vers 21 h 30.
 
 ## Fait aujourd'hui, sur master
 
@@ -59,16 +59,33 @@ transaction : il crée le schéma à la volée, qu'une annulation emportait.
 `build/lecteurs-csv` rebâti sous verrou exclusif à 14 h 10 (garde 2 de
 rag3db-e3) et à 15 h 16 (`34bde7eea`, CSV vide entre guillemets).
 
+## Fusionné le 4 octobre (soir)
+
+Le premier index sur disque, tout derrière `RAG3WEAVER_TX_PAR_PAQUET` (éteint par défaut, l'allumage attend Lucie) :
+
+| Commit | Lot | Mesure (rag3db-eb, 512 sur disque, 8 Gio) |
+|---|---|---|
+| `abc2ca27d`, `3e267c714` | Transaction par paquet, durcie : schéma posé d'avance, aucun DDL dans la transaction, ROLLBACK puis empoisonnement | 753 → 168 s |
+| `a15da9c0d` | Gain 1 : la file des relations ne se vide qu'à la fin | 171 → 150 s |
+| `38f1bb3cd` | Gain 2 : naissances par COPY à chaque paquet, marque de session dans la ligne | neutre à K = 1, −29 s à K = 4 |
+| `b527f5c5c` | K paquets par validation (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION`) | **K = 4 : 106 s** (recommandé) |
+| `345f2ea1a` → retiré `c94c6d892` | Gain 3 : un commit plein texte par paquet | perte : 106 → 121 s |
+| `c6cf2c263` → option `0f7103670` | Plein texte poussé une fois à la fin (marque `fts_pending`, « mots : en cours », reconstruction à la reprise) | perte : 113 → 135 s ; option `RAG3WEAVER_TX_POUSSEE_A_LA_FIN`, poussée finale en une transaction (hypothèse au ticket) |
+
+Les tests d'arrêt brutal (`e2e_tx_par_paquet_arret`, 7 cas) : mort au paquet, au milieu d'un groupe de 4, avant la poussée, ROLLBACK — la reprise rend les comptes d'une passe sans arrêt, plein texte compris.
+
+Ailleurs :
+- `5f1fefa39` MENTIONS perdues en silence (NULL en tête d'un lot) ; `9b89ec823` déclarations ; `986565f81` colonne `resolution` ; fusions de rag3db-c0 (`f4495af6a`, `b52df1117`) et pointeurs codeparsers jusqu'à `3f992e4`.
+- `395d35523`, `f53d41488` le tampon du moteur (min(RAM/2, 8 Gio)).
+- `ad220d0eb`, `2c600c442` **une seule instance en écriture par base et par processus** : registre chemin → `Weak<Database>`, attente bornée ; le catalogue ferme vraiment ses index. La cause de la corruption d'e2e_code (deux instances, retenue par les acteurs lucivy) ; demi-page pour Lucie : `03-lucivy-fermeture-synchrone.md`.
+- Défauts du moteur trouvés et corrigés par rag3db-e3 : clés fantômes après deux COPY annulés (`5c8507577`).
+
 ## En cours
 
-1. **Le premier index vers 90 s sur disque.** La cause de l'échec à 4 Gio
-   n'est pas connue (rag3db-eb : la sonde en Cypher brut dit qu'il casse sous
-   des BLOB, 544 Mo suffisent avec 2 Gio). Leviers : seuil du point de
-   reprise, transaction par paquet (à mesurer), paquets bornés en octets.
-2. **Les 24 avertissements sans lecteur** restants (hors title_boost,
-   content_boost, boost, à rag3db-88).
-3. **Le ticket des journaux d'annulation dans /tmp** (ne rien effacer : Lucie
-   décide).
+1. Les trois leviers du chargement final des relations (27 s) : MENTIONS sans CSV, vérification d'existence sautée quand c'est prouvé, points de reprise du dataflow coupés dans la transaction — un commit par levier, mesuré.
+2. Le COPY qui expire (« Timeout waiting… ») : reconnu par son nom, rejoué 3 fois hors transaction (`copy_retried`).
+3. Rejouer les suites qui rouvrent sur le moteur au gestionnaire de verrous (`lock_manager`).
+4. Rouge connu, pas de mon fait : `e2e_prise_atomique::un_lecteur_qui_insiste_pendant_qu_on_ecrit` (1 à 3 refus de lecture seule sur 80, aussi sans mes changements).
 
 ## Ce qu'on a appris aujourd'hui
 
