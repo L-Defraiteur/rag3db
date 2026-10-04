@@ -3,7 +3,7 @@
 # Une ligne par suite dans `codes`, son journal à côté.
 set -u
 R=/home/lucied/git_workspaces/rag3db-moteur
-D=/home/lucied/.cache/rag3db-moteur-notes/plantage-reouverture/liste
+D=/home/lucied/.cache/rag3db-moteur-notes/perte-au-point-de-reprise/liste
 mkdir -p "$D"
 : > "$D/codes"
 cd "$R" || exit 1
@@ -26,6 +26,7 @@ done
 cmake -DBENCH=$R/build/moteur/test/transaction/concurrence/concurrence_test \
   -DKNOWN_RED_FILE=$R/test/transaction/concurrence/known_red.txt \
   -DPROBABILISTIC_FILE=$R/test/transaction/concurrence/probabilistic.txt \
+  -DLONG_FILE=$R/test/transaction/concurrence/long.txt \
   -DRESULT_FILE=$D/banc.json -P test/transaction/concurrence/compare_known_red.cmake > "$D/banc.log" 2>&1
 echo "banc code $? — $(grep -E 'bench matches|differ' "$D/banc.log" | tr '\n' ' ')" >> "$D/codes"
 
