@@ -34,6 +34,7 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{analyze, default_scope_chunking, read_sources, register_code_schema};
+use rag3weaver::dataflow::graph_walk::EdgeMark;
 use rag3weaver::dataflow::neighborhood_nodes::{neighborhood_of, Direction, NeighborhoodConfig};
 use rag3weaver::dataflow::usage_nodes::{usages_of, UsagesConfig};
 use rag3weaver::embedder::HashEmbedder;
@@ -137,7 +138,7 @@ fn setup() -> Arc<Mutex<Catalog>> {
     Arc::new(Mutex::new(catalog))
 }
 
-fn usages_config(relations: &[&str]) -> UsagesConfig {
+fn usages_config(relations: &[&str], marque: &EdgeMark) -> UsagesConfig {
     UsagesConfig {
         pivot: "Symbol".into(),
         key: "name".into(),
@@ -151,13 +152,14 @@ fn usages_config(relations: &[&str]) -> UsagesConfig {
         kind_field: "scope_type".into(),
         path_fields: vec!["file_path".into()],
         line_field: "start_line".into(),
+        edge_mark: marque.clone(),
     }
 }
 
-fn voisinage(direction: Direction) -> NeighborhoodConfig {
+fn voisinage(direction: Direction, marque: &EdgeMark) -> NeighborhoodConfig {
     let relations = ["CONSUMES", "INHERITS_FROM", "IMPLEMENTS"];
     NeighborhoodConfig {
-        start: usages_config(&relations),
+        start: usages_config(&relations, marque),
         relations: relations.iter().map(|r| r.to_string()).collect(),
         direction,
         group_by: "test_role".into(),
@@ -191,68 +193,74 @@ fn banc_des_relations() {
     let racine = format!("{}/src", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     catalog.lock().unwrap().ingest_code(&analyze(&racine, read_sources(&racine).unwrap())).unwrap();
     let cat = catalog.lock().unwrap();
-    let mut lignes: Vec<String> = Vec::new();
-    let mut totaux: Vec<(&str, f64, f64, usize)> = Vec::new();
+    // Deux passes sur le même index : toutes les arêtes, puis sans les arêtes
+    // devinées (`resolution = nom`, la déclaration des gabarits).
+    let gabarits = EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] };
+    for (titre, marque) in [("toutes les arêtes", EdgeMark::default()), ("sans les arêtes devinées (resolution = nom)", gabarits)] {
+        eprintln!("\n## {titre}");
+        let mut lignes: Vec<String> = Vec::new();
+        let mut totaux: Vec<(&str, f64, f64, usize)> = Vec::new();
 
-    // « Qui appelle X ? » — `usages`, chemin restreint au fichier de X.
-    let (mut r, mut p) = (0.0, 0.0);
-    for ((x, fichier), attendu) in QUI_APPELLE {
-        let rep = usages_of(&cat, &usages_config(&["CONSUMES", "INHERITS_FROM", "IMPLEMENTS"]), x, fichier).unwrap();
-        let rendu: BTreeSet<(String, String)> = rep.usages.iter().filter(|u| u.usage != "import").map(|u| (u.user.title.clone(), relatif(&u.user.path))).collect();
-        let (ri, pi) = noter(&rendu, attendu, &[]);
-        lignes.push(format!("| qui appelle {x} | usages | {ri:.2} | {pi:.2} | {:?} |", rendu.iter().filter(|e| !attendu.iter().any(|(n, f)| e.0 == *n && e.1 == *f)).collect::<Vec<_>>()));
-        r += ri;
-        p += pi;
-    }
-    totaux.push(("qui appelle X (usages)", r, p, QUI_APPELLE.len()));
+        // « Qui appelle X ? » — `usages`, chemin restreint au fichier de X.
+        let (mut r, mut p) = (0.0, 0.0);
+        for ((x, fichier), attendu) in QUI_APPELLE {
+            let rep = usages_of(&cat, &usages_config(&["CONSUMES", "INHERITS_FROM", "IMPLEMENTS"], &marque), x, fichier).unwrap();
+            let rendu: BTreeSet<(String, String)> = rep.usages.iter().filter(|u| u.usage != "import").map(|u| (u.user.title.clone(), relatif(&u.user.path))).collect();
+            let (ri, pi) = noter(&rendu, attendu, &[]);
+            lignes.push(format!("| qui appelle {x} | usages | {ri:.2} | {pi:.2} | {:?} |", rendu.iter().filter(|e| !attendu.iter().any(|(n, f)| e.0 == *n && e.1 == *f)).collect::<Vec<_>>()));
+            r += ri;
+            p += pi;
+        }
+        totaux.push(("qui appelle X (usages)", r, p, QUI_APPELLE.len()));
 
-    // « De quoi dépend X ? » — le voisinage sortant, un saut.
-    let (mut r, mut p) = (0.0, 0.0);
-    for ((x, fichier), attendu, toleres) in DEPEND_DE {
-        let rep = neighborhood_of(&cat, &voisinage(Direction::Outgoing), x, fichier, 1, 200, 10_000).unwrap();
-        let rendu: BTreeSet<(String, String)> = rep.reached.iter().map(|m| (m.title.clone(), relatif(&m.path))).collect();
-        let (ri, pi) = noter(&rendu, attendu, toleres);
-        lignes.push(format!("| dépend de {x} | voisinage sortant | {ri:.2} | {pi:.2} | {:?} |", rendu.iter().filter(|e| !attendu.iter().any(|(n, f)| e.0 == *n && e.1 == *f)).collect::<Vec<_>>()));
-        r += ri;
-        p += pi;
-    }
-    totaux.push(("de quoi dépend X (voisinage sortant)", r, p, DEPEND_DE.len()));
+        // « De quoi dépend X ? » — le voisinage sortant, un saut.
+        let (mut r, mut p) = (0.0, 0.0);
+        for ((x, fichier), attendu, toleres) in DEPEND_DE {
+            let rep = neighborhood_of(&cat, &voisinage(Direction::Outgoing, &marque), x, fichier, 1, 200, 10_000).unwrap();
+            let rendu: BTreeSet<(String, String)> = rep.reached.iter().map(|m| (m.title.clone(), relatif(&m.path))).collect();
+            let (ri, pi) = noter(&rendu, attendu, toleres);
+            lignes.push(format!("| dépend de {x} | voisinage sortant | {ri:.2} | {pi:.2} | {:?} |", rendu.iter().filter(|e| !attendu.iter().any(|(n, f)| e.0 == *n && e.1 == *f)).collect::<Vec<_>>()));
+            r += ri;
+            p += pi;
+        }
+        totaux.push(("de quoi dépend X (voisinage sortant)", r, p, DEPEND_DE.len()));
 
-    // « Qu'est-ce qui relie X et Y ? » — `impact` de Y : X au bon niveau ?
-    let mut d = 0.0;
-    for chemin in RELIE {
-        let (x, _) = chemin[0];
-        let (y, fy) = chemin[chemin.len() - 1];
-        let longueur = chemin.len() - 1;
-        let rep = neighborhood_of(&cat, &voisinage(Direction::Incoming), y, fy, 3, 2_000, 10_000).unwrap();
-        let niveau = rep.reached.iter().filter(|m| m.title == x && relatif(&m.path) == chemin[0].1).map(|m| m.level).min();
-        let juste = niveau == Some(longueur);
-        d += f64::from(u8::from(juste));
-        lignes.push(format!("| relie {x} et {y} | impact (distance) | {} | — | niveau {niveau:?}, attendu {longueur} |", u8::from(juste)));
-    }
-    totaux.push(("qu'est-ce qui relie X et Y (impact, distance)", d, f64::NAN, RELIE.len()));
+        // « Qu'est-ce qui relie X et Y ? » — `impact` de Y : X au bon niveau ?
+        let mut d = 0.0;
+        for chemin in RELIE {
+            let (x, _) = chemin[0];
+            let (y, fy) = chemin[chemin.len() - 1];
+            let longueur = chemin.len() - 1;
+            let rep = neighborhood_of(&cat, &voisinage(Direction::Incoming, &marque), y, fy, 3, 2_000, 10_000).unwrap();
+            let niveau = rep.reached.iter().filter(|m| m.title == x && relatif(&m.path) == chemin[0].1).map(|m| m.level).min();
+            let juste = niveau == Some(longueur);
+            d += f64::from(u8::from(juste));
+            lignes.push(format!("| relie {x} et {y} | impact (distance) | {} | — | niveau {niveau:?}, attendu {longueur} |", u8::from(juste)));
+        }
+        totaux.push(("qu'est-ce qui relie X et Y (impact, distance)", d, f64::NAN, RELIE.len()));
 
-    // « Quels tests traversent X ? » — `impact`, deux sauts.
-    let (mut r, mut p) = (0.0, 0.0);
-    for ((x, fichier), attendu) in TESTS_DE {
-        let rep = neighborhood_of(&cat, &voisinage(Direction::Incoming), x, fichier, 2, 2_000, 50).unwrap();
-        let rendu: BTreeSet<String> = rep.grouped().iter().filter(|m| m.group == "case").map(|m| m.title.clone()).collect();
-        let reference: BTreeSet<String> = attendu.iter().map(|s| s.to_string()).collect();
-        let ri = rendu.intersection(&reference).count() as f64 / reference.len() as f64;
-        let pi = if rendu.is_empty() { 0.0 } else { rendu.intersection(&reference).count() as f64 / rendu.len() as f64 };
-        lignes.push(format!("| tests de {x} | impact | {ri:.2} | {pi:.2} | en trop {:?}, manquants {:?} |", rendu.difference(&reference).collect::<Vec<_>>(), reference.difference(&rendu).collect::<Vec<_>>()));
-        r += ri;
-        p += pi;
-    }
-    totaux.push(("quels tests traversent X (impact)", r, p, TESTS_DE.len()));
+        // « Quels tests traversent X ? » — `impact`, deux sauts.
+        let (mut r, mut p) = (0.0, 0.0);
+        for ((x, fichier), attendu) in TESTS_DE {
+            let rep = neighborhood_of(&cat, &voisinage(Direction::Incoming, &marque), x, fichier, 2, 2_000, 50).unwrap();
+            let rendu: BTreeSet<String> = rep.grouped().iter().filter(|m| m.group == "case").map(|m| m.title.clone()).collect();
+            let reference: BTreeSet<String> = attendu.iter().map(|s| s.to_string()).collect();
+            let ri = rendu.intersection(&reference).count() as f64 / reference.len() as f64;
+            let pi = if rendu.is_empty() { 0.0 } else { rendu.intersection(&reference).count() as f64 / rendu.len() as f64 };
+            lignes.push(format!("| tests de {x} | impact | {ri:.2} | {pi:.2} | en trop {:?}, manquants {:?} |", rendu.difference(&reference).collect::<Vec<_>>(), reference.difference(&rendu).collect::<Vec<_>>()));
+            r += ri;
+            p += pi;
+        }
+        totaux.push(("quels tests traversent X (impact)", r, p, TESTS_DE.len()));
 
-    eprintln!("\n| question | outil | rappel | précision | écarts |\n|---|---|---|---|---|");
-    for l in &lignes {
-        eprintln!("{l}");
-    }
-    eprintln!("\n| type | questions | rappel moyen | précision moyenne |\n|---|---|---|---|");
-    for (t, r, p, n) in &totaux {
-        eprintln!("| {t} | {n} | {:.2} | {} |", r / *n as f64, if p.is_nan() { "—".into() } else { format!("{:.2}", p / *n as f64) });
+        eprintln!("\n| question | outil | rappel | précision | écarts |\n|---|---|---|---|---|");
+        for l in &lignes {
+            eprintln!("{l}");
+        }
+        eprintln!("\n| type | questions | rappel moyen | précision moyenne |\n|---|---|---|---|");
+        for (t, r, p, n) in &totaux {
+            eprintln!("| {t} | {n} | {:.2} | {} |", r / *n as f64, if p.is_nan() { "—".into() } else { format!("{:.2}", p / *n as f64) });
+        }
     }
 }
 

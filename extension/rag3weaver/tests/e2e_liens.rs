@@ -165,6 +165,7 @@ fn config_banc(max_degree: usize, max_links: usize) -> LinksConfig {
         max_links,
         max_degree,
         sources: 20,
+        edge_mark: Default::default(),
     }
 }
 

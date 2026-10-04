@@ -1129,9 +1129,16 @@ pub fn analyze_in_project(
                 }
                 // Le module d'où vient le nom : `use crate::estimate::Rate` →
                 // `crate::estimate` ; `connection::open()` après
-                // `use crate::connection` → `crate::connection`.
+                // `use crate::connection` → `crate::connection`. Sans `use`,
+                // un appel par chemin dit son module lui-même :
+                // `crate::estimate::probe_rate()` → `crate::estimate`.
                 let module = r.import_origin.as_ref().map(|o| {
                     if o.via_qualifier { format!("{}::{}", o.source, o.imported) } else { o.source.clone() }
+                });
+                let module = module.or_else(|| {
+                    let q = r.qualifier.as_deref()?;
+                    let chemin = r.context.as_deref().is_some_and(|ctx| ctx.contains(&format!("{q}::{id}")));
+                    if chemin { module_d_un_chemin(q, abs) } else { None }
                 });
                 let modules = modules_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 match (modules.as_mut(), module) {
@@ -2251,6 +2258,40 @@ fn choose_target(
     None
 }
 
+/// **Le module d'un appel par chemin**, lu comme un import : le qualificatif
+/// tel qu'écrit (`crate::a`, `module`), ou, s'il part de `self` / `super`,
+/// le chemin du module qu'il désigne depuis le fichier de l'appel —
+/// `super::x` dans `…/src/dataflow/port.rs` est `…/src/dataflow/x`. `None`
+/// quand `super` remonte au-delà de la racine. Un type en qualificatif
+/// (`Outil::fabrique`) ne désigne un fichier que s'il en porte le nom.
+fn module_d_un_chemin(qualifier: &str, fichier: &str) -> Option<String> {
+    let mut segments = qualifier.split("::").filter(|s| !s.is_empty()).peekable();
+    if !matches!(segments.peek(), Some(&"self") | Some(&"super")) {
+        return Some(qualifier.to_string());
+    }
+    let chemin = Path::new(fichier);
+    let mut module: Vec<String> = chemin
+        .parent()
+        .map(|d| d.components().filter_map(|c| c.as_os_str().to_str().map(String::from)).filter(|c| c != "/").collect())
+        .unwrap_or_default();
+    let tige = chemin.file_stem().and_then(|t| t.to_str()).unwrap_or("");
+    if !matches!(tige, "mod" | "lib" | "main") {
+        module.push(tige.to_string());
+    }
+    while let Some(s) = segments.peek() {
+        match *s {
+            "self" => {}
+            "super" => {
+                module.pop()?;
+            }
+            _ => break,
+        }
+        segments.next();
+    }
+    module.extend(segments.map(String::from));
+    Some(module.join("/"))
+}
+
 /// **Un module d'import désigne-t-il ce fichier ?** `crate::estimate` désigne
 /// `…/src/estimate.rs` (ou `…/estimate/mod.rs`), `pkg.models` désigne
 /// `…/pkg/models.py` (ou `…/pkg/models/__init__.py`), `./util` désigne
@@ -2796,6 +2837,20 @@ mod tests_resolution {
         assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new()), Some(("get@b".into(), Resolution::Import)));
         let rien = mention("CONSUMES", &[], &[]);
         assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new()), None);
+    }
+
+    #[test]
+    fn un_appel_par_chemin_dit_son_module() {
+        assert_eq!(module_d_un_chemin("crate::a", "/p/src/b.rs").as_deref(), Some("crate::a"));
+        // `super` depuis un fichier : le module parent, puis le reste.
+        assert_eq!(module_d_un_chemin("super::x", "/p/src/dataflow/port.rs").as_deref(), Some("p/src/dataflow/x"));
+        assert_eq!(module_d_un_chemin("super::x", "/p/src/dataflow/mod.rs").as_deref(), Some("p/src/x"));
+        // `self` : un sous-module du fichier.
+        assert_eq!(module_d_un_chemin("self::inner", "/p/outer.rs").as_deref(), Some("p/outer/inner"));
+        assert!(module_designe_fichier("p/src/dataflow/x", "/p/src/dataflow/x.rs"));
+        assert!(!module_designe_fichier("p/src/dataflow/x", "/p/src/x.rs"));
+        // Au-delà de la racine : rien.
+        assert_eq!(module_d_un_chemin("super::super::super::x", "/p/b.rs"), None);
     }
 
     #[test]

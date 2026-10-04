@@ -13,3 +13,9 @@ graph LR
 %% dépendants extérieurs, dédoublonnés. Le résumé ne nomme que les tests
 %% qu'on relance (`test_role` = `case`), pas leurs aides. Le schéma de code (src/code.rs) :
 %% `repo_path` est le chemin relatif au dépôt, `file_path` le chemin absolu.
+%% Les arêtes devinées (`resolution = nom`) restent suivies ici : le banc des
+%% relations (4 octobre 2026) perd du rappel sans elles — un appel de méthode
+%% sur une variable sans type lu, un appel dans les arguments d'une macro
+%% sont de vrais usages que rien ne confirme. Un test manqué coûte plus
+%% qu'un dépendant en trop. Pour les taire : `edge_field=resolution,
+%% edge_guessed=nom`.

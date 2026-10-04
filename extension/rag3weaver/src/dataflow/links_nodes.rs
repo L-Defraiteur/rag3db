@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
-use super::graph_walk::{degrees, neighbors, text, uuid_param, Direction};
+use super::graph_walk::{degrees, neighbors, text, uuid_param, Direction, EdgeMark};
 use super::node::{Node, NodeContext};
 use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{take_or_clone, PortDef, PortType, PortValue};
@@ -57,6 +57,8 @@ pub struct LinksConfig {
     pub max_links: usize,
     pub max_degree: usize,
     pub sources: usize,
+    /// Les arêtes devinées, non suivies (vide : toutes suivies).
+    pub edge_mark: EdgeMark,
 }
 
 /// Une arête d'un chemin, dans son vrai sens.
@@ -151,7 +153,7 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
         let mut voisins: HashMap<String, Vec<(String, Edge)>> = HashMap::new();
         for rel in &rels {
             for &direction in &both {
-                for (de, vers) in neighbors(catalog, rel, direction, &a_suivre).map_err(err)? {
+                for (de, vers) in neighbors(catalog, rel, direction, &cfg.edge_mark, &a_suivre).map_err(err)? {
                     let edge = match direction {
                         Direction::Outgoing => Edge { from: de.clone(), to: vers.clone(), relation: rel.name.clone() },
                         Direction::Incoming => Edge { from: vers.clone(), to: de.clone(), relation: rel.name.clone() },
@@ -499,6 +501,7 @@ impl NodeFactory for LinksNodeFactory {
             max_links: entier("max_links", 5).clamp(1, 50) as usize,
             max_degree: entier("max_degree", 50).max(1) as usize,
             sources: entier("sources", 10).clamp(2, MAX_SOURCES as u64) as usize,
+            edge_mark: EdgeMark::from_config(config, "LinksNode")?,
         };
         // Des identifiants seulement : ils entrent dans le texte des requêtes.
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
@@ -546,6 +549,8 @@ impl NodeFactory for LinksNodeFactory {
                 p("max_links", Int, false, Some(serde_json::json!(5)), "Liens rendus au plus"),
                 p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté n'est ni traversé ni point de rencontre"),
                 p("sources", Int, false, Some(serde_json::json!(10)), "Résultats pris comme départs, dans l'ordre (2 à 20)"),
+                p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
+                p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée, non suivie (ex. nom), séparées par |"),
                 format,
             ],
         }
@@ -660,6 +665,7 @@ impl NodeFactory for CohesionNodeFactory {
             max_links: usize::MAX,
             max_degree: entier("max_degree", 50).max(1) as usize,
             sources: entier("sources", 40).clamp(2, 200) as usize,
+            edge_mark: EdgeMark::default(),
         };
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
         if let Some(x) = std::iter::once(&cfg.entity).chain(&cfg.relations).find(|x| !ident(x)) {
@@ -744,6 +750,7 @@ impl Node for CohesionBoostNode {
                 max_links: usize::MAX,
                 max_degree: c.max_degree.max(1),
                 sources: c.candidates.clamp(2, 200),
+                edge_mark: EdgeMark::default(),
             };
             let ident = |x: &str| !x.is_empty() && x.chars().all(|ch| ch.is_alphanumeric() || ch == '_');
             if !std::iter::once(&cfg.entity).chain(&cfg.relations).all(|x| ident(x)) {

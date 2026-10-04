@@ -17,3 +17,9 @@ graph LR
 %% méthode du trait du même nom (`PARENT_OF`) ; ce qui l'appelle peut
 %% atteindre la méthode modifiée par un `dyn Trait`. Le nœud est générique :
 %% il ne sait rien de ces relations.
+%% Les arêtes devinées (`resolution = nom`) restent suivies ici : le banc des
+%% relations (4 octobre 2026) perd du rappel sans elles — un appel de méthode
+%% sur une variable sans type lu, un appel dans les arguments d'une macro
+%% sont de vrais usages que rien ne confirme. Un test manqué coûte plus
+%% qu'un dépendant en trop. Pour les taire : `edge_field=resolution,
+%% edge_guessed=nom`.

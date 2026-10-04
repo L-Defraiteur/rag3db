@@ -56,6 +56,7 @@ fn code_config() -> NeighborhoodConfig {
             kind_field: "scope_type".into(),
             path_fields: vec!["repo_path".into(), "file_path".into()],
             line_field: "start_line".into(),
+            edge_mark: Default::default(),
         },
         relations,
         direction: Direction::Incoming,
