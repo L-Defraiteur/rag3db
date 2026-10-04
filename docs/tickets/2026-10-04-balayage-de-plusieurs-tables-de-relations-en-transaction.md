@@ -1,6 +1,6 @@
 # Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(stockage): le balayage de plusieurs tables de relations ne relit plus les relations locales de la table précédente »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié

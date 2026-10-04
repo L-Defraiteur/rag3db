@@ -43,7 +43,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [L'étiquette d'une variable liée plus tôt sans étiquette est ignorée](2026-10-04-etiquette-d-une-variable-deja-liee-ignoree.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [MERGE d'une clé répétée rend une autre valeur que celle stockée](2026-10-04-merge-d-une-cle-repetee-rend-un-autre-noeud.md) | corrigé | réponse fausse | oui | oui, par `batch_link` |
-| [Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table](2026-10-04-balayage-de-plusieurs-tables-de-relations-en-transaction.md) | ouvert | réponse fausse | oui | non vérifié |
+| [Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table](2026-10-04-balayage-de-plusieurs-tables-de-relations-en-transaction.md) | corrigé | réponse fausse | oui | non vérifié |
 | [Deux COPY annulés dans une transaction laissent les clés du premier dans l'index](2026-10-04-cles-fantomes-apres-deux-copy-annules.md) | corrigé | blocage | non par défaut (oui avec la transaction par paquet) | oui (transaction par paquet) |
 | [Un NULL en tête d'une liste de paramètres type sa colonne en STRING](2026-10-04-null-en-tete-d-une-liste-de-parametres-type-string.md) | ouvert (contourné dans rag3weaver) | perte | oui | oui, par `LinkRecordNode` |
 | [COPY : un champ CSV vide entre guillemets devient NULL](2026-10-04-csv-champ-vide-entre-guillemets-devient-null.md) | corrigé | réponse fausse | oui | non vérifié |

@@ -32,6 +32,9 @@ void RelTableScanState::setToTable(const Transaction* transaction, Table* table_
     RelDataDirection direction_) {
     TableScanState::setToTable(transaction, table_, std::move(columnIDs_),
         std::move(columnPredicateSets_));
+    // L'état est partagé entre les tables d'un même balayage (ScanMultiRelTable) : sans cette
+    // remise à zéro, une table sans relations locales relisait celles de la table précédente.
+    localTableScanState.reset();
     columns.resize(columnIDs.size());
     direction = direction_;
     for (size_t i = 0; i < columnIDs.size(); ++i) {

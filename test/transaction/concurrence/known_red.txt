@@ -175,7 +175,6 @@ UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-he
 #   batch_link de rag3weaver : le SET d'une relation répétée dans le lot est perdu) ; balayage de
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
-UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 #
 # Les statistiques des tables (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite.md) : un COPY
