@@ -298,8 +298,29 @@ Points en débat :
   telles quelles quand elles existent, le fork ne rédige que ce qui manque ;
 - un essai abandonné disparaît du diff fondu : le résumé doit le dire en une
   ligne ;
-- ce résumé est-il seulement de la session, ou devient-il une fiche durable
-  liée au fichier (`path:…`) à la fin de la session ?
+
+**Retenu par Lucie** : le résumé **devient une fiche durable** liée au
+fichier (`path:…`) à la fin de la session. Et : « un agent peut marquer une
+fiche *done* pour obtenir juste un résumé de la fiche dans ses prochains
+contextes, sans avoir besoin d'attendre la fin de session. »
+
+Donc la fiche de contexte d'un fichier a des états :
+
+| État | Ce que l'agent voit | Comment on y entre |
+|---|---|---|
+| ouverte | les plages lues au contenu du jour, les commits un par un | une lecture ou une édition |
+| terminée (*done*) | le résumé seul, et les relations | l'agent la marque ; ou la fin de session |
+| à revoir | le résumé, avec la mention de ce qui a changé | le fichier change après coup, par un autre |
+
+- *done* est le geste « fermer » du curseur (§2) : l'ouverture est la
+  lecture, la fermeture est *done*. Deux gestes suffisent.
+- Marquer *done* lance le même fork de l'archiviste que le débordement ; tant
+  que le résumé n'est pas prêt, la fiche reste entière.
+- Relire ou éditer le fichier rouvre la fiche ; le résumé reste en tête.
+- Le harnais peut suggérer (« fiche non touchée depuis 15 tours ») ; il ne
+  ferme de lui-même qu'au débordement, et le dit.
+- C'est une machine à états comme celles des gabarits de mémoire : la fiche
+  de contexte de fichier peut être un gabarit, pas du code à part.
 
 ## 8. Ce qui attend un choix de Lucie
 
