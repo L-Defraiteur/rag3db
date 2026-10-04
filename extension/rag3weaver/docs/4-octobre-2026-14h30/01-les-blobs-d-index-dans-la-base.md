@@ -180,3 +180,25 @@ avec une pression d'entrée-sortie de 10,7 % et des compilations qui
 démarraient entre deux passes ; les deux autres, poste calme, font 95 s. Le
 disque occupé est plausible, pas prouvé. **Le chiffre de 97 s rendu plus tôt
 était une passe unique ; la médiane est 95 s.**
+
+## Le mode complet (étape B) contre la base, et le rebâti (4 octobre, 23 h 31 au 5, 0 h 05)
+
+Moteur rebâti à 23 h 23 (`25b3b45dc`), master `8157547bd`, mêmes réglages,
+chaque passe seule sous `poste mesure`, alternées.
+
+| | Passes | **Médiane** | Pic | Réouverture jusqu'à la recherche |
+|---|---|---|---|---|
+| blobs en base | 127 · 120 · 117 s | **120 s** | 14,7–14,8 Go | 1,3–3,5 s |
+| fichiers, étapes A et B | 105 · 107 · 107 s | **107 s** | 8,7–8,9 Go | 0,3 s |
+
+Avec la marque de génération, le mode fichiers reste devant (−13 s en
+médiane) et sa dispersion est faible. La charge avant chaque passe est
+relevée (`serie-alternee-2.out`) : des compilations d'autres sessions
+tournaient entre les passes, pas pendant.
+
+**Le rebâti à l'ouverture** (dossier retiré, base de 6 900 fichiers) :
+**95 s** pour l'entité `Scope`, et la première recherche n'a répondu qu'à
+95,5 s — elle a attendu tout le rebâti. C'est la durée pendant laquelle
+la recherche par mots devra dire « mots : en cours » au lieu d'attendre :
+le lot suivant (rebâti en fond au premier écrivain, état calculé à la
+lecture, la recherche répond sur l'index partiel en le disant).
