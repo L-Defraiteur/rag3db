@@ -76,6 +76,9 @@ l'agent.
 > - **Le pic arrive au chargement final des relations** (+4,4 Go en
 >   quelques secondes) dans le témoin, et pendant le dernier paquet avec les
 >   fusions bornées.
+> - **8 Gio de tampon passent** (384 s, pic 13,5 Go, la même mémoire que
+>   le témoin) ; **4 Gio avec un seuil de 64 Mio échouent plus tôt** qu'avec
+>   512 Mio : ce n'est pas le journal qui remplit le tampon. Détail au ticket.
 > - Les passes de 13 h 05 à 13 h 40 sont jetées : d'autres sessions
 >   compilaient et testaient pendant elles.
 

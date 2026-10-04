@@ -49,6 +49,28 @@ dans l'état « à rouvrir » sont gardées sous
 `~/.cache/rag3weaver-build/base-echouee-mem-tampon4g` et
 `base-echouee-mem-les-deux`.
 
+**8 Gio passent ; abaisser le seuil ne sauve pas 4 Gio** (4 octobre,
+14 h 20, sous le verrou exclusif) :
+
+| Tampon | Seuil du point de reprise | Résultat |
+|---|---|---|
+| 8 Gio | 512 Mio | passe, 384 s, pic 13,5 Go |
+| 4 Gio | 512 Mio | échoue vers 4 500 fichiers |
+| 4 Gio | 64 Mio | échoue **plus tôt**, entre 3 072 et 4 096 fichiers |
+| 2 Gio | 16 Mio | échoue vers 2 500 fichiers |
+
+- **Ce n'est pas le journal accumulé** : avec un seuil huit fois plus bas, la
+  passe meurt plus tôt, pas plus tard. Ce qui remplit le tampon, ce sont des
+  pages que le moteur ne rend pas — à isoler en Cypher brut avant d'accuser
+  le moteur.
+- **Ce n'est pas la taille de l'instruction** : à 4 Gio, l'instruction qui
+  meurt est le COPY de 512 arêtes de `File_CHUNKED_FROM`, la file des liens
+  étant vide ; à 2 Gio, c'est une poussée des blobs du plein texte. Les deux
+  morts suivent de près une poussée du plein texte (piste de la session de
+  l'arbre principal : les blobs lucivy rangés dans la base).
+- **L'échec ne laisse aucun dégât durable** (session mémoire, deux bases
+  rouvertes) : la réouverture rejoue le journal, lignes et index sont là.
+
 ## Le témoin
 
 `extension/rag3weaver/tests/e2e_estimate.rs`,
