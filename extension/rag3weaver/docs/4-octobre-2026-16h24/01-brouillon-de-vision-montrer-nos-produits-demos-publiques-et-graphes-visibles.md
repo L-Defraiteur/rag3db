@@ -247,3 +247,61 @@ Deux façons de bâtir le front, la déclaration des vues étant la même :
 Premier pas possible : une seule vue, l'arbre des « Liens », servie en page
 par rag3weaver. Ce n'est pas un cadre web général (routage, empaquetage,
 hydratation) : ce n'est pas là qu'est notre valeur.
+
+## 9. Les secrets et les intégrations (brouillon, notre conception)
+
+L'idée de Lucie :
+
+> « Tu parles à un agent, tu lui remplis des variables dont il ne voit que le
+> nom, et il les pose dans le registre sans jamais pouvoir les lire. »
+
+### Le registre des secrets
+
+- **L'agent connaît des noms, jamais des valeurs.** Il peut demander qu'une
+  variable existe (« j'ai besoin de `STRIPE_KEY` »), savoir si elle est
+  posée, la référencer dans un graphe. Il ne peut pas la lire.
+- **La valeur ne passe pas par la conversation.** La personne la saisit dans
+  un champ à part de l'interface ; l'agent ne reçoit que « posée ». Une
+  valeur tapée dans le fil entrerait dans le contexte et dans le journal.
+- **Un seul exécuteur détient les secrets.** Le harnais résout la référence à
+  l'exécution du nœud, juste avant l'appel ; la valeur n'est ni dans le
+  contexte, ni dans le journal, ni dans un résultat d'outil, ni dans une
+  fiche.
+- **Un secret est lié à sa destination.** Ne pas pouvoir le lire ne suffit
+  pas : il ne doit pas pouvoir sortir. Chaque secret déclare où il a le droit
+  d'aller (ce domaine, cette méthode d'authentification) ; un nœud qui
+  l'enverrait ailleurs est refusé, à la déclaration et à l'exécution.
+- **Ce qui revient au modèle est filtré.** La réponse d'un appel peut porter
+  un jeton (une session, un rafraîchissement) : ce que le graphe en garde
+  pour lui se déclare, et ne revient pas dans le contexte.
+- **Stockage** : chiffré, des clés séparées par genre de secret, une portée
+  dite (la personne, le projet, l'organisation). L'interface ne montre que
+  « configuré » ou non.
+
+### Les intégrations
+
+- **Une intégration est déclarée, pas codée** : un manifeste dit ses méthodes
+  d'authentification, ses actions (des contrôleurs ou des nœuds), ce qu'elle
+  demande à la personne. C'est la règle de généricité appliquée aux services
+  extérieurs.
+- **Des méthodes d'authentification nommées**, fournies par le moteur et
+  référencées par nom : clé d'API, jeton porteur, OAuth2, OpenID avec
+  vérification de la signature, webhook signé. Jamais un graphe écrit par
+  l'auteur du backend (§ précédent : l'authentification est fournie).
+- **OAuth qui tient la concurrence** : rafraîchissement au moment de l'appel,
+  cache, un seul rafraîchissement à la fois.
+- **Les webhooks entrants sont signés et horodatés dès la première version**,
+  avec une fenêtre contre le rejeu et une clé d'idempotence ; un webhook est
+  une entrée de contrôleur comme une autre.
+- **Les appels sortants** passent par une garde d'adresse (pas d'adresse
+  interne, pas de redirection hors de la destination déclarée), des délais
+  bornés, et un journal sans secrets.
+
+### Ce qui reste à débattre
+
+- la portée d'un secret quand plusieurs agents travaillent sur le même
+  projet ;
+- qui peut déclarer une intégration nouvelle : la personne seulement, ou un
+  agent avec confirmation (comme pour un gabarit de mémoire) ;
+- ce qu'on montre à la démo publique : aucune intégration à secrets pour un
+  visiteur, ou seulement des intégrations fournies par nous.
