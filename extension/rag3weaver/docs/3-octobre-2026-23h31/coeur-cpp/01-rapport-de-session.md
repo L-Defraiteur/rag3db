@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 23 h 50, après la panne de mémoire de 22 h 51.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 1 h 30.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -33,29 +33,48 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Chargement journalisé, étape 3 (les relations) | `1cfba2d6a` | derrière le même réglage, un `COPY` de relations écrit ses relations au journal (par le partitionneur, sous le verrou qui réserve leurs identités) ; un chargement entier est durable par le journal seul. Le témoin ne prouve pas l'ordre entre plusieurs fils |
 | Sonde des deux sens | `168a63901` | une relation introuvable dans l'un de ses deux rangements fait refuser sa mise à jour ou sa suppression (`RelTable::REL_NOT_FOUND_IN_ONE_DIRECTION`) ; sans test, la condition ne se fabrique pas par l'interface |
 | Chaînes permutées au point de reprise | `25b3b45dc` | défaut d'origine, résultat faux écrit sur disque : la relecture partielle d'un segment de chaînes échangeait les chaînes des lignes d'une région (propriétés `STRING`, `BLOB`, `STRUCT` à chaîne des relations ; listes de chaînes des relations **et des nœuds**). Garde `DICTIONARY_INDEX_OUT_OF_RANGE`. Ne répare pas : une base écrite avant se réindexe ; `tools/check_rel_directions` dit si des relations sont atteintes |
+| Un `COPY` après des insertions de la même transaction | `f1d8c7190` | le `COPY` verse d'abord dans la table les lignes locales de sa transaction (`LocalStorage::flushNodeTable` : le commit d'une table, appelé plus tôt) ; le refus nommé du 4 octobre disparaît ; les quatre tests Cypher d'origine reprennent leur forme. Non prouvé sous plusieurs écrivains |
+| L'annulation prévient les index | `e1049934e` | après un `COPY` annulé sur une table à index vectoriel, l'index ne se croit plus en avance (la recherche échouait, puis le `COPY` suivant n'était pas relié, en silence) ; crochet `Index::rollbackInsert` ; refus « is behind its table » si le compte dépasse quand même la table. Le refus n'a pas de témoin (le banc l'écrit par les internes) |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
 
-**Après le correctif des chaînes (4 octobre, 23 h 50).** Tout est poussé, l'arbre
-`rag3db-moteur` est propre, sur la branche locale `chaines-relecture-partielle` (égale à
-`master`). La suite, dans l'ordre de l'orchestration : le vrai correctif du `COPY` après des
-insertions (verser les lignes locales au début du `COPY`, ce qui retire le refus et rend leur
-forme aux quatre tests Cypher) ; l'étape 4 du chargement journalisé avec le banc ; la forme
-compacte des vecteurs au journal ; l'étape 5 ; puis le câblage des verrous.
+**Où j'en suis (5 octobre, 1 h 30).** Tout est poussé, l'arbre `rag3db-moteur` est propre, sur
+la branche locale `copy-apres-insertions` (égale à `master`, `e1049934e`). La suite, dans l'ordre
+de l'orchestration : l'étape 4 du chargement journalisé avec le banc (prévenir l'orchestration
+avant de retirer le remède 2a) ; la forme compacte des vecteurs au journal ; l'étape 5 ; puis
+le câblage des verrous.
 
-Ce qui reste ouvert de ce lot :
-- les listes de chaînes du carnet (`Note.labels`, `Snapshot.labels`) sont sur des nœuds et
-  n'ont pas d'autre source que la base : le contrôle ne les voit pas, rien ne les rebâtit.
-  À dire à Lucie ; l'étendue côté produit est au ticket ;
-- Vela n'a pas été regardé pour ce défaut ; Kuzu le porte tel quel, Ladybug l'a corrigé ;
-- `expectSameRows` (la comparaison bornée du test) n'a jamais été vue en rouge ;
-- la passe ASan date d'avant la garde d'indice ;
-- un rouge isolé, vu une fois dans une liste et jamais revu :
-  `transaction~ddl~ddl_tinysnb.AddInt64PropertyWithoutDefaultRollbackRecovery`, « Cannot open
-  file …db.kz.shadow » au premier `COPY` du `SetUp`. Pas de recette, pas de ticket.
+**Ce qui est ouvert et peut passer devant** : la session de l'arbre principal a un plantage à
+la reprise de rag3weaver après un paquet défait (`SIGSEGV` dans
+`OnDiskHNSWIndex::shrinkForNode`, sous un `SET` de vecteur, après une réouverture avec un
+journal de 82 Ko). Ce n'est peut-être pas le défaut corrigé par `e1049934e` : sur une copie de
+sa base, un `SET` de vecteur par table passe sans que le filet parle. Ma forme soupçonnée (un
+`COPY` journalisé dans une table déjà indexée, mort base ouverte, rejeu, `SET` de vecteurs) ne
+plante pas : test gardé en annexe (`annexes/vector_index_journaled_copy_test.cpp`), non mis au
+dépôt parce qu'un de ses deux cas perd 4 lignes sur 128 en tête après un `SET` de toutes les
+lignes (famille « lignes joignables après une mise à jour », non vérifié que ce soit seulement
+cela). Elle rejoue sa sonde (`extension/rag3weaver/tests/sonde_vecteurs_apres_rollback.rs`)
+sur `e1049934e` ; si la reprise plante encore, c'est un second défaut et sa sonde en est le
+témoin. Sa base gardée : `~/.cache/rag3weaver-build/sonde-vecteurs/rollback-1483509-…`.
+
+Ce qui reste ouvert des lots de la nuit :
+- le refus « is behind its table » du compte en avance n'a aucun témoin ;
+- mon essai jetable sur la base de l'arbre principal a planté à la fermeture (appel d'un
+  pointeur nul dans `NodeTable::serialize`, au point de reprise de `~Database`) — peut-être un
+  artefact de l'essai (deux `Database` dans le processus de test), non poursuivi ;
+- aucun témoin du chargement journalisé (étapes 2 et 3) ne porte d'index vectoriel : le trou
+  est dit, le banc y ajoute deux formes à sa famille `ExtensionIndexRecovery` ;
+- le compte de l'index est un entier simple lu et écrit sans verrou : pour la passe TSan de
+  l'extension, jamais faite ;
+- trois tickets ouverts par lecture, non exécutés ou sans effet avec un seul écrivain : `COPY`
+  de relations vers des nœuds locaux sans remappage (A3′), RTree de geo (confort), et le
+  remappage du versement sous plusieurs écrivains (dans le code) ;
+- du lot des chaînes : Vela non regardé ; `expectSameRows` jamais vue en rouge ; un rouge
+  isolé jamais revu (`transaction~ddl~ddl_tinysnb.AddInt64PropertyWithoutDefaultRollbackRecovery`,
+  « Cannot open file …db.kz.shadow »).
 
 **La panne de 22 h 51.** systemd-oomd a tué toutes les sessions. Cause établie : un
 `EXPECT_EQ` rouge de gtest entre deux textes de 400 000 lignes (un test neuf du banc, joué
@@ -238,6 +257,14 @@ par défaut, **lire, ne pas copier**.
 - Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
   joignables », plusieurs passes.
 - La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
+- Ne pas rebâtir l'extension vector pendant qu'une liste tourne : les suites la chargent à
+  l'exécution (`extension/vector/build/`), le rebâti la remplace sous elles. Écrire le code,
+  bâtir après.
+- Un test écrit pour une hypothèse se joue avant d'être annoncé comme témoin : mon filet « is
+  behind its table » était annoncé comme la réponse au plantage de l'arbre principal avant
+  d'avoir vu sa base, qui ne le déclenche pas.
+- Deux commits qui se partagent un fichier se découpent par un patch inverse des fichiers du
+  second, le premier commité, puis le patch réappliqué (`git apply -R`, jamais `git stash`).
 - **Jamais d'`EXPECT_EQ` entre deux grands textes à plusieurs lignes** : comparer par `==` et
   écrire un résumé borné (`expectSameRows` dans `rel_string_property_checkpoint_test.cpp`).
   Rouge, gtest réserve (lignes + 1)² cases.

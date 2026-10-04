@@ -207,6 +207,12 @@ c'est la première chose à vérifier.
   chaînes permutées au point de reprise (`25b3b45dc`), passés devant sur décision de
   l'orchestration. 6 rebâtis, 2 ASan dont un arrêté, 1 bâti d'ancêtre, 2 listes dont une tuée
   par la panne de mémoire, 1 banc après rebase.
+- **Avant l'étape 4** (5 octobre) : le vrai correctif du `COPY` après des insertions
+  (`f1d8c7190`, le refus de l'étape 2 disparaît) et l'annulation qui prévient les index
+  (`e1049934e`). Passes : 10 rebâtis, 2 ASan, 2 listes — contre 5, 2 et 2 prévus.
+- **Un trou des étapes 2 et 3, dit après coup** : aucun de leurs témoins ne porte d'index
+  vectoriel. Un essai (COPY journalisé dans une table indexée, mort, rejeu, `SET` de
+  vecteurs) ne plante pas ; le banc ajoute la forme à sa famille `ExtensionIndexRecovery`.
 
 ## 8. Les étapes, et l'estimation en passes
 

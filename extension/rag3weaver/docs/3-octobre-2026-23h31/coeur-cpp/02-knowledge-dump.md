@@ -98,7 +98,32 @@ ligne) :
   sous un même verrou (`journalOrderMtx`) : le rejeu réattribue les identités dans l'ordre
   du journal.
 
+- **Le stockage local d'une table de nœuds peut être versé en cours de transaction**
+  (`LocalStorage::flushNodeTable`, depuis `f1d8c7190`, au début d'un `COPY`) : c'est
+  `NodeTable::commit` appelé plus tôt. Après lui le stockage local est vide et ressert ; il
+  repart de la fin de la table à sa prochaine insertion (`restartAt`, dans
+  `getOrCreateLocalTable`), et tant qu'il est vide il ne désigne aucun décalage
+  (`getMinUncommittedNodeOffset` rend `INVALID_OFFSET`). `NodeGroupCollection::clear` remet
+  son compte à zéro — avant, le compte survivait au vidage, sans conséquence parce que rien ne
+  suivait le commit.
+- Rien n'est journalisé pour une ligne locale avant le commit — ou le versement. Les lignes
+  versées sont donc au journal AVANT celles du `COPY`, dans l'ordre des décalages.
+- Une transaction en erreur refuse tout jusqu'au `ROLLBACK` (T0) : on ne peut pas montrer ce
+  qu'elle « voit encore » après un `COPY` refusé.
+
 ## 2. L'index vectoriel (HNSW) et notre greffe
+
+- **Ce que l'index garde en mémoire, hors du graphe** : `HNSWStorageInfo` — le compte des
+  lignes reliées (`numCheckpointedNodes`) et deux points d'entrée. Un `COPY` avance le compte
+  à sa fin (`finalize`), une insertion ordinaire au commit (`commitInsert` le pose à
+  « décalage + 1 »). Les arêtes, elles, sont des relations écrites par la transaction dans
+  ses tables locales : l'annulation les défait seule. Depuis `e1049934e` l'annulation prévient
+  les index (`Index::rollbackInsert`) et l'index recule son compte ; avant, il restait en
+  avance. Sans point d'entrée, recherche et insertion repartent d'une ligne vivante
+  (`findLiveNode`).
+- La recherche a deux parts : le graphe, pour les lignes jusqu'au compte ; un balayage direct
+  pour les lignes au-delà (`searchFromUnCheckpointed`). Un compte en avance prive donc de
+  l'une et de l'autre les lignes qu'il couvre à tort.
 
 - L'insertion dans l'index se fait **au commit** (`needCommitInsert`,
   `NodeTable::commit` → `scanIndexColumns` → `OnDiskHNSWIndex::commitInsert`). La
