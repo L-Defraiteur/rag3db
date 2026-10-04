@@ -279,13 +279,21 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 # bibliothèque et de l'extension liées ; et un refus si elles sont plus
 # vieilles que le dernier commit des sources du moteur (le commit résiste à
 # un `touch`). `RAG3WEAVER_MOTEUR_ANCIEN=1` passe outre, en le disant.
+# **L'extension vector** : bâtie dans l'arbre principal, pas dans un worktree.
+# `RAG3DB_ROOT` désigne l'arbre où elle est, comme pour les tests ; sinon
+# l'arbre du script.
+EXTENSION_VECTOR="${RAG3DB_ROOT:-$ROOT}/extension/vector/build/libvector.rag3db_extension"
+
 verifier_le_moteur() {
-  local lib="$BUILD/src/librag3db.so" ext="$ROOT/extension/vector/build/libvector.rag3db_extension"
+  local lib="$BUILD/src/librag3db.so" ext="$EXTENSION_VECTOR"
   local sources_ct sources_de vieux=0 f ct
   sources_ct=$(git -C "$ROOT" log -1 --format=%ct -- src extension/vector/src 2>/dev/null)
   sources_de=$(git -C "$ROOT" log -1 --format='%h du %cd' --date=format:'%d/%m %H:%M' -- src extension/vector/src 2>/dev/null)
   for f in "$lib" "$ext"; do
-    [ -f "$f" ] || continue
+    if [ ! -f "$f" ]; then
+      echo "⚠ introuvable : $f — depuis un worktree, RAG3DB_ROOT désigne l'arbre où le moteur est bâti"
+      continue
+    fi
     ct=$(stat -c %Y "$f")
     echo "▸ moteur lié : $f — bâti le $(date -d "@$ct" '+%d/%m %H:%M'), il y a $(( ($(date +%s) - ct) / 60 )) min"
     if [ -n "$sources_ct" ] && [ "$ct" -lt "$sources_ct" ]; then
@@ -313,9 +321,13 @@ verifier_le_moteur
 # soir avaient la même, à l'octet).
 empreinte_du_moteur() {
   local f
-  for f in "$BUILD/src/librag3db.so" "$ROOT/extension/vector/build/libvector.rag3db_extension"; do
-    [ -f "$f" ] && cksum "$f"
+  for f in "$BUILD/src/librag3db.so" "$EXTENSION_VECTOR"; do
+    # Un `[ -f ] && …` en dernière ligne rendait 1 quand le fichier manquait,
+    # et `set -e` arrêtait le script sans un mot (4 octobre 2026, depuis un
+    # worktree). La fonction ne doit jamais échouer : elle relève ce qui est.
+    if [ -f "$f" ]; then cksum "$f"; else echo "absent $f"; fi
   done
+  return 0
 }
 MOTEUR_AU_DEBUT="$(empreinte_du_moteur)"
 moteur_inchange() {
