@@ -60,7 +60,29 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (4 octobre 14h30 — le titre indexé répare tout, sur master)
+## En cours (4 octobre 16h — l'essai de la note d'utilité est rendu : négatif net)
+
+- **score() est né et l'essai 3 est joué (61e0ad13b)** :
+  score(decider, question, grille, temperature) = Σ pᵢ·i au-dessus de
+  decide, testé au MockDecider ; la section U du banc relit les dix
+  premiers de la fusion du produit par une grille d'utilité à quatre
+  niveaux (mes mots, rien de jevbox), écartés < 1,5, tri stable par
+  note, sous RAG3WEAVER_BANC_UTILITE.
+- **Le verdict est NÉGATIF et net** (JevK5-4B, extraits 1 200 car.) :
+  phrases 0,419 → 0,226, identifiants 0,900 → 0,577, ~23 descentes pour
+  6 montées, des rangs 1 exacts descendus (merge_port_values 1→4) ;
+  530 appels, 2,28 s/requête. Un 4B note la familiarité du vocabulaire,
+  pas la définition ; notre fusion (titre+dense) juge mieux. Rien
+  d'allumé au produit. Variantes possibles si Lucie veut payer :
+  relire SEULEMENT les fusions indécises (départage), extrait
+  signature+doc plutôt que corps brut.
+- **Piste non mesurée (décision du 4 oct.)** : les pondérations par
+  relations (DEFINES, genre/usages) — la cible a fondu avec le titre
+  indexé (identifiants à 1,000) ; Lucie rouvrira si elle veut.
+- **L'orchestration a changé d'adresse** : rag3db-76 [ccdb1b] remplace
+  rag3db-9f.
+
+## Ancien (4 octobre 14h30 — le titre indexé répare tout, sur master)
 
 - **« Avant d'éditer » est branchée (f8d231148)** : le gabarit
   impact_fichier de c0 au crochet after de read_file (budget 6 lignes) —
