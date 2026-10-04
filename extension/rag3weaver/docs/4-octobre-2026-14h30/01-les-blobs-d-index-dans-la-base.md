@@ -84,3 +84,60 @@ rebâti à l'ouverture si les deux divergent. Avant de décider, deux mesures :
 la sonde en cours (le tampon meurt-il des blobs ?) et une passe du dépôt
 entier en `LocalFs` (durée, mémoire, taille). Lucie, le 2 octobre : « on n'est
 pas obligé d'avoir tout dans un seul fichier ».
+
+## Temps 1 — le mode tel qu'il marche aujourd'hui (4 octobre, 18 h 30 à 19 h 05)
+
+Lucie a dit oui pour **un mode déclaré** (« concentrons-nous sur avoir un mode
+pour ne pas l'avoir en blob ») ; `BlobBacked` reste le défaut. Mesure du mode
+existant, `FtsStorage::LocalFs` (fichiers dans `<base>.fts/`), sans protocole
+de validation : dépôt rag3db entier, paquets de 512, base sur disque (btrfs,
+NVMe), transaction par paquet validée tous les 4 paquets, moteur bâti à
+18 h 03, chaque passe seule sous le verrou de mesure.
+
+| | Blobs dans la base | Fichiers à côté (8 Gio) | Fichiers à côté (4 Gio) |
+|---|---|---|---|
+| Durée du premier index | **116 s** | 159 s | 164 s |
+| `COMMIT` des paquets (et leur point de reprise) | 30,9 s | **6,1 s** | 8,5 s |
+| Vidages du plein texte (`flush_fts`) | 9,4 s | **83,8 s** | 90,1 s |
+| Pousser les blobs en base | 5,3 s | 0 | 0 |
+| Pic de mémoire résidente | 15,0 Go | **8,8 Go** | 8,7 Go |
+| Base sur disque | 2 985 Mo | 327 Mo | 327 Mo |
+| Dossier du plein texte | — | 687 Mo | 688 Mo |
+| Réouverture, première recherche rendue | 2,7 s | **0,4 s** | 0,3 s |
+| Passe avec 4 Gio de tampon | échoue (ticket) | — | **passe** |
+
+Comptes égaux (6 927 fichiers, 79 074 scopes, 255 857 relations ; la passe
+en base en a quelques dizaines de moins, le corpus bouge).
+
+**Ce que le mode règle déjà** : le point de reprise ne porte plus que les
+lignes (`COMMIT` 31 → 6 s : la table des blobs faisait 24 s sur 28 de ces
+points de reprise, selon le chronométrage du cœur C++) ; la mémoire tombe de
+moitié ; la base fait un tiers ; la réouverture est immédiate ; et **la passe
+tient dans 4 Gio de tampon**, là où le mode en base meurt.
+
+**Ce qui ne marche pas encore** :
+
+- **Les vidages du plein texte coûtent 84 s au lieu de 9.** Cause lue dans
+  lucivy : son répertoire sur disque (`MmapDirectory`) fait un `fsync` à la
+  fermeture de **chaque** fichier écrit (`SafeFileWriter::terminate_ref`,
+  `sync_data`). Lucivy le sait : son répertoire à blobs écrit son cache
+  « sans fsync », avec ce commentaire : un commit devient « des dizaines de
+  fsync (~65 ms chacun sur btrfs) ». C'est exactement ce que le protocole du
+  temps 2 doit remplacer : écrire les fichiers d'une génération sans
+  `fsync`, synchroniser une fois, puis valider la marque. Gain attendu
+  (estimé, non mesuré) : le gros des 84 s, soit une passe vers 80 à 90 s.
+- **Rien ne lie les fichiers aux lignes** : un arrêt brutal entre les deux
+  laisse un plein texte en avance ou en retard sur la base. C'est le temps 2.
+- Le dossier n'est pas nettoyé avec la base, ni rebâti s'il manque.
+
+**Faits pour lucivy** (trace des blobs, passe en base) : 60 vidages ;
+153 590 écritures de fichiers reçues par le tampon, 45 158 poussées après
+dédoublonnage ; **1 951 Mo poussés pour un index qui fait 687 Mo** une fois
+fini — l'index est réécrit environ 2,8 fois pendant le premier index (les
+fusions de segments et les générations successives).
+
+**Piste, non codée** : lucivy a déjà une politique de fusion réglable
+(`MergePolicy`, `NoMergePolicy`, `IndexWriter::set_merge_policy`,
+`merge(segment_ids)`), que rag3weaver n'utilise pas. Sans fusion pendant le
+premier index et une seule à la fin, les 1 951 Mo écrits tomberaient vers la
+taille de l'index (~700 Mo) plus une fusion finale — estimé, pas mesuré.

@@ -171,6 +171,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     eprintln!("[mémoire] {} Mo — les sources lues ({:.0} Mo de texte)", rss(), chars as f64 / 1e6);
 
     let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
+    let reopen_embedder = embedder.clone();
     let rate = probe_rate(embedder.as_ref(), &samples()).expect("sonde");
     // `RAG3WEAVER_ESTIMATE_DB_DIR` : la base sur disque, dans ce dossier (vidé
     // d'abord) — le cas réel d'un utilisateur. Sans elle : en mémoire.
@@ -240,6 +241,19 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     });
     let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
+    // `RAG3WEAVER_ESTIMATE_FTS=localfs` (base sur disque seulement) : le plein
+    // texte dans des fichiers à côté de la base, `<base>.fts/`, au lieu de
+    // blobs dans la base (`FtsStorage::LocalFs`, tel qu'il est aujourd'hui).
+    let fts_storage = || match (&db_dir, std::env::var("RAG3WEAVER_ESTIMATE_FTS").as_deref()) {
+        (Some(dir), Ok("localfs")) => Some(rag3weaver::fts_handle::FtsStorage::LocalFs {
+            base_path: dir.join("estimate.rag3db.fts").to_string_lossy().to_string(),
+        }),
+        _ => None,
+    };
+    if let Some(storage) = fts_storage() {
+        eprintln!("[mots] plein texte : {storage:?}");
+        catalog.set_fts_storage(storage);
+    }
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
 
@@ -345,7 +359,12 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
                 })
                 .unwrap_or(0)
         }
-        eprintln!("[mots] taille de la base sur disque : {:.0} Mo", size(dir) as f64 / 1e6);
+        let fts = dir.join("estimate.rag3db.fts");
+        eprintln!(
+            "[mots] taille de la base sur disque : {:.0} Mo (dont dossier du plein texte {:.0} Mo)",
+            size(dir) as f64 / 1e6,
+            size(&fts) as f64 / 1e6
+        );
     }
     for (reason, n) in &report.files_set_aside {
         eprintln!("[mots] {n} fichiers écartés : {reason}");
@@ -394,6 +413,41 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         let p = catalog.lock().unwrap().index_progress().unwrap();
         eprintln!("[vecteurs] {done} morceaux embarqués en {:.0} s (prévu : {predicted:?} s) — {}", t.elapsed().as_secs_f64(), p.line(rate, chars_per_chunk));
         assert_eq!(p.dense_missing(), 0, "{p:?}");
+    }
+
+    // **La réouverture** : un processus qui rouvre la base et cherche. En
+    // `BlobBacked`, l'index entier se recopie depuis la base ; en `LocalFs`,
+    // il se lit en place.
+    if let Some(dir) = &db_dir {
+        drop(catalog);
+        let t = Instant::now();
+        let conn = Rag3dbConnection::new(dir.join("estimate.rag3db")).expect("base rouverte");
+        let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+        boxed
+            .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
+            .expect("extension vector");
+        let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: reopen_embedder.dim(), ..Default::default() };
+        let mut reopened = Catalog::new(boxed, Box::new(reopen_embedder), config);
+        if let Some(storage) = fts_storage() {
+            reopened.set_fts_storage(storage);
+        }
+        reopened.initialize().unwrap();
+        register_code_schema(&mut reopened, default_scope_chunking()).unwrap();
+        let opened = t.elapsed();
+        let reopened = Arc::new(Mutex::new(reopened));
+        let found = Catalog::rechercher(&reopened, SCOPE, "embarquer_le_retard", SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche après réouverture");
+        eprintln!(
+            "[réouverture] base rouverte en {:.1} s, première recherche par mots rendue à {:.1} s : {} résultats",
+            opened.as_secs_f64(),
+            t.elapsed().as_secs_f64(),
+            found.results.len()
+        );
+        assert!(!found.results.is_empty(), "après réouverture, le dépôt reste cherchable par mots");
     }
 }
 
