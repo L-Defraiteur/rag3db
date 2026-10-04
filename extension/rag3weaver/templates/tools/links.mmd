@@ -5,7 +5,7 @@
 %% result: links.result
 
 graph LR
-    links["LinksNode(entity=Scope, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', labels='CONSUMES=CONSUMES/CONSUMED_BY|INHERITS_FROM=INHERITS_FROM/INHERITED_BY|IMPLEMENTS=IMPLEMENTS/IMPLEMENTED_BY', kind_field=scope_type, uuids=$result_uuids, title=name, path_fields='repo_path|file_path', line_field=start_line, max_hops=$max_hops, max_links=5, max_degree=50, sources=10)"]
+    links["LinksNode(entity=Scope, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', labels='CONSUMES=CONSUMES/CONSUMED_BY|INHERITS_FROM=INHERITS_FROM/INHERITED_BY|IMPLEMENTS=IMPLEMENTS/IMPLEMENTED_BY', kind_field=scope_type, uuids=$result_uuids, title=name, path_fields='repo_path|file_path', line_field=start_line, max_hops=$max_hops, max_links=5, max_degree=50, sources=10, edge_field=resolution, edge_guessed=nom)"]
 
 %% Le schéma de code (src/code.rs) : `CONSUMES` (appel, usage d'un type,
 %% import), `INHERITS_FROM`, `IMPLEMENTS`, entre `Scope`. Les deux sens sont
@@ -17,3 +17,6 @@ graph LR
 %%   "after": {"graph": "../../tools/links.mmd", "title": "Liens",
 %%             "max_lines": 14,
 %%             "results_port": {"node": "render", "port": "results"}}
+%% Les arêtes devinées (`resolution = nom` : le rendez-vous les a posées par
+%% le seul nom, sans type ni import qui confirme) ne sont pas suivies ; une
+%% arête sans marque (base d'avant la colonne) est suivie.

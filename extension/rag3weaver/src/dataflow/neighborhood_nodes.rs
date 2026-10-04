@@ -127,7 +127,7 @@ fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
 /// Un saut : depuis une liste d'uuid, par une relation, dans un sens.
 pub fn hop_query(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
     let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
-    format!("UNWIND $uuids AS u MATCH {} RETURN u, {c}, {ligne}", direction.pattern(rel), c = champs("m", cfg))
+    format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
 }
 
 fn texte(v: Option<&CypherValue>) -> String {
@@ -660,6 +660,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 if p.is_empty() { vec!["file_path".into()] } else { p }
             },
             line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
+            edge_mark: super::graph_walk::EdgeMark::from_config(config, "NeighborhoodNode")?,
         };
         let relations = liste(config.get("relations"));
         if relations.is_empty() {
@@ -781,6 +782,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("depth", Int, false, Some(serde_json::json!(2)), "Profondeur, 1 à 3"),
                 p("budget", Int, false, Some(serde_json::json!(200)), "Nœuds rendus au plus (plafond 2000)"),
                 p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté est montré, pas traversé"),
+                p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
+                p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
                 p("limit", Int, false, Some(serde_json::json!(30)), "Lignes par section"),
                 format,
             ],

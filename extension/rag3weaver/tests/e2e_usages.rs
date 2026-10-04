@@ -62,6 +62,7 @@ fn code_config() -> UsagesConfig {
         kind_field: "scope_type".into(),
         path_fields: vec!["repo_path".into(), "file_path".into()],
         line_field: "start_line".into(),
+        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
     }
 }
 
@@ -189,4 +190,111 @@ fn les_requetes_de_usages_passent_par_l_index() {
         assert!(!texte.is_empty(), "un plan lisible pour {q}");
         assert!(!texte.contains("CROSS_PRODUCT"), "produit cartésien dans le plan de {q} :\n{texte}");
     }
+}
+
+/// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
+/// dit pas comment elle a été résolue ») : `run` appelle `helper` sans
+/// import — le rendez-vous le relie par le seul nom ; `go` l'importe. Par
+/// les gabarits réels : `usages` garde les deux et dit « (par le nom) » pour
+/// `run` ; `impact` les remonte tous deux (un test manqué coûte plus qu'un
+/// dépendant en trop : banc des relations) ; les liens ne relient pas `run`
+/// et `go` par `helper`.
+#[test]
+#[ignore]
+fn une_arete_devinee_se_dit_et_ne_se_suit_pas() {
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        let fichiers = vec![
+            ("a.rs".to_string(), "pub fn helper() -> i32 {\n    1\n}\n".to_string()),
+            ("b.rs".to_string(), "pub fn run() -> i32 {\n    helper()\n}\n".to_string()),
+            ("c.rs".to_string(), "use crate::a::helper;\n\npub fn go() -> i32 {\n    helper()\n}\n".to_string()),
+        ];
+        cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+        let r = cat
+            .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope {name: 'helper'}) RETURN a.name, r.resolution ORDER BY a.name")
+            .unwrap();
+        let marques: Vec<(String, String)> =
+            r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+        // Le scope de fichier de c.rs consomme aussi `helper`, par son `use`.
+        assert_eq!(
+            marques,
+            vec![("file_scope_01".to_string(), "import".to_string()), ("go".to_string(), "import".to_string()), ("run".to_string(), "nom".to_string())],
+            "les marques posées"
+        );
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let outil = |gabarit: &str, args: serde_json::Value| {
+        let tool = GraphTool::from_mermaid(gabarit).unwrap().bind(&registry).unwrap();
+        tool.execute(&registry, services.clone(), &args).unwrap()
+    };
+
+    let usages = outil(include_str!("../templates/tools/usages.mmd"), serde_json::json!({"name": "helper"}));
+    eprintln!("{usages}");
+    let ligne = |nom: &str| usages.lines().find(|l| l.contains(&format!(" {nom} —"))).unwrap_or_else(|| panic!("{nom} absent : {usages}")).to_string();
+    assert!(ligne("run").ends_with("(par le nom)"), "{usages}");
+    assert!(!ligne("go").contains("par le nom"), "{usages}");
+
+    let impact = outil(include_str!("../templates/tools/impact.mmd"), serde_json::json!({"name": "helper"}));
+    eprintln!("{impact}");
+    assert!(impact.contains("go") && impact.contains("run"), "impact suit aussi l'arête devinée : {impact}");
+
+    let uuids: Vec<String> = {
+        let cat = catalog.lock().unwrap();
+        let r = cat.execute_raw("MATCH (s:Scope) WHERE s.name = 'run' OR s.name = 'go' RETURN s._uuid ORDER BY s.name").unwrap();
+        r.rows.iter().map(|x| x[0].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(uuids.len(), 2);
+    let liens = outil(include_str!("../templates/tools/links.mmd"), serde_json::json!({"result_uuids": uuids}));
+    eprintln!("[liens] {liens:?}");
+    assert!(!liens.contains("helper"), "run et go ne se relient que par une arête devinée : {liens}");
+}
+
+/// **Un appel par chemin vaut un import** (sans `use`) : `crate::a::`,
+/// `self::` et `super::` désignent un fichier, résolus depuis celui de
+/// l'appel ; un `super::` qui ne désigne pas le fichier du définisseur reste
+/// « nom ». Un type en qualificatif (`Outil::fabrique()`) ne départage pas à
+/// tort vers l'homonyme d'un autre type.
+#[test]
+#[ignore]
+fn un_appel_par_chemin_vaut_un_import() {
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let f = |p: &str, c: &str| (p.to_string(), c.to_string());
+    let fichiers = vec![
+        f("a.rs", "pub fn helper() -> i32 {\n    1\n}\n"),
+        f("b.rs", "pub fn par_crate() -> i32 {\n    crate::a::helper()\n}\n\npub fn par_super() -> i32 {\n    super::a::helper()\n}\n"),
+        f("sub/c.rs", "pub fn super_ailleurs() -> i32 {\n    super::zz::helper()\n}\n"),
+        f("outer.rs", "pub fn par_self() -> i32 {\n    self::inner::interne()\n}\n"),
+        f("outer/inner.rs", "pub fn interne() -> i32 {\n    2\n}\n"),
+        f("outil.rs", "pub struct Outil;\n\nimpl Outil {\n    pub fn fabrique() -> Outil {\n        Outil\n    }\n}\n"),
+        f("autre.rs", "pub struct Autre;\n\nimpl Autre {\n    pub fn fabrique() -> Autre {\n        Autre\n    }\n}\n"),
+        f("usine.rs", "use crate::outil::Outil;\n\npub fn usine() {\n    Outil::fabrique();\n}\n"),
+    ];
+    cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat
+        .execute_raw(
+            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = 'helper' OR b.name = 'interne' OR b.name = 'fabrique' \
+             RETURN a.name, b.file_path, r.resolution ORDER BY a.name, b.file_path",
+        )
+        .unwrap();
+    let aretes: Vec<(String, String, String)> = r
+        .rows
+        .iter()
+        .map(|x| (x[0].as_str().unwrap_or("").to_string(), fichier(x[1].as_str().unwrap_or("")), x[2].as_str().unwrap_or("").to_string()))
+        .collect();
+    eprintln!("{aretes:#?}");
+    let marque = |de: &str| aretes.iter().find(|(a, _, _)| a == de).map(|(_, f, m)| (f.clone(), m.clone()));
+    assert_eq!(marque("par_crate"), Some(("a.rs".into(), "import".into())), "crate::a désigne a.rs");
+    assert_eq!(marque("par_super"), Some(("a.rs".into(), "import".into())), "super::a depuis b.rs désigne a.rs");
+    assert_eq!(marque("super_ailleurs"), Some(("a.rs".into(), "nom".into())), "super::zz ne désigne pas a.rs : seul définisseur, par le nom");
+    assert_eq!(marque("par_self"), Some(("inner.rs".into(), "import".into())), "self::inner depuis outer.rs désigne outer/inner.rs");
+    assert!(
+        !aretes.iter().any(|(a, f, _)| a == "usine" && f == "autre.rs"),
+        "Outil::fabrique ne va jamais vers le fabrique d'Autre : {aretes:?}"
+    );
 }

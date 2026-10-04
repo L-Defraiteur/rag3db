@@ -62,6 +62,8 @@ pub struct UsagesConfig {
     pub kind_field: String,
     pub path_fields: Vec<String>,
     pub line_field: String,
+    /// Les arêtes devinées : `usages` les dit, le voisinage ne les suit pas.
+    pub edge_mark: super::graph_walk::EdgeMark,
 }
 
 /// Une définition, ou un usage.
@@ -85,6 +87,8 @@ pub struct Usage {
     pub relation: String,
     /// L'uuid de la définition visée ; `None` pour un usage non attribué.
     pub definition: Option<String>,
+    /// Trouvé par une arête devinée (`edge_guessed`) : peut-être.
+    pub guessed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -172,11 +176,12 @@ fn champs(alias: &str, cfg: &UsagesConfig) -> String {
 }
 
 fn proprietes(rel: &RelInfo, cfg: &UsagesConfig) -> String {
-    [&cfg.group_by, &cfg.usages_field, &cfg.line]
+    let mut c: Vec<String> = [&cfg.group_by, &cfg.usages_field, &cfg.line]
         .iter()
         .map(|p| if rel.props.iter().any(|x| x == *p) { format!("r.{p}") } else { "NULL".to_string() })
-        .collect::<Vec<_>>()
-        .join(", ")
+        .collect();
+    c.push(cfg.edge_mark.column(rel));
+    c.join(", ")
 }
 
 /// Les définitions d'un pivot : `MATCH (x:Pivot {_uuid: $u})<-[:DEF]-(d:T)`.
@@ -305,12 +310,14 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
             for r in &rows.rows {
                 let def = texte(r.first());
                 let mut user = item(r, 1, cfg);
-                let (usage, ensemble, site) = usage_props(r, 1 + 4 + cfg.path_fields.len());
+                let debut = 1 + 4 + cfg.path_fields.len();
+                let (usage, ensemble, site) = usage_props(r, debut);
                 if user.uuid == def {
                     continue;
                 }
                 user.line = site.or(user.line);
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def) });
+                let guessed = cfg.edge_mark.is_guessed(&texte(r.get(debut + 3)));
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed });
             }
         }
     }
@@ -335,7 +342,7 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
                 if usages.iter().any(|x| x.user.uuid == user.uuid && (x.definition == unique || unique.is_none())) {
                     continue;
                 }
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone() });
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: false });
             }
         }
     }
@@ -467,7 +474,8 @@ impl UsagesReport {
                 } else {
                     String::new()
                 };
-                out.push_str(&format!("- {} {} — {}{cible}\n", u.user.kind, u.user.title, lieu(&u.user)));
+                let devine = if u.guessed { " (par le nom)" } else { "" };
+                out.push_str(&format!("- {} {} — {}{cible}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
             }
             if v.len() > limit {
                 out.push_str(&format!("… {} de plus\n", v.len() - limit));
@@ -577,6 +585,7 @@ impl NodeFactory for UsagesNodeFactory {
                 if p.is_empty() { vec!["file_path".into()] } else { p }
             },
             line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
+            edge_mark: super::graph_walk::EdgeMark::from_config(config, "UsagesNode")?,
         };
         // Des identifiants seulement : ils entrent dans le texte des requêtes.
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
@@ -663,6 +672,8 @@ impl NodeFactory for UsagesNodeFactory {
                 p("path", S, false, Some(serde_json::json!("")), "Ne montrer que les définitions sous ce chemin"),
                 usage,
                 p("limit", Int, false, Some(serde_json::json!(20)), "Usages rendus par genre (plafond 200) ; tous sont comptés"),
+                p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
+                p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
                 format,
             ],
         }

@@ -8,7 +8,7 @@
 %% result: usages.result
 
 graph LR
-    usages["UsagesNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, declared_in=HAS_PARENT, declarations_field=declarations, name=$name, path=$path, usage=$usage, limit=$limit)"]
+    usages["UsagesNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, declared_in=HAS_PARENT, declarations_field=declarations, name=$name, path=$path, usage=$usage, limit=$limit, edge_field=resolution, edge_guessed=nom)"]
 
 %% Le schéma de code (src/code.rs) : `Symbol` est le rendez-vous des noms,
 %% `DEFINES` le relie à ses définitions, `MENTIONS` à ce qui le nomme d'un
@@ -22,3 +22,5 @@ graph LR
 %% foo.cpp:3 — déclaré foo.h:5 (dans Foo) », et une déclaration sans
 %% définition indexée (virtuelle pure) se montre seule. Sans ce champ au
 %% schéma, rien ne change.
+%% Un usage trouvé par une arête devinée (`resolution = nom` : posée par le
+%% seul nom) est gardé, et dit « (par le nom) ».
