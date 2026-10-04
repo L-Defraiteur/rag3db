@@ -38,8 +38,12 @@ def prepare(tmp, manifest_name, patch=None):
     shutil.copytree(CRATE / "templates/tools", Path(tmp) / "tools", dirs_exist_ok=True)
     ws = d / "workspace"
     ws.mkdir()
-    (ws / "main.rs").write_text("fn main() { depart(); }\n")
+    (ws / "main.rs").write_text("fn main() { depart(); outil_commun(); }\n")
     (ws / "lib.rs").write_text("pub fn depart() {}\n")
+    # util.rs : une dépendance qui SURVIT aux éditions du scénario (main.rs
+    # perd depart() en route) — c'est elle que le crochet « avant d'éditer »
+    # doit voir quand on lit util.rs, index prêt.
+    (ws / "util.rs").write_text("pub fn outil_commun() {}\n")
     manifest = json.loads((d / manifest_name).read_text())
     manifest["vector_extension"] = os.environ.get(
         "RAG3DB_VECTOR_EXTENSION",
@@ -142,9 +146,12 @@ def main():
         assert "main.rs" in t, f"le balayage trouve le mot exact : {r}"
         assert "balayage" in t, f"la ligne d'état avoue le balayage : {r}"
 
-        # read lit le workspace.
+        # read lit le workspace. Son crochet « avant d'éditer » se TAIT ici :
+        # sans index, l'impact rend l'état de la porte (un blockquote), et
+        # un état n'est pas un contenu de section.
         r = host.ask(op="call", name="read_file", arguments={"path": "main.rs"})
         assert "depart()" in json.dumps(r), r
+        assert "Avant d'éditer" not in json.dumps(r, ensure_ascii=False), f"le crochet se tait sans index : {r}"
         # read hors du workspace : chemin refusé.
         r = host.ask(op="call", name="read_file", arguments={"path": "../backend.json"})
         assert not r.get("ok", True) or ".." in json.dumps(r), f"le chemin hors workspace se refuse : {r}"
@@ -193,6 +200,24 @@ def main():
         t = json.dumps(r, ensure_ascii=False)
         assert "main.rs" in t, f"la recherche répond après l'indexation : {r}"
         assert "balayage" not in t, f"l'index prêt répond sans ligne de balayage : {r}"
+        # ── Le crochet « avant d'éditer » sur read_file, index prêt ─────────
+        # lib.rs définit depart, que main.rs consomme : lire lib.rs doit
+        # rendre la section d'impact, et sa latence se dit (c0 : 82-148 ms
+        # par fichier sur l'index de src/ — ici un micro-corpus).
+        import time as _t
+        t0 = _t.monotonic()
+        r = host.ask(op="call", name="read_file", arguments={"path": "util.rs"})
+        latence_ms = ( _t.monotonic() - t0) * 1000.0
+        t = json.dumps(r, ensure_ascii=False)
+        assert "Avant d'éditer" in t, f"la section d'impact après read_file : {r}"
+        # Le résumé compte les dépendants (il ne nomme que les tests) :
+        # main.rs consomme outil_commun, donc « 1 directement ».
+        assert "1 directement" in t.split("Avant d'éditer", 1)[1], f"un dépendant direct compté : {r}"
+        # Et un fichier dont rien ne dépend garde un read_file SANS section :
+        # « rien quand rien n'en dépend ».
+        r = host.ask(op="call", name="read_file", arguments={"path": "lib.rs"})
+        assert "Avant d'éditer" not in json.dumps(r, ensure_ascii=False), f"pas de section sans dépendant : {r}"
+        print(f"[avant-d-editer] read_file+impact : {latence_ms:.0f} ms (micro-corpus)")
         # Après l'index (vecteurs prêts), une édition sur CE micro-corpus
         # reste silencieuse : le seuil est calibré au banc M à 0,97
         # (presque-identique — les vrais clones inter-fichiers), et ici le

@@ -30,6 +30,11 @@
       "description": "Lire un fichier du workspace par son chemin relatif, avec numéros de lignes. À prendre après search ou grep, pour voir le contexte exact avant d'éditer.",
       "policy": {
         "read_files": true
+      },
+      "after": {
+        "graph": "../../tools/impact_fichier.mmd",
+        "title": "Avant d'éditer — ce qui dépend de ce fichier",
+        "max_lines": 6
       }
     },
     "grep_files": {

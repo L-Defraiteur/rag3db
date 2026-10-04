@@ -1533,6 +1533,18 @@ impl Backend {
                     eprintln!("[crochet {tool_name}] tu — rien à dire");
                     return;
                 }
+                // Un état de la porte read_catalog n'est pas un contenu :
+                // une section d'appoint le tait — l'outil principal porte
+                // déjà sa ligne d'état. Trois formes : le partiel (une ligne
+                // en blockquote devant le résultat), l'occupé et le
+                // jamais-indexé (leurs constantes).
+                if texte.starts_with("> ")
+                    || texte.starts_with(crate::dataflow::catalog_read::BUSY)
+                    || texte.starts_with(crate::dataflow::catalog_read::NEVER_INDEXED)
+                {
+                    eprintln!("[crochet {tool_name}] tu — un état, pas un contenu");
+                    return;
+                }
                 let lignes: Vec<&str> = texte.lines().collect();
                 let coupees = lignes.len().saturating_sub(hook.max_lines);
                 let mut section = lignes
