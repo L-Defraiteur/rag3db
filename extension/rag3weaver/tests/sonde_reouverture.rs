@@ -124,6 +124,11 @@ fn que_donne_la_reouverture() {
     // montage **écrit** : étapes 2 à 4 d'`initialize` reposent les DDL, et la
     // sonde d'index détaché rebâtit ce qu'elle trouve en retard. C'est bien ce
     // qu'on veut savoir — mais c'est pourquoi on travaille sur une copie.
+    // La première connexion est lâchée avant le montage : deux instances en
+    // écriture du même fichier dans un processus s'écrivaient l'une sur
+    // l'autre (la corruption d'e2e_code, 4 octobre 2026), et le moteur
+    // refuse désormais la seconde.
+    drop(boxed);
     let montage = std::panic::catch_unwind(|| {
         let conn = Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);

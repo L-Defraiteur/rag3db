@@ -153,8 +153,8 @@ fn role_enfant() {
     }
     if role == "echoueur" {
         // Le chemin du ROLLBACK : le paquet échoue, la base est empoisonnée,
-        // puis lâchée (sa fermeture fait un point de reprise), rouverte dans
-        // ce même processus, et l'index repris.
+        // puis lâchée (sa fermeture fait un point de reprise après
+        // l'annulation). La reprise se prouve dans un processus neuf.
         let options = SourceSyncOptions {
             batch_files: 32,
             relations: Some(RelationsMode::Bulk),
@@ -167,9 +167,10 @@ fn role_enfant() {
         println!("ECHEC {erreur}");
         assert!(catalog.must_reopen().is_some(), "le catalogue est empoisonné après le ROLLBACK : {erreur}");
         drop(catalog);
-        catalog = catalogue(&base);
+        println!("FERME");
+        return;
     }
-    synchroniser(&mut catalog, role == "repreneur" || role == "echoueur");
+    synchroniser(&mut catalog, role == "repreneur");
     // L'écrivain n'arrive jamais ici : le crochet le tue au paquet tué.
     println!("COMPTES {role} {}", serde_json::to_string(&comptes(&catalog)).unwrap());
 }
@@ -339,17 +340,20 @@ fn un_arret_au_milieu_d_un_groupe_de_quatre_paquets_se_reprend_aux_memes_comptes
 
 /// **Le chemin du ROLLBACK** (K = 4) : le paquet 6 échoue au milieu du
 /// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée — sa
-/// fermeture fait un point de reprise après l'annulation, ce que le correctif
-/// du moteur 05788a868 rend sûr —, rouverte dans le même processus, et
+/// fermeture fait un point de reprise après l'annulation, que le moteur rend
+/// sûr depuis 5c8507577 — ; puis la base rouverte dans un processus neuf, et
 /// l'index repris. Les comptes sont ceux d'une passe sans échec.
 #[test]
 #[ignore]
 fn un_paquet_qui_echoue_est_defait_et_la_reprise_rend_les_memes_comptes() {
     let dossier = dossier_sur_disque("rollback");
-    let (statut, sortie) = lancer_avec("echoueur", &dossier.join("base.rag3db"), None, true, 4);
-    assert!(statut.success(), "échec, ROLLBACK, réouverture et reprise :\n{sortie}");
-    assert!(sortie.contains("ECHEC") && sortie.contains("échec au paquet 6"), "le paquet piégé a échoué :\n{sortie}");
-    let repris = comptes_rendus("echoueur", &sortie);
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("echoueur", &base, None, true, 4);
+    assert!(statut.success(), "échec, ROLLBACK, empoisonnement et fermeture :\n{sortie}");
+    assert!(sortie.contains("échec au paquet 6") && sortie.contains("FERME"), "le paquet piégé a échoué, la base est fermée :\n{sortie}");
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 4);
+    assert!(statut.success(), "la base rouvre dans un processus neuf, et la reprise va au bout :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
     let temoin_dossier = dossier_sur_disque("temoin-rollback");
     let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
     assert!(statut.success(), "le témoin va au bout :\n{sortie}");

@@ -465,6 +465,11 @@ fn jouer_le_relecteur() -> Option<()> {
     // catalogue — qui crée ses index à l'initialisation — qui rencontrera
     // l'index détaché. Ce que ce montage fait ou ne fait pas est précisément ce
     // qu'il reste à écrire côté produit.
+    // La première connexion est lâchée avant le montage : deux instances en
+    // écriture du même fichier dans un processus s'écrivaient l'une sur
+    // l'autre (la corruption d'e2e_code, 4 octobre 2026), et le moteur
+    // refuse désormais la seconde.
+    drop(boxed);
     let cible_apres = cible.clone();
     let montage = std::panic::catch_unwind(|| {
         let conn = Rag3dbConnection::new(&base_dans(&dossier).display().to_string())
