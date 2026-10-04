@@ -221,6 +221,17 @@ Ce que cela donne, mis en forme (proposition de l'orchestration, en débat) :
   un contrôleur, avec une politique par contrôleur comme il y a une
   politique par outil.
 
+- **Un service est un petit graphe partagé** (Lucie) : un sous-graphe nommé,
+  que plusieurs contrôleurs appellent. À vérifier : ce que le moteur de
+  graphes sait déjà de la composition (un graphe appelé comme un nœud).
+- **L'authentification est fournie, pas écrite** (Lucie : « des builtins,
+  peut-être, avec OAuth Google ou OpenID, webhooks HMAC ») : des gardes
+  intégrées, déclarées au manifeste sur un contrôleur (qui peut entrer, par
+  quelle preuve), jamais un graphe écrit par l'auteur du backend — le code de
+  sécurité se vérifie une fois, au même endroit. Un webhook signé est une
+  quatrième façon d'entrer dans un contrôleur, après la route, l'outil et
+  l'événement.
+
 Ce qui ne serait pas un graphe : l'interface elle-même (les boucles clic →
 état → écran sont le métier des bibliothèques d'interface), les sessions,
 l'authentification, les fichiers statiques.
