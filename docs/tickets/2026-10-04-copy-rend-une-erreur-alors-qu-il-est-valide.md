@@ -1,6 +1,6 @@
 # Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(transactions): un point de reprise n'attend plus en tenant le verrou public, et une écriture validée ne rend plus d'erreur »
 - **Gravité** : perte (un COPY vu par d'autres disparaît après une mort) et réponse fausse
 - **Atteignable en service** : oui (dès qu'une autre connexion tient une transaction ouverte pendant un `COPY`)
 - **Touche rag3weaver** : à vérifier (il valide chaque instruction seule ; un lecteur long sur une autre connexion suffirait)

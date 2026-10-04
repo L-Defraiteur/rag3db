@@ -35,7 +35,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Comparer une relation à une variable de lambda fait planter](2026-10-04-relation-comparee-a-une-variable-de-lambda.md) | corrigé | plantage | oui | non vérifié |
 | [WITH sans colonne utile filtré par un paramètre fait planter](2026-10-04-with-filtre-par-un-parametre.md) | corrigé | plantage | oui | non (vérifié par l'arbre principal) |
 | [L'UUID nul empêche tout point de reprise](2026-10-04-uuid-nul-empeche-le-point-de-reprise.md) | corrigé | blocage | oui | non vérifié |
-| [Un CHECKPOINT retient la validation d'un lecteur jusqu'à son délai](2026-10-04-checkpoint-retient-un-lecteur.md) | ouvert | blocage | oui | probable (lecteurs et points de reprise automatiques) |
+| [Un CHECKPOINT retient la validation d'un lecteur jusqu'à son délai](2026-10-04-checkpoint-retient-un-lecteur.md) | corrigé | blocage | oui | probable (lecteurs et points de reprise automatiques) |
 | [Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit](2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md) | ouvert | blocage | oui | oui (première indexation, poussée des blobs du plein texte) |
 | [RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne](2026-10-04-distinct-skip-sans-limit.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
@@ -64,7 +64,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [La réouverture d'une base échoue par intermittence, sous charge seulement](2026-10-04-reouverture-intermittente-sous-charge.md) | ouvert — trois hypothèses écartées | plantage | non établi (vu une seule fois, sous batterie) | oui (test rag3weaver ; la lecture qui échoue est celle du moteur) |
 | [La portée `person` d'une mémoire est écrite, et jamais rappelée](2026-10-04-portee-person-ecrite-jamais-rappelee.md) | ouvert — dette nommée, condition de sortie écrite | réponse fausse | oui, dès que le gabarit `memory` sert | oui (crochet de rappel, protocole d'outil) |
 | [Une corruption de mémoire tue `e2e_code`, une passe sur trente à soixante](2026-10-04-memoire-corrompue-dans-e2e-code.md) | ouvert | plantage | inconnu | oui (sa suite `e2e_code`) |
-| [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | ouvert | réponse fausse | oui | à vérifier |
+| [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | corrigé | réponse fausse | oui | à vérifier |
 | [L'ordre de synchronisation au point de reprise laisse peut-être des pages non durables](2026-10-04-ordre-de-synchronisation-au-point-de-reprise.md) | ouvert, non vérifié | perte | inconnu | oui si le doute est fondé |
 | [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | corrigé (codeparsers 75077f7 + 46cc492, pointeur 4fe5a3bfc) | réponse fausse | oui | oui (usages, impact, liens) |
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre sur `filtre-resolution` | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
