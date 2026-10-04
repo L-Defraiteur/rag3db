@@ -1465,6 +1465,27 @@ impl Backend {
                 hargs.entry("threshold".to_string()).or_insert(json!(t));
             }
         }
+        // Le chemin TEL QUE LA BASE L'INDEXE : l'argument `path` d'un outil
+        // de fichiers est relatif à la racine du workspace, mais `file_path`
+        // en base est absolu (mesuré le 4 octobre : index et réédition,
+        // mêmes formes). Un crochet qui matche l'égalité — l'impact d'un
+        // fichier — déclare `path_in_source` et reçoit racine + chemin.
+        if declares.contains("path_in_source") {
+            if let (Some(w), Some(Value::String(chemin))) = (
+                self.prepared.manifest.workspace.as_ref(),
+                args.get("path"),
+            ) {
+                let racine = if w.root.is_absolute() {
+                    w.root.clone()
+                } else {
+                    self.prepared.directory.join(&w.root)
+                };
+                hargs.insert(
+                    "path_in_source".to_string(),
+                    json!(racine.join(chemin).to_string_lossy()),
+                );
+            }
+        }
         if declares.contains("result_uuids") {
             if let Some(port) = &hook.results_port {
                 let cle = format!("{}.{}", port.node, port.port);

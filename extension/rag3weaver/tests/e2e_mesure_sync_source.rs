@@ -19,7 +19,14 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 #[test]
 #[ignore]
 fn mesure_la_duree_par_paquet() {
-    let racine = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    // RAG3DB_ROOT d'abord : depuis un worktree, le moteur et l'extension
+    // vivent dans l'arbre bâti, pas dans celui où ce code est extrait
+    // (trouvé par la session mémoire, 4 octobre — injouable sans).
+    let racine = std::env::var("RAG3DB_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .canonicalize()
+        .unwrap();
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
     conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine.display())).unwrap();
     let config = CatalogConfig { name: Some("mesure-sync".into()), embedding_dim: 64, ..Default::default() };

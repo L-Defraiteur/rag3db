@@ -334,7 +334,7 @@ fn register_entity_persists_and_reloads() {
 
     {
         // Session 2: reopen, entity configs should be restored from _catalog_meta
-        let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
+        let conn = Rag3dbConnection::new(&db_str).expect("le journal de la base rouverte est illisible — la base a-t-elle été fermée proprement ? (vu sous charge de batterie le 4 octobre, vert isolé)");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref());
 
@@ -1016,7 +1016,7 @@ fn kb_and_relation_persist_and_reopen() {
 
     {
         // Session 2: reopen, verify everything is restored, migrate entity, search
-        let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
+        let conn = Rag3dbConnection::new(&db_str).expect("le journal de la base rouverte est illisible — la base a-t-elle été fermée proprement ? (vu sous charge de batterie le 4 octobre, vert isolé)");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref());
 
@@ -1998,7 +1998,7 @@ fn kb_incremental_ingest_across_sessions() {
 
     // Session 2: reopen + ingest more + search across all data
     {
-        let conn = Rag3dbConnection::new(&db_str).expect("reopen DB");
+        let conn = Rag3dbConnection::new(&db_str).expect("le journal de la base rouverte est illisible — la base a-t-elle été fermée proprement ? (vu sous charge de batterie le 4 octobre, vert isolé)");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref());
 
@@ -2057,7 +2057,7 @@ fn kb_incremental_ingest_across_sessions() {
 
     // Session 3: reopen + migrate + reindex + verify everything
     {
-        let conn = Rag3dbConnection::new(&db_str).expect("reopen DB again");
+        let conn = Rag3dbConnection::new(&db_str).expect("le journal de la base rouverte (2e réouverture) est illisible — fermée proprement ?");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         load_extensions(boxed.as_ref());
 
