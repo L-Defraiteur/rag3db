@@ -2,6 +2,8 @@
 
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/enums/rel_direction.h"
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
@@ -114,8 +116,19 @@ bool RelTableData::update(Transaction* transaction, ValueVector& boundNodeIDVect
         return false;
     }
     const auto [source, rowIdx] = findMatchingRow(transaction, boundNodeIDVector, relIDVector);
-    KU_ASSERT(rowIdx != INVALID_ROW_IDX);
     const auto boundNodeOffset = boundNodeIDVector.getValue<nodeID_t>(boundNodePos).offset;
+    if (rowIdx == INVALID_ROW_IDX) [[unlikely]] {
+        // Actif en Release. Une relation mise à jour sens par sens : ne pas la retrouver dans
+        // un sens laissait l'autre seul modifié, en silence, et la même relation rendait deux
+        // valeurs selon le sens de lecture (base du produit, 4 octobre 2026). Un refus nommé à
+        // la place ; il annule l'instruction, donc aussi le sens déjà écrit.
+        throw RuntimeException(stringFormat(
+            "Relationship {} of table {} {} {} direction, among the relationships of node {}. "
+            "Its update is refused: it would have reached one direction only.",
+            relIDVector.getValue<nodeID_t>(relIDPos).offset, table.getTableName(),
+            RelTable::REL_NOT_FOUND_IN_ONE_DIRECTION,
+            direction == RelDataDirection::FWD ? "forward" : "backward", boundNodeOffset));
+    }
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeOffset);
     auto& csrNodeGroup = getNodeGroup(nodeGroupIdx)->cast<CSRNodeGroup>();
     csrNodeGroup.update(transaction, source, rowIdx, columnID, dataVector);

@@ -249,13 +249,32 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
         KU_ASSERT(localTable);
         isDeleted = localTable->delete_(transaction, deleteState);
     } else {
+        auto numDirectionsDeleted = 0u;
         for (auto& relData : directedRelData) {
             isDeleted = relData->delete_(transaction,
                 relDeleteState.getBoundNodeIDVector(relData->getDirection()),
                 relDeleteState.relIDVector);
             if (!isDeleted) {
+                if (numDirectionsDeleted > 0) [[unlikely]] {
+                    // Supprimée dans un sens, introuvable dans l'autre : s'arrêter là laissait
+                    // la relation vivante d'un seul côté, en silence. Refus nommé, comme pour
+                    // la mise à jour (RelTableData::update) ; il annule l'instruction.
+                    const auto boundPos = relDeleteState
+                                              .getBoundNodeIDVector(relData->getDirection())
+                                              .state->getSelVector()[0];
+                    throw RuntimeException(stringFormat(
+                        "Relationship {} of table {} {} {} direction, among the relationships "
+                        "of node {}. Its deletion is refused: it would have reached one "
+                        "direction only.",
+                        relOffset, tableName, REL_NOT_FOUND_IN_ONE_DIRECTION,
+                        relData->getDirection() == RelDataDirection::FWD ? "forward" : "backward",
+                        relDeleteState.getBoundNodeIDVector(relData->getDirection())
+                            .getValue<nodeID_t>(boundPos)
+                            .offset));
+                }
                 break;
             }
+            numDirectionsDeleted++;
         }
     }
     if (isDeleted) {

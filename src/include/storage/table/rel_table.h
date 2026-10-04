@@ -147,6 +147,11 @@ public:
         common::table_id_t toTableID, const StorageManager* storageManager,
         MemoryManager* memoryManager);
 
+    // Le nom du refus de mettre à jour une relation qu'on ne retrouve pas dans l'un de ses deux
+    // sens : l'écriture n'aurait atteint que l'autre. Le message porte l'identité de la
+    // relation, la table, le sens et le nœud.
+    static constexpr const char* REL_NOT_FOUND_IN_ONE_DIRECTION = "was not found in the";
+
     common::table_id_t getFromNodeTableID() const { return fromNodeTableID; }
     common::table_id_t getToNodeTableID() const { return toNodeTableID; }
 
