@@ -27,3 +27,11 @@ VectorIndexUpdate.SetToAnotherVectorLineByLine
 # 25 s avant c8fdaf196, 12 à 27 min après (signalé au cœur C++) ; ctest -LE concurrence-probabiliste
 # pour l'écarter d'une passe complète.
 VectorIndexUpdate.TenThousandRowsInBatchesOf512
+#
+# Le lecteur qui insiste (4 octobre au soir, relevé par la session de l'arbre principal sur
+# e2e_prise_atomique) : un écrivain fait environ 470 points de reprise par seconde, un
+# lecteur ouvre 80 fois en lecture seule avec la patience de rag3weaver (250 ms). Refusé
+# par CHECKPOINT_CROSSED_READ_ONLY_OPEN dans 17 passes sur 20, déjà avant 57c8389b4 et
+# df689b522 (2,14 refus pour 1 000 points de reprise à l'ancêtre, 2,72 sur master : écart
+# non établi). La famine que la marche 5 (une époque écrite dans le fichier) doit réduire.
+ReadOnlyReader.InsistingReaderIsNotStarvedByCheckpoints

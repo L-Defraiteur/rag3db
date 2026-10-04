@@ -531,6 +531,124 @@ TEST_F(UpstreamFixes, ScanOfSeveralRelationTablesInATransaction) {
     mustRun("COMMIT;");
 }
 
+// Défaut d'origine, même code chez Vela et Ladybug (relevé par la session cœur C++, ticket
+// 2026-10-04-copy-apres-des-insertions-dans-la-meme-transaction). Les lignes insérées dans
+// une transaction portent des décalages provisoires qui commencent au nombre de lignes de
+// la table ; un COPY dans la même table et la même transaction écrit ses lignes aux mêmes
+// décalages, et la transaction prend les unes pour les autres : la clé 5 rend la ligne
+// 1005, le SET et la relation tombent sur les lignes locales ; avec une seule ligne locale,
+// la recherche par clé plante.
+//
+// Le témoin dit l'invariant, pas le remède : ou le COPY est refusé par son nom (« already
+// holds rows inserted by this transaction », NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS),
+// ou chaque lecture et chaque écriture tombe sur la bonne ligne, avant comme après la
+// validation. Il reste vert quand les lignes locales seront versées avant le COPY.
+class CopyAfterLocalInserts : public UpstreamFixes {
+public:
+    // Codes du fils : 0 invariant tenu, 5 clé rendue fausse, 6 SET mal placé, 7 relation
+    // mal reliée, 8 état validé faux, 9 COPY refusé pour une autre raison, 4 requête échouée.
+    std::string run(int localRows) {
+        const auto csv = databasePath + ".copy-after-local.csv";
+        {
+            std::ofstream out(csv);
+            for (int i = 0; i < 100; i++) {
+                out << i << ",copie " << i << "\n";
+            }
+        }
+        mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);");
+        mustRun("CREATE REL TABLE L(FROM Doc TO Doc);");
+        return inChild([&](rag3db::main::Connection& connection) {
+            if (auto code = runOrFail(connection, "BEGIN TRANSACTION;")) {
+                return code;
+            }
+            if (auto code = runOrFail(connection,
+                    "UNWIND range(1000, " + std::to_string(1000 + localRows - 1) +
+                        ") AS i CREATE (:Doc {id: i, name: 'locale ' + CAST(i AS STRING)});")) {
+                return code;
+            }
+            auto copy = connection.query("COPY Doc FROM '" + csv + "' (header=false);");
+            if (!copy->isSuccess()) {
+                const auto message = copy->getErrorMessage();
+                std::cerr << "  copy: " << message << "\n";
+                connection.query("ROLLBACK;");
+                return message.find("already holds rows inserted by this transaction") !=
+                               std::string::npos ?
+                           0 :
+                           9;
+            }
+            auto key = connection.query("MATCH (n:Doc {id: 5}) RETURN n.id;");
+            if (!key->isSuccess() || !key->hasNext() ||
+                key->getNext()->getValue(0)->getValue<int64_t>() != 5) {
+                std::cerr << "  key 5: "
+                          << (key->isSuccess() ? key->toString() : key->getErrorMessage())
+                          << "\n";
+                return 5;
+            }
+            if (auto code = runOrFail(connection, "MATCH (n:Doc {id: 5}) SET n.name = 'X';")) {
+                return code;
+            }
+            if (auto code = runOrFail(connection,
+                    "MATCH (a:Doc {id: 7}), (b:Doc {id: 8}) CREATE (a)-[:L]->(b);")) {
+                return code;
+            }
+            if (auto code = runOrFail(connection, "COMMIT;")) {
+                return code;
+            }
+            const auto count = [&](const std::string& query) -> int64_t {
+                auto result = connection.query(query);
+                return result->isSuccess() && result->hasNext() ?
+                           result->getNext()->getValue(0)->getValue<int64_t>() :
+                           -1;
+            };
+            if (count("MATCH (n:Doc) WHERE n.name = 'X' RETURN count(*);") != 1 ||
+                count("MATCH (n:Doc {id: 5}) WHERE n.name = 'X' RETURN count(*);") != 1) {
+                return 6;
+            }
+            if (count("MATCH (a:Doc)-[:L]->(b:Doc) WHERE a.id = 7 AND b.id = 8 RETURN "
+                      "count(*);") != 1 ||
+                count("MATCH ()-[r:L]->() RETURN count(r);") != 1) {
+                return 7;
+            }
+            if (count("MATCH (n:Doc) RETURN count(n);") != 100 + localRows ||
+                count("MATCH (n:Doc) WHERE n.id >= 1000 AND n.name = 'locale ' + CAST(n.id "
+                      "AS STRING) RETURN count(*);") != localRows) {
+                return 8;
+            }
+            return 0;
+        });
+    }
+};
+
+std::string copyAfterLocalInsertsCheck(const std::string& outcome) {
+    if (outcome == "exit code 5") {
+        return "[check: copy-after-local-inserts-key] the key 5 does not give the row 5";
+    }
+    if (outcome == "exit code 6") {
+        return "[check: copy-after-local-inserts-set] the SET of the row 5 landed elsewhere";
+    }
+    if (outcome == "exit code 7") {
+        return "[check: copy-after-local-inserts-relation] the relation does not join 7 and 8";
+    }
+    if (outcome == "exit code 8") {
+        return "[check: copy-after-local-inserts-committed] the committed rows are wrong";
+    }
+    if (outcome == "exit code 9") {
+        return "[check: copy-after-local-inserts-refusal-named] the COPY was refused, not by "
+               "its name";
+    }
+    return "[check: copy-after-local-inserts-runs] " + outcome;
+}
+
+TEST_F(CopyAfterLocalInserts, TwentyLocalRowsThenACopyInTheSameTable) {
+    const auto outcome = run(20);
+    EXPECT_EQ(outcome, "") << copyAfterLocalInsertsCheck(outcome);
+}
+
+TEST_F(CopyAfterLocalInserts, OneLocalRowThenACopyInTheSameTable) {
+    const auto outcome = run(1);
+    EXPECT_EQ(outcome, "") << copyAfterLocalInsertsCheck(outcome);
+}
+
 // Ladybug 2fc419036. Un champ CSV vide entre guillemets devient NULL.
 TEST_F(UpstreamFixes, QuotedEmptyCsvFieldIsNotNull) {
     const auto csv = databasePath + ".quoted.csv";

@@ -8,7 +8,7 @@
 add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     minimal_reproduction_test.cpp integrity_checker_test.cpp harness_mechanics_test.cpp
     lock_bench_test.cpp single_writer_crash_test.cpp vector_index_update_test.cpp
-    uncommitted_relations_test.cpp
+    uncommitted_relations_test.cpp read_only_reader_test.cpp
     upstream_fixes_test.cpp)
 target_link_libraries(concurrence_test PRIVATE test_helper test_runner graph_test)
 if (ENABLE_BACKTRACES)
