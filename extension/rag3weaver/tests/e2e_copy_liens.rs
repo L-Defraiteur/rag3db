@@ -166,3 +166,45 @@ fn l_ancien_mot_du_null_revient_intact_du_copy() {
     let liens = catalog.execute_raw(&format!("MATCH ()-[r:Lien]->() WHERE r.p = '{mot}' RETURN count(r)")).unwrap().rows;
     assert_eq!(liens, vec![vec![CypherValue::Int(900)]], "chaque lien garde sa propriété");
 }
+
+/// **Une paire répétée dans un lot garde la dernière valeur** (4 octobre
+/// 2026). Sous le seuil du COPY, les liens partent par `MERGE` ; le moteur
+/// perdait le `SET` de la seconde occurrence d'une paire quand une autre
+/// relation était créée entre les deux (recette du banc :
+/// `[a→b x1, a→c w5, a→b y2]` laissait `a→b` à `x1`). Le lot est maintenant
+/// dédoublonné avant l'envoi, en gardant la dernière occurrence.
+#[test]
+#[ignore]
+fn une_paire_repetee_dans_un_lot_garde_la_derniere_valeur() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let config = CatalogConfig { name: Some("lien-repete".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    catalog.register_entity("Gauche", bout()).unwrap();
+    catalog.register_entity("Droite", bout()).unwrap();
+    let texte = || -> FieldDef { serde_json::from_value(serde_json::json!({"type": "string"})).unwrap() };
+    catalog.register_relation_with("Lien", "Gauche", "Droite", HashMap::from([("p".to_string(), texte())])).unwrap();
+    catalog.ingest_entities("Gauche", vec![ligne("a")]).unwrap();
+    catalog.ingest_entities("Droite", vec![ligne("b"), ligne("c")]).unwrap();
+    let ua = catalog.entity_uuid("Gauche", &ligne("a")).unwrap();
+    let ub = catalog.entity_uuid("Droite", &ligne("b")).unwrap();
+    let uc = catalog.entity_uuid("Droite", &ligne("c")).unwrap();
+    for (vers, p) in [(&ub, "x1"), (&uc, "w5"), (&ub, "y2")] {
+        let props = BTreeMap::from([("p".to_string(), CypherValue::String(p.into()))]);
+        catalog
+            .link_jusqu_a("Lien", RefOrUuid::Uuid(ua.clone()), RefOrUuid::Uuid(vers.clone()), props, Disponibilites::AUCUNE)
+            .unwrap();
+    }
+    let res = catalog.drain();
+    assert_eq!(res.failed, 0, "{:?}", res.warnings);
+    let mut lu = catalog.execute_raw("MATCH (a:Gauche)-[r:Lien]->(b:Droite) RETURN b.nom, r.p").unwrap().rows;
+    lu.sort_by_key(|r| format!("{r:?}"));
+    assert_eq!(
+        lu,
+        vec![
+            vec![CypherValue::String("b".into()), CypherValue::String("y2".into())],
+            vec![CypherValue::String("c".into()), CypherValue::String("w5".into())],
+        ],
+        "a→b porte la dernière valeur, une seule fois"
+    );
+}

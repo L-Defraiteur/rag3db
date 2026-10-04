@@ -1002,10 +1002,24 @@ impl Node for LinkRecordNode {
             // 97 s là où 30 000 en prenaient 1,2 s : superlinéaire au-delà de
             // quelques dizaines de milliers (6 septembre 2026, cœur C++ de
             // rag3db). Cinq mille par requête.
+            // **Une paire, une fois, sa dernière valeur.** Le moteur perdait le
+            // `SET` de la seconde occurrence d'une paire répétée dans un même
+            // `MERGE` quand une autre relation était créée entre les deux
+            // (recette du banc, 4 octobre 2026) : `[a→b x1, a→c w5, a→b y2]`
+            // laissait `a→b` à `x1`. Seule la dernière occurrence part ; les
+            // références des autres se résolvent avec la tranche.
+            let derniers: HashSet<usize> = {
+                let mut vue: HashMap<(&str, &str), usize> = HashMap::new();
+                for &ri in indices.iter() {
+                    vue.insert((resolved[ri].from_uuid.as_str(), resolved[ri].to_uuid.as_str()), ri);
+                }
+                vue.into_values().collect()
+            };
             for tranche in indices.chunks(5_000) {
             let items_param = CypherValue::List(
                 tranche
                     .iter()
+                    .filter(|ri| derniers.contains(ri))
                     .map(|&ri| {
                         let rl = &resolved[ri];
                         let rel = &items[rl.index];
