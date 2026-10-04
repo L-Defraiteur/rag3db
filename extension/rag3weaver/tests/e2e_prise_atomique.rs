@@ -346,9 +346,10 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         let mut refus = 0usize;
         let mut lus = 0usize;
         let mut incoherents = 0usize;
+        let mut reprises = 0usize;
         for _ in 0..CYCLES {
             match Rag3dbConnection::read_only(&dossier) {
-                Ok(conn) => match conn.execute("MATCH (t:Travail) RETURN count(t) AS n") {
+                Ok(conn) => match { reprises += conn.open_retries() as usize; conn.execute("MATCH (t:Travail) RETURN count(t) AS n") } {
                     // Le compte croît pendant qu'on écrit : ce qui compte est
                     // qu'il soit **plausible**, jamais du bruit.
                     Ok(r) => match r.rows.first().and_then(|l| l.first()) {
@@ -361,7 +362,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
             }
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
-        println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents}");
+        println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents} REPRISES={reprises}");
         std::process::exit(0);
     }
 
@@ -416,7 +417,18 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
             .and_then(|v| v.parse().ok())
             .unwrap_or_else(|| panic!("« {cle} » illisible dans « {ligne} »"))
     };
-    let (refus, lus, incoherents) = (lire("REFUS="), lire("LUS="), lire("INCOHERENTS="));
+    let (refus, lus, incoherents, reprises) = (lire("REFUS="), lire("LUS="), lire("INCOHERENTS="), lire("REPRISES="));
+    // **Les reprises sont bornées et dites.** Mesuré le 5 octobre 2026 sur ce
+    // test (un point de reprise toutes les cinq écritures, 2 500 à 4 000
+    // écritures pendant les 80 ouvertures) : 138 à 221 reprises, soit environ
+    // un croisement pour quatre points de reprise — bien plus que le taux du
+    // banc (2 à 3 pour 1 000, à 0,2 ms de pause), qui ne vaut pas sous cette
+    // cadence. Vingt reprises par ouverture laissaient encore passer 4 refus
+    // sur 80 ; cent n'en laissent aucun. La borne : cinq reprises par ouverture
+    // en moyenne — au-delà, la famine revient, et c'est la marche 5 qui doit
+    // la réduire.
+    println!("  → {reprises} reprise(s) d'ouverture sur {CYCLES} (point de reprise croisé)");
+    assert!(reprises <= 5 * CYCLES, "trop de reprises d'ouverture : {reprises} pour {CYCLES} ouvertures");
 
     // Ce qui est vrai dans les deux régimes.
     assert_eq!(

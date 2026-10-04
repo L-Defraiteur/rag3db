@@ -77,7 +77,18 @@ pub fn ouvrir_lecteur(
 ) -> Result<Lecteur, String> {
     let direct = |avertissements: Vec<String>| -> Result<Lecteur, String> {
         Rag3dbConnection::read_only(base)
-            .map(|c| Lecteur { conn: Box::new(c), par: Chemin::Direct, avertissements })
+            .map(|c| {
+                let mut avertissements = avertissements;
+                // Le compte des reprises se dit : un lecteur souvent repris
+                // signale des points de reprise rapprochés chez l'écrivain.
+                if c.open_retries() > 0 {
+                    avertissements.push(format!(
+                        "ouverture reprise {} fois : un point de reprise de l'écrivain l'avait croisée",
+                        c.open_retries()
+                    ));
+                }
+                Lecteur { conn: Box::new(c), par: Chemin::Direct, avertissements }
+            })
             .map_err(|e| e.to_string())
     };
     let relais = |avertissements: Vec<String>| -> Result<Lecteur, String> {

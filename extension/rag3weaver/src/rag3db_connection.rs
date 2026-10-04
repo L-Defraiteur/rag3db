@@ -33,6 +33,9 @@ pub struct Rag3dbConnection {
     /// Le tampon retenu à l'ouverture, et sa source ; `None` pour une base
     /// ouverte avec une configuration fournie par l'appelant.
     buffer_pool: Option<BufferPoolChoice>,
+    /// Combien de fois l'ouverture en lecture seule a été reprise parce qu'un
+    /// point de reprise d'un autre processus l'avait croisée.
+    open_retries: u32,
 }
 
 /// **Crochet de test** : faire répondre la base exactement comme le moteur
@@ -111,6 +114,12 @@ impl Rag3dbConnection {
     /// jamais faire passer une vraie panne pour une lenteur.
     pub const PATIENCE_OUVERTURE_MS: u64 = 250;
 
+    /// Combien de fois l'ouverture en lecture seule a été reprise parce qu'un
+    /// point de reprise d'un autre processus l'avait croisée (0 d'ordinaire).
+    pub fn open_retries(&self) -> u32 {
+        self.open_retries
+    }
+
     /// Comme [`read_only`](Self::read_only), avec un budget d'attente choisi.
     ///
     /// Utile à un lecteur qui préfère attendre la fin d'un point de reprise
@@ -119,11 +128,26 @@ impl Rag3dbConnection {
         let path = path.as_ref();
         let debut = std::time::Instant::now();
         let mut tentatives = 0u32;
+        let mut croisees = 0u32;
         let mut attente = std::time::Duration::from_millis(5);
         loop {
             tentatives += 1;
             match Self::with_config(path, Self::default_config().read_only(true)) {
-                Ok(c) => return Ok(c),
+                Ok(mut c) => {
+                    c.open_retries = croisees;
+                    return Ok(c);
+                }
+                // **Un point de reprise d'un autre processus a croisé
+                // l'ouverture** : le moteur le refuse par son nom, et une
+                // nouvelle ouverture repart de l'état d'après. Repris un
+                // nombre borné de fois, hors du budget de temps — sous des
+                // points de reprise rapprochés, le budget seul laissait passer
+                // un refus sur trente (e2e_prise_atomique, 4 octobre 2026). Le
+                // compte est rendu (`open_retries`).
+                Err(e) if e.to_string().contains(CHECKPOINT_CROSSED_READ_ONLY_OPEN) && croisees < CROSSED_OPEN_RETRIES => {
+                    croisees += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(2));
+                }
                 Err(e) => {
                     let ecoule = debut.elapsed().as_millis() as u64;
                     if ecoule + attente.as_millis() as u64 > budget_ms {
@@ -290,7 +314,7 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db, reopen, buffer_pool: None })
+        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0 })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
@@ -605,6 +629,18 @@ fn total_memory() -> Option<u64> {
 }
 
 // ─── Une instance en écriture par base et par processus ───────────────────
+
+/// Le fragment stable du refus d'une ouverture en lecture seule qu'un point de
+/// reprise d'un autre processus a croisée
+/// (`WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN`).
+pub const CHECKPOINT_CROSSED_READ_ONLY_OPEN: &str = "was checkpointed by another process while this read-only open was reading";
+
+/// Combien de fois au plus une ouverture en lecture seule reprend sur ce refus.
+/// Sous un écrivain qui fait un point de reprise toutes les cinq écritures,
+/// environ un point de reprise sur quatre croise une ouverture (5 octobre
+/// 2026) : vingt reprises laissaient passer 4 refus sur 80, cent aucun. Chaque
+/// reprise coûte une ouverture et 2 ms.
+pub const CROSSED_OPEN_RETRIES: u32 = 100;
 
 /// Le fragment stable du refus du moteur (`Database::ALREADY_OPEN_FOR_WRITING`).
 pub const ALREADY_OPEN_FOR_WRITING: &str = "is already open for writing in this process";
