@@ -186,7 +186,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     };
     eprintln!(
         "[mots] tampon du moteur : {}",
-        conn.buffer_pool().map(rag3weaver::connection::describe_buffer_pool).unwrap_or_else(|| "non dit par la connexion".into())
+        rag3weaver::connection::DbConnection::buffer_pool(&conn).map(rag3weaver::connection::describe_buffer_pool).unwrap_or_else(|| "non dit par la connexion".into())
     );
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
