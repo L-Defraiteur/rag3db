@@ -164,7 +164,17 @@ fn estimate_of(
             (rate, guard.embedder_is_remote())
         }
     };
-    Ok(estimate_here(&files, &excluded, policy, rate, remote))
+    let estimate = estimate_here(&files, &excluded, policy, rate, remote);
+    // Le tampon de la base ouverte, quand elle le dit : celui-là, manifeste
+    // compris, est le vrai.
+    let pool = catalog.and_then(|c| c.lock().ok().and_then(|g| g.conn().buffer_pool()));
+    Ok(match pool {
+        Some(choice) => {
+            let (bytes, source) = crate::estimate::buffer_pool_of(choice);
+            estimate.with_buffer(bytes, source)
+        }
+        None => estimate,
+    })
 }
 
 pub struct EstimateNodeFactory;

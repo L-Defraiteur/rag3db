@@ -67,29 +67,38 @@ impl BufferCheck {
     }
 }
 
-/// Le tampon du moteur de ce processus, tel que la connexion le prendra :
-/// la règle du produit (`rag3db_connection::buffer_pool_choice` : variable,
-/// règle de 8 Gio dès 32 Go, sinon le défaut du moteur, 80 % de la mémoire).
-/// **Limite** : la clé `buffer_pool` d'un manifeste n'est pas vue d'ici —
-/// l'estimation ne connaît pas le manifeste qui a ouvert la base.
+/// Le tampon du moteur que décrit un choix de connexion, en octets et en
+/// clair. Un choix sans octets est le défaut du moteur : 80 % de la mémoire
+/// du poste.
+pub fn buffer_pool_of(choice: crate::connection::BufferPoolChoice) -> (u64, String) {
+    let bytes = choice.bytes.unwrap_or_else(|| {
+        let total = std::fs::read_to_string("/proc/meminfo")
+            .ok()
+            .and_then(|m| m.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
+            .map(|kb| kb * 1024)
+            .unwrap_or(0);
+        total / 10 * 8
+    });
+    (bytes, crate::connection::describe_buffer_pool(choice))
+}
+
+/// Le tampon qu'une connexion ouverte par ce processus prendrait, sans
+/// manifeste : la règle du produit (`rag3db_connection::buffer_pool_choice` —
+/// la variable, sinon `min(RAM/2, 8 Gio)`). Quand une base est ouverte, sa
+/// connexion dit le vrai (`DbConnection::buffer_pool`, manifeste compris) :
+/// c'est ce que lit `index`.
 pub fn buffer_pool_here() -> (u64, String) {
     #[cfg(feature = "rag3db-native")]
     {
-        use crate::rag3db_connection::{buffer_pool_choice, describe_buffer_pool};
-        let choice = buffer_pool_choice(None);
-        if let Some(bytes) = choice.bytes {
-            return (bytes, describe_buffer_pool(choice));
-        }
+        buffer_pool_of(crate::rag3db_connection::buffer_pool_choice(None))
     }
-    if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
-        return (v, "RAG3DB_BUFFER_POOL_SIZE".into());
+    #[cfg(not(feature = "rag3db-native"))]
+    {
+        use crate::connection::{BufferPoolChoice, BufferPoolSource};
+        let bytes = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|v| v.trim().parse::<u64>().ok());
+        let source = if bytes.is_some() { BufferPoolSource::Environment } else { BufferPoolSource::EngineDefault };
+        buffer_pool_of(BufferPoolChoice { bytes, source })
     }
-    let total = std::fs::read_to_string("/proc/meminfo")
-        .ok()
-        .and_then(|m| m.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
-        .map(|kb| kb * 1024)
-        .unwrap_or(0);
-    (total / 10 * 8, "défaut du moteur (80 % de la mémoire du poste)".into())
 }
 
 /// Ce que la politique fait d'un fichier.

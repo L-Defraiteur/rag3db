@@ -184,7 +184,10 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         }
         None => Rag3dbConnection::in_memory().expect("base en mémoire"),
     };
-    eprintln!("[mots] tampon du moteur : RAG3DB_BUFFER_POOL_SIZE = {:?} (absent : le défaut du moteur)", std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok());
+    eprintln!(
+        "[mots] tampon du moteur : {}",
+        conn.buffer_pool().map(rag3weaver::connection::describe_buffer_pool).unwrap_or_else(|| "non dit par la connexion".into())
+    );
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
         .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
