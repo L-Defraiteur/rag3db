@@ -213,9 +213,55 @@ impl Rag3dbConnection {
     /// (`bufferPool`, bytes), under the precedence of [`buffer_pool_choice`].
     pub fn with_manifest_buffer_pool(path: impl AsRef<Path>, manifest: Option<u64>) -> Result<Self, DbError> {
         let choix = buffer_pool_choice(manifest);
-        let mut conn = Self::with_config(path, Self::config_with_buffer_pool(choix))?;
+        let mut conn = Self::open_for_writing(path.as_ref(), Self::config_with_buffer_pool(choix))?;
         conn.buffer_pool = Some(choix);
         Ok(conn)
+    }
+
+    /// **Ouvrir une base en écriture, une instance à la fois dans ce
+    /// processus.** Deux instances en écriture du même fichier écrivent l'une
+    /// sur les pages de l'autre (la corruption d'e2e_code, 4 octobre 2026) ;
+    /// le moteur refuse désormais la seconde (« is already open for writing
+    /// in this process »). Une réouverture rapide arrive pourtant souvent
+    /// quand la précédente meurt encore — son dernier `Arc` tombe sur un fil
+    /// de fond (acteurs lucivy), et le moteur ne lève sa marque qu'à la fin
+    /// de son destructeur. On attend donc, au plus [`REOPEN_WAIT`], que
+    /// l'instance précédente soit morte et que le moteur l'accepte ; au-delà,
+    /// une erreur nommée dit combien de références la retiennent encore.
+    fn open_for_writing(path: &Path, config: rag3db::SystemConfig) -> Result<Self, DbError> {
+        let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        let debut = std::time::Instant::now();
+        loop {
+            let tenues = OPEN_FOR_WRITING
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .get(&cle)
+                .map(std::sync::Weak::strong_count)
+                .unwrap_or(0);
+            let reste = REOPEN_WAIT.saturating_sub(debut.elapsed());
+            if tenues == 0 {
+                match rag3db::Database::new(path, config.clone()) {
+                    Ok(db) => {
+                        let db = Arc::new(db);
+                        OPEN_FOR_WRITING
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .insert(cle, Arc::downgrade(&db));
+                        return Self::connect(db, Self::fresh_reopen_state());
+                    }
+                    Err(e) if e.to_string().contains(ALREADY_OPEN_FOR_WRITING) && !reste.is_zero() => {}
+                    Err(e) => return Err(DbError::ConnectionError(e.to_string())),
+                }
+            } else if reste.is_zero() {
+                return Err(DbError::ConnectionError(format!(
+                    "{} {ALREADY_OPEN_FOR_WRITING} — {tenues} référence(s) à l'instance précédente tenue(s) après {:?} : \
+                     un catalogue, un index plein texte ou une tâche de fond la retient encore",
+                    path.display(),
+                    REOPEN_WAIT
+                )));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
     }
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
@@ -557,6 +603,20 @@ fn total_memory() -> Option<u64> {
     let kio: u64 = ligne.split_whitespace().nth(1)?.parse().ok()?;
     Some(kio * 1024)
 }
+
+// ─── Une instance en écriture par base et par processus ───────────────────
+
+/// Le fragment stable du refus du moteur (`Database::ALREADY_OPEN_FOR_WRITING`).
+pub const ALREADY_OPEN_FOR_WRITING: &str = "is already open for writing in this process";
+
+/// Combien de temps une ouverture en écriture attend la mort de l'instance
+/// précédente du même fichier dans ce processus.
+pub const REOPEN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Les bases ouvertes en écriture par ce processus : chemin absolu → l'instance.
+static OPEN_FOR_WRITING: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, std::sync::Weak<rag3db::Database>>>,
+> = std::sync::LazyLock::new(Default::default);
 
 #[cfg(test)]
 mod tests {

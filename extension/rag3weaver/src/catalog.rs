@@ -736,13 +736,16 @@ impl Catalog {
                     Err(p) => failed.push(format!("{table}: close() a paniqué: {}", describe(p))),
                 },
                 Err(shared) => {
-                    // D'autres références vivent encore : on commite au moins,
-                    // pour ne pas perdre l'état, et on laisse le dernier `Drop`
-                    // faire le reste.
-                    match catch_unwind(AssertUnwindSafe(|| shared.commit())) {
-                        Ok(Ok(())) => closed += 1,
-                        Ok(Err(e)) => failed.push(format!("{table} (commit seul): {e}")),
-                        Err(p) => failed.push(format!("{table} (commit seul) a paniqué: {}", describe(p))),
+                    // D'autres références vivent encore (un service, un nœud) :
+                    // on ferme quand même. Un simple commit laissait les
+                    // acteurs lucivy vivants, et avec eux le magasin de blobs,
+                    // la connexion et la base — une seconde instance du même
+                    // fichier s'ouvrait alors à côté (4 octobre 2026). Les
+                    // clones restants tiennent un handle fermé.
+                    match catch_unwind(AssertUnwindSafe(|| shared.close())) {
+                        Ok(Ok(_)) => closed += 1,
+                        Ok(Err(e)) => failed.push(format!("{table} (encore partagé): {e}")),
+                        Err(p) => failed.push(format!("{table} (encore partagé) : close() a paniqué: {}", describe(p))),
                     }
                 }
             }
