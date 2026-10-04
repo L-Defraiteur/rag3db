@@ -123,6 +123,28 @@ l'agent.
 > point de reprise au seuil (le mode « chargement initial » que la session
 > cœur C++ chiffre à un ou deux jours).
 
+> **Valider moins souvent — 4 octobre, 17 h 20 à 17 h 45 : 106 s à 512 sur
+> disque.** Réglage `RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION` (`b527f5c5c`),
+> transaction par paquet, 8 Gio, moteur rebâti à 16 h 56, chaque passe seule
+> sous le verrou de mesure.
+>
+> | Validation | Gain 2 (naissances par `COPY`) | Durée | `COMMIT` des paquets | Chargement final | Plus gros journal | Pic |
+> |---|---|---|---|---|---|---|
+> | à chaque paquet (référence, 16 h 56) | sans | 155 s | 50 s | 27 s | 366 Mo | 15,3 Go |
+> | à chaque paquet | avec | 157 s | 73 s | 33 s | 270 Mo | 14,3 Go |
+> | tous les 4 paquets | sans | 135 s | 33 s | 28 s | 473 Mo | 15,8 Go |
+> | tous les 4 paquets | avec | **106 s** | 24 s | 27 s | 455 Mo | 15,8 Go |
+> | une seule fois à la fin | sans | 133 s | 25 s | 31 s | 1 025 Mo | 15,1 Go |
+> | une seule fois à la fin | avec | **107 s** | 24 s | 29 s | 813 Mo | 14,7 Go |
+>
+> - **Valider tous les 4 paquets suffit** : une seule validation à la fin
+>   n'apporte rien de plus, et double le journal.
+> - **Le gain 2 paie dès qu'on valide moins souvent** (−29 s à K = 4) : il
+>   n'était absorbé que parce que chaque `COMMIT` portait un point de reprise.
+> - **Rien n'échoue à 8 Gio**, même avec un journal de 1 Go non validé.
+> - Ce qui reste à 106 s : analyser 16 s, ingérer 43 s, `COMMIT` 24 s
+>   (celui de la fin compris), chargement final des relations 27 s.
+
 > **La transaction par paquet fusionnée, et ses deux gains — 4 octobre,
 > 16 h 20 à 17 h 05.** Base sur disque, tampon 8 Gio, variable
 > `RAG3WEAVER_TX_PAR_PAQUET=1`, chaque passe seule sous le verrou de mesure.
