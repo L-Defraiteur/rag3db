@@ -77,10 +77,24 @@ jette les autres sans vérifier que la ligne jetée reste atteinte par quelqu'un
 la couche haute (`pu`). Les vecteurs de ce jeu sont très proches les uns des autres, faits
 durs exprès ; la fréquence sur des vecteurs réels n'est pas mesurée.
 
-Pourquoi le banc l'avait lu comme l'annulation (inférence, non exécutée) : sa fin « mort »
-rejoue le journal, donc rebâtit le graphe par le chemin de l'insertion ordinaire ; ses deux
-fins avec annulation passent par un point de reprise et relisent le graphe tel que le
-`COPY` l'a bâti.
+Pourquoi le banc l'avait d'abord lu comme l'annulation : sa fin « mort » rejoue le journal,
+donc rebâtit le graphe par le chemin de l'insertion ordinaire ; ses fins avec annulation
+passent par un point de reprise et relisent le graphe tel que le `COPY` l'a bâti. **Confirmé
+par le banc** avec une quatrième fin, sans aucune annulation — quatre `COPY` validés, une
+fermeture propre, une réouverture : rouge 10 passes sur 10, toujours la ligne 15, qui rend 87.
+
+Avec un seul fil (`CALL threads=1` dans la session du chargement, désormais dans le témoin
+du banc), sur 30 passes :
+
+| Fin | Rouge | La ligne fautive |
+|---|---|---|
+| Mort après les `COPY` validés (le rejeu rebâtit le graphe) | 0 sur 30 | — |
+| Annulation, point de reprise, un `COPY`, mort | 29 sur 30 | toujours 15, qui rend 234 |
+| Annulation, fermeture propre | 29 sur 30 | toujours 15, qui rend 87 |
+
+Le hasard qui reste est la graine de l'index (`RandomEngine` amorcé par
+`std::random_device`, sans réglage). Une graine réglable rendrait ces cas déterministes —
+utile au témoin d'une passe de rattrapage.
 
 Témoin de diagnostic, hors dépôt parce que rouge une fois sur deux par nature :
 `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/annexes/vector_index_rollback_test.avec-temoin-des-lignes-injoignables.cpp`
