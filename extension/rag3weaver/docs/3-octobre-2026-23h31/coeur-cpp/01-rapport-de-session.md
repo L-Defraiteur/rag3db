@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 16 h 40.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 17 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -22,6 +22,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Garde 1 de la reprise | `fcd9a7882` | une base ne plante plus à l'ouverture ; l'index se dit « en retard » |
 | Garde 2 de la reprise ; borne du contrôle des voisins | `15fcc3474`, `110a65f15` | après un arrêt brutal l'index vectoriel reste juste sans être rebâti (`<base>.extensions`) ; la mise à jour d'un vecteur ne lance plus une recherche par ancien voisin (dix mille lignes par lots : 42 s au lieu d'environ 800) |
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
+| Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
@@ -54,9 +55,13 @@ Où j'en suis exactement (16 h 40, seconde limite de l'orchestration atteinte : 
   de build de l'arbre ; ninja ne la refait pas si le fichier d'un autre dossier est plus
   récent : supprimer le fichier puis rebâtir la cible.
 
-**Le lot qui suit** (orchestration, 16 h 15) : une demi-page, sans code, sur le point de
-reprise que `COPY` force — 66 s sur 177 du premier index de ce dépôt avec la transaction par
-paquet. Puis V1.
+**Le lot en cours** : le point de reprise que `COPY` force — 66 s sur 177 du premier index
+de ce dépôt avec la transaction par paquet. La demi-page est `03-le-point-de-reprise-de-copy.md`.
+Décision de l'orchestration : la voie (c) d'abord — mesurer ce que font les 5 s d'un point de
+reprise de paquet, **rendre le découpage (somme égale au total) avant de modifier**, puis
+alléger ; une demi-journée au plus. La voie (b) touche à la durabilité : elle passera par
+Lucie, après une mesure côté rag3weaver. La voie (a) : au journal comme le vrai remède, pas
+maintenant. Puis V1, sur message de l'orchestration.
 
 **Ce qui attend derrière**, dans l'ordre de l'orchestration : la revue des amonts de la
 session du banc (`…/banc-de-concurrence/03-revue-des-amonts.md`, tickets dans

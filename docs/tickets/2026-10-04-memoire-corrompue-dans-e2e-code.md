@@ -100,9 +100,19 @@ Le compte de la reprise : huit passes lancées, la limite fixée. Une avec faux 
 
 Pour reprendre : `annexes/instrumentation-traque-4-octobre.patch` (à appliquer sur `110a65f15` ; imprime au rapport ASan les longueurs, décalages et métadonnées de `scanValue`, et les piles de tous les fils par gdb), `annexes/build-traque.sh`, `annexes/boucle-traque.sh`, le rapport complet `annexes/asan-extension-vector-4-octobre.txt`. À ajouter avant de relancer : dans `oneHopSearch`, imprimer le décalage du voisin, la cardinalité et le nombre de lignes quand le voisin dépasse le tableau — cela départage (a) et (b) en un rapport. Et un essai déterministe à écrire, non tenté : base sur disque, table à vecteurs et chaînes longues, index, `DROP_VECTOR_INDEX`, fermeture, réouverture, `CREATE_VECTOR_INDEX`, recherche et balayage.
 
-Indépendamment de la cause, **deux gardes manquent** et se justifient seules : une borne sur `VisitedState` (dimensionné par une estimation, indexé sans contrôle, `add` écrit) — de même `create_hnsw_index.cpp:62`, où le graphe en mémoire est dimensionné par la même cardinalité avec des `assert` éteints en Release ; et un refus nommé dans `DictionaryColumn::scan` quand `endOffset < startOffset`, à la place d'un `assert`. Elles transformeraient une corruption de tas en erreur nommée ; elles ne sont pas posées (consigne : pas de correctif avant la condition).
+**Les gardes sont posées** (`1ea49837f`, 4 octobre, sur décision de l'orchestration : une garde qui change une corruption de tas en erreur nommée se justifie seule et sert de sonde). Trois refus nommés, actifs en Release, chacun avec ses nombres dans le message :
 
-Lecture de `scanValue` (non vérifiée par les nombres) : si un décalage de fin est inférieur au décalage de début, `endOffset - startOffset` reboucle (l'`assert` de `dictionary_column.cpp:114` est éteint en Release) ; `InMemOverflowBuffer::requireNewBlock` (`currentOffset + size > taille`) reboucle à son tour, aucun bloc n'est réservé, et la lecture page par page écrit jusqu'au-delà du bloc courant — la signature du premier rapport.
+| Refus | Où | Ce qu'il arrête |
+|---|---|---|
+| « is beyond the visited set » (`HNSWIndexUtils::OFFSET_BEYOND_VISITED_SET`) | `VisitedState::add` et `contains` | un décalage de ligne hors du tableau des visités |
+| « is beyond the in-memory graph » (`HNSWIndexUtils::OFFSET_BEYOND_IN_MEM_GRAPH`) | `InMemHNSWIndex::insert` | un décalage hors du graphe en mémoire à la construction |
+| « Dictionary offsets out of order » (`DictionaryColumn::DICTIONARY_OFFSETS_OUT_OF_ORDER`) | `DictionaryColumn::scan` | une fin de chaîne avant son début, ou au-delà des données |
+
+Et un correctif de fond dans le même commit : l'index vectoriel se dimensionne par `NodeTable::getNumTotalRows` (le nombre de lignes) et plus par la cardinalité estimée, à la recherche comme à la construction — où cette cardinalité bornait aussi le parcours des lignes : en retard, des lignes restaient hors de l'index.
+
+**Ces gardes n'ont pas de test neuf**, et c'est assumé : aucune des trois conditions ne se fabrique par l'interface. Un décalage hors du tableau des visités ne peut plus venir que d'un graphe d'index faux, depuis que le tableau a la taille exacte de la table ; des décalages de dictionnaire décroissants demandent un fichier abîmé ou la cause inconnue de ce ticket. Les fabriquer, c'est trouver la condition — l'essai déterministe est confié à la session du banc. La prochaine occurrence, en service ou en test, dira laquelle a parlé et avec quels nombres : **quiconque voit l'un de ces trois textes l'ajoute ici.**
+
+Piste de témoin sans ASan (orchestration) : si la cardinalité est parfois en retard, un index bâti avant `1ea49837f` avait un rappel incomplet — des lignes absentes de l'index, mesurable par un compte.
 
 ## Recette minimale
 
