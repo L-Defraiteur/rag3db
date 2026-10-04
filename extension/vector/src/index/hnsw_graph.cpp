@@ -189,13 +189,19 @@ std::vector<EmbeddingHandle> OnDiskEmbeddings::getEmbeddings(
             // Return a null embedding for deleted nodes
             embeddings.emplace_back(EmbeddingHandle::createNullHandle());
         }
-        if (scanState.outputVectors[0]->isNull(i)) {
+        if (scanState.outputVectors[0]->isNull(pos)) {
             embeddings.emplace_back(EmbeddingHandle::createNullHandle());
         } else {
             const auto value = scanState.outputVectors[0]->getValue<common::list_entry_t>(pos);
             KU_ASSERT(value.size == info.typeInfo.getNumElements());
             embeddings.emplace_back(value.offset, &embeddingScanState);
         }
+    }
+    // Un vecteur par décalage demandé, toujours : les lignes invisibles qui suivent la dernière
+    // ligne lue n'avaient pas le leur, et l'appelant, qui indexe par position, lisait après la
+    // fin du tableau (SIGSEGV dans shrinkForNode, sonde de l'arbre principal, 5 octobre 2026).
+    while (embeddings.size() < offsets.size()) {
+        embeddings.emplace_back(EmbeddingHandle::createNullHandle());
     }
     return embeddings;
 }

@@ -237,4 +237,45 @@ TEST_F(VectorIndexRollbackTest, ARolledBackVectorUpdate) {
     expectEachFound(0, NUM_OLD_ROWS, oldVector, "after the reopening");
 }
 
+// La reprise de rag3weaver après un paquet défait (sonde de la session de l'arbre principal,
+// 5 octobre 2026) : un COPY annulé, la base fermée et rouverte, puis dans une transaction des
+// lignes neuves créées sans vecteur et leur vecteur posé par SET avant la validation. Les
+// lignes neuves prennent les décalages des lignes annulées.
+TEST_F(VectorIndexRollbackTest, NewRowsGivenTheirVectorBySetAfterARolledBackCopyAndAReopening) {
+    createOldRowsAndIndex();
+    ok("BEGIN TRANSACTION;");
+    ok(copyStatement());
+    ok("ROLLBACK;");
+    reopen();
+    const auto newVector = [](int64_t id) {
+        return "[60.0,60.0,60.0," + std::to_string(id) + ".0]";
+    };
+    ok("BEGIN TRANSACTION;");
+    ok("UNWIND range(5000, 5031) AS i MERGE (n:Doc {id: i});");
+    ok("UNWIND range(5000, 5031) AS i MATCH (n:Doc {id: i}) SET n.vec = [60.0, 60.0, 60.0, "
+       "CAST(i AS FLOAT)];");
+    ok("COMMIT;");
+    expectEachFound(5000, 32, newVector, "after the commit");
+    expectEachFound(0, NUM_OLD_ROWS, oldVector, "after the commit");
+    ok("CHECKPOINT;");
+    reopen();
+    expectEachFound(5000, 32, newVector, "after the reopening");
+}
+
+// La même sans COPY annulé : le SET du vecteur d'une ligne créée dans la transaction.
+TEST_F(VectorIndexRollbackTest, NewRowsGivenTheirVectorBySetInTheirTransaction) {
+    createOldRowsAndIndex();
+    reopen();
+    const auto newVector = [](int64_t id) {
+        return "[60.0,60.0,60.0," + std::to_string(id) + ".0]";
+    };
+    ok("BEGIN TRANSACTION;");
+    ok("UNWIND range(5000, 5031) AS i MERGE (n:Doc {id: i});");
+    ok("UNWIND range(5000, 5031) AS i MATCH (n:Doc {id: i}) SET n.vec = [60.0, 60.0, 60.0, "
+       "CAST(i AS FLOAT)];");
+    ok("COMMIT;");
+    expectEachFound(5000, 32, newVector, "after the commit");
+    expectEachFound(0, NUM_OLD_ROWS, oldVector, "after the commit");
+}
+
 } // namespace
