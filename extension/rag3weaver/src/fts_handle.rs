@@ -267,6 +267,13 @@ pub enum FtsStorage {
     /// sa persistance IDBFS), et celle qui rend LUCIDS utile — en (a) un delta
     /// n'a aucun cache persistant à mettre à jour.
     LocalFs { base_path: String },
+
+    /// **(c)** Des fichiers à côté de la base, durables **une fois par
+    /// génération** (`crate::fts_directory`) au lieu d'un `fsync` par fichier
+    /// écrit. Mode déclaré, à l'essai (Lucie, 4 octobre 2026) : le plein
+    /// texte hors de la base. Étape A — la marque de génération validée en
+    /// base avec les lignes viendra ensuite.
+    Files { base_path: String },
 }
 
 impl Default for FtsStorage {

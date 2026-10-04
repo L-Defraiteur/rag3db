@@ -241,11 +241,15 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     });
     let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
-    // `RAG3WEAVER_ESTIMATE_FTS=localfs` (base sur disque seulement) : le plein
-    // texte dans des fichiers à côté de la base, `<base>.fts/`, au lieu de
-    // blobs dans la base (`FtsStorage::LocalFs`, tel qu'il est aujourd'hui).
+    // `RAG3WEAVER_ESTIMATE_FTS=localfs` ou `fichiers` (base sur disque
+    // seulement) : le plein texte dans des fichiers à côté de la base,
+    // `<base>.fts/`, au lieu de blobs dans la base — `FtsStorage::LocalFs`
+    // (un `fsync` par fichier) ou `FtsStorage::Files` (un par génération).
     let fts_storage = || match (&db_dir, std::env::var("RAG3WEAVER_ESTIMATE_FTS").as_deref()) {
         (Some(dir), Ok("localfs")) => Some(rag3weaver::fts_handle::FtsStorage::LocalFs {
+            base_path: dir.join("estimate.rag3db.fts").to_string_lossy().to_string(),
+        }),
+        (Some(dir), Ok("fichiers")) => Some(rag3weaver::fts_handle::FtsStorage::Files {
             base_path: dir.join("estimate.rag3db.fts").to_string_lossy().to_string(),
         }),
         _ => None,

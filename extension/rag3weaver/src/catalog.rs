@@ -320,6 +320,9 @@ pub struct Catalog {
     /// index Blob télécharge tout l'index, donc on ne le fait qu'au premier
     /// usage réel de la table (cf doc 04 de la passation lucivy).
     fts_handles: HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>,
+    /// Les dossiers du mode `FtsStorage::Files`, gardés pour les rendre
+    /// durables à chaque vidage.
+    fts_files: Vec<Arc<crate::fts_directory::FtsShardStorage>>,
     /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
@@ -449,6 +452,7 @@ impl Catalog {
             blob_buffer: None,
             sparse_handles: HashMap::new(),
             fts_handles: HashMap::new(),
+            fts_files: Vec::new(),
             fts_storage: Default::default(),
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
@@ -842,6 +846,7 @@ impl Catalog {
         // Un index par cellule (org, project) : jamais partagé (doc 37 §2.2).
         let index_name = self.scope.index_name(&crate::fts_handle::fts_index_name(table));
 
+        let files: std::cell::RefCell<Vec<Arc<crate::fts_directory::FtsShardStorage>>> = Default::default();
         let storage = || -> Option<Box<dyn ShardStorage>> {
             match &self.fts_storage {
                 crate::fts_handle::FtsStorage::BlobBacked { lazy } => {
@@ -856,6 +861,19 @@ impl Catalog {
                         );
                     }
                     Some(Box::new(st))
+                }
+                crate::fts_handle::FtsStorage::Files { base_path } => {
+                    let dir = std::path::Path::new(base_path).join(&index_name);
+                    match crate::fts_directory::FtsShardStorage::new(&dir) {
+                        Ok(s) => {
+                            files.borrow_mut().push(s.clone());
+                            Some(Box::new(crate::fts_directory::SharedFtsStorage(s)))
+                        }
+                        Err(e) => {
+                            eprintln!("[rag3weaver] dossier du plein texte {table}: {e}");
+                            None
+                        }
+                    }
                 }
                 crate::fts_handle::FtsStorage::LocalFs { base_path } => {
                     let dir = std::path::Path::new(base_path).join(&index_name);
@@ -896,6 +914,7 @@ impl Catalog {
         };
 
         let handle = Arc::new(handle);
+        self.fts_files.extend(files.into_inner());
         self.fts_handles.insert(table.to_string(), handle.clone());
         Some(handle)
     }
@@ -6998,6 +7017,18 @@ impl Catalog {
     /// Return failures to the caller as well as emitting an event. Retaining
     /// pending blobs permits retry but does not mean the index is durable.
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
+        // Le mode fichiers : la génération du plein texte rendue durable ici,
+        // là où les blobs seraient poussés — une fois, pas un `fsync` par
+        // fichier.
+        if !self.fts_files.is_empty() {
+            let t = std::time::Instant::now();
+            for storage in &self.fts_files {
+                storage
+                    .sync_generation()
+                    .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : {e}")))?;
+            }
+            crate::ingest_profile::add("entités · rendre durable le plein texte (fichiers)", t);
+        }
         let Some(ref buffer) = self.blob_buffer else { return Ok(()) };
         let t0 = std::time::Instant::now();
         match buffer.flush() {

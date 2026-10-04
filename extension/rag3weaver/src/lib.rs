@@ -150,6 +150,7 @@ pub mod events;
 pub mod filter;
 pub mod generated;
 pub mod fts_handle;
+pub mod fts_directory;
 pub mod disponibilite;
 pub mod hash;
 pub mod node_id_cache;
