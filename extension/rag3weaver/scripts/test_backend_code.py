@@ -275,6 +275,12 @@ def main():
         r = host.ask(op="call", name="search_code",
                      arguments={"query": "arrivee", "options": {"consistency": "strict"}})
         assert "main.rs" in json.dumps(r), f"la recherche répond sur l'instantané indexé : {r}"
+        # « Avant d'éditer » vit aussi sur l'instantané : il s'édite (en
+        # mémoire), et son index porte les relations — l'oubli relevé par
+        # c0 le 4 octobre, corrigé ici.
+        r = host.ask(op="call", name="read_file", arguments={"path": "util.rs"})
+        t = json.dumps(r, ensure_ascii=False)
+        assert "Avant d'éditer" in t, f"la section d'impact sur l'instantané indexé : {r}"
         host.close()
 
         print("PASS: descriptions distinctes, lecture, chemin hors workspace refusé, "

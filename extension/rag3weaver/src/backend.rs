@@ -1474,21 +1474,29 @@ impl Backend {
         // de fichiers est relatif à la racine du workspace, mais `file_path`
         // en base est absolu (mesuré le 4 octobre : index et réédition,
         // mêmes formes). Un crochet qui matche l'égalité — l'impact d'un
-        // fichier — déclare `path_in_source` et reçoit racine + chemin.
+        // fichier — déclare `path_in_source` et reçoit le chemin TEL QUE LA
+        // BASE LE GARDE : racine + chemin pour un arbre de travail (les
+        // file_path y sont absolus), le chemin NU pour un instantané — une
+        // source sans disque est sa propre identité, ses chemins en base
+        // sont ceux de la source (le silence du crochet sur snapshot.json,
+        // 4 octobre, venait de là).
         if declares.contains("path_in_source") {
             if let (Some(w), Some(Value::String(chemin))) = (
                 self.prepared.manifest.workspace.as_ref(),
                 args.get("path"),
             ) {
-                let racine = if w.root.is_absolute() {
-                    w.root.clone()
-                } else {
-                    self.prepared.directory.join(&w.root)
+                let valeur = match w.source {
+                    crate::backend_code::WorkspaceSource::Snapshot => chemin.clone(),
+                    _ => {
+                        let racine = if w.root.is_absolute() {
+                            w.root.clone()
+                        } else {
+                            self.prepared.directory.join(&w.root)
+                        };
+                        racine.join(chemin).to_string_lossy().to_string()
+                    }
                 };
-                hargs.insert(
-                    "path_in_source".to_string(),
-                    json!(racine.join(chemin).to_string_lossy()),
-                );
+                hargs.insert("path_in_source".to_string(), json!(valeur));
             }
         }
         if declares.contains("result_uuids") {
