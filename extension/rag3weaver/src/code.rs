@@ -518,7 +518,13 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             continue;
         }
         if USAGE_RELATIONS.contains(&rel) {
-            catalog.register_relation_with(rel, from, to, usage_property_defs())?;
+            // **Comment l'arête a été résolue** (`resolution`) : « fichier »
+            // (l'analyseur, dans le fichier), « import », « type » ou « nom »
+            // (le rendez-vous, voir `choose_target`). Une base d'avant reçoit
+            // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
+            let mut props = usage_property_defs();
+            props.insert("resolution".to_string(), field_def(FieldType::String));
+            catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
         catalog.register_relation(rel, from, to)?;
@@ -1740,7 +1746,16 @@ impl Catalog {
             let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
             let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
             let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
-            let props = if USAGE_RELATIONS.contains(&r.rel.as_str()) { usage_properties(&r.sites) } else { BTreeMap::new() };
+            let props = if USAGE_RELATIONS.contains(&r.rel.as_str()) {
+                let mut p = usage_properties(&r.sites);
+                // L'analyseur résout dans le fichier ; une bibliothèque, par
+                // l'import qui la nomme.
+                let resolution = if r.rel == "USES_LIBRARY" { Resolution::Import } else { Resolution::File };
+                p.insert("resolution".to_string(), s(resolution.as_str()));
+                p
+            } else {
+                BTreeMap::new()
+            };
             par_relation.entry(r.rel.as_str()).or_default().push((from, to, props));
         }
         let en_file: usize = par_relation.values().map(Vec::len).sum();
@@ -1935,9 +1950,7 @@ impl Catalog {
                 report.ambiguous += 1;
             }
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                // La marque attend sa colonne de relation (arbre principal) :
-                // ticket « une arête ne dit pas comment elle a été résolue ».
-                let Some((target, _resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres) else {
+                let Some((target, resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres) else {
                     continue;
                 };
                 let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
@@ -1953,10 +1966,13 @@ impl Catalog {
                 let rel = if RELATIONS.iter().any(|(r, _, _)| *r == m.kind) { m.kind.as_str() } else { "CONSUMES" };
                 // L'usage ne voyage que vers une relation qui le porte : une
                 // `HAS_PARENT` n'a pas ces colonnes, et l'arête ne se posait pas.
-                let usage = if USAGE_RELATIONS.contains(&rel) { m.usage.clone() } else { BTreeMap::new() };
-                self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
+                let mut usage = if USAGE_RELATIONS.contains(&rel) { m.usage.clone() } else { BTreeMap::new() };
+                if USAGE_RELATIONS.contains(&rel) {
+                    usage.insert("resolution".to_string(), s(resolution.as_str()));
+                }
+                self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
-                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), m.usage, crate::disponibilite::Disponibilites::AUCUNE)?;
+                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
                 } else if rel == "HAS_PARENT" {
                     self.link_jusqu_a("PARENT_OF", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 }
@@ -2151,7 +2167,6 @@ struct Mention {
 /// portera, pour qu'un consommateur sache taire ou signaler une arête
 /// devinée. `File` est la marque des relations de l'analyseur, résolues dans
 /// le fichier ; elles ne passent pas par le rendez-vous.
-#[allow(dead_code)] // posée avec la colonne de relation, à venir
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Resolution {
     /// Relation de l'analyseur, dans le fichier.
@@ -2164,7 +2179,6 @@ pub(crate) enum Resolution {
     Name,
 }
 
-#[allow(dead_code)]
 impl Resolution {
     pub(crate) fn as_str(self) -> &'static str {
         match self {

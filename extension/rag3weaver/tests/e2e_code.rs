@@ -1817,3 +1817,43 @@ fn les_methodes_d_un_meme_impl_sont_rendues_sous_sa_signature() {
     let cadre = md.lines().find(|l| l.starts_with("┌ `")).unwrap_or_default().to_string();
     assert!(md.contains("**PortValue** ·") && cadre.contains("PortValue"), "les méthodes de PortValue doivent être encadrées par la signature de leur parent :\n{md}");
 }
+
+/// **Une arête dit comment elle a été résolue** (`resolution`) : « fichier »
+/// pour l'analyseur (un appel dans le même fichier), « nom » pour le
+/// rendez-vous qui n'a que le nom (un seul définisseur ailleurs), et la
+/// réciproque `CONSUMED_BY` porte la même marque que son `CONSUMES`.
+#[test]
+#[ignore]
+fn an_edge_says_how_it_was_resolved() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::connection::CypherValue;
+
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    for lot in [
+        ("aide.rs".to_string(), "pub fn aide() -> u32 {\n    1\n}\n".to_string()),
+        (
+            "appel.rs".to_string(),
+            "fn local() -> u32 {\n    2\n}\n\npub fn appelle() -> u32 {\n    local() + aide()\n}\n".to_string(),
+        ),
+    ] {
+        let rapport = cat.ingest_code(&analyze("/projet", vec![lot])).unwrap();
+        assert_eq!(rapport.failed, 0, "{rapport:?}");
+    }
+    let marque = |rel: &str, de: &str, vers: &str| -> Vec<Option<String>> {
+        cat.execute_raw(&format!(
+            "MATCH (a:Scope)-[r:{rel}]->(b:Scope) WHERE a.name = '{de}' AND b.name = '{vers}' RETURN r.resolution"
+        ))
+        .unwrap()
+        .rows
+        .iter()
+        .map(|r| match r.first() {
+            Some(CypherValue::String(v)) => Some(v.clone()),
+            _ => None,
+        })
+        .collect()
+    };
+    assert_eq!(marque("CONSUMES", "appelle", "local"), vec![Some("fichier".to_string())], "dans le fichier");
+    assert_eq!(marque("CONSUMES", "appelle", "aide"), vec![Some("nom".to_string())], "par le seul nom");
+    assert_eq!(marque("CONSUMED_BY", "aide", "appelle"), vec![Some("nom".to_string())], "la réciproque, même marque");
+}
