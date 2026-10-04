@@ -21,6 +21,17 @@ enum class ReadOnlyOpenPhase : uint8_t {
     DATA_FILE_READ = 1,
 };
 
+// Test-only : les points nommés d'une reprise en écriture où un test d'arrêt brutal peut tuer
+// le processus. Voir WALReplayer::setRecoveryHookForTesting. Les prochains témoins d'arrêt
+// s'en servent plutôt que d'en poser d'autres.
+enum class RecoveryPoint : uint8_t {
+    // Les pages du fichier fantôme sont recopiées dans le fichier de données et synchronisées ;
+    // ni le journal ni le fichier fantôme ne sont encore supprimés.
+    SHADOW_PAGES_REPLAYED = 0,
+    // Le journal est supprimé ; le fichier fantôme ne l'est pas encore.
+    JOURNAL_REMOVED = 1,
+};
+
 class WALReplayer {
 public:
     explicit WALReplayer(main::ClientContext& clientContext);
@@ -37,6 +48,11 @@ public:
     // called on a read-write open, and a no-op unless a test sets it. Pass nullptr to clear.
     using read_only_open_hook_t = std::function<void(ReadOnlyOpenPhase)>;
     static void setReadOnlyOpenHookForTesting(read_only_open_hook_t hook);
+
+    // Test-only. Runs `hook` at each RecoveryPoint of a read-write recovery, so that a test can
+    // kill the process at that instant. A no-op unless a test sets it. Pass nullptr to clear.
+    using recovery_hook_t = std::function<void(RecoveryPoint)>;
+    static void setRecoveryHookForTesting(recovery_hook_t hook);
 
 private:
     struct WALReplayInfo {
@@ -75,6 +91,7 @@ private:
         bool enableChecksums) const;
 
     void runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const;
+    void runRecoveryHook(RecoveryPoint point) const;
 
     // What a read-only open saw of the two files before reading them, so that it can tell
     // afterwards whether a writer's checkpoint crossed it. A reader takes no lock: the journal is

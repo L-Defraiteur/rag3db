@@ -99,6 +99,18 @@ void WALReplayer::setReadOnlyOpenHookForTesting(read_only_open_hook_t hook) {
     readOnlyOpenHookForTesting = std::move(hook);
 }
 
+static WALReplayer::recovery_hook_t recoveryHookForTesting;
+
+void WALReplayer::setRecoveryHookForTesting(recovery_hook_t hook) {
+    recoveryHookForTesting = std::move(hook);
+}
+
+void WALReplayer::runRecoveryHook(RecoveryPoint point) const {
+    if (recoveryHookForTesting && !StorageManager::Get(clientContext)->isReadOnly()) {
+        recoveryHookForTesting(point);
+    }
+}
+
 void WALReplayer::runReadOnlyOpenHook(ReadOnlyOpenPhase phase) const {
     if (readOnlyOpenHookForTesting && StorageManager::Get(clientContext)->isReadOnly()) {
         readOnlyOpenHookForTesting(phase);
@@ -276,8 +288,15 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             setAsideCutBytes(*fileInfo, offsetDeserialized, tornEnd);
         }
         if (isLastRecordCheckpoint) {
-            // If the last record is a checkpoint, we resume by replaying the shadow file.
-            ShadowFile::replayShadowPageRecords(clientContext);
+            // If the last record is a checkpoint, we resume by replaying the shadow file. Un
+            // fichier fantôme absent veut dire qu'une reprise précédente l'avait déjà rejoué et
+            // supprimé, puis est morte avant de supprimer le journal (l'ordre d'avant le 4
+            // octobre) : il n'y a plus rien à recopier.
+            if (VirtualFileSystem::GetUnsafe(clientContext)
+                    ->fileOrPathExists(shadowFilePath, &clientContext)) {
+                ShadowFile::replayShadowPageRecords(clientContext);
+            }
+            runRecoveryHook(RecoveryPoint::SHADOW_PAGES_REPLAYED);
             removeWALAndShadowFiles();
             // Re-read checkpointed data from disk again as now the shadow file is applied.
             checkpointer.readCheckpoint();
@@ -762,8 +781,13 @@ void WALReplayer::replayLoadExtensionRecord(const WALRecord& walRecord) const {
 }
 
 void WALReplayer::removeWALAndShadowFiles() const {
-    removeFileIfExists(shadowFilePath);
+    // Le journal d'abord. Une mort entre les deux suppressions laisse alors un fichier fantôme
+    // sans journal, que la reprise suivante supprime. Dans l'ordre inverse, elle laissait un
+    // journal terminé par un CHECKPOINT sans son fichier fantôme, et la base ne s'ouvrait plus.
+    // Comme le point de reprise ordinaire (Checkpointer::logCheckpointAndApplyShadowPages).
     removeFileIfExists(walPath);
+    runRecoveryHook(RecoveryPoint::JOURNAL_REMOVED);
+    removeFileIfExists(shadowFilePath);
 }
 
 void WALReplayer::removeFileIfExists(const std::string& path) const {
