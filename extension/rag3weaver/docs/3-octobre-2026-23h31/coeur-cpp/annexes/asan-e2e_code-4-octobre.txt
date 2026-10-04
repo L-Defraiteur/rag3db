@@ -1,0 +1,130 @@
+=================================================================
+==2626138==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7e39a9a62400 at pc 0x7f699cf87374 bp 0x7b68f0e01970 sp 0x7b68f0e01118
+WRITE of size 4096 at 0x7e39a9a62400 thread T5554
+    #0 0x7f699cf87373 in memcpy (/usr/lib/libasan.so.8.0.0+0x187373) 
+    #1 0x7f699b7d8d78 in rag3db::storage::Uncompressed::decompressFromPage(unsigned char const*, unsigned long, unsigned char*, unsigned long, unsigned long, rag3db::storage::CompressionMetadata const&) const /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/compression/compression.h:332
+    #2 0x7f699b7d8d78 in rag3db::storage::ReadCompressedValuesFromPage::operator()(unsigned char const*, rag3db::storage::PageCursor&, unsigned char*, unsigned int, unsigned long, rag3db::storage::CompressionMetadata const&) /home/lucied/git_workspaces/rag3db-moteur/src/storage/compression/compression.cpp:977
+    #3 0x7f699bb155e1 in std::function<void (unsigned char*, rag3db::storage::PageCursor&, unsigned char*, unsigned int, unsigned long, rag3db::storage::CompressionMetadata const&)>::operator()(unsigned char*, rag3db::storage::PageCursor&, unsigned char*, unsigned int, unsigned long, rag3db::storage::CompressionMetadata const&) const /usr/include/c++/16/bits/std_function.h:581
+    #4 0x7f699bb155e1 in operator() /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column_reader_writer.cpp:191
+    #5 0x7f699bb155e1 in __invoke_impl<void, const rag3db::storage::(anonymous namespace)::DefaultColumnReadWriter::readCompressedValues<unsigned char*>(const rag3db::storage::SegmentState&, unsigned char*, uint32_t, uint64_t, uint64_t, rag3db::storage::read_values_from_page_func_t<unsigned char*>&, const std::optional<std::function<bool(long unsigned int, long unsigned int)> >&)::<lambda(uint8_t*)>&, unsigned char*> /usr/include/c++/16/bits/invoke.h:63
+    #6 0x7f699bb155e1 in __invoke<const rag3db::storage::(anonymous namespace)::DefaultColumnReadWriter::readCompressedValues<unsigned char*>(const rag3db::storage::SegmentState&, unsigned char*, uint32_t, uint64_t, uint64_t, rag3db::storage::read_values_from_page_func_t<unsigned char*>&, const std::optional<std::function<bool(long unsigned int, long unsigned int)> >&)::<lambda(uint8_t*)>&, unsigned char*> /usr/include/c++/16/bits/invoke.h:98
+    #7 0x7f699bb155e1 in operator()<unsigned char*> /usr/include/c++/16/bits/refwrap.h:366
+    #8 0x7f699bb155e1 in __invoke_impl<void, std::reference_wrapper<const rag3db::storage::(anonymous namespace)::DefaultColumnReadWriter::readCompressedValues<unsigned char*>(const rag3db::storage::SegmentState&, unsigned char*, uint32_t, uint64_t, uint64_t, rag3db::storage::read_values_from_page_func_t<unsigned char*>&, const std::optional<std::function<bool(long unsigned int, long unsigned int)> >&)::<lambda(uint8_t*)> >&, unsigned char*> /usr/include/c++/16/bits/invoke.h:63
+    #9 0x7f699bb155e1 in __invoke_r<void, std::reference_wrapper<const rag3db::storage::(anonymous namespace)::DefaultColumnReadWriter::readCompressedValues<unsigned char*>(const rag3db::storage::SegmentState&, unsigned char*, uint32_t, uint64_t, uint64_t, rag3db::storage::read_values_from_page_func_t<unsigned char*>&, const std::optional<std::function<bool(long unsigned int, long unsigned int)> >&)::<lambda(uint8_t*)> >&, unsigned char*> /usr/include/c++/16/bits/invoke.h:113
+    #10 0x7f699bb155e1 in _M_invoke /usr/include/c++/16/bits/std_function.h:295
+    #11 0x7f699b7c4f02 in std::function<void (unsigned char*)>::operator()(unsigned char*) const /usr/include/c++/16/bits/std_function.h:581
+    #12 0x7f699b7c4f02 in rag3db::storage::try_func(std::function<void (unsigned char*)> const&, unsigned char*, std::array<std::unique_ptr<rag3db::storage::VMRegion, std::default_delete<rag3db::storage::VMRegion> >, 2ul> const&, rag3db::common::PageSizeClass, rag3db::storage::PageState*) /home/lucied/git_workspaces/rag3db-moteur/src/storage/buffer_manager/buffer_manager.cpp:199
+    #13 0x7f699b7c4f02 in rag3db::storage::BufferManager::optimisticRead(rag3db::storage::FileHandle&, unsigned int, std::function<void (unsigned char*)> const&) /home/lucied/git_workspaces/rag3db-moteur/src/storage/buffer_manager/buffer_manager.cpp:229
+    #14 0x7f699bcdfee0 in rag3db::storage::FileHandle::optimisticReadPage(unsigned int, std::function<void (unsigned char*)> const&) /home/lucied/git_workspaces/rag3db-moteur/src/storage/file_handle.cpp:106
+    #15 0x7f699bb18968 in rag3db::storage::ColumnReadWriter::readFromPage(unsigned int, std::function<void (unsigned char*)> const&) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column_reader_writer.cpp:427
+    #16 0x7f699bb18968 in readCompressedValues<unsigned char*> /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column_reader_writer.cpp:194
+    #17 0x7f699ba7e69d in rag3db::storage::Column::scanSegment(rag3db::storage::SegmentState const&, unsigned long, unsigned long, unsigned char*) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column.cpp:289
+    #18 0x7f699bb4f19e in rag3db::storage::DictionaryColumn::scanValue(rag3db::storage::SegmentState const&, unsigned long, unsigned long, rag3db::common::ValueVector*, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/dictionary_column.cpp:175
+    #19 0x7f699bb55b83 in void rag3db::storage::DictionaryColumn::scan<rag3db::common::ValueVector>(rag3db::storage::SegmentState const&, rag3db::storage::SegmentState const&, std::vector<std::pair<unsigned int, unsigned long>, std::allocator<std::pair<unsigned int, unsigned long> > >&, rag3db::common::ValueVector*, rag3db::storage::ColumnChunkMetadata const&) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/dictionary_column.cpp:115
+    #20 0x7f699bc4e16e in rag3db::storage::StringColumn::scanUnfiltered(rag3db::storage::SegmentState const&, unsigned long, unsigned long, rag3db::common::ValueVector*, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/string_column.cpp:230
+    #21 0x7f699ba7f82f in operator()<rag3db::storage::SegmentState, long unsigned int, long unsigned int, long unsigned int> /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column.cpp:206
+    #22 0x7f699ba7f82f in genericRangeSegmentsFromIt<rag3db::storage::SegmentState, rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:81
+    #23 0x7f699ba7f82f in genericRangeSegments<rag3db::storage::SegmentState, rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:62
+    #24 0x7f699ba7f82f in rangeSegments<rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:127
+    #25 0x7f699ba7f82f in rangeSegments<rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:137
+    #26 0x7f699ba7f82f in rag3db::storage::Column::scan(rag3db::storage::ChunkState const&, unsigned long, unsigned long, rag3db::common::ValueVector*, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column.cpp:204
+    #27 0x7f699ba914e3 in rag3db::storage::ColumnChunk::scan(rag3db::transaction::Transaction const*, rag3db::storage::ChunkState const&, rag3db::common::ValueVector&, unsigned long, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column_chunk.cpp:82
+    #28 0x7f699ba5f0ef in rag3db::storage::ChunkedNodeGroup::scan(rag3db::transaction::Transaction const*, rag3db::storage::TableScanState const&, rag3db::storage::NodeGroupScanState const&, unsigned long, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/chunked_node_group.cpp:327
+    #29 0x7f699bb90252 in rag3db::storage::NodeGroup::scan(rag3db::transaction::Transaction const*, rag3db::storage::TableScanState&) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/node_group.cpp:253
+    #30 0x7f699bbbd9a1 in rag3db::storage::NodeTableScanState::scanNext(rag3db::transaction::Transaction*) /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/node_table.cpp:255
+    #31 0x7f699b58bfd4 in rag3db::processor::ScanNodeTable::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/scan/scan_node_table.cpp:108
+    #32 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #33 0x7f699b5fd7bc in rag3db::processor::Filter::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/filter.cpp:30
+    #34 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #35 0x7f699b711b38 in rag3db::processor::Projection::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/projection.cpp:29
+    #36 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #37 0x7f699b727ab2 in rag3db::processor::ResultCollector::executeInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/result_collector.cpp:47
+    #38 0x7f699b7bc701 in rag3db::processor::Sink::execute(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/include/processor/operator/sink.h:35
+    #39 0x7f699b7bc701 in rag3db::processor::ProcessorTask::run() /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor_task.cpp:31
+    #40 0x7f69996b81cd in rag3db::common::TaskScheduler::runWorkerThread() /home/lucied/git_workspaces/rag3db-moteur/src/common/task_system/task_scheduler.cpp:140
+    #41 0x7f6998b05395  (/usr/lib/libstdc++.so.6+0x105395) 
+    #42 0x7f699ce6da2f  (/usr/lib/libasan.so.8.0.0+0x6da2f) 
+    #43 0x7f69986acfb0  (/usr/lib/libc.so.6+0xacfb0) 
+    #44 0x7f699874c60b  (/usr/lib/libc.so.6+0x14c60b) 
+
+0x7e39a9a62400 is located 0 bytes after 32768-byte region [0x7e39a9a5a400,0x7e39a9a62400)
+allocated by thread T5554 here:
+    #0 0x7f699cf8a5b1 in malloc (/usr/lib/libasan.so.8.0.0+0x18a5b1) 
+    #1 0x7f699b7c82f7 in rag3db::storage::MemoryManager::mallocBuffer(bool, unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/storage/buffer_manager/memory_manager.cpp:64
+    #2 0x7f699b7c8a79 in rag3db::storage::MemoryManager::allocateBuffer(bool, unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/storage/buffer_manager/memory_manager.cpp:71
+    #3 0x7f69997c9644 in rag3db::common::InMemOverflowBuffer::allocateNewBlock(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/common/in_mem_overflow_buffer.cpp:62
+    #4 0x7f69997cac2a in rag3db::common::InMemOverflowBuffer::allocateSpace(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/common/in_mem_overflow_buffer.cpp:30
+    #5 0x7f699977a253 in rag3db::common::StringAuxiliaryBuffer::allocateOverflow(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/include/common/vector/auxiliary_buffer.h:35
+    #6 0x7f699977a253 in rag3db::common::StringVector::addString(rag3db::common::ValueVector*, unsigned int, rag3db::common::ku_string_t&) /home/lucied/git_workspaces/rag3db-moteur/src/common/vector/value_vector.cpp:473
+    #7 0x7f699977a479 in void rag3db::common::ValueVector::setValue<rag3db::common::ku_string_t>(unsigned int, rag3db::common::ku_string_t) /home/lucied/git_workspaces/rag3db-moteur/src/common/vector/value_vector.cpp:451
+    #8 0x7f699bb55c6a in void rag3db::storage::DictionaryColumn::scan<rag3db::common::ValueVector>(rag3db::storage::SegmentState const&, rag3db::storage::SegmentState const&, std::vector<std::pair<unsigned int, unsigned long>, std::allocator<std::pair<unsigned int, unsigned long> > >&, rag3db::common::ValueVector*, rag3db::storage::ColumnChunkMetadata const&) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/dictionary_column.cpp:123
+    #9 0x7f699bc4e16e in rag3db::storage::StringColumn::scanUnfiltered(rag3db::storage::SegmentState const&, unsigned long, unsigned long, rag3db::common::ValueVector*, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/string_column.cpp:230
+    #10 0x7f699ba7f82f in operator()<rag3db::storage::SegmentState, long unsigned int, long unsigned int, long unsigned int> /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column.cpp:206
+    #11 0x7f699ba7f82f in genericRangeSegmentsFromIt<rag3db::storage::SegmentState, rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:81
+    #12 0x7f699ba7f82f in genericRangeSegments<rag3db::storage::SegmentState, rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:62
+    #13 0x7f699ba7f82f in rangeSegments<rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:127
+    #14 0x7f699ba7f82f in rangeSegments<rag3db::storage::Column::scan(const rag3db::storage::ChunkState&, rag3db::common::offset_t, rag3db::common::offset_t, rag3db::common::ValueVector*, uint64_t) const::<lambda(auto:45&, auto:46, auto:47, auto:48)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/table/column_chunk.h:137
+    #15 0x7f699ba7f82f in rag3db::storage::Column::scan(rag3db::storage::ChunkState const&, unsigned long, unsigned long, rag3db::common::ValueVector*, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column.cpp:204
+    #16 0x7f699ba914e3 in rag3db::storage::ColumnChunk::scan(rag3db::transaction::Transaction const*, rag3db::storage::ChunkState const&, rag3db::common::ValueVector&, unsigned long, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/column_chunk.cpp:82
+    #17 0x7f699ba5f0ef in rag3db::storage::ChunkedNodeGroup::scan(rag3db::transaction::Transaction const*, rag3db::storage::TableScanState const&, rag3db::storage::NodeGroupScanState const&, unsigned long, unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/chunked_node_group.cpp:327
+    #18 0x7f699bb90252 in rag3db::storage::NodeGroup::scan(rag3db::transaction::Transaction const*, rag3db::storage::TableScanState&) const /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/node_group.cpp:253
+    #19 0x7f699bbbd9a1 in rag3db::storage::NodeTableScanState::scanNext(rag3db::transaction::Transaction*) /home/lucied/git_workspaces/rag3db-moteur/src/storage/table/node_table.cpp:255
+    #20 0x7f699b58bfd4 in rag3db::processor::ScanNodeTable::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/scan/scan_node_table.cpp:108
+    #21 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #22 0x7f699b5fd7bc in rag3db::processor::Filter::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/filter.cpp:30
+    #23 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #24 0x7f699b711b38 in rag3db::processor::Projection::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/projection.cpp:29
+    #25 0x7f699b70841b in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #26 0x7f699b727ab2 in rag3db::processor::ResultCollector::executeInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/result_collector.cpp:47
+    #27 0x7f699b7bc701 in rag3db::processor::Sink::execute(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/include/processor/operator/sink.h:35
+    #28 0x7f699b7bc701 in rag3db::processor::ProcessorTask::run() /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor_task.cpp:31
+    #29 0x7f69996b81cd in rag3db::common::TaskScheduler::runWorkerThread() /home/lucied/git_workspaces/rag3db-moteur/src/common/task_system/task_scheduler.cpp:140
+    #30 0x7f6998b05395  (/usr/lib/libstdc++.so.6+0x105395) 
+
+Thread T5554 created by T1 here:
+    #0 0x7f699cf7e28c in pthread_create (/usr/lib/libasan.so.8.0.0+0x17e28c) 
+    #1 0x7f6998b05479 in std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) (/usr/lib/libstdc++.so.6+0x105479) 
+    #2 0x7f699b7b8ce9 in std::__detail::_MakeUniq<rag3db::common::TaskScheduler>::__single_object std::make_unique<rag3db::common::TaskScheduler, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #3 0x7f699b7b8ce9 in rag3db::processor::QueryProcessor::QueryProcessor(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor.cpp:21
+    #4 0x7f699a9d5db6 in std::__detail::_MakeUniq<rag3db::processor::QueryProcessor>::__single_object std::make_unique<rag3db::processor::QueryProcessor, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #5 0x7f699a9d5db6 in rag3db::main::Database::initMembers(std::basic_string_view<char, std::char_traits<char> >, std::function<std::unique_ptr<rag3db::storage::BufferManager, std::default_delete<rag3db::storage::BufferManager> > (rag3db::main::Database const&)>) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:120
+    #6 0x7f699a9d8e09 in rag3db::main::Database::Database(std::basic_string_view<char, std::char_traits<char> >, rag3db::main::SystemConfig, std::function<std::unique_ptr<rag3db::storage::BufferManager, std::default_delete<rag3db::storage::BufferManager> > (rag3db::main::Database const&)>) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:92
+    #7 0x7f699a9d91ec in rag3db::main::Database::Database(std::basic_string_view<char, std::char_traits<char> >, rag3db::main::SystemConfig) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:87
+    #8 0x559eda4dd557 in std::__detail::_MakeUniq<rag3db::main::Database>::__single_object std::make_unique<rag3db::main::Database, std::basic_string_view<char, std::char_traits<char> >&, rag3db::main::SystemConfig&>(std::basic_string_view<char, std::char_traits<char> >&, rag3db::main::SystemConfig&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #9 0x559eda4dd557 in rag3db_rs::new_database(std::basic_string_view<char, std::char_traits<char> >, unsigned long, unsigned long, bool, bool, unsigned long, bool, long, bool, bool) src/rag3db_rs.cpp:90
+    #10 0x559eda4d3fae in operator() /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:982
+    #11 0x559eda4d3fae in trycatch<rag3db_rs::rag3db_rs$cxxbridge1$new_database(std::string_view*, uint64_t, uint64_t, bool, bool, uint64_t, bool, int64_t, bool, bool, rag3db::main::Database**)::<lambda()>, rust::cxxbridge1::detail::Fail> /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:842
+    #12 0x559eda4d3fae in rag3db_rs$cxxbridge1$new_database /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:980
+    #13 0x559eda4d30ec in _RNvNtNtCs5bsZpSl2dkw_6rag3db3ffi3ffi12new_database (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x391b0ec) 
+
+Thread T1 created by T0 here:
+    #0 0x7f699cf7e28c in pthread_create (/usr/lib/libasan.so.8.0.0+0x17e28c) 
+    #1 0x559edbbeb210 in _RNvMs0_NtNtNtCs9k3SxhrAWiO_3std3sys6thread4unixNtB5_6Thread3new library/std/src/sys/thread/unix.rs:103
+    #2 0x559ed951c2a7 in _RINvNtNtCs9k3SxhrAWiO_3std6thread9lifecycle15spawn_uncheckedNCNvCs965H7XVcgUb_4test8run_tests_0uEB10_ library/std/src/thread/lifecycle.rs:116
+    #3 0x559ed951c2a7 in _RINvMNtNtCs9k3SxhrAWiO_3std6thread7builderNtB3_7Builder15spawn_uncheckedNCNvCs965H7XVcgUb_4test8run_tests_0uEB1c_ library/std/src/thread/builder.rs:261
+    #4 0x559ed951c2a7 in _RINvMNtNtCs9k3SxhrAWiO_3std6thread7builderNtB3_7Builder5spawnNCNvCs965H7XVcgUb_4test8run_tests_0uEB11_ library/std/src/thread/builder.rs:191
+    #5 0x559ed951c2a7 in _RNvCs965H7XVcgUb_4test8run_test library/test/src/lib.rs:698
+    #6 0x559ed952fc45 in _RINvCs965H7XVcgUb_4test9run_testsNCNvNtB2_7console17run_tests_consoles0_0EB2_ library/test/src/lib.rs:461
+    #7 0x559ed952fc45 in _RNvNtCs965H7XVcgUb_4test7console17run_tests_console library/test/src/console.rs:328
+    #8 0x559ed951b16a in _RINvCs965H7XVcgUb_4test15test_main_innerNCNvB2_16test_main_static0EB2_ library/test/src/lib.rs:170
+    #9 0x559ed951b16a in _RNvCs965H7XVcgUb_4test16test_main_static library/test/src/lib.rs:195
+    #10 0x559ed94b4d62 in _RNvCsiK30G64IfHQ_8e2e_code4main (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x28fcd62) 
+    #11 0x559ed94f4e40 in _RINvNtCs9k3SxhrAWiO_3std2rt10lang_startuECsiK30G64IfHQ_8e2e_code (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x293ce40) 
+    #12 0x7fffd6934f53  (<unknown module>)
+    #13 0x7065642f67756264  (<unknown module>)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/lucied/git_workspaces/rag3db-moteur/src/include/storage/compression/compression.h:332 in rag3db::storage::Uncompressed::decompressFromPage(unsigned char const*, unsigned long, unsigned char*, unsigned long, unsigned long, rag3db::storage::CompressionMetadata const&) const
+Shadow bytes around the buggy address:
+  0x7e39a9a62180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7e39a9a62200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7e39a9a62280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7e39a9a62300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7e39a9a62380: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7e39a9a62400:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e39a9a62480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e39a9a62500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e39a9a62580: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e39a9a62600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e39a9a62680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
