@@ -367,8 +367,8 @@ impl DbConnection for Rag3dbConnection {
         self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
-    fn buffer_pool(&self) -> Option<String> {
-        self.buffer_pool.map(describe_buffer_pool)
+    fn buffer_pool(&self) -> Option<BufferPoolChoice> {
+        self.buffer_pool
     }
 }
 
@@ -510,46 +510,23 @@ fn typed_rag3db_value(v: &CypherValue, ty: &crate::config::FieldType) -> rag3db:
 
 // ─── Le tampon du moteur ───────────────────────────────────────────────────
 
-/// D'où vient la taille du tampon du moteur.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BufferPoolSource {
-    /// `RAG3DB_BUFFER_POOL_SIZE`, posée par qui lance.
-    Environment,
-    /// La clé `bufferPool` du manifeste.
-    Manifest,
-    /// La règle du produit : [`BUFFER_POOL_RULE_BYTES`] sur un poste d'au
-    /// moins [`BUFFER_POOL_RULE_MIN_RAM`].
-    Rule,
-    /// Rien de posé : le moteur prend 80 % de la mémoire vive.
-    EngineDefault,
-}
+pub use crate::connection::{describe_buffer_pool, BufferPoolChoice, BufferPoolSource};
 
-/// La taille retenue pour le tampon du moteur, et sa source. `bytes` vaut
-/// `None` quand le moteur choisit lui-même (80 % de la mémoire vive).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BufferPoolChoice {
-    pub bytes: Option<u64>,
-    pub source: BufferPoolSource,
-}
-
-/// **8 Gio, posés explicitement.** Décision de l'orchestration du 4 octobre
-/// 2026, en attendant la cause de l'échec mesuré : à 512 fichiers par paquet
-/// sur disque, 4 Gio échouent vers 4 500 fichiers sur un point de reprise,
-/// 8 Gio passent l'indexation de ce dépôt (62 Mo de texte, 6 900 fichiers).
-/// Lucie accepte 8 Go sur son poste. Pas de règle « une fraction de la
-/// mémoire » tant que la cause n'est pas connue.
-pub const BUFFER_POOL_RULE_BYTES: u64 = 8 << 30;
-
-/// Le seuil de la règle : un poste « de 32 Go ». La mémoire que le noyau
-/// annonce est un peu en dessous de la barrette (31,2 Gio pour 32 Go), d'où
-/// 30 Gio.
-pub const BUFFER_POOL_RULE_MIN_RAM: u64 = 30 << 30;
+/// **La moitié de la mémoire, au plus 8 Gio**, à tout poste. Décision de
+/// l'orchestration du 4 octobre 2026 : 32 Go et plus → 8 Gio, 16 Go → 8 Gio,
+/// 8 Go → 4 Gio. Le défaut du moteur (80 % de la mémoire) ferait échanger un
+/// petit poste avant d'échouer proprement ; l'estimation refuse d'avance un
+/// dépôt qu'un tampon ne porte pas. Les 8 Gio : à 512 fichiers par paquet sur
+/// disque, 4 Gio échouent vers 4 500 fichiers sur un point de reprise, 8 Gio
+/// passent l'indexation de ce dépôt (62 Mo de texte, 6 900 fichiers).
+pub const BUFFER_POOL_RULE_MAX: u64 = 8 << 30;
 
 /// **Le tampon du moteur, et d'où il vient.** Par ordre : la variable
-/// `RAG3DB_BUFFER_POOL_SIZE`, la clé `bufferPool` du manifeste (`manifest`),
-/// la règle du produit (8 Gio dès 32 Go de mémoire), sinon le défaut du
-/// moteur. L'estimation d'une indexation l'appelle pour savoir quel tampon
-/// elle aura ; le rapport de synchronisation la reprend.
+/// `RAG3DB_BUFFER_POOL_SIZE`, la clé `buffer_pool` du manifeste (`manifest`),
+/// la règle du produit (la moitié de la mémoire, au plus 8 Gio), et le défaut
+/// du moteur seulement quand la mémoire du poste ne se lit pas.
+/// L'estimation d'une indexation l'appelle pour savoir quel tampon elle aura ;
+/// une connexion ouverte dit le sien (`DbConnection::buffer_pool`).
 pub fn buffer_pool_choice(manifest: Option<u64>) -> BufferPoolChoice {
     if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
         return BufferPoolChoice { bytes: Some(v), source: BufferPoolSource::Environment };
@@ -560,27 +537,10 @@ pub fn buffer_pool_choice(manifest: Option<u64>) -> BufferPoolChoice {
     choice_by_rule(total_memory())
 }
 
-/// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
-/// rapport.
-pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
-    let source = match choice.source {
-        BufferPoolSource::Environment => "RAG3DB_BUFFER_POOL_SIZE",
-        BufferPoolSource::Manifest => "manifeste (buffer_pool)",
-        BufferPoolSource::Rule => "règle du produit (8 Gio dès 32 Go)",
-        BufferPoolSource::EngineDefault => "défaut du moteur",
-    };
-    match choice.bytes {
-        Some(b) => format!("{:.1} Gio, {source}", b as f64 / (1u64 << 30) as f64),
-        None => format!("80 % de la mémoire vive, {source}"),
-    }
-}
-
 fn choice_by_rule(total_memory: Option<u64>) -> BufferPoolChoice {
     match total_memory {
-        Some(ram) if ram >= BUFFER_POOL_RULE_MIN_RAM => {
-            BufferPoolChoice { bytes: Some(BUFFER_POOL_RULE_BYTES), source: BufferPoolSource::Rule }
-        }
-        _ => BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault },
+        Some(ram) => BufferPoolChoice { bytes: Some((ram / 2).min(BUFFER_POOL_RULE_MAX)), source: BufferPoolSource::Rule },
+        None => BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault },
     }
 }
 
@@ -596,14 +556,19 @@ fn total_memory() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn la_regle_du_tampon_pose_8_gio_des_32_go() {
+    fn la_regle_du_tampon_prend_la_moitie_de_la_memoire_au_plus_8_gio() {
         use super::*;
         let gio = 1u64 << 30;
-        assert_eq!(choice_by_rule(Some(125 * gio)), BufferPoolChoice { bytes: Some(8 * gio), source: BufferPoolSource::Rule });
-        // 32 Go de barrettes, 31,2 Gio annoncés par le noyau.
-        assert_eq!(choice_by_rule(Some(31 * gio + gio / 5)).source, BufferPoolSource::Rule);
-        assert_eq!(choice_by_rule(Some(15 * gio)), BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault });
-        assert_eq!(choice_by_rule(None).source, BufferPoolSource::EngineDefault);
+        let regle = |ram: u64| choice_by_rule(Some(ram));
+        // 32 Go et plus : 8 Gio.
+        assert_eq!(regle(125 * gio), BufferPoolChoice { bytes: Some(8 * gio), source: BufferPoolSource::Rule });
+        assert_eq!(regle(31 * gio).bytes, Some(8 * gio));
+        // 16 Go : 8 Gio (la moitié de 16 vaut le plafond).
+        assert_eq!(regle(16 * gio).bytes, Some(8 * gio));
+        // 8 Go : 4 Gio.
+        assert_eq!(regle(8 * gio), BufferPoolChoice { bytes: Some(4 * gio), source: BufferPoolSource::Rule });
+        // La mémoire ne se lit pas : le moteur choisit.
+        assert_eq!(choice_by_rule(None), BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault });
     }
 
 

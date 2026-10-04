@@ -584,7 +584,7 @@ fn synchroniser(
             source: source_id,
             files_listed: listed.len(),
             relations_mode: Some(mode),
-            buffer_pool: catalog.conn().buffer_pool(),
+            buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
             ..Default::default()
         };
     let mut noms_differes = std::collections::BTreeSet::new();

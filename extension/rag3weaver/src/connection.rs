@@ -214,12 +214,48 @@ pub trait DbConnection: Send + Sync {
         None
     }
 
-    /// **Le tampon du moteur** retenu à l'ouverture, et sa source, dits en
-    /// clair (`rag3db_connection::describe_buffer_pool`) ; `None` pour un
-    /// moteur qui n'en a pas, ou une base ouverte par une configuration
-    /// fournie.
-    fn buffer_pool(&self) -> Option<String> {
+    /// **Le tampon du moteur** retenu à l'ouverture, et sa source ; `None`
+    /// pour un moteur qui n'en a pas, ou une base ouverte par une
+    /// configuration fournie. [`describe_buffer_pool`] le dit en clair.
+    fn buffer_pool(&self) -> Option<BufferPoolChoice> {
         None
+    }
+}
+
+/// D'où vient la taille du tampon du moteur.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferPoolSource {
+    /// `RAG3DB_BUFFER_POOL_SIZE`, posée par qui lance.
+    Environment,
+    /// La clé `buffer_pool` du manifeste.
+    Manifest,
+    /// La règle du produit : la moitié de la mémoire, au plus 8 Gio.
+    Rule,
+    /// La mémoire du poste ne se lit pas : le moteur prend 80 % de la
+    /// mémoire vive.
+    EngineDefault,
+}
+
+/// La taille retenue pour le tampon du moteur, et sa source. `bytes` vaut
+/// `None` quand le moteur choisit lui-même (80 % de la mémoire vive).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufferPoolChoice {
+    pub bytes: Option<u64>,
+    pub source: BufferPoolSource,
+}
+
+/// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
+/// rapport.
+pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
+    let source = match choice.source {
+        BufferPoolSource::Environment => "RAG3DB_BUFFER_POOL_SIZE",
+        BufferPoolSource::Manifest => "manifeste (buffer_pool)",
+        BufferPoolSource::Rule => "règle du produit (la moitié de la mémoire, au plus 8 Gio)",
+        BufferPoolSource::EngineDefault => "défaut du moteur",
+    };
+    match choice.bytes {
+        Some(b) => format!("{:.1} Gio, {source}", b as f64 / (1u64 << 30) as f64),
+        None => format!("80 % de la mémoire vive, {source}"),
     }
 }
 
