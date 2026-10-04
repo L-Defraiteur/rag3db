@@ -477,3 +477,49 @@ Ce qui pèse dans le choix :
 - **le langage peut être un point de branchement**, comme le moteur de plein
   texte : un nœud de script déclare son langage, rhai reste le défaut tant
   qu'une mesure ne dit pas autre chose.
+
+### Un moteur de script générique, et le nœud entièrement scripté
+
+> « Donc WebAssembly et TypeScript ? Compiler, ça reste OK si on charge à la
+> volée dès que c'est disponible ? Ça reste compiler un petit module à chaque
+> fois. Complètement OK pour que le "moteur de scripting" reste générique ;
+> le seul truc, c'est que je veux qu'on puisse déclarer un nœud 100 %
+> scripté. » — Lucie
+
+**Retenu par Lucie** : le moteur de script est générique (le langage est un
+point de branchement), et un nœud peut être déclaré entièrement en script.
+
+**Le nœud entièrement scripté** — ce que ce serait :
+
+- une déclaration : un nom, des ports d'entrée et de sortie avec leur schéma,
+  une configuration, un langage, et le corps du script ;
+- une seule fonction à écrire : elle reçoit les entrées et la configuration,
+  elle rend les sorties ;
+- vérifié comme tout nœud (ports, schémas) avant d'entrer dans un graphe, et
+  rechargé à chaud ;
+- il n'appelle le système que par ce qu'on lui donne : requêter, journaliser,
+  nommer un secret (jamais le lire), appeler l'extérieur par l'exécuteur
+  gardé.
+
+`RhaiNode` existe ; il manque la déclaration du nœud sous un nom, avec ses
+ports, pour qu'il se réutilise comme un nœud fourni.
+
+**Le moteur générique** : une seule interface — préparer un script, l'appeler
+avec des entrées, recevoir des sorties — que chaque langage remplit. Le nœud
+scripté ne sait pas lequel tourne dessous.
+
+**TypeScript et WebAssembly** (avis de l'orchestration, à vérifier) :
+
+- **TypeScript ne se compile pas directement en WebAssembly.** Deux chemins :
+  un langage voisin fait pour cela (un sous-ensemble, pas du vrai
+  TypeScript) ; ou embarquer un moteur JavaScript dans notre binaire et
+  retirer les types à la volée — un outil écrit en Rust le fait en quelques
+  millisecondes. Par le second chemin, la personne écrit du TypeScript et ne
+  compile rien.
+- **WebAssembly demande de compiler**, mais un petit module : quelques
+  secondes, puis chargé à chaud. Ce que cela coûte vraiment : la personne (ou
+  l'agent) doit avoir une chaîne de compilation sur son poste. C'est donc
+  l'étage pour une logique lourde, pas le chemin ordinaire.
+
+Ce qui donnerait : rhai aujourd'hui ; TypeScript par un moteur embarqué quand
+on veut un langage que les modèles écrivent bien ; WebAssembly pour le lourd.
