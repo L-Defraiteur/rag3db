@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 17 h.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 18 h.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -113,10 +113,26 @@ classe) : corrigé dans `d51e933`, pointé en `4fe5a3bfc`. Sonde rejouée sur
 le dépôt entier : 264 156 relations et 601 929 rendez-vous, identiques à 64
 et à 512 ; zéro boucle.
 
+**La ligne de relation des arbres se lit `~ Consumed by ~`** (`98478b5ef`,
+demande de Lucie) : le nom en casse de phrase, tirets bas en espaces, entre
+deux tildes, règle tirée du nom. Aux trois rendus : `arbre::relation_label`
+(Liens, Graphe du grep) et `replace("_", " ") | capitalize` dans
+`results.md.jinja`.
+
+**La marque de résolution, ma moitié** (branche `resolution-marque`,
+`b0448ee5e`, non fusionnée) : `choose_target`, extrait de
+`materialiser_les_symboles` sans changer la cible, rend aussi la marque
+(`Resolution` : fichier / type / import / nom ; un seul définisseur que
+l'import désigne est marqué import, d'accord avec l'arbre principal). La
+colonne et son écriture sont à l'arbre principal ; ensuite le filtre
+d'arête déclaré au gabarit dans Liens et `impact`, « par le nom » dans
+`usages`, et la mesure au banc des relations (précision de « dépend de » en
+hausse, rappel pas en baisse ; sinon le filtre reste éteint).
+
 ## Ce qui attend quelqu'un
 
-- **Lucie** : la marque de résolution sur les arêtes (proposition au
-  ticket) — c'est elle qui ferait taire `clear`.
+- **Arbre principal** : la colonne `resolution` et son écriture, sur
+  `resolution-marque` (entre deux mesures de la session embarquements).
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les
