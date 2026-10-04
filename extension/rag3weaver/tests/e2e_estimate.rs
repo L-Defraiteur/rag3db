@@ -150,14 +150,81 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         .collect();
     let chars: usize = kept.iter().map(|(_, c)| c.len()).sum();
     eprintln!("[mots] {} fichiers, {:.1} Mo à synchroniser", kept.len(), chars as f64 / 1e6);
+    // La mémoire résidente du moment, en Mo : de quoi dire où elle monte.
+    let rss = || {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
+            .map(|kb| kb / 1024)
+            .unwrap_or(0)
+    };
+    eprintln!("[mémoire] {} Mo — les sources lues ({:.0} Mo de texte)", rss(), chars as f64 / 1e6);
 
     let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
     let rate = probe_rate(embedder.as_ref(), &samples()).expect("sonde");
-    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    // `RAG3WEAVER_ESTIMATE_DB_DIR` : la base sur disque, dans ce dossier (vidé
+    // d'abord) — le cas réel d'un utilisateur. Sans elle : en mémoire.
+    let db_dir = std::env::var_os("RAG3WEAVER_ESTIMATE_DB_DIR").map(std::path::PathBuf::from);
+    let conn = match &db_dir {
+        Some(dir) => {
+            let _ = std::fs::remove_dir_all(dir);
+            std::fs::create_dir_all(dir).expect("dossier de la base");
+            eprintln!("[mots] base sur disque : {}", dir.display());
+            Rag3dbConnection::new(dir.join("estimate.rag3db")).expect("base sur disque")
+        }
+        None => Rag3dbConnection::in_memory().expect("base en mémoire"),
+    };
+    eprintln!("[mots] tampon du moteur : RAG3DB_BUFFER_POOL_SIZE = {:?} (absent : le défaut du moteur)", std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok());
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
         .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
         .expect("extension vector");
+    // `RAG3WEAVER_ESTIMATE_AUTO_CHECKPOINT=0` : le point de reprise
+    // automatique du moteur est coupé, et un seul est demandé à la fin.
+    // `RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD` : son seuil, en octets de
+    // journal (défaut du moteur : 16 Mio).
+    let auto_checkpoint = std::env::var("RAG3WEAVER_ESTIMATE_AUTO_CHECKPOINT").map(|v| v.trim() != "0").unwrap_or(true);
+    if !auto_checkpoint {
+        boxed.execute("CALL auto_checkpoint=false").expect("couper le point de reprise automatique");
+    }
+    if let Some(threshold) = std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+        boxed.execute(&format!("CALL checkpoint_threshold={threshold}")).expect("seuil du point de reprise");
+    }
+    eprintln!("[mots] point de reprise automatique : {auto_checkpoint} ; seuil : {:?}", std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok());
+    // Les points de reprise réellement posés, comptés par la taille du
+    // journal : elle ne retombe que quand le moteur le replie (le guetteur de
+    // `e2e_arret_brutal`). Un échantillon toutes les 2 ms.
+    let journal_stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let journal_watch = db_dir.as_ref().map(|dir| {
+        let (dir, stop) = (dir.clone(), journal_stop.clone());
+        std::thread::spawn(move || {
+            use std::sync::atomic::Ordering;
+            let wal_size = || -> u64 {
+                std::fs::read_dir(&dir)
+                    .map(|entries| {
+                        entries
+                            .flatten()
+                            .filter(|e| e.file_name().to_string_lossy().ends_with(".wal"))
+                            .filter_map(|e| e.metadata().ok())
+                            .map(|m| m.len())
+                            .sum()
+                    })
+                    .unwrap_or(0)
+            };
+            let (mut previous, mut folds, mut largest, mut folded_bytes) = (0u64, 0usize, 0u64, 0u64);
+            while !stop.load(Ordering::Relaxed) {
+                let size = wal_size();
+                if size < previous {
+                    folds += 1;
+                    folded_bytes += previous;
+                }
+                largest = largest.max(size);
+                previous = size;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            (folds, largest, folded_bytes)
+        })
+    });
     let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
     catalog.initialize().unwrap();
@@ -178,9 +245,11 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         if p.phase == SyncPhase::Relations && words_seconds.is_none() {
             words_seconds = Some(t.elapsed().as_secs_f64());
             eprintln!("[mots] les mots sont là en {:.0} s ; relations : {} liens à poser", t.elapsed().as_secs_f64(), p.relations_pending);
+            eprintln!("[mémoire] {} Mo — les mots posés, {} liens en file", rss(), p.relations_pending);
         } else if p.phase == SyncPhase::Nodes && (p.files_done >= last + 1_000 || p.files_done == p.files_total) {
             last = p.files_done;
             eprintln!("[mots] {} / {} fichiers, {} scopes, {} liens en file, {:.0} s", p.files_done, p.files_total, p.scopes_written, p.relations_pending, t.elapsed().as_secs_f64());
+            eprintln!("[mémoire] {} Mo — {} fichiers faits", rss(), p.files_done);
         }
     })
     .expect("synchronisation jusqu'au plein texte");
@@ -196,6 +265,47 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         report.relations
     );
 
+    eprintln!("[mémoire] {} Mo — synchronisation finie", rss());
+    if !auto_checkpoint {
+        let t = Instant::now();
+        catalog.execute_raw("CHECKPOINT").expect("point de reprise final");
+        eprintln!("[journal] point de reprise final, demandé : {:.1} s", t.elapsed().as_secs_f64());
+    }
+    journal_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    if let Some(watch) = journal_watch {
+        let (folds, largest, folded_bytes) = watch.join().expect("guetteur du journal");
+        eprintln!(
+            "[journal] {folds} replis du journal vus (points de reprise) ; plus gros journal : {:.0} Mo ; journal replié au total : {:.0} Mo",
+            largest as f64 / 1e6,
+            folded_bytes as f64 / 1e6
+        );
+    }
+    // Les relations par type : de quoi comparer deux tailles de paquet.
+    match catalog.execute_raw("MATCH ()-[r]->() RETURN label(r) AS type, count(*) AS n ORDER BY type") {
+        Ok(result) => {
+            for row in &result.rows {
+                eprintln!("[relations] {:?} : {:?}", row[0], row[1]);
+            }
+        }
+        Err(e) => eprintln!("[relations] décompte par type impossible : {e}"),
+    }
+    if let Some(dir) = &db_dir {
+        fn size(dir: &std::path::Path) -> u64 {
+            std::fs::read_dir(dir)
+                .map(|entries| {
+                    entries
+                        .flatten()
+                        .map(|e| match e.metadata() {
+                            Ok(m) if m.is_dir() => size(&e.path()),
+                            Ok(m) => m.len(),
+                            Err(_) => 0,
+                        })
+                        .sum()
+                })
+                .unwrap_or(0)
+        }
+        eprintln!("[mots] taille de la base sur disque : {:.0} Mo", size(dir) as f64 / 1e6);
+    }
     for (reason, n) in &report.files_set_aside {
         eprintln!("[mots] {n} fichiers écartés : {reason}");
     }

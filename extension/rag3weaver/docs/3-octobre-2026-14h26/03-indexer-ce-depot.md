@@ -4,6 +4,29 @@
 l'orchestration avec la page de la session recherche sur les outils de
 l'agent.
 
+> **À lire d'abord (4 octobre 2026, midi) : en mémoire ou sur disque.**
+> Tous les chiffres de cette page mesurés avant le 4 octobre à midi le sont
+> sur une **base en mémoire**. Sur disque — le cas d'un utilisateur —, la
+> première indexation de ce dépôt (mots seulement, 8 fils lucivy, binaire de
+> test, NVMe) donne :
+>
+> | Paquets de | En mémoire | Sur disque | Pic de mémoire sur disque |
+> |---|---|---|---|
+> | 512 | 120 s | **823 s** | 13,1 Go |
+> | tout (un paquet) | 89 s | **232 s** | 15,3 Go |
+> | 512, tampon du moteur à 2 Gio | — | **échoue** vers 2 000 fichiers | — |
+>
+> Où part le temps sur disque, à 512 : pousser les blobs du plein texte en
+> base 346 s en 56 appels (8 s en mémoire), symboles 153 s, `flush_fts`
+> 137 s, `chunk_link` 87 s, file des liens vidée en route 57 s, chargement
+> final des relations 38 s. D'un tenant : pousser les blobs 77 s en 4 appels.
+> La base fait 3,5 à 3,7 Go. La cause n'est pas encore mesurée ; l'hypothèse
+> est un point de reprise du moteur à chaque poussée (seuil du journal :
+> 16 Mio). Avec un tampon de 2 Gio, un point de reprise échoue (« buffer pool
+> is full ») et la base doit être rouverte : un poste modeste n'indexe pas ce
+> dépôt aujourd'hui. Une passe par ligne, sans répétition ; le corpus a bougé
+> de quelques dizaines de fichiers entre les passes.
+
 Deux produits, un moteur : un agent de code en cloud qui télécharge un dépôt
 git, un agent en ligne de commande qui ingère ce qu'il y a sur le disque. Le
 verbe qui leur manque à tous deux est le même : **dire ce que ça va coûter,
