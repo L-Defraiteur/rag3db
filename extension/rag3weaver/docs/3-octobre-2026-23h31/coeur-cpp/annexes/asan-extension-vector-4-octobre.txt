@@ -1,0 +1,112 @@
+=================================================================
+==3076417==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c1682bc697f at pc 0x674cf2be738b bp 0x7b0614697ee0 sp 0x7b0614697ed0
+READ of size 1 at 0x7c1682bc697f thread T5863
+    #0 0x674cf2be738a in rag3db::vector_extension::VisitedState::contains(unsigned long) const /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/include/index/hnsw_index.h:58
+    #1 0x674cf2be738a in operator()<std::span<const rag3db::common::internalID_t>, std::span<const std::shared_ptr<rag3db::common::ValueVector> >, long unsigned int> /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:1300
+    #2 0x674cf2be738a in operator()<long unsigned int> /home/lucied/git_workspaces/rag3db-moteur/src/include/graph/graph.h:46
+    #3 0x674cf2be738a in forEach<rag3db::graph::NbrScanState::Chunk::forEach<rag3db::vector_extension::OnDiskHNSWIndex::oneHopSearch(const rag3db::vector_extension::EmbeddingHandle&, rag3db::graph::Graph::EdgeIterator&, rag3db::vector_extension::HNSWSearchState&, rag3db::vector_extension::min_node_priority_queue_t&, rag3db::vector_extension::max_node_priority_queue_t&) const::<lambda(auto:67, auto:68, auto:69)> >(rag3db::vector_extension::OnDiskHNSWIndex::oneHopSearch(const rag3db::vector_extension::EmbeddingHandle&, rag3db::graph::Graph::EdgeIterator&, rag3db::vector_extension::HNSWSearchState&, rag3db::vector_extension::min_node_priority_queue_t&, rag3db::vector_extension::max_node_priority_queue_t&) const::<lambda(auto:67, auto:68, auto:69)>&&) const::<lambda(auto:9)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/common/data_chunk/sel_vector.h:43
+    #4 0x674cf2be738a in forEach<rag3db::vector_extension::OnDiskHNSWIndex::oneHopSearch(const rag3db::vector_extension::EmbeddingHandle&, rag3db::graph::Graph::EdgeIterator&, rag3db::vector_extension::HNSWSearchState&, rag3db::vector_extension::min_node_priority_queue_t&, rag3db::vector_extension::max_node_priority_queue_t&) const::<lambda(auto:67, auto:68, auto:69)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/graph/graph.h:46
+    #5 0x674cf2be738a in rag3db::vector_extension::OnDiskHNSWIndex::oneHopSearch(rag3db::vector_extension::EmbeddingHandle const&, rag3db::graph::Graph::EdgeIterator&, rag3db::vector_extension::HNSWSearchState&, std::priority_queue<rag3db::vector_extension::NodeWithDistance, std::vector<rag3db::vector_extension::NodeWithDistance, std::allocator<rag3db::vector_extension::NodeWithDistance> >, rag3db::vector_extension::MinNodePriorityQueueComparator>&, std::priority_queue<rag3db::vector_extension::NodeWithDistance, std::vector<rag3db::vector_extension::NodeWithDistance, std::allocator<rag3db::vector_extension::NodeWithDistance> >, rag3db::vector_extension::MaxNodePriorityQueueComparator>&) const /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:1298
+    #6 0x674cf2bee4c4 in rag3db::vector_extension::OnDiskHNSWIndex::searchKNNInLayer(rag3db::transaction::Transaction*, rag3db::vector_extension::EmbeddingHandle const&, unsigned long, rag3db::vector_extension::HNSWSearchState&, bool) const /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:1231
+    #7 0x674cf2bf47b1 in rag3db::vector_extension::OnDiskHNSWIndex::searchFromCheckpointed(rag3db::transaction::Transaction*, rag3db::vector_extension::EmbeddingHandle const&, rag3db::vector_extension::HNSWSearchState&) const /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:531
+    #8 0x674cf2c021d4 in rag3db::vector_extension::OnDiskHNSWIndex::search(rag3db::transaction::Transaction*, rag3db::vector_extension::EmbeddingHandle const&, rag3db::vector_extension::HNSWSearchState&) const /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:510
+    #9 0x674cf2b886fa in operator()<float> /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/function/query_hnsw_index.cpp:263
+    #10 0x674cf2b886fa in visit<rag3db::vector_extension::tableFunc(const rag3db::function::TableFuncInput&, rag3db::function::TableFuncOutput&)::<lambda(T)>, rag3db::vector_extension::tableFunc(const rag3db::function::TableFuncInput&, rag3db::function::TableFuncOutput&)::<lambda(auto:61)> > /home/lucied/git_workspaces/rag3db-moteur/src/include/common/type_utils.h:178
+    #11 0x674cf2b886fa in tableFunc /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/function/query_hnsw_index.cpp:256
+    #12 0x7f068655cb45 in std::function<unsigned long (rag3db::function::TableFuncInput const&, rag3db::function::TableFuncOutput&)>::operator()(rag3db::function::TableFuncInput const&, rag3db::function::TableFuncOutput&) const /usr/include/c++/16/bits/std_function.h:581
+    #13 0x7f068655cb45 in rag3db::processor::TableFunctionCall::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/table_function_call.cpp:42
+    #14 0x7f068650a2db in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #15 0x7f0686531b6a in rag3db::processor::SingleTableSemiMasker::getNextTuplesInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/semi_masker.cpp:87
+    #16 0x7f068650a2db in rag3db::processor::PhysicalOperator::getNextTuple(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:203
+    #17 0x7f0685fc0c68 in rag3db::processor::HashJoinBuild::executeInternal(rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/hash_join/hash_join_build.cpp:64
+    #18 0x7f06865be5c1 in rag3db::processor::Sink::execute(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/include/processor/operator/sink.h:35
+    #19 0x7f06865be5c1 in rag3db::processor::ProcessorTask::run() /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor_task.cpp:31
+    #20 0x7f06844b934d in rag3db::common::TaskScheduler::runWorkerThread() /home/lucied/git_workspaces/rag3db-moteur/src/common/task_system/task_scheduler.cpp:140
+    #21 0x7f0683905395  (/usr/lib/libstdc++.so.6+0x105395) (BuildId: ed0778005ba03ef96f624ef8cfca20042b7f9ee8)
+    #22 0x7f0687c6da2f  (/usr/lib/libasan.so.8.0.0+0x6da2f) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #23 0x7f06834acfb0  (/usr/lib/libc.so.6+0xacfb0) (BuildId: 46554afd5282a7de42075035b9bdaac8968c6e03)
+    #24 0x7f068354c60b  (/usr/lib/libc.so.6+0x14c60b) (BuildId: 46554afd5282a7de42075035b9bdaac8968c6e03)
+
+0x7c1682bc697f is located 44 bytes after 211-byte region [0x7c1682bc6880,0x7c1682bc6953)
+allocated by thread T5863 here:
+    #0 0x7f0687d8c241 in operator new[](unsigned long) (/usr/lib/libasan.so.8.0.0+0x18c241) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x674cf2be1561 in std::__detail::_MakeUniq<unsigned char []>::__array std::make_unique<unsigned char []>(unsigned long) /usr/include/c++/16/bits/unique_ptr.h:1120
+    #2 0x674cf2be1561 in rag3db::vector_extension::VisitedState::VisitedState(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/include/index/hnsw_index.h:50
+    #3 0x674cf2be1561 in rag3db::vector_extension::HNSWSearchState::HNSWSearchState(rag3db::main::ClientContext*, rag3db::catalog::TableCatalogEntry*, rag3db::catalog::TableCatalogEntry*, rag3db::catalog::TableCatalogEntry*, rag3db::storage::NodeTable&, unsigned int, unsigned long, unsigned long, rag3db::vector_extension::QueryHNSWConfig) /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/index/hnsw_index.cpp:425
+    #4 0x674cf2b79982 in rag3db::vector_extension::initQueryHNSWLocalState(rag3db::function::TableFuncInitLocalStateInput const&) /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/function/query_hnsw_index.cpp:320
+    #5 0x674cf2b4fbb0 in std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > std::__invoke_impl<std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> >, std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*&)(rag3db::function::TableFuncInitLocalStateInput const&), rag3db::function::TableFuncInitLocalStateInput const&>(std::__invoke_other, std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*&)(rag3db::function::TableFuncInitLocalStateInput const&), rag3db::function::TableFuncInitLocalStateInput const&) /usr/include/c++/16/bits/invoke.h:63
+    #6 0x674cf2b4fbb0 in std::enable_if<is_invocable_r_v<std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> >, std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*&)(rag3db::function::TableFuncInitLocalStateInput const&), rag3db::function::TableFuncInitLocalStateInput const&>, std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > >::type std::__invoke_r<std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> >, std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*&)(rag3db::function::TableFuncInitLocalStateInput const&), rag3db::function::TableFuncInitLocalStateInput const&>(std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*&)(rag3db::function::TableFuncInitLocalStateInput const&), rag3db::function::TableFuncInitLocalStateInput const&) /usr/include/c++/16/bits/invoke.h:118
+    #7 0x674cf2b4fbb0 in std::_Function_handler<std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (rag3db::function::TableFuncInitLocalStateInput const&), std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (*)(rag3db::function::TableFuncInitLocalStateInput const&)>::_M_invoke(std::_Any_data const&, rag3db::function::TableFuncInitLocalStateInput const&) /usr/include/c++/16/bits/std_function.h:296
+    #8 0x7f068655e538 in std::function<std::unique_ptr<rag3db::function::TableFuncLocalState, std::default_delete<rag3db::function::TableFuncLocalState> > (rag3db::function::TableFuncInitLocalStateInput const&)>::operator()(rag3db::function::TableFuncInitLocalStateInput const&) const /usr/include/c++/16/bits/std_function.h:581
+    #9 0x7f068655e538 in rag3db::processor::TableFunctionCall::initLocalStateInternal(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/table_function_call.cpp:25
+    #10 0x7f068650bac6 in rag3db::processor::PhysicalOperator::initLocalState(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:179
+    #11 0x7f068650bac6 in rag3db::processor::PhysicalOperator::initLocalState(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/processor/operator/physical_operator.cpp:179
+    #12 0x7f06865be531 in rag3db::processor::Sink::execute(rag3db::processor::ResultSet*, rag3db::processor::ExecutionContext*) /home/lucied/git_workspaces/rag3db-moteur/src/include/processor/operator/sink.h:33
+    #13 0x7f06865be531 in rag3db::processor::ProcessorTask::run() /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor_task.cpp:31
+    #14 0x7f06844b934d in rag3db::common::TaskScheduler::runWorkerThread() /home/lucied/git_workspaces/rag3db-moteur/src/common/task_system/task_scheduler.cpp:140
+    #15 0x7f0683905395  (/usr/lib/libstdc++.so.6+0x105395) (BuildId: ed0778005ba03ef96f624ef8cfca20042b7f9ee8)
+
+Thread T5863 created by T1 here:
+    #0 0x7f0687d7e28c in pthread_create (/usr/lib/libasan.so.8.0.0+0x17e28c) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x7f0683905479 in std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) (/usr/lib/libstdc++.so.6+0x105479) (BuildId: ed0778005ba03ef96f624ef8cfca20042b7f9ee8)
+    #2 0x7f06865baba9 in std::__detail::_MakeUniq<rag3db::common::TaskScheduler>::__single_object std::make_unique<rag3db::common::TaskScheduler, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #3 0x7f06865baba9 in rag3db::processor::QueryProcessor::QueryProcessor(unsigned long) /home/lucied/git_workspaces/rag3db-moteur/src/processor/processor.cpp:21
+    #4 0x7f06857d7c76 in std::__detail::_MakeUniq<rag3db::processor::QueryProcessor>::__single_object std::make_unique<rag3db::processor::QueryProcessor, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #5 0x7f06857d7c76 in rag3db::main::Database::initMembers(std::basic_string_view<char, std::char_traits<char> >, std::function<std::unique_ptr<rag3db::storage::BufferManager, std::default_delete<rag3db::storage::BufferManager> > (rag3db::main::Database const&)>) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:120
+    #6 0x7f06857dacc9 in rag3db::main::Database::Database(std::basic_string_view<char, std::char_traits<char> >, rag3db::main::SystemConfig, std::function<std::unique_ptr<rag3db::storage::BufferManager, std::default_delete<rag3db::storage::BufferManager> > (rag3db::main::Database const&)>) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:92
+    #7 0x7f06857db0ac in rag3db::main::Database::Database(std::basic_string_view<char, std::char_traits<char> >, rag3db::main::SystemConfig) /home/lucied/git_workspaces/rag3db-moteur/src/main/database.cpp:87
+    #8 0x55ba9e66d557 in std::__detail::_MakeUniq<rag3db::main::Database>::__single_object std::make_unique<rag3db::main::Database, std::basic_string_view<char, std::char_traits<char> >&, rag3db::main::SystemConfig&>(std::basic_string_view<char, std::char_traits<char> >&, rag3db::main::SystemConfig&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #9 0x55ba9e66d557 in rag3db_rs::new_database(std::basic_string_view<char, std::char_traits<char> >, unsigned long, unsigned long, bool, bool, unsigned long, bool, long, bool, bool) src/rag3db_rs.cpp:90
+    #10 0x55ba9e663fae in operator() /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:982
+    #11 0x55ba9e663fae in trycatch<rag3db_rs::rag3db_rs$cxxbridge1$new_database(std::string_view*, uint64_t, uint64_t, bool, bool, uint64_t, bool, int64_t, bool, bool, rag3db::main::Database**)::<lambda()>, rust::cxxbridge1::detail::Fail> /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:842
+    #12 0x55ba9e663fae in rag3db_rs$cxxbridge1$new_database /home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/build/rag3db-11fa0ce65fd4141a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc:980
+    #13 0x55ba9e6630ec in _RNvNtNtCs5bsZpSl2dkw_6rag3db3ffi3ffi12new_database (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x391b0ec) (BuildId: 91b13972077a15d0f1a7bf1b52b720a2da631c21)
+
+Thread T1 created by T0 here:
+    #0 0x7f0687d7e28c in pthread_create (/usr/lib/libasan.so.8.0.0+0x17e28c) (BuildId: 9984d9525c58ce2da97a0c6855b72ef802ee1bbe)
+    #1 0x55ba9fd7b210 in _RNvMs0_NtNtNtCs9k3SxhrAWiO_3std3sys6thread4unixNtB5_6Thread3new library/std/src/sys/thread/unix.rs:103
+    #2 0x55ba9d6ac2a7 in _RINvNtNtCs9k3SxhrAWiO_3std6thread9lifecycle15spawn_uncheckedNCNvCs965H7XVcgUb_4test8run_tests_0uEB10_ library/std/src/thread/lifecycle.rs:116
+    #3 0x55ba9d6ac2a7 in _RINvMNtNtCs9k3SxhrAWiO_3std6thread7builderNtB3_7Builder15spawn_uncheckedNCNvCs965H7XVcgUb_4test8run_tests_0uEB1c_ library/std/src/thread/builder.rs:261
+    #4 0x55ba9d6ac2a7 in _RINvMNtNtCs9k3SxhrAWiO_3std6thread7builderNtB3_7Builder5spawnNCNvCs965H7XVcgUb_4test8run_tests_0uEB11_ library/std/src/thread/builder.rs:191
+    #5 0x55ba9d6ac2a7 in _RNvCs965H7XVcgUb_4test8run_test library/test/src/lib.rs:698
+    #6 0x55ba9d6bfc45 in _RINvCs965H7XVcgUb_4test9run_testsNCNvNtB2_7console17run_tests_consoles0_0EB2_ library/test/src/lib.rs:461
+    #7 0x55ba9d6bfc45 in _RNvNtCs965H7XVcgUb_4test7console17run_tests_console library/test/src/console.rs:328
+    #8 0x55ba9d6ab16a in _RINvCs965H7XVcgUb_4test15test_main_innerNCNvB2_16test_main_static0EB2_ library/test/src/lib.rs:170
+    #9 0x55ba9d6ab16a in _RNvCs965H7XVcgUb_4test16test_main_static library/test/src/lib.rs:195
+    #10 0x55ba9d644d62 in _RNvCsiK30G64IfHQ_8e2e_code4main (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x28fcd62) (BuildId: 91b13972077a15d0f1a7bf1b52b720a2da631c21)
+    #11 0x55ba9d684e40 in _RINvNtCs9k3SxhrAWiO_3std2rt10lang_startuECsiK30G64IfHQ_8e2e_code (/home/lucied/git_workspaces/rag3db-moteur/extension/rag3weaver/target/debug/deps/e2e_code-ac0354779355be28+0x293ce40) (BuildId: 91b13972077a15d0f1a7bf1b52b720a2da631c21)
+    #12 0x7ffc4683ef38  (<unknown module>)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/lucied/git_workspaces/rag3db-moteur/extension/vector/src/include/index/hnsw_index.h:58 in rag3db::vector_extension::VisitedState::contains(unsigned long) const
+Shadow bytes around the buggy address:
+  0x7c1682bc6680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7c1682bc6700: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x7c1682bc6780: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7c1682bc6800: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x7c1682bc6880: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7c1682bc6900: 00 00 00 00 00 00 00 00 00 00 03 fa fa fa fa[fa]
+  0x7c1682bc6980: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x7c1682bc6a00: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7c1682bc6a80: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x7c1682bc6b00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7c1682bc6b80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==3076417==ABORTING

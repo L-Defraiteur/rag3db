@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 15 h.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 16 h 40.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -35,30 +35,28 @@ avec la bibliothèque de master, donc antérieure à la garde 2), la pile d'Addr
 (une écriture de 4 096 octets après un bloc de 32 768, dans `DictionaryColumn::scanValue`,
 la lecture d'une colonne de chaînes longues par un balayage), ce qui a été essayé sans effet.
 
-Où j'en suis exactement :
-- `build/asan` : bibliothèque et extension bâties avec AddressSanitizer
-  (`annexes/build-asan.sh`). L'instrumentation provisoire est retirée, l'arbre est propre
-  (branche `garde-2-extensions-avant-le-rejeu-5`, égale à master `110a65f15` plus rien).
-- Sept passes sous ASan après la première : aucun rapport. **Le défaut sort une passe sur
-  huit sous ASan**, une sur quarante sans. La session s'est arrêtée là, à la limite fixée
-  par l'orchestration : la condition n'est pas connue. Scripts :
-  `~/.cache/rag3db-moteur-notes/asan/boucle-asan.sh`, `gdb-asan.cmd`.
-- Pour reprendre : boucler sous ASan **avec l'extension vector bâtie elle aussi sous ASan**
-  (c'était le cas de la seule passe qui a attrapé le défaut), gdb arrêté sur
-  `__asan::ReportGenericError`, et lire dans `DictionaryColumn::scanValue` et son appelant
-  la longueur, les décalages et les métadonnées du segment.
-- Hypothèse de l'orchestration, à trancher par les nombres : une course — une longueur ou
-  un décalage tiré d'une lecture optimiste d'une page en cours d'éviction ou de réécriture.
-  À regarder au rapport : la longueur réservée est-elle celle qui borne la boucle de pages ;
-  y a-t-il un autre fil actif sur le fichier (`thread apply all bt` sous gdb, commandes dans
-  `~/.cache/rag3db-moteur-notes/asan/gdb-asan.cmd`).
-- **Consigne de l'orchestration** : si la condition manque encore après cette étape,
-  s'arrêter et le dire — une session neuve reprendra sur le ticket et ce rapport.
-- Dès que la condition est connue : la donner, avec la pile, à la session du banc
-  (« rag3db-76 »), qui écrit le témoin.
+Où j'en suis exactement (16 h 40, seconde limite de l'orchestration atteinte : huit passes) :
+- **Fait nouveau** : avec l'extension vector bâtie elle aussi sous ASan, un second débordement,
+  dans l'extension — `VisitedState::contains` lit l'indice 255 d'un tableau de 211 octets
+  dimensionné par la cardinalité estimée de la table (`query_hnsw_index.cpp:293`) ; son
+  pendant `add` écrit un octet hors tableau. Même test, même base sur disque. Un rapport sur
+  six passes réelles ; le rapport de `scanValue` n'est pas revenu.
+- **La condition n'est pas établie.** Un contrôle « cardinalité < nombre de lignes » n'a
+  jamais parlé en quatre passes : soit le retard est rare, soit c'est le voisin rendu par le
+  graphe qui est faux. Détail, lectures et suite au ticket.
+- L'arbre est propre (`110a65f15`), l'extension ordinaire est rebâtie. **`build/asan` porte
+  encore la bibliothèque instrumentée** : la rebâtir avant de s'en servir. L'instrumentation
+  est en patch dans `annexes/instrumentation-traque-4-octobre.patch`, avec
+  `build-traque.sh` et `boucle-traque.sh`.
+- Leçon : un contrôle provisoire se joue une fois seul avant d'entrer dans une boucle
+  comptée — deux passes sur huit sont mortes de mes propres contrôles.
 - Piège : l'extension vector sort dans `extension/vector/build/`, commun à tous les dossiers
-  de build de l'arbre. Après une passe ASan, rebâtir l'extension ordinaire
-  (`cmake --build build/lecteurs-csv --target rag3db_vector_extension`).
+  de build de l'arbre ; ninja ne la refait pas si le fichier d'un autre dossier est plus
+  récent : supprimer le fichier puis rebâtir la cible.
+
+**Le lot qui suit** (orchestration, 16 h 15) : une demi-page, sans code, sur le point de
+reprise que `COPY` force — 66 s sur 177 du premier index de ce dépôt avec la transaction par
+paquet. Puis V1.
 
 **Ce qui attend derrière**, dans l'ordre de l'orchestration : la revue des amonts de la
 session du banc (`…/banc-de-concurrence/03-revue-des-amonts.md`, tickets dans

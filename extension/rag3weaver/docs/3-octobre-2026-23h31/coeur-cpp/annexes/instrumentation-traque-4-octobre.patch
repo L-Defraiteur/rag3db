@@ -1,0 +1,323 @@
+diff --git a/extension/vector/src/function/query_hnsw_index.cpp b/extension/vector/src/function/query_hnsw_index.cpp
+index ea1088d0f..ca7e30e01 100644
+--- a/extension/vector/src/function/query_hnsw_index.cpp
++++ b/extension/vector/src/function/query_hnsw_index.cpp
+@@ -35,6 +35,13 @@ using namespace rag3db::planner;
+ using namespace rag3db::catalog;
+ using namespace rag3db::processor;
+ 
++// TRAQUE (provisoire, ne pas livrer)
++namespace rag3db {
++namespace storage {
++RAG3DB_API void traqueCard(NodeTable& table, const transaction::Transaction* transaction,
++    const char* where);
++}
++} // namespace rag3db
+ namespace rag3db {
+ namespace vector_extension {
+ 
+@@ -291,6 +298,7 @@ static std::unique_ptr<TableFuncSharedState> initQueryHNSWSharedState(
+                          ->getTable(bindData->nodeTableEntry->getTableID())
+                          ->ptrCast<storage::NodeTable>();
+     auto numNodes = nodeTable->getStats(transaction::Transaction::Get(*context)).getTableCard();
++    storage::traqueCard(*nodeTable, transaction::Transaction::Get(*context), "recherche");
+     return std::make_unique<QueryHNSWIndexSharedState>(nodeTable, numNodes);
+ }
+ 
+diff --git a/src/common/in_mem_overflow_buffer.cpp b/src/common/in_mem_overflow_buffer.cpp
+index 3edcdff51..ed54ef773 100644
+--- a/src/common/in_mem_overflow_buffer.cpp
++++ b/src/common/in_mem_overflow_buffer.cpp
+@@ -6,6 +6,96 @@
+ 
+ using namespace rag3db::storage;
+ 
++// TRAQUE (provisoire, ne pas livrer)
++#include <atomic>
++#include <cstdio>
++#include <cstdlib>
++#include <sys/prctl.h>
++#include <sys/syscall.h>
++#include <unistd.h>
++extern "C" void __asan_set_error_report_callback(void (*)(const char*));
++namespace rag3db {
++namespace common {
++struct TraqueCtx {
++    unsigned long v[24];
++};
++RAG3DB_API thread_local TraqueCtx traqueCtx{};
++RAG3DB_API TraqueCtx& traqueGet() {
++    return traqueCtx;
++}
++struct TraqueSlot {
++    std::atomic<const void*> buf{nullptr};
++    std::atomic<long> tid{0};
++};
++static TraqueSlot traqueSlots[4096];
++RAG3DB_API long traqueTid() {
++    static thread_local long t = syscall(SYS_gettid);
++    return t;
++}
++static std::atomic<int> traqueReported{0};
++RAG3DB_API void traqueReport(const char* why) {
++    auto& c = traqueCtx;
++    static const char* names[24] = {"reserve.length", "startOffset", "dest", "vec", "buf",
++        "nblocks", "blk.data", "blk.size", "blk.offsetApres", "data.numValues", "data.startPage",
++        "data.numPages", "dict.pos", "dict.nOffsets", "dict.first", "dict.start", "dict.end",
++        "data.nvpp", "boucle.result", "boucle.length", "boucle.scanned", "boucle.inPage",
++        "boucle.pageIdx", "offsets.numValues"};
++    fprintf(stderr, "TRAQUE %s tid=%ld", why, traqueTid());
++    for (auto i = 0; i < 24; i++) {
++        fprintf(stderr, " %s=%#lx", names[i], c.v[i]);
++    }
++    fprintf(stderr, "\n");
++    fflush(stderr);
++    if (traqueReported.exchange(1) == 0) {
++        prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
++        char cmd[512];
++        snprintf(cmd, sizeof(cmd),
++            "env -u LD_PRELOAD -u LD_LIBRARY_PATH gdb -p %d -batch -ex 'set pagination off' -ex "
++            "'thread apply all bt 30' > /home/lucied/.cache/rag3db-moteur-notes/asan/fils-%d.txt "
++            "2>&1",
++            getpid(), getpid());
++        [[maybe_unused]] auto r = system(cmd);
++    }
++}
++struct RAG3DB_API TraqueHold {
++    TraqueSlot& s;
++    const void* prevBuf;
++    long prevTid;
++    TraqueHold(const void* b, const char* where) : s{traqueSlots[((uintptr_t)b >> 4) % 4096]} {
++        prevBuf = s.buf.load();
++        prevTid = s.tid.load();
++        if (prevBuf == b && prevTid != 0 && prevTid != traqueTid()) {
++            fprintf(stderr, "TRAQUE CONCURRENT buf=%p ou=%s moi=%ld autre=%ld\n", b, where,
++                traqueTid(), prevTid);
++            traqueReport("concurrent");
++        }
++        s.tid.store(traqueTid());
++        s.buf.store(b);
++    }
++    ~TraqueHold() {
++        // Ne restaure que sa propre imbrication ; sinon vide (pas d'entrée périmée d'un autre fil).
++        if (prevTid == traqueTid()) {
++            s.tid.store(prevTid);
++            s.buf.store(prevBuf);
++        } else {
++            s.buf.store(nullptr);
++            s.tid.store(0);
++        }
++    }
++};
++RAG3DB_API void* traqueHoldNew(const void* b, const char* where) {
++    return new TraqueHold(b, where);
++}
++RAG3DB_API void traqueHoldDelete(void* h) {
++    delete static_cast<TraqueHold*>(h);
++}
++static void traqueAsan(const char*) {
++    traqueReport("asan");
++}
++static int traqueInstall = (__asan_set_error_report_callback(traqueAsan), 0);
++} // namespace common
++} // namespace rag3db
++
+ namespace rag3db {
+ namespace common {
+ 
+@@ -23,6 +113,7 @@ uint8_t* BufferBlock::data() const {
+ }
+ 
+ uint8_t* InMemOverflowBuffer::allocateSpace(uint64_t size) {
++    TraqueHold traqueHold(this, "allocateSpace");
+     if (requireNewBlock(size)) {
+         if (!blocks.empty() && currentBlock()->currentOffset == 0) {
+             blocks.pop_back();
+@@ -35,6 +126,7 @@ uint8_t* InMemOverflowBuffer::allocateSpace(uint64_t size) {
+ }
+ 
+ void InMemOverflowBuffer::resetBuffer() {
++    TraqueHold traqueHold(this, "resetBuffer");
+     if (!blocks.empty()) {
+         // Last block is usually the largest
+         auto lastBlock = std::move(blocks.back());
+diff --git a/src/processor/operator/persistent/node_batch_insert.cpp b/src/processor/operator/persistent/node_batch_insert.cpp
+index 894213752..44c91274b 100644
+--- a/src/processor/operator/persistent/node_batch_insert.cpp
++++ b/src/processor/operator/persistent/node_batch_insert.cpp
+@@ -20,6 +20,12 @@ using namespace rag3db::common;
+ using namespace rag3db::storage;
+ using namespace rag3db::transaction;
+ 
++// TRAQUE (provisoire, ne pas livrer)
++namespace rag3db {
++namespace storage {
++void traqueCard(NodeTable& table, const transaction::Transaction* transaction, const char* where);
++}
++} // namespace rag3db
+ namespace rag3db {
+ namespace processor {
+ 
+@@ -307,6 +313,7 @@ void NodeBatchInsert::finalizeInternal(ExecutionContext* context) {
+         FactorizedTableUtils::appendStringToTable(sharedState->fTable.get(), warningMsg,
+             MemoryManager::Get(*clientContext));
+     }
++    storage::traqueCard(sharedState->table->cast<NodeTable>(), nullptr, "copy-finalize");
+ }
+ 
+ } // namespace processor
+diff --git a/src/storage/table/column_reader_writer.cpp b/src/storage/table/column_reader_writer.cpp
+index 3083c5611..c0387c991 100644
+--- a/src/storage/table/column_reader_writer.cpp
++++ b/src/storage/table/column_reader_writer.cpp
+@@ -11,6 +11,16 @@
+ #include "storage/table/column_chunk_metadata.h"
+ #include <concepts>
+ 
++// TRAQUE (provisoire, ne pas livrer)
++namespace rag3db {
++namespace common {
++struct TraqueCtx {
++    unsigned long v[24];
++};
++TraqueCtx& traqueGet();
++} // namespace common
++} // namespace rag3db
++
+ namespace rag3db::storage {
+ 
+ using namespace common;
+@@ -187,6 +197,14 @@ public:
+             if (!filterFunc.has_value() ||
+                 filterFunc.value()(numValuesScanned, numValuesScanned + numValuesToScanInPage)) {
+ 
++                if constexpr (std::is_same_v<OutputType, uint8_t*>) {
++                    auto& c = rag3db::common::traqueGet();
++                    c.v[18] = (unsigned long)result;
++                    c.v[19] = length;
++                    c.v[20] = numValuesScanned;
++                    c.v[21] = numValuesToScanInPage;
++                    c.v[22] = pageCursor.pageIdx;
++                }
+                 const auto readFromPageFunc = [&](uint8_t* frame) -> void {
+                     readFunc(frame, pageCursor, result, numValuesScanned + startOffsetInResult,
+                         numValuesToScanInPage, chunkMeta.compMeta);
+diff --git a/src/storage/table/dictionary_column.cpp b/src/storage/table/dictionary_column.cpp
+index cf5eb650d..4f0f53587 100644
+--- a/src/storage/table/dictionary_column.cpp
++++ b/src/storage/table/dictionary_column.cpp
+@@ -1,3 +1,19 @@
++// TRAQUE (provisoire, ne pas livrer)
++#define private public
++#include "common/in_mem_overflow_buffer.h"
++#undef private
++#include "common/vector/auxiliary_buffer.h"
++namespace rag3db {
++namespace common {
++struct TraqueCtx {
++    unsigned long v[24];
++};
++TraqueCtx& traqueGet();
++void traqueReport(const char* why);
++void* traqueHoldNew(const void* b, const char* where);
++void traqueHoldDelete(void* h);
++} // namespace common
++} // namespace rag3db
+ #include "storage/table/dictionary_column.h"
+ 
+ #include <algorithm>
+@@ -112,6 +128,15 @@ void DictionaryColumn::scan(const SegmentState& offsetState, const SegmentState&
+         auto endOffset = offsets[offsetsToScan[pos].first - firstOffsetToScan + 1];
+         auto lengthToScan = endOffset - startOffset;
+         KU_ASSERT(endOffset >= startOffset);
++        {
++            auto& c = common::traqueGet();
++            c.v[12] = pos;
++            c.v[13] = offsetsToScan.size();
++            c.v[14] = firstOffsetToScan;
++            c.v[15] = startOffset;
++            c.v[16] = endOffset;
++            c.v[23] = offsetState.metadata.numValues;
++        }
+         scanValue(dataState, startOffset, lengthToScan, result, offsetsToScan[pos].second);
+         // For each string which has the same index in the dictionary as the one we scanned,
+         // copy the scanned string to its position in the result vector
+@@ -171,8 +196,31 @@ void DictionaryColumn::scanOffsets(const SegmentState& state,
+ void DictionaryColumn::scanValue(const SegmentState& dataState, uint64_t startOffset,
+     uint64_t length, ValueVector* resultVector, uint64_t offsetInVector) const {
+     // Add string to vector first and read directly into the vector
++    auto* traqueBuf = StringVector::getInMemOverflowBuffer(resultVector);
++    auto* traqueHold = common::traqueHoldNew(traqueBuf, "scanValue");
+     auto& kuString = StringVector::reserveString(resultVector, offsetInVector, length);
++    {
++        auto& c = common::traqueGet();
++        c.v[0] = length;
++        c.v[1] = startOffset;
++        c.v[2] = (unsigned long)kuString.getData();
++        c.v[3] = (unsigned long)resultVector;
++        c.v[4] = (unsigned long)traqueBuf;
++        c.v[5] = traqueBuf->blocks.size();
++        c.v[6] = traqueBuf->blocks.empty() ? 0 : (unsigned long)traqueBuf->currentBlock()->data();
++        c.v[7] = traqueBuf->blocks.empty() ? 0 : traqueBuf->currentBlock()->size();
++        c.v[8] = traqueBuf->blocks.empty() ? 0 : traqueBuf->currentBlock()->currentOffset;
++        c.v[9] = dataState.metadata.numValues;
++        c.v[10] = dataState.metadata.getStartPageIdx();
++        c.v[11] = dataState.metadata.getNumPages();
++        c.v[17] = dataState.numValuesPerPage;
++        if (!ku_string_t::isShortString(length) &&
++            (c.v[5] == 0 || c.v[2] < c.v[6] || c.v[2] + length > c.v[6] + c.v[7])) {
++            common::traqueReport("reserve-hors-bloc");
++        }
++    }
+     dataColumn->scanSegment(dataState, startOffset, length, (uint8_t*)kuString.getData());
++    common::traqueHoldDelete(traqueHold);
+     // Update prefix to match the scanned string data
+     if (!ku_string_t::isShortString(kuString.len)) {
+         memcpy(kuString.prefix, kuString.getData(), ku_string_t::PREFIX_LENGTH);
+diff --git a/src/storage/table/node_table.cpp b/src/storage/table/node_table.cpp
+index 42a02687e..06dc63e54 100644
+--- a/src/storage/table/node_table.cpp
++++ b/src/storage/table/node_table.cpp
+@@ -1,3 +1,7 @@
++// TRAQUE (provisoire, ne pas livrer)
++#define private public
++#include "storage/table/node_table.h"
++#undef private
+ #include "storage/table/node_table.h"
+ 
+ #include "catalog/catalog_entry/node_table_catalog_entry.h"
+@@ -703,6 +707,18 @@ DataChunk NodeTable::constructDataChunkForColumns(const std::vector<column_id_t>
+     return constructDataChunk(memoryManager, std::move(types));
+ }
+ 
++// TRAQUE (provisoire, ne pas livrer)
++RAG3DB_API void traqueCard(NodeTable& table, const transaction::Transaction* transaction,
++    const char* where) {
++    (void)transaction;
++    auto card = table.nodeGroups->getStats().getTableCard();
++    auto total = table.nodeGroups->getNumTotalRows();
++    if (card < total) {
++        fprintf(stderr, "TRAQUE CARD ou=%s table=%s card=%lu total=%lu\n", where,
++            table.getTableName().c_str(), (unsigned long)card, (unsigned long)total);
++    }
++}
++
+ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
+     LocalTable* localTable) {
+     const auto startNodeOffset = nodeGroups->getNumTotalRows();
+@@ -793,6 +809,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
+ 
+     // 4. Clear local table.
+     localTable->clear(*MemoryManager::Get(*context));
++    traqueCard(*this, nullptr, "commit");
+ }
+ 
+ visible_func NodeTable::getVisibleFunc(const Transaction* transaction) const {
+@@ -1012,6 +1029,7 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
+             indexes[i].load(context, storageManager);
+         }
+     }
++    traqueCard(*this, nullptr, "deserialize");
+ }
+ 
+ } // namespace storage
