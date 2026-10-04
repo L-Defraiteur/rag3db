@@ -461,6 +461,49 @@ avertissement est une erreur dont on a choisi de ne pas mourir.** Ce choix se
 justifie par un lecteur nommé. Sans lecteur, ce n'est pas un avertissement,
 c'est un silence avec du texte dedans.
 
+## Les suites dont l'objet est la carte locale ne tournent pas de jour
+
+Tranché par l'orchestration le 4 octobre 2026, après un gel d'écran : un démon
+d'embarquement **local** tenait 2,7 Go de mémoire et 3,6 Go de mémoire vidéo sur
+la carte qui porte l'écran de Lucie, pendant qu'elle travaillait.
+
+**Pourquoi aucun régime doux ne sauve ces suites-là.** Quatre suites
+court-circuitent **exprès** le service d'embarquement de l'autre poste —
+`tests/common/mod.rs`, `fn par_le_service` rend `None` avant même de le
+consulter quand `suite_locale()` est vraie :
+
+```rust
+const SUITES_LOCALES: &[&str] = &["e2e_burn_", "e2e_demon_embeddings",
+                                  "e2e_mesure_ingestion_code", "e2e_banc_bge_m3"];
+```
+
+Et c'est juste : leur objet **est** l'embarqueur, le démon, ou la vitesse de ce
+poste. Les envoyer au service leur ferait mesurer la carte d'un autre — un
+chiffre juste pour une question qu'on ne leur pose pas, ce qui est pire qu'un
+rouge. `RAG3WEAVER_EMBED_SERVICE` ne peut donc rien pour elles, par
+construction et non par oubli.
+
+**La règle** : tant que Lucie est devant l'écran, ces suites **ne tournent
+pas**. `RAG3WEAVER_SANS_CARTE_LOCALE=1` les écarte **en le disant**, et c'est le
+défaut des batteries de jour.
+
+**Et la conséquence sur ce qu'on rend** : une batterie ainsi jouée se dit
+**« complète hors carte locale »**, jamais « complète ». Elles se jouent quand
+Lucie le dit — la nuit, ou sur demande —, et **une livraison qui touche
+l'embarqueur, le démon ou le moteur burn les exige avant fusion** : il faut
+alors le lui demander.
+
+**Le second défaut, indépendant** : le démon survit exprès à qui l'a lancé
+(`Fin::Laisser`), pour que le binaire de test suivant retrouve le modèle déjà
+chargé — 2,2 Go de chargement économisés par binaire. La survie sert **pendant**
+la passe et ne sert plus rien après. Donc `run_e2e.sh` doit relever `pidof
+rag3weaver-embeddings` au début et arrêter en fin de passe **le démon qu'il a vu
+naître pendant elle** : la même symétrie que sa somme du moteur, on relève
+l'état avant et on le rétablit après.
+
+Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
+shell qui porte le motif.
+
 ## Méthode : six façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
