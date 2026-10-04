@@ -7,7 +7,7 @@
 %% result: impact.result
 
 graph LR
-    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, also_path='HAS_PARENT>|IMPLEMENTS>|PARENT_OF>', also_same=name, also_label='Par le trait (peut-être) : ce qui appelle la méthode du trait que cette méthode implémente', group_title='Tests qui la traversent', rest_title='Code qui en dépend', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, max_degree=50)"]
+    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, also_path='HAS_PARENT>|IMPLEMENTS>|PARENT_OF>', also_same=name, also_label='Par le trait (peut-être) : ce qui appelle la méthode du trait que cette méthode implémente', group_title='Tests qui la traversent', rest_title='Code qui en dépend', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, max_degree=50, edge_field=resolution, edge_guessed=nom)"]
 
 %% Le schéma de code (src/code.rs) : les `CONSUMES`, `INHERITS_FROM` et
 %% `IMPLEMENTS` **entrants** — qui consomme, qui hérite, qui implémente —,
@@ -17,9 +17,8 @@ graph LR
 %% méthode du trait du même nom (`PARENT_OF`) ; ce qui l'appelle peut
 %% atteindre la méthode modifiée par un `dyn Trait`. Le nœud est générique :
 %% il ne sait rien de ces relations.
-%% Les arêtes devinées (`resolution = nom`) restent suivies ici : le banc des
-%% relations (4 octobre 2026) perd du rappel sans elles — un appel de méthode
-%% sur une variable sans type lu, un appel dans les arguments d'une macro
-%% sont de vrais usages que rien ne confirme. Un test manqué coûte plus
-%% qu'un dépendant en trop. Pour les taire : `edge_field=resolution,
-%% edge_guessed=nom`.
+%% Les arêtes devinées (`resolution = nom`) ne sont pas suivies ; une arête
+%% sans marque (base d'avant la colonne) l'est. Allumé le 4 octobre 2026,
+%% quand le banc des relations a tenu : « relie » 1,00, « tests traversés »
+%% 0,89 / 0,99, une fois typés les receveurs (macros, `self`, chaînes std,
+%% champs, retours, motifs `Some` / `Ok` — codeparsers 4abafd2).

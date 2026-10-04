@@ -6,16 +6,15 @@
 %% result: impact.result
 
 graph LR
-    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, group_title='Tests qui le traversent', rest_title='Code hors de ce fichier qui en dépend', kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, file=$path_in_source, depth=$depth, budget=200, max_degree=50, limit=$limit, format=summary, summary_group=case)"]
+    impact["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', direction=incoming, group_by=test_role, label_field=test_name, note_field=test_certainty, group_title='Tests qui le traversent', rest_title='Code hors de ce fichier qui en dépend', kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, file=$path_in_source, depth=$depth, budget=200, max_degree=50, limit=$limit, format=summary, summary_group=case, edge_field=resolution, edge_guessed=nom)"]
 
 %% Le même nœud qu'`impact`, parti de toutes les lignes du fichier au lieu
 %% d'un nom : ce qui est dans le fichier ne compte pas, seuls les
 %% dépendants extérieurs, dédoublonnés. Le résumé ne nomme que les tests
 %% qu'on relance (`test_role` = `case`), pas leurs aides. Le schéma de code (src/code.rs) :
 %% `repo_path` est le chemin relatif au dépôt, `file_path` le chemin absolu.
-%% Les arêtes devinées (`resolution = nom`) restent suivies ici : le banc des
-%% relations (4 octobre 2026) perd du rappel sans elles — un appel de méthode
-%% sur une variable sans type lu, un appel dans les arguments d'une macro
-%% sont de vrais usages que rien ne confirme. Un test manqué coûte plus
-%% qu'un dépendant en trop. Pour les taire : `edge_field=resolution,
-%% edge_guessed=nom`.
+%% Les arêtes devinées (`resolution = nom`) ne sont pas suivies ; une arête
+%% sans marque (base d'avant la colonne) l'est. Allumé le 4 octobre 2026,
+%% quand le banc des relations a tenu : « relie » 1,00, « tests traversés »
+%% 0,89 / 0,99, une fois typés les receveurs (macros, `self`, chaînes std,
+%% champs, retours, motifs `Some` / `Ok` — codeparsers 4abafd2).

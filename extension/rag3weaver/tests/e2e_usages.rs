@@ -196,9 +196,8 @@ fn les_requetes_de_usages_passent_par_l_index() {
 /// dit pas comment elle a été résolue ») : `run` appelle `helper` sans
 /// import — le rendez-vous le relie par le seul nom ; `go` l'importe. Par
 /// les gabarits réels : `usages` garde les deux et dit « (par le nom) » pour
-/// `run` ; `impact` les remonte tous deux (un test manqué coûte plus qu'un
-/// dépendant en trop : banc des relations) ; les liens ne relient pas `run`
-/// et `go` par `helper`.
+/// `run` ; `impact` ne remonte que `go` ; les liens ne relient pas `run` et
+/// `go` par `helper`.
 #[test]
 #[ignore]
 fn une_arete_devinee_se_dit_et_ne_se_suit_pas() {
@@ -241,7 +240,8 @@ fn une_arete_devinee_se_dit_et_ne_se_suit_pas() {
 
     let impact = outil(include_str!("../templates/tools/impact.mmd"), serde_json::json!({"name": "helper"}));
     eprintln!("{impact}");
-    assert!(impact.contains("go") && impact.contains("run"), "impact suit aussi l'arête devinée : {impact}");
+    assert!(impact.contains("go"), "{impact}");
+    assert!(!impact.contains("run"), "l'arête devinée n'est pas suivie : {impact}");
 
     let uuids: Vec<String> = {
         let cat = catalog.lock().unwrap();
