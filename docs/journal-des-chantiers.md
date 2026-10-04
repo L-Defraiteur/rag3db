@@ -461,7 +461,7 @@ avertissement est une erreur dont on a choisi de ne pas mourir.** Ce choix se
 justifie par un lecteur nommé. Sans lecteur, ce n'est pas un avertissement,
 c'est un silence avec du texte dedans.
 
-## Méthode : cinq façons de prendre son harnais pour un résultat
+## Méthode : six façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante. Elles se sont présentées à la suite,
@@ -562,7 +562,34 @@ Et la règle de voisinage qui va avec : **annoncer, attendre les « libre » des
 passes en vol, puis rebâtir** — l'annonce seule ne suffit pas, puisque la passe
 en vol ne peut pas l'entendre.
 
-**Et la forme commune aux cinq**, qui est aussi celle des défauts qu'on
+**6. Le chemin du moteur dérivé du chemin du code.** Quatre fois le 4 octobre
+2026, dans quatre endroits différents, et à chaque fois depuis un **worktree** :
+la bibliothèque et l'extension du moteur sont bâties dans l'arbre principal, et
+un harnais qui dérive leur chemin de `CARGO_MANIFEST_DIR` ou du chemin de son
+propre script les cherche là où vit le **code**.
+
+| Où | Ce que ça donnait |
+|---|---|
+| `e2e_arret_brutal` (le mien) | trois rouges nommés — `RAG3DB_ROOT` oublié à l'appel ; la suite, elle, le lisait |
+| `e2e_mesure_sync_source` | injouable depuis un worktree, `RAG3DB_ROOT` pas lu du tout |
+| `e2e_code_sync` (un seul site, deux tests) | idem |
+| **`run_e2e.sh`** | **code 1 sans un seul message** |
+
+Le dernier est le plus instructif, et c'est un contrôle que j'avais demandé
+moi-même : `empreinte_du_moteur` faisait `[ -f "$f" ] && cksum "$f"` dans une
+boucle, donc rendait **1** quand le dernier fichier manquait ; l'affectation
+`MOTEUR_AU_DEBUT="$(…)"` propageait ce 1, et `set -e` tuait la passe en
+silence. **Un contrôle qui tue en silence est pire que pas de contrôle** : il ne
+laisse même pas la trace d'un refus. Une fonction de ce genre se termine par
+`return 0`, et dit « absent … » pour ce qu'elle n'a pas trouvé.
+
+La règle, donc : **le chemin du moteur ne se dérive jamais du chemin du code.**
+`RAG3DB_ROOT` d'abord, le manifeste en repli, et l'absence **dite**. Et la façon
+de chercher ce motif, qui a tranché là où une liste de fichiers ne suffisait
+pas : un `grep` sur `extension/vector/build` dans `tests/` — par le **chemin**,
+pas par la liste des fichiers déjà en cause.
+
+**Et la forme commune aux six**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
 d'une bibliothèque — et, pour la cinquième, son âge **à la fin**. Un banc, un
