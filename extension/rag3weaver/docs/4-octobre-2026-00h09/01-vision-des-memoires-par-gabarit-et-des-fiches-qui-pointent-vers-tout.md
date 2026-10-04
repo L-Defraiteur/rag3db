@@ -334,6 +334,63 @@ forme que le système a déjà.
 4. Le sommaire sous les yeux de l'agent suffit-il à ce qu'il tire de
    lui-même ? Les passes d'agent diront s'il s'en sert.
 
+### 9.3 Les trois étages du classeur (Lucie, 4 octobre)
+
+> « À 100 % du contexte, tous les sujets touchés cette session sont à
+> re-résumer, en tenant compte des autres L1 du même jour (ou des L2 déjà
+> faits ce jour) : le sujet garde un article résumant le jour, c'est le L2.
+> Et quand trop de L2 sont présents dans un sujet, en caractères ou en jetons,
+> un crochet appelle un archiviste neutre pour un résumé global, intemporel
+> même si on lui donne la date du jour : un L3, l'article principal du sujet. »
+
+| Étage | Ce que c'est | Quand il s'écrit | Ce qu'il lit |
+|---|---|---|---|
+| **L1** | le résumé d'une tranche de session | à 30 % du contexte | les tours de la tranche |
+| **L2** | l'article **du jour** d'un sujet | à 100 % du contexte, pour chaque sujet touché dans la session | les L1 du jour rangés sous ce sujet, et le L2 du jour s'il existe déjà |
+| **L3** | l'article **principal** du sujet, intemporel | quand les L2 du sujet dépassent un budget (caractères ou jetons) | les L2 du sujet, et le L3 précédent |
+
+Ce que cette forme règle :
+
+- **Un seul L2 par sujet et par jour.** Une seconde session du même jour ne
+  crée pas un second article : elle refait celui du jour avec ce qu'elle
+  apporte.
+- **Le L3 est ce qu'on compare** pour ranger un texte neuf et pour répondre
+  au premier temps de la porte : c'est « le contenu complet du sujet » que la
+  mesure demandait, en un seul texte borné. Sans L3 encore, le dernier L2 en
+  tient lieu.
+- **L'archiviste du L3 est neutre** : il ne sort pas de la session en cours,
+  il n'a que les articles. C'est un appel isolé, déclenché par un crochet sur
+  la taille, pas par un tour.
+- **Le coût est borné par construction** : un L1 par tranche, un L2 par sujet
+  touché et par jour, un L3 seulement au dépassement du budget.
+
+Ce qu'il faut tenir, parce qu'un résumé de résumés dérive :
+
+1. **Rien ne se perd en montant.** Chaque L2 garde l'adresse de ses L1, chaque
+   L1 celle de ses tours ; le L3 cite les L2 dont il vient. On redescend
+   toujours. Un L2 ou un L3 refait **remplace** le précédent sans l'effacer.
+2. **Le L3 dit ce qui a changé, pas seulement ce qui est.** « Intemporel » ne
+   veut pas dire sans histoire : une décision renversée doit rester lisible
+   comme renversée (« on faisait X jusqu'au 3 octobre ; depuis, Y, parce
+   que… »), sinon l'article principal efface justement ce qu'une mémoire doit
+   garder. La date du jour lui sert à cela.
+3. **Ce que la personne a dit ne se résume pas.** Ses mots restent cités tels
+   quels d'un étage à l'autre ; ce que l'archiviste en déduit est marqué.
+4. **Le L3 se refait à partir des L2, pas à partir de l'ancien L3 seul**, pour
+   qu'une erreur de résumé ne se recopie pas indéfiniment ; l'ancien L3 sert
+   de point de départ, les L2 de preuve.
+5. **Un sujet qui se divise** : quand un L3 devient lui-même trop gros ou
+   couvre deux choses, l'archiviste propose de le scinder — comme pour la
+   création d'un sujet, il propose, il ne tranche pas seul.
+
+Encore flou :
+
+- Ce que devient un L1 touchant **plusieurs sujets** : rangé sous chacun, ou
+  découpé par sujet avant d'être rangé.
+- « 100 % du contexte » quand une session s'arrête avant : la fermeture de la
+  session vaut 100 %.
+- Le budget qui déclenche le L3, et s'il dépend du sujet.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. L'ordre du §7, ou la boucle (le registre) d'abord.
