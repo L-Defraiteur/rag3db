@@ -67,6 +67,12 @@ std::map<uint64_t, std::set<uint64_t>> storedForwardAdjacency(main::Connection& 
 // Clés primaires INT64 seulement (celles du banc) ; une autre est signalée, pas sautée.
 std::vector<Violation> checkLevel2(main::Connection& connection);
 
+// Les propriétés de chaque relation telles que le stockage les range dans chaque sens :
+// « table sens rel@offset » -> valeurs. Par les internes, dans une transaction de lecture,
+// sans planificateur. Deux photographies prises avant et après un point de reprise doivent
+// être égales : il ne change aucune valeur.
+std::map<std::string, std::string> storedRelProperties(main::Connection& connection);
+
 // Toutes les lignes et toutes les relations, sans identifiant interne, triées : deux
 // bases qui donnent les mêmes réponses ont le même vidage. Une relation pendante y
 // figure avec « <missing> » à la place de la clé absente.

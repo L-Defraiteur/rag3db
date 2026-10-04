@@ -632,6 +632,54 @@ std::vector<Violation> checkLevel2(main::Connection& connection) {
     return violations;
 }
 
+std::map<std::string, std::string> storedRelProperties(main::Connection& connection) {
+    const auto schema = loadSchema(connection);
+    std::map<std::string, std::string> stored;
+    mustQuery(connection, "BEGIN TRANSACTION READ ONLY;");
+    try {
+        auto* context = connection.getClientContext();
+        auto* transaction = transaction::Transaction::Get(*context);
+        auto* catalog = catalog::Catalog::Get(*context);
+        auto* storageManager = storage::StorageManager::Get(*context);
+        auto* mm = storage::MemoryManager::Get(*context);
+        const auto nodeTable = [&](const std::string& name) -> storage::NodeTable& {
+            const auto* entry = catalog->getTableCatalogEntry(transaction, name);
+            return storageManager->getTable(entry->getTableID())->cast<storage::NodeTable>();
+        };
+        for (const auto& rel : schema.relTables) {
+            const auto* entry = catalog->getTableCatalogEntry(transaction, rel.name);
+            const auto relTableID =
+                entry->constCast<catalog::RelGroupCatalogEntry>().getSingleRelEntryInfo().oid;
+            auto& relTable = storageManager->getTable(relTableID)->cast<storage::RelTable>();
+            std::vector<std::pair<common::column_id_t, common::LogicalType>> properties;
+            for (const auto& property : entry->getProperties()) {
+                if (property.getName() != common::InternalKeyword::ID) {
+                    properties.emplace_back(entry->getColumnID(property.getName()),
+                        property.getType().copy());
+                }
+            }
+            for (const auto direction : relTable.getStorageDirections()) {
+                const auto forward = direction == common::RelDataDirection::FWD;
+                const auto values = scanStoredProperties(transaction, mm, relTable,
+                    nodeTable(forward ? rel.source : rel.destination), direction, properties);
+                for (const auto& [relOffset, row] : values) {
+                    std::string text;
+                    for (const auto& value : row) {
+                        text += value + "|";
+                    }
+                    stored[stringFormat("{} {} rel@{}", rel.name, forward ? "forward" : "backward",
+                        relOffset)] = text;
+                }
+            }
+        }
+    } catch (...) {
+        connection.query("ROLLBACK;");
+        throw;
+    }
+    mustQuery(connection, "COMMIT;");
+    return stored;
+}
+
 std::vector<Violation> checkVectorIndexes(main::Connection& connection) {
     std::vector<Violation> violations;
     for (const auto& index : rows(connection,

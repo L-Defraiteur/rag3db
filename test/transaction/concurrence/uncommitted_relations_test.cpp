@@ -276,4 +276,135 @@ TEST_F(RelationPropertiesBothWays, TwoMergeSetBatchesUnderFrequentAutomaticCheck
     run(2);
 }
 
+// La recette trouvée par la session cœur C++ (ticket
+// propriete-de-chaine-faussee-dans-le-sens-direct) : deux générations de chaînes, une
+// mise à jour par lot, un point de reprise. Le point de reprise relisait chaque région
+// réécrite et y échangeait les chaînes des lignes qu'aucune écriture n'avait touchées.
+// Comparé par le stockage, sens par sens, avant et après le point de reprise : aucune
+// forme de requête n'y sert de référence. Vu rouge le 4 octobre 2026 sur master avant
+// 25b3b45dc (561 valeurs changées), vert avec le correctif.
+TEST_F(RelationPropertiesBothWays, CheckpointKeepsEveryStoredString) {
+    mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);");
+    mustRun("CREATE REL TABLE M(FROM Doc TO Doc, res STRING, line INT64);");
+    mustRun("UNWIND range(0, 2399) AS i CREATE (:Doc {id: i, name: 'ancien'});");
+    mustRun("UNWIND range(0, 1999) AS i MATCH (a:Doc {id: i}) WITH a, i MATCH (b:Doc {id: (i * "
+            "11) % 2400}) CREATE (a)-[:M {res: 'vieux', line: -1}]->(b);");
+    mustRun("CHECKPOINT;");
+    mustRun("UNWIND range(2400, 2599) AS i CREATE (:Doc {id: i, name: 'neuf'});");
+    mustRun("UNWIND range(0, 2029) AS i MATCH (a:Doc {id: i % 2400}) WITH a, i MATCH (b:Doc {id: "
+            "(i * 7 + 3) % 2400}) CREATE (a)-[:M {res: 'fichier', line: i}]->(b);");
+    mustRun("UNWIND range(0, 139) AS i MATCH (a:Doc {id: 2400 + i}) WITH a, i MATCH (b:Doc {id: "
+            "2400 + (i * 3 + 1) % 60}) CREATE (a)-[:M {res: 'fichier', line: 5000 + i}]->(b);");
+    mustRun("CHECKPOINT;");
+    mustRun("UNWIND range(0, 139) AS i MATCH (a:Doc {id: 2400 + i}) WITH a, i MATCH (b:Doc {id: "
+            "2400 + (i * 3 + 1) % 60}) MERGE (a)-[r:M]->(b) SET r.res = 'nom';");
+    const auto before = integrity::storedRelProperties(*conn);
+    mustRun("CHECKPOINT;");
+    const auto after = integrity::storedRelProperties(*conn);
+    std::string changed;
+    size_t numChanged = 0;
+    for (const auto& [key, value] : before) {
+        const auto it = after.find(key);
+        if ((it == after.end() || it->second != value) && ++numChanged <= 5) {
+            changed += " " + key + ": '" + value + "' -> '" +
+                       (it == after.end() ? std::string("<missing>") : it->second) + "'";
+        }
+    }
+    EXPECT_EQ(numChanged, 0u) << "[check: checkpoint-keeps-rel-properties] " << numChanged
+                              << " stored relation values changed:" << changed;
+    EXPECT_EQ(before.size(), after.size()) << "[check: checkpoint-keeps-rel-properties] ";
+    expectBothWaysAgree("after the checkpoint");
+}
+
+// L'appelant de plus, signalé à la session cœur C++ : une colonne LIST<STRING> relit sa
+// colonne de données sur la plage de ses listes, et liste par liste quand les décalages ne
+// sont plus croissants (des listes réécrites en place). Deux générations de chaînes très
+// dupliquées, des listes réécrites entre deux points de reprise, puis la comparaison avant
+// et après le dernier point de reprise ; sur des nœuds (lus par Cypher, un seul rangement)
+// et sur des relations (par le stockage, sens par sens).
+class ListOfStringsAcrossCheckpoints : public RelationPropertiesBothWays {
+public:
+    // Une ligne par nœud, triées pour compareDumps.
+    std::vector<std::string> nodeLists() {
+        auto result = conn->query("MATCH (d:Doc) RETURN d.id, d.tags;");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        std::vector<std::string> lines;
+        while (result->isSuccess() && result->hasNext()) {
+            lines.push_back(result->getNext()->toString());
+        }
+        std::sort(lines.begin(), lines.end());
+        return lines;
+    }
+
+    // Jamais EXPECT_EQ sur les deux vidages : rouge, gtest en calcule le diff, quadratique
+    // sur 400 000 lignes (la panne de mémoire du 4 octobre à 22 h 51). Comparés par ==,
+    // puis un résumé borné : le nombre de lignes de chaque côté et les premières.
+    void expectSameLists(const std::vector<std::string>& before,
+        const std::vector<std::string>& after, const std::string& check) {
+        if (before == after) {
+            return;
+        }
+        ADD_FAILURE() << "[check: " << check << "] "
+                      << integrity::describe(integrity::compareDumps(before, after,
+                             "before the checkpoint", "after"));
+    }
+
+    void prepare() {
+        mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, tags STRING[]);");
+        mustRun("CREATE REL TABLE M(FROM Doc TO Doc, tags STRING[]);");
+        mustRun("UNWIND range(0, 2399) AS i CREATE (:Doc {id: i, tags: ['vieux', 'vieux']});");
+        mustRun("UNWIND range(0, 1999) AS i MATCH (a:Doc {id: i}), (b:Doc {id: (i * 11) % 2400}) "
+                "CREATE (a)-[:M {tags: ['vieux', 'vieux']}]->(b);");
+        mustRun("CHECKPOINT;");
+        // Des listes réécrites en place, de longueurs différentes : leurs données vont
+        // ailleurs, et les décalages ne sont plus croissants.
+        mustRun("MATCH (d:Doc) WHERE d.id % 3 = 0 SET d.tags = ['fichier', 'nom', 'fichier'];");
+        mustRun("MATCH (a:Doc)-[r:M]->(b:Doc) WHERE a.id % 3 = 0 SET r.tags = ['fichier', 'nom', "
+                "'fichier'];");
+        mustRun("CHECKPOINT;");
+        mustRun("MATCH (d:Doc) WHERE d.id % 7 = 0 SET d.tags = ['nom'];");
+        mustRun("MATCH (a:Doc)-[r:M]->(b:Doc) WHERE a.id % 7 = 0 SET r.tags = ['nom'];");
+    }
+};
+
+// Les nœuds ne s'y prennent qu'en nombre (forme trouvée par la session cœur C++) :
+// 400 000 lignes à listes alternées, une mise à jour sur 500, un point de reprise.
+TEST_F(ListOfStringsAcrossCheckpoints, NodeListsKeepTheirStrings) {
+    mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, tags STRING[]);");
+    // Par lots : une seule transaction de 400 000 lignes remplit le tampon des tests.
+    for (auto first = 0; first < 400000; first += 50000) {
+        mustRun("UNWIND range(" + std::to_string(first) + ", " + std::to_string(first + 49999) +
+                ") AS i CREATE (:Doc {id: i, tags: CASE WHEN i % 2 = 0 THEN ['vieux', 'vieux'] "
+                "ELSE ['fichier', 'vieux'] END});");
+    }
+    mustRun("CHECKPOINT;");
+    mustRun("MATCH (d:Doc) WHERE d.id % 500 = 0 SET d.tags = ['nom'];");
+    const auto before = nodeLists();
+    mustRun("CHECKPOINT;");
+    expectSameLists(before, nodeLists(), "checkpoint-keeps-node-lists");
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    expectSameLists(before, nodeLists(), "reopen-keeps-node-lists");
+}
+
+TEST_F(ListOfStringsAcrossCheckpoints, RelationListsKeepTheirStrings) {
+    prepare();
+    const auto before = integrity::storedRelProperties(*conn);
+    mustRun("CHECKPOINT;");
+    const auto after = integrity::storedRelProperties(*conn);
+    size_t numChanged = 0;
+    std::string changed;
+    for (const auto& [key, value] : before) {
+        const auto it = after.find(key);
+        if ((it == after.end() || it->second != value) && ++numChanged <= 5) {
+            changed += " " + key + ": '" + value + "' -> '" +
+                       (it == after.end() ? std::string("<missing>") : it->second) + "'";
+        }
+    }
+    EXPECT_EQ(numChanged, 0u) << "[check: checkpoint-keeps-rel-properties] " << numChanged
+                              << " stored relation values changed:" << changed;
+    expectBothWaysAgree("after the checkpoint");
+}
+
 #endif
