@@ -3,7 +3,7 @@
 Session de l'arbre principal (`/home/lucied/git_workspaces/rag3db`, crate
 `extension/rag3weaver`). Elle tient l'ingestion du code, la synchronisation,
 le chargement en masse et les requêtes par lot du dialecte. Mis à jour le
-4 octobre 2026, vers 21 h 30.
+5 octobre 2026, vers 0 h 40.
 
 ## Fait aujourd'hui, sur master
 
@@ -80,12 +80,31 @@ Ailleurs :
 - `ad220d0eb`, `2c600c442` **une seule instance en écriture par base et par processus** : registre chemin → `Weak<Database>`, attente bornée ; le catalogue ferme vraiment ses index. La cause de la corruption d'e2e_code (deux instances, retenue par les acteurs lucivy) ; demi-page pour Lucie : `03-lucivy-fermeture-synchrone.md`.
 - Défauts du moteur trouvés et corrigés par rag3db-e3 : clés fantômes après deux COPY annulés (`5c8507577`).
 
+## Fusionné dans la nuit du 4 au 5 octobre
+
+- `005c304af` **comparaison ligne à ligne** de la transaction par paquet (e2e_tx_ligne_a_ligne : premier index et reprise, avec et sans, nœuds, vecteurs, relations lues dans les deux sens, plein texte) ; elle a trouvé le défaut des chaînes au point de reprise (corrigé par le cœur C++ en `25b3b45dc`). Sur le moteur corrigé : **7 passes sur 7 vertes**.
+- **Toute base de code indexée avant `25b3b45dc` se réindexe de zéro** : les propriétés de chaîne des relations (resolution, usage, usages, et surtout kind, qualifier_types, import_modules de MENTIONS, recopiées à chaque résolution) ont pu être échangées entre lignes ; une resynchronisation ne les répare pas (le COPY au-delà de 200 liens écarte les paires déjà posées).
+- `41136459a` dans une transaction, une table de nœuds repliée sur MERGE y reste (le moteur refuse désormais le COPY qui suivrait, `0f4a54b2c`) ; témoin `e2e_tx_merge_puis_copy`.
+- `ad220d0eb`, `2c600c442` une seule instance en écriture par base et par processus.
+- `0cace43e7` run_e2e.sh passe par `poste` (portée systemd plafonnée, 40 Go).
+- `3647be041` **points de reprise sur disque** (`$XDG_CACHE_HOME/rag3weaver/checkpoints`) ; une ingestion ou un drain finis ne laissent rien, annulation comprise ; une exécution échouée garde ses fichiers (elle se reprend).
+- `5a554a7c6` sonde (hors batterie) : après un paquet défait sous transaction, avec des vecteurs, **la reprise plante** (SIGSEGV dans `OnDiskHNSWIndex::shrinkForNode`, par un SET de vecteur) — défaut du moteur (COPY annulé sur une table indexée), chez rag3db-e2. **L'allumage par défaut de la transaction par paquet attend son correctif.**
+- Tickets : carnet fermé (`d67d34983`, aucun carnet en usage réel) ; COPY qui expire (note rag3weaver).
+
+### L'ouverture en lecture seule (`de9b1cfbe`, `b2f5306de`) — à montrer à Lucie
+
+`Rag3dbConnection::read_only`, qu'appelle `acces::ouvrir_lecteur` :
+- le refus « un point de reprise d'un autre processus a croisé l'ouverture », reconnu par son nom, est **repris toutes les 2 ms tant que la borne de temps n'est pas atteinte** : `RAG3WEAVER_READ_ONLY_CROSSED_MS`, **2 000 ms par défaut** ; au-delà, le refus nommé dit le compte des reprises et le temps passé ;
+- tout autre refus est repris dans un budget de 250 ms, comme avant ;
+- **une ouverture peut donc attendre jusqu'à environ 2 s** (plus la durée de la dernière ouverture, 20 ms en médiane et jusqu'à 381 ms mesurés sur une base de 60 Mo) sous un écrivain très actif ;
+- le compte des reprises est rendu (`open_retries()`, et un avertissement dans `ouvrir_lecteur`) ;
+- ce que les tests affirment : sur 80 ouvertures pendant qu'un autre processus écrit (un point de reprise toutes les cinq écritures), **aucune n'est refusée**, aucune ne lit faux, et les reprises restent ≤ 400 (mesuré : 74 à 221) ; avec une borne d'1 ms et 2 000 ouvertures, chaque refus est le refus nommé avec son compte, en moins de 2 s (mesuré : 168 ms au plus).
+
 ## En cours
 
-1. Les trois leviers du chargement final des relations (27 s) : MENTIONS sans CSV, vérification d'existence sautée quand c'est prouvé, points de reprise du dataflow coupés dans la transaction — un commit par levier, mesuré.
-2. Le COPY qui expire (« Timeout waiting… ») : reconnu par son nom, rejoué 3 fois hors transaction (`copy_retried`).
-3. Rejouer les suites qui rouvrent sur le moteur au gestionnaire de verrous (`lock_manager`).
-4. Rouge connu, pas de mon fait : `e2e_prise_atomique::un_lecteur_qui_insiste_pendant_qu_on_ecrit` (1 à 3 refus de lecture seule sur 80, aussi sans mes changements).
+1. Les trois leviers du chargement final des relations (MENTIONS sans CSV, vérification d'existence sautée quand c'est prouvé, points de reprise du dataflow coupés dans la transaction).
+2. Quand le correctif de l'index vectoriel de rag3db-e2 arrive : la sonde des vecteurs après ROLLBACK entre dans la suite d'arrêt (exige TOUT) et doit passer.
+3. Le repli par branche de la recherche hybride (une erreur de la branche vectorielle fait échouer toute la recherche, à éprouver) : choix de conception porté à Lucie.
 
 ## Ce qu'on a appris aujourd'hui
 
