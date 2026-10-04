@@ -1,0 +1,21 @@
+# Les cas longs du banc (plus de vingt secondes chacun) : hors de la passe par défaut.
+# concurrence_test.known_red ne les lance pas et ne les compare pas, sauf avec
+# CONCURRENCE_LONG=1 dans l'environnement : alors ils sont lancés et comparés à
+# known_red.txt comme les autres. ctest les découvre sous le label concurrence-long
+# (ctest -LE concurrence-long pour les écarter). Un rouge long garde sa ligne dans
+# known_red.txt. Décidé le 4 octobre : la comparaison était passée d'une minute à 14 min 30.
+#
+# L'index vectoriel juste en service (vector_index_update_test.cpp), durées après
+# c8fdaf196 ; ensemble, environ 15 minutes.
+VectorIndexUpdate.SetFromNullLineByLine
+VectorIndexUpdate.SetToAnotherVectorInBatchesOf512
+VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine
+VectorIndexUpdate.RealDimension768InBatchesOf100
+VectorIndexUpdate.OneRowUpdatedManyTimes
+VectorIndexUpdate.UpdateThenDelete
+VectorIndexUpdate.SetFromNullInBatchesOf32WithAMarker
+VectorIndexUpdate.ReplaceThroughNullEveryRow
+VectorIndexUpdate.ReplaceThroughNullEveryOtherRow
+VectorIndexUpdate.ReplaceThroughNullEveryThirdRow
+VectorIndexUpdate.SecondIndexOnASecondColumnFilledFromNull
+VectorIndexUpdate.DropThenCreateTheIndexOnAFullTable

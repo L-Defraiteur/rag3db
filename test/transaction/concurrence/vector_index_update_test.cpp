@@ -308,13 +308,10 @@ TEST_F(VectorIndexUpdate, RealDimension768InBatchesOf100) {
     }, 1 /* ownStep */, 1 /* runs */);
 }
 
-// Lourd : 25 s avant c8fdaf196, 27 min après (la mise à jour s'est beaucoup ralentie,
-// signalé au cœur C++ le 4 octobre). Ne tourne que sur demande, CONCURRENCE_VECTOR_HEAVY=1 ;
-// rouge à chaque passe avant comme après.
+// Lourd : 25 s avant c8fdaf196, 12 à 27 min après (la mise à jour s'est beaucoup ralentie,
+// signalé au cœur C++ le 4 octobre). Probabiliste (probabilistic.txt) : rouge six essais sur
+// six, puis vert une fois.
 TEST_F(VectorIndexUpdate, TenThousandRowsInBatchesOf512) {
-    if (!std::getenv("CONCURRENCE_VECTOR_HEAVY")) {
-        GTEST_SKIP() << "heavy: set CONCURRENCE_VECTOR_HEAVY=1";
-    }
     runRepeatedly(
         [&](int run) {
             createDocs(run, 10000);

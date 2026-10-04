@@ -2,12 +2,14 @@
 # y restent rouges, sous le label concurrence-rouge-connu ; concurrence_test.known_red
 # compare le résultat complet à known_red.txt. Les cas probabilistes
 # (probabilistic.txt) tournent sous le label concurrence-probabiliste et ne sont pas
-# comparés. Jamais de DISABLED_.
+# comparés. Les cas longs (long.txt) tournent sous le label concurrence-long, et la
+# comparaison ne les prend qu'avec CONCURRENCE_LONG=1. Jamais de DISABLED_.
 
 add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     minimal_reproduction_test.cpp integrity_checker_test.cpp harness_mechanics_test.cpp
     lock_bench_test.cpp single_writer_crash_test.cpp vector_index_update_test.cpp
-    uncommitted_relations_test.cpp)
+    uncommitted_relations_test.cpp
+    upstream_fixes_test.cpp)
 target_link_libraries(concurrence_test PRIVATE test_helper test_runner graph_test)
 if (ENABLE_BACKTRACES)
     target_link_libraries(concurrence_test PRIVATE register_backtrace_signal_handler)
@@ -31,8 +33,9 @@ endif()
 
 set(KNOWN_RED_FILE ${CMAKE_CURRENT_SOURCE_DIR}/known_red.txt)
 set(PROBABILISTIC_FILE ${CMAKE_CURRENT_SOURCE_DIR}/probabilistic.txt)
+set(LONG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/long.txt)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${KNOWN_RED_FILE} ${PROBABILISTIC_FILE})
+    ${KNOWN_RED_FILE} ${PROBABILISTIC_FILE} ${LONG_FILE})
 file(STRINGS ${KNOWN_RED_FILE} KNOWN_RED_LINES ENCODING UTF-8 REGEX "^[^#]")
 set(KNOWN_RED)
 foreach (line IN LISTS KNOWN_RED_LINES)
@@ -40,11 +43,15 @@ foreach (line IN LISTS KNOWN_RED_LINES)
     list(APPEND KNOWN_RED ${name})
 endforeach()
 file(STRINGS ${PROBABILISTIC_FILE} PROBABILISTIC ENCODING UTF-8 REGEX "^[^#]")
+file(STRINGS ${LONG_FILE} LONG ENCODING UTF-8 REGEX "^[^#]")
+# Un cas long n'est découvert que dans son groupe, même s'il est rouge connu.
+list(REMOVE_ITEM KNOWN_RED ${LONG})
 list(JOIN KNOWN_RED ":" KNOWN_RED_FILTER)
 list(JOIN PROBABILISTIC ":" PROBABILISTIC_FILTER)
+list(JOIN LONG ":" LONG_FILTER)
 
-# Trois groupes : les cas ordinaires, les rouges connus, les cas probabilistes.
-set(SET_ASIDE ${KNOWN_RED} ${PROBABILISTIC})
+# Quatre groupes : les cas ordinaires, les rouges connus, les cas probabilistes, les longs.
+set(SET_ASIDE ${KNOWN_RED} ${PROBABILISTIC} ${LONG})
 list(JOIN SET_ASIDE ":" SET_ASIDE_FILTER)
 gtest_discover_tests(concurrence_test
     DISCOVERY_TIMEOUT 600
@@ -67,12 +74,21 @@ if (PROBABILISTIC_FILTER)
         PROPERTIES LABELS concurrence-probabiliste
     )
 endif()
+if (LONG_FILTER)
+    gtest_discover_tests(concurrence_test
+        DISCOVERY_TIMEOUT 600
+        DISCOVERY_MODE PRE_TEST
+        TEST_FILTER "${LONG_FILTER}"
+        PROPERTIES LABELS concurrence-long
+    )
+endif()
 
 add_test(NAME concurrence_test.known_red
     COMMAND ${CMAKE_COMMAND}
         -DBENCH=$<TARGET_FILE:concurrence_test>
         -DKNOWN_RED_FILE=${KNOWN_RED_FILE}
         -DPROBABILISTIC_FILE=${PROBABILISTIC_FILE}
+        -DLONG_FILE=${LONG_FILE}
         -DRESULT_FILE=${CMAKE_CURRENT_BINARY_DIR}/concurrence_test_result.json
         -P ${CMAKE_CURRENT_SOURCE_DIR}/compare_known_red.cmake
 )

@@ -2,18 +2,28 @@
 # Échoue sur tout écart : un rouge nouveau, un rouge connu devenu vert, un rouge
 # connu sauté ou absent, un rouge connu dont les étiquettes « [check: …] » ne sont pas
 # exactement celles de known_red.txt (un rouge qui change de cause). Les cas de
-# probabilistic.txt sont ignorés, dans un sens comme dans l'autre.
-# Usage : cmake -DBENCH=… -DKNOWN_RED_FILE=… -DPROBABILISTIC_FILE=… -DRESULT_FILE=… -P …
+# probabilistic.txt sont ignorés, dans un sens comme dans l'autre ; ceux de long.txt aussi,
+# sauf avec CONCURRENCE_LONG=1 dans l'environnement.
+# Usage : cmake -DBENCH=… -DKNOWN_RED_FILE=… -DPROBABILISTIC_FILE=… -DLONG_FILE=…
+#   -DRESULT_FILE=… -P …
 
 # Les cas probabilistes ne sont pas lancés dans cette passe : la comparaison les
 # ignore, et C5 peut faire planter tout le processus (course du chemin de suppression
 # sans verrou, SIGSEGV dans VersionInfo::isSelected, 3 octobre) — la passe entière
 # serait perdue. ctest les lance un par un sous le label concurrence-probabiliste.
 file(STRINGS ${PROBABILISTIC_FILE} probabilistic ENCODING UTF-8 REGEX "^[^#]")
-list(JOIN probabilistic ":" probabilistic_filter)
+set(set_aside ${probabilistic})
+# Les cas longs : hors de la passe par défaut, lancés et comparés sur demande.
+set(long)
+if (NOT "$ENV{CONCURRENCE_LONG}")
+    file(STRINGS ${LONG_FILE} long ENCODING UTF-8 REGEX "^[^#]")
+    list(APPEND set_aside ${long})
+    message(STATUS "long cases set aside (CONCURRENCE_LONG=1 to run them): ${long}")
+endif()
+list(JOIN set_aside ":" set_aside_filter)
 set(filter "*")
-if (probabilistic_filter)
-    set(filter "-${probabilistic_filter}")
+if (set_aside_filter)
+    set(filter "-${set_aside_filter}")
 endif()
 
 file(REMOVE ${RESULT_FILE})
@@ -81,6 +91,9 @@ foreach (line IN LISTS known_red_lines)
     string(REPLACE "," ";" expected "${expected}")
     list(SORT expected)
     list(JOIN expected "," expected)
+    if (name IN_LIST long)
+        continue()
+    endif()
     list(APPEND known_red ${name})
     set(expected_of_${name} "${expected}")
 endforeach()
