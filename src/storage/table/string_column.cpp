@@ -1,5 +1,7 @@
 #include "storage/table/string_column.h"
 
+#include <unordered_set>
+
 #include <algorithm>
 #include <unordered_map>
 
@@ -164,32 +166,35 @@ void StringColumn::scanSegment(const SegmentState& state, ColumnChunkData* resul
         }
         dictionary.scan(state, stringResultChunk->getDictionaryChunk());
     } else {
-        // Any strings which are duplicated only need to be scanned once, so we track duplicate
-        // indices
-        std::unordered_map<string_index_t, uint64_t> indexMap;
-        std::vector<std::pair<string_index_t, uint64_t>> offsetsToScan;
+        // Seules les chaînes des lignes relues entrent dans le dictionnaire du bloc, une fois
+        // chacune. C'est le dictionnaire qui dit où il a rangé chaque chaîne : les lignes ne sont
+        // renumérotées qu'ensuite, d'après sa réponse. (Les numéroter d'avance, dans l'ordre
+        // d'apparition, quand le dictionnaire range dans l'ordre du disque, échangeait les
+        // chaînes des lignes — un point de reprise de relations relit ainsi chaque région.)
+        std::unordered_set<string_index_t> seen;
+        std::vector<string_index_t> indicesToScan;
         for (auto i = 0u; i < numValuesToScan; i++) {
             if (!resultChunk->isNull(startOffsetInResult + i)) {
                 auto index = indexChunk->getValue<string_index_t>(startOffsetInResult + i);
-                auto element = indexMap.find(index);
-                if (element == indexMap.end()) {
-                    indexMap.insert(std::make_pair(index, initialDictSize + offsetsToScan.size()));
-                    indexChunk->setValue<string_index_t>(initialDictSize + offsetsToScan.size(),
-                        startOffsetInResult + i);
-                    offsetsToScan.emplace_back(index, initialDictSize + offsetsToScan.size());
-                } else {
-                    indexChunk->setValue<string_index_t>(element->second, startOffsetInResult + i);
+                if (seen.insert(index).second) {
+                    indicesToScan.push_back(index);
                 }
             }
         }
 
-        if (offsetsToScan.size() == 0) {
+        if (indicesToScan.empty()) {
             // All scanned values are null
             return;
         }
-        dictionary.scan(getChildState(state, ChildStateIndex::OFFSET),
-            getChildState(state, ChildStateIndex::DATA), offsetsToScan, stringResultChunk,
-            getChildState(state, ChildStateIndex::INDEX).metadata);
+        const auto newIndices = dictionary.scanToChunk(getChildState(state, ChildStateIndex::OFFSET),
+            getChildState(state, ChildStateIndex::DATA), std::move(indicesToScan),
+            stringResultChunk->getDictionaryChunk());
+        for (auto i = 0u; i < numValuesToScan; i++) {
+            if (!resultChunk->isNull(startOffsetInResult + i)) {
+                auto index = indexChunk->getValue<string_index_t>(startOffsetInResult + i);
+                indexChunk->setValue<string_index_t>(newIndices.at(index), startOffsetInResult + i);
+            }
+        }
     }
     KU_ASSERT(resultChunk->getNumValues() == startOffsetInResult + numValuesToScan &&
               stringResultChunk->getIndexColumnChunk()->getNumValues() ==

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "dictionary_chunk.h"
 #include "storage/table/column.h"
 #include "storage/table/column_chunk_data.h"
@@ -16,6 +18,10 @@ public:
     static constexpr const char* DICTIONARY_OFFSETS_OUT_OF_ORDER =
         "Dictionary offsets out of order";
 
+    // Un indice de chaîne au-delà du dictionnaire de son segment. Refusé avant de dimensionner
+    // quoi que ce soit d'après lui : la plage d'indices à relire commande une réservation.
+    static constexpr const char* DICTIONARY_INDEX_OUT_OF_RANGE = "Dictionary index out of range";
+
     DictionaryColumn(const std::string& name, FileHandle* dataFH, MemoryManager* mm,
         ShadowFile* shadowFile, bool enableCompression);
 
@@ -27,6 +33,13 @@ public:
     void scan(const SegmentState& offsetState, const SegmentState& dataState,
         std::vector<std::pair<DictionaryChunk::string_index_t, uint64_t>>& offsetsToScan,
         Result* result, const ColumnChunkMetadata& indexMeta) const;
+
+    // Ajoute au dictionnaire d'un bloc les chaînes du segment désignées par leurs indices
+    // (distincts), et rend pour chacun l'indice de sa chaîne dans ce dictionnaire.
+    std::unordered_map<DictionaryChunk::string_index_t, DictionaryChunk::string_index_t>
+    scanToChunk(const SegmentState& offsetState, const SegmentState& dataState,
+        std::vector<DictionaryChunk::string_index_t> indicesToScan,
+        DictionaryChunk& dictChunk) const;
 
     DictionaryChunk::string_index_t append(const DictionaryChunk& dictChunk, SegmentState& state,
         std::string_view val) const;
@@ -40,8 +53,6 @@ public:
 private:
     void scanOffsets(const SegmentState& state, DictionaryChunk::string_offset_t* offsets,
         uint64_t index, uint64_t numValues, uint64_t dataSize) const;
-    void scanValue(const SegmentState& dataState, uint64_t startOffset, uint64_t endOffset,
-        StringChunkData* result, uint64_t offsetInVector) const;
     void scanValue(const SegmentState& dataState, uint64_t startOffset, uint64_t endOffset,
         common::ValueVector* resultVector, uint64_t offsetInVector) const;
 
