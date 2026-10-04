@@ -55,7 +55,16 @@ est donc **sur disque**, après le point de reprise de fermeture.
 
 ## Cause
 
-Inconnue. Piste lue dans le code, non vérifiée : une mise à jour de relation validée passe
+**Trouvée par la session cœur C++ (168a63901, message du commit)** : le point de reprise
+d'une colonne de chaînes de relations échange les chaînes de lignes qu'aucune écriture
+n'a touchées. Aucune écriture n'a manqué un sens dans la base gardée ; correctif à part,
+par la session cœur C++.
+
+Écartée pour cette base, mais fermée pour elle-même par la garde 168a63901 (refus nommé
+`RelTable::REL_NOT_FOUND_IN_ONE_DIRECTION`, « was not found in the ») : la piste lue d'abord
+dans le code, ci-dessous.
+
+Piste d'abord lue dans le code : une mise à jour de relation validée passe
 par `RelTableData::update` pour chaque sens ; elle retrouve la ligne par
 `findMatchingRow` (le nœud de rattachement du sens et l'identifiant de la relation), et un
 échec n'y est vérifié que par `KU_ASSERT(rowIdx != INVALID_ROW_IDX)`, éteint en Release.
