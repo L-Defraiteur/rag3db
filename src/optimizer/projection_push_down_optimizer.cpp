@@ -1,5 +1,6 @@
 #include "optimizer/projection_push_down_optimizer.h"
 
+#include "binder/expression/lambda_expression.h"
 #include "binder/expression_visitor.h"
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/rec_joins.h"
@@ -315,6 +316,16 @@ void ProjectionPushDownOptimizer::collectExpressionsInUse(
         nodeOrRelInUse.insert(expression);
         for (auto& child : ExpressionChildrenCollector::collectChildren(*expression)) {
             collectExpressionsInUse(child);
+        }
+        return;
+    }
+    case ExpressionType::LAMBDA: {
+        // Le corps d'un lambda n'est pas parmi ses enfants : sans ce cas, ce qu'il est seul
+        // à lire (un chemin p dans any(x IN … WHERE p IS NOT NULL)) n'était pas marqué
+        // utilisé, et les segments récursifs du chemin étaient élagués (SIGSEGV).
+        auto& lambda = expression->constCast<LambdaExpression>();
+        if (lambda.getFunctionExpr() != nullptr) {
+            collectExpressionsInUse(lambda.getFunctionExpr());
         }
         return;
     }

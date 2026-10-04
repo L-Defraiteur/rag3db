@@ -1,6 +1,6 @@
 # Un chemin utilisé seulement dans un lambda fait planter
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(optimiseur): ce que le corps d'un lambda est seul à lire n'est plus élagué »
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié
