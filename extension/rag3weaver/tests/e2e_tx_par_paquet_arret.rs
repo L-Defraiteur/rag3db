@@ -7,7 +7,7 @@
 //! rendre les mêmes comptes qu'une passe sans arrêt.
 //!
 //! Trois processus, comme `e2e_arret_brutal` :
-//! - **l'écrivain** indexe un corpus de 300 fichiers par paquets de 64, et se
+//! - **l'écrivain** indexe un corpus de 300 fichiers par paquets de 32, et se
 //!   tue par SIGKILL au paquet 2, après son ingestion et avant sa validation
 //!   (crochet `RAG3WEAVER_TEST_KILL_IN_BATCH`) ;
 //! - **le repreneur**, un processus neuf, rouvre la base et relance la même
@@ -84,7 +84,7 @@ fn catalogue(base: &Path) -> Catalog {
 /// un arrêt brutal.
 fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
     let options = SourceSyncOptions {
-        batch_files: 64,
+        batch_files: 32,
         relations: Some(RelationsMode::Bulk),
         exige: Disponibilites::RECHERCHE_TEXTE,
         force: true,
@@ -265,6 +265,35 @@ fn un_arret_a_deux_paquets_par_validation_se_reprend_aux_memes_comptes() {
     let temoin = comptes_rendus("temoin", &sortie);
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
     assert_eq!(repris, temoin, "à K = 2 comme à une seule validation, les comptes d'une passe sans arrêt");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Au réglage proposé : quatre paquets par validation.** Dix paquets de 32
+/// fichiers : les groupes 0–3 et 4–7, puis 8–9. La mort au paquet 6, au
+/// milieu du deuxième groupe, défait les paquets 4 à 6 et garde les 0 à 3,
+/// validés ; la reprise rend les comptes d'une passe sans arrêt au même
+/// réglage.
+#[test]
+#[ignore]
+fn un_arret_au_milieu_d_un_groupe_de_quatre_paquets_se_reprend_aux_memes_comptes() {
+    let dossier = dossier_sur_disque("repris-k4");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("ecrivain", &base, Some(6), true, 4);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet 6 :\n{sortie}");
+    let wal = journal(&dossier);
+    println!("▸ journal après la mort, K = 4 : {wal:?}");
+    assert!(wal.iter().any(|(_, t)| *t > 0), "journal vide : la mort ne prouverait rien ({wal:?})");
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 4);
+    assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+    let temoin_dossier = dossier_sur_disque("temoin-k4");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
+    assert_eq!(repris, temoin, "à K = 4, la reprise rend les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }
