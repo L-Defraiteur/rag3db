@@ -67,14 +67,12 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     nodeSharedState->table = nodeTable;
     nodeSharedState->pkColumnID = pkColumnID;
     nodeSharedState->pkType = pkDefinition.getType().copy();
+    // Les lignes que la transaction a déjà insérées dans cette table par le chemin ordinaire
+    // vivent dans son stockage local, à des décalages provisoires qui commencent où la table
+    // finit — là où ce COPY va écrire. Elles sont versées dans la table d'abord ; le COPY
+    // ajoute à la suite.
     if (const auto localStorage = transaction->getLocalStorage()) {
-        if (const auto localTable = localStorage->getLocalTable(nodeTable->getTableID());
-            localTable && localTable->getNumTotalRows() > 0) {
-            throw RuntimeException(stringFormat(
-                "COPY into table {} is refused: it {}. Commit them first, or run the COPY "
-                "before the other insertions of the transaction.",
-                info->tableName, NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS));
-        }
+        localStorage->flushNodeTable(nodeTable->getTableID());
     }
     nodeSharedState->numRowsBeforeCopy =
         nodeTable->cast<NodeTable>().getNumTotalRows(nullptr /* sans les lignes locales */);

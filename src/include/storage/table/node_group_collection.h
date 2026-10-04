@@ -68,6 +68,10 @@ public:
     void clear() {
         const auto lock = nodeGroups.lock();
         nodeGroups.clear(lock);
+        // Le compte suit : une collection vidée en cours de transaction ressert (le stockage
+        // local, versé dans sa table avant un COPY), et son nombre de lignes dit où va la
+        // prochaine.
+        numTotalRows = 0;
     }
 
     common::column_id_t getNumColumns() const { return types.size(); }

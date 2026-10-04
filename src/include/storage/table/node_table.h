@@ -117,14 +117,6 @@ public:
 
     common::row_idx_t getNumTotalRows(const transaction::Transaction* transaction) override;
 
-    // Le nom du refus d'un COPY dans une table où la transaction a déjà inséré des lignes
-    // ordinaires, pas encore validées. Ces lignes portent des décalages provisoires qui
-    // commencent au nombre de lignes de la table ; un COPY écrit les siennes aux mêmes
-    // décalages, et toute recherche par clé prenait ensuite l'une pour l'autre (plantage dans
-    // NodeGroup::lookup). L'ordre inverse — COPY, puis insertions — est juste.
-    static constexpr const char* COPY_AFTER_UNCOMMITTED_INSERTS =
-        "already holds rows inserted by this transaction";
-
     // Écrit au journal de la transaction, sous la forme d'une insertion, les lignes de la table
     // dont le décalage est dans [startOffset, endOffset), dans l'ordre de leurs décalages. Pour
     // un chargement en masse, dont les lignes sont écrites hors du journal. Lève si une ligne de

@@ -33,6 +33,10 @@ LocalTable* LocalStorage::getOrCreateLocalTable(Table& table) {
         default:
             KU_UNREACHABLE;
         }
+    } else if (table.getTableType() == TableType::NODE &&
+               tables.at(tableID)->getNumTotalRows() == 0) {
+        tables.at(tableID)->cast<LocalNodeTable>().restartAt(
+            table.getNumTotalRows(nullptr /* transaction */));
     }
     return tables.at(tableID).get();
 }
@@ -100,6 +104,44 @@ void LocalStorage::commit() {
     }
     for (auto& optimisticAllocator : optimisticAllocators) {
         optimisticAllocator->commit();
+    }
+}
+
+void LocalStorage::flushNodeTable(table_id_t tableID) {
+    const auto found = tables.find(tableID);
+    if (found == tables.end() || found->second->getNumTotalRows() == 0) {
+        return;
+    }
+    auto& localTable = *found->second;
+    KU_ASSERT(localTable.getTableType() == TableType::NODE);
+    auto catalog = catalog::Catalog::Get(clientContext);
+    auto transaction = transaction::Transaction::Get(clientContext);
+    auto storageManager = StorageManager::Get(clientContext);
+    // Comme au commit : les relations locales créées vers ces nœuds les désignent par leurs
+    // décalages provisoires. Avec un seul écrivain ce sont déjà les définitifs ; si un autre
+    // écrivain a validé des nœuds dans la table depuis, ils ont changé, et les relations
+    // suivent. Ce remappage en cours de transaction n'est pas prouvé sous concurrence (témoin
+    // attendu de la marche A3′).
+    std::unordered_map<table_id_t, row_idx_t> numLocalRelsBeforeFlush;
+    for (auto& [relTableID, localRelTable] : tables) {
+        if (localRelTable->getTableType() == TableType::REL) {
+            numLocalRelsBeforeFlush[relTableID] = localRelTable->getNumTotalRows();
+        }
+    }
+    const auto tableEntry = catalog->getTableCatalogEntry(transaction, tableID);
+    const auto table = storageManager->getTable(tableID);
+    local_node_offset_map_t nodeOffsetMap;
+    nodeOffsetMap[tableID] = LocalNodeOffsetMap{localTable.cast<LocalNodeTable>().getStartOffset(),
+        table->getNumTotalRows(nullptr /* transaction */), localTable.getNumTotalRows()};
+    table->commit(&clientContext, tableEntry, &localTable);
+    for (auto& [relTableID, localRelTable] : tables) {
+        if (localRelTable->getTableType() == TableType::REL) {
+            // Une table de relations locale née pendant le versement (un index qui relie les
+            // nouvelles lignes) ne porte que des décalages définitifs.
+            const auto numRowsBefore = numLocalRelsBeforeFlush.find(relTableID);
+            localRelTable->cast<LocalRelTable>().remapNodeOffsets(nodeOffsetMap,
+                numRowsBefore == numLocalRelsBeforeFlush.end() ? 0 : numRowsBefore->second);
+        }
     }
 }
 

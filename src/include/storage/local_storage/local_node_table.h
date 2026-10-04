@@ -47,6 +47,13 @@ public:
     // transaction first wrote to it. The rows may have landed further, and what follows in the
     // commit (an index inserting the new rows) reads them by their final offsets.
     void rowsAreCommitted() { startOffset = common::INVALID_OFFSET; }
+    // Vide — après que ses lignes ont été versées dans la table pour un COPY, ou créée avant
+    // un COPY de la transaction : ses prochaines lignes commencent où la table finit
+    // maintenant, pas où elle finissait à sa création.
+    void restartAt(common::offset_t tableEnd) {
+        KU_ASSERT(nodeGroups.getNumTotalRows() == 0);
+        startOffset = tableEnd;
+    }
 
     static std::vector<common::LogicalType> getNodeTableColumnTypes(
         const catalog::TableCatalogEntry& table);

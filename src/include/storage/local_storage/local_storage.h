@@ -30,6 +30,14 @@ public:
     void commit();
     void rollback();
 
+    // Verse dans la table, en cours de transaction, les lignes locales d'une table de nœuds —
+    // ce que le commit fait pour elle : elles deviennent des lignes non validées ordinaires
+    // de la transaction, à leurs décalages définitifs, écrites à son journal, inscrites à
+    // l'index, annulables. Pour un COPY, qui écrit directement dans la table à la suite de ce
+    // qu'elle contient : des lignes locales y occuperaient les mêmes décalages que les siennes.
+    // Ne fait rien si la transaction n'a pas de ligne locale dans cette table.
+    void flushNodeTable(common::table_id_t tableID);
+
 private:
     main::ClientContext& clientContext;
     std::unordered_map<common::table_id_t, std::unique_ptr<LocalTable>> tables;

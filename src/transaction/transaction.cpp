@@ -203,9 +203,11 @@ Transaction::~Transaction() = default;
 
 common::offset_t Transaction::getMinUncommittedNodeOffset(common::table_id_t tableID) const {
     if (localStorage && localStorage->getLocalTable(tableID)) {
-        return localStorage->getLocalTable(tableID)
-            ->cast<storage::LocalNodeTable>()
-            .getStartOffset();
+        auto& localTable = localStorage->getLocalTable(tableID)->cast<storage::LocalNodeTable>();
+        // Sans ligne locale, aucun décalage n'en désigne une : le départ noté est celui d'un
+        // moment passé (avant un COPY de la transaction, ou avant un versement).
+        return localTable.getNumTotalRows() == 0 ? common::INVALID_OFFSET :
+                                                   localTable.getStartOffset();
     }
     return 0;
 }

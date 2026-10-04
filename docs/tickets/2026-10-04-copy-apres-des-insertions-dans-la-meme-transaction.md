@@ -1,6 +1,6 @@
 # Dans une transaction, après des insertions ordinaires puis un COPY dans la même table, la clé d'une ligne mène à une autre ligne
 
-- **État** : refusé par son nom depuis le 4 octobre 2026, commit `0f4a54b2c` — le résultat faux est fermé ; faire marcher le cas (ce qui retirera le refus) est décidé pour après le chargement journalisé des relations. **Bloque la stèle** tant que le cas n'est pas rendu juste
+- **État** : corrigé le 5 octobre 2026 (« fix(stockage): un COPY verse d'abord dans la table les lignes que sa transaction y a déjà insérées — le cas refusé par un nom est rendu juste »). Refusé par son nom entre-temps (`0f4a54b2c`, 4 octobre) ; le refus et son nom sont retirés
 - **Gravité** : réponse fausse et écriture sur la mauvaise ligne, validées en silence ; plantage quand la ligne visée n'existe pas
 - **Atteignable en service** : oui — un seul écrivain, une transaction explicite
 - **Touche rag3weaver** : contourné — sous la transaction par paquet à K > 1, un groupe replié sur `MERGE` pouvait être suivi d'un `COPY` dans la même table ; depuis `41136459a` une table de nœuds écrite par `MERGE` dans une transaction ne repasse plus par `COPY` avant la validation. Pour les tables de relations (un petit lot par `MERGE` puis un gros par `COPY`, cas courant), le même défaut n'est **pas vérifié**
@@ -35,11 +35,17 @@ L'ordre inverse (`COPY`, puis `CREATE`, puis les recherches) est juste : le stoc
 
 ## Témoin
 
-`test/transaction/journaled_copy_test.cpp`, `ACopyAfterUncommittedInsertsInTheSameTableIsRefusedByName` : le `COPY` est refusé (« … already holds rows inserted by this transaction », `NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS`) sous les deux réglages du chargement journalisé, l'annulation ne laisse rien, et l'ordre inverse rend les bonnes lignes par leur clé. Quatre cas Cypher d'origine (`transaction/copy/copy_node`, `InsertAndCopy…`), qui tenaient le cas pour permis et le vérifiaient par comptage, vérifient maintenant le refus puis l'ordre permis. Au banc : `CopyAfterLocalInserts` (`upstream_fixes_test.cpp`, `7e4100576`), deux cas qui disent l'invariant — ou le `COPY` est refusé par ce nom, ou la clé 5 rend la ligne 5 — et restent verts avant comme après le vrai correctif.
+`test/transaction/journaled_copy_test.cpp`, `CopyAfterInsertsTest`, sept cas, chacun sous les deux réglages du chargement journalisé : la forme du défaut (vingt lignes insérées, cent copiées ; la clé, le `SET` et les relations, créées avant comme après le `COPY`, tombent sur leurs lignes — dans la transaction, après la validation, après la réouverture) ; une seule ligne locale (l'ancien plantage) ; une clé du `COPY` déjà insérée par la transaction (refus pour clé en double, rien ne reste, clés libres) ; une ligne locale modifiée et une autre supprimée avant le `COPY` ; des insertions après le `COPY`, un second `COPY`, d'autres insertions ; `ROLLBACK` puis la même suite validée ; et la mort base ouverte, par le journal seul. Sur une table à index vectoriel : `VectorIndexAfterFailedCopyTest.InsertsThenACopyInOneTransactionAreAllIndexed` (chemin validé ; le chemin annulé est le ticket `2026-10-05-copy-annule-sur-une-table-a-index-vectoriel.md`, qui existe sans ce cas). Les quatre cas Cypher d'origine (`transaction/copy/copy_node`, `InsertAndCopy…`) ont repris leur forme, avec une recherche par clé en plus. Au banc : `CopyAfterLocalInserts` (`upstream_fixes_test.cpp`), qui dit l'invariant et reste vert.
 
 ## Cause
 
 Deux espaces de décalages qui se recouvrent dans la même transaction. Défaut d'origine : Vela (`vela/master`) et Ladybug (`ladybug-main-2026-08-31`) portent le même `getMinUncommittedNodeOffset`.
+
+## Le correctif (5 octobre 2026)
+
+Au début d'un `COPY` de nœuds, les lignes locales que la transaction a dans cette table sont versées dans la table (`LocalStorage::flushNodeTable`) : c'est le commit d'une table (`NodeTable::commit`), appelé plus tôt — ajout aux groupes sous l'identité de la transaction, suppressions appliquées, clés inscrites à l'index, lignes écrites au journal de la transaction (donc avant celles du `COPY`, dans l'ordre des décalages), relations locales remappées. Elles deviennent des lignes non validées ordinaires, annulables par le chemin qui annule un `COPY`. Le stockage local, vidé, repart de la fin de la table à sa prochaine insertion ; vide, il ne désigne plus aucun décalage.
+
+Ce que le correctif ne prouve pas : le remappage des relations locales en cours de transaction sous plusieurs écrivains (témoin attendu de la marche A3′, écrit dans le code).
 
 ## La décision (orchestration, 4 octobre 2026)
 
