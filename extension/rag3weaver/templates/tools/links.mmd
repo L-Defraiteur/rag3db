@@ -1,12 +1,19 @@
 %% tool: links
-%% description: Comment les résultats d'une recherche se relient dans le graphe du code : les plus courts chemins entre eux, à quatre sauts au plus, sans passer par un utilitaire appelé de partout. Une ligne par lien, rien quand ils ne se relient pas. Fait pour un crochet après outil (`after`, `results_port`) : la section n'existe que si le manifeste la déclare.
+%% description: Comment les résultats d'une recherche se relient dans le graphe du code : les plus courts chemins entre eux, à deux sauts par défaut (quatre au plus), sans passer par un utilitaire appelé de partout. Une ligne par lien, rien quand ils ne se relient pas. Fait pour un crochet après outil (`after`, `results_port`) : la section n'existe que si le manifeste la déclare.
 %% param: result_uuids json = [] -- Les uuid des résultats de l'outil, dans l'ordre (le crochet les passe).
+%% param: max_hops int = 2 -- Longueur maximale d'un lien, 1 à 4. Deux par défaut : à quatre, presque tout se relie par des utilitaires moyens.
 %% result: links.result
 
 graph LR
-    links["LinksNode(entity=Scope, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', labels='CONSUMES=utilise|INHERITS_FROM=hérite de|IMPLEMENTS=implémente', uuids=$result_uuids, title=name, path_fields='repo_path|file_path', line_field=start_line, max_hops=4, max_links=5, max_degree=50, sources=10)"]
+    links["LinksNode(entity=Scope, relations='CONSUMES|INHERITS_FROM|IMPLEMENTS', labels='CONSUMES=utilise|INHERITS_FROM=hérite de|IMPLEMENTS=implémente', uuids=$result_uuids, title=name, path_fields='repo_path|file_path', line_field=start_line, max_hops=$max_hops, max_links=5, max_degree=50, sources=10)"]
 
 %% Le schéma de code (src/code.rs) : `CONSUMES` (appel, usage d'un type,
 %% import), `INHERITS_FROM`, `IMPLEMENTS`, entre `Scope`. Les deux sens sont
 %% suivis : « A utilise X, qu'utilise aussi B » relie A et B. Le nœud est
 %% générique : il ne sait rien de ces relations.
+%%
+%% Le branchement, éteint par défaut — à ajouter à l'outil `search_code` du
+%% manifeste (`templates/backends/code/backend.json`) pour l'allumer :
+%%   "after": {"graph": "../../tools/links.mmd", "title": "Liens",
+%%             "max_lines": 6,
+%%             "results_port": {"node": "render", "port": "results"}}

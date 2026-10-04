@@ -200,6 +200,7 @@ fn banc_cohesion() {
         let t = std::time::Instant::now();
         for (q, attendus) in QUESTIONS {
             let mut services = ServiceRegistry::new();
+            reel.lock().unwrap().register_search_services(&mut services);
             services.register("catalog", reel.clone());
             let rendu = tool.execute(&registry, Arc::new(services), &serde_json::json!({ "query": q, "options": options, "w": w })).expect("recherche");
             let n = noms(&rendu);

@@ -7,6 +7,8 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
+mod common;
+
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -18,7 +20,6 @@ use rag3weaver::dataflow::node_factories::register_builtins;
 use rag3weaver::dataflow::node_registry::NodeRegistry;
 use rag3weaver::dataflow::ServiceRegistry;
 use rag3weaver::embedder::HashEmbedder;
-use rag3weaver::search::{Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 fn rag3db_root() -> String {
@@ -28,14 +29,27 @@ fn rag3db_root() -> String {
     })
 }
 
+fn embarqueur() -> Arc<dyn rag3weaver::embedder::Embedder> {
+    match std::env::var("RAG3WEAVER_BANC_MODELE").unwrap_or_default().as_str() {
+        #[cfg(feature = "burn-embedder")]
+        "granite-278m" => common::burn::GRANITE_278M.clone(),
+        "" => Arc::new(HashEmbedder::new(64)),
+        autre => panic!("RAG3WEAVER_BANC_MODELE={autre} : granite-278m, ou rien (HashEmbedder)"),
+    }
+}
+
 fn setup() -> Arc<Mutex<Catalog>> {
+    setup_avec(Arc::new(HashEmbedder::new(64)))
+}
+
+fn setup_avec(embedder: Arc<dyn rag3weaver::embedder::Embedder>) -> Arc<Mutex<Catalog>> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     assert!(std::path::Path::new(&ext).exists(), "vector extension not found at {ext} — ./run_e2e.sh --build-only");
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
-    let config = CatalogConfig { name: Some("liens-e2e".into()), embedding_dim: 64, ..Default::default() };
-    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    let config = CatalogConfig { name: Some("liens-e2e".into()), embedding_dim: embedder.dim(), ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
     Arc::new(Mutex::new(catalog))
@@ -53,19 +67,23 @@ fn uuid(cat: &Catalog, nom: &str, fichier: &str) -> String {
         .unwrap_or_else(|| panic!("{nom} dans {fichier}"))
 }
 
-/// Le gabarit du crochet, tel que le manifeste le monterait.
-fn section(catalog: &Arc<Mutex<Catalog>>, uuids: &[String]) -> String {
+/// Le gabarit du crochet, tel que le manifeste le monterait ; `max_hops`
+/// comme un appelant le passerait (défaut du gabarit : 2).
+fn section_a(catalog: &Arc<Mutex<Catalog>>, uuids: &[String], max_hops: Option<u64>) -> String {
     let mut registry = NodeRegistry::new();
     register_builtins(&mut registry);
-    // `LIENS_MAX_HOPS` : comparer une autre longueur sans toucher au gabarit.
-    let gabarit = match std::env::var("LIENS_MAX_HOPS") {
-        Ok(n) => include_str!("../templates/tools/links.mmd").replace("max_hops=4", &format!("max_hops={n}")),
-        Err(_) => include_str!("../templates/tools/links.mmd").to_string(),
-    };
-    let tool = GraphTool::from_mermaid(&gabarit).unwrap().bind(&registry).unwrap();
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/links.mmd")).unwrap().bind(&registry).unwrap();
     let mut services = ServiceRegistry::new();
     services.register("catalog", catalog.clone());
-    tool.execute(&registry, Arc::new(services), &serde_json::json!({ "result_uuids": uuids })).unwrap()
+    let mut args = serde_json::json!({ "result_uuids": uuids });
+    if let Some(n) = max_hops {
+        args["max_hops"] = serde_json::json!(n);
+    }
+    tool.execute(&registry, Arc::new(services), &args).unwrap()
+}
+
+fn section(catalog: &Arc<Mutex<Catalog>>, uuids: &[String]) -> String {
+    section_a(catalog, uuids, None)
 }
 
 /// Un carrefour : appelé par soixante fonctions.
@@ -182,37 +200,94 @@ fn la_marche_rend_les_plus_courts_chemins_du_moteur() {
     assert!(!mien.is_empty(), "le corpus relie des départs : la comparaison n'est pas vide");
 }
 
-/// **Trois rendus réels** pour Lucie : des recherches en mots (BM25, sans
-/// vecteurs — HashEmbedder), leurs dix premiers résultats, et la section que
-/// le crochet ajouterait. Imprimé, pas jugé : c'est elle qui juge.
+/// **Les exemples réels, par `search_code`** : la recherche de l'outil
+/// (`search_workspace.mmd`, mode index), ses résultats tels que le crochet
+/// les reçoit (`render.results`), puis la section des liens à deux sauts et
+/// à quatre. `RAG3WEAVER_BANC_MODELE=granite-278m` (et le service
+/// d'embarquement) pour la recherche du produit ; sans, HashEmbedder — les
+/// mots seuls portent. Imprimé, pas jugé : c'est Lucie qui juge.
 #[test]
 #[ignore]
-fn trois_rendus_reels() {
-    let catalog = setup();
+fn exemples_par_search_code() {
+    let catalog = setup_avec(embarqueur());
     let racine = format!("{}/src", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     catalog.lock().unwrap().ingest_code(&analyze(&racine, read_sources(&racine).unwrap())).unwrap();
     let requetes: Vec<String> = std::env::var("LIENS_REQUETES")
         .map(|v| v.split(';').map(String::from).collect())
         .unwrap_or_else(|_| {
-            ["chunk lines line index", "probe embedding rate estimate", "snapshot begin finish undo", "parse mermaid template param", "vector index rebuild drop", "usage kind edge line"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect()
+            [
+                "prendre un instantané de la source puis le finir ou l'annuler",
+                "réessayer un appel au modèle après une erreur passagère",
+                "couleur du thème sombre de l'interface",
+                "normaliser les accents et la casse d'un mot",
+                "découper un texte en morceaux par lignes",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
         });
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let recherche = GraphTool::from_mermaid(include_str!("../templates/tools/search_workspace.mmd")).unwrap().bind(&registry).unwrap();
+    let options = serde_json::to_value(rag3weaver::search::SearchOptions { limit: 10, consistency: rag3weaver::search::Consistency::Immediate, ..Default::default() }).unwrap();
     for q in requetes {
-        let opts = SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), limit: 10, ..Default::default() };
-        let res = Catalog::rechercher(&catalog, "Scope", &q, opts).unwrap().results;
-        let noms: Vec<String> = res
+        let mut services = ServiceRegistry::new();
+        catalog.lock().unwrap().register_search_services(&mut services);
+        services.register("catalog", catalog.clone());
+        let rendu = recherche
+            .execute(&registry, Arc::new(services), &serde_json::json!({ "target": "Scope", "query": q, "options": options, "mode": "indexed" }))
+            .unwrap();
+        let resultats: Vec<serde_json::Value> = serde_json::from_str(&rendu).unwrap_or_default();
+        let uuids: Vec<String> = resultats.iter().filter_map(|r| r.get("uuid").and_then(|u| u.as_str()).map(String::from)).filter(|u| !u.starts_with("scan:")).collect();
+        let noms: Vec<String> = resultats
             .iter()
             .map(|r| {
-                let d = r.data.as_ref();
-                let champ = |k: &str| d.and_then(|d| d.get(k)).and_then(|v| v.as_str()).unwrap_or("?").to_string();
+                let champ = |k: &str| r.pointer(&format!("/data/{k}")).and_then(|v| v.as_str()).unwrap_or("?").to_string();
                 format!("{} ({})", champ("name"), champ("file_path").rsplit("/src/").next().unwrap_or_default())
             })
             .collect();
-        let uuids: Vec<String> = res.iter().map(|r| r.uuid.clone()).collect();
-        let t = std::time::Instant::now();
-        let rendu = section(&catalog, &uuids);
-        eprintln!("\n=== « {q} » ({} ms)\nRésultats :\n  {}\n### Liens\n{}", t.elapsed().as_millis(), noms.join("\n  "), if rendu.is_empty() { "(rien — le crochet se tait)\n".into() } else { rendu });
+        let deux = section_a(&catalog, &uuids, Some(2));
+        let quatre = section_a(&catalog, &uuids, Some(4));
+        let vide = |s: String| if s.is_empty() { "(rien — le crochet se tait)\n".to_string() } else { s };
+        eprintln!("\n=== « {q} »\nRésultats :\n  {}\n### Liens (2 sauts)\n{}### Liens (4 sauts)\n{}", noms.join("\n  "), vide(deux), vide(quatre));
+    }
+}
+
+/// **Le branchement se déclare** : le manifeste de code, avec le crochet des
+/// liens sur `search_code`, se charge — nœuds permis à un crochet,
+/// `result_uuids` et `results_port` cohérents. Éteint par défaut : le
+/// manifeste du dépôt ne le déclare pas.
+#[test]
+#[ignore]
+fn le_crochet_des_liens_se_declare_sur_search_code() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let dir = tempfile::tempdir().unwrap();
+    fn copier(src: &std::path::Path, dst: &std::path::Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap() {
+            let e = e.unwrap();
+            let cible = dst.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copier(&e.path(), &cible);
+            } else {
+                std::fs::copy(e.path(), &cible).unwrap();
+            }
+        }
+    }
+    copier(&src, &dir.path().join("templates"));
+    // La racine du workspace que le manifeste déclare doit exister.
+    std::fs::create_dir_all(dir.path().join("templates/backends/code/workspace")).unwrap();
+    let chemin = dir.path().join("templates/backends/code/backend.json");
+    let mut manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    assert!(manifest["tools"]["search_code"].get("after").is_none(), "éteint par défaut : le manifeste du dépôt ne déclare pas les liens");
+    manifest["tools"]["search_code"]["after"] = serde_json::json!({
+        "graph": "../../tools/links.mmd",
+        "title": "Liens",
+        "max_lines": 6,
+        "results_port": {"node": "render", "port": "results"}
+    });
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+    if let Err(e) = rag3weaver::backend::PreparedBackend::load(&chemin) {
+        panic!("le crochet des liens se refuse : {e}");
     }
 }
