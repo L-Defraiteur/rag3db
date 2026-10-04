@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <thread>
 
@@ -655,6 +656,118 @@ TEST_F(LockBench, RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen) {
            "database impossible to open";
     EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1)
         << "[check: one-row-per-key] ";
+}
+
+// ── A3′, les deux limites écrites le 4 octobre (stèle, étape 5) ─────────────────────
+namespace {
+// Un fichier des clés de 'first' à 'first + count - 1', et le COPY qui le charge.
+std::string writeKeysCsv(const std::string& path, int64_t first, int64_t count) {
+    std::ofstream csv(path);
+    for (auto id = first; id < first + count; id++) {
+        csv << id << "," << id << "\n";
+    }
+    return "COPY Item FROM '" + path + "' (header=false);";
+}
+} // namespace
+
+// Première limite (5c8507577, node_table.cpp, RollbackPKDeleter) : à l'annulation, une
+// transaction retire de l'index de clé primaire la clé de toute ligne non validée du bloc,
+// celles d'un autre écrivain comprises. Un COPY écrit directement dans les blocs de la
+// table : deux COPY non validés de deux écrivains partagent le dernier bloc. L'un annule,
+// l'autre valide : ses lignes et ses clés doivent rester. Dans un seul fil, par deux
+// connexions, pour être sûr. Joué le 5 octobre : vert quand celui qui annule a copié en
+// second ; quand il a copié le premier, son annulation efface aussi les lignes de l'autre,
+// validées ensuite (compte 0), et leurs clés — plus que la limite écrite.
+class RollbackOfACopy : public LockBench, public ::testing::WithParamInterface<bool> {};
+
+// Le paramètre : l'écrivain qui annule a-t-il copié le premier ?
+TEST_P(RollbackOfACopy, RemovesOnlyItsOwnKeys) {
+    const auto rolledBackFirst = GetParam();
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    const auto keptCopy = writeKeysCsv(databasePath + ".kept.csv", 0, 100);
+    const auto rolledBackCopy = writeKeysCsv(databasePath + ".rolled-back.csv", 1000, 100);
+    rag3db::main::Connection other(database.get());
+    std::vector<std::pair<rag3db::main::Connection*, std::string>> steps{
+        {&other, "BEGIN TRANSACTION;"}, {conn.get(), "BEGIN TRANSACTION;"}};
+    if (rolledBackFirst) {
+        steps.insert(steps.end(), {{conn.get(), rolledBackCopy}, {&other, keptCopy}});
+    } else {
+        steps.insert(steps.end(), {{&other, keptCopy}, {conn.get(), rolledBackCopy}});
+    }
+    steps.insert(steps.end(), {{conn.get(), "ROLLBACK;"}, {&other, "COMMIT;"}});
+    for (const auto& [connection, query] : steps) {
+        auto result = connection->query(query);
+        ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << query << "\n"
+                                         << result->getErrorMessage();
+    }
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 100) << "[check: committed-rows] ";
+    int64_t found = 0;
+    for (const auto key : {0, 1, 50, 98, 99}) {
+        found += queryInt("MATCH (n:Item {id: " + std::to_string(key) + "}) RETURN count(n);");
+    }
+    EXPECT_EQ(found, 5) << "[check: other-writer-keys-kept] the keys of the writer that "
+                           "committed must still lead to their rows; found "
+                        << found << " of 5";
+    auto duplicate = conn->query("CREATE (:Item {id: 50, v: -1});");
+    EXPECT_FALSE(duplicate->isSuccess())
+        << "[check: other-writer-key-unique] a second row with key 50 was accepted";
+    expectIntegrity();
+    std::filesystem::remove(databasePath + ".kept.csv");
+    std::filesystem::remove(databasePath + ".rolled-back.csv");
+}
+
+INSTANTIATE_TEST_SUITE_P(Order, RollbackOfACopy, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) {
+        return info.param ? "RolledBackCopiedFirst" : "RolledBackCopiedSecond";
+    });
+
+// Seconde limite (68ff9d5e2, transaction_manager.cpp) : deux validations qui veulent
+// chacune leur point de reprise (un COPY, force_checkpoint_on_copy par défaut). La
+// première attend le départ des autres ; la seconde, entrée à son tour dans sa validation,
+// attend que la première ait fini sans quitter les transactions actives. La première va
+// jusqu'au délai et échoue. Attendu : les deux valident, sans délai expiré. Joué le
+// 5 octobre : 5 s, et l'annulation de la première efface les lignes de la seconde, qui
+// a pourtant validé (la limite précédente, copié le premier).
+TEST_F(LockBench, TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    const std::vector<std::string> copies{writeKeysCsv(databasePath + ".w0.csv", 0, 100),
+        writeKeysCsv(databasePath + ".w1.csv", 1000, 100)};
+    SharedMapping mapping(2);
+    auto& area = mapping.get();
+    const auto start = std::chrono::steady_clock::now();
+    launchCase(area, [&copies](Worker& worker) {
+        const auto self = worker.index();
+        if (self == 1) {
+            worker.waitForAny(0, {"copy:done", "copy:failed"}, EVENT_WAIT);
+        }
+        worker.begin();
+        worker.runMarked(copies[self], "copy");
+        if (self == 0) {
+            worker.waitForAny(1, {"copy:done", "copy:failed"}, EVENT_WAIT);
+            worker.commitMarked("commit");
+            return;
+        }
+        // Valider pendant que le premier attend dans sa validation.
+        worker.waitFor(0, "commit:start", EVENT_WAIT);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        worker.commitMarked("commit");
+    });
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+    std::cerr << "  two commits with a checkpoint: " << elapsed.count() << " ms\n";
+    for (const auto worker : {0u, 1u}) {
+        EXPECT_GE(eventIndex(area, worker, "copy:done"), 0) << "[check: setup] ";
+        EXPECT_GE(eventIndex(area, worker, "commit:done"), 0)
+            << "[check: both-commit] writer " << worker << " did not commit";
+        EXPECT_EQ(refusals(area, worker, Refusal::CheckpointTimeout), 0u)
+            << "[check: no-checkpoint-timeout] writer " << worker;
+    }
+    EXPECT_LT(elapsed.count(), 2'500)
+        << "[check: no-wait-until-timeout] the two commits took " << elapsed.count() << " ms";
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 200) << "[check: committed-rows] ";
+    expectIntegrity();
+    std::filesystem::remove(databasePath + ".w0.csv");
+    std::filesystem::remove(databasePath + ".w1.csv");
 }
 
 // ── Le verrou d'index (genre « index », forme décidée par la session cœur C++ et
