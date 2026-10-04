@@ -1,6 +1,6 @@
 # Mémoire longue — ce que cette session sait
 
-3 octobre 2026. Mis à jour sur place. Ce que le [journal des
+3 octobre 2026, et la journée du 4. Mis à jour sur place. Ce que le [journal des
 chantiers](../../../../../docs/journal-des-chantiers.md) ne dit pas.
 
 ## 1. Les fichiers
@@ -70,6 +70,34 @@ pour autre chose ; et un index **détaché** ferait échouer cette étape 4. Mai
 ces DDL ne portent que le **schéma déclaré** : l'index d'un modèle
 d'embarquement d'avant n'y est pas, et personne ne le recrée.
 
+**`<base>.extensions` existe, à côté de `<base>.wal`.** Le moteur y note les
+extensions à recharger au rejeu. **Le supprimer avant une réouverture retrouve
+l'état d'index détaché** — c'est la façon propre de fabriquer ce témoin, bien
+meilleure que déplacer la bibliothèque d'extension, qui est partagée entre
+toutes les sessions du poste. Donné par la session cœur C++ le 4 octobre ; je ne
+savais pas que ce fichier existait.
+
+**Et une réserve sur ce témoin, à connaître avant de l'écrire** : si le journal
+de la session morte porte encore l'enregistrement de chargement et que
+l'extension a disparu, **la base ne s'ouvre pas du tout** — le rejeu relance
+l'erreur de chargement. Ce n'est pas un index détaché, c'est une erreur
+d'ouverture. Donc ce cas ne s'écrit **qu'avec la garde 2** du moteur, qui fera
+continuer le rejeu sans l'extension.
+
+**Un index ne se dit « en retard » que s'il y avait des écritures à rattraper**
+dans sa table. Sans elles, rien à rejouer, et l'index reste juste. C'est ce qui
+explique que le cas BM25 de `e2e_arret_brutal` ne joue aucune sonde : il n'y a
+pas d'index du tout.
+
+**Le nom à attendre quand une extension ne se charge pas au rejeu** :
+« At recovery, extension VECTOR could not be loaded from <chemin>: <erreur> »,
+**à la suite de** « is behind its table ».
+
+**`CREATE_VECTOR_INDEX … skip_if_exists` refuse exprès sur un index détaché**, et
+le cœur C++ refuse de le changer : « faire absorber le cas reviendrait à rebâtir
+en silence un index entier derrière un mot qui promet de ne rien faire ». C'est
+notre règle sur les avertissements, vue de l'autre côté de la frontière.
+
 **Le moteur refuse une écriture dans une table indexée si l'extension
 vectorielle n'est pas chargée**, hors rejeu. Donc on ne fabrique pas un index
 détaché en « ouvrant sans l'extension puis en écrivant » : il faut la mort
@@ -128,6 +156,41 @@ titre court, le verdict veut le titre **et** le pourquoi. Ce n'est pas un
 réglage, c'est la forme du nœud — et la tentation est de passer le même objet
 aux deux puisque c'est la même mémoire.
 
+## 4 bis. La garde de cycle de vie : ce que « vide » voulait dire
+
+`split_unchanged` rendait une `HashMap` nue pour l'état d'avant d'un lot, et
+**une carte vide voulait dire deux choses incompatibles** : « la table a
+répondu, aucune de ces lignes n'y est » — des naissances prouvées — et « je n'ai
+pas pu regarder ». Comme `lifecycle_verdict` traite une absence d'état d'avant
+comme une naissance, le second cas laissait passer **n'importe quelle transition
+déclarée**, en silence.
+
+`PreviousState { Read(carte), Unknown(raison) }`. Les cas, qui ne se traitent
+pas en bloc :
+
+| Sortie de `split_unchanged` | Ce qu'elle rend | Effet |
+|---|---|---|
+| relecture impossible | `Unknown` | **refus nommé** |
+| entité absente de la configuration | `Unknown` | **refus nommé** (branche défensive, injoignable : `register_entity` insère dans `config.entities`) |
+| zéro ligne relue, et première ingestion | `Read(vide)` | passe — naissances **prouvées** |
+| chunks illisibles | `Read` | passe — c'est `stored` qui est bon là |
+
+Et une exception : un état d'avant inconnu sur une ligne qui **n'écrit aucun
+état** laisse passer l'état initial. Il n'y a pas de transition à vérifier, et
+refuser là transformerait toute relecture qui tombe en panne d'ingestion.
+
+**Le chiffre, et ce qu'il vaut.** Batterie complète : **274** occurrences du
+chemin permis, **0** des deux chemins durcis. Mais les deux durcis sont des
+**chemins d'erreur** — il faut qu'une requête échoue —, et une suite verte n'en
+fabrique pas les conditions par construction. Donc le zéro **n'est pas une
+mesure de rareté** : c'est une autorisation de durcir sans casser l'existant.
+
+Les 274 par suite, ce que je n'avais pas regardé d'emblée :
+`e2e_code_sync` **127**, `e2e_code` 68, `e2e_idempotent_registration` 19,
+`e2e_synchronisation` 15, `e2e_agent_loop` 12, onze autres de 1 à 5. Donc la
+réingestion — seconde synchronisation des mêmes fichiers, réédition — exerce
+massivement la relecture de l'état d'avant, et **jamais son échec**.
+
 ## 5. Défauts connus, non corrigés
 
 - **La portée `person` est écrite et jamais rappelée** par le crochet, faute
@@ -180,6 +243,26 @@ aux deux puisque c'est la même mémoire.
   qui n'en était pas une.
 - **Nommer ce qu'un rouge signifierait**, dans le message d'échec, plutôt que
   « attendu 6, reçu 0 ».
+- **Une condition de validité se vérifie aux deux bouts.** Relevée avant le
+  travail, elle ne prouve rien de ce qui s'est passé pendant. Le 4 octobre à
+  00 h 59, le moteur a été rebâti **pendant** une batterie complète : les
+  binaires démarrés avant tenaient l'ancienne bibliothèque, ceux d'après la
+  neuve, et la ligne d'âge imprimée en tête de passe était parfaitement exacte
+  et parfaitement trompeuse. Batterie jetée. `run_e2e.sh` compare désormais une
+  **somme du contenu** du moteur au début et à la fin et refuse de conclure si
+  elle a changé.
+- **Un contrôle d'identité se fait sur le contenu.** J'avais proposé la date et
+  la taille ; l'arbre principal a mis une somme, et pour une raison mesurée :
+  deux de ses rebâtis de la même nuit avaient **la même taille à l'octet**. Ma
+  version aurait raté un vrai échange tout en criant au faux sur un `touch`.
+- **Vingt essais ne valent que ce que vaut le taux cherché.** Mon premier
+  résultat d'isolation était 0/20 contre 0/20, et j'ai failli le rendre : à 10 %
+  — le taux mesuré ailleurs —, tomber sur zéro en vingt tirages arrive une fois
+  sur huit. À cent, une fois sur trente-sept mille. Chaque essai coûtait 0,4 s :
+  j'avais pris vingt parce qu'on m'avait dit vingt.
+- **Deux côtés d'une comparaison doivent voir la même minute.** Sous une charge
+  extérieure qui monte et descend, deux blocs consécutifs diraient la charge au
+  lieu de dire le code : les côtés s'alternent.
 - **Mesurer plutôt que raisonner, quand les deux sont possibles.** Aucun de
   mes raisonnements sur l'émission de `EntitiesChanged` n'a tenu ; les cinq
   jalons imprimés ont tranché en une exécution.
