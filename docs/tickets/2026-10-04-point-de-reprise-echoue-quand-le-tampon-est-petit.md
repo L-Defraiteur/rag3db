@@ -39,6 +39,16 @@ RAG3WEAVER_ESTIMATE_DB_DIR=~/.cache/rag3weaver-build/base-mesure \
 `e3daa2836`). Sans la borne (tampon par défaut du moteur, poste de 121 Go),
 la même passe finit en 823 s avec un pic de 13,1 Go de mémoire résidente.
 
+**4 Gio ne suffisent pas non plus** (4 octobre, 14 h, moteur rebâti à
+12 h 43, seuil du point de reprise automatique relevé à 512 Mio, poste seul
+sous `poste mesure`) : deux passes à 512 sur disque, l'une avec les fusions
+lucivy bornées, meurent toutes deux sur le même message entre 4 096 et
+5 120 fichiers. La mémoire résidente anonyme y atteint 7 à 8 Go avant
+l'échec : au moins 3 Go ne sont donc pas dans le tampon du moteur. Les bases
+dans l'état « à rouvrir » sont gardées sous
+`~/.cache/rag3weaver-build/base-echouee-mem-tampon4g` et
+`base-echouee-mem-les-deux`.
+
 ## Le témoin
 
 `extension/rag3weaver/tests/e2e_estimate.rs`,

@@ -47,9 +47,37 @@ l'agent.
 >   symboles 95 à 154 s, file des liens vidée en route 44 à 69 s, chargement
 >   final 32 à 34 s. Pas encore mesuré : une passe avec moins de `COPY`.
 > - Le pic de mémoire ne bouge pas avec ces réglages (13,7 à 13,8 Go).
-> - Lu dans le code par la session cœur C++, pas mesuré : un point de reprise
->   réécrit en entier le dernier groupe de lignes touché, donc tous les blobs
->   déjà posés de ce groupe.
+> - Le coût d'un point de reprise n'est pas expliqué : la session cœur C++
+>   avait d'abord lu « tout le dernier groupe de lignes réécrit », puis s'est
+>   corrigée (seulement le dernier segment des colonnes touchées, et les
+>   métadonnées). Les 6 s par poussée restent sans cause.
+> - **Les 83 points de reprise restants sont les `COPY FROM`**, confirmé par
+>   le cœur C++ : chacun en force un à sa validation.
+>
+> **Où est la mémoire — 4 octobre, 14 h**, poste seul (`poste mesure`),
+> moteur rebâti à 12 h 43, paquets de 512 sur disque, seuil 512 Mio :
+>
+> | Réglage | Durée | Anonyme à la fin des mots | Partagé | Pic, et pendant quoi |
+> |---|---|---|---|---|
+> | témoin | 419 s | 8,6 Go | 0,2 Go | 13,2 Go, au chargement final des relations |
+> | tampon du moteur 4 Gio | **échoue** vers 4 500 fichiers | 7,0 Go à 4 096 fichiers | 0,2 Go | — |
+> | fusions lucivy bornées | 377 s | 9,4 Go | 0,4 Go | 14,5 Go, au dernier paquet |
+> | les deux | **échoue** vers 4 500 fichiers | 8,0 Go à 4 096 fichiers | 0,3 Go | — |
+>
+> - **La mémoire est anonyme** : le tas, et le tampon du moteur (un mmap
+>   anonyme). Les fichiers d'index lucivy du tmpfs ne pèsent pas (0,2 Go).
+> - **Au moins 3 Go sont dans le tas** : avec le tampon borné à 4 Gio,
+>   l'anonyme atteint 7 Go avant l'échec. La répartition exacte entre tas et
+>   tampon reste à faire.
+> - **4 Gio de tampon ne suffisent pas** à indexer ce dépôt (2 Gio non plus,
+>   ticket). Le prochain essai : 8 Gio, la borne que Lucie accepte.
+> - **Borner les fusions lucivy ne réduit pas la mémoire** (elle monte) mais
+>   accélère la passe de 42 s — une seule passe, à confirmer.
+> - **Le pic arrive au chargement final des relations** (+4,4 Go en
+>   quelques secondes) dans le témoin, et pendant le dernier paquet avec les
+>   fusions bornées.
+> - Les passes de 13 h 05 à 13 h 40 sont jetées : d'autres sessions
+>   compilaient et testaient pendant elles.
 
 Deux produits, un moteur : un agent de code en cloud qui télécharge un dépôt
 git, un agent en ligne de commande qui ingère ce qu'il y a sur le disque. Le
