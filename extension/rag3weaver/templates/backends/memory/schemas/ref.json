@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["genre", "valeur", "dit_comme", "empreinte", "etat", "revision", "created_at", "updated_at"],
+  "properties": {
+    "genre": {"type": "string", "description": "Le genre de la référence, pris dans la liste des genres déclarés. Un genre absent est refusé avec la liste et l'appel exact pour le créer."},
+    "valeur": {"type": "string", "minLength": 1, "description": "La forme normale rendue par le harnais du genre, ou la valeur telle quelle pour un genre sans harnais. C'est elle qui sert de point de rendez-vous : « que sait-on de path:docs/users.md ? » est un filtre sur genre et valeur."},
+    "dit_comme": {"type": "string", "description": "Les mots qui ont cité la chose, quand ils ne sont pas la valeur elle-même (« le design d'hier »). Vide pour une référence extraite sans modèle. C'est ce qui s'embarque et se cherche."},
+    "empreinte": {"type": "string", "description": "Ce qui fait vieillir cette référence, selon son genre : l'empreinte d'un fichier, la révision d'une ligne. Vide quand rien ne la fait vieillir (un commit est immuable)."},
+    "etat": {"type": "string", "enum": ["vue", "a_revoir", "introuvable", "retiree"], "description": "Une référence dont la cible a bougé passe « a_revoir » ; une cible disparue devient « introuvable » — « cité, introuvable » est une information, elle n'est ni jetée ni inventée."},
+    "revision": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"}
+  }
+}

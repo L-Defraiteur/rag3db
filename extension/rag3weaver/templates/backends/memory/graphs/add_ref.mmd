@@ -1,0 +1,26 @@
+%% tool: add_ref
+%% description: Cite une chose depuis une fiche : un fichier, un lien, un commit, une ligne du catalogue. Le genre décide de la forme normale et de ce qui fait vieillir la référence. Citer deux fois la même chose ne crée qu'une ligne. Un genre qui n'existe pas encore n'est pas une erreur : la réponse donne la liste du jour et l'appel exact pour le créer, et ne perd pas la valeur.
+%% param: genre string! -- Le genre de la chose citée. La liste est relue à chaque appel : un genre créé à l'instant y est déjà.
+%% choices: genre = @values:RefType.name
+%% param: valeur string! -- La chose citée, telle que tu l'as ; le harnais du genre la met en forme normale s'il en a un.
+%% param: dit_comme string = "" -- Les mots qui l'ont citée, quand ils ne sont pas la valeur (« le design d'hier »). Vide si tu donnes la chose elle-même.
+%% param: fiche json -- Les champs d'identité de la fiche qui cite (pour une mémoire : claim et reach). Omis, la référence est écrite seule.
+%% param: refs_entity string = "Ref" -- Entité qui porte les références.
+%% param: types_entity string = "RefType" -- Entité qui porte les genres.
+%% param: from_entity string = "Memory" -- Entité de la fiche qui cite.
+%% param: relation string = "CITE" -- Relation de la fiche vers la référence.
+%% result: add.report
+%%
+%% **Une seule ligne de graphe**, et c'est voulu : tout le geste est dans le
+%% nœud, parce qu'il ne se découpe pas. La règle d'un genre vit dans une
+%% **ligne** (son champ `script`), et `RhaiNode` prend son script en
+%% configuration, pas par un port — un graphe ne peut donc pas lui passer le
+%% script du genre qu'il vient de lire.
+%%
+%% **Le nœud est générique ; cette fiche-ci nomme la mémoire.** Les quatre
+%% derniers paramètres sont les noms d'entités, et `@values:RefType.name` est le
+%% seul endroit où un nom d'entité est écrit en dur — la liste de choix ne prend
+%% pas de paramètre. C'est une limite connue : un autre backend qui voudrait ce
+%% verbe copie cette fiche en changeant cette ligne, et le nœud ne bouge pas.
+graph LR
+    add["AddRefNode(genre=$genre, valeur=$valeur, dit_comme=$dit_comme, fiche=$fiche, refs_entity=$refs_entity, types_entity=$types_entity, from_entity=$from_entity, relation=$relation)"]

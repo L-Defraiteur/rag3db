@@ -39,6 +39,16 @@ pub enum Choices {
     Targets,
     /// Les relations déclarées dans le schéma du catalogue (`@relations`).
     Relations,
+    /// **Les valeurs distinctes d'un champ d'une entité** (`@values:Entité.champ`),
+    /// relues contre le catalogue chaque fois que la fiche est rendue.
+    ///
+    /// C'est la liste close qui **grandit** : un genre de référence créé à
+    /// l'instant paraît dans le schéma de l'appel suivant, sans mécanisme neuf.
+    /// Générique exprès — rien ici ne nomme `RefType` : toute liste close qui
+    /// vit dans une table devient disponible, ce qui est la règle du dépôt (une
+    /// organisation nouvelle se décrit dans la déclaration, jamais en dur pour
+    /// un cas).
+    Values { entity: String, field: String },
 }
 
 impl Choices {
@@ -52,6 +62,7 @@ impl Choices {
             Self::Fixed(values) => values.join(" | "),
             Self::Targets => "@targets".to_string(),
             Self::Relations => "@relations".to_string(),
+            Self::Values { entity, field } => format!("@values:{entity}.{field}"),
         }
     }
 
@@ -68,6 +79,34 @@ impl Choices {
             Self::Targets => {
                 let names = catalog?.search_target_names();
                 (!names.is_empty()).then_some((names, None))
+            }
+            Self::Values { entity, field } => {
+                // **Les deux noms entrent dans du Cypher** : ils viennent d'une
+                // fiche, et une fiche peut avoir été écrite par un modèle. On
+                // les vérifie avant, et un nom qui n'est pas un nom rend `None`
+                // — la fiche reste utilisable, juste moins contrainte, ce qui
+                // est déjà le contrat de cette fonction.
+                let nom = |s: &str| {
+                    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                };
+                if !nom(entity) || !nom(field) {
+                    return None;
+                }
+                let cat = catalog?;
+                let rows = cat
+                    .execute_raw(&format!("MATCH (n:{entity}) RETURN n.{field}"))
+                    .ok()?
+                    .rows;
+                let mut vues: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+                for l in &rows {
+                    if let Some(v) = l.first().and_then(|v| v.as_str()) {
+                        if !v.is_empty() {
+                            vues.insert(v.to_string());
+                        }
+                    }
+                }
+                let values: Vec<String> = vues.into_iter().collect();
+                (!values.is_empty()).then_some((values, None))
             }
             Self::Relations => {
                 let rels = catalog?.relation_summaries();

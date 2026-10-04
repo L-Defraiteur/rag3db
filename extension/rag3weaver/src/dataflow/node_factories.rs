@@ -1417,6 +1417,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
     registry.register(Box::new(super::react_nodes::ReactTransitionNodeFactory));
+    registry.register(Box::new(super::ref_nodes::AddRefNodeFactory));
+    registry.register(Box::new(super::ref_nodes::CreateRefTypeNodeFactory));
     registry.register(Box::new(super::usage_nodes::UsagesNodeFactory));
     registry.register(Box::new(super::neighborhood_nodes::NeighborhoodNodeFactory));
     registry.register(Box::new(super::links_nodes::LinksNodeFactory));
@@ -1480,7 +1482,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 47 + if cfg!(feature = "code") { 13 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 13 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1681,6 +1683,8 @@ mod tests {
                 "RelatedResultsNode" => serde_json::json!({"signal":"related"}),
                 "FetchRelatedNode" => serde_json::json!({ "relation": "HAS_VARIANT" }),
                 "ReactTransitionNode" => serde_json::json!({ "target": "Memory", "transition": "review", "relation": "ANCHORED_TO" }),
+                "AddRefNode" => serde_json::json!({ "genre": "code_file", "valeur": "src/catalog.rs", "refs_entity": "Ref", "types_entity": "RefType", "from_entity": "Memory", "relation": "CITE" }),
+                "CreateRefTypeNode" => serde_json::json!({ "name": "invoice", "description": "un numéro de facture", "types_entity": "RefType" }),
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),
                 "LinksNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),

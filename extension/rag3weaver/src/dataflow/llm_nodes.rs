@@ -358,8 +358,15 @@ mod tests {
         // Les nœuds enregistrés, **triés par nom** — l'ordre doit être stable
         // d'une exécution à l'autre, sinon le préfixe du prompt change et la
         // mise en cache tombe. Le premier suit donc l'alphabet, pas l'ordre
-        // d'enregistrement : `AdoptTemplateNode` depuis le 30 août 2026.
-        let premier = if cfg!(feature = "code") { "AdoptTemplateNode" } else { "BM25SearchNode" };
+        // d'enregistrement : `AdoptTemplateNode` du 30 août 2026 au 4 octobre,
+        // puis `AddRefNode`, qui le précède à la lettre près (`AddR` < `AdoP`).
+        //
+        // **Ce que ce test protège n'est pas ce nom-là**, c'est que l'ordre
+        // soit alphabétique et stable. Un nœud neuf qui change le premier le
+        // fait donc légitimement tomber, et la bonne correction est de mettre
+        // le nom à jour — pas d'assouplir l'assertion, qui ne verrait plus un
+        // ordre devenu celui de l'enregistrement.
+        let premier = if cfg!(feature = "code") { "AddRefNode" } else { "AddRefNode" };
         assert_eq!(
             text,
             format!("{} outils, premier={premier}", crate::dataflow::node_factories::BUILTIN_NODE_COUNT)

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["name", "description", "forme", "script", "etat", "revision", "created_at", "updated_at"],
+  "properties": {
+    "name": {"type": "string", "minLength": 1, "description": "Le nom du genre, tel qu'il paraît dans la liste que l'appelant voit avant d'appeler. En anglais et en souligné, comme les autres identifiants : code_file, web_link, invoice."},
+    "description": {"type": "string", "minLength": 1, "description": "Ce que ce genre désigne, en clair, avec deux ou trois exemples. **Obligatoire** : c'est le seul harnais qu'un genre doit avoir."},
+    "forme": {"type": "string", "description": "La forme normale attendue, en clair : « path:<chemin relatif> », « FAC-<année>-<4 chiffres> ». Lue par un humain et par un modèle ; ce n'est pas elle qui vérifie."},
+    "script": {"type": "string", "description": "Un script rhai facultatif, le seul harnais qui vérifie sans modèle. Trois fonctions au plus, chacune facultative : validate (reconnaître et normaliser), resolve (la chose existe-t-elle encore), fingerprint (ce qui la fait vieillir). Vide : les références de ce genre sont dites « non vérifiées »."},
+    "etat": {"type": "string", "enum": ["current", "retiree"], "description": "Un genre retiré ne paraît plus dans la liste ; ses références redeviennent du texte, rien n'est perdu."},
+    "revision": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
+    "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"}
+  }
+}

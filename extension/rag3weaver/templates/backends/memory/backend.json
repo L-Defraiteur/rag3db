@@ -145,6 +145,144 @@
         "updated_at": "updated_at",
         "revision": "revision"
       }
+    },
+    "Ref": {
+      "schema": "schemas/ref.json",
+      "config": {
+        "fields": {
+          "genre": {
+            "type": "string"
+          },
+          "valeur": {
+            "type": "string",
+            "isTitle": true
+          },
+          "dit_comme": {
+            "type": "string",
+            "isContent": true
+          },
+          "empreinte": {
+            "type": "string"
+          },
+          "etat": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "genre",
+          "valeur"
+        ],
+        "returnFields": [
+          "genre",
+          "valeur",
+          "dit_comme",
+          "etat",
+          "revision"
+        ],
+        "signals": [
+          "bm25"
+        ],
+        "lifecycle": {
+          "field": "etat",
+          "initial": "vue",
+          "transitions": [
+            {
+              "name": "revoir",
+              "from": "vue",
+              "to": "a_revoir"
+            },
+            {
+              "name": "confirmer",
+              "from": "a_revoir",
+              "to": "vue"
+            },
+            {
+              "name": "perdre",
+              "from": "vue",
+              "to": "introuvable"
+            },
+            {
+              "name": "perdre_revue",
+              "from": "a_revoir",
+              "to": "introuvable"
+            },
+            {
+              "name": "retrouver",
+              "from": "introuvable",
+              "to": "a_revoir"
+            },
+            {
+              "name": "retirer",
+              "from": "vue",
+              "to": "retiree"
+            },
+            {
+              "name": "retirer_revue",
+              "from": "a_revoir",
+              "to": "retiree"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
+    },
+    "RefType": {
+      "schema": "schemas/ref_type.json",
+      "config": {
+        "fields": {
+          "name": {
+            "type": "string",
+            "isTitle": true
+          },
+          "description": {
+            "type": "string",
+            "isContent": true
+          },
+          "forme": {
+            "type": "string"
+          },
+          "script": {
+            "type": "string"
+          },
+          "etat": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "name"
+        ],
+        "returnFields": [
+          "name",
+          "description",
+          "forme",
+          "etat",
+          "revision"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "etat",
+          "initial": "current",
+          "transitions": [
+            {
+              "name": "retirer",
+              "from": "current",
+              "to": "retiree"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
     }
   },
   "relations": {
@@ -155,6 +293,10 @@
     "REPLACES": {
       "from": "Memory",
       "to": "Memory"
+    },
+    "CITE": {
+      "from": "Memory",
+      "to": "Ref"
     }
   },
   "tools": {
@@ -225,6 +367,21 @@
         "target": "Memory",
         "relation": "ANCHORED_TO",
         "transition": "review"
+      }
+    },
+    "add_ref": {
+      "graph": "graphs/add_ref.mmd",
+      "bindings": {
+        "refs_entity": "Ref",
+        "types_entity": "RefType",
+        "from_entity": "Memory",
+        "relation": "CITE"
+      }
+    },
+    "create_ref_type": {
+      "graph": "graphs/create_ref_type.mmd",
+      "bindings": {
+        "types_entity": "RefType"
       }
     }
   }

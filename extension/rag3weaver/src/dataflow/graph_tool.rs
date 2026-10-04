@@ -759,6 +759,18 @@ fn parse_choices(line: &str) -> Result<(String, Choices), GraphToolError> {
     let choices = match rest {
         "@targets" => Choices::Targets,
         "@relations" => Choices::Relations,
+        // `@values:Entité.champ` — la liste close qui vit dans une table.
+        autre if autre.starts_with("@values:") => {
+            let reste = &autre["@values:".len()..];
+            match reste.split_once('.') {
+                Some((entity, field)) if !entity.is_empty() && !field.is_empty() => {
+                    Choices::Values { entity: entity.to_string(), field: field.to_string() }
+                }
+                _ => return Err(spec(format!(
+                    "choices '{line}' : la forme est @values:Entité.champ"
+                ))),
+            }
+        }
         other if other.starts_with('@') => {
             return Err(spec(format!(
                 "choices '{name}' : source '{other}' inconnue (@targets, @relations)"

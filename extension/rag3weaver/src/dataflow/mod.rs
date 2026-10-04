@@ -49,6 +49,7 @@ pub mod code_nodes;
 pub mod index_nodes;
 pub mod catalog_read;
 pub mod react_nodes;
+pub mod ref_nodes;
 pub mod usage_nodes;
 pub mod neighborhood_nodes;
 pub mod graph_walk;
