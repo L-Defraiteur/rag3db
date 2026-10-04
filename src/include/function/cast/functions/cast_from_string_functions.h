@@ -13,8 +13,10 @@ namespace rag3db {
 namespace function {
 
 struct RAG3DB_API CastString {
+    // valueWasQuoted : le champ CSV portait ses guillemets. "" est alors la chaîne vide, et
+    // le test des chaînes NULL ne s'y applique pas ; un champ vide sans guillemets reste NULL.
     static void copyStringToVector(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
-        const CSVOption* option);
+        const CSVOption* option, bool valueWasQuoted = false);
 
     template<typename T>
     static inline bool tryCast(const ku_string_t& input, T& result) {

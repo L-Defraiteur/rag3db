@@ -1,6 +1,6 @@
 # COPY : un champ CSV vide entre guillemets devient NULL
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(copy): un champ CSV vide entre guillemets se lit comme la chaîne vide, plus comme NULL »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié
@@ -48,7 +48,9 @@ Choisir entre les deux, c'est décider de ce qu'un `""` veut dire dans nos CSV :
 - NULL, comme aujourd'hui ; ce ticket se ferme alors comme « voulu », en le disant dans la
   documentation de COPY.
 
-À trancher par Lucie.
+Tranché par Lucie le 4 octobre : `""` est la chaîne vide. NULL reste le champ vide non
+cité, ou le mot déclaré par `null_strings`, comme PostgreSQL. rag3weaver n'est pas touché :
+ses COPY déclarent leur propre `null_strings`, et `e2e_chemin_de_masse` l'affirme.
 
 ## Pour le fermer
 

@@ -178,5 +178,4 @@ UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-he
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
-UpstreamFixes.QuotedEmptyCsvFieldIsNotNull quoted-empty-is-not-null
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed

@@ -859,11 +859,11 @@ void CastString::operation(const ku_string_t& input, union_entry_t& result,
 }
 
 static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
-    const CSVOption* option) {
+    const CSVOption* option, bool valueWasQuoted) {
     auto& type = vector->dataType;
     switch (type.getLogicalTypeID()) {
     case LogicalTypeID::STRING: {
-        if (std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
+        if (!valueWasQuoted && std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
                 [&](const std::string& nullStr) { return nullStr == strVal; })) {
             vector->setNull(vectorPos, true /* isNull */);
             return;
@@ -880,9 +880,9 @@ static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_v
 }
 
 void CastString::copyStringToVector(ValueVector* vector, uint64_t vectorPos,
-    std::string_view strVal, const CSVOption* option) {
+    std::string_view strVal, const CSVOption* option, bool valueWasQuoted) {
     auto& type = vector->dataType;
-    setVectorNull(vector, vectorPos, strVal, option);
+    setVectorNull(vector, vectorPos, strVal, option, valueWasQuoted);
     if (vector->isNull(vectorPos)) {
         return;
     }

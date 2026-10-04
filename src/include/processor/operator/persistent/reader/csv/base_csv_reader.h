@@ -85,7 +85,8 @@ public:
 protected:
     template<typename Driver>
     bool addValue(Driver&, uint64_t rowNum, common::column_id_t columnIdx, std::string_view strVal,
-        std::vector<uint64_t>& escapePositions, std::vector<uint64_t>& newlineEscapePositions);
+        std::vector<uint64_t>& escapePositions, std::vector<uint64_t>& newlineEscapePositions,
+        bool valueWasQuoted);
 
     //! Read BOM and header.
     parse_result_t handleFirstBlock();
