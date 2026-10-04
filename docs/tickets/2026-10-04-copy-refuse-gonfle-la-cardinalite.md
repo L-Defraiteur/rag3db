@@ -1,6 +1,6 @@
 # Un COPY refusé laisse la cardinalité de la table gonflée
 
-- **État** : ouvert
+- **État** : ouvert — confort pour la stèle, sa condition posée (`STATS_INFO` dit qu'il rend une estimation)
 - **Gravité** : réponse fausse (et, avant `1ea49837f`, plantage)
 - **Atteignable en service** : oui, par tout `COPY` refusé (clé en double, ligne mal formée…)
 - **Touche rag3weaver** : à vérifier ; son chargement en masse passe par `COPY`, et le test `e2e_code` qui meurt en interrompt un
@@ -70,3 +70,13 @@ Aucun trouvé dans la revue des amonts du 4 octobre.
 L'annulation d'un `COPY` retire aussi ce qu'il a fusionné dans les statistiques. Une
 autre voie : ne fusionner les statistiques qu'à la validation. Le témoin
 `RefusedCopyLeavesTheCardinalityTrue` passe alors au vert.
+
+## La condition de la stèle (4 octobre 2026, banc)
+
+La stèle classe ce ticket en confort à condition que `STATS_INFO` dise qu'il rend une
+estimation. Le moteur n'a pas de champ de description pour ses fonctions ; la phrase est
+sur la déclaration (`StatsInfoFunction`, `simple_table_function.h`) : des estimations
+destinées au planificateur, `cardinality` compte aussi les lignes d'un `COPY` refusé, les
+`*_distinct_count` sont approchés, et le compte exact se fait par `MATCH … count(*)`.
+Renommer la colonne `cardinality` changerait ce que lisent les appelants : non fait, à
+décider ailleurs.

@@ -110,6 +110,9 @@ struct StorageInfoFunction final {
     static function_set getFunctionSet();
 };
 
+// STATS_INFO rend des estimations destinées au planificateur, pas des comptes : `cardinality`
+// compte aussi les lignes d'un COPY refusé (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite),
+// et les `*_distinct_count` sont approchés. Pour le nombre exact de lignes : MATCH … count(*).
 struct StatsInfoFunction final {
     static constexpr const char* name = "STATS_INFO";
 
