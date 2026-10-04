@@ -194,3 +194,42 @@ Gardé tel quel, sans réponse : l'interface elle-même décrite par un graphe
 (comme les traitements le sont par des `.mmd`), et des graphes comme première
 chose que la personne voit. À reprendre quand l'interface du §6 aura une
 première forme ; rien à décider maintenant.
+
+### Suite : un backend tout en graphes, une route comme entrée
+
+> « Faire un genre de Next.js depuis rag3weaver ? Peut-être que le backend est
+> tout en DAG : une route est un début de DAG, ensuite on référence une vue
+> dedans, et une interface de données pour communiquer avec. Je n'en sais
+> rien. » — Lucie
+
+Ce que cela donne, mis en forme (proposition de l'orchestration, en débat) :
+
+- **Une route est une entrée de graphe**, au même titre que les deux qui
+  existent : l'appel d'outil par un agent, et l'événement (réacteur). Un même
+  graphe peut avoir les trois.
+- **La fin du graphe nomme une vue** : un afficheur générique (arbre, tableau,
+  graphe, diff, fiche) qui reçoit le résultat typé. « Une vue est un outil
+  dont le résultat va à l'écran. »
+- **L'interface de données est déjà là** : les ports des nœuds sont typés et
+  déclarés par schéma ; le contrat entre le front et le back en sort, sans
+  l'écrire deux fois.
+- **Vivant** : le réacteur pousse ce qui change vers la vue ouverte.
+- **Les écritures** (un formulaire, une note posée sur une fiche) passent par
+  une route et son graphe, avec une politique par route comme il y a une
+  politique par outil.
+
+Ce qui ne serait pas un graphe : l'interface elle-même (les boucles clic →
+état → écran sont le métier des bibliothèques d'interface), les sessions,
+l'authentification, les fichiers statiques.
+
+Deux façons de bâtir le front, la déclaration des vues étant la même :
+
+1. sans React — rag3weaver rend du HTML par ses gabarits jinja comme il rend
+   déjà du texte, mises à jour partielles poussées par le serveur, du
+   JavaScript seulement pour dessiner les graphes ; un seul binaire ;
+2. un front React mince — quelques afficheurs compilés une fois et servis par
+   le binaire.
+
+Premier pas possible : une seule vue, l'arbre des « Liens », servie en page
+par rag3weaver. Ce n'est pas un cadre web général (routage, empaquetage,
+hydratation) : ce n'est pas là qu'est notre valeur.
