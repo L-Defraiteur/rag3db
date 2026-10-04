@@ -121,6 +121,15 @@ ligne) :
   les index (`Index::rollbackInsert`) et l'index recule son compte ; avant, il restait en
   avance. Sans point d'entrée, recherche et insertion repartent d'une ligne vivante
   (`findLiveNode`).
+- **La lecture groupée des vecteurs** (`OnDiskEmbeddings::getEmbeddings`) rend un vecteur par
+  décalage demandé, nul pour une ligne qu'elle ne voit pas ; ses appelants indexent par
+  position. Avant `35d09c466` le tableau s'arrêtait à la dernière ligne lue.
+- **Joignabilité** : rien ne garantit, à l'insertion, qu'une ligne garde une arête entrante ;
+  `keepNodeReachable` ne sert qu'à la mise à jour et à la suppression. Une recherche avec
+  `efs` supérieur au nombre de lignes visite tout le joignable : une ligne absente pour son
+  propre vecteur est orpheline. Le rejeu du journal rebâtit le graphe par l'insertion
+  ordinaire — un graphe relu après un point de reprise et un graphe rejoué ne sont pas le
+  même.
 - La recherche a deux parts : le graphe, pour les lignes jusqu'au compte ; un balayage direct
   pour les lignes au-delà (`searchFromUnCheckpointed`). Un compte en avance prive donc de
   l'une et de l'autre les lignes qu'il couvre à tort.

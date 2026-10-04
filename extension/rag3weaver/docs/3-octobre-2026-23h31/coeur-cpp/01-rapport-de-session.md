@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 1 h 30.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 3 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -35,6 +35,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Chaînes permutées au point de reprise | `25b3b45dc` | défaut d'origine, résultat faux écrit sur disque : la relecture partielle d'un segment de chaînes échangeait les chaînes des lignes d'une région (propriétés `STRING`, `BLOB`, `STRUCT` à chaîne des relations ; listes de chaînes des relations **et des nœuds**). Garde `DICTIONARY_INDEX_OUT_OF_RANGE`. Ne répare pas : une base écrite avant se réindexe ; `tools/check_rel_directions` dit si des relations sont atteintes |
 | Un `COPY` après des insertions de la même transaction | `f1d8c7190` | le `COPY` verse d'abord dans la table les lignes locales de sa transaction (`LocalStorage::flushNodeTable` : le commit d'une table, appelé plus tôt) ; le refus nommé du 4 octobre disparaît ; les quatre tests Cypher d'origine reprennent leur forme. Non prouvé sous plusieurs écrivains |
 | L'annulation prévient les index | `e1049934e` | après un `COPY` annulé sur une table à index vectoriel, l'index ne se croit plus en avance (la recherche échouait, puis le `COPY` suivant n'était pas relié, en silence) ; crochet `Index::rollbackInsert` ; refus « is behind its table » si le compte dépasse quand même la table. Le refus n'a pas de témoin (le banc l'écrit par les internes) |
+| Le plantage de la reprise | `35d09c466` | poser par `SET` le vecteur d'une ligne créée dans la même transaction, sur une table indexée, plantait (`shrinkForNode`) : la lecture groupée des vecteurs des voisins rendait un tableau plus court que demandé. Défaut d'origine, sans rapport avec l'annulation ; c'est la reprise ordinaire de rag3weaver |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
@@ -47,18 +48,22 @@ de l'orchestration : l'étape 4 du chargement journalisé avec le banc (préveni
 avant de retirer le remède 2a) ; la forme compacte des vecteurs au journal ; l'étape 5 ; puis
 le câblage des verrous.
 
-**Ce qui est ouvert et peut passer devant** : la session de l'arbre principal a un plantage à
-la reprise de rag3weaver après un paquet défait (`SIGSEGV` dans
-`OnDiskHNSWIndex::shrinkForNode`, sous un `SET` de vecteur, après une réouverture avec un
-journal de 82 Ko). Ce n'est peut-être pas le défaut corrigé par `e1049934e` : sur une copie de
-sa base, un `SET` de vecteur par table passe sans que le filet parle. Ma forme soupçonnée (un
-`COPY` journalisé dans une table déjà indexée, mort base ouverte, rejeu, `SET` de vecteurs) ne
-plante pas : test gardé en annexe (`annexes/vector_index_journaled_copy_test.cpp`), non mis au
-dépôt parce qu'un de ses deux cas perd 4 lignes sur 128 en tête après un `SET` de toutes les
-lignes (famille « lignes joignables après une mise à jour », non vérifié que ce soit seulement
-cela). Elle rejoue sa sonde (`extension/rag3weaver/tests/sonde_vecteurs_apres_rollback.rs`)
-sur `e1049934e` ; si la reprise plante encore, c'est un second défaut et sa sonde en est le
-témoin. Sa base gardée : `~/.cache/rag3weaver-build/sonde-vecteurs/rollback-1483509-…`.
+**Le plantage de l'arbre principal est réglé** (`35d09c466`) ; il rejoue sa sonde.
+
+**Les lignes introuvables après des `COPY` annulés** (témoin du banc) : ce n'est pas
+l'annulation. La ligne manque avant le premier `COPY` annulé, une passe sur deux, et
+l'annulation rend exactement l'état d'avant (huit passes dans un seul processus). C'est une
+ligne injoignable dès la construction par des `COPY` successifs — l'élagage des voisins à
+l'insertion ne garantit pas qu'une ligne garde une arête entrante. Tout est au ticket
+`docs/tickets/2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md` : la recette,
+les huit passes, ce que font hnswlib, pgvector et Qdrant (aucun ne garantit la
+joignabilité), et la décision de l'orchestration — mesurer d'abord sur un corpus réel
+(arbre principal), puis une passe de rattrapage hors du chemin chaud si le taux n'est pas
+nul. **Rien à coder avant la mesure.** Le filet « is behind its table » et le remappage du
+versement sous deux écrivains ont maintenant leurs témoins au banc (`efd76bdc9`).
+
+**La suite** : l'étape 4 du chargement journalisé avec le banc (retirer le point de reprise
+forcé et le remède 2a), avec un index vectoriel dans les témoins.
 
 Ce qui reste ouvert des lots de la nuit :
 - le refus « is behind its table » du compte en avance n'a aucun témoin ;
@@ -257,6 +262,12 @@ par défaut, **lire, ne pas copier**.
 - Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
   joignables », plusieurs passes.
 - La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
+- Un témoin de diagnostic se vérifie à sa PREMIÈRE étape avant d'être lu : six passes du
+  témoin des lignes injoignables étaient nulles (fichiers `.batchN` sans `.csv`, aucun `COPY`
+  ne passait, « 128 manques sur 128 » partout).
+- Une corrélation entre deux fins de test n'est pas une cause : « rouge avec annulation, vert
+  avec mort » venait du rejeu qui rebâtit le graphe, pas du `ROLLBACK`. Mesurer AVANT
+  l'opération accusée, dans le même processus.
 - Ne pas rebâtir l'extension vector pendant qu'une liste tourne : les suites la chargent à
   l'exécution (`extension/vector/build/`), le rebâti la remplace sous elles. Écrire le code,
   bâtir après.

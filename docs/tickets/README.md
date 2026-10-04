@@ -26,7 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur](2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.md) | ouvert (classement à décider) | réponse fausse | oui | oui (paquet défait) |
+| [L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur](2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.md) | requalifié — ce n'est pas l'annulation ; suivi dans « la ligne lointaine » | réponse fausse | oui | oui (paquet défait) |
 | [Une erreur du moteur dans la branche vecteur fait tomber toute la recherche hybride](2026-10-05-erreur-de-la-branche-vecteur-fait-tomber-la-recherche-hybride.md) | ouvert — décision de Lucie (repli par branche ?) | blocage | oui | oui (toutes les entrées de recherche) |
 | [L'annulation d'un COPY efface les lignes qu'un autre écrivain valide ensuite](2026-10-05-annulation-d-un-copy-efface-les-lignes-d-un-autre-ecrivain.md) | ouvert (A3′) | perte | non (mode multi-écrivains) | non |
 | [Les étiquettes d'un carnet peuvent avoir été échangées, sans moyen sûr de le voir](2026-10-05-etiquettes-du-carnet-peut-etre-echangees.md) | fermé (aucun carnet en usage réel ; 25b3b45dc) | perte | oui, avant 25b3b45dc | oui (gabarit carnet) |
@@ -81,7 +81,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le qualificatif d'un chemin se perd dans une macro](2026-10-04-le-qualificatif-d-un-chemin-se-perd-dans-une-macro.md) | corrigé dans codeparsers 5778d92 — en attente du pointeur | réponse fausse | oui | oui (marque de résolution) |
 | [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (`_index_blobs`, contourné) |
 | [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | ouvert | réponse fausse | oui | peu |
-| [Une ligne très loin des autres est injoignable dans un index bâti d'un coup](2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md) | ouvert | réponse fausse | oui | peu probable |
+| [Une ligne très loin des autres est injoignable dans un index bâti d'un coup](2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md) | ouvert — **bloque la stèle, provisoirement** (mesure sur corpus réel demandée) ; aussi par des COPY successifs | réponse fausse | oui | peu probable |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (usages, Liens, impact) |

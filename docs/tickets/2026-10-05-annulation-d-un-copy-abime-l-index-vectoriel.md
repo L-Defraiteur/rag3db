@@ -1,7 +1,14 @@
-# L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur
+# (Requalifié) L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur
 
-- **État** : ouvert. Classement à décider par l'orchestration ; c'est peut-être la cause du
-  plantage de la reprise de l'arbre principal (non établi).
+- **État** : **requalifié le 5 octobre 2026 — ce n'est pas l'annulation.** La ligne manque
+  déjà avant le premier `COPY` annulé, une passe sur deux, et l'annulation rend exactement
+  l'état d'avant (huit passes dans un seul processus, session cœur C++). C'est une ligne
+  injoignable dès la construction par des `COPY` successifs : suivi dans
+  `2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md`, section « La même
+  famille par des COPY successifs ». Ce qui suit est le constat d'origine, gardé pour sa
+  recette ; son hypothèse (des arêtes de retour abîmées par l'annulation) est écartée. Ce
+  n'est pas non plus la cause du plantage de la reprise de l'arbre principal, corrigé à
+  part (`35d09c466`).
 - **Gravité** : réponse fausse (une recherche ne rend pas une ligne validée, cherchée par son
   vecteur exact).
 - **Atteignable en service** : oui. C'est le chemin d'échec d'un paquet de rag3weaver :
