@@ -12,6 +12,16 @@ public:
         : LogicalOperator{LogicalOperatorType::UNION_ALL, children},
           expressionsToUnion{std::move(expressions)} {}
 
+    // La liste des projections de chaque branche, telle qu'elle est écrite : le schéma d'une
+    // branche dédoublonne ses expressions (RETURN b.age, b.age n'y occupe qu'une place), et
+    // ne peut donc pas servir à les retrouver par position.
+    void setChildProjections(std::vector<binder::expression_vector> projections) {
+        childProjections = std::move(projections);
+    }
+    const std::vector<binder::expression_vector>& getChildProjections() const {
+        return childProjections;
+    }
+
     f_group_pos_set getGroupsPosToFlatten(uint32_t childIdx);
 
     void computeFactorizedSchema() override;
@@ -32,6 +42,7 @@ private:
 
 private:
     binder::expression_vector expressionsToUnion;
+    std::vector<binder::expression_vector> childProjections;
 };
 
 } // namespace planner

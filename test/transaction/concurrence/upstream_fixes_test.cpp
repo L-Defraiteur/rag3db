@@ -274,9 +274,20 @@ TEST_F(UpstreamFixes, UnionArmProjectingAPropertyTwice) {
     const auto outcome = inChild([](rag3db::main::Connection& connection) {
         auto result = connection.query("MATCH (a:Person) RETURN 1, 2 UNION ALL "
                                        "MATCH (b:Person) RETURN b.age, b.age;");
-        return result->isSuccess() && result->getNumTuples() == 2 ? 0 : 5;
+        // L'ordre des branches n'est pas garanti : on cherche la ligne de la seconde.
+        return result->isSuccess() && result->getNumTuples() == 2 &&
+                       result->toString().find("\n30|30\n") != std::string::npos ?
+                   0 :
+                   5;
     });
     EXPECT_EQ(outcome, "") << "[check: query-survives] " << outcome;
+    // La branche qui projette deux fois la même propriété en premier.
+    const auto reversed = inChild([](rag3db::main::Connection& connection) {
+        auto result = connection.query("MATCH (b:Person) RETURN b.age, b.age UNION ALL "
+                                       "MATCH (a:Person) RETURN 1, 2;");
+        return result->isSuccess() && result->getNumTuples() == 2 ? 0 : 5;
+    });
+    EXPECT_EQ(reversed, "") << "[check: query-survives] reversed: " << reversed;
 }
 
 // Ladybug 0c19d7816. Un chemin utilisé seulement dans le corps d'un lambda.

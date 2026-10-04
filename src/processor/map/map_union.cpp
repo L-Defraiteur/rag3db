@@ -19,8 +19,9 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapUnionAll(const LogicalOperator*
         auto child = logicalOperator->getChild(i);
         auto childSchema = logicalUnionAll.getSchemaBeforeUnion(i);
         auto prevOperator = mapOperator(child.get());
+        // Une colonne par expression à unir, doublons compris, comme les autres branches.
         auto resultCollector = createResultCollector(AccumulateType::REGULAR,
-            childSchema->getExpressionsInScope(), childSchema, std::move(prevOperator));
+            logicalUnionAll.getChildProjections()[i], childSchema, std::move(prevOperator));
         tables.push_back(resultCollector->getResultFTable());
         prevOperators.push_back(std::move(resultCollector));
     }

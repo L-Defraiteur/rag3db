@@ -1,4 +1,5 @@
 #include "binder/query/bound_regular_query.h"
+#include "planner/operator/logical_projection.h"
 #include "planner/operator/logical_union.h"
 #include "planner/planner.h"
 
@@ -27,11 +28,23 @@ LogicalPlan Planner::createUnionPlan(std::vector<LogicalPlan>& childrenPlans,
     auto plan = LogicalPlan();
     std::vector<std::shared_ptr<LogicalOperator>> children;
     children.reserve(childrenPlans.size());
+    std::vector<expression_vector> childProjections;
+    childProjections.reserve(childrenPlans.size());
     for (auto& childPlan : childrenPlans) {
         children.push_back(childPlan.getLastOperator());
+        // Une projection garde sa liste telle qu'écrite ; les autres opérateurs de fin de
+        // branche (une mise à jour sans RETURN) n'ont pas de doublon à perdre.
+        auto lastOperator = childPlan.getLastOperator().get();
+        if (lastOperator->getOperatorType() == LogicalOperatorType::PROJECTION) {
+            childProjections.push_back(
+                lastOperator->constCast<LogicalProjection>().getExpressionsToProject());
+        } else {
+            childProjections.push_back(lastOperator->getSchema()->getExpressionsInScope());
+        }
     }
     // we compute the schema based on first child
     auto union_ = std::make_shared<LogicalUnion>(expressions, std::move(children));
+    union_->setChildProjections(std::move(childProjections));
     for (auto i = 0u; i < childrenPlans.size(); ++i) {
         appendFlattens(union_->getGroupsPosToFlatten(i), childrenPlans[i]);
         union_->setChild(i, childrenPlans[i].getLastOperator());

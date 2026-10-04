@@ -1,6 +1,6 @@
 # UNION plante quand une branche projette deux fois la même propriété
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(planificateur): une branche de UNION qui projette deux fois la même propriété ne plante plus »
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié

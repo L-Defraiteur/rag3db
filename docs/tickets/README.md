@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le point de reprise plante, à jamais, après ALTER TABLE … DROP](2026-10-04-point-de-reprise-impossible-apres-drop-de-colonne.md) | ouvert | plantage | oui | non (rag3weaver ne supprime jamais de colonne) |
 | [La lecture plante après le point de reprise d'une relation créée puis supprimée](2026-10-04-lecture-apres-reprise-d-une-relation-creee-puis-supprimee.md) | corrigé | plantage | oui | oui (il crée et supprime des relations) |
 | [MERGE avec deux ON MATCH SET et une clé répétée plante](2026-10-04-merge-deux-on-match-set-et-cle-repetee.md) | ouvert | plantage | oui | non vérifié |
-| [UNION plante quand une branche projette deux fois la même propriété](2026-10-04-union-propriete-projetee-deux-fois.md) | ouvert | plantage | oui | non vérifié |
+| [UNION plante quand une branche projette deux fois la même propriété](2026-10-04-union-propriete-projetee-deux-fois.md) | corrigé | plantage | oui | non vérifié |
 | [Un chemin utilisé seulement dans un lambda fait planter](2026-10-04-chemin-utilise-seulement-dans-un-lambda.md) | corrigé | plantage | oui | non vérifié |
 | [Comparer une relation à une variable de lambda fait planter](2026-10-04-relation-comparee-a-une-variable-de-lambda.md) | corrigé | plantage | oui | non vérifié |
 | [WITH sans colonne utile filtré par un paramètre fait planter](2026-10-04-with-filtre-par-un-parametre.md) | corrigé | plantage | oui | non (vérifié par l'arbre principal) |
