@@ -42,3 +42,7 @@ Non lue. Pistes : la mise à jour en place d'une colonne de chaînes est refusé
 ## Ce qu'il faut pour le fermer
 
 Qu'un point de reprise n'écrive que les blobs neufs ou changés. Lire d'abord pourquoi il réécrit tout (une à deux heures) avant d'estimer.
+
+## La poussée unique, côté rag3weaver (arbre principal, 4 octobre, 20 h 30)
+
+Pousser les 699 Mo du plein texte une seule fois à la fin a coûté 52 s, contre 25 s de COMMIT épargnés (113 → 135 s, mesure de rag3db-eb). Hypothèse, non mesurée : `CypherBlobStore::save_many` pousse en ~22 lots de 32 Mo, chacun validé seul, et chaque validation porte un point de reprise qui réécrit toute la table, de plus en plus grosse — un coût quadratique. L'option `RAG3WEAVER_TX_POUSSEE_A_LA_FIN=1` pousse désormais dans une seule transaction (un point de reprise) ; le défaut est revenu à la poussée par paquet.
