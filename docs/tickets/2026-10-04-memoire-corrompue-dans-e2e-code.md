@@ -210,6 +210,20 @@ in a dictionary of 6197 bytes and 17 strings.
 
 Deux lectures, non départagées : (a) les métadonnées du dictionnaire sont en retard sur la colonne d'indices après une écriture en place au point de reprise (`StringColumn::writeSegment`, `DictionaryColumn::append`) ; (b) une page relue est périmée — le cadre du tampon d'une page libérée puis réallouée (le `DROP` puis `CREATE` de l'index libère et réalloue des pages, et écrit un point de reprise). La lecture (b) expliquerait aussi le voisin 255 rendu par le graphe de l'index pour une table de 211 lignes.
 
+**La seconde garde a parlé aussi, et la base est abîmée sur disque (4 octobre, 19 h 12 à 19 h 40).** Passe suivante, même test : « HNSW index: node offset 255 is beyond the visited set of 211 nodes » — les nombres du rapport ASan de l'après-midi, avec un tableau cette fois à la taille exacte de la table : le voisin 255 est bien faux.
+
+La base du test fautif reste sur disque (`/var/tmp/rag3weaver-bulk-<pid>`, copiée dans `~/.cache/rag3db-moteur-notes/bases-fautives/`). Rouverte dans un processus neuf, elle est **abîmée de façon durable** : `MATCH (n:_index_blobs) RETURN n` rend « Dictionary offsets out of order: string 0 runs from byte 2097151 to byte 2062335 in a dictionary of 1880926 bytes and 312 strings ». `storage_info('_index_blobs')` place `_data_index` à la page 5102 et `_data_offset` à la page 5103 (bitpacking sur 21 bits). Le contenu brut de la page 5103 :
+
+```
+ffff ffff ee13 0000 ffff ffff ffff ffff …   (4 092 octets à ff)
+```
+
+C'est une table de pages de `DiskArray` — « page suivante » invalide, première page de données `0x13ee` = 5102, le reste invalide —, c'est-à-dire une page de l'index de clé primaire (ou de son fichier de débordement). **Deux structures possèdent les mêmes pages** : une colonne de chaînes et un tableau sur disque de l'index. 2 097 151 et 255 sont des « tout à un » lus sur 21 et sur 8 bits. Aucun recouvrement entre colonnes (445 plages relevées par `storage_info` sur toutes les tables) : le second propriétaire n'est pas une colonne.
+
+L'autre base fautive (celle du refus du dictionnaire, 18 h 50) se relit sans erreur dans un processus neuf : là, la page fausse n'était pas (ou plus) sur disque.
+
+Ce qui reste à établir : par quel chemin une page est rendue puis réattribuée alors que quelqu'un s'en sert encore. Deux pistes, non vérifiées : une page d'ombre en attente appliquée par-dessus une page réattribuée entre-temps ; le stockage d'une colonne vivante rendu au point de reprise (`NodeGroup::checkpointInMemAndOnDisk` rend ce qui « doit avoir été supprimé »). rag3weaver émet `ALTER TABLE _index_blobs ADD _deleted_gen` à chaque ouverture de son magasin de blobs. En cours : un journal provisoire des allocations, libérations, écritures directes et pages d'ombre de la base du test, pour lire l'histoire de la page à la prochaine occurrence. Outils : `annexes/sonde-base-fautive/` (rouvrir une base, relire toutes ses tables, relever les plages de pages).
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —
