@@ -154,7 +154,7 @@ struct UncommittedIndexInserter final : IndexScanHelper {
 struct RollbackPKDeleter final : IndexScanHelper {
     RollbackPKDeleter(row_idx_t startNodeOffset, row_idx_t numRows, NodeTable* table,
         PrimaryKeyIndex* pkIndex)
-        : IndexScanHelper(table, pkIndex), startNodeOffset{startNodeOffset},
+        : IndexScanHelper(table, pkIndex),
           semiMask(SemiMaskUtil::createMask(startNodeOffset + numRows)) {
         semiMask->maskRange(startNodeOffset, startNodeOffset + numRows);
         semiMask->enable();
@@ -166,8 +166,6 @@ struct RollbackPKDeleter final : IndexScanHelper {
     bool processScanOutput(main::ClientContext* context, NodeGroupScanResult scanResult,
         const std::vector<ValueVector*>& scannedVectors) override;
 
-    // La première des lignes que cet enregistrement annule.
-    offset_t startNodeOffset;
     std::unique_ptr<SemiMask> semiMask;
 };
 
@@ -220,18 +218,23 @@ bool RollbackPKDeleter::processScanOutput(main::ClientContext* context,
             const auto pos = scannedVector.state->getSelVector()[i];
             T key = scannedVector.getValue<T>(pos);
             static constexpr auto isVisible = [](offset_t) { return true; };
-            // Seulement si la clé ne mène pas à une ligne d'avant celles qu'on annule. Une ligne
-            // annulée pour clé en double porte la clé d'une ligne qui reste : la retirer ici
-            // faisait disparaître de l'index la ligne d'origine, tant que sa clé n'avait pas
-            // passé un point de reprise. Une ligne qui reste précède toujours les lignes
-            // annulées (les ajouts vont en fin de table). La borne haute n'est pas contrôlée :
-            // dans un COPY annulé, la clé d'une ligne de cette plage peut mener au-delà de la
-            // plage (observé dans copy_tests, non expliqué) ; l'y laisser faisait planter le
-            // COPY suivant.
+            // Seulement si la clé ne mène pas à une ligne validée. Le balayage rend des blocs
+            // entiers, pas la seule plage annulée : on y trouve des lignes qui restent, et une
+            // ligne refusée pour clé en double porte la clé d'une ligne qui reste. Retirer ces
+            // clés faisait disparaître de l'index des lignes validées, tant que leur clé n'avait
+            // pas passé un point de reprise.
+            // Le critère n'est pas la plage de cet enregistrement : annuler un enregistrement
+            // rend invisibles toutes les lignes de son bloc ajoutées par la transaction
+            // (VectorVersionInfo::rollbackInsertions), celles des enregistrements qui restent à
+            // annuler comprises ; leur propre balayage ne les rend plus, et leurs clés doivent
+            // donc sortir ici.
+            // Avec plusieurs écrivains, les lignes non validées d'un autre écrivain du même bloc
+            // perdraient aussi leur clé : à reprendre avec les verrous.
             if (offset_t lookupOffset = 0;
                 pkIndex.lookup(transaction::Transaction::Get(*context), key, lookupOffset,
                     isVisible) &&
-                lookupOffset >= startNodeOffset) {
+                !table->isVisibleNoLock(&transaction::DUMMY_CHECKPOINT_TRANSACTION,
+                    lookupOffset)) {
                 // If we delete the key then it will not be visible to future transactions within
                 // this process
                 pkIndex.discardLocal(key);

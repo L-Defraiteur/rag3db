@@ -75,7 +75,14 @@ protected:
         EXPECT_EQ(single("MATCH (n:Doc) RETURN count(*);"), numRows);
         EXPECT_EQ(single("MATCH (n:Doc) WHERE n.name STARTS WITH 'row ' RETURN count(*);"),
             NUM_ROWS);
+        // La clé en double, puis ses voisines : chaque ligne d'avant le COPY se retrouve par sa
+        // clé (l'annulation relit des blocs entiers, pas la seule plage annulée).
         EXPECT_EQ(single("MATCH (n:Doc {id: 5}) RETURN count(*);"), 1);
+        for (const auto id : {0, 7, 100, 199}) {
+            EXPECT_EQ(single("MATCH (n:Doc {id: " + std::to_string(id) + "}) RETURN count(*);"),
+                1)
+                << id;
+        }
     }
 
     std::string csvPath;
