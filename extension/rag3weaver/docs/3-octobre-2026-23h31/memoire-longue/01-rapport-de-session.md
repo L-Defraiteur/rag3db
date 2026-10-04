@@ -294,11 +294,28 @@ Batterie complète, `RAG3WEAVER_TRACE_ETAT_DAVANT=1`, contre le moteur
 | `Unknown` — relecture impossible | **0** |
 | `Unknown` — entité absente de la configuration | **0** |
 
-Donc le durcissement ne peut pas casser une suite verte. **La réserve qui
-reste** : « jamais vu dans une batterie verte » n'est pas « ne se produit
-jamais » — une relecture qui échoue demande une base occupée, un verrou, un
-disque plein, qu'une suite verte ne fabrique pas. La session embarquements
-guette la ligne pendant sa remesure du dépôt entier, dont une passe à 16 Go.
+Donc le durcissement ne peut pas casser une suite verte.
+
+**Et la réserve est plus forte que « jamais vu ».** Les deux chemins durcis sont
+des **chemins d'erreur** : l'un demande qu'une requête de relecture échoue (base
+occupée, verrou, disque plein), l'autre une incohérence de configuration
+injoignable. Une suite verte ne les fabrique pas **par construction** — mon zéro
+ne mesure donc pas leur rareté, il mesure qu'ils n'ont pas été atteints. C'est
+une autorisation de durcir sans casser l'existant, pas une mesure de fréquence.
+
+La leçon est venue d'ailleurs, et elle vaut d'être écrite : j'avais demandé à la
+session embarquements de guetter la ligne pendant sa remesure du dépôt entier.
+Elle a **vérifié au lieu de me croire** — la trace n'était pas sur master, elle
+vit dans mon commit non fusionné — puis a vu elle-même que son zéro ne vaudrait
+rien de toute façon : ses quatre passes sont des **premières ingestions dans une
+base vide**, qui prennent le raccourci `premiere_ingestion` et **ne passent pas
+du tout** par `split_unchanged`. Je lui avais demandé une mesure que son travail
+ne pouvait pas produire.
+
+Ce qui l'observerait : une **réingestion** sur une base non vide, sur disque —
+une synchronisation de dépôt, pas une indexation initiale. En attendant, la
+formule juste est : **ce chemin n'a jamais été observé, et aucune mesure de la
+nuit ne pouvait l'observer.**
 
 ### Le réacteur
 
