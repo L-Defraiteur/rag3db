@@ -345,6 +345,15 @@ pub enum RelationsMode {
 /// — de l'ordre de la centaine de Mo pour 200 000 liens.
 pub const BULK_QUEUE_LIMIT: usize = 200_000;
 
+/// La même borne quand chaque paquet tourne dans une transaction
+/// (`RAG3WEAVER_TX_PAR_PAQUET=1`) : la file ne se vide qu'une fois, à la fin,
+/// sur ce dépôt (14,4 s de vidages en route mesurés par rag3db-eb, le
+/// 4 octobre 2026). La mémoire reste bornée, de l'ordre du Go, pour un
+/// dépôt dix fois plus gros. Ce que ça retire pendant l'index : aucune
+/// arête de l'analyse n'est en base avant la fin (usages, impact, liens
+/// d'un scope déjà écrit restent vides jusque-là).
+pub const BULK_QUEUE_LIMIT_IN_TRANSACTION: usize = 2_000_000;
+
 /// Où en est une synchronisation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -667,7 +676,8 @@ fn synchroniser(
         // paquet) ou mises en file (en masse) — le même compte.
         report.relations += ingere.relations;
         tuer_dans_le_paquet(rang_du_paquet);
-        if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > BULK_QUEUE_LIMIT {
+        let borne = if par_transaction { BULK_QUEUE_LIMIT_IN_TRANSACTION } else { BULK_QUEUE_LIMIT };
+        if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > borne {
             // La mémoire bornée : la file est posée par COPY sans attendre.
             let t = std::time::Instant::now();
             let pose = catalog.drain_jusqu_a(options.exige);
