@@ -634,13 +634,63 @@ fn cellule_csv(v: &CypherValue) -> String {
     }
 }
 
-/// Écrire une chaîne en cellule CSV sans allouer quand elle n'a rien à
-/// échapper — le cas des uuids, deux par arête, 205 000 arêtes.
-fn ecrire_cellule_texte(w: &mut impl std::io::Write, texte: &str) -> Result<(), String> {
-    if texte.contains([',', '"', '\n', '\r']) || texte.is_empty() {
-        w.write_all(cellule_csv(&CypherValue::String(texte.to_string())).as_bytes()).map_err(|e| e.to_string())
+/// **Ajouter une cellule à une ligne CSV, sans allocation dans le cas
+/// courant** — une chaîne sans rien à échapper, un nombre, un booléen. Rend
+/// exactement ce que rend [`cellule_csv`] ; seuls les cas rares (listes,
+/// chaînes à échapper) passent par elle. `cellule_csv` fabriquait une
+/// `String` par cellule, et MENTIONS en porte sept par arête : 2,4 s de CSV
+/// pour 497 899 arêtes sur le dépôt entier (rag3db-eb, 4 octobre 2026).
+fn pousser_cellule(out: &mut String, v: &CypherValue) {
+    use std::fmt::Write as _;
+    match v {
+        CypherValue::Null => {}
+        CypherValue::String(s) if s.is_empty() => out.push_str("\"\""),
+        CypherValue::String(s) if !s.contains([',', '"', '\n', '\r']) => out.push_str(s),
+        CypherValue::Int(i) => {
+            let _ = write!(out, "{i}");
+        }
+        CypherValue::Float(f) => {
+            let _ = write!(out, "{f}");
+        }
+        CypherValue::Bool(b) => {
+            let _ = write!(out, "{b}");
+        }
+        // Les vecteurs denses : une liste de scalaires n'a rien à échapper,
+        // seule sa virgule de séparation la met entre guillemets.
+        CypherValue::List(items)
+            if items.iter().all(|x| matches!(x, CypherValue::Int(_) | CypherValue::Float(_) | CypherValue::Bool(_) | CypherValue::Null)) =>
+        {
+            let entre_guillemets = items.len() > 1;
+            if entre_guillemets {
+                out.push('"');
+            }
+            out.push('[');
+            for (i, x) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                let _ = match x {
+                    CypherValue::Int(n) => write!(out, "{n}"),
+                    CypherValue::Float(f) => write!(out, "{f}"),
+                    CypherValue::Bool(b) => write!(out, "{b}"),
+                    _ => Ok(()),
+                };
+            }
+            out.push(']');
+            if entre_guillemets {
+                out.push('"');
+            }
+        }
+        autre => out.push_str(&cellule_csv(autre)),
+    }
+}
+
+/// [`pousser_cellule`] pour une chaîne empruntée (les uuids des bouts).
+fn pousser_texte(out: &mut String, texte: &str) {
+    if texte.is_empty() || texte.contains([',', '"', '\n', '\r']) {
+        out.push_str(&cellule_csv(&CypherValue::String(texte.to_string())));
     } else {
-        w.write_all(texte.as_bytes()).map_err(|e| e.to_string())
+        out.push_str(texte);
     }
 }
 
@@ -697,7 +747,7 @@ fn copier_les_noeuds(
                     ligne.push(',');
                 }
                 match rec.data.get(*col) {
-                    Some(v) => ligne.push_str(&cellule_csv(v)),
+                    Some(v) => pousser_cellule(&mut ligne, v),
                     None => {
                         // La colonne du vecteur dense : `[f1,f2,…]` entre
                         // guillemets, écrit depuis le `f32` sans passer par
@@ -777,7 +827,9 @@ fn copier_les_liens(
     let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
     let t0 = std::time::Instant::now();
     // Les paires déjà posées, seulement si la table a quelque chose.
-    let mut deja: HashSet<(String, String)> = HashSet::new();
+    // Par départ, les arrivées déjà posées : une recherche par `&str`, sans
+    // les deux `String` qu'un couple demandait à chaque ligne.
+    let mut deja: HashMap<String, HashSet<String>> = HashMap::new();
     let compte = conn.execute(&dialect.count_links(rel_name)).map_err(|e| e.to_string())?;
     let vide = matches!(compte.rows.first().and_then(|r| r.first()), Some(CypherValue::Int(0)));
     if !vide {
@@ -791,7 +843,7 @@ fn copier_les_liens(
                 .map_err(|e| e.to_string())?;
             for row in &lu.rows {
                 if let (Some(a), Some(b)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_str())) {
-                    deja.insert((a.to_string(), b.to_string()));
+                    deja.entry(a.to_string()).or_default().insert(b.to_string());
                 }
             }
         }
@@ -841,6 +893,7 @@ fn copier_les_liens(
         use std::io::Write;
         let f = std::fs::File::create(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
         let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
+        let mut ligne = String::with_capacity(256);
         for &ri in indices {
             let rl = &resolved[ri];
             let paire = (rl.from_uuid.as_str(), rl.to_uuid.as_str());
@@ -848,18 +901,20 @@ fn copier_les_liens(
                 absents += 1;
                 continue;
             }
-            if !vues.insert(paire) || (!deja.is_empty() && deja.contains(&(paire.0.to_string(), paire.1.to_string()))) {
+            if !vues.insert(paire) || deja.get(paire.0).is_some_and(|tos| tos.contains(paire.1)) {
                 continue;
             }
             let rel = &items[rl.index];
-            ecrire_cellule_texte(&mut w, &rl.from_uuid)?;
-            w.write_all(b",").map_err(|e| e.to_string())?;
-            ecrire_cellule_texte(&mut w, &rl.to_uuid)?;
+            ligne.clear();
+            pousser_texte(&mut ligne, &rl.from_uuid);
+            ligne.push(',');
+            pousser_texte(&mut ligne, &rl.to_uuid);
             for key in prop_keys {
-                w.write_all(b",").map_err(|e| e.to_string())?;
-                w.write_all(cellule_csv(rel.properties.get(key).unwrap_or(&CypherValue::Null)).as_bytes()).map_err(|e| e.to_string())?;
+                ligne.push(',');
+                pousser_cellule(&mut ligne, rel.properties.get(key).unwrap_or(&CypherValue::Null));
             }
-            w.write_all(b"\n").map_err(|e| e.to_string())?;
+            ligne.push('\n');
+            w.write_all(ligne.as_bytes()).map_err(|e| e.to_string())?;
             ecrites += 1;
         }
         w.flush().map_err(|e| e.to_string())?;
@@ -3725,6 +3780,31 @@ fn reindex_fts_rows(
 
 #[cfg(test)]
 mod tests {
+
+    /// L'écriture sans allocation rend octet pour octet ce que rend
+    /// `cellule_csv` — le format du COPY ne change pas.
+    #[test]
+    fn pousser_cellule_rend_ce_que_rend_cellule_csv() {
+        use crate::connection::CypherValue as V;
+        let s = |x: &str| V::String(x.into());
+        let cas = vec![
+            V::Null, s(""), s("abc"), s("a,b"), s("dit \"oui\""), s("l1\nl2"), s("c:\\x\r"), s("é—ü"),
+            V::Int(-42), V::Int(0), V::Float(0.1), V::Float(-3.0), V::Float(f64::NAN), V::Float(1e300), V::Bool(true),
+            V::List(vec![]), V::List(vec![V::Float(0.5)]), V::List(vec![V::Null]),
+            V::List(vec![V::Float(0.5), V::Int(2), V::Null, V::Bool(false)]),
+            V::List(vec![s("a"), s("b")]),
+        ];
+        for v in &cas {
+            let mut ligne = String::from("x,");
+            pousser_cellule(&mut ligne, v);
+            assert_eq!(ligne, format!("x,{}", cellule_csv(v)), "{v:?}");
+            if let V::String(t) = v {
+                let mut ligne = String::new();
+                pousser_texte(&mut ligne, t);
+                assert_eq!(ligne, cellule_csv(v), "{v:?}");
+            }
+        }
+    }
     use super::tables_sans_index_plein_texte as sans_index;
     use std::collections::HashMap;
 
