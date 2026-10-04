@@ -14,7 +14,7 @@ fn item(uuid: &str, title: &str, path: &str, line: i64) -> Item {
 }
 
 fn usage(user: Item, genre: &str, definition: Option<&str>) -> Usage {
-    Usage { user, usage: genre.into(), usages: vec![genre.into()], relation: "CONSUMES".into(), definition: definition.map(String::from) }
+    Usage { user, usage: genre.into(), usages: vec![genre.into()], relation: "CONSUMES".into(), definition: definition.map(String::from), guessed: false }
 }
 
 #[test]
@@ -53,6 +53,21 @@ fn un_nom_ambigu_montre_tout_et_n_attribue_que_le_sur() {
     assert!(md.contains("## Définitions (2)") && md.contains("Nom ambigu"), "{md}");
     assert!(md.contains("direct — one.rs:9 → one.rs:1"), "l'usage direct est rangé sous sa définition : {md}");
     assert!(md.contains("### non attribués (nom ambigu) (1)") && md.contains("par_le_nom"), "{md}");
+}
+
+/// Un usage trouvé par une arête devinée (posée par le seul nom) reste
+/// rendu, et le dit.
+#[test]
+fn un_usage_devine_dit_par_le_nom() {
+    let def = item("d", "clear", "node_id_cache.rs", 95);
+    let usages = vec![
+        usage(item("s", "sur", "a.rs", 3), "call", Some("d")),
+        Usage { guessed: true, ..usage(item("g", "devine", "b.rs", 7), "call", Some("d")) },
+    ];
+    let r = UsagesReport { name: "clear".into(), definitions: vec![def], definitions_hidden: 0, usages, ambiguous: false };
+    let md = r.markdown("all", 20);
+    assert!(md.contains("devine — b.rs:7 (par le nom)"), "{md}");
+    assert!(md.lines().any(|l| l.contains("sur — a.rs:3") && !l.contains("par le nom")), "{md}");
 }
 
 #[test]
