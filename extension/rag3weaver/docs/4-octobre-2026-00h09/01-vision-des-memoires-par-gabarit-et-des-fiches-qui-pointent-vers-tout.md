@@ -435,6 +435,45 @@ règle, générique, et elle rejoint le registre. C'est la boucle du §4 : les
 genres de référence sont eux-mêmes des fiches d'une mémoire, avec leur
 gabarit, et le prochain résumé s'en sert.
 
+**La forme exacte, dite par Lucie** : « ça se rajoute à un enum global de
+types de référence ; nous on en fait une dizaine intégrés — document local,
+fichier de code local, méthode ou symbole de code, lien web… — et le
+structuré est contraint dessus, ou bien choisit `new` comme valeur, et dans
+ce cas doit renseigner le champ optionnel `newRefType`, avec description et
+règle. »
+
+```json
+{
+  "summary": "…",
+  "refs": [
+    { "type": "code_file",  "value": "src/catalog.rs" },
+    { "type": "web_link",   "value": "https://…" },
+    { "type": "new",        "value": "FAC-2026-0412",
+      "newRefType": { "name": "invoice",
+                      "description": "un numéro de facture",
+                      "rule": "FAC-<année>-<4 chiffres>" } }
+  ]
+}
+```
+
+- **Un enum global**, que la sortie structurée du modèle est **contrainte** à
+  respecter : il ne peut pas inventer un genre en l'écrivant de travers. Le
+  moteur sait déjà faire d'une liste fermée un `enum` de schéma, refusé avec
+  la liste quand la valeur n'y est pas.
+- **Une dizaine de genres intégrés** : document local, fichier de code local,
+  méthode ou symbole de code, lien web, ligne d'une entité, élément du
+  schéma, graphe, gabarit, sujet, commit, ticket.
+- **`new` est la seule porte de sortie**, et elle se paie : qui choisit `new`
+  doit remplir `newRefType` (nom, description, règle). Le schéma l'exige — un
+  `new` sans sa règle est refusé.
+- **L'enum grandit** : un `newRefType` admis (points 1 et 2 ci-dessous)
+  entre dans l'enum, et le résumé suivant le voit parmi ses choix. En
+  attendant, la référence garde son genre proposé : elle n'est pas perdue.
+- **La liste doit rester lisible par un modèle** : quand elle dépasse ce
+  qu'un schéma porte bien, on ne montre que les intégrés et les genres déjà
+  vus dans le sujet ou la mémoire en cours — le reste se retrouve par la
+  recherche avant création.
+
 Ce qu'il faut tenir, parce qu'une règle créée à la volée par un modèle est
 exactement l'endroit où le désordre entre :
 
