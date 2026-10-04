@@ -63,3 +63,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une corruption de mémoire tue `e2e_code`, une passe sur trente à soixante](2026-10-04-memoire-corrompue-dans-e2e-code.md) | ouvert | plantage | inconnu | oui (sa suite `e2e_code`) |
 | [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | ouvert | réponse fausse | oui | à vérifier |
 | [L'ordre de synchronisation au point de reprise laisse peut-être des pages non durables](2026-10-04-ordre-de-synchronisation-au-point-de-reprise.md) | ouvert, non vérifié | perte | inconnu | oui si le doute est fondé |
+| [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | ouvert | réponse fausse | oui | oui (usages, impact, liens) |
