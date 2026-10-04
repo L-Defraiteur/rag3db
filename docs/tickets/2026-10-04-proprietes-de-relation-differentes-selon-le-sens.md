@@ -1,6 +1,6 @@
 # Une relation porte deux valeurs d'une même propriété selon le sens où on la lit
 
-- **État** : ouvert — **bloque la stèle** (orchestration, 4 octobre 2026) ; recette inconnue, défaut intermittent
+- **État** : corrigé par `25b3b45dc` (session cœur C++) ; la cause et la recette sont au ticket [Une propriété de chaîne d'une relation se lit fausse dans un sens ou l'autre après un point de reprise](2026-10-04-propriete-de-chaine-faussee-dans-le-sens-direct.md), fermé en `153cccdae`. Témoins au banc : `RelationPropertiesBothWays.*`, `ListOfStringsAcrossCheckpoints.*` (`eef731081`). Était : ouvert — bloque la stèle (orchestration, 4 octobre 2026)
 - **Gravité** : réponse fausse, durable (sur disque, après fermeture et réouverture)
 - **Atteignable en service** : oui — vu dans rag3weaver tel qu'il tourne, sans transaction par paquet
 - **Touche rag3weaver** : oui (relations CONSUMES et CONSUMED_BY du graphe de code, propriété `resolution`)

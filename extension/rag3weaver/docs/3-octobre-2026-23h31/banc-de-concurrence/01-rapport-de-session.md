@@ -178,6 +178,35 @@ amonts (`8c83c3360`, puis le second lot).
       valeurs changées sur les relations ; 2,4 s, sans pression de mémoire. Vert avec le
       correctif, comme `CheckpointKeepsEveryStoredString` ;
     - le tout est poussé en `eef731081`, après une comparaison `known_red` verte.
+19. **La suite de la nuit du 5 octobre** :
+    - les pages d'un COPY tué (ticket de durabilité, `a4442df7e`, `a517dcc36`) : la fuite
+      n'est pas bornée. Chaque mort laisse 0,3 à 3,4 Mo, sans palier, et ni la réouverture
+      ni le point de reprise ni les écritures suivantes ne les rendent. Mesuré par une sonde
+      non commitée (`~/.cache/rag3db-banc-notes/sonde-fuite-copy.patch`). Classé confort par
+      l'orchestration ; la déduction « reprises naturellement » de la page du chargement
+      journalisé est réfutée ;
+    - les témoins d'A3′ (`218a0fa8a`) trouvent plus grave que la limite écrite. En mode
+      multi-écrivains, l'annulation d'un COPY copié le premier efface les **lignes** et les
+      clés d'un COPY copié après lui dans le même bloc, que l'autre écrivain valide sans
+      erreur. `Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst` et
+      `TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout` sont rouges, stables, dans
+      `known_red.txt` sous A3′. Ticket
+      `2026-10-05-annulation-d-un-copy-efface-les-lignes-d-un-autre-ecrivain.md`, non
+      atteignable en service ;
+    - relecture croisée du correctif de la session cœur C++ (le COPY après des insertions de
+      la même transaction, par versement du stockage local) : rien de bloquant. Deux cas
+      proposés et écrits chez elle (une clé versée, supprimée puis réinsérée ; une mise à
+      jour après le COPY rejouée). Son versement hérite du défaut d'A3′ ci-dessus, et c'est
+      écrit dans son message ;
+    - l'index des tickets : les propriétés selon le sens passent à corrigé (`25b3b45dc`).
+
+## Ce qui m'attend
+
+- le témoin du remappage des relations locales en multi-écrivains, après la fusion du lot
+  « COPY après des insertions » ; le commentaire de mes deux `CopyAfterLocalInserts`, qui
+  citent encore le nom du refus retiré ;
+- la relecture du second commit de la session cœur C++ : l'index vectoriel à l'annulation
+  d'un COPY.
 
 ## Décisions et pourquoi
 
