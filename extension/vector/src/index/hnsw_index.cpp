@@ -979,13 +979,72 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     // 3. The nodes the old position led to have lost an incoming edge each. One of them may
     // have been reachable through this node only: check them all, as finalizeDelete does for
     // the neighbours of a deleted node.
+    //
+    // The full check is a search of the graph per neighbour: sixty searches per updated row,
+    // which made a bulk update sixty times slower. Most neighbours do not need it. A node that
+    // lost nothing in this update is as reachable as it was before; so is the updated row,
+    // which was just inserted anew. A former neighbour one of those points to is therefore
+    // reachable, and so is a former neighbour another reachable former neighbour points to.
+    // Who points to a node is not stored, but edges are nearly always mutual: the nodes a
+    // neighbour points to are where to look. The search is kept for the neighbours this does
+    // not settle.
+    std::unordered_map<common::offset_t, std::vector<common::offset_t>> edgesOf;
     for (const auto nbr : lowerNbrs) {
-        if (nbr == offset) {
+        if (nbr != offset && !edgesOf.contains(nbr)) {
+            edgesOf.emplace(nbr,
+                scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState));
+        }
+    }
+    const auto pointsTo = [](const std::vector<common::offset_t>& edges, common::offset_t to) {
+        return std::ranges::find(edges, to) != edges.end();
+    };
+    std::unordered_set<common::offset_t> reachable;
+    // 3a. Pointed to by the updated row, or by a node outside the former neighbours.
+    const auto edgesOfUpdated =
+        scanNeighbors(transaction, offset, false /*isUpperLayer*/, state.insertState);
+    static constexpr size_t MAX_OUTSIDE_NODES_TRIED = 4;
+    for (const auto& [nbr, edges] : edgesOf) {
+        if (pointsTo(edgesOfUpdated, nbr)) {
+            reachable.insert(nbr);
             continue;
         }
-        keepNodeReachable(transaction, nbr,
-            scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState),
-            false /*isUpperLayer*/, state.insertState);
+        size_t numTried = 0;
+        for (const auto other : edges) {
+            if (other == offset || other == nbr || edgesOf.contains(other)) {
+                continue;
+            }
+            if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/,
+                             state.insertState),
+                    nbr)) {
+                reachable.insert(nbr);
+                break;
+            }
+            if (++numTried == MAX_OUTSIDE_NODES_TRIED) {
+                break;
+            }
+        }
+    }
+    // 3b. Pointed to by a former neighbour already known reachable, until nothing changes.
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const auto& [nbr, edges] : edgesOf) {
+            if (reachable.contains(nbr)) {
+                continue;
+            }
+            for (const auto other : reachable) {
+                if (pointsTo(edgesOf.at(other), nbr)) {
+                    reachable.insert(nbr);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+    // 3c. The rest: the search, and ties if it does not find them.
+    for (const auto& [nbr, edges] : edgesOf) {
+        if (!reachable.contains(nbr)) {
+            keepNodeReachable(transaction, nbr, edges, false /*isUpperLayer*/, state.insertState);
+        }
     }
 }
 
