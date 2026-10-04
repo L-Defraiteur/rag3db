@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 17 h.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 18 h 15.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -23,6 +23,8 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Garde 2 de la reprise ; borne du contrôle des voisins | `15fcc3474`, `110a65f15` | après un arrêt brutal l'index vectoriel reste juste sans être rebâti (`<base>.extensions`) ; la mise à jour d'un vecteur ne lance plus une recherche par ancien voisin (dix mille lignes par lots : 42 s au lieu d'environ 800) |
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
+| Après un `COPY` refusé | `05788a868` | le point de reprise n'écrit plus hors de son bloc (corruption de tas, défaut d'origine) ; la ligne d'origine d'une clé en double reste dans l'index de clé primaire (résultat faux silencieux, défaut d'origine) |
+| Chronométrage du point de reprise | `5771f0afb` | `RAG3DB_PROFILE_CHECKPOINT=1` : le découpage d'un commit et de son point de reprise sur la sortie d'erreur ; muet sinon |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
@@ -54,6 +56,12 @@ Où j'en suis exactement (16 h 40, seconde limite de l'orchestration atteinte : 
 - Piège : l'extension vector sort dans `extension/vector/build/`, commun à tous les dossiers
   de build de l'arbre ; ninja ne la refait pas si le fichier d'un autre dossier est plus
   récent : supprimer le fichier puis rebâtir la cible.
+
+**La stèle du moteur** (`docs/4-octobre-2026-16h57/01-la-stele-du-moteur.md`, décision de
+Lucie) : le point d'arrêt de version du moteur. J'y ai écrit le tri des tickets (§3.1) et
+corrigé le §2. Leçon du jour, à garder : un contrôle plus strict que nécessaire (« la clé
+mène dans la plage annulée ») a fait planter `copy_tests` — la liste complète l'a attrapé
+avant le push ; ne jamais pousser sur les seuls tests du changement.
 
 **Le lot en cours** : le point de reprise que `COPY` force — 66 s sur 177 du premier index
 de ce dépôt avec la transaction par paquet. La demi-page est `03-le-point-de-reprise-de-copy.md`.

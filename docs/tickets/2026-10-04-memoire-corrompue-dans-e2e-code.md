@@ -165,6 +165,8 @@ puis sur celui d'après. Le défaut doit disparaître après.
 - Plus court encore : vérifier d'abord que l'interruption du test gonfle la cardinalité, en
   lisant `STATS_INFO` contre `count(*)` à la réouverture. Une seule passe.
 
+**Un candidat sérieux pour la cause (4 octobre, 18 h)** : en faisant un test du moteur de l'essai déterministe du banc, un défaut d'origine est sorti — après un ajout annulé (un `COPY` refusé) dans un groupe de nœuds encore en mémoire, le point de reprise suivant écrit hors de son bloc (ticket « Le point de reprise écrit hors de son bloc après un ajout annulé », corrigé par `05788a868`). Le test fautif d'`e2e_code` interrompt un chargement puis rouvre et recrée l'index, ce qui écrit un point de reprise. **Non vérifié** : rien ne dit encore que c'est cette écriture-là qui tuait la suite. Ce ticket se ferme si les passes du banc sous AddressSanitizer, sur un moteur à jour, ne rendent plus de rapport — ou reste ouvert avec le texte du refus nommé qui aura parlé.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —

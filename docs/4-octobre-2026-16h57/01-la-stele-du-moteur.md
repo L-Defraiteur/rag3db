@@ -40,21 +40,56 @@ poser la version.
   chargement initial, journaliser pour de bon (la voie que la stèle demande).
 - **3, les écritures parallèles** : T0, A2, A5, A5 bis livrées ; le mode
   reste éteint hors du banc ; la suite attend les verrous.
-- **4, les défauts** : la corruption de mémoire à la recréation d'un index a
-  sa cause et son correctif (`1ea49837f`) ; une quarantaine de tickets
-  ouverts, **pas encore triés** entre « bloque la stèle » et « confort ».
+- **4, les défauts** : la traque de la corruption de mémoire d'`e2e_code` a donné trois
+  correctifs le 4 octobre — l'index vectoriel dimensionné par le nombre de lignes et trois
+  refus nommés à la place d'écritures hors bloc (`1ea49837f`) ; puis, en faisant un test de
+  l'essai du banc, deux défauts d'origine après un `COPY` refusé : le point de reprise qui
+  écrivait hors de son bloc, et la ligne d'origine d'une clé en double qui sortait de l'index
+  de clé primaire (`05788a868`). **La cause de la corruption d'`e2e_code` elle-même n'est pas
+  établie** : le point de reprise après un ajout annulé en est un candidat sérieux, non
+  vérifié ; le ticket reste ouvert jusqu'à ce que les passes du banc sous AddressSanitizer
+  le disent. Les tickets du moteur sont triés au §3.1.
 
 ## 3. Ce qui reste à faire pour que la stèle soit utilisable
 
 1. **Trier les tickets** : une ligne par ticket du moteur — bloque la stèle
-   (mémoire, durabilité, résultat faux) ou non. À faire par la session du
-   cœur C++, relu par le banc.
+   (mémoire, durabilité, résultat faux) ou non. Fait au §3.1, à relire par le banc.
 2. **L'ordre** : les verrous, puis les écritures parallèles, puis le
    chargement journalisé — ou le chargement d'abord, puisqu'il est sur le
    chemin des 90 s du premier index. À trancher.
 3. **Poser la version** quand les quatre conditions sont tenues : une
    étiquette git, la date au journal des chantiers, et la règle « on n'y
    revient que sur un défaut constaté ».
+
+### 3.1 Le tri des tickets du moteur (session cœur C++, 4 octobre, à relire par le banc)
+
+Seuls les tickets **ouverts** qui touchent le moteur. Les tickets fermés ne bloquent plus
+rien ; ceux de l'analyse de code, de codeparsers et de rag3weaver ne sont pas l'affaire de
+la stèle.
+
+| Ticket | Verdict | Pourquoi |
+|---|---|---|
+| Une corruption de mémoire tue `e2e_code` | **bloque** | mémoire ; cause non établie, trois correctifs posés autour |
+| Le point de reprise plante, à jamais, après `ALTER TABLE … DROP` | **bloque** | mémoire (SIGSEGV) et durabilité : la base ne peut plus écrire de point de reprise ; rag3weaver ne supprime pas de colonne, mais le défaut corrompt |
+| Dans une transaction, un balayage de plusieurs tables de relations relit celles d'une autre table | **bloque** | résultat faux |
+| Un `COPY` rend une erreur alors qu'il est validé | **bloque** | résultat faux sur la durabilité : l'appelant qui recommence écrit deux fois |
+| L'ordre de synchronisation au point de reprise | **bloque, à éprouver** | durabilité, si le doute est fondé ; un arrêt au bon instant le dit |
+| Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant | **bloque, à borner** | durabilité ; non éprouvable au banc sans crochet dans `src/` — dire lesquels de ses cas la stèle exige |
+| La réouverture d'une base échoue par intermittence, sous charge | **bloque, tant que la cause manque** | une réouverture qui échoue sur un journal de taille nulle touche à la durabilité ; quatre hypothèses écartées |
+| Mise à jour massive de vecteurs : des lignes restent injoignables dans l'index | **bloque — sans ticket, à ouvrir** | résultat faux (journal des chantiers §6) |
+| Une ligne très loin des autres est injoignable dans un index bâti d'un coup | **bloque — sans ticket, à ouvrir** | résultat faux (journal des chantiers §6) ; à vérifier depuis `1ea49837f`, qui borne autrement le parcours de la construction |
+| Un doublon de clé au journal empêche de rouvrir (H4) | **bloque — porté par la condition 1** | durabilité ; c'est A3′ |
+| Un `CHECKPOINT` retient la validation d'un lecteur jusqu'à son délai | confort | une attente, sans perte ; à revoir avec la condition 3 (« sans blocage ») |
+| Le point de reprise échoue quand le tampon du moteur est petit | confort, au sens de la stèle | l'indexation s'arrête sous un nom, rien n'est perdu ni faux ; gênant pour le produit à 4 Gio |
+| Un `COPY` refusé laisse la cardinalité gonflée | confort | ne sert plus qu'au planificateur depuis `1ea49837f` |
+| Un `NULL` en tête d'une liste de paramètres type sa colonne en `STRING` | confort | un refus nommé, contourné dans rag3weaver |
+| Un accent grave doublé dans un nom n'est pas réduit | confort | un cas de syntaxe |
+| Deux défauts de chaînes annoncés par Ladybug, non reproduits | hors stèle | correctifs d'amont non reproduits |
+
+Ce tri est un avis, pas une décision : sept tickets ouverts bloquent, plus trois défauts
+sans ticket ou portés par une condition. Les deux qui demandent une décision de Lucie ou
+de l'orchestration sont « durabilité sur faute d'entrée-sortie » (jusqu'où l'exiger) et
+« le tampon petit » (confort pour la stèle, bloquant pour le produit).
 
 ## 4. Ce qui n'attend pas la stèle
 

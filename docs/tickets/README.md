@@ -69,3 +69,5 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | ouvert — proposition | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
 | [Un COPY refusé laisse la cardinalité de la table gonflée](2026-10-04-copy-refuse-gonfle-la-cardinalite.md) | ouvert | réponse fausse | oui | à vérifier |
+| [Le point de reprise écrit hors de son bloc après un ajout annulé](2026-10-04-point-de-reprise-ecrit-hors-bloc-apres-un-ajout-annule.md) | corrigé | plantage | oui | oui si un de ses `COPY` est refusé ou annulé |
+| [Après un COPY refusé pour clé en double, la ligne d'origine disparaît de l'index](2026-10-04-cle-d-origine-perdue-apres-un-copy-refuse.md) | corrigé | réponse fausse | oui | par `RAG3WEAVER_COPY_NAISSANCES=1` seulement |
