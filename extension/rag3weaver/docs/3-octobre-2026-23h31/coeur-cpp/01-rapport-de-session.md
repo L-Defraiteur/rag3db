@@ -37,14 +37,16 @@ la lecture d'une colonne de chaînes longues par un balayage), ce qui a été es
 
 Où j'en suis exactement :
 - `build/asan` : bibliothèque et extension bâties avec AddressSanitizer
-  (`annexes/build-asan.sh`). **L'arbre porte une instrumentation provisoire, non commitée**,
-  dans `src/storage/table/dictionary_column.cpp` : une ligne `[CHAINE INCOHERENTE]` quand
-  les décalages lus du dictionnaire sont décroissants ou dépassent la taille des données.
-  À retirer (`git checkout -- src/storage/table/dictionary_column.cpp`) avant tout autre
-  travail.
-- Une boucle de six passes au plus tourne (`~/.cache/rag3db-moteur-notes/asan/boucle-asan.sh`,
-  résultat dans `boucle-asan`, rapports dans `rapport-<n>.*`) ; elle s'arrête au premier
-  rapport. ASan n'attrape le défaut qu'une passe sur deux environ.
+  (`annexes/build-asan.sh`). L'instrumentation provisoire est retirée, l'arbre est propre
+  (branche `garde-2-extensions-avant-le-rejeu-5`, égale à master `110a65f15` plus rien).
+- Sept passes sous ASan après la première : aucun rapport. **Le défaut sort une passe sur
+  huit sous ASan**, une sur quarante sans. La session s'est arrêtée là, à la limite fixée
+  par l'orchestration : la condition n'est pas connue. Scripts :
+  `~/.cache/rag3db-moteur-notes/asan/boucle-asan.sh`, `gdb-asan.cmd`.
+- Pour reprendre : boucler sous ASan **avec l'extension vector bâtie elle aussi sous ASan**
+  (c'était le cas de la seule passe qui a attrapé le défaut), gdb arrêté sur
+  `__asan::ReportGenericError`, et lire dans `DictionaryColumn::scanValue` et son appelant
+  la longueur, les décalages et les métadonnées du segment.
 - Hypothèse de l'orchestration, à trancher par les nombres : une course — une longueur ou
   un décalage tiré d'une lecture optimiste d'une page en cours d'éviction ou de réécriture.
   À regarder au rapport : la longueur réservée est-elle celle qui borne la boucle de pages ;
