@@ -195,7 +195,7 @@ Gardé tel quel, sans réponse : l'interface elle-même décrite par un graphe
 chose que la personne voit. À reprendre quand l'interface du §6 aura une
 première forme ; rien à décider maintenant.
 
-### Suite : un backend tout en graphes, une route comme entrée
+### Suite : un backend tout en graphes, un contrôleur est un graphe
 
 > « Faire un genre de Next.js depuis rag3weaver ? Peut-être que le backend est
 > tout en DAG : une route est un début de DAG, ensuite on référence une vue
@@ -204,9 +204,12 @@ première forme ; rien à décider maintenant.
 
 Ce que cela donne, mis en forme (proposition de l'orchestration, en débat) :
 
-- **Une route est une entrée de graphe**, au même titre que les deux qui
-  existent : l'appel d'outil par un agent, et l'événement (réacteur). Un même
-  graphe peut avoir les trois.
+- **Un contrôleur est un graphe ; une route n'est que ce qui y mène** —
+  précision de Lucie : « un contrôleur est un graphe, plutôt qu'une route un
+  graphe. » La route est une adresse liée à un contrôleur, comme le nom d'un
+  outil l'est pour un agent et l'abonnement pour un événement (réacteur).
+  Trois façons d'entrer dans un même graphe ; plusieurs routes peuvent mener
+  au même contrôleur.
 - **La fin du graphe nomme une vue** : un afficheur générique (arbre, tableau,
   graphe, diff, fiche) qui reçoit le résultat typé. « Une vue est un outil
   dont le résultat va à l'écran. »
@@ -215,7 +218,7 @@ Ce que cela donne, mis en forme (proposition de l'orchestration, en débat) :
   l'écrire deux fois.
 - **Vivant** : le réacteur pousse ce qui change vers la vue ouverte.
 - **Les écritures** (un formulaire, une note posée sur une fiche) passent par
-  une route et son graphe, avec une politique par route comme il y a une
+  un contrôleur, avec une politique par contrôleur comme il y a une
   politique par outil.
 
 Ce qui ne serait pas un graphe : l'interface elle-même (les boucles clic →
