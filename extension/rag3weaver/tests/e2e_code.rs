@@ -1149,6 +1149,68 @@ fn a_typed_variable_picks_its_method_among_homonyms() {
     }
 }
 
+/// **Une définition faite hors de sa classe rejoint sa classe** (4 octobre
+/// 2026). En C++, `int Foo::bar(int x) const {…}` dans foo.cpp définit un
+/// membre de la classe `Foo` déclarée dans foo.h. Le parent n'est pas dans
+/// le fichier : la définition prend rendez-vous avec lui par son nom, et la
+/// voie des `Symbol` la relie à la **classe** (`HAS_PARENT`, et `PARENT_OF`
+/// en retour), pas au constructeur `Foo::Foo`, qui porte le même nom. La
+/// classe, elle, garde ce qu'elle déclare (`declarations`, avec la ligne de
+/// foo.h) : c'est ce que `usages` rendra (« déclaré foo.h:3 dans Foo »).
+/// Dans les deux ordres d'ingestion.
+#[test]
+#[ignore]
+fn an_out_of_class_definition_joins_its_class() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::connection::CypherValue;
+
+    let entete = || ("foo.h".to_string(), "class Foo {\npublic:\n    int bar(int x) const;\n    Foo();\n};\n".to_string());
+    let corps = || {
+        (
+            "foo.cpp".to_string(),
+            "#include \"foo.h\"\n\nFoo::Foo() {}\n\nint Foo::bar(int x) const {\n    return x;\n}\n".to_string(),
+        )
+    };
+    for ordre in [vec![entete(), corps()], vec![corps(), entete()]] {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for lot in ordre {
+            let rapport = cat.ingest_code(&analyze("/projet", vec![lot])).unwrap();
+            assert_eq!(rapport.failed, 0, "aucun lien en échec : {rapport:?}");
+        }
+        let lignes = |q: &str| -> Vec<(String, String, String)> {
+            cat.execute_raw(q)
+                .unwrap()
+                .rows
+                .iter()
+                .filter_map(|r| match (r.first(), r.get(1), r.get(2)) {
+                    (Some(CypherValue::String(a)), Some(CypherValue::String(b)), Some(CypherValue::String(c))) => {
+                        Some((a.clone(), b.clone(), c.clone()))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let parents = lignes("MATCH (a:Scope)-[:HAS_PARENT]->(b:Scope) WHERE a.name = 'bar' RETURN a.file_path, b.name, b.scope_type");
+        eprintln!("[parent de bar] {parents:?}");
+        assert_eq!(parents.len(), 1, "bar a un seul parent : {parents:?}");
+        assert!(parents[0].0.ends_with("foo.cpp") && parents[0].1 == "Foo" && parents[0].2 == "class", "la classe Foo de foo.h : {parents:?}");
+        let enfants = lignes("MATCH (b:Scope)-[:PARENT_OF]->(a:Scope) WHERE a.name = 'bar' RETURN b.name, b.scope_type, a.file_path");
+        assert_eq!(enfants.len(), 1, "et la réciproque : {enfants:?}");
+        let declare = cat
+            .execute_raw("MATCH (s:Scope) WHERE s.name = 'Foo' AND s.scope_type = 'class' RETURN s.declarations")
+            .unwrap()
+            .rows;
+        let json = declare.first().and_then(|r| r.first()).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        eprintln!("[déclarations de Foo] {json}");
+        let liste: serde_json::Value = serde_json::from_str(&json).unwrap_or_else(|e| panic!("JSON : {e} — {json}"));
+        assert!(
+            liste.as_array().is_some_and(|l| l.iter().any(|d| d["name"] == "bar" && d["line"] == 3 && d["kind"] == "method")),
+            "Foo déclare bar à la ligne 3 de foo.h : {json}"
+        );
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 10. Grossir : un fichier, puis un autre, puis tout le projet
 // ═════════════════════════════════════════════════════════════════════════════

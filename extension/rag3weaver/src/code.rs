@@ -296,6 +296,12 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     fields.insert("test_role".into(), field(FieldType::String));
     fields.insert("test_certainty".into(), field(FieldType::String));
     fields.insert("test_name".into(), field(FieldType::String));
+    // **Ce que le conteneur déclare** (une classe, un namespace) : ses
+    // méthodes et fonctions, avec ligne et signature, en JSON
+    // `[{name, line, signature, kind}]`, vide s'il n'en déclare pas. En C++,
+    // une déclaration n'est pas un scope (son corps est ailleurs) : c'est ici
+    // qu'elle se lit, et `usages` la rend (« déclaré foo.h:5 dans Foo »).
+    fields.insert("declarations".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
     // Les enfants repliés dans `content` : de quoi rendre un extrait avec
@@ -579,6 +585,10 @@ pub struct ScopeRecord {
     pub test_certainty: String,
     #[serde(default)]
     pub test_name: String,
+    /// Les membres déclarés (méthodes, fonctions), en JSON ; vide sinon. Voir
+    /// [`scope_config`].
+    #[serde(default)]
+    pub declarations: String,
     pub start_line: usize,
     pub end_line: usize,
     pub start_byte: usize,
@@ -906,6 +916,7 @@ pub fn analyze_in_project(
             test_role: String::new(),
             test_certainty: String::new(),
             test_name: String::new(),
+            declarations: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
             start_byte: sc.scope_start_byte,
@@ -927,8 +938,10 @@ pub fn analyze_in_project(
         return analysis;
     };
 
-    // L'identité d'un scope, la nôtre (voir `stable_scope_keys`).
-    let stable = stable_scope_keys(&rels.uuid_mapping, &named, &source);
+    // L'identité d'un scope, la nôtre (voir `stable_scope_keys`), calculée sur
+    // les scopes de chaque fichier ; l'uuid de l'analyseur ne sert qu'à y
+    // rattacher ses relations.
+    let (cle_du_scope, stable) = stable_scope_keys(&fichiers_tries, root, &rels.uuid_mapping, &named, &source);
 
     // uuid codeparsers → (entité, clé).
     let mut identity: HashMap<&str, (&str, String)> = HashMap::new();
@@ -952,11 +965,6 @@ pub fn analyze_in_project(
     // Scopes : le ScopeInfo complet (contenu, docstring, octets) est dans
     // `result.files` ; son uuid dans `uuid_mapping`. Rapprochement par
     // (fichier relatif, nom, type, ligne de début).
-    let mut by_position: HashMap<(String, String, String, usize), String> = HashMap::new();
-    for (uuid, entry) in &rels.uuid_mapping {
-        let Some(key) = stable.get(uuid.as_str()) else { continue };
-        by_position.insert((entry.file.clone(), entry.name.clone(), entry.r#type.clone(), entry.start_line), key.clone());
-    }
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
         let (indexed_name, coords) = identity_of(&rel);
@@ -971,7 +979,7 @@ pub fn analyze_in_project(
         let owned = raw.get(abs).map(|texte| own_texts(texte, &fa.scopes)).unwrap_or_default();
         for (i, s) in fa.scopes.iter().enumerate() {
             let type_str = scope_type_name(&s.r#type).to_string();
-            let Some(key) = by_position.get(&(rel.clone(), s.name.clone(), type_str.clone(), s.scope_start_line)) else {
+            let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
                 continue;
             };
             // Sans texte propre, le repli de l'analyseur peut n'être que le
@@ -999,6 +1007,7 @@ pub fn analyze_in_project(
                 test_role: s.test.as_ref().map_or_else(String::new, |t| test_role_name(&t.role).to_string()),
                 test_certainty: s.test.as_ref().map_or_else(String::new, |t| test_certainty_name(&t.certainty).to_string()),
                 test_name: s.test.as_ref().and_then(|t| t.name.clone()).unwrap_or_default(),
+                declarations: declarations_of(s),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
                 start_byte: s.scope_start_byte,
@@ -1055,13 +1064,8 @@ pub fn analyze_in_project(
     let aucune = std::collections::HashSet::new();
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
-        for sc in &fa.scopes {
-            let Some(key) = by_position.get(&(
-                rel.clone(),
-                sc.name.clone(),
-                scope_type_name(&sc.r#type).to_string(),
-                sc.scope_start_line,
-            )) else {
+        for (i, sc) in fa.scopes.iter().enumerate() {
+            let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
                 continue;
             };
             let libraries = fichier_du_scope.get(key).and_then(|f| libraries_du_fichier.get(f)).unwrap_or(&aucune);
@@ -1181,6 +1185,38 @@ pub fn analyze_in_project(
             }
         }
     }
+    // **Le parent d'ailleurs.** Une définition hors de sa classe
+    // (`int Foo::bar() {…}` dans foo.cpp, la classe dans foo.h) a un parent
+    // nommé, mais aucune arête `HAS_PARENT` dans son fichier : le parent
+    // n'y est pas. Elle prend rendez-vous avec lui par son nom, comme un
+    // appel ; la matérialisation ne la relie qu'à un conteneur (classe,
+    // namespace…), et s'abstient s'il y en a plusieurs.
+    // Un parent qui n'est pas un conteneur n'en est pas un : l'analyseur relie
+    // par le nom, dans le fichier, et `Foo::bar` défini à côté du
+    // constructeur `Foo::Foo` prenait le constructeur pour parent. Ces
+    // arêtes-là partent, et la définition prend rendez-vous comme les autres.
+    let genre_du_scope: HashMap<String, String> =
+        analysis.scopes.iter().map(|sc| (sc.key.clone(), sc.scope_type.clone())).collect();
+    let est_conteneur = |cle: &str| genre_du_scope.get(cle).is_some_and(|g| GENRES_CONTENEURS.contains(&g.as_str()));
+    analysis.relations.retain(|r| match r.rel.as_str() {
+        "HAS_PARENT" if r.to_entity == SCOPE => est_conteneur(&r.to_key),
+        "PARENT_OF" if r.from_entity == SCOPE => est_conteneur(&r.from_key),
+        _ => true,
+    });
+    let deja_parent: std::collections::HashSet<&str> =
+        analysis.relations.iter().filter(|r| r.rel == "HAS_PARENT").map(|r| r.from_key.as_str()).collect();
+    let parents_d_ailleurs: Vec<(String, String)> = analysis
+        .scopes
+        .iter()
+        .filter(|sc| !sc.parent_name.is_empty() && !deja_parent.contains(sc.key.as_str()))
+        .filter_map(|sc| {
+            let nom = sc.parent_name.rsplit("::").next().unwrap_or("").trim();
+            (!nom.is_empty()).then(|| (sc.key.clone(), nom.to_string()))
+        })
+        .collect();
+    for (key, nom) in parents_d_ailleurs {
+        analysis.pending.push((key, nom, "HAS_PARENT".to_string()));
+    }
     analysis.pending.sort();
     analysis.pending.dedup();
 
@@ -1209,44 +1245,63 @@ pub fn analyze_in_project(
 ///
 /// Ce qui change encore une identité : renommer, changer de parent, changer
 /// de fichier. C'est-à-dire exactement ce qui *est* un autre symbole.
+///
+/// **Calculée sur les scopes de chaque fichier**, pas sur la table des uuids
+/// de l'analyseur (4 octobre 2026) : les homonymes se numérotaient à partir de
+/// cette table, qui ne rendait pas toujours les mêmes entrées d'un paquet à
+/// l'autre (`s:variable` à 64 fichiers, `s:variable#1` à 512), et deux
+/// homonymes sur une même ligne recevaient la même clé. Le rang départage par
+/// ligne de début, ligne de fin, puis rang dans le fichier : un ordre que
+/// l'analyseur rend identique quel que soit le paquet.
+///
+/// Rend la clé de chaque scope, par (fichier relatif, rang dans le fichier),
+/// et celle de chaque uuid de l'analyseur, rattaché par (fichier, nom, type,
+/// lignes de début et de fin).
+#[allow(clippy::type_complexity)]
 fn stable_scope_keys(
+    fichiers: &[(&String, &codeparsers::scope_extraction::types::ScopeFileAnalysis)],
+    root: &str,
     mapping: &codeparsers::relationship_resolution::types::UuidToScopeMapping,
     named: &HashMap<String, (String, BTreeMap<String, String>)>,
     source: &str,
-) -> HashMap<String, String> {
-    // Les homonymes de même parent et de même type, par fichier.
-    let mut groups: HashMap<(&str, &str, &str, &str), Vec<(usize, &str)>> = HashMap::new();
-    for (uuid, e) in mapping {
-        groups
-            .entry((
-                e.file.as_str(),
-                e.parent.as_deref().unwrap_or(""),
-                e.name.as_str(),
-                e.r#type.as_str(),
-            ))
-            .or_default()
-            .push((e.start_line, uuid.as_str()));
-    }
-
-    let mut keys = HashMap::with_capacity(mapping.len());
-    for ((file, parent, name, typ), mut members) in groups {
+) -> (HashMap<(String, usize), String>, HashMap<String, String>) {
+    let mut cle_du_scope: HashMap<(String, usize), String> = HashMap::new();
+    let mut cle_par_position: HashMap<(String, String, String, usize, usize), String> = HashMap::new();
+    for (abs, fa) in fichiers.iter().copied() {
+        let rel = relative(root, abs);
         // Le fichier se nomme dans sa source, pas dans la racine d'analyse.
-        let file = named.get(file).map(|(n, _)| n.clone()).unwrap_or_else(|| file.to_string());
-        let origin = source;
-        // Par ligne, puis par uuid : deux surcharges sur la même ligne
-        // restent départagées de façon déterministe.
-        members.sort_unstable();
-        let qualified = if parent.is_empty() { name.to_string() } else { format!("{parent}.{name}") };
-        for (rank, (_, uuid)) in members.into_iter().enumerate() {
-            let key = if rank == 0 {
-                format!("{origin}#{file}#{qualified}:{typ}")
-            } else {
-                format!("{origin}#{file}#{qualified}:{typ}#{rank}")
-            };
-            keys.insert(uuid.to_string(), key);
+        let file = named.get(&rel).map(|(n, _)| n.clone()).unwrap_or_else(|| rel.clone());
+        // Les homonymes de même parent et de même type.
+        let mut groupes: BTreeMap<(String, String, String), Vec<(usize, usize, usize)>> = BTreeMap::new();
+        for (i, sc) in fa.scopes.iter().enumerate() {
+            groupes
+                .entry((sc.parent.clone().unwrap_or_default(), sc.name.clone(), scope_type_name(&sc.r#type).to_string()))
+                .or_default()
+                .push((sc.scope_start_line, sc.scope_end_line, i));
+        }
+        for ((parent, name, typ), mut membres) in groupes {
+            membres.sort_unstable();
+            let qualified = if parent.is_empty() { name.clone() } else { format!("{parent}.{name}") };
+            for (rank, (debut, fin, i)) in membres.into_iter().enumerate() {
+                let key = if rank == 0 {
+                    format!("{source}#{file}#{qualified}:{typ}")
+                } else {
+                    format!("{source}#{file}#{qualified}:{typ}#{rank}")
+                };
+                cle_par_position.entry((rel.clone(), name.clone(), typ.clone(), debut, fin)).or_insert_with(|| key.clone());
+                cle_du_scope.insert((rel.clone(), i), key);
+            }
         }
     }
-    keys
+    let par_uuid = mapping
+        .iter()
+        .filter_map(|(uuid, e)| {
+            cle_par_position
+                .get(&(e.file.clone(), e.name.clone(), e.r#type.clone(), e.start_line, e.end_line))
+                .map(|k| (uuid.clone(), k.clone()))
+        })
+        .collect();
+    (cle_du_scope, par_uuid)
 }
 
 /// Une fermeture n'est pas une entité qu'on cherche par son nom : ses
@@ -1536,6 +1591,7 @@ impl ScopeRecord {
             ("test_role".into(), s(&self.test_role)),
             ("test_certainty".into(), s(&self.test_certainty)),
             ("test_name".into(), s(&self.test_name)),
+            ("declarations".into(), s(&self.declarations)),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
             ("start_byte".into(), i(self.start_byte)),
@@ -1856,11 +1912,13 @@ impl Catalog {
             .filter(|sym| {
                 mentioners_by_symbol
                     .get(*sym)
-                    .is_some_and(|ms| ms.iter().any(|m| !m.qualifier_types.is_empty() || !m.import_modules.is_empty()))
+                    .is_some_and(|ms| {
+                        ms.iter().any(|m| !m.qualifier_types.is_empty() || !m.import_modules.is_empty() || m.kind == "HAS_PARENT")
+                    })
             })
             .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
             .collect();
-        let (parents, fichiers) = self.parents_et_fichiers(&a_departager)?;
+        let (parents, fichiers, genres) = self.parents_et_fichiers(&a_departager)?;
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<Mention> = Vec::new();
@@ -1877,7 +1935,28 @@ impl Catalog {
                 report.ambiguous += 1;
             }
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                let target = if !m.qualifier_types.is_empty() {
+                let target = if m.kind == "HAS_PARENT" {
+                    // Le parent d'une définition faite ailleurs : seul un
+                    // conteneur peut l'être (pas le constructeur `Foo` de la
+                    // classe `Foo`) ; s'il y en a plusieurs, l'import les
+                    // départage, sinon on s'abstient.
+                    let conteneurs: Vec<&String> = definers
+                        .iter()
+                        .filter(|d| genres.get(*d).is_some_and(|g| GENRES_CONTENEURS.contains(&g.as_str())))
+                        .collect();
+                    let choisis: Vec<&String> = if conteneurs.len() > 1 && !m.import_modules.is_empty() {
+                        conteneurs
+                            .into_iter()
+                            .filter(|d| fichiers.get(*d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))))
+                            .collect()
+                    } else {
+                        conteneurs
+                    };
+                    match choisis.as_slice() {
+                        [un] => (*un).clone(),
+                        _ => continue,
+                    }
+                } else if !m.qualifier_types.is_empty() {
                     // Le type lu choisit, et il est seul juge : un
                     // définisseur d'un autre type n'est pas la cible, même
                     // s'il est le seul.
@@ -1919,9 +1998,14 @@ impl Catalog {
                 // a une réciproque déclarée ; `IMPLEMENTS` et `INHERITS_FROM`
                 // n'en ont pas, et on n'en invente pas.
                 let rel = if RELATIONS.iter().any(|(r, _, _)| *r == m.kind) { m.kind.as_str() } else { "CONSUMES" };
-                self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), m.usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                // L'usage ne voyage que vers une relation qui le porte : une
+                // `HAS_PARENT` n'a pas ces colonnes, et l'arête ne se posait pas.
+                let usage = if USAGE_RELATIONS.contains(&rel) { m.usage.clone() } else { BTreeMap::new() };
+                self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
                     self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), m.usage, crate::disponibilite::Disponibilites::AUCUNE)?;
+                } else if rel == "HAS_PARENT" {
+                    self.link_jusqu_a("PARENT_OF", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 }
                 report.linked_across_batches += 1;
             }
@@ -1973,17 +2057,25 @@ impl Catalog {
     fn parents_et_fichiers(
         &self,
         uuids: &[String],
-    ) -> Result<(std::collections::HashMap<String, String>, std::collections::HashMap<String, String>), CatalogError> {
+    ) -> Result<
+        (
+            std::collections::HashMap<String, String>,
+            std::collections::HashMap<String, String>,
+            std::collections::HashMap<String, String>,
+        ),
+        CatalogError,
+    > {
         let mut parents = std::collections::HashMap::new();
         let mut fichiers = std::collections::HashMap::new();
+        let mut genres = std::collections::HashMap::new();
         if uuids.is_empty() {
-            return Ok((parents, fichiers));
+            return Ok((parents, fichiers, genres));
         }
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
             .conn()
             .execute_with_params(
-                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name, s.file_path"),
+                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name, s.file_path, s.scope_type"),
                 &[crate::connection::QueryParam::new("uuids", param)],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -1995,8 +2087,11 @@ impl Catalog {
             if let Some(CypherValue::String(f)) = row.get(2) {
                 fichiers.insert(u.clone(), f.clone());
             }
+            if let Some(CypherValue::String(g)) = row.get(3) {
+                genres.insert(u.clone(), g.clone());
+            }
         }
-        Ok((parents, fichiers))
+        Ok((parents, fichiers, genres))
     }
 
     /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
@@ -2050,6 +2145,34 @@ impl Catalog {
             }
         }
         Ok(out)
+    }
+}
+
+/// Les genres de scope qui peuvent être le parent d'une définition faite
+/// ailleurs.
+const GENRES_CONTENEURS: [&str; 5] = ["class", "interface", "namespace", "module", "enum"];
+
+/// Les méthodes et fonctions qu'un scope déclare, en JSON
+/// `[{name, line, signature, kind}]` ; vide s'il n'en déclare aucune.
+fn declarations_of(s: &codeparsers::scope_extraction::types::ScopeInfo) -> String {
+    use codeparsers::scope_extraction::types::ClassMemberInfoMemberType as M;
+    let liste: Vec<serde_json::Value> = s
+        .members
+        .iter()
+        .flatten()
+        .filter_map(|m| {
+            let kind = match m.member_type {
+                M::Method => "method",
+                M::Function => "function",
+                _ => return None,
+            };
+            Some(serde_json::json!({ "name": m.name, "line": m.line, "signature": m.signature.clone().unwrap_or_default(), "kind": kind }))
+        })
+        .collect();
+    if liste.is_empty() {
+        String::new()
+    } else {
+        serde_json::Value::Array(liste).to_string()
     }
 }
 
