@@ -32,6 +32,17 @@ taille, derrière le même enregistrement de validation.
 Le `COPY` garde son chemin rapide : il écrit toujours ses blocs directement dans le fichier.
 Le journal est une **copie pour la reprise**, pas le chemin d'écriture.
 
+## 1 bis. Une vérification préalable : les gros enregistrements
+
+Tout va reposer sur des enregistrements de plusieurs Kio. Le défaut du 1er octobre —
+`resizeBufferIfNeeded` remplaçait le tampon sans recopier son début, un enregistrement de
+plus de 4 Kio perdait donc son début avec une somme de contrôle valide — **est corrigé sur
+master** : `955b1b136` (« fix(wal): les enregistrements de plus de 4 Kio gardent leur
+début », 1er octobre 2026), dans `src/storage/wal/checksum_writer.cpp` et
+`checksum_reader.cpp`, avec son témoin dans `test/transaction/wal_test.cpp` (« Des
+enregistrements de plus de 4096 octets se rejouent avec leurs valeurs ») **[lu]**. Pas
+d'étape 0.
+
 ## 2. Le rejeu
 
 Rien de neuf dans le principe : `replayNodeTableInsertRecord` et
@@ -41,8 +52,11 @@ déjà ce sur quoi reposent les insertions ordinaires **[lu]**.
 
 Ce qui est à faire : le rejeu d'un nœud insère aujourd'hui **ligne par ligne**
 (`wal_replayer.cpp:613-616`). Pour un chargement de dizaines de milliers de lignes il faut
-un rejeu par vecteur entier. Lent ne veut pas dire faux : la première étape livre le rejeu
-tel qu'il est, la mesure dit s'il faut l'accélérer.
+un rejeu par vecteur entier. Lent ne veut pas dire faux : la première étape mesure le rejeu
+tel qu'il est, **à la taille du premier index** (≈ 79 000 scopes, leurs morceaux et
+vecteurs, 250 000 relations) — c'est la durée de réouverture après un arrêt brutal en plein
+index, un chiffre à rendre à Lucie. Le seuil : si cette réouverture dépasse **30 secondes**,
+le rejeu passe par vecteur dès l'étape 2 ; en dessous, il reste tel quel.
 
 `COPY_TABLE_RECORD` existe, n'est jamais écrit, et son rejeu ne fait rien **[lu]**
 (`wal_replayer.cpp:742`) : il se retire.
@@ -105,7 +119,12 @@ Deux conséquences.
 ## 6. Ce qui se retire
 
 - `setForceCheckpoint` pour un `COPY` (`client_context.cpp:535-538`) et la branche « forcé »
-  de `TransactionManager::commit`.
+  de `TransactionManager::commit`. **Ce qui se retire est l'obligation, pas le coût** : avec
+  le seuil par défaut de 16 Mio, un gros `COPY` dépasse le seuil et la validation fait encore
+  son point de reprise. Le temps n'est gagné que si le seuil est relevé — rag3weaver le
+  règle déjà pour un premier index. Ne pas promettre un gain de durée sans ce réglage ; le
+  gain sûr est de justesse (plus d'erreur après validation, plus d'attente, durabilité par
+  le journal).
 - Le remède 2a (`68ff9d5e2`) : l'attente du départ des autres avant la validation d'un
   `COPY`. Ses témoins s'adaptent avec le banc (« le `COPY` valide sans attendre, et survit à
   une mort brutale »).
@@ -136,18 +155,31 @@ Le banc écrit 1 et 2 (il les prépare) ; 3 à 5 sont des tests du moteur. Tous 
 code d'aujourd'hui dès qu'on retire le point de reprise forcé sans rien mettre à sa place :
 c'est la première chose à vérifier.
 
-## 8. Les étapes, et l'estimation
+## 8. Les étapes, et l'estimation en passes
 
-| Étape | Contenu | Jours |
-|---|---|---|
-| 1 | mesurer : journaliser les lignes d'un `COPY` de nœuds à la validation, sans rien retirer ; taille et durée sur le premier index de ce dépôt | 1 |
-| 2 | nœuds : rejeu, témoins 1, 2, 5 ; le point de reprise forcé se retire pour les nœuds | 2 |
-| 3 | relations : journal, rejeu, témoin 3 ; index vectoriel, témoin 4 | 2 à 3 |
-| 4 | retirer le forcé et le remède 2a, adapter les témoins avec le banc ; la borne de mémoire du journal | 1 à 2 |
-| 5 | liste C++ complète, passe Rust, mesure avant/après du premier index | 1 |
+Le temps réel ici est celui des passes, sérialisées par le verrou du poste. Durées
+constatées le 4 octobre : un rebâti du moteur 3 à 10 min (10 quand un en-tête public change),
+une liste C++ complète ≈ 20 min, une passe sous AddressSanitizer ou ThreadSanitizer ≈ 10 min
+(build compris), une passe Rust complète ≈ 40 min, une mesure exclusive du premier index
+≈ 3 min plus le rebâti de la bibliothèque de l'arbre principal. Les tests d'arrêt brutal
+sont dans `transaction_test` : quelques secondes, comptés avec le rebâti.
 
-**7 à 9 jours de session**, dans la fourchette donnée (6 à 10). L'étape 1 peut la faire
-bouger : si le rejeu ligne par ligne est trop lent ou le journal trop gros, il faut le rejeu
-par vecteur dès l'étape 2 (un jour de plus).
+| Étape | Contenu | Rebâtis | Listes C++ | ASan / TSan | Mesures exclusives | Passe Rust |
+|---|---|---|---|---|---|---|
+| 1 | mesurer : journaliser les lignes d'un `COPY` de nœuds à la validation, derrière un interrupteur, sans rien retirer ; taille, durée d'écriture, durée du rejeu à la taille du premier index | 2 | 1 | — | 2 (une avec, une sans) | — |
+| 2 | nœuds : rejeu (par vecteur si le seuil des 30 s est dépassé), témoins 1, 2, 5 | 3 | 1 | 1 ASan | — | — |
+| 3 | relations, puis index vectoriel : journal, rejeu, témoins 3 et 4 | 3 | 1 | 1 ASan | — | — |
+| 4 | retirer le forcé et le remède 2a, adapter les témoins avec le banc ; la borne de mémoire du journal | 2 | 1 | 1 TSan | — | — |
+| 5 | passe Rust, mesure avant/après du premier index | 1 | — | — | 2 | 1 |
+| **Total** | | **11** | **4** | **3** | **4** | **1** |
+
+Ce qui se regroupe : les étapes 2 et 3 peuvent partager une liste C++ si elles sont livrées
+ensemble (3 listes au lieu de 4) ; chaque passe ASan ou TSan se joue dans la même tenue du
+verrou que la liste de son étape. Soit **environ 4 heures de passes** au total (11 rebâtis
+≈ 70 min, 4 listes ≈ 80 min, 3 passes instrumentées ≈ 30 min, 1 passe Rust ≈ 40 min, 4 mesures
+≈ 20 min), hors l'attente du verrou quand une autre session mesure. Le reste est de
+l'écriture et de la relecture, qui ne prennent pas le poste. L'incertitude est dans le nombre
+de rebâtis : un défaut trouvé par un témoin en ajoute deux ou trois à son étape. En jours de
+session, l'ancienne fourchette (7 à 9) tient.
 
 Rien de cela ne va aux amonts.
