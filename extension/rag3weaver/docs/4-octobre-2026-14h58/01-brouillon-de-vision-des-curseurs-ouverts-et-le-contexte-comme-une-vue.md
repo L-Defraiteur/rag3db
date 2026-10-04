@@ -326,6 +326,45 @@ Donc la fiche de contexte d'un fichier a des états :
 - C'est une machine à états comme celles des gabarits de mémoire : la fiche
   de contexte de fichier peut être un gabarit, pas du code à part.
 
+### La personne dans les fiches, et l'heure partout
+
+**Lucie** : « Les utilisateurs peuvent explorer dans l'interface les fiches
+ouvertes et y glisser des notes ; les agents voient la date d'édition. Chacun
+des tours de l'agent est marqué d'une heure et minute exactes, comme ça quand
+on dit "tout à l'heure" il sait de quoi il s'agit. Et pour read et edit, il
+ne voit que les paramètres et la référence de la fiche. »
+
+Trois choses :
+
+1. **Les fiches ouvertes se voient et s'annotent dans l'interface.** La
+   personne voit ce que l'agent a ouvert, et pose une note sur une fiche : un
+   canal de la personne vers l'agent accroché à un fichier, pas au fil de la
+   conversation. Une note est une entrée de la fiche comme un commit, avec
+   son auteur et son heure.
+2. **L'heure partout.** Chaque tour, chaque commit, chaque note porte sa date
+   et son heure, sur la même horloge : « tout à l'heure, vers 14 h » désigne
+   la même chose dans le fil et dans les fiches.
+3. **Dans le fil, une lecture ou une édition ne laisse que ses paramètres et
+   la référence de la fiche.** Le contenu vit dans la fiche.
+
+Points en débat :
+
+- une note de la personne n'est jamais fondue dans un résumé de l'archiviste :
+  ce sont ses mots, ils restent tels quels, y compris sur la fiche terminée
+  et sur la fiche durable ;
+- une note posée sur une fiche ouverte doit se signaler à l'agent au tour
+  suivant (un événement « note de Lucie sur `X`, 14 h 32 »), sinon il ne la
+  voit pas ; posée sur une fiche terminée, elle la fait passer « à revoir » ;
+- l'auteur d'une entrée est toujours dit (la personne, cet agent, un autre
+  agent) : l'agent ne doit pas prendre une note d'un autre agent pour une
+  consigne de la personne ;
+- l'heure seule ne suffit pas sur une session de plusieurs jours : date et
+  heure, et « maintenant » redonné à chaque tour, en fin de prompt (l'heure
+  des tours passés ne bouge pas, le cache est gardé) ;
+- une édition qui échoue garde son erreur dans le fil : elle n'a rien écrit
+  dans la fiche. Les résultats qui ne sont pas des fichiers (une commande,
+  une recherche) restent dans le fil comme aujourd'hui.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. Lancer l'essai 1 (petit, sans risque) dès qu'une session est libre, ou
