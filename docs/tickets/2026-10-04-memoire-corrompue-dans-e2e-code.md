@@ -199,6 +199,17 @@ table de nœuds :
   `COPY` refusé. Mais ils ne sont pas, à ce jour, la cause des rapports d'`e2e_code`.
 - Les 18 passes sous ASan ne sont pas lancées, sur consigne de l'orchestration.
 
+**La garde a parlé (4 octobre, 18 h 50)** — moteur `5c8507577`, `e2e_code` sous AddressSanitizer (bibliothèque et extension), deuxième passe sur deux. Plus de rapport ASan, plus de corruption : le test `a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen` échoue sur le refus nommé,
+
+```
+Dictionary offsets out of order: string 22 runs from byte 2185 to byte 1095
+in a dictionary of 6197 bytes and 17 strings.
+```
+
+à `tests/e2e_code.rs:758` (`catalog.initialize()` de la réouverture), juste après « index vectoriel 'Scope_Chunk_vec__hashembedder' laissé détruit par un chargement en masse interrompu — reconstruction ». Ce que les nombres disent : **l'indice de la chaîne (22) dépasse le nombre de chaînes du dictionnaire (17)**. Les décalages lus au-delà du dictionnaire sont donc n'importe quoi (2185 puis 1095), et c'est ce qui faisait reboucler la longueur dans le premier rapport. Ce ne sont pas les décalages qui sont faux : c'est que l'indice et le dictionnaire ne vont pas ensemble — une colonne d'indices lue dans un état, son dictionnaire dans un autre. Le candidat « point de reprise après un ajout annulé » est donc écarté pour ce rapport-ci (il est corrigé, et le défaut revient).
+
+Deux lectures, non départagées : (a) les métadonnées du dictionnaire sont en retard sur la colonne d'indices après une écriture en place au point de reprise (`StringColumn::writeSegment`, `DictionaryColumn::append`) ; (b) une page relue est périmée — le cadre du tampon d'une page libérée puis réallouée (le `DROP` puis `CREATE` de l'index libère et réalloue des pages, et écrit un point de reprise). La lecture (b) expliquerait aussi le voisin 255 rendu par le graphe de l'index pour une table de 211 lignes.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —
