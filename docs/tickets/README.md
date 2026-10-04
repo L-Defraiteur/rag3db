@@ -26,6 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une erreur du moteur dans la branche vecteur fait tomber toute la recherche hybride](2026-10-05-erreur-de-la-branche-vecteur-fait-tomber-la-recherche-hybride.md) | ouvert — décision de Lucie (repli par branche ?) | blocage | oui | oui (toutes les entrées de recherche) |
 | [L'annulation d'un COPY efface les lignes qu'un autre écrivain valide ensuite](2026-10-05-annulation-d-un-copy-efface-les-lignes-d-un-autre-ecrivain.md) | ouvert (A3′) | perte | non (mode multi-écrivains) | non |
 | [Les étiquettes d'un carnet peuvent avoir été échangées, sans moyen sûr de le voir](2026-10-05-etiquettes-du-carnet-peut-etre-echangees.md) | fermé (aucun carnet en usage réel ; 25b3b45dc) | perte | oui, avant 25b3b45dc | oui (gabarit carnet) |
 | [Une relation porte deux valeurs d'une même propriété selon le sens où on la lit](2026-10-04-proprietes-de-relation-differentes-selon-le-sens.md) | corrigé `25b3b45dc` (même défaut que « un sens ou l'autre ») | réponse fausse | oui | oui (CONSUMES, CONSUMED_BY) |
