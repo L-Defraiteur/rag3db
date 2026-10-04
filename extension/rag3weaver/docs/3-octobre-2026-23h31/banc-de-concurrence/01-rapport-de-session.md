@@ -199,14 +199,37 @@ amonts (`8c83c3360`, puis le second lot).
       jour après le COPY rejouée). Son versement hérite du défaut d'A3′ ci-dessus, et c'est
       écrit dans son message ;
     - l'index des tickets : les propriétés selon le sens passent à corrigé (`25b3b45dc`).
+20. **Après la fusion des deux commits de la session cœur C++ (`f1d8c7190`, `e1049934e`)** :
+    - relu `e1049934e`, sans objection. Deux remarques : le filet compare au compte de la
+      transaction, lignes locales comprises ; et la course sur `numCheckpointedNodes`,
+      pour la passe TSan avec l'extension ;
+    - `efd76bdc9` :
+      - le filet témoigné par les internes, `IndexCountingMoreRowsThanItsTableIsRefusedByName` :
+        un miroir de `HNSWStorageInfo` écrit le compte à 210 pour 200 lignes. Trois refus
+        nommés, puis un rebâti juste ;
+      - le remappage d'un versement après un autre écrivain : vert ;
+      - `CopyAfterLocalInserts` exige le COPY accepté ;
+    - `77ee3f986`, la reprise de rag3weaver après un paquet défait (`ProductReloadRecovery`) :
+      - la forme : index cosinus de 64 dimensions posé d'avance, paquets de 32 par COPY
+        journalisé, reprise dans un fils ;
+      - aucun plantage, le SIGSEGV de l'arbre principal n'est pas reproduit ;
+      - mais, après trois COPY annulés, de 1 à 9 lignes validées avant l'annulation ne
+        sortent plus pour leur vecteur exact, 5 à 6 fois sur 10. C'est vrai aussi sans
+        rejeu, après une fermeture propre. Sans annulation, vert 10 fois sur 10 ;
+      - ticket `2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.md`, la cause à la
+        session cœur C++ ; les deux cas sont probabilistes ;
+    - `data-file-bounded` est passé vert une fois (rouge 4 fois sur 5) : il est déplacé de
+      `known_red.txt` vers `probabilistic.txt`, sans correctif. L'écart à la règle est
+      signalé à l'orchestration.
 
 ## Ce qui m'attend
 
-- le témoin du remappage des relations locales en multi-écrivains, après la fusion du lot
-  « COPY après des insertions » ; le commentaire de mes deux `CopyAfterLocalInserts`, qui
-  citent encore le nom du refus retiré ;
-- la relecture du second commit de la session cœur C++ : l'index vectoriel à l'annulation
-  d'un COPY.
+- la cause du défaut d'index à l'annulation est chez la session cœur C++. Une fois son
+  correctif fait, les deux cas de `ProductReloadRecovery` doivent passer verts sur des
+  essais répétés ;
+- un témoin qui compte les arêtes du graphe par les internes (aucune arête d'une ligne
+  validée vers un décalage annulé), si la session cœur C++ le veut au banc ;
+- `data-file-bounded` déterministe, si l'orchestration le préfère.
 
 ## Décisions et pourquoi
 
