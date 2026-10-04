@@ -467,6 +467,32 @@ pub struct SearchOptions {
     /// Reranking (cross-encoder) du pool fusionné, avant la pagination.
     /// Requiert un `Catalog::set_reranker` ; sinon `meta.warnings` le dit.
     pub rerank: Option<RerankOptions>,
+    /// **La cohésion** : remonter un candidat relié dans le graphe aux autres
+    /// candidats fusionnés. `None` (ou un poids nul) : rien ne change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cohesion: Option<CohesionOptions>,
+}
+
+/// La cohésion des candidats fusionnés : pour chacun, la somme de 1/sauts
+/// vers les autres candidats qu'il rejoint par les relations déclarées (les
+/// deux sens, carrefours exclus) ; normalisée, elle multiplie le score :
+/// `score × (1 + weight × cohésion)`. Les relations sont celles de l'appelant —
+/// le moteur ne sait rien du domaine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CohesionOptions {
+    pub weight: f64,
+    pub relations: Vec<String>,
+    pub max_hops: usize,
+    pub max_degree: usize,
+    /// Candidats pris en compte, dans l'ordre fusionné.
+    pub candidates: usize,
+}
+
+impl Default for CohesionOptions {
+    fn default() -> Self {
+        Self { weight: 0.0, relations: Vec::new(), max_hops: 2, max_degree: 50, candidates: 40 }
+    }
 }
 
 impl Default for SearchOptions {
@@ -490,6 +516,7 @@ impl Default for SearchOptions {
             scope: None,
             scopes: Vec::new(),
             rerank: None,
+            cohesion: None,
         }
     }
 }

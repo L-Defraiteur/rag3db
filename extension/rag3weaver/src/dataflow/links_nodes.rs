@@ -633,3 +633,96 @@ impl NodeFactory for CohesionNodeFactory {
         }
     }
 }
+
+// ─── La cohésion, en option de recherche ─────────────────────────────────────
+
+/// **La cohésion après la fusion**, pilotée par `SearchOptions.cohesion` :
+/// sans option (ou poids nul), les résultats passent tels quels, à coût nul.
+/// Sinon, la cohésion des `candidates` premiers (même calcul que
+/// [`CohesionNode`]), normalisée par son maximum, multiplie le score —
+/// `score × (1 + weight × cohésion)` — et la liste se réordonne. Un nœud
+/// après la fusion plutôt qu'un signal de boost : le poids est celui de
+/// l'appelant, quels que soient les poids de fusion qu'il déclare.
+/// **Inputs** `results`, `query` ; **output** `results`. Service : `catalog`.
+pub struct CohesionBoostNode {
+    node_name: String,
+}
+
+impl Node for CohesionBoostNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "CohesionBoostNode"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&CohesionBoostNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&CohesionBoostNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        use super::catalog_read::{read_catalog, CatalogRead};
+        let mut results: Vec<UnifiedResult> = ctx.take_input("results").and_then(take_or_clone::<Vec<UnifiedResult>>).unwrap_or_default();
+        let qp = ctx.take_input("query").and_then(take_or_clone::<super::port::QueryPayload>);
+        let opt = qp.as_ref().and_then(|q| q.options.cohesion.clone()).filter(|c| c.weight != 0.0 && !c.relations.is_empty());
+        if let (Some(c), Some(catalog)) = (opt, ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned()) {
+            let entity = results.iter().find_map(|r| r.entity.clone()).or_else(|| qp.as_ref().map(|q| q.target_name.clone())).unwrap_or_default();
+            let cfg = LinksConfig {
+                entity: entity.clone(),
+                relations: c.relations.clone(),
+                labels: BTreeMap::new(),
+                title: "_uuid".into(),
+                path_fields: Vec::new(),
+                line_field: "_uuid".into(),
+                max_hops: c.max_hops.clamp(1, MAX_HOPS),
+                max_links: usize::MAX,
+                max_degree: c.max_degree.max(1),
+                sources: c.candidates.clamp(2, 200),
+            };
+            let ident = |x: &str| !x.is_empty() && x.chars().all(|ch| ch.is_alphanumeric() || ch == '_');
+            if !std::iter::once(&cfg.entity).chain(&cfg.relations).all(|x| ident(x)) {
+                return Err("CohesionBoostNode: entité ou relation qui n'est pas un identifiant".into());
+            }
+            let uuids: Vec<String> = results.iter().filter(|r| !r.uuid.starts_with("scan:")).map(|r| r.uuid.clone()).collect();
+            let scores = match read_catalog(&catalog, &entity) {
+                CatalogRead::Refused(_) => HashMap::new(),
+                CatalogRead::Ready { catalog: cat, .. } => cohesion_of(&cat, &cfg, &uuids)?,
+            };
+            let max = scores.values().cloned().fold(0.0_f64, f64::max);
+            if max > 0.0 {
+                for r in results.iter_mut() {
+                    let v = scores.get(&r.uuid).copied().unwrap_or(0.0) / max;
+                    r.score *= 1.0 + c.weight * v;
+                }
+                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            ctx.metric("coherent", scores.len() as f64);
+        }
+        ctx.set_output("results", PortValue::new(results));
+        Ok(())
+    }
+}
+
+pub struct CohesionBoostNodeFactory;
+
+impl NodeFactory for CohesionBoostNodeFactory {
+    fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        Ok(Box::new(CohesionBoostNode { node_name: name.to_string() }))
+    }
+    fn node_type(&self) -> &'static str {
+        "CohesionBoostNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "CohesionBoostNode",
+            description: "After fusion: when SearchOptions.cohesion is set (weight, relations), multiplies each fused score by 1 + weight × normalised cohesion (how many other candidates it reaches within max_hops along the declared relations, hubs excluded) and re-sorts. Without the option, results pass through at no cost.",
+            inputs: vec![
+                PortDef { name: "results", port_type: PortType::Results, required: false },
+                PortDef { name: "query", port_type: PortType::Query, required: false },
+            ],
+            outputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+            config_params: vec![],
+        }
+    }
+}

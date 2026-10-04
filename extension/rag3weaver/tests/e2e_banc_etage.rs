@@ -888,3 +888,111 @@ fn banc_etage_qui_perd() {
 
     assert!(rapport.scopes > 0, "rien n'a été indexé");
 }
+
+/// **La cohésion par-dessus la fusion du produit** (session codeparsers,
+/// demande de l'orchestration du 4 octobre). La fusion du produit
+/// (bm25 0,45 / vector 0,55, sans creux), puis `SearchOptions.cohesion` à
+/// W = 0 / 0,2 / 0,5 : un candidat relié dans le graphe du code (CONSUMES,
+/// INHERITS_FROM, IMPLEMENTS, deux sauts, carrefours exclus) aux autres
+/// candidats fusionnés remonte. W = 0 doit égaler la ligne « 0,45/0,55 » de
+/// la section H (même base fraîche). Un test à part, avec sa propre base,
+/// pour itérer sur W sans rejouer les autres sections. Un banc mesure, il
+/// n'échoue pas : les montées et descentes sont nommées, pas assertées.
+#[test]
+#[ignore]
+fn banc_cohesion_produit() {
+    let (embedder, modele) = embarqueur();
+    let reel = Arc::new(Mutex::new(base(embedder.clone(), "etage-cohesion")));
+    register_code_schema(&mut reel.lock().unwrap(), default_scope_chunking()).unwrap();
+    let racine = manifest();
+    let sources: Vec<(String, String)> = read_sources(&format!("{racine}/src"))
+        .expect("lire src/")
+        .into_iter()
+        .map(|(rel, c)| (format!("src/{rel}"), c))
+        .collect();
+    let rapport = reel.lock().unwrap().ingest_code(&rag3weaver::code::analyze(&racine, sources)).expect("ingérer src/");
+    eprintln!("[cohésion] modèle {modele} · {} scopes", rapport.scopes);
+
+    // Copiés de la section H — deux tests ne se prêtent rien.
+    const IDENTIFIANTS: [&str; 10] = [
+        "merge_port_values",
+        "fuse_signals",
+        "resolve_search_target",
+        "register_search_services",
+        "embarquer_la_requete",
+        "base_de_fusion",
+        "appliquer_la_consigne_pour",
+        "search_bm25_chunked",
+        "parse_mermaid_template",
+        "rendre_le_retard",
+    ];
+    let options = |w: f64| -> SearchOptions {
+        let mut o = options_vecteur();
+        o.signals = Some(SearchSignals::HYBRID);
+        o.fusion = Some(FusionConfig {
+            bm25: SignalConfig { weight: 0.45, ..SignalConfig::default() },
+            vector: SignalConfig { weight: 0.55, ..SignalConfig::default() },
+            ..FusionConfig::default()
+        });
+        if w != 0.0 {
+            o.cohesion = Some(rag3weaver::search::CohesionOptions {
+                weight: w,
+                relations: vec!["CONSUMES".into(), "INHERITS_FROM".into(), "IMPLEMENTS".into()],
+                ..Default::default()
+            });
+        }
+        o
+    };
+    let poids = [0.0, 0.2, 0.5];
+    let mut lignes = Vec::new();
+    let mut classements: Vec<(Vec<Vec<String>>, Vec<Vec<String>>)> = Vec::new();
+    for w in poids {
+        let (mut ph, mut id) = (Mesure::default(), Mesure::default());
+        let (mut cp, mut ci) = (Vec::new(), Vec::new());
+        let t = std::time::Instant::now();
+        for (q, attendus) in QUESTIONS {
+            let n = noms(&Catalog::rechercher(&reel, SCOPE, q, options(w)).expect("recherche"));
+            ph.noter(&n, attendus);
+            cp.push(n);
+        }
+        for nom in IDENTIFIANTS {
+            let n = noms(&Catalog::rechercher(&reel, SCOPE, nom, options(w)).expect("recherche d'identifiant"));
+            id.noter(&n, &[nom]);
+            ci.push(n);
+        }
+        let ms = t.elapsed().as_millis() as usize / (QUESTIONS.len() + IDENTIFIANTS.len());
+        lignes.push(format!("{} / I {:.3} {}/{} — {ms} ms par recherche", ph.ligne(&format!("produit 0,45/0,55, cohésion W = {w}")), id.mrr / IDENTIFIANTS.len() as f64, id.r1, id.r5));
+        classements.push((cp, ci));
+    }
+    eprintln!("\n| ligne | MRR | R@1 | R@5 | identifiants (MRR R@1/R@5) |\n|---|---|---|---|---|");
+    for l in &lignes {
+        eprintln!("{l}");
+    }
+    let rang = |l: &Vec<String>, attendus: &[&str]| l.iter().position(|n| attendus.contains(&n.as_str()));
+    for (i, w) in poids.iter().enumerate().skip(1) {
+        let (mut montees, mut descentes) = (Vec::new(), Vec::new());
+        let jeux: Vec<(String, Vec<&str>, &Vec<String>, &Vec<String>)> = QUESTIONS
+            .iter()
+            .enumerate()
+            .map(|(k, (q, a))| (q.to_string(), a.to_vec(), &classements[0].0[k], &classements[i].0[k]))
+            .chain(IDENTIFIANTS.iter().enumerate().map(|(k, nom)| (format!("[id] {nom}"), vec![*nom], &classements[0].1[k], &classements[i].1[k])))
+            .collect();
+        for (q, attendus, avant, apres) in jeux {
+            let (a, b) = (rang(avant, &attendus), rang(apres, &attendus));
+            let f = |r: Option<usize>| r.map(|x| (x + 1).to_string()).unwrap_or("-".into());
+            let ligne = format!("« {q} » : {} → {} (avant {:?} ; après {:?})", f(a), f(b), &avant[..avant.len().min(3)], &apres[..apres.len().min(3)]);
+            match (a.unwrap_or(99), b.unwrap_or(99)) {
+                (x, y) if y < x => montees.push(ligne),
+                (x, y) if y > x => descentes.push(ligne),
+                _ => {}
+            }
+        }
+        eprintln!("\n### W = {w} contre W = 0 : {} montées, {} descentes", montees.len(), descentes.len());
+        for l in montees {
+            eprintln!("- ↑ {l}");
+        }
+        for l in descentes {
+            eprintln!("- ↓ {l}");
+        }
+    }
+}
