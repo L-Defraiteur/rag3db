@@ -193,4 +193,3 @@ UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-re
 UpstreamFixes.QuotedEmptyCsvFieldIsNotNull quoted-empty-is-not-null
 UpstreamFixes.CsvEndingWithAnEmptyFieldAndNoNewline copy-accepts-trailing-empty-field
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
-UpstreamFixes.ResultToStringKeepsTheCursor to-string-keeps-cursor

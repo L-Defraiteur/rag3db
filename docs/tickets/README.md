@@ -46,7 +46,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [COPY : un champ CSV vide entre guillemets devient NULL](2026-10-04-csv-champ-vide-entre-guillemets-devient-null.md) | ouvert | réponse fausse | oui | non vérifié |
 | [COPY refuse un CSV qui finit par un champ vide sans saut de ligne](2026-10-04-csv-champ-vide-final-sans-saut-de-ligne.md) | ouvert | réponse fausse | oui | non vérifié |
 | [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert | réponse fausse | oui | non vérifié |
-| [QueryResult::toString() consomme le résultat](2026-10-04-tostring-consomme-le-resultat.md) | ouvert | réponse fausse | oui (par l'API C++) | non vérifié |
+| [QueryResult::toString() consomme le résultat](2026-10-04-tostring-consomme-le-resultat.md) | corrigé | réponse fausse | oui (par l'API C++) | non vérifié |
 | [Deux défauts de chaînes annoncés par Ladybug, non reproduits chez nous](2026-10-04-recettes-de-l-amont-non-reproduites.md) | ouvert — non reproduit | perte (annoncée) / réponse fausse (annoncée) | incertain | non vérifié |
 | [Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant](2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md) | ouvert | perte (pour la plupart) | non au banc sans crochet dans src/ | oui en cas d'incident (disque plein, coupure) |
 | [Un conteneur garde les références de ses membres](2026-10-04-un-conteneur-garde-les-references-de-ses-membres.md) | ouvert | réponse fausse | oui | oui (usages, impact, liens) |

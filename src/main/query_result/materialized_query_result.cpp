@@ -78,9 +78,11 @@ std::string MaterializedQueryResult::toString() const {
     }
     result += "\n";
     auto tuple_ = FlatTuple(this->columnTypes);
+    // Un itérateur à soi : celui du résultat est le curseur de l'appelant, que toString ne
+    // doit pas consommer.
     auto iterator_ = FactorizedTableIterator(*table);
-    while (iterator->hasNext()) {
-        iterator->getNext(tuple_);
+    while (iterator_.hasNext()) {
+        iterator_.getNext(tuple_);
         result += tuple_.toString();
     }
     return result;
