@@ -179,3 +179,9 @@ UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-he
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
+#
+# Les statistiques des tables (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite.md) : un COPY
+# refusé laisse la cardinalité gonflée des lignes annulées (401 pour 200), même après
+# réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
+# déterministe de la corruption d'e2e_code.
+VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows

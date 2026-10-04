@@ -33,8 +33,12 @@
 
 #ifndef __SINGLE_THREADED__
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
@@ -474,6 +478,89 @@ TEST_F(VectorIndexUpdate, FarRowFromATightCloudInAnIndexBuiltAtOnce) {
     runRepeatedly([&](int run) {
         farRowScenario(*this, run, "[n.id % 17, n.id % 23, n.id % 29, n.id % 31]");
     }, 1 /* ownStep */, 30 /* runs */);
+}
+
+// Un COPY refusé (une clé en double) laisse la cardinalité de la table gonflée des lignes
+// qu'il avait ajoutées : l'annulation retire les lignes, pas les statistiques fusionnées
+// (NodeBatchInsert, node_batch_insert.cpp). Avant 1ea49837f, CREATE_VECTOR_INDEX bornait
+// son parcours par cette cardinalité alors que son graphe en mémoire est dimensionné par
+// les vraies lignes : il écrivait hors de ses tableaux, et le processus mourait (SIGSEGV).
+// Trouvé le 4 octobre par l'essai déterministe de la corruption d'e2e_code (ticket
+// 2026-10-04-memoire-corrompue-dans-e2e-code.md) ; le lien avec ce rapport reste à prouver.
+static void fillThenRefuseACopy(VectorIndexUpdate& test) {
+    test.table = "DocCopy";
+    test.mustRun("CREATE NODE TABLE DocCopy(id INT64 PRIMARY KEY, vec FLOAT[4], s STRING);");
+    test.mustRun("UNWIND range(0, 199) AS i CREATE (:DocCopy {id: i, vec: [i % 17, i % 23, "
+                 "i % 29, i], s: lpad(CAST(i % 7 AS STRING), 4096 + (i % 7) * 4000, 'x')});");
+    test.createIndex();
+    test.mustRun("CHECKPOINT;");
+    const auto csv = test.databasePath + ".refused.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 200; i < 400; ++i) {
+            out << i << ",\"[1,2,3," << i << "]\"," << std::string(5000, 'y') << "\n";
+        }
+        out << "5,\"[1,2,3,4]\",dup\n";
+    }
+    auto copy = test.conn->query("COPY DocCopy FROM '" + csv + "' (header=false);");
+    ASSERT_FALSE(copy->isSuccess()) << "[check: copy-refused] the COPY was meant to fail";
+}
+
+TEST_F(VectorIndexUpdate, CreateIndexAfterARefusedCopy) {
+    fillThenRefuseACopy(*this);
+    if (HasFatalFailure()) {
+        return;
+    }
+    mustRun("CALL DROP_VECTOR_INDEX('DocCopy', 'doc_index');");
+    conn.reset();
+    database.reset();
+    // Dans un fils : avant 1ea49837f, la création tuait le processus.
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        createDBAndConn();
+        concurrency::loadVectorExtension(*conn);
+        auto created =
+            conn->query("CALL CREATE_VECTOR_INDEX('DocCopy', 'doc_index', 'vec', metric := 'l2');");
+        _exit(created->isSuccess() ? 0 : 5);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: create-after-refused-copy] "
+        << (WIFSIGNALED(status) ? "killed by signal " + std::to_string(WTERMSIG(status)) :
+                                  "exit code " + std::to_string(WEXITSTATUS(status)));
+    createDBAndConn();
+    concurrency::loadVectorExtension(*conn);
+    const auto failed = check("after a refused COPY");
+    std::string checks;
+    for (const auto& name : failed) {
+        checks += "[check: " + name + "] ";
+    }
+    EXPECT_TRUE(failed.empty()) << checks;
+    auto strings = conn->query("MATCH (d:DocCopy) WHERE size(d.s) <> 4096 + (d.id % 7) * 4000 "
+                               "RETURN count(*);");
+    EXPECT_EQ(strings->getNext()->getValue(0)->getValue<int64_t>(), 0)
+        << "[check: long-strings-intact] ";
+}
+
+// Le défaut lui-même, qui demeure après 1ea49837f : la cardinalité que STATS_INFO rend (et que
+// le planificateur lit) compte les lignes d'un COPY annulé, même après réouverture.
+TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrue) {
+    fillThenRefuseACopy(*this);
+    if (HasFatalFailure()) {
+        return;
+    }
+    for (const auto* moment : {"after the refused COPY", "after reopening"}) {
+        auto card = conn->query("CALL STATS_INFO('DocCopy') RETURN cardinality;");
+        ASSERT_TRUE(card->isSuccess()) << "[check: query] " << card->getErrorMessage();
+        EXPECT_EQ(card->getNext()->getValue(0)->toString(), "200")
+            << "[check: cardinality-matches-rows] " << moment;
+        card.reset();
+        conn.reset();
+        database.reset();
+        createDBAndConn();
+    }
 }
 
 } // namespace

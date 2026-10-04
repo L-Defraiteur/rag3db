@@ -114,6 +114,57 @@ Et un correctif de fond dans le même commit : l'index vectoriel se dimensionne 
 
 Piste de témoin sans ASan (orchestration) : si la cardinalité est parfois en retard, un index bâti avant `1ea49837f` avait un rappel incomplet — des lignes absentes de l'index, mesurable par un compte.
 
+## Un scénario déterministe voisin, et une hypothèse (session du banc, 4 octobre au soir)
+
+**Trouvé** : sans rag3weaver, en Release et sans ASan, le processus meurt par SIGSEGV, trois
+passes sur trois, sur un moteur d'avant `1ea49837f` (`b1b4df161`). La recette :
+- base sur disque, table à vecteurs et chaînes longues, index, `CHECKPOINT` ;
+- un `COPY` refusé (clé en double) ;
+- `DROP_VECTOR_INDEX`, réouverture, `CREATE_VECTOR_INDEX`.
+
+Le mécanisme, lu par la session cœur C++ :
+- le `COPY` annulé laisse la cardinalité gonflée (401 pour 200 lignes : ticket
+  `2026-10-04-copy-refuse-gonfle-la-cardinalite.md`) ;
+- `CREATE_VECTOR_INDEX` bornait son parcours par cette cardinalité, alors que son graphe en
+  mémoire est dimensionné par les vraies lignes : il écrivait hors de ses tableaux.
+
+Depuis `1ea49837f`, le même scénario est vert : la création aboutit et les 200 lignes sont
+joignables. Témoin : `VectorIndexUpdate.CreateIndexAfterARefusedCopy`.
+
+Cinq autres variations n'ont rien donné, ni avant ni après ce commit :
+- le scénario de base (index, `DROP`, réouverture, `CREATE`) ;
+- des suppressions et réinsertions avant le `DROP` (décalages au-delà des lignes vivantes) ;
+- un point de reprise entre `DROP` et `CREATE` ;
+- des lignes non validées pendant la recherche ;
+- des insertions annulées par `ROLLBACK`.
+
+La cardinalité n'y a jamais été en retard sur les lignes, et les chaînes longues ont
+toujours été relues justes.
+
+**Hypothèse, non prouvée** : les deux rapports d'ASan seraient ce même défaut. Le test
+fautif, `a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`, interrompt un
+chargement en masse, puis fait `DROP` et `CREATE` de l'index à la réouverture. Si
+l'interruption gonfle la cardinalité, la création écrit hors des tableaux de son graphe :
+- c'est une corruption du tas, dont `DictionaryColumn::scanValue` ne serait qu'une victime
+  plus loin ;
+- le voisin au décalage 255 dans une table comptée à 211 serait un nœud inséré au-delà des
+  lignes.
+
+La fréquence s'expliquerait par l'instant de l'interruption : avant ou après la fusion des
+statistiques.
+
+**Ce qui la prouverait** : `e2e_code` rejoué en nombre sur le moteur d'avant `1ea49837f`,
+puis sur celui d'après. Le défaut doit disparaître après.
+- **En Release**, à une passe sur soixante : pour voir au moins une mort avant avec 95 % de
+  chances, puis lire un zéro après comme un taux inférieur à 1/60, il faut environ 180
+  passes de chaque côté (règle de trois). C'est 6 à 12 heures par côté, à 2 à 4 minutes la
+  passe.
+- **Sous ASan, l'extension vector comprise**, le défaut a été attrapé une passe sur six :
+  environ 18 passes de chaque côté suffisent pour la même confiance. C'est 1 h 15 à 1 h 30
+  par côté, à 4 minutes la passe.
+- Plus court encore : vérifier d'abord que l'interruption du test gonfle la cardinalité, en
+  lisant `STATS_INFO` contre `count(*)` à la réouverture. Une seule passe.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —
