@@ -132,10 +132,14 @@ amonts (`8c83c3360`, puis le second lot).
   - **le ralentissement de la mise à jour depuis `c8fdaf196`** : dix mille lignes par
     lots de 512 passent de 25 s à 12–27 min. C'est signalé ; le cas est probabiliste (vert
     une fois sur sept essais).
-- **La garde 2** est en cours chez le cœur C++. Elle retire elle-même ses cinq rouges, et
-  ses `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
-  Il reste à faire vérifier par `IndexExactWithoutRebuild` que la liste existait avant la
-  mort.
+- **La garde 2** est livrée (`15fcc3474`) : ses cinq rouges sont verts et retirés, et les
+  `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
+  `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
+  (`9e3b03c63`).
+- **Le prochain témoin probable** : la corruption de mémoire qui tue `e2e_code` une passe
+  sur quarante (ticket `2026-10-04-memoire-corrompue-dans-e2e-code.md`), quand le cœur C++
+  aura la pile d'AddressSanitizer. La meilleure piste de la revue : Ladybug `1a233d280`,
+  l'écriture hors tampon d'une fonction de graphe pendant une validation.
 - **La session cœur C++, sur les amonts** : la perte de relations au point de reprise et
   la lecture après une relation créée puis supprimée sont corrigées (`80e3f2c32`). Restent
   sous la marche : le point de reprise après `ALTER … DROP`, le lecteur retenu par un
