@@ -25,8 +25,15 @@ public:
     // Get the primary key property expression for a given table ID.
     std::shared_ptr<Expression> getPrimaryKey(common::table_id_t tableID) const;
 
+    // Vrai tant que le nœud n'a été lié que par des motifs sans étiquette : ses tables sont
+    // alors toutes les tables de nœuds, et une étiquette donnée ensuite doit le restreindre
+    // au lieu de s'y ajouter.
+    void setBoundWithoutLabel(bool value) { boundWithoutLabel = value; }
+    bool isBoundWithoutLabel() const { return boundWithoutLabel; }
+
 private:
     std::shared_ptr<PropertyExpression> internalID;
+    bool boundWithoutLabel = false;
 };
 
 } // namespace binder

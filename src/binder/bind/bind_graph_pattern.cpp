@@ -570,7 +570,15 @@ std::shared_ptr<NodeExpression> Binder::bindQueryNode(const NodePattern& nodePat
             // We bind to a single node with both labels
             if (!nodePattern.getTableNames().empty()) {
                 auto otherNodeEntries = bindNodeTableEntries(nodePattern.getTableNames());
-                queryNode->addEntries(otherNodeEntries);
+                // Un nœud lié sans étiquette couvre toutes les tables de nœuds : y ajouter
+                // celles de l'étiquette ne le contraignait pas (MATCH (n1), (n1:L2) gardait
+                // toutes les tables). On le restreint à l'étiquette, ce qui est l'intersection.
+                if (queryNode->isBoundWithoutLabel()) {
+                    queryNode->setEntries(otherNodeEntries);
+                    queryNode->setBoundWithoutLabel(false);
+                } else {
+                    queryNode->addEntries(otherNodeEntries);
+                }
             }
         }
     } else {
@@ -591,7 +599,10 @@ std::shared_ptr<NodeExpression> Binder::bindQueryNode(const NodePattern& nodePat
 
 std::shared_ptr<NodeExpression> Binder::createQueryNode(const NodePattern& nodePattern) {
     auto parsedName = nodePattern.getVariableName();
-    return createQueryNode(parsedName, bindNodeTableEntries(nodePattern.getTableNames()));
+    auto queryNode =
+        createQueryNode(parsedName, bindNodeTableEntries(nodePattern.getTableNames()));
+    queryNode->setBoundWithoutLabel(nodePattern.getTableNames().empty());
+    return queryNode;
 }
 
 std::shared_ptr<NodeExpression> Binder::createQueryNode(const std::string& parsedName,

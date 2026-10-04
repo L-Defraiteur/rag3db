@@ -1,6 +1,6 @@
 # L'étiquette d'une variable liée plus tôt sans étiquette est ignorée
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(binder): l'étiquette d'un nœud lié plus tôt sans étiquette le restreint »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (vérifié par l'arbre principal)
