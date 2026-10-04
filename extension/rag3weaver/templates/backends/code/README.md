@@ -41,12 +41,19 @@ fichier édité est réindexé à l'édition.
 
 La tuyauterie s'éprouve sans modèle : `scripts/test_backend_code.py`.
 
-## Le signal creux (4 octobre 2026)
+## Le signal creux — une option, pas le défaut (4 octobre 2026)
 
-Le manifeste du poste déclare le creux : `models.sparse` (bge-m3 par le
-service) **et** `workspace.index_signals` qui monte `Scope` en
-`bm25+vector+sparse` — un signal de plus sur une entité se déclare, il ne
-découle pas du modèle tout seul. La fusion le pèse par les
+**Position de Lucie** : le creux appris sur du texte faiblit sur les
+jetons hors vocabulaire (les identifiants), et hors domaine il peut
+faire pire que BM25 — « une option, bien faite », la parité avec ce que
+propose Qdrant, mais pas la préconisation par défaut tant que les
+expériences ne l'ont pas tranchée (la session optimiseur en propose, le
+banc les jouera). Le manifeste d'exemple ne l'active donc PAS. Pour
+l'activer, deux clés : `models.sparse` (bge-m3 par le service) **et**
+`workspace.index_signals` qui monte `Scope` en `bm25+vector+sparse` — un
+signal de plus sur une entité se déclare, il ne découle pas du modèle
+tout seul. Le poids `sparse:0.4` des `default_weights` reste déclaré :
+il ne pèse rien sans signal. La fusion le pèse par les
 `default_weights` mesurés (`bm25:0.45, vector:0.55, sparse:0.4` — banc du
 4 octobre : phrases 0,340 → 0,369, identifiants 0,850 → 0,900 sur granite
 dense + creux bge).
