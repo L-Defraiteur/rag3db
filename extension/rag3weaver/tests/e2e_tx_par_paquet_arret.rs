@@ -163,6 +163,19 @@ fn role_enfant() {
         println!("ETAT mots {:?}", etat.text);
         return;
     }
+    if role == "chercheur" {
+        // Une recherche seule, sans synchronisation : la voie de la recherche
+        // doit rebâtir un dossier en avance, pas chercher dans un index vide.
+        let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+        let trouves = Catalog::rechercher(&catalog, rag3weaver::code::SCOPE, "f010", rag3weaver::search::SearchOptions {
+            consistency: rag3weaver::search::Consistency::Immediate,
+            signals: Some(rag3weaver::search::SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche");
+        println!("TROUVES {}", trouves.results.len());
+        return;
+    }
     if role == "echoueur" {
         // Le chemin du ROLLBACK : le paquet échoue, la base est empoisonnée,
         // puis lâchée (sa fermeture fait un point de reprise après
@@ -463,5 +476,25 @@ fn en_fichiers_une_base_saine_se_rouvre_sans_rebatir() {
     assert!(statut.success(), "{sortie}");
     assert!(!sortie.contains("rebâti depuis les lignes"), "une base saine ne se rebâtit pas :\n{sortie}");
     assert_eq!(comptes_rendus("second", &sortie), premier, "mêmes comptes après réouverture");
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **La recherche aussi rebâtit** : après la même mort, un processus neuf qui
+/// ne fait que chercher trouve un dossier en avance sur la base ; il le
+/// rebâtit avant de répondre, et trouve ce que les paquets validés ont écrit.
+#[test]
+#[ignore]
+fn en_fichiers_une_recherche_apres_un_arret_rebatit_avant_de_repondre() {
+    FICHIERS.with(|f| f.set(true));
+    let dossier = dossier_sur_disque("fichiers-chercheur");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer("ecrivain", &base, true);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet {PAQUET_TUE} :\n{sortie}");
+    let (statut, sortie) = lancer("chercheur", &base, false);
+    assert!(statut.success(), "{sortie}");
+    assert!(sortie.contains("rebâti depuis les lignes"), "la recherche rebâtit le dossier en avance :\n{sortie}");
+    let trouves: usize = sortie.lines().find_map(|l| l.strip_prefix("TROUVES ")).and_then(|n| n.trim().parse().ok()).unwrap_or(0);
+    assert!(trouves > 0, "f010 est dans un paquet validé (paquets 0 et 1 : f000 à f063) : au moins un résultat :\n{sortie}");
     let _ = std::fs::remove_dir_all(&dossier);
 }

@@ -22,9 +22,24 @@
 //! rebâti depuis les lignes**.
 //!
 //! Écart au protocole écrit (`02-…`) : on ne garde pas la génération N−1 pour
-//! y revenir, on rebâtit — plus simple, plus lent après un arrêt. Et hors de
-//! la transaction par paquet, les lignes sont validées avant le plein texte :
-//! un arrêt entre les deux laisse un index en retard que rien ne détecte.
+//! y revenir, on rebâtit — plus simple, plus lent après un arrêt.
+//!
+//! **Limite, et ce qu'il faudrait pour la lever.** Hors de la transaction par
+//! paquet — le chemin par défaut d'aujourd'hui —, chaque écriture valide ses
+//! lignes avant que le plein texte soit synchronisé et marqué : un arrêt entre
+//! les deux laisse un index **en retard** sur les lignes, avec une génération
+//! égale des deux côtés, donc invisible. Pour le détecter : écrire en base,
+//! **avant** les lignes et dans leur instruction, une génération « promise »
+//! (`fts_generation:<index> = N+1 en cours`) ; après la synchronisation des
+//! fichiers, la confirmer (`= N+1`). À l'ouverture, une génération promise
+//! jamais confirmée dit qu'un arrêt est tombé entre les deux : rebâti. Un
+//! aller-retour de méta de plus par écriture, rien de plus. Tant que ce n'est
+//! pas fait, ce mode n'est sûr qu'avec la transaction par paquet.
+//!
+//! **Le rebâti** se fait au premier usage de l'index hors transaction
+//! (`Catalog::ensure_fts_handle`, donc aussi une recherche), le catalogue
+//! tenu : une recherche concurrente attend la fin, elle ne voit pas un index
+//! vide ; l'état d'index n'annonce pas « mots : en cours » pendant ce temps.
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};

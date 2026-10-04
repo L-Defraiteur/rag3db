@@ -337,6 +337,8 @@ pub struct Catalog {
     /// (génération qui n'est pas celle de la base) : à rebâtir depuis les
     /// lignes, hors transaction (`open_fts_handles_for`).
     fts_rebuild: HashSet<String>,
+    /// Un rebâti est en cours (le `reindex` rouvre l'index qu'il a détruit).
+    fts_rebuilding: bool,
     /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
@@ -470,6 +472,7 @@ impl Catalog {
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
+            fts_rebuilding: false,
             fts_storage: Default::default(),
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
@@ -865,9 +868,46 @@ impl Catalog {
         text_fields: &[String],
         filter_fields: &[(String, String)],
     ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
-        if let Some(h) = self.fts_handles.get(table) {
-            return Some(h.clone());
+        if self.fts_handles.contains_key(table) {
+            self.rebuild_fts_if_flagged(table);
+            return self.fts_handles.get(table).cloned();
         }
+        let opened = self.open_fts_handle(table, text_fields, filter_fields)?;
+        self.rebuild_fts_if_flagged(table);
+        Some(self.fts_handles.get(table).cloned().unwrap_or(opened))
+    }
+
+    /// **Un dossier du plein texte jeté à l'ouverture se rebâtit depuis les
+    /// lignes**, au premier usage hors transaction — par toute voie qui ouvre
+    /// l'index (recherche, ingestion, vérification) : jamais un plein texte
+    /// vide servi en silence. Pendant le rebâti, le catalogue est tenu : une
+    /// recherche concurrente attend, elle ne voit pas un index à moitié vide.
+    fn rebuild_fts_if_flagged(&mut self, table: &str) {
+        if self.in_transaction || self.fts_rebuilding || !self.fts_rebuild.contains(table) {
+            return;
+        }
+        let entity = self
+            .entity_configs
+            .keys()
+            .find(|name| self.resolve_search_target(name).is_ok_and(|t| t.parent_table == table))
+            .cloned();
+        let Some(entity) = entity else { return };
+        self.fts_rebuilding = true;
+        let t = std::time::Instant::now();
+        match self.reindex(&entity) {
+            Ok(_) => eprintln!("[rag3weaver] plein texte de {entity} rebâti depuis les lignes en {:.1} s", t.elapsed().as_secs_f64()),
+            Err(e) => eprintln!("[rag3weaver] plein texte de {entity} : rebâti impossible : {e}"),
+        }
+        self.fts_rebuilding = false;
+        self.fts_rebuild.remove(table);
+    }
+
+    fn open_fts_handle(
+        &mut self,
+        table: &str,
+        text_fields: &[String],
+        filter_fields: &[(String, String)],
+    ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
         if text_fields.is_empty() {
             return None;
         }
@@ -6524,16 +6564,6 @@ impl Catalog {
                         let _ = &fields;
                     } else {
                         self.ensure_fts_handle(&table, &fields, &crate::scope::fts_filter_fields());
-                        // Un dossier jeté à l'ouverture se rebâtit ici, hors
-                        // transaction : jamais un plein texte vide servi.
-                        if !self.in_transaction && self.fts_rebuild.remove(&table) {
-                            let t = std::time::Instant::now();
-                            match self.reindex(&name) {
-                                Ok(_) => eprintln!("[rag3weaver] plein texte de {name} rebâti depuis les lignes en {:.1} s", t.elapsed().as_secs_f64()),
-                                Err(e) => eprintln!("[rag3weaver] plein texte de {name} : rebâti impossible : {e}"),
-                            }
-                            self.fts_rebuild.remove(&table);
-                        }
                     }
                 }
             }

@@ -424,6 +424,13 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     // il se lit en place.
     if let Some(dir) = &db_dir {
         drop(catalog);
+        // `RAG3WEAVER_ESTIMATE_FORCER_REBATI=1` (mode fichiers) : le dossier
+        // du plein texte est retiré avant la réouverture — ce que laisse un
+        // dossier perdu : la réouverture le rebâtit depuis les lignes.
+        if std::env::var_os("RAG3WEAVER_ESTIMATE_FORCER_REBATI").is_some() {
+            let _ = std::fs::remove_dir_all(dir.join("estimate.rag3db.fts"));
+            eprintln!("[réouverture] dossier du plein texte retiré : la réouverture doit le rebâtir");
+        }
         let t = Instant::now();
         let conn = Rag3dbConnection::new(dir.join("estimate.rag3db")).expect("base rouverte");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
