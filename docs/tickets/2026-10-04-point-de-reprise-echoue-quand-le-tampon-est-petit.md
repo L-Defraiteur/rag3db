@@ -24,7 +24,42 @@ database failed, so it must be closed and reopened before it is used again:
 the checkpoint did not complete.
 ```
 
-## La recette
+## La recette, sans rag3weaver (4 octobre, 14 h 45)
+
+`extension/rag3weaver/tests/sonde_tampon_et_blobs.rs` : la connexion seule
+et du Cypher brut, base sur disque, tampon du moteur à 2 Gio, point de reprise
+automatique par défaut (16 Mio).
+
+```cypher
+CREATE NODE TABLE Blobs (_key STRING, _data BLOB, _deleted_gen INT64, PRIMARY KEY(_key));
+-- répété, par lots de 32 Mo au plus (8 blobs de 4 Mo, octets incompressibles) :
+UNWIND $items AS item WITH item, item.key AS k
+MERGE (b:Blobs {_key: k}) SET b._data = item.data, b._deleted_gen = -1;
+```
+
+| Mode | Tampon | Résultat |
+|---|---|---|
+| `ajoute` : des clés toujours neuves, rien supprimé | 2 Gio | **échoue après 544 Mo écrits** (génération 8, 55 s), mémoire résidente 2,6 Go |
+| `remplace` : chaque génération remplace la précédente, octets vidés deux générations plus tard | 2 Gio | passe 8 Go écrits en 621 s, mais **mémoire résidente 5,0 Go, plus du double du tampon** |
+
+Même message que dans le produit : « Buffer manager exception: Unable to
+allocate memory! The buffer pool is full and no memory could be freed! A
+checkpoint of this database failed, so it must be closed and reopened ».
+
+Donc :
+
+- **Le défaut est dans le moteur**, sans rien de rag3weaver : une table qui
+  ne porte que **544 Mo** de BLOB fait échouer un point de reprise dans un
+  tampon de **2 Gio**. Le point de reprise d'une colonne de BLOB demande
+  plusieurs fois la taille de la colonne.
+- **Le moteur garde de la mémoire hors de son tampon** quand on écrit des
+  BLOB : 5 Go de mémoire résidente pour 2 Gio de tampon, en mode
+  `remplace`.
+- Une seule exécution de chaque. Pas encore isolé : le seuil de 32 Mio des
+  lots, la taille des blobs, le point de reprise automatique coupé.
+
+## La recette par le produit
+
 
 Pas encore de recette en Cypher brut. Par le produit, base sur disque :
 
