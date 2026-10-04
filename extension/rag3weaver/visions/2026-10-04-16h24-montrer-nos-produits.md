@@ -643,3 +643,40 @@ Ce que cela demande (proposition de l'orchestration, en débat) :
 
 C'est le produit « à la Lovable » du §1, retourné : au lieu de bâtir un site
 dans un outil puis de le déployer, le site déployé porte son propre outil.
+
+### Une page de démo que tout le monde édite en même temps
+
+> « On laisse une deuxième page collaborative où les gens contribuent tous à
+> l'édition d'une même démo initiale, qui se recharge tous les jours, peut-être
+> à zéro ; mais au moins dans une journée tu vois les éditions des autres, ce
+> qu'ils ont dit, leurs sessions. Édition en réseau d'un site. Imagine une
+> équipe de demain qui parlent tous à un site déjà déployé. » — Lucie,
+> 5 octobre
+
+Ce que ce serait : une page publique, remise à son état de départ chaque
+jour, que chaque visiteur modifie en parlant à un agent ; chacun voit les
+changements des autres arriver, avec ce qui a été demandé.
+
+Pourquoi c'est une bonne vitrine :
+
+- **elle se montre toute seule** : une page qui change sous les yeux, et le
+  fil de ce que les gens ont demandé, se partage sans explication ;
+- **elle prouve le plus dur** : plusieurs agents qui écrivent en même temps
+  dans le même système, sans se marcher dessus — c'est la quatrième condition
+  de la stèle du moteur (les écritures parallèles) rendue visible ;
+- **elle montre l'équipe de demain** : plusieurs personnes, chacune avec son
+  agent, sur un même site en service.
+
+Ce qu'elle demande :
+
+- **les écritures parallèles** du moteur, et la présence entre agents de la
+  vision des fiches (qui a un curseur sur quoi, un verrou d'intention qui
+  annonce sans bloquer) ;
+- **une règle quand deux demandes se contredisent** : la dernière gagne, ou
+  l'agent le dit et propose — à débattre ;
+- **un bac très fermé** : aucun secret, aucun appel vers l'extérieur, des
+  quotas par visiteur, une page isolée du reste ;
+- **de la modération** : un espace que tout le monde édite attire les abus ;
+  la remise à zéro quotidienne limite les dégâts, elle ne suffit pas ;
+- **dire aux gens que leurs demandes sont visibles** de tous avant qu'ils
+  écrivent.
