@@ -80,6 +80,24 @@ ligne) :
   extensions liées statiquement sont chargées d'office avant le rejeu
   (`Checkpointer::readCheckpoint`).
 
+- **Une colonne de chaînes se relit de deux façons** (`StringColumn::scanSegment` vers un
+  bloc) : le segment entier — le dictionnaire est copié tel quel, les indices décalés — ou
+  une partie — seules les chaînes des lignes relues entrent au dictionnaire du bloc et les
+  lignes sont renumérotées. La seconde est celle du point de reprise des relations (une
+  région à la fois, `CSRNodeGroup::checkpointColumnInRegion`) et des listes
+  (`ListColumn::scanSegment` ne relit que la plage de ses listes, même quand le segment de
+  la liste est entier). Le point de reprise d'une table de nœuds relit des segments entiers
+  (`NodeGroup::checkpoint`) : une colonne `STRING` de nœuds ne passe pas par la seconde.
+  Depuis `25b3b45dc` c'est le dictionnaire qui rend la correspondance des indices
+  (`DictionaryColumn::scanToChunk`) ; avant, l'ordre d'apparition et l'ordre du disque
+  étaient confondus dès que la colonne était très dupliquée (`duplicationFactor <= 0.5`).
+- Le dictionnaire d'un bloc exige des décalages croissants, une chaîne par indice : la
+  longueur d'une chaîne est l'écart au décalage suivant. On n'y range donc qu'en ajoutant
+  à la fin, dans l'ordre où l'on écrit les données.
+- Un COPY de relations se journalise au partitionneur, là où les identités sont réservées,
+  sous un même verrou (`journalOrderMtx`) : le rejeu réattribue les identités dans l'ordre
+  du journal.
+
 ## 2. L'index vectoriel (HNSW) et notre greffe
 
 - L'insertion dans l'index se fait **au commit** (`needCommitInsert`,

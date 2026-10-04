@@ -1,0 +1,4 @@
+relation STRING[] à un élément : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+relation STRING[] à deux éléments : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 2530, sens inverse changé 2738
+noeud STRING[] à un élément : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud STRING[] alterné : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 4, sens inverse changé 4

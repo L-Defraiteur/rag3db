@@ -1,0 +1,11 @@
+relation STRING : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 700
+relation BLOB : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 700
+relation STRING[] : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+relation INT64[] : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+relation STRUCT(s STRING) : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 700
+relation STRING[] (ordre inverse) : 4170 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud STRING alterné : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud STRING[] (ordre inverse) : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud STRING : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud BLOB : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0
+noeud STRING[] : 400000 lignes ; avant le point de reprise, écart entre sens 0 ; après, sens direct changé 0, sens inverse changé 0

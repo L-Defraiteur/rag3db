@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 0 h 15.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 23 h 50, après la panne de mémoire de 22 h 51.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -30,11 +30,39 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Clés fantômes après deux `COPY` annulés | `5c8507577` | régression de `05788a868` trouvée par l'arbre principal : l'annulation retire maintenant de l'index les clés de toutes les lignes non validées, et seulement elles |
 | Chronométrage du point de reprise | `5771f0afb` | `RAG3DB_PROFILE_CHECKPOINT=1` : le découpage d'un commit et de son point de reprise sur la sortie d'erreur ; muet sinon |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
+| Chargement journalisé, étape 3 (les relations) | `1cfba2d6a` | derrière le même réglage, un `COPY` de relations écrit ses relations au journal (par le partitionneur, sous le verrou qui réserve leurs identités) ; un chargement entier est durable par le journal seul. Le témoin ne prouve pas l'ordre entre plusieurs fils |
+| Sonde des deux sens | `168a63901` | une relation introuvable dans l'un de ses deux rangements fait refuser sa mise à jour ou sa suppression (`RelTable::REL_NOT_FOUND_IN_ONE_DIRECTION`) ; sans test, la condition ne se fabrique pas par l'interface |
+| Chaînes permutées au point de reprise | `25b3b45dc` | défaut d'origine, résultat faux écrit sur disque : la relecture partielle d'un segment de chaînes échangeait les chaînes des lignes d'une région (propriétés `STRING`, `BLOB`, `STRUCT` à chaîne des relations ; listes de chaînes des relations **et des nœuds**). Garde `DICTIONARY_INDEX_OUT_OF_RANGE`. Ne répare pas : une base écrite avant se réindexe ; `tools/check_rel_directions` dit si des relations sont atteintes |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
+
+**Après le correctif des chaînes (4 octobre, 23 h 50).** Tout est poussé, l'arbre
+`rag3db-moteur` est propre, sur la branche locale `chaines-relecture-partielle` (égale à
+`master`). La suite, dans l'ordre de l'orchestration : le vrai correctif du `COPY` après des
+insertions (verser les lignes locales au début du `COPY`, ce qui retire le refus et rend leur
+forme aux quatre tests Cypher) ; l'étape 4 du chargement journalisé avec le banc ; la forme
+compacte des vecteurs au journal ; l'étape 5 ; puis le câblage des verrous.
+
+Ce qui reste ouvert de ce lot :
+- les listes de chaînes du carnet (`Note.labels`, `Snapshot.labels`) sont sur des nœuds et
+  n'ont pas d'autre source que la base : le contrôle ne les voit pas, rien ne les rebâtit.
+  À dire à Lucie ; l'étendue côté produit est au ticket ;
+- Vela n'a pas été regardé pour ce défaut ; Kuzu le porte tel quel, Ladybug l'a corrigé ;
+- `expectSameRows` (la comparaison bornée du test) n'a jamais été vue en rouge ;
+- la passe ASan date d'avant la garde d'indice ;
+- un rouge isolé, vu une fois dans une liste et jamais revu :
+  `transaction~ddl~ddl_tinysnb.AddInt64PropertyWithoutDefaultRollbackRecovery`, « Cannot open
+  file …db.kz.shadow » au premier `COPY` du `SetUp`. Pas de recette, pas de ticket.
+
+**La panne de 22 h 51.** systemd-oomd a tué toutes les sessions. Cause établie : un
+`EXPECT_EQ` rouge de gtest entre deux textes de 400 000 lignes (un test neuf du banc, joué
+sur le moteur non corrigé, hors de `poste`) — gtest calcule la différence dans une table
+quadratique. Mesuré sous plafond : 4 000 lignes, 186 Mio ; 20 000 lignes, plus de 4 Gio.
+Le moteur n'y est pour rien (le même scénario sans gtest : 438 Mio). Depuis, `poste` met
+chaque commande dans sa portée avec un plafond (`POSTE_MEM_MAX`, 40 Gio par défaut).
 
 **La corruption de mémoire qui tue `e2e_code`** — tout est dans le ticket
 `docs/tickets/2026-10-04-memoire-corrompue-dans-e2e-code.md` : les mesures (une mort sur 60
@@ -210,6 +238,16 @@ par défaut, **lire, ne pas copier**.
 - Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
   joignables », plusieurs passes.
 - La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
+- **Jamais d'`EXPECT_EQ` entre deux grands textes à plusieurs lignes** : comparer par `==` et
+  écrire un résumé borné (`expectSameRows` dans `rel_string_property_checkpoint_test.cpp`).
+  Rouge, gtest réserve (lignes + 1)² cases.
+- Le pic de mémoire d'une passe : `/usr/bin/time` n'existe pas sur ce poste ; lire
+  `memory.peak` du cgroup de la portée (`annexes/borne.sh`, à lancer sous `poste`).
+- Laquelle des deux formes de requête (`->` ou `<-`) lit quel rangement d'une table de
+  relations dépend du planificateur : aucune n'est une référence, on compare les deux.
+- Une étendue annoncée d'après ses propres variantes n'est pas l'étendue du défaut : « nœuds
+  et listes indemnes » était faux, la relecture du banc a montré l'appelant manquant
+  (`ListColumn::scanSegment`). Chercher les appelants du code fautif avant d'annoncer.
 - **Le verrou de poste** (depuis le 4 octobre) : tout ce qui est lourd — build, liste C++,
   passe Rust, boucle — se lance sous `flock -s ~/.cache/rag3weaver-build/poste.lock` ; une
   mesure de durée ou de mémoire sous `flock -x`. Deux mesures d'une autre session ont été

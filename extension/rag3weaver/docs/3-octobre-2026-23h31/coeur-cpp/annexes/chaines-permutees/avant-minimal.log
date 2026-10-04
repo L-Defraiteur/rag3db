@@ -1,0 +1,37 @@
+> CHECKPOINT;
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|2170
+> MATCH (b:Doc)<-[r:M]-(a:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|2170
+> MATCH (a:Doc {id: 2400})-[r:M]->(b:Doc) SET r.res = 'nom';
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|2169
+   nom|1
+> MATCH (b:Doc)<-[r:M]-(a:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|2169
+   nom|1
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|1756
+   nom|1
+   vieux|413
+> MATCH (b:Doc)<-[r:M]-(a:Doc) WHERE r.line >= 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|2169
+   nom|1
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line >= 0 AND r.res = 'vieux' RETURN a.id, b.id, r.line, offset(id(r)) ORDER BY a.id LIMIT 6;
+   293|2054|293|2293
+   294|2061|294|2294
+   295|2068|295|2295
+   296|2075|296|2296
+   297|2082|297|2297
+   298|2089|298|2298
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line >= 0 AND r.res = 'vieux' RETURN min(a.id), max(a.id), min(r.line), max(r.line), count(*);
+   293|2539|293|5139|413
+> MATCH (a:Doc)-[r:M]->(b:Doc) RETURN count(r), count(DISTINCT id(r));
+   4170|4170
+> MATCH (b:Doc)<-[r:M]-(a:Doc) RETURN count(r), count(DISTINCT id(r));
+   4170|4170
+> MATCH (a:Doc)-[r:M]->(b:Doc) WHERE r.line < 0 RETURN r.res, count(*) ORDER BY r.res;
+   fichier|287
+   vieux|1713
+> MATCH (b:Doc)<-[r:M]-(a:Doc) WHERE r.line < 0 RETURN r.res, count(*) ORDER BY r.res;
+   vieux|2000

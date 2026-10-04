@@ -196,6 +196,18 @@ c'est la première chose à vérifier.
   qui retire le refus ; l'étape 4 (retraits, avec le banc) ; la forme compacte des vecteurs
   avec la version du journal ; l'étape 5.
 
+- **Étape 3, faite** (`1cfba2d6a`) : un `COPY` de relations écrit ses relations au journal,
+  par le partitionneur, sous le verrou qui réserve leurs identités ; `IGNORE_ERRORS` garde
+  son point de reprise. Quatorze cas dans `journaled_copy_test.cpp` avec ceux des nœuds, dont
+  les deux formes de la transaction par paquet. Le témoin des identités reste vert sans le
+  verrou d'ordre : l'ordre entre plusieurs fils de partitionneur n'est pas prouvé, un témoin
+  reste à écrire. Passes réelles : 4 rebâtis, 1 ASan, 2 listes dont une avec un rouge isolé
+  inexpliqué (rapport de session).
+- **Entre l'étape 3 et la suite** : la sonde des deux sens (`168a63901`) et le correctif des
+  chaînes permutées au point de reprise (`25b3b45dc`), passés devant sur décision de
+  l'orchestration. 6 rebâtis, 2 ASan dont un arrêté, 1 bâti d'ancêtre, 2 listes dont une tuée
+  par la panne de mémoire, 1 banc après rebase.
+
 ## 8. Les étapes, et l'estimation en passes
 
 Le temps réel ici est celui des passes, sérialisées par le verrou du poste. Durées

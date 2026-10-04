@@ -1,6 +1,6 @@
 # Une propriété de chaîne d'une relation se lit fausse dans un sens ou l'autre après un point de reprise
 
-- **État** : corrigé le 4 octobre 2026 (« fix(stockage): la relecture partielle d'un segment de chaînes ne permute plus les chaînes de ses lignes — un point de reprise faussait les propriétés de chaîne des relations »). Le correctif empêche les dégâts suivants ; il ne répare pas une base déjà atteinte.
+- **État** : corrigé le 4 octobre 2026, commit `25b3b45dc` (« fix(stockage): la relecture partielle d'un segment de chaînes ne permute plus les chaînes de ses lignes — un point de reprise faussait les propriétés de chaîne des relations »). Le correctif empêche les dégâts suivants ; il ne répare pas une base déjà atteinte.
 - **Gravité** : réponse fausse, écrite sur disque
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (la marque `resolution` des arêtes d'usage, que lisent les filtres de Liens ; `usage`, `kind`)
@@ -74,7 +74,9 @@ C'est du code d'origine : les lignes fautives sont celles de Kuzu (le tri
 dans `DictionaryColumn::scan`, la numérotation dans
 `StringColumn::scanSegment`, retouchée par l'amont en septembre 2025 sans
 changer ce point). Ni `80e3f2c32` (régions non réécrites) ni `308ebd17e`
-(colonnes par position) n'y touchent.
+(colonnes par position) n'y touchent. Exécuté : la recette donne le même
+défaut (413 et 287 relations échangées) sur l'ancêtre de `80e3f2c32`
+(`5be86be81`), et sur un moteur sans `308ebd17e`.
 
 ## L'étendue (exécutée sur le moteur non corrigé)
 
@@ -145,6 +147,20 @@ sondes des marques) viennent d'index neufs, construits en mémoire à chaque
 passe ; qu'un point de reprise y soit survenu en cours d'ingestion n'est pas
 établi. À rejouer après le correctif, sur une indexation de zéro, avant d'y
 fonder une décision.
+
+## L'étendue côté produit (relevé de l'arbre principal, par lecture, 4 octobre)
+
+- **Nœuds à liste de chaînes** : seulement le carnet — `Note.labels` et
+  `Snapshot.labels`. Rien ne les rebâtit : la base est leur source, le contrôle
+  ne les voit pas. Aucune liste sur les nœuds du code ni sur les tables
+  internes (`_catalog_meta`, `_index_blobs`, dataflow, morceaux : `STRING`,
+  `BLOB` ou `INT64` simples, non atteints).
+- **Relations** : `usage`, `usages`, `resolution` sur `CONSUMES`,
+  `CONSUMED_BY`, `INHERITS_FROM`, `IMPLEMENTS`, `DECORATES`, `USES_LIBRARY` ;
+  `kind`, `usage`, `usages`, `qualifier_types`, `import_modules`, `self_types`
+  sur `MENTIONS` ; `nature` sur `PARTICIPATES_IN`. Elles se rebâtissent par
+  réindexation.
+- La mémoire (`Memory`, `Subject`, `Ref`, `RefType`) est indemne.
 
 ## Ce qui reste, hors du moteur
 
