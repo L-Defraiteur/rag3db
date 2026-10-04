@@ -251,6 +251,89 @@ de session, sur le journal d'événements — elle ne gêne personne et se juge
 à froid. Puis les déclencheurs. L'injection en dernier, éteinte par défaut,
 allumée fiche par fiche.
 
+### 9.2 Seconde forme : le classeur et la porte à deux temps (Lucie, 4 octobre midi)
+
+> « Il faut qu'il travaille quand même chaque tour ou chaque compression de
+> contexte, à la manière d'une mémoire hiérarchique : chaque fois qu'on
+> atteint 30 % du contexte, un résumé est généré, un L1 ; l'archiviste le
+> classe, avec un sujet en plus de la date — il organise comme un classeur.
+> Et à chaque tour il décide, mais on l'encourage à ne pas chercher plusieurs
+> fois la même chose. Peut-être d'abord une décision structurée pour savoir
+> s'il faut chercher, et après la recherche, s'il faut injecter. Peut-être
+> des outils plutôt que des appels structurés. C'est encore flou. »
+
+Cela corrige §9.1 sur un point : l'archiviste a deux rythmes, pas des
+déclencheurs épars.
+
+**Rythme lent — classer, à chaque compression.**
+
+- Quand le contexte de l'agent atteint un seuil (30 %), la tranche écoulée
+  est résumée : un **L1**.
+- L'archiviste **classe** le L1 : sa date, et un ou plusieurs **sujets**. Le
+  classement d'un texte parmi des sujets existants est ce que la mesure a
+  montré de plus sûr (la similarité contre le contenu complet du sujet) ; la
+  création d'un sujet neuf suit la règle de la mémoire : montrer les proches,
+  demander lequel on retient.
+- Le classeur est **hiérarchique** : un sujet qui accumule des L1 reçoit un
+  **L2**, son résumé à lui, refait quand il a assez changé — c'est le sujet
+  « dérivé de ce qu'il porte ». Chaque L1 garde l'adresse de la tranche brute
+  d'où il vient : on peut toujours redescendre du L2 au L1, du L1 aux tours.
+- Un **sommaire** du classeur — les sujets, une ligne chacun — est petit et
+  stable.
+
+**Rythme rapide — rappeler, à chaque tour, par une porte à deux temps.**
+
+```
+tour ──▶ faut-il chercher ? ──non──▶ rien
+              │ oui
+              ▼
+         chercher dans le classeur (borné)
+              │
+              ▼
+         faut-il injecter ? ──non──▶ rien (mais on retient qu'on a cherché)
+              │ oui
+              ▼
+         une section courte, nommée, avec ce que l'agent n'a pas déjà
+```
+
+- **Premier temps, sans modèle si possible.** « Chaque tour » n'est tenable
+  que si ce temps ne coûte presque rien : le tour comparé au sommaire du
+  classeur (un embarquement, quelques millisecondes), plus le registre de la
+  session. Un modèle n'est appelé que quand ce score laisse un doute.
+- **Ne pas chercher deux fois.** Le registre de la session garde ce qui a été
+  cherché (le sujet, le tour, ce que ça a rendu) et ce qui a été montré. Une
+  recherche déjà faite sur un sujet qui n'a pas changé ne se refait pas : la
+  porte le voit et répond non.
+- **Second temps : injecter ou non.** Trois refus avant un oui : l'agent l'a
+  déjà (montré, ou lu par lui, depuis le dernier résumé) ; ce n'est pas
+  accroché à ce qu'il fait ; cela ne change rien à ce qu'il s'apprête à faire.
+
+**Décision structurée ou outils ?** Les deux, chacun à sa place — c'est la
+forme que le système a déjà.
+
+- Les deux portes sont des **décisions fermées** (chercher ou non ; injecter
+  ou non) : un nœud de décision, pas une boucle d'agent. Elles se mesurent.
+- La recherche dans le classeur est un **graphe**, borné, pas une exploration
+  libre.
+- L'archiviste entier est donc un **graphe de traitement**, déclaré comme un
+  outil : porte, recherche, porte, rendu. Pas un second agent qui converse.
+- Et l'agent qui travaille garde un **outil** pour tirer lui-même sur le
+  classeur (« rappelle ce qu'on sait de tel sujet »), avec le sommaire sous
+  les yeux : ce qu'il sait vouloir, il le demande ; l'archiviste ne pousse que
+  ce qu'il ne sait pas devoir demander.
+
+**Ce qui reste flou, à trancher par la mesure et pas par l'intuition** :
+
+1. Qui écrit le L1 : le résumé que le harnais produit déjà en compressant, ou
+   un résumé fait pour le classeur (plus factuel : décisions, échecs, état) ?
+2. « 30 % » : du contexte total, ou depuis le dernier L1 ?
+3. La première porte tient-elle sans modèle ? La mesure des modèles de
+   décision dit qu'un score ordonne bien et juge mal, et qu'un seuil ne se
+   transporte pas d'un jeu à l'autre : il faudra un banc de tours réels,
+   étiquetés « il fallait chercher » ou non.
+4. Le sommaire sous les yeux de l'agent suffit-il à ce qu'il tire de
+   lui-même ? Les passes d'agent diront s'il s'en sert.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. L'ordre du §7, ou la boucle (le registre) d'abord.
