@@ -687,13 +687,15 @@ TEST_F(SingleWriterCrash, CopyWhileATransactionIsOpen) {
         << "[check: error-means-not-committed] the COPY returned an error but is committed";
 }
 
-// La forme grave : un COPY qui a rendu une erreur mais dont les lignes sont visibles, puis la
-// mort du processus. Le COPY n'est pas au journal (sa durabilité est son propre point de
-// reprise) : si ses lignes ont été vues, elles doivent survivre.
+// La forme grave : un COPY qui a rendu une erreur, puis la mort du processus. Le COPY n'est pas
+// au journal (sa durabilité est son propre point de reprise) : ce que d'autres ont vu de lui
+// avant la mort doit survivre. Avant le 4 octobre au soir, il rendait l'erreur avec ses lignes
+// visibles, et elles disparaissaient ; il est désormais annulé avant d'être visible.
 TEST_F(SingleWriterCrash, CopyThatReturnedAnErrorThenDeath) {
     mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
     mustRun("CHECKPOINT;");
     const auto csv = writeCsv(databasePath + ".death.csv", 0, 1000);
+    const auto seenFile = databasePath + ".seen";
     runChild([&](rag3db::main::Database& childDatabase, rag3db::main::Connection& connection) {
         rag3db::main::Connection other(&childDatabase);
         other.query("BEGIN TRANSACTION READ ONLY;");
@@ -701,17 +703,99 @@ TEST_F(SingleWriterCrash, CopyThatReturnedAnErrorThenDeath) {
         auto copy = connection.query("COPY C FROM '" + csv + "' (header=false);");
         other.query("COMMIT;");
         auto seen = connection.query("MATCH (c:C) RETURN count(*);");
+        const auto count = seen->getNext()->getValue(0)->getValue<int64_t>();
+        std::ofstream(seenFile) << count;
         std::cerr << "  child: copy " << (copy->isSuccess() ? "ok" : "error") << ", rows seen "
-                  << seen->getNext()->getValue(0)->getValue<int64_t>() << "\n";
+                  << count << "\n";
     });
+    int64_t seen = -1;
+    std::ifstream(seenFile) >> seen;
     if (!reopen()) {
         return;
     }
     const auto after = queryInt("MATCH (c:C) RETURN count(*);");
     std::cerr << "  after death: " << after << " rows\n";
     EXPECT_TRUE(after == 0 || after == 1000) << "[check: copy-all-or-nothing] " << after;
-    EXPECT_EQ(after, 1000) << "[check: visible-copy-survives-death] rows seen before the death "
-                              "are lost";
+    EXPECT_EQ(after, seen) << "[check: visible-copy-survives-death] " << seen
+                           << " rows seen before the death, " << after << " after";
+}
+
+// Après un COPY annulé parce qu'une transaction restait ouverte : aucune ligne, aucune clé
+// fantôme, et le même COPY passe une fois la transaction fermée. La cardinalité gonflée par
+// l'annulation est un défaut connu, rangé en confort (ticket
+// 2026-10-04-copy-refuse-gonfle-la-cardinalite.md) : ce cas ne la regarde pas.
+TEST_F(SingleWriterCrash, CopyCancelledByAnOpenTransactionLeavesNothing) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    const auto csv = writeCsv(databasePath + ".cancelled.csv", 0, 1000);
+    {
+        rag3db::main::Connection other(database.get());
+        other.query("BEGIN TRANSACTION READ ONLY;");
+        other.query("MATCH (c:C) RETURN count(*);");
+        auto copy = conn->query("COPY C FROM '" + csv + "' (header=false);");
+        EXPECT_FALSE(copy->isSuccess()) << "[check: copy-cancelled] the COPY should wait and fail";
+        other.query("COMMIT;");
+    }
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-visible] ";
+    EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 0) << "[check: no-ghost-key] ";
+    auto again = conn->query("COPY C FROM '" + csv + "' (header=false);");
+    EXPECT_TRUE(again->isSuccess()) << "[check: copy-again-passes] " << again->getErrorMessage();
+    again.reset();
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 1000) << "[check: copy-again-passes] ";
+    EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 1) << "[check: key-found] ";
+    // Puis un point de reprise, une réouverture, et la relecture de toutes les tables : les
+    // pages rendues par l'annulation ne doivent rien avoir abîmé (session cœur C++).
+    mustRun("CHECKPOINT;");
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (c:C) WHERE c.id + 0 >= 0 RETURN count(*);"), 1000)
+        << "[check: rows-after-reopen] ";
+    expectIntegrity();
+}
+
+// Un COPY réussi, puis la mort : ses lignes sont là.
+TEST_F(SingleWriterCrash, DeathAfterASuccessfulCopy) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    mustRun("CHECKPOINT;");
+    const auto csv = writeCsv(databasePath + ".ok.csv", 0, 1000);
+    runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+        auto copy = connection.query("COPY C FROM '" + csv + "' (header=false);");
+        std::cerr << "  child: copy " << (copy->isSuccess() ? "ok" : copy->getErrorMessage())
+                  << "\n";
+    });
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 1000) << "[check: copy-survives-death] ";
+}
+
+// Le point de reprise automatique, quand une transaction reste ouverte au-delà du délai : il
+// est reporté, l'écriture validée ne rend pas d'erreur, et il se fait à une validation
+// suivante, une fois la transaction fermée (comme PostgreSQL, un point de reprise ne fait
+// jamais échouer une validation).
+TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
+    mustRun("CALL auto_checkpoint=false;");
+    mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
+    mustRun("UNWIND range(1, 1000) AS i CREATE (:P {id: i});");
+    mustRun("CHECKPOINT;");
+    mustRun("CALL checkpoint_threshold=1;");
+    mustRun("CALL auto_checkpoint=true;");
+    rag3db::main::Connection other(database.get());
+    other.query("BEGIN TRANSACTION READ ONLY;");
+    other.query("MATCH (p:P) RETURN count(*);");
+    auto write = conn->query("CREATE (:P {id: 999999});");
+    EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
+                                    << write->getErrorMessage();
+    write.reset();
+    other.query("COMMIT;");
+    const auto walBefore = walSize();
+    auto next = conn->query("CREATE (:P {id: 1000000});");
+    EXPECT_TRUE(next->isSuccess()) << "[check: next-write-succeeds] " << next->getErrorMessage();
+    next.reset();
+    EXPECT_LT(walSize(), walBefore) << "[check: postponed-checkpoint-done] the journal should "
+                                       "have been folded by the next commit";
+    EXPECT_EQ(queryInt("MATCH (p:P) WHERE p.id + 0 >= 999999 RETURN count(*);"), 2)
+        << "[check: rows-present] ";
 }
 
 // Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à

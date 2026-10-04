@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 
@@ -50,16 +51,28 @@ public:
 
     // The start of the error that every statement gets once a checkpoint of this database has
     // failed while writing, until the database is closed and reopened. See checkpointNoLock.
+    // L'avertissement d'un point de reprise automatique reporté : l'attente du départ des
+    // transactions a expiré après une validation déjà au journal.
+    static constexpr const char* CHECKPOINT_POSTPONED =
+        "Checkpoint postponed: transactions did not leave in time";
     static constexpr const char* REOPEN_AFTER_FAILED_CHECKPOINT =
         "A checkpoint of this database failed, so it must be closed and reopened before it is "
         "used again";
 
 private:
     bool hasNoActiveTransactions() const;
-    void checkpointNoLock(main::ClientContext& clientContext);
+    // Écrit un point de reprise ; publicLock est le verrou public, tenu par l'appelant. Sauf si
+    // newTransactionsAlreadyStopped, attend d'abord que toutes les transactions partent.
+    void checkpointNoLock(main::ClientContext& clientContext,
+        std::unique_lock<std::mutex>& publicLock, bool newTransactionsAlreadyStopped = false);
 
-    // This functions locks the mutex to start new transactions.
-    common::UniqLock stopNewTransactionsAndWaitUntilAllTransactionsLeave();
+    // Interdit le démarrage de nouvelles transactions et attend que toutes les autres que
+    // `staying` partent, en relâchant le verrou public pendant l'attente : une transaction ne
+    // peut partir (commit, rollback) qu'en le prenant. Lève une TransactionManagerException si
+    // le délai expire, et rouvre alors le démarrage.
+    void stopNewTransactionsAndWaitForOthersNoLock(std::unique_lock<std::mutex>& publicLock,
+        const Transaction* staying);
+    void allowNewTransactionsNoLock();
 
     bool hasActiveWriteTransactionNoLock() const;
 
@@ -75,11 +88,13 @@ private:
     std::vector<std::unique_ptr<Transaction>> activeTransactions;
     common::transaction_t lastTransactionID;
     common::transaction_t lastTimestamp;
-    // This mutex is used to ensure thread safety and letting only one public function to be called
-    // at any time except the stopNewTransactionsAndWaitUntilAllReadTransactionsLeave
-    // function, which needs to let calls to coming and rollback.
+    // Une seule fonction publique à la fois, sauf pendant l'attente d'un point de reprise, qui
+    // relâche ce verrou pour que les transactions ouvertes puissent valider ou annuler.
     std::mutex mtxForSerializingPublicFunctionCalls;
-    std::mutex mtxForStartingNewTransactions;
+    // Vrai tant qu'un point de reprise attend le départ des transactions ou s'écrit : aucune
+    // transaction ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
+    bool checkpointPending = false;
+    std::condition_variable transactionsChanged;
     uint64_t checkpointWaitTimeoutInMicros = common::DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS;
 
     init_checkpointer_func_t initCheckpointerFunc;

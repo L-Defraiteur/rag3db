@@ -1,6 +1,6 @@
 # Un CHECKPOINT retient la validation d'un lecteur jusqu'à son délai
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(transactions): un point de reprise n'attend plus en tenant le verrou public, et une écriture validée ne rend plus d'erreur »
 - **Gravité** : blocage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : probable (lecteurs et points de reprise automatiques)
