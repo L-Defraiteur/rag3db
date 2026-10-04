@@ -104,6 +104,25 @@ Variance observée ~0,002. Le creux se mesure par RAG3WEAVER_BANC_CREUX
 dense bge 1024 irait dans la colonne granite 768). Le seuil motif 0,97
 reste compatible bge (p10 0,944-0,975 selon le dense).
 
+### L'ablation (a), rendue le 4 octobre 13 h (granite dense + creux bge, poids égaux)
+
+| combinaison | phrases (45) | identifiants (10) |
+|---|---|---|
+| plein texte seul | 0,243 · 8 · 13 | 0,417 · 1 · 8 |
+| dense seul | 0,402 · 13 · 25 | 0,708 · 6 · 9 |
+| creux seul | 0,339 · 11 · 19 | **1,000 · 10 · 10** |
+| texte+dense | 0,319 · 9 · 19 | 0,800 · 7 · 9 |
+| texte+creux | 0,306 · 8 · 20 | 0,933 · 9 · 10 |
+| dense+creux | **0,449 · 16 · 22** | 0,950 · 9 · 10 |
+| trio | 0,378 · 12 · 23 | 0,883 · 8 · 10 |
+
+Lecture : le creux bat le plein texte partout (pas un simple double) ;
+à poids égaux le plein texte actuel tire toute fusion vers le bas ;
+dense+creux sans plein texte est la meilleure configuration jamais
+mesurée sur ce banc (0,449 > 0,405 tel quel > 0,369 meilleur H réglé).
+La passe a duré 384 s tout compris (~56 s partagées avec une analyse de
+c0). Reste (b) : le découpeur amélioré rattrape-t-il le creux ?
+
 ### Les expériences de l'optimiseur (en cours, 4 octobre midi)
 
 - **Ce que lucivy fait des identifiants** (sources 4.3.0, filtre

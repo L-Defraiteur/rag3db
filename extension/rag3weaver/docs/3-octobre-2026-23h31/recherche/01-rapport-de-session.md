@@ -60,7 +60,32 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (4 octobre 12h45, les deux expériences de l'optimiseur)
+## En cours (4 octobre 13h10 — l'ablation est rendue, le fix chat est sur master)
+
+- **L'ablation (a) est rendue (384 s)** et la première leçon est nette :
+  le creux N'EST PAS un second plein texte. Phrases : plein texte seul
+  0,243 · dense seul 0,402 · creux seul 0,339 · texte+dense 0,319 ·
+  dense+creux **0,449** (le meilleur jamais mesuré ici, réf. 0,402) ·
+  trio 0,378. Identifiants : plein texte seul 0,417 (1/10 au rang 1 —
+  la fusion-à-4 abîme l'exact) · dense 0,708 · creux **1,000** (10/10) ·
+  dense+creux 0,950 · trio 0,883. À poids égaux, le plein texte actuel
+  TIRE LA FUSION VERS LE BAS ; la paire dense+creux sans plein texte
+  n'avait jamais été essayée et elle mène. Les passes (b) diront si un
+  découpeur amélioré rattrape le creux (l'hypothèse de l'optimiseur).
+- **Deux scripts chat rouges sur master, corrigés (356e4dec4)** : depuis
+  9ebfeb8bf ma sonde index_state d'après-tour partait vers TOUT backend
+  — une fixture la lisait comme un appel d'outil (KeyError 'name'), et
+  en panne répétée elle consommait la relance unique (tour suivant :
+  Broken pipe). Correctif par le motif de l'op journal : le backend
+  déclare « index_state » dans les capabilities de describe, le chat ne
+  sonde que si c'est déclaré. test_chat_app.py et
+  test_chat_must_reopen.py sont AJOUTÉS à ma batterie d'avant-fusion —
+  ils n'y étaient pas, c'est le trou par lequel c'est passé.
+- **Le poste est en créneaux serrés** : eb (diagnostic disque) → mes
+  trois passes (b) → c0 (banc de cohésion C1, son harnais à lui, base
+  W=0 à comparer à elle-même). Section d'ablation poussée (2cac6dfe6).
+
+## Ancien (4 octobre 12h45, les deux expériences de l'optimiseur)
 
 - **La réponse préalable sur lucivy est rendue à 9f, lue dans les
   sources (4.3.0, filtre identique à 4.0.1)** : tout champ texte passe
