@@ -15,15 +15,18 @@
 ---- 1
 10
 
-# Neuf cellules sont identiques entre les deux chemins de lecture ; la dixième,
-# la cellule vide `""`, devient NULL des deux côtés — c'est le comportement du
-# lecteur CSV, pas de l'option, et il est le même dans les deux modes.
+# Les dix cellules sont identiques entre les deux chemins de lecture, la cellule
+# `""` comprise : un champ entre guillemets est une chaîne, la chaîne vide ici, et
+# non NULL (4 octobre 2026 ; avant, le lecteur la lisait NULL des deux côtés).
 -STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v = e.v RETURN COUNT(*)
 ---- 1
-9
--STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v IS NULL AND e.v IS NULL RETURN COUNT(*)
+10
+-STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND (p.v IS NULL OR e.v IS NULL) RETURN COUNT(*)
 ---- 1
-1
+0
+-STATEMENT MATCH (e:escaped) WHERE e.k = 6 RETURN size(e.v)
+---- 1
+0
 -STATEMENT MATCH (p:physical), (e:escaped) WHERE p.k = e.k AND p.v <> e.v RETURN COUNT(*)
 ---- 1
 0
