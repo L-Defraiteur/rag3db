@@ -339,6 +339,16 @@ pub struct Catalog {
     fts_rebuild: HashSet<String>,
     /// Le dernier décalage de ligne indexé par le rebâti, par table.
     fts_rebuild_cursor: HashMap<String, i64>,
+    /// **La génération promise** (mode fichiers) : posée en base avant toute
+    /// écriture de lignes (`fts_promesse` = le jeton de ce processus),
+    /// levée quand les fichiers sont synchronisés et marqués. Une promesse
+    /// d'un autre processus trouvée à l'ouverture dit qu'un arrêt est tombé
+    /// entre les lignes et le plein texte.
+    fts_promise: std::sync::atomic::AtomicBool,
+    fts_promise_token: String,
+    /// Une promesse d'un autre processus, trouvée quand ce processus a posé
+    /// la sienne par-dessus : à reprendre à l'ouverture des index.
+    fts_promise_orphan: std::sync::atomic::AtomicBool,
     /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
@@ -473,6 +483,9 @@ impl Catalog {
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
             fts_rebuild_cursor: HashMap::new(),
+            fts_promise: std::sync::atomic::AtomicBool::new(false),
+            fts_promise_orphan: std::sync::atomic::AtomicBool::new(false),
+            fts_promise_token: format!("{}-{}", std::process::id(), crate::dataflow::checkpoint::timestamp_ms()),
             fts_storage: Default::default(),
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
@@ -1006,6 +1019,7 @@ impl Catalog {
             let marque = self.read_meta_key(&format!("fts_generation:{index_name}")).ok().flatten().and_then(|v| v.parse::<u64>().ok());
             let sur_disque = crate::fts_directory::generation_on_disk(&dir);
             base_generation = marque.unwrap_or(0);
+            self.reprendre_une_promesse();
             let entite = self.entity_of_fts_table(table);
             // Un rebâti interrompu (marque durable encore posée) recommence.
             let interrompu = entite
@@ -5708,7 +5722,55 @@ impl Catalog {
         if self.lecture_seule {
             return Err(CatalogError::LectureSeule(verbe.to_string()));
         }
-        Ok(())
+        self.promettre_le_plein_texte()
+    }
+
+    /// **Promettre une génération** avant d'écrire des lignes, en mode
+    /// fichiers : une fois par génération (levée à la synchronisation
+    /// suivante, `flush_blob_store`).
+    fn promettre_le_plein_texte(&self) -> Result<(), CatalogError> {
+        use std::sync::atomic::Ordering;
+        if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. })
+            || self.fts_promise.swap(true, Ordering::SeqCst)
+        {
+            return Ok(());
+        }
+        // Une promesse d'un mort ne s'écrase pas sans être notée.
+        let avant = self.read_meta_key(FTS_PROMISE)?.unwrap_or_default();
+        if !avant.is_empty() && avant != self.fts_promise_token {
+            self.fts_promise_orphan.store(true, Ordering::SeqCst);
+        }
+        self.persist_meta_key(FTS_PROMISE, &self.fts_promise_token)
+    }
+
+    /// **Une promesse orpheline** (posée par un processus mort avant de la
+    /// tenir) : toutes les entités au plein texte sont marquées à rebâtir,
+    /// durablement, puis la promesse est levée. Un écrivain seulement.
+    fn reprendre_une_promesse(&mut self) {
+        if self.lecture_seule {
+            return;
+        }
+        let promesse = self.read_meta_key(FTS_PROMISE).ok().flatten().unwrap_or_default();
+        let orpheline = self.fts_promise_orphan.swap(false, std::sync::atomic::Ordering::SeqCst)
+            || (!promesse.is_empty() && promesse != self.fts_promise_token);
+        if !orpheline {
+            return;
+        }
+        let entites: Vec<String> = self
+            .entity_configs
+            .keys()
+            .filter(|e| self.resolve_search_target(e).is_ok_and(|t| t.default_signals.bm25()))
+            .cloned()
+            .collect();
+        eprintln!(
+            "[rag3weaver] plein texte : une génération promise n'a pas été tenue (arrêt entre les lignes et le plein texte) — {} entités à rebâtir",
+            entites.len()
+        );
+        let refs: Vec<&str> = entites.iter().map(String::as_str).collect();
+        let _ = self.mark_fts_pending(&refs);
+        if promesse != self.fts_promise_token {
+            let _ = self.persist_meta_key(FTS_PROMISE, "");
+        }
     }
 
     /// `initialize` d'un catalogue en lecture : tout ce qui **lit**, rien de
@@ -7298,6 +7360,7 @@ impl Catalog {
         // l'écrivain, et une marque posée par un lecteur ferait croire juste
         // un dossier qu'il n'a pas rebâti.
         if !self.fts_files.is_empty() && !self.lecture_seule {
+            tuer_avant_la_synchronisation_du_plein_texte();
             let t = std::time::Instant::now();
             for storage in &self.fts_files {
                 let ecrits = storage
@@ -7312,6 +7375,11 @@ impl Catalog {
                         .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : marque : {e}")))?;
                     self.persist_meta_key(&format!("fts_generation:{}", storage.key()), &g.to_string())?;
                 }
+            }
+            // La promesse est tenue : fichiers synchronisés, génération
+            // marquée des deux côtés.
+            if self.fts_promise.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                self.persist_meta_key(FTS_PROMISE, "")?;
             }
             crate::ingest_profile::add("entités · rendre durable le plein texte (fichiers)", t);
         }
@@ -11004,6 +11072,28 @@ impl Drop for Catalog {
 
 /// Le préfixe de la marque durable « plein texte à pousser » d'une entité.
 const FTS_PENDING: &str = "fts_pending:";
+
+/// La génération promise du plein texte en fichiers (voir `fts_promise`).
+const FTS_PROMISE: &str = "fts_promesse";
+
+/// **Crochet de test** (`RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC=<n>`) : le
+/// processus se tue par SIGKILL à la n-ième synchronisation du plein texte en
+/// fichiers, avant elle — des lignes validées, leur plein texte pas encore
+/// durable (`tests/e2e_tx_par_paquet_arret.rs`).
+fn tuer_avant_la_synchronisation_du_plein_texte() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static APPELS: AtomicUsize = AtomicUsize::new(0);
+    let Some(n) = std::env::var("RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC").ok().and_then(|v| v.parse::<usize>().ok()) else {
+        return;
+    };
+    if APPELS.fetch_add(1, Ordering::SeqCst) + 1 == n {
+        eprintln!("[rag3weaver] crochet de test : SIGKILL avant la synchronisation {n} du plein texte");
+        let _ = std::process::Command::new("kill").args(["-KILL", &std::process::id().to_string()]).status();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
+}
 
 /// Lignes par lot du rebâti du plein texte en fichiers : le catalogue n'est
 /// tenu que le temps d'un lot, une recherche passe entre deux.

@@ -42,6 +42,8 @@ const PAQUET_TUE: usize = 2;
 thread_local! {
     /// Les fils de ce fil de test tournent-ils en mode fichiers ?
     static FICHIERS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// La n-ième synchronisation du plein texte tue-t-elle le fils ?
+    static TUER_AVANT_SYNC: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     /// Le rôle « un-lot » meurt-il après son lot ?
     static TUER_APRES_LOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -286,6 +288,14 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
     }
     if role == "echoueur" {
         cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", "6");
+    }
+    match TUER_AVANT_SYNC.with(|f| f.get()) {
+        Some(n) => {
+            cmd.env("RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC", n.to_string());
+        }
+        None => {
+            cmd.env_remove("RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC");
+        }
     }
     if TUER_APRES_LOT.with(|f| f.get()) {
         cmd.env("TX_ARRET_TUER_APRES_LOT", "1");
@@ -604,6 +614,36 @@ fn en_fichiers_le_rebati_dit_son_etat_et_survit_a_son_interruption() {
     assert!(statut.success(), "{sortie}");
     assert!(ligne(&sortie, "ETAT ").ends_with("None"), "plus rien à rebâtir :\n{sortie}");
     assert!(!ligne(&sortie, "ETAT ").starts_with("Running"), "le plein texte est prêt :\n{sortie}");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Hors de la transaction par paquet, un arrêt entre les lignes et le plein
+/// texte se détecte** (la génération promise) : l'écrivain, sans transaction,
+/// meurt avant la dixième synchronisation du plein texte — des lignes déjà
+/// validées, leur plein texte pas encore durable. Le repreneur trouve la
+/// promesse non tenue, rebâtit, et ses comptes — plein texte compris — sont
+/// ceux d'un témoin sans arrêt.
+#[test]
+#[ignore]
+fn en_fichiers_hors_transaction_un_arret_entre_lignes_et_plein_texte_se_detecte() {
+    FICHIERS.with(|f| f.set(true));
+    let dossier = dossier_sur_disque("fichiers-promesse");
+    let base = dossier.join("base.rag3db");
+    TUER_AVANT_SYNC.with(|f| f.set(Some(10)));
+    let (statut, sortie) = lancer_avec("ecrivain", &base, None, false, 1);
+    TUER_AVANT_SYNC.with(|f| f.set(None));
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort au crochet :\n{sortie}");
+    assert!(sortie.contains("SIGKILL avant la synchronisation 10"), "{sortie}");
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, false, 1);
+    assert!(statut.success(), "{sortie}");
+    assert!(sortie.contains("une génération promise n'a pas été tenue"), "la promesse non tenue est reconnue :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+    let temoin_dossier = dossier_sur_disque("fichiers-promesse-temoin");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, false, 1);
+    assert!(statut.success(), "{sortie}");
+    assert_eq!(repris, comptes_rendus("temoin", &sortie), "hors transaction, la reprise rend les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }

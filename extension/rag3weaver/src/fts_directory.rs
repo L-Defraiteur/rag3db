@@ -24,17 +24,13 @@
 //! Écart au protocole écrit (`02-…`) : on ne garde pas la génération N−1 pour
 //! y revenir, on rebâtit — plus simple, plus lent après un arrêt.
 //!
-//! **Limite, et ce qu'il faudrait pour la lever.** Hors de la transaction par
-//! paquet — le chemin par défaut d'aujourd'hui —, chaque écriture valide ses
-//! lignes avant que le plein texte soit synchronisé et marqué : un arrêt entre
-//! les deux laisse un index **en retard** sur les lignes, avec une génération
-//! égale des deux côtés, donc invisible. Pour le détecter : écrire en base,
-//! **avant** les lignes et dans leur instruction, une génération « promise »
-//! (`fts_generation:<index> = N+1 en cours`) ; après la synchronisation des
-//! fichiers, la confirmer (`= N+1`). À l'ouverture, une génération promise
-//! jamais confirmée dit qu'un arrêt est tombé entre les deux : rebâti. Un
-//! aller-retour de méta de plus par écriture, rien de plus. Tant que ce n'est
-//! pas fait, ce mode n'est sûr qu'avec la transaction par paquet.
+//! **La génération promise** (le chemin hors transaction par paquet, où les
+//! lignes sont validées avant le plein texte) : avant toute écriture de
+//! lignes, le catalogue pose en base `fts_promesse` = le jeton de son
+//! processus ; il la lève quand les fichiers sont synchronisés et marqués.
+//! Une promesse d'un autre processus trouvée en écrivant ou en ouvrant un
+//! index dit qu'un arrêt est tombé entre les lignes et le plein texte : toutes
+//! les entités au plein texte sont marquées à rebâtir (`fts_pending:`).
 //!
 //! **Le rebâti** : un écrivain qui trouve un dossier dont la génération
 //! n'est pas celle de la base le jette, pose la marque durable
