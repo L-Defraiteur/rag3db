@@ -1,7 +1,7 @@
 # Proposition — l'adresse, les genres de référence, et le classeur
 
 4 octobre 2026, session mémoire longue. Réponse demandée par l'orchestration à
-la vision `../4-octobre-2026-00h09/01`. Même méthode que la proposition de la
+la vision `extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md`. Même méthode que la proposition de la
 mémoire longue : je prends ce que le code permet déjà, je **contredis** ce qu'il
 dit autrement, et je nomme ce que je ne sais pas.
 

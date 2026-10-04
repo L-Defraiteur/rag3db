@@ -3,7 +3,7 @@
 4 octobre 2026. **Brouillon** : rien n'est décidé ni codé ; Lucie termine par
 « je ne sais pas », « on y réfléchira ». Ce document garde les idées, pas un
 plan. Il suit le brouillon du dépôt de référence
-(`../4-octobre-2026-16h17/01`).
+(`extension/rag3weaver/visions/2026-10-04-16h17-depot-de-reference.md`).
 
 ## 1. Les idées de Lucie
 
@@ -161,7 +161,7 @@ Points en débat :
   déterministe.
 - **Une vue composée est une requête enregistrée** : elle se garde, se rejoue
   et se lie à une fiche — c'est l'adresse `query:` de la vision des mémoires
-  (`../4-octobre-2026-00h09/01`).
+  (`extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md`).
 - **Un même afficheur** pour les graphes de code et pour les graphes de
   traitement, qui sont déjà des fichiers mermaid (`.mmd`).
 - **La taille** : mermaid tient quelques dizaines de nœuds ; au-delà il faut

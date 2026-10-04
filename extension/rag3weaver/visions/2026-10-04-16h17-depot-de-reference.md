@@ -9,7 +9,7 @@
 > [sur le dépôt de travail]. »
 
 Ce document complète les visions du produit code
-(`../3-octobre-2026-20h37/01`).
+(`extension/rag3weaver/visions/2026-10-03-20h37-le-produit-code.md`).
 
 ## 1. L'idée
 
@@ -61,7 +61,7 @@ commit » est prévu.
   dire.
 - **La mémoire** : une fiche peut pointer vers une ligne d'une référence
   (`row:…` dans la source de la référence), comme vers toute adresse
-  (`../4-octobre-2026-00h09/01`).
+  (`extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md`).
 - **Ce que le grep par l'index sait faire** : sous-chaînes et expressions
   régulières par lucivy, à vérifier ; ce qu'il ne sait pas faire se dit, il
   ne rend pas un résultat partiel en silence.

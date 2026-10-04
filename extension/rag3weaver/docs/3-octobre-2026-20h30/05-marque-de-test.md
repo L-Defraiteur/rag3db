@@ -1,7 +1,7 @@
 # Savoir qu'un scope est un test
 
 3 octobre 2026, codeparsers `137b9d2`. La pièce qui manque à la première
-vision du produit code (`3-octobre-2026-20h37/01-…`, idée 1 : « 23
+vision du produit code (`extension/rag3weaver/visions/2026-10-03-20h37-le-produit-code.md`, idée 1 : « 23
 appelants, 4 tests la traversent », puis « quels tests rejouer après cette
 édition »).
 

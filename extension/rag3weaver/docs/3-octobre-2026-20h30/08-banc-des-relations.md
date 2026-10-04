@@ -1,7 +1,7 @@
 # Le banc des relations — la référence avant tout poids de proximité
 
 3 octobre 2026. Le banc de recherche n'avait aucune question dont la bonne
-réponse dépend du graphe (vision des relations, `3-octobre-2026-20h16/01`,
+réponse dépend du graphe (vision des relations, `extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md`,
 §5). `tests/e2e_banc_relations.rs` en pose vingt, sur le corpus du banc de
 l'étage (`src/` de rag3weaver), et note les outils qui y répondent
 aujourd'hui. Fichier frère, autonome, comme les autres bancs : rien n'est

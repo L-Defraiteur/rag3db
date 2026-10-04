@@ -1,7 +1,7 @@
 # Une mémoire longue pour des agents — proposition
 
-3 octobre 2026. Réponse à la [vision](../3-octobre-2026-20h37/02-vision-memoire-longue.md)
-et aux [décisions accrochées au code](../3-octobre-2026-20h37/01-visions-pour-le-produit-code.md) §3.
+3 octobre 2026. Réponse à la [vision](extension/rag3weaver/visions/2026-10-03-20h37-memoire-longue.md)
+et aux [décisions accrochées au code](extension/rag3weaver/visions/2026-10-03-20h37-le-produit-code.md) §3.
 Conception seulement : rien n'est codé, aucune mesure n'est inventée.
 
 Le fil tient en une phrase : **la mémoire longue n'a presque pas besoin de

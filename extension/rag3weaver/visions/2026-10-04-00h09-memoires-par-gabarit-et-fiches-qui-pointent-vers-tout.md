@@ -12,8 +12,8 @@ fil de travail » et trois genres d'ancre). Lucie l'a élargie :
 > DAG, tel gabarit… pensons vraiment boucle étrange, même là-dedans. »
 
 Rien n'est décidé ni codé. Ce document complète la vision de la mémoire
-longue (`../3-octobre-2026-20h37/02`) et sa proposition
-(`../3-octobre-2026-20h41/01`).
+longue (`extension/rag3weaver/visions/2026-10-03-20h37-memoire-longue.md`) et sa proposition
+(`../docs/3-octobre-2026-20h41/01`).
 
 ## 1. L'idée en trois phrases
 

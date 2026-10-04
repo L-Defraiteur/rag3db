@@ -1,7 +1,7 @@
 # État des lieux — ce que codeparsers sait dire d'un usage
 
 3 octobre 2026. Premier temps du chantier « genre d'usage » (vision du jour,
-`3-octobre-2026-20h16/01-vision-explorer-les-relations.md`, §2-A). Question :
+`extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md`, §2-A). Question :
 pour chaque usage d'un symbole, l'analyseur sait-il dire **comment** on s'en
 sert (appel, type, import, héritage…) et **à quelle ligne** ?
 

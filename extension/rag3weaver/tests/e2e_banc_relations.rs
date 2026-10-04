@@ -1,7 +1,7 @@
 //! **Le banc des relations** : des questions dont la bonne réponse dépend du
 //! graphe, et la note des outils qui y répondent aujourd'hui (`usages`,
 //! `impact`, le voisinage sortant). C'est la référence avant tout poids de
-//! proximité (vision des relations, `3-octobre-2026-20h16/01`, §5).
+//! proximité (vision des relations, `extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md`, §5).
 //!
 //! Run with: ./run_e2e.sh --test e2e_banc_relations
 //!

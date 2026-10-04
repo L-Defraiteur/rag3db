@@ -1,7 +1,7 @@
 # Les modèles de décision, vérifiés à la source
 
 **3 octobre 2026, session « optimiseur ».** Pour le nœud de décision de la
-mémoire longue ([la vision](../../3-octobre-2026-20h37/02-vision-memoire-longue.md)) :
+mémoire longue ([la vision](extension/rag3weaver/visions/2026-10-03-20h37-memoire-longue.md)) :
 un critère en clair, une chose, des candidats, et en retour un choix dans une
 liste fermée avec une probabilité. Une recherche web avait donné des noms que
 personne n'avait vérifiés. Ce document est le temps 1 : **des faits lus dans

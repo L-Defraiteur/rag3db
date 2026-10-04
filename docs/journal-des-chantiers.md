@@ -875,14 +875,14 @@ déterministe ; 1 552 fausses arêtes retirées sur `src/dataflow`
 (`extension/rag3weaver/docs/3-octobre-2026-20h30/`). Les références du banc
 de recherche d'avant ne sont plus comparables : refaire une référence.
 
-**Visions** (`extension/rag3weaver/docs/3-octobre-2026-20h16/` et
-`…-20h37/`) : explorer les relations (usages, chemins entre résultats, poids
+**Visions** (`extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md` et
+`extension/rag3weaver/visions/`) : explorer les relations (usages, chemins entre résultats, poids
 par proximité, voisinage, structure) ; sept idées pour le produit code, toutes
 retenues, avec le crochet après outil (idée de Lucie pour « le même motif
 existe ailleurs ») et des notes accrochées au code, datées et versionnées ;
 les propriétés d'arête, dont la provenance.
 
-**Mémoire longue** (`…-20h37/02`, proposition `…-20h41/01`) : produit ouvert
+**Mémoire longue** (`extension/rag3weaver/visions/2026-10-03-20h37-memoire-longue.md`, proposition `…-20h41/01`) : produit ouvert
 en parallèle. Choix pris par délégation, chacun un réglage du manifeste :
 premier usage l'agent de code, avec un scénario sans dépôt au banc ; tout
 agent écrit, l'origine marquée, une déduction n'écrase jamais une parole ; la

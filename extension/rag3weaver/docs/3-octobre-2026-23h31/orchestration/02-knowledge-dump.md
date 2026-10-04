@@ -59,7 +59,7 @@ On n'y commite ni n'y bâtit rien.
 ## Où sont les choses
 
 - Registre commun : `docs/journal-des-chantiers.md`.
-- Visions : `extension/rag3weaver/docs/3-octobre-2026-20h16/` et `…-20h37/`.
+- Visions : `extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md` et `extension/rag3weaver/visions/`.
 - Verrous : `docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`.
 - Indexer un dépôt, mesures : `extension/rag3weaver/docs/3-octobre-2026-14h26/03-indexer-ce-depot.md`.
 - Passes d'agent : `extension/rag3weaver/docs/3-octobre-2026-22h40/`.

@@ -14,9 +14,9 @@ Lucie, la seconde plus lointaine que la première :
 > faire des essais intermédiaires qui ne vont pas directement là-dessus. »
 
 Ce document complète les visions du produit code
-(`../3-octobre-2026-20h37/01`), l'exploration des relations
-(`../3-octobre-2026-20h16/01`) et la vision des mémoires
-(`../4-octobre-2026-00h09/01` et `02`).
+(`extension/rag3weaver/visions/2026-10-03-20h37-le-produit-code.md`), l'exploration des relations
+(`extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md`) et la vision des mémoires
+(`extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md` et `02`).
 
 ## 1. Le trou que cela comble
 
@@ -81,7 +81,7 @@ fermeture, le harnais peut proposer d'en garder une note — jamais l'imposer.
   section « Liens » montre une fois : les fausses arêtes (variables locales
   Rust, conteneur `mod tests`) y pèseraient plus lourd. À corriger d'abord.
 - **Hors de notre chat.** Dans un harnais qui ne laisse qu'ajouter du
-  contexte (Claude Code, `../4-octobre-2026-00h09/02`), pas de bloc épinglé :
+  contexte (Claude Code, `extension/rag3weaver/visions/2026-10-04-00h09-l-archiviste-branche-sur-claude-code.md`), pas de bloc épinglé :
   on n'aurait qu'une approximation, une injection quand un curseur change.
 
 ## 5. L'idée plus lointaine : le contexte comme une vue

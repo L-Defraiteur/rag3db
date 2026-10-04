@@ -2,7 +2,7 @@
 
 3 octobre 2026. Sept idées proposées à Lucie, qui les a toutes retenues, avec
 deux précisions de sa part (notées « Lucie : »). Rien n'est codé. Ce document
-complète `3-octobre-2026-20h16/01-vision-explorer-les-relations.md`.
+complète `extension/rag3weaver/visions/2026-10-03-20h16-explorer-les-relations.md`.
 
 Le point de départ : un agent muni de grep sait déjà lire du code. Ce que nous
 avons en plus est un graphe persistant, synchronisé, mêlé à la recherche par
