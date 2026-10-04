@@ -154,9 +154,19 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     let rss = || {
         std::fs::read_to_string("/proc/self/status")
             .ok()
-            .and_then(|s| s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
-            .map(|kb| kb / 1024)
-            .unwrap_or(0)
+            .map(|s| {
+                // Le total, puis ce qui est anonyme (tas, tampon du moteur) et
+                // ce qui est partagé (fichiers mmap du tmpfs, cache lucivy).
+                let field = |name: &str| {
+                    s.lines()
+                        .find(|l| l.starts_with(name))
+                        .and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()))
+                        .map(|kb| kb / 1024)
+                        .unwrap_or(0)
+                };
+                format!("{} (anonyme {}, partagé {})", field("VmRSS:"), field("RssAnon:"), field("RssShmem:"))
+            })
+            .unwrap_or_default()
     };
     eprintln!("[mémoire] {} Mo — les sources lues ({:.0} Mo de texte)", rss(), chars as f64 / 1e6);
 
