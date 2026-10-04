@@ -68,8 +68,10 @@ public:
     common::nodeID_t insert(main::ClientContext* context);
 
     // For MERGE, we might need to skip the insert for duplicate input. But still, we need to write
-    // the output vector for later usage.
-    void skipInsert() const;
+    // the output vector for later usage : l'identifiant du nœud que le lot a créé pour cette clé,
+    // et ses propriétés relues dans la table (une valeur par défaut réévaluée ne serait pas
+    // celle qui est stockée).
+    void skipInsert(common::nodeID_t createdNodeID, main::ClientContext* context) const;
 
 private:
     NodeInsertExecutor(const NodeInsertExecutor& other)
@@ -132,8 +134,9 @@ public:
 
     common::internalID_t insert(main::ClientContext* context);
 
-    // See comment in NodeInsertExecutor.
-    void skipInsert() const;
+    // See comment in NodeInsertExecutor. Seul l'identifiant de la relation créée est reposé ;
+    // ses propriétés de sortie restent celles de la ligne en cours.
+    void skipInsert(common::internalID_t createdRelID) const;
 
 private:
     RelInsertExecutor(const RelInsertExecutor& other)

@@ -1,6 +1,6 @@
 # MERGE d'une clé répétée rend une autre valeur que celle stockée
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(merge): un motif retrouvé dans le lot repose l'identifiant créé, pour les ON MATCH SET comme pour le SET qui suit »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui, par `batch_link` (voir plus bas)
