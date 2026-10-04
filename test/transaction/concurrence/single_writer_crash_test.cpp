@@ -59,6 +59,9 @@ enum class DeathPoint {
     // La marque CHECKPOINT est au journal, les pages fantômes ne sont pas encore recopiées :
     // la reprise devra les rejouer depuis le fichier fantôme.
     AfterCheckpointLogged,
+    // Pages recopiées et synchronisées, journal vidé (tronqué, pas supprimé), fichier
+    // fantôme encore plein : la reprise trouve un journal vide à côté d'un fichier fantôme.
+    AfterJournalCleared,
     AfterApplyingShadowPages,
 };
 
@@ -74,6 +77,8 @@ std::string deathPointName(DeathPoint point) {
         return "AfterHeader";
     case DeathPoint::AfterCheckpointLogged:
         return "AfterCheckpointLogged";
+    case DeathPoint::AfterJournalCleared:
+        return "AfterJournalCleared";
     case DeathPoint::AfterApplyingShadowPages:
         return "AfterApplyingShadowPages";
     }
@@ -123,6 +128,17 @@ protected:
                 ->getShadowFile()
                 .flushAll(clientContext);
             rag3db::storage::WAL::Get(clientContext)->logAndFlushCheckpoint(&clientContext);
+            dieNow();
+        }
+        if (point == DeathPoint::AfterJournalCleared) {
+            // Les pas de Checkpointer::logCheckpointAndApplyShadowPages jusqu'au vidage du
+            // journal, puis la mort avant celui du fichier fantôme.
+            auto& shadowFile = rag3db::storage::StorageManager::Get(clientContext)->getShadowFile();
+            shadowFile.flushAll(clientContext);
+            auto wal = rag3db::storage::WAL::Get(clientContext);
+            wal->logAndFlushCheckpoint(&clientContext);
+            shadowFile.applyShadowPages(clientContext);
+            wal->clear();
             dieNow();
         }
         Checkpointer::logCheckpointAndApplyShadowPages();
@@ -413,7 +429,15 @@ TEST_P(CheckpointDeath, CommittedDataSurvivesADeathDuringCheckpoint) {
     });
     // Après l'application des pages fantômes, le point de reprise est consigné et le
     // journal peut déjà être vide : légitime à cet instant-là seulement.
-    if (point != DeathPoint::AfterApplyingShadowPages) {
+    if (point == DeathPoint::AfterJournalCleared) {
+        const auto shadowPath = rag3db::storage::StorageUtils::getShadowFilePath(databasePath);
+        EXPECT_TRUE(std::filesystem::exists(
+                        rag3db::storage::StorageUtils::getWALFilePath(databasePath)) &&
+                    walSize() == 0)
+            << "[check: journal-cleared] the journal is not there and empty";
+        EXPECT_TRUE(std::filesystem::exists(shadowPath) && std::filesystem::file_size(shadowPath) > 0)
+            << "[check: shadow-file-left] no shadow file next to the empty journal";
+    } else if (point != DeathPoint::AfterApplyingShadowPages) {
         expectJournalToReplay();
     }
     if (!reopen()) {
@@ -437,7 +461,7 @@ TEST_P(CheckpointDeath, CommittedDataSurvivesADeathDuringCheckpoint) {
 INSTANTIATE_TEST_SUITE_P(Points, CheckpointDeath,
     ::testing::Values(DeathPoint::BeforeStorage, DeathPoint::AfterStorage,
         DeathPoint::AfterSerialize, DeathPoint::AfterHeader, DeathPoint::AfterCheckpointLogged,
-        DeathPoint::AfterApplyingShadowPages),
+        DeathPoint::AfterJournalCleared, DeathPoint::AfterApplyingShadowPages),
     [](const ::testing::TestParamInfo<DeathPoint>& info) { return deathPointName(info.param); });
 
 // La reprise d'un journal terminé par un CHECKPOINT rejoue les pages du fichier fantôme, puis

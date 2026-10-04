@@ -54,7 +54,8 @@ Deux lignes de la cause sont traitées ; le ticket reste ouvert pour les autres.
   - `SHADOW_PAGES_REPLAYED` : pages fantômes recopiées et synchronisées, rien supprimé ;
   - `JOURNAL_REMOVED` : journal supprimé, fichier fantôme pas encore.
 - Côté banc, un point de mort de plus pendant le point de reprise : `DeathPoint::AfterCheckpointLogged` (journal clos par CHECKPOINT, pages fantômes pas encore appliquées), qui produit l'état qu'une reprise doit rejouer.
-- Témoins (`single_writer_crash_test.cpp`) : `RecoveryDeath.DeathBetweenTheTwoRemovalsAtRecovery` (rouge dans l'ordre ancien : « Cannot open file … db.kz.shadow »), `RecoveryDeath.ShadowFileAlreadyReplayedAndRemoved` (tolérance), `Points/CheckpointDeath…/AfterCheckpointLogged`.
+- Témoins (`single_writer_crash_test.cpp`) : `RecoveryDeath.DeathBetweenTheTwoRemovalsAtRecovery` (rouge dans l'ordre ancien : « Cannot open file … db.kz.shadow »), `RecoveryDeath.ShadowFileAlreadyReplayedAndRemoved` (tolérance), `Points/CheckpointDeath…/AfterCheckpointLogged`, `Points/CheckpointDeath…/AfterJournalCleared` (journal vidé par le point de reprise ordinaire, fichier fantôme encore plein : la reprise le supprime sans le rejouer, les pages étant déjà recopiées et synchronisées).
+- Limite de la tolérance : elle couvre une mort de processus dans l'ordre ancien, pas une coupure de courant. L'ancien code recopiait les pages sans les synchroniser ; après une coupure à cet instant, des pages peuvent manquer et la tolérance les croirait appliquées. Hors du périmètre de la stèle (arrêts au mauvais instant, pas coupures).
 
 **Synchronisation après le rejeu des pages fantômes** : corrigé, sans témoin.
 
