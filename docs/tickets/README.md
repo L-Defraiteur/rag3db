@@ -36,6 +36,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [WITH sans colonne utile filtré par un paramètre fait planter](2026-10-04-with-filtre-par-un-parametre.md) | ouvert | plantage | oui | non (vérifié par l'arbre principal) |
 | [L'UUID nul empêche tout point de reprise](2026-10-04-uuid-nul-empeche-le-point-de-reprise.md) | ouvert | blocage | oui | non vérifié |
 | [Un CHECKPOINT retient la validation d'un lecteur jusqu'à son délai](2026-10-04-checkpoint-retient-un-lecteur.md) | ouvert | blocage | oui | probable (lecteurs et points de reprise automatiques) |
+| [Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit](2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md) | ouvert | blocage | oui | oui (première indexation, poussée des blobs du plein texte) |
 | [RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne](2026-10-04-distinct-skip-sans-limit.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [Un terme de WHERE qui ne cite que des paramètres est ignoré](2026-10-04-where-sur-parametres-seuls-ignore.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [L'étiquette d'une variable liée plus tôt sans étiquette est ignorée](2026-10-04-etiquette-d-une-variable-deja-liee-ignoree.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
