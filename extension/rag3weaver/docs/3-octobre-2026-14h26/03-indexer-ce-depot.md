@@ -346,6 +346,57 @@ encore remesurées ici.
 La remesure du dépôt entier se fera quand le résolveur unique sera sur
 master, en une passe annoncée.
 
+### La remesure du 4 octobre : 89 s d'un tenant, 111 s par paquets de 2 048
+
+Sur master après le résolveur unique (`63d154730`) et les fichiers générés
+écartés (95 fichiers). Même protocole : les mots seulement, 8 fils lucivy,
+binaire de test, base en mémoire, moteur de master (bâti le 4 à 0 h 59),
+poste calme (charge 0,4), quatre passes dos à dos.
+
+| Paquets de | Durée | dont mots | dont relations | Pic de mémoire | Relations |
+|---|---|---|---|---|---|
+| 64 | **289 s** (352 s la veille) | 278 s | 11 s | 16,6 Go | 305 357 |
+| 512 | **120 s** | 109 s | 10 s | 11,3 Go | 304 883 |
+| 2 048 | **111 s** | 102 s | 9 s | 10,9 Go | 304 922 |
+| tout (un paquet) | **89 s** (132 s la veille) | 81 s | 8 s | 14,8 Go | 304 914 |
+
+6 822 fichiers et 74 404 scopes aux deux premières passes, 6 824 et 74 417
+aux deux dernières : d'autres sessions écrivaient du code, le corpus a bougé
+de deux fichiers.
+
+Où part le temps, par poste (secondes) :
+
+| Poste | 64 | 512 | 2 048 | un paquet |
+|---|---|---|---|---|
+| analyser (codeparsers) | 24 | 17 | 21 | 24 |
+| ingérer les paquets | 230 | 73 | 60 | 38 |
+| — dont pousser les blobs d'index | 109 | 8 | 2,5 | 1,2 |
+| — dont exécuter le graphe d'ingestion | 91 | 46 | 40 | 24 |
+| — dont symboles | 52 | 16 | 13 | 9 |
+| vider la file des liens en route | 21 | 18 | 20 | 18 |
+| charger les relations à la fin | 11 | 10 | 9 | 8 |
+
+Ce que ça dit :
+
+- **La cible de 90 s est touchée d'un tenant (89 s), sans marge**, et au prix
+  de 14,8 Go. Par paquets de 2 048 il manque 21 s, avec 10,9 Go.
+- **Les paquets de 64 perdent 109 s à pousser les blobs d'index** en 411
+  appels : c'est presque tout l'écart avec 512. Le report de cette poussée
+  rendrait les petits paquets proches des gros.
+- **Un plancher d'une cinquantaine de secondes ne dépend pas de la taille** :
+  analyser (17 à 24 s), vider la file des liens en route (18 à 21 s), charger
+  les relations (8 à 11 s). C'est là qu'est la marge sous 90 s : la file des
+  liens pourrait ne se vider qu'une fois, à la fin.
+- **Le graphe ne dépend presque plus du paquet** : 304 883 à 305 357
+  relations, contre 438 104 et 819 808 la veille. Il reste 474 relations de
+  plus à 64 qu'à 512, à corpus identique — pas expliqué.
+- **Le pic de mémoire est le plus haut à 64 (16,6 Go)**, pas d'un tenant —
+  inattendu, pas expliqué. Aucune taille ne passe sur un poste modeste : la
+  mémoire reste à traiter avant de choisir la forme.
+
+Non mesuré ici : ce que les 95 fichiers générés retirent à eux seuls (il
+aurait fallu une passe règle levée), un binaire optimisé, une base sur disque.
+
 ## 4. Les deux politiques
 
 Le mécanisme ne connaît que `FileSource` (lister, lire). La politique décide
