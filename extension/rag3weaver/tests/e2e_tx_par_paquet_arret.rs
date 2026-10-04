@@ -137,21 +137,24 @@ fn role_enfant() {
 }
 
 fn lancer(role: &str, base: &Path, tuer: bool) -> (std::process::ExitStatus, String) {
-    lancer_avec(role, base, tuer, true)
+    lancer_avec(role, base, tuer.then_some(PAQUET_TUE), true, 1)
 }
 
-fn lancer_avec(role: &str, base: &Path, tuer: bool, transaction: bool) -> (std::process::ExitStatus, String) {
+/// `tuer` : le rang du paquet où mourir ; `par_validation` : K, les paquets
+/// par validation (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION`).
+fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, par_validation: usize) -> (std::process::ExitStatus, String) {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
     cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
+        .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())
         .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH");
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }
-    if tuer {
-        cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", PAQUET_TUE.to_string());
+    if let Some(rang) = tuer {
+        cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", rang.to_string());
     }
     let sortie = cmd.output().expect("lancer le fils");
     let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
@@ -217,14 +220,40 @@ fn un_arret_au_milieu_d_un_paquet_se_reprend_aux_comptes_d_une_passe_sans_arret(
 fn la_transaction_par_paquet_rend_les_comptes_du_chemin_ordinaire() {
     let avec = dossier_sur_disque("avec");
     let sans = dossier_sur_disque("sans");
-    let (statut, sortie) = lancer_avec("avec", &avec.join("base.rag3db"), false, true);
+    let (statut, sortie) = lancer_avec("avec", &avec.join("base.rag3db"), None, true, 1);
     assert!(statut.success(), "avec la transaction :\n{sortie}");
     let comptes_avec = comptes_rendus("avec", &sortie);
-    let (statut, sortie) = lancer_avec("sans", &sans.join("base.rag3db"), false, false);
+    let (statut, sortie) = lancer_avec("sans", &sans.join("base.rag3db"), None, false, 1);
     assert!(statut.success(), "sans la transaction :\n{sortie}");
     let comptes_sans = comptes_rendus("sans", &sortie);
     assert!(comptes_sans.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{comptes_sans:?}");
     assert_eq!(comptes_avec, comptes_sans, "mêmes comptes avec et sans la transaction par paquet");
     let _ = std::fs::remove_dir_all(&avec);
     let _ = std::fs::remove_dir_all(&sans);
+}
+
+/// **Deux paquets par validation** (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION=2`) :
+/// la mort au paquet 3 défait les paquets 2 et 3, ouverts ensemble ; la
+/// reprise les refait, et les comptes sont ceux d'une passe sans arrêt —
+/// celle-ci en une seule validation, pour couvrir aussi « tous ».
+#[test]
+#[ignore]
+fn un_arret_a_deux_paquets_par_validation_se_reprend_aux_memes_comptes() {
+    let dossier = dossier_sur_disque("repris-k2");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("ecrivain", &base, Some(3), true, 2);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet 3 :\n{sortie}");
+    assert!(journal(&dossier).iter().any(|(_, t)| *t > 0), "journal vide : la mort ne prouverait rien");
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 2);
+    assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+    let temoin_dossier = dossier_sur_disque("temoin-tous");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 0);
+    assert!(statut.success(), "le témoin, en une seule validation, va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
+    assert_eq!(repris, temoin, "à K = 2 comme à une seule validation, les comptes d'une passe sans arrêt");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
 }

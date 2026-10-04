@@ -606,8 +606,15 @@ fn synchroniser(
         // Les naissances par COPY à chaque paquet, la marque de session dans
         // la ligne : plus de COUNT, de relecture ni de marquage par paquet
         // pour une table vide au départ (`Catalog::begin_fresh_ingest`).
-        catalog.begin_fresh_ingest(&[FILE, SCOPE, LIBRARY, SYMBOL], &[(SCOPE, s_scopes), (FILE, s_files)]);
+        // `RAG3WEAVER_TX_SANS_NAISSANCES=1` le coupe, pour mesurer : le temps
+        // qu'il retire aux paquets se retrouvait dans les COMMIT (155 → 157 s,
+        // rag3db-eb, 4 octobre 2026).
+        if std::env::var("RAG3WEAVER_TX_SANS_NAISSANCES").as_deref() != Ok("1") {
+            catalog.begin_fresh_ingest(&[FILE, SCOPE, LIBRARY, SYMBOL], &[(SCOPE, s_scopes), (FILE, s_files)]);
+        }
     }
+    let nombre_de_paquets = retenus.chunks(options.batch_files.max(1)).len();
+    let par_validation = paquets_par_validation();
     for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
@@ -642,7 +649,11 @@ fn synchroniser(
         // [`terminer`].
         let tx = par_transaction;
         let t_paquet = std::time::Instant::now();
-        if tx {
+        // Une transaction s'ouvre tous les `par_validation` paquets, et se
+        // valide au dernier d'entre eux (ou au dernier paquet tout court).
+        let ouvrir = tx && rang_du_paquet % par_validation == 0;
+        let valider = tx && ((rang_du_paquet + 1) % par_validation == 0 || rang_du_paquet + 1 == nombre_de_paquets);
+        if ouvrir {
             commencer(catalog)?;
         }
         let resultat: Result<(), String> = (|| {
@@ -694,7 +705,7 @@ fn synchroniser(
         }
         Ok(())
         })();
-        if tx {
+        if tx && (valider || resultat.is_err()) {
             terminer(catalog, resultat)?;
         } else {
             resultat?;
@@ -811,6 +822,22 @@ fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, Strin
         )
         .map_err(|e| e.to_string())?;
     Ok(!res.rows.is_empty())
+}
+
+/// **Combien de paquets par validation** (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION`,
+/// avec la transaction par paquet) : 1 par défaut, une validation par paquet ;
+/// `tous` (ou 0), une seule à la fin des paquets. Chaque validation porte le
+/// point de reprise que les COPY imposent (~5 s par paquet sur le dépôt
+/// entier, mesuré le 4 octobre 2026). Ce qu'un K plus grand coûte : rien
+/// d'un groupe n'est lisible par une autre connexion avant sa validation ; un
+/// arrêt brutal refait jusqu'à K paquets ; les écritures non validées restent
+/// en mémoire du moteur. Essai de l'orchestration, à mesurer.
+fn paquets_par_validation() -> usize {
+    match std::env::var("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION").ok().as_deref().map(str::trim) {
+        Some("tous") | Some("0") => usize::MAX,
+        Some(v) => v.parse::<usize>().ok().filter(|k| *k > 0).unwrap_or(1),
+        None => 1,
+    }
 }
 
 /// Le prototype de la transaction par paquet est-il demandé ?
