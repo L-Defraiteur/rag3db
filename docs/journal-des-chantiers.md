@@ -584,10 +584,21 @@ laisse même pas la trace d'un refus. Une fonction de ce genre se termine par
 `return 0`, et dit « absent … » pour ce qu'elle n'a pas trouvé.
 
 La règle, donc : **le chemin du moteur ne se dérive jamais du chemin du code.**
-`RAG3DB_ROOT` d'abord, le manifeste en repli, et l'absence **dite**. Et la façon
-de chercher ce motif, qui a tranché là où une liste de fichiers ne suffisait
-pas : un `grep` sur `extension/vector/build` dans `tests/` — par le **chemin**,
-pas par la liste des fichiers déjà en cause.
+`RAG3DB_ROOT` d'abord, le manifeste en repli, et l'absence **dite**.
+
+**Et `RAG3DB_ROOT` désigne l'arbre où le moteur est bâti, pas « l'arbre
+principal ».** La nuance a de l'importance et elle se trompe facilement : un
+worktree qui a lancé son propre `cmake` a sa `libvector` à lui, et c'est **lui**
+qu'il faut désigner ; un worktree qui n'a jamais bâti n'a pas de
+`extension/vector/build/` du tout, et doit désigner l'arbre principal. Les deux
+cas se sont présentés le même jour, dans deux sessions, avec des réponses
+opposées — et chacune avait raison chez elle.
+
+Et la façon de chercher ce motif, qui a tranché là où une liste de fichiers ne
+suffisait pas : un `grep` sur `extension/vector/build` dans `tests/` — par le
+**chemin**, pas par la liste des fichiers déjà en cause. **À rejouer après
+chaque rebase** : un second site du même motif est arrivé sur master le jour
+même, et un grep joué avant le rebase ne pouvait pas le voir.
 
 **Et la forme commune aux six**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
