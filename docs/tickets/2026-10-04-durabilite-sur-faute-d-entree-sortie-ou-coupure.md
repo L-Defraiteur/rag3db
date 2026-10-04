@@ -63,6 +63,13 @@ Deux lignes de la cause sont traitées ; le ticket reste ouvert pour les autres.
 - Ce qui manque pour le prouver : un crochet de faute dans `src/` qui simule une coupure (écritures non synchronisées perdues). Une mort de processus ne suffit pas, le cache de pages du noyau survit.
 - Coût mesuré à une réouverture avec rejeu (200 000 lignes, base sur btrfs) : avec la synchronisation 76, 89 et 115 ms, sans 69, 71 et 72 ms : environ 20 ms à la médiane, 45 ms au pire. Payé une fois, seulement quand la reprise rejoue des pages fantômes (mort pendant un point de reprise).
 
+**Les pages d'un COPY tué : la fuite n'est pas bornée** (5 octobre 2026, banc, mesuré, non corrigé).
+
+- Sonde non commitée (`~/.cache/rag3db-banc-notes/sonde-fuite-copy.patch`, sur la fixture `JournaledCopyDeath`). Elle tue 12 fois un COPY d'un million de lignes, rouvre, fait un point de reprise, puis écrit 200 000 lignes ordinaires et fait un point de reprise. Même chose sur l'ancien chemin et sur une base sans morts.
+- Chaque mort laisse entre 0,3 et 3,4 Mo, selon l'avancement du COPY. Après 12 morts, le fichier de données passe de 28 Ko à 14,6–25,9 Mo sur le chemin journalisé, et à 14,9–16 Mo sur l'ancien (deux passes). La croissance est linéaire, sans palier : bornée par mort (la taille du COPY), pas par le nombre de morts.
+- Rien ne la rend : ni la réouverture, ni le point de reprise, ni les écritures qui suivent. Les 200 000 lignes ordinaires font grossir le fichier de 13,2 Mo après les morts, contre 14,3 Mo sans morts : au mieux 1,1 Mo réutilisé, sur 15 à 26 Mo perdus. Les pages écrites par un COPY non validé ne sont connues d'aucun gestionnaire de pages libres après la reprise.
+- Aucune donnée perdue ni lue faux : la base reste intègre (niveaux 1 et 2) après chaque mort.
+
 ## Pour le fermer
 
 un crochet de test dans `src/` (faute d'E/S injectée, mort à un point nommé), puis un témoin par défaut ; ou un correctif lu sur l'amont pour chacun, sans témoin, avec l'accord de la session cœur C++.
