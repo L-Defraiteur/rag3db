@@ -54,6 +54,22 @@ if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then
     echo "▸ verrou du poste $NOM_VERROU : attente d'une passe en cours ($VERROU)"
   fi
   export RAG3WEAVER_VERROU_TENU="$NOM_VERROU"
+  # **Par le script du poste quand il est là** (5 octobre 2026, après la
+  # panne de mémoire du 4 à 22 h 51) : il prend la même porte et le même
+  # verrou, et lance la passe dans sa propre portée systemd plafonnée
+  # (POSTE_MEM_MAX, 40 Go par défaut ; POSTE_SWAP_MAX, 4 Go). Une passe qui
+  # déborde est tuée seule (code 137) au lieu d'emporter les sessions. Sans
+  # le script, le verrou d'avant, sans plafond.
+  POSTE="${HOME}/.cache/rag3weaver-build/poste"
+  if [ -x "$POSTE" ]; then
+    if [ "$MODE_VERROU" = "-x" ] && [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then
+      exec "$POSTE" mesure "$0" "$@"
+    elif [ "$MODE_VERROU" = "-x" ]; then
+      # Un rebâti du moteur : exclusif, en priorité basse.
+      exec "$POSTE" mesure nice -n 15 ionice -c 3 "$0" "$@"
+    fi
+    exec "$POSTE" lourd "$0" "$@"
+  fi
   if [ "$MODE_VERROU" = "-x" ]; then
     exec flock -x "$PORTE" flock -x "$VERROU" $BASSE "$0" "$@"
   fi
