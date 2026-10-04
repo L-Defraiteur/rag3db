@@ -3,7 +3,7 @@
 - **État** : ouvert
 - **Gravité** : plantage
 - **Atteignable en service** : oui
-- **Touche rag3weaver** : non vérifié
+- **Touche rag3weaver** : non d'après la sonde du 4 octobre (`kb_upsert_index`, la seule forme à ON MATCH SET multiple, est juste avec une clé répétée : la clé y est extraite dans un WITH)
 - **Ouvert le** : 4 octobre 2026, revue des amonts
 - **Pour** : exécuteur — à attribuer
 

@@ -482,6 +482,29 @@ TEST_F(UpstreamFixes, MergeOfARepeatedKeyReturnsTheStoredNode) {
         << "[check: merge-returns-stored-node] the repeated key returns another node";
 }
 
+// La forme de batch_link de rag3weaver (dialect.rs, unwind_par_cle puis MERGE de la relation
+// et SET) quand un lot porte deux fois la même relation, créée par le lot lui-même, avec une
+// autre relation créée entre les deux : le SET de la seconde occurrence est perdu, sans erreur.
+// Adjacents, ou sur une relation qui existait déjà, les doublons sont justes ; aucune autre
+// relation n'est touchée (sonde du 4 octobre). Même famille que Ladybug c5a3c7385 : un MERGE qui
+// retrouve un motif créé plus tôt dans le lot ne repose pas l'identifiant de ce qu'il a trouvé.
+TEST_F(UpstreamFixes, MergeOfARelationRepeatedInTheBatchKeepsTheLastSet) {
+    mustRun("CREATE NODE TABLE A(_uuid STRING PRIMARY KEY);");
+    mustRun("CREATE NODE TABLE B(_uuid STRING PRIMARY KEY);");
+    mustRun("CREATE REL TABLE R(FROM A TO B, t STRING, u INT64);");
+    mustRun("CREATE (:A {_uuid: 'a'}), (:B {_uuid: 'b'}), (:B {_uuid: 'c'});");
+    mustRun("UNWIND [{from_uuid: 'a', to_uuid: 'b', t: 'x', u: 1}, "
+            "{from_uuid: 'a', to_uuid: 'c', t: 'w', u: 5}, "
+            "{from_uuid: 'a', to_uuid: 'b', t: 'y', u: 2}] AS item "
+            "WITH item, item.from_uuid AS __cle_0 MATCH (a:A {_uuid: __cle_0}) "
+            "WITH a, item, item.to_uuid AS __cle_1 MATCH (b:B {_uuid: __cle_1}) "
+            "MERGE (a)-[r:R]->(b) SET r.t = item.t, r.u = item.u;");
+    EXPECT_EQ(queryInt("MATCH (:A)-[r:R]->(:B {_uuid: 'b'}) RETURN r.u;"), 2)
+        << "[check: merge-set-applied] the second occurrence of a->b lost its SET";
+    EXPECT_EQ(queryInt("MATCH (:A)-[r:R]->(:B {_uuid: 'c'}) RETURN r.u;"), 5)
+        << "[check: merge-set-applied] a->c";
+}
+
 // Ladybug a8814a143. Le balayage de plusieurs tables de relations partage un état : les
 // relations locales de R1 sont relues sous R2.
 TEST_F(UpstreamFixes, ScanOfSeveralRelationTablesInATransaction) {
