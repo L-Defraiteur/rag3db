@@ -234,9 +234,33 @@ ou renonce-t-il ? La session recherche et moi avons la forme des quatre issues
 
 ## 6. Ce que je ne sais pas
 
-- **Qui écrit le L1.** Le résumé du harnais, ou un résumé fait pour le classeur.
-  Je ne sais même pas si rag3weaver peut lire le premier — c'est une question
-  pour la session du chat, et elle décide du reste.
+- ~~**Qui écrit le L1.**~~ **Répondu** par la session recherche, qui tient le
+  chat, et la réponse change la conception en mieux : **le chat ne compresse
+  rien aujourd'hui.** Ni résumé ni élagage ; les seules bornes sont
+  `AgentLimits.token_budget` (qui **arrête** le tour), `max_iterations`, et la
+  troncature de la sortie d'un outil à l'entrée. Le contexte grandit tel quel.
+
+  Donc il n'y a pas de résumé du harnais à lire, et **l'archiviste écrit le
+  sien** — processus séparé, qui lit `journal/<session>.jsonl`, écrit **au fil
+  de l'eau** et lisible **pendant** le tour, avec des frontières de tours où une
+  tranche se découpe proprement. La session JSON n'est écrite qu'en fin de tour :
+  le journal est la bonne source.
+
+  Et « 30 % » est mesurable sans rien ajouter : `AgentRun.usage` cumule les
+  jetons, le `prompt_tokens` du **dernier** appel est la taille réelle du
+  contexte envoyé, le modèle déclare sa fenêtre (`ModelSource.context_tokens`),
+  et l'événement `turn_end` porte déjà le cumul.
+
+  Il manque **un seul** crochet, et il a un site net : la **fermeture de
+  session** — la sortie de boucle de `rag3weaver-chat`, avant `drop(tools)`,
+  où le backend est encore vivant et le journal joint. Trois lignes, même motif
+  que l'`index_status` d'après-tour. Le crochet « à la compression », lui, n'a
+  aucun site aujourd'hui — et ma conception n'en a pas besoin.
+
+  **Ce que ça simplifie** : pas de négociation avec le harnais, pas de
+  dépendance à un résumé dont la forme ne nous appartient pas, et le même
+  chemin pour un agent hébergé ailleurs — on lit ce qu'il émet, pas ce qu'il
+  pense.
 - **« 30 % du contexte »** : du total ou depuis le dernier L1. Mesurable une
   fois le classeur écrit, pas avant.
 - **Si un L1 touchant plusieurs sujets se range sous chacun ou se découpe.** Mon
