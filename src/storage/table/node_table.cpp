@@ -154,7 +154,7 @@ struct UncommittedIndexInserter final : IndexScanHelper {
 struct RollbackPKDeleter final : IndexScanHelper {
     RollbackPKDeleter(row_idx_t startNodeOffset, row_idx_t numRows, NodeTable* table,
         PrimaryKeyIndex* pkIndex)
-        : IndexScanHelper(table, pkIndex),
+        : IndexScanHelper(table, pkIndex), startNodeOffset{startNodeOffset},
           semiMask(SemiMaskUtil::createMask(startNodeOffset + numRows)) {
         semiMask->maskRange(startNodeOffset, startNodeOffset + numRows);
         semiMask->enable();
@@ -166,6 +166,8 @@ struct RollbackPKDeleter final : IndexScanHelper {
     bool processScanOutput(main::ClientContext* context, NodeGroupScanResult scanResult,
         const std::vector<ValueVector*>& scannedVectors) override;
 
+    // La première des lignes que cet enregistrement annule.
+    offset_t startNodeOffset;
     std::unique_ptr<SemiMask> semiMask;
 };
 
@@ -218,8 +220,18 @@ bool RollbackPKDeleter::processScanOutput(main::ClientContext* context,
             const auto pos = scannedVector.state->getSelVector()[i];
             T key = scannedVector.getValue<T>(pos);
             static constexpr auto isVisible = [](offset_t) { return true; };
-            if (offset_t lookupOffset = 0; pkIndex.lookup(transaction::Transaction::Get(*context),
-                    key, lookupOffset, isVisible)) {
+            // Seulement si la clé ne mène pas à une ligne d'avant celles qu'on annule. Une ligne
+            // annulée pour clé en double porte la clé d'une ligne qui reste : la retirer ici
+            // faisait disparaître de l'index la ligne d'origine, tant que sa clé n'avait pas
+            // passé un point de reprise. Une ligne qui reste précède toujours les lignes
+            // annulées (les ajouts vont en fin de table). La borne haute n'est pas contrôlée :
+            // dans un COPY annulé, la clé d'une ligne de cette plage peut mener au-delà de la
+            // plage (observé dans copy_tests, non expliqué) ; l'y laisser faisait planter le
+            // COPY suivant.
+            if (offset_t lookupOffset = 0;
+                pkIndex.lookup(transaction::Transaction::Get(*context), key, lookupOffset,
+                    isVisible) &&
+                lookupOffset >= startNodeOffset) {
                 // If we delete the key then it will not be visible to future transactions within
                 // this process
                 pkIndex.discardLocal(key);

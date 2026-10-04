@@ -559,7 +559,15 @@ void ChunkedNodeGroup::rollbackInsert(row_idx_t startRow, row_idx_t numRows_, tr
         return;
     }
     versionInfo->rollbackInsert(startRow, numRows_);
-    numRows = startRow;
+    // Les colonnes aussi reviennent à startRow lignes. Ne ramener que le compte du bloc laissait
+    // les lignes annulées dans ses colonnes : le point de reprise suivant les recopiait dans un
+    // bloc dimensionné pour les seules lignes valides, et écrivait au-delà (corruption de tas
+    // après un COPY refusé dans un groupe encore en mémoire).
+    if (residencyState == ResidencyState::IN_MEMORY) {
+        truncate(startRow);
+    } else {
+        numRows = startRow;
+    }
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
