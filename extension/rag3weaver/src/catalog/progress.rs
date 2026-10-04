@@ -170,6 +170,11 @@ pub struct IndexState {
     /// prêt et le creux en dette, et la fusion doit pouvoir le dire.
     #[serde(default)]
     pub sparse: Option<SignalState>,
+    /// **Le plein texte en cours de rebâti** : la part des lignes déjà
+    /// indexées, calculée à la lecture (documents de l'index sur lignes de la
+    /// table). `None` hors rebâti.
+    #[serde(default)]
+    pub text_percent: Option<u8>,
     /// Quand cet état a été écrit (millisecondes Unix).
     pub updated_ms: u64,
 }
@@ -213,6 +218,7 @@ impl IndexState {
             vectors_percent: if chunks == 0 { 0 } else { progress.dense_percent() },
             vectors_seconds_left: None,
             sparse: progress.sparse_state(),
+            text_percent: None,
             updated_ms: now_ms,
         }
     }
@@ -281,7 +287,7 @@ impl Catalog {
         })
     }
 
-    fn count_rows_of(&self, table: &str) -> usize {
+    pub(crate) fn count_rows_of(&self, table: &str) -> usize {
         self.conn
             .execute(&self.dialect.count_rows(table))
             .ok()
@@ -373,6 +379,14 @@ impl Catalog {
             Some(entite) => pending.iter().any(|e| e == entite),
             None => !pending.is_empty(),
         };
+        // **Le plein texte en fichiers à rebâtir** (génération du dossier qui
+        // n'est pas celle de la base, ou rebâti en cours) : calculé à la
+        // lecture, un lecteur seul le voit sans rien écrire.
+        if let Some(entite) = key.strip_prefix("index_state:") {
+            if let Some(percent) = self.fts_rebuild_percent(entite) {
+                return Ok(IndexState { text: Level::Running, text_percent: Some(percent), ..state });
+            }
+        }
         if touche && state.text == Level::Ready {
             return Ok(IndexState { text: Level::Running, ..state });
         }
@@ -593,11 +607,11 @@ mod tests {
 
     #[test]
     fn un_etat_en_cours_sans_nouvelles_n_est_plus_cru() {
-        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, sparse: None, updated_ms: 1_000 };
+        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, sparse: None, text_percent: None, updated_ms: 1_000 };
         assert!(!en_cours.is_stale(1_000 + STATE_STALE_MS));
         assert!(en_cours.is_stale(1_001 + STATE_STALE_MS), "un processus tué ne laisse pas « en cours » pour toujours");
         // Un état abouti ne périme pas : rien ne le rafraîchit, et c'est normal.
-        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, sparse: None, updated_ms: 1_000 };
+        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, sparse: None, text_percent: None, updated_ms: 1_000 };
         assert!(!pret.is_stale(u64::MAX));
         // Et il se lit tel qu'il s'écrit.
         let json = serde_json::to_string(&en_cours).unwrap();

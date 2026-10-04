@@ -129,7 +129,11 @@ pub fn adaptive_search_decision(
                 Some(format!(
                     "{}partiel — plein texte {}, vecteurs {} %{}{} ; les résultats viennent de ce qui est prêt",
                     crate::search::INDEX_STATUS_PREFIX,
-                    if text == Level::Ready { "prêt" } else { "en cours" },
+                    match (text, s.text_percent) {
+                        (Level::Ready, _) => "prêt".to_string(),
+                        (_, Some(p)) => format!("en cours de rebâti ({p} %, les mots répondent sur ce qui est déjà rebâti)"),
+                        _ => "en cours".to_string(),
+                    },
                     s.vectors_percent,
                     s.vectors_seconds_left
                         .map(|sec| format!(" (reste environ {} min)", sec.div_ceil(60)))
@@ -392,6 +396,9 @@ impl Node for SearchSourceNode {
             };
             (reste, partiel, w, embedding, sparse)
         };
+        // **Un plein texte en fichiers à rebâtir se rebâtit en fond** : la
+        // recherche n'attend pas, elle répond sur ce qui est prêt et le dit.
+        crate::catalog::spawn_fts_rebuild(catalog.clone());
         // La ligne d'état du mode auto en tête : c'est elle qui explique un
         // résultat plus pauvre que prévu (vecteurs en cours, index occupé).
         if let Some(l) = ligne_etat {
@@ -2276,6 +2283,7 @@ mod tests {
                 vectors_percent: pct,
                 vectors_seconds_left: None,
                 sparse: None,
+                text_percent: None,
                 updated_ms: 0,
             })
         };

@@ -42,6 +42,8 @@ const PAQUET_TUE: usize = 2;
 thread_local! {
     /// Les fils de ce fil de test tournent-ils en mode fichiers ?
     static FICHIERS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Le rôle « un-lot » meurt-il après son lot ?
+    static TUER_APRES_LOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
@@ -76,11 +78,19 @@ fn corpus() -> Vec<(String, String)> {
 }
 
 fn catalogue(base: &Path) -> Catalog {
+    catalogue_en(base, false)
+}
+
+fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
     let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
     conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
-    let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
+    let mut catalog = if lecture {
+        Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(HashEmbedder::new(16)), config)
+    } else {
+        Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config)
+    };
     // `TX_ARRET_FTS=fichiers` : le plein texte dans des fichiers à côté de la
     // base (`FtsStorage::Files`), dont la génération est validée avec les
     // lignes.
@@ -156,7 +166,32 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
 fn role_enfant() {
     let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
     let base = PathBuf::from(base);
+    if role == "lecteur-fts" {
+        // Un lecteur seul : il calcule l'état, ne jette ni n'écrit rien.
+        let mut catalog = catalogue_en(&base, true);
+        catalog.open_fts_files();
+        let etat = catalog.index_state_for("Scope").expect("état");
+        println!("ETAT {:?} {:?}", etat.text, etat.text_percent);
+        println!("DOSSIER {}", Path::new(&format!("{}.fts", base.display())).exists());
+        return;
+    }
     let mut catalog = catalogue(&base);
+    if role == "un-lot" {
+        // Un écrivain qui ne fait qu'un lot du rebâti ; avec
+        // `TX_ARRET_TUER_APRES_LOT`, il meurt ensuite, rebâti interrompu.
+        catalog.open_fts_files();
+        let reste = catalog.rebuild_fts_step(20).expect("un lot");
+        // Le premier lot va à la première table dans l'ordre (File).
+        let etat = catalog.index_state_for("File").expect("état");
+        println!("ETAT {:?} {:?} reste={reste}", etat.text, etat.text_percent);
+        if std::env::var_os("TX_ARRET_TUER_APRES_LOT").is_some() {
+            let _ = std::process::Command::new("kill").args(["-KILL", &std::process::id().to_string()]).status();
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+        return;
+    }
     if role == "lecteur" {
         // Ce qu'une recherche verrait, sans synchroniser : l'état des mots.
         let etat = catalog.index_state_for("Scope").expect("état d'index");
@@ -167,6 +202,21 @@ fn role_enfant() {
         // Une recherche seule, sans synchronisation : la voie de la recherche
         // doit rebâtir un dossier en avance, pas chercher dans un index vide.
         let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+        let trouves = Catalog::rechercher(&catalog, rag3weaver::code::SCOPE, "f010", rag3weaver::search::SearchOptions {
+            consistency: rag3weaver::search::Consistency::Immediate,
+            signals: Some(rag3weaver::search::SearchSignals::BM25),
+            ..Default::default()
+        })
+        .expect("recherche");
+        println!("PREMIERE {}", trouves.results.len());
+        // Le rebâti tourne en fond : attendre qu'il ait fini, puis chercher.
+        for _ in 0..600 {
+            let fini = catalog.lock().unwrap().index_state_for("Scope").map(|e| e.text_percent.is_none()).unwrap_or(false);
+            if fini {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
         let trouves = Catalog::rechercher(&catalog, rag3weaver::code::SCOPE, "f010", rag3weaver::search::SearchOptions {
             consistency: rag3weaver::search::Consistency::Immediate,
             signals: Some(rag3weaver::search::SearchSignals::BM25),
@@ -236,6 +286,11 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
     }
     if role == "echoueur" {
         cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", "6");
+    }
+    if TUER_APRES_LOT.with(|f| f.get()) {
+        cmd.env("TX_ARRET_TUER_APRES_LOT", "1");
+    } else {
+        cmd.env_remove("TX_ARRET_TUER_APRES_LOT");
     }
     let sortie = cmd.output().expect("lancer le fils");
     let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
@@ -497,4 +552,58 @@ fn en_fichiers_une_recherche_apres_un_arret_rebatit_avant_de_repondre() {
     let trouves: usize = sortie.lines().find_map(|l| l.strip_prefix("TROUVES ")).and_then(|n| n.trim().parse().ok()).unwrap_or(0);
     assert!(trouves > 0, "f010 est dans un paquet validé (paquets 0 et 1 : f000 à f063) : au moins un résultat :\n{sortie}");
     let _ = std::fs::remove_dir_all(&dossier);
+}
+
+fn ligne(sortie: &str, prefixe: &str) -> String {
+    sortie.lines().find_map(|l| l.strip_prefix(prefixe)).map(str::to_string).unwrap_or_else(|| panic!("pas de ligne « {prefixe} » :\n{sortie}"))
+}
+
+/// **Les trois états du rebâti, et son interruption.** Après la mort de
+/// l'écrivain : un lecteur seul voit « à rebâtir » (en cours, 0 %) sans rien
+/// jeter ; un écrivain qui fait un lot voit « en cours » avec un avancement
+/// entre 0 et 100 % ; il meurt après ce lot (rebâti interrompu) ; un repreneur
+/// recommence le rebâti, va au bout, et ses comptes sont ceux d'un témoin ;
+/// un lecteur voit alors « prêt ».
+#[test]
+#[ignore]
+fn en_fichiers_le_rebati_dit_son_etat_et_survit_a_son_interruption() {
+    FICHIERS.with(|f| f.set(true));
+    let dossier = dossier_sur_disque("fichiers-etats");
+    let base = dossier.join("base.rag3db");
+    use std::os::unix::process::ExitStatusExt;
+    let (statut, sortie) = lancer("ecrivain", &base, true);
+    assert_eq!(statut.signal(), Some(9), "{sortie}");
+
+    // À rebâtir, vu d'un lecteur seul.
+    let (statut, sortie) = lancer("lecteur-fts", &base, false);
+    assert!(statut.success(), "{sortie}");
+    assert_eq!(ligne(&sortie, "ETAT "), "Running Some(0)", "le lecteur calcule « à rebâtir » :\n{sortie}");
+    assert_eq!(ligne(&sortie, "DOSSIER "), "true", "le lecteur n'a rien jeté");
+
+    // En cours, avec avancement ; puis l'écrivain meurt après son lot.
+    TUER_APRES_LOT.with(|f| f.set(true));
+    let (statut, sortie) = lancer("un-lot", &base, false);
+    TUER_APRES_LOT.with(|f| f.set(false));
+    assert_eq!(statut.signal(), Some(9), "{sortie}");
+    let etat = ligne(&sortie, "ETAT ");
+    let pourcent: u8 = etat.split("Some(").nth(1).and_then(|r| r.split(')').next()).and_then(|n| n.parse().ok()).unwrap_or(0);
+    assert!(etat.starts_with("Running") && pourcent > 0 && pourcent < 100, "en cours, entre 0 et 100 % : {etat}\n{sortie}");
+
+    // Le repreneur recommence le rebâti interrompu et va au bout.
+    let (statut, sortie) = lancer("repreneur", &base, false);
+    assert!(statut.success(), "{sortie}");
+    assert!(sortie.contains("rebâti interrompu"), "le rebâti interrompu est reconnu :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+    let temoin_dossier = dossier_sur_disque("fichiers-etats-temoin");
+    let (statut, sortie) = lancer("temoin", &temoin_dossier.join("base.rag3db"), false);
+    assert!(statut.success(), "{sortie}");
+    assert_eq!(repris, comptes_rendus("temoin", &sortie), "comptes d'une passe sans arrêt, plein texte compris");
+
+    // Prêt.
+    let (statut, sortie) = lancer("lecteur-fts", &base, false);
+    assert!(statut.success(), "{sortie}");
+    assert!(ligne(&sortie, "ETAT ").ends_with("None"), "plus rien à rebâtir :\n{sortie}");
+    assert!(!ligne(&sortie, "ETAT ").starts_with("Running"), "le plein texte est prêt :\n{sortie}");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
 }

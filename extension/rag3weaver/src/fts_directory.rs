@@ -36,10 +36,16 @@
 //! aller-retour de méta de plus par écriture, rien de plus. Tant que ce n'est
 //! pas fait, ce mode n'est sûr qu'avec la transaction par paquet.
 //!
-//! **Le rebâti** se fait au premier usage de l'index hors transaction
-//! (`Catalog::ensure_fts_handle`, donc aussi une recherche), le catalogue
-//! tenu : une recherche concurrente attend la fin, elle ne voit pas un index
-//! vide ; l'état d'index n'annonce pas « mots : en cours » pendant ce temps.
+//! **Le rebâti** : un écrivain qui trouve un dossier dont la génération
+//! n'est pas celle de la base le jette, pose la marque durable
+//! `fts_pending:<entité>`, et rebâtit par lots de 2 000 lignes
+//! (`Catalog::rebuild_fts_step`), en fond depuis une recherche
+//! (`catalog::spawn_fts_rebuild`, le catalogue rendu entre deux lots) ou en
+//! ligne en tête d'une synchronisation. Pendant ce temps l'état d'index dit
+//! « mots : en cours » avec la part rebâtie, et la recherche par mots répond
+//! sur ce qui est prêt en le disant. Un rebâti interrompu (marque encore là)
+//! recommence. Un lecteur seul ne jette ni ne marque rien : il sert le dossier
+//! trouvé et calcule « à rebâtir » (0 %).
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
@@ -48,9 +54,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ld_lucivy::directory::error::{DeleteError, OpenReadError, OpenWriteError};
+use ld_lucivy::directory::error::{DeleteError, LockError, OpenReadError, OpenWriteError};
 use ld_lucivy::directory::{
-    AntiCallToken, Directory, FileHandle, MmapDirectory, TerminatingWrite, WatchCallback, WatchHandle, WritePtr,
+    AntiCallToken, Directory, DirectoryLock, FileHandle, Lock, MmapDirectory, TerminatingWrite, WatchCallback,
+    WatchHandle, WritePtr,
 };
 use lucivy_core::handle::LucivyHandle;
 use lucivy_core::sharded_handle::ShardStorage;
@@ -172,6 +179,14 @@ impl Directory for FtsDirectory {
     fn sync_directory(&self) -> io::Result<()> {
         // Différé à la génération : c'est tout l'objet de ce répertoire.
         Ok(())
+    }
+
+    /// Le verrou de l'écrivain, par `MmapDirectory` : un verrou du système
+    /// sur un fichier, rendu à la mort du processus. Le verrou par défaut du
+    /// trait (un fichier créé, supprimé à la libération) survit à un arrêt
+    /// brutal, et l'index ne s'ouvrait plus jamais en écriture.
+    fn acquire_lock(&self, lock: &Lock) -> Result<DirectoryLock, LockError> {
+        self.inner.acquire_lock(lock)
     }
 
     fn watch(&self, watch_callback: WatchCallback) -> ld_lucivy::Result<WatchHandle> {

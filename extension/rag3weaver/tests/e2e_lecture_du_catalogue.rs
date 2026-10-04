@@ -82,6 +82,7 @@ fn jamais_indexe_meme_quand_la_base_porte_autre_chose() {
             vectors_percent: 100,
             vectors_seconds_left: None,
             sparse: None,
+            text_percent: None,
             updated_ms: maintenant,
         })
         .unwrap();
@@ -120,6 +121,7 @@ fn en_cours_le_resultat_avec_sa_ligne_d_etat() {
             vectors_percent: 10,
             vectors_seconds_left: None,
             sparse: None,
+            text_percent: None,
             updated_ms: maintenant,
         })
         .unwrap();

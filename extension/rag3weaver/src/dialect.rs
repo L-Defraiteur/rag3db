@@ -434,6 +434,17 @@ pub trait SchemaDialect: Send + Sync {
     /// `order_by`: optional column to ORDER BY (ascending).
     fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String;
 
+    /// **Une page de lignes, dans l'ordre de leur décalage**, après `$apres` :
+    /// le décalage d'abord, puis `fields`. Pour rebâtir un index par lots.
+    fn select_page_after_offset(&self, table: &str, fields: &[&str], limit: usize) -> String {
+        let offset = self.node_offset_expr("n");
+        let returns: Vec<String> = fields.iter().map(|f| format!("n.{f}")).collect();
+        format!(
+            "MATCH (n:{table}) WHERE {offset} > $apres RETURN {offset} AS _offset, {} ORDER BY _offset LIMIT {limit}",
+            returns.join(", ")
+        )
+    }
+
     /// Select rows whose `field` equals `$value`, returning `fields`.
     fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String;
 

@@ -337,8 +337,8 @@ pub struct Catalog {
     /// (génération qui n'est pas celle de la base) : à rebâtir depuis les
     /// lignes, hors transaction (`open_fts_handles_for`).
     fts_rebuild: HashSet<String>,
-    /// Un rebâti est en cours (le `reindex` rouvre l'index qu'il a détruit).
-    fts_rebuilding: bool,
+    /// Le dernier décalage de ligne indexé par le rebâti, par table.
+    fts_rebuild_cursor: HashMap<String, i64>,
     /// Topologie de stockage des index FTS. Voir [`crate::fts_handle::FtsStorage`] :
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
@@ -472,7 +472,7 @@ impl Catalog {
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
-            fts_rebuilding: false,
+            fts_rebuild_cursor: HashMap::new(),
             fts_storage: Default::default(),
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
@@ -817,12 +817,35 @@ impl Catalog {
     /// base est rebâti depuis les lignes. À appeler hors transaction (la
     /// synchronisation d'une source le fait en tête). Sans effet hors du mode
     /// `FtsStorage::Files`.
-    pub fn verify_fts_files(&mut self) {
+    /// Ouvre l'index de chaque entité en mode fichiers, sans rien rebâtir :
+    /// ce qui est à rebâtir est seulement reconnu (et, chez un écrivain, le
+    /// dossier jeté et la marque durable posée).
+    pub fn open_fts_files(&mut self) {
         if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
             return;
         }
         let names: Vec<String> = self.entity_configs.keys().cloned().collect();
         self.open_fts_handles_for(&names);
+    }
+
+    pub fn verify_fts_files(&mut self) {
+        if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
+            return;
+        }
+        self.open_fts_files();
+        if self.lecture_seule || self.in_transaction {
+            return;
+        }
+        loop {
+            match self.rebuild_fts_step(FTS_REBUILD_BATCH) {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => {
+                    eprintln!("[rag3weaver] rebâti du plein texte : {e}");
+                    break;
+                }
+            }
+        }
     }
 
     pub fn drop_fts_index(&mut self, table: &str) {
@@ -868,38 +891,94 @@ impl Catalog {
         text_fields: &[String],
         filter_fields: &[(String, String)],
     ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
-        if self.fts_handles.contains_key(table) {
-            self.rebuild_fts_if_flagged(table);
-            return self.fts_handles.get(table).cloned();
+        if let Some(h) = self.fts_handles.get(table) {
+            return Some(h.clone());
         }
-        let opened = self.open_fts_handle(table, text_fields, filter_fields)?;
-        self.rebuild_fts_if_flagged(table);
-        Some(self.fts_handles.get(table).cloned().unwrap_or(opened))
+        self.open_fts_handle(table, text_fields, filter_fields)
     }
 
-    /// **Un dossier du plein texte jeté à l'ouverture se rebâtit depuis les
-    /// lignes**, au premier usage hors transaction — par toute voie qui ouvre
-    /// l'index (recherche, ingestion, vérification) : jamais un plein texte
-    /// vide servi en silence. Pendant le rebâti, le catalogue est tenu : une
-    /// recherche concurrente attend, elle ne voit pas un index à moitié vide.
-    fn rebuild_fts_if_flagged(&mut self, table: &str) {
-        if self.in_transaction || self.fts_rebuilding || !self.fts_rebuild.contains(table) {
-            return;
-        }
-        let entity = self
-            .entity_configs
+    /// L'entité dont `table` porte le plein texte.
+    fn entity_of_fts_table(&self, table: &str) -> Option<String> {
+        self.entity_configs
             .keys()
             .find(|name| self.resolve_search_target(name).is_ok_and(|t| t.parent_table == table))
-            .cloned();
-        let Some(entity) = entity else { return };
-        self.fts_rebuilding = true;
-        let t = std::time::Instant::now();
-        match self.reindex(&entity) {
-            Ok(_) => eprintln!("[rag3weaver] plein texte de {entity} rebâti depuis les lignes en {:.1} s", t.elapsed().as_secs_f64()),
-            Err(e) => eprintln!("[rag3weaver] plein texte de {entity} : rebâti impossible : {e}"),
+            .cloned()
+    }
+
+    /// **Le plein texte en fichiers d'une entité est-il à rebâtir ?** Rend la
+    /// part déjà rebâtie (documents de l'index sur lignes de la table), ou
+    /// `None` s'il n'y a rien à rebâtir. Une lecture : un lecteur seul le
+    /// calcule sans rien écrire.
+    pub(crate) fn fts_rebuild_percent(&self, entity: &str) -> Option<u8> {
+        let table = self.resolve_search_target(entity).ok()?.parent_table;
+        if !self.fts_rebuild.contains(&table) {
+            return None;
         }
-        self.fts_rebuilding = false;
-        self.fts_rebuild.remove(table);
+        // Un lecteur sert le dossier tel qu'il l'a trouvé (en avance ou en
+        // retard sur la base) et ne rebâtit rien : « à rebâtir », 0 %.
+        if self.lecture_seule {
+            return Some(0);
+        }
+        let docs = self.fts_handles.get(&table).map(|h| h.num_docs()).unwrap_or(0);
+        let rows = self.count_rows_of(entity).max(1) as u64;
+        Some((100 * docs.min(rows) / rows) as u8)
+    }
+
+    /// Reste-t-il un plein texte à rebâtir que ce processus peut rebâtir ?
+    pub fn fts_rebuild_pending(&self) -> bool {
+        !self.lecture_seule && !self.fts_rebuild.is_empty()
+    }
+
+    /// **Un lot du rebâti du plein texte en fichiers** : jusqu'à `lot` lignes
+    /// de la première entité à rebâtir, prises après le dernier décalage
+    /// indexé, ajoutées à l'index, validées et rendues durables (génération).
+    /// Au dernier lot, la marque durable `fts_pending:` est levée. Rend `true`
+    /// s'il reste du travail. Le catalogue n'est tenu que le temps d'un lot.
+    pub fn rebuild_fts_step(&mut self, lot: usize) -> Result<bool, CatalogError> {
+        self.check_ecriture("rebâtir le plein texte")?;
+        let Some(table) = self.fts_rebuild.iter().min().cloned() else { return Ok(false) };
+        let Some(entity) = self.entity_of_fts_table(&table) else {
+            self.fts_rebuild.remove(&table);
+            return Ok(!self.fts_rebuild.is_empty());
+        };
+        let target = self.resolve_search_target(&entity)?;
+        let handle = self
+            .ensure_fts_handle(&table, &target.bm25_fields, &crate::scope::fts_filter_fields())
+            .ok_or_else(|| CatalogError::IndexPersistence(format!("plein texte de {entity} : index introuvable")))?;
+        let mut field_names: Vec<String> = self.check_entity(&entity)?.fields.keys().cloned().collect();
+        field_names.sort();
+        let fields: Vec<&str> = field_names.iter().map(String::as_str).collect();
+        let apres = self.fts_rebuild_cursor.get(&table).copied().unwrap_or(-1);
+        let page = self
+            .conn
+            .execute_with_params(
+                &self.dialect.select_page_after_offset(&entity, &fields, lot),
+                &[QueryParam::new("apres", CypherValue::Int(apres))],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut dernier = apres;
+        for row in &page.rows {
+            let Some(offset) = row.first().and_then(|v| v.as_i64()) else { continue };
+            dernier = dernier.max(offset);
+            let values: Vec<(String, String)> = field_names
+                .iter()
+                .enumerate()
+                .filter_map(|(i, name)| row.get(i + 1).and_then(|v| v.as_str()).map(|sv| (name.clone(), sv.to_string())))
+                .collect();
+            if let Err(e) = crate::fts_handle::index_document(&handle, &values, offset as u64) {
+                eprintln!("[rag3weaver] rebâti du plein texte de {entity} : {e}");
+            }
+        }
+        handle.commit().map_err(|e| CatalogError::IndexPersistence(format!("plein texte de {entity} : {e}")))?;
+        self.flush_blob_store("rebâti du plein texte")?;
+        self.fts_rebuild_cursor.insert(table.clone(), dernier);
+        if page.rows.len() < lot {
+            self.persist_meta_key(&format!("{FTS_PENDING}{entity}"), "")?;
+            self.fts_rebuild.remove(&table);
+            self.fts_rebuild_cursor.remove(&table);
+            eprintln!("[rag3weaver] plein texte de {entity} rebâti depuis les lignes ({} documents)", handle.num_docs());
+        }
+        Ok(!self.fts_rebuild.is_empty())
     }
 
     fn open_fts_handle(
@@ -927,12 +1006,34 @@ impl Catalog {
             let marque = self.read_meta_key(&format!("fts_generation:{index_name}")).ok().flatten().and_then(|v| v.parse::<u64>().ok());
             let sur_disque = crate::fts_directory::generation_on_disk(&dir);
             base_generation = marque.unwrap_or(0);
-            if marque != sur_disque && (marque.is_some() || dir.exists()) {
-                eprintln!(
-                    "[rag3weaver] plein texte {table} : génération du dossier {sur_disque:?}, de la base {marque:?} — dossier jeté, rebâti depuis les lignes"
-                );
-                let _ = std::fs::remove_dir_all(&dir);
-                self.fts_rebuild.insert(table.to_string());
+            let entite = self.entity_of_fts_table(table);
+            // Un rebâti interrompu (marque durable encore posée) recommence.
+            let interrompu = entite
+                .as_ref()
+                .is_some_and(|e| self.fts_pending_entities().map(|p| p.contains(e)).unwrap_or(false));
+            if (marque != sur_disque && (marque.is_some() || dir.exists())) || interrompu {
+                if self.lecture_seule {
+                    // Un lecteur ne jette rien et n'écrit rien : il sert ce
+                    // qui est là, et l'état dit « à rebâtir ».
+                    eprintln!(
+                        "[rag3weaver] plein texte {table} : génération du dossier {sur_disque:?}, de la base {marque:?} — à rebâtir par un écrivain"
+                    );
+                    self.fts_rebuild.insert(table.to_string());
+                    if !dir.exists() {
+                        return None;
+                    }
+                } else {
+                    eprintln!(
+                        "[rag3weaver] plein texte {table} : génération du dossier {sur_disque:?}, de la base {marque:?}{} — dossier jeté, rebâti depuis les lignes",
+                        if interrompu { ", rebâti interrompu" } else { "" }
+                    );
+                    let _ = std::fs::remove_dir_all(&dir);
+                    if let Some(e) = &entite {
+                        let _ = self.mark_fts_pending(&[e.as_str()]);
+                    }
+                    self.fts_rebuild.insert(table.to_string());
+                    self.fts_rebuild_cursor.remove(table);
+                }
             }
         }
         let files: std::cell::RefCell<Vec<Arc<crate::fts_directory::FtsShardStorage>>> = Default::default();
@@ -7193,7 +7294,10 @@ impl Catalog {
         // Le mode fichiers : la génération du plein texte rendue durable ici,
         // là où les blobs seraient poussés — une fois, pas un `fsync` par
         // fichier.
-        if !self.fts_files.is_empty() {
+        // Un lecteur ne marque rien : la génération est l'affaire de
+        // l'écrivain, et une marque posée par un lecteur ferait croire juste
+        // un dossier qu'il n'a pas rebâti.
+        if !self.fts_files.is_empty() && !self.lecture_seule {
             let t = std::time::Instant::now();
             for storage in &self.fts_files {
                 let ecrits = storage
@@ -10900,6 +11004,44 @@ impl Drop for Catalog {
 
 /// Le préfixe de la marque durable « plein texte à pousser » d'une entité.
 const FTS_PENDING: &str = "fts_pending:";
+
+/// Lignes par lot du rebâti du plein texte en fichiers : le catalogue n'est
+/// tenu que le temps d'un lot, une recherche passe entre deux.
+pub const FTS_REBUILD_BATCH: usize = 2_000;
+
+/// **Rebâtir le plein texte en fichiers en fond**, un lot à la fois, le
+/// catalogue rendu entre deux lots. Un seul fil par processus ; sans rien à
+/// rebâtir (ou en lecture seule), ne lance rien.
+pub fn spawn_fts_rebuild(catalog: std::sync::Arc<std::sync::Mutex<Catalog>>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static EN_COURS: AtomicBool = AtomicBool::new(false);
+    let pending = catalog.try_lock().map(|c| c.fts_rebuild_pending()).unwrap_or(false);
+    if !pending || EN_COURS.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let t = std::time::Instant::now();
+        loop {
+            let reste = match catalog.lock() {
+                Ok(mut c) if !c.in_transaction => c.rebuild_fts_step(FTS_REBUILD_BATCH),
+                Ok(_) => Ok(true),
+                Err(_) => break,
+            };
+            match reste {
+                Ok(true) => std::thread::yield_now(),
+                Ok(false) => {
+                    eprintln!("[rag3weaver] rebâti du plein texte en fond fini en {:.1} s", t.elapsed().as_secs_f64());
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("[rag3weaver] rebâti du plein texte en fond arrêté : {e}");
+                    break;
+                }
+            }
+        }
+        EN_COURS.store(false, Ordering::SeqCst);
+    });
+}
 
 /// L'état d'une première indexation (`Catalog::begin_fresh_ingest`).
 #[derive(Debug, Default)]
