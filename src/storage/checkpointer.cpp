@@ -181,6 +181,13 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     // Flush the shadow file.
     shadowFile.flushAll(clientContext);
     const auto flushMs = profile.lap();
+    // Les pages neuves des colonnes et des débordements s'écrivent directement dans le fichier
+    // de données, sans page fantôme ; l'en-tête et les métadonnées qui les désignent passent par
+    // le fichier fantôme. Ces pages doivent être durables avant la marque CHECKPOINT : après
+    // elle, la reprise rejoue l'en-tête et supprime le journal, et une page perdue ne pourrait
+    // plus être refaite.
+    storageManager->getDataFH()->getFileInfo()->syncFile();
+    const auto syncDataMs = profile.lap();
     auto wal = WAL::Get(clientContext);
     // Log the checkpoint to the WAL and flush WAL. This indicates that all shadow pages and
     // files (snapshots of catalog and metadata) have been written to disk. The part that is not
@@ -199,9 +206,9 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
         const auto clearMs = profile.lap();
         fprintf(stderr,
             "[checkpoint-profile]   journal+pages-ombres=%.1f ms : ecriture-ombres=%.1f (%lu "
-            "pages) marque-au-journal=%.1f application=%.1f vidage=%.1f\n",
-            profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), walMs, applyMs,
-            clearMs);
+            "pages) synchro-donnees=%.1f marque-au-journal=%.1f application=%.1f vidage=%.1f\n",
+            profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), syncDataMs,
+            walMs, applyMs, clearMs);
     }
 }
 
