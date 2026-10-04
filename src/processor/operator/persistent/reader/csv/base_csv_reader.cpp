@@ -79,7 +79,7 @@ static char decodeNewlineEscape(char letter) {
 template<typename Driver>
 bool BaseCSVReader::addValue(Driver& driver, uint64_t rowNum, column_id_t columnIdx,
     std::string_view strVal, std::vector<uint64_t>& escapePositions,
-    std::vector<uint64_t>& newlineEscapePositions) {
+    std::vector<uint64_t>& newlineEscapePositions, bool valueWasQuoted) {
     std::string valueToAdd;
     // insert the line number into the chunk
     if (!escapePositions.empty() || !newlineEscapePositions.empty()) {
@@ -112,7 +112,7 @@ bool BaseCSVReader::addValue(Driver& driver, uint64_t rowNum, column_id_t column
     if (!utf8proc::Utf8Proc::isValid(valueToAdd.data(), valueToAdd.length())) {
         handleCopyException("Invalid UTF8-encoded string.", true /* mustThrow */);
     }
-    return driver.addValue(rowNum, columnIdx, valueToAdd);
+    return driver.addValue(rowNum, columnIdx, valueToAdd, valueWasQuoted);
 }
 
 struct SkipRowDriver {
@@ -120,7 +120,7 @@ struct SkipRowDriver {
     explicit SkipRowDriver(uint64_t skipNum) : skipNum{skipNum} {}
     bool done(uint64_t rowNum) const { return rowNum >= skipNum; }
     bool addRow(uint64_t, column_id_t, std::optional<WarningDataWithColumnInfo>) { return true; }
-    bool addValue(uint64_t, column_id_t, std::string_view) { return true; }
+    bool addValue(uint64_t, column_id_t, std::string_view, bool) { return true; }
 
     uint64_t skipNum;
 };
@@ -157,7 +157,7 @@ struct HeaderDriver {
     DriverType driverType = DriverType::HEADER;
     bool done(uint64_t) { return true; }
     bool addRow(uint64_t, column_id_t, std::optional<WarningDataWithColumnInfo>) { return true; }
-    bool addValue(uint64_t, column_id_t, std::string_view) { return true; }
+    bool addValue(uint64_t, column_id_t, std::string_view, bool) { return true; }
 };
 
 void BaseCSVReader::resetNumRowsInCurrentBlock() {
@@ -362,7 +362,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         // Trim one character if we have quotes.
         if (!addValue(driver, curRowIdx, column,
                 std::string_view(buffer.get() + start, position - start - hasQuotes),
-                escapePositions, newlineEscapePositions)) {
+                escapePositions, newlineEscapePositions, hasQuotes)) {
             goto ignore_error;
         }
         column++;
@@ -384,7 +384,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
         bool isCarriageReturn = buffer[position] == '\r';
         if (!addValue(driver, curRowIdx, column,
                 std::string_view(buffer.get() + start, position - start - hasQuotes),
-                escapePositions, newlineEscapePositions)) {
+                escapePositions, newlineEscapePositions, hasQuotes)) {
             goto ignore_error;
         }
         column++;
@@ -576,7 +576,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
             // Add remaining value to chunk.
             if (!addValue(driver, curRowIdx, column,
                     std::string_view(buffer.get() + start, position - start - hasQuotes),
-                    escapePositions, newlineEscapePositions)) {
+                    escapePositions, newlineEscapePositions, hasQuotes)) {
                 return {curRowIdx, numErrors};
             }
             column++;
@@ -584,7 +584,7 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
             // Le fichier finit juste après un délimiteur, sans saut de ligne : le dernier
             // champ est vide, mais il compte (« 1,x, » a trois champs, pas deux).
             if (!addValue(driver, curRowIdx, column, std::string_view{}, escapePositions,
-                    newlineEscapePositions)) {
+                    newlineEscapePositions, false /* valueWasQuoted */)) {
                 return {curRowIdx, numErrors};
             }
             column++;

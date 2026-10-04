@@ -1255,6 +1255,11 @@ sessions, pas d'une vérification.
   Par ailleurs, deux recettes ne se reproduisent pas chez nous. Dix défauts ne sont pas
   atteignables sans faute d'E/S ou coupure ; parmi eux, la publication avant le journal et
   le répertoire jamais synchronisé.
+  **Changement de comportement, 4 octobre** : un champ CSV `""` (entre guillemets) se lit
+  désormais comme la chaîne vide, et non plus NULL. NULL reste le champ vide non cité, ou
+  le mot déclaré par `null_strings`. Décision de Lucie ; `escaped_newlines.test` a changé
+  d'attendu dans le même commit. Qui écrit du CSV sans `null_strings` et comptait sur
+  `""` → NULL doit le savoir. rag3weaver n'est pas touché, ses COPY déclarent leur mot.
 - **`UNWIND $items AS item MATCH (n {_uuid: item.champ})` balaie la table entière**
   (planificateur, trouvé le 3 octobre par la session cœur C++, non corrigé ; un
   contournement existe). Toute écriture par lot qui retrouve ses nœuds par la clé primaire
