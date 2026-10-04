@@ -150,6 +150,7 @@ Writes/ExtensionIndexRecovery.IndexExactWithoutRebuild/UpdateVector index-knows-
 # lignes, ou une ligne n'est pas rendue première sur son propre vecteur. Après c8fdaf196 (les
 # anciens voisins restent joignables), un essai sur deux environ perd encore des lignes :
 # chaque cas répète assez d'essais pour rougir à chaque passe (4 octobre, trois passes).
+# Ces cas sont longs (long.txt) : comparés seulement avec CONCURRENCE_LONG=1.
 # Le chemin du produit (depuis NULL, et le remplacement qui repasse par NULL) est vert.
 VectorIndexUpdate.SetToAnotherVectorInBatchesOf512 vector-index-exact
 VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine vector-index-exact
@@ -162,3 +163,43 @@ VectorIndexUpdate.UpdateThenDelete vector-index-exact
 # manquent un essai sur trois environ. Vert avec les vecteurs de la recette du cœur C++,
 # dont la dernière coordonnée va jusqu'à 499. Parent de HnswBuiltOnTheFirstHundredRows.
 VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
+#
+# Marche « correctifs de l'amont à reprendre » (upstream_fixes_test.cpp, revue du 4 octobre) :
+# des défauts hérités de Kuzu que Ladybug (tag ladybug-main-2026-08-31) ou Vela (tag
+# vela-master-2026-09-03) ont corrigés. Le commit de l'amont est nommé dans chaque cas ; on le
+# lit, on ne le copie pas. Par gravité :
+# — perte de données : les relations d'une région intacte effacées au point de reprise
+#   (Ladybug 0be6fa597, Vela e5e700e73) ;
+UpstreamFixes.RelationsOfAnUntouchedRegionSurviveACheckpoint directions-agree,relations-survive-checkpoint
+# — plantages : point de reprise après ALTER … DROP, définitivement (Vela e5e700e73) ;
+#   lecture après le point de reprise d'une relation créée puis supprimée (Ladybug ba5f38815) ;
+#   MERGE avec deux ON MATCH SET et une clé répétée (a0063158d) ; UNION (26be67f84) ;
+#   lambda (0c19d7816) ; comparaison de relations et label() (0f3f03d63, 57dc0b4ed) ; WITH
+#   filtré par un paramètre (8281c845e) ;
+UpstreamFixes.CheckpointAfterDroppingANodeColumn checkpoint-after-reopen,checkpoint-survives
+UpstreamFixes.CheckpointAfterDroppingARelationColumn checkpoint-after-reopen,checkpoint-survives
+UpstreamFixes.ReadAfterCheckpointOfACreatedThenDeletedRelation read-after-checkpoint-survives
+UpstreamFixes.MergeWithTwoOnMatchSetsAndARepeatedKey merge-survives
+UpstreamFixes.UnionArmProjectingAPropertyTwice query-survives
+UpstreamFixes.PathUsedOnlyInsideALambda query-survives
+UpstreamFixes.RelationComparedToALambdaVariable query-survives
+UpstreamFixes.WithGateFilteredByAParameter query-survives
+# — blocages : l'UUID nul empêche tout point de reprise (Ladybug 231a0b854) ; un CHECKPOINT
+#   retient la validation d'un lecteur jusqu'à son délai, puis échoue (Vela 326d40dbd) ;
+UpstreamFixes.CheckpointOfAColumnHoldingTheNilUuid checkpoint-after-reopen,checkpoint-succeeds
+UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-held
+# — réponses fausses : SKIP sans LIMIT (079aa8458) ; terme de WHERE sur paramètres seuls
+#   (8281c845e) ; étiquette d'une variable liée plus tôt (413079079) ; OPTIONAL MATCH qui
+#   répète un nœud lié (e36c93e59) ; MERGE d'une clé répétée (c5a3c7385) ; balayage de
+#   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
+#   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
+UpstreamFixes.SkipWithoutLimit skip-keeps-the-rest
+UpstreamFixes.PredicateOnParametersOnly parameter-predicate-applied
+UpstreamFixes.ExplicitLabelOfAVariableBoundEarlier explicit-label-applied
+UpstreamFixes.OptionalMatchRepeatingABoundNode optional-match-cardinality
+UpstreamFixes.MergeOfARepeatedKeyReturnsTheStoredNode merge-returns-stored-node
+UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
+UpstreamFixes.QuotedEmptyCsvFieldIsNotNull quoted-empty-is-not-null
+UpstreamFixes.CsvEndingWithAnEmptyFieldAndNoNewline copy-accepts-trailing-empty-field
+UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
+UpstreamFixes.ResultToStringKeepsTheCursor to-string-keeps-cursor
