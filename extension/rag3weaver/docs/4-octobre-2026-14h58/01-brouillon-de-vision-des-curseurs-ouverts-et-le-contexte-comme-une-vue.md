@@ -258,6 +258,29 @@ Points en débat :
   la compression** — et c'est le L1 de l'archiviste tout fait : (demande,
   raison, diff, adresse), sans appel à un modèle.
 
+### Ce que Lucie retient (4 octobre)
+
+> « On voit chaque diff, c'est sûr, une par une, pas le diff à l'état final.
+> On voit des commits, en gros, même si ce ne sont pas ceux de git, entre
+> deux appels d'outils. Une raison optionnelle quand on fait une édition, et
+> puis basta, en précisant dans la description que ça aide aux fiches
+> contextuelles. »
+
+Donc :
+
+- **chaque édition est un commit** de la zone du fichier, dans l'ordre : pas
+  de diff net. Les essais abandonnés restent visibles d'eux-mêmes, comme un
+  commit et celui qui le défait ;
+- **la raison est un champ optionnel** de l'outil d'édition, sans autre
+  mécanisme (pas de repli sur le texte du fil, pas d'obligation) ; la
+  description de l'outil dit à quoi elle sert : elle nourrit les fiches
+  contextuelles ;
+- la question de l'utilisateur reste attachée aux commits qu'elle a amenés.
+
+Reste ouvert : ce qu'on fait d'une longue suite de commits sur un même
+fichier quand la zone déborde (les plus anciens se replient-ils en leur seule
+ligne de raison ?).
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. Lancer l'essai 1 (petit, sans risque) dès qu'une session est libre, ou
