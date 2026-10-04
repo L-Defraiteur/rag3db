@@ -488,3 +488,148 @@ impl NodeFactory for LinksNodeFactory {
         }
     }
 }
+
+// ─── La cohésion ─────────────────────────────────────────────────────────────
+
+/// **La cohésion de chaque candidat** : la somme, sur les autres candidats
+/// qu'il rejoint en `max_hops` sauts au plus (carrefours exclus), de
+/// `1 / sauts`. Un résultat isolé vaut 0 ; un résultat au milieu d'une
+/// grappe de résultats reliés vaut plus. C'est un signal de rang, pas de
+/// pertinence : la fusion le prend en `boost`, avec un poids déclaré (0 par
+/// défaut — éteint).
+pub fn cohesion_of(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -> Result<HashMap<String, f64>, String> {
+    let tous = LinksConfig { max_links: usize::MAX, ..cfg.clone() };
+    let report = links_between(catalog, &tous, sources)?;
+    let mut vus: HashSet<&str> = HashSet::new();
+    let sources: Vec<&String> = sources.iter().filter(|u| !u.is_empty() && vus.insert(u.as_str())).take(cfg.sources).collect();
+    let mut out: HashMap<String, f64> = HashMap::new();
+    for l in &report.links {
+        let poids = 1.0 / l.hops().max(1) as f64;
+        for i in [l.a, l.b] {
+            if let Some(u) = sources.get(i) {
+                *out.entry((*u).clone()).or_default() += poids;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Cohésion des candidats : **input** `results` (fan-in : les signaux de la
+/// recherche), **output** `results` — un signal étiqueté (`label`, par
+/// défaut `cohesion`), à brancher sur une fusion avec `boost='<label>'`.
+pub struct CohesionNode {
+    node_name: String,
+    cfg: LinksConfig,
+    label: String,
+}
+
+impl Node for CohesionNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "CohesionNode"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&CohesionNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&CohesionNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        use super::catalog_read::{read_catalog, CatalogRead};
+        let candidats: Vec<UnifiedResult> = ctx.take_input("results").and_then(take_or_clone::<Vec<UnifiedResult>>).unwrap_or_default();
+        // L'ordre des candidats : le meilleur rang de chacun, tous signaux confondus.
+        let mut tri: Vec<&UnifiedResult> = candidats.iter().filter(|r| !r.uuid.starts_with("scan:")).collect();
+        tri.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        let sources: Vec<String> = tri.iter().map(|r| r.uuid.clone()).collect();
+        let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("CohesionNode: service 'catalog' absent")?;
+        let scores = match read_catalog(&catalog, &self.cfg.entity) {
+            CatalogRead::Refused(_) => HashMap::new(),
+            CatalogRead::Ready { catalog: cat, .. } => cohesion_of(&cat, &self.cfg, &sources)?,
+        };
+        let mut sortie: Vec<UnifiedResult> = Vec::new();
+        let mut deja: HashSet<String> = HashSet::new();
+        for r in tri {
+            let Some(&s) = scores.get(&r.uuid) else { continue };
+            if s <= 0.0 || !deja.insert(r.uuid.clone()) {
+                continue;
+            }
+            sortie.push(UnifiedResult {
+                uuid: r.uuid.clone(),
+                score: s,
+                entity: r.entity.clone(),
+                data: None,
+                chunk: None,
+                chunks: None,
+                relation: None,
+                matched_children: None,
+                other_children: None,
+                graph: None,
+                signal: Some(self.label.clone()),
+            });
+        }
+        ctx.metric("coherent", sortie.len() as f64);
+        ctx.set_output("results", PortValue::new(sortie));
+        Ok(())
+    }
+}
+
+pub struct CohesionNodeFactory;
+
+impl NodeFactory for CohesionNodeFactory {
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let s = |k: &str| config.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        let entier = |k: &str, defaut: u64| config.get(k).and_then(|v| v.as_u64()).unwrap_or(defaut);
+        let relations = liste(config.get("relations"));
+        if relations.is_empty() {
+            return Err("CohesionNode: « relations » requis".into());
+        }
+        let cfg = LinksConfig {
+            entity: s("entity").filter(|v| !v.is_empty()).ok_or("CohesionNode: « entity » requis")?,
+            relations,
+            labels: BTreeMap::new(),
+            title: "_uuid".into(),
+            path_fields: Vec::new(),
+            line_field: "_uuid".into(),
+            max_hops: entier("max_hops", 2).clamp(1, MAX_HOPS as u64) as usize,
+            max_links: usize::MAX,
+            max_degree: entier("max_degree", 50).max(1) as usize,
+            sources: entier("sources", 40).clamp(2, 200) as usize,
+        };
+        let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
+        if let Some(x) = std::iter::once(&cfg.entity).chain(&cfg.relations).find(|x| !ident(x)) {
+            return Err(format!("CohesionNode: « {x} » n'est pas un identifiant"));
+        }
+        Ok(Box::new(CohesionNode { node_name: name.to_string(), cfg, label: s("label").filter(|v| !v.is_empty()).unwrap_or_else(|| "cohesion".into()) }))
+    }
+    fn node_type(&self) -> &'static str {
+        "CohesionNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        let p = |name: &'static str, param_type, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
+            name,
+            param_type,
+            required,
+            default,
+            description,
+            choices: None,
+            json_schema: None,
+        };
+        use ConfigParamType::{Int, String as S};
+        NodeSchema {
+            node_type: "CohesionNode",
+            description: "How cohesive each search candidate is: the sum of 1/hops to the other candidates it reaches within max_hops along declared relations (hubs excluded). Emits a labelled result signal to plug into FuseResultsNode as a boost (weight declared there, 0 = off).",
+            inputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+            outputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+            config_params: vec![
+                p("entity", S, true, None, "Entité des candidats (ex. Scope)"),
+                p("relations", S, true, None, "Relations suivies dans les deux sens, séparées par |"),
+                p("max_hops", Int, false, Some(serde_json::json!(2)), "Longueur maximale d'un lien, 1 à 4"),
+                p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté n'est ni traversé ni point de rencontre"),
+                p("sources", Int, false, Some(serde_json::json!(40)), "Candidats pris, dans l'ordre des scores"),
+                p("label", S, false, Some(serde_json::json!("cohesion")), "L'étiquette du signal (celle que la fusion boost)"),
+            ],
+        }
+    }
+}

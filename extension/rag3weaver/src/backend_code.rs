@@ -195,6 +195,7 @@ const BASE_NODES: &[&str] = &[
     "UsagesNode",
     "NeighborhoodNode",
     "LinksNode",
+    "CohesionNode",
     // L'indexation en fond : n'écrit qu'en base, par le catalogue, et rend
     // un journal. Refuse d'elle-même sans confirmation quand l'estimation
     // dépasse le seuil — le produit cloud doit pouvoir indexer sans

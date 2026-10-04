@@ -1420,6 +1420,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::usage_nodes::UsagesNodeFactory));
     registry.register(Box::new(super::neighborhood_nodes::NeighborhoodNodeFactory));
     registry.register(Box::new(super::links_nodes::LinksNodeFactory));
+    registry.register(Box::new(super::links_nodes::CohesionNodeFactory));
     registry.register(Box::new(FieldWeightNodeFactory));
     registry.register(Box::new(GroupFrameNodeFactory));
     // Trace : le consommateur du bus d'événements, en graphe.
@@ -1478,7 +1479,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 44 + if cfg!(feature = "code") { 13 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 45 + if cfg!(feature = "code") { 13 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1682,6 +1683,7 @@ mod tests {
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),
                 "LinksNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),
+                "CohesionNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),
                 "FlushNode" | "SparseCommitNode" => serde_json::json!({ "table": "Product" }),
                 "KBQuerySourceNode" => serde_json::json!({ "kb_name": "kb", "query": "rust" }),
                 "SearchSourceNode" => serde_json::json!({ "target_name": "Product", "query": "rust" }),
