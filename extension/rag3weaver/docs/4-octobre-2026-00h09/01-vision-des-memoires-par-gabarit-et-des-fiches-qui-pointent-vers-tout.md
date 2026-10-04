@@ -529,6 +529,33 @@ fn validate(value) {
   accepter la valeur qui l'a fait naître, refuser des contre-exemples, et ne
   pas accepter ce qu'un genre existant accepte déjà.
 
+**La description toujours, les harnais au mieux** (Lucie) : « c'est les deux :
+description de règle, et script si possible, ou même schéma — c'est encore
+flou. L'agent a consigne de renseigner au mieux des harnais pour son type de
+référence. »
+
+Un genre n'exige donc pas un script pour exister. Il a une description, qui
+est obligatoire, et autant de **harnais** que son créateur sait en donner :
+
+| Niveau | Ce que le genre porte | Qui vérifie une référence |
+|---|---|---|
+| 0 | une description en clair, avec deux ou trois exemples | un modèle, en lisant la description — coûteux, variable |
+| 1 | un **schéma** : la forme de la valeur (champs, motif, bornes) | le moteur, sans modèle |
+| 2 | un **script** : normaliser, résoudre, dire ce qui fait vieillir | le moteur, sans modèle |
+
+- La consigne donnée à l'archiviste : monter aussi haut qu'il le peut
+  honnêtement. Un numéro de facture se met en schéma ; « le design d'hier »
+  ne se met pas en script, et ce n'est pas une faute.
+- Un genre peut **monter d'un niveau plus tard** : quand assez de références
+  l'ont utilisé, le jardinier (ou l'archiviste neutre) propose le schéma ou
+  le script qu'elles permettent d'écrire, éprouvé sur elles.
+- Le niveau se voit : un genre de niveau 0 est marqué comme tel, et ses
+  références sont dites « non vérifiées » plutôt que tenues pour sûres.
+- Ce qui reste flou, et qui se décidera en essayant : si le schéma et le
+  script sont deux harnais ou un seul (un script peut tout faire, un schéma
+  se lit mieux) ; et ce qu'on demande au minimum pour qu'un genre entre dans
+  l'enum.
+
 Un script écrit par un modèle et rejoué pour tous est une surface à tenir :
 
 1. **Pur par défaut** : rien que des chaînes en entrée et une table en
