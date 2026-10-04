@@ -585,3 +585,61 @@ BDD — rag3db, Postgres ou d'autres. »
   schéma n'est pas que des tables — les relations, le plein texte, les
   vecteurs et la découpe suivent le verbe, et se rebâtissent par l'état
   d'index.
+
+## 13. Voir une exécution comme un graphe
+
+> « Si tout fonctionne en DAG, on doit pouvoir visualiser le pas d'exécution
+> en général en graphe, vu que tout est un workflow au final. » — Lucie,
+> 5 octobre
+
+- **Une exécution est un graphe parcouru** : le même dessin que le graphe
+  déclaré, avec pour chaque nœud ce qui s'est passé — joué, sauté, échoué,
+  sa durée, ce qui est entré et sorti (en compte, puis en détail au clic).
+- **La matière existe** : le moteur de graphes tient déjà ses exécutions et
+  l'état de chaque nœud dans des tables de la base (`_DataflowExecution`,
+  `_DataflowNodeState`), et il a un nœud de trace. Il manque le rendu.
+- **Un pas d'exécution devient une adresse** (un genre de plus, à côté de
+  `row:`, `query:`, `graph:`…) : cliquer sur un nœud ou une arête d'une
+  exécution ouvre ce que l'agent ou le traitement avait en main à ce moment —
+  idée venue d'un échange de Lucie avec Gemini, gardée parce qu'elle rend la
+  trace explorable au lieu d'être un journal qu'on lit.
+- **Valable partout** : un outil appelé par un agent, un contrôleur appelé
+  par une route, une ingestion, une migration — c'est le même afficheur.
+- Du même échange, une piste de navigation : depuis n'importe quel nœud,
+  « ce qui ressemble à ça » (ses voisins par le sens), à côté des relations
+  et des mots. Chaque morceau a déjà son vecteur.
+
+## 14. Éditer son site déjà déployé, sur place, avec un agent
+
+> « Le mec pourrait éditer son site web sur connexion admin : il vient, il
+> clique sur un bouton que lui seul voit, et hop l'interface d'édition se
+> lance, il édite son site déjà déployé en temps réel avec un agent. » —
+> Lucie, 5 octobre (vision née d'un échange avec ChatGPT)
+
+Pourquoi c'est à notre portée, si le backend est déclaré (§8 à §12) : le site
+est fait de contrôleurs, de vues, de gabarits et de scripts — des choses
+déclarées, rechargées à chaud, sans compilation. L'agent qui édite le site
+n'écrit pas dans un dépôt à redéployer : il change des déclarations, et le
+site change.
+
+Ce que cela demande (proposition de l'orchestration, en débat) :
+
+- **Le bouton que seule l'administratrice voit** est une garde fournie
+  (§9) : l'interface d'édition n'existe pas pour un visiteur.
+- **On n'édite pas ce que les visiteurs voient** : l'administratrice et
+  l'agent travaillent sur un brouillon du site, qu'elle seule voit en place ;
+  les visiteurs gardent la version publiée. Publier est un geste, avec son
+  résumé de ce qui change.
+- **Chaque changement est un commit** d'une chose déclarée, avec sa raison —
+  les fiches de fichier de la vision des fiches de contexte
+  (`2026-10-04-14h58-…`) ; revenir en arrière est un geste aussi.
+- **Un changement de données passe par les migrations en verbes** (§12),
+  avec leur essai à blanc ; jamais par un script libre sur la base en
+  service.
+- **L'agent ne voit aucun secret** du site (§9), et ce qu'il peut déclarer
+  est borné par ce que le site lui permet.
+- **Ce qui casse se voit avant de publier** : la vérification des
+  déclarations, et les exemples rejoués des contrôleurs touchés.
+
+C'est le produit « à la Lovable » du §1, retourné : au lieu de bâtir un site
+dans un outil puis de le déployer, le site déployé porte son propre outil.
