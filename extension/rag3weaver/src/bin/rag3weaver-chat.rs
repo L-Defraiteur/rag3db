@@ -115,6 +115,12 @@ struct AppTools {
     /// Le backend annonce l'op `journal` dans `describe` (`capabilities`).
     /// Un backend qui ne la connaît pas ne la reçoit jamais.
     journal: bool,
+    /// Même règle pour l'op `index_state` (la ligne de statut après chaque
+    /// tour) : sans la capacité, aucune sonde — un backend de fixture l'a
+    /// prouvé en recevant la sonde comme un appel d'outil, et en panne
+    /// répétée la sonde consommait la relance unique (le tour suivant
+    /// écrivait dans un tuyau mort).
+    index_state: bool,
     defs: Vec<ToolDef>,
     artifacts: ArtifactTools,
     completion_tool: Option<String>,
@@ -126,6 +132,7 @@ impl AppTools {
         };
         let mut defs = artifacts.tool_defs();
         let mut journal = false;
+        let mut index_state = false;
         let backend = if config.backend_command.is_empty() {
             None
         } else {
@@ -134,6 +141,9 @@ impl AppTools {
             journal = description["capabilities"]
                 .as_array()
                 .is_some_and(|c| c.iter().any(|v| v == "journal"));
+            index_state = description["capabilities"]
+                .as_array()
+                .is_some_and(|c| c.iter().any(|v| v == "index_state"));
             let tools = description["tools"]
                 .as_array()
                 .ok_or("backend has no tools array")?;
@@ -167,6 +177,7 @@ impl AppTools {
         Ok(Self {
             backend,
             journal,
+            index_state,
             defs,
             artifacts,
             completion_tool: config.completion_tool.clone(),
@@ -447,7 +458,12 @@ fn run() -> Result<(), String> {
         // qu'aucun modèle ne relaie l'état à l'utilisateur. Après chaque
         // tour, l'état lu au backend part en événement ; l'interface
         // l'affiche hors du texte de l'agent. Un backend sans index nommé
-        // rend {} : rien n'est émis, rien ne change.
+        // rend {} : rien n'est émis, rien ne change. Seul un backend qui
+        // DÉCLARE l'op dans describe la reçoit ; une relance à la sonde est
+        // une relance légitime du vrai backend (request, pas de voie à part).
+        if !tools.index_state {
+            continue;
+        }
         if let Some(backend) = &tools.backend {
             if let Ok(etats) = backend
                 .lock()
