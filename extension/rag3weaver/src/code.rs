@@ -1935,56 +1935,9 @@ impl Catalog {
                 report.ambiguous += 1;
             }
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                let target = if m.kind == "HAS_PARENT" {
-                    // Le parent d'une définition faite ailleurs : seul un
-                    // conteneur peut l'être (pas le constructeur `Foo` de la
-                    // classe `Foo`) ; s'il y en a plusieurs, l'import les
-                    // départage, sinon on s'abstient.
-                    let conteneurs: Vec<&String> = definers
-                        .iter()
-                        .filter(|d| genres.get(*d).is_some_and(|g| GENRES_CONTENEURS.contains(&g.as_str())))
-                        .collect();
-                    let choisis: Vec<&String> = if conteneurs.len() > 1 && !m.import_modules.is_empty() {
-                        conteneurs
-                            .into_iter()
-                            .filter(|d| fichiers.get(*d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))))
-                            .collect()
-                    } else {
-                        conteneurs
-                    };
-                    match choisis.as_slice() {
-                        [un] => (*un).clone(),
-                        _ => continue,
-                    }
-                } else if !m.qualifier_types.is_empty() {
-                    // Le type lu choisit, et il est seul juge : un
-                    // définisseur d'un autre type n'est pas la cible, même
-                    // s'il est le seul.
-                    let du_type: Vec<&String> = definers
-                        .iter()
-                        .filter(|d| {
-                            parents.get(*d).is_some_and(|p| m.qualifier_types.iter().any(|t| nom_de_type(t) == nom_de_type(p)))
-                        })
-                        .collect();
-                    match du_type.as_slice() {
-                        [un] => (*un).clone(),
-                        _ => continue,
-                    }
-                } else if definers.len() == 1 {
-                    definers[0].clone()
-                } else if !m.import_modules.is_empty() {
-                    // Plusieurs définisseurs, et un import qui désigne un
-                    // module : le définisseur du fichier de ce module, s'il
-                    // est seul. Sinon, l'abstention.
-                    let du_module: Vec<&String> = definers
-                        .iter()
-                        .filter(|d| fichiers.get(*d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))))
-                        .collect();
-                    match du_module.as_slice() {
-                        [un] => (*un).clone(),
-                        _ => continue,
-                    }
-                } else {
+                // La marque attend sa colonne de relation (arbre principal) :
+                // ticket « une arête ne dit pas comment elle a été résolue ».
+                let Some((target, _resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres) else {
                     continue;
                 };
                 let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
@@ -2192,6 +2145,96 @@ struct Mention {
     qualifier_types: Vec<String>,
     /// Les modules d'où le mentionneur importe le nom.
     import_modules: Vec<String>,
+}
+
+/// **Comment une arête du rendez-vous a été résolue** : la marque qu'elle
+/// portera, pour qu'un consommateur sache taire ou signaler une arête
+/// devinée. `File` est la marque des relations de l'analyseur, résolues dans
+/// le fichier ; elles ne passent pas par le rendez-vous.
+#[allow(dead_code)] // posée avec la colonne de relation, à venir
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Resolution {
+    /// Relation de l'analyseur, dans le fichier.
+    File,
+    /// Le type lu (`x: T`, champ, retour) a choisi la cible.
+    Type,
+    /// Un import du mentionneur désigne le fichier de la cible.
+    Import,
+    /// Seul définisseur du nom, rien d'autre ne le confirme.
+    Name,
+}
+
+#[allow(dead_code)]
+impl Resolution {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Resolution::File => "fichier",
+            Resolution::Type => "type",
+            Resolution::Import => "import",
+            Resolution::Name => "nom",
+        }
+    }
+}
+
+/// **La cible d'une mention, et comment elle a été choisie** ; `None` quand
+/// on s'abstient. Une relation manquante vaut mieux qu'une relation fausse.
+///
+/// - Le parent d'une définition faite ailleurs (`HAS_PARENT`) : seul un
+///   conteneur peut l'être (pas le constructeur `Foo` de la classe `Foo`) ;
+///   s'il y en a plusieurs, l'import les départage.
+/// - Un type lu choisit, et il est seul juge : un définisseur d'un autre type
+///   n'est pas la cible, même s'il est le seul.
+/// - Un seul définisseur : lui — marqué `Import` si un import du mentionneur
+///   désigne son fichier, `Name` sinon.
+/// - Plusieurs, et un import : le définisseur du fichier de ce module, s'il
+///   est seul.
+fn choose_target(
+    m: &Mention,
+    definers: &[String],
+    parents: &HashMap<String, String>,
+    fichiers: &HashMap<String, String>,
+    genres: &HashMap<String, String>,
+) -> Option<(String, Resolution)> {
+    let par_import = |d: &String| fichiers.get(d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f)));
+    let seul_ou_import = |d: &String| (d.clone(), if par_import(d) { Resolution::Import } else { Resolution::Name });
+    if m.kind == "HAS_PARENT" {
+        let conteneurs: Vec<&String> = definers
+            .iter()
+            .filter(|d| genres.get(*d).is_some_and(|g| GENRES_CONTENEURS.contains(&g.as_str())))
+            .collect();
+        if conteneurs.len() > 1 && !m.import_modules.is_empty() {
+            let choisis: Vec<&String> = conteneurs.into_iter().filter(|d| par_import(d)).collect();
+            return match choisis.as_slice() {
+                [un] => Some(((*un).clone(), Resolution::Import)),
+                _ => None,
+            };
+        }
+        return match conteneurs.as_slice() {
+            [un] => Some(seul_ou_import(un)),
+            _ => None,
+        };
+    }
+    if !m.qualifier_types.is_empty() {
+        let du_type: Vec<&String> = definers
+            .iter()
+            .filter(|d| parents.get(*d).is_some_and(|p| m.qualifier_types.iter().any(|t| nom_de_type(t) == nom_de_type(p))))
+            .collect();
+        return match du_type.as_slice() {
+            [un] => Some(((*un).clone(), Resolution::Type)),
+            _ => None,
+        };
+    }
+    if let [un] = definers {
+        return Some(seul_ou_import(un));
+    }
+    if !m.import_modules.is_empty() {
+        let du_module: Vec<&String> = definers.iter().filter(|d| par_import(d)).collect();
+        return match du_module.as_slice() {
+            [un] => Some(((*un).clone(), Resolution::Import)),
+            _ => None,
+        };
+    }
+    None
 }
 
 /// **Un module d'import désigne-t-il ce fichier ?** `crate::estimate` désigne
@@ -2674,5 +2717,85 @@ mod tests_vocabulaire {
         // reste du code, on sait le lire.
         assert!(matches!(verdict("gros.rs", 200 * 1024), Verdict::Code));
         assert!(matches!(verdict("dump.md", 200 * 1024), Verdict::Ecarte(_)));
+    }
+}
+
+#[cfg(test)]
+mod tests_resolution {
+    use super::*;
+
+    fn mention(kind: &str, types: &[&str], imports: &[&str]) -> Mention {
+        Mention {
+            from: "run".into(),
+            kind: kind.into(),
+            usage: BTreeMap::new(),
+            qualifier_types: types.iter().map(|t| t.to_string()).collect(),
+            import_modules: imports.iter().map(|t| t.to_string()).collect(),
+        }
+    }
+
+    fn table(paires: &[(&str, &str)]) -> HashMap<String, String> {
+        paires.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn un_seul_definisseur_sans_rien_est_par_le_nom() {
+        // La recette du ticket : `v.clear()` sans type lu, une seule `clear`.
+        let m = mention("CONSUMES", &[], &[]);
+        let t = choose_target(&m, &ids(&["clear@a.rs"]), &HashMap::new(), &HashMap::new(), &HashMap::new());
+        assert_eq!(t, Some(("clear@a.rs".into(), Resolution::Name)));
+        assert_eq!(Resolution::Name.as_str(), "nom");
+    }
+
+    #[test]
+    fn un_seul_definisseur_designe_par_un_import_est_par_l_import() {
+        let m = mention("CONSUMES", &[], &["crate::estimate"]);
+        let fichiers = table(&[("rate", "/p/src/estimate.rs")]);
+        let t = choose_target(&m, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new());
+        assert_eq!(t, Some(("rate".into(), Resolution::Import)));
+        // Un import qui ne désigne pas son fichier ne confirme rien.
+        let ailleurs = mention("CONSUMES", &[], &["crate::autre"]);
+        let t = choose_target(&ailleurs, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new());
+        assert_eq!(t, Some(("rate".into(), Resolution::Name)));
+    }
+
+    #[test]
+    fn le_type_lu_choisit_et_reste_seul_juge() {
+        let parents = table(&[("run@node", "Node<'a>"), ("run@reactor", "Reactor")]);
+        let m = mention("CONSUMES", &["Node"], &[]);
+        let t = choose_target(&m, &ids(&["run@node", "run@reactor"]), &parents, &HashMap::new(), &HashMap::new());
+        assert_eq!(t, Some(("run@node".into(), Resolution::Type)));
+        // Seul définisseur, mais d'un autre type : l'abstention.
+        let t = choose_target(&m, &ids(&["run@reactor"]), &parents, &HashMap::new(), &HashMap::new());
+        assert_eq!(t, None);
+    }
+
+    #[test]
+    fn plusieurs_definisseurs_l_import_departage_sinon_abstention() {
+        let fichiers = table(&[("get@a", "/p/src/a.rs"), ("get@b", "/p/src/b.rs")]);
+        let definers = ids(&["get@a", "get@b"]);
+        let m = mention("CONSUMES", &[], &["crate::b"]);
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new()), Some(("get@b".into(), Resolution::Import)));
+        let rien = mention("CONSUMES", &[], &[]);
+        assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new()), None);
+    }
+
+    #[test]
+    fn le_parent_est_un_conteneur() {
+        let genres = table(&[("Foo@class", "class"), ("Foo@ctor", "method"), ("Foo@ns", "namespace")]);
+        let m = mention("HAS_PARENT", &[], &[]);
+        // Le constructeur homonyme n'est pas un parent.
+        let t = choose_target(&m, &ids(&["Foo@class", "Foo@ctor"]), &HashMap::new(), &HashMap::new(), &genres);
+        assert_eq!(t, Some(("Foo@class".into(), Resolution::Name)));
+        // Deux conteneurs sans import : l'abstention ; l'import départage.
+        let deux = ids(&["Foo@class", "Foo@ns"]);
+        assert_eq!(choose_target(&m, &deux, &HashMap::new(), &HashMap::new(), &genres), None);
+        let fichiers = table(&[("Foo@class", "/p/foo.h"), ("Foo@ns", "/p/ns.h")]);
+        let par_import = mention("HAS_PARENT", &[], &["foo"]);
+        assert_eq!(choose_target(&par_import, &deux, &HashMap::new(), &fichiers, &genres), Some(("Foo@class".into(), Resolution::Import)));
     }
 }
