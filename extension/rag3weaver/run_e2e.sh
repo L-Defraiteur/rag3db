@@ -16,6 +16,36 @@
 
 set -euo pipefail
 
+# ── Le verrou du poste ──────────────────────────────────────────────────────
+#
+# Une mesure de durée ou de mémoire ne vaut que seule sur le poste. Les
+# annonces croisées entre sessions ont échoué deux fois le 4 octobre 2026 :
+# une boucle e2e_code que personne n'avait dans sa liste a faussé une série de
+# mesures. Le script prend donc lui-même le verrou du poste
+# (`~/.cache/rag3weaver-build/poste.lock`, décision de l'orchestration) :
+# - **partagé** par défaut : les passes ordinaires tournent ensemble, elles
+#   attendent seulement qu'une mesure ait fini ;
+# - **exclusif** pour une mesure (`RAG3WEAVER_MESURE=1`) et pour un rebâti du
+#   moteur (`--build`, `--build-only`), que personne ne doit lire en même
+#   temps.
+# On se relance sous `flock`, avant tout effet de bord (journal de charge,
+# compilation), pour que le verrou couvre la passe entière.
+if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then
+  VERROU="${HOME}/.cache/rag3weaver-build/poste.lock"
+  mkdir -p "$(dirname "$VERROU")"
+  MODE_VERROU="-s"; NOM_VERROU="partagé"
+  if [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then MODE_VERROU="-x"; NOM_VERROU="exclusif (mesure)"; fi
+  for a in "$@"; do
+    case "$a" in --build|--build-only) MODE_VERROU="-x"; NOM_VERROU="exclusif (rebâti du moteur)" ;; esac
+  done
+  if ! flock -n "$MODE_VERROU" "$VERROU" true; then
+    echo "▸ verrou du poste $NOM_VERROU : attente d'une passe en cours ($VERROU)"
+  fi
+  export RAG3WEAVER_VERROU_TENU="$NOM_VERROU"
+  exec flock "$MODE_VERROU" "$VERROU" "$0" "$@"
+fi
+[ -n "${RAG3WEAVER_VERROU_TENU:-}" ] && echo "▸ verrou du poste : $RAG3WEAVER_VERROU_TENU"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # **La bibliothèque contre laquelle tout est éprouvé.**
 #
