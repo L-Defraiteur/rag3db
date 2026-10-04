@@ -166,7 +166,8 @@ impl Rag3dbConnection {
                     return Ok(c);
                 }
                 // **Un point de reprise d'un autre processus a croisé
-                // l'ouverture** : le moteur le refuse par son nom, et une
+                // l'ouverture** (l'un des deux messages, `is_checkpoint_crossing`) :
+                // le moteur le refuse par son nom, et une
                 // nouvelle ouverture repart de l'état d'après. Repris un
                 // nombre borné de fois, hors du budget de temps — sous des
                 // points de reprise rapprochés, le budget seul laissait passer
@@ -174,7 +175,7 @@ impl Rag3dbConnection {
                 // compte est rendu (`open_retries`). La borne est un temps
                 // (`crossed_open_budget`, 2 s par défaut) : au-delà, le refus
                 // nommé, avec le compte.
-                Err(e) if e.to_string().contains(CHECKPOINT_CROSSED_READ_ONLY_OPEN) => {
+                Err(e) if is_checkpoint_crossing(&e.to_string()) => {
                     let borne = crossed_open_budget();
                     if debut.elapsed() >= borne {
                         return Err(DbError::ConnectionError(format!(
@@ -693,6 +694,19 @@ fn total_memory() -> Option<u64> {
 /// reprise d'un autre processus a croisée
 /// (`WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN`).
 pub const CHECKPOINT_CROSSED_READ_ONLY_OPEN: &str = "was checkpointed by another process while this read-only open was reading";
+
+/// **Le même croisement, sous un autre message** : l'ouverture arrive pendant
+/// que l'écrivain est au milieu de son point de reprise, et trouve ses pages
+/// fantômes. Un écrivain mort en plein point de reprise rendrait ce message
+/// pour de bon : le refus final le garde tel quel. Les deux messages sont à
+/// unifier dans le moteur (ticket du lecteur affamé), pas ici.
+pub const SHADOW_PAGES_READ_ONLY_OPEN: &str = "Couldn't replay shadow pages under read-only mode";
+
+/// Une ouverture en lecture seule refusée parce qu'un point de reprise d'un
+/// autre processus l'a croisée — l'un ou l'autre des deux messages du moteur.
+pub fn is_checkpoint_crossing(message: &str) -> bool {
+    message.contains(CHECKPOINT_CROSSED_READ_ONLY_OPEN) || message.contains(SHADOW_PAGES_READ_ONLY_OPEN)
+}
 
 /// **Combien de temps une ouverture en lecture seule reprend sur ce refus**,
 /// par défaut : 2 s, réglable par `RAG3WEAVER_READ_ONLY_CROSSED_MS`. Sous un

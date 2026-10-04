@@ -360,7 +360,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
             if let Err(e) = &ouverture {
                 duree_max_refus = duree_max_refus.max(t.elapsed().as_millis());
                 let texte = e.to_string();
-                if texte.contains(rag3weaver::rag3db_connection::CHECKPOINT_CROSSED_READ_ONLY_OPEN) && texte.contains(" fois en ") {
+                if rag3weaver::rag3db_connection::is_checkpoint_crossing(&texte) && texte.contains(" fois en ") {
                     nommes += 1;
                 } else if autre.is_none() {
                     autre = Some(texte.replace('\n', " ").chars().take(300).collect());
