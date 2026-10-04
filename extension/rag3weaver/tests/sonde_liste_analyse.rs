@@ -114,3 +114,47 @@ fn relations_selon_le_paquet() {
         }
     }
 }
+
+/// **Les relations d'un scope vers lui-même**, paquet par paquet (64 lignes
+/// retenues, comme la synchronisation) : pour chacune, les `ScopeRecord` qui
+/// portent la clé en cause — combien, et leurs champs. Le témoin des 55
+/// boucles du ticket « relations qui dépendent du paquet ».
+#[test]
+#[ignore]
+fn boucles_sur_soi() {
+    let racine = std::env::var("SONDE_RACINE").unwrap_or_else(|_| {
+        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
+    });
+    let taille: usize = std::env::var("SONDE_PAQUET").ok().and_then(|v| v.parse().ok()).unwrap_or(64);
+    let arbre = WorkingTree::new(&racine);
+    let mut sources: Vec<(String, String)> = Vec::new();
+    for p in arbre.list().unwrap() {
+        if matches!(verdict(&p, 0), Verdict::Ecarte(_)) {
+            continue;
+        }
+        if let Ok(Some(c)) = arbre.read(&p) {
+            sources.push((p, c));
+        }
+    }
+    let projet: Vec<String> = sources.iter().map(|(p, _)| p.clone()).collect();
+    let mut montrees = 0;
+    let mut total = 0;
+    for (i, paquet) in sources.chunks(taille).enumerate() {
+        let a = rag3weaver::code::analyze_in_project(&racine, paquet.to_vec(), "", Some(&projet));
+        for r in a.relations.iter().filter(|r| r.from_key == r.to_key && r.rel == "CONSUMES") {
+            total += 1;
+            if montrees >= 3 {
+                continue;
+            }
+            montrees += 1;
+            eprintln!("\n[boucle] paquet {i} : {} {} → même clé", r.rel, r.from_key);
+            for s in a.scopes.iter().filter(|s| s.key == r.from_key) {
+                eprintln!("  scope : name={} type={} source={} file_path={} lignes {}–{} parent={}", s.name, s.scope_type, s.source, s.file_path, s.start_line, s.end_line, s.parent_name);
+            }
+            let fichiers: Vec<&String> = paquet.iter().map(|(p, _)| p).filter(|p| r.from_key.contains(p.as_str())).collect();
+            eprintln!("  fichier dans le paquet : {fichiers:?} ; le paquet compte {} fichiers", paquet.len());
+        }
+    }
+    eprintln!("\n[boucles] {total} CONSUMES d'une clé vers elle-même, paquets de {taille}");
+}

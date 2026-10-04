@@ -137,6 +137,17 @@ fn deux_homonymes_du_meme_fichier_ne_font_pas_un_lien() {
     let rendu = section(&catalog, &chunkers);
     eprintln!("{rendu}");
     assert_eq!(rendu, "", "deux homonymes du même fichier ne se relient pas : {rendu}");
+    // Et un tiers relié aux deux ne fait qu'une ligne.
+    let tiers = {
+        let cat = catalog.lock().unwrap();
+        let rows = cat.execute_raw("MATCH (s:Scope) WHERE s.name = 'use_struct' RETURN s._uuid").unwrap();
+        rows.rows[0][0].as_str().unwrap().to_string()
+    };
+    let mut avec_tiers = vec![tiers];
+    avec_tiers.extend(chunkers.iter().cloned());
+    let rendu = section(&catalog, &avec_tiers);
+    eprintln!("{rendu}");
+    assert_eq!(rendu.lines().filter(|l| l.starts_with("- ")).count(), 1, "une ligne, pas une par homonyme : {rendu}");
 }
 
 fn config_banc(max_degree: usize, max_links: usize) -> LinksConfig {

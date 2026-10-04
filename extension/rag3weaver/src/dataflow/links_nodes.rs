@@ -258,6 +258,20 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
             l.stops.iter().filter(|s| !s.title.is_empty() && !s.path.is_empty()).all(|s| vus.insert((s.title.as_str(), s.path.as_str())))
         })
         .collect();
+    // Et une même paire de choses ne fait qu'une ligne : deux résultats
+    // homonymes d'un même fichier (la struct et son impl) reliés au même
+    // tiers, ou deux chemins entre les mêmes bouts — le plus court, venu
+    // en premier, reste.
+    let bout = |s: &Stop| if s.title.is_empty() { (s.uuid.clone(), String::new()) } else { (s.title.clone(), s.path.clone()) };
+    let mut deja: HashSet<((String, String), (String, String))> = HashSet::new();
+    let links: Vec<Link> = links
+        .into_iter()
+        .filter(|l| {
+            let (a, b) = (bout(&l.stops[0]), bout(&l.stops[l.stops.len() - 1]));
+            let cle = if a <= b { (a, b) } else { (b, a) };
+            deja.insert(cle)
+        })
+        .collect();
     let cut = links.len().saturating_sub(cfg.max_links);
     let links: Vec<Link> = links.into_iter().take(cfg.max_links).collect();
     let mut par_titre: HashMap<&str, usize> = HashMap::new();
