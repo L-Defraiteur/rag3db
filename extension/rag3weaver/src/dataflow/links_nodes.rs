@@ -208,8 +208,6 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
     let mut paires: Vec<((usize, usize), (usize, String))> = meilleurs.into_iter().collect();
     // Les plus courts d'abord, puis les résultats les mieux classés.
     paires.sort_by_key(|((a, b), (d, _))| (*d, a + b, *a));
-    let cut = paires.len().saturating_sub(cfg.max_links);
-    paires.truncate(cfg.max_links);
 
     let remonter = |depuis: &str, i: usize| -> Vec<(String, Option<Edge>)> {
         // Du nœud de rencontre au départ `i` : [(nœud, arête vers le suivant)].
@@ -244,7 +242,7 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
     uuids.sort();
     uuids.dedup();
     let fiches = fiches(catalog, cfg, &rels, &uuids).map_err(err)?;
-    let links = links
+    let links: Vec<Link> = links
         .into_iter()
         .map(|(a, b, stops, edges)| Link {
             a,
@@ -252,7 +250,16 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
             stops: stops.iter().map(|u| fiches.get(u).cloned().unwrap_or(Stop { uuid: u.clone(), ..Default::default() })).collect(),
             edges,
         })
+        // Deux scopes de même nom dans le même fichier sont une seule chose
+        // (une `struct` et son `impl`, une déclaration et sa définition) :
+        // ni lien entre eux, ni chemin qui passe de l'un à l'autre.
+        .filter(|l| {
+            let mut vus: HashSet<(&str, &str)> = HashSet::new();
+            l.stops.iter().filter(|s| !s.title.is_empty() && !s.path.is_empty()).all(|s| vus.insert((s.title.as_str(), s.path.as_str())))
+        })
         .collect();
+    let cut = links.len().saturating_sub(cfg.max_links);
+    let links: Vec<Link> = links.into_iter().take(cfg.max_links).collect();
     let mut par_titre: HashMap<&str, usize> = HashMap::new();
     for u in &sources {
         if let Some(f) = fiches.get(u) {

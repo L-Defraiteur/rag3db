@@ -120,6 +120,25 @@ fn relie_par_ce_qu_ils_partagent_jamais_par_un_carrefour() {
     assert_eq!(section(&catalog, &[uuids[2].clone(), uuids[3].clone()]), "", "alone et c ne se relient pas");
 }
 
+/// **Deux scopes de même nom dans le même fichier sont une seule chose** :
+/// une `struct` et son `impl` qui partagent une fonction ne se relient pas,
+/// et un chemin ne passe pas de l'un à l'autre.
+#[test]
+#[ignore]
+fn deux_homonymes_du_meme_fichier_ne_font_pas_un_lien() {
+    let catalog = setup();
+    let src = "pub struct Chunker {\n    n: usize,\n}\n\npub fn snap(x: usize) -> usize {\n    x\n}\n\nimpl Chunker {\n    pub fn cut(&self) -> usize {\n        snap(self.n)\n    }\n}\n\npub fn use_struct(c: &Chunker) -> usize {\n    snap(c.n)\n}\n";
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("c.rs".into(), src.into())])).unwrap();
+    let cat = catalog.lock().unwrap();
+    let rows = cat.execute_raw("MATCH (s:Scope) WHERE s.name = 'Chunker' RETURN s._uuid").unwrap();
+    let chunkers: Vec<String> = rows.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from)).collect();
+    drop(cat);
+    assert!(chunkers.len() >= 2, "la struct et l'impl : {chunkers:?}");
+    let rendu = section(&catalog, &chunkers);
+    eprintln!("{rendu}");
+    assert_eq!(rendu, "", "deux homonymes du même fichier ne se relient pas : {rendu}");
+}
+
 fn config_banc(max_degree: usize, max_links: usize) -> LinksConfig {
     LinksConfig {
         entity: "Scope".into(),
