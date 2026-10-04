@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 13 h 30.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 15 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -20,6 +20,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Marche A5 bis | `7487fae08` | l'ajout en mémoire ne réalloue plus un bloc sous une recherche vectorielle |
 | `DROP` d'index au rejeu | `f5acca417` | le rejeu retire aussi l'index de la table |
 | Garde 1 de la reprise | `fcd9a7882` | une base ne plante plus à l'ouverture ; l'index se dit « en retard » |
+| Garde 2 de la reprise ; borne du contrôle des voisins | `15fcc3474`, `110a65f15` | après un arrêt brutal l'index vectoriel reste juste sans être rebâti (`<base>.extensions`) ; la mise à jour d'un vecteur ne lance plus une recherche par ancien voisin (dix mille lignes par lots : 42 s au lieu d'environ 800) |
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
@@ -28,38 +29,44 @@ A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec u
 
 ## Ce qui est en cours
 
-**À livrer, passe finale en cours** (branche locale `garde-2-extensions-avant-le-rejeu-4`,
-deux commits au-dessus de master) :
-- **La garde 2 de la reprise** : chaque extension chargée est notée dans `<base>.extensions`
-  à côté de la base ; la reprise la charge avant de rejouer, l'index reste juste après une
-  mort. Si le fichier manque ou si l'extension ne se charge pas, la reprise continue sans
-  elle et la garde 1 joue ; l'erreur `is behind its table` porte alors la raison (« At
-  recovery, extension … could not be loaded from … »). Le rejeu d'une suppression de nœud
-  fait aussi son étape de réparation de l'index. L'attendu d'`e2e_arret_brutal` est inversé
-  dans le même commit (accord de la session mémoire).
-- **La borne du ralentissement** : `c8fdaf196` faisait une recherche par ancien voisin à
-  chaque mise à jour de vecteur — dix mille lignes par lots de 512 : 12 s avant, environ
-  800 s après. Avec la borne (une propagation parmi les anciens voisins, la recherche
-  seulement pour ce qu'elle ne tranche pas) : 42 s. **Ce ralentissement est sur master tant
-  que la borne n'est pas livrée.**
+**La corruption de mémoire qui tue `e2e_code`** — tout est dans le ticket
+`docs/tickets/2026-10-04-memoire-corrompue-dans-e2e-code.md` : les mesures (une mort sur 60
+avec la bibliothèque de master, donc antérieure à la garde 2), la pile d'AddressSanitizer
+(une écriture de 4 096 octets après un bloc de 32 768, dans `DictionaryColumn::scanValue`,
+la lecture d'une colonne de chaînes longues par un balayage), ce qui a été essayé sans effet.
 
-**La corruption de mémoire qui tue `e2e_code`** (ticket
-`docs/tickets/2026-10-04-memoire-corrompue-dans-e2e-code.md`), devant V1. Une mort par
-signal sur 60 passes avec la bibliothèque de master, deux sur 57 avec la garde 2 : antérieure
-à la garde 2. Le test du chargement interrompu, seul, ne plante pas en 150 passes. Prochaine
-étape : bâtir la bibliothèque avec AddressSanitizer (`-DENABLE_ADDRESS_SANITIZER=ON`, un
-dossier de build à part) et jouer la suite — la pile de l'écriture, pas celle de la victime.
-À relire à sa lumière : l'intermittent d'`e2e_idempotent_registration` (journal lu vide).
+Où j'en suis exactement :
+- `build/asan` : bibliothèque et extension bâties avec AddressSanitizer
+  (`annexes/build-asan.sh`). **L'arbre porte une instrumentation provisoire, non commitée**,
+  dans `src/storage/table/dictionary_column.cpp` : une ligne `[CHAINE INCOHERENTE]` quand
+  les décalages lus du dictionnaire sont décroissants ou dépassent la taille des données.
+  À retirer (`git checkout -- src/storage/table/dictionary_column.cpp`) avant tout autre
+  travail.
+- Une boucle de six passes au plus tourne (`~/.cache/rag3db-moteur-notes/asan/boucle-asan.sh`,
+  résultat dans `boucle-asan`, rapports dans `rapport-<n>.*`) ; elle s'arrête au premier
+  rapport. ASan n'attrape le défaut qu'une passe sur deux environ.
+- Hypothèse de l'orchestration, à trancher par les nombres : une course — une longueur ou
+  un décalage tiré d'une lecture optimiste d'une page en cours d'éviction ou de réécriture.
+  À regarder au rapport : la longueur réservée est-elle celle qui borne la boucle de pages ;
+  y a-t-il un autre fil actif sur le fichier (`thread apply all bt` sous gdb, commandes dans
+  `~/.cache/rag3db-moteur-notes/asan/gdb-asan.cmd`).
+- **Consigne de l'orchestration** : si la condition manque encore après cette étape,
+  s'arrêter et le dire — une session neuve reprendra sur le ticket et ce rapport.
+- Dès que la condition est connue : la donner, avec la pile, à la session du banc
+  (« rag3db-76 »), qui écrit le témoin.
+- Piège : l'extension vector sort dans `extension/vector/build/`, commun à tous les dossiers
+  de build de l'arbre. Après une passe ASan, rebâtir l'extension ordinaire
+  (`cmake --build build/lecteurs-csv --target rag3db_vector_extension`).
 
 **Ce qui attend derrière**, dans l'ordre de l'orchestration : la revue des amonts de la
 session du banc (`…/banc-de-concurrence/03-revue-des-amonts.md`, tickets dans
 `docs/tickets/`) — proposer un ordre et une estimation pour les plantages et blocages de
 stockage restants, dont le `CHECKPOINT` qui tue le processus après `ALTER TABLE … DROP`
-d'une colonne ; le mode « chargement initial » du `COPY` si regrouper les `COPY` dans une
-transaction ne suffit pas à la cible d'indexation ; puis V1.
-
-**La mise à jour massive de vecteurs** (cause 3, un `finalize` de la mise à jour), la
-dimension 768, la ligne lointaine à la construction : après, sauf rouge en usage réel.
+d'une colonne ; l'échec du point de reprise sous petit tampon (recette `62a91829f`) ; le mode
+« chargement initial » du `COPY` si regrouper les `COPY` dans une transaction ne suffit pas ;
+puis V1. La mise à jour massive de vecteurs (un `finalize` de la mise à jour), la dimension
+768 et la ligne lointaine à la construction : après, sauf rouge en usage réel. La mesure
+d'A5 bis au calme (A5 ter) : jamais faite, sous `poste mesure`.
 
 ## Les amonts et la licence (4 octobre 2026)
 
