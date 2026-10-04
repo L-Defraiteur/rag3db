@@ -182,3 +182,15 @@ au clic. »
 - Un nom qui n'a pas d'adresse (cité par l'agent sans être résolu) ne se
   déguise pas en lien : c'est la différence visible entre « cité » et
   « vérifié » (`add_ref` rend déjà `verifiee: false`).
+
+## 8. Autre sujet, à garder : un moteur de graphes pour le front aussi
+
+> « Je ne sais pas comment, mais on a un moteur de DAG pour le back et le
+> front — genre un DAG qui enveloppe React, je n'en sais rien. Je kifferais
+> que les gens voient principalement des graphes. Mais ça c'est un autre
+> sujet. » — Lucie
+
+Gardé tel quel, sans réponse : l'interface elle-même décrite par un graphe
+(comme les traitements le sont par des `.mmd`), et des graphes comme première
+chose que la personne voit. À reprendre quand l'interface du §6 aura une
+première forme ; rien à décider maintenant.
