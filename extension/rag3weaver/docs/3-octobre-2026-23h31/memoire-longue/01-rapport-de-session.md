@@ -1,6 +1,7 @@
 # Mémoire longue — rapport de session
 
-3 octobre 2026, puis la nuit du 4. Session « mémoire longue » (lignée d'août : la
+3 octobre 2026, la nuit du 4, et la reprise du 4 à 11 h après une coupure de
+quota. Session « mémoire longue » (lignée d'août : la
 session comme graphe, le langage de déclaration, la machine à états).
 Mis à jour sur place.
 
@@ -16,6 +17,7 @@ Mis à jour sur place.
 | `5b3d0656f` | `e2e_arret_brutal` — le témoin produit de la reprise |
 | `87f176535` | **un index vectoriel détaché se reconnaît à l'ouverture et se rebâtit** |
 | `86fd91473` | l'audit des `CatalogEvent::Warning` au journal des chantiers |
+| *en attente* | la garde de cycle de vie durcie (`PreviousState`) et le **réacteur** (`ReactTransitionNode`) — prêts, mesurés, non fusionnés : un intermittent à expliquer d'abord |
 
 **Zéro ligne de Rust pour `Memory` et `Subject`.** Le gabarit `notebook`
 avait déjà prouvé qu'une entité à machine à états, identité stable et
@@ -259,6 +261,100 @@ essayer « ouvrir sans l'extension puis écrire », le moteur refuse cette
 | les deux cas du chargement en masse interrompu | **moi** | scénario reçu de `rag3db-50`, à écrire |
 | le crochet après outil (`context` : identités résolues, source, cellule, lignes) | recherche | contrat acté, code après la passe Gemini |
 | un modèle de décision, quand une bonne manière de s'en servir existera | optimiseur | diagnostic en cours |
+
+## 4 bis. La garde de cycle de vie, et le réacteur — prêts, pas fusionnés
+
+### Ce que la garde corrigeait
+
+L'audit a sorti un défaut dans mon propre code : `split_unchanged` rendait une
+`HashMap` nue, et **une carte vide voulait dire deux choses incompatibles** —
+« la table a répondu, aucune de ces lignes n'y est » (des naissances prouvées)
+et « je n'ai pas pu regarder ». Comme `lifecycle_verdict` traite une absence
+d'état d'avant comme une naissance, le second cas **laissait passer n'importe
+quelle transition déclarée**, en silence. Le code le savait déjà — « d'avant
+sort d'ici, un silence fait passer une transition interdite » est écrit juste
+au-dessus — et personne ne l'avait relié au comportement.
+
+`PreviousState { Read(carte), Unknown(raison) }` rend la confusion impossible.
+Arbitré par l'orchestration sur délégation de Lucie, cas par cas et pas en
+bloc : refus nommé pour les deux `Unknown`, naissances prouvées conservées pour
+`Read(vide)`, et une exception écrite en test — une ligne qui **n'écrit aucun
+état** passe même sans état d'avant, parce qu'il n'y a pas de transition à
+vérifier et que refuser là transformerait toute relecture qui tombe en panne
+d'ingestion ordinaire.
+
+### Le chiffre qui a autorisé le durcissement
+
+Batterie complète, `RAG3WEAVER_TRACE_ETAT_DAVANT=1`, contre le moteur
+`e3daa2836` : **451 passed**.
+
+| Chemin | Occurrences |
+|---|---|
+| `Read(vide)` — naissances prouvées | **274** (`Scope` 102, `File` 98, `Fiche` 18, `Product` 13, `Symbol` 12…) |
+| `Unknown` — relecture impossible | **0** |
+| `Unknown` — entité absente de la configuration | **0** |
+
+Donc le durcissement ne peut pas casser une suite verte. **La réserve qui
+reste** : « jamais vu dans une batterie verte » n'est pas « ne se produit
+jamais » — une relecture qui échoue demande une base occupée, un verrou, un
+disque plein, qu'une suite verte ne fabrique pas. La session embarquements
+guette la ligne pendant sa remesure du dépôt entier, dont une passe à 16 Go.
+
+### Le réacteur
+
+`src/dataflow/react_nodes.rs`, `ReactTransitionNode`, générique — rien n'y
+nomme une entité, une relation ni un état. `BUILTIN_NODE_COUNT` : 43 → 44.
+Trois décisions :
+
+1. **la transition se nomme, elle ne se décrit pas** : le gabarit donne
+   `review`, la déclaration porte `from` et `to`. Il n'y a aucun moyen d'écrire
+   par ce nœud un passage que la machine interdit — la garde n'est pas
+   respectée, elle est **inatteignable** ;
+2. **l'écriture passe par le verbe du catalogue**, jamais par du Cypher, parce
+   que c'est `UpdateRecordNode` qui réapplique la garde ;
+3. **les noms interpolés sont vérifiés à la construction**, pas à l'exécution :
+   un gabarit peut avoir été écrit par un modèle, et une erreur à l'exécution
+   tomberait dans un réacteur que personne ne regarde.
+
+Le rapport rend **quatre** comptes — `seen`, `concerned`, `out_of_state`,
+`transitioned` —, parce que « zéro ligne transitionnée » a trois causes et
+trois remèdes. J'avais d'abord jeté `out_of_state` par un `let _ =` : écrire le
+nœud qui sort d'un audit sur les informations que rien ne consulte, et y jeter
+un compte, aurait été une belle démonstration.
+
+### Ce qui bloque la fusion
+
+Deux rouges dans la batterie, **tous deux de la migration `e2b0413d9`** de la
+session recherche (« suites à valider ») :
+
+- `e2e_mesure_sync_source::mesure_la_duree_par_paquet` est **injouable depuis un
+  worktree** : le chemin de l'extension vient de `CARGO_MANIFEST_DIR` + `../..`,
+  et `RAG3DB_ROOT` n'est pas lu ;
+- `e2e_idempotent_registration::kb_and_relation_persist_and_reopen` tombe sur
+  une lecture de journal (`numBytesRead: 0`), **mais passe 3 fois sur 3 en
+  isolation**. La session cœur C++ l'a mesuré intermittent à 2 sur 20 **avant**
+  mes changements. Reste à comparer vingt fois de chaque côté, sur un poste
+  calme : un worktree témoin est posé à mon point de branche
+  (`~/.cache/rag3weaver-build/temoin-master`). Si ma sonde d'ouverture
+  l'aggrave, elle ne sondera que ce qui le demande.
+
+### La garde 2 du cœur C++, et l'attendu qui s'inverse
+
+Sa garde 2 (le rejeu charge l'extension avant de rejouer) rend l'index juste
+dès la réouverture : `une_mort_apres_insertion_vectorielle` rendra
+`OuvreEtJuste`, donc tombera dans ma branche datée. **Je l'ai autorisé à
+inverser cette branche dans son commit de livraison** — c'est la seule option
+qui ne laisse jamais master rouge, et c'est l'instruction que le test porte
+lui-même. Mes 22 lignes de note en attente se heurteront à son inversion : le
+conflit est à moi.
+
+Deux choses qu'il m'a données et qui changent la suite :
+
+- le nom exact à attendre, **à la suite de** « is behind its table » :
+  « At recovery, extension VECTOR could not be loaded from <chemin>: <erreur> » ;
+- **`<base>.extensions`**, à côté de `<base>.wal` : le supprimer avant la
+  réouverture retrouve l'état détaché. C'est bien plus propre que déplacer la
+  bibliothèque d'extension, qui est partagée — je n'aurais pas dû l'envisager.
 
 ## 5 bis. Qui est qui, la nuit du 4 octobre
 
