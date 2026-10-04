@@ -41,3 +41,34 @@ Ladybug `0be6fa597` (13 mars 2026) ; Vela `e5e700e73`. Défaut d'origine Kuzu `e
 ## Pour le fermer
 
 compter les relations sur toutes les régions du groupe ; le témoin passe au vert. Condition pour une base existante : une table de nœuds de plus de 1 024 lignes, et toutes les relations d'un bloc de 1 024 supprimées entre deux points de reprise ; signature : les deux sens ne s'accordent plus.
+
+## Côté rag3weaver (arbre principal, 4 octobre)
+
+- **La sonde** : `rag3weaver::relation_directions::count_both_directions(conn)`
+  compte, par table de relation et par couple (départ, arrivée), les
+  arêtes lues dans les deux formes `MATCH (a:From)-[r:T]->(b:To)` et
+  `MATCH (b:To)<-[r:T]-(a:From)`. L'exemple `sens_des_relations <base>
+  [<extension>]` l'applique à une copie de base, et sort en 1 si un couple
+  diffère. Elle sert à dire si une base existante a perdu des arêtes.
+- **Elle voit la recette** (`tests/sonde_sens_des_relations.rs`,
+  `la_recette_du_banc_garde_les_deux_sens_egaux`, hors batterie, rouge
+  aujourd'hui) : `knows` (2, 2) → (1, 0) après le second CHECKPOINT, et
+  encore (1, 0) après réouverture. **Mais le 0 tombe sur la seconde forme**
+  (`<-`), alors que la perte est dans le sens direct. Le planificateur
+  choisit le sens de parcours : la sonde détecte la dissymétrie, sans dire
+  de façon sûre quel sens est touché. Question ouverte pour le cœur C++ :
+  quelle forme Cypher force chaque sens de stockage ?
+- **Nos chemins du produit ne l'ont pas déclenché**
+  (`un_fichier_retire_ne_fait_pas_perdre_les_aretes_des_autres_regions`).
+  Le test prend 1 102 scopes (deux régions), dont seuls le premier et le
+  dernier fichier portent un `USES_LIBRARY`. On retire celui du premier,
+  puis CHECKPOINT :
+  - par resynchronisation (le fichier part, ses scopes par DETACH DELETE) :
+    (2, 2) → (1, 1) ;
+  - par édition (`MESURE_GESTE=edition` : `reingest_file`, `DELETE r`, puis
+    réingestion sans l'import) : (2, 2) → (1, 1).
+
+  Pourquoi la condition n'est pas remplie n'est pas expliqué. Hypothèses :
+  la position réelle des nœuds Scope (COPY puis MERGE), d'autres régions
+  modifiées dans la même table entre les deux points de reprise, ou le sens
+  compté. Ce vert ne prouve donc pas que rag3weaver est à l'abri.
