@@ -1,6 +1,6 @@
 # Un terme de WHERE qui ne cite que des paramètres est ignoré
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(planificateur): un terme de WHERE qui ne lit que des paramètres n'est plus jeté »
+- **État** : corrigé le 4 octobre 2026, commit `e418c0c08` (« fix(planificateur): un terme de WHERE qui ne lit que des paramètres n'est plus jeté »)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (vérifié par l'arbre principal)

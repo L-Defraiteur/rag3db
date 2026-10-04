@@ -1,6 +1,6 @@
 # WITH sans colonne utile filtré par un paramètre fait planter
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(planificateur): une projection vide garde son balayage factice, le WHERE qui la suit ne plante plus »
+- **État** : corrigé le 4 octobre 2026, commit `f82462111` (« fix(planificateur): une projection vide garde son balayage factice, le WHERE qui la suit ne plante plus »)
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (vérifié par l'arbre principal)

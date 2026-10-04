@@ -1,6 +1,6 @@
 # Comparer une relation à une variable de lambda fait planter
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(binder): une relation comparée à une variable de lambda, et label() sur un élément de liste, ne plantent plus »
+- **État** : corrigé le 4 octobre 2026, commit `d6aec2bf6` (« fix(binder): une relation comparée à une variable de lambda, et label() sur un élément de liste, ne plantent plus »)
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié

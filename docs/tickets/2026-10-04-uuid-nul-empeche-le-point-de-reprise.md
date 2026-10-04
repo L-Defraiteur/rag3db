@@ -1,6 +1,6 @@
 # L'UUID nul empêche tout point de reprise
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(compression): l'UUID nul ne fait plus échouer le point de reprise »
+- **État** : corrigé le 4 octobre 2026, commit `ed2f9d5db` (« fix(compression): l'UUID nul ne fait plus échouer le point de reprise »)
 - **Gravité** : blocage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié
