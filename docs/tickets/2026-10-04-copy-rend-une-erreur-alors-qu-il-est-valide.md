@@ -1,7 +1,7 @@
 # Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte
 
 - **État** : ouvert
-- **Gravité** : réponse fausse
+- **Gravité** : perte (un COPY vu par d'autres disparaît après une mort) et réponse fausse
 - **Atteignable en service** : oui (dès qu'une autre connexion tient une transaction ouverte pendant un `COPY`)
 - **Touche rag3weaver** : à vérifier (il valide chaque instruction seule ; un lecteur long sur une autre connexion suffirait)
 - **Ouvert le** : 4 octobre 2026, session cœur C++ (lecture du code, non reproduit)
@@ -13,11 +13,33 @@ Un `COPY FROM` force un point de reprise à sa validation. Si une autre transact
 
 ## Recette minimale
 
-Non écrite. D'après le code : une connexion ouvre `BEGIN TRANSACTION` et lit ; une seconde lance un `COPY` ; attendre le délai du point de reprise.
+```cypher
+-- connexion 1
+BEGIN TRANSACTION READ ONLY;
+MATCH (c:C) RETURN count(*);
+-- connexion 2
+COPY C FROM 'mille-lignes.csv';   -- après 5 s : « Timeout waiting for active transactions… »
+-- connexion 1
+COMMIT;
+-- n'importe quelle connexion
+MATCH (c:C) RETURN count(*);      -- 1000 : le COPY « échoué » est validé et visible
+-- mort brutale du processus, réouverture
+MATCH (c:C) RETURN count(*);      -- 0 : les lignes vues sont perdues
+```
+
+La même erreur remonte d'une écriture ordinaire validée, quand le point de reprise
+automatique (au seuil) expire sur un lecteur long ; là, l'écriture est au journal et survit.
 
 ## Témoin
 
-Aucun chez nous. Un test de l'amont décrit le comportement : `test/test_files/transaction/basic.test` (lignes 78-80).
+`test/transaction/concurrence/single_writer_crash_test.cpp` (banc, 4 octobre), rouges :
+- `AutoCheckpointTimeoutOnACommittedWrite` (`error-means-not-committed`) ;
+- `CopyWhileATransactionIsOpen` (`error-means-not-committed`) ;
+- `CopyThatReturnedAnErrorThenDeath` (`visible-copy-survives-death`) : 1 000 lignes vues
+  avant la mort, 0 après.
+
+Le test de l'amont `test/test_files/transaction/basic.test` (lignes 78-80) attend l'erreur et
+ne regarde que la transaction déjà ouverte.
 
 ## Cause
 

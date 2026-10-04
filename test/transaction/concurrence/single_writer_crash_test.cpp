@@ -637,6 +637,83 @@ TEST_F(SingleWriterCrash, DeathDuringDeletesOfAnIndexFromAnEarlierSessionKeepsTh
 }
 
 // ── La reprise avec un index d'extension (marche à part, pas les verrous) ─────────────
+// Une écriture validée ne doit pas rendre d'erreur (ticket « un COPY rend une erreur alors
+// qu'il est validé », et « un CHECKPOINT retient un lecteur », 4 octobre). Le point de
+// reprise lancé après la validation (automatique au seuil, ou forcé par un COPY) attend que
+// les autres transactions partent ; s'il expire, son erreur remonte comme le résultat de
+// l'instruction, alors que l'écriture est déjà visible. L'appelant croit à un échec et
+// rejoue : il écrit deux fois. L'attendu : une erreur veut dire « rien n'est validé ».
+static std::string writeCsv(const std::string& path, int from, int to) {
+    std::ofstream out(path);
+    for (auto i = from; i < to; ++i) {
+        out << i << "\n";
+    }
+    return path;
+}
+
+TEST_F(SingleWriterCrash, AutoCheckpointTimeoutOnACommittedWrite) {
+    mustRun("CALL auto_checkpoint=false;");
+    mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
+    mustRun("UNWIND range(1, 20000) AS i CREATE (:P {id: i});");
+    mustRun("CHECKPOINT;");
+    mustRun("CALL checkpoint_threshold=1;");
+    mustRun("CALL auto_checkpoint=true;");
+    // Un lecteur long sur une autre connexion, pendant que l'écrivain valide.
+    rag3db::main::Connection reader(database.get());
+    std::thread readerThread(
+        [&] { reader.query("MATCH (a:P), (b:P) WHERE a.id + b.id = 7 RETURN count(*);"); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    auto write = conn->query("CREATE (:P {id: 999999});");
+    readerThread.join();
+    const auto present = queryInt("MATCH (p:P) WHERE p.id + 0 = 999999 RETURN count(*);");
+    std::cerr << "  write: " << (write->isSuccess() ? "ok" : write->getErrorMessage())
+              << " ; row present: " << present << "\n";
+    EXPECT_TRUE(write->isSuccess() || present == 0)
+        << "[check: error-means-not-committed] the write returned an error but is committed";
+}
+
+TEST_F(SingleWriterCrash, CopyWhileATransactionIsOpen) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    rag3db::main::Connection other(database.get());
+    other.query("BEGIN TRANSACTION READ ONLY;");
+    other.query("MATCH (c:C) RETURN count(*);");
+    auto copy = conn->query(
+        "COPY C FROM '" + writeCsv(databasePath + ".open.csv", 0, 1000) + "' (header=false);");
+    other.query("COMMIT;");
+    const auto present = queryInt("MATCH (c:C) RETURN count(*);");
+    std::cerr << "  copy: " << (copy->isSuccess() ? "ok" : copy->getErrorMessage())
+              << " ; rows present: " << present << "\n";
+    EXPECT_TRUE(copy->isSuccess() || present == 0)
+        << "[check: error-means-not-committed] the COPY returned an error but is committed";
+}
+
+// La forme grave : un COPY qui a rendu une erreur mais dont les lignes sont visibles, puis la
+// mort du processus. Le COPY n'est pas au journal (sa durabilité est son propre point de
+// reprise) : si ses lignes ont été vues, elles doivent survivre.
+TEST_F(SingleWriterCrash, CopyThatReturnedAnErrorThenDeath) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    mustRun("CHECKPOINT;");
+    const auto csv = writeCsv(databasePath + ".death.csv", 0, 1000);
+    runChild([&](rag3db::main::Database& childDatabase, rag3db::main::Connection& connection) {
+        rag3db::main::Connection other(&childDatabase);
+        other.query("BEGIN TRANSACTION READ ONLY;");
+        other.query("MATCH (c:C) RETURN count(*);");
+        auto copy = connection.query("COPY C FROM '" + csv + "' (header=false);");
+        other.query("COMMIT;");
+        auto seen = connection.query("MATCH (c:C) RETURN count(*);");
+        std::cerr << "  child: copy " << (copy->isSuccess() ? "ok" : "error") << ", rows seen "
+                  << seen->getNext()->getValue(0)->getValue<int64_t>() << "\n";
+    });
+    if (!reopen()) {
+        return;
+    }
+    const auto after = queryInt("MATCH (c:C) RETURN count(*);");
+    std::cerr << "  after death: " << after << " rows\n";
+    EXPECT_TRUE(after == 0 || after == 1000) << "[check: copy-all-or-nothing] " << after;
+    EXPECT_EQ(after, 1000) << "[check: visible-copy-survives-death] rows seen before the death "
+                              "are lost";
+}
+
 // Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à
 // l'ouverture vient de ce que le journal ne porte plus le LOAD EXTENSION — n'importe quel
 // point de reprise après le chargement de l'extension, puis une écriture dans la table

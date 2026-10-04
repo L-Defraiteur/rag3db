@@ -183,3 +183,13 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
+#
+# Une écriture validée rend une erreur (tickets « un COPY rend une erreur alors qu'il est
+# validé » et « un CHECKPOINT retient un lecteur », 4 octobre). Le point de reprise lancé
+# après la validation (au seuil, ou forcé par un COPY) expire sur une transaction ouverte, et
+# son erreur remonte alors que l'écriture est visible : l'appelant rejoue et écrit deux fois.
+# Pour le COPY, pire : il n'est pas au journal, et une mort juste après perd des lignes que
+# d'autres ont déjà lues. Le remède attend une décision de conception (orchestration).
+SingleWriterCrash.AutoCheckpointTimeoutOnACommittedWrite error-means-not-committed
+SingleWriterCrash.CopyWhileATransactionIsOpen error-means-not-committed
+SingleWriterCrash.CopyThatReturnedAnErrorThenDeath visible-copy-survives-death
