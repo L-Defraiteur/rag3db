@@ -141,3 +141,24 @@ fusions de segments et les générations successives).
 `merge(segment_ids)`), que rag3weaver n'utilise pas. Sans fusion pendant le
 premier index et une seule à la fin, les 1 951 Mo écrits tomberaient vers la
 taille de l'index (~700 Mo) plus une fusion finale — estimé, pas mesuré.
+
+## Étape A du protocole, mesurée (4 octobre, 19 h 15 et 20 h)
+
+`FtsStorage::Files` (`src/fts_directory.rs`, `16ab78413`) : un répertoire à
+nous, écritures sans `fsync`, une synchronisation à chaque vidage. Même
+réglage que plus haut (512, disque, K = 4, naissances, seul sous le verrou).
+
+| Passe | Moteur | Durée | Vidages du plein texte | Rendre durable | Pic | Réouverture |
+|---|---|---|---|---|---|---|
+| fichiers, étape A | 18 h 03 | **97 s** | 12,5 s | 10,9 s (59 fois) | 8,6 Go | 0,3 s |
+| blobs en base, poussée à chaque paquet | 19 h 36 | 113 s | 7,7 s | — | 14,9 Go | 1,2 s |
+| blobs en base, poussée une fois à la fin (`c6cf2c263`) | 19 h 36 | 135 s | 8,1 s | — | 14,4 Go | 1,0 s |
+| fichiers, étape A | 19 h 36 | **110 s** | 14,9 s | 20,8 s (60 fois) | 8,8 Go | 0,3 s |
+
+- Le mode fichiers reste le plus rapide et de loin le plus sobre, mais son
+  avance (19 s à 18 h, 3 s à 20 h) n'est pas stable : la synchronisation a
+  pris deux fois plus longtemps sur la seconde passe, sans explication. Une
+  passe chacune ; il en faut plusieurs pour trancher.
+- La poussée unique des blobs à la fin écrit bien 699 Mo au lieu de
+  1 922 Mo et ramène les `COMMIT` de 32 à 7 s, mais elle coûte 52 s à elle
+  seule : en tout, plus lent.
