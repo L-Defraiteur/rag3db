@@ -99,3 +99,36 @@ notre main avant de conclure.
 À retenir aussi de leur méthode : mesurer la couverture des preuves à part de
 la justesse de la réponse, et retirer ce qui n'a pas prouvé de gain (ils ont
 défait quatre changements sur cinq le 3 octobre).
+
+## 6. Résultat de l'essai 3 (4 octobre, 15 h 50) : négatif
+
+Mesuré par la session recherche (`61e0ad13b`, section U du banc étagé, sous
+variable d'environnement) : relecture des dix premiers résultats de la fusion
+du produit (0,45 / 0,55) par la note d'utilité, JevK5-4B par le tunnel,
+extraits de 1 200 caractères, écartés sous 1,5, réordonnés par note.
+
+| | MRR | Premier juste | Dans les cinq |
+|---|---|---|---|
+| phrases, avant | 0,419 | 14 | 21 |
+| phrases, après | 0,226 | 4 | 15 |
+| identifiants, avant | 0,900 | 8 | 10 |
+| identifiants, après | 0,577 | 4 | 8 |
+
+Environ 23 descentes pour 6 montées ; des premiers rangs exacts sont
+descendus. Coût : 530 appels, 2,28 s par requête en moyenne.
+
+Lecture de la session : un modèle de 4 milliards de paramètres qui note un
+extrait de code brut contre une question courte juge la familiarité du
+vocabulaire, pas la définition attendue ; la fusion (titre et dense) est
+meilleur juge.
+
+Ce que ce résultat dit et ne dit pas :
+
+- il vaut pour **ce modèle, sur du code, comme juge de tous les résultats**.
+  Rien à allumer au produit ; la section U reste au banc ;
+- il ne dit rien du service de jevbox sur des documents, ni des essais 1 et 2
+  (choisir un sujet parmi quelques-uns, sur des textes courts), mais il
+  abaisse l'attente : un seuil pris chez eux ne vaut pas pour notre modèle ;
+- deux variantes non jouées, à ne payer que si la relecture redevient un
+  sujet : ne relire que les cas où la fusion est indécise (départage, pas
+  juge), et noter sur la signature et la docstring plutôt que sur le corps.
