@@ -123,6 +123,19 @@ mesurée sur ce banc (0,449 > 0,405 tel quel > 0,369 meilleur H réglé).
 La passe a duré 384 s tout compris (~56 s partagées avec une analyse de
 c0). Reste (b) : le découpeur amélioré rattrape-t-il le creux ?
 
+### La note d'utilité comme relecteur (essai 3, 61e0ad13b) — négatif net
+
+score(decider, question, grille, temperature) = Σ pᵢ·i au-dessus de
+decide (src/decider.rs, testé au MockDecider). Section U du banc sous
+`RAG3WEAVER_BANC_UTILITE=<adresse>` : dix premiers de la fusion produit
+0,45/0,55 relus par une grille à quatre niveaux, écartés < 1,5 en
+queue, tri stable. JevK5-4B (tunnel 7982), extraits 1 200 caractères :
+phrases 0,419 → 0,226, identifiants 0,900 → 0,577, ~23 descentes pour
+6 montées, des rangs 1 exacts descendus ; 530 appels, 2,28 s/requête.
+Leçon : un 4B note la familiarité du vocabulaire, pas la définition —
+la fusion titre+dense juge mieux que lui. Variantes non jouées :
+relecture des seules fusions indécises ; extrait signature+doc.
+
 ### Le titre indexé (66dc381c3) — les références NOUVELLES du banc
 
 | config (granite+creux bge, titre indexé) | phrases (45) | identifiants (10) |
