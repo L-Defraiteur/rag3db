@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include "binder/expression_visitor.h"
@@ -33,8 +34,11 @@ static bool readsAVariable(const std::shared_ptr<Expression>& expression) {
 }
 
 static int32_t getConnectedQueryGraphIdx(const QueryGraphCollection& queryGraphCollection,
-    const QueryGraphPlanningInfo& info) {
+    const QueryGraphPlanningInfo& info, const std::vector<bool>& skipQueryGraph) {
     for (auto i = 0u; i < queryGraphCollection.getNumQueryGraphs(); ++i) {
+        if (skipQueryGraph[i]) {
+            continue;
+        }
         auto queryGraph = queryGraphCollection.getQueryGraph(i);
         for (auto& queryNode : queryGraph->getQueryNodes()) {
             if (info.containsCorrExpr(*queryNode->getInternalID())) {
@@ -49,15 +53,50 @@ LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryG
     const QueryGraphPlanningInfo& info) {
     KU_ASSERT(queryGraphCollection.getNumQueryGraphs() > 0);
     auto& corrExprs = info.corrExprs;
+    // Dans une sous-requête (OPTIONAL MATCH, EXISTS…), un graphe sans relation dont tous
+    // les nœuds sont déjà liés plus haut — le « , (n3) » d'un OPTIONAL MATCH — n'ajoute
+    // aucune contrainte : la corrélation porte déjà ces nœuds. Le planifier rebalayait leur
+    // table et multipliait les lignes. On le saute, sauf s'il ne reste que lui, ou si un
+    // prédicat lit l'un de ses nœuds (ses propriétés ne viendraient plus d'aucun balayage).
+    std::unordered_set<std::string> varsReadByPredicates;
+    for (auto& predicate : info.predicates) {
+        auto collector = DependentVarNameCollector();
+        collector.visit(predicate);
+        auto names = collector.getVarNames();
+        varsReadByPredicates.insert(names.begin(), names.end());
+    }
+    std::vector<bool> skipQueryGraph(queryGraphCollection.getNumQueryGraphs(), false);
+    if (info.subqueryType != SubqueryPlanningType::NONE) {
+        for (auto i = 0u; i < queryGraphCollection.getNumQueryGraphs(); ++i) {
+            auto queryGraph = queryGraphCollection.getQueryGraph(i);
+            if (queryGraph->getNumQueryRels() > 0) {
+                continue;
+            }
+            auto skip = true;
+            for (auto& queryNode : queryGraph->getQueryNodes()) {
+                skip = skip && info.containsCorrExpr(*queryNode->getInternalID()) &&
+                       !varsReadByPredicates.contains(queryNode->getUniqueName());
+            }
+            skipQueryGraph[i] = skip;
+        }
+        if (std::all_of(skipQueryGraph.begin(), skipQueryGraph.end(),
+                [](bool skip) { return skip; })) {
+            skipQueryGraph[0] = false;
+        }
+    }
     int32_t queryGraphIdxToPlanExpressionsScan = -1;
     if (info.subqueryType == SubqueryPlanningType::CORRELATED) {
-        // Pick a query graph to plan ExpressionsScan. If -1 is returned, we fall back to cross
-        // product.
-        queryGraphIdxToPlanExpressionsScan = getConnectedQueryGraphIdx(queryGraphCollection, info);
+        // Pick a query graph to plan ExpressionsScan, among those that are planned. If -1 is
+        // returned, we fall back to cross product.
+        queryGraphIdxToPlanExpressionsScan =
+            getConnectedQueryGraphIdx(queryGraphCollection, info, skipQueryGraph);
     }
     std::unordered_set<uint32_t> evaluatedPredicatesIndices;
     std::vector<LogicalPlan> planPerQueryGraph;
     for (auto i = 0u; i < queryGraphCollection.getNumQueryGraphs(); ++i) {
+        if (skipQueryGraph[i]) {
+            continue;
+        }
         auto queryGraph = queryGraphCollection.getQueryGraph(i);
         // Extract predicates for current query graph
         std::unordered_set<uint32_t> predicateToEvaluateIndices;

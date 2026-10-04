@@ -1,6 +1,6 @@
 # OPTIONAL MATCH qui répète un nœud lié double les lignes
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(planificateur): un OPTIONAL MATCH qui répète seul un nœud déjà lié ne multiplie plus les lignes »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (vérifié par l'arbre principal)

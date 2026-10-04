@@ -40,7 +40,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne](2026-10-04-distinct-skip-sans-limit.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [Un terme de WHERE qui ne cite que des paramètres est ignoré](2026-10-04-where-sur-parametres-seuls-ignore.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [L'étiquette d'une variable liée plus tôt sans étiquette est ignorée](2026-10-04-etiquette-d-une-variable-deja-liee-ignoree.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
-| [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | ouvert | réponse fausse | oui | non (vérifié par l'arbre principal) |
+| [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [MERGE d'une clé répétée rend une autre valeur que celle stockée](2026-10-04-merge-d-une-cle-repetee-rend-un-autre-noeud.md) | ouvert | réponse fausse | oui | non vérifié |
 | [Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table](2026-10-04-balayage-de-plusieurs-tables-de-relations-en-transaction.md) | ouvert | réponse fausse | oui | non vérifié |
 | [COPY : un champ CSV vide entre guillemets devient NULL](2026-10-04-csv-champ-vide-entre-guillemets-devient-null.md) | ouvert | réponse fausse | oui | non vérifié |
