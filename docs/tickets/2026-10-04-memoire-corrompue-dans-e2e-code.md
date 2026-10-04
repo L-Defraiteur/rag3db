@@ -57,6 +57,12 @@ Inconnue. Pistes, non vérifiées : la lecture optimiste d'une page pendant qu'u
 
 Candidats de la revue des amonts sur le tampon, non reliés à ce défaut : Ladybug `7e4248202`, `eff87c1e1`, `d6adbd2b7` ; Vela `e5e700e73`.
 
+## À relire à sa lumière, une fois la pile obtenue
+
+- L'intermittent d'`e2e_idempotent_registration` : « Reading past the end of the file …wal with size 0 » à la réouverture, 2 fois sur 20, avant comme après les correctifs du rejeu.
+- Le ticket « La réouverture d'une base échoue par intermittence, sous charge seulement ».
+- Tout rouge intermittent inexpliqué de ces derniers jours.
+
 ## Ce qu'il faut pour le fermer
 
 La pile d'AddressSanitizer, puis un test C++ qui reproduit l'écriture fautive à coup sûr.

@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, dans la nuit.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 13 h 30.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -20,6 +20,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Marche A5 bis | `7487fae08` | l'ajout en mémoire ne réalloue plus un bloc sous une recherche vectorielle |
 | `DROP` d'index au rejeu | `f5acca417` | le rejeu retire aussi l'index de la table |
 | Garde 1 de la reprise | `fcd9a7882` | une base ne plante plus à l'ouverture ; l'index se dit « en retard » |
+| Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
@@ -27,21 +28,38 @@ A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec u
 
 ## Ce qui est en cours
 
-**La garde 2 de la reprise** (ordre de l'orchestration, 4 octobre) : rendre la demi-page —
-version de stockage montée, marqueur dans l'en-tête, ou enregistrement réécrit en tête du
-journal — avec une recommandation, puis la coder. Le repérage est dans le relevé de
-connaissances, §1. Dans le même lot : le rejeu continue quand le fichier d'une extension
-notée au journal a disparu (aujourd'hui la base ne s'ouvre pas).
+**À livrer, passe finale en cours** (branche locale `garde-2-extensions-avant-le-rejeu-4`,
+deux commits au-dessus de master) :
+- **La garde 2 de la reprise** : chaque extension chargée est notée dans `<base>.extensions`
+  à côté de la base ; la reprise la charge avant de rejouer, l'index reste juste après une
+  mort. Si le fichier manque ou si l'extension ne se charge pas, la reprise continue sans
+  elle et la garde 1 joue ; l'erreur `is behind its table` porte alors la raison (« At
+  recovery, extension … could not be loaded from … »). Le rejeu d'une suppression de nœud
+  fait aussi son étape de réparation de l'index. L'attendu d'`e2e_arret_brutal` est inversé
+  dans le même commit (accord de la session mémoire).
+- **La borne du ralentissement** : `c8fdaf196` faisait une recherche par ancien voisin à
+  chaque mise à jour de vecteur — dix mille lignes par lots de 512 : 12 s avant, environ
+  800 s après. Avec la borne (une propagation parmi les anciens voisins, la recherche
+  seulement pour ce qu'elle ne tranche pas) : 42 s. **Ce ralentissement est sur master tant
+  que la borne n'est pas livrée.**
 
-**La mise à jour de vecteur, ce qui reste** (après la garde 2, avant V1 seulement si
-l'invariant côté produit rougit) : quand presque toutes les lignes d'une table sont mises à
-jour, il reste des lignes injoignables, en nombre variable d'une passe à l'autre. Piste :
-un `finalize` de la mise à jour, comme pour la suppression — l'état de mise à jour de
-l'index est recréé à chaque ligne, rien ne s'y accumule. À regarder aussi : `shrinkForNode`
-reprend ses voisins à partir du second (`for (auto i = 1u; …)`), code de l'amont, non
-examiné. Pas fait : la dimension 768, les dix mille lignes, la ligne lointaine à la
-construction. Les brouillons et l'état de travail d'avant livraison sont dans
-`annexes/set-de-vecteur/`.
+**La corruption de mémoire qui tue `e2e_code`** (ticket
+`docs/tickets/2026-10-04-memoire-corrompue-dans-e2e-code.md`), devant V1. Une mort par
+signal sur 60 passes avec la bibliothèque de master, deux sur 57 avec la garde 2 : antérieure
+à la garde 2. Le test du chargement interrompu, seul, ne plante pas en 150 passes. Prochaine
+étape : bâtir la bibliothèque avec AddressSanitizer (`-DENABLE_ADDRESS_SANITIZER=ON`, un
+dossier de build à part) et jouer la suite — la pile de l'écriture, pas celle de la victime.
+À relire à sa lumière : l'intermittent d'`e2e_idempotent_registration` (journal lu vide).
+
+**Ce qui attend derrière**, dans l'ordre de l'orchestration : la revue des amonts de la
+session du banc (`…/banc-de-concurrence/03-revue-des-amonts.md`, tickets dans
+`docs/tickets/`) — proposer un ordre et une estimation pour les plantages et blocages de
+stockage restants, dont le `CHECKPOINT` qui tue le processus après `ALTER TABLE … DROP`
+d'une colonne ; le mode « chargement initial » du `COPY` si regrouper les `COPY` dans une
+transaction ne suffit pas à la cible d'indexation ; puis V1.
+
+**La mise à jour massive de vecteurs** (cause 3, un `finalize` de la mise à jour), la
+dimension 768, la ligne lointaine à la construction : après, sauf rouge en usage réel.
 
 ## Les amonts et la licence (4 octobre 2026)
 
@@ -122,6 +140,14 @@ par défaut, **lire, ne pas copier**.
 - Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
   joignables », plusieurs passes.
 - La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
+- **Le verrou de poste** (depuis le 4 octobre) : tout ce qui est lourd — build, liste C++,
+  passe Rust, boucle — se lance sous `flock -s ~/.cache/rag3weaver-build/poste.lock` ; une
+  mesure de durée ou de mémoire sous `flock -x`. Deux mesures d'une autre session ont été
+  faussées par une boucle et un build lancés sans prévenir.
+- `compare_known_red.cmake` prend un argument de plus, `-DLONG_FILE=…/long.txt` ; sans lui
+  il sort en erreur. Les cas longs du banc sont à part (`CONCURRENCE_LONG=1`).
+- Reposer une branche pendant qu'un script de passe tourne : le script compile un arbre en
+  conflit. Finir le rebase d'abord, lancer ensuite.
 - Une ligne très loin des autres est injoignable dans un index bâti d'un coup : ne pas
   s'en servir comme sonde dans un test qui prouve autre chose.
 - Le poste est partagé par plusieurs sessions : une mesure de temps faite sous charge ne
