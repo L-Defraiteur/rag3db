@@ -317,8 +317,12 @@ Donc la fiche de contexte d'un fichier a des états :
 - Marquer *done* lance le même fork de l'archiviste que le débordement ; tant
   que le résumé n'est pas prêt, la fiche reste entière.
 - Relire ou éditer le fichier rouvre la fiche ; le résumé reste en tête.
-- Le harnais peut suggérer (« fiche non touchée depuis 15 tours ») ; il ne
-  ferme de lui-même qu'au débordement, et le dit.
+- **Retenu par Lucie** : une fiche non touchée depuis longtemps reçoit un
+  indice qui suggère à l'agent de la fermer s'il ne s'en sert plus. C'est une
+  suggestion, jamais une fermeture : le harnais ne ferme de lui-même qu'au
+  débordement, et le dit. À régler : l'indice se montre une fois, avec ce que
+  la fiche coûte (« non touchée depuis 15 tours, ~900 jetons »), pas à chaque
+  tour.
 - C'est une machine à états comme celles des gabarits de mémoire : la fiche
   de contexte de fichier peut être un gabarit, pas du code à part.
 
