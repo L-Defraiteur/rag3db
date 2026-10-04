@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 12 h 30.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, fin d'après-midi.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -59,15 +59,40 @@ estimate_of → probe_rate) : la règle ne vise que les non-appels.
   jour, transmis à l'arbre principal ;
 - six tickets ouverts dans `docs/tickets/` (`a5e829d5b`).
 
-**Prêt, à mesurer** : la cohésion (C1), branche rag3db `liens`
-(`913fad0e3`) — `CohesionNode` en boost de la fusion, poids 0 par défaut ;
-banc `e2e_banc_cohesion` (les 43 questions du banc étagé, graphe hybride,
-W ∈ {0, 0,2, 0,5, 1}). Le banc étagé appelle l'API sans graphe : d'où un
-banc à moi, avec sa propre base à W = 0. Attend le créneau de la session
-recherche.
+**La cohésion (C1) : mesurée, éteinte par défaut, option gardée.**
+`SearchOptions.cohesion { weight, relations, … }` (`b9347b459`) : un nœud
+après la fusion dans `search_base` (`CohesionBoostNode`) multiplie chaque
+score par `1 + W × cohésion normalisée` (somme de 1/sauts vers les autres
+candidats, carrefours exclus) ; sans option, il laisse passer. Mesure par la
+voie `banc_cohesion_produit` du banc étagé (granite-278m, titre indexé),
+par-dessus la fusion du produit (bm25 0,45 / vector 0,55) :
 
-**Ensuite** : la section Liens (même branche) — la longueur (2 ou 4 sauts)
-attend Lucie.
+| W | MRR | R@1 | R@5 | identifiants | latence |
+|---|---|---|---|---|---|
+| 0 | 0,419 | 14 | 21 | 0,900 (8/10) | 329 ms |
+| 0,2 | 0,431 | 15 | 21 | 0,950 (9/10) | 370 ms |
+| 0,5 | 0,420 | 14 | 23 | 0,933 (9/10) | 424 ms |
+
+Un gain petit (+0,012 à W = 0,2, au-dessus de la variance ~0,002), pour
++40 ms ; sur un graphe hybride plus faible (0,312) il était de +0,065 — la
+fusion du produit fait déjà l'essentiel (descendre les `file_scope` isolés).
+Décision de l'orchestration : éteinte par défaut, **à remesurer si la fusion
+change**. Le `CohesionNode` (signal de boost) et le banc
+`e2e_banc_cohesion` (graphe à part) restent.
+
+**La section Liens** (`be9555c49`) : deux sauts par défaut, `max_hops`
+paramètre ; le crochet est écrit dans `links.mmd`, le manifeste ne le
+déclare pas. Trois exemples réels rendus à Lucie (ils expliquent / rien /
+n'apportent rien). Deux bruits relevés, corrigés dans codeparsers (master
+`766e4bd`, à pointer) : une variable locale Rust prise pour une fonction
+(`s`), le conteneur `mod tests`. **Attend** : le pointeur, puis les trois
+exemples rejoués pour Lucie.
+
+**Aussi** : l'impact d'un fichier est branché par la session recherche
+(« Avant d'éditer » sur read_file, f8d231148) ; les relations qui
+dépendaient du paquet sont localisées dans `code.rs` (numéros d'homonymes
+des clés) ; codeparsers master `766e4bd` = déclarations C++, locales Rust,
+conteneurs.
 
 ## Ce qui attend quelqu'un
 
