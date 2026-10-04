@@ -123,6 +123,25 @@ Ce sur quoi les deux s'accordent :
   corrompt ou qui perd) ;
 - tout n'attend pas la stèle : un agent seul sur un dépôt marche déjà.
 
+### Le moteur et les autres bases (décision de Lucie, 5 octobre 2026)
+
+> « Je pense qu'on garde rag3db, mais on rend rag3weaver vraiment compatible,
+> pour que quelqu'un ajoute des implémentations aux dialectes. »
+
+- **rag3db reste le moteur** : le graphe, l'embarqué, tout dans un seul
+  processus sont ce qui rend le tout-en-un possible. Sa dette héritée (les
+  chemins d'écriture, d'annulation et de reprise, peu éprouvés à l'origine)
+  se paie par la stèle.
+- **rag3weaver ne doit pas en dépendre par construction** : le dialecte de
+  schéma (`src/dialect.rs`, avec une implémentation PostgreSQL) est le point
+  d'extension. Le rendre « vraiment compatible » veut dire : un contrat écrit
+  de ce qu'un dialecte doit fournir, ce que chaque dialecte déclare savoir
+  faire (transactions, chargement en masse, index de mots et de vecteurs),
+  et une batterie de tests qu'une implémentation nouvelle fait passer.
+- Les migrations en verbes
+  (`2026-10-04-16h24-montrer-nos-produits.md`, §12) passent par cette même
+  couche : le vocabulaire est portable, les garanties se déclarent par base.
+
 ## 7. Un ordre, proposé — pas décidé
 
 1. **Le moteur jusqu'à sa stèle**, en fond, par sa session.
