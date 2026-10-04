@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, nuit.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 22 h.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -138,20 +138,25 @@ Depuis, pour faire baisser les « nom » :
   (9 907 → 9 798), le volume est en différé (champs, retours) : palier 3
   proposé.
 
-Sonde `tests/sonde_marques.rs` : les « nom » passent de 11 769 à 9 907. Le
+- codeparsers 4abafd2 (palier 3) : champs et retours pelés par leur chaîne,
+  constructeurs enveloppants, liaisons à leur position et motifs
+  `Some` / `Ok`, lecture de champ Rust écartée. **Le critère tenu** : avec
+  le filtre dans `impact`, « relie » 1,00, `e2e_impact` vert — branche
+  `filtre-impact` (216715158) à fusionner par l'arbre principal.
+
+Sonde `tests/sonde_marques.rs` : les « nom » passent de 11 769 à 9 210 ;
+`tests/sonde_racines.rs` dit d'où partent les receveurs sans type. Le
 reste, par forme : nom seul 28 % (ticket, pas maintenant), chemins de
 module 20 % (réexportations — décision à prendre), receveurs variables et
 chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
 
 ## Ce qui attend quelqu'un
 
-- **Arbre principal** : fusionner `self-types` (5236059bf) et pointer
-  codeparsers 3f992e4, avec les suites du graphe d'usages.
 - **Orchestration ou Lucie** : un chemin de module désigne-t-il aussi son
   dossier (réexportations) ?
-- **Orchestration** : palier 3 (type différé à texte complet et chaîne à
-  peler), ou d'abord les réexportations (tranché : suivre les `pub use` du
-  fichier du module, sauts bornés, marque import).
+- **Arbre principal** : fusionner `filtre-impact` (pointeur 4abafd2 et
+  filtre dans impact).
+- **Ensuite** : les réexportations (environ un jour, schéma dans code.rs).
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les

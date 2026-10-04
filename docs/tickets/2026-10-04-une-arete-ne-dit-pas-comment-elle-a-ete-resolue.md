@@ -1,6 +1,6 @@
 # Une arête ne dit pas comment elle a été résolue
 
-- **État** : en cours — filtre dans Liens sur master (f4495af6a) ; palier A (codeparsers d3c077c, branche `self-types` 5236059bf) en attente de fusion ; palier 2 à ouvrir
+- **État** : en cours — filtre dans Liens (master) ; filtre dans impact sur la branche `filtre-impact` (216715158), critère tenu, en attente de fusion ; réexportations à faire
 - **Gravité** : réponse fausse (une arête devinée se montre comme une arête sûre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous `code.rs`, `usages`, `impact`, liens)
@@ -106,3 +106,16 @@ du projet — l'abstention sur un type lu vers std est le gain).
   module nommé seulement ; `export … from` en TypeScript, `__init__.py`),
   sur un nombre borné de sauts ; marque « import ». Sinon l'arête reste
   « nom ». Mesuré à part.
+
+## Palier 3, critère tenu (4 octobre, soir)
+
+codeparsers 4abafd2 : un champ ou un retour se pèle par sa chaîne ; les
+constructeurs enveloppants (`Arc::new(Mutex::new(e))`) ; les liaisons
+valent à leur position, `Some(x)` / `Ok(x)` déballe son élément ; une
+lecture de champ Rust n'est plus une référence. Banc, sans les arêtes
+« nom » : « relie » 1,00 (0,75 avant), « tests traversés » 0,89 / 0,99,
+« dépend de » 1,00 / 1,00 ; `e2e_impact` vert avec le filtre. Sonde :
+« nom » 11 769 → 9 210 sur la soirée. Branche `filtre-impact` : le filtre
+allumé dans `impact` et `impact_fichier`.
+
+Reste : les réexportations (décision ci-dessus), le « nom seul » (ticket).
