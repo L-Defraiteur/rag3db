@@ -1,0 +1,202 @@
+//! **Un arrêt brutal au milieu d'un paquet en transaction** (4 octobre 2026).
+//!
+//! La transaction par paquet (`RAG3WEAVER_TX_PAR_PAQUET=1`, mode Bulk) fait
+//! tenir un paquet entier entre `BEGIN` et `COMMIT`. C'est la condition pour
+//! l'allumer par défaut : un processus tué au milieu d'un paquet, base
+//! ouverte, doit laisser une base qui rouvre, et la reprise de l'index doit
+//! rendre les mêmes comptes qu'une passe sans arrêt.
+//!
+//! Trois processus, comme `e2e_arret_brutal` :
+//! - **l'écrivain** indexe un corpus de 300 fichiers par paquets de 64, et se
+//!   tue par SIGKILL au paquet 2, après son ingestion et avant sa validation
+//!   (crochet `RAG3WEAVER_TEST_KILL_IN_BATCH`) ;
+//! - **le repreneur**, un processus neuf, rouvre la base et relance la même
+//!   synchronisation ;
+//! - **le témoin** indexe le même corpus dans une base neuve, sans arrêt.
+//!
+//! Le journal est exigé non vide après la mort : les paquets 0 et 1, validés,
+//! y sont encore (aucun point de reprise ne les a repliés sur un si petit
+//! corpus). Un journal vide ne prouverait rien. Sur disque, sous `~/.cache` :
+//! `/tmp` est de la mémoire vive ici, et la base reste examinable.
+//!
+//! ```bash
+//! ./run_e2e.sh --test e2e_tx_par_paquet_arret
+//! ```
+#![cfg(all(feature = "rag3db-native", feature = "code"))]
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use rag3weaver::code::{default_scope_chunking, register_code_schema};
+use rag3weaver::code_sync::{sync_source, RelationsMode, SourceSyncOptions};
+use rag3weaver::code_tools::Snapshot;
+use rag3weaver::connection::DbConnection;
+use rag3weaver::disponibilite::Disponibilites;
+use rag3weaver::embedder::HashEmbedder;
+use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+
+const ROLE: &str = "TX_ARRET_ROLE";
+const BASE: &str = "TX_ARRET_BASE";
+const PAQUET_TUE: usize = 2;
+
+fn racine_moteur() -> String {
+    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
+    })
+}
+
+fn dossier_sur_disque(cas: &str) -> PathBuf {
+    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/tx-par-paquet-arret").join(format!(
+        "{cas}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+/// 300 fichiers : chacun définit une fonction et appelle la précédente ; un
+/// sur dix importe une bibliothèque. Des arêtes entre paquets, donc.
+fn corpus() -> Vec<(String, String)> {
+    (0..300)
+        .map(|i| {
+            let import = if i % 10 == 0 { "use serde::Serialize;\n\n" } else { "" };
+            let appel = if i > 0 { format!("f{}() + ", i - 1) } else { String::new() };
+            (format!("src/f{i:03}.rs"), format!("{import}pub fn f{i}() -> u32 {{ {appel}{i} }}\n"))
+        })
+        .collect()
+}
+
+fn catalogue(base: &Path) -> Catalog {
+    let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
+    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+        .expect("extension vecteur");
+    let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
+    catalog.initialize().expect("initialize");
+    register_code_schema(&mut catalog, default_scope_chunking()).expect("schéma du code");
+    catalog
+}
+
+/// `reprendre` : la session laissée ouverte par un processus mort se reprend
+/// (`takeover`) — sans quoi la synchronisation refuse, une seule session à la
+/// fois par périmètre. C'est la voie que le produit donne aujourd'hui après
+/// un arrêt brutal.
+fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
+    let options = SourceSyncOptions {
+        batch_files: 64,
+        relations: Some(RelationsMode::Bulk),
+        exige: Disponibilites::RECHERCHE_TEXTE,
+        force: true,
+        takeover: reprendre,
+        ..Default::default()
+    };
+    let r = sync_source(catalog, &Snapshot::new("depot", corpus()), &options, &mut |_| {}).expect("synchroniser");
+    assert_eq!(r.failed, 0, "aucun échec : {r:?}");
+}
+
+/// Les comptes de chaque table de l'utilisateur (nœuds, et arêtes lues dans
+/// les deux sens). Les tables internes (`_…`) en sont exclues : le magasin
+/// de blobs et les marques de session diffèrent légitimement entre une base
+/// reprise et une base neuve.
+fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
+    let conn = catalog.conn();
+    let tables = conn.execute("CALL show_tables() RETURN *").unwrap();
+    let mut out = BTreeMap::new();
+    for r in &tables.rows {
+        let Some(nom) = r.get(1).and_then(|v| v.as_str()) else { continue };
+        if nom.starts_with('_') {
+            continue;
+        }
+        if r.iter().any(|v| v.as_str() == Some("NODE")) {
+            let n = conn.execute(&format!("MATCH (n:{nom}) RETURN count(n)")).unwrap().rows[0][0].as_i64().unwrap();
+            out.insert(format!("nœuds {nom}"), n);
+        }
+    }
+    for d in rag3weaver::relation_directions::count_both_directions(conn).unwrap() {
+        if d.from.starts_with('_') || d.to.starts_with('_') {
+            continue;
+        }
+        out.insert(format!("arêtes {} {}→{} direct", d.table, d.from, d.to), d.forward);
+        out.insert(format!("arêtes {} {}→{} inverse", d.table, d.from, d.to), d.backward);
+    }
+    out
+}
+
+/// **Le rôle d'un processus fils** : sans variable, rien (il ne tourne que
+/// lancé par le test ci-dessous).
+#[test]
+#[ignore]
+fn role_enfant() {
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let base = PathBuf::from(base);
+    let mut catalog = catalogue(&base);
+    synchroniser(&mut catalog, role == "repreneur");
+    // L'écrivain n'arrive jamais ici : le crochet le tue au paquet tué.
+    println!("COMPTES {role} {}", serde_json::to_string(&comptes(&catalog)).unwrap());
+}
+
+fn lancer(role: &str, base: &Path, tuer: bool) -> (std::process::ExitStatus, String) {
+    let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .env(ROLE, role)
+        .env(BASE, base)
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
+        .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH");
+    if tuer {
+        cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", PAQUET_TUE.to_string());
+    }
+    let sortie = cmd.output().expect("lancer le fils");
+    let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
+    (sortie.status, texte)
+}
+
+fn comptes_rendus(role: &str, sortie: &str) -> BTreeMap<String, i64> {
+    let ligne = sortie
+        .lines()
+        .find_map(|l| l.strip_prefix(&format!("COMPTES {role} ")))
+        .unwrap_or_else(|| panic!("le {role} n'a pas rendu ses comptes :\n{sortie}"));
+    serde_json::from_str(ligne).unwrap()
+}
+
+/// Les fichiers du journal à côté de la base, et leur taille.
+fn journal(dossier: &Path) -> Vec<(String, u64)> {
+    std::fs::read_dir(dossier)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().contains("wal"))
+        .map(|e| (e.file_name().to_string_lossy().to_string(), e.metadata().map(|m| m.len()).unwrap_or(0)))
+        .collect()
+}
+
+#[test]
+#[ignore]
+fn un_arret_au_milieu_d_un_paquet_se_reprend_aux_comptes_d_une_passe_sans_arret() {
+    let dossier = dossier_sur_disque("repris");
+    let base = dossier.join("base.rag3db");
+
+    let (statut, sortie) = lancer("ecrivain", &base, true);
+    println!("▸ écrivain : {statut:?}");
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "l'écrivain doit mourir par SIGKILL au paquet {PAQUET_TUE} :\n{sortie}");
+    assert!(sortie.contains(&format!("SIGKILL au paquet {PAQUET_TUE}")), "mort au crochet, pas ailleurs :\n{sortie}");
+    let wal = journal(&dossier);
+    println!("▸ journal après la mort : {wal:?}");
+    assert!(wal.iter().any(|(_, t)| *t > 0), "journal vide ou absent : la mort ne prouverait rien ({wal:?})");
+
+    let (statut, sortie) = lancer("repreneur", &base, false);
+    assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
+    let repris = comptes_rendus("repreneur", &sortie);
+
+    let temoin_dossier = dossier_sur_disque("temoin");
+    let (statut, sortie) = lancer("temoin", &temoin_dossier.join("base.rag3db"), false);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+
+    println!("▸ comptes repris : {repris:?}");
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "le témoin a bien indexé le corpus : {temoin:?}");
+    assert_eq!(repris, temoin, "la reprise rend les comptes d'une passe sans arrêt");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}

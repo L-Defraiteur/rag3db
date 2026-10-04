@@ -370,6 +370,11 @@ impl DbConnection for Rag3dbConnection {
     fn buffer_pool(&self) -> Option<BufferPoolChoice> {
         self.buffer_pool
     }
+
+    fn poison(&self, reason: &str) {
+        let mut r = self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner());
+        r.get_or_insert_with(|| reason.to_string());
+    }
 }
 
 // ── Value conversions ──────────────────────────────────────────────────

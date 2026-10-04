@@ -589,6 +589,12 @@ fn synchroniser(
         };
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
+    let par_transaction = mode == RelationsMode::Bulk && transaction_par_paquet();
+    if par_transaction {
+        // Le schéma que le premier paquet créerait à la volée, posé avant :
+        // dans la transaction, une annulation l'emporterait avec les lignes.
+        catalog.prepare_schema_for_ingest().map_err(|e| e.to_string())?;
+    }
     for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
@@ -621,10 +627,8 @@ fn synchroniser(
         // propre point de reprise à la validation, sauf dans une transaction
         // explicite, où un seul suffit au COMMIT (session cœur C++). Voir
         // [`terminer`].
-        // Le premier paquet crée le schéma à la volée (tables de morceaux,
-        // colonnes ajoutées) : hors transaction, sinon une annulation emporte
-        // le schéma avec les lignes.
-        let tx = mode == RelationsMode::Bulk && transaction_par_paquet() && rang_du_paquet > 0;
+        let tx = par_transaction;
+        let t_paquet = std::time::Instant::now();
         if tx {
             commencer(catalog)?;
         }
@@ -662,6 +666,7 @@ fn synchroniser(
         // Les relations de l'analyse, dans les deux modes : posées (par
         // paquet) ou mises en file (en masse) — le même compte.
         report.relations += ingere.relations;
+        tuer_dans_le_paquet(rang_du_paquet);
         if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > BULK_QUEUE_LIMIT {
             // La mémoire bornée : la file est posée par COPY sans attendre.
             let t = std::time::Instant::now();
@@ -676,6 +681,7 @@ fn synchroniser(
         } else {
             resultat?;
         }
+        crate::ingest_profile::add("sync · paquet entier, de bout en bout", t_paquet);
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         avancement.relations_pending = catalog.pending_work().relations.len();
@@ -689,7 +695,7 @@ fn synchroniser(
         avancement.phase = SyncPhase::Relations;
         progress(avancement);
         let debut = std::time::Instant::now();
-        let tx = transaction_par_paquet();
+        let tx = par_transaction;
         if tx {
             commencer(catalog)?;
         }
@@ -794,28 +800,61 @@ fn transaction_par_paquet() -> bool {
 }
 
 /// **Ouvrir la transaction d'un paquet** : toutes les écritures du catalogue
-/// passent par la même connexion du moteur, donc par elle.
-fn commencer(catalog: &Catalog) -> Result<(), String> {
-    catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))
+/// passent par la même connexion du moteur, donc par elle. Le catalogue
+/// n'émet plus de DDL tant qu'elle est ouverte.
+fn commencer(catalog: &mut Catalog) -> Result<(), String> {
+    catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
+    catalog.set_in_transaction(true);
+    Ok(())
 }
 
-/// **Valider le paquet, ou le défaire.** Après un `ROLLBACK`, les caches du
-/// catalogue (identifiants de nœuds, sessions, file vidée) gardent des
-/// écritures défaites : le catalogue doit être rouvert, et l'erreur le dit.
-/// Prototype : la mise en « doit être rouvert » viendra avec le
-/// durcissement, si la mesure montre le gain.
-fn terminer(catalog: &Catalog, resultat: Result<(), String>) -> Result<(), String> {
-    match resultat {
-        Ok(()) => catalog.conn().execute("COMMIT").map(|_| ()).map_err(|e| format!("valider le paquet : {e}")),
+/// **Valider le paquet, ou le défaire.** Sur un échec, `ROLLBACK`, puis le
+/// catalogue est empoisonné comme après un point de reprise échoué
+/// ([`Catalog::poison`]) : ses caches (identifiants de nœuds, modèles
+/// enregistrés, index plein texte ouverts, file vidée) gardent des écritures
+/// défaites, et seule une réouverture les remet d'accord avec la base. Un
+/// COMMIT refusé vaut la même chose. La reprise de l'index refait le paquet.
+fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), String> {
+    catalog.set_in_transaction(false);
+    let echec = match resultat {
+        Ok(()) => {
+            // Le COMMIT porte le point de reprise que les COPY du paquet ont
+            // demandé : on ne sait pas séparer les deux d'ici (minuterie de
+            // rag3db-eb).
+            let t = std::time::Instant::now();
+            let r = catalog.conn().execute("COMMIT");
+            crate::ingest_profile::add("sync · COMMIT du paquet (et son point de reprise)", t);
+            match r {
+                Ok(_) => return Ok(()),
+                Err(e) => format!("valider le paquet : {e}"),
+            }
+        }
         Err(cause) => {
             let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
-            Err(format!(
-                "{cause} — le paquet est défait ({}) : le catalogue doit être rouvert avant toute autre écriture",
+            format!(
+                "{cause} — le paquet est défait ({})",
                 match defait {
                     Ok(_) => "ROLLBACK".to_string(),
                     Err(e) => format!("ROLLBACK refusé : {e}"),
                 }
-            ))
+            )
+        }
+    };
+    catalog.poison(&echec);
+    Err(format!("{echec} : le catalogue doit être rouvert, et l'index repris"))
+}
+
+/// **Crochet de test** (`RAG3WEAVER_TEST_KILL_IN_BATCH=<rang>`) : le processus
+/// se tue par SIGKILL au milieu du paquet de ce rang, après son ingestion et
+/// avant sa validation — une mort base ouverte, transaction en cours
+/// (`tests/e2e_tx_par_paquet_arret.rs`).
+#[doc(hidden)]
+fn tuer_dans_le_paquet(rang: usize) {
+    if std::env::var("RAG3WEAVER_TEST_KILL_IN_BATCH").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang) {
+        eprintln!("[rag3weaver] crochet de test : SIGKILL au paquet {rang}, transaction ouverte");
+        let _ = std::process::Command::new("kill").args(["-KILL", &std::process::id().to_string()]).status();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 }

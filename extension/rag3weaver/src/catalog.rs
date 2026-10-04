@@ -241,6 +241,11 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// **Une transaction de l'appelant est ouverte** (`set_in_transaction`) :
+    /// aucun DDL ne part plus d'ici — les index vectoriels ne tombent pas et
+    /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
+    /// annulation emporterait sinon le schéma avec les lignes.
+    in_transaction: bool,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -410,6 +415,7 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
+            in_transaction: false,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -1503,6 +1509,11 @@ impl Catalog {
         entities: &[&str],
         f: impl FnOnce(&mut Self) -> T,
     ) -> Result<T, CatalogError> {
+        if self.in_transaction {
+            // Pas de DDL dans la transaction de l'appelant : l'index reste
+            // et se tient à jour ligne à ligne.
+            return Ok(f(self));
+        }
         let indexes = self.vector_indexes_of(entities);
         for (table, column, index) in &indexes {
             // Le drapeau est **par index**, et porte la colonne : avec
@@ -3094,6 +3105,9 @@ impl Catalog {
     /// retard nul reconstruit, et un processus mort laisse
     /// [`Self::restore_dropped_vector_indexes`] finir à l'ouverture suivante.
     fn ajuster_l_index_pour_le_retard(&self, table: &str, storage: &crate::embedding_storage::VectorStorage, retard: usize) -> Result<(), CatalogError> {
+        if self.in_transaction {
+            return Ok(());
+        }
         let cle = format!("vector_index_dropped:{table}:{}", storage.index);
         let tombe = self.read_meta_key(&cle)?.is_some_and(|v| !v.is_empty());
         if tombe && retard == 0 {
@@ -6234,6 +6248,40 @@ impl Catalog {
     /// À appeler depuis **chaque** point d'entrée d'ingestion : sans handle
     /// ouvert, `InsertRecordNode` saute l'indexation en silence, et la
     /// recherche rend 0 sans que rien ne le signale.
+    /// **Poser d'avance le schéma qu'une ingestion crée à la volée**, pour
+    /// que chaque paquet puisse ensuite tourner dans une transaction : le
+    /// stockage du modèle d'embarquement courant (colonnes et index sur les
+    /// tables de morceaux), les index plein texte de chaque entité déclarée,
+    /// et la colonne de marquage du magasin de blobs, que leur ouverture
+    /// pose. Tiré des seules déclarations ; à appeler hors transaction.
+    pub fn prepare_schema_for_ingest(&mut self) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.ensure_embedding_model()?;
+        let mut names: Vec<String> = self.entity_configs.keys().cloned().collect();
+        names.sort();
+        self.open_fts_handles_for(&names);
+        self.flush_blob_store("préparation du schéma")
+    }
+
+    /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
+    /// est ouverte, le catalogue n'émet aucun DDL (voir `in_transaction`).
+    pub fn set_in_transaction(&mut self, open: bool) {
+        self.in_transaction = open;
+    }
+
+    /// **Rendre ce catalogue inutilisable**, comme après un point de reprise
+    /// échoué : toutes les connexions de la base refusent ensuite tout, et
+    /// [`must_reopen`](Self::must_reopen) donne `reason`. Après l'annulation
+    /// d'une transaction, les caches en mémoire (modèles enregistrés, index
+    /// plein texte ouverts, magasin de blobs préparé) gardent des écritures
+    /// défaites : seule une réouverture les remet d'accord avec la base.
+    pub fn poison(&self, reason: &str) {
+        self.conn.poison(reason);
+        if let Some(c) = &self.sync_conn {
+            c.poison(reason);
+        }
+    }
+
     fn open_fts_handles_for(&mut self, entity_names: &[String]) {
         let names: std::collections::HashSet<String> =
             entity_names.iter().cloned().collect();
@@ -6820,7 +6868,7 @@ impl Catalog {
         // que sa fermeture — un écrivain qui exige le GPU pour son entité ne
         // règle pas la dette d'un autre, ce serait le couplage que
         // l'invariant interdit.
-        if cible.is_none() && avec_embarquement && outcome.failed == 0 && self.peut_devoir_un_embarquement {
+        if cible.is_none() && avec_embarquement && outcome.failed == 0 && self.peut_devoir_un_embarquement && !self.in_transaction {
             // Le compte d'un rattrapage réussi n'est pas un avertissement :
             // c'est du travail normal, et la dette restante s'interroge
             // (`count_marqueur_manquant`). Seul l'échec se dit.

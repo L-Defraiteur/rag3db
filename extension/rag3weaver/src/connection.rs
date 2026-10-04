@@ -220,6 +220,11 @@ pub trait DbConnection: Send + Sync {
     fn buffer_pool(&self) -> Option<BufferPoolChoice> {
         None
     }
+
+    /// **Rendre la base inutilisable** pour toutes ses connexions, comme
+    /// après un point de reprise échoué : [`must_reopen`](Self::must_reopen)
+    /// rend ensuite `reason`. Sans effet pour un moteur qui ne le sait pas.
+    fn poison(&self, _reason: &str) {}
 }
 
 /// D'où vient la taille du tampon du moteur.
