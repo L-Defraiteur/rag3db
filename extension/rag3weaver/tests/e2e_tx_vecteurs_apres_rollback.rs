@@ -1,6 +1,8 @@
 //! **Après un paquet défait, l'index vectoriel retrouve-t-il les morceaux
-//! repris ?** (5 octobre 2026). Hors de la batterie : rouge tant que le moteur
-//! n'est pas corrigé (session cœur C++).
+//! repris ?** (5 octobre 2026). Dans la batterie depuis les correctifs du
+//! cœur C++ `e1049934e` (l'annulation prévient les index, le refus nommé
+//! « is behind its table ») et `35d09c466` (le SET d'un vecteur sur une ligne
+//! créée dans la même transaction plantait dans `shrinkForNode`).
 //!
 //! Le défaut : sur une table qui porte un index vectoriel, un COPY annulé
 //! (BEGIN ; COPY ; ROLLBACK) laisse avancé le compteur des lignes indexées ; la
@@ -22,7 +24,7 @@
 //! sonde elle-même voit juste.
 //!
 //! ```bash
-//! ./run_e2e.sh --test sonde_vecteurs_apres_rollback
+//! ./run_e2e.sh --test e2e_tx_vecteurs_apres_rollback
 //! ```
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
