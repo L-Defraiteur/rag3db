@@ -298,3 +298,39 @@ fn un_appel_par_chemin_vaut_un_import() {
         "Outil::fabrique ne va jamais vers le fabrique d'Autre : {aretes:?}"
     );
 }
+
+/// **Par `self`, le type englobant d'abord** : `self.record()` dans
+/// `impl Catalog` (a.rs) vise le `record` de `Catalog` défini dans un autre
+/// fichier (b.rs), pas celui d'`Autre` (c.rs) — marqué `type`. Une méthode
+/// par défaut de trait qui appelle `self.seul()` n'a pas ce type pour parent :
+/// la règle d'avant la relie quand même au seul définisseur, par le nom.
+#[test]
+#[ignore]
+fn par_self_le_type_englobant_d_abord() {
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let f = |p: &str, c: &str| (p.to_string(), c.to_string());
+    let fichiers = vec![
+        f("a.rs", "pub struct Catalog;\n\nimpl Catalog {\n    pub fn finish(&self) {\n        self.record();\n    }\n}\n"),
+        f("b.rs", "use crate::a::Catalog;\n\nimpl Catalog {\n    pub fn record(&self) {}\n}\n"),
+        f("c.rs", "pub struct Autre;\n\nimpl Autre {\n    pub fn record(&self) {}\n}\n"),
+        f("d.rs", "pub trait Outil {\n    fn bonjour(&self) {\n        self.seul();\n    }\n}\n"),
+        f("e.rs", "pub struct X;\n\nimpl X {\n    pub fn seul(&self) {}\n}\n"),
+    ];
+    cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat
+        .execute_raw(
+            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = 'record' OR b.name = 'seul' \
+             RETURN a.name, b.file_path, r.resolution ORDER BY a.name, b.file_path",
+        )
+        .unwrap();
+    let aretes: Vec<(String, String, String)> = r
+        .rows
+        .iter()
+        .map(|x| (x[0].as_str().unwrap_or("").to_string(), fichier(x[1].as_str().unwrap_or("")), x[2].as_str().unwrap_or("").to_string()))
+        .collect();
+    eprintln!("{aretes:#?}");
+    let vers = |de: &str| aretes.iter().filter(|(a, _, _)| a == de).map(|(_, f, m)| (f.clone(), m.clone())).collect::<Vec<_>>();
+    assert_eq!(vers("finish"), vec![("b.rs".to_string(), "type".to_string())], "le record de Catalog, pas celui d'Autre");
+    assert_eq!(vers("bonjour"), vec![("e.rs".to_string(), "nom".to_string())], "l'héritage ne se perd pas");
+}

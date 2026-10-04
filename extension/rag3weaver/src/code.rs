@@ -514,6 +514,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             props.insert("kind".to_string(), field_def(FieldType::String));
             props.insert("qualifier_types".to_string(), field_def(FieldType::String));
             props.insert("import_modules".to_string(), field_def(FieldType::String));
+            props.insert("self_types".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -662,6 +663,13 @@ pub struct CodeAnalysis {
     /// matérialisation, comme le type lu.
     #[serde(default)]
     pub pending_import_modules: Vec<(String, String, Vec<String>)>,
+    /// Le type englobant du scope, quand **toutes** ses références à ce nom
+    /// passent par `self`, `Self` ou `this` (`self.f()` dans `impl Catalog`
+    /// donne `Catalog`). Il préfère le définisseur de ce type, sans exclure
+    /// les autres : une méthode héritée (défaut d'un trait, classe de base)
+    /// n'en est pas un.
+    #[serde(default)]
+    pub pending_self_types: Vec<(String, String, Vec<String>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -1081,6 +1089,8 @@ pub fn analyze_in_project(
             let mut types_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : les modules d'import, même règle.
             let mut modules_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Par nom : le type englobant, quand on l'atteint par `self`.
+            let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             for r in &sc.identifier_references {
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
@@ -1149,6 +1159,17 @@ pub fn analyze_in_project(
                     }
                     _ => *modules = None,
                 }
+                let par_instance = r.qualifier.as_deref().is_some_and(|q| matches!(q, "self" | "Self" | "this"));
+                let englobant = sc.parent.clone().filter(|p| par_instance && !p.is_empty());
+                let englobants = englobants_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
+                match (englobants.as_mut(), englobant) {
+                    (Some(v), Some(t)) => {
+                        if !v.contains(&t) {
+                            v.push(t);
+                        }
+                    }
+                    _ => *englobants = None,
+                }
                 if !seen.insert(id.to_string()) {
                     continue;
                 }
@@ -1194,6 +1215,12 @@ pub fn analyze_in_project(
                 if let Some(mut v) = modules.filter(|v| !v.is_empty()) {
                     v.sort();
                     analysis.pending_import_modules.push((key.clone(), name, v));
+                }
+            }
+            for (name, englobants) in englobants_lus {
+                if let Some(mut v) = englobants.filter(|v| !v.is_empty()) {
+                    v.sort();
+                    analysis.pending_self_types.push((key.clone(), name, v));
                 }
             }
         }
@@ -1861,6 +1888,8 @@ impl Catalog {
             analysis.pending_qualifier_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         let modules_of: HashMap<(&str, &str), &Vec<String>> =
             analysis.pending_import_modules.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let englobants_of: HashMap<(&str, &str), &Vec<String>> =
+            analysis.pending_self_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -1877,6 +1906,8 @@ impl Catalog {
             props.insert("qualifier_types".to_string(), s(&types));
             let modules = modules_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
             props.insert("import_modules".to_string(), s(&modules));
+            let englobants = englobants_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
+            props.insert("self_types".to_string(), s(&englobants));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -1935,7 +1966,7 @@ impl Catalog {
                 mentioners_by_symbol
                     .get(*sym)
                     .is_some_and(|ms| {
-                        ms.iter().any(|m| !m.qualifier_types.is_empty() || !m.import_modules.is_empty() || m.kind == "HAS_PARENT")
+                        ms.iter().any(|m| !m.qualifier_types.is_empty() || !m.import_modules.is_empty() || !m.self_types.is_empty() || m.kind == "HAS_PARENT")
                     })
             })
             .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
@@ -2083,7 +2114,7 @@ impl Catalog {
         if to_uuids.is_empty() {
             return Ok(out);
         }
-        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types, r.import_modules" } else { "" };
+        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types, r.import_modules, r.self_types" } else { "" };
         let cypher = format!(
             // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
             // toutes les tables, à chaque symbole de chaque lot.
@@ -2117,7 +2148,8 @@ impl Catalog {
                         .unwrap_or_default()
                 };
                 let import_modules = liste(7);
-                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules });
+                let self_types = liste(8);
+                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types });
             }
         }
         Ok(out)
@@ -2168,6 +2200,8 @@ struct Mention {
     qualifier_types: Vec<String>,
     /// Les modules d'où le mentionneur importe le nom.
     import_modules: Vec<String>,
+    /// Le type englobant, quand le mentionneur atteint le nom par `self`.
+    self_types: Vec<String>,
 }
 
 /// **Comment une arête du rendez-vous a été résolue** : la marque qu'elle
@@ -2245,6 +2279,18 @@ fn choose_target(
             _ => None,
         };
     }
+    // Par `self` : le définisseur du type englobant, s'il est seul. Sinon la
+    // suite — une méthode héritée (défaut d'un trait, classe de base) n'est
+    // pas définie dans le type, et ne se perd pas pour autant.
+    if !m.self_types.is_empty() {
+        let du_type: Vec<&String> = definers
+            .iter()
+            .filter(|d| parents.get(*d).is_some_and(|p| m.self_types.iter().any(|t| nom_de_type(t) == nom_de_type(p))))
+            .collect();
+        if let [un] = du_type.as_slice() {
+            return Some(((*un).clone(), Resolution::Type));
+        }
+    }
     if let [un] = definers {
         return Some(seul_ou_import(un));
     }
@@ -2265,6 +2311,10 @@ fn choose_target(
 /// quand `super` remonte au-delà de la racine. Un type en qualificatif
 /// (`Outil::fabrique`) ne désigne un fichier que s'il en porte le nom.
 fn module_d_un_chemin(qualifier: &str, fichier: &str) -> Option<String> {
+    if qualifier == "Self" {
+        // Le type englobant, pas un module : `self_types` s'en charge.
+        return None;
+    }
     let mut segments = qualifier.split("::").filter(|s| !s.is_empty()).peekable();
     if !matches!(segments.peek(), Some(&"self") | Some(&"super")) {
         return Some(qualifier.to_string());
@@ -2786,6 +2836,7 @@ mod tests_resolution {
             usage: BTreeMap::new(),
             qualifier_types: types.iter().map(|t| t.to_string()).collect(),
             import_modules: imports.iter().map(|t| t.to_string()).collect(),
+            self_types: Vec::new(),
         }
     }
 
@@ -2851,6 +2902,21 @@ mod tests_resolution {
         assert!(!module_designe_fichier("p/src/dataflow/x", "/p/src/x.rs"));
         // Au-delà de la racine : rien.
         assert_eq!(module_d_un_chemin("super::super::super::x", "/p/b.rs"), None);
+    }
+
+    #[test]
+    fn self_prefere_le_type_englobant_sans_exclure_l_heritage() {
+        let parents = table(&[("new@foo", "Foo"), ("new@bar", "Bar")]);
+        let par_self = |englobant: &str| Mention { self_types: vec![englobant.to_string()], ..mention("CONSUMES", &[], &[]) };
+        // `Self::new()` dans `impl Foo`, `new` défini pour Foo et Bar : Foo.
+        let t = choose_target(&par_self("Foo"), &ids(&["new@foo", "new@bar"]), &parents, &HashMap::new(), &HashMap::new());
+        assert_eq!(t, Some(("new@foo".into(), Resolution::Type)));
+        // `self.f()` dans une méthode par défaut du trait `Outil`, `f` défini
+        // par deux impls : le trait ne choisit pas au hasard.
+        let parents2 = table(&[("f@a", "A"), ("f@b", "B")]);
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a", "f@b"]), &parents2, &HashMap::new(), &HashMap::new()), None);
+        // … et s'il n'y en a qu'un : la règle d'avant, par le nom.
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a"]), &parents2, &HashMap::new(), &HashMap::new()), Some(("f@a".into(), Resolution::Name)));
     }
 
     #[test]
