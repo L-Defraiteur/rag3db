@@ -449,3 +449,31 @@ Points en débat :
   ports. C'est ce qui garde un graphe lisible, vérifiable, rejouable.
 - **Quand l'assemblage ne suffit pas** : WebAssembly (section précédente),
   pas un nœud Rust.
+
+### Quel langage de script dans les nœuds ?
+
+> « Il n'y a pas un autre langage de script plus performant que rhai pour
+> décrire des nœuds ? » — Lucie
+
+Avis de l'orchestration, de connaissance générale — **rien n'est mesuré chez
+nous**, à vérifier avant de choisir :
+
+| Langage | Vitesse | Isolation | Intégration à Rust | Connu des modèles |
+|---|---|---|---|---|
+| rhai (l'actuel) | la plus faible : il interprète l'arbre du script | sûre par défaut | native, aucune dépendance | peu |
+| Lua / Luau | bien plus rapide ; très rapide avec un compilateur à la volée | bonne si l'on restreint la bibliothèque ; Luau est fait pour cela | une dépendance en C | très bien |
+| Rune | plus rapide que rhai (machine à code intermédiaire) | bonne | native | très peu |
+| JavaScript embarqué | de modéré (petit moteur) à très rapide (gros moteur, lourd) | bonne | dépendance moyenne à lourde | très bien |
+| Starlark | modérée | déterministe et fermé par conception | native | assez bien (proche de Python) |
+| WebAssembly | proche du natif | la meilleure | une dépendance ; il faut compiler | sans objet |
+
+Ce qui pèse dans le choix :
+
+- **la vitesse compte peu pour une expression** (la condition d'un « si ») ;
+  elle compte pour un script appelé sur chaque enregistrement d'un gros flux ;
+- **qui écrit les scripts** : si ce sont des agents, un langage que les
+  modèles connaissent bien fait moins de fautes — c'est peut-être l'argument
+  le plus fort contre rhai, avant la vitesse ;
+- **le langage peut être un point de branchement**, comme le moteur de plein
+  texte : un nœud de script déclare son langage, rhai reste le défaut tant
+  qu'une mesure ne dit pas autre chose.
