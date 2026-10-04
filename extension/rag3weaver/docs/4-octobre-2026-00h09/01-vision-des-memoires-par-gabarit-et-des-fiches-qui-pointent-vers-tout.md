@@ -391,6 +391,69 @@ Encore flou :
   session vaut 100 %.
 - Le budget qui déclenche le L3, et s'il dépend du sujet.
 
+### 9.4 Des résumés structurés, et des genres de référence qui s'apprennent (Lucie, 4 octobre)
+
+> « Les résumés sont structurés quand même : on extrait en plus des infos —
+> nom de fichier mentionné, site web, des références abstraites avec des
+> règles de format. Si ce type de référence n'existe pas encore, on demande à
+> l'archiviste de créer la règle, en la pensant générique pour ce type de
+> référence, pour les usages futurs. »
+
+Un résumé n'est pas qu'un texte : c'est un texte **et la liste de ce qu'il
+cite**. Chaque chose citée est une référence d'un **genre**, écrite dans une
+forme réglée. Ce sont les adresses du §3 : un L1 qui cite `docs/users.md`, la
+PR 42 et l'entité `User` porte trois liens, et se retrouve depuis chacun des
+trois.
+
+**Ce que le résumé structuré apporte.**
+
+- Le rappel par ce qu'on touche devient exact : l'agent lit un fichier, et
+  les L1, L2 et L3 qui le citent se trouvent par l'adresse, sans recherche
+  par sens.
+- Le « à revoir » monte les étages : un fichier change, les articles qui le
+  citent le savent.
+- Deux articles qui citent les mêmes choses sont proches, même s'ils n'en
+  parlent pas avec les mêmes mots : un signal de plus pour ranger.
+
+**Un genre de référence est une règle déclarée**, pas du code :
+
+| Partie de la règle | Exemple pour « fichier » | Exemple pour « commit » |
+|---|---|---|
+| son nom et ce qu'il désigne | un chemin dans l'espace de travail | une révision d'un dépôt |
+| comment on le reconnaît | un chemin relatif avec une extension | 7 à 40 chiffres hexadécimaux, près de « commit » |
+| sa forme normale | `path:docs/users.md` | `commit:<dépôt>@<sha>` |
+| comment on le vérifie | le fichier existe | la révision existe |
+| ce qui le fait vieillir | l'empreinte du contenu | rien, il est immuable |
+
+Les genres de départ : fichier, adresse web, ligne d'une entité, élément du
+schéma, graphe, gabarit, sujet, commit, ticket.
+
+**Quand un genre manque, l'archiviste le crée — pour tous les usages à venir.**
+Il rencontre une chose citée qu'aucune règle ne reconnaît (un numéro de
+facture, une référence d'article, un identifiant de carte) : il écrit la
+règle, générique, et elle rejoint le registre. C'est la boucle du §4 : les
+genres de référence sont eux-mêmes des fiches d'une mémoire, avec leur
+gabarit, et le prochain résumé s'en sert.
+
+Ce qu'il faut tenir, parce qu'une règle créée à la volée par un modèle est
+exactement l'endroit où le désordre entre :
+
+1. **Chercher avant de créer** : montrer les genres proches et demander
+   lequel on retient — la même règle que pour un sujet. « Référence
+   d'article » et « DOI » ne doivent pas devenir deux genres.
+2. **Une règle s'éprouve avant d'entrer** : sur les exemples qui l'ont fait
+   naître, et sur des contre-exemples — elle ne doit pas attraper ce que les
+   genres existants attrapent déjà. Une règle qui échoue reste une
+   proposition.
+3. **L'extraction est déterministe d'abord** : ce qu'une règle sait
+   reconnaître seule (un chemin, une adresse, une révision) n'a pas besoin de
+   modèle ; le modèle ne sert qu'aux références dites en langue (« le design
+   d'hier », « la PR sur les users ») et à la création d'un genre.
+4. **Une référence non résolue se dit** : « cité, introuvable » est une
+   information ; elle n'est ni jetée ni inventée.
+5. **Un genre créé est daté, attribué, et se retire** : ses références
+   redeviennent du texte, rien n'est perdu.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. L'ordre du §7, ou la boucle (le registre) d'abord.
