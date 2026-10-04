@@ -695,6 +695,7 @@ fn synchroniser(
         // paquet) ou mises en file (en masse) — le même compte.
         report.relations += ingere.relations;
         tuer_dans_le_paquet(rang_du_paquet);
+        echouer_dans_le_paquet(rang_du_paquet)?;
         let borne = if par_transaction { BULK_QUEUE_LIMIT_IN_TRANSACTION } else { BULK_QUEUE_LIMIT };
         if mode == RelationsMode::Bulk && catalog.pending_work().relations.len() > borne {
             // La mémoire bornée : la file est posée par COPY sans attendre.
@@ -888,6 +889,22 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
     };
     catalog.poison(&echec);
     Err(format!("{echec} : le catalogue doit être rouvert, et l'index repris"))
+}
+
+/// **Crochet de test** (`RAG3WEAVER_TEST_FAIL_IN_BATCH=<rang>`) : le paquet de
+/// ce rang échoue après son ingestion, avant sa validation — le chemin du
+/// ROLLBACK et de l'empoisonnement (`tests/e2e_tx_par_paquet_arret.rs`).
+/// Une fois par processus : la reprise qui suit, dans le même processus, va
+/// au bout.
+#[doc(hidden)]
+fn echouer_dans_le_paquet(rang: usize) -> Result<(), String> {
+    static DEJA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if std::env::var("RAG3WEAVER_TEST_FAIL_IN_BATCH").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang)
+        && !DEJA.swap(true, std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err(format!("crochet de test : échec au paquet {rang}"));
+    }
+    Ok(())
 }
 
 /// **Crochet de test** (`RAG3WEAVER_TEST_KILL_IN_BATCH=<rang>`) : le processus

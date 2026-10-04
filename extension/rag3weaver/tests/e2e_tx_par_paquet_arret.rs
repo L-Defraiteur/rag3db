@@ -142,7 +142,25 @@ fn role_enfant() {
     let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
     let base = PathBuf::from(base);
     let mut catalog = catalogue(&base);
-    synchroniser(&mut catalog, role == "repreneur");
+    if role == "echoueur" {
+        // Le chemin du ROLLBACK : le paquet échoue, la base est empoisonnée,
+        // puis lâchée (sa fermeture fait un point de reprise), rouverte dans
+        // ce même processus, et l'index repris.
+        let options = SourceSyncOptions {
+            batch_files: 32,
+            relations: Some(RelationsMode::Bulk),
+            exige: Disponibilites::RECHERCHE_TEXTE,
+            force: true,
+            ..Default::default()
+        };
+        let erreur = sync_source(&mut catalog, &Snapshot::new("depot", corpus()), &options, &mut |_| {})
+            .expect_err("le paquet piégé échoue");
+        println!("ECHEC {erreur}");
+        assert!(catalog.must_reopen().is_some(), "le catalogue est empoisonné après le ROLLBACK : {erreur}");
+        drop(catalog);
+        catalog = catalogue(&base);
+    }
+    synchroniser(&mut catalog, role == "repreneur" || role == "echoueur");
     // L'écrivain n'arrive jamais ici : le crochet le tue au paquet tué.
     println!("COMPTES {role} {}", serde_json::to_string(&comptes(&catalog)).unwrap());
 }
@@ -160,12 +178,16 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())
         .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
-        .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH");
+        .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH")
+        .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH");
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }
     if let Some(rang) = tuer {
         cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", rang.to_string());
+    }
+    if role == "echoueur" {
+        cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", "6");
     }
     let sortie = cmd.output().expect("lancer le fils");
     let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
@@ -294,6 +316,29 @@ fn un_arret_au_milieu_d_un_groupe_de_quatre_paquets_se_reprend_aux_memes_comptes
     let temoin = comptes_rendus("temoin", &sortie);
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
     assert_eq!(repris, temoin, "à K = 4, la reprise rend les comptes d'une passe sans arrêt");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Le chemin du ROLLBACK** (K = 4) : le paquet 6 échoue au milieu du
+/// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée — sa
+/// fermeture fait un point de reprise après l'annulation, ce que le correctif
+/// du moteur 05788a868 rend sûr —, rouverte dans le même processus, et
+/// l'index repris. Les comptes sont ceux d'une passe sans échec.
+#[test]
+#[ignore]
+fn un_paquet_qui_echoue_est_defait_et_la_reprise_rend_les_memes_comptes() {
+    let dossier = dossier_sur_disque("rollback");
+    let (statut, sortie) = lancer_avec("echoueur", &dossier.join("base.rag3db"), None, true, 4);
+    assert!(statut.success(), "échec, ROLLBACK, réouverture et reprise :\n{sortie}");
+    assert!(sortie.contains("ECHEC") && sortie.contains("échec au paquet 6"), "le paquet piégé a échoué :\n{sortie}");
+    let repris = comptes_rendus("echoueur", &sortie);
+    let temoin_dossier = dossier_sur_disque("temoin-rollback");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
+    assert_eq!(repris, temoin, "après un ROLLBACK et une reprise, les comptes d'une passe sans échec");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }
