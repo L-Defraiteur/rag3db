@@ -10,21 +10,30 @@ namespace processor {
 
 struct MergeInfo {
     std::vector<std::unique_ptr<evaluator::ExpressionEvaluator>> keyEvaluators;
+    // La table des motifs créés garde une colonne d'identifiant par insertion (les nœuds, puis
+    // les relations) ; executorInfo va d'une insertion à sa colonne.
     FactorizedTableSchema tableSchema;
     common::executor_info executorInfo;
+    // Pour chaque ON MATCH SET (les nœuds, puis les relations), l'insertion qui crée son
+    // motif, ou INVALID_EXECUTOR si le motif n'est pas créé par ce MERGE.
+    std::vector<common::executor_id_t> onMatchInsertIdx;
     DataPos existenceMark;
 
     MergeInfo(std::vector<std::unique_ptr<evaluator::ExpressionEvaluator>> keyEvaluators,
         FactorizedTableSchema tableSchema, common::executor_info executorInfo,
-        DataPos existenceMark)
+        std::vector<common::executor_id_t> onMatchInsertIdx, DataPos existenceMark)
         : keyEvaluators{std::move(keyEvaluators)}, tableSchema{std::move(tableSchema)},
-          executorInfo{std::move(executorInfo)}, existenceMark{existenceMark} {}
+          executorInfo{std::move(executorInfo)}, onMatchInsertIdx{std::move(onMatchInsertIdx)},
+          existenceMark{existenceMark} {}
     EXPLICIT_COPY_DEFAULT_MOVE(MergeInfo);
+
+    static constexpr common::executor_id_t INVALID_EXECUTOR = UINT64_MAX;
 
 private:
     MergeInfo(const MergeInfo& other)
         : keyEvaluators{copyVector(other.keyEvaluators)}, tableSchema{other.tableSchema.copy()},
-          executorInfo{other.executorInfo}, existenceMark{other.existenceMark} {}
+          executorInfo{other.executorInfo}, onMatchInsertIdx{other.onMatchInsertIdx},
+          existenceMark{other.existenceMark} {}
 };
 
 struct MergePrintInfo final : OPPrintInfo {

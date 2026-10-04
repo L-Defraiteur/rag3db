@@ -29,7 +29,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un point de reprise efface les relations des régions non touchées](2026-10-04-relations-effacees-au-point-de-reprise.md) | corrigé | perte | oui | oui (il supprime des relations et laisse passer des points de reprise) |
 | [Le point de reprise plante, à jamais, après ALTER TABLE … DROP](2026-10-04-point-de-reprise-impossible-apres-drop-de-colonne.md) | ouvert | plantage | oui | non (rag3weaver ne supprime jamais de colonne) |
 | [La lecture plante après le point de reprise d'une relation créée puis supprimée](2026-10-04-lecture-apres-reprise-d-une-relation-creee-puis-supprimee.md) | corrigé | plantage | oui | oui (il crée et supprime des relations) |
-| [MERGE avec deux ON MATCH SET et une clé répétée plante](2026-10-04-merge-deux-on-match-set-et-cle-repetee.md) | ouvert | plantage | oui | non (sonde du 4 octobre) |
+| [MERGE avec deux ON MATCH SET et une clé répétée plante](2026-10-04-merge-deux-on-match-set-et-cle-repetee.md) | corrigé | plantage | oui | non (sonde du 4 octobre) |
 | [UNION plante quand une branche projette deux fois la même propriété](2026-10-04-union-propriete-projetee-deux-fois.md) | corrigé | plantage | oui | non vérifié |
 | [Un chemin utilisé seulement dans un lambda fait planter](2026-10-04-chemin-utilise-seulement-dans-un-lambda.md) | corrigé | plantage | oui | non vérifié |
 | [Comparer une relation à une variable de lambda fait planter](2026-10-04-relation-comparee-a-une-variable-de-lambda.md) | corrigé | plantage | oui | non vérifié |
@@ -41,7 +41,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un terme de WHERE qui ne cite que des paramètres est ignoré](2026-10-04-where-sur-parametres-seuls-ignore.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [L'étiquette d'une variable liée plus tôt sans étiquette est ignorée](2026-10-04-etiquette-d-une-variable-deja-liee-ignoree.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
-| [MERGE d'une clé répétée rend une autre valeur que celle stockée](2026-10-04-merge-d-une-cle-repetee-rend-un-autre-noeud.md) | ouvert | réponse fausse | oui | oui, par `batch_link` |
+| [MERGE d'une clé répétée rend une autre valeur que celle stockée](2026-10-04-merge-d-une-cle-repetee-rend-un-autre-noeud.md) | corrigé | réponse fausse | oui | oui, par `batch_link` |
 | [Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table](2026-10-04-balayage-de-plusieurs-tables-de-relations-en-transaction.md) | ouvert | réponse fausse | oui | non vérifié |
 | [COPY : un champ CSV vide entre guillemets devient NULL](2026-10-04-csv-champ-vide-entre-guillemets-devient-null.md) | ouvert | réponse fausse | oui | non vérifié |
 | [COPY refuse un CSV qui finit par un champ vide sans saut de ligne](2026-10-04-csv-champ-vide-final-sans-saut-de-ligne.md) | corrigé | réponse fausse | oui | non vérifié |

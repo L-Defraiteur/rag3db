@@ -476,10 +476,18 @@ TEST_F(UpstreamFixes, MergeOfARepeatedKeyReturnsTheStoredNode) {
     EXPECT_EQ(merged->getNumTuples(), 1u)
         << "[check: merge-returns-stored-node] the repeated key returns another default";
     mustRun("CREATE NODE TABLE B(id SERIAL, stuff INT64, PRIMARY KEY(id));");
-    EXPECT_EQ(queryInt("UNWIND [1, 2, 1] AS i MERGE (b:B {stuff: i}) WITH i, b "
-                       "MATCH (c:B {id: b.id}) WHERE c.stuff <> i RETURN count(*);"),
+    // Les deux lignes de stuff = 1 doivent rendre le même nœud, celui qui est stocké.
+    EXPECT_EQ(queryInt("UNWIND [1, 2, 1] AS i MERGE (b:B {stuff: i}) WITH i, "
+                       "collect(DISTINCT b.id) AS ids WHERE size(ids) > 1 RETURN count(*);"),
         0)
         << "[check: merge-returns-stored-node] the repeated key returns another node";
+    // Un SET qui suit un MERGE sur une propriété qui n'est pas la clé.
+    mustRun("CREATE NODE TABLE C(id SERIAL, stuff INT64, x INT64, PRIMARY KEY(id));");
+    mustRun("UNWIND [1, 2, 1] AS i MERGE (c:C {stuff: i}) SET c.x = i * 10;");
+    EXPECT_EQ(queryInt("MATCH (c:C {stuff: 2}) RETURN c.x;"), 20)
+        << "[check: merge-returns-stored-node] the SET after the repeated key";
+    EXPECT_EQ(queryInt("MATCH (c:C {stuff: 1}) RETURN c.x;"), 10)
+        << "[check: merge-returns-stored-node] the SET after the repeated key";
 }
 
 // La forme de batch_link de rag3weaver (dialect.rs, unwind_par_cle puis MERGE de la relation
