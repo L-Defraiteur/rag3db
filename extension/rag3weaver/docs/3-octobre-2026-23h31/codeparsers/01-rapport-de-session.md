@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, fin d'après-midi.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, soir.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -83,10 +83,19 @@ change**. Le `CohesionNode` (signal de boost) et le banc
 **La section Liens** (`be9555c49`) : deux sauts par défaut, `max_hops`
 paramètre ; le crochet est écrit dans `links.mmd`, le manifeste ne le
 déclare pas. Trois exemples réels rendus à Lucie (ils expliquent / rien /
-n'apportent rien). Deux bruits relevés, corrigés dans codeparsers (master
-`766e4bd`, à pointer) : une variable locale Rust prise pour une fonction
-(`s`), le conteneur `mod tests`. **Attend** : le pointeur, puis les trois
-exemples rejoués pour Lucie.
+n'apportent rien). Les bruits relevés sont corrigés et pointés (`766e4bd`, master
+`18b1a6889`) : une variable locale Rust prise pour une fonction (`s`), le
+conteneur `mod tests`, et au rendu deux homonymes d'un même fichier (une
+struct et son impl) qui ne font qu'une chose (`3dbd3e7e1`, `a19bf1188`).
+Version pour Lucie rendue à l'orchestration ; reste `clear`, résolu par le
+nom seul (ticket de la marque de résolution, proposé). **Attend** : Lucie,
+pour l'allumer par défaut.
+
+**Les boucles sur soi** (le reste du ticket des paquets, 52 à 64) venaient
+de codeparsers : le nom d'un destructeur `~Foo` résolu vers sa propre
+classe, la résolution locale sans contrôle cible ≠ source — corrigé dans
+codeparsers `d51e933`, à pointer ; puis la sonde 64/512 et la fermeture du
+ticket.
 
 **Aussi** : l'impact d'un fichier est branché par la session recherche
 (« Avant d'éditer » sur read_file, f8d231148) ; les relations qui
