@@ -51,6 +51,46 @@ const STD: &[&str] = &[
     "run", "execute", "close", "open", "start", "stop", "wait", "reset", "load", "store", "set", "update", "merge", "apply",
 ];
 
+/// D'où vient une variable-receveur : la liaison la plus proche au-dessus du
+/// site, lue sur le texte (approximatif — une sonde, pas une analyse).
+fn origine_de_la_variable(lignes: &[&str], site: usize, var: &str) -> &'static str {
+    let mot = |l: &str, motif: &str| l.contains(motif);
+    for i in (site.saturating_sub(300)..site).rev() {
+        let l = lignes[i].trim();
+        if mot(l, &format!("let {var} =")) || mot(l, &format!("let mut {var} =")) {
+            let valeur = l.split_once('=').map_or("", |(_, v)| v).trim();
+            let tete: String = valeur.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == ':').collect();
+            return if valeur.starts_with(|c: char| c.is_uppercase()) || tete.contains("::new") {
+                "let = constructeur"
+            } else if valeur.starts_with("self.") {
+                "let = depuis un champ (self.x…)"
+            } else if valeur[tete.len()..].trim_start().starts_with('(') {
+                "let = retour d'une fonction (f())"
+            } else if valeur[tete.len()..].trim_start().starts_with('.') {
+                "let = chaîne sur une variable"
+            } else {
+                "let = autre"
+            };
+        }
+        if mot(l, &format!("let {var}:")) || mot(l, &format!("let mut {var}:")) {
+            return "let annoté";
+        }
+        if mot(l, &format!("for {var} in")) || mot(l, &format!("for (")) && l.contains(var) && l.contains(" in ") {
+            return "boucle for";
+        }
+        if mot(l, &format!("|{var}|")) || mot(l, &format!("|{var},")) || mot(l, &format!(", {var}|")) || mot(l, &format!("|mut {var}|")) {
+            return "paramètre de fermeture";
+        }
+        if mot(l, &format!("Some({var})")) || mot(l, &format!("Ok({var})")) || mot(l, &format!("let Some({var})")) {
+            return "motif (Some/Ok/match)";
+        }
+        if (l.contains("fn ") || l.starts_with(&format!("{var}:")) || l.contains(&format!("({var}:")) || l.contains(&format!(", {var}:"))) && l.contains(&format!("{var}:")) {
+            return "paramètre de fonction";
+        }
+    }
+    "introuvable"
+}
+
 /// La forme d'une référence à `nom` sur la ligne `ligne`.
 fn forme(ligne: &str, nom: &str) -> &'static str {
     let mot = |i: usize| {
@@ -81,6 +121,9 @@ fn forme(ligne: &str, nom: &str) -> &'static str {
     }
     if let Some(recv) = avant.strip_suffix('.') {
         let recv = recv.trim_end();
+        if recv.is_empty() {
+            return "receveur : chaîne sur plusieurs lignes";
+        }
         if recv.ends_with(')') || recv.ends_with('?') || recv.ends_with(']') {
             return "receveur : chaîne d'appels (x.a().f())";
         }
@@ -133,6 +176,8 @@ fn arêtes_par_marque_et_formes_des_noms() {
     let mut formes: BTreeMap<&'static str, (usize, Vec<String>)> = BTreeMap::new();
     let mut dans_macro = 0;
     let (mut receveurs, mut receveurs_std) = (0, 0);
+    let mut origines: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut exemples_origine: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
     for x in &r.rows {
         let (fichier, nom, de) = (texte(x.first()), texte(x.get(2)), texte(x.get(3)));
         let ligne = x.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
@@ -143,6 +188,20 @@ fn arêtes_par_marque_et_formes_des_noms() {
         }
         if f.starts_with("receveur") {
             receveurs += 1;
+        }
+        if f == "receveur : variable (v.f())" {
+            if let Some(c) = contenus.get(&fichier) {
+                let lignes: Vec<&str> = c.lines().collect();
+                let i = texte_ligne.find(&format!(".{nom}")).unwrap_or(0);
+                let var: String = texte_ligne[..i].chars().rev().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<Vec<_>>().into_iter().rev().collect();
+                let o = origine_de_la_variable(&lignes, ligne.saturating_sub(1).min(lignes.len()), &var);
+                *origines.entry(o).or_default() += 1;
+                let ex = exemples_origine.entry(o).or_default();
+                if ex.len() < 4 {
+                    let court = fichier.rsplit('/').next().unwrap_or("").to_string();
+                    ex.push(format!("{court}:{ligne} `{var}.{nom}` — {}", texte_ligne.chars().take(80).collect::<String>()));
+                }
+            }
         }
         if texte_ligne.contains("!(") {
             dans_macro += 1;
@@ -164,6 +223,18 @@ fn arêtes_par_marque_et_formes_des_noms() {
         eprintln!("| {f} | {c} | {:.0} % |", 100.0 * *c as f64 / n.max(1) as f64);
     }
     eprintln!("\n{dans_macro} des {n} sur une ligne qui contient une macro.");
+    let mut o: Vec<_> = origines.iter().collect();
+    o.sort_by(|a, b| b.1.cmp(a.1));
+    eprintln!("\n| d'où vient la variable-receveur | arêtes |\n|---|---|");
+    for (k, v) in o {
+        eprintln!("| {k} | {v} |");
+    }
+    for (k, ex) in &exemples_origine {
+        eprintln!("\n*{k}*");
+        for e in ex {
+            eprintln!("- {e}");
+        }
+    }
     eprintln!("{receveurs_std} des {receveurs} « receveur » visent un nom de méthode de la bibliothèque standard (clone, collect, lock…).\n\nExemples :");
     for (f, (_, ex)) in &tri {
         eprintln!("\n**{f}**");
