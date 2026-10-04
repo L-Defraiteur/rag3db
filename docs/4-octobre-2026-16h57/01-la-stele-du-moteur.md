@@ -40,15 +40,14 @@ poser la version.
   chargement initial, journaliser pour de bon (la voie que la stèle demande).
 - **3, les écritures parallèles** : T0, A2, A5, A5 bis livrées ; le mode
   reste éteint hors du banc ; la suite attend les verrous.
-- **4, les défauts** : la traque de la corruption de mémoire d'`e2e_code` a donné trois
-  correctifs le 4 octobre — l'index vectoriel dimensionné par le nombre de lignes et trois
-  refus nommés à la place d'écritures hors bloc (`1ea49837f`) ; puis, en faisant un test de
-  l'essai du banc, deux défauts d'origine après un `COPY` refusé : le point de reprise qui
-  écrivait hors de son bloc, et la ligne d'origine d'une clé en double qui sortait de l'index
-  de clé primaire (`05788a868`). **La cause de la corruption d'`e2e_code` elle-même n'est pas
-  établie** : le point de reprise après un ajout annulé en est un candidat sérieux, non
-  vérifié ; le ticket reste ouvert jusqu'à ce que les passes du banc sous AddressSanitizer
-  le disent. Les tickets du moteur sont triés au §3.1.
+- **4, les défauts** : la corruption de mémoire d'`e2e_code` a sa cause et son correctif
+  (`57c8389b4`, 4 octobre au soir) : deux exemplaires de la même base ouverts en écriture dans le
+  même processus — rag3weaver rouvrait avant la fin de la fermeture, et le verrou du fichier
+  n'exclut qu'un autre processus. Le moteur refuse maintenant la seconde ouverture par son
+  nom ; rag3weaver doit encore rendre sa fermeture synchrone. En chemin, la traque a donné
+  trois refus nommés à la place d'écritures hors bloc et l'index vectoriel dimensionné par
+  le nombre de lignes (`1ea49837f`), et deux défauts d'origine de l'annulation d'un `COPY`
+  (`05788a868`, `5c8507577`). Les tickets du moteur sont triés au §3.1.
 
 ## 3. Ce qui reste à faire pour que la stèle soit utilisable
 
@@ -67,7 +66,7 @@ la stèle.
 
 | Ticket | Verdict | Pourquoi |
 |---|---|---|
-| Une corruption de mémoire tue `e2e_code` | **bloque** | mémoire ; cause non établie, trois correctifs posés autour |
+| Une corruption de mémoire tue `e2e_code` | corrigé dans le moteur (`57c8389b4`) | la cause : une double ouverture en écriture dans un même processus, maintenant refusée par son nom ; reste à rag3weaver d'attendre la fin de la fermeture |
 | Le point de reprise plante, à jamais, après `ALTER TABLE … DROP` | **bloque** | mémoire (SIGSEGV) et durabilité : la base ne peut plus écrire de point de reprise ; rag3weaver ne supprime pas de colonne, mais le défaut corrompt |
 | Dans une transaction, un balayage de plusieurs tables de relations relit celles d'une autre table | **bloque** | résultat faux |
 | Un `COPY` rend une erreur alors qu'il est validé | **bloque** | résultat faux sur la durabilité : l'appelant qui recommence écrit deux fois |
@@ -102,9 +101,7 @@ reprise de quatre paquets coûte environ 4 s en tout : le chargement journalisé
 sur le chemin des 90 s du premier index) :
 
 1. l'annulation d'un `COPY` (clés de l'index, point de reprise) — fait ;
-2. la corruption d'`e2e_code`, une demi-journée au plus ; si le voisin faux du graphe de
-   l'index ne se laisse pas attraper, la garde nommée reste le filet et le ticket reste
-   « bloque » ;
+2. la corruption d'`e2e_code` — fait : c'était une double ouverture de la base ;
 3. les verrous : V1, A3′, A4′, V2, la maintenance de l'index vectoriel au commit
    (14 à 20 jours de session) ;
 4. le chargement en masse journalisé (6 à 10 jours) ;

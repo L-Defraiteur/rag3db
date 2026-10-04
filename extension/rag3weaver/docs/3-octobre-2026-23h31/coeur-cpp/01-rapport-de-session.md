@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 19 h 30.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 21 h 15.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -24,6 +24,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
 | Après un `COPY` refusé | `05788a868` | le point de reprise n'écrit plus hors de son bloc (corruption de tas, défaut d'origine) ; la ligne d'origine d'une clé en double reste dans l'index de clé primaire (résultat faux silencieux, défaut d'origine) |
+| Double ouverture en écriture dans un processus | `57c8389b4` | la cause de la corruption d'`e2e_code` : refus nommé `Database::ALREADY_OPEN_FOR_WRITING` avant de toucher à un fichier ; un lecteur du même processus reste permis |
 | Clés fantômes après deux `COPY` annulés | `5c8507577` | régression de `05788a868` trouvée par l'arbre principal : l'annulation retire maintenant de l'index les clés de toutes les lignes non validées, et seulement elles |
 | Chronométrage du point de reprise | `5771f0afb` | `RAG3DB_PROFILE_CHECKPOINT=1` : le découpage d'un commit et de son point de reprise sur la sortie d'erreur ; muet sinon |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
@@ -64,9 +65,19 @@ corrigé le §2. Leçon du jour, à garder : un contrôle plus strict que néces
 mène dans la plage annulée ») a fait planter `copy_tests` — la liste complète l'a attrapé
 avant le push ; ne jamais pousser sur les seuls tests du changement.
 
-**L'ordre, tranché par l'orchestration (stèle §3.2)** : la corruption d'`e2e_code`, une
-demi-journée au plus (le voisin faux dans le graphe de l'index ; les gardes nommées sont le
-filet) ; puis V1, A3′, A4′, V2, la maintenance de l'index au commit ; puis le chargement
+**La corruption d'`e2e_code` est close côté moteur** : deux exemplaires de la base ouverts
+en écriture dans le même processus (ticket, avec la méthode qui l'a trouvée). Les outils de
+la traque sont dans `annexes/` : `sonde-base-fautive/` (rouvrir une base abîmée, relire ses
+tables, relever les plages de pages). Le journal des pages, lui, n'a pas été gardé en patch
+(retiré de l'arbre sans copie, ma faute) ; il se refait en une demi-heure : une fonction qui
+imprime l'opération, la plage et la pile (`backtrace`, adresses relatives par `dladdr`, à
+résoudre par `addr2line`) quand le chemin du fichier porte un fragment donné par une variable
+d'environnement, appelée dans `PageManager::allocatePageRange`, `freePageRange`,
+`freeImmediatelyRewritablePageRange` et `finalizeCheckpoint`, dans
+`FileHandle::writePagesToFile` et `removePageIdxAndTruncateIfNecessary`, et dans
+`ShadowFile::applyShadowPages`.
+
+**L'ordre, tranché par l'orchestration (stèle §3.2)** : V1, A3′, A4′, V2, la maintenance de l'index au commit ; puis le chargement
 journalisé ; puis les écritures parallèles. Les autres tickets « bloque » sont au banc.
 
 **Le point de reprise de `COPY`, voie (c) : rendu.** Le découpage (mesure de la session des
@@ -82,6 +93,9 @@ voies (b) et (a) attendent.
   l'annulation balaie. Avant de corriger un chemin d'annulation, imprimer ce qu'il relit
   réellement (plages, lignes rendues) : dix minutes d'instrument auraient évité la
   régression.
+- Quand un défaut intermittent abîme un fichier, la première chose à obtenir est le fichier
+  abîmé : des refus nommés à la place des plantages l'ont laissé sur disque, et vingt minutes
+  de lecture de pages brutes ont dit plus que la journée d'hypothèses sur le code.
 - Un témoin ne doit pas vérifier la seule ligne qui a révélé le défaut : celui de la clé en
   double ne regardait que la clé 5, et cachait que toutes les voisines étaient perdues.
 

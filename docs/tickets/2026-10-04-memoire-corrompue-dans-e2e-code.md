@@ -1,7 +1,7 @@
-# Une corruption de mémoire tue `e2e_code`, une passe sur trente à soixante
+# Une corruption de mémoire tue `e2e_code`, une passe sur trente à soixante — deux exemplaires de la base ouverts en écriture dans le même processus
 
-- **État** : ouvert
-- **Gravité** : plantage
+- **État** : corrigé le 4 octobre 2026, commit `57c8389b4` (« fix(base): une base déjà ouverte en écriture par ce processus ne s'ouvre pas une seconde fois en écriture — la cause de la corruption d'e2e_code ») pour le moteur ; rag3weaver doit encore attendre la fin d'une fermeture avant de rouvrir (session de l'arbre principal)
+- **Gravité** : plantage et corruption durable du fichier de la base
 - **Atteignable en service** : probablement oui — l'écriture fautive est dans la lecture d'une colonne de chaînes longues par un balayage ordinaire ; vu seulement, à ce jour, dans la suite `e2e_code`
 - **Touche rag3weaver** : oui (c'est sa suite `e2e_code` qui meurt)
 - **Ouvert le** : 4 octobre 2026, session cœur C++
@@ -224,6 +224,20 @@ L'autre base fautive (celle du refus du dictionnaire, 18 h 50) se relit sans err
 
 Ce qui reste à établir : par quel chemin une page est rendue puis réattribuée alors que quelqu'un s'en sert encore. Deux pistes, non vérifiées : une page d'ombre en attente appliquée par-dessus une page réattribuée entre-temps ; le stockage d'une colonne vivante rendu au point de reprise (`NodeGroup::checkpointInMemAndOnDisk` rend ce qui « doit avoir été supprimé »). rag3weaver émet `ALTER TABLE _index_blobs ADD _deleted_gen` à chaque ouverture de son magasin de blobs. En cours : un journal provisoire des allocations, libérations, écritures directes et pages d'ombre de la base du test, pour lire l'histoire de la page à la prochaine occurrence. Outils : `annexes/sonde-base-fautive/` (rouvrir une base, relire toutes ses tables, relever les plages de pages).
 
+**La cause (4 octobre, 20 h 30) : deux exemplaires de la base ouverts en écriture en même temps, dans le même processus.**
+
+Le journal provisoire des pages (allocations, libérations, écritures directes, pages d'ombre, avec la pile de l'appelant) d'une passe fautive montre deux fils qui écrivent chacun un point de reprise, entrelacés, **avec deux tailles de fichier différentes** (7 846 et 7 385 pages) — deux `FileHandle`, deux gestionnaires de pages libres — et qui tirent les mêmes pages libres : la page 6748 est donnée à l'un (ligne 15360 du journal) puis à l'autre (ligne 16096) sans avoir été rendue entre-temps ; de même 5076, 5078, 6789, 6792. Les piles résolues : l'un des points de reprise vient d'un `COMMIT` (`TransactionManager::commit`), l'autre de **`Database::~Database`** — le point de reprise de fermeture d'un exemplaire en train de partir.
+
+Le test rouvre donc la base (`open(false)`) pendant que l'exemplaire de la première session n'a pas fini de se fermer : après la panique rattrapée, quelque chose de rag3weaver garde encore l'exemplaire en vie, et sa destruction (avec son point de reprise) tombe plus tard, sur un autre fil. Selon l'instant, les deux exemplaires se croisent ou non : d'où une passe sur deux à une sur soixante.
+
+Le moteur laissait faire : le verrou du fichier est un `fcntl(F_SETLK)` (`src/common/file_system/local_file_system.cpp`), qui n'exclut qu'un **autre processus**. Vérifié par un essai direct : une seconde `Database` sur le même chemin, dans le même processus, s'ouvre, rejoue le journal vivant de la première et lit ses lignes.
+
+Tout ce qui précède dans ce ticket en découle : un décalage de dictionnaire ou un voisin d'index « faux » sont des pages réécrites par l'autre exemplaire ; les débordements vus par AddressSanitizer étaient la lecture de ces pages. Les gardes nommées posées en chemin restent utiles (elles arrêtent toute page abîmée), et les deux défauts de l'annulation d'un `COPY` trouvés en chemin étaient réels mais sans rapport.
+
+**Le correctif du moteur** (`57c8389b4`) : une seconde ouverture en écriture d'une base déjà ouverte en écriture par le processus est refusée par son nom, `Database::ALREADY_OPEN_FOR_WRITING` (« is already open for writing in this process »), avant de toucher au moindre fichier. Un lecteur du même processus reste permis. Témoin : `test/transaction/double_open_test.cpp`.
+
+**Ce qui reste, côté rag3weaver** (session de l'arbre principal) : ne pas rouvrir une base avant que l'exemplaire précédent soit détruit. Ce qui le retient est trouvé (sa réponse du 4 octobre) : les acteurs de shard du scheduler de lucivy tiennent un `Arc<LucivyHandle>`, qui remonte au magasin de blobs, à la connexion puis à la `Database` ; `ShardedHandle::close()` répond avant que l'acteur soit lâché, et la dernière référence tombe sur un fil de lucivy, après le retour de `Catalog::drop`. Avec la garde, le test fautif échouera par ce refus nommé au lieu de corrompre la base.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —
@@ -251,6 +265,6 @@ Trois hypothèses de lecture de la session du banc, non vérifiées : puisque la
 - Le ticket « La réouverture d'une base échoue par intermittence, sous charge seulement ».
 - Tout rouge intermittent inexpliqué de ces derniers jours.
 
-## Ce qu'il faut pour le fermer
+## Ce qu'il fallait pour le fermer
 
-La pile d'AddressSanitizer, puis un test C++ qui reproduit l'écriture fautive à coup sûr.
+La cause, et un test C++ qui la reproduit à coup sûr : `test/transaction/double_open_test.cpp`. La traque a pris la journée ; ce qui l'a débloquée, dans l'ordre : bâtir l'extension vector elle aussi sous AddressSanitizer ; poser des refus nommés à la place des écritures hors bloc, pour que le défaut laisse la base du test sur disque au lieu de tuer le processus ; rouvrir cette base dans un processus neuf et lire ses pages brutes ; journaliser les allocations de pages avec la pile de l'appelant.
