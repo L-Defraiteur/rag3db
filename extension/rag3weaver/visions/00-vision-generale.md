@@ -216,6 +216,40 @@ Les ports étant typés, le contrat entre le composant et le backend se
 vérifie comme celui de deux nœuds. Ce n'est ni « tout l'écran est un
 graphe », ni « une page à la main » : le graphe câble, le composant affiche.
 
+**Et les clics qui n'ont qu'un effet d'écran ?** Lucie, 5 octobre : « on ne
+veut pas systématiquement un clic qui a un effet backend, souvent c'est un
+effet front aussi ; je me demande comment même les clics gérés côté front
+sont des DAG. »
+
+Une réponse à débattre (proposition de l'orchestration, rien d'essayé) :
+
+- **Un clic n'est pas une boucle, c'est un tour.** La boucle « clic → état →
+  écran → clic » est une boucle *dans le temps*. À l'intérieur d'un seul
+  événement, le chemin est sans cycle : (l'événement, l'état d'avant) →
+  l'état d'après → ce que chaque composant reçoit. C'est un graphe.
+- **Trois sortes de nœuds côté écran** : des **cases d'état** (la sélection,
+  un filtre, la page courante, la valeur d'un formulaire) ; des **nœuds
+  purs** (une expression qui calcule l'état d'après ou une donnée dérivée) ;
+  des **nœuds d'effet** (appeler un contrôleur, changer de page). Un clic
+  purement d'écran ne traverse que les deux premières sortes ; un clic qui
+  touche le backend passe par un nœud d'effet.
+- **Le même moteur des deux côtés** — la phrase de départ de Lucie, « un
+  moteur de DAG pour le back et le front » : le moteur de graphes tournerait
+  aussi dans le navigateur (compilé pour lui), et le graphe d'une page se
+  coupe tout seul là où un nœud a besoin de la base. Les nœuds purs et les
+  composants tournent devant ; le reste derrière.
+- **Ce que cela donne en plus** : l'exécution d'un clic se voit dans le même
+  afficheur que celle d'un contrôleur (§ « voir une exécution comme un
+  graphe ») ; et l'agent qui édite une page modifie des graphes, devant comme
+  derrière.
+- **La limite à garder** : l'état purement de présentation d'un composant
+  (un menu ouvert, un survol) reste dans le composant. Le graphe porte l'état
+  qui compte pour l'application, pas chaque pixel — même règle que « les
+  nœuds pour le flux, le script pour l'expression ».
+- **Ce qui est à vérifier** : ce que pèse le moteur dans un navigateur, quels
+  nœuds y sont permis, et quel langage d'expression y tourne (c'est là que
+  TypeScript a un avantage naturel sur rhai).
+
 Trois règles pour tenir ce cap :
 
 - **Lucie est la première utilisatrice** : les marches 1 à 4 tournent d'abord
