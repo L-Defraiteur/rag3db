@@ -1083,6 +1083,25 @@ sessions, pas d'une vérification.
   banc fait un passage en lecture seule sur ses commits de stockage, avec un témoin rouge
   par correctif atteignable en service. Son histoire est séparée de la nôtre (espace de
   noms `lbug`, même arborescence) ; celle de Vela nous est commune jusqu'au 10 octobre 2025.
+  **Fait le 4 octobre** : vingt correctifs manquants confirmés chez nous, chacun par un
+  témoin rouge au banc (`UpstreamFixes`, `a10ee1c51`, marche « correctifs de l'amont à
+  reprendre »). Le tableau complet est dans
+  `extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/03-revue-des-amonts.md`.
+  Par gravité :
+  - **une perte** : un point de reprise efface les relations des régions intactes d'un
+    groupe de nœuds (Ladybug `0be6fa597`). La condition : une table de plus de 1 024
+    nœuds, et toutes les relations d'un bloc de 1 024 supprimées entre deux points de
+    reprise. Signature : les deux sens ne s'accordent plus.
+  - **huit plantages**, dont :
+    - le point de reprise impossible, à jamais, après `ALTER … DROP` ;
+    - la lecture après le point de reprise d'une relation créée puis supprimée, qui
+      concerne rag3weaver.
+  - **deux blocages** : l'UUID nul, et le lecteur retenu par un `CHECKPOINT`.
+  - **dix réponses fausses**, dont aucune forme n'est émise par rag3weaver (vérifié par
+    l'arbre principal).
+  Par ailleurs, deux recettes ne se reproduisent pas chez nous. Dix défauts ne sont pas
+  atteignables sans faute d'E/S ou coupure ; parmi eux, la publication avant le journal et
+  le répertoire jamais synchronisé.
 - **`UNWIND $items AS item MATCH (n {_uuid: item.champ})` balaie la table entière**
   (planificateur, trouvé le 3 octobre par la session cœur C++, non corrigé ; un
   contournement existe). Toute écriture par lot qui retrouve ses nœuds par la clé primaire

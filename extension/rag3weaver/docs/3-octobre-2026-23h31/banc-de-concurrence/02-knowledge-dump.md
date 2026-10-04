@@ -18,6 +18,8 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
 | `lock_bench_test.cpp` | témoins des verrous (§6 de la note), verrou d'index, réouverture de l'index, second témoin d'A3′ |
 | `single_writer_crash_test.cpp` | arrêt brutal avec un seul écrivain, reprise avec un index d'extension, `OpenProbe` |
 | `vector_index_update_test.cpp` | l'index vectoriel juste en service : mise à jour de vecteurs, chemin du produit, ligne lointaine ; essais répétés |
+| `upstream_fixes_test.cpp` | les correctifs de Ladybug et de Vela qui nous manquent ; les cas qui plantent tournent dans un fils qui sort base ouverte |
+| `long.txt` | les cas de plus de vingt secondes, hors de la passe par défaut (`CONCURRENCE_LONG=1`) |
 | `uncommitted_relations_test.cpp` | relations supprimées puis créées dans une transaction, relues et réécrites (verts depuis `c8fdaf196`) |
 | `known_red.txt`, `probabilistic.txt` | les rouges attendus, avec leurs étiquettes et leur marche ; les cas probabilistes |
 | `compare_known_red.cmake`, `compare_tsan_signatures.py`, `tsan_signatures.txt` | les deux comparaisons |
@@ -133,6 +135,19 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
   `c8fdaf196`. Les essais par cas sont réglés pour que la comparaison reste sous le quart
   d'heure ; `CONCURRENCE_VECTOR_RUNS` les remplace tous.
 
+## 5 ter. La revue des amonts (4 octobre)
+
+- **[exécuté] Une recette déduite d'un diff n'est pas un défaut.** Sur une trentaine de
+  recettes proposées par les agents, vingt se sont confirmées chez nous ; deux n'ont pas
+  rougi. Le cas Vela du lecteur retenu ne s'est vu qu'avec un lecteur plus long que le
+  délai d'attente du test.
+- **[exécuté] Un fils qui plante laisse une base que la fermeture fait planter à nouveau.**
+  Une base rouverte dans le processus du test fait un point de reprise à la fermeture, et
+  ce point de reprise plante lui aussi. Les témoins font donc tout dans des fils qui
+  sortent base ouverte (`_exit` dans la portée de la base).
+- **[lu] Les tags suffisent.** `ladybug-main-2026-08-31` a une histoire séparée de la
+  nôtre : on la lit par dates. Vela, par `git log HEAD..vela-master-2026-09-03`.
+
 ## 6. Ce qui n'est pas atteignable sans crochet dans `src/`
 
 - **La mort à chaque allocation pendant la phase de stockage d'un point de reprise.**
@@ -167,7 +182,7 @@ avant d'innocenter le moteur.
 
 - Build : `transaction_test`, cœur compris, 240 s ; l'extension vector, 10 s ; le
   build TSan, 314 s.
-- La comparaison `known_red` : 14 min 30 s depuis les témoins vectoriels (40 à 70 s
-  avant). Les dix mille lignes, sur demande : 27 min.
+- La comparaison `known_red` par défaut : 2 min 17 ; avec les cas longs : 29 min. Les dix
+  mille lignes : 12 à 27 min.
 - Un fils qui plantait en écrivant un vidage mémoire coûtait 20 à 27 s ; les fils du
   banc n'en écrivent plus.

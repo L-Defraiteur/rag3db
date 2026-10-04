@@ -1,20 +1,20 @@
 # Banc de concurrence — rapport de session
 
-Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026,
-après les témoins du `SET` de vecteur (`e8d646716`). À l'arrêt, sur demande de
-l'orchestration.
+Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 à
+midi, après la revue des amonts (`a10ee1c51`).
 
 ## Où en est le banc
 
-- **Sur master**, tout est fusionné. Derniers commits de la session : `e8d646716`
-  (témoins), `c5d394fac` (journal).
+- **Sur master**, tout est fusionné. Derniers commits de la session : `67c910f0d` (cas
+  longs), `a10ee1c51` (témoins des amonts), poussés en `6fe2e4fc0`.
   Chaque lot est entré en avance rapide, sans force, et la comparaison `known_red` était
   verte à chaque fois.
 - **Code** : `test/transaction/concurrence/`, une seule cible, `concurrence_test`.
 - **Spécification** : `docs/2-octobre-2026-00h36/01-specification-du-banc-de-concurrence.md`,
   §1 à §13 ; chaque lot y a sa section.
-- **Liste des rouges** : `known_red.txt`, 66 rouges connus rangés par marche, chacun avec
-  l'ensemble exact des étiquettes de son échec. `probabilistic.txt` : 5 cas.
+- **Liste des rouges** : `known_red.txt`, 87 rouges connus rangés par marche, chacun avec
+  l'ensemble exact des étiquettes de son échec. `probabilistic.txt` : 6 cas. `long.txt` :
+  12 cas hors de la passe par défaut.
 - **Moteur** : jamais modifié par cette session.
 
 ## Ce qui a été fait, dans l'ordre
@@ -64,6 +64,13 @@ l'orchestration.
      S'y ajoute le chemin du produit, décrit par la session des embarquements.
    - Le témoin déterministe du cœur C++ sur les relations relues de travers
      (`uncommitted_relations_test.cpp`) : rouge avant `c8fdaf196`, vert après.
+9. **Les cas longs hors de la passe par défaut (4 octobre)** : `long.txt`, label
+   `concurrence-long`, comparés seulement avec `CONCURRENCE_LONG=1`. La comparaison par
+   défaut repasse de 14 min 30 à 2 min 17 ; la longue dure 29 min.
+10. **La revue des amonts (4 octobre)** : Ladybug et Vela lus en lecture seule, chaque
+    correctif présenté comme manquant reproduit chez nous avant d'être rangé. Vingt défauts
+    confirmés, 21 témoins rouges (`upstream_fixes_test.cpp`). Les deux défauts graves ont
+    été signalés dès leur confirmation. Tableau : `03-revue-des-amonts.md`.
 
 ## Décisions et pourquoi
 
@@ -101,18 +108,21 @@ l'orchestration.
     dans `known_red.txt`, plus le ligne à ligne en probabiliste) ;
   - la ligne lointaine d'un nuage serré, sous la construction de l'index ;
   - **le ralentissement de la mise à jour depuis `c8fdaf196`** : dix mille lignes par
-    lots de 512 passent de 25 s à 27 min. C'est signalé, et le cas ne tourne que sur
-    demande (`CONCURRENCE_VECTOR_HEAVY=1`).
+    lots de 512 passent de 25 s à 12–27 min. C'est signalé ; le cas est probabiliste (vert
+    une fois sur sept essais).
 - **La garde 2** est en cours chez le cœur C++. Elle retire elle-même ses cinq rouges, et
   ses `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   Il reste à faire vérifier par `IndexExactWithoutRebuild` que la liste existait avant la
   mort.
-- **Le lot suivant, demandé par l'orchestration** : passer en revue les correctifs de
-  Ladybug et de Vela qui nous manquent (tags `ladybug-main-2026-08-31`,
-  `vela-master-2026-09-03`), avec un témoin rouge pour chacun de ceux qui sont atteignables.
-- **La durée de la comparaison** : 14 min 30 s depuis ce lot, contre une minute avant. Les
-  rouges vectoriels répètent leurs essais pour rougir à chaque passe. Si c'est trop, il
-  faudra un label à part.
+- **La session cœur C++, sur les amonts** : les 21 rouges de la marche « correctifs de
+  l'amont à reprendre », dans l'ordre du tableau. D'abord la perte de relations au point de
+  reprise, puis la lecture après le point de reprise d'une relation créée puis supprimée :
+  rag3weaver passe par ces deux chemins.
+- **Ce que la revue n'a pas couvert** :
+  - deux recettes non reproduites (`254a7444d`, `a10cecbc7`) ;
+  - dix défauts qui demandent une faute d'E/S, une coupure ou une mort placée au bon
+    instant (§3 du tableau) ;
+  - les défauts d'API sans témoin (§4).
 - **TSan avec l'extension vector** : pas fait. L'extension se construit à un chemin fixe
   de l'arbre source, qu'un build TSan écraserait (§11).
 
@@ -124,7 +134,8 @@ git fetch origin && git rebase origin/master
 cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_BENCHMARK=OFF -DBUILD_EXTENSIONS=vector
 cmake --build build/release -j 8 --target rag3db_vector_extension concurrence_test   # jamais l'alias ninja
-ctest --test-dir build/release/test -R known_red --output-on-failure   # la comparaison seule, 14 min 30 s
+ctest --test-dir build/release/test -R known_red --output-on-failure   # la comparaison seule, 2 min 17
+CONCURRENCE_LONG=1 ctest --test-dir build/release/test -R known_red   # avec les cas longs, 29 min
 ctest --test-dir build/release/test -L concurrence-rouge-connu -N      # les rouges connus
 ```
 
