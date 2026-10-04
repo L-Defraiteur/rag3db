@@ -635,6 +635,56 @@ fn banc_etage_qui_perd() {
         }
     }
 
+    // ── A : l'ablation complète (expérience 1 de l'optimiseur) ─────────
+    // Chaque voie seule, chaque paire, le trio — poids ÉGAUX entre les
+    // voies actives : on mesure les APPORTS, pas un réglage. Elle dit si
+    // le creux apporte par-dessus le plein texte ou le double (l'hypothèse
+    // du doc optimiseur : notre gain viendrait de la DÉCOUPE du creux, pas
+    // d'un signal neuf — un second plein texte). Sans creux (passes « b »,
+    // découpeur en variante), seules les combinaisons sans SPARSE jouent.
+    {
+        let combo = |b: bool, v: bool, sp: bool| -> SearchOptions {
+            let mut o = options_vecteur();
+            let mut s = SearchSignals::NONE;
+            if b { s = s | SearchSignals::BM25; }
+            if v { s = s | SearchSignals::VECTOR; }
+            if sp { s = s | SearchSignals::SPARSE; }
+            o.signals = Some(s);
+            let w = |on: bool| SignalConfig { weight: if on { 1.0 } else { 0.0 }, ..SignalConfig::default() };
+            o.fusion = Some(FusionConfig {
+                bm25: w(b),
+                vector: w(v),
+                sparse: w(sp),
+                ..FusionConfig::default()
+            });
+            o
+        };
+        for (etiquette, b, v, sp) in [
+            ("A plein texte seul", true, false, false),
+            ("A dense seul", false, true, false),
+            ("A creux seul", false, false, true),
+            ("A texte+dense", true, true, false),
+            ("A texte+creux", true, false, true),
+            ("A dense+creux", false, true, true),
+            ("A trio", true, true, true),
+        ] {
+            if sp && !avec_creux {
+                continue;
+            }
+            let mut phrases = Mesure::default();
+            for (q, attendus) in QUESTIONS {
+                let r = Catalog::rechercher(&reel, SCOPE, q, combo(b, v, sp)).expect("ablation");
+                phrases.noter(&noms(&r), attendus);
+            }
+            let mut idents = Mesure::default();
+            for nom in IDENTIFIANTS {
+                let r = Catalog::rechercher(&reel, SCOPE, nom, combo(b, v, sp)).expect("ablation id");
+                idents.noter(&noms(&r), &[nom]);
+            }
+            hybrides.push((etiquette.to_string(), phrases, idents));
+        }
+    }
+
     // Le témoin : les identifiants en vecteur seul — le chiffre du problème.
     let mut idents_vecteur = Mesure::default();
     for nom in IDENTIFIANTS {
