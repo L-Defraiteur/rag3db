@@ -6,7 +6,11 @@
 # étiquettes changent (un rouge qui change de cause) la font échouer. Un échec sans
 # étiquette (plantage, préparation qui échoue) compte comme « untagged ».
 # Une ligne ne se retire, ou ne change d'étiquettes, que dans le commit de la marche qui
-# corrige le cas. Les cas probabilistes sont dans probabilistic.txt.
+# corrige le cas ; ou elle passe dans probabilistic.txt avec ses comptes écrits (combien de
+# rouges sur combien de passes), quand on la découvre variable. Jamais retirée en silence
+# (orchestration, 5 octobre). Un rouge probabiliste est une étape : on cherche ce qui le rend
+# constant (un seul fil, une graine, des délais choisis) avant de le laisser là. Les cas
+# probabilistes sont dans probabilistic.txt.
 #
 # Marche A3′ (verrou de clé, unicité contre le dernier état validé) — C1 : deux insertions de la
 # même clé validées toutes les deux. Après un VRAI arrêt brutal (variante Crash corrigée le

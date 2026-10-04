@@ -1277,21 +1277,27 @@ INSTANTIATE_TEST_SUITE_P(Writes, ExtensionIndexRecovery,
         return indexedWriteName(info.param);
     });
 
-// La forme de la reprise de rag3weaver après un paquet défait (5 octobre). La reprise de
-// l'arbre principal y plante, et ce plantage reste inexpliqué : SIGSEGV dans
-// OnDiskHNSWIndex::update → shrinkForNode, sous un SET de vecteur, après un paquet défait et
-// une réouverture avec journal. Ce qu'on en sait par la session cœur C++ :
+// La forme de la reprise de rag3weaver après un paquet défait (5 octobre), écrite pour
+// chercher le SIGSEGV de la reprise de l'arbre principal (OnDiskHNSWIndex::update →
+// shrinkForNode sous un SET de vecteur). Ce plantage venait d'ailleurs : le SET du vecteur
+// d'une ligne créée dans la même transaction, corrigé en 35d09c466. La forme :
 // - l'index est posé sur la table vide : cosinus, 64 dimensions, mu 30, ml 60 ;
 // - les lignes arrivent par paquets de 32, en COPY journalisés ;
 // - un paquet échoue, et ROLLBACK annule plusieurs COPY d'une même transaction ;
 // - à la reprise, MERGE … SET repose les vecteurs de lignes déjà validées, puis des SET
 //   posent les autres.
-// Trois fins :
-// - la mort après quatre paquets validés ;
-// - trois COPY annulés, un point de reprise, un paquet de plus validé, puis la mort ;
-// - trois COPY annulés, puis une fermeture propre.
+// Quatre fins :
+// - Death : la mort après quatre paquets validés ;
+// - RolledBackCheckpointThenDeath : trois COPY annulés, un point de reprise, un paquet de
+//   plus validé, puis la mort ;
+// - RolledBackThenClose : trois COPY annulés, puis une fermeture propre ;
+// - Close : quatre paquets validés, puis une fermeture propre, sans annulation.
+// Ce qu'elles ont montré : le graphe bâti par des COPY successifs peut laisser une ligne
+// validée injoignable par son propre vecteur. Ce n'est pas l'annulation : Close rougit
+// comme les fins annulées. Death rejoue le journal, et le rejeu rebâtit le graphe. Les
+// comptes sont dans probabilistic.txt.
 // La reprise tourne dans un processus fils, pour qu'un plantage n'emporte pas la passe.
-enum class ProductEnd { Death, RolledBackCheckpointThenDeath, RolledBackThenClose };
+enum class ProductEnd { Death, RolledBackCheckpointThenDeath, RolledBackThenClose, Close };
 
 std::string productEndName(ProductEnd end) {
     switch (end) {
@@ -1301,6 +1307,8 @@ std::string productEndName(ProductEnd end) {
         return "RolledBackCheckpointThenDeath";
     case ProductEnd::RolledBackThenClose:
         return "RolledBackThenClose";
+    case ProductEnd::Close:
+        return "Close";
     }
     return "?";
 }
@@ -1355,6 +1363,10 @@ public:
         loadVectorExtension(connection);
         mustQuery(connection, "CALL auto_checkpoint=false;");
         mustQuery(connection, "CALL force_checkpoint_on_copy=false;");
+        // Un seul fil : la fin de chaque COPY relie ses lignes dans un ordre fixe. Le rouge
+        // devient presque constant (5 octobre : 10 sur 10 et 9 sur 10, au lieu d'environ
+        // une fois sur deux) ; le hasard qui reste est la graine de l'index.
+        mustQuery(connection, "CALL threads=1;");
         const auto copy = [&](int64_t batch) {
             mustQuery(connection, "COPY Chunk FROM '" + csvPath(batch) + "' (header=false);");
         };
@@ -1363,7 +1375,7 @@ public:
             copy(batch);
             mustQuery(connection, "COMMIT;");
         }
-        if (end == ProductEnd::Death) {
+        if (end == ProductEnd::Death || end == ProductEnd::Close) {
             return;
         }
         mustQuery(connection, "BEGIN TRANSACTION;");
@@ -1517,7 +1529,7 @@ TEST_P(ProductReloadRecovery, VectorsSetAfterRecoveryAreFound) {
     const auto end = GetParam();
     writeBatches(8);
     createIndexOnTheEmptyTable();
-    if (end == ProductEnd::RolledBackThenClose) {
+    if (end == ProductEnd::RolledBackThenClose || end == ProductEnd::Close) {
         // Une fermeture propre : le point de reprise de la fermeture n'est pas coupé.
         rag3db::main::Database session(databasePath, *systemConfig);
         rag3db::main::Connection connection(&session);
@@ -1548,7 +1560,7 @@ TEST_P(ProductReloadRecovery, VectorsSetAfterRecoveryAreFound) {
 
 INSTANTIATE_TEST_SUITE_P(Ends, ProductReloadRecovery,
     ::testing::Values(ProductEnd::Death, ProductEnd::RolledBackCheckpointThenDeath,
-        ProductEnd::RolledBackThenClose),
+        ProductEnd::RolledBackThenClose, ProductEnd::Close),
     [](const ::testing::TestParamInfo<ProductEnd>& info) { return productEndName(info.param); });
 
 // Le processus neuf d'une sonde d'ouverture (probeOpenInFreshProcess) : lancé par exec du
