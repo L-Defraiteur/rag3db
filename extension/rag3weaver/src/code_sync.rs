@@ -589,7 +589,7 @@ fn synchroniser(
         };
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
-    for paquet in retenus.chunks(options.batch_files.max(1)) {
+    for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
         marquer_lus(&report.source, paquet);
@@ -616,6 +616,19 @@ fn synchroniser(
                 f.absolute_path.clear();
             }
         }
+        // **Le paquet dans une transaction** (prototype, derrière
+        // `RAG3WEAVER_TX_PAR_PAQUET=1`, en mode Bulk) : chaque COPY pose son
+        // propre point de reprise à la validation, sauf dans une transaction
+        // explicite, où un seul suffit au COMMIT (session cœur C++). Voir
+        // [`terminer`].
+        // Le premier paquet crée le schéma à la volée (tables de morceaux,
+        // colonnes ajoutées) : hors transaction, sinon une annulation emporte
+        // le schéma avec les lignes.
+        let tx = mode == RelationsMode::Bulk && transaction_par_paquet() && rang_du_paquet > 0;
+        if tx {
+            commencer(catalog)?;
+        }
+        let resultat: Result<(), String> = (|| {
         let t = std::time::Instant::now();
         let ingere = match mode {
             RelationsMode::PerBatch => catalog.ingest_code_jusqu_a(&analysis, options.exige),
@@ -656,6 +669,13 @@ fn synchroniser(
             profil.add("vider la file des liens en route", t);
             report.failed += pose.failed;
         }
+        Ok(())
+        })();
+        if tx {
+            terminer(catalog, resultat)?;
+        } else {
+            resultat?;
+        }
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         avancement.relations_pending = catalog.pending_work().relations.len();
@@ -669,7 +689,18 @@ fn synchroniser(
         avancement.phase = SyncPhase::Relations;
         progress(avancement);
         let debut = std::time::Instant::now();
-        let fin = catalog.finir_les_relations_differees(&noms_differes, options.exige).map_err(|e| e.to_string())?;
+        let tx = transaction_par_paquet();
+        if tx {
+            commencer(catalog)?;
+        }
+        let fin = catalog.finir_les_relations_differees(&noms_differes, options.exige).map_err(|e| e.to_string());
+        let fin = if tx {
+            let ok = fin.as_ref().map(|_| ()).map_err(Clone::clone);
+            terminer(catalog, ok)?;
+            fin?
+        } else {
+            fin?
+        };
         report.failed += fin.failed;
         report.relations_bulk_ms = debut.elapsed().as_millis();
         profil.add("charger les relations à la fin", debut);
@@ -755,4 +786,36 @@ fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, Strin
         )
         .map_err(|e| e.to_string())?;
     Ok(!res.rows.is_empty())
+}
+
+/// Le prototype de la transaction par paquet est-il demandé ?
+fn transaction_par_paquet() -> bool {
+    std::env::var("RAG3WEAVER_TX_PAR_PAQUET").as_deref() == Ok("1")
+}
+
+/// **Ouvrir la transaction d'un paquet** : toutes les écritures du catalogue
+/// passent par la même connexion du moteur, donc par elle.
+fn commencer(catalog: &Catalog) -> Result<(), String> {
+    catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))
+}
+
+/// **Valider le paquet, ou le défaire.** Après un `ROLLBACK`, les caches du
+/// catalogue (identifiants de nœuds, sessions, file vidée) gardent des
+/// écritures défaites : le catalogue doit être rouvert, et l'erreur le dit.
+/// Prototype : la mise en « doit être rouvert » viendra avec le
+/// durcissement, si la mesure montre le gain.
+fn terminer(catalog: &Catalog, resultat: Result<(), String>) -> Result<(), String> {
+    match resultat {
+        Ok(()) => catalog.conn().execute("COMMIT").map(|_| ()).map_err(|e| format!("valider le paquet : {e}")),
+        Err(cause) => {
+            let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
+            Err(format!(
+                "{cause} — le paquet est défait ({}) : le catalogue doit être rouvert avant toute autre écriture",
+                match defait {
+                    Ok(_) => "ROLLBACK".to_string(),
+                    Err(e) => format!("ROLLBACK refusé : {e}"),
+                }
+            ))
+        }
+    }
 }
