@@ -1,6 +1,6 @@
 # Banc de concurrence — ce que la session sait
 
-Mis à jour le 3 octobre 2026 au soir. Étiquettes : **[exécuté]** vu en lançant ;
+Mis à jour le 4 octobre 2026. Étiquettes : **[exécuté]** vu en lançant ;
 **[lu]** vu dans le code ; **[déduit]**.
 
 ## 1. Les fichiers
@@ -17,6 +17,8 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
 | `harness_mechanics_test.cpp` | la mécanique éprouvée sur elle-même : ordre des événements, délai de garde |
 | `lock_bench_test.cpp` | témoins des verrous (§6 de la note), verrou d'index, réouverture de l'index, second témoin d'A3′ |
 | `single_writer_crash_test.cpp` | arrêt brutal avec un seul écrivain, reprise avec un index d'extension, `OpenProbe` |
+| `vector_index_update_test.cpp` | l'index vectoriel juste en service : mise à jour de vecteurs, chemin du produit, ligne lointaine ; essais répétés |
+| `uncommitted_relations_test.cpp` | relations supprimées puis créées dans une transaction, relues et réécrites (verts depuis `c8fdaf196`) |
 | `known_red.txt`, `probabilistic.txt` | les rouges attendus, avec leurs étiquettes et leur marche ; les cas probabilistes |
 | `compare_known_red.cmake`, `compare_tsan_signatures.py`, `tsan_signatures.txt` | les deux comparaisons |
 
@@ -106,6 +108,31 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
   - Restent les témoins de la garde 2 : l'index juste sans rebâtir.
   - Quand le journal porte encore le chargement, le rejeu tient l'index à jour : vert.
 
+## 5 bis. L'index vectoriel juste en service (4 octobre)
+
+- **[exécuté] Le compte des pertes n'est pas stable.** La même recette, sur le même
+  binaire, donne 779, 593, 772 lignes joignables d'une passe à l'autre. Un chiffre d'une
+  passe ne vaut qu'en ordre de grandeur. Les témoins répètent donc des essais sur des
+  tables neuves, et rougissent si un seul perd une ligne.
+- **[exécuté] La recherche « exhaustive » dépend de son point d'entrée.** Dans un essai,
+  790 lignes sortaient premières sur leur propre vecteur, et 772 seulement étaient
+  joignables depuis la ligne 0. D'où les deux contrôles, sous une seule étiquette
+  (`vector-index-exact`), puisque la même perte se voit par l'un, par l'autre ou par les
+  deux.
+- **[exécuté] Les résultats de `QUERY_VECTOR_INDEX` ne sont pas triés par distance**, et
+  `distance` ne se lit pas en `double` (passer par `toString`). Ce sont deux fautes de la
+  sonde, corrigées avant de rien conclure.
+- **[exécuté] État après `c8fdaf196`.**
+  - Verts : le chemin du produit (depuis NULL, par lots de 32, remplacement qui repasse
+    par NULL ligne à ligne, second index, `DROP` puis `CREATE`), vingt lignes vers le
+    même vecteur, 768 dimensions, la transaction annulée.
+  - Rouges, environ un essai sur deux (33 à 90 % selon le cas) : les autres mises à jour.
+  - Rouge sans aucune mise à jour : une ligne lointaine dans un nuage serré, un essai
+    sur trois.
+- **[exécuté] Coût.** La mise à jour est cinq à soixante fois plus lente depuis
+  `c8fdaf196`. Les essais par cas sont réglés pour que la comparaison reste sous le quart
+  d'heure ; `CONCURRENCE_VECTOR_RUNS` les remplace tous.
+
 ## 6. Ce qui n'est pas atteignable sans crochet dans `src/`
 
 - **La mort à chaque allocation pendant la phase de stockage d'un point de reprise.**
@@ -140,6 +167,7 @@ avant d'innocenter le moteur.
 
 - Build : `transaction_test`, cœur compris, 240 s ; l'extension vector, 10 s ; le
   build TSan, 314 s.
-- La comparaison `known_red` : 40 à 70 s. La passe ctest du banc en série : 80 à 120 s.
+- La comparaison `known_red` : 14 min 30 s depuis les témoins vectoriels (40 à 70 s
+  avant). Les dix mille lignes, sur demande : 27 min.
 - Un fils qui plantait en écrivant un vidage mémoire coûtait 20 à 27 s ; les fils du
   banc n'en écrivent plus.

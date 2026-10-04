@@ -1,19 +1,20 @@
 # Banc de concurrence — rapport de session
 
-Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 3 octobre 2026
-au soir, après la livraison de la garde 1 par la session cœur C++ (`fcd9a7882`).
-À l'arrêt, sur demande de l'orchestration.
+Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026,
+après les témoins du `SET` de vecteur (`e8d646716`). À l'arrêt, sur demande de
+l'orchestration.
 
 ## Où en est le banc
 
-- **Sur master**, tout est fusionné. Dernier commit de la session : `a46d0a189`.
+- **Sur master**, tout est fusionné. Derniers commits de la session : `e8d646716`
+  (témoins), `c5d394fac` (journal).
   Chaque lot est entré en avance rapide, sans force, et la comparaison `known_red` était
   verte à chaque fois.
 - **Code** : `test/transaction/concurrence/`, une seule cible, `concurrence_test`.
 - **Spécification** : `docs/2-octobre-2026-00h36/01-specification-du-banc-de-concurrence.md`,
   §1 à §13 ; chaque lot y a sa section.
-- **Liste des rouges** : `known_red.txt`, 62 rouges connus rangés par marche, chacun avec
-  l'ensemble exact des étiquettes de son échec. `probabilistic.txt` : 4 cas.
+- **Liste des rouges** : `known_red.txt`, 66 rouges connus rangés par marche, chacun avec
+  l'ensemble exact des étiquettes de son échec. `probabilistic.txt` : 5 cas.
 - **Moteur** : jamais modifié par cette session.
 
 ## Ce qui a été fait, dans l'ordre
@@ -50,6 +51,19 @@ au soir, après la livraison de la garde 1 par la session cœur C++ (`fcd9a7882`
    base indexée qui fait planter le processus qui l'ouvre.
 7. **La reprise avec un index d'extension**, sur la condition élargie par le cœur C++ :
    les attendus des gardes 1 et 2, et une seconde mort. La garde 1 est livrée.
+8. **L'index vectoriel juste en service (4 octobre)**, témoins écrits avant le correctif du
+   cœur C++, par une autre main (`vector_index_update_test.cpp`) :
+   - Ses chiffres ont d'abord été reproduits hors du harnais : ils n'étaient pas
+     reproductibles à l'unité, parce que le compte varie d'une passe à l'autre. Nous
+     sommes convenus d'un seuil « toutes les lignes justes », sur des essais répétés.
+   - Deux contrôles. Toute ligne est joignable par une recherche exhaustive, et chaque
+     ligne sort première sur son propre vecteur. Le second voit des pertes que le premier
+     ne voit pas.
+   - Les cas : sa recette, plus 768 dimensions, dix mille lignes, une ligne mise à jour
+     cinquante fois, mise à jour puis suppression, transaction annulée, ligne lointaine.
+     S'y ajoute le chemin du produit, décrit par la session des embarquements.
+   - Le témoin déterministe du cœur C++ sur les relations relues de travers
+     (`uncommitted_relations_test.cpp`) : rouge avant `c8fdaf196`, vert après.
 
 ## Décisions et pourquoi
 
@@ -82,9 +96,23 @@ au soir, après la livraison de la garde 1 par la session cœur C++ (`fcd9a7882`
     la phase de stockage d'un point de reprise. C'est non couvert ;
   - savoir si le graphe HNSW connaît la nouvelle position d'un vecteur mis à jour (le
     banc ne vérifie que ce que rend la recherche).
-- **Les prochains cas, annoncés par l'orchestration** : les témoins de la garde 2, et le
-  défaut « un `SET` d'un vecteur vers un autre perd des lignes dans l'index » (969 sur
-  1 000 ligne à ligne, 532 sur 1 000 par lots de 512, mesuré par le cœur C++).
+- **La session cœur C++, sur l'index vectoriel** :
+  - la marche « mise à jour de l'index : contrôle en fin d'instruction » (quatre rouges
+    dans `known_red.txt`, plus le ligne à ligne en probabiliste) ;
+  - la ligne lointaine d'un nuage serré, sous la construction de l'index ;
+  - **le ralentissement de la mise à jour depuis `c8fdaf196`** : dix mille lignes par
+    lots de 512 passent de 25 s à 27 min. C'est signalé, et le cas ne tourne que sur
+    demande (`CONCURRENCE_VECTOR_HEAVY=1`).
+- **La garde 2** est en cours chez le cœur C++. Elle retire elle-même ses cinq rouges, et
+  ses `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
+  Il reste à faire vérifier par `IndexExactWithoutRebuild` que la liste existait avant la
+  mort.
+- **Le lot suivant, demandé par l'orchestration** : passer en revue les correctifs de
+  Ladybug et de Vela qui nous manquent (tags `ladybug-main-2026-08-31`,
+  `vela-master-2026-09-03`), avec un témoin rouge pour chacun de ceux qui sont atteignables.
+- **La durée de la comparaison** : 14 min 30 s depuis ce lot, contre une minute avant. Les
+  rouges vectoriels répètent leurs essais pour rougir à chaque passe. Si c'est trop, il
+  faudra un label à part.
 - **TSan avec l'extension vector** : pas fait. L'extension se construit à un chemin fixe
   de l'arbre source, qu'un build TSan écraserait (§11).
 
@@ -96,7 +124,7 @@ git fetch origin && git rebase origin/master
 cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_BENCHMARK=OFF -DBUILD_EXTENSIONS=vector
 cmake --build build/release -j 8 --target rag3db_vector_extension concurrence_test   # jamais l'alias ninja
-ctest --test-dir build/release/test -R known_red --output-on-failure   # la comparaison seule, 40 à 70 s
+ctest --test-dir build/release/test -R known_red --output-on-failure   # la comparaison seule, 14 min 30 s
 ctest --test-dir build/release/test -L concurrence-rouge-connu -N      # les rouges connus
 ```
 
