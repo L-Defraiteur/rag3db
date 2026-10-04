@@ -565,3 +565,23 @@ Ce que cela donne (proposition de l'orchestration, en débat) :
   et qu'une autre base peut rejouer dans l'ordre.
 - **Un module partagé (§10) porte ses migrations** : mettre à jour une
   capacité reçue, c'est rejouer ses verbes.
+
+**Des migrations indépendantes de la base** (Lucie, 5 octobre) : « ce qui est
+fou en plus, c'est qu'on aurait des migrations indépendantes du provider de
+BDD — rag3db, Postgres ou d'autres. »
+
+- Un verbe dit **quoi** (« renommer ce champ »), pas **comment** : chaque
+  base le traduit dans son langage. rag3weaver a déjà cette couche pour ses
+  requêtes (le dialecte) ; les verbes de migration passeraient par elle.
+- Le même historique de migrations se rejouerait donc sur une autre base, et
+  un module partagé (§10) ne dépendrait pas de la base de celui qui le
+  reçoit.
+- **Ce qui est portable, c'est le vocabulaire, pas les garanties** : chaque
+  base déclare ce qu'elle sait faire d'un verbe — en une transaction ou non,
+  réversible ou non, avec ou sans réécriture de la table. L'essai à blanc le
+  dit avant d'appliquer ; un verbe qu'une base ne sait pas faire sûrement est
+  refusé en le disant, pas approché.
+- Ce qui est propre à nous, au-delà d'un outil de migration ordinaire : le
+  schéma n'est pas que des tables — les relations, le plein texte, les
+  vecteurs et la découpe suivent le verbe, et se rebâtissent par l'état
+  d'index.
