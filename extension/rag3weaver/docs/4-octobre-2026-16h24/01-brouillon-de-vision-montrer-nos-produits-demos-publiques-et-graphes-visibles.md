@@ -305,3 +305,49 @@ L'idée de Lucie :
   agent avec confirmation (comme pour un gabarit de mémoire) ;
 - ce qu'on montre à la démo publique : aucune intégration à secrets pour un
   visiteur, ou seulement des intégrations fournies par nous.
+
+## 10. Un agent ajoute une capacité, et la personne nous l'envoie
+
+> « Comme chez nous tout vit dans un genre de gloubi-boulga incluant la base,
+> on aurait moins de mal pour qu'un agent, à la volée, rajoute des capacités à
+> notre version de l'integration kit, et nous envoie, sur accord de
+> l'utilisateur, le module pour contribuer. Un genre de PR, mais version
+> rag3weaver. » — Lucie
+
+Pourquoi c'est plus facile chez nous : une capacité est **déclarée** — un
+manifeste, des graphes, parfois un script rhai — et non du code compilé. Elle
+se crée à chaud, se vérifie comme un manifeste l'est déjà, et se transporte
+comme des données.
+
+Ce que serait un module envoyé :
+
+- la déclaration (manifeste, graphes, scripts), ses exemples d'appel rejouables
+  sur des réponses enregistrées, et la fiche qui dit pourquoi il existe (la
+  boucle étrange : l'agent qui conçoit laisse sa trace) ;
+- **jamais un secret** : le registre est à part, donc par construction rien
+  n'en sort ; les réponses enregistrées sont à nettoyer avant l'envoi ;
+- les destinations réseau qu'il demande, lisibles en tête.
+
+Le parcours :
+
+1. l'agent conçoit la capacité pour la personne ; elle sert tout de suite,
+   chez elle ;
+2. l'agent propose de la partager ; la personne voit **exactement** ce qui
+   partirait, et décide — jamais d'envoi sans son accord ;
+3. chez nous : vérification automatique (manifeste, liste blanche des nœuds,
+   destinations déclarées, exemples rejoués), puis relecture humaine avant
+   toute mise au catalogue.
+
+Points en débat :
+
+- **C'est une chaîne d'approvisionnement** : un module malveillant déclarerait
+  une destination à lui. Les gardes du §9 valent pour un module reçu comme
+  pour un module écrit ici ; le catalogue est relu, signé, et un module non
+  relu se dit comme tel.
+- **Le même mécanisme vaut pour tout ce qui se déclare** : un gabarit de
+  mémoire, une vue, un contrôleur, un genre de référence — « partager une
+  chose déclarée », pas seulement une intégration.
+- **La licence** : sous quelles conditions une contribution entre dans un
+  produit sous LRSL ; à écrire avant d'ouvrir le canal.
+- **Ce qui ne se partage pas ainsi** : un nœud nouveau en Rust reste une
+  contribution de code, par la voie ordinaire.
