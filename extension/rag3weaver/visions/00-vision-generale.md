@@ -250,6 +250,18 @@ Une réponse à débattre (proposition de l'orchestration, rien d'essayé) :
   nœuds y sont permis, et quel langage d'expression y tourne (c'est là que
   TypeScript a un avantage naturel sur rhai).
 
+- **La contrainte connue** (Lucie, 5 octobre) : « le souci, c'est tokio,
+  qu'on a remis récemment ; donc pas envisageable de suite, à moins de le
+  désactiver sur option et de prendre luciole quand on est sur navigateur. »
+  Deux voies, aucune pour maintenant : (a) le moteur d'exécution derrière une
+  option — tokio en natif, luciole dans le navigateur ; (b) ne porter devant
+  que le cœur des graphes (le modèle, les ports, la vérification, un
+  exécuteur simple) dans une pièce sans moteur asynchrone : un tour de clic
+  fait de nœuds purs s'exécute d'une traite, et seuls les nœuds d'effet
+  attendent — ce que le navigateur sait faire seul. À regarder quand la
+  marche 3 arrive ; d'ici là, la marche 2 doit seulement éviter de coller le
+  cœur des graphes à tokio plus qu'il ne l'est.
+
 Trois règles pour tenir ce cap :
 
 - **Lucie est la première utilisatrice** : les marches 1 à 4 tournent d'abord
