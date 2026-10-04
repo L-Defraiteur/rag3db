@@ -166,6 +166,40 @@ Le banc de la mémoire longue mesure le désordre (doublons, abandons après une
 demande de précision) : il vaudra pour les mémoires et les gabarits comme
 pour les fiches.
 
+## 9. L'archiviste (idée de Lucie, 4 octobre — pour plus tard)
+
+> « Un agent différent pourrait se brancher sur ce qui se passe chez un autre
+> et lui enregistrer ses mémoires sans qu'il s'en rende compte, ou lui en
+> injecter — sauf demande explicite de la personne, en mode "note ça en
+> mémoire". Genre un archiviste. »
+
+L'agent qui travaille ne tient pas sa mémoire : un second agent, l'archiviste,
+regarde passer la conversation et les appels d'outils, et fait les deux
+gestes à sa place.
+
+- **Il note.** Il lit le fil (les tours, les résultats d'outils, les
+  corrections de la personne) et écrit les fiches : les décisions, les
+  préférences, ce qui a été essayé sans succès. L'agent qui travaille n'a
+  rien à décider ni à interrompre.
+- **Il rappelle.** Avant un tour ou avec un résultat d'outil, il glisse les
+  fiches utiles — par le crochet après outil, qui est déjà la porte prévue
+  pour cela.
+- **La personne garde la main directe** : « note ça en mémoire » s'adresse à
+  l'agent qui travaille, qui écrit alors lui-même, avec ses mots à elle.
+
+Pourquoi cela vaut d'être gardé : les passes d'agent ont montré qu'un modèle
+qui travaille n'écrit ni ne relaie ce qu'on ne l'oblige pas à écrire ; un
+agent dont c'est le seul métier le fera. Et la séparation règle la question
+de l'origine : ce que l'archiviste déduit est marqué comme tel, ce que la
+personne a dit reste sa parole.
+
+Ce qu'il demande, et qui existe en partie : le fil d'événements d'une session
+(le chat le journalise déjà), le crochet après outil (livré), les mémoires
+par gabarit, et un modèle peu coûteux qui tourne à côté. Ce qu'il faudra
+tenir : il ne modifie jamais le travail de l'autre ; ce qu'il injecte se voit
+(une section nommée, pas un texte fondu) ; il a un budget ; et la personne
+peut lire, corriger et effacer ce qu'il a retenu.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. L'ordre du §7, ou la boucle (le registre) d'abord.
