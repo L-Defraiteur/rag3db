@@ -1,6 +1,6 @@
 # La réouverture d'une base échoue par intermittence, sous charge seulement
 
-- **État** : ouvert — **quatre hypothèses écartées**
+- **État** : fermé sous surveillance le 4 octobre 2026 — la cause est la double ouverture dans un même processus, refusée par 57c8389b4 et évitée par ad220d0eb
 - **Gravité** : plantage (une réouverture qui échoue ; la base n'est pas perdue)
 - **Atteignable en service** : **non établi** — vu uniquement sous charge de
   batterie, jamais au repos
@@ -122,7 +122,43 @@ Sonde : `tests/sonde_reouverture.rs` (`SONDE_BASE=<chemin>`), qui ne juge rien
 et ne s'arrête pas au premier échec — chaque étage dit ce que le suivant ne dira
 pas.
 
-## La cause, si elle est connue
+## La cause (4 octobre 2026, au soir)
+
+**Une seconde instance en écriture de la même base, dans le même processus.** C'est
+la cause de la corruption d'e2e_code (diagnostic de la session cœur C++), et le
+témoin d'ici en remplit toutes les conditions :
+
+- les deux sessions de `kb_and_relation_persist_and_reopen` sont deux blocs
+  successifs, sur le même chemin, dans le même processus ;
+- la session 1 passe par le plein texte (BM25, donc lucivy). Les acteurs de shard
+  lucivy tenaient un `Arc<LucivyHandle>` et, par le `BlobDirectory`, la `Database` ;
+  le dernier `Arc` tombait **sur un fil de fond, après le retour de
+  `Catalog::drop`** (ad220d0eb) ;
+- la session 2 ouvrait donc la base pendant que la première vivait encore. Sa
+  fermeture (point de reprise, journal tronqué puis supprimé) passait **sous** la
+  lecture du journal par la seconde : d'où `numBytesRead: 0` à une position non
+  nulle, sur une base pourtant fermée proprement ;
+- **sous charge seulement** : il faut que le fil de fond n'ait pas fini quand la
+  session 2 ouvre. Au repos il gagne presque toujours ; avec vingt-huit moteurs et
+  les suites `burn` il perd parfois. C'est pourquoi la charge d'une ingestion (un
+  seul moteur, peu de fils en compétition) ne reproduisait pas, et pourquoi le
+  tampon étroit ne jouait pas.
+
+Ce qui l'a fermé : le moteur refuse désormais la seconde instance par une erreur
+nommée, `ALREADY_OPEN_FOR_WRITING` (57c8389b4) ; rag3weaver attend la mort de la
+première avant de rouvrir, au plus 10 s, et le catalogue ferme vraiment ses index
+(ad220d0eb). Au banc, `SingleWriterCrash.SecondDatabaseOnTheSamePathInOneProcessIsRefused`.
+`e2e_idempotent_registration` est vert 22/22 ce soir avec le registre.
+
+**Sous surveillance, pas prouvé par une reproduction** : le défaut n'a été vu
+qu'une fois et la reproduction sous charge n'a jamais été obtenue. Ce qui le
+rouvrirait : la même lecture de journal à zéro octet après ad220d0eb, ou un refus
+`ALREADY_OPEN_FOR_WRITING` à la réouverture de ce test (la seconde instance
+existerait encore, mais le moteur la refuse). Les `expect` des quatre sites de
+réouverture parlent encore d'un « journal illisible » : à reformuler par la session
+qui tient la suite.
+
+## Les pistes d'avant (gardées pour mémoire)
 
 Non connue. Deux pistes, aucune vérifiée :
 
