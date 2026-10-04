@@ -1,6 +1,6 @@
 # QueryResult::toString() consomme le résultat
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(api): QueryResult::toString ne consomme plus le curseur du résultat »
+- **État** : corrigé le 4 octobre 2026, commit `27bff7d9f` (« fix(api): QueryResult::toString ne consomme plus le curseur du résultat »)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui (par l'API C++)
 - **Touche rag3weaver** : non vérifié

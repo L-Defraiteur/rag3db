@@ -1,6 +1,6 @@
 # COPY : un champ CSV vide entre guillemets devient NULL
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(copy): un champ CSV vide entre guillemets se lit comme la chaîne vide, plus comme NULL »
+- **État** : corrigé le 4 octobre 2026, commit `34bde7eea` (« fix(copy): un champ CSV vide entre guillemets se lit comme la chaîne vide, plus comme NULL »)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié

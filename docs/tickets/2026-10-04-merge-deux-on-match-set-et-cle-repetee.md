@@ -1,6 +1,6 @@
 # MERGE avec deux ON MATCH SET et une clé répétée plante
 
-- **État** : corrigé le 4 octobre 2026, commit « fix(merge): un motif retrouvé dans le lot repose l'identifiant créé, pour les ON MATCH SET comme pour le SET qui suit »
+- **État** : corrigé le 4 octobre 2026, commit `f19977332` (« fix(merge): un motif retrouvé dans le lot repose l'identifiant créé, pour les ON MATCH SET comme pour le SET qui suit »)
 - **Gravité** : plantage
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non d'après la sonde du 4 octobre (`kb_upsert_index`, la seule forme à ON MATCH SET multiple, est juste avec une clé répétée : la clé y est extraite dans un WITH)
