@@ -42,6 +42,9 @@ struct RelBatchInsertProgressSharedState;
 
 struct CopyPartitionerSharedState : public PartitionerSharedState {
     std::mutex mtx;
+    // Tenu de la réservation des identités d'un lot de relations à son écriture au journal :
+    // l'ordre du journal est ainsi celui des identités, que le rejeu réattribue dans l'ordre.
+    std::mutex journalOrderMtx;
     storage::MemoryManager& mm;
 
     explicit CopyPartitionerSharedState(storage::MemoryManager& mm) : mm{mm} {}
@@ -187,6 +190,10 @@ private:
         common::partition_idx_t partitioningIdx, const common::DataChunk& chunkToCopyFrom) const;
 
 private:
+    // Écrit au journal de la transaction, sous la forme d'une insertion, le lot de relations que
+    // les évaluateurs viennent de produire (chargement en masse journalisé).
+    void logRelsToWAL(ExecutionContext* context, const common::ValueVector& relOffsetVector) const;
+
     PartitionerDataInfo dataInfo;
     PartitionerInfo info;
     std::shared_ptr<CopyPartitionerSharedState> sharedState;

@@ -1,7 +1,11 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
+#include "processor/warning_context.h"
+#include "storage/buffer_manager/memory_manager.h"
+#include "storage/wal/local_wal.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
@@ -126,16 +130,81 @@ void Partitioner::initializePartitioningStates(const logical_type_vec_t& columnT
     }
 }
 
+// Le chargement en masse journalisé s'applique-t-il à ce COPY de relations ? Oui quand le
+// réglage force_checkpoint_on_copy est éteint, que la transaction écrit au journal, et que le
+// COPY n'écarte aucune ligne (IGNORE_ERRORS) : une relation écartée après avoir été journalisée
+// reviendrait au rejeu.
+static bool journalsItsRels(const main::ClientContext& clientContext) {
+    return !clientContext.getClientConfig()->forceCheckpointOnCopy &&
+           transaction::Transaction::Get(clientContext)->shouldLogToWAL() &&
+           !WarningContext::Get(clientContext)->getIgnoreErrorsOption();
+}
+
+void Partitioner::logRelsToWAL(ExecutionContext* context,
+    const ValueVector& relOffsetVector) const {
+    const auto clientContext = context->clientContext;
+    const auto mm = MemoryManager::Get(*clientContext);
+    const auto& relTable = *sharedState->relTable;
+    const auto& selVector = relOffsetVector.state->getSelVector();
+    const auto numRels = selVector.getSelSize();
+    // Les colonnes du journal : l'origine, l'arrivée, l'identité, puis les propriétés — la
+    // forme d'une relation locale, celle que le rejeu attend.
+    const idx_t numColumns = relTable.getNumColumns() + 1;
+    KU_ASSERT(numColumns <= dataInfo.columnEvaluators.size());
+    const table_id_t tableIDs[] = {relTable.getFromNodeTableID(), relTable.getToNodeTableID(),
+        relTable.getTableID()};
+    const auto state = std::make_shared<DataChunkState>();
+    state->getSelVectorUnsafe().setToUnfiltered(numRels);
+    std::vector<std::unique_ptr<ValueVector>> ownedVectors;
+    std::vector<ValueVector*> vectors;
+    for (idx_t column = 0; column < numColumns; column++) {
+        const auto& source = *dataInfo.columnEvaluators[column]->resultVector;
+        const auto isInternalID = column < 3;
+        auto vector = std::make_unique<ValueVector>(
+            isInternalID ? LogicalType::INTERNAL_ID() : source.dataType.copy(), mm, state);
+        for (sel_t i = 0; i < numRels; i++) {
+            const auto pos = selVector[i];
+            if (isInternalID) {
+                // Le plan porte ces trois colonnes comme de simples décalages.
+                vector->setValue<internalID_t>(i,
+                    internalID_t{source.getValue<offset_t>(pos), tableIDs[column]});
+            } else if (source.isNull(pos)) {
+                vector->setNull(i, true);
+            } else {
+                vector->setNull(i, false);
+                vector->copyFromVectorData(i, &source, pos);
+            }
+        }
+        vectors.push_back(vector.get());
+        ownedVectors.push_back(std::move(vector));
+    }
+    transaction::Transaction::Get(*clientContext)
+        ->getLocalWAL()
+        .logTableInsertion(relTable.getTableID(), TableType::REL, numRels, vectors);
+}
+
 void Partitioner::executeInternal(ExecutionContext* context) {
     const auto relOffsetVector = resultSet->getValueVector(info.relOffsetDataPos);
+    const auto journaled = journalsItsRels(*context->clientContext);
     while (children[0]->getNextTuple(context)) {
         KU_ASSERT(dataInfo.columnEvaluators.size() >= 1);
         const auto numRels = relOffsetVector->state->getSelVector().getSelSize();
         evaluateExpressions(numRels);
-        auto currentRelOffset = sharedState->relTable->reserveRelOffsets(numRels);
-        for (auto i = 0u; i < numRels; i++) {
-            const auto pos = relOffsetVector->state->getSelVector()[i];
-            relOffsetVector->setValue<offset_t>(pos, currentRelOffset++);
+        {
+            // Journalisé : la réservation des identités et l'écriture au journal ne font qu'un,
+            // pour que l'ordre du journal soit celui des identités.
+            std::unique_lock<std::mutex> journalOrder;
+            if (journaled) {
+                journalOrder = std::unique_lock{sharedState->journalOrderMtx};
+            }
+            auto currentRelOffset = sharedState->relTable->reserveRelOffsets(numRels);
+            for (auto i = 0u; i < numRels; i++) {
+                const auto pos = relOffsetVector->state->getSelVector()[i];
+                relOffsetVector->setValue<offset_t>(pos, currentRelOffset++);
+            }
+            if (journaled && numRels > 0) {
+                logRelsToWAL(context, *relOffsetVector);
+            }
         }
         for (auto partitioningIdx = 0u; partitioningIdx < info.infos.size(); partitioningIdx++) {
             auto& partitionInfo = info.infos[partitioningIdx];

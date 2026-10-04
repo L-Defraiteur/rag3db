@@ -59,9 +59,13 @@ void RelBatchInsert::initLocalStateInternal(ResultSet*, ExecutionContext* contex
 }
 
 void RelBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
-    // Les lignes d'un COPY de relations ne sont pas encore au journal : il force son point de
-    // reprise, même quand le réglage force_checkpoint_on_copy est éteint.
-    transaction::Transaction::Get(*context->clientContext)->setForceCheckpoint();
+    // Un COPY de relations qui peut écarter des lignes (IGNORE_ERRORS) n'est pas journalisé —
+    // une relation écartée après avoir été écrite au journal reviendrait au rejeu — : il force
+    // son point de reprise, même quand le réglage force_checkpoint_on_copy est éteint. Sinon,
+    // ses relations sont écrites au journal par le partitionneur (Partitioner::logRelsToWAL).
+    if (WarningContext::Get(*context->clientContext)->getIgnoreErrorsOption()) {
+        transaction::Transaction::Get(*context->clientContext)->setForceCheckpoint();
+    }
     const auto relBatchInsertInfo = info->ptrCast<RelBatchInsertInfo>();
     const auto clientContext = context->clientContext;
     const auto catalog = Catalog::Get(*clientContext);
