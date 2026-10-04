@@ -189,12 +189,15 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH")
         .env_remove("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH")
+        .env_remove("RAG3WEAVER_TX_POUSSEE_A_LA_FIN")
         .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH");
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }
     if let Some(rang) = tuer {
         if rang == AVANT_LA_POUSSEE {
+            // La poussée unique est une option : l'écrivain la demande.
+            cmd.env("RAG3WEAVER_TX_POUSSEE_A_LA_FIN", "1");
             cmd.env("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH", "1");
         } else {
             cmd.env("RAG3WEAVER_TEST_KILL_IN_BATCH", rang.to_string());

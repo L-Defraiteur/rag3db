@@ -607,13 +607,16 @@ fn synchroniser(
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     let par_transaction = mode == RelationsMode::Bulk && transaction_par_paquet();
-    // **La poussée des blobs du plein texte, une fois à la fin** : chaque
-    // poussée faisait réécrire toute la table des blobs au point de reprise
-    // suivant (≈ 4 s, 24 s sur 106 à quatre paquets par validation). La
-    // marque durable est posée d'abord, hors transaction ;
-    // `RAG3WEAVER_TX_POUSSEE_PAR_PAQUET=1` garde l'ancienne poussée.
+    // **La poussée des blobs du plein texte, une fois à la fin** — une
+    // option (`RAG3WEAVER_TX_POUSSEE_A_LA_FIN=1`), pas le défaut : chaque
+    // poussée fait réécrire toute la table des blobs au point de reprise
+    // suivant, mais la poussée unique de 699 Mo coûtait plus encore (113 →
+    // 135 s, rag3db-eb, 4 octobre 2026 : 52 s pour elle seule, contre 25 s de
+    // COMMIT épargnés). Sa poussée finale part dans une seule transaction
+    // (un point de reprise au lieu d'un par lot de `save_many`), à mesurer.
+    // La marque durable est posée d'abord, hors transaction.
     let entites_plein_texte = [FILE, SCOPE, LIBRARY, SYMBOL];
-    let poussee_differee = par_transaction && std::env::var("RAG3WEAVER_TX_POUSSEE_PAR_PAQUET").as_deref() != Ok("1");
+    let poussee_differee = par_transaction && std::env::var("RAG3WEAVER_TX_POUSSEE_A_LA_FIN").as_deref() == Ok("1");
     if poussee_differee {
         catalog.mark_fts_pending(&entites_plein_texte).map_err(|e| e.to_string())?;
     }
@@ -767,7 +770,11 @@ fn synchroniser(
     if poussee_differee {
         tuer_avant_la_poussee();
         let t = std::time::Instant::now();
-        catalog.push_deferred_blobs(&entites_plein_texte).map_err(|e| e.to_string())?;
+        // Une seule transaction pour toute la poussée : `save_many` valide
+        // chaque lot de 32 Mo à part, et chaque validation réécrivait la table.
+        commencer(catalog)?;
+        let poussee = catalog.push_deferred_blobs(&entites_plein_texte).map_err(|e| e.to_string());
+        terminer(catalog, poussee)?;
         profil.add("pousser le plein texte, une fois", t);
     }
     let garde = SnapshotFinishOptions { allow_empty: options.allow_empty, force: options.force };
