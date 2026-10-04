@@ -42,10 +42,14 @@ piste, pas une grille) :
 
 | Ce qui se paie | Comment |
 |---|---|
-| le logiciel lui-même | un abonnement, comme un logiciel de bureau : une licence pour coder, de l'ordre de 20 € par mois |
-| le logiciel comme backend en ligne | une licence plus chère |
+| le logiciel lui-même | **un seul abonnement, de l'ordre de 20 € par mois, quel que soit l'usage** — coder avec, ou s'en servir comme backend en ligne |
 | les embarquements | servis par nous et payants, **ou** branchés par la personne sur les siens |
 | le modèle de langage | **pas vendu** : nous ne le servons que pour la démo gratuite ; à l'installation, un assistant dans le CLI fait choisir le modèle et la façon de le brancher |
+
+Lucie, un peu plus tard : « au pire un seul abonnement, 20 € par mois, peu
+importe l'usage, tant pis ; sinon ça va être embêtant pour mettre en avant que
+ça peut servir direct de backend tout-en-un. » Une licence « backend » plus
+chère avait été envisagée, puis écartée pour cette raison.
 
 Le modèle de langage et les embarquements se déclarent déjà en service ou en
 local (`models.<capacité>`) : l'assistant d'installation écrit cette
@@ -134,8 +138,8 @@ Ce sur quoi les deux s'accordent :
 ## 8. Ce qui n'est pas décidé
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;
-- le prix exact, et ce qui distingue la licence « coder » de la licence
-  « backend en ligne » (à écrire dans la LRSL ou à côté) ;
+- le prix exact, et ce que l'abonnement compte (une personne, un poste, un
+  déploiement) — à écrire dans la LRSL ou à côté ;
 - l'ordre des trois chantiers de la stèle ;
 - où vit une référence, où vit une mémoire (une base chacune, ou une seule) ;
 - les conditions d'une contribution dans un produit sous LRSL.
