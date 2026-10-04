@@ -65,3 +65,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | ouvert | réponse fausse | oui | à vérifier |
 | [L'ordre de synchronisation au point de reprise laisse peut-être des pages non durables](2026-10-04-ordre-de-synchronisation-au-point-de-reprise.md) | ouvert, non vérifié | perte | inconnu | oui si le doute est fondé |
 | [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | corrigé dans codeparsers 75077f7 + 46cc492 — en attente du pointeur | réponse fausse | oui | oui (usages, impact, liens) |
+| [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | ouvert — proposition | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
