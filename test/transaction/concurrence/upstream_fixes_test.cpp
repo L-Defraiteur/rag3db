@@ -537,6 +537,9 @@ TEST_F(UpstreamFixes, CsvEndingWithAnEmptyFieldAndNoNewline) {
     auto copy = conn->query("COPY U FROM '" + csv + "' (header=false);");
     EXPECT_TRUE(copy->isSuccess())
         << "[check: copy-accepts-trailing-empty-field] " << copy->getErrorMessage();
+    EXPECT_EQ(queryInt("MATCH (u:U) WHERE u.id = 1 AND u.a = 'x' AND u.b IS NULL RETURN count(*);"),
+        1)
+        << "[check: copy-accepts-trailing-empty-field] the row read back";
 }
 
 // Ladybug f03139f95. Un accent grave doublé dans un nom n'est pas réduit.

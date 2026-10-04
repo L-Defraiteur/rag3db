@@ -580,6 +580,14 @@ BaseCSVReader::parse_result_t BaseCSVReader::parseCSV(Driver& driver) {
                 return {curRowIdx, numErrors};
             }
             column++;
+        } else if (column > 0) {
+            // Le fichier finit juste après un délimiteur, sans saut de ligne : le dernier
+            // champ est vide, mais il compte (« 1,x, » a trois champs, pas deux).
+            if (!addValue(driver, curRowIdx, column, std::string_view{}, escapePositions,
+                    newlineEscapePositions)) {
+                return {curRowIdx, numErrors};
+            }
+            column++;
         }
         if (column > 0) {
             curRowIdx += driver.addRow(curRowIdx, column,

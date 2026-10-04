@@ -191,5 +191,4 @@ UpstreamFixes.MergeOfARepeatedKeyReturnsTheStoredNode merge-returns-stored-node
 UpstreamFixes.MergeOfARelationRepeatedInTheBatchKeepsTheLastSet merge-set-applied
 UpstreamFixes.ScanOfSeveralRelationTablesInATransaction transaction-reads-its-relations
 UpstreamFixes.QuotedEmptyCsvFieldIsNotNull quoted-empty-is-not-null
-UpstreamFixes.CsvEndingWithAnEmptyFieldAndNoNewline copy-accepts-trailing-empty-field
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed

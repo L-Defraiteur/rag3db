@@ -1,6 +1,6 @@
 # COPY refuse un CSV qui finit par un champ vide sans saut de ligne
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(copy): un CSV qui finit par un champ vide sans saut de ligne n'est plus refusé »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non vérifié
