@@ -4,7 +4,7 @@ Session « embarquements » : worktree `/home/lucied/git_workspaces/rag3db-embar
 (crate `extension/rag3weaver`), target à elle dans ce worktree. Elle tient le
 service de modèles sur l'autre poste, le régulateur d'écran, l'estimation et
 l'indexation en fond, l'état d'avancement, la déclaration commune des modèles,
-et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 12 h 50.
+et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 15 h 30.
 
 ## Fait aujourd'hui, sur master
 
@@ -78,7 +78,36 @@ relance), `03` (« indexer ce dépôt » : proposition, puis toutes les mesures)
   corrigé. « Sûr ligne à ligne » repose sur les mesures du cœur C++.
 - Les cas sont donnés à la session du banc pour ses témoins du moteur.
 
+## Le 4 octobre après-midi : la mémoire et le tampon du moteur
+
+- **Le verrou du poste** remplace les annonces (orchestration, 13 h 30) :
+  `~/.cache/rag3weaver-build/poste mesure|lourd <commande>`, ou
+  `RAG3WEAVER_MESURE=1` pour `run_e2e.sh`, qui prend le verrou lui-même.
+  Les passes de 13 h 05 à 13 h 40 sont jetées (concurrence).
+- **Où est la mémoire** (page 03) : anonyme (tas et tampon du moteur), pas
+  les fichiers lucivy ; au moins 3 Go dans le tas ; borner les fusions
+  lucivy ne la réduit pas.
+- **Le tampon du moteur** : 8 Gio passent (384 s) ; 4 Gio et 2 Gio échouent
+  sur un point de reprise ; un seuil plus bas aggrave. **Reproduit sans
+  rag3weaver** (`tests/sonde_tampon_et_blobs.rs`) : 544 Mo de BLOB suffisent à
+  faire échouer un point de reprise sous 2 Gio. Ticket complété pour le cœur
+  C++.
+- **Le refus d'avant l'indexation** : `estimate` dit le tampon, `index`
+  refuse s'il est trop petit. **La borne « 8 Mo de texte par Gio de tampon »
+  reste provisoire : deux points de mesure** (62 Mo passent à 8 Gio, 40 Mo
+  cassent à 4). Elle lit la règle du produit posée par la session de l'arbre
+  principal, tranchée par l'orchestration : `min(RAM/2, 8 Gio)`.
+- **Demi-page pour Lucie** : `docs/4-octobre-2026-14h30/01-les-blobs-d-index-
+  dans-la-base.md` — sortir les fichiers du plein texte de la base.
+- **Tickets ouverts** : journaux d'annulation laissés dans `/tmp` (5,5 Go de
+  mémoire vive) ; services de modèles sans authentification ; point de
+  reprise qui échoue quand le tampon est petit.
+
 ## En cours
+
+- **Brancher le refus sur le tampon réel de la connexion ouverte**, manifeste
+  compris, quand `DbConnection::buffer_pool()` rendra les octets (session de
+  l'arbre principal).
 
 - **Fichiers générés, le reste** : ce que la règle retire en relations et
   en temps (à la prochaine passe du dépôt entier), `.gitattributes
