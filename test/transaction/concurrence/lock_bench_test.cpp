@@ -721,6 +721,60 @@ INSTANTIATE_TEST_SUITE_P(Order, RollbackOfACopy, ::testing::Bool(),
         return info.param ? "RolledBackCopiedFirst" : "RolledBackCopiedSecond";
     });
 
+// Le remappage en cours de transaction (f1d8c7190, LocalStorage::flushNodeTable) : un COPY
+// verse d'abord dans la table les lignes locales de sa transaction, et les relations locales
+// qui les citent suivent leurs nouveaux décalages. Non prouvé par son commit quand un autre
+// écrivain a validé des nœuds dans la table entre-temps. A insère vingt nœuds et des
+// relations entre eux, à des décalages provisoires qui partent de 0 ; B copie cent nœuds et
+// valide ; A copie à son tour (versement : ses nœuds passent à 100 et plus) et valide.
+// Chargement journalisé chez les deux, pour que la validation de B n'attende pas le départ
+// de A. Dans un seul fil, par deux connexions.
+TEST_F(LockBench, LocalRelationsFollowTheirNodesWhenACopyFlushesThemAfterAnotherWriter) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    mustRun("CREATE REL TABLE Next(FROM Item TO Item, step INT64);");
+    const auto otherCopy = writeKeysCsv(databasePath + ".other.csv", 0, 100);
+    const auto ownCopy = writeKeysCsv(databasePath + ".own.csv", 2000, 50);
+    rag3db::main::Connection other(database.get());
+    for (const auto& [connection, query] :
+        std::vector<std::pair<rag3db::main::Connection*, std::string>>{
+            {conn.get(), "CALL force_checkpoint_on_copy=false;"},
+            {&other, "CALL force_checkpoint_on_copy=false;"},
+            {conn.get(), "BEGIN TRANSACTION;"},
+            {conn.get(), "UNWIND range(1000, 1019) AS i CREATE (:Item {id: i, v: i});"},
+            {conn.get(), "MATCH (a:Item), (b:Item) WHERE a.id >= 1000 AND a.id < 1019 AND b.id "
+                         "= a.id + 1 CREATE (a)-[:Next {step: a.id}]->(b);"},
+            {&other, "BEGIN TRANSACTION;"}, {&other, otherCopy}, {&other, "COMMIT;"},
+            {conn.get(), ownCopy},
+            {conn.get(), "MATCH (a:Item {id: 2000}), (b:Item {id: 1000}) CREATE (a)-[:Next "
+                         "{step: -1}]->(b);"},
+            {conn.get(), "COMMIT;"}}) {
+        auto result = connection->query(query);
+        ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << query << "\n"
+                                         << result->getErrorMessage();
+    }
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 170) << "[check: committed-rows] ";
+    EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id >= 1000 AND n.id < 1020 AND n.v = n.id RETURN "
+                       "count(n);"),
+        20)
+        << "[check: flushed-rows-keep-their-values] ";
+    EXPECT_EQ(queryInt("MATCH (a:Item)-[r:Next]->(b:Item) WHERE b.id = a.id + 1 AND r.step = a.id "
+                       "RETURN count(r);"),
+        19)
+        << "[check: local-relations-follow-their-nodes] ";
+    EXPECT_EQ(queryInt("MATCH (b:Item)<-[r:Next]-(a:Item) WHERE b.id = a.id + 1 AND r.step = a.id "
+                       "RETURN count(r);"),
+        19)
+        << "[check: local-relations-follow-their-nodes-backward] ";
+    EXPECT_EQ(queryInt("MATCH (a:Item {id: 2000})-[r:Next {step: -1}]->(b:Item {id: 1000}) RETURN "
+                       "count(r);"),
+        1)
+        << "[check: relation-after-the-flush] ";
+    EXPECT_EQ(queryInt("MATCH ()-[r:Next]->() RETURN count(r);"), 20) << "[check: no-stray-relation] ";
+    expectIntegrity();
+    std::filesystem::remove(databasePath + ".other.csv");
+    std::filesystem::remove(databasePath + ".own.csv");
+}
+
 // Seconde limite (68ff9d5e2, transaction_manager.cpp) : deux validations qui veulent
 // chacune leur point de reprise (un COPY, force_checkpoint_on_copy par défaut). La
 // première attend le départ des autres ; la seconde, entrée à son tour dans sa validation,

@@ -38,15 +38,24 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <set>
 
 #include "bench_harness.h"
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
+#include "main/client_context.h"
 #include "processor/result/flat_tuple.h"
+#include "storage/index/index.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -637,6 +646,90 @@ TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrue) {
         database.reset();
         createDBAndConn();
     }
+}
+
+// Le miroir de HNSWStorageInfo (extension/vector/src/include/index/hnsw_index.h), pour écrire
+// son compte sans tirer les en-têtes de l'extension dans le banc. Sa disposition est vérifiée
+// avant toute écriture : le compte lu doit égaler le nombre de lignes reliées.
+struct HNSWStorageInfoMirror : rag3db::storage::IndexStorageInfo {
+    table_id_t upperRelTableID;
+    table_id_t lowerRelTableID;
+    offset_t upperEntryPoint;
+    offset_t lowerEntryPoint;
+    offset_t numCheckpointedNodes;
+};
+
+// Le compte des lignes reliées de l'index, lu ou, avec newCount, écrit par les internes.
+offset_t indexedRowCount(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index, std::optional<offset_t> newCount = std::nullopt) {
+    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    auto* context = connection.getClientContext();
+    auto* transaction = rag3db::transaction::Transaction::Get(*context);
+    const auto* entry =
+        rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, table);
+    auto& nodeTable = rag3db::storage::StorageManager::Get(*context)
+                          ->getTable(entry->getTableID())
+                          ->cast<rag3db::storage::NodeTable>();
+    auto* found = nodeTable.getIndex(index).value();
+    auto& info = static_cast<HNSWStorageInfoMirror&>(
+        const_cast<rag3db::storage::IndexStorageInfo&>(found->getStorageInfo()));
+    if (newCount) {
+        info.numCheckpointedNodes = *newCount;
+    }
+    const auto count = info.numCheckpointedNodes;
+    EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
+    return count;
+}
+
+// Le filet de e1049934e : un index qui compte plus de lignes reliées que sa table n'en contient
+// (une base écrite avant le crochet d'annulation) refuse sous le nom « is behind its table », que
+// rag3weaver reconnaît pour retirer l'index et le rebâtir. Aucune base abîmée ne le déclenche
+// sur le moteur corrigé : le compte est écrit par les internes, à 210 pour 200 lignes. La
+// recherche, la mise à jour d'un vecteur et la fin d'un COPY de 5 lignes (205 < 210) doivent
+// refuser par ce nom ; le COPY refusé est annulé ; DROP puis CREATE rendent un index juste.
+TEST_F(VectorIndexUpdate, IndexCountingMoreRowsThanItsTableIsRefusedByName) {
+    table = "Lag";
+    mustRun("CREATE NODE TABLE Lag(id INT64 PRIMARY KEY, vec FLOAT[4]);");
+    mustRun(stringFormat("UNWIND range(0, 199) AS i CREATE (n:Lag {id: i}) SET n.vec = {};",
+        ORIGIN_VECTOR));
+    createIndex();
+    mustRun("CHECKPOINT;");
+    ASSERT_EQ(indexedRowCount(*conn, table, "doc_index"), 200u)
+        << "[check: setup] the mirror of HNSWStorageInfo does not read the index's row count";
+    indexedRowCount(*conn, table, "doc_index", 210);
+    const auto refusedByName = [&](const std::string& query, const char* check) {
+        auto result = conn->query(query);
+        const auto message = result->isSuccess() ? std::string("<success>") :
+                                                   result->getErrorMessage();
+        std::cerr << "  " << check << ": " << message.substr(0, 300) << "\n";
+        EXPECT_NE(message.find("is behind its table"), std::string::npos)
+            << "[check: " << check << "] " << message.substr(0, 300);
+    };
+    refusedByName("CALL QUERY_VECTOR_INDEX('Lag', 'doc_index', [1.0, 2.0, 3.0, 4.0], 5) RETURN "
+                  "node.id;",
+        "search-refused");
+    refusedByName("MATCH (n:Lag {id: 3}) SET n.vec = [9.0, 9.0, 9.0, 9.0];", "update-refused");
+    const auto csv = databasePath + ".lag.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 1000; i < 1005; ++i) {
+            out << i << ",\"[1.0,2.0,3.0," << i << ".0]\"\n";
+        }
+    }
+    refusedByName("COPY Lag FROM '" + csv + "' (header=false);", "copy-refused");
+    auto rows = conn->query("MATCH (n:Lag) RETURN count(n);");
+    EXPECT_EQ(rows->getNext()->getValue(0)->getValue<int64_t>(), 200)
+        << "[check: refused-copy-rolled-back] ";
+    rows.reset();
+    mustRun("CALL DROP_VECTOR_INDEX('Lag', 'doc_index');");
+    createIndex();
+    const auto failed = check("after the index is built again");
+    std::string checks;
+    for (const auto& name : failed) {
+        checks += "[check: " + name + "] ";
+    }
+    EXPECT_TRUE(failed.empty()) << checks;
+    std::filesystem::remove(csv);
 }
 
 } // namespace

@@ -539,14 +539,14 @@ TEST_F(UpstreamFixes, ScanOfSeveralRelationTablesInATransaction) {
 // 1005, le SET et la relation tombent sur les lignes locales ; avec une seule ligne locale,
 // la recherche par clé plante.
 //
-// Le témoin dit l'invariant, pas le remède : ou le COPY est refusé par son nom (« already
-// holds rows inserted by this transaction », NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS),
-// ou chaque lecture et chaque écriture tombe sur la bonne ligne, avant comme après la
-// validation. Il reste vert quand les lignes locales seront versées avant le COPY.
+// Le COPY était refusé par un nom depuis 0f4a54b2c ; depuis f1d8c7190, les lignes locales sont
+// versées dans la table avant le COPY, et le refus est retiré. Le témoin exige désormais le
+// COPY accepté, et chaque lecture et chaque écriture sur la bonne ligne, avant comme après
+// la validation.
 class CopyAfterLocalInserts : public UpstreamFixes {
 public:
     // Codes du fils : 0 invariant tenu, 5 clé rendue fausse, 6 SET mal placé, 7 relation
-    // mal reliée, 8 état validé faux, 9 COPY refusé pour une autre raison, 4 requête échouée.
+    // mal reliée, 8 état validé faux, 9 COPY refusé, 4 requête échouée.
     std::string run(int localRows) {
         const auto csv = databasePath + ".copy-after-local.csv";
         {
@@ -568,13 +568,9 @@ public:
             }
             auto copy = connection.query("COPY Doc FROM '" + csv + "' (header=false);");
             if (!copy->isSuccess()) {
-                const auto message = copy->getErrorMessage();
-                std::cerr << "  copy: " << message << "\n";
+                std::cerr << "  copy: " << copy->getErrorMessage() << "\n";
                 connection.query("ROLLBACK;");
-                return message.find("already holds rows inserted by this transaction") !=
-                               std::string::npos ?
-                           0 :
-                           9;
+                return 9;
             }
             auto key = connection.query("MATCH (n:Doc {id: 5}) RETURN n.id;");
             if (!key->isSuccess() || !key->hasNext() ||
@@ -633,8 +629,7 @@ std::string copyAfterLocalInsertsCheck(const std::string& outcome) {
         return "[check: copy-after-local-inserts-committed] the committed rows are wrong";
     }
     if (outcome == "exit code 9") {
-        return "[check: copy-after-local-inserts-refusal-named] the COPY was refused, not by "
-               "its name";
+        return "[check: copy-after-local-inserts-accepted] the COPY was refused";
     }
     return "[check: copy-after-local-inserts-runs] " + outcome;
 }

@@ -51,6 +51,15 @@ Déterministe : 3 passes sur 3, le 5 octobre.
 
 Les deux sont dans `known_red.txt`, sous A3′.
 
+Deux conséquences de plus, depuis le 5 octobre, sans témoin propre :
+
+- le versement des lignes locales avant un COPY (`f1d8c7190`) écrit lui aussi directement dans
+  les blocs : des insertions ordinaires suivies d'un COPY y tombent de même ;
+- sur une table à index vectoriel, le crochet d'annulation (`e1049934e`) ramène le compte des
+  lignes reliées au premier décalage annulé, sous les lignes de l'autre écrivain : elles
+  seraient reliées une seconde fois à la fin du COPY suivant (relevé par la session cœur
+  C++).
+
 ## Cause
 
 Pas cherchée au-delà du constat. L'annulation d'un COPY défait les insertions du bloc à
