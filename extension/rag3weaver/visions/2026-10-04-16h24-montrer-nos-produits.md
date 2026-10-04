@@ -351,3 +351,36 @@ Points en débat :
   produit sous LRSL ; à écrire avant d'ouvrir le canal.
 - **Ce qui ne se partage pas ainsi** : un nœud nouveau en Rust reste une
   contribution de code, par la voie ordinaire.
+
+## 11. Jamais de compilation pour la personne, et le rechargement à chaud
+
+> « Est-ce que le code ne saurait pas se recharger, sans avoir besoin de
+> relancer une compilation ? Si on fait tout ce qui est codable en rhai, les
+> logiques de backend, l'utilisateur n'a potentiellement jamais besoin de
+> compiler, non ? » — Lucie
+
+Oui, c'est la conséquence de « tout est déclaré » :
+
+- **Ce que la personne écrit n'est jamais compilé** : manifestes, graphes
+  (`.mmd`), gabarits de rendu, scripts rhai. Le binaire est livré tout fait ;
+  rhai est interprété, lu à l'exécution.
+- **Le rechargement à chaud** : un fichier déclaré change, le système le
+  revérifie comme au démarrage et remplace l'ancien d'un coup. S'il est
+  invalide, l'ancien reste en service et l'erreur dit quoi corriger. Une
+  exécution en cours finit sur l'ancienne version.
+- C'est la condition de « un agent ajoute une capacité à la volée » (§10).
+
+État : aujourd'hui un manifeste se charge au démarrage ; le rechargement est
+à faire. La vérification des manifestes existe.
+
+Limites à garder en tête :
+
+- **rhai est lent devant du Rust** : bon pour la logique de liaison (décider,
+  transformer un enregistrement, valider), pas pour une boucle lourde — le
+  lourd reste dans des nœuds fournis.
+- **Un changement de schéma n'est pas un simple rechargement** : une entité
+  qui change de forme demande une migration des données ; c'est la partie
+  difficile, à traiter à part.
+- **Un nœud nouveau en Rust se compile** — par nous, pas par la personne.
+- **rhai n'a accès qu'à ce qu'on lui donne** (ni fichiers ni réseau par
+  défaut) : c'est aussi ce qui rend un module reçu acceptable.
