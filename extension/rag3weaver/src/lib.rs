@@ -155,6 +155,7 @@ pub mod derived_kb;
 pub mod ocr;
 pub mod origin;
 pub mod records;
+pub mod relation_directions;
 pub mod dataflow;
 pub mod query;
 pub mod refs;

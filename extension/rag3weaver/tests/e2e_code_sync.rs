@@ -593,3 +593,64 @@ fn une_edition_apres_un_point_de_reprise_vaut_un_index_neuf() {
     assert_eq!(fini.1, attendu.1, "les fichiers");
     assert_eq!(fini.2, attendu.2, "les arêtes, avec leur multiplicité");
 }
+
+/// **Une suppression d'arêtes suivie d'un point de reprise garde les deux sens
+/// égaux** (4 octobre 2026). Un défaut du moteur, trouvé par la session du
+/// banc, effaçait au point de reprise, dans le sens direct seulement, les
+/// relations d'autres régions du même groupe de nœuds après la suppression de
+/// quelques-unes. C'est le geste d'une édition : `reingest_file` retire les
+/// arêtes sortantes des scopes d'un fichier, qui partagent leur groupe avec
+/// ceux des autres. Ici, sur disque : un CHECKPOINT, l'édition, un CHECKPOINT,
+/// puis une réouverture. Chaque table de relation doit se lire autant dans
+/// un sens que dans l'autre, et l'index rouvert doit valoir un index bâti à
+/// neuf.
+#[test]
+#[ignore]
+fn apres_un_point_de_reprise_les_deux_sens_d_une_relation_restent_egaux() {
+    use rag3weaver::relation_directions::count_both_directions;
+    let dir = std::path::PathBuf::from(std::env::var("HOME").unwrap())
+        .join(format!(".cache/rag3weaver-build/code-sync-sens-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+    let ouvrir = |enregistrer: bool| {
+        let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
+        conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display())).unwrap();
+        let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
+        catalog.initialize().unwrap();
+        if enregistrer {
+            register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+        }
+        catalog
+    };
+    let dissymetries = |catalog: &Catalog, quand: &str| {
+        let sens = count_both_directions(catalog.conn()).unwrap();
+        let fautes: Vec<_> = sens.iter().filter(|d| !d.is_symmetric()).collect();
+        eprintln!("[sens {quand}] {} couples, {} dissymétriques : {fautes:?}", sens.len(), fautes.len());
+        assert!(sens.iter().any(|d| d.table == "CONSUMES" && d.forward > 0), "la sonde lit bien des arêtes : {sens:?}");
+        fautes.len()
+    };
+    let snapshot = Snapshot::new("sens", source_reliee());
+    let options = SourceSyncOptions { batch_files: 2, ..Default::default() };
+    {
+        let mut catalog = ouvrir(true);
+        sync_source(&mut catalog, &snapshot, &options, &mut |_| {}).unwrap();
+        catalog.execute_raw("CHECKPOINT").unwrap();
+        edit_file(
+            &snapshot,
+            Some(&mut catalog),
+            "base.rs",
+            &EditOp::Replace { old: "pub fn autre() -> f64 { base() }".into(), new: "pub fn autre() -> f64 { 2.0 }\npub fn neuve() -> f64 { autre() }".into() },
+        )
+        .unwrap();
+        catalog.execute_raw("CHECKPOINT").unwrap();
+        assert_eq!(dissymetries(&catalog, "après le point de reprise"), 0);
+    }
+    let rouvert = ouvrir(true);
+    assert_eq!(dissymetries(&rouvert, "après réouverture"), 0);
+    let fini = etat(&rouvert);
+    drop(rouvert);
+    let _ = std::fs::remove_dir_all(&dir);
+    let attendu = etat(&a_neuf(&snapshot, "sens", &options));
+    assert_eq!(fini.2, attendu.2, "les arêtes de la base rouverte valent un index bâti à neuf");
+}
