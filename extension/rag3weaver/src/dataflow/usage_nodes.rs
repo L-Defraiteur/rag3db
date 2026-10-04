@@ -97,6 +97,71 @@ pub struct UsagesReport {
     pub ambiguous: bool,
 }
 
+/// **Une déclaration** : la ligne d'un conteneur qui annonce un nom défini
+/// ailleurs (`int bar(int x) const;` dans `class Foo` de foo.h, défini dans
+/// foo.cpp) — ou jamais (une méthode virtuelle pure).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Declaration {
+    /// La définition qu'elle annonce, quand elle est indexée.
+    pub definition: Option<String>,
+    pub container: String,
+    pub path: String,
+    pub line: Option<i64>,
+    pub signature: String,
+}
+
+/// Où lire les déclarations : la relation d'une définition vers son
+/// conteneur (`HAS_PARENT`), et le champ du conteneur qui les porte (une
+/// liste JSON de `{name, line, signature, kind}`).
+#[derive(Debug, Clone)]
+pub struct DeclarationsConfig {
+    pub relation: String,
+    pub field: String,
+}
+
+/// Les déclarations d'un nom. Avec des définitions : celles de leurs
+/// conteneurs. Sans : les conteneurs qui le déclarent sans qu'aucune
+/// définition soit indexée. Rien tant que le schéma ne porte pas le champ.
+pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsConfig, name: &str, definitions: &[Item]) -> Result<Vec<Declaration>, String> {
+    let rel = rel_info(catalog, &d.relation)?;
+    if !catalog.entity_config(&rel.to).is_some_and(|c| c.fields.contains_key(&d.field)) {
+        return Ok(Vec::new());
+    }
+    let mut colonnes = vec![format!("p.{}", cfg.title)];
+    colonnes.extend(cfg.path_fields.iter().map(|f| format!("p.{f}")));
+    colonnes.push(format!("p.{}", d.field));
+    let colonnes = colonnes.join(", ");
+    let rows = if definitions.is_empty() {
+        let q = format!("MATCH (p:{t}) WHERE p.{f} CONTAINS $nom RETURN '', {colonnes}", t = rel.to, f = d.field);
+        catalog.execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+    } else {
+        let q = format!("UNWIND $uuids AS u MATCH (x:{} {{_uuid: u}})-[:{}]->(p:{}) RETURN u, {colonnes}", rel.from, rel.name, rel.to);
+        let uuids = CypherValue::List(definitions.iter().map(|x| CypherValue::String(x.uuid.clone())).collect());
+        catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", uuids)])
+    }
+    .map_err(|e| format!("UsagesNode: {e}"))?;
+    let n = cfg.path_fields.len();
+    let mut out = Vec::new();
+    for r in &rows.rows {
+        let definition = Some(texte(r.first())).filter(|u| !u.is_empty());
+        let container = texte(r.get(1));
+        let path = (0..n).map(|i| texte(r.get(2 + i))).find(|p| !p.is_empty()).unwrap_or_default();
+        let Ok(serde_json::Value::Array(entrees)) = serde_json::from_str::<serde_json::Value>(&texte(r.get(2 + n))) else { continue };
+        for e in entrees.iter().filter(|e| e.get("name").and_then(|v| v.as_str()) == Some(name)) {
+            out.push(Declaration {
+                definition: definition.clone(),
+                container: container.clone(),
+                path: path.clone(),
+                line: e.get("line").and_then(|v| v.as_i64()),
+                signature: e.get("signature").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+            });
+        }
+    }
+    out.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
+    out.dedup();
+    Ok(out)
+}
+
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
 fn champs(alias: &str, cfg: &UsagesConfig) -> String {
@@ -334,6 +399,12 @@ impl UsagesReport {
     }
 
     pub fn markdown(&self, usage: &str, limit: usize) -> String {
+        self.markdown_with(usage, limit, &[])
+    }
+
+    /// Le rendu, avec les déclarations : « défini foo.cpp:3 — déclaré
+    /// foo.h:5 (dans Foo) » ; sans définition indexée, la déclaration seule.
+    pub fn markdown_with(&self, usage: &str, limit: usize, declarations: &[Declaration]) -> String {
         let mut out = format!("# usages: {}\n\n", self.name);
         let defs = &self.definitions;
         out.push_str(&format!("## Définitions ({})", defs.len()));
@@ -341,11 +412,27 @@ impl UsagesReport {
             out.push_str(&format!(" — {} autre(s) hors du chemin demandé", self.definitions_hidden));
         }
         out.push('\n');
+        let lieu_decl = |x: &Declaration| match x.line {
+            Some(l) => format!("{}:{l}", x.path),
+            None => x.path.clone(),
+        };
         if defs.is_empty() {
-            out.push_str("(aucune définition indexée sous ce nom)\n");
+            let seules: Vec<&Declaration> = declarations.iter().filter(|x| x.definition.is_none()).collect();
+            if seules.is_empty() {
+                out.push_str("(aucune définition indexée sous ce nom)\n");
+            } else {
+                out.push_str("(aucune définition indexée — déclaré seulement)\n");
+                for x in seules {
+                    out.push_str(&format!("- déclaré dans {} — {} : `{}`\n", x.container, lieu_decl(x), x.signature));
+                }
+            }
         }
         for d in defs {
-            out.push_str(&format!("- {} {} — {}\n", d.kind, d.title, lieu(d)));
+            let decl = declarations.iter().find(|x| x.definition.as_deref() == Some(d.uuid.as_str()));
+            match decl {
+                Some(x) => out.push_str(&format!("- {} {} — {} — déclaré {} (dans {})\n", d.kind, d.title, lieu(d), lieu_decl(x), x.container)),
+                None => out.push_str(&format!("- {} {} — {}\n", d.kind, d.title, lieu(d))),
+            }
         }
         if self.ambiguous {
             out.push_str("\nNom ambigu : plusieurs définitions. Les usages trouvés par le nom seul ne sont pas attribués.\n");
@@ -411,6 +498,8 @@ pub struct UsagesNode {
     limit: usize,
     /// `true` : le rapport en JSON ; sinon du markdown.
     json: bool,
+    /// Où lire les déclarations (`declared_in`), quand le gabarit le dit.
+    declarations: Option<DeclarationsConfig>,
 }
 
 impl Node for UsagesNode {
@@ -436,14 +525,26 @@ impl Node for UsagesNode {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
             }
-            CatalogRead::Ready { catalog: cat, status } => (usages_of(&cat, &self.cfg, &self.name, &self.path)?, status),
+            CatalogRead::Ready { catalog: cat, status } => {
+                let report = usages_of(&cat, &self.cfg, &self.name, &self.path)?;
+                let declarations = match &self.declarations {
+                    Some(d) => declarations_of(&cat, &self.cfg, d, &self.name, &report.definitions)?,
+                    None => Vec::new(),
+                };
+                ((report, declarations), status)
+            }
         };
+        let (report, declarations) = report;
         ctx.metric("definitions", report.definitions.len() as f64);
         ctx.metric("usages", report.usages.len() as f64);
         let value = if self.json {
-            serde_json::to_value(&report).map_err(|e| e.to_string())?
+            let mut v = serde_json::to_value(&report).map_err(|e| e.to_string())?;
+            if !declarations.is_empty() {
+                v["declarations"] = serde_json::to_value(&declarations).map_err(|e| e.to_string())?;
+            }
+            v
         } else {
-            serde_json::Value::String(report.markdown(&self.usage, self.limit))
+            serde_json::Value::String(report.markdown_with(&self.usage, self.limit, &declarations))
         };
         ctx.set_output("result", PortValue::new(with_status(status.as_deref(), value, self.json)));
         Ok(())
@@ -499,6 +600,16 @@ impl NodeFactory for UsagesNodeFactory {
             Some("json") => true,
             Some(f) => return Err(format!("UsagesNode: format inconnu « {f} »")),
         };
+        let declarations = s("declared_in").filter(|v| !v.is_empty()).map(|relation| DeclarationsConfig {
+            relation,
+            field: s("declarations_field").filter(|v| !v.is_empty()).unwrap_or_else(|| "declarations".into()),
+        });
+        if let Some(d) = &declarations {
+            let ident = |x: &str| x.chars().all(|c| c.is_alphanumeric() || c == '_');
+            if let Some(x) = [&d.relation, &d.field].into_iter().find(|x| !ident(x)) {
+                return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
+            }
+        }
         Ok(Box::new(UsagesNode {
             node_name: name.to_string(),
             cfg,
@@ -507,6 +618,7 @@ impl NodeFactory for UsagesNodeFactory {
             usage,
             limit,
             json,
+            declarations,
         }))
     }
     fn node_type(&self) -> &'static str {
@@ -545,6 +657,8 @@ impl NodeFactory for UsagesNodeFactory {
                 p("kind_field", S, false, Some(serde_json::json!("scope_type")), "Champ montré comme genre"),
                 p("path_fields", S, false, Some(serde_json::json!("file_path")), "Champs de chemin, le premier non vide, séparés par |"),
                 p("line_field", S, false, Some(serde_json::json!("start_line")), "Champ de ligne de la déclaration"),
+                p("declared_in", S, false, Some(serde_json::json!("")), "Relation d'une définition vers son conteneur, qui porte les déclarations (ex. HAS_PARENT)"),
+                p("declarations_field", S, false, Some(serde_json::json!("declarations")), "Champ du conteneur : liste JSON de {name, line, signature, kind}"),
                 p("name", S, true, None, "Le nom cherché"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne montrer que les définitions sous ce chemin"),
                 usage,

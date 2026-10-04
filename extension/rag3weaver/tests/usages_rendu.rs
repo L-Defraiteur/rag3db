@@ -66,3 +66,23 @@ fn la_configuration_n_accepte_que_des_identifiants() {
     genre["usage"] = serde_json::json!("nimporte");
     assert!(UsagesNodeFactory.create("u", &genre).is_err());
 }
+
+/// La définition dit où elle est déclarée ; sans définition indexée, la
+/// déclaration seule — jamais « rien ».
+#[test]
+fn la_declaration_se_montre_avec_sa_definition_ou_seule() {
+    use rag3weaver::dataflow::usage_nodes::Declaration;
+    let def = Item { uuid: "u-bar".into(), title: "bar".into(), kind: "function".into(), path: "src/foo.cpp".into(), line: Some(3) };
+    let decl = Declaration { definition: Some("u-bar".into()), container: "Foo".into(), path: "src/foo.h".into(), line: Some(5), signature: "int bar(int x) const".into() };
+    let r = UsagesReport { name: "bar".into(), definitions: vec![def], definitions_hidden: 0, usages: vec![], ambiguous: false };
+    let md = r.markdown_with("all", 10, &[decl]);
+    assert!(md.contains("- function bar — src/foo.cpp:3 — déclaré src/foo.h:5 (dans Foo)"), "{md}");
+
+    let pure = Declaration { definition: None, container: "Foo".into(), path: "src/foo.h".into(), line: Some(8), signature: "virtual int pure(int y) = 0".into() };
+    let r = UsagesReport { name: "pure".into(), definitions: vec![], definitions_hidden: 0, usages: vec![], ambiguous: false };
+    let md = r.markdown_with("all", 10, &[pure]);
+    assert!(md.contains("aucune définition indexée — déclaré seulement"), "{md}");
+    assert!(md.contains("- déclaré dans Foo — src/foo.h:8 : `virtual int pure(int y) = 0`"), "{md}");
+    // Sans déclaration, le rendu d'avant.
+    assert_eq!(r.markdown_with("all", 10, &[]), r.markdown("all", 10));
+}
