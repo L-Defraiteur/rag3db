@@ -147,6 +147,25 @@ amonts (`8c83c3360`, puis le second lot).
     - la réouverture intermittente sous charge : fermée sous surveillance (`21ae489d9`).
       C'était la double ouverture dans un même processus, par le dernier `Arc<Database>`
       que lucivy lâchait sur un fil de fond (ad220d0eb).
+17. **La fin de la soirée du 4 octobre** :
+    - le lecteur refusé 1 à 3 fois sur 80 (`e2e_prise_atomique`) : le refus nommé
+      `CHECKPOINT_CROSSED_READ_ONLY_OPEN`, déjà présent avant la garde et les remèdes
+      (ancêtre `df689b522^` rebâti, 20 passes alternées, écart non établi). Témoin
+      probabiliste `ReadOnlyReader`, ticket « lecteur affamé » (`fdf6d81c6`), confort ;
+    - le témoin du COPY après des insertions de la même transaction (`7e4100576`), rouge
+      jusqu'au refus de la session cœur C++ (`0f4a54b2c`), vert depuis ;
+    - l'ordre de synchronisation au point de reprise : le doute tenait, pour une coupure.
+      Le fichier de données est synchronisé avant la marque CHECKPOINT (`552443817`, relu
+      par la session cœur C++), + 22 ms après 200 000 lignes, + 1,4 ms après une ligne ;
+    - `STATS_INFO` dit qu'il rend des estimations (`d5fa21152`) ;
+    - le COPY journalisé, cas 1 et 2 du §7 (`c45095c55`) : le cas 1 tient le tout ou rien
+      mais fuit des pages (rouge connu `data-file-bounded`, sur l'ancien chemin aussi) ;
+    - les propriétés d'une relation qui diffèrent selon le sens (CONSUMES, bloque la
+      stèle) : base gardée lue par le stockage, 140 relations contiguës ; nouvel invariant
+      `stored-rel-properties-agree` au niveau 2 et témoin générique `RelationPropertiesBothWays`
+      (`c45095c55`). Cause trouvée par la session cœur C++ (le point de reprise d'une
+      colonne de chaînes de relations) ; son correctif relu ; le témoin avant et après le
+      point de reprise est rouge sans lui, vert avec, et part après son push.
 
 ## Décisions et pourquoi
 
@@ -190,12 +209,11 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
-- **Les tickets « bloque » de la stèle qui restent au banc** : l'ordre de synchronisation
-  au point de reprise ; un lecteur en lecture seule refusé 1 à 3 fois sur 80 pendant qu'on
-  écrit (`e2e_prise_atomique::un_lecteur_qui_insiste_pendant_qu_on_ecrit`, relevé par
-  rag3db-50), à qualifier sur les ancêtres de 57c8389b4 et de 68ff9d5e2 ; une ligne dans
-  la description de `STATS_INFO`. Puis les deux témoins du chargement en masse journalisé
-  (§7 de la page de la session cœur C++), que le banc prépare.
+- **Les tickets « bloque » de la stèle confiés au banc** : faits, sauf les propriétés
+  selon le sens (CONSUMES), dont le correctif est chez la session cœur C++ ; le témoin
+  `RelationPropertiesBothWays.CheckpointKeepsEveryStoredString` part vert après son push.
+- **Les pages d'un COPY tué jamais récupérées** (ticket de durabilité, rouge connu
+  `data-file-bounded`) : pour la session cœur C++, avec le chargement journalisé.
 - **Le remède 2a** (l'attente du départ des autres avant la validation d'un `COPY`) se
   retirera avec le chargement journalisé ; la session cœur C++ préviendra avant de toucher
   à ses témoins.
