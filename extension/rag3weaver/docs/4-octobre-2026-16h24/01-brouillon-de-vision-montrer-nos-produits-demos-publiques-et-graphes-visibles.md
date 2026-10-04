@@ -166,3 +166,19 @@ Points en débat :
   traitement, qui sont déjà des fichiers mermaid (`.mmd`).
 - **La taille** : mermaid tient quelques dizaines de nœuds ; au-delà il faut
   replier, ou un autre afficheur.
+
+**Les références sont des liens** (Lucie) : « dans les fiches de code, les
+références sont, autant que possible, des liens pour voir des choses réelles,
+au clic. »
+
+- Toute référence affichée est une **adresse** (`row:`, plage, `path:`,
+  `query:`, `url:`, `schema:`, `graph:`) : le clic la résout — le scope dans
+  son fichier, le diff d'un commit de fiche, la requête rejouée, le graphe
+  affiché. C'est le même système d'adresses que la mémoire ; l'agent lit
+  l'adresse en texte, la personne clique dessus.
+- Le clic montre **l'état du jour**, et dit si la cible a changé depuis que la
+  fiche en parle ; une cible disparue se dit, elle ne mène pas à une page
+  vide.
+- Un nom qui n'a pas d'adresse (cité par l'agent sans être résolu) ne se
+  déguise pas en lien : c'est la différence visible entre « cité » et
+  « vérifié » (`add_ref` rend déjà `verifiee: false`).
