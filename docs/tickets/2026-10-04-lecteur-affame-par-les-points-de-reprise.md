@@ -82,3 +82,23 @@ pause) sans refus.
 En attendant, côté rag3weaver : reprendre l'ouverture en lecture seule sur ce refus
 nommé. Le seuil « 0 refus » du test `e2e_prise_atomique` ne se relâche pas (décision de
 l'orchestration) ; c'est confié à la session de l'arbre principal.
+
+## Deux messages pour le même croisement (5 octobre 2026)
+
+Le moteur refuse une ouverture en lecture seule croisée par un point de reprise sous deux
+messages :
+
+- « … was checkpointed by another process while this read-only open was reading » :
+  le point de reprise a traversé l'ouverture ;
+- « Couldn't replay shadow pages under read-only mode » : l'ouverture arrive pendant
+  que l'écrivain est au milieu de son point de reprise.
+
+Le second partait sur la borne de 250 ms des autres erreurs. Le test du lecteur affamé
+échouait alors une passe sur quatre, avec un refus non nommé sur une centaine. Côté
+rag3weaver, `rag3db_connection::is_checkpoint_crossing` reconnaît les deux messages, et
+une seule constante tient chacun d'eux. Les deux sont repris sous la même borne de 2 s.
+Le refus final garde le message du moteur et le compte des reprises : un écrivain mort
+en plein point de reprise rendrait le second message pour de bon (décision de
+l'orchestration).
+
+À faire côté moteur, avec la marche 5 et pas avant : un seul message pour ce croisement.

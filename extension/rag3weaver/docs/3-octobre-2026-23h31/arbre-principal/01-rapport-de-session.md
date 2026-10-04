@@ -100,11 +100,25 @@ Ailleurs :
 - le compte des reprises est rendu (`open_retries()`, et un avertissement dans `ouvrir_lecteur`) ;
 - ce que les tests affirment : sur 80 ouvertures pendant qu'un autre processus écrit (un point de reprise toutes les cinq écritures), **aucune n'est refusée**, aucune ne lit faux, et les reprises restent ≤ 400 (mesuré : 74 à 221) ; avec une borne d'1 ms et 2 000 ouvertures, chaque refus est le refus nommé avec son compte, en moins de 2 s (mesuré : 168 ms au plus).
 
+## Fusionné le 5 octobre (nuit)
+
+- `9e3243dfc` **levier 1** : le CSV du COPY s'écrit sans allocation par cellule. Les octets sont les mêmes (un test unitaire contre `cellule_csv`, et `e2e_tx_ligne_a_ligne` vert dans les deux sens). La mesure est chez rag3db-ac.
+- `a85ee6444` ticket : une erreur du moteur dans la branche vecteur fait tomber toute la recherche hybride. Le chemin a été lu, pas testé. Trois options sont posées pour Lucie.
+- `3bb2410f0` **une transaction défaite dit l'instruction qui l'a défaite**. La connexion garde son dernier refus et l'ajoute au message générique « a statement in it failed », qu'un repli COPY → MERGE masquait. `RAG3WEAVER_TRACE_CYPHER=1` trace les instructions. La sonde vectorielle gagne le cas (b).
+- La sonde vectorielle sur `e1049934e` :
+  - (b), une base défaite par l'ancien moteur : refus nommé, sans plantage ;
+  - (a), échoueur neuf puis repreneur : SIGSEGV encore. La trace a donné la recette à rag3db-e2 : un SET du vecteur sur des lignes insérées par MERGE dans la même transaction. Ce plantage ne dépend pas du COPY annulé et peut arriver dans une reprise ordinaire.
+  - Le correctif est `35d09c466`. libvector est à rebâtir, quand rag3db-ac aura fini sa série.
+
 ## En cours
 
-1. Les trois leviers du chargement final des relations (MENTIONS sans CSV, vérification d'existence sautée quand c'est prouvé, points de reprise du dataflow coupés dans la transaction).
-2. Quand le correctif de l'index vectoriel de rag3db-e2 arrive : la sonde des vecteurs après ROLLBACK entre dans la suite d'arrêt (exige TOUT) et doit passer.
-3. Le repli par branche de la recherche hybride (une erreur de la branche vectorielle fait échouer toute la recherche, à éprouver) : choix de conception porté à Lucie.
+1. **Levier 2, écrit et non compilé**, en attente du verrou du poste. Les uuids qu'une synchronisation sous `RAG3WEAVER_TX_PAR_PAQUET` a vraiment posés font preuve d'existence :
+   - ce que COPY a posé, plus les lignes qu'un MERGE a rendues ;
+   - les quatre suppressions des drains les retirent ;
+   - la preuve tombe au ROLLBACK et à la fin de la synchronisation.
+   Son témoin est `e2e_preuve_d_existence` : 450 paires sans bout comptées avec et sans la preuve, 55 bouts prouvés, aucun COPY refusé. Le levier 3 suit.
+2. « Couldn't replay shadow pages under read-only mode » est le même croisement que le refus nommé. Il sera repris sous la borne de 2 s (accord de l'orchestration), mais c'est **écrit et pas encore rejoué**. Le test du lecteur affamé échouait une passe sur quatre à cause de lui.
+3. La sonde vectorielle, (a) et (b), sur `35d09c466`. Si elle passe entière, elle entre dans la suite d'arrêt. Des morceaux manquants dans les paquets validés avant l'échec relèvent du second défaut de rag3db-e2, à rapporter avec uuids et distances.
 
 ## Ce qu'on a appris aujourd'hui
 
