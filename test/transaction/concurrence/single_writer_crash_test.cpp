@@ -813,10 +813,16 @@ TEST_P(ExtensionIndexRecovery, IndexToRebuildIsNamed) {
     expectIntegrity();
 }
 
-// Garde 2, plus tard : l'index est juste dès la réouverture, sans rebâtir.
+// Garde 2 (15fcc3474) : l'index est juste dès la réouverture, sans rebâtir.
 TEST_P(ExtensionIndexRecovery, IndexExactWithoutRebuild) {
     createIndexInAnEarlierSession();
     dieAfterWriting(GetParam(), 0);
+    // Le vert doit dire « la liste des extensions a servi » : le journal ne porte plus le
+    // LOAD EXTENSION (un point de reprise l'a suivi), et c'est la liste notée à côté de la
+    // base qui le rend à la reprise. Sans elle, le cas éprouverait autre chose.
+    ASSERT_TRUE(std::filesystem::exists(
+        rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath)))
+        << "[check: extensions-list-written] no list of extensions next to the database";
     if (!reopenAfterDeath()) {
         return;
     }
