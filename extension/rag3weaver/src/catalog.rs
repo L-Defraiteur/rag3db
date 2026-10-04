@@ -251,10 +251,6 @@ pub struct Catalog {
     /// indexation y a déjà écrits, et la marque de session que leurs lignes
     /// portent dès leur naissance.
     fresh_ingest: Option<FreshIngest>,
-    /// **Les commits plein texte différés** (`defer_fts_commits`) : les
-    /// tables dont l'index a reçu des lignes et attend son commit, que
-    /// l'appelant fera une fois (`commit_deferred_fts`).
-    deferred_fts: Option<HashSet<String>>,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -426,7 +422,6 @@ impl Catalog {
             peut_devoir_un_embarquement: false,
             in_transaction: false,
             fresh_ingest: None,
-            deferred_fts: None,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -5304,16 +5299,8 @@ impl Catalog {
             self.peut_devoir_un_embarquement = true;
         }
 
-        // 6. Flush FTS on entity table — ou plus tard, une fois pour toutes
-        // les entités, quand l'appelant l'a demandé (`defer_fts_commits`).
-        let tables_a_valider = match self.deferred_fts.as_mut() {
-            Some(differees) => {
-                differees.insert(entity_name.to_string());
-                vec![]
-            }
-            None => vec![entity_name.to_string()],
-        };
-        graph.add_node(Box::new(FlushNode::new("flush_fts", tables_a_valider))).unwrap();
+        // 6. Flush FTS on entity table
+        graph.add_node(Box::new(FlushNode::new("flush_fts", vec![entity_name.to_string()]))).unwrap();
         graph.connect("insert", "done", "flush_fts", "trigger").unwrap();
 
         crate::ingest_profile::add("entités · monter le graphe", t);
@@ -6340,39 +6327,6 @@ impl Catalog {
     /// Cette entité est-elle écrite par une première indexation en cours ?
     pub fn fresh_ingest_covers(&self, entity_name: &str) -> bool {
         self.fresh_ingest.as_ref().is_some_and(|f| f.written.contains_key(entity_name))
-    }
-
-    /// **Différer les commits plein texte.** Une ingestion valide l'index
-    /// lucivy de son entité à chaque appel : quatre commits par paquet d'une
-    /// indexation de code (File, Scope, Library, Symbol). Différés, ils
-    /// attendent [`commit_deferred_fts`](Self::commit_deferred_fts) : un par
-    /// table touchée, une fois. Entre-temps, une recherche plein texte ne
-    /// voit pas les lignes écrites. `false` valide ce qui attend.
-    pub fn defer_fts_commits(&mut self, on: bool) -> Result<(), CatalogError> {
-        if on {
-            self.deferred_fts.get_or_insert_with(HashSet::new);
-            Ok(())
-        } else {
-            let r = self.commit_deferred_fts();
-            self.deferred_fts = None;
-            r
-        }
-    }
-
-    /// **Valider les index plein texte qui attendent**, puis pousser leurs
-    /// blobs en base — dans la transaction de l'appelant s'il en a une.
-    pub fn commit_deferred_fts(&mut self) -> Result<(), CatalogError> {
-        let Some(differees) = self.deferred_fts.as_mut() else { return Ok(()) };
-        let mut tables: Vec<String> = differees.drain().collect();
-        tables.sort();
-        for table in &tables {
-            if let Some(handle) = self.fts_handles.get(table) {
-                handle
-                    .commit()
-                    .map_err(|e| CatalogError::DbError(format!("commit plein texte de « {table} » : {e}")))?;
-            }
-        }
-        self.flush_blob_store("commit plein texte différé")
     }
 
     /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
