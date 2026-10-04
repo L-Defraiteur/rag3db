@@ -1,0 +1,39 @@
+%% tool: review_anchored
+%% description: Quand une ligne change, les lignes qui l'ancrent repassent par une transition déclarée. Pour la mémoire longue : une mémoire ancrée à un sujet dont le contenu bouge passe « à revoir ». Rend {seen, concerned, out_of_state, transitioned, refused}.
+%% param: target string! -- Entité dont les lignes ancrées reçoivent la transition ; elle doit déclarer un cycle de vie.
+%% param: relation string! -- Relation d'ancrage, remontée **depuis la cible** : (cible)-[relation]->(ligne changée).
+%% param: transition string! -- Nom d'une transition déclarée sur la cible. C'est la déclaration qui porte ses deux états, jamais ce graphe.
+%% param: source string = "" -- Entité dont les changements déclenchent ; vide pour n'importe laquelle.
+%% on: catalog
+%% policy: debounce 500
+%% result: react.report
+%%
+%% **Une fiche réactive, et la pièce qui lui manquait.** Le réacteur savait
+%% déjà *quand* lancer un graphe (il attend sur les sujets du bus et déclare sa
+%% politique) et `EventSourceNode` savait vider les événements dans un port —
+%% mais rien ne consommait ce port sauf `TraceSinkNode`, qui les écrit tels
+%% quels. Entre « un événement est arrivé » et « ces lignes-là doivent changer
+%% d'état », il n'y avait rien.
+%%
+%% **Pourquoi `debounce` et pas `each`.** Une ingestion émet un
+%% `EntitiesChanged` par lot, et une synchronisation en émet beaucoup d'affilée.
+%% Avec `each`, chaque lot rouvrirait la même remontée d'ancres ; avec
+%% `debounce 500`, on attend que la rafale se taise et on transitionne une
+%% fois. Le prix est une demi-seconde de retard sur le dernier lot, ce qu'un
+%% état « à revoir » peut parfaitement attendre.
+%%
+%% **Pourquoi il ne se mord pas la queue.** Le nœud écrit par le verbe du
+%% catalogue, ce qui peut émettre un `EntitiesChanged` sur la **cible** ; le
+%% filtre `source` ne retient que les changements de la source déclarée, donc
+%% une mémoire transitionnée ne déclenche pas une nouvelle remontée. Laisser
+%% `source` vide ouvre cette porte : à ne faire que pour une cible qui n'est
+%% jamais sa propre source.
+%%
+%% Services attendus : `"events"` (`Arc<EventBus>`, le bus à lire) et
+%% `"catalog"`. Sans réacteur, s'exécute à la main : ce qui n'a pas été drainé
+%% attend au curseur.
+graph LR
+    events["EventSourceNode(topics='catalog', cursor='review_anchored', limit=1000)"]
+    react["ReactTransitionNode(source=$source, relation=$relation, target=$target, transition=$transition)"]
+
+    events -->|events| react
