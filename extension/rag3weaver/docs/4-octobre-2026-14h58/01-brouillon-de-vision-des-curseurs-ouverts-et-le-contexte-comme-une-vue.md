@@ -219,6 +219,45 @@ Dans la liste du §6, cette étape se place entre les essais 1 et 2 : elle
 demande la maîtrise de l'assemblage du prompt (notre chat), pas encore les
 gestes `open` / `close` — l'ouverture est la lecture elle-même.
 
+### Suite du débat : le pourquoi voyage avec le diff
+
+**Lucie** : « L'agent peut oublier pourquoi il avait édité telle chose,
+puisqu'il ne voit plus le problème dans son historique. Il voit les diffs et
+l'état final, de la manière la plus concise possible, et on colle la
+réflexion de l'agent et la question de l'utilisateur aux diffs qu'il aura
+dans son contexte. »
+
+Ce que cela donne : dans la zone d'un fichier, l'état du jour, puis ses
+modifications, chacune avec sa raison. C'est un micro-commit : un diff et son
+message.
+
+```
+src/catalog/sync.rs — lu l. 580-640, état du jour
+  [demande 3 : « l'annulation d'un instantané laisse des lignes »]
+    l. 603-611 (+6 −2) — apply_snapshot_finish ne purgeait pas le cas annulé
+    l. 620 (+1 −1) — même cause, second appel
+```
+
+Points en débat :
+
+- **D'où vient la raison.** Le texte de l'agent juste avant l'appel coûte
+  zéro, mais il peut être long, absent, ou parler d'autre chose. Un champ
+  « pourquoi » d'une ligne à l'outil d'édition est voulu et court, mais
+  demande de la discipline. Piste : le champ, et le texte précédent en repli.
+- **La question de l'utilisateur ne se répète pas** : une demande amène vingt
+  éditions ; elle se met en tête de groupe, une fois.
+- **Le déclencheur n'est souvent ni la question ni la réflexion**, mais un
+  résultat d'outil (une erreur de compilation, un test rouge). La raison doit
+  pouvoir le citer en une ligne.
+- **Diff net ou diffs dans l'ordre.** L'état final plus le diff net contre
+  l'état d'ouverture est le plus concis ; les essais abandonnés (« essayé A,
+  retiré ») y disparaissent, alors qu'ils disent ce qu'il ne faut pas
+  refaire. Piste : diff net, et une ligne par essai abandonné.
+- **Quand cela sert vraiment.** Tant que le fil n'est pas compressé, la
+  réflexion y est encore. Cette structure est donc surtout ce qui **survit à
+  la compression** — et c'est le L1 de l'archiviste tout fait : (demande,
+  raison, diff, adresse), sans appel à un modèle.
+
 ## 8. Ce qui attend un choix de Lucie
 
 1. Lancer l'essai 1 (petit, sans risque) dès qu'une session est libre, ou
