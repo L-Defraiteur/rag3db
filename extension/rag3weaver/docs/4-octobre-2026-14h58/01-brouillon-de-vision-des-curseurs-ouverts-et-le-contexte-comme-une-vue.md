@@ -277,9 +277,29 @@ Donc :
   contextuelles ;
 - la question de l'utilisateur reste attachée aux commits qu'elle a amenés.
 
-Reste ouvert : ce qu'on fait d'une longue suite de commits sur un même
-fichier quand la zone déborde (les plus anciens se replient-ils en leur seule
-ligne de raison ?).
+**Quand la zone d'un fichier déborde** (Lucie) : « un fork de l'archiviste
+en cours a ce boulot-là, de faire un petit résumé sur la fiche de contexte du
+fichier, et on comprime les diffs en un seul ensuite. »
+
+Donc, au débordement seulement :
+
+- un fork de l'archiviste lit les commits anciens du fichier (diffs, raisons,
+  demandes) et écrit quelques lignes sur la fiche de contexte du fichier ;
+- ces commits sont ensuite fondus en un seul diff ; les commits récents
+  restent un par un ;
+- les originaux restent au journal, joignables par un outil.
+
+Points en débat :
+
+- le fork tourne à côté, il ne bloque pas le tour : la fusion s'applique
+  quand le résumé est prêt, en une fois (le cache n'est perdu qu'à ce
+  moment) ;
+- le résumé peut être faux : les raisons données par l'agent y sont reprises
+  telles quelles quand elles existent, le fork ne rédige que ce qui manque ;
+- un essai abandonné disparaît du diff fondu : le résumé doit le dire en une
+  ligne ;
+- ce résumé est-il seulement de la session, ou devient-il une fiche durable
+  liée au fichier (`path:…`) à la fin de la session ?
 
 ## 8. Ce qui attend un choix de Lucie
 
