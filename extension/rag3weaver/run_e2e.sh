@@ -28,23 +28,52 @@ set -euo pipefail
 # - **exclusif** pour une mesure (`RAG3WEAVER_MESURE=1`) et pour un rebâti du
 #   moteur (`--build`, `--build-only`), que personne ne doit lire en même
 #   temps.
+# La **porte** (`porte.lock`, le script `~/.cache/rag3weaver-build/poste`)
+# donne la priorité à la mesure : une passe partagée la franchit avant
+# d'entrer, une passe exclusive la tient pendant qu'elle attend et tourne.
+# Dès qu'une mesure attend, plus aucune passe partagée n'entre ; elle n'attend
+# que la fin de celles déjà lancées. Sans porte, les partagées enchaînées
+# l'affamaient.
+# Tout ce qui n'est pas une mesure tourne en **priorité basse** (`nice -n 15
+# ionice -c 3`) : l'écran et la personne devant le poste passent avant. Une
+# mesure garde la priorité normale, sinon son chiffre ne vaut rien.
 # On se relance sous `flock`, avant tout effet de bord (journal de charge,
 # compilation), pour que le verrou couvre la passe entière.
 if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then
   VERROU="${HOME}/.cache/rag3weaver-build/poste.lock"
+  PORTE="${HOME}/.cache/rag3weaver-build/porte.lock"
   mkdir -p "$(dirname "$VERROU")"
-  MODE_VERROU="-s"; NOM_VERROU="partagé"
-  if [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then MODE_VERROU="-x"; NOM_VERROU="exclusif (mesure)"; fi
+  MODE_VERROU="-s"; NOM_VERROU="partagé, priorité basse"
   for a in "$@"; do
-    case "$a" in --build|--build-only) MODE_VERROU="-x"; NOM_VERROU="exclusif (rebâti du moteur)" ;; esac
+    case "$a" in --build|--build-only) MODE_VERROU="-x"; NOM_VERROU="exclusif (rebâti du moteur), priorité basse" ;; esac
   done
-  if ! flock -n "$MODE_VERROU" "$VERROU" true; then
+  if [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then MODE_VERROU="-x"; NOM_VERROU="exclusif (mesure)"; fi
+  BASSE=""
+  [ "${RAG3WEAVER_MESURE:-}" = 1 ] || BASSE="nice -n 15 ionice -c 3"
+  if ! flock -n "$MODE_VERROU" "$VERROU" true || ! flock -n -x "$PORTE" true; then
     echo "▸ verrou du poste $NOM_VERROU : attente d'une passe en cours ($VERROU)"
   fi
   export RAG3WEAVER_VERROU_TENU="$NOM_VERROU"
-  exec flock "$MODE_VERROU" "$VERROU" "$0" "$@"
+  if [ "$MODE_VERROU" = "-x" ]; then
+    exec flock -x "$PORTE" flock -x "$VERROU" $BASSE "$0" "$@"
+  fi
+  flock -x "$PORTE" true
+  exec flock -s "$VERROU" $BASSE "$0" "$@"
 fi
 [ -n "${RAG3WEAVER_VERROU_TENU:-}" ] && echo "▸ verrou du poste : $RAG3WEAVER_VERROU_TENU"
+
+# ── Pas de démon d'embarquement local sans le dire ──────────────────────────
+#
+# Un démon lancé par une suite survit à la passe (c'est son rôle) et garde
+# la carte : le 4 octobre 2026, celui d'une autre session tenait 3,6 Go de la
+# carte qui porte l'écran. Sans service distant déclaré
+# (`RAG3WEAVER_EMBED_SERVICE`), le lanceur n'en démarre donc aucun : les
+# suites qui veulent BGE-M3 le chargent dans leur processus, rendu à sa fin.
+# `RAG3WEAVER_DEMON_LOCAL=1` lève le refus, pour qui le veut vraiment.
+if [ -z "${RAG3WEAVER_EMBED_SERVICE:-}" ] && [ "${RAG3WEAVER_DEMON_LOCAL:-}" != 1 ]; then
+  export RAG3WEAVER_SANS_DEMON=1
+  echo "▸ aucun service d'embarquement déclaré : pas de démon local (RAG3WEAVER_DEMON_LOCAL=1 pour en lancer un)"
+fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # **La bibliothèque contre laquelle tout est éprouvé.**
