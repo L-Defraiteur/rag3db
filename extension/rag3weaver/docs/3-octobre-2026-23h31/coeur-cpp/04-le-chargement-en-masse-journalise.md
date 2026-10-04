@@ -93,28 +93,41 @@ garde 2 (l'extension est chargée avant de rejouer) ; s'il ne peut pas l'être, 
 
 ## 5. La taille du journal, et ce qu'elle coûte
 
-Le journal porte les lignes non compressées. **[estimé]** pour le premier index de ce dépôt :
+**[mesuré]** le 4 octobre à 21 h 15, seul sur le poste (charge 5,8), par le chemin qui écrit
+déjà ces enregistrements — une insertion ordinaire dans une transaction, sans point de
+reprise, puis une sortie sans fermer et une réouverture. Un `COPY` journalisé écrira les
+mêmes enregistrements et se rejouera de même. Programme et sortie :
+`annexes/mesure-du-journal-d-un-chargement.cpp` et `…-4-octobre.txt`.
 
-| Quoi | Lignes | Octets par ligne | Journal |
-|---|---|---|---|
-| relations | 250 000 | ≈ 50 (deux extrémités, identité, propriétés courtes) | ≈ 12 Mio |
-| morceaux avec leur vecteur (768 flottants) | ≈ 30 000 | ≈ 3 100 + le texte | ≈ 100 à 150 Mio |
-| scopes, symboles, fichiers (texte du code) | ≈ 50 000 | variable | ≈ 30 à 60 Mio |
+| Quoi | Lignes | Journal | Par ligne | Validation (journal compris) |
+|---|---|---|---|---|
+| scopes (clé, nom, ≈ 450 caractères de corps) | 79 000 | 38 Mio | 0,5 Kio | 0,10 s |
+| morceaux avec leur vecteur de 768 flottants | 79 000 | 732 Mio | 9,3 Kio | 4,03 s |
+| relations (une propriété courte) | 250 000 | 23 Mio | 92 octets | 0,81 s |
+| **total** | | **793 Mio** | | **≈ 5 s** |
 
-Soit 150 à 250 Mio écrits en séquence, de l'ordre d'une à deux secondes sur ce disque, plus
-une synchronisation par validation. À mesurer en étape 1, avant toute autre chose.
+**La réouverture après un arrêt brutal : 17,2 s** pour rejouer ces 793 Mio, ligne à ligne
+(deux passes : 17,21 et 17,19 s). Sous le seuil de 30 s : le rejeu reste tel quel à
+l'étape 2.
 
-Deux conséquences.
+Ce que la mesure corrige de mon estimation (150 à 250 Mio) : **le journal est trois à cinq
+fois plus gros**, à cause des vecteurs. Un flottant y coûte 12 octets au lieu de 4 : chaque
+valeur est sérialisée comme une `Value` générique, avec son type (`ValueVector::serialize`,
+`value_vector.cpp:383-398`). Une forme compacte pour les tableaux de taille fixe ramènerait
+les vecteurs à ≈ 3,1 Kio et le journal à ≈ 300 Mio, la validation et le rejeu d'autant. Ce
+n'est pas nécessaire pour être juste ; c'est le premier gain à prendre si la taille gêne.
+
+Trois conséquences.
 - **Le seuil du point de reprise** (16 Mio par défaut, `database.h:68`) est dépassé par
   chaque gros `COPY` : la validation fera encore un point de reprise, **au seuil** — reporté
   sans erreur si une autre transaction est ouverte (remède 1 du banc), au lieu d'être forcé.
-  Pour un premier index, rag3weaver relève le seuil ou laisse faire : un point de reprise ne
-  coûte plus que ≈ 1 s depuis que les blobs du plein texte ne sont poussés qu'une fois.
 - **La mémoire** : le journal d'une transaction est tenu en mémoire jusqu'à sa validation
-  (`LocalWAL`, un `InMemFileWriter`) **[lu]**. Un `COPY` de plusieurs Gio doublerait sa
-  mémoire. Borne à poser en étape 4 : au-delà d'une taille, les enregistrements du `COPY`
-  s'écrivent au fil de l'eau dans le journal, sous la marque de la transaction (comme
-  PostgreSQL), et ne comptent qu'à l'enregistrement de validation.
+  (`LocalWAL`, un `InMemFileWriter`) **[lu]**. Le premier index en une seule transaction y
+  tiendrait 793 Mio ; par paquets (treize sur ce dépôt), une soixantaine de Mio par paquet.
+  La borne de l'étape 4 — écrire au fil de l'eau au-delà d'une taille — est donc nécessaire
+  pour un dépôt dix fois plus gros, pas pour celui-ci.
+- **Le disque** : 793 Mio de journal pour un premier index dont la base fait de l'ordre du
+  Gio, écrits une fois en séquence et rendus au premier point de reprise.
 
 ## 6. Ce qui se retire
 

@@ -1,0 +1,28 @@
+charge 5.76 3.77 3.92 21:15
+schema : 0.00736683 s ; journal 0.00031662 Mio
+schema : 0.00228837 s ; journal 0.000624657 Mio
+schema : 0.00100795 s ; journal 0.000862122 Mio
+BEGIN : 0.0001282 s ; journal 0.000862122 Mio
+scopes, execution : 0.122382 s ; journal 0.000862122 Mio
+scopes, COMMIT : 0.103815 s ; journal 38.1795 Mio
+BEGIN : 0.000143739 s ; journal 38.1795 Mio
+morceaux et vecteurs, execution : 5.36771 s ; journal 38.1795 Mio
+morceaux et vecteurs, COMMIT : 4.03483 s ; journal 770.102 Mio
+BEGIN : 0.000224379 s ; journal 770.102 Mio
+relations, execution : 0.254848 s ; journal 770.102 Mio
+relations, COMMIT : 0.807572 s ; journal 792.999 Mio
+fichier de la base : 0.00390625 Mio (aucun point de reprise)
+--- reouverture
+journal avant reouverture : 792.999 Mio
+reouverture (rejeu) : 17.2052 s
+  MATCH (n:Scope) RETURN count(*); -> 79000
+  MATCH (n:Chunk) RETURN count(*); -> 79000
+  MATCH ()-[r:R]->() RETURN count(*); -> 250000
+  MATCH (n:Chunk {id: 4242}) RETURN n.content; -> fn body line of code; fn body line of code; fn body line of --- seconde reouverture (le rejeu a ecrit son point de reprise)
+journal avant reouverture : 792.999 Mio
+reouverture (rejeu) : 17.1892 s
+  MATCH (n:Scope) RETURN count(*); -> 79000
+  MATCH (n:Chunk) RETURN count(*); -> 79000
+  MATCH ()-[r:R]->() RETURN count(*); -> 250000
+  MATCH (n:Chunk {id: 4242}) RETURN n.content; -> fn body line of code; fn body line of code; fn body line of ied      4096  4 oct.  21:15 /home/lucied/.cache/rag3db-moteur-notes/copy-journalise/mesure/grande.db
+ied 831520073  4 oct.  21:15 /home/lucied/.cache/rag3db-moteur-notes/copy-journalise/mesure/grande.db.wal
