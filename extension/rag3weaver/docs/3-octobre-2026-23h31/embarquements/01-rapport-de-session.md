@@ -4,7 +4,7 @@ Session « embarquements » : worktree `/home/lucied/git_workspaces/rag3db-embar
 (crate `extension/rag3weaver`), target à elle dans ce worktree. Elle tient le
 service de modèles sur l'autre poste, le régulateur d'écran, l'estimation et
 l'indexation en fond, l'état d'avancement, la déclaration commune des modèles,
-et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 15 h 30.
+et les mesures du dépôt entier. Mis à jour le 5 octobre 2026, vers 1 h.
 
 ## Fait aujourd'hui, sur master
 
@@ -103,7 +103,42 @@ relance), `03` (« indexer ce dépôt » : proposition, puis toutes les mesures)
   mémoire vive) ; services de modèles sans authentification ; point de
   reprise qui échoue quand le tampon est petit.
 
+## Le 4 au soir et la nuit : le plein texte hors de la base
+
+Lucie a dit oui pour **un mode déclaré** (`FtsStorage::Files`) ; le défaut
+reste le plein texte en blobs dans la base. Tout est sur master :
+
+| Commit | Ce qu'il fait |
+|---|---|
+| `16ab78413` | Étape A : un répertoire lucivy à nous (`src/fts_directory.rs`), écritures sans `fsync`, une synchronisation par vidage |
+| `c749404a8` | Étape B : la génération du dossier validée en base avec les lignes ; un dossier en désaccord est jeté et rebâti |
+| `8157547bd` | Le rebâti passe par toute ouverture de l'index, recherche comprise |
+| `9db36cc30` | Le rebâti en fond par lots, l'état « en cours » avec avancement calculé à la lecture, un lecteur seul qui ne jette ni ne marque rien, le verrou de l'écrivain lucivy par le système |
+| `81f5a46ab` | La génération promise : un arrêt entre les lignes et le plein texte se détecte, avec ou sans transaction par paquet |
+
+Mesures (dépôt rag3db, 512 sur disque, K = 4, médianes de trois passes
+alternées sous `poste mesure`) : **107 s en fichiers contre 120 s en base**,
+pic 8,8 Go contre 14,8, réouverture 0,3 s contre 1,3 à 3,5 s. Le rebâti à
+l'ouverture du plein texte des scopes prenait 95 s, bloquant ; il tourne
+maintenant en fond (pas encore remesuré). Preuve : `e2e_tx_par_paquet_arret`
+12/12, dont cinq cas en fichiers (arrêt entre fichiers et validation, base
+saine, recherche après arrêt, les états du rebâti et son interruption,
+arrêt hors transaction).
+
+Pages : `docs/4-octobre-2026-14h30/01` (pourquoi, et toutes les mesures),
+`02` (le protocole). Tickets ouverts dans la journée : le point de reprise
+qui échoue sous un petit tampon (recette en Cypher brut), les journaux
+d'annulation laissés dans `/tmp`, les services de modèles sans
+authentification.
+
 ## En cours
+
+- Le rebâti du dépôt entier remesuré en fond, et pourquoi rebâtir le seul
+  plein texte des scopes coûte presque un premier index.
+- La fusion lucivy reportée à la fin d'un premier index (`NoMergePolicy`
+  pendant, une fusion à la fin), mesurée.
+- Le levier 1 de l'arbre principal (`9e3243dfc`, CSV sans allocation) à
+  mesurer.
 
 - **Brancher le refus sur le tampon réel de la connexion ouverte**, manifeste
   compris, quand `DbConnection::buffer_pool()` rendra les octets (session de
