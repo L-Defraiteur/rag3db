@@ -24,6 +24,14 @@ LogicalPlan Planner::planQueryGraphCollectionInNewContext(
     return plan;
 }
 
+// Vrai si l'expression lit au moins une variable de nœud ou de relation. Sinon elle vaut la
+// même chose pour toute la requête : un littéral, ou une expression sur des paramètres.
+static bool readsAVariable(const std::shared_ptr<Expression>& expression) {
+    auto collector = DependentVarNameCollector();
+    collector.visit(expression);
+    return !collector.getVarNames().empty();
+}
+
 static int32_t getConnectedQueryGraphIdx(const QueryGraphCollection& queryGraphCollection,
     const QueryGraphPlanningInfo& info) {
     for (auto i = 0u; i < queryGraphCollection.getNumQueryGraphs(); ++i) {
@@ -54,7 +62,11 @@ LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryG
         // Extract predicates for current query graph
         std::unordered_set<uint32_t> predicateToEvaluateIndices;
         for (auto j = 0u; j < info.predicates.size(); ++j) {
-            if (info.predicates[j]->expressionType == ExpressionType::LITERAL) {
+            // Un prédicat qui ne lit aucune variable ne se rattache à aucun graphe :
+            // canProjectExpression l'accepte (il ne cite rien que le graphe ignore), il serait
+            // marqué évalué, et l'ordre des jointures ne l'émettrait jamais. Il passe, comme un
+            // littéral, aux prédicats restants, filtrés après les produits croisés.
+            if (!readsAVariable(info.predicates[j])) {
                 continue;
             }
             if (evaluatedPredicatesIndices.contains(j)) {
