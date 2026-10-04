@@ -56,7 +56,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
 | [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
-| [474 relations dépendent encore de la taille du paquet](2026-10-04-relations-qui-dependent-encore-du-paquet.md) | ouvert — cause localisée | réponse fausse | oui | oui |
+| [474 relations dépendent encore de la taille du paquet](2026-10-04-relations-qui-dependent-encore-du-paquet.md) | ouvert — boucles sur soi | réponse fausse | oui | oui |
 | [Les journaux d'annulation du dataflow restent à vie dans /tmp, qui est de la mémoire vive](2026-10-04-journaux-d-annulation-laisses-dans-tmp.md) | ouvert | perte | oui | oui (son code) |
 | [Les services de modèles n'ont aucune authentification](2026-10-04-services-de-modeles-sans-authentification.md) | ouvert (accepté aujourd'hui) | à faire avant toute exposition hors d'un tunnel | depuis l'un des deux postes | oui (démon d'embarquement et ses clients) |
 | [La réouverture d'une base échoue par intermittence, sous charge seulement](2026-10-04-reouverture-intermittente-sous-charge.md) | ouvert — trois hypothèses écartées | plantage | non établi (vu une seule fois, sous batterie) | oui (test rag3weaver ; la lecture qui échoue est celle du moteur) |

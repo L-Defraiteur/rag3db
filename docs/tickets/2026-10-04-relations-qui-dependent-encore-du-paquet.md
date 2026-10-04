@@ -1,6 +1,6 @@
 # 474 relations dépendent encore de la taille du paquet
 
-- **État** : ouvert — cause localisée (`code.rs`, arbre principal)
+- **État** : ouvert — réduit à des boucles sur soi (`code.rs`, arbre principal)
 - **Gravité** : réponse fausse (le graphe dépend du découpage)
 - **Atteignable en service** : oui (première indexation, synchronisation)
 - **Touche rag3weaver** : oui
@@ -46,3 +46,13 @@ canonique de chaque fichier). À l'arbre principal.
 
 La sonde, puis le correctif, puis le test d'égalité des graphes de l'arbre
 principal étendu au dépôt entier.
+
+## Après les clés stables (9b89ec823, rejoué le 4 octobre, 15 h 37)
+
+Sur master `18b1a6889` : 110 relations seulement à 64, 0 seulement à 512,
+rendez-vous identiques — les numéros d'homonymes sont réglés. Les 110
+restantes sont 55 `CONSUMES` (et leurs inverses), **toutes des boucles sur
+soi** de classes C++ d'en-tête (`graph.h#rag3db.Graph:class → la même`) :
+la classe mentionne son propre nom, et le rendez-vous la relie à elle-même
+quand elle est le seul définisseur du paquet. Pour le fermer : le
+rendez-vous ne relie jamais un scope à lui-même.
