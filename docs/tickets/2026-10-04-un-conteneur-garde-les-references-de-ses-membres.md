@@ -1,6 +1,6 @@
 # Un conteneur garde les références de ses membres
 
-- **État** : ouvert
+- **État** : corrigé dans codeparsers `766e4bd` — en attente du pointeur
 - **Gravité** : réponse fausse (des arêtes conteneur → homonyme)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (`usages`, `impact`, liens)

@@ -1,6 +1,6 @@
 # Une variable locale Rust passe pour l'usage d'une fonction homonyme
 
-- **État** : ouvert
+- **État** : corrigé dans codeparsers `75077f7` + `46cc492` — en attente du pointeur
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (`usages`, `impact`, liens — vu par la section Liens)

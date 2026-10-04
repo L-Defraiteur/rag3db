@@ -50,7 +50,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [QueryResult::toString() consomme le résultat](2026-10-04-tostring-consomme-le-resultat.md) | corrigé | réponse fausse | oui (par l'API C++) | non vérifié |
 | [Deux défauts de chaînes annoncés par Ladybug, non reproduits chez nous](2026-10-04-recettes-de-l-amont-non-reproduites.md) | ouvert — non reproduit | perte (annoncée) / réponse fausse (annoncée) | incertain | non vérifié |
 | [Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant](2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md) | ouvert | perte (pour la plupart) | non au banc sans crochet dans src/ | oui en cas d'incident (disque plein, coupure) |
-| [Un conteneur garde les références de ses membres](2026-10-04-un-conteneur-garde-les-references-de-ses-membres.md) | ouvert | réponse fausse | oui | oui (usages, impact, liens) |
+| [Un conteneur garde les références de ses membres](2026-10-04-un-conteneur-garde-les-references-de-ses-membres.md) | corrigé dans codeparsers 766e4bd — en attente du pointeur | réponse fausse | oui | oui (usages, impact, liens) |
 | [Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet](2026-10-04-appel-par-chemin-vers-un-type-externe.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
@@ -63,4 +63,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une corruption de mémoire tue `e2e_code`, une passe sur trente à soixante](2026-10-04-memoire-corrompue-dans-e2e-code.md) | ouvert | plantage | inconnu | oui (sa suite `e2e_code`) |
 | [Un `COPY` rend une erreur alors qu'il est validé, quand une autre transaction est ouverte](2026-10-04-copy-rend-une-erreur-alors-qu-il-est-valide.md) | ouvert | réponse fausse | oui | à vérifier |
 | [L'ordre de synchronisation au point de reprise laisse peut-être des pages non durables](2026-10-04-ordre-de-synchronisation-au-point-de-reprise.md) | ouvert, non vérifié | perte | inconnu | oui si le doute est fondé |
-| [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | ouvert | réponse fausse | oui | oui (usages, impact, liens) |
+| [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | corrigé dans codeparsers 75077f7 + 46cc492 — en attente du pointeur | réponse fausse | oui | oui (usages, impact, liens) |
