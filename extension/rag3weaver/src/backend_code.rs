@@ -197,6 +197,20 @@ const BASE_NODES: &[&str] = &[
     "LinksNode",
     "CohesionNode",
     "CohesionBoostNode",
+    // **Citer une chose, et apprendre un genre de chose.** Les deux n'écrivent
+    // qu'en base et par les verbes du catalogue — donc la garde de cycle de vie
+    // s'applique —, ne lisent aucun fichier et ne lancent aucune commande. Le
+    // harnais d'un genre est un script rhai joué par le même `harness` borné
+    // que `RhaiNode`, déjà de la liste : pur, plafonné, sans entrée-sortie.
+    "AddRefNode",
+    "CreateRefTypeNode",
+    // **Et pas `ReactTransitionNode`** : je l'y avais mis, je le retire. Un
+    // outil de backend est appelé par l'agent, et ce nœud ne sert à rien dans
+    // ce cadre — il lit ses uuid par un **port**, qu'un paramètre d'outil ne
+    // peut pas alimenter. Sa place est la liste blanche des graphes
+    // **réactifs**, qui reste à écrire (avec `EventSourceNode`). Une liste de
+    // sécurité ne s'élargit pas « au cas où » : une entrée inutile est une
+    // entrée que personne ne saura retirer.
     // L'indexation en fond : n'écrit qu'en base, par le catalogue, et rend
     // un journal. Refuse d'elle-même sans confirmation quand l'estimation
     // dépasse le seuil — le produit cloud doit pouvoir indexer sans

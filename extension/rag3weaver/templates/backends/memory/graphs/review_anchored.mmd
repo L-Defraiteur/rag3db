@@ -32,6 +32,26 @@
 %% Services attendus : `"events"` (`Arc<EventBus>`, le bus à lire) et
 %% `"catalog"`. Sans réacteur, s'exécute à la main : ce qui n'a pas été drainé
 %% attend au curseur.
+%%
+%% ────────────────────────────────────────────────────────────────────────────
+%% **Cette fiche n'est PAS déclarée dans les outils du gabarit, et elle ne peut
+%% pas l'être aujourd'hui.** Mesuré le 4 octobre 2026 : un outil de backend ne
+%% peut contenir que les nœuds d'une liste blanche (`backend_code.rs`,
+%% `BASE_NODES` et les listes par capacité), et `EventSourceNode` n'y est pas —
+%% le backend **refuse de charger** son manifeste, en le disant :
+%% « l'outil « review_anchored » contient EventSourceNode, qui n'est pas un
+%% nœud d'outil de backend ».
+%%
+%% Et ce refus est juste : un graphe réactif n'est pas un verbe qu'un agent
+%% appelle, c'est ce que le **réacteur** exécute. C'est pourquoi `trace.mmd`
+%% vit dans `templates/` et non dans un manifeste de backend.
+%%
+%% **Ce qui manque pour la monter** : `Reactor::watch(GraphTool)` existe
+%% (`dataflow/reactor.rs:146`) et **personne ne l'appelle** dans tout `src/`.
+%% Il n'y a donc, à cette date, aucun chemin par lequel un backend déclare ses
+%% graphes réactifs. Le nœud et son témoin de bout en bout
+%% (`tests/e2e_reacteur.rs`) sont vrais ; le branchement attend ce chemin.
+%% ────────────────────────────────────────────────────────────────────────────
 graph LR
     events["EventSourceNode(topics='catalog', cursor='review_anchored', limit=1000)"]
     react["ReactTransitionNode(source=$source, relation=$relation, target=$target, transition=$transition)"]
