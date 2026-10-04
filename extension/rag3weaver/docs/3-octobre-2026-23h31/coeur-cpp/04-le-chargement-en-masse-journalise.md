@@ -117,6 +117,14 @@ valeur est sérialisée comme une `Value` générique, avec son type (`ValueVect
 les vecteurs à ≈ 3,1 Kio et le journal à ≈ 300 Mio, la validation et le rejeu d'autant. Ce
 n'est pas nécessaire pour être juste ; c'est le premier gain à prendre si la taille gêne.
 
+**Sans les vecteurs** — la forme du premier index « cherchable par mots » de rag3weaver, qui
+n'écrit pas les vecteurs : ils arrivent ensuite par des `SET` en fond, déjà journalisés — le
+journal d'un premier index par `COPY` est de l'ordre de **100 Mio** : 38 pour les scopes,
+autant pour les morceaux (clé et texte, calculé d'après la ligne des scopes, non mesuré à
+part), 23 pour les relations. Les douze octets par flottant sont donc déjà payés chaque jour
+par l'embarquement en fond : c'est le vrai argument du ticket « Au journal, un vecteur coûte
+trois fois sa taille ».
+
 Trois conséquences.
 - **Le seuil du point de reprise** (16 Mio par défaut, `database.h:68`) est dépassé par
   chaque gros `COPY` : la validation fera encore un point de reprise, **au seuil** — reporté
@@ -167,6 +175,26 @@ Par un processus tué (SIGKILL), base ouverte, **sans aucun point de reprise** e
 Le banc écrit 1 et 2 (il les prépare) ; 3 à 5 sont des tests du moteur. Tous rouges sur le
 code d'aujourd'hui dès qu'on retire le point de reprise forcé sans rien mettre à sa place :
 c'est la première chose à vérifier.
+
+## 7 bis. Où l'on en est (4 octobre, minuit)
+
+- **Étape 1, faite** : mesurée sans code (chiffres du §5). 0 rebâti, 1 mesure exclusive.
+- **Étape 2, faite** (`0f4a54b2c`) : derrière `CALL force_checkpoint_on_copy=false`, un `COPY` de
+  nœuds écrit ses lignes au journal à la fin de l'instruction, dans l'ordre de leurs
+  décalages (`NodeTable::logInsertedRowsToWAL`), et ne force plus de point de reprise. Rien ne
+  change par défaut. Un `COPY` qui écarte des lignes et un `COPY` de relations gardent leur
+  point de reprise. Neuf cas dans `test/transaction/journaled_copy_test.cpp`. Passes réelles :
+  7 rebâtis, 2 passes ASan, 3 listes C++ dont 2 perdues, 1 comparaison du banc — contre 3
+  rebâtis, 1 ASan et 1 liste prévus. Les écarts : deux erreurs de compilation, une faute dans
+  ma relecture des lignes (la sélection doit être remise à neuf avant chaque bloc balayé), et
+  surtout un défaut d'origine trouvé par les témoins (ticket « Dans une transaction, après
+  des insertions puis un COPY… »), d'abord refusé, puis retiré du lot, puis remis sur décision.
+- **Étape 3, à faire** : les relations. Ce qui est déjà éprouvé avant de coder : dans une
+  transaction, `MERGE` puis `COPY` dans la même table de relations est juste (quatre formes,
+  annexes `essai-relations-*.cpp`). À ajouter aux témoins : ces formes avec une réouverture.
+- **Puis** : le vrai correctif du `COPY` après des insertions (verser les lignes locales),
+  qui retire le refus ; l'étape 4 (retraits, avec le banc) ; la forme compacte des vecteurs
+  avec la version du journal ; l'étape 5.
 
 ## 8. Les étapes, et l'estimation en passes
 

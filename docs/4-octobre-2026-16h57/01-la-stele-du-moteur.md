@@ -68,6 +68,7 @@ la stèle.
 |---|---|---|
 | Une corruption de mémoire tue `e2e_code` | corrigé dans le moteur (`57c8389b4`) | la cause : une double ouverture en écriture dans un même processus, maintenant refusée par son nom ; reste à rag3weaver d'attendre la fin de la fermeture |
 | Le point de reprise plante, à jamais, après `ALTER TABLE … DROP` | **bloque** | mémoire (SIGSEGV) et durabilité : la base ne peut plus écrire de point de reprise ; rag3weaver ne supprime pas de colonne, mais le défaut corrompt |
+| Dans une transaction, après des insertions puis un `COPY` dans la même table, la clé d'une ligne mène à une autre ligne | **bloque** — refusé par son nom (`0f4a54b2c`), le vrai correctif après le chargement journalisé des relations | résultat faux et écriture sur la mauvaise ligne, validés en silence (défaut d'origine, exécuté le 4 octobre) ; les tables de relations ne sont pas touchées |
 | Dans une transaction, un balayage de plusieurs tables de relations relit celles d'une autre table | **bloque** | résultat faux |
 | Un `COPY` rend une erreur alors qu'il est validé | **bloque** | résultat faux sur la durabilité : l'appelant qui recommence écrit deux fois |
 | L'ordre de synchronisation au point de reprise | **bloque, à éprouver** | durabilité, si le doute est fondé ; un arrêt au bon instant le dit |

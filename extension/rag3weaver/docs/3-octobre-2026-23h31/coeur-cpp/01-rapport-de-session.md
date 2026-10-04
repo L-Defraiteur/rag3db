@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 22 h 45.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 0 h 15.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -24,6 +24,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
 | Après un `COPY` refusé | `05788a868` | le point de reprise n'écrit plus hors de son bloc (corruption de tas, défaut d'origine) ; la ligne d'origine d'une clé en double reste dans l'index de clé primaire (résultat faux silencieux, défaut d'origine) |
+| Chargement journalisé, étape 2 (les nœuds) ; refus du `COPY` après des insertions | `0f4a54b2c` | derrière `force_checkpoint_on_copy=false`, un `COPY` de nœuds écrit ses lignes au journal et ne force plus de point de reprise ; dans une transaction, un `COPY` dans une table où elle a déjà inséré est refusé par son nom (il rendait des résultats faux, défaut d'origine) |
 | Gestionnaire de verrous, marche V1 | `022c78402` | le gestionnaire seul, sans câblage : ressources ligne et index, partagé et exclusif, attente, interblocage à la prise, délai, interruption, prises groupées, `CALL lock_timeout` ; aucune écriture ne prend encore de verrou |
 | Double ouverture en écriture dans un processus | `57c8389b4` | la cause de la corruption d'`e2e_code` : refus nommé `Database::ALREADY_OPEN_FOR_WRITING` avant de toucher à un fichier ; un lecteur du même processus reste permis |
 | Clés fantômes après deux `COPY` annulés | `5c8507577` | régression de `05788a868` trouvée par l'arbre principal : l'annulation retire maintenant de l'index les clés de toutes les lignes non validées, et seulement elles |
@@ -84,15 +85,19 @@ passe avant le câblage des verrous**. Donc : V1 (fait, `022c78402`) → le char
 journalisé → A3′, A4′, V2, la maintenance de l'index au commit → les écritures parallèles.
 Les autres tickets « bloque » sont au banc.
 
-**Le lot en cours : le chargement en masse journalisé.** La page de conception est
-`04-le-chargement-en-masse-journalise.md` (acceptée par l'orchestration) : le journal porte
-les lignes du `COPY` sous la forme d'insertion que le rejeu connaît déjà ; cinq étapes,
-estimées en passes (11 rebâtis, 4 listes C++, 3 passes instrumentées, 4 mesures exclusives,
-1 passe Rust). **J'en suis à l'étape 1, la mesure** : journaliser les lignes d'un `COPY` de
-nœuds à la validation, derrière un interrupteur, sans rien retirer ; rendre la taille du
-journal, la durée d'écriture et la durée du rejeu à la taille du premier index. Seuil fixé :
-si la réouverture après arrêt brutal dépasse 30 secondes, le rejeu passe par vecteur dès
-l'étape 2. Le remède 2a du banc et ses témoins ne se retirent qu'à l'étape 4, avec lui.
+**Le lot en cours : le chargement en masse journalisé.** Tout est dans
+`04-le-chargement-en-masse-journalise.md`, §7 bis pour l'avancement : étapes 1 et 2 faites,
+**étape 3 (les relations) à faire**. Ordre décidé par l'orchestration pour la suite : étape 3,
+puis le vrai correctif du `COPY` après des insertions (ticket « bloque la stèle » : verser les
+lignes locales dans la table au début du `COPY`, ce qui retire le refus et rend quatre tests
+Cypher d'origine à leur forme), puis l'étape 4 avec le banc (retrait du forcé et de son
+remède 2a), la forme compacte des vecteurs avec une version du journal, l'étape 5.
+
+Pour l'étape 3, ce qu'il faut savoir : `RelBatchInsert::initGlobalStateInternal` force
+aujourd'hui le point de reprise ; la journalisation des relations doit suivre l'ordre du
+stockage comme pour les nœuds ; le rejeu existant est `replayRelTableInsertRecord`. Le banc
+prépare deux témoins (mort au milieu et juste après un `COPY` validé). Tenir le compte des
+passes au fil de l'eau, erreurs comprises : l'orchestration le rend à Lucie.
 
 **V1, ce qu'il faut savoir pour la suite** : `src/transaction/lock_manager.{h,cpp}`, un
 `LockManager` par `TransactionManager`, `releaseAll` appelé dans `clearTransactionNoLock`.
@@ -114,6 +119,12 @@ voies (b) et (a) attendent.
   l'annulation balaie. Avant de corriger un chemin d'annulation, imprimer ce qu'il relit
   réellement (plages, lignes rendues) : dix minutes d'instrument auraient évité la
   régression.
+- Avant de poser un refus sur un chemin, chercher si la batterie d'origine le tient pour
+  permis (`grep` dans `test/test_files`) : quatre tests Cypher inséraient puis copiaient dans
+  une transaction, et une liste complète a été perdue à le découvrir.
+- Un balayage de table (`NodeGroup::scan`) attend une sélection neuve à chaque bloc ; et le
+  masque ne filtre pas les lignes d'un bloc qui porte des informations de version. Filtrer
+  soi-même par décalage.
 - Quand un défaut intermittent abîme un fichier, la première chose à obtenir est le fichier
   abîmé : des refus nommés à la place des plantages l'ont laissé sur disque, et vingt minutes
   de lecture de pages brutes ont dit plus que la journée d'hypothèses sur le code.
