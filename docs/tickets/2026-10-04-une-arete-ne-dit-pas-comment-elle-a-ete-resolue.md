@@ -119,3 +119,10 @@ lecture de champ Rust n'est plus une référence. Banc, sans les arêtes
 allumé dans `impact` et `impact_fichier`.
 
 Reste : les réexportations (décision ci-dessus), le « nom seul » (ticket).
+
+## Exposition à un défaut du moteur (4 octobre, 22 h 40)
+
+Ticket « une propriété de chaîne d'une relation se lit fausse dans le sens
+direct après un point de reprise » : en attendant son correctif, le filtre de
+Liens (et « dépend de ») peut taire une arête sûre lue « nom » dans le sens
+direct ; impact et usages lisent depuis la cible, sûrs.
