@@ -44,7 +44,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [MERGE d'une clé répétée rend une autre valeur que celle stockée](2026-10-04-merge-d-une-cle-repetee-rend-un-autre-noeud.md) | corrigé | réponse fausse | oui | oui, par `batch_link` |
 | [Dans une transaction, un balayage de plusieurs tables de relations relit les relations d'une autre table](2026-10-04-balayage-de-plusieurs-tables-de-relations-en-transaction.md) | ouvert | réponse fausse | oui | non vérifié |
-| [Deux COPY annulés dans une transaction laissent les clés du premier dans l'index](2026-10-04-cles-fantomes-apres-deux-copy-annules.md) | ouvert | blocage | non par défaut (oui avec la transaction par paquet) | oui (transaction par paquet) |
+| [Deux COPY annulés dans une transaction laissent les clés du premier dans l'index](2026-10-04-cles-fantomes-apres-deux-copy-annules.md) | corrigé | blocage | non par défaut (oui avec la transaction par paquet) | oui (transaction par paquet) |
 | [Un NULL en tête d'une liste de paramètres type sa colonne en STRING](2026-10-04-null-en-tete-d-une-liste-de-parametres-type-string.md) | ouvert (contourné dans rag3weaver) | perte | oui | oui, par `LinkRecordNode` |
 | [COPY : un champ CSV vide entre guillemets devient NULL](2026-10-04-csv-champ-vide-entre-guillemets-devient-null.md) | corrigé | réponse fausse | oui | non vérifié |
 | [COPY refuse un CSV qui finit par un champ vide sans saut de ligne](2026-10-04-csv-champ-vide-final-sans-saut-de-ligne.md) | corrigé | réponse fausse | oui | non vérifié |
@@ -73,3 +73,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le point de reprise écrit hors de son bloc après un ajout annulé](2026-10-04-point-de-reprise-ecrit-hors-bloc-apres-un-ajout-annule.md) | corrigé | plantage | oui | oui si un de ses `COPY` est refusé ou annulé |
 | [Après un COPY refusé pour clé en double, la ligne d'origine disparaît de l'index](2026-10-04-cle-d-origine-perdue-apres-un-copy-refuse.md) | corrigé | réponse fausse | oui | par `RAG3WEAVER_COPY_NAISSANCES=1` seulement |
 | [Le qualificatif d'un chemin se perd dans une macro](2026-10-04-le-qualificatif-d-un-chemin-se-perd-dans-une-macro.md) | ouvert | réponse fausse | oui | oui (marque de résolution) |
+| [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (`_index_blobs`, contourné) |

@@ -1,4 +1,4 @@
-# Après un COPY refusé pour clé en double, la ligne d'origine disparaît de l'index de clé primaire
+# Après un COPY refusé, des lignes validées disparaissent de l'index de clé primaire
 
 - **État** : corrigé le 4 octobre 2026, commit `05788a868` (« fix(stockage): après un COPY refusé, le point de reprise n'écrit plus hors de son bloc, et la ligne d'origine d'une clé en double reste dans l'index »)
 - **Gravité** : réponse fausse, silencieuse, puis durable
@@ -32,9 +32,9 @@ Un balayage `WHERE n.id = 5` retrouve la ligne : c'est l'index qui la perd, pas 
 
 ## Cause
 
-`RollbackPKDeleter::processScanOutput` (`src/storage/table/node_table.cpp`) relit les lignes annulées et retire de la partie en mémoire de l'index la clé de chacune, sans regarder où cette clé mène. La ligne refusée porte la clé d'une ligne qui reste. Une clé déjà passée par un point de reprise est dans la partie persistante de l'index et n'était pas touchée.
+`RollbackPKDeleter::processScanOutput` (`src/storage/table/node_table.cpp`) relit les lignes à annuler et retire de la partie en mémoire de l'index la clé de chacune. Deux choses la faisaient retirer des clés de lignes validées : le balayage rend des **blocs entiers**, pas la seule plage annulée — toute ligne validée du même bloc y passe ; et une ligne refusée pour clé en double porte la clé d'une ligne qui reste. La clé en double n'est donc qu'un cas : **toute ligne validée voisine, dont la clé n'avait pas passé un point de reprise, sortait de l'index.** Une clé déjà passée par un point de reprise est dans la partie persistante de l'index et n'était pas touchée.
 
-Correctif : une clé n'est retirée que si elle ne mène pas à une ligne d'avant celles que l'on annule (une ligne qui reste précède toujours les lignes annulées). Un contrôle plus strict — « seulement si elle mène dans la plage annulée » — faisait planter le `COPY` qui suit un `COPY` annulé (`copy_tests`, `NodeCopyBMExceptionRecoverySameConnection`) : dans un `COPY` annulé, la clé d'une ligne d'une plage peut mener au-delà de cette plage. Observé, non expliqué.
+Correctif, en deux temps. `05788a868` ne retirait une clé que si elle menait à la plage annulée ou au-delà — ce qui a laissé des clés fantômes après deux `COPY` annulés dans une transaction (ticket « Deux COPY annulés… », régression trouvée le soir même). `5c8507577` pose le bon critère : une clé sort de l'index si et seulement si elle ne mène pas à une ligne validée.
 
 ## Correctif de l'amont
 

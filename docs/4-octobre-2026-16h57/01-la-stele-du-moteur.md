@@ -54,9 +54,7 @@ poser la version.
 
 1. **Trier les tickets** : une ligne par ticket du moteur — bloque la stèle
    (mémoire, durabilité, résultat faux) ou non. Fait au §3.1, à relire par le banc.
-2. **L'ordre** : les verrous, puis les écritures parallèles, puis le
-   chargement journalisé — ou le chargement d'abord, puisqu'il est sur le
-   chemin des 90 s du premier index. À trancher.
+2. **L'ordre** : tranché au §3.2.
 3. **Poser la version** quand les quatre conditions sont tenues : une
    étiquette git, la date au journal des chantiers, et la règle « on n'y
    revient que sur un défaut constaté ».
@@ -74,22 +72,45 @@ la stèle.
 | Dans une transaction, un balayage de plusieurs tables de relations relit celles d'une autre table | **bloque** | résultat faux |
 | Un `COPY` rend une erreur alors qu'il est validé | **bloque** | résultat faux sur la durabilité : l'appelant qui recommence écrit deux fois |
 | L'ordre de synchronisation au point de reprise | **bloque, à éprouver** | durabilité, si le doute est fondé ; un arrêt au bon instant le dit |
-| Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant | **bloque, à borner** | durabilité ; non éprouvable au banc sans crochet dans `src/` — dire lesquels de ses cas la stèle exige |
+| Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant | **bloque, borné** | la stèle exige les cas qu'un arrêt au mauvais instant suffit à déclencher (l'ordre des suppressions à la reprise, le rejeu des pages d'ombre non synchronisé) et, pour le reste, « détecter et refuser de continuer » ; le disque plein et la coupure de courant viennent après la stèle, avec un crochet de faute |
 | La réouverture d'une base échoue par intermittence, sous charge | **bloque, tant que la cause manque** | une réouverture qui échoue sur un journal de taille nulle touche à la durabilité ; quatre hypothèses écartées |
 | Mise à jour massive de vecteurs : des lignes restent injoignables dans l'index | **bloque — sans ticket, à ouvrir** | résultat faux (journal des chantiers §6) |
 | Une ligne très loin des autres est injoignable dans un index bâti d'un coup | **bloque — sans ticket, à ouvrir** | résultat faux (journal des chantiers §6) ; à vérifier depuis `1ea49837f`, qui borne autrement le parcours de la construction |
 | Un doublon de clé au journal empêche de rouvrir (H4) | **bloque — porté par la condition 1** | durabilité ; c'est A3′ |
-| Un `CHECKPOINT` retient la validation d'un lecteur jusqu'à son délai | confort | une attente, sans perte ; à revoir avec la condition 3 (« sans blocage ») |
-| Le point de reprise échoue quand le tampon du moteur est petit | confort, au sens de la stèle | l'indexation s'arrête sous un nom, rien n'est perdu ni faux ; gênant pour le produit à 4 Gio |
-| Un `COPY` refusé laisse la cardinalité gonflée | confort | ne sert plus qu'au planificateur depuis `1ea49837f` |
+| Un `CHECKPOINT` retient la validation d'un lecteur jusqu'à son délai | **bloque** (relecture du banc) | l'écrivain reçoit une erreur de délai alors que sa ligne est validée : même classe que le `COPY` validé qui rend une erreur — un appelant qui recommence écrit deux fois |
+| Le point de reprise échoue quand le tampon du moteur est petit | confort, sous condition | à condition que l'erreur soit nommée et qu'aucune écriture validée ne soit perdue, avec un témoin au banc de cette condition |
+| Un `COPY` refusé laisse la cardinalité gonflée | confort, sous condition | ne sert plus qu'au planificateur depuis `1ea49837f` ; à condition que `STATS_INFO` dise qu'il rend une estimation |
+| Le point de reprise réécrit en entier une table de blobs | hors stèle | une optimisation (ticket du 4 octobre) ; contournée dans rag3weaver |
 | Un `NULL` en tête d'une liste de paramètres type sa colonne en `STRING` | confort | un refus nommé, contourné dans rag3weaver |
 | Un accent grave doublé dans un nom n'est pas réduit | confort | un cas de syntaxe |
 | Deux défauts de chaînes annoncés par Ladybug, non reproduits | hors stèle | correctifs d'amont non reproduits |
 
-Ce tri est un avis, pas une décision : sept tickets ouverts bloquent, plus trois défauts
-sans ticket ou portés par une condition. Les deux qui demandent une décision de Lucie ou
-de l'orchestration sont « durabilité sur faute d'entrée-sortie » (jusqu'où l'exiger) et
-« le tampon petit » (confort pour la stèle, bloquant pour le produit).
+Relu par la session du banc le 4 octobre au soir ; les quatre lignes « relecture » et
+« sous condition » sont ses corrections, tranchées par l'orchestration. Le partage : les
+tickets « bloque » qui ne sont portés par aucune condition vont au banc (point de reprise
+après `DROP` de colonne, balayage de plusieurs tables de relations, `COPY` validé qui rend
+une erreur et `CHECKPOINT` qui retient un lecteur, ordre de synchronisation, réouverture
+intermittente, durabilité à l'arrêt) ; le terrain du `COPY` et de son annulation, la
+corruption d'`e2e_code` et les verrous restent au cœur C++. Les deux défauts de l'index
+vectoriel sans ticket sont à ouvrir par le banc, qui en a les témoins.
+
+### 3.2 L'ordre (tranché le 4 octobre, 19 h, choix réversibles)
+
+Lucie : « on se focus sur la stèle ». L'ordre, d'après le découpage du point de reprise
+(les 5 s par paquet étaient celles d'une seule table, `_index_blobs` ; sans elle un point de
+reprise de quatre paquets coûte environ 4 s en tout : le chargement journalisé n'est plus
+sur le chemin des 90 s du premier index) :
+
+1. l'annulation d'un `COPY` (clés de l'index, point de reprise) — fait ;
+2. la corruption d'`e2e_code`, une demi-journée au plus ; si le voisin faux du graphe de
+   l'index ne se laisse pas attraper, la garde nommée reste le filet et le ticket reste
+   « bloque » ;
+3. les verrous : V1, A3′, A4′, V2, la maintenance de l'index vectoriel au commit
+   (14 à 20 jours de session) ;
+4. le chargement en masse journalisé (6 à 10 jours) ;
+5. les écritures parallèles (10 à 20 jours, la plus incertaine).
+
+Les durées sont celles de la session cœur C++, avec une incertitude d'un facteur 1,5.
 
 ## 4. Ce qui n'attend pas la stèle
 

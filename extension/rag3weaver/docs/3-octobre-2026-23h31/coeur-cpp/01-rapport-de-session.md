@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 18 h 15.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 19 h 30.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -24,6 +24,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
 | Après un `COPY` refusé | `05788a868` | le point de reprise n'écrit plus hors de son bloc (corruption de tas, défaut d'origine) ; la ligne d'origine d'une clé en double reste dans l'index de clé primaire (résultat faux silencieux, défaut d'origine) |
+| Clés fantômes après deux `COPY` annulés | `5c8507577` | régression de `05788a868` trouvée par l'arbre principal : l'annulation retire maintenant de l'index les clés de toutes les lignes non validées, et seulement elles |
 | Chronométrage du point de reprise | `5771f0afb` | `RAG3DB_PROFILE_CHECKPOINT=1` : le découpage d'un commit et de son point de reprise sur la sortie d'erreur ; muet sinon |
 | Relire ses relations ; voisins d'un vecteur mis à jour | `c8fdaf196` | une transaction relit juste ses relations après en avoir supprimé (défaut d'origine, par Cypher) ; la mise à jour d'un vecteur garde ses anciens voisins joignables |
 
@@ -63,23 +64,26 @@ corrigé le §2. Leçon du jour, à garder : un contrôle plus strict que néces
 mène dans la plage annulée ») a fait planter `copy_tests` — la liste complète l'a attrapé
 avant le push ; ne jamais pousser sur les seuls tests du changement.
 
-**Le lot en cours** : le point de reprise que `COPY` force — 66 s sur 177 du premier index
-de ce dépôt avec la transaction par paquet. La demi-page est `03-le-point-de-reprise-de-copy.md`.
-Décision de l'orchestration : la voie (c) d'abord — mesurer ce que font les 5 s d'un point de
-reprise de paquet, **rendre le découpage (somme égale au total) avant de modifier**, puis
-alléger ; une demi-journée au plus. La voie (b) touche à la durabilité : elle passera par
-Lucie, après une mesure côté rag3weaver. La voie (a) : au journal comme le vrai remède, pas
-maintenant. Puis V1, sur message de l'orchestration.
+**L'ordre, tranché par l'orchestration (stèle §3.2)** : la corruption d'`e2e_code`, une
+demi-journée au plus (le voisin faux dans le graphe de l'index ; les gardes nommées sont le
+filet) ; puis V1, A3′, A4′, V2, la maintenance de l'index au commit ; puis le chargement
+journalisé ; puis les écritures parallèles. Les autres tickets « bloque » sont au banc.
 
-**Ce qui attend derrière**, dans l'ordre de l'orchestration : la revue des amonts de la
-session du banc (`…/banc-de-concurrence/03-revue-des-amonts.md`, tickets dans
-`docs/tickets/`) — proposer un ordre et une estimation pour les plantages et blocages de
-stockage restants, dont le `CHECKPOINT` qui tue le processus après `ALTER TABLE … DROP`
-d'une colonne ; l'échec du point de reprise sous petit tampon (recette `62a91829f`) ; le mode
-« chargement initial » du `COPY` si regrouper les `COPY` dans une transaction ne suffit pas ;
-puis V1. La mise à jour massive de vecteurs (un `finalize` de la mise à jour), la dimension
-768 et la ligne lointaine à la construction : après, sauf rouge en usage réel. La mesure
-d'A5 bis au calme (A5 ter) : jamais faite, sous `poste mesure`.
+**Le point de reprise de `COPY`, voie (c) : rendu.** Le découpage (mesure de la session des
+embarquements avec `RAG3DB_PROFILE_CHECKPOINT=1`) : les 5 s par paquet sont celles d'une
+seule table, `_index_blobs`, réécrite en entier à chaque point de reprise (48,9 s sur 75 à
+une validation par paquet, 23,8 sur 28 à une validation tous les quatre). Le remède est
+parti côté rag3weaver (pousser les blobs une fois, à la fin) ; côté moteur c'est un ticket
+d'optimisation, hors stèle. La demi-page reste `03-le-point-de-reprise-de-copy.md` ; ses
+voies (b) et (a) attendent.
+
+**Leçons de la soirée, à garder.**
+- Mon premier correctif de l'index (`05788a868`) reposait sur une lecture fausse de ce que
+  l'annulation balaie. Avant de corriger un chemin d'annulation, imprimer ce qu'il relit
+  réellement (plages, lignes rendues) : dix minutes d'instrument auraient évité la
+  régression.
+- Un témoin ne doit pas vérifier la seule ligne qui a révélé le défaut : celui de la clé en
+  double ne regardait que la clé 5, et cachait que toutes les voisines étaient perdues.
 
 ## Les amonts et la licence (4 octobre 2026)
 

@@ -1,6 +1,6 @@
 # Deux COPY annulés dans une transaction laissent les clés du premier dans l'index
 
-- **État** : ouvert.
+- **État** : corrigé le 4 octobre 2026, commit `5c8507577` (« fix(stockage): l'annulation d'un COPY retire de l'index les clés de toutes ses lignes, et seulement elles — plus de clés fantômes après deux COPY annulés »). C'était une régression de `05788a868`, poussé deux heures plus tôt ; le code d'avant n'avait pas ce défaut.
 - **Gravité** : blocage (la reprise d'un index après l'annulation refuse : « duplicated primary key »).
 - **Atteignable en service** : non par défaut ; oui avec `RAG3WEAVER_TX_PAR_PAQUET=1` (premier index, gain 2), sur le chemin d'échec d'un paquet.
 - **Touche rag3weaver** : oui (la transaction par paquet).
@@ -50,3 +50,18 @@ MERGE d'une clé existante ou nouvelle.
 Que l'annulation retire de l'index de clé primaire les clés de tous les COPY de la
 transaction, pas seulement du dernier. Puis appliquer le patch du témoin, le rejouer, et le
 pousser avec la fermeture.
+
+## Cause et correctif (session cœur C++, 4 octobre)
+
+L'annulation relit des blocs de lignes entiers, pas la plage qu'elle annule, et annuler un
+enregistrement rend invisibles toutes les lignes de son bloc ajoutées par la transaction
+(`VectorVersionInfo::rollbackInsertions`) : le balayage des enregistrements suivants ne rend
+plus rien. Le code d'origine retirait la clé de toute ligne relue, dès le premier
+enregistrement — c'est ce qui lui faisait aussi retirer des clés de lignes validées.
+`05788a868` ne retirait une clé que si elle menait à la plage de l'enregistrement ou
+au-delà : les clés des COPY précédents n'étaient plus retirées par personne.
+
+Le critère est maintenant : une clé sort de l'index si et seulement si elle ne mène pas à
+une ligne validée. Témoin du moteur : `test/transaction/rolled_back_copies_test.cpp`, quatre
+cas, rouges sur `05788a868`. Le témoin produit mis de côté (`e2e_tx_par_paquet_arret`) est à
+rejouer par la session de l'arbre principal.
