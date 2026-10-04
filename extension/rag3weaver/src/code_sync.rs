@@ -612,6 +612,9 @@ fn synchroniser(
         if std::env::var("RAG3WEAVER_TX_SANS_NAISSANCES").as_deref() != Ok("1") {
             catalog.begin_fresh_ingest(&[FILE, SCOPE, LIBRARY, SYMBOL], &[(SCOPE, s_scopes), (FILE, s_files)]);
         }
+        // Gain 3 : un commit plein texte par table et par paquet, au lieu
+        // d'un par entité et par appel d'ingestion.
+        catalog.defer_fts_commits(true).map_err(|e| e.to_string())?;
     }
     let nombre_de_paquets = retenus.chunks(options.batch_files.max(1)).len();
     let par_validation = paquets_par_validation();
@@ -703,6 +706,11 @@ fn synchroniser(
             profil.add("vider la file des liens en route", t);
             report.failed += pose.failed;
         }
+        if par_transaction {
+            let t = std::time::Instant::now();
+            catalog.commit_deferred_fts().map_err(|e| e.to_string())?;
+            profil.add("valider le plein texte du paquet", t);
+        }
         Ok(())
         })();
         if tx && (valider || resultat.is_err()) {
@@ -721,6 +729,7 @@ fn synchroniser(
         progress(avancement);
     }
     catalog.end_fresh_ingest();
+    catalog.defer_fts_commits(false).map_err(|e| e.to_string())?;
     if mode == RelationsMode::Bulk {
         avancement.phase = SyncPhase::Relations;
         progress(avancement);

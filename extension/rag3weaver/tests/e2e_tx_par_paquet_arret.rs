@@ -113,6 +113,17 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
             out.insert(format!("nœuds {nom}"), n);
         }
     }
+    // Le plein texte aussi : un commit lucivy oublié ou défait se verrait
+    // ici, pas dans les tables. Chaque scope du corpus dit « pub » ; chaque
+    // chemin de fichier, « src » (File n'indexe que son chemin).
+    for (entite, champ, mot) in [("Scope", "content", "pub"), ("File", "path", "src")] {
+        let handle = catalog.fts_handle(entite).unwrap_or_else(|| panic!("index plein texte de {entite}"));
+        let requete: lucivy_core::query::QueryConfig =
+            serde_json::from_value(serde_json::json!({"type": "contains", "field": champ, "value": mot, "distance": 0}))
+                .unwrap();
+        let n = handle.search(&requete, 100_000, None).unwrap().len() as i64;
+        out.insert(format!("plein texte {entite} « {mot} »"), n);
+    }
     for d in rag3weaver::relation_directions::count_both_directions(conn).unwrap() {
         if d.from.starts_with('_') || d.to.starts_with('_') {
             continue;
