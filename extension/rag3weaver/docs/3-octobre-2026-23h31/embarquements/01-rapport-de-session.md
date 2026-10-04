@@ -4,7 +4,7 @@ Session « embarquements » : worktree `/home/lucied/git_workspaces/rag3db-embar
 (crate `extension/rag3weaver`), target à elle dans ce worktree. Elle tient le
 service de modèles sur l'autre poste, le régulateur d'écran, l'estimation et
 l'indexation en fond, l'état d'avancement, la déclaration commune des modèles,
-et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 12 h 40.
+et les mesures du dépôt entier. Mis à jour le 4 octobre 2026, vers 12 h 50.
 
 ## Fait aujourd'hui, sur master
 
@@ -97,9 +97,13 @@ relance), `03` (« indexer ce dépôt » : proposition, puis toutes les mesures)
   le plein texte bâti d'un coup (durée, taille des blobs).
 - **Sur disque, tout change** (4 octobre, 12 h 30) : 823 s par paquets de
   512 (120 s en mémoire), 232 s d'un tenant (89 s), et un échec avec le
-  tampon du moteur à 2 Gio. Tableau en tête de la page 03. En cours : le
-  diagnostic — combien de points de reprise le moteur pose pendant la passe,
-  et ce que donne une passe où il n'en pose qu'un, à la fin.
+  tampon du moteur à 2 Gio (ticket `docs/tickets/2026-10-04-point-de-reprise-
+  echoue-quand-le-tampon-est-petit.md`). Tableau en tête de la page 03.
+  **Diagnostic fait** : le seuil de 16 Mio du point de reprise automatique
+  coûte 300 à 350 s (823 → 468 s avec un seuil de 512 Mio) ; restent 83
+  points de reprise que posent d'eux-mêmes les chargements en masse. À
+  faire : régler le seuil dans le produit (premier index), et compter les
+  `COPY` par paquet.
 - **La remesure du dépôt entier est faite** (4 octobre, 11 h 30, sur master
   avec le résolveur unique) : 289 s par paquets de 64, 120 s à 512, 111 s à
   2 048, **89 s d'un tenant** ; pics de 10,9 à 16,6 Go. Tableau et postes dans

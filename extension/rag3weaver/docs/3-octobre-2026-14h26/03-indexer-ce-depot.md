@@ -26,6 +26,30 @@ l'agent.
 > is full ») et la base doit être rouverte : un poste modeste n'indexe pas ce
 > dépôt aujourd'hui. Une passe par ligne, sans répétition ; le corpus a bougé
 > de quelques dizaines de fichiers entre les passes.
+>
+> **Pourquoi le disque coûte sept fois plus — mesuré le 4 octobre, 12 h 40.**
+> Paquets de 512, base sur disque, trois réglages du point de reprise du
+> moteur :
+>
+> | Point de reprise automatique | Durée | Pousser les blobs | Replis du journal vus |
+> |---|---|---|---|
+> | actif, seuil 16 Mio (le défaut) | 823 s | 346 s | non compté |
+> | coupé, un seul demandé à la fin | 523 s | 28 s | 84 |
+> | actif, seuil 512 Mio | 468 s | 22 s | 83 |
+>
+> - **Une cause est établie** : au seuil par défaut, chaque poussée de blobs
+>   dépasse 16 Mio de journal et fait poser un point de reprise. Relever le
+>   seuil rend 300 à 350 s. Le point de reprise demandé à la fin coûte 0 s.
+> - **Une seconde reste** : 83 replis du journal sans que rien ne les
+>   demande. Des instructions posent leur propre point de reprise — les
+>   chargements en masse (`COPY`), d'après le moteur lui-même. Ce qui reste
+>   cher passe par eux : `flush_fts` 125 à 152 s, `chunk_link` 110 s,
+>   symboles 95 à 154 s, file des liens vidée en route 44 à 69 s, chargement
+>   final 32 à 34 s. Pas encore mesuré : une passe avec moins de `COPY`.
+> - Le pic de mémoire ne bouge pas avec ces réglages (13,7 à 13,8 Go).
+> - Lu dans le code par la session cœur C++, pas mesuré : un point de reprise
+>   réécrit en entier le dernier groupe de lignes touché, donc tous les blobs
+>   déjà posés de ce groupe.
 
 Deux produits, un moteur : un agent de code en cloud qui télécharge un dépôt
 git, un agent en ligne de commande qui ingère ce qu'il y a sur le disque. Le
