@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 18 h.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, soir.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -119,20 +119,31 @@ deux tildes, règle tirée du nom. Aux trois rendus : `arbre::relation_label`
 (Liens, Graphe du grep) et `replace("_", " ") | capitalize` dans
 `results.md.jinja`.
 
-**La marque de résolution, ma moitié** (branche `resolution-marque`,
-`b0448ee5e`, non fusionnée) : `choose_target`, extrait de
-`materialiser_les_symboles` sans changer la cible, rend aussi la marque
-(`Resolution` : fichier / type / import / nom ; un seul définisseur que
-l'import désigne est marqué import, d'accord avec l'arbre principal). La
-colonne et son écriture sont à l'arbre principal ; ensuite le filtre
-d'arête déclaré au gabarit dans Liens et `impact`, « par le nom » dans
-`usages`, et la mesure au banc des relations (précision de « dépend de » en
-hausse, rappel pas en baisse ; sinon le filtre reste éteint).
+**La marque de résolution** : `choose_target` (cef4c5ae5) et la colonne
+`resolution` de l'arbre principal (986565f81) sont sur master. Le filtre est
+sur la branche `filtre-resolution` (c56ee578b), en attente du rejeu de
+l'arbre principal après son rebâti :
+- `EdgeMark` (`graph_walk`), générique, déclaré au gabarit
+  (`edge_field=resolution, edge_guessed=nom`) ; une arête sans marque est
+  suivie ;
+- Liens ne suit pas les arêtes devinées ; `usages` dit « (par le nom) » ;
+- `code.rs` : un appel par chemin sans `use` prend son qualificatif comme
+  module (`self` / `super` résolus depuis le fichier de l'appel) — marqué
+  import au lieu de nom.
+
+Banc des relations, deux passes sur le même index : « dépend de » 1,00 /
+0,85 → 1,00 / 1,00 ; « tests traversés » 0,89 / 0,92 → 0,89 / 0,99 ;
+« relie » 1,00 → 0,75. D'où : filtre dans Liens, **pas dans `impact`** — une
+méthode sur une variable sans type lu et un appel dans une macro sont de
+vrais usages marqués `nom` (ticket « le qualificatif d'un chemin se perd
+dans une macro », à moi).
 
 ## Ce qui attend quelqu'un
 
-- **Arbre principal** : la colonne `resolution` et son écriture, sur
-  `resolution-marque` (entre deux mesures de la session embarquements).
+- **Arbre principal** : rejouer les suites du graphe d'usages sur
+  `filtre-resolution` (c56ee578b) après son rebâti, puis la fusion.
+- **Moi, ensuite** : le qualificatif d'un chemin dans une macro
+  (codeparsers), puis la même mesure avec le filtre dans `impact`.
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les
