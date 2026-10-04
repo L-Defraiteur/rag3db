@@ -407,3 +407,45 @@ Trois étages possibles, du plus simple au plus puissant :
    personne compile pour elle-même ; jamais pour un module reçu.
 
 Dans les trois cas la personne ne recompile jamais **notre** binaire.
+
+### Un nœud sur mesure par assemblage, à la manière d'Unreal
+
+> « Le problème, c'est si quelqu'un veut faire un nœud custom. Mais a priori
+> on pourrait donner toutes les briques pour que ce soit faisable en
+> assemblant des nœuds existants ? On ferait des nœuds if, for, etc., si ce
+> n'est pas déjà fait — un peu à la Unreal Engine. » — Lucie
+
+Ce qui existe (relevé du 4 octobre dans `src/`, par les noms seulement) : une
+soixantaine de nœuds, et **`GraphNode`, un sous-graphe utilisé comme un
+nœud** — ses ports libres deviennent ses entrées et ses sorties. Un « nœud
+sur mesure » est donc déjà possible : un graphe enregistré sous un nom. C'est
+aussi le « service = petit graphe partagé » du §« backend tout en graphes ».
+Aucun nœud de contrôle (si, pour chaque) n'apparaît par son nom : à vérifier,
+et sans doute à faire.
+
+Les briques de contrôle, qui restent toutes un graphe sans cycle :
+
+| Brique | Ce qu'elle fait |
+|---|---|
+| si / selon | envoie chaque enregistrement vers une sortie ou une autre, d'après une condition |
+| pour chaque | applique un sous-graphe à chaque élément d'une liste |
+| filtrer, regrouper, réduire | les opérations d'ensemble (certaines existent pour la recherche) |
+| joindre | réunit deux flux sur une clé |
+| essayer / sinon | une branche de repli quand un nœud échoue — et le repli se compte, il ne se tait pas |
+| répéter, borné | un sous-graphe rejoué jusqu'à une condition, avec un nombre maximal de tours |
+
+Points en débat :
+
+- **Les nœuds pour le flux, rhai pour l'expression.** La leçon des graphes
+  visuels : une addition ou une comparaison en nœuds devient vite illisible.
+  La condition d'un « si », la transformation d'un champ sont une ligne de
+  rhai dans le nœud — c'est « des scripts rhai dans certains nœuds ».
+- **Ce qu'un nœud reçoit doit pouvoir venir d'un port**, pas seulement de sa
+  configuration : aujourd'hui `RhaiNode` prend son script en configuration et
+  `EntityBatchNode` ses enregistrements aussi (relevé par la session mémoire,
+  qui a dû écrire deux nœuds pour cela). C'est la première chose à lever pour
+  que l'assemblage suffise.
+- **Pas de variables partagées** entre nœuds : les données passent par les
+  ports. C'est ce qui garde un graphe lisible, vérifiable, rejouable.
+- **Quand l'assemblage ne suffit pas** : WebAssembly (section précédente),
+  pas un nœud Rust.
