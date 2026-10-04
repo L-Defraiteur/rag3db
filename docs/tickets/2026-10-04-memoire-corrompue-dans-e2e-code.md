@@ -167,6 +167,38 @@ puis sur celui d'après. Le défaut doit disparaître après.
 
 **Un candidat sérieux pour la cause (4 octobre, 18 h)** : en faisant un test du moteur de l'essai déterministe du banc, un défaut d'origine est sorti — après un ajout annulé (un `COPY` refusé) dans un groupe de nœuds encore en mémoire, le point de reprise suivant écrit hors de son bloc (ticket « Le point de reprise écrit hors de son bloc après un ajout annulé », corrigé par `05788a868`). Le test fautif d'`e2e_code` interrompt un chargement puis rouvre et recrée l'index, ce qui écrit un point de reprise. **Non vérifié** : rien ne dit encore que c'est cette écriture-là qui tuait la suite. Ce ticket se ferme si les passes du banc sous AddressSanitizer, sur un moteur à jour, ne rendent plus de rapport — ou reste ouvert avec le texte du refus nommé qui aura parlé.
 
+## La passe courte : l'hypothèse du COPY refusé tombe pour ce test (4 octobre, fin d'après-midi)
+
+La recette du test fautif, rejouée par une sonde (non commitée) sur master avec
+`1ea49837f`. Elle relève, à la réouverture, avant la réparation (`DROP` puis `CREATE` de
+l'index), la cardinalité (`STATS_INFO`), `count(*)` et le plus grand décalage de chaque
+table de nœuds :
+
+| table | cardinalité | lignes | plus grand décalage |
+|---|---|---|---|
+| `Scope_Chunk` (la table de l'index vectoriel) | 211 | 211 | 210 |
+| `Scope` | 144 | 144 | 143 |
+| `Symbol` | 382 | 382 | 381 |
+| `_index_blobs` | 670 | 670 | 669 |
+| `_DataflowNodeState` | 27 | 19 | 26 |
+| les autres | justes | | |
+
+- **Aucune table indexée n'a de cardinalité gonflée** : rien n'indique de `COPY` refusé
+  dans ce test. L'hypothèse du `COPY` refusé ne vaut donc pas pour lui.
+- **`_DataflowNodeState` (27 pour 19)** : l'écart vient de suppressions, que la
+  cardinalité ne décompte jamais. Il est sans danger ici : le plus grand décalage (26) reste
+  sous 27.
+- **Les 211 du rapport d'ASan sont exactement les lignes de `Scope_Chunk`.** Le tableau
+  des déjà-visités était bien dimensionné ; le voisin au décalage 255 n'existe pas dans
+  cette table (plus grand décalage 210). C'est la lecture (b) : **le graphe de l'index
+  rend un voisin faux**. La piste qui reste : d'où vient un décalage 255 dans le graphe
+  d'un index rebâti sur 211 lignes ? Ce peut être un décalage d'une autre table, ou celui
+  d'une ligne déjà supprimée, resté dans une arête.
+- Les défauts trouvés en chemin restent réels et ont leurs témoins : la cardinalité
+  gonflée par un `COPY` refusé, la clé d'origine perdue, le point de reprise qui suit un
+  `COPY` refusé. Mais ils ne sont pas, à ce jour, la cause des rapports d'`e2e_code`.
+- Les 18 passes sous ASan ne sont pas lancées, sur consigne de l'orchestration.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —

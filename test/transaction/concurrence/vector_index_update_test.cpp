@@ -544,6 +544,82 @@ TEST_F(VectorIndexUpdate, CreateIndexAfterARefusedCopy) {
         << "[check: long-strings-intact] ";
 }
 
+// La ligne d'origine d'une clé que le COPY refusé portait en double (id 5) doit rester
+// trouvable par sa clé. L'annulation (RollbackPKDeleter) retire les clés des lignes annulées
+// de la partie en mémoire de l'index de clé primaire, celle de la ligne d'origine comprise ;
+// une clé déjà passée par un point de reprise survit. D'où la recette de la session cœur
+// C++ : pas d'index vectoriel (sa création écrit un point de reprise), pas de CHECKPOINT
+// avant le COPY. La table garde la ligne ; c'est la recherche par clé qui la perd, et un
+// MERGE de la clé créerait un doublon.
+static void insertThenRefuseACopy(VectorIndexUpdate& test) {
+    test.mustRun("CREATE NODE TABLE KeyCopy(id INT64 PRIMARY KEY, name STRING);");
+    test.mustRun("UNWIND range(0, 199) AS i CREATE (:KeyCopy {id: i, name: 'row ' + "
+                 "CAST(i AS STRING)});");
+    const auto csv = test.databasePath + ".refused-keys.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 200; i < 400; ++i) {
+            out << i << ",new " << i << "\n";
+        }
+        out << "5,duplicate\n";
+    }
+    auto copy = test.conn->query("COPY KeyCopy FROM '" + csv + "' (header=false);");
+    ASSERT_FALSE(copy->isSuccess()) << "[check: copy-refused] the COPY was meant to fail";
+}
+
+TEST_F(VectorIndexUpdate, RefusedCopyKeepsTheOriginalKey) {
+    insertThenRefuseACopy(*this);
+    if (HasFatalFailure()) {
+        return;
+    }
+    auto count = [&](const std::string& query) {
+        auto result = conn->query(query);
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
+        return result->isSuccess() ? result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+    };
+    // « d.id + 0 » force un balayage : « WHERE d.id = 5 » devient une recherche par clé.
+    // UNWIND … MATCH par clé balaie aussi la table (planificateur) : il retrouve la ligne.
+    EXPECT_EQ(count("MATCH (d:KeyCopy) WHERE d.id + 0 = 5 RETURN count(*);"), 1)
+        << "[check: original-row-scanned] the row itself";
+    EXPECT_EQ(count("MATCH (d:KeyCopy {id: 5}) RETURN count(*);"), 1)
+        << "[check: original-key-found] MATCH by key";
+    EXPECT_EQ(count("MATCH (d:KeyCopy) WHERE d.id = 5 RETURN count(*);"), 1)
+        << "[check: original-key-found] WHERE on the key";
+    mustRun("MERGE (d:KeyCopy {id: 5}) SET d.name = 'merged';");
+    EXPECT_EQ(count("MATCH (d:KeyCopy) WHERE d.id + 0 = 5 RETURN count(*);"), 1)
+        << "[check: merge-no-duplicate] MERGE of the original key";
+}
+
+// Le CHECKPOINT qui suit un COPY refusé, sans point de reprise avant : l'annulation ramène
+// le compte de lignes du groupe mais pas ses colonnes, et le point de reprise écrivait hors
+// de son bloc (ASan : NullMask::copyNullMask sous NodeGroup::checkpointInMemOnly, session
+// cœur C++). Dans un fils : le tas corrompu peut tuer le processus.
+TEST_F(VectorIndexUpdate, CheckpointAfterARefusedCopy) {
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        createDBAndConn();
+        conn->query("CALL auto_checkpoint=false;");
+        insertThenRefuseACopy(*this);
+        auto checkpoint = conn->query("CHECKPOINT;");
+        if (!checkpoint->isSuccess()) {
+            _exit(5);
+        }
+        auto rows = conn->query("MATCH (d:KeyCopy) RETURN count(*), sum(size(d.name));");
+        auto tuple = rows->getNext();
+        _exit(tuple->getValue(0)->getValue<int64_t>() == 200 ? 0 : 6);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: checkpoint-after-refused-copy] "
+        << (WIFSIGNALED(status) ? "killed by signal " + std::to_string(WTERMSIG(status)) :
+                                  "exit code " + std::to_string(WEXITSTATUS(status)));
+    createDBAndConn();
+}
+
 // Le défaut lui-même, qui demeure après 1ea49837f : la cardinalité que STATS_INFO rend (et que
 // le planificateur lit) compte les lignes d'un COPY annulé, même après réouverture.
 TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrue) {
