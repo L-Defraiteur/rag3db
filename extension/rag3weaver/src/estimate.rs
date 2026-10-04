@@ -36,6 +36,53 @@ use crate::embedding_choice::{CardClass, Choice};
 /// rien d'un poste à l'autre.
 pub const CONFIRM_ABOVE: Duration = Duration::from_secs(5 * 60);
 
+/// **Ce qu'un Gio de tampon du moteur sait indexer**, en octets de texte
+/// retenus. **Provisoire, deux mesures** (dépôt rag3db, paquets de 512, base
+/// sur disque, 4 octobre 2026) : 62 Mo passent avec 8 Gio ; avec 4 Gio la
+/// passe meurt vers 40 Mo, sur un point de reprise qui ne tient plus dans le
+/// tampon (ticket `2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit`).
+/// Soit 7,75 Mo par Gio qui passent, 10 Mo par Gio qui cassent : la borne est
+/// prise au point qui a passé, arrondi à 8 Mo. À remplacer quand la cause sera
+/// connue : ce n'est pas une loi, c'est ce que les deux points autorisent.
+pub const TEXT_BYTES_PER_BUFFER_GIB: u64 = 8_000_000;
+
+/// Le tampon du moteur que cette indexation aura, et d'où il vient.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BufferCheck {
+    pub pool_bytes: u64,
+    pub source: String,
+    /// Le tampon qu'il faudrait, d'après [`TEXT_BYTES_PER_BUFFER_GIB`].
+    pub needed_bytes: u64,
+}
+
+impl BufferCheck {
+    pub fn new(text_bytes: u64, pool_bytes: u64, source: impl Into<String>) -> Self {
+        let gib = 1u64 << 30;
+        let needed_bytes = text_bytes.div_ceil(TEXT_BYTES_PER_BUFFER_GIB).max(1) * gib;
+        Self { pool_bytes, source: source.into(), needed_bytes }
+    }
+
+    pub fn too_small(&self) -> bool {
+        self.pool_bytes < self.needed_bytes
+    }
+}
+
+/// Le tampon du moteur de ce processus, tel que le moteur le prendra :
+/// `RAG3DB_BUFFER_POOL_SIZE`, sinon son défaut (80 % de la mémoire du poste).
+/// Provisoire : la session de l'arbre principal pose la règle du produit à
+/// l'ouverture de la connexion, et cette lecture passera par elle.
+pub fn buffer_pool_here() -> (u64, String) {
+    if let Some(v) = std::env::var("RAG3DB_BUFFER_POOL_SIZE").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+        return (v, "RAG3DB_BUFFER_POOL_SIZE".into());
+    }
+    let total = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|m| m.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
+        .map(|kb| kb * 1024)
+        .unwrap_or(0);
+    (total / 10 * 8, "défaut du moteur (80 % de la mémoire du poste)".into())
+}
+
 /// Ce que la politique fait d'un fichier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kept {
@@ -244,6 +291,10 @@ pub struct Estimate {
     /// pas sur une ignorance : `false`.
     pub needs_confirmation: bool,
     pub confirm_above_seconds: u64,
+    /// Le tampon du moteur contre le texte à indexer. `None` : pas vérifié
+    /// (une estimation pure, sans poste).
+    #[serde(default)]
+    pub buffer: Option<BufferCheck>,
 }
 
 impl Estimate {
@@ -257,7 +308,31 @@ impl Estimate {
             vectors_seconds: vectors.map(|d| d.as_secs()),
             needs_confirmation: vectors.is_some_and(|d| d > confirm_above),
             confirm_above_seconds: confirm_above.as_secs(),
+            buffer: None,
         }
+    }
+
+    pub fn with_buffer(mut self, pool_bytes: u64, source: impl Into<String>) -> Self {
+        self.buffer = Some(BufferCheck::new(self.survey.bytes, pool_bytes, source));
+        self
+    }
+
+    /// **Le refus d'avant l'écriture** : le tampon du moteur ne porterait pas
+    /// ce texte. Une base morte à mi-chemin sur un point de reprise est pire
+    /// qu'un refus qui dit le réglage à poser.
+    pub fn buffer_refusal(&self) -> Option<String> {
+        let b = self.buffer.as_ref().filter(|b| b.too_small())?;
+        let gio = |v: u64| format!("{:.1} Gio", v as f64 / (1u64 << 30) as f64);
+        Some(format!(
+            "tampon du moteur trop petit pour indexer ce dépôt — rien n'a été écrit. {:.1} Mo de texte demandent environ {} de tampon ; ce processus en a {} ({}). \
+             Posez RAG3DB_BUFFER_POOL_SIZE (en octets) à {} au moins, ou indexez un sous-dossier. \
+             Borne provisoire (deux mesures, 4 octobre 2026) : au-delà, la première indexation meurt sur un point de reprise.",
+            self.survey.bytes as f64 / 1e6,
+            gio(b.needed_bytes),
+            gio(b.pool_bytes),
+            b.source,
+            b.needed_bytes
+        ))
     }
 
     /// Ce qu'un agent lit, en quelques lignes.
@@ -278,6 +353,13 @@ impl Estimate {
         }
         if self.needs_confirmation {
             out.push_str(&format!(" — au-delà de {}, confirmation demandée", human(self.confirm_above_seconds)));
+        }
+        if let Some(b) = &self.buffer {
+            let gio = |v: u64| format!("{:.1} Gio", v as f64 / (1u64 << 30) as f64);
+            out.push_str(&format!("\ntampon du moteur : {} ({}), il en faut environ {}", gio(b.pool_bytes), b.source, gio(b.needed_bytes)));
+            if b.too_small() {
+                out.push_str(" — TROP PETIT : index refusera");
+            }
         }
         out
     }
@@ -316,7 +398,8 @@ pub fn estimate_here(
     let explicit = std::env::var(crate::embedding_choice::MODEL_VARIABLE).ok();
     let choice = crate::embedding_choice::choose(survey.files, survey.bytes, card, sole, explicit.as_deref());
     let pacing = if remote { None } else { crate::burst::active() };
-    Estimate::new(survey, choice, rate.map(|r| r.paced(pacing)), CONFIRM_ABOVE)
+    let (pool, source) = buffer_pool_here();
+    Estimate::new(survey, choice, rate.map(|r| r.paced(pacing)), CONFIRM_ABOVE).with_buffer(pool, source)
 }
 
 fn human(seconds: u64) -> String {
@@ -424,6 +507,22 @@ mod tests {
         let inconnue = Estimate::new(s, choice, None, CONFIRM_ABOVE);
         assert_eq!((inconnue.vectors_seconds, inconnue.needs_confirmation), (None, false));
         assert!(inconnue.text().contains("durée inconnue"), "{}", inconnue.text());
+    }
+
+    /// Le tampon du moteur trop petit se refuse avant d'écrire, en disant le
+    /// réglage ; assez grand, rien ne change.
+    #[test]
+    fn un_tampon_trop_petit_se_refuse_avant_d_ecrire() {
+        let choice = Choice { model: DEFAULT_MODEL.into(), reason: "le défaut".into() };
+        let s = survey([("a.rs", 62_000_000u64)], |_, _| Kept::Yes("code"));
+        let gib = 1u64 << 30;
+        let petit = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(4 * gib, "RAG3DB_BUFFER_POOL_SIZE");
+        let refus = petit.buffer_refusal().expect("4 Gio pour 62 Mo : refusé");
+        assert!(refus.contains("rien n'a été écrit") && refus.contains("RAG3DB_BUFFER_POOL_SIZE") && refus.contains("8.0 Gio"), "{refus}");
+        assert!(petit.text().contains("TROP PETIT"), "{}", petit.text());
+        let assez = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(8 * gib, "défaut");
+        assert_eq!(assez.buffer_refusal(), None);
+        assert_eq!(Estimate::new(s, choice, None, CONFIRM_ABOVE).buffer_refusal(), None, "sans vérification, pas de refus");
     }
 
     /// **Un service attaché fait taire les déclencheurs de la carte d'ici.**

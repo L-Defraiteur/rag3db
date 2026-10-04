@@ -412,6 +412,11 @@ impl Node for IndexNode {
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("IndexNode: 'catalog' service not found")?;
         let generated = generated_policy(ctx);
         let estimate = estimate_of(source.as_ref(), Some(&catalog), true, &generated).map_err(|e| format!("IndexNode: {e}"))?;
+        // Le tampon d'abord : une confirmation n'y change rien, seul un
+        // tampon plus grand le lève.
+        if let Some(refusal) = estimate.buffer_refusal() {
+            return Err(format!("index : {refusal}"));
+        }
         if let Some(refusal) = confirmation_refusal(&estimate, self.confirm) {
             return Err(format!("index : {refusal}"));
         }
