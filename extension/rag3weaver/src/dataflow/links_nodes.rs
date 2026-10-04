@@ -51,6 +51,8 @@ pub struct LinksConfig {
     pub title: String,
     pub path_fields: Vec<String>,
     pub line_field: String,
+    /// Le champ du genre, montré entre parenthèses (vide : rien).
+    pub kind_field: String,
     pub max_hops: usize,
     pub max_links: usize,
     pub max_degree: usize,
@@ -72,6 +74,8 @@ pub struct Stop {
     pub title: String,
     pub path: String,
     pub line: Option<i64>,
+    /// Le genre (`scope_type`), quand le gabarit déclare son champ.
+    pub kind: String,
 }
 
 /// Un lien entre deux résultats : le chemin, du premier au second.
@@ -99,6 +103,9 @@ pub struct LinksReport {
     /// Les titres que portent plusieurs résultats : au rendu, ces bouts
     /// disent leur fichier — sinon deux `from_bytes` se confondent.
     pub homonyms: Vec<String>,
+    /// Les départs (les résultats de la recherche) : au rendu, un nom qui
+    /// n'en est pas — un intermédiaire — se distingue.
+    pub sources: Vec<String>,
 }
 
 /// L'arrivée d'un départ sur un nœud : sa distance, et d'où il vient.
@@ -116,7 +123,7 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
     let sources: Vec<String> = sources.iter().filter(|u| !u.is_empty() && vus_src.insert(u.as_str())).take(cfg.sources).cloned().collect();
     let rang: HashMap<&str, usize> = sources.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
     if sources.len() < 2 {
-        return Ok(LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new() });
+        return Ok(LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new(), sources: Vec::new() });
     }
     let both = [Direction::Outgoing, Direction::Incoming];
     // node → (départ → arrivée)
@@ -282,7 +289,7 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
     }
     let mut homonyms: Vec<String> = par_titre.into_iter().filter(|(t, n)| *n > 1 && !t.is_empty()).map(|(t, _)| t.to_string()).collect();
     homonyms.sort();
-    Ok(LinksReport { links, cut, homonyms })
+    Ok(LinksReport { links, cut, homonyms, sources: sources.clone() })
 }
 
 /// Titre et lieu de chaque nœud, dans toutes les tables que les relations
@@ -303,6 +310,7 @@ fn fiches(catalog: &Catalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[Strin
         let mut champs = vec![format!("m.{}", cfg.title)];
         champs.extend(cfg.path_fields.iter().map(|p| format!("m.{p}")));
         champs.push(format!("m.{}", cfg.line_field));
+        champs.push(if cfg.kind_field.is_empty() { "NULL".into() } else { format!("m.{}", cfg.kind_field) });
         let q = format!("UNWIND $uuids AS u MATCH (m:{t} {{_uuid: u}}) RETURN u, {}", champs.join(", "));
         // Une table qui n'a pas ces champs n'a pas de fiche : le nœud garde
         // son uuid, le lien reste vrai.
@@ -311,56 +319,89 @@ fn fiches(catalog: &Catalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[Strin
         for r in &rows.rows {
             let uuid = text(r.first());
             let path = (0..n).map(|i| text(r.get(2 + i))).find(|p| !p.is_empty()).unwrap_or_default();
-            out.insert(uuid.clone(), Stop { uuid, title: text(r.get(1)), path, line: r.get(2 + n).and_then(|v| v.as_i64()) });
+            out.insert(uuid.clone(), Stop { uuid, title: text(r.get(1)), path, line: r.get(2 + n).and_then(|v| v.as_i64()), kind: text(r.get(3 + n)) });
         }
     }
     Ok(out)
 }
 
 impl LinksReport {
-    /// Une ligne par lien ; rien quand il n'y a rien à dire. Deux liens
-    /// qui se rendent pareil (des homonymes de fichiers différents qu'aucun
-    /// lieu ne distingue) ne font qu'une ligne.
+    /// **Le rendu en arbre**, la forme du « Dependency Graph » des résultats
+    /// et du « Graphe » de `grep` ([`crate::arbre`]) : les liens regroupés
+    /// autour du nom le plus relié (le pivot), qui n'apparaît qu'une fois ;
+    /// une branche par relation entre crochets, le sens dit par son nom
+    /// (`labels` : `REL=sortant/entrant`, `CONSUMES/CONSUMED_BY`) ; les
+    /// voisins dessous, `nom (genre)`. Le lieu (`@ fichier:ligne`) sur le
+    /// pivot, et sur un voisin seulement s'il n'est pas un résultat de la
+    /// recherche — un intermédiaire, qui le dit (`· hors résultats`). Rien
+    /// quand il n'y a rien à dire.
     pub fn markdown(&self, cfg: &LinksConfig) -> String {
         if self.links.is_empty() {
             return String::new();
         }
-        let nom = |s: &Stop| if s.title.is_empty() { s.uuid.clone() } else { s.title.clone() };
-        let lieu = |s: &Stop| match s.line {
-            Some(n) => format!("{}:{n}", s.path),
-            None => s.path.clone(),
-        };
-        let homonyme = |s: &Stop| self.homonyms.iter().any(|h| h == &s.title) && !s.path.is_empty();
-        let mut lignes: Vec<String> = Vec::new();
+        let mut fiche: HashMap<&str, &Stop> = HashMap::new();
+        let mut aretes: Vec<&Edge> = Vec::new();
+        let mut ordre: Vec<&str> = Vec::new();
         for l in &self.links {
-            let n = l.edges.len();
-            let rendu = |i: usize, s: &Stop| {
-                // Un passage montre où il est ; un bout, seulement s'il a des
-                // homonymes parmi les résultats.
-                let passage = i > 0 && i < n;
-                if (passage || homonyme(s)) && !s.path.is_empty() {
-                    format!("`{}` ({})", nom(s), lieu(s))
-                } else {
-                    format!("`{}`", nom(s))
+            for s in &l.stops {
+                fiche.entry(s.uuid.as_str()).or_insert(s);
+                if !ordre.contains(&s.uuid.as_str()) {
+                    ordre.push(s.uuid.as_str());
                 }
-            };
-            let mut ligne = format!("- {}", rendu(0, &l.stops[0]));
-            for (i, e) in l.edges.iter().enumerate() {
-                let libelle = cfg.labels.get(&e.relation).cloned().unwrap_or_else(|| e.relation.clone());
-                // Le sens vrai de l'arête, lu de gauche à droite.
-                if e.from == l.stops[i].uuid {
-                    ligne.push_str(&format!(" —{libelle}→ "));
-                } else {
-                    ligne.push_str(&format!(" ←{libelle}— "));
-                }
-                ligne.push_str(&rendu(i + 1, &l.stops[i + 1]));
             }
-            if !lignes.contains(&ligne) {
-                lignes.push(ligne);
+            for e in &l.edges {
+                if !aretes.iter().any(|x| x.from == e.from && x.to == e.to && x.relation == e.relation) {
+                    aretes.push(e);
+                }
             }
         }
-        let mut out = lignes.join("\n");
-        out.push('\n');
+        let resultats: HashSet<&str> = self.sources.iter().map(String::as_str).collect();
+        let lieu = |s: &Stop| match s.line {
+            Some(n) if !s.path.is_empty() => format!("{}:{n}", s.path),
+            _ => s.path.clone(),
+        };
+        // `nom (genre)`, le lieu si demandé, et la marque d'un intermédiaire.
+        let decrire = |u: &str, avec_lieu: bool| -> String {
+            let Some(s) = fiche.get(u) else { return u.to_string() };
+            let mut t = if s.title.is_empty() { s.uuid.clone() } else { s.title.clone() };
+            if !s.kind.is_empty() {
+                t.push_str(&format!(" ({})", s.kind));
+            }
+            let ou = lieu(s);
+            if avec_lieu && !ou.is_empty() {
+                t.push_str(&format!(" @ {ou}"));
+            }
+            if !resultats.contains(u) {
+                t.push_str(" · hors résultats");
+            }
+            t
+        };
+        let sens = |e: &Edge, sortant: bool| -> String {
+            match cfg.labels.get(&e.relation).and_then(|l| l.split_once('/')) {
+                Some((a, p)) => if sortant { a.trim().to_string() } else { p.trim().to_string() },
+                None => if sortant { e.relation.clone() } else { format!("{} (entrant)", e.relation) },
+            }
+        };
+        let mut restantes: Vec<&Edge> = aretes.clone();
+        let mut out = String::from("```\n");
+        while !restantes.is_empty() {
+            let degre = |u: &str| restantes.iter().filter(|e| e.from == u || e.to == u).count();
+            let pivot = *ordre.iter().max_by_key(|u| (degre(u), std::cmp::Reverse(ordre.iter().position(|x| x == *u)))).unwrap();
+            let siennes: Vec<&Edge> = restantes.iter().copied().filter(|e| e.from == pivot || e.to == pivot).collect();
+            restantes.retain(|e| !(e.from == pivot || e.to == pivot));
+            let mut groupes: Vec<(String, Vec<String>)> = Vec::new();
+            for e in siennes {
+                let (autre, sortant) = if e.from == pivot { (e.to.as_str(), true) } else { (e.from.as_str(), false) };
+                let rel = sens(e, sortant);
+                let voisin = decrire(autre, !resultats.contains(autre));
+                match groupes.iter_mut().find(|(r, _)| *r == rel) {
+                    Some((_, v)) => v.push(voisin),
+                    None => groupes.push((rel, vec![voisin])),
+                }
+            }
+            out.push_str(&crate::arbre::arbre(&decrire(pivot, true), &groupes));
+        }
+        out.push_str("```\n");
         if self.cut > 0 {
             out.push_str(&format!("_… et {} autres paires reliées._\n", self.cut));
         }
@@ -406,7 +447,7 @@ impl Node for LinksNode {
         // Une section qui accompagne un autre rendu : occupé ou jamais
         // indexé, elle se tait — l'outil qu'elle suit l'a déjà dit.
         let report = match read_catalog(&catalog, &self.cfg.entity) {
-            CatalogRead::Refused(_) => LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new() },
+            CatalogRead::Refused(_) => LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new(), sources: Vec::new() },
             CatalogRead::Ready { catalog: cat, .. } => links_between(&cat, &self.cfg, &sources)?,
         };
         ctx.metric("links", report.links.len() as f64);
@@ -453,6 +494,7 @@ impl NodeFactory for LinksNodeFactory {
                 if p.is_empty() { vec!["file_path".into()] } else { p }
             },
             line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
+            kind_field: s("kind_field").unwrap_or_default(),
             max_hops: entier("max_hops", MAX_HOPS as u64).clamp(1, MAX_HOPS as u64) as usize,
             max_links: entier("max_links", 5).clamp(1, 50) as usize,
             max_degree: entier("max_degree", 50).max(1) as usize,
@@ -460,7 +502,7 @@ impl NodeFactory for LinksNodeFactory {
         };
         // Des identifiants seulement : ils entrent dans le texte des requêtes.
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
-        let tous = [&cfg.entity, &cfg.title, &cfg.line_field].into_iter().chain(&cfg.relations).chain(&cfg.path_fields);
+        let tous = [&cfg.entity, &cfg.title, &cfg.line_field].into_iter().chain(&cfg.relations).chain(&cfg.path_fields).chain(std::iter::once(&cfg.kind_field).filter(|k| !k.is_empty()));
         if let Some(x) = tous.into_iter().find(|x| !ident(x)) {
             return Err(format!("LinksNode: « {x} » n'est pas un identifiant"));
         }
@@ -613,6 +655,7 @@ impl NodeFactory for CohesionNodeFactory {
             title: "_uuid".into(),
             path_fields: Vec::new(),
             line_field: "_uuid".into(),
+            kind_field: String::new(),
             max_hops: entier("max_hops", 2).clamp(1, MAX_HOPS as u64) as usize,
             max_links: usize::MAX,
             max_degree: entier("max_degree", 50).max(1) as usize,
@@ -696,6 +739,7 @@ impl Node for CohesionBoostNode {
                 title: "_uuid".into(),
                 path_fields: Vec::new(),
                 line_field: "_uuid".into(),
+                kind_field: String::new(),
                 max_hops: c.max_hops.clamp(1, MAX_HOPS),
                 max_links: usize::MAX,
                 max_degree: c.max_degree.max(1),

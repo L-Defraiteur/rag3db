@@ -109,10 +109,11 @@ fn relie_par_ce_qu_ils_partagent_jamais_par_un_carrefour() {
     };
     let rendu = section(&catalog, &uuids);
     eprintln!("{rendu}");
-    let lignes: Vec<&str> = rendu.lines().collect();
-    assert_eq!(lignes.len(), 1, "un seul lien, a—shared—b : {rendu}");
-    assert!(lignes[0].contains("`a`") && lignes[0].contains("`shared`") && lignes[0].contains("`b`"), "{rendu}");
-    assert!(lignes[0].contains("—utilise→") && lignes[0].contains("←utilise—"), "le sens vrai de chaque arête : {rendu}");
+    // La forme du graphe de dépendances : le pivot (l'intermédiaire
+    // `shared`, hors des résultats, avec son lieu), la relation dans le sens
+    // vu depuis lui, les deux résultats dessous.
+    let attendu = "```\nshared (function) @ /projet/lib.rs:1 · hors résultats\n└── [CONSUMED_BY]\n    ├── a (function)\n    └── b (function)\n```\n";
+    assert_eq!(rendu, attendu, "un seul arbre, a et b par shared");
     assert!(!rendu.contains("alone"), "l'isolé n'a pas de lien : {rendu}");
     assert!(!rendu.contains("hub"), "les deux appellent un carrefour : ce n'est pas un lien : {rendu}");
 
@@ -147,7 +148,8 @@ fn deux_homonymes_du_meme_fichier_ne_font_pas_un_lien() {
     avec_tiers.extend(chunkers.iter().cloned());
     let rendu = section(&catalog, &avec_tiers);
     eprintln!("{rendu}");
-    assert_eq!(rendu.lines().filter(|l| l.starts_with("- ")).count(), 1, "une ligne, pas une par homonyme : {rendu}");
+    assert_eq!(rendu.matches("Chunker").count(), 1, "un seul Chunker, pas un par homonyme : {rendu}");
+    assert_eq!(rendu.matches("use_struct").count(), 1, "{rendu}");
 }
 
 fn config_banc(max_degree: usize, max_links: usize) -> LinksConfig {
@@ -158,6 +160,7 @@ fn config_banc(max_degree: usize, max_links: usize) -> LinksConfig {
         title: "name".into(),
         path_fields: vec!["file_path".into()],
         line_field: "start_line".into(),
+        kind_field: "scope_type".into(),
         max_hops: 4,
         max_links,
         max_degree,
@@ -283,13 +286,15 @@ fn exemples_par_search_code() {
     }
 }
 
-/// **Le branchement se déclare** : le manifeste de code, avec le crochet des
-/// liens sur `search_code`, se charge — nœuds permis à un crochet,
-/// `result_uuids` et `results_port` cohérents. Éteint par défaut : le
-/// manifeste du dépôt ne le déclare pas.
+/// **La section Liens est allumée** (Lucie, 4 octobre) : les deux
+/// manifestes du backend de code — le poste (`backend.json`) et le cloud
+/// (`snapshot.json`), même moteur — déclarent le crochet sur `search_code`,
+/// à deux sauts (défaut du gabarit), six lignes au plus, et se chargent tels
+/// quels : nœuds permis à un crochet, `result_uuids` et `results_port`
+/// cohérents.
 #[test]
 #[ignore]
-fn le_crochet_des_liens_se_declare_sur_search_code() {
+fn le_crochet_des_liens_est_declare_sur_search_code() {
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
     let dir = tempfile::tempdir().unwrap();
     fn copier(src: &std::path::Path, dst: &std::path::Path) {
@@ -305,19 +310,27 @@ fn le_crochet_des_liens_se_declare_sur_search_code() {
         }
     }
     copier(&src, &dir.path().join("templates"));
-    // La racine du workspace que le manifeste déclare doit exister.
+    // La racine du workspace que les manifestes déclarent doit exister.
     std::fs::create_dir_all(dir.path().join("templates/backends/code/workspace")).unwrap();
-    let chemin = dir.path().join("templates/backends/code/backend.json");
-    let mut manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
-    assert!(manifest["tools"]["search_code"].get("after").is_none(), "éteint par défaut : le manifeste du dépôt ne déclare pas les liens");
-    manifest["tools"]["search_code"]["after"] = serde_json::json!({
-        "graph": "../../tools/links.mmd",
-        "title": "Liens",
-        "max_lines": 6,
-        "results_port": {"node": "render", "port": "results"}
-    });
-    std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
-    if let Err(e) = rag3weaver::backend::PreparedBackend::load(&chemin) {
-        panic!("le crochet des liens se refuse : {e}");
+    for nom in ["backend.json", "snapshot.json"] {
+        let chemin = dir.path().join("templates/backends/code").join(nom);
+        let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        let after = &manifest["tools"]["search_code"]["after"];
+        assert_eq!(after["graph"], "../../tools/links.mmd", "{nom} : le crochet des liens");
+        assert_eq!(after["max_lines"], 14, "{nom}");
+        assert_eq!(after["results_port"]["node"], "render", "{nom}");
+        if let Err(e) = rag3weaver::backend::PreparedBackend::load(&chemin) {
+            panic!("{nom} : le crochet des liens se refuse : {e}");
+        }
     }
+}
+
+/// **Muette sans index** : sur un catalogue jamais indexé, la section rend
+/// un texte vide (la porte de lecture refuse, le nœud se tait) — le crochet
+/// ne montre rien.
+#[test]
+#[ignore]
+fn muette_sans_index() {
+    let catalog = setup();
+    assert_eq!(section(&catalog, &["u1".to_string(), "u2".to_string()]), "");
 }

@@ -22,6 +22,15 @@
       },
       "policy": {
         "read_files": true
+      },
+      "after": {
+        "graph": "../../tools/links.mmd",
+        "title": "Liens",
+        "max_lines": 14,
+        "results_port": {
+          "node": "render",
+          "port": "results"
+        }
       }
     },
     "read_file": {

@@ -838,15 +838,16 @@ impl GrepResult {
         if !self.related.is_empty() {
             out.push_str("\n## Graphe\n\n```\n");
             for r in &self.related {
-                out.push_str(&format!("{}\n", r.from));
-                out.push_str(&format!("└── [{}]\n", r.relation));
-                let dernier = r.to.len().saturating_sub(1);
-                for (i, (nom, genre, ou)) in r.to.iter().enumerate() {
-                    let branche = if i == dernier { "└── " } else { "├── " };
-                    let genre = if genre.is_empty() { String::new() } else { format!(" ({genre})") };
-                    let ou = if ou.is_empty() { String::new() } else { format!(" @ {ou}") };
-                    out.push_str(&format!("    {branche}{nom}{genre}{ou}\n"));
-                }
+                let voisins: Vec<String> = r
+                    .to
+                    .iter()
+                    .map(|(nom, genre, ou)| {
+                        let genre = if genre.is_empty() { String::new() } else { format!(" ({genre})") };
+                        let ou = if ou.is_empty() { String::new() } else { format!(" @ {ou}") };
+                        format!("{nom}{genre}{ou}")
+                    })
+                    .collect();
+                out.push_str(&crate::arbre::arbre(&r.from, &[(r.relation.clone(), voisins)]));
             }
             out.push_str("```\n");
         }
