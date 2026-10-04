@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 21 h 15.**
+Mis à jour sur place. **Dernière mise à jour : 4 octobre 2026, 22 h 45.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -24,6 +24,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Perte de relations au point de reprise | `80e3f2c32` | un point de reprise ne libère plus les relations des régions qu'il n'a pas réécrites (perte silencieuse, défaut d'origine) ; le plantage à la lecture après une relation créée puis supprimée |
 | Gardes de mémoire ; taille exacte pour l'index vectoriel | `1ea49837f` | trois refus nommés à la place de trois écritures hors bloc (tableau des visités, graphe en mémoire, décalages du dictionnaire) ; l'index se dimensionne par le nombre de lignes, plus par la cardinalité estimée. Sans test neuf : voir le ticket |
 | Après un `COPY` refusé | `05788a868` | le point de reprise n'écrit plus hors de son bloc (corruption de tas, défaut d'origine) ; la ligne d'origine d'une clé en double reste dans l'index de clé primaire (résultat faux silencieux, défaut d'origine) |
+| Gestionnaire de verrous, marche V1 | `022c78402` | le gestionnaire seul, sans câblage : ressources ligne et index, partagé et exclusif, attente, interblocage à la prise, délai, interruption, prises groupées, `CALL lock_timeout` ; aucune écriture ne prend encore de verrou |
 | Double ouverture en écriture dans un processus | `57c8389b4` | la cause de la corruption d'`e2e_code` : refus nommé `Database::ALREADY_OPEN_FOR_WRITING` avant de toucher à un fichier ; un lecteur du même processus reste permis |
 | Clés fantômes après deux `COPY` annulés | `5c8507577` | régression de `05788a868` trouvée par l'arbre principal : l'annulation retire maintenant de l'index les clés de toutes les lignes non validées, et seulement elles |
 | Chronométrage du point de reprise | `5771f0afb` | `RAG3DB_PROFILE_CHECKPOINT=1` : le découpage d'un commit et de son point de reprise sur la sortie d'erreur ; muet sinon |
@@ -77,8 +78,28 @@ d'environnement, appelée dans `PageManager::allocatePageRange`, `freePageRange`
 `FileHandle::writePagesToFile` et `removePageIdxAndTruncateIfNecessary`, et dans
 `ShadowFile::applyShadowPages`.
 
-**L'ordre, tranché par l'orchestration (stèle §3.2)** : V1, A3′, A4′, V2, la maintenance de l'index au commit ; puis le chargement
-journalisé ; puis les écritures parallèles. Les autres tickets « bloque » sont au banc.
+**L'ordre, revu par Lucie le 4 octobre à 20 h 40 (stèle §3.2)** : le `COPY` hors journal
+est la cause commune de ce qui a été payé ce jour-là ; **le chargement en masse journalisé
+passe avant le câblage des verrous**. Donc : V1 (fait, `022c78402`) → le chargement
+journalisé → A3′, A4′, V2, la maintenance de l'index au commit → les écritures parallèles.
+Les autres tickets « bloque » sont au banc.
+
+**Le lot en cours : le chargement en masse journalisé.** La page de conception est
+`04-le-chargement-en-masse-journalise.md` (acceptée par l'orchestration) : le journal porte
+les lignes du `COPY` sous la forme d'insertion que le rejeu connaît déjà ; cinq étapes,
+estimées en passes (11 rebâtis, 4 listes C++, 3 passes instrumentées, 4 mesures exclusives,
+1 passe Rust). **J'en suis à l'étape 1, la mesure** : journaliser les lignes d'un `COPY` de
+nœuds à la validation, derrière un interrupteur, sans rien retirer ; rendre la taille du
+journal, la durée d'écriture et la durée du rejeu à la taille du premier index. Seuil fixé :
+si la réouverture après arrêt brutal dépasse 30 secondes, le rejeu passe par vecteur dès
+l'étape 2. Le remède 2a du banc et ses témoins ne se retirent qu'à l'étape 4, avec lui.
+
+**V1, ce qu'il faut savoir pour la suite** : `src/transaction/lock_manager.{h,cpp}`, un
+`LockManager` par `TransactionManager`, `releaseAll` appelé dans `clearTransactionNoLock`.
+Le genre de ressource « base » envisagé pour l'attente du départ des autres n'est pas
+construit (voir l'ajout daté de la note de conception des verrous). Tests :
+`test/transaction/lock_manager_test.cpp`, à rejouer sous ThreadSanitizer (`build/tsan`,
+cible `transaction_test`) à chaque changement du gestionnaire.
 
 **Le point de reprise de `COPY`, voie (c) : rendu.** Le découpage (mesure de la session des
 embarquements avec `RAG3DB_PROFILE_CHECKPOINT=1`) : les 5 s par paquet sont celles d'une
