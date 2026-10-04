@@ -81,6 +81,23 @@ Donc : `DictionaryColumn::scanValue` réserve `length` octets dans le vecteur pu
 
 **La prochaine étape** : rejouer sous ASan avec gdb arrêté sur `__asan::ReportGenericError`, et lire dans `DictionaryColumn::scanValue` et son appelant `length`, `startOffset`, les décalages et les métadonnées du segment (`~/.cache/rag3db-moteur-notes/asan/gdb-asan.cmd`, `annexes/build-asan.sh`). Attention : l'extension vector sort dans `extension/vector/build/`, commun à tous les dossiers de build d'un arbre — rebâtir l'extension ordinaire après une passe ASan.
 
+**Reprise du 4 octobre, 16 h — l'extension vector bâtie elle aussi sous ASan.** Première passe sans rapport (elle portait un détecteur provisoire d'usage concurrent du tampon des chaînes, qui n'a donné que des faux positifs : le fil « autre » était au repos dans la pile de tous les fils). Deuxième passe : **un autre débordement, dans l'extension**, même test (`a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`, la base sur disque) :
+
+```
+READ of size 1, 44 octets après un bloc de 211 octets
+VisitedState::contains            extension/vector/src/include/index/hnsw_index.h:58
+OnDiskHNSWIndex::oneHopSearch     extension/vector/src/index/hnsw_index.cpp:1298
+OnDiskHNSWIndex::searchKNNInLayer extension/vector/src/index/hnsw_index.cpp:1231
+searchFromCheckpointed → search → QUERY_VECTOR_INDEX (query_hnsw_index.cpp:256)
+bloc alloué par VisitedState::VisitedState (hnsw_index.h:50), HNSWSearchState, query_hnsw_index.cpp:320
+```
+
+Le tableau des « déjà visités » est dimensionné par `nodeTable->getStats(transaction).getTableCard()` (`query_hnsw_index.cpp:293`, de même `vector_search_function.cpp:165`) — la cardinalité **estimée** de la table (« not always up-to-date », `table_stats.h:63`) — et indexé par le décalage de ligne d'un voisin : ici 211 lignes comptées, un voisin au décalage 255. `contains` lit hors du tableau ; `add` (`visited[offset] = 1`, même fichier) y **écrit un octet** : une corruption de tas, invisible à ASan tant que l'extension n'est pas bâtie avec lui (c'est pourquoi sept passes n'avaient rien vu). Le contrôle de borne provisoire essayé plus haut ne s'était pas déclenché : il était juste, la condition est rare.
+
+Ce que cela ne dit pas encore : pourquoi la cardinalité est en retard sur les décalages (en cours : un contrôle posé au commit, à la fin d'un COPY, à la relecture de la table et à la création de l'état de recherche) ; ni si le débordement de `DictionaryColumn::scanValue` est un second défaut ou une suite de celui-ci.
+
+Lecture de `scanValue` (non vérifiée par les nombres) : si un décalage de fin est inférieur au décalage de début, `endOffset - startOffset` reboucle (l'`assert` de `dictionary_column.cpp:114` est éteint en Release) ; `InMemOverflowBuffer::requireNewBlock` (`currentOffset + size > taille`) reboucle à son tour, aucun bloc n'est réservé, et la lecture page par page écrit jusqu'au-delà du bloc courant — la signature du premier rapport.
+
 ## Recette minimale
 
 Aucune. Reproduction : la suite entière en boucle, binaire lancé directement —
