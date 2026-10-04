@@ -196,6 +196,10 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         report.relations
     );
 
+    for (reason, n) in &report.files_set_aside {
+        eprintln!("[mots] {n} fichiers écartés : {reason}");
+    }
+
     // Le pic de mémoire résidente du processus : la borne à tenir sur un
     // poste modeste, et l'inconnue d'un chargement de bout en bout.
     if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
