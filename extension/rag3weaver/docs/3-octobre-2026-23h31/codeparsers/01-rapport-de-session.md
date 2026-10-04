@@ -1,11 +1,11 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, soir.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, 17 h.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
 lisent le graphe du code : `usages`, `impact`, la lecture du catalogue, le
-banc des relations, et la section « Liens » en cours. Elle ne touche ni
+banc des relations, et la section « Liens ». Elle ne touche ni
 `code.rs`, ni `code_sync.rs`, ni le schéma de code, ni les gabarits du
 backend sans passer par la session de l'arbre principal : elle propose des
 branches.
@@ -80,40 +80,47 @@ Décision de l'orchestration : éteinte par défaut, **à remesurer si la fusion
 change**. Le `CohesionNode` (signal de boost) et le banc
 `e2e_banc_cohesion` (graphe à part) restent.
 
-**La section Liens** (`be9555c49`) : deux sauts par défaut, `max_hops`
-paramètre ; le crochet est écrit dans `links.mmd`, le manifeste ne le
-déclare pas. Trois exemples réels rendus à Lucie (ils expliquent / rien /
-n'apportent rien). Les bruits relevés sont corrigés et pointés (`766e4bd`, master
-`18b1a6889`) : une variable locale Rust prise pour une fonction (`s`), le
-conteneur `mod tests`, et au rendu deux homonymes d'un même fichier (une
-struct et son impl) qui ne font qu'une chose (`3dbd3e7e1`, `a19bf1188`).
-Version pour Lucie rendue à l'orchestration ; reste `clear`, résolu par le
-nom seul (ticket de la marque de résolution, proposé). **Attend** : Lucie,
-pour l'allumer par défaut.
+**La section Liens est allumée, en arbre** (`6380dd8a5`, 4 octobre).
+Crochet `after` de `search_code` dans les deux manifestes du backend de code
+(`backend.json`, `snapshot.json`), deux sauts, `max_lines` 14, port
+`render.results`. Rendu dans la forme du « Dependency Graph » de
+`results.md.jinja` : le pivot (le nœud le plus relié) une fois, avec son
+lieu ; `├── [CONSUMES]` / `[CONSUMED_BY]` disent le sens ; le lieu d'un
+voisin n'apparaît que s'il n'est pas un résultat ; un intermédiaire hors des
+résultats porte « · hors résultats » ; la coupe dit « … et N autres paires
+reliées ». Un seul dessinateur, `crate::arbre::arbre`, pour les Liens et le
+« Graphe » de `code_tools.rs` (sortie inchangée, à l'octet) ; le gabarit
+jinja garde sa boucle — ticket « trois rendus d'arbre à fondre ».
 
-**Les boucles sur soi** (le reste du ticket des paquets, 52 à 64) venaient
-de codeparsers : le nom d'un destructeur `~Foo` résolu vers sa propre
-classe, la résolution locale sans contrôle cible ≠ source — corrigé dans
-codeparsers `d51e933`, à pointer ; puis la sonde 64/512 et la fermeture du
-ticket.
+`max_lines` 14 et non 6 : un arbre de deux groupes et quatre voisins fait
+déjà 8 lignes avec ses clôtures, et une coupe au milieu laisserait une
+clôture ```` ``` ```` ouverte. Les trois exemples tiennent en 13. Le crochet
+« Le même motif existe ailleurs » de la session recherche reste à 6 ; son
+« Avant d'éditer » de `read_file` n'est que dans `backend.json` (asymétrie
+à elle, laissée).
 
-**Aussi** : l'impact d'un fichier est branché par la session recherche
-(« Avant d'éditer » sur read_file, f8d231148) ; les relations qui
-dépendaient du paquet sont localisées dans `code.rs` (numéros d'homonymes
-des clés) ; codeparsers master `766e4bd` = déclarations C++, locales Rust,
-conteneurs.
+Preuves : `e2e_liens` (le manifeste réel se charge et porte le crochet ;
+muette sans index ; arbre exact d'un voisinage partagé ; deux homonymes
+d'un fichier ne font pas un lien ; plus courts chemins contre l'oracle du
+moteur), `test_backend_code.py` PASS, `e2e_agent_loop` 8/8 (rouge depuis
+`b9347b459` : le nœud `cohere` changeait les comptes du graphe de
+recherche). Reste `clear`, résolu par le nom seul : ticket de la marque de
+résolution.
+
+**Les relations qui dépendent du paquet : fermé.** Les boucles sur soi
+venaient de codeparsers (nom d'un destructeur `~Foo` résolu vers sa propre
+classe) : corrigé dans `d51e933`, pointé en `4fe5a3bfc`. Sonde rejouée sur
+le dépôt entier : 264 156 relations et 601 929 rendez-vous, identiques à 64
+et à 512 ; zéro boucle.
 
 ## Ce qui attend quelqu'un
 
-- **Lucie** : la longueur des liens (2 ou 4 sauts) et les trois exemples.
-- **Arbre principal** : un seul pointeur pour `ace6fd8` (parent homonyme)
-  et `fichier-seul`, après la preuve au banc.
+- **Lucie** : la marque de résolution sur les arêtes (proposition au
+  ticket) — c'est elle qui ferait taire `clear`.
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les
   `from_bytes` des embarqueurs. Même voie que les champs, autre cas.
-- **Session recherche** : brancher le crochet `links` dans le manifeste
-  (`after`, `results_port`, `max_lines`) quand la longueur est choisie.
 
 ## Reprendre
 
@@ -123,8 +130,8 @@ Deux dépôts :
   branches à moi : `liens` (garée), `codeparsers-pointeur-8` et
   `codeparsers-rendez-vous-champs` (fusionnées, à supprimer quand Lucie le
   dit).
-- codeparsers, dans le sous-module ; `master` = `ace6fd8`, pointé par
-  rag3db : `56d039f` ; branche `fichier-seul` = `2c17314`. Le clone du sous-module prenait l'adresse pro :
+- codeparsers, dans le sous-module ; `master` = `d51e933`, pointé par
+  rag3db master. Le clone du sous-module prenait l'adresse pro :
   `git config user.email` à vérifier dans tout clone neuf.
 
 Bâtir et tester depuis le worktree, contre la lib de l'arbre principal
@@ -156,9 +163,12 @@ Pièges rencontrés :
   démon local.
 - Le banc des relations indexe `src/` : éditer un fichier de `src/` change
   ses notes.
-- **Les mesures lourdes se prennent une à la fois** : l'annoncer à
-  l'arbre principal et à la session embarquements, attendre leurs deux
-  « libre », dire « fini » en rendant.
+- **Les travaux lourds passent par le verrou** :
+  `~/.cache/rag3weaver-build/poste lourd <cmd>` (bâtir, e2e, banc, sonde du
+  dépôt), `poste mesure <cmd>` pour une durée ou une mémoire.
+- `test_backend_code.py` depuis le worktree veut l'extension vector : lien
+  symbolique `extension/vector/build` vers celle de l'arbre principal (non
+  suivi, ne pas commettre), et un binaire plus récent que les gabarits.
 - **Mesurer l'analyseur** : `tests/sonde_liste_analyse.rs` écrit la liste
   exacte des fichiers de l'index (`SONDE_RACINE`, `SONDE_LISTE`). Les sondes
   de codeparsers (`examples/sonde_*`) se bâtissent en release, un target par

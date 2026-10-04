@@ -1,6 +1,6 @@
 # 474 relations dépendent encore de la taille du paquet
 
-- **État** : ouvert — réduit à des boucles sur soi (`code.rs`, arbre principal)
+- **État** : corrigé — 9b89ec823 (clés stables) et 4fe5a3bfc (pointeur codeparsers d51e933)
 - **Gravité** : réponse fausse (le graphe dépend du découpage)
 - **Atteignable en service** : oui (première indexation, synchronisation)
 - **Touche rag3weaver** : oui
@@ -56,3 +56,24 @@ soi** de classes C++ d'en-tête (`graph.h#rag3db.Graph:class → la même`) :
 la classe mentionne son propre nom, et le rendez-vous la relie à elle-même
 quand elle est le seul définisseur du paquet. Pour le fermer : le
 rendez-vous ne relie jamais un scope à lui-même.
+
+## Fermé (4 octobre, 17 h)
+
+La cause des boucles n'était pas le rendez-vous mais codeparsers : le nom
+d'un destructeur C++ (`~Graph`) était lu comme une référence à la classe,
+et la résolution locale reliait le scope à lui-même. Corrigé dans
+codeparsers d51e933 (un identifiant `destructor_name` est une définition ;
+`resolve_local_scope_references` ne rend jamais de relation vers soi),
+pointeur sur master en 4fe5a3bfc.
+
+Sonde rejouée sur master 6380dd8a5, dépôt entier :
+
+```
+[paquets] relations 64 : 264156, 512 : 264156 ; rendez-vous 64 : 601929, 512 : 601929
+[relations seulement à 64] 0      [relations seulement à 512] 0
+[rendez-vous seulement à 64] 0    [rendez-vous seulement à 512] 0
+[boucles] 0 CONSUMES d'une clé vers elle-même, paquets de 64
+```
+
+Témoins : `tests/sonde_liste_analyse.rs::relations_selon_le_paquet` et
+`::boucles_sur_soi` (`#[ignore]`, dépôt entier).

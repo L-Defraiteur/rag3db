@@ -1,6 +1,6 @@
 # Une variable locale Rust passe pour l'usage d'une fonction homonyme
 
-- **État** : corrigé dans codeparsers `75077f7` + `46cc492` — en attente du pointeur
+- **État** : corrigé — codeparsers `75077f7` + `46cc492`, pointeur sur master en 4fe5a3bfc
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (`usages`, `impact`, liens — vu par la section Liens)
