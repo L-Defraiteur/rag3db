@@ -1,7 +1,7 @@
 # Banc de concurrence — rapport de session
 
-Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 à
-midi, après la revue des amonts (`a10ee1c51`).
+Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 après-midi, après les correctifs du planificateur et des
+amonts (`8c83c3360`, puis le second lot).
 
 ## Où en est le banc
 
@@ -71,6 +71,28 @@ midi, après la revue des amonts (`a10ee1c51`).
     correctif présenté comme manquant reproduit chez nous avant d'être rangé. Vingt défauts
     confirmés, 21 témoins rouges (`upstream_fixes_test.cpp`). Les deux défauts graves ont
     été signalés dès leur confirmation. Tableau : `03-revue-des-amonts.md`.
+11. **Les tickets (4 octobre)** : `docs/tickets/`, un fichier par défaut connu, demandé par
+    Lucie ; la convention et l'index dans son `README.md`. Les 22 de la revue y sont, et
+    les autres sessions y écrivent les leurs.
+12. **Les correctifs faciles, écrits par le banc (4 octobre)**, sur un périmètre levé par
+    l'orchestration (planificateur, optimiseur, binder, UUID nul, puis `toString`, CSV,
+    `MERGE`, accent grave) :
+    - un défaut par commit, chacun lu sur Ladybug puis réécrit, le commit lu cité ;
+    - le témoin quitte `known_red.txt` et le ticket passe à corrigé, dans le même commit ;
+    - la liste C++ complète est verte avant chaque fusion.
+    Treize sont corrigés :
+    - premier lot (`ed2f9d5db` à `8c83c3360`) : l'UUID nul, `SKIP` sans `LIMIT`, le
+      `WHERE` sur paramètres seuls, `WITH gate`, l'`OPTIONAL MATCH` doublé, l'étiquette
+      ignorée, le lambda, la comparaison de relations, l'`UNION` ;
+    - second lot (`27bff7d9f`, `7fc1023d1`) : `toString`, le CSV qui finit par un champ vide ;
+    - troisième lot (`d5ccf5b2d`, `462300b98`, après l'accord de Lucie) : le `MERGE` d'un
+      motif retrouvé dans le lot, et le champ CSV `""` lu comme la chaîne vide (un
+      changement de comportement, noté au journal).
+    Le `MERGE` touchait la forme `batch_link` de rag3weaver : une relation répétée dans un
+    lot perdait son `SET`. Le mécanisme a été compris avant d'être corrigé : la ligne en
+    double portait l'identifiant de la dernière relation insérée. Trois défauts en
+    sortent, et un seul commit les ferme.
+    L'accent grave reste un ticket : 17 fichiers, hors du périmètre.
 
 ## Décisions et pourquoi
 
@@ -114,10 +136,12 @@ midi, après la revue des amonts (`a10ee1c51`).
   ses `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   Il reste à faire vérifier par `IndexExactWithoutRebuild` que la liste existait avant la
   mort.
-- **La session cœur C++, sur les amonts** : les 21 rouges de la marche « correctifs de
-  l'amont à reprendre », dans l'ordre du tableau. D'abord la perte de relations au point de
-  reprise, puis la lecture après le point de reprise d'une relation créée puis supprimée :
-  rag3weaver passe par ces deux chemins.
+- **La session cœur C++, sur les amonts** : la perte de relations au point de reprise et
+  la lecture après une relation créée puis supprimée sont corrigées (`80e3f2c32`). Restent
+  sous la marche : le point de reprise après `ALTER … DROP`, le lecteur retenu par un
+  `CHECKPOINT`, le balayage de plusieurs tables de relations dans une transaction.
+- **L'accent grave dans un nom** : un correctif sur 17 fichiers (catalogue, export, un
+  fichier de stockage), à attribuer.
 - **Ce que la revue n'a pas couvert** :
   - deux recettes non reproduites (`254a7444d`, `a10cecbc7`) ;
   - dix défauts qui demandent une faute d'E/S, une coupure ou une mort placée au bon

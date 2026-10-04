@@ -148,6 +148,34 @@ Tous sous `test/transaction/concurrence/`, dans une seule cible, `concurrence_te
 - **[lu] Les tags suffisent.** `ladybug-main-2026-08-31` a une histoire séparée de la
   nôtre : on la lit par dates. Vela, par `git log HEAD..vela-master-2026-09-03`.
 
+## 5 quater. Les correctifs (4 octobre)
+
+- **[exécuté] La TCK a refusé une heuristique.** Reconnaître un nœud lié sans étiquette à
+  ce qu'il couvre toutes les tables cassait `tck/match/match3` Scenario26 : `(a1:X:Y)`
+  couvre toutes les tables par ses étiquettes. Un marqueur posé à la création du nœud
+  (`NodeExpression::isBoundWithoutLabel`) l'a remplacée.
+- **[lu] Un correctif de l'amont peut avoir son propre trou.** Pour l'`OPTIONAL MATCH`
+  doublé, Ladybug choisit le graphe porteur du balayage corrélé avant de sauter les
+  graphes vides, et pourrait choisir celui qu'il saute. Nous choisissons après.
+- **[exécuté] Un test de notre dépôt peut poser un contrat qu'un correctif de l'amont
+  contredit.** C'est le cas du champ CSV `""`, que `escaped_newlines.test` voulait NULL.
+  On s'est arrêté pour rendre la décision ; Lucie a choisi la chaîne vide, et le test a
+  changé d'attendu dans le commit du correctif.
+- **[exécuté] Un témoin doit discriminer : le jouer sans le correctif.** Le cas `SERIAL`
+  du `MERGE` cherchait un nœud par un identifiant inexistant et comptait 0 sans le
+  correctif comme avec. Réécrit pour comparer les identifiants rendus, il rougit sans et
+  verdit avec. Une prédiction (le `SET` après un `MERGE` de nœud hors clé) ne s'est pas
+  vérifiée ; elle reste comme garde-fou, et le commit le dit.
+- **[lu] Le `MERGE` d'un motif créé dans le même lot** passe par la table des motifs
+  créés, parce que l'existence est calculée avant l'écriture. Cette table garde
+  désormais un identifiant par insertion (`map_merge.cpp`, `merge.cpp`).
+- **[exécuté] La liste C++ (`build/liste-cpp.sh` du worktree, reprise de celle du cœur
+  C++)** dure environ 25 minutes. Le banc y relit `known_red.txt` depuis les sources : n'y
+  touchez pas pendant qu'elle tourne, ou la comparaison se fait contre un fichier qui ne
+  correspond plus au binaire.
+- **[exécuté] Les tests e2e lancés depuis la racine du worktree** y laissent
+  `follows.csv`, `user.csv` et `user.parquet` : à supprimer après chaque passe.
+
 ## 6. Ce qui n'est pas atteignable sans crochet dans `src/`
 
 - **La mort à chaque allocation pendant la phase de stockage d'un point de reprise.**
