@@ -45,16 +45,36 @@ struct FilDEcriture {
 }
 
 impl Spiller {
-    /// Le dossier par défaut, sous le dossier temporaire : il survit au
-    /// processus, ce qu'une reprise après crash demande.
+    /// **Le dossier par défaut, sur disque** : `$XDG_CACHE_HOME/rag3weaver/
+    /// checkpoints` (ou `~/.cache/…`). Il survit au processus, ce qu'une
+    /// reprise après crash demande. Il vivait dans `temp_dir()`, et `/tmp` est
+    /// de la mémoire vive sur ce poste : le 4 octobre 2026, 7 183 dossiers et
+    /// 11 Go en quatre heures. Sans dossier de cache connu, `temp_dir()`.
     pub fn dossier_par_defaut() -> PathBuf {
-        std::env::temp_dir().join("rag3weaver-checkpoints")
+        let cache = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")));
+        match cache {
+            Some(c) => c.join("rag3weaver").join("checkpoints"),
+            None => std::env::temp_dir().join("rag3weaver-checkpoints"),
+        }
     }
 
     pub fn new(dossier: PathBuf) -> Self {
         static COMPTEUR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let jeton = format!("{}-{}", std::process::id(), COMPTEUR.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
         Self { dossier, jeton, fil: Mutex::new(None) }
+    }
+
+    /// **Une exécution éphémère** : une ingestion ou un drain du catalogue.
+    /// Une fois FINIE, rien ne relit son annulation — seul le retour arrière
+    /// d'une migration le fait, et ses exécutions s'appellent `migration-…`.
+    /// Une exécution échouée, elle, se reprend (`Catalog::drain_resume`, y
+    /// compris dans un processus neuf après un arrêt) : ses fichiers restent
+    /// jusqu'à sa fin.
+    fn est_ephemere(execution_id: &str) -> bool {
+        execution_id.starts_with("ingest-") || execution_id.starts_with("drain-")
     }
 
     fn dossier_de(&self, execution_id: &str) -> PathBuf {
@@ -183,6 +203,13 @@ impl Spiller {
     /// ça, une soirée de tests laissait 1,3 Go sous /tmp (6 septembre 2026).
     pub fn nettoyer_apres_fin(&self, execution_id: &str) {
         let dossier = self.dossier_de(execution_id);
+        // Une exécution éphémère part entière, annulation comprise : rien ne
+        // la relira (voir `est_ephemere`). Les journaux d'annulation de plus
+        // de 64 Ko restaient sinon à vie (ticket « journaux d'annulation »).
+        if Self::est_ephemere(execution_id) {
+            let _ = std::fs::remove_dir_all(&dossier);
+            return;
+        }
         let Ok(entrees) = std::fs::read_dir(&dossier) else { return };
         let mut reste = false;
         for entree in entrees.flatten() {
