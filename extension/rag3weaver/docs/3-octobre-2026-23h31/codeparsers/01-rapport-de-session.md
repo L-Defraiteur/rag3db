@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, soir.
+Tenu à jour sur place. Dernière mise à jour : 4 octobre 2026, nuit.
 
 La session tient l'analyseur (dépôt `L-Defraiteur/codeparsers`, sous-module
 `extension/rag3weaver/codeparsers`) et, côté rag3weaver, les outils qui
@@ -119,31 +119,34 @@ deux tildes, règle tirée du nom. Aux trois rendus : `arbre::relation_label`
 (Liens, Graphe du grep) et `replace("_", " ") | capitalize` dans
 `results.md.jinja`.
 
-**La marque de résolution** : `choose_target` (cef4c5ae5) et la colonne
-`resolution` de l'arbre principal (986565f81) sont sur master. Le filtre est
-sur la branche `filtre-resolution` (c56ee578b), en attente du rejeu de
-l'arbre principal après son rebâti :
-- `EdgeMark` (`graph_walk`), générique, déclaré au gabarit
-  (`edge_field=resolution, edge_guessed=nom`) ; une arête sans marque est
-  suivie ;
-- Liens ne suit pas les arêtes devinées ; `usages` dit « (par le nom) » ;
-- `code.rs` : un appel par chemin sans `use` prend son qualificatif comme
-  module (`self` / `super` résolus depuis le fichier de l'appel) — marqué
-  import au lieu de nom.
+**La marque de résolution.** La marque (`choose_target`, colonne
+`resolution`) et le filtre sont sur master (f4495af6a, 15efaca4f) : Liens
+ne suit pas les arêtes devinées, `usages` dit « (par le nom) », un appel par
+chemin vaut un import. Pas dans `impact` : « relie » y tombe à 0,75.
 
-Banc des relations, deux passes sur le même index : « dépend de » 1,00 /
-0,85 → 1,00 / 1,00 ; « tests traversés » 0,89 / 0,92 → 0,89 / 0,99 ;
-« relie » 1,00 → 0,75. D'où : filtre dans Liens, **pas dans `impact`** — une
-méthode sur une variable sans type lu et un appel dans une macro sont de
-vrais usages marqués `nom` (ticket « le qualificatif d'un chemin se perd
-dans une macro », à moi).
+Depuis, pour faire baisser les « nom » :
+- codeparsers 5778d92 : un nom dans les arguments d'une macro se lit comme
+  hors macro (chemin, receveur) ;
+- codeparsers d3c077c : un attribut de compilation n'est pas une
+  référence ; un type à chemin garde son chemin ;
+- branche `self-types` (5236059bf, code.rs, d'accord avec l'arbre
+  principal) : par `self`, le type englobant d'abord, sans exclure
+  l'héritage — `record_snapshot_finish` revient dans Liens.
+
+Sonde `tests/sonde_marques.rs` : les « nom » passent de 11 769 à 9 907. Le
+reste, par forme : nom seul 28 % (ticket, pas maintenant), chemins de
+module 20 % (réexportations — décision à prendre), receveurs variables et
+chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
 
 ## Ce qui attend quelqu'un
 
-- **Arbre principal** : rejouer les suites du graphe d'usages sur
-  `filtre-resolution` (c56ee578b) après son rebâti, puis la fusion.
-- **Moi, ensuite** : le qualificatif d'un chemin dans une macro
-  (codeparsers), puis la même mesure avec le filtre dans `impact`.
+- **Arbre principal** : fusionner `self-types` (5236059bf) et pointer
+  codeparsers d3c077c, avec les suites du graphe d'usages.
+- **Orchestration ou Lucie** : un chemin de module désigne-t-il aussi son
+  dossier (réexportations) ?
+- **Moi, ensuite** : le palier 2 — lire le type d'un receveur (texte complet
+  des types, chaîne de méthodes, règles std certaines), puis la même mesure
+  avec le filtre dans `impact`.
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les

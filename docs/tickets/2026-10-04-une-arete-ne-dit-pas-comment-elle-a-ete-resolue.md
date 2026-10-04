@@ -1,6 +1,6 @@
 # Une arête ne dit pas comment elle a été résolue
 
-- **État** : en cours — colonne sur master (986565f81) ; filtre et appels par chemin sur la branche `filtre-resolution` (c56ee578b), en attente du rejeu de l'arbre principal
+- **État** : en cours — filtre dans Liens sur master (f4495af6a) ; palier A (codeparsers d3c077c, branche `self-types` 5236059bf) en attente de fusion ; palier 2 à ouvrir
 - **Gravité** : réponse fausse (une arête devinée se montre comme une arête sûre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous `code.rs`, `usages`, `impact`, liens)
@@ -71,3 +71,21 @@ arêtes `nom` justes existent aussi).
 
 Pour allumer le filtre dans `impact` : que ces deux voies gagnent une
 marque plus sûre que `nom`, puis la même mesure.
+
+## Palier A (4 octobre, nuit)
+
+Sonde `tests/sonde_marques.rs` (src/ et tests/ de rag3weaver) : les
+CONSUMES « nom » passent de 11 769 à 9 907 (−16 %).
+- Attributs de compilation (`#[cfg(…)]`) : 720 → 0 (codeparsers d3c077c).
+- `self.f()` / `Self::f` : le type englobant d'abord, sans exclure
+  l'héritage (`self_types`, branche `self-types`) : 250 → 74.
+  `record_snapshot_finish` revient dans Liens.
+- Types à chemin : le qualificatif est gardé (d3c077c) ; `m::T` ne baisse
+  que de 2 209 à 1 972 — un chemin vers une réexportation
+  (`crate::dataflow::DataflowEvent`, défini dans dataflow/runtime.rs) ne
+  désigne pas le fichier du définisseur ; décision à prendre (un module
+  désigne-t-il son dossier ?).
+
+Reste, pour allumer le filtre dans `impact` : le palier 2 (receveurs
+typés, dont 2 285 visent un nom de méthode std et relient à tort un fichier
+du projet — l'abstention sur un type lu vers std est le gain).
