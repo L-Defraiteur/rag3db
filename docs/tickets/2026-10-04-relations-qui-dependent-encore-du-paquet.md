@@ -1,6 +1,6 @@
 # 474 relations dépendent encore de la taille du paquet
 
-- **État** : en cours (session codeparsers)
+- **État** : ouvert — cause localisée (`code.rs`, arbre principal)
 - **Gravité** : réponse fausse (le graphe dépend du découpage)
 - **Atteignable en service** : oui (première indexation, synchronisation)
 - **Touche rag3weaver** : oui
@@ -19,10 +19,28 @@ les mêmes 371 289 relations, une à une. L'écart naît dans
 `liens`, à jouer) : relations et rendez-vous en attente seulement d'un côté,
 par type et par extension.
 
-## Pistes
+## Ce que la sonde a trouvé (4 octobre, 12 h 20)
 
-Les `HAS_PARENT` de l'analyseur, `project_files` (Python seulement), le
-repli des fermetures, `USES_LIBRARY` hors Rust.
+`analyze_in_project` sur le dépôt entier, 64 contre 512 : 314 029 contre
+313 510 relations ; 660 seulement à 64, 141 seulement à 512 ; rendez-vous :
+720 138 des deux côtés, 59 qui ne diffèrent que par la clé.
+
+**Tous les écarts sont dans un même fichier, et ce sont des clés** : le
+suffixe d'homonyme de la clé stable change avec le paquet —
+`declarations_of.Closure:lambda#5` contre un autre numéro,
+`main.set_comprehension:lambda#1` à 64 et `#2` à 512, `s:variable#1`
+contre `s:variable`. S'y ajoutent des auto-arêtes de classe C++
+(`SelectionView:class → SelectionView:class`, seulement à 64 : deux scopes
+de même clé dans un paquet — sans doute une déclaration anticipée et sa
+définition) et 282 `HAS_PARENT` / `PARENT_OF`.
+
+## Cause probable
+
+La numérotation des homonymes (`stable_scope_keys`, `code.rs`) dépend de
+quelque chose qui varie avec le paquet — un ensemble ou un ordre construit
+par paquet (repli des lambdas ?). La sortie de codeparsers n'y est pour
+rien : identique, ordre compris, quel que soit le paquet (empreinte
+canonique de chaque fichier). À l'arbre principal.
 
 ## Pour le fermer
 

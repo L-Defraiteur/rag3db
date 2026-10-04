@@ -54,4 +54,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
 | [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
-| [474 relations dépendent encore de la taille du paquet](2026-10-04-relations-qui-dependent-encore-du-paquet.md) | en cours | réponse fausse | oui | oui |
+| [474 relations dépendent encore de la taille du paquet](2026-10-04-relations-qui-dependent-encore-du-paquet.md) | ouvert — cause localisée | réponse fausse | oui | oui |
