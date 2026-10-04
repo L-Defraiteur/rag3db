@@ -9,11 +9,14 @@ namespace planner {
 
 void Planner::planProjectionBody(const BoundProjectionBody* projectionBody, LogicalPlan& plan) {
     auto expressionsToProject = projectionBody->getProjectionExpressions();
-    if (expressionsToProject.empty()) {
-        return;
-    }
+    // Le balayage factice d'abord : une projection qui ne garde rien (WITH 1 AS gate, que
+    // personne ne relit) vaut quand même une ligne, et le WHERE qui la suit a besoin d'un
+    // plan sous lui. Sans cela, le filtre n'avait pas d'enfant (SIGSEGV).
     if (plan.isEmpty()) { // e.g. RETURN 1, COUNT(2)
         appendDummyScan(plan);
+    }
+    if (expressionsToProject.empty()) {
+        return;
     }
     auto expressionsToAggregate = projectionBody->getAggregateExpressions();
     auto expressionsToGroupBy = projectionBody->getGroupByExpressions();
