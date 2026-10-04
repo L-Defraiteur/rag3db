@@ -162,3 +162,21 @@ réglage que plus haut (512, disque, K = 4, naissances, seul sous le verrou).
 - La poussée unique des blobs à la fin écrit bien 699 Mo au lieu de
   1 922 Mo et ramène les `COMMIT` de 32 à 7 s, mais elle coûte 52 s à elle
   seule : en tout, plus lent.
+
+## La série alternée (4 octobre, 20 h 19 à 21 h 15)
+
+Trois passes de chaque mode, alternées, même moteur (bâti à 20 h 17 ; joué
+avec `RAG3WEAVER_MOTEUR_ANCIEN=1`, un commit du moteur étant arrivé à 20 h 18),
+512 sur disque, K = 4, naissances, 8 Gio, chacune seule sous le verrou.
+L'état du poste au départ de chaque passe est relevé.
+
+| | Passes | **Médiane** | Étendue | `COMMIT` | Pic | Réouverture |
+|---|---|---|---|---|---|---|
+| blobs en base, poussée par paquet | 113 · 110 · 107 s | **110 s** | 107–113 | 26–32 s | 14,7–15,1 Go | 1,2–2,2 s |
+| fichiers (étape A) | 110 · 95 · 95 s | **95 s** | 95–110 | 6,7–8,1 s | 8,7–8,8 Go | 0,3–0,4 s |
+
+La passe lente des fichiers (synchronisation 21,4 s au lieu de 11) est partie
+avec une pression d'entrée-sortie de 10,7 % et des compilations qui
+démarraient entre deux passes ; les deux autres, poste calme, font 95 s. Le
+disque occupé est plausible, pas prouvé. **Le chiffre de 97 s rendu plus tôt
+était une passe unique ; la médiane est 95 s.**
