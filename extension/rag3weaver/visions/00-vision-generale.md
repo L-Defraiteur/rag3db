@@ -180,33 +180,52 @@ Ce sur quoi les deux s'accordent :
   (`2026-10-04-16h24-montrer-nos-produits.md`, §12) passent par cette même
   couche : le vocabulaire est portable, les garanties se déclarent par base.
 
-## 7. Les marches — proposées par l'orchestration, à valider par Lucie
+## 7. Les marches
 
-Chaque marche se montre : elle a une preuve qu'on peut voir, et la liste de
-ce qu'elle demande à la plomberie. On ne commence pas une marche pour sa
-plomberie seule.
+Proposées par l'orchestration, **reprises par Lucie le 5 octobre** : « pas si
+vite — le backend déclaratif en 2, avant ton "voir" ; et en 3 je mettrais les
+vues aussi, peut-être aller plus loin et déclarer des DAG autour de
+composants React, je ne sais pas encore comment. J'aime viser quelque part,
+mais pas plonger dans la facilité qui sert juste à faire beau. »
 
-| # | La marche | Ce qu'on voit quand elle est faite | Ce qu'elle demande |
+Donc : **chaque marche pose une pièce durable de l'architecture**. Une page
+jolie posée sur rien n'est pas une marche. Chaque marche a quand même une
+preuve qu'on peut voir.
+
+| # | La marche | La pièce qu'elle pose | Ce qu'on voit quand elle est faite |
 |---|---|---|---|
-| 0 | **La stèle du moteur** (en cours) | rien à l'écran : une base qu'on peut tuer, rouvrir et croire | les tickets bloquants, le chargement journalisé, puis les verrous |
-| 1 | **Les fiches de contexte** sur l'agent de code | une tâche longue où l'agent ne relit pas, n'édite pas sur du périmé, et où chaque édition porte sa raison | l'assemblage du prompt du chat, le registre des lectures, les commits de fiche ; rien du moteur au-delà de la marche 0 |
-| 2 | **Voir** : une première page servie par rag3weaver | l'arbre des liens en graphe, une exécution nœud par nœud, une fiche, tout cliquable — en lecture seule | une vue déclarée, un afficheur, le pas d'exécution comme adresse |
-| 3 | **Parler à une page** : l'éditer en place | Lucie dit « ajoute une colonne à cette liste », la page change dans son brouillon, le commit et sa raison sont là ; la voix en option | le contrôleur déclaré, le rechargement à chaud, le brouillon et la publication |
-| 4 | **Les vitrines** | le constructeur de decks Magic ouvert à tous, des rejeux d'agent sur un dépôt connu | la base Magic refaite, un quota, l'authentification du service |
-| 5 | **À plusieurs** | la page de démo que tout le monde édite, remise à zéro chaque jour | les écritures parallèles (fin de la stèle), la présence entre agents |
+| 0 | **La stèle du moteur** (en cours) | une base qu'on peut tuer, rouvrir et croire | rien à l'écran ; les témoins du banc |
+| 1 | **Les fiches de contexte** sur l'agent de code | le contexte tenu comme un état, pas comme un fil | une tâche longue où l'agent ne relit pas, n'édite pas sur du périmé, et où chaque édition porte sa raison |
+| 2 | **Le backend déclaratif** | un contrôleur est un graphe ; ses entrées (route, outil, événement) ; les services en sous-graphes ; les briques de contrôle et les ports ; le rechargement à chaud | un vrai backend — celui du code, ou celui des decks — déclaré de bout en bout, appelé par une route comme par un agent, modifié et rechargé sans compiler |
+| 3 | **Les vues déclarées** | la fin d'un graphe nomme une vue ; le contrat de données tiré des ports ; des graphes autour de composants (à concevoir) | une page réelle servie par ce backend : les liens en graphe, une exécution nœud par nœud, une fiche, tout cliquable |
+| 4 | **Parler à une page** : l'éditer en place | le brouillon et la publication ; chaque changement est un commit de déclaration | Lucie dit « ajoute une colonne à cette liste », la page change dans son brouillon ; la voix en option |
+| 5 | **Les vitrines** | le quota, l'authentification du service | le constructeur de decks ouvert à tous, des rejeux d'agent sur un dépôt connu |
+| 6 | **À plusieurs** | les écritures parallèles (fin de la stèle), la présence entre agents | la page de démo que tout le monde édite, remise à zéro chaque jour |
 
 Ensuite, quand une marche les réclame : les secrets et les intégrations, les
 migrations en verbes, les contributions de modules, d'autres bases par les
 dialectes, l'archiviste.
 
-Deux règles pour tenir ce cap :
+**La piste à concevoir pour la marche 3 — des graphes autour de composants.**
+Pas encore de réponse ; une forme à débattre : un composant d'interface est
+un **nœud à ports**. Ses entrées sont ses données (ce que le graphe lui
+donne) ; ses sorties sont ses événements (un clic, une saisie), qui sont des
+entrées de contrôleurs. Le graphe dit d'où viennent les données et où vont
+les actions ; le composant garde ce qu'il sait faire, dessiner et réagir.
+Les ports étant typés, le contrat entre le composant et le backend se
+vérifie comme celui de deux nœuds. Ce n'est ni « tout l'écran est un
+graphe », ni « une page à la main » : le graphe câble, le composant affiche.
 
-- **Lucie est la première utilisatrice** : les marches 1 à 3 tournent d'abord
+Trois règles pour tenir ce cap :
+
+- **Lucie est la première utilisatrice** : les marches 1 à 4 tournent d'abord
   en local, chez elle, sur ses projets. Une personne extérieure dès qu'une
   marche se montre.
 - **La plomberie se choisit par la marche qu'elle sert** : un défaut du
   moteur qui corrompt ou qui perd se corrige toujours ; une optimisation ou
   un confort attend la marche qui en a besoin.
+- **Rien qui ne sert qu'à faire beau** : une démonstration se bâtit sur une
+  pièce posée, jamais à côté.
 
 ## 8. Ce qui n'est pas décidé
 
