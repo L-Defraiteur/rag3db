@@ -3,7 +3,7 @@
 Session de l'arbre principal (`/home/lucied/git_workspaces/rag3db`, crate
 `extension/rag3weaver`). Elle tient l'ingestion du code, la synchronisation,
 le chargement en masse et les requêtes par lot du dialecte. Mis à jour le
-3 octobre 2026, vers minuit.
+4 octobre 2026, vers 16 h.
 
 ## Fait aujourd'hui, sur master
 
@@ -40,39 +40,45 @@ Dans l'ordre de fusion.
 - **Les poids de pertinence se déclarent** (`FieldWeight`), aucune règle de
   classement neuve. « La correspondance exacte du nom en tête » attend Lucie.
 
-## En cours (mis à jour le 4 octobre, vers 1 h 30)
+## Fusionné le 4 octobre (après-midi)
 
-Fusionné depuis minuit :
-- `63d154730` **Le résolveur unique** (codeparsers `fichier-seul` @ `d567e7c`).
-  Le graphe ne dépend plus de la taille du paquet ; banc « dépend de »
-  1,00/0,64 → 1,00/0,85 ; relations d'analyse sur `e2e_code`
-  22 066 → 12 632, avec 5 vraies bibliothèques. Bases existantes : à
-  réindexer de zéro (journal).
-- `973c7c432` : `run_e2e.sh` refuse de conclure si le moteur change pendant
-  la passe (somme du contenu au début et à la fin).
-- `e1c746c31` : un catalogue sans magasin de blobs ou de points de reprise ne
-  s'ouvre plus (`DurableStoreMissing`). Ces deux avertissements n'avaient
-  aucun lecteur.
-- `build/lecteurs-csv` rebâti sur `e3daa2836` (correctif moteur `c8fdaf196`).
+| Commit | Lot | Pourquoi |
+|---|---|---|
+| `1a57eb77b`, `561002bfc`, `d54985804` | **run_e2e.sh prend le verrou du poste** | Partagé par défaut, exclusif pour une mesure ou un rebâti ; la porte donne la priorité à la mesure ; priorité basse (`nice`, `ionice`) hors mesure. Une batterie écarte de jour les quatre familles de la carte locale (`RAG3WEAVER_SANS_CARTE_LOCALE=0` les fait entrer) et se dit « complète hors carte locale ». Le démon d'embarquement né pendant la passe s'arrête avec elle (marque `RAG3WEAVER_PASSE_E2E`). `561002bfc` refusait le démon local : erreur, chaque suite chargeait alors le modèle sur la carte ; retiré dans `d54985804`. |
+| `5f1fefa39` | **Un NULL en tête d'un lot ne fait plus tomber le lot** | Un NULL de paramètre est typé STRING par le moteur ; un rendez-vous sans ligne en tête d'un lot de MENTIONS faisait refuser tout le lot, compté dans `failed` sans un mot. Des MENTIONS ont pu manquer dans tout index bâti avant. Ticket moteur ouvert. |
+| `9b89ec823` | **Déclarations** (codeparsers `a3905ec`) | Une définition hors de sa classe rejoint sa classe ; `Scope.declarations` ; HAS_PARENT vers un conteneur seulement ; clés stables calculées par fichier (le ticket des 474 relations attend la sonde 64/512 de rag3db-c0). |
+| `395d35523`, `f53d41488` | **Le tampon du moteur** | Choisi à l'ouverture : variable, clé `buffer_pool` du manifeste, puis la règle de l'orchestration, min(RAM/2, 8 Gio). Dit au rapport ; `DbConnection::buffer_pool()` le rend typé pour `estimate` (rag3db-eb). |
+| `18b1a6889` | **Pointeur codeparsers `766e4bd`** | Locales Rust et conteneurs : moins de fausses références. 69 tests verts, aucun seuil touché. |
 
-À faire, dans l'ordre de l'orchestration :
-1. **Le premier index par gros paquets bornés en octets** (cible de Lucie :
-   90 s pour le dépôt entier). rag3db-eb fait la remesure de référence sur
-   master (64, 512, 2 048, d'un tenant) ; puis ce qu'il faut regrouper (les
-   liens, l'aval séquentiel de l'analyse, les symboles).
-2. **Le pointeur `declarations`** (codeparsers `44c4310`, C++ seulement),
-   avec de mon côté :
-   - le rendez-vous HAS_PARENT d'une définition hors de son fichier ;
-   - la propriété `declarations` (JSON `{name, line, signature, kind}`) sur
-     le scope conteneur, que rag3db-c0 lit dans `usages`.
-3. **Les 24 autres avertissements sans lecteur** (journal, audit de
-   rag3db-dc).
+Sur une branche, pas sur master : `tx-par-paquet` (`6359f7100`), la
+transaction par paquet derrière `RAG3WEAVER_TX_PAR_PAQUET=1`, pour la mesure
+de rag3db-eb. Elle ne répond pas à l'échec du tampon à 4 Gio (elle regroupe
+les points de reprise, chacun porte plus). Le premier paquet reste hors
+transaction : il crée le schéma à la volée, qu'une annulation emportait.
 
-Règles apprises cette nuit :
-- Rebâtir `build/lecteurs-csv` seulement après les « libre » des sessions qui
-  la lient. Un rebâti dans la foulée a ruiné une batterie.
-- Avant de pousser, lire ce que le rebase a apporté, et rejouer si c'est du
-  code.
+`build/lecteurs-csv` rebâti sous verrou exclusif à 14 h 10 (garde 2 de
+rag3db-e3) et à 15 h 16 (`34bde7eea`, CSV vide entre guillemets).
+
+## En cours
+
+1. **Le premier index vers 90 s sur disque.** La cause de l'échec à 4 Gio
+   n'est pas connue (rag3db-eb : la sonde en Cypher brut dit qu'il casse sous
+   des BLOB, 544 Mo suffisent avec 2 Gio). Leviers : seuil du point de
+   reprise, transaction par paquet (à mesurer), paquets bornés en octets.
+2. **Les 24 avertissements sans lecteur** restants (hors title_boost,
+   content_boost, boost, à rag3db-88).
+3. **Le ticket des journaux d'annulation dans /tmp** (ne rien effacer : Lucie
+   décide).
+
+## Ce qu'on a appris aujourd'hui
+
+- Un compteur `failed` qu'aucun test ne lit cache une perte entière : le
+  test des déclarations exige maintenant `failed == 0`.
+- Une variable qui « refuse » une chose peut en déplacer le coût :
+  `RAG3WEAVER_SANS_DEMON` ne renvoie pas au service, il charge sur place.
+  Lire le chemin de repli avant de poser un refus.
+- `poste lourd` / `poste mesure` (`~/.cache/rag3weaver-build/poste`) pour tout
+  le lourd hors run_e2e ; plus d'annonces.
 
 ## Ce qui attend quelqu'un
 
@@ -107,6 +113,8 @@ Règles apprises cette nuit :
 - Mesure : `MESURE_RELATIONS=per_batch|bulk ./run_e2e.sh --test
   e2e_mesure_sync_source` (src/ du moteur, 1 643 fichiers). Aujourd'hui :
   47 s par paquet, 37 s en masse.
-- Pièges : annoncer chaque passe cargo à l'orchestration, jamais deux e2e en
-  même temps ; `/tmp` est en RAM ; e2e_code indexe `src/dataflow` (corpus
-  vivant : un fichier neuf y change les comptes).
+- Pièges : le verrou du poste remplace les annonces (run_e2e.sh le prend,
+  `poste lourd` pour le reste) ; `/tmp` est en RAM ; e2e_code indexe
+  `src/dataflow` (corpus vivant : un fichier neuf y change les comptes) ;
+  après un rebase qui apporte des sources du moteur, rebâtir
+  `build/lecteurs-csv` en exclusif, run_e2e.sh le refuse sinon.
