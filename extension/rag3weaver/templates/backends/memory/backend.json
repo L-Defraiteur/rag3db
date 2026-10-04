@@ -217,6 +217,15 @@
           "port": "meta"
         }
       ]
+    },
+    "review_anchored": {
+      "graph": "graphs/review_anchored.mmd",
+      "bindings": {
+        "source": "Subject",
+        "target": "Memory",
+        "relation": "ANCHORED_TO",
+        "transition": "review"
+      }
     }
   }
 }

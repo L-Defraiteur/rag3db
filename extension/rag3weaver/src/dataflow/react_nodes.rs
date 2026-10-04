@@ -147,6 +147,19 @@ impl Node for ReactTransitionNode {
             "limit": self.cfg.limit,
         })))
     }
+    /// **Les ports d'entrée se déclarent ici aussi, pas seulement au schéma.**
+    /// Le constructeur de graphe valide les arêtes contre `inputs()`, dont le
+    /// défaut du trait est vide : sans cette redéclaration, une arête vers
+    /// `events` est refusée par « input port 'events' not found », alors que le
+    /// schéma la déclare. Trouvé par le témoin de bout en bout — aucun test
+    /// unitaire du nœud ne pouvait le voir, puisqu'il ne construit pas de
+    /// graphe.
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(
+            &crate::dataflow::react_nodes::ReactTransitionNodeFactory,
+        )
+        .0
+    }
     fn outputs(&self) -> Vec<PortDef> {
         crate::dataflow::node_registry::ports_declares(
             &crate::dataflow::react_nodes::ReactTransitionNodeFactory,
