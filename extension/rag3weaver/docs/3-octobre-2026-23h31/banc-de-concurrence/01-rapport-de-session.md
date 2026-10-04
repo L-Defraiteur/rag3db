@@ -166,6 +166,18 @@ amonts (`8c83c3360`, puis le second lot).
       (`c45095c55`). Cause trouvée par la session cœur C++ (le point de reprise d'une
       colonne de chaînes de relations) ; son correctif relu ; le témoin avant et après le
       point de reprise est rouge sans lui, vert avec, et part après son push.
+18. **La reprise après la panne de mémoire (5 octobre, nuit)**, par une conversation neuve
+    (`rag3db-36`), l'ancienne ne se rouvrant plus :
+    - la panne de 22 h 51 venait du banc : `NodeListsKeepTheirStrings` comparait par
+      `EXPECT_EQ` deux textes de 400 000 lignes, et gtest en calcule un diff quadratique
+      quand il est rouge. Les deux vidages sont maintenant des lignes triées, comparées
+      par `==` puis résumées par `compareDumps`, qui est borné ;
+    - `ListOfStringsAcrossCheckpoints` vu rouge une fois, le correctif `25b3b45dc` retiré
+      de `src/` dans l'arbre du banc, sous `poste` à 4 Go sans échange : 2 lignes sur
+      400 000 changées sur les nœuds (au point de reprise et à la réouverture), 1 614
+      valeurs changées sur les relations ; 2,4 s, sans pression de mémoire. Vert avec le
+      correctif, comme `CheckpointKeepsEveryStoredString` ;
+    - le tout est poussé en `eef731081`, après une comparaison `known_red` verte.
 
 ## Décisions et pourquoi
 
@@ -209,9 +221,9 @@ amonts (`8c83c3360`, puis le second lot).
   `IndexToRebuildIsNamed` effacent la liste des extensions pour éprouver la garde 1.
   `IndexExactWithoutRebuild` exige désormais que la liste existe avant la réouverture
   (`9e3b03c63`).
-- **Les tickets « bloque » de la stèle confiés au banc** : faits, sauf les propriétés
-  selon le sens (CONSUMES), dont le correctif est chez la session cœur C++ ; le témoin
-  `RelationPropertiesBothWays.CheckpointKeepsEveryStoredString` part vert après son push.
+- **Les tickets « bloque » de la stèle confiés au banc** : faits. Les propriétés selon le
+  sens (CONSUMES) sont corrigées par `25b3b45dc` ; leurs témoins sont sur master
+  (`eef731081`).
 - **Les pages d'un COPY tué jamais récupérées** (ticket de durabilité, rouge connu
   `data-file-bounded`) : pour la session cœur C++, avec le chargement journalisé.
 - **Le remède 2a** (l'attente du départ des autres avant la validation d'un `COPY`) se
