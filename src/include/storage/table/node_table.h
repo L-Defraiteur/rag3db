@@ -197,6 +197,8 @@ public:
     void rollbackPKIndexInsert(main::ClientContext* context, common::row_idx_t startRow,
         common::row_idx_t numRows_, common::node_group_idx_t nodeGroupIdx_);
     void rollbackGroupCollectionInsert(common::row_idx_t numRows_);
+    // Prévient chaque index chargé que les lignes à partir de ce décalage sont retirées.
+    void rollbackIndexInsert(common::offset_t firstRolledBackOffset);
 
     common::node_group_idx_t getNumCommittedNodeGroups() const {
         return nodeGroups->getNumNodeGroups();

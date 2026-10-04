@@ -83,6 +83,7 @@ void NodeTableVersionRecordHandler::applyFuncToChunkedGroups(version_record_hand
 void NodeTableVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
     table->rollbackPKIndexInsert(context, startRow, numRows, nodeGroupIdx);
+    table->rollbackIndexInsert(StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx) + startRow);
 
     // the only case where a node group would be empty (and potentially removed before) is if an
     // exception occurred while adding its first chunk
@@ -856,6 +857,14 @@ void NodeTable::rollbackPKIndexInsert(main::ClientContext* context, row_idx_t st
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
+void NodeTable::rollbackIndexInsert(offset_t firstRolledBackOffset) {
+    for (auto& index : indexes) {
+        if (index.isLoaded()) {
+            index.getIndex()->rollbackInsert(firstRolledBackOffset);
+        }
+    }
+}
+
 void NodeTable::rollbackGroupCollectionInsert(row_idx_t numRows_) {
     nodeGroups->rollbackInsert(numRows_);
 }

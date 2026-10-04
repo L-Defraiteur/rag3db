@@ -512,10 +512,24 @@ std::unique_ptr<Index> OnDiskHNSWIndex::load(main::ClientContext* context, Stora
 
 std::vector<NodeWithDistance> OnDiskHNSWIndex::search(Transaction* transaction,
     const EmbeddingHandle& queryVector, HNSWSearchState& searchState) const {
+    throwIfCountsMoreRowsThanItsTable(transaction);
     auto result = searchFromCheckpointed(transaction, queryVector, searchState);
     searchFromUnCheckpointed(transaction, queryVector, searchState, result);
     result.resize(searchState.k);
     return result;
+}
+
+// Avant de parcourir le graphe ou d'y écrire : un index qui compte plus de lignes reliées que
+// sa table n'en contient prend pour reliées des lignes sans arêtes, ou hors de la table (une
+// base écrite avant le crochet d'annulation ; la mise à jour d'un vecteur y plantait dans
+// shrinkForNode, la recherche réservait une taille négative).
+void OnDiskHNSWIndex::throwIfCountsMoreRowsThanItsTable(const Transaction* transaction) const {
+    const auto numIndexedRows = storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes;
+    const auto numTotalRows = nodeTable.getNumTotalRows(transaction);
+    if (numIndexedRows > numTotalRows) [[unlikely]] {
+        HNSWIndexUtils::throwCountsMoreRowsThanItsTable(indexInfo.name, nodeTable.getTableName(),
+            numIndexedRows, numTotalRows);
+    }
 }
 
 std::vector<NodeWithDistance> OnDiskHNSWIndex::searchFromCheckpointed(Transaction* transaction,
@@ -631,6 +645,7 @@ void OnDiskHNSWIndex::commitInsert(Transaction* transaction,
     InsertState& insertState) {
     KU_ASSERT(dataVectors.size() == 1);
     KU_ASSERT(nodeIDVector.state->getSelSize() == dataVectors[0]->state->getSelSize());
+    throwIfCountsMoreRowsThanItsTable(transaction);
     auto& hnswInsertState = insertState.cast<HNSWInsertState>();
     auto commitInsertScanState = std::make_unique<CommitInsertEmbeddingScanState>(dataVectors[0]);
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
@@ -647,11 +662,29 @@ void OnDiskHNSWIndex::commitInsert(Transaction* transaction,
     }
 }
 
+void OnDiskHNSWIndex::rollbackInsert(common::offset_t firstRolledBackOffset) {
+    auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
+    // Les blocs s'annulent à rebours, un appel par bloc : le plus petit décalage l'emporte.
+    hnswStorageInfo.numCheckpointedNodes =
+        std::min(hnswStorageInfo.numCheckpointedNodes, firstRolledBackOffset);
+    // Un point d'entrée qui désignait une ligne retirée : la recherche et l'insertion savent
+    // repartir d'une ligne vivante quand il n'y en a pas (findLiveNode).
+    for (auto* entryPoint : {&hnswStorageInfo.upperEntryPoint, &hnswStorageInfo.lowerEntryPoint}) {
+        if (*entryPoint != common::INVALID_OFFSET && *entryPoint >= firstRolledBackOffset) {
+            *entryPoint = common::INVALID_OFFSET;
+        }
+    }
+}
+
 void OnDiskHNSWIndex::finalize(main::ClientContext* context) {
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     const auto numTotalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
     if (numTotalRows == hnswStorageInfo.numCheckpointedNodes) {
         return;
+    }
+    if (hnswStorageInfo.numCheckpointedNodes > numTotalRows) [[unlikely]] {
+        HNSWIndexUtils::throwCountsMoreRowsThanItsTable(indexInfo.name, nodeTable.getTableName(),
+            hnswStorageInfo.numCheckpointedNodes, numTotalRows);
     }
     auto transaction = Transaction::Get(*context);
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
@@ -728,6 +761,7 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     if (state.deletedNodes.empty()) {
         return;
     }
+    throwIfCountsMoreRowsThanItsTable(transaction);
     // First every surviving neighbour gets its edges rewritten, then the entry points are
     // repaired, and only then is each of them made reachable again: that last step may insert a
     // node anew, which searches the graph from the entry point.
@@ -959,6 +993,7 @@ std::unique_ptr<Index::UpdateState> OnDiskHNSWIndex::initUpdateState(
 
 void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector& nodeIDVector,
     common::ValueVector& propertyVector, UpdateState& updateState) {
+    throwIfCountsMoreRowsThanItsTable(transaction);
     auto& state = updateState.cast<HNSWUpdateState>();
     const auto pos = nodeIDVector.state->getSelVector()[0];
     const auto offset = nodeIDVector.readNodeOffset(pos);

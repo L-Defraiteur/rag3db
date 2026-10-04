@@ -26,6 +26,14 @@ struct HNSWIndexUtils {
     // dans la table pendant que l'extension n'était pas chargée. L'appelant le reconnaît à
     // ce fragment, retire l'index (DROP_VECTOR_INDEX) et le rebâtit.
     static constexpr const char* INDEX_BEHIND_ITS_TABLE = "is behind its table";
+    // Sous le même nom, donc le même remède (retirer l'index, le rebâtir) : l'index compte
+    // plus de lignes reliées que sa table n'en contient. Un chargement annulé avançait ce
+    // compte sans que l'annulation le recule ; un point de reprise a pu l'écrire ainsi. La
+    // recherche réservait alors une taille négative (« vector::reserve »), et le chargement
+    // suivant n'était pas relié. Depuis le crochet d'annulation, seul un index abîmé avant
+    // lui arrive ici.
+    [[noreturn]] static void throwCountsMoreRowsThanItsTable(const std::string& indexName,
+        const std::string& tableName, common::offset_t numIndexedRows, common::offset_t numRows);
 
     // Deux gardes de mémoire, actives en Release. Un décalage de nœud hors du tableau des
     // « déjà visités » d'une recherche, ou hors du graphe en mémoire d'une construction,

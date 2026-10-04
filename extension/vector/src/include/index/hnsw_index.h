@@ -365,6 +365,10 @@ public:
     bool needCommitInsert() const override { return true; }
     void commitInsert(transaction::Transaction*, const common::ValueVector&,
         const std::vector<common::ValueVector*>&, InsertState&) override;
+    // Les lignes à partir de ce décalage quittent la table. Le compte des lignes reliées et
+    // les points d'entrée vivent en mémoire et ne s'annulent pas seuls ; les arêtes, elles,
+    // sont dans les tables de relations de la transaction, que l'annulation défait.
+    void rollbackInsert(common::offset_t firstRolledBackOffset) override;
 
     std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction* transaction,
         storage::MemoryManager* mm, storage::visible_func isVisible) override;
@@ -396,6 +400,7 @@ private:
         HNSWSearchState& searchState, bool isUpperLayer) const;
     std::vector<NodeWithDistance> searchFromCheckpointed(transaction::Transaction* transaction,
         const EmbeddingHandle& queryVector, HNSWSearchState& searchState) const;
+    void throwIfCountsMoreRowsThanItsTable(const transaction::Transaction* transaction) const;
     void searchFromUnCheckpointed(transaction::Transaction* transaction,
         const EmbeddingHandle& queryVector, HNSWSearchState& searchState,
         std::vector<NodeWithDistance>& result) const;

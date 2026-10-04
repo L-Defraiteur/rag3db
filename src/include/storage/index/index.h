@@ -155,6 +155,14 @@ public:
         // DO NOTHING.
     }
 
+    // L'annulation d'une transaction retire de la table les lignes à partir de ce décalage
+    // (un COPY annulé, des lignes versées puis annulées, un commit qui échoue après avoir
+    // nourri l'index). Un index qui tient un état en mémoire d'après les lignes qu'il a
+    // reçues le ramène ici à ce que la table contient encore.
+    virtual void rollbackInsert(common::offset_t /*firstRolledBackOffset*/) {
+        // DO NOTHING.
+    }
+
     virtual void checkpointInMemory() {
         // DO NOTHING.
     };

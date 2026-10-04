@@ -48,6 +48,14 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
     }
 }
 
+void HNSWIndexUtils::throwCountsMoreRowsThanItsTable(const std::string& indexName,
+    const std::string& tableName, common::offset_t numIndexedRows, common::offset_t numRows) {
+    throw common::RuntimeException{common::stringFormat(
+        "Index {} {} {}: it counts {} indexed rows and the table holds {}. A load into the "
+        "table was rolled back after the index had counted its rows. Drop it and build it again.",
+        indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableName, numIndexedRows, numRows)};
+}
+
 void HNSWIndexUtils::throwOffsetBeyondVisitedSet(common::offset_t offset, common::offset_t size) {
     throw common::RuntimeException{common::stringFormat(
         "HNSW index: node offset {} {} of {} nodes. The index graph or the row count of its "
