@@ -345,7 +345,10 @@ Trois choses :
    et son heure, sur la même horloge : « tout à l'heure, vers 14 h » désigne
    la même chose dans le fil et dans les fiches.
 3. **Dans le fil, une lecture ou une édition ne laisse que ses paramètres et
-   la référence de la fiche.** Le contenu vit dans la fiche.
+   la référence de la fiche.** Le contenu vit dans la fiche. Lucie précise :
+   les paramètres eux-mêmes sont **rognés**, puisque la fiche les porte — une
+   édition ne garde pas l'ancien et le nouveau texte (c'est le commit de la
+   fiche), seulement le chemin, les lignes, la raison et la référence.
 
 Points en débat :
 
