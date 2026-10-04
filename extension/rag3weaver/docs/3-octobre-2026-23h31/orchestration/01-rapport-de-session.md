@@ -1,75 +1,121 @@
 # Orchestration — rapport de session
 
-Mis à jour le 3 octobre 2026 à 23 h 35. Ce fichier se met à jour sur place.
+Mis à jour le 5 octobre 2026 à 0 h 20. Ce fichier se met à jour sur place.
 
-## 1. Le rôle
+## 1. Le rôle, et l'adresse
 
 La session d'orchestration cadre les autres sessions par messages, relit par
 git, tient le journal des décisions et ne remonte à Lucie que les vrais choix.
-Depuis le 3 octobre au soir, Lucie délègue les choix réversibles (« prendre le
-meilleur chemin possible et laisser la voie aux autres options ») et laisse
-les sessions travailler seules plusieurs heures.
+Lucie délègue les choix réversibles (« prendre le meilleur chemin possible et
+laisser la voie aux autres options »).
 
-## 2. Où en est chaque chantier
+**Adresse** : depuis le 4 octobre vers 15 h (session reprise en fork),
+l'orchestration répond à `rag3db-76 [ccdb1b]`, plus à `rag3db-9f`. Le banc
+porte le même nom avec un autre repère : `rag3db-76 [155bbd]`. Toujours écrire
+le repère.
 
-Les noms de sessions changent à chaque relance ; se fier au sujet.
+## 2. La priorité : la stèle du moteur
 
-| Sujet | État | Suite |
-|---|---|---|
-| **Cœur C++** | T0, A2, A5, A5 bis livrées. `DROP_VECTOR_INDEX` au rejeu livré (`f5acca417`). **Garde 1** de la reprise avec index d'extension prouvée (`d21045c40`, locale), en passe Rust avant livraison. | Vérifier si « la mise à jour d'un vecteur perd des lignes dans l'index » couvre le `SET` depuis NULL (le chemin principal de rag3weaver) ; garde 2 ; les deux défauts de rappel du HNSW ; puis V1 (gestionnaire de verrous, ressource générique, genre « index »), A3′, A4′, V2, maintenance de l'index au commit ; H4 ; port de l'opérateur de Ladybug pour `UNWIND … MATCH`. |
-| **Banc de concurrence** | Témoins des verrous (§6 de la note), cas du verrou d'index, famille « arrêt brutal, un seul écrivain », marche « reprise avec index d'extension » : tout sur master (`80e2e810a`). À l'arrêt. | Reprendre quand V1 arrive, ou pour un nouveau témoin. |
-| **Arbre principal** | Synchronisation par source, chargement en masse des relations, seuil du COPY à 200, édition pendant l'indexation, pile codeparsers 4 → 7, réécriture des 17 requêtes par lot (`b3db4244c`), replis muets comptés (`218faf854`). | Accès de champ et pointeur 8 de codeparsers ; **report de la poussée des blobs plein texte** avec sa marque durable ; reconnaître « is behind its table » à l'ouverture et rebâtir ; renommer le test de chargement interrompu. |
-| **Embarquements** | Service distant (trois modèles d'embarquement, modèle de décision, petit modèle de langage sur l'autre poste), `estimate`, `index`, états d'index (global et par entité), modèles déclarés lots 1 à 4, profils d'ingestion. | Lot 5 (routes de démon du relecteur et de l'OCR) ; remesure du dépôt entier après chaque gain. |
-| **Recherche** | Backend de code (deux manifestes), politique par outil, recherche adaptative, garde des liens, faille `run_command` fermée, passes d'agent (faible et Gemini) jouées et écrites, crochet après outil lot 1. | Client « le même motif existe ailleurs » ; branche `sparse` dans les graphes de gabarit ; lot 6 des modèles (LLM du chat) avec la session embarquements. |
-| **Codeparsers** | Genre d'usage, fausses arêtes, déterminisme, appels typés, fonctions de module Rust, marque de test, blocs de test TS, imports, `usages`, `impact`, banc des relations. | `LinksNode` (liens entre résultats, par le crochet après outil) ; `CohesionNode` (poids 0 par défaut), mesuré au banc. |
-| **Mémoire longue** | Proposition, banc scripté, gabarit `memory` (zéro Rust), l'ingestion émet ce qu'elle change ; suite `e2e_arret_brutal`. | Attendus de la garde 1 ; réacteur « à revoir » (lot 4) ; sujets comme entités dérivées. |
-| **Optimiseur** | Cinq documents sur les modèles de décision ; arrêté. | Attend « envoie » de Lucie pour tracel-ai. |
+Décision de Lucie, 4 octobre : le moteur a un point d'arrêt écrit
+(`docs/4-octobre-2026-16h57/01-la-stele-du-moteur.md`), puis « on se focus
+sur la stèle ». Quatre conditions ; l'ordre a été changé le soir même par
+Lucie (« on l'a attaqué du bon côté ? ») : le chargement journalisé passe
+avant le câblage des verrous.
 
-## 3. Les faits graves de la soirée, à ne pas perdre
+| Condition | État au 5 octobre, 0 h 20 |
+|---|---|
+| plus de défaut connu qui corrompt ou qui perd | neuf tickets fermés le 4 ; reste l'ordre de synchronisation au point de reprise (banc) et le vrai remède du COPY après des insertions (refus nommé posé en attendant) |
+| le chargement en masse journalisé | page acceptée ; étape 1 (mesure) et étape 2 (nœuds) sur master `0f4a54b2c`, derrière `force_checkpoint_on_copy=false` ; étape 3 (relations) en cours |
+| les verrous | V1 (le gestionnaire seul) sur master `022c78402` ; A3′, A4′, V2, index au commit après le chargement journalisé |
+| les écritures parallèles | en dernier |
 
-1. **Une base à vecteurs peut planter à l'ouverture après un arrêt brutal.**
-   Cause : un point de reprise vide le journal, enregistrement `LOAD EXTENSION`
-   compris ; le rejeu rencontre alors un index HNSW connu mais pas chargé.
-   Confirmé par le chemin de rag3weaver. Garde 1 en cours de livraison.
-   Tant qu'elle n'est pas sur master et reprise par rag3weaver : arrêter les
-   backends proprement, ne pas toucher à la base MTG.
-2. **Nos tests de reprise ne tuaient rien.** La variante Crash du banc fermait
-   la base avant de tuer ; aucun test Rust ne fait « écrire, mourir, rouvrir
-   dans un autre processus ». Règle : une reprise se prouve par SIGKILL,
-   journal vérifié non vide, réouverture dans un processus **neuf**.
-3. **`UNWIND … MATCH` sur une clé prise dans une structure balaie les tables.**
-   Contourné dans rag3weaver par `dialect::unwind_par_cle` ; garde-fou
-   `e2e_plans_par_lot`.
-4. **Un agent fort contourne un refus par un autre outil.** `run_command`
-   laissait lire hors du domaine ; fermé, avec la limite écrite : la vraie
-   frontière est un bac à sable.
-5. **Un outil qui lit le catalogue ne rend jamais un vide sans dire d'où il
-   vient**, et l'état d'index se lit par entité (le journal de conversation
-   faussait l'état global).
+Deux sessions travaillent le moteur : le cœur C++ (le COPY, puis les verrous)
+et le banc (les tickets bloquants, les témoins). Elles se disent leurs
+fichiers, un seul rebâti exclusif à la fois, relecture croisée de ce qui
+touche la reprise.
 
-## 4. Ce qui attend Lucie
+## 3. Ce que le 4 octobre a trouvé dans le moteur
 
-- L'ordre du cœur C++ : garde 2 et défauts de rappel du HNSW avant les verrous
-  (recommandé).
-- La ligne d'état en tête de fiche plutôt qu'en avertissement (recommandé).
-- L'affichage de la marque de test dans les résultats.
-- Remesurer le couple de fusion 0,45/0,55 sur la nouvelle référence.
-- La section « Liens » par défaut ou non (exemples à venir).
-- « Envoie » pour tracel-ai, dans la fenêtre de l'optimiseur.
-- La demande au support GitHub ; le ménage des branches distantes.
+Tous d'origine (présents chez Vela ou Ladybug), sauf mention :
 
-## 5. La cible d'indexation
+1. Recréation d'index vectoriel bornée par une cardinalité estimée
+   (`1ea49837f`).
+2. Annulation d'un ajout : le compte du bloc revient, pas ses colonnes ; le
+   point de reprise suivant déborde du tas (`05788a868`).
+3. Après un COPY refusé, la clé d'origine sort de l'index de clé primaire
+   (`05788a868`, puis `5c8507577` — le premier correctif avait créé des clés
+   fantômes : une régression à nous, attrapée par le test du ROLLBACK).
+4. Point de reprise après `ALTER TABLE … DROP` : identifiant de colonne pris
+   pour une position (`308ebd17e`).
+5. Balayage de plusieurs tables de relations en transaction (`88d937160`).
+6. Une erreur rendue sur une écriture validée, et un COPY validé puis perdu à
+   l'arrêt : la validation tenait le verrou public pendant l'attente du point
+   de reprise (`68ff9d5e2`).
+7. **La corruption rare d'e2e_code** : deux exemplaires de la même base
+   ouverts en écriture dans un même processus (le verrou `fcntl` n'exclut
+   qu'un autre processus) ; l'ancien exemplaire était retenu par les acteurs
+   de lucivy. Garde du moteur `57c8389b4`, filet de rag3weaver `ad220d0eb`.
+   La « réouverture intermittente sous charge » était le même défaut.
+8. Arrêts au mauvais instant : ordre des suppressions à la reprise, fsync
+   après le rejeu (`a86d4e6a8`).
+9. **Insertions puis COPY dans la même table et la même transaction : écriture
+   sur la mauvaise ligne, validée, silencieuse.** Refus nommé `0f4a54b2c` ; le
+   vrai remède après l'étape 3. Les relations, quatre formes éprouvées :
+   justes.
 
-Lucie, 23 h 30 : **1 min 30 au plus** pour qu'un dépôt comme celui-ci soit
-cherchable par mots. Mesures : 1 798 s → 523 → 499 → 352 s. Premier poste
-restant : la poussée des blobs d'index plein texte (119 s).
+## 4. Le produit
 
-## 6. Comment reprendre
+| Sujet | État |
+|---|---|
+| premier index de ce dépôt, sur disque | 753 s → 110 s (médiane, transaction par paquet K = 4) ; 95 s en mode « plein texte hors de la base » sur un poste calme. Cible de Lucie : 90 s. |
+| transaction par paquet | derrière sa variable, **mesures seulement**. Conditions de l'allumage par défaut : le test de comparaison ligne à ligne (sous transaction / sans, reprise comprise) — en cours chez l'arbre principal. « Mêmes comptes » ne prouvait pas « même graphe ». |
+| plein texte hors de la base (`FtsStorage::Files`) | étape A sur master `16ab78413` (mémoire ÷ 1,7, réouverture ÷ 4, 4 Gio de tampon passe) ; étape B (marque de génération, reprise) en cours ; le défaut reste en base |
+| section « Liens » | allumée, en arbre (`~ Consumes ~`), filtre des arêtes devinées |
+| graphe de code | marque `resolution` sur les arêtes ; « nom » 11 769 → 9 210 ; filtre allumable dans impact (branche `filtre-impact` à fusionner) |
+| mémoire longue | références (`add_ref`, `create_ref_type`) de bout en bout ; graphes réactifs au manifeste à proposer |
+| modèles de décision | **mis de côté par Lucie** (4 octobre) ; essai « note d'utilité » négatif |
 
-1. Lire `docs/journal-des-chantiers.md`, §4 « Décisions du 3 octobre au soir »
-   et §6.
+## 5. Les visions
+
+Réunies dans `extension/rag3weaver/visions/`, datées dans leur nom, avec
+`00-vision-generale.md` (l'idée, les étages, ce qu'on vend, les principes, la
+largeur, la stèle). Une vision nouvelle va là. Rien n'y est décidé sauf ce qui
+est marqué « retenu par Lucie ».
+
+## 6. Ce qui attend Lucie
+
+- Le changement dans lucivy pour une fermeture synchrone (demi-page :
+  `3-octobre-2026-23h31/arbre-principal/03-lucivy-fermeture-synchrone.md`) —
+  plus nécessaire depuis le filet, reste une amélioration.
+- Retirer `content_boost` et `special_ops` (recommandé).
+- L'allumage par défaut de la transaction par paquet, puis du mode hors
+  base : à lui représenter quand leurs preuves sont complètes.
+- Toujours en attente depuis le 3 : la réécriture de l'historique
+  (`5ea14e1aa`, à lancer par elle), « envoie » ou non pour tracel-ai, le
+  ménage des branches distantes, le statut du dépôt.
+
+## 7. Méthode : ce que la journée a corrigé
+
+- **Une estimation de session en « jours » ne se rend pas telle quelle** : la
+  compter en passes (rebâtis, listes C++, passes instrumentées, mesures).
+- **Une mesure se rend en médiane sur trois passes alternées**, avec l'état
+  du poste ; un meilleur chiffre isolé (97 s) n'a pas tenu.
+- **« Mêmes comptes » n'est pas « même graphe »** : comparer les lignes et
+  leurs propriétés.
+- **Attaquer la cause, pas le symptôme** : le COPY hors journal était derrière
+  le point de reprise forcé, les défauts de l'annulation, la perte après
+  délai et un cycle avec les verrous.
+- **Pour une corruption, obtenir le fichier abîmé et lire ses pages** avant
+  une quatrième hypothèse ; et vérifier d'abord qu'aucune réouverture n'a eu
+  lieu pendant qu'un exemplaire vivait.
+- **Pousser après un rebasage qui apporte du code sans rejouer** : trois
+  écarts le 4, trois sessions, rattrapés dans les minutes — la règle reste.
+
+## 8. Comment reprendre
+
+1. Lire la stèle (§3 : le tri et l'ordre), puis `docs/journal-des-chantiers.md`.
 2. Lire ce dossier, puis celui de la session dont on reprend le sujet.
 3. `git log origin/master --since=<dernière lecture>` : tout se livre sur
    master, en avance rapide, sans force.
-4. Relancer une session au repos par un message qui nomme son prochain lot ;
-   une session peut s'arrêter sur un compte rendu sans le dire.
+4. `ListAgents` pour les noms du jour ; relancer une session au repos par un
+   message qui nomme son prochain lot.
