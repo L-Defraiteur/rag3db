@@ -143,8 +143,19 @@ impl Rag3dbConnection {
                 // nombre borné de fois, hors du budget de temps — sous des
                 // points de reprise rapprochés, le budget seul laissait passer
                 // un refus sur trente (e2e_prise_atomique, 4 octobre 2026). Le
-                // compte est rendu (`open_retries`).
-                Err(e) if e.to_string().contains(CHECKPOINT_CROSSED_READ_ONLY_OPEN) && croisees < CROSSED_OPEN_RETRIES => {
+                // compte est rendu (`open_retries`). La borne est un temps
+                // (`crossed_open_budget`, 2 s par défaut) : au-delà, le refus
+                // nommé, avec le compte.
+                Err(e) if e.to_string().contains(CHECKPOINT_CROSSED_READ_ONLY_OPEN) => {
+                    let borne = crossed_open_budget();
+                    if debut.elapsed() >= borne {
+                        return Err(DbError::ConnectionError(format!(
+                            "{e} — ouverture en lecture seule croisée {croisees} fois en {} ms par des points de \
+                             reprise d'un autre processus (borne RAG3WEAVER_READ_ONLY_CROSSED_MS = {} ms)",
+                            debut.elapsed().as_millis(),
+                            borne.as_millis()
+                        )));
+                    }
                     croisees += 1;
                     std::thread::sleep(std::time::Duration::from_millis(2));
                 }
@@ -635,12 +646,24 @@ fn total_memory() -> Option<u64> {
 /// (`WALReplayer::CHECKPOINT_CROSSED_READ_ONLY_OPEN`).
 pub const CHECKPOINT_CROSSED_READ_ONLY_OPEN: &str = "was checkpointed by another process while this read-only open was reading";
 
-/// Combien de fois au plus une ouverture en lecture seule reprend sur ce refus.
-/// Sous un écrivain qui fait un point de reprise toutes les cinq écritures,
-/// environ un point de reprise sur quatre croise une ouverture (5 octobre
-/// 2026) : vingt reprises laissaient passer 4 refus sur 80, cent aucun. Chaque
-/// reprise coûte une ouverture et 2 ms.
-pub const CROSSED_OPEN_RETRIES: u32 = 100;
+/// **Combien de temps une ouverture en lecture seule reprend sur ce refus**,
+/// par défaut : 2 s, réglable par `RAG3WEAVER_READ_ONLY_CROSSED_MS`. Sous un
+/// écrivain qui fait un point de reprise toutes les cinq écritures, environ un
+/// point de reprise sur quatre croise une ouverture (5 octobre 2026) ; vingt
+/// reprises laissaient passer 4 refus sur 80, cent aucun. Une borne en nombre
+/// pouvait durer une quarantaine de secondes au pire (100 ouvertures de
+/// 381 ms) ; une borne en temps dit d'avance ce qu'un lecteur attendra au plus
+/// (décision de l'orchestration, à montrer à Lucie).
+pub const CROSSED_OPEN_BUDGET_DEFAULT_MS: u64 = 2_000;
+
+/// La borne en vigueur : `RAG3WEAVER_READ_ONLY_CROSSED_MS`, sinon le défaut.
+pub fn crossed_open_budget() -> std::time::Duration {
+    let ms = std::env::var("RAG3WEAVER_READ_ONLY_CROSSED_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(CROSSED_OPEN_BUDGET_DEFAULT_MS);
+    std::time::Duration::from_millis(ms)
+}
 
 /// Le fragment stable du refus du moteur (`Database::ALREADY_OPEN_FOR_WRITING`).
 pub const ALREADY_OPEN_FOR_WRITING: &str = "is already open for writing in this process";

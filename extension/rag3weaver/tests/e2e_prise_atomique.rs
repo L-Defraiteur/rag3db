@@ -347,8 +347,22 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         let mut lus = 0usize;
         let mut incoherents = 0usize;
         let mut reprises = 0usize;
-        for _ in 0..CYCLES {
-            match Rag3dbConnection::read_only(&dossier) {
+        let mut nommes = 0usize;
+        let mut duree_max_refus = 0u128;
+        // Le nombre d'ouvertures : 80, ou ce que demande le test de la borne
+        // (`RAG3WEAVER_ENFANT_CYCLES`), qui en veut assez pour croiser.
+        let cycles = std::env::var("RAG3WEAVER_ENFANT_CYCLES").ok().and_then(|v| v.parse().ok()).unwrap_or(CYCLES);
+        for _ in 0..cycles {
+            let t = std::time::Instant::now();
+            let ouverture = Rag3dbConnection::read_only(&dossier);
+            if let Err(e) = &ouverture {
+                duree_max_refus = duree_max_refus.max(t.elapsed().as_millis());
+                let texte = e.to_string();
+                if texte.contains(rag3weaver::rag3db_connection::CHECKPOINT_CROSSED_READ_ONLY_OPEN) && texte.contains(" fois en ") {
+                    nommes += 1;
+                }
+            }
+            match ouverture {
                 Ok(conn) => match { reprises += conn.open_retries() as usize; conn.execute("MATCH (t:Travail) RETURN count(t) AS n") } {
                     // Le compte croît pendant qu'on écrit : ce qui compte est
                     // qu'il soit **plausible**, jamais du bruit.
@@ -362,7 +376,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
             }
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
-        println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents} REPRISES={reprises}");
+        println!("REFUS={refus} LUS={lus} INCOHERENTS={incoherents} REPRISES={reprises} NOMMES={nommes} DUREE_MAX_REFUS_MS={duree_max_refus}");
         std::process::exit(0);
     }
 
@@ -1047,4 +1061,67 @@ fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
         assert!(!recherche_vectorielle(&b2, "clavecin").unwrap().results.is_empty(), "et l'index répond");
     }
     let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **La borne de temps atteinte** (5 octobre 2026). L'écrivain du test voisin
+/// (un point de reprise toutes les cinq écritures : une ouverture sur deux
+/// environ est croisée) ; un lecteur dont la borne est d'une milliseconde
+/// (`RAG3WEAVER_READ_ONLY_CROSSED_MS=1`) — l'écrivain est plus rapide qu'elle —
+/// et 2 000 ouvertures : à 80, une ouverture qui n'attend plus finissait
+/// parfois avant le moindre croisement.
+/// Un point de reprise à chaque écriture ralentissait tant l'écrivain qu'il
+/// n'en faisait que huit pendant les 80 ouvertures, sans croisement. Ce qui est affirmé : au moins une
+/// ouverture est refusée, **chaque** refus est le refus nommé avec le compte
+/// des reprises, aucune lecture n'est fausse, et une ouverture refusée l'est
+/// vite — en moins de deux secondes, pas après une quarantaine.
+#[test]
+#[ignore]
+fn un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne() {
+    const INSISTANT: &str = "RAG3WEAVER_ENFANT_INSISTANT";
+    let dossier = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(format!(
+        ".cache/rag3weaver-build/affame-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
+    ecrivain
+        .execute("CREATE NODE TABLE Travail(id INT64, statut STRING, preneur STRING, PRIMARY KEY(id))")
+        .expect("table");
+    // Le même lecteur que le test voisin, avec une borne courte.
+    let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture", "--ignored"])
+        .env(INSISTANT, &dossier)
+        .env("RAG3WEAVER_READ_ONLY_CROSSED_MS", "1")
+        .env("RAG3WEAVER_ENFANT_CYCLES", "2000")
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("lancer le lecteur");
+    let mut i = 0i64;
+    while enfant.try_wait().expect("try_wait").is_none() {
+        ecrivain
+            .execute(&format!("CREATE (:Travail {{id: {i}, statut: 'libre', preneur: ''}})"))
+            .expect("insertion");
+        i += 1;
+        if i % 5 == 0 {
+            let _ = ecrivain.execute("CHECKPOINT");
+        }
+    }
+    let sortie = enfant.wait_with_output().expect("attendre le lecteur");
+    let texte = String::from_utf8_lossy(&sortie.stdout);
+    let ligne = texte.lines().find(|l| l.starts_with("REFUS=")).unwrap_or_else(|| panic!("le lecteur n'a rien dit :\n{texte}"));
+    println!("▸ {ligne}   ({i} écritures, un point de reprise toutes les cinq)");
+    let lire = |cle: &str| -> u128 {
+        ligne
+            .split_whitespace()
+            .find_map(|m| m.strip_prefix(cle))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_else(|| panic!("« {cle} » illisible dans « {ligne} »"))
+    };
+    let (refus, incoherents, nommes, duree) = (lire("REFUS="), lire("INCOHERENTS="), lire("NOMMES="), lire("DUREE_MAX_REFUS_MS="));
+    drop(ecrivain);
+    let _ = std::fs::remove_dir_all(&dossier);
+    assert_eq!(incoherents, 0, "une ouverture qui réussit lit un compte cohérent");
+    assert!(refus >= 1, "la borne d'une milliseconde doit être atteinte sous cet écrivain ({ligne})");
+    assert_eq!(nommes, refus, "chaque refus est le refus nommé, avec le compte des reprises ({ligne})");
+    assert!(duree < 2_000, "une ouverture refusée l'est vite : {duree} ms au plus long");
 }
