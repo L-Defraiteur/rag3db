@@ -179,7 +179,6 @@ UpstreamFixes.CheckpointAfterDroppingANodeColumn checkpoint-after-reopen,checkpo
 UpstreamFixes.CheckpointAfterDroppingARelationColumn checkpoint-after-reopen,checkpoint-survives
 UpstreamFixes.MergeWithTwoOnMatchSetsAndARepeatedKey merge-survives
 UpstreamFixes.UnionArmProjectingAPropertyTwice query-survives
-UpstreamFixes.RelationComparedToALambdaVariable query-survives
 # — blocages : l'UUID nul empêche tout point de reprise (Ladybug 231a0b854) ; un CHECKPOINT
 #   retient la validation d'un lecteur jusqu'à son délai, puis échoue (Vela 326d40dbd) ;
 UpstreamFixes.CheckpointLetsAFinishingReaderGo checkpoint-succeeds,reader-not-held

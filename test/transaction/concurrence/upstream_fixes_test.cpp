@@ -306,13 +306,24 @@ TEST_F(UpstreamFixes, RelationComparedToALambdaVariable) {
             "MATCH (a:person)-[t:knows]->(d:person) WITH a, d, t "
             "MATCH p = (a)-[:knows*1..3]->(d) WHERE length(p) >= 2 AND "
             "ALL(r IN relationships(p) WHERE r <> t) WITH DISTINCT t RETURN count(t);");
-        return result->isSuccess() ? 0 : 5;
+        // Graphe complet sur quatre nœuds : chacune des douze relations a un autre chemin.
+        return result->isSuccess() && result->getNext()->getValue(0)->getValue<int64_t>() == 12 ?
+                   0 :
+                   5;
     });
     EXPECT_EQ(outcome, "") << "[check: query-survives] " << outcome;
     const auto label = inChild([](rag3db::main::Connection& connection) {
         auto result = connection.query(
             "MATCH p = (n)-[:knows]->(m:person {ID: 2}) WITH nodes(p) AS ns RETURN label(ns[1]);");
-        return result->isSuccess() && result->getNumTuples() == 3 ? 0 : 5;
+        if (!result->isSuccess() || result->getNumTuples() != 3) {
+            return 5;
+        }
+        while (result->hasNext()) {
+            if (result->getNext()->getValue(0)->toString() != "person") {
+                return 6;
+            }
+        }
+        return 0;
     });
     EXPECT_EQ(label, "") << "[check: query-survives] label(): " << label;
 }

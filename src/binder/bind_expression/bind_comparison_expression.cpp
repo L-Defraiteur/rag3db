@@ -5,6 +5,7 @@
 #include "catalog/catalog.h"
 #include "common/exception/binder.h"
 #include "function/built_in_function_utils.h"
+#include "function/struct/vector_struct_functions.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -40,9 +41,18 @@ std::shared_ptr<Expression> ExpressionBinder::bindComparisonExpression(
     // Rewrite node or rel comparison
     KU_ASSERT(children.size() == 2);
     if (isNodeOrRel(*children[0]) && isNodeOrRel(*children[1])) {
+        // Un côté qui n'est pas un motif (une variable de lambda, r dans ALL(r IN … WHERE
+        // r <> t)) n'est pas une NodeOrRelExpression : on compare son champ _ID extrait.
         expression_vector newChildren;
-        newChildren.push_back(children[0]->constCast<NodeOrRelExpression>().getInternalID());
-        newChildren.push_back(children[1]->constCast<NodeOrRelExpression>().getInternalID());
+        for (auto& child : children) {
+            if (child->expressionType == ExpressionType::PATTERN) {
+                newChildren.push_back(child->constCast<NodeOrRelExpression>().getInternalID());
+            } else {
+                newChildren.push_back(bindScalarFunctionExpression(
+                    expression_vector{child, createLiteralExpression(InternalKeyword::ID)},
+                    StructExtractFunctions::name));
+            }
+        }
         return bindComparisonExpression(expressionType, newChildren);
     }
 
