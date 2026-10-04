@@ -1,6 +1,6 @@
 # La réouverture d'une base échoue par intermittence, sous charge seulement
 
-- **État** : ouvert
+- **État** : ouvert — **quatre hypothèses écartées**
 - **Gravité** : plantage (une réouverture qui échoue ; la base n'est pas perdue)
 - **Atteignable en service** : **non établi** — vu uniquement sous charge de
   batterie, jamais au repos
@@ -77,6 +77,8 @@ d'environnement au lieu d'une charge empruntée.
 | 32 Mio | 1 rouge sur 5 |
 | 24 Mio, 20 Mio, 16 Mio | 5 rouges sur 5 |
 
+(et aucun de ces rouges n'est le défaut cherché : voir ci-dessous)
+
 Mais **tous** les rouges sont un **autre** échec : « Buffer manager exception:
 Unable to allocate memory! The buffer pool is full », à la ligne 1051 (une
 recherche BM25), jamais la lecture de journal de la ligne 1019. Le tampon étroit
@@ -90,6 +92,35 @@ compte pas.**
 Produit secondaire, sans gravité (un tampon de 24 Mio n'est pas une
 configuration de service) : entre 20 et 32 Mio, une recherche BM25 sur cette
 base échoue par épuisement du tampon de façon reproductible.
+
+**Un point de reprise échoué, sur deux bases réelles.** La session
+embarquements a gardé deux bases laissées dans l'état « A checkpoint of this
+database failed, so it must be closed and reopened » — tampon de 4 Gio, seuil
+de point de reprise à 512 Mio, extension vector chargée, schéma de code,
+1,7 Go chacune. C'était la condition la plus proche du mécanisme supposé :
+pression mémoire → point de reprise qui échoue → base « à rouvrir » → et c'est
+à la réouverture que ce test tombe.
+
+**Il ne reproduit pas, et il apprend autre chose de rassurant.** Sondées par le
+chemin du produit, sur des copies reflink :
+
+| | base 1 (tampon 4 Gio) | base 2 (les deux réglages) |
+|---|---|---|
+| ouverture (rejeu du journal) | **ok** | **ok** |
+| chargement de l'extension | ok | ok |
+| lignes (File / Scope / Symbol) | 5042 / 47737 / 39373 | 4018 / 41807 / 35617 |
+| les trois index HNSW au catalogue | présents | présents |
+| montage complet du catalogue | **ok** | **ok** |
+
+Donc **« must be closed and reopened » ne laisse aucun dégât durable** : c'est
+une poignée morte, pas une base cassée. Et la réouverture **consomme le
+journal** — la copie est passée de 1,577 à 2,135 Go, le `.wal` de 162 Mo et le
+`.shadow` ont disparu. Un point de reprise échoué ne perd rien ; il remet le
+travail à la réouverture suivante.
+
+Sonde : `tests/sonde_reouverture.rs` (`SONDE_BASE=<chemin>`), qui ne juge rien
+et ne s'arrête pas au premier échec — chaque étage dit ce que le suivant ne dira
+pas.
 
 ## La cause, si elle est connue
 
