@@ -456,6 +456,33 @@ règle. »
 }
 ```
 
+**Des outils plutôt qu'une sortie structurée** (Lucie, dans la foulée) :
+« je dis structuré, mais je pense mieux des outils : il essaie avec tel enum,
+il se rend compte que ça n'existe pas encore — normalement il voit direct
+qu'il n'a pas la valeur dans l'enum —, et donc il appelle un outil
+`create_ref_type`. »
+
+La forme ci-dessus devient donc deux outils, et le champ `new` disparaît :
+
+- **`add_ref(type, value)`** — `type` est l'enum, dans le schéma de l'outil :
+  l'archiviste voit la liste avant d'appeler. Un genre qui n'y est pas est
+  refusé avec la liste et l'appel exact à faire : « ce genre n'existe pas ;
+  crée-le par `create_ref_type(name, description, rule)`, puis rappelle
+  `add_ref` ».
+- **`create_ref_type(name, description, rule)`** — montre les genres proches
+  (« `web_link` existe déjà : est-ce lui ? »), éprouve la règle sur la valeur
+  qui l'a fait naître, puis l'ajoute à l'enum. L'appel suivant d'`add_ref`
+  porte le genre neuf dans son schéma.
+
+Pourquoi c'est mieux qu'un seul objet structuré : chaque geste a son refus,
+qui dit quoi faire — la forme que les passes d'agent ont montrée suivie, même
+par un modèle faible ; la création d'un genre est un acte à part, visible au
+journal, et pas un champ optionnel qu'on remplit en passant ; et l'enum est
+relu à chaque appel, donc un genre créé à l'instant sert tout de suite. Le
+résumé lui-même reste un texte ; ses références s'y ajoutent une à une.
+
+Ce qui reste vrai de la première forme :
+
 - **Un enum global**, que la sortie structurée du modèle est **contrainte** à
   respecter : il ne peut pas inventer un genre en l'écrivant de travers. Le
   moteur sait déjà faire d'une liste fermée un `enum` de schéma, refusé avec
