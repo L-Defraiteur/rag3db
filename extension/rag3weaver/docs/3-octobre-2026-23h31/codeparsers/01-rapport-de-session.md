@@ -133,6 +133,11 @@ Depuis, pour faire baisser les « nom » :
   principal) : par `self`, le type englobant d'abord, sans exclure
   l'héritage — `record_snapshot_finish` revient dans Liens.
 
+- codeparsers 3f992e4 (palier 2) : le type d'un receveur Rust se lit à
+  travers une chaîne std (verrous, unwrap, itérateurs) — gain faible
+  (9 907 → 9 798), le volume est en différé (champs, retours) : palier 3
+  proposé.
+
 Sonde `tests/sonde_marques.rs` : les « nom » passent de 11 769 à 9 907. Le
 reste, par forme : nom seul 28 % (ticket, pas maintenant), chemins de
 module 20 % (réexportations — décision à prendre), receveurs variables et
@@ -141,12 +146,12 @@ chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
 ## Ce qui attend quelqu'un
 
 - **Arbre principal** : fusionner `self-types` (5236059bf) et pointer
-  codeparsers d3c077c, avec les suites du graphe d'usages.
+  codeparsers 3f992e4, avec les suites du graphe d'usages.
 - **Orchestration ou Lucie** : un chemin de module désigne-t-il aussi son
   dossier (réexportations) ?
-- **Moi, ensuite** : le palier 2 — lire le type d'un receveur (texte complet
-  des types, chaîne de méthodes, règles std certaines), puis la même mesure
-  avec le filtre dans `impact`.
+- **Orchestration** : palier 3 (type différé à texte complet et chaîne à
+  peler), ou d'abord les réexportations (tranché : suivre les `pub use` du
+  fichier du module, sauts bornés, marque import).
 - **Arbre principal, à proposer** : un appel par chemin vers un type
   externe (`Tokenizer::from_file`) prend rendez-vous avec le seul
   `from_file` du projet (`gcp_auth.rs`) : vu par les liens sur les

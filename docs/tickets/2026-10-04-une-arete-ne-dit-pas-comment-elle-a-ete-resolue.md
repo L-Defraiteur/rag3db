@@ -89,3 +89,20 @@ CONSUMES « nom » passent de 11 769 à 9 907 (−16 %).
 Reste, pour allumer le filtre dans `impact` : le palier 2 (receveurs
 typés, dont 2 285 visent un nom de méthode std et relient à tort un fichier
 du projet — l'abstention sur un type lu vers std est le gain).
+
+## Palier 2 et réexportations (4 octobre, nuit)
+
+- Palier 2 (codeparsers 3f992e4) : le type écrit en entier d'une variable
+  locale se suit à travers une table std à retour certain (verrous,
+  unwrap, itérateurs). Gain faible : « nom » 9 907 → 9 798. Le volume
+  restant est en différé — une chaîne dont la racine est un champ
+  (`self.catalog.lock()…`) ou un retour de fonction (`let c = setup();`) :
+  palier 3 proposé (le type différé garde le texte complet et la chaîne à
+  peler).
+- **Réexportations, tranché par l'orchestration** : pas de « le module
+  désigne son dossier ». Le chemin désigne le fichier du module ; si le nom
+  n'y est pas défini, suivre les réexportations de CE fichier (`pub use
+  runtime::DataflowEvent`, `pub use runtime::*` — le nom cherché dans ce
+  module nommé seulement ; `export … from` en TypeScript, `__init__.py`),
+  sur un nombre borné de sauts ; marque « import ». Sinon l'arête reste
+  « nom ». Mesuré à part.
