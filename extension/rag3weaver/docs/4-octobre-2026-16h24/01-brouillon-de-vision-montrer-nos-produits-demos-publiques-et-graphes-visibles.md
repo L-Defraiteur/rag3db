@@ -134,3 +134,35 @@ Points en débat :
   une page générée en un tour.
 - **Le modèle de langage** : à la clé de la personne, ou revendu ? Aujourd'hui
   l'agent se juge avec Gemini ; rien n'est décidé sur qui le paie.
+
+## 7. Ce que la personne voit dans l'interface
+
+> « Tu lances tes propres recherches et tu vois de beaux graphes bien
+> construits, se basant sur les arbres ASCII que verrait l'agent ; ou bien un
+> agent construit la recherche et l'affichage pour toi en mermaid. Je ne sais
+> pas. » — Lucie
+
+Deux voies, qui ne s'excluent pas :
+
+- **La personne cherche elle-même** : les mêmes outils que l'agent, rendus en
+  graphe à l'écran.
+- **L'agent compose une vue** pour une question (« montre-moi comment un
+  instantané se finit ou s'annule ») et l'affiche.
+
+Points en débat :
+
+- **Une donnée, deux rendus.** L'arbre ASCII de l'agent et le graphe de la
+  personne sortent du même résultat structuré ; on ne dessine pas en relisant
+  l'ASCII. La personne voit alors exactement ce que l'agent a vu — c'est
+  aussi l'outil de diagnostic demandé (« ce qu'il voit vraiment »).
+- **L'agent choisit quoi montrer, pas quelles arêtes existent.** Un mermaid
+  écrit librement par un modèle peut inventer un lien. L'agent appelle un
+  outil (une requête sur le graphe) ; le rendu mermaid en est tiré de façon
+  déterministe.
+- **Une vue composée est une requête enregistrée** : elle se garde, se rejoue
+  et se lie à une fiche — c'est l'adresse `query:` de la vision des mémoires
+  (`../4-octobre-2026-00h09/01`).
+- **Un même afficheur** pour les graphes de code et pour les graphes de
+  traitement, qui sont déjà des fichiers mermaid (`.mmd`).
+- **La taille** : mermaid tient quelques dizaines de nœuds ; au-delà il faut
+  replier, ou un autre afficheur.
