@@ -39,7 +39,9 @@ void LimitPushDownOptimizer::visitOperator(planner::LogicalOperator* op) {
         return;
     }
     case LogicalOperatorType::DISTINCT: {
-        if (limitNumber == INVALID_LIMIT && skipNumber == 0) {
+        // Un SKIP sans LIMIT ne borne pas le nombre de lignes à produire : le pousser seul
+        // faisait garder au DISTINCT autant de lignes que le SKIP en jette ensuite.
+        if (limitNumber == INVALID_LIMIT) {
             return;
         }
         auto& distinctOp = op->cast<LogicalDistinct>();
@@ -48,7 +50,9 @@ void LimitPushDownOptimizer::visitOperator(planner::LogicalOperator* op) {
         return;
     }
     case LogicalOperatorType::HASH_JOIN: {
-        if (limitNumber == INVALID_LIMIT && skipNumber == 0) {
+        // Même raison que pour DISTINCT ; de plus, skipNumber + INVALID_LIMIT déborde et
+        // bornait l'extension récursive à skipNumber - 1.
+        if (limitNumber == INVALID_LIMIT) {
             return;
         }
         if (op->getChild(0)->getOperatorType() == LogicalOperatorType::HASH_JOIN) {

@@ -1,6 +1,6 @@
 # RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne
 
-- **État** : ouvert
+- **État** : corrigé le 4 octobre 2026, commit « fix(optimiseur): un SKIP sans LIMIT n'est plus poussé dans DISTINCT ni dans l'extension récursive »
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (vérifié par l'arbre principal)
