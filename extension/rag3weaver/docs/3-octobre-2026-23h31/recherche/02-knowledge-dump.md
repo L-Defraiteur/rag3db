@@ -123,6 +123,29 @@ mesurée sur ce banc (0,449 > 0,405 tel quel > 0,369 meilleur H réglé).
 La passe a duré 384 s tout compris (~56 s partagées avec une analyse de
 c0). Reste (b) : le découpeur amélioré rattrape-t-il le creux ?
 
+### Le titre indexé (66dc381c3) — les références NOUVELLES du banc
+
+| config (granite+creux bge, titre indexé) | phrases (45) | identifiants (10) |
+|---|---|---|
+| plein texte seul | 0,295 · 9 · 18 | **1,000 · 10 · 10** |
+| texte+dense (0,5/0,5) | 0,429 · 15 · 22 | 0,900 · 8 · 10 |
+| dense+creux | 0,449 · 16 · 22 | 0,950 · 9 · 10 |
+| trio | 0,448 · 16 · 25 | 0,950 · 9 · 10 |
+| tel quel (dense seul) | 0,401 · 13 · 25 | 0,758 · 6 · 10 |
+
+Boost du titre (section N) : identifiants 1,000 dès ×1 ; phrases en
+texte seul 0,295/0,269/0,260/0,258 pour ×1/×1,5/×2/×3 (un nom qui porte
+un mot banal remonte à tort) ; fusion 0,45/0,55 insensible (0,420/0,900
+partout). **L'indexation répare, le boost n'ajoute rien : défaut neutre
+(KBConfig.title_boost passé de 2,0 jamais appliqué à 1,0).** L'apport
+du creux après ce fix : +0,02 phrases / +0,05 identifiants au-dessus de
+texte+dense. ⚠ Toute référence d'AVANT ce commit (0,402/0,405, H 0,369,
+I plein texte 0,417) appartient au monde sans titre indexé.
+
+Garantie des lignes : e2e_titre_indexe (dépôt en mémoire — RACINE
+ABSOLUE obligatoire, voir ticket bc5a6b070 ; les extraits au fichier
+près, le titre jamais collé au corps).
+
 ### Le verdict des expériences (4 octobre 13h30)
 
 - **Découpeur (passes b)** : entier 0,244/0,417 · fin 0,248/0,433 ·

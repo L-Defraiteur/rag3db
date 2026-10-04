@@ -60,7 +60,38 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (4 octobre 13h30 — le découpeur réfuté, le vrai défaut trouvé)
+## En cours (4 octobre 14h30 — le titre indexé répare tout, sur master)
+
+- **Le chantier titre est sur master (66dc381c3)**, batterie verte : le
+  titre est indexé en plein texte pour TOUTE entité (plus seulement les
+  dérivées), un hit dont le titre matche multiplie son score par le
+  boost déclaré (SimpleFieldDef.boost, 1,0 = neutre), KBConfig.
+  title_boost n'est qu'un alias (défaut passé de 2,0 jamais appliqué à
+  1,0 — la continuité du comportement réel), les vieux index sont
+  servis par filtrage du schéma (ils gagnent le champ au rebâti), et
+  e2e_titre_indexe prouve la garantie de Lucie : les extraits gardent
+  leurs lignes au fichier près, avec et sans boost, dépôt en mémoire.
+- **La mesure tranche tout** : plein texte seul 0,295/**1,000** (contre
+  0,243/0,417 avant — l'indexation du titre porte seule les identifiants
+  au niveau du creux) ; texte+dense 0,429/0,900 ; trio 0,448/0,950 =
+  dense+creux 0,449/0,950. Le BOOST n'ajoute RIEN (identifiants à 1,000
+  dès ×1, phrases en BAISSE avec ×1,5-×3 en texte seul, fusion
+  insensible) : c'est l'indexation qui répare, le neutre est le bon
+  défaut. **L'apport du creux tombe à +0,02/+0,05 : la position de
+  Lucie est confirmée par la mesure.**
+- **Ticket bc5a6b070** : analyze() à racine relative rend zéro scope en
+  silence (trouvé par le dépôt-en-mémoire du test de garantie).
+- **Le poste est passé au verrou** (~/.cache/rag3weaver-build/poste :
+  lourd/mesure, porte + priorité basse ; run_e2e ≥ 561002bfc le prend
+  seul) — une passe à moi est entrée une fois devant la mesure d'eb par
+  la copie d'avant-porte du lanceur : arrêtée dès le signalement,
+  relancée par le lanceur à porte.
+- **Lecture pour l'archiviste rendue à dc** : le chat ne compresse rien,
+  le journal au fil de l'eau suffit à un résumeur externe, turn_end
+  porte les jetons ; il ne manque qu'un événement de fermeture de
+  session (site identifié avant drop(tools)).
+
+## Ancien (4 octobre 13h30 — le découpeur réfuté, le vrai défaut trouvé)
 
 - **Les passes (b) réfutent l'hypothèse du découpeur** : trois variantes
   de tokenisation lucivy par patch local (entier gardé / sans fusion-à-4
