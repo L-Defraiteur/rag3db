@@ -242,6 +242,12 @@ pub trait DbConnection: Send + Sync {
     /// écrirait cet état (ou ne finirait pas) ; la réouverture repart du
     /// disque et du journal. Sans effet pour un moteur qui ne le sait pas.
     fn close_without_checkpoint(&self) {}
+
+    /// Le chemin de la base sur disque, s'il y en a un : `None` en mémoire,
+    /// ou pour un moteur qui n'en a pas (PostgreSQL).
+    fn database_path(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 /// D'où vient la taille du tampon du moteur.

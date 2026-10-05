@@ -124,6 +124,10 @@ fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
     if std::env::var("TX_ARRET_FTS").as_deref() == Ok("fichiers") {
         let dossier = format!("{}.fts", base.display());
         catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: dossier });
+    } else {
+        // Les blobs, posés : une base neuve sur disque prend les fichiers par
+        // défaut, et ces cas-là éprouvent le stockage dans la base.
+        catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::BlobBacked { lazy: false });
     }
     catalog.initialize().expect("initialize");
     register_code_schema(&mut catalog, default_scope_chunking()).expect("schéma du code");
@@ -419,7 +423,7 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())
-        .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "0")
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH")
         .env_remove("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH")
         .env_remove("RAG3WEAVER_TX_POUSSEE_A_LA_FIN")

@@ -360,6 +360,10 @@ pub struct Catalog {
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
     fts_storage: crate::fts_handle::FtsStorage,
+    /// Le stockage du plein texte a-t-il été posé par l'appelant
+    /// ([`set_fts_storage`](Self::set_fts_storage)) ? Sinon, l'initialisation
+    /// le choisit ([`choisir_le_stockage_du_plein_texte`](Self::choisir_le_stockage_du_plein_texte)).
+    fts_storage_pose: bool,
     fts_positions: bool,
     /// **L'identité de cet écrivain**, pour que sa marque de travail en attente
     /// ne se confonde pas avec celle d'un autre processus. Tirée à la
@@ -496,6 +500,7 @@ impl Catalog {
             fts_promise_orphan: std::sync::atomic::AtomicBool::new(false),
             fts_promise_token: format!("{}-{}", std::process::id(), crate::dataflow::checkpoint::timestamp_ms()),
             fts_storage: Default::default(),
+            fts_storage_pose: false,
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
                 "_writer",
@@ -730,6 +735,53 @@ impl Catalog {
     /// Choose storage before opening any FTS handle.
     pub fn set_fts_storage(&mut self, storage: crate::fts_handle::FtsStorage) {
         self.fts_storage = storage;
+        self.fts_storage_pose = true;
+    }
+
+    /// Le plein texte vit-il dans la base (`_index_blobs`) ?
+    pub fn plein_texte_en_base(&self) -> bool {
+        matches!(self.fts_storage, crate::fts_handle::FtsStorage::BlobBacked { .. })
+    }
+
+    /// **Le plein texte en fichiers, par défaut, pour une base neuve sur
+    /// disque** (défaut basculé, en préparation : décision de Lucie). Dans
+    /// l'ordre :
+    /// 1. posé par l'appelant (`set_fts_storage`) : gardé ;
+    /// 2. `RAG3WEAVER_FTS=blobs` ou `fichiers` : le moyen de revenir en
+    ///    arrière, ou de forcer ;
+    /// 3. une base sans chemin (en mémoire) : dans la base (blobs) ;
+    /// 4. `<base>.fts` existe : en fichiers ;
+    /// 5. `_index_blobs` n'est pas vide : **une base existante garde ses
+    ///    blobs** — pas de migration silencieuse ;
+    /// 6. sinon, une base neuve : en fichiers, dans `<base>.fts`.
+    /// Le lecteur et l'écrivain d'une même base font le même choix.
+    fn choisir_le_stockage_du_plein_texte(&mut self) {
+        if self.fts_storage_pose {
+            return;
+        }
+        let Some(chemin) = self.conn.database_path() else { return };
+        let dossier = format!("{}.fts", chemin.display());
+        let fichiers = crate::fts_handle::FtsStorage::Files { base_path: dossier.clone() };
+        match std::env::var("RAG3WEAVER_FTS").as_deref() {
+            Ok("blobs") => return,
+            Ok("fichiers") => {
+                self.fts_storage = fichiers;
+                return;
+            }
+            _ => {}
+        }
+        if std::path::Path::new(&dossier).is_dir() {
+            self.fts_storage = fichiers;
+            return;
+        }
+        let des_blobs = self
+            .conn
+            .execute("MATCH (b:_index_blobs) RETURN b._key LIMIT 1")
+            .map(|r| !r.rows.is_empty())
+            .unwrap_or(false);
+        if !des_blobs {
+            self.fts_storage = fichiers;
+        }
     }
 
     /// Ferme les index FTS ouverts, en drainant leurs merges.
@@ -1283,6 +1335,7 @@ impl Catalog {
     }
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
+        self.choisir_le_stockage_du_plein_texte();
         if self.lecture_seule {
             return self.initialiser_en_lecture();
         }

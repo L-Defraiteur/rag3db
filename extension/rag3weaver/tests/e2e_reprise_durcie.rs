@@ -155,7 +155,7 @@ fn la_marque_des_relations_s_efface_par_une_passe_par_paquet_complete() {
         .env(ROLE, "masse")
         .env(BASE, &base)
         .env("RAG3WEAVER_TEST_KILL_IN_BATCH", "2")
-        .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "0")
         .output()
         .expect("lancer le fils");
     use std::os::unix::process::ExitStatusExt;
