@@ -204,6 +204,13 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     if let Some(threshold) = std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
         boxed.execute(&format!("CALL checkpoint_threshold={threshold}")).expect("seuil du point de reprise");
     }
+    // `RAG3WEAVER_ESTIMATE_COPY_JOURNALISE=1` : un COPY écrit ses lignes au
+    // journal au lieu de forcer son point de reprise (réglage du moteur
+    // `force_checkpoint_on_copy`) — pour peser au journal un paquet réel.
+    if std::env::var("RAG3WEAVER_ESTIMATE_COPY_JOURNALISE").as_deref() == Ok("1") {
+        boxed.execute("CALL force_checkpoint_on_copy=false").expect("COPY journalisé");
+        eprintln!("[mots] COPY journalisé (force_checkpoint_on_copy=false)");
+    }
     eprintln!("[mots] point de reprise automatique : {auto_checkpoint} ; seuil : {:?}", std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok());
     // Les points de reprise réellement posés, comptés par la taille du
     // journal : elle ne retombe que quand le moteur le replie (le guetteur de
