@@ -1,0 +1,110 @@
+diff --git a/test/transaction/journaled_copy_test.cpp b/test/transaction/journaled_copy_test.cpp
+index 6e1f82e04..e04554438 100644
+--- a/test/transaction/journaled_copy_test.cpp
++++ b/test/transaction/journaled_copy_test.cpp
+@@ -1735,6 +1735,105 @@ TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommi
+     expectTheMixedTransaction();
+ }
+ 
++// Les pages sans propriétaire après une réouverture (page coeur-cpp/06) : ce qu'un travail qui
++// n'a pas atteint de point de reprise a ajouté à la fin du fichier y reste, compté et à
++// personne — le fichier n'a pas d'étendue connue. La mesure est celle du contrôle de fuite de
++// la suite Cypher : toutes les tables retirées, un point de reprise, puis les pages du fichier
++// moins les pages libres, comparées à celles d'une base qui a fait le même travail sans mourir.
++class OwnerlessPagesTest : public CopyJournalThresholdTest {
++protected:
++    static constexpr int64_t NUM_ROWS = 60000;
++
++    int64_t occupiedPagesOnceEmptied() {
++        ok("DROP TABLE Link;");
++        ok("DROP TABLE Doc;");
++        ok("CHECKPOINT;");
++        const auto numPages = single("CALL file_info() RETURN num_pages;");
++        auto free = conn->query("CALL fsm_info() RETURN sum(num_pages);");
++        EXPECT_TRUE(free->isSuccess()) << free->getErrorMessage();
++        int64_t numFree = 0;
++        if (free->isSuccess() && free->hasNext()) {
++            auto* value = free->getNext()->getValue(0);
++            numFree = value->isNull() ? 0 : std::stoll(value->toString());
++        }
++        return numPages - numFree;
++    }
++
++    // La base qui n'est pas morte : le même COPY, validé, puis vidée.
++    int64_t occupiedPagesOfTheControl() {
++        openWithSchema();
++        EXPECT_TRUE(conn->query(copyFrom(csvPath))->isSuccess());
++        const auto occupied = occupiedPagesOnceEmptied();
++        conn.reset();
++        database.reset();
++        std::filesystem::remove(databasePath);
++        std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
++        return occupied;
++    }
++
++    int64_t occupiedPagesAfterReopening() {
++        createDBAndConn();
++        return occupiedPagesOnceEmptied();
++    }
++};
++
++TEST_F(OwnerlessPagesTest, AJournaledCopyReplayedLeavesNoPageBehind) {
++    writeDocs(csvPath, 0, NUM_ROWS);
++    const auto control = occupiedPagesOfTheControl();
++    writeThenDie([&](Connection& child) {
++        childSchema(child);
++        must(child, "CALL copy_journal_threshold=1073741824;");
++        must(child, copyFrom(csvPath));
++    });
++    ASSERT_GT(journalSize(), 0u);
++    EXPECT_EQ(occupiedPagesAfterReopening(), control);
++}
++
++TEST_F(OwnerlessPagesTest, AForcedCopyKilledBeforeItsCommitLeavesNoPageBehind) {
++    writeDocs(csvPath, 0, NUM_ROWS);
++    const auto control = occupiedPagesOfTheControl();
++    writeThenDie(
++        [&](Connection& child) {
++            childSchema(child);
++            must(child, "BEGIN TRANSACTION;");
++            must(child, copyFrom(csvPath));
++        },
++        false /* journaled */);
++    EXPECT_EQ(occupiedPagesAfterReopening(), control);
++}
++
++TEST_F(OwnerlessPagesTest, AFallenBackCopyKilledBeforeItsCommitLeavesNoPageBehind) {
++    writeDocs(csvPath, 0, NUM_ROWS);
++    const auto control = occupiedPagesOfTheControl();
++    writeThenDie([&](Connection& child) {
++        childSchema(child);
++        must(child, "CALL copy_journal_threshold=65536;");
++        must(child, "BEGIN TRANSACTION;");
++        must(child, copyFrom(csvPath));
++    });
++    EXPECT_EQ(occupiedPagesAfterReopening(), control);
++}
++
++// Deux morts de suite sans point de reprise entre elles : la fuite ne s'additionne pas.
++TEST_F(OwnerlessPagesTest, TwoDeathsInARowDoNotAddUp) {
++    writeDocs(csvPath, 0, NUM_ROWS);
++    const auto control = occupiedPagesOfTheControl();
++    writeThenDie(
++        [&](Connection& child) {
++            childSchema(child);
++            must(child, "BEGIN TRANSACTION;");
++            must(child, copyFrom(csvPath));
++        },
++        false /* journaled */);
++    writeThenDie(
++        [&](Connection& child) {
++            must(child, "BEGIN TRANSACTION;");
++            must(child, copyFrom(csvPath));
++        },
++        false /* journaled */);
++    EXPECT_EQ(occupiedPagesAfterReopening(), control);
++}
++
+ } // namespace
+ 
+ #endif

@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 9 h.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 10 h — mise en pause à la demande de Lucie.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -43,39 +43,131 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Statistiques d'un `COPY` dans sa transaction (étape 4, lot 1) | `1177f5794` | la cardinalité et les comptes de distincts d'un `COPY` ne rejoignent la table qu'à la validation ; un `COPY` annulé ou refusé ne les gonfle plus ; des insertions suivies d'un `COPY` dans la même transaction ne sont plus comptées deux fois (deux défauts de `f1d8c7190`) |
 | Forme compacte des tableaux au journal | `1c232f318` | un tableau de taille fixe de numériques s'écrit en octets bruts : un `FLOAT[768]` pèse 3,1 Ko au journal au lieu de 9,3, par `COPY` comme par `SET` ; trois numéros d'enregistrement neufs (40, 42, 45), l'ancien décodage gardé ; un journal neuf n'est pas lisible par un moteur d'avant |
 | Sonde du poids du journal | `c1c2f9dfc` | `RAG3DB_PROFILE_JOURNAL=1` : à chaque validation, les octets du journal de la transaction par type d'enregistrement et par table, sur la sortie d'erreur |
+| Repli d'un `COPY` journalisé (étape 4, lot 2) | `71cffbc4b` | au-delà de `copy_journal_threshold` (défaut : un huitième du tampon, plafonné à 256 Mio), la transaction vide son journal et redevient durable par son point de reprise ; compteur `copy_journal_fallbacks`. Inerte tant que `force_checkpoint_on_copy` vaut `true` |
+| Transaction forcée sans journal en mémoire | `fb98852e1` | une transaction à point de reprise forcé (tout `COPY` d'aujourd'hui) ne sérialise plus son journal en mémoire pour le jeter : 411 Ko puis 823 Ko gardés avant, 0 après |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
 
-**Où j'en suis (5 octobre, 9 h).** `master` à `c1c2f9dfc`, branche locale
-`copy-journalise-etape-4`. L'étape 4 du chargement journalisé est en cours ; sa page est
-`05-la-borne-du-journal-d-un-copy.md`.
+**Mise en pause (5 octobre 2026, 10 h).** Lucie reprend le week-end ou un soir. Cette section
+suffit pour reprendre ; les sections plus bas sont plus anciennes.
 
-- **Fait et poussé** : le lot 1 (statistiques), la forme compacte des tableaux, la sonde.
-- **Codé, pas poussé** (dans l'arbre `rag3db-moteur`, non commité) : le mécanisme du repli —
-  `CALL copy_journal_threshold`, `Transaction::fallBackToForcedCheckpoint`, `LocalWAL::discard`,
-  le compteur `copy_journal_fallbacks` — et ses neuf témoins (`CopyJournalThresholdTest`), verts.
-  Liste complète lancée dessus, patch chez le banc
-  (`~/.cache/rag3db-moteur-notes/etape-4/repli/repli-src.patch`). Le défaut du seuil est
-  provisoire (un huitième du tampon, plafonné à 256 Mio).
-- **En attente** : deux passes sondées des embarquements (fichiers et blobs à 2 048 fichiers par
-  paquet, `RAG3DB_PROFILE_JOURNAL=1`), quand l'arbre principal sera rebâti sur `c1c2f9dfc`. Elles
-  doivent dire la plus grosse transaction, d'où vient le facteur 8 (491 Mo de journal pour 62 Mo
-  de texte), et fixer le défaut du seuil avec une marge de ×2 sous le tampon de 4 Gio.
-- **Ce que la première mesure des embarquements a montré** (quatre passes sous `COPY`
-  journalisé, aucun refus ni plantage) : pas de gain de temps en mode fichiers (80 s contre
-  78–79), une perte en mode blobs (117 s contre 78–89) — les blobs sont écrits deux fois, au
-  journal puis aux pages. Le basculement du défaut ne se justifie donc pas par la vitesse
-  (décision de l'orchestration : il se justifie par la stèle), et il ne doit ralentir aucun
-  mode : fichiers à ±3 %, blobs ramenés par le repli à leur temps d'avant, prouvé par une série
-  des embarquements avant de basculer.
-- **Si le facteur 8 est le coût par cellule** (chaque valeur réécrit son type au journal) : ne
-  pas le corriger dans la foulée ; rendre le chiffre et la taille du correctif à l'orchestration.
-- **Ensuite** : la liste « défaut basculé », le basculement (réécrire les deux témoins du banc
-  qui attendent le point de reprise d'un `COPY`), puis les verrous. Le banc m'enverra à relire
-  son correctif de l'élagage (`shrinkForNode`, `i = 0`).
+### L'état exact
+
+- `master` est à `fb98852e1` (moteur) ; les docs suivent. Tout ce qui est fini est poussé.
+- L'arbre `rag3db-moteur` est **propre**, sur la branche locale `copy-journalise-etape-4`, égale
+  à `master`. Son `build/moteur` est **à moitié rebâti** (un rebâti interrompu à la pause) :
+  commencer par `~/.cache/rag3weaver-build/poste lourd cmake --build build/moteur -j 8`.
+- Rien n'est en cours d'exécution de mon côté : ni liste, ni agent.
+- Un brouillon non commité est gardé en patch : les quatre témoins de la fuite de pages,
+  `annexes/etape-4/temoins-pages-sans-proprietaire.patch` (à appliquer sur
+  `test/transaction/journaled_copy_test.cpp`). Ils n'ont **jamais été bâtis ni joués**.
+
+### Ce qui a été fait le 5 octobre (dans l'ordre)
+
+1. **Deux bloquants de la stèle fermés, sur l'index de clé primaire** : le point de reprise sans
+   fin après un `COPY` annulé (`836edfc29`), et la clé perdue quand l'index grandit
+   (`eb2d78e46`, une lecture en mémoire libérée dans `HashIndex::splitSlots`, trouvée par l'arbre
+   principal sur deux `COPY` de 50 000 symboles). Une base déjà touchée se réindexe.
+2. **L'étape 4 du chargement journalisé**, en lots : les statistiques d'un `COPY` dans sa
+   transaction (`1177f5794`) ; la forme compacte des tableaux au journal (`1c232f318`) ; la sonde
+   `RAG3DB_PROFILE_JOURNAL` (`c1c2f9dfc`) ; le repli au seuil (`71cffbc4b`) ; la transaction
+   forcée sans journal en mémoire (`fb98852e1`).
+3. **Deux marches sans retour**, acceptées par l'orchestration : un journal écrit par le moteur
+   d'aujourd'hui n'est plus lisible par un moteur d'avant `1c232f318` (« unknown WAL record
+   type 40 ») ; et le correctif à venir de la fuite de pages changera la version de stockage.
+
+### Ce que les mesures ont appris
+
+- **Le `COPY` journalisé ne fait pas gagner de temps** sur une première indexation (mesure des
+  embarquements, 7 014 fichiers) : 80 s contre 78–79 en mode fichiers ; 117 s contre 78–89 quand
+  le plein texte vit en base, parce que ses blobs sont alors écrits deux fois. Le basculement se
+  justifie par la stèle (plus de point de reprise forcé, plus d'attente à la validation,
+  plusieurs `COPY` dans une transaction), pas par la vitesse.
+- **Ce qui pèse au journal** (sonde, mode fichiers, 466 Mio pour 62 Mo de texte) : les relations
+  168 Mio ; le texte écrit deux fois, dans `Scope` et `Scope_Chunk`, environ 124 Mio (un fait de
+  schéma de rag3weaver) ; le coût par ligne hors texte, environ 175 Mio. La plus grosse
+  transaction est le chargement final des relations (158 Mio), pas un paquet ; le plus gros
+  paquet de 2 048 fichiers pèse 114,5 Mio.
+- **Décisions de l'orchestration** : seuil par défaut confirmé (256 Mio au plus) ; le mode à
+  blobs demande lui-même le point de reprise forcé, côté rag3weaver (l'arbre principal le pose
+  dans sa branche des nouveaux défauts) ; le coût par cellule au journal est un ticket de
+  confort, après le basculement.
+
+### Ce qui bloque le basculement du défaut
+
+**La fuite de pages après une réouverture** — ticket
+`docs/tickets/2026-10-05-pages-d-un-copy-journalise-perdues-au-rejeu.md`, page de conception
+`06-les-pages-sans-proprietaire.md`, **acceptée par l'orchestration, rien de codé**.
+
+- Mesuré : après un `COPY` journalisé et une réouverture sans point de reprise, 403 pages
+  occupées pour 11 attendues, 949 pour 11, 232 pour 5 (le contrôle de fuite de la suite Cypher,
+  défaut basculé dans l'arbre).
+- La cause, lue et non rejouée : le fichier de la base n'a pas d'étendue connue — le nombre de
+  pages en mémoire est la taille du fichier à l'ouverture. Par raisonnement, **non mesuré**, le
+  `COPY` forcé d'aujourd'hui tué avant son point de reprise fuit de la même façon.
+- Le correctif accepté : écrire l'étendue du fichier dans l'en-tête à chaque point de reprise
+  (nouvelle version de stockage) ; à l'ouverture en écriture, rendre à l'espace libre tout ce qui
+  dépasse ; pas de troncature.
+- Exigences de l'orchestration : témoigner que le rejeu ne lit rien au-delà de l'étendue (`COPY`
+  journalisé, index vectoriel, plein texte) ; le point de reprise interrompu après sa marque ;
+  le contrôle de fuite joué sur toute la liste ; une base du moteur d'avant qui s'ouvre et
+  n'est pas abîmée ; relecture du banc.
+
+### La suite, dans l'ordre
+
+1. Rebâtir `build/moteur`. Appliquer le patch des témoins de la fuite, les bâtir, **les voir
+   rouges** (c'est la mesure qui manque : le `COPY` forcé tué, le `COPY` replié tué, deux morts de
+   suite). Si le `COPY` forcé tué fuit, l'écrire au ticket : c'est un défaut du défaut actuel.
+2. Coder le correctif de la page 06, ses huit témoins, la liste complète, la relecture du banc.
+3. `CopyTest.RelCopyBMExceptionRecoverySameConnection`, rouge sous le défaut basculé : sous un
+   tampon minuscule le `COPY` de relations échoue vingt fois ; regarder d'abord pourquoi le repli
+   ne s'est pas déclenché (un plancher du seuil ?) avant d'accuser le test.
+4. Rejouer la liste « défaut basculé » (`sed` sur `forceCheckpointOnCopy` dans
+   `src/include/main/client_config.h`, **sans le commiter**), le banc compris — il s'arrêtait à
+   `ExplicitCopyCommitWhileATransactionIsOpen`, un défaut de son harnais que le banc corrige.
+5. Adapter les huit tests qui supposaient le point de reprise d'un `COPY` (liste au message de
+   tri rendu à l'orchestration : `CopySegmentTest`, `DeleteAllRels`, `FSMReclaimRelNewTable`,
+   `FSMReuseFreePageForNewTable`, `DropNodeTableReclaim`, `DropNodeTableRollbackRecovery`,
+   `AutoCheckpointTimeoutErrorTest`, `JournaledCopyTest.ByDefaultACopyStillForcesItsCheckpoint`),
+   un par un, les « Reclaim » lus avec soupçon.
+6. Dire aux embarquements de jouer leur série d'avant basculement (sur ≥ `fb98852e1` : fichiers
+   à ±3 % sous `COPY` journalisé, blobs à leur temps d'avant), puis basculer le défaut.
+7. Ensuite : les verrous.
+
+### Ce que d'autres sessions me doivent, ou attendent de moi
+
+- **Le banc** : il ajoute la mort pendant le point de reprise d'une transaction repliée (ses sept
+  points de mort) et corrige la portée des résultats dans son harnais. Il m'enverra à relire son
+  correctif de l'élagage de l'index vectoriel (`shrinkForNode` : la règle classique, avec ses
+  chiffres) — **je lui dois cette relecture**, rejeu et chemin disque d'abord.
+- **Les embarquements** : leur série d'avant basculement attend mon signal.
+- **L'arbre principal** : il pose le point de reprise forcé pour le mode à blobs, et rejoue ses
+  témoins sur les correctifs de l'index.
+
+### Tickets ouverts le 5 octobre, non traités
+
+- la fuite de pages (bloque le basculement) ;
+- le journal d'une transaction sans borne hors `COPY` ;
+- le coût par cellule au journal (confort) ;
+- un `COPY` de relations annulé gonfle l'estimation du nombre de relations (confort) ;
+- une extension chargée au rejeu sans contrôle de bâti (robustesse du produit) ;
+- à ouvrir : des pages jamais rendues à l'annulation dans une session qui continue (création
+  d'un index plein texte annulée, `ALTER … ADD` annulé, point de reprise annulé) — lu dans les
+  commentaires du code, non mesuré.
+
+### Mes erreurs du jour, pour ne pas les refaire
+
+- Un quatrième cas de témoin annoncé « rouge » alors qu'il échouait pour une instruction refusée
+  plus haut (une assertion dans une fonction auxiliaire n'arrête pas le test) : lire la première
+  erreur d'un rouge avant de le compter.
+- Un rebâti lancé dans l'arbre pendant qu'une liste y bâtissait : la liste est partie de travers.
+  Ne rien bâtir dans un arbre où une liste tourne.
+- Un rebâti complet parti hors de `poste`.
+- Un « core dump » annoncé à l'arbre principal sans l'avoir regardé : c'était mon essai, qui
+  chargeait une extension d'un autre bâti.
 
 **Ce que les lots de l'index de clé laissent ouvert :**
 - la comparaison du banc a rendu une fois « Segmentation fault, no result » (sous un plafond de
