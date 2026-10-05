@@ -294,3 +294,27 @@ Une seule tenue du verrou pour les douze passes (rien de lourd entre deux),
   tenue dans un tampon de 4 Gio.
 - Sur un disque calme, le mode fichiers ne varie plus (97–104 s) : l'écart de
   la série précédente (97–119 s) venait des écritures des autres.
+
+## Le jeu de réglages par défaut proposé (5 octobre, 7 h 01 à 7 h 17)
+
+Une seule tenue du verrou, disque calme avant chaque passe (pression E/S
+0 à 1,7 %), moteur rebâti à 6 h 50 (`eb2d78e46` et suivants : l'index de clé
+primaire, l'annulation d'un COPY), transaction par paquet. Comptes égaux.
+
+| Réglage | Passes | **Médiane** | Pic | Première chose cherchable | COPY refusés |
+|---|---|---|---|---|---|
+| contrôle : fichiers 2 048 × 4 | 74 s | — | 9,4 Go | 57 s | 0 |
+| fichiers 2 048 × 1 | 78 · 77 · 78 s | **78 s** | 9,1–9,4 Go | 8–10 s | 0 |
+| fichiers 1 024 × 2 | 77 · 77 · 75 s | **77 s** | 8,6–8,8 Go | 9 s | 0 |
+| blobs 2 048 × 1 | 88 · 90 · 89 s | **89 s** | 14,2–14,7 Go | 8–9 s | 0 |
+
+- Le contrôle (74 s) rattache la série à celle de la nuit (médiane 79 s) : le
+  moteur neuf n'a pas déplacé la référence, ou à peine.
+- **Valider à chaque paquet ne coûte presque rien en mode fichiers** (78 s
+  contre 74 à 79), et la première chose cherchable arrive en 8 à 10 s au
+  lieu de 57. En mode blobs, valider à chaque paquet coûte ~10 s (89 contre
+  78 à K = 4) : chaque validation y porte un point de reprise des blobs.
+- 1 024 × 2 vaut 2 048 × 1, avec un pic un peu plus bas.
+- « Première chose cherchable » : l'instant où la synchronisation rend le
+  premier groupe de paquets validé, lu dans son avancement — à quelques
+  secondes près.
