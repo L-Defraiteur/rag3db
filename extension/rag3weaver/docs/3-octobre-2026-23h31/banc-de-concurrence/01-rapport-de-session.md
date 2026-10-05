@@ -266,7 +266,24 @@ amonts (`8c83c3360`, puis le second lot).
       Le correctif de la session cœur C++ (`f3a581fb8`), joué ici, le verdit ;
     - la joignabilité « fond » contre « masse », sur les vrais vecteurs de l'arbre principal :
       pas d'écart au banc. Le premier compte était faussé par 159 lignes dans des groupes de
-      plus de dix vecteurs identiques.
+      plus de dix vecteurs identiques. L'arbre principal propose de clore la piste ;
+    - la chasse, par lecture, au motif de la clé perdue (un pointeur gardé à travers une
+      réallocation, `HashIndex::splitSlots`) dans l'index et le versement des blocs. Un seul
+      suspect fort, celui-là, corrigé par la session cœur C++. Quatre faibles, sans chemin
+      trouvé, notés ici et sans ticket :
+      - `mergeSlot` (`hash_index.cpp` ~387) : des `KU_ASSERT` relisent une page qu'un
+        `pushBack` a pu désépingler, en Debug seulement ;
+      - `disk_array.cpp:48` : une référence à un élément passée à l'`emplace_back` du même
+        vecteur, sûre avec libstdc++ et libc++ ;
+      - `DictionaryChunk::appendString` : un `resize` puis la lecture de `val`, fautif
+        seulement si un dictionnaire s'ajoutait à lui-même (aucun appelant trouvé) ;
+      - `OverflowFile::setStringOverflow` : le tampon d'un `emplace` qui échoue, si une
+        lecture optimiste est rejouée pendant un point de reprise ;
+      - et hors motif, `ColumnChunk::write` (`column_chunk.cpp` ~268) : la seconde boucle ne
+        fait jamais avancer son segment, et `min(numValues, taille) - offset` déborde en
+        non signé quand `numValues < offset`. Pas de témoin possible : la fonction n'a aucun
+        appelant (code mort, par recherche). À retirer, ou à corriger le jour où elle sert.
+      `lastNodeGroup` relu hors verrou est allé au ticket A3′ (`9c274b0ca`).
 
 ## Ce qui m'attend
 
