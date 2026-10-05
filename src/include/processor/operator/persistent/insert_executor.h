@@ -42,6 +42,11 @@ struct NodeTableInsertInfo {
 
     common::ValueVector* pkVector;
     std::vector<common::ValueVector*> columnDataVectors;
+    // Posés une fois à init, depuis le catalogue : les positions des colonnes de chaque index
+    // parmi les propriétés, et pour chaque position son numéro de colonne (pour relire une
+    // ligne, skipInsert).
+    std::vector<std::vector<common::idx_t>> indexPropertyPositions;
+    std::vector<common::column_id_t> columnIDOfPosition;
 
     NodeTableInsertInfo(storage::NodeTable* table,
         evaluator::evaluator_vector_t columnDataEvaluators)

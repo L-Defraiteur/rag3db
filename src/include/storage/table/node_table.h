@@ -149,6 +149,10 @@ public:
     // Return the max node offset during insertions.
     common::offset_t validateUniquenessConstraint(const transaction::Transaction* transaction,
         const common::ValueVector& pkVector) const;
+    // Pour chaque index, les positions de ses colonnes parmi les propriétés de tableEntry
+    // (NodeTableInsertState::indexPropertyPositions). À poser une fois par instruction.
+    std::vector<std::vector<common::idx_t>> getIndexPropertyPositions(
+        const catalog::TableCatalogEntry& tableEntry) const;
 
     void initInsertState(main::ClientContext* context, TableInsertState& insertState) override;
     void insert(transaction::Transaction* transaction, TableInsertState& insertState) override;

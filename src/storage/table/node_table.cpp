@@ -496,12 +496,26 @@ bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* tra
         INDEX_NOT_LOADED_FOR_WRITE, tableName));
 }
 
+std::vector<std::vector<idx_t>> NodeTable::getIndexPropertyPositions(
+    const TableCatalogEntry& tableEntry) const {
+    std::vector<std::vector<idx_t>> positions(indexes.size());
+    for (auto i = 0u; i < indexes.size(); i++) {
+        for (const auto columnID : indexes[i].getIndexInfo().columnIDs) {
+            positions[i].push_back(tableEntry.getPropertyPosition(columnID));
+        }
+    }
+    return positions;
+}
+
 void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& insertState) {
     auto& nodeInsertState = insertState.cast<NodeTableInsertState>();
     nodeInsertState.indexInsertStates.resize(indexes.size());
-    nodeInsertState.indexPropertyPositions.resize(indexes.size());
-    const auto* tableEntry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
-        transaction::Transaction::Get(*context), tableID);
+    if (nodeInsertState.indexPropertyPositions.size() != indexes.size()) {
+        // Pas posées par l'appelant (le rejeu) : une recherche au catalogue.
+        nodeInsertState.indexPropertyPositions =
+            getIndexPropertyPositions(*catalog::Catalog::Get(*context)->getTableCatalogEntry(
+                transaction::Transaction::Get(*context), tableID));
+    }
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
         if (!isWritableIndex(indexHolder, transaction::Transaction::Get(*context))) {
@@ -509,10 +523,6 @@ void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& 
             continue;
         }
         const auto index = indexHolder.getIndex();
-        for (const auto columnID : index->getIndexInfo().columnIDs) {
-            nodeInsertState.indexPropertyPositions[i].push_back(
-                tableEntry->getPropertyPosition(columnID));
-        }
         nodeInsertState.indexInsertStates[i] =
             index->initInsertState(context, [&](offset_t offset) {
                 return isVisible(transaction::Transaction::Get(*context), offset);

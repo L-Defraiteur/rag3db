@@ -49,6 +49,10 @@ void NodeTableInsertInfo::init(const ResultSet& resultSet, main::ClientContext* 
         transaction::Transaction::Get(*context), table->getTableID());
     pkVector = columnDataVectors[entry->constCast<catalog::NodeTableCatalogEntry>()
                                      .getPrimaryKeyPosition()];
+    indexPropertyPositions = table->getIndexPropertyPositions(*entry);
+    for (const auto& property : entry->getProperties()) {
+        columnIDOfPosition.push_back(entry->getColumnID(property.getName()));
+    }
 }
 
 void NodeInsertExecutor::init(ResultSet* resultSet, const ExecutionContext* context) {
@@ -108,6 +112,7 @@ nodeID_t NodeInsertExecutor::insert(main::ClientContext* context) {
     }
     auto insertState = std::make_unique<storage::NodeTableInsertState>(*info.nodeIDVector,
         *tableInfo.pkVector, tableInfo.columnDataVectors);
+    insertState->indexPropertyPositions = tableInfo.indexPropertyPositions;
     tableInfo.table->initInsertState(context, *insertState);
     tableInfo.table->insert(transaction, *insertState);
     writeColumnVectors(info.columnVectors, tableInfo.columnDataVectors);
@@ -121,14 +126,11 @@ void NodeInsertExecutor::skipInsert(nodeID_t createdNodeID, main::ClientContext*
     // columnVectors est rangé par position de propriété ; le balayage prend des numéros de
     // colonne, et les traduit lui-même pour les groupes locaux.
     auto transaction = Transaction::Get(*context);
-    const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction,
-        tableInfo.table->getTableID());
-    const auto properties = entry->getProperties();
     std::vector<column_id_t> columnIDs;
     std::vector<ValueVector*> outputVectors;
     for (auto i = 0u; i < info.columnVectors.size(); ++i) {
         if (info.columnVectors[i] != nullptr) {
-            columnIDs.push_back(entry->getColumnID(properties[i].getName()));
+            columnIDs.push_back(tableInfo.columnIDOfPosition[i]);
             outputVectors.push_back(info.columnVectors[i]);
         }
     }

@@ -165,6 +165,10 @@ bool LocalRelTable::delete_(Transaction* transaction, TableDeleteState& state) {
 bool LocalRelTable::addColumn(TableAddColumnState& addColumnState) {
     localNodeGroup->addColumn(addColumnState, nullptr /* FileHandle */,
         nullptr /* newColumnStats */);
+    // La nouvelle propriété prend le numéro de colonne suivant (RelTable::addColumn appelle la
+    // table locale avant d'ajouter la colonne au stockage), et la dernière position ici, après
+    // les deux colonnes de nœuds.
+    positionOfColumn.push_back(localNodeGroup->getDataTypes().size() - 1 - 2);
     return true;
 }
 

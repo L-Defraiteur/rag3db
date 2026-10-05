@@ -26,6 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas](2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md) | ouvert, bloque la stèle (proposé) | blocage, panne de mémoire | oui | oui (paquet défait, COPY refusé) |
 | [Une transaction qui mêle des écritures et un COPY revient à moitié après une mort pendant le point de reprise de sa validation](2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md) | corrigé | perte (et base inouvrable sous IGNORE_ERRORS) | oui (chemin par défaut) | oui, par la transaction par paquet (éteinte par défaut) |
 | [Retirer une colonne déclarée avant la clé primaire casse l'insertion](2026-10-05-drop-d-une-colonne-declaree-avant-la-cle-primaire.md) | en cours (fenêtre A corrigée, 4 témoins rouges) | réponse fausse, perte, plantage | oui | non (rag3weaver ne retire jamais de colonne) |
 | [L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur](2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.md) | requalifié — ce n'est pas l'annulation ; suivi dans « la ligne lointaine » | réponse fausse | oui | oui (paquet défait) |

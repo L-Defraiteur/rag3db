@@ -9,6 +9,7 @@
 
 #ifndef __SINGLE_THREADED__
 
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -437,8 +438,188 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
                 "CREATE (:P {id: 1}), (:P {id: 2});", "ALTER TABLE R DROP a;",
                 "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[r:R {b: 'v', c: 'w'}]->(y) SET "
                 "r.b = 'z';"},
-            "MATCH ()-[r:R]->() RETURN r.b + '/' + r.c;", "z/w"}),
+            "MATCH ()-[r:R]->() RETURN r.b + '/' + r.c;", "z/w"},
+        // Relecture de 8b091813d : ce que la fenêtre A touche sans témoin.
+        ColumnPositionCase{"AddToARelationTableWithRelationsOfTheTransaction",
+            {"CREATE NODE TABLE P(id INT64, PRIMARY KEY (id));",
+                "CREATE REL TABLE R(FROM P TO P, b STRING);",
+                "CREATE (:P {id: 1}), (:P {id: 2});", "BEGIN TRANSACTION;",
+                "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[:R {b: 'v'}]->(y);",
+                "ALTER TABLE R ADD d INT64 DEFAULT 7;"},
+            "MATCH ()-[r:R]->() RETURN r.d;", "7"},
+        ColumnPositionCase{"MergeOfARowOfTheTransactionAfterDrop",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;"},
+            "UNWIND [2, 2] AS k MERGE (n:Item {id: k}) ON CREATE SET n.name = 'c', n.note = 'm' "
+            "RETURN collect(n.note);",
+            "[m,m]"},
+        ColumnPositionCase{"DeleteOfARowOfTheTransactionAfterDropThenReplay",
+            {ITEM, ROW, "CHECKPOINT;", "ALTER TABLE Item DROP extra;", "BEGIN TRANSACTION;",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});",
+                "CREATE (:Item {id: 3, name: 'c', note: 'o'});",
+                "MATCH (n:Item {id: 2}) DELETE n;", "COMMIT;", "REOPEN",
+                "CREATE (:Item {id: 2, name: 'again', note: 'p'});"},
+            "MATCH (n:Item) RETURN count(*);", "3"},
+        ColumnPositionCase{"VectorIndexOnARowOfTheTransactionAfterDrop",
+            {"CREATE NODE TABLE V(id INT64, extra STRING, emb FLOAT[3], PRIMARY KEY (id));",
+                "UNWIND range(0, 49) AS i CREATE (:V {id: i, extra: 'e', emb: [CAST(i AS FLOAT), "
+                "1.0, 2.0]});",
+                "CALL CREATE_VECTOR_INDEX('V', 'vi', 'emb', metric := 'l2');",
+                "ALTER TABLE V DROP extra;", "CREATE (:V {id: 100, emb: [100.0, 1.0, 2.0]});"},
+            "CALL QUERY_VECTOR_INDEX('V', 'vi', [100.0, 1.0, 2.0], 1) RETURN node.id;", "100",
+            true},
+        ColumnPositionCase{"AddAfterDropWithRowsOfTheTransaction",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;", "BEGIN TRANSACTION;",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});",
+                "ALTER TABLE Item ADD x INT64 DEFAULT 5;"},
+            "MATCH (n:Item {id: 2}) RETURN n.note + '/' + CAST(n.x AS STRING);", "m/5"}),
     [](const ::testing::TestParamInfo<ColumnPositionCase>& info) { return info.param.name; });
+
+// Un COPY annulé (BEGIN ; COPY ; ROLLBACK), ou refusé pour une clé en double au milieu de son
+// lot, puis le même COPY validé, puis un point de reprise (5 octobre, cherché pour la session
+// cœur C++ : la « seconde porte » de l'index de clé qui enfle, sans panne de mémoire). Toutes
+// les clés sont retrouvées, mais STATS_INFO compte les lignes annulées, et le point de reprise
+// ne finit pas : plus de 240 s sous 2 Go, ou tué par le plafond sous 4 Go (HashIndex::
+// checkpoint → splitSlots, d'après la pile de la session cœur C++). Sur master tel quel.
+// Le fils a une échéance : un point de reprise sans fin ne doit pas bloquer la passe ; sa
+// mémoire est bornée par la portée de `poste`, qui tue le plus gros processus.
+class RolledBackCopyThenCheckpoint : public UpstreamFixes,
+                                     public ::testing::WithParamInterface<std::string> {
+public:
+    // Comme inChild, avec une échéance : au-delà, le fils est tué et le résultat le dit.
+    std::string inChildWithDeadline(const std::function<int(rag3db::main::Connection&)>& work,
+        std::chrono::seconds deadline) {
+        conn.reset();
+        database.reset();
+        const auto pid = fork();
+        if (pid == 0) {
+            concurrency::disableCoreDumps();
+            int code = 3;
+            try {
+                // Un tampon borné : ce qui enfle s'y heurte au lieu de prendre la mémoire du
+                // poste (la portée de `poste` tuerait alors toute la passe).
+                auto boundedConfig = *systemConfig;
+                boundedConfig.bufferPoolSize = 512ull * 1024 * 1024;
+                // La réservation virtuelle du tampon compte dans RLIMIT_DATA : la ramener.
+                boundedConfig.maxDBSize = 1ull << 30;
+                // Et le tas : ce qui enfle n'est pas dans le tampon (essai du 5 octobre).
+                rlimit dataLimit{3ull << 30, 3ull << 30};
+                setrlimit(RLIMIT_DATA, &dataLimit);
+                rag3db::main::Database childDatabase(databasePath, boundedConfig);
+                rag3db::main::Connection childConnection(&childDatabase);
+                childConnection.query("CALL auto_checkpoint=false;");
+                _exit(work(childConnection));
+            } catch (const std::exception& e) {
+                std::cerr << "  child failed: " << e.what() << "\n";
+            }
+            _exit(code);
+        }
+        const auto end = std::chrono::steady_clock::now() + deadline;
+        int status = 0;
+        while (waitpid(pid, &status, WNOHANG) == 0) {
+            if (std::chrono::steady_clock::now() >= end) {
+                kill(pid, SIGKILL);
+                waitpid(pid, &status, 0);
+                return "past its deadline of " + std::to_string(deadline.count()) + " s";
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (WIFSIGNALED(status)) {
+            return "killed by signal " + std::to_string(WTERMSIG(status));
+        }
+        return WEXITSTATUS(status) == 0 ? "" : "exit code " + std::to_string(WEXITSTATUS(status));
+    }
+};
+
+TEST_P(RolledBackCopyThenCheckpoint, TheCheckpointFinishesAndEveryKeyIsFound) {
+    const auto refused = GetParam() == "Refused";
+    const auto csv = databasePath + ".copy.csv";
+    const auto refusedCsv = databasePath + ".copy-refused.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 0; i < 100000; ++i) {
+            out << i << ",n" << i << "\n";
+        }
+        std::ofstream refusedOut(refusedCsv);
+        for (auto i = 200000; i < 300000; ++i) {
+            refusedOut << i << ",r" << i << "\n";
+            if (i == 250000) {
+                refusedOut << 200050 << ",duplicate\n";
+            }
+        }
+    }
+    // 0 si chaque clé est retrouvée et le compte juste ; 6 sinon.
+    const auto lookups = [](rag3db::main::Connection& connection, const char* when) {
+        int bad = 0;
+        for (const auto key : {0, 50000, 99999, 500000, 500001}) {
+            auto result = connection.query(
+                "MATCH (n:Doc {id: " + std::to_string(key) + "}) RETURN count(*);");
+            if (!result->isSuccess() || result->getNext()->getValue(0)->getValue<int64_t>() != 1) {
+                bad++;
+            }
+        }
+        auto count = connection.query("MATCH (n:Doc) RETURN count(*);");
+        auto stats = connection.query("CALL STATS_INFO('Doc') RETURN cardinality;");
+        std::cerr << "  " << when << ": " << count->getNext()->getValue(0)->toString()
+                  << " rows, STATS_INFO " << stats->getNext()->getValue(0)->toString() << ", "
+                  << bad << " keys not found\n";
+        return bad == 0 ? 0 : 6;
+    };
+    const auto written = inChildWithDeadline(
+        [&](rag3db::main::Connection& connection) {
+            if (runOrFail(connection,
+                    "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);")) {
+                return 4;
+            }
+            if (refused) {
+                auto result =
+                    connection.query("COPY Doc FROM '" + refusedCsv + "' (header=false);");
+                if (result->isSuccess()) {
+                    return 4;
+                }
+            } else if (runOrFail(connection, "BEGIN TRANSACTION;") ||
+                       runOrFail(connection, "COPY Doc FROM '" + csv + "' (header=false);") ||
+                       runOrFail(connection, "ROLLBACK;")) {
+                return 4;
+            }
+            if (runOrFail(connection, "COPY Doc FROM '" + csv + "' (header=false);") ||
+                runOrFail(connection, "CREATE (:Doc {id: 500000, name: 'a'});") ||
+                runOrFail(connection, "CREATE (:Doc {id: 500001, name: 'b'});")) {
+                return 4;
+            }
+            if (const auto bad = lookups(connection, "before the checkpoint")) {
+                return bad;
+            }
+            if (runOrFail(connection, "CHECKPOINT;")) {
+                return 5;
+            }
+            return lookups(connection, "after the checkpoint");
+        },
+        std::chrono::seconds(60));
+    const auto checkFor = [](const std::string& outcome) -> std::string {
+        if (outcome == "exit code 4") {
+            return "setup";
+        }
+        if (outcome == "exit code 6") {
+            return "keys-found";
+        }
+        return "checkpoint-finishes";
+    };
+    EXPECT_EQ(written, "") << "[check: " << checkFor(written) << "] " << written;
+    if (written.empty()) {
+        const auto reopened = inChildWithDeadline(
+            [&](rag3db::main::Connection& connection) {
+                return lookups(connection, "after reopening");
+            },
+            std::chrono::seconds(60));
+        EXPECT_EQ(reopened, "") << "[check: keys-found-after-reopening] " << reopened;
+    }
+    std::filesystem::remove(csv);
+    std::filesystem::remove(refusedCsv);
+}
+
+INSTANTIATE_TEST_SUITE_P(Copies, RolledBackCopyThenCheckpoint,
+    ::testing::Values("RolledBack", "Refused"),
+    [](const ::testing::TestParamInfo<std::string>& info) { return info.param; });
 
 // Garde-fou vert : la lecture partielle d'une colonne de chaînes de relations au point de
 // reprise d'une seule région (Ladybug 254a7444d, chaînes réécrites aux mauvaises lignes).
