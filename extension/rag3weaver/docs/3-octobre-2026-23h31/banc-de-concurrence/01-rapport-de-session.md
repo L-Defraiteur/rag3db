@@ -221,15 +221,40 @@ amonts (`8c83c3360`, puis le second lot).
     - `data-file-bounded` est passé vert une fois (rouge 4 fois sur 5) : il est déplacé de
       `known_red.txt` vers `probabilistic.txt`, sans correctif. L'écart à la règle est
       signalé à l'orchestration.
+21. **La nuit du 5 octobre, suite** :
+    - `ProductReloadRecovery` rendu presque constant par un seul fil (`45aca6dc1`) : 29 rouges
+      sur 30, toujours sur la ligne 15. Le hasard qui reste est la graine de l'index.
+      Une quatrième fin, sans annulation, est rouge 10 fois sur 10 : ce n'est pas
+      l'annulation, c'est le graphe bâti par des COPY successifs. Mon hypothèse des arêtes
+      de retour était fausse, la session cœur C++ l'avait établi dans un seul processus. Les
+      tickets ont été réécrits par elle. La règle « jamais retirée en silence » est en tête
+      de `known_red.txt` ;
+    - un rouge isolé de `DeathDuringDeletesAndVectorSearchKeepsTheIndexExact`
+      (`vector-extension-loaded`), le 5 octobre vers 1 h 20, sous une forte charge du poste :
+      rejoué vert. S'il revient, le délai de mort doit dépendre de la préparation au lieu
+      d'être fixe (décision de l'orchestration) ;
+    - le seul COPY qui reste forcé, `ForcedCopyCheckpointDeath` (`8900138c8`), trois formes ×
+      sept instants de mort du point de reprise de la validation. Douze rouges dans
+      `known_red.txt`, bloque la stèle :
+      - le COPY sous IGNORE_ERRORS qui écarte une clé en double rend la base inouvrable :
+        sa suppression est journalisée sans son insertion ;
+      - une transaction qui mêle des écritures et un COPY revient à moitié, même au réglage
+        par défaut (105 lignes). Le COMMIT n'avait pas rendu la main ;
+      - le correctif de la session cœur C++ pour le premier défaut (`9c0c6532d`) a été joué
+        ici, appliqué temporairement : il ne suffit pas pour le second. Le remède retenu
+        est qu'une transaction forcée n'écrive rien au fichier du journal ;
+      - ticket `2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md`.
 
 ## Ce qui m'attend
 
-- la cause du défaut d'index à l'annulation est chez la session cœur C++. Une fois son
-  correctif fait, les deux cas de `ProductReloadRecovery` doivent passer verts sur des
-  essais répétés ;
-- un témoin qui compte les arêtes du graphe par les internes (aucune arête d'une ligne
-  validée vers un décalage annulé), si la session cœur C++ le veut au banc ;
-- `data-file-bounded` déterministe, si l'orchestration le préfère.
+- la relecture croisée du remède de la session cœur C++ pour l'atomicité : l'invariant
+  (jamais validée sans journal et sans point de reprise abouti) et le point de reprise qui
+  échoue sans mort (toute la transaction défaite). Les douze lignes sortent de
+  `known_red.txt` dans son commit ;
+- l'étape 4 du chargement journalisé : réécrire mes deux témoins de l'attente (2a) le jour du
+  basculement, et sortir `TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout` ;
+- une graine réglable de l'index vectoriel, demandée à la session cœur C++ : elle rendrait
+  `ProductReloadRecovery` déterministe.
 
 ## Décisions et pourquoi
 
