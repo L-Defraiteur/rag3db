@@ -1,6 +1,7 @@
 #include "storage/index/hash_index.h"
 
 #include <bitset>
+#include <deque>
 
 #include "common/assert.h"
 #include "common/exception/message.h"
@@ -141,11 +142,20 @@ void HashIndex<T>::splitSlots(PageAllocator& pageAllocator, const Transaction* t
     auto overflowSlotIterator = oSlots->iter_mut();
     // The overflow slot iterators will hang if they access the same page
     // So instead buffer new overflow slots here and append them at the end
-    std::vector<OnDiskSlotType> newOverflowSlots;
+    //
+    // Un deque, pas un vector : la case d'origine peut elle-même se trouver ici (une case créée
+    // dans cet appel, dont la chaîne passe par une de ces cases neuves, et que la montée de
+    // niveau fait rediviser avant la fin de l'appel). Un vector réalloué par l'emplace_back
+    // d'en dessous laissait originalSlot dans la mémoire libérée : empreinte fausse recopiée,
+    // entrée laissée valide — une clé sur disque que l'index ne retrouvait plus jamais.
+    std::deque<OnDiskSlotType> newOverflowSlots;
+
+    // Les cases neuves ne rejoignent oSlots qu'à la fin : ce nombre ne bouge pas d'ici là.
+    const auto numOverflowSlots = oSlots->getNumElements(transaction->getType());
 
     auto getNextOvfSlot = [&](slot_id_t nextOvfSlotId) {
-        if (nextOvfSlotId >= oSlots->getNumElements()) {
-            return &newOverflowSlots[nextOvfSlotId - oSlots->getNumElements()];
+        if (nextOvfSlotId >= numOverflowSlots) {
+            return &newOverflowSlots[nextOvfSlotId - numOverflowSlots];
         } else {
             return &*overflowSlotIterator.seek(nextOvfSlotId);
         }
@@ -162,8 +172,7 @@ void HashIndex<T>::splitSlots(PageAllocator& pageAllocator, const Transaction* t
                     continue; // Skip invalid entries.
                 }
                 if (newEntryPos >= PERSISTENT_SLOT_CAPACITY) {
-                    newSlot->header.nextOvfSlotId =
-                        newOverflowSlots.size() + oSlots->getNumElements();
+                    newSlot->header.nextOvfSlotId = newOverflowSlots.size() + numOverflowSlots;
                     newOverflowSlots.emplace_back();
                     newSlot = &newOverflowSlots.back();
                     newEntryPos = 0;

@@ -1,6 +1,6 @@
 # Une clé sort de l'index de clé primaire après deux COPY de 50 000 lignes
 
-- **État** : ouvert, côté moteur (le cœur C++ prend l'isolement). **Bloque la stèle.**
+- **État** : corrigé le 5 octobre 2026 par la session cœur C++ (« fix(index de clé): la division des cases ne lit plus une case de débordement dans une mémoire libérée »). Reste, côté rag3weaver : rejouer le témoin rouge attendu et le remettre dans la batterie.
 - **Gravité** : perte. Avant le filet du 5 octobre 2026, des arêtes étaient sautées en silence.
 - **Atteignable en service** : oui, sur le chemin par défaut, sans annulation, sans transaction par paquet, sans panne de mémoire.
 - **Touche rag3weaver** : oui (toute pose de liens par clé : COPY des liens, MERGE des liens).
@@ -43,6 +43,43 @@ TX_ARRET_ROLE=temoin TX_ARRET_BASE=<dossier>/base.rag3db TX_ARRET_GROS=1 \
 
 La sonde qui recalcule les uuids (`tests/sonde_uuid_absent.rs`) est jetable et n'est pas
 commitée.
+
+## La cause
+
+Un défaut d'origine de `HashIndex::splitSlots` (`src/storage/index/hash_index.cpp`), sans
+rapport avec l'annulation. Quand un point de reprise agrandit un index non vide, la division
+traite les cases une à une et gardait les cases de débordement neuves dans un `std::vector`.
+Si une des 256 parts de l'index fait plus que doubler, le niveau monte pendant l'appel et une
+case créée dans l'appel y est redivisée ; quand sa chaîne passait par une case de débordement
+neuve, le pointeur de la case d'origine visait ce vecteur, que l'ajout suivant réallouait. La
+suite lisait et écrivait dans la mémoire libérée : une empreinte fausse recopiée, une entrée
+laissée valide. La clé est sur disque sous une mauvaise empreinte — introuvable, et la
+réouverture ne répare rien. ASan le dit en une passe (heap-use-after-free).
+
+L'événement est rare par case, de l'ordre d'un par index à ces tailles : d'où « une clé », pas
+toujours la même d'une passe à l'autre, toujours du premier COPY. Les clés de chaîne sont les
+plus exposées (9 entrées par case, 14 pour un entier). Tout point de reprise qui agrandit un
+index de clé non vide y passe, COPY comme insertions ordinaires.
+
+Isolé sans rag3weaver : les 100 000 uuids de Symbol de la base `sans-tx`, rechargés dans une
+table neuve du moteur nu par deux COPY de 50 000 — 1 clé introuvable, 6 passes sur 6, sur le
+moteur d'avant nos correctifs de l'index (bibliothèque à `5771f0afb`) comme sur celui du
+correctif de l'annulation ; en un seul COPY, 0. Clés synthétiques longues : 47 000 puis
+200 000 lignes, 1 clé perdue ; 30 000 puis 200 000, 2.
+
+Le correctif : des références stables pour les cases neuves (un `std::deque`).
+
+## Une base déjà touchée
+
+Elle garde sa clé introuvable : le correctif n'y revient pas. **Elle se réindexe.** Pas de
+commande de reconstruction de l'index de clé (décision de l'orchestration, 5 octobre : aucune
+base à sauver). La requête de contrôle par balayage est plus bas.
+
+## Témoin du moteur
+
+`test/storage/hash_index_split_test.cpp`, `HashIndexSplitTest` (dans `local_hash_index_test`) :
+trois couples de tailles par COPY, et la même croissance par insertions ordinaires suivies d'un
+`CHECKPOINT` ; chaque clé cherchée par l'index, dans la session et après réouverture.
 
 ## Témoin
 
