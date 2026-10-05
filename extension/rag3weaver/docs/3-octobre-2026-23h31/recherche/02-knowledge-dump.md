@@ -123,6 +123,32 @@ mesurée sur ce banc (0,449 > 0,405 tel quel > 0,369 meilleur H réglé).
 La passe a duré 384 s tout compris (~56 s partagées avec une analyse de
 c0). Reste (b) : le découpeur amélioré rattrape-t-il le creux ?
 
+### Le repli par branche (872d60e99, 5 octobre)
+
+- La règle vit dans les NŒUDS DE SIGNAL (Vector/BM25/Sparse), jamais au
+  runtime : chute attrapée au nœud → liste vide + SignalBranchStatus sur
+  le port `status` (émis TOUJOURS, « available » compris) + le message
+  par la MÉTA du nœud (ctx.warn seul reste dans le journal du nœud — ce
+  qui touche à la justesse passe par la méta, leçon re-payée).
+- Libellés : « dense/text/sparse signal is not available: … » (modèle
+  absent, index en retard, « aucun index FTS » d'un rebâti) ; « …
+  failed: <raison> » (erreur du moteur). La fusion refuse si TOUTES les
+  branches actives sont tombées (statuts en fan-in — merge_port_values
+  a un bras Vec<SignalBranchStatus>) ; un zéro légitime reste un zéro.
+- SearchOptions.strict_signals = l'erreur entière d'avant.
+  e2e_prise_atomique la fige ; e2e_repli_de_branche porte le défaut
+  (montage : base écrite modele-a, lecteur modele-b — la branche dense
+  n'a pas sa colonne, les mots savent répondre).
+- Câblage : search_chain + search_base/structured/workspace + weighted
+  + simple_hybrid ; le builder rust de graph_tool est le MIROIR du .mmd
+  (rust_and_mermaid_agree compte nœuds ET arêtes — tout arc ajouté au
+  gabarit s'ajoute au miroir). Avertissement « status non câblé » au
+  chargement (backend.rs statuts_non_cables, testé au parseur réel).
+- Le flake du lecteur affamé pendant la batterie : SECOND message du
+  croisement de checkpoint (« Couldn't replay shadow pages… »), corrigé
+  par l'arbre principal (f5de0a3f0) pendant que j'ouvrais un ticket
+  doublon — l'index des tickets se regarde AVANT d'écrire.
+
 ### La note d'utilité comme relecteur (essai 3, 61e0ad13b) — négatif net
 
 score(decider, question, grille, temperature) = Σ pᵢ·i au-dessus de
