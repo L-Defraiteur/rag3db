@@ -3,20 +3,24 @@
 //!
 //! Un groupe revenu à moitié d'une mort pendant sa validation (défaut du
 //! moteur, corrigé par `37608cf4b`), ou tout autre arrêt, pouvait laisser
-//! des morceaux sans leur arête `{E}_CHUNKED_FROM` : la complétude de
-//! l'inchangé ne comptait que les morceaux, le parent était sauté à chaque
-//! relance, et ces morceaux restaient introuvables par la recherche.
+//! deux états que la relance ne réparait jamais :
+//! - des morceaux sans leur arête `{E}_CHUNKED_FROM` : la complétude de
+//!   l'inchangé ne comptait que les morceaux, le parent était sauté à chaque
+//!   relance, et ces morceaux restaient introuvables par la recherche ;
+//! - la marque `relations_pending` d'une passe en masse morte : seule une
+//!   passe en masse l'effaçait, l'état disait « relations en cours » pour
+//!   toujours.
 //!
 //! ```bash
 //! ./run_e2e.sh --test e2e_reprise_durcie
 //! ```
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
-use rag3weaver::code_sync::{sync_source, SourceSyncOptions};
+use rag3weaver::code_sync::{sync_source, RelationsMode, SourceSyncOptions};
 use rag3weaver::code_tools::Snapshot;
 use rag3weaver::connection::DbConnection;
 use rag3weaver::disponibilite::Disponibilites;
@@ -24,10 +28,23 @@ use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::search::{SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
+const ROLE: &str = "REPRISE_DURCIE_ROLE";
+const BASE: &str = "REPRISE_DURCIE_BASE";
+
 fn racine_moteur() -> String {
     std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
     })
+}
+
+fn dossier(cas: &str) -> PathBuf {
+    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/reprise-durcie").join(format!(
+        "{cas}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    std::fs::create_dir_all(&d).unwrap();
+    d
 }
 
 fn corpus(n: usize) -> Vec<(String, String)> {
@@ -96,4 +113,69 @@ fn des_morceaux_sans_leur_arete_sont_refaits_a_la_relance() {
     assert_eq!(compte(&catalog, SANS_ARETE), 0, "la relance a refait les morceaux sans arête");
     let (apres, _) = retrouvee(catalog);
     assert!(apres, "après la relance, la recherche retrouve f10 par son vecteur");
+}
+
+/// Le rôle du fils : une passe en masse, tuée au paquet 2.
+#[test]
+#[ignore]
+fn role_enfant() {
+    let (Ok(_), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let mut catalog = catalogue(Rag3dbConnection::new(&base).expect("base"));
+    let options = SourceSyncOptions {
+        batch_files: 16,
+        relations: Some(RelationsMode::Bulk),
+        exige: Disponibilites::RECHERCHE_TEXTE,
+        ..Default::default()
+    };
+    let _ = sync_source(&mut catalog, &Snapshot::new("depot", corpus(80)), &options, &mut |_| {});
+    println!("PAS TUE");
+}
+
+fn marque(catalog: &Catalog) -> String {
+    catalog
+        .execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relations_pending:' RETURN m._value")
+        .unwrap()
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// **La marque d'une passe en masse morte s'efface par une passe par paquet
+/// qui va au bout.**
+#[test]
+#[ignore]
+fn la_marque_des_relations_s_efface_par_une_passe_par_paquet_complete() {
+    let d = dossier("marque");
+    let base = d.join("base.rag3db");
+    let sortie = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .env(ROLE, "masse")
+        .env(BASE, &base)
+        .env("RAG3WEAVER_TEST_KILL_IN_BATCH", "2")
+        .env_remove("RAG3WEAVER_TX_PAR_PAQUET")
+        .output()
+        .expect("lancer le fils");
+    use std::os::unix::process::ExitStatusExt;
+    let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
+    assert_eq!(sortie.status.signal(), Some(9), "la passe en masse meurt au paquet 2 :\n{texte}");
+
+    let mut catalog = catalogue(Rag3dbConnection::new(&base).expect("rouvrir"));
+    let laissee = marque(&catalog);
+    assert!(!laissee.is_empty(), "la passe morte a laissé sa marque");
+    let options = SourceSyncOptions {
+        batch_files: 16,
+        relations: Some(RelationsMode::PerBatch),
+        exige: Disponibilites::RECHERCHE_TEXTE,
+        takeover: true,
+        ..Default::default()
+    };
+    let r = sync_source(&mut catalog, &Snapshot::new("depot", corpus(80)), &options, &mut |_| {}).expect("passe par paquet");
+    assert_eq!(r.failed, 0, "{r:?}");
+    println!("▸ marque laissée « {laissee} », après la passe par paquet « {} »", marque(&catalog));
+    assert_eq!(marque(&catalog), "", "la passe par paquet allée au bout efface la marque");
+    drop(catalog);
+    let _ = std::fs::remove_dir_all(&d);
 }

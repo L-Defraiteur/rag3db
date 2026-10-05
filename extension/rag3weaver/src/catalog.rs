@@ -4071,7 +4071,7 @@ impl Catalog {
     }
 
     /// Read a single `_catalog_meta` value.
-    fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
+    pub(crate) fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self.conn.execute_with_params(
             &stmt,

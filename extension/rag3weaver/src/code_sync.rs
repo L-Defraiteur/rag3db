@@ -554,6 +554,14 @@ fn synchroniser_la_source(
     catalog.end_proving_presence();
     if mode == RelationsMode::Bulk {
         let _ = catalog.persist_meta_key(&marque, "");
+    } else if resultat.is_ok() && !options.plan_only {
+        // **Une passe par paquet qui va au bout a posé ses relations** : la
+        // marque laissée par une passe en masse morte (ou revenue à moitié)
+        // ne doit pas dire « relations en cours » pour toujours — seule une
+        // passe en masse l'effaçait (5 octobre 2026).
+        if catalog.read_meta_key(&marque).ok().flatten().is_some_and(|v| !v.is_empty()) {
+            let _ = catalog.persist_meta_key(&marque, "");
+        }
     }
     if resultat.is_err() || options.plan_only {
         let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
