@@ -22,8 +22,9 @@ pub enum DbError {
 
     /// **La base doit être fermée puis rouverte** : un point de reprise y a
     /// échoué, et le moteur refuse tout jusqu'à la réouverture
-    /// ([`REOPEN_AFTER_FAILED_CHECKPOINT`]). Rien n'est sûr d'ici là — ni
-    /// retenter, ni rejouer.
+    /// ([`REOPEN_AFTER_FAILED_CHECKPOINT`]), ou son tampon a été plein
+    /// ([`BUFFER_POOL_FULL`]). Rien n'est sûr d'ici là — ni retenter, ni
+    /// rejouer.
     #[error("must reopen: {0}")]
     MustReopen(String),
 }
@@ -34,6 +35,16 @@ pub enum DbError {
 /// lui seul, qu'une erreur du moteur est reconnue.
 pub const REOPEN_AFTER_FAILED_CHECKPOINT: &str =
     "A checkpoint of this database failed, so it must be closed and reopened";
+
+/// **Le tampon du moteur plein** (`MemoryManager`, « Unable to allocate
+/// memory! The buffer pool is full and no memory could be freed! »). Un
+/// COPY refusé ainsi après avoir réservé ses lignes laisse la table fausse
+/// en mémoire jusqu'à la réouverture (défaut du moteur, cœur C++, 5 octobre
+/// 2026) : le repli MERGE y aurait cherché ses clés et écrit des doublons.
+/// Reconnu comme une raison de rouvrir, comme un point de reprise échoué.
+/// **Un filet à garder** même après le correctif du moteur, tant qu'une
+/// preuve ne dit pas qu'il est inutile.
+pub const BUFFER_POOL_FULL: &str = "The buffer pool is full";
 
 /// **Le code de sortie d'un hôte dont la base doit être rouverte** (75,
 /// `EX_TEMPFAIL`) : `rag3weaver-backend` et `rag3daemon` répondent l'erreur,
@@ -259,6 +270,8 @@ pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
         BufferPoolSource::EngineDefault => "défaut du moteur",
     };
     match choice.bytes {
+        // Sous le Gio, en Mio : un petit tampon ne s'écrit pas « 0.0 Gio ».
+        Some(b) if b < 1u64 << 30 => format!("{} Mio, {source}", b >> 20),
         Some(b) => format!("{:.1} Gio, {source}", b as f64 / (1u64 << 30) as f64),
         None => format!("80 % de la mémoire vive, {source}"),
     }

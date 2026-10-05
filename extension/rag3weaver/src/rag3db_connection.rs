@@ -90,6 +90,24 @@ struct ReopenState {
     /// Crochet de test : nombre d'instructions encore servies avant de
     /// répondre comme un point de reprise échoué ; négatif, inactif.
     inject_after: std::sync::atomic::AtomicI64,
+    /// **Fermer sans point de reprise** : posé quand le tampon a été plein.
+    /// La table peut être fausse en mémoire, et un point de reprise sur elle
+    /// enfle sans fin (cœur C++, 5 octobre 2026) ; la réouverture repart du
+    /// disque et du journal, et elle est juste.
+    close_without_checkpoint: std::sync::atomic::AtomicBool,
+}
+
+/// **La dernière connexion d'une base au tampon plein la ferme sans point de
+/// reprise** : elle défait une transaction restée ouverte, puis coupe le
+/// point de reprise de fermeture — directement sur le moteur, l'empoisonnement
+/// côté rag3weaver refusant tout le reste.
+impl Drop for Rag3dbConnection {
+    fn drop(&mut self) {
+        if self.reopen.close_without_checkpoint.load(std::sync::atomic::Ordering::SeqCst) && Arc::strong_count(&self.db) == 1 {
+            let _ = self.conn.query("ROLLBACK");
+            let _ = self.conn.query("CALL force_checkpoint_on_close=false");
+        }
+    }
 }
 
 // rag3db::Connection is already Send+Sync (unsafe impl in the crate).
@@ -376,6 +394,28 @@ impl Rag3dbConnection {
             let mut reason = self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner());
             reason.get_or_insert_with(|| message.clone());
             return DbError::MustReopen(message);
+        }
+        // **Le tampon plein empoisonne aussi la base** : après ce refus, la
+        // table peut être fausse en mémoire ; plus rien ne s'y écrit. Le
+        // message dit la cause et le réglage — sans lui, la reprise
+        // retomberait au même endroit.
+        if message.contains(crate::connection::BUFFER_POOL_FULL) {
+            self.reopen.close_without_checkpoint.store(true, std::sync::atomic::Ordering::SeqCst);
+            // Hors transaction, le moteur l'accepte tout de suite ; dans une
+            // transaction défaite, la fermeture le refait après un ROLLBACK.
+            let _ = self.conn.query("CALL force_checkpoint_on_close=false");
+            let tampon = self
+                .buffer_pool
+                .map(crate::connection::describe_buffer_pool)
+                .unwrap_or_else(|| "tampon fourni par l'appelant".to_string());
+            let raison = format!(
+                "{message} — le tampon du moteur est plein ({tampon}) : la base doit être rouverte, avec un tampon \
+                 plus grand (RAG3DB_BUFFER_POOL_SIZE en octets, ou buffer_pool au manifeste ; règle par défaut : \
+                 la moitié de la mémoire vive, au plus 8 Gio), ou en indexant moins à la fois"
+            );
+            let mut reason = self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner());
+            reason.get_or_insert_with(|| raison.clone());
+            return DbError::MustReopen(raison);
         }
         let mut premier = self.first_refusal.lock().unwrap_or_else(|p| p.into_inner());
         if message.contains(TRANSACTION_ABORTED) {

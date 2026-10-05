@@ -351,6 +351,12 @@ impl Node for InsertRecordNode {
                         uuid_to_node_id = Some(ids);
                     }
                     Ok(None) => {}
+                    // Une base à rouvrir (tampon plein, point de reprise
+                    // échoué) ne se replie pas : le MERGE écrirait dans une
+                    // table que la mémoire du moteur a peut-être faussée.
+                    Err(cause) if conn.must_reopen().is_some() => {
+                        return Err(format!("insertion dans « {entity_name} » : {cause}"));
+                    }
                     Err(cause) => {
                         ctx.warn(&format!("insertion dans « {entity_name} » : {REPLI_EN_MASSE} ({cause}), retour au MERGE"));
                     }
@@ -1128,6 +1134,9 @@ impl Node for LinkRecordNode {
                             continue;
                         }
                         Ok(false) => {}
+                        Err(cause) if conn.must_reopen().is_some() => {
+                            return Err(format!("lien « {rel_name} » : {cause}"));
+                        }
                         Err(cause) => {
                             ctx.warn(&format!("lien « {rel_name} » : {REPLI_EN_MASSE} ({cause}), retour au chemin par lots"));
                         }
