@@ -75,14 +75,20 @@ bool Transaction::journalExceedsCopyThreshold() const {
     return localWAL && localWAL->getSize() > copyJournalThreshold();
 }
 
+void Transaction::setForceCheckpoint() {
+    forceCheckpoint = true;
+    // Sur une base en mémoire rien n'est forcé ni journalisé (shouldForceCheckpoint,
+    // shouldLogToWAL) : le journal reste comme il est.
+    if (localWAL && shouldForceCheckpoint()) {
+        localWAL->discard();
+    }
+}
+
 void Transaction::fallBackToForcedCheckpoint() {
     if (forceCheckpoint) {
         return;
     }
-    forceCheckpoint = true;
-    if (localWAL) {
-        localWAL->discard();
-    }
+    setForceCheckpoint();
     storage::StorageManager::Get(*clientContext)->getWAL().noteCopyJournalFallback();
 }
 

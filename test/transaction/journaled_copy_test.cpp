@@ -23,6 +23,8 @@
 #include "main/database.h"
 #include "storage/table/node_table.h"
 #include "storage/storage_utils.h"
+#include "storage/wal/local_wal.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::main;
 using namespace rag3db::testing;
@@ -1551,6 +1553,186 @@ TEST_F(CopyJournalThresholdTest, AFallenBackRelationCopyDiesAfterAndBeforeItsCom
     EXPECT_EQ(journalSize(), 0u);
     createDBAndConn();
     expectRels(30000, 1);
+}
+
+// Une transaction forcée — durable par son seul point de reprise : un COPY sous le réglage
+// d'aujourd'hui, un COPY qui écarte des lignes, la création d'un index — n'écrit rien au fichier
+// du journal (37608cf4b). Elle tenait pourtant son journal en mémoire jusqu'à sa validation,
+// pour le jeter : ses écritures ordinaires y étaient sérialisées pour rien, en mémoire que le
+// tampon ne peut pas évincer. Dès qu'elle devient forcée, son journal est vidé et plus rien n'y
+// est écrit.
+class ForcedTransactionJournalTest : public CopyJournalThresholdTest {
+protected:
+    // Comme aujourd'hui : un COPY force son point de reprise.
+    void openForced() {
+        createDBAndConn();
+        ok("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);");
+        ok("CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
+        ok("UNWIND range(500000, 500199) AS i CREATE (:Doc {id: i, name: 'old', score: 0.5});");
+        ok("CHECKPOINT;");
+        ok("CALL auto_checkpoint=false;");
+    }
+
+    uint64_t journalInMemory() {
+        return rag3db::transaction::Transaction::Get(*conn->getClientContext())
+            ->getLocalWAL()
+            .getSize();
+    }
+
+    // Deux cents mises à jour d'une chaîne de 2 000 caractères : 400 Ko de journal.
+    void bigUpdates(const std::string& letter) {
+        ok("MATCH (d:Doc) WHERE d.id >= 500000 SET d.name = repeat('" + letter + "', 2000);");
+    }
+
+    static void childForcedSchema(Connection& child) {
+        must(child, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);");
+        must(child, "CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
+        must(child, "UNWIND range(500000, 500199) AS i CREATE (:Doc {id: i, name: 'old', "
+                    "score: 0.5});");
+        must(child, "CHECKPOINT;");
+    }
+
+    // Des écritures ordinaires avant le COPY forcé, et après lui.
+    static void mixedTransaction(Connection& child, const std::string& copy) {
+        must(child, "BEGIN TRANSACTION;");
+        must(child, "CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+        must(child, "MATCH (d:Doc) WHERE d.id >= 500000 AND d.id < 500200 SET d.name = "
+                    "repeat('x', 2000);");
+        must(child, "MATCH (d:Doc {id: 500007}) DELETE d;");
+        must(child, copy);
+        must(child, "CREATE (:Doc {id: 900001, name: 'created after', score: 2.5});");
+        must(child, "MATCH (a:Doc {id: 900000}), (b:Doc {id: 12}) CREATE (a)-[:Link {weight: "
+                    "9}]->(b);");
+    }
+
+    void expectTheMixedTransaction() {
+        EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 3000 + 199 + 2);
+        expectRows(0, 3000);
+        EXPECT_EQ(text("MATCH (d:Doc {id: 900000}) RETURN d.name;"), "created");
+        EXPECT_EQ(text("MATCH (d:Doc {id: 900001}) RETURN d.name;"), "created after");
+        EXPECT_EQ(single("MATCH (d:Doc) WHERE d.id >= 500000 AND d.id < 500200 AND size(d.name) "
+                         "= 2000 RETURN count(*);"),
+            199);
+        EXPECT_EQ(single("MATCH (d:Doc {id: 500007}) RETURN count(*);"), 0);
+        EXPECT_EQ(single("MATCH (a:Doc {id: 900000})-[l:Link]->(b:Doc) RETURN b.id * 100 + "
+                         "l.weight;"),
+            1209);
+    }
+
+    void expectNothingOfIt() {
+        EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 200);
+        EXPECT_EQ(single("MATCH (d:Doc) WHERE d.name = 'old' RETURN count(*);"), 200);
+        EXPECT_EQ(single("MATCH (:Doc)-[l:Link]->(:Doc) RETURN count(l);"), 0);
+    }
+};
+
+// La mémoire : ce que la transaction avait au journal avant de devenir forcée est rendu, et ce
+// qu'elle écrit ensuite n'y va pas.
+TEST_F(ForcedTransactionJournalTest, AForcedTransactionKeepsNoJournalInMemory) {
+    openForced();
+    writeDocs(csvPath, 0, 3000);
+    ok("BEGIN TRANSACTION;");
+    bigUpdates("a");
+    EXPECT_GT(journalInMemory(), 400000u) << "not forced yet: its updates are in its journal";
+    ok(copyFrom(csvPath));
+    EXPECT_EQ(journalInMemory(), 0u) << "forced by its copy: the journal is given back";
+    bigUpdates("b");
+    ok("CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+    EXPECT_EQ(journalInMemory(), 0u) << "and nothing more is written to it";
+    ok("COMMIT;");
+    EXPECT_EQ(journalSize(), 0u);
+    EXPECT_EQ(fallbacks(), 0) << "this is not a fallback of a journaled copy";
+    expectRows(0, 3000);
+    EXPECT_EQ(single("MATCH (d:Doc) WHERE d.id >= 500000 AND d.id < 500200 AND d.name = "
+                     "repeat('b', 2000) RETURN count(*);"),
+        200);
+    createDBAndConn();
+    expectRows(0, 3000);
+    EXPECT_EQ(text("MATCH (d:Doc {id: 900000}) RETURN d.name;"), "created");
+    EXPECT_EQ(single("MATCH (d:Doc) WHERE d.id >= 500000 AND d.id < 500200 AND d.name = "
+                     "repeat('b', 2000) RETURN count(*);"),
+        200);
+}
+
+TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeAForcedCopyCommittedThenDead) {
+    writeDocs(csvPath, 0, 3000);
+    writeThenDie(
+        [&](Connection& child) {
+            childForcedSchema(child);
+            mixedTransaction(child, copyFrom(csvPath));
+            must(child, "COMMIT;");
+        },
+        false /* journaled */);
+    EXPECT_EQ(journalSize(), 0u);
+    createDBAndConn();
+    expectTheMixedTransaction();
+}
+
+TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeAForcedCopyDeadBeforeTheCommit) {
+    writeDocs(csvPath, 0, 3000);
+    writeThenDie(
+        [&](Connection& child) {
+            childForcedSchema(child);
+            mixedTransaction(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    createDBAndConn();
+    expectNothingOfIt();
+}
+
+// Annulée, rien n'en reste ; et la transaction suivante, ordinaire, écrit de nouveau au journal.
+TEST_F(ForcedTransactionJournalTest, RolledBackThenTheNextTransactionIsJournaledAgain) {
+    openForced();
+    writeDocs(csvPath, 0, 3000);
+    ok("BEGIN TRANSACTION;");
+    bigUpdates("a");
+    ok(copyFrom(csvPath));
+    ok("CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+    ok("ROLLBACK;");
+    expectNothingOfIt();
+    EXPECT_EQ(journalSize(), 0u);
+    ok("BEGIN TRANSACTION;");
+    bigUpdates("c");
+    EXPECT_GT(journalInMemory(), 400000u);
+    ok("COMMIT;");
+    EXPECT_GT(journalSize(), 400000u);
+    conn.reset();
+    database.reset();
+    // Et ce journal se rejoue : le fils meurt sans point de reprise après une transaction
+    // forcée annulée puis une ordinaire validée.
+    std::filesystem::remove(databasePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+    writeThenDie(
+        [&](Connection& child) {
+            childForcedSchema(child);
+            mixedTransaction(child, copyFrom(csvPath));
+            must(child, "ROLLBACK;");
+            must(child, "MATCH (d:Doc) WHERE d.id >= 500000 SET d.name = 'again';");
+        },
+        false /* journaled */);
+    ASSERT_GT(journalSize(), 0u);
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 200);
+    EXPECT_EQ(single("MATCH (d:Doc) WHERE d.name = 'again' RETURN count(*);"), 200);
+}
+
+// Le COPY qui écarte des lignes reste forcé sous le réglage du chargement journalisé.
+TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommittedThenDead) {
+    {
+        std::ofstream csv(csvPath);
+        for (int64_t id = 0; id < 3000; id++) {
+            csv << id << ",name " << id << "," << id << ".5\n";
+        }
+        csv << "17,again,0.5\n";
+    }
+    writeThenDie([&](Connection& child) {
+        childForcedSchema(child);
+        mixedTransaction(child, "COPY Doc FROM '" + csvPath + "' (IGNORE_ERRORS=true);");
+        must(child, "COMMIT;");
+    });
+    EXPECT_EQ(journalSize(), 0u);
+    createDBAndConn();
+    expectTheMixedTransaction();
 }
 
 } // namespace

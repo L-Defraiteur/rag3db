@@ -102,10 +102,13 @@ public:
     common::transaction_t getCommitTS() const { return commitTS; }
     int64_t getCurrentTS() const { return currentTS; }
 
-    void setForceCheckpoint() { forceCheckpoint = true; }
+    // La transaction devient forcée : durable par le seul point de reprise que sa validation
+    // impose, entière ou pas du tout (Transaction::commit). Elle n'écrira rien au fichier du
+    // journal : son journal en mémoire est vidé sur-le-champ, et plus rien n'y est écrit. Sur
+    // une base en mémoire rien n'est forcé (shouldForceCheckpoint) : le drapeau y est sans effet.
+    void setForceCheckpoint();
     // Le repli d'un COPY journalisé dont le journal dépasse le seuil : la transaction devient
-    // forcée, son journal est vidé et plus rien n'y est écrit. Une transaction forcée est
-    // durable par son seul point de reprise, entière ou pas du tout (Transaction::commit).
+    // forcée, et la base le compte.
     uint64_t copyJournalThreshold() const;
     bool journalExceedsCopyThreshold() const;
     void fallBackToForcedCheckpoint();
