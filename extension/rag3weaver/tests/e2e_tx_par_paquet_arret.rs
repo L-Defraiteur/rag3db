@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use rag3weaver::code::{default_scope_chunking, register_code_schema};
 use rag3weaver::code_sync::{sync_source, RelationsMode, SourceSyncOptions};
 use rag3weaver::code_tools::Snapshot;
-use rag3weaver::connection::DbConnection;
+use rag3weaver::connection::{CypherValue, DbConnection, QueryParam};
 use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -187,6 +187,94 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
     out
 }
 
+/// Une valeur, écrite de façon stable (les flottants par leurs bits), sans
+/// les champs de session qui diffèrent légitimement entre une base reprise
+/// et une base neuve (repris de `e2e_tx_ligne_a_ligne`). Sans les vecteurs
+/// et leurs marqueurs non plus : la synchronisation exige le plein texte
+/// seul, et le rattrapage opportuniste de la dette d'embarquement (512
+/// lignes par table et par passe, dans l'ordre du parcours) en pose déjà
+/// une partie à la reprise — l'état de la dette, pas les données.
+fn canonique(v: &CypherValue) -> String {
+    match v {
+        CypherValue::Map(m) => format!(
+            "{{{}}}",
+            m.iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "_snapshot" | "_absent_since" | "_id" | "_label" | "_ID" | "_LABEL" | "_src" | "_dst" | "_embed_claim"))
+                .filter(|(k, _)| !k.starts_with("embedding") && !k.starts_with("_embed_hash"))
+                .map(|(k, v)| format!("{k}={}", canonique(v)))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        CypherValue::List(l) => format!("[{}]", l.iter().map(canonique).collect::<Vec<_>>().join(",")),
+        CypherValue::Float(f) => format!("f{:x}", f.to_bits()),
+        autre => format!("{autre:?}"),
+    }
+}
+
+/// **L'empreinte ligne à ligne** du graphe : par table de nœuds et par table
+/// d'arêtes (lues dans les deux sens), le compte et le hachage de l'ensemble
+/// trié des lignes canoniques — propriétés comprises. Et, pour chaque uuid
+/// de chaque table de nœuds, sa recherche **par la clé** (l'index de clé
+/// primaire) : c'est ce contrôle qui aurait vu la clé perdue d'eb2d78e46.
+/// Des empreintes, pas des textes : deux grands ensembles ne se diffent pas.
+fn empreinte(catalog: &Catalog, depot: Option<&Path>) -> (BTreeMap<String, String>, usize) {
+    use std::hash::{Hash, Hasher};
+    let conn = catalog.conn();
+    let mut out = BTreeMap::new();
+    let mut introuvables = 0usize;
+    // Les lignes de chaque table, triées, déposées dans un fichier : en cas
+    // d'écart, le parent en lit les premières différences, bornées.
+    let resume = |table: &str, lignes: std::collections::BTreeSet<String>| {
+        if let Some(d) = depot {
+            let _ = std::fs::create_dir_all(d);
+            let nom: String = table.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+            let _ = std::fs::write(d.join(nom), lignes.iter().cloned().collect::<Vec<_>>().join("\n"));
+        }
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        lignes.hash(&mut h);
+        format!("{}:{:x}", lignes.len(), h.finish())
+    };
+    let tables = conn.execute("CALL show_tables() RETURN *").unwrap();
+    for r in &tables.rows {
+        let Some(nom) = r.get(1).and_then(|v| v.as_str()) else { continue };
+        if nom.starts_with('_') || !r.iter().any(|v| v.as_str() == Some("NODE")) {
+            continue;
+        }
+        let lignes = conn.execute(&format!("MATCH (n:{nom}) RETURN n, n._uuid")).unwrap().rows;
+        let uuids: Vec<CypherValue> = lignes.iter().map(|l| l[1].clone()).collect();
+        let cle = format!("nœuds {nom}");
+        let v = resume(&cle, lignes.iter().map(|l| canonique(&l[0])).collect());
+        out.insert(cle, v);
+        for tranche in uuids.chunks(5_000) {
+            let trouves = conn
+                .execute_with_params(
+                    &format!("UNWIND $u AS u MATCH (n:{nom} {{_uuid: u}}) RETURN count(n)"),
+                    &[QueryParam::new("u", CypherValue::List(tranche.to_vec()))],
+                )
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                .unwrap() as usize;
+            introuvables += tranche.len() - trouves;
+        }
+    }
+    for d in rag3weaver::relation_directions::count_both_directions(conn).unwrap() {
+        if d.from.starts_with('_') || d.to.starts_with('_') {
+            continue;
+        }
+        for (sens, q) in [
+            ("direct", format!("MATCH (a:{}) WITH a MATCH (a)-[r:{}]->(b:{}) RETURN a._uuid, b._uuid, r", d.from, d.table, d.to)),
+            ("inverse", format!("MATCH (b:{}) WITH b MATCH (b)<-[r:{}]-(a:{}) RETURN a._uuid, b._uuid, r", d.to, d.table, d.from)),
+        ] {
+            let lignes = conn.execute(&q).unwrap().rows;
+            let cle = format!("arêtes {} {}→{} ({sens})", d.table, d.from, d.to);
+            let v = resume(&cle, lignes.iter().map(|l| format!("{}→{} {}", canonique(&l[0]), canonique(&l[1]), canonique(&l[2]))).collect());
+            out.insert(cle, v);
+        }
+    }
+    (out, introuvables)
+}
+
 /// **Le rôle d'un processus fils** : sans variable, rien (il ne tourne que
 /// lancé par le test ci-dessous).
 #[test]
@@ -298,6 +386,12 @@ fn role_enfant() {
     synchroniser(&mut catalog, role == "repreneur");
     // L'écrivain n'arrive jamais ici : le crochet le tue au paquet tué.
     println!("COMPTES {role} {}", serde_json::to_string(&comptes(&catalog)).unwrap());
+    if gros() {
+        let depot = PathBuf::from(format!("{}.lignes-{role}", base.display()));
+        let (e, introuvables) = empreinte(&catalog, Some(&depot));
+        println!("EMPREINTE {role} {}", serde_json::to_string(&e).unwrap());
+        println!("INTROUVABLES_PAR_CLE {introuvables}");
+    }
     if role == "repreneur" {
         // Un point de reprise explicite à la fin de la reprise : sur l'état
         // d'après un COPY annulé, il ne finit pas (le banc) ; ici il doit
@@ -553,11 +647,11 @@ fn une_mort_pendant_la_validation_d_un_groupe_le_laisse_entier_ou_absent() {
 }
 
 /// **Le chemin du ROLLBACK** (K = 4) : le paquet 6 échoue au milieu du
-/// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée
-/// **sans point de reprise** (depuis le 5 octobre 2026 : un point de reprise
-/// sur l'état d'après un COPY annulé est ce que le banc voit ne pas finir) ;
-/// puis la base rouverte dans un processus neuf, l'index repris, et un point
-/// de reprise explicite à la fin qui finit en temps borné. Les comptes sont
+/// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée —
+/// sa fermeture fait un point de reprise sur l'état d'après l'annulation,
+/// sûr depuis 836edfc29 (le compte de l'index de clé recule) ; puis la base
+/// rouverte dans un processus neuf, l'index repris, et un point de reprise
+/// explicite à la fin qui finit en temps borné. Les comptes sont
 /// ceux d'une passe sans échec.
 #[test]
 #[ignore]
@@ -590,7 +684,7 @@ fn point_de_reprise_final(sortie: &str) -> u128 {
 
 /// **Un gros paquet défait** (5 octobre 2026), à la taille du banc : le
 /// deuxième paquet (200 fichiers, 50 000 scopes et autant de morceaux, par
-/// COPY) échoue ; ROLLBACK, base fermée sans point de reprise ; la reprise,
+/// COPY) échoue ; ROLLBACK, base fermée avec son point de reprise ; la reprise,
 /// dans un processus neuf, refait le même COPY et va au bout aux comptes
 /// d'une passe sans échec, puis un point de reprise explicite finit en temps
 /// borné — la recette du banc (COPY annulé, même COPY validé, point de
@@ -618,6 +712,8 @@ fn un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit() {
     let repris = comptes_rendus("repreneur", &sortie);
     let duree = point_de_reprise_final(&sortie);
     let replis_reprise = ligne(&sortie, "REPLIS_EN_MASSE ");
+    let empreinte_reprise = ligne(&sortie, "EMPREINTE repreneur ");
+    let introuvables_reprise = ligne(&sortie, "INTROUVABLES_PAR_CLE ");
     let temoin_dossier = dossier_sur_disque("gros-temoin");
     let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 1);
     GROS.with(|f| f.set(false));
@@ -631,6 +727,40 @@ fn un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit() {
     );
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 100_000, "{temoin:?}");
     assert_eq!(repris, temoin, "après un gros paquet défait et une reprise, les comptes d'une passe sans échec");
+    let empreinte_temoin = ligne(&sortie, "EMPREINTE temoin ");
+    let ecarts: Vec<String> = {
+        let a: BTreeMap<String, String> = serde_json::from_str(&empreinte_reprise).unwrap();
+        let b: BTreeMap<String, String> = serde_json::from_str(&empreinte_temoin).unwrap();
+        a.keys().chain(b.keys()).collect::<std::collections::BTreeSet<_>>().into_iter()
+            .filter(|k| a.get(*k) != b.get(*k))
+            .map(|k| format!("{k} : reprise {:?}, témoin {:?}", a.get(k), b.get(k)))
+            .collect()
+    };
+    println!("▸ ligne à ligne : {} tables, {} écarts ; introuvables par la clé : reprise {introuvables_reprise}, témoin {}", serde_json::from_str::<BTreeMap<String, String>>(&empreinte_temoin).unwrap().len(), ecarts.len(), ligne(&sortie, "INTROUVABLES_PAR_CLE "));
+    if !ecarts.is_empty() {
+        // Les trois premières différences de chaque table en écart, bornées.
+        let a: BTreeMap<String, String> = serde_json::from_str(&empreinte_reprise).unwrap();
+        let b: BTreeMap<String, String> = serde_json::from_str(&empreinte_temoin).unwrap();
+        for k in a.keys().filter(|k| a.get(*k) != b.get(*k)) {
+            let nom: String = k.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+            let lire = |d: &Path| std::fs::read_to_string(d.join(&nom)).unwrap_or_default();
+            let ra = lire(Path::new(&format!("{}.lignes-repreneur", base.display())));
+            let rb = lire(Path::new(&format!("{}.lignes-temoin", temoin_dossier.join("base.rag3db").display())));
+            let mut vues = 0;
+            for (x, y) in ra.lines().zip(rb.lines()) {
+                if x != y {
+                    println!("▸ {k}\n    reprise : {}\n    témoin  : {}", x.chars().take(600).collect::<String>(), y.chars().take(600).collect::<String>());
+                    vues += 1;
+                    if vues == 3 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(ecarts.is_empty(), "la reprise et le témoin, ligne à ligne (propriétés et arêtes) : {ecarts:?}");
+    assert_eq!(introuvables_reprise.trim(), "0", "chaque uuid de la reprise se trouve par sa clé");
+    assert_eq!(ligne(&sortie, "INTROUVABLES_PAR_CLE ").trim(), "0", "chaque uuid du témoin se trouve par sa clé");
     assert!(duree < 60_000, "le point de reprise final finit en temps borné : {duree} ms");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);

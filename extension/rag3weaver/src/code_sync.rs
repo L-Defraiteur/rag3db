@@ -938,7 +938,6 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     catalog.end_proving_presence();
-                    catalog.close_without_checkpoint();
                     format!("valider le paquet : {e}")
                 }
             }
@@ -947,8 +946,6 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             // Défait : les lignes posées n'existent plus, la preuve tombe.
             catalog.end_proving_presence();
             let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
-            // Et la base se fermera sans point de reprise.
-            catalog.close_without_checkpoint();
             format!(
                 "{cause} — le paquet est défait ({})",
                 match defait {
