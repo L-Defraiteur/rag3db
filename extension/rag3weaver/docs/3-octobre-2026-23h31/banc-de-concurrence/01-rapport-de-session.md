@@ -291,6 +291,24 @@ amonts (`8c83c3360`, puis le second lot).
       compte des cases de débordement lu une fois avec le type de la transaction), relu et
       joué sur la liste complète : 63 rouges, comme sans lui. Aucun rouge du banc n'était lui.
 
+## Les rouges du banc devant la condition 1 de la stèle (5 octobre, après `31ad712c5`)
+
+« Plus de défaut connu qui corrompt ou qui perd. » `known_red.txt` porte 67 lignes : les 63 de la
+passe par défaut, plus 4 cas longs.
+
+| Catégorie | Nombre | Lesquels | Tickets |
+|---|---|---|---|
+| Réponse fausse, atteignable en service | 7 | index vectoriel bâti d'un coup qui laisse une ligne injoignable (2) ; mise à jour massive de vecteurs (4, cas longs) ; accent grave doublé dans un nom (1) | `ligne-lointaine-injoignable-index-bati-d-un-coup` (bloque, provisoirement : sur un corpus réel, 0 à 1 sur 12 278) ; `mise-a-jour-massive-de-vecteurs-lignes-injoignables` ; `accent-grave-double-dans-un-nom` |
+| Blocage ou estimation, sans perte | 3 | point de reprise sans fin après un COPY annulé ou refusé (2, correctif `f3a581fb8` prêt) ; cardinalité de `STATS_INFO` après un COPY annulé (1) | `point-de-reprise-sans-fin-apres-un-copy-annule` ; `copy-refuse-gonfle-la-cardinalite` (classement en cours) |
+| Manque de fonction : les verrous et le mode multi-écrivains (marches A3′, A4′, V1, V2, verrou d'index), éteints hors du banc | 57 | C1, C2, C6, C7 sous arrêt brutal, deux colonnes d'une ligne, l'attente prouvée, l'interblocage, l'annonce, le délai, l'interruption, H3, le verrou d'index | la note des verrous ; `annulation-d-un-copy-efface-les-lignes-d-un-autre-ecrivain` |
+| Rouge du banc lui-même | 0 | — | — |
+
+Les 57 de la troisième ligne perdent ou corrompent pour de vrai (clés en double, relations
+pendantes, lignes effacées), mais seulement sous un mode qui n'est pas atteignable en service :
+ce sont les marches de la stèle, pas des défauts du mode en service. Ce qui reste devant la
+condition 1, c'est donc la première ligne (7 cas, trois tickets, tous de l'index vectoriel et
+d'un nom), et la deuxième, qui ne perd rien.
+
 ## Ce qui m'attend
 
 - l'étape 4 du chargement journalisé : réécrire mes deux témoins de l'attente (2a) le jour du
