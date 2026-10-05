@@ -630,13 +630,18 @@ TEST_F(VectorIndexUpdate, CheckpointAfterARefusedCopy) {
 }
 
 // Le défaut lui-même, qui demeure après 1ea49837f : la cardinalité que STATS_INFO rend (et que
-// le planificateur lit) compte les lignes d'un COPY annulé, même après réouverture.
-TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrue) {
+// le planificateur lit) compte les lignes d'un COPY refusé. C'est une estimation : le COPY
+// fusionne ses statistiques dans la table avant sa validation, et rien ne les en retire. Le
+// recalage du 5 octobre (voie (c), comme le reltuples de PostgreSQL) la remet sur le nombre de
+// lignes au point de reprise et à la lecture : juste après le point de reprise, et après la
+// réouverture.
+TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrueAfterACheckpoint) {
     fillThenRefuseACopy(*this);
     if (HasFatalFailure()) {
         return;
     }
-    for (const auto* moment : {"after the refused COPY", "after reopening"}) {
+    mustRun("CHECKPOINT;");
+    for (const auto* moment : {"after a checkpoint", "after reopening"}) {
         auto card = conn->query("CALL STATS_INFO('DocCopy') RETURN cardinality;");
         ASSERT_TRUE(card->isSuccess()) << "[check: query] " << card->getErrorMessage();
         EXPECT_EQ(card->getNext()->getValue(0)->toString(), "200")
@@ -646,6 +651,70 @@ TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrue) {
         database.reset();
         createDBAndConn();
     }
+}
+
+// Avant tout point de reprise, l'estimation reste gonflée : il faut que le COPY garde ses
+// statistiques dans sa transaction (voie (a), avec l'étape 4 du chargement journalisé).
+TEST_F(VectorIndexUpdate, RefusedCopyLeavesTheCardinalityTrueAtOnce) {
+    fillThenRefuseACopy(*this);
+    if (HasFatalFailure()) {
+        return;
+    }
+    auto card = conn->query("CALL STATS_INFO('DocCopy') RETURN cardinality;");
+    ASSERT_TRUE(card->isSuccess()) << "[check: query] " << card->getErrorMessage();
+    EXPECT_EQ(card->getNext()->getValue(0)->toString(), "200")
+        << "[check: cardinality-matches-rows-at-once] ";
+}
+
+// Le fabricant de la base gardée de InflatedCardinalityIsRecalibratedAtOpening : sauté, sauf si
+// BANC_FABRIQUER donne un dossier. À jouer sur un moteur d'AVANT le recalage, qui écrit sur
+// disque une cardinalité gonflée par un COPY annulé.
+TEST_F(VectorIndexUpdate, FabricateADatabaseWithAnInflatedCardinality) {
+    const char* target = std::getenv("BANC_FABRIQUER");
+    if (target == nullptr) {
+        GTEST_SKIP() << "only run to fabricate the kept database";
+    }
+    const auto csv = databasePath + ".inflate.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 200; i < 400; ++i) {
+            out << i << ",n" << i << "\n";
+        }
+    }
+    for (const auto& query : std::vector<std::string>{
+             "CREATE NODE TABLE T(id INT64 PRIMARY KEY, s STRING);",
+             "UNWIND range(0, 199) AS i CREATE (:T {id: i, s: 'r'});", "CHECKPOINT;",
+             "BEGIN TRANSACTION;", "COPY T FROM '" + csv + "' (header=false);", "ROLLBACK;",
+             "CHECKPOINT;"}) {
+        mustRun(query);
+    }
+    auto card = conn->query("CALL STATS_INFO('T') RETURN cardinality;");
+    std::cerr << "  fabricated with STATS_INFO " << card->getNext()->getValue(0)->toString()
+              << "\n";
+    card.reset();
+    conn.reset();
+    database.reset();
+    std::filesystem::create_directories(target);
+    std::filesystem::copy(databasePath, std::string(target) + "/db.kz",
+        std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::remove(csv);
+}
+
+// Une base dont la cardinalité gonflée est déjà écrite sur disque (fabriquée par le moteur
+// d'avant le recalage, dataset/databases/inflated-cardinality) se recale à la lecture.
+TEST_F(VectorIndexUpdate, InflatedCardinalityIsRecalibratedAtOpening) {
+    conn.reset();
+    database.reset();
+    std::filesystem::remove_all(databasePath);
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("dataset/databases/inflated-cardinality/db.kz.gz");
+    ASSERT_EQ(std::system(("gzip -dc '" + fixture + "' > '" + databasePath + "'").c_str()), 0)
+        << "[check: setup] the kept database could not be unpacked";
+    createDBAndConn();
+    auto card = conn->query("CALL STATS_INFO('T') RETURN cardinality;");
+    ASSERT_TRUE(card->isSuccess()) << "[check: query] " << card->getErrorMessage();
+    EXPECT_EQ(card->getNext()->getValue(0)->toString(), "200")
+        << "[check: cardinality-recalibrated-at-opening] ";
 }
 
 // Le miroir de HNSWStorageInfo (extension/vector/src/include/index/hnsw_index.h), pour écrire

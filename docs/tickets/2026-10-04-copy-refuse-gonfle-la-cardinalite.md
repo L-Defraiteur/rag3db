@@ -1,9 +1,9 @@
 # Un COPY refusé laisse la cardinalité de la table gonflée
 
-- **État** : ouvert — confort pour la stèle, sa condition posée (`STATS_INFO` dit qu'il rend une estimation)
+- **État** : en partie corrigé (banc, 5 octobre 2026) — confort pour la stèle. L'estimation est recalée sur le nombre de lignes au point de reprise et à la lecture (voie (c), comme le `reltuples` de PostgreSQL) ; reste le moment d'avant tout point de reprise, avec la voie (a) rattachée à l'étape 4 du chargement journalisé (session cœur C++)
 - **Gravité** : réponse fausse (et, avant `1ea49837f`, plantage)
 - **Atteignable en service** : oui, par tout `COPY` refusé (clé en double, ligne mal formée…)
-- **Touche rag3weaver** : à vérifier ; son chargement en masse passe par `COPY`, et le test `e2e_code` qui meurt en interrompt un
+- **Touche rag3weaver** : non, par lecture : il n'appelle ni `STATS_INFO` ni aucune API de compte du moteur (ses comptes sont des `count(*)`) ; au plus, des plans plus lents à mesure que les paquets défaits gonflent l'estimation
 - **Ouvert le** : 4 octobre 2026, session du banc (essai déterministe de la corruption d'`e2e_code`)
 - **Pour** : cœur C++ (stockage, statistiques)
 
@@ -80,3 +80,44 @@ destinées au planificateur, `cardinality` compte aussi les lignes d'un `COPY` r
 `*_distinct_count` sont approchés, et le compte exact se fait par `MATCH … count(*)`.
 Renommer la colonne `cardinality` changerait ce que lisent les appelants : non fait, à
 décider ailleurs.
+
+## Ce que ce compte faux peut casser (5 octobre, carte des lecteurs)
+
+Depuis `1ea49837f`, plus aucun lecteur ne dimensionne un tableau ni ne borne une boucle par
+cette cardinalité estimée (`TableStats::cardinality`). Les frontières des algorithmes de
+graphe, les masques de balayage, le partitionneur, et les index vectoriel, plein texte et
+spatial lisent le nombre RÉEL de lignes (`numTotalRows`), que l'annulation recule et que la
+lecture recalcule. Restent deux lecteurs de l'estimation :
+- le planificateur : ordre des jointures, côté build/probe, SIP. Au pire, un plan plus lent ;
+- `STATS_INFO`, qui la rend telle quelle.
+D'où le classement « confort ».
+
+## Cause
+
+`NodeBatchInsert` fusionne les statistiques de son COPY dans celles de la table dès
+`executeInternal` (`node_batch_insert.cpp:138`), donc avant sa validation, et avant que la clé
+en double ne soit levée au `finalize`. L'annulation n'a aucun pendant : `TableStats` n'a pas de
+recul. Au point de reprise et à la réouverture, l'estimation était écrite et relue telle quelle.
+
+Même famille, par lecture : un COPY sous IGNORE_ERRORS compte ses lignes écartées, et DELETE ne
+décrémente jamais. Le recalage les corrige aussi pour la cardinalité ; les comptes de valeurs
+distinctes (HyperLogLog, qui ne se décrémentent pas) restent gonflés jusqu'à la voie (a).
+
+## Le recalage (voie (c))
+
+`NodeGroupCollection::checkpoint` et `deserialize` remettent la cardinalité sur `numTotalRows`
+(lignes supprimées comprises). Témoins, `vector_index_update_test.cpp` :
+- `RefusedCopyLeavesTheCardinalityTrueAfterACheckpoint`, vert ;
+- `InflatedCardinalityIsRecalibratedAtOpening` : une base gonflée écrite par le moteur d'avant
+  le recalage (400 pour 200), gardée compressée dans `dataset/databases/inflated-cardinality`
+  avec son fabricant `FabricateADatabaseWithAnInflatedCardinality` (sauté par défaut). Elle se
+  recale à l'ouverture. Vert ;
+- `RefusedCopyLeavesTheCardinalityTrueAtOnce`, rouge connu (`cardinality-matches-rows-at-once`)
+  jusqu'à la voie (a).
+
+## Pour le fermer
+
+La voie (a) : les statistiques du COPY restent dans la transaction, fusionnées au commit et
+jetées à l'annulation. Elle est rattachée à l'étape 4 du chargement journalisé, quand la session
+cœur C++ refait le chemin du COPY. La voie (b), reculer la cardinalité à l'annulation, est
+écartée (les distincts resteraient faux).

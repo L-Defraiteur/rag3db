@@ -189,11 +189,12 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 #
-# Les statistiques des tables (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite.md) : un COPY
-# refusé laisse la cardinalité gonflée des lignes annulées (401 pour 200), même après
-# réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
-# déterministe de la corruption d'e2e_code.
-VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
+# Les statistiques des tables (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite.md, confort) :
+# un COPY refusé laisse la cardinalité estimée gonflée des lignes annulées (401 pour 200). Le
+# recalage au point de reprise et à la lecture (5 octobre) la corrige ensuite ; reste le moment
+# d'avant tout point de reprise, jusqu'à ce que le COPY garde ses statistiques dans sa transaction
+# (voie (a), étape 4 du chargement journalisé).
+VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrueAtOnce cardinality-matches-rows-at-once
 #
 # Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas (ticket
 # 2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md, bloque la stèle) : l'index de

@@ -211,6 +211,10 @@ void NodeGroupCollection::checkpoint(MemoryManager& memoryManager,
         typesAfterCheckpoint.push_back(types[state.columnIDs[i]].copy());
     }
     types = std::move(typesAfterCheckpoint);
+    // L'estimation que lisent STATS_INFO et le planificateur compte encore les lignes d'un COPY
+    // annulé ou refusé (il fusionne ses statistiques avant sa validation) : le point de reprise
+    // la recale sur le nombre de lignes, qui inclut les supprimées.
+    stats.setCardinality(numTotalRows);
 }
 
 void NodeGroupCollection::reclaimStorage(PageAllocator& pageAllocator) const {
@@ -270,6 +274,9 @@ void NodeGroupCollection::deserialize(Deserializer& deSer, MemoryManager& memory
     for (auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
         numTotalRows += nodeGroup->getNumRows();
     }
+    // Et à la lecture : une base écrite avant ce recalage garde sur disque une estimation
+    // gonflée.
+    stats.setCardinality(numTotalRows);
 }
 
 } // namespace storage

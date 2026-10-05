@@ -16,6 +16,10 @@ public:
     EXPLICIT_COPY_DEFAULT_MOVE(TableStats);
 
     void incrementCardinality(common::cardinality_t increment) { cardinality += increment; }
+    // Le recalage (NodeGroupCollection::checkpoint et deserialize) : une estimation tenue à
+    // l'ajout, qu'une annulation ne recule pas, remise sur le nombre de lignes de la table,
+    // comme le reltuples de PostgreSQL l'est par le ménage.
+    void setCardinality(common::cardinality_t newCardinality) { cardinality = newCardinality; }
 
     void merge(const TableStats& other) {
         std::vector<common::column_id_t> columnIDs;
