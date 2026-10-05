@@ -1,6 +1,6 @@
 # Un COPY refusé laisse la cardinalité de la table gonflée
 
-- **État** : en partie corrigé (banc, 5 octobre 2026) — confort pour la stèle. L'estimation est recalée sur le nombre de lignes au point de reprise et à la lecture (voie (c), comme le `reltuples` de PostgreSQL) ; reste le moment d'avant tout point de reprise, avec la voie (a) rattachée à l'étape 4 du chargement journalisé (session cœur C++)
+- **État** : corrigé le 5 octobre 2026 — le recalage au point de reprise et à la lecture (banc, `62f5c9817`, voie (c)), puis les statistiques d'un `COPY` gardées dans sa transaction (session cœur C++, « fix(statistiques): les statistiques d'un COPY suivent sa transaction », voie (a)). Ce qui reste, en estimation et hors de ce ticket, est à la dernière section
 - **Gravité** : réponse fausse (et, avant `1ea49837f`, plantage)
 - **Atteignable en service** : oui, par tout `COPY` refusé (clé en double, ligne mal formée…)
 - **Touche rag3weaver** : non, par lecture : il n'appelle ni `STATS_INFO` ni aucune API de compte du moteur (ses comptes sont des `count(*)`) ; au plus, des plans plus lents à mesure que les paquets défaits gonflent l'estimation
@@ -121,3 +121,17 @@ La voie (a) : les statistiques du COPY restent dans la transaction, fusionnées 
 jetées à l'annulation. Elle est rattachée à l'étape 4 du chargement journalisé, quand la session
 cœur C++ refait le chemin du COPY. La voie (b), reculer la cardinalité à l'annulation, est
 écartée (les distincts resteraient faux).
+
+## La voie (a) (5 octobre, session cœur C++)
+
+Les statistiques d'un `COPY` de nœuds ne rejoignent plus la table pendant son exécution. Ses fils les réunissent dans l'état partagé du `COPY` ; à la fin, après l'index de clé (là où une clé en double fait refuser), elles sont remises au stockage local de la transaction (`LocalStorage::addPendingNodeStats`) : fusionnées dans la table à la validation, jetées à l'annulation, ajoutées à ce que la transaction lit (`NodeTable::getStats`). C'est le chemin que suivaient déjà celles d'un `CREATE`. Un compte de distincts (HyperLogLog) ne se défait pas : c'est pourquoi rien n'entre avant la validation.
+
+Deux défauts du `COPY` après des insertions de la même transaction (`f1d8c7190`) sont corrigés avec : le versement des lignes locales faisait entrer leurs statistiques dans la table avant la validation, et la table locale vidée gardait les siennes, comptées une seconde fois (20 `CREATE` puis un `COPY` de 100 lignes : 140 vues par la transaction, 145 après le commit de 5 de plus).
+
+Témoins : `CopyStatisticsTest` (`test/transaction/journaled_copy_test.cpp`), sous les deux réglages du chargement journalisé ; au banc, `VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrueAtOnce`, sorti de `known_red.txt`.
+
+## Ce qui reste une estimation
+
+- Une ligne écartée par `IGNORE_ERRORS` (clé en double ou nulle) reste comptée, dans la cardinalité comme dans les distincts : elle est ajoutée puis supprimée.
+- `DELETE` et `UPDATE` ne touchent jamais ces statistiques. La cardinalité est recalée au point de reprise ; les comptes de distincts ne reculent pas.
+- Les relations : ticket `2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md`.

@@ -188,10 +188,3 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
-#
-# Les statistiques des tables (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite.md, confort) :
-# un COPY refusé laisse la cardinalité estimée gonflée des lignes annulées (401 pour 200). Le
-# recalage au point de reprise et à la lecture (5 octobre) la corrige ensuite ; reste le moment
-# d'avant tout point de reprise, jusqu'à ce que le COPY garde ses statistiques dans sa transaction
-# (voie (a), étape 4 du chargement journalisé).
-VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrueAtOnce cardinality-matches-rows-at-once

@@ -40,6 +40,9 @@ public:
         common::sel_t pos, common::offset_t& result) const;
 
     TableStats getStats() const { return nodeGroups.getStats(); }
+    // Pour le versement en cours de transaction : les statistiques des lignes versées quittent
+    // la table locale sans entrer dans la table (LocalStorage::addPendingNodeStats).
+    TableStats takeStats() { return nodeGroups.takeStats(); }
     common::offset_t getStartOffset() const { return startOffset; }
     // Called at commit once the rows are in the table. From then on no offset designates a row of
     // this local table: the transaction tells its own rows from the committed ones by comparing

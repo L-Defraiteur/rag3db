@@ -72,6 +72,9 @@ public:
         // local, versé dans sa table avant un COPY), et son nombre de lignes dit où va la
         // prochaine.
         numTotalRows = 0;
+        // Ses statistiques aussi : celles des lignes parties ne doivent pas être comptées de
+        // nouveau avec les suivantes.
+        stats = TableStats{types};
     }
 
     common::column_id_t getNumColumns() const { return types.size(); }
@@ -91,6 +94,13 @@ public:
         KU_ASSERT(lock.isLocked());
         KU_UNUSED(lock);
         return stats.copy();
+    }
+    // Rend les statistiques et repart de zéro.
+    TableStats takeStats() {
+        auto lock = nodeGroups.lock();
+        auto taken = std::move(stats);
+        stats = TableStats{types};
+        return taken;
     }
     void mergeStats(const TableStats& stats) {
         auto lock = nodeGroups.lock();

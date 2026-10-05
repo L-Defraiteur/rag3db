@@ -1,10 +1,12 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 #include "common/copy_constructors.h"
 #include "storage/local_storage/local_table.h"
 #include "storage/optimistic_allocator.h"
+#include "storage/stats/table_stats.h"
 
 namespace rag3db {
 namespace main {
@@ -38,9 +40,24 @@ public:
     // Ne fait rien si la transaction n'a pas de ligne locale dans cette table.
     void flushNodeTable(common::table_id_t tableID);
 
+    // Les statistiques de lignes que la transaction a déjà écrites dans une table de nœuds sans
+    // les avoir validées — celles d'un COPY, celles des lignes locales versées avant lui. Elles
+    // attendent ici : fusionnées dans la table à la validation, jetées à l'annulation, et
+    // ajoutées à ce que la transaction lit de la table (NodeTable::getStats). Comme celles d'un
+    // CREATE, qui attendent dans la table locale. Un compte de distincts ne se défait pas :
+    // c'est pourquoi rien n'entre dans la table avant la validation.
+    struct PendingNodeStats {
+        std::vector<common::column_id_t> columnIDs;
+        TableStats stats;
+    };
+    void addPendingNodeStats(common::table_id_t tableID,
+        std::vector<common::column_id_t> columnIDs, TableStats stats);
+    const std::vector<PendingNodeStats>* getPendingNodeStats(common::table_id_t tableID) const;
+
 private:
     main::ClientContext& clientContext;
     std::unordered_map<common::table_id_t, std::unique_ptr<LocalTable>> tables;
+    std::unordered_map<common::table_id_t, std::vector<PendingNodeStats>> pendingNodeStats;
 
     // The mutex is only needed when working with the optimistic allocators
     std::mutex mtx;

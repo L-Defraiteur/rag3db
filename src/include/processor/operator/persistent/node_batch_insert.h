@@ -74,6 +74,10 @@ struct NodeBatchInsertSharedState final : BatchInsertSharedState {
     // suivent, et c'est d'après ce repère qu'il les relit pour les écrire au journal.
     common::offset_t numRowsBeforeCopy = 0;
 
+    // Les statistiques des lignes de ce COPY, réunies ici par ses fils (sous mtx) : elles ne
+    // rejoignent la table qu'à la validation de la transaction (LocalStorage).
+    std::optional<storage::TableStats> stats;
+
     explicit NodeBatchInsertSharedState(std::shared_ptr<FactorizedTable> fTable)
         : BatchInsertSharedState{std::move(fTable)}, pkPosition{0},
           globalIndexBuilder(std::nullopt), tableFuncSharedState{nullptr},

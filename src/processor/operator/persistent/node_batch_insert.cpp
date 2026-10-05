@@ -134,9 +134,15 @@ void NodeBatchInsert::executeInternal(ExecutionContext* context) {
         nodeLocalState->localIndexBuilder->finishedProducing(nodeLocalState->errorHandler.value());
         nodeLocalState->errorHandler->flushStoredErrors();
     }
-    const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
-    sharedState->table->cast<NodeTable>().mergeStats(nodeInfo->insertColumnIDs,
-        nodeLocalState->stats);
+    // Pas dans la table : la transaction n'est pas validée, et une clé en double peut encore
+    // faire refuser ce COPY (au finalize).
+    const auto nodeSharedState = sharedState->ptrCast<NodeBatchInsertSharedState>();
+    std::unique_lock lck{nodeSharedState->mtx};
+    if (nodeSharedState->stats.has_value()) {
+        nodeSharedState->stats->merge(nodeLocalState->stats);
+    } else {
+        nodeSharedState->stats = nodeLocalState->stats.copy();
+    }
 }
 
 void NodeBatchInsert::evaluateExpressions(uint64_t numTuples) const {
@@ -286,6 +292,12 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
     auto& nodeTable = nodeSharedState->table->cast<NodeTable>();
     for (auto& index : nodeTable.getIndexes()) {
         index.finalize(clientContext);
+    }
+    if (nodeSharedState->stats.has_value()) {
+        transaction->getLocalStorage()->addPendingNodeStats(nodeTable.getTableID(),
+            info->ptrCast<NodeBatchInsertInfo>()->insertColumnIDs,
+            std::move(*nodeSharedState->stats));
+        nodeSharedState->stats.reset();
     }
     if (!clientContext->getClientConfig()->forceCheckpointOnCopy && transaction->shouldLogToWAL()) {
         // Le chargement journalisé : les lignes de ce COPY vont au journal de la transaction,

@@ -941,6 +941,92 @@ TEST_F(CopyAfterInsertsTest, SurvivesADeathWithoutAnyCheckpoint) {
         8ll * 1000000 + 200000);
 }
 
+// Les statistiques d'une table (STATS_INFO : la cardinalité, les comptes de distincts) suivent
+// la transaction d'un COPY comme elles suivent celle d'un CREATE : vues par elle, fusionnées à
+// sa validation, jetées à son annulation. Le COPY les fusionnait dans la table pendant son
+// exécution — avant la validation, et avant le refus pour une clé en double ; et le versement
+// des lignes locales qui précède un COPY fusionnait celles des CREATE, puis les comptait une
+// seconde fois. Les comptes de distincts sont des estimations (HyperLogLog) : ils sont comparés
+// à ce qu'ils valaient, pas à un nombre.
+class CopyStatisticsTest : public CopyAfterInsertsTest {
+protected:
+    int64_t cardinality() { return single("CALL STATS_INFO('Doc') RETURN cardinality;"); }
+    int64_t distinctNames() {
+        return single("CALL STATS_INFO('Doc') RETURN name_distinct_count;");
+    }
+};
+
+TEST_F(CopyStatisticsTest, ARolledBackCopyLeavesThemAsTheyWere) {
+    underBothSettings([&] {
+        writeCsv(0, 100);
+        ok(copyStatement());
+        ASSERT_EQ(cardinality(), 100);
+        const auto namesBefore = distinctNames();
+        writeCsv(100, 5000);
+        ok("BEGIN TRANSACTION;");
+        ok(copyStatement());
+        EXPECT_EQ(cardinality(), 5100) << "the transaction sees its own copy";
+        EXPECT_GT(distinctNames(), namesBefore);
+        ok("ROLLBACK;");
+        EXPECT_EQ(cardinality(), 100);
+        EXPECT_EQ(distinctNames(), namesBefore);
+    });
+}
+
+TEST_F(CopyStatisticsTest, ARefusedCopyLeavesThemAsTheyWere) {
+    underBothSettings([&] {
+        writeCsv(0, 100);
+        ok(copyStatement());
+        const auto namesBefore = distinctNames();
+        writeCsv(100, 5000, "7,again,0.5\n");
+        auto refused = conn->query(copyStatement());
+        ASSERT_FALSE(refused->isSuccess());
+        EXPECT_EQ(cardinality(), 100);
+        EXPECT_EQ(distinctNames(), namesBefore);
+    });
+}
+
+TEST_F(CopyStatisticsTest, ACommittedCopyIsCountedOnce) {
+    underBothSettings([&] {
+        writeCsv(0, 5000);
+        ok("BEGIN TRANSACTION;");
+        ok(copyStatement());
+        EXPECT_EQ(cardinality(), 5000);
+        ok("COMMIT;");
+        EXPECT_EQ(cardinality(), 5000);
+        createDBAndConn();
+        EXPECT_EQ(cardinality(), 5000);
+    });
+}
+
+TEST_F(CopyStatisticsTest, InsertsThenACopyAreCountedOnce) {
+    underBothSettings([&] {
+        writeCsv(0, 100);
+        ok("BEGIN TRANSACTION;");
+        insertLocals(1000, 20);
+        EXPECT_EQ(cardinality(), 20);
+        ok(copyStatement());
+        EXPECT_EQ(cardinality(), 120) << "in the transaction, after the copy";
+        insertLocals(2000, 5);
+        EXPECT_EQ(cardinality(), 125) << "in the transaction, after more inserts";
+        ok("COMMIT;");
+        EXPECT_EQ(cardinality(), 125) << "after the commit";
+    });
+}
+
+TEST_F(CopyStatisticsTest, InsertsThenACopyRolledBackLeaveNothing) {
+    underBothSettings([&] {
+        writeCsv(0, 100);
+        ok("BEGIN TRANSACTION;");
+        insertLocals(1000, 20);
+        ok(copyStatement());
+        insertLocals(2000, 5);
+        ok("ROLLBACK;");
+        EXPECT_EQ(cardinality(), 0);
+        EXPECT_EQ(distinctNames(), 0);
+    });
+}
+
 } // namespace
 
 #endif

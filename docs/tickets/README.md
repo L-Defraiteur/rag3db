@@ -83,7 +83,8 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une variable locale Rust passe pour l'usage d'une fonction homonyme](2026-10-04-variables-locales-rust-prises-pour-des-usages.md) | corrigé (codeparsers 75077f7 + 46cc492, pointeur 4fe5a3bfc) | réponse fausse | oui | oui (usages, impact, liens) |
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens et impact (master) ; réexportations à faire | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
-| [Un COPY refusé laisse la cardinalité de la table gonflée](2026-10-04-copy-refuse-gonfle-la-cardinalite.md) | en partie corrigé (recalage ; reste la voie (a), étape 4), confort | estimation fausse | oui | non |
+| [Un COPY de relations annulé laisse gonflée l'estimation du nombre de relations](2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md) | ouvert, confort | estimation fausse | oui | non |
+| [Un COPY refusé laisse la cardinalité de la table gonflée](2026-10-04-copy-refuse-gonfle-la-cardinalite.md) | corrigé | estimation fausse | oui | non |
 | [Le point de reprise écrit hors de son bloc après un ajout annulé](2026-10-04-point-de-reprise-ecrit-hors-bloc-apres-un-ajout-annule.md) | corrigé | plantage | oui | oui si un de ses `COPY` est refusé ou annulé |
 | [Après un COPY refusé pour clé en double, la ligne d'origine disparaît de l'index](2026-10-04-cle-d-origine-perdue-apres-un-copy-refuse.md) | corrigé | réponse fausse | oui | par `RAG3WEAVER_COPY_NAISSANCES=1` seulement |
 | [Le qualificatif d'un chemin se perd dans une macro](2026-10-04-le-qualificatif-d-un-chemin-se-perd-dans-une-macro.md) | corrigé dans codeparsers 5778d92 — en attente du pointeur | réponse fausse | oui | oui (marque de résolution) |

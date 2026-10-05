@@ -4,6 +4,7 @@
 #include "storage/local_storage/local_rel_table.h"
 #include "storage/local_storage/local_table.h"
 #include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 #include "storage/table/table.h"
 
@@ -102,9 +103,31 @@ void LocalStorage::commit() {
             table->commit(&clientContext, tableEntry, localTable.get());
         }
     }
+    for (auto& [tableID, pendingStats] : pendingNodeStats) {
+        // Une table retirée par la transaction après son COPY n'a plus de statistiques.
+        if (!catalog->containsTable(transaction, tableID)) {
+            continue;
+        }
+        auto& nodeTable = storageManager->getTable(tableID)->cast<NodeTable>();
+        for (const auto& pending : pendingStats) {
+            nodeTable.mergeStats(pending.columnIDs, pending.stats);
+        }
+    }
+    pendingNodeStats.clear();
     for (auto& optimisticAllocator : optimisticAllocators) {
         optimisticAllocator->commit();
     }
+}
+
+void LocalStorage::addPendingNodeStats(table_id_t tableID, std::vector<column_id_t> columnIDs,
+    TableStats stats) {
+    pendingNodeStats[tableID].push_back(PendingNodeStats{std::move(columnIDs), std::move(stats)});
+}
+
+const std::vector<LocalStorage::PendingNodeStats>* LocalStorage::getPendingNodeStats(
+    table_id_t tableID) const {
+    const auto found = pendingNodeStats.find(tableID);
+    return found == pendingNodeStats.end() ? nullptr : &found->second;
 }
 
 void LocalStorage::flushNodeTable(table_id_t tableID) {
@@ -133,6 +156,11 @@ void LocalStorage::flushNodeTable(table_id_t tableID) {
     local_node_offset_map_t nodeOffsetMap;
     nodeOffsetMap[tableID] = LocalNodeOffsetMap{localTable.cast<LocalNodeTable>().getStartOffset(),
         table->getNumTotalRows(nullptr /* transaction */), localTable.getNumTotalRows()};
+    // Les lignes entrent dans la table, pas leurs statistiques : la transaction n'est pas
+    // validée. Elles attendent avec celles du COPY qui suit.
+    auto& localNodeTable = localTable.cast<LocalNodeTable>();
+    addPendingNodeStats(tableID, localNodeTable.getCommittedColumnIDs(),
+        localNodeTable.takeStats());
     table->commit(&clientContext, tableEntry, &localTable);
     for (auto& [relTableID, localRelTable] : tables) {
         if (localRelTable->getTableType() == TableType::REL) {
@@ -150,6 +178,7 @@ void LocalStorage::rollback() {
     for (auto& [_, localTable] : tables) {
         localTable->clear(*mm);
     }
+    pendingNodeStats.clear();
     for (auto& optimisticAllocator : optimisticAllocators) {
         optimisticAllocator->rollback();
     }

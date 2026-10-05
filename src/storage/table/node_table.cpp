@@ -925,6 +925,13 @@ TableStats NodeTable::getStats(const Transaction* transaction) const {
         // Les statistiques locales sont rangées par position de propriété.
         stats.merge(localNodeTable.getCommittedColumnIDs(), localNodeTable.getStats());
     }
+    // Et celles des lignes que la transaction a déjà écrites dans la table (un COPY, des lignes
+    // locales versées avant lui), qui attendent sa validation.
+    if (const auto pendingStats = transaction->getLocalStorage()->getPendingNodeStats(tableID)) {
+        for (const auto& pending : *pendingStats) {
+            stats.merge(pending.columnIDs, pending.stats);
+        }
+    }
     return stats;
 }
 
