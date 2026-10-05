@@ -145,6 +145,7 @@ fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
     };
     let r = sync_source(catalog, &Snapshot::new("depot", corpus()), &options, &mut |_| {}).expect("synchroniser");
     assert_eq!(r.failed, 0, "aucun échec : {r:?}");
+    println!("REPLIS_EN_MASSE {} {:?}", r.bulk_load_refused.len(), r.bulk_load_refused.first());
 }
 
 /// Les comptes de chaque table de l'utilisateur (nœuds, et arêtes lues dans
@@ -596,17 +597,11 @@ fn point_de_reprise_final(sortie: &str) -> u128 {
 /// reprise) ne se rejoue pas chez nous à travers la réouverture.
 #[test]
 #[ignore]
-fn rouge_attendu_defaut_du_moteur_un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit() {
-    // **Rouge attendu, défaut du moteur** (ticket
-    // `2026-10-05-cle-perdue-par-l-index-de-cle-primaire`) : sur ce corpus,
-    // une clé sort de l'index de clé primaire après deux COPY de 50 000
-    // lignes, et le COPY des arêtes DEFINES est refusé avant le paquet
-    // piégé. Hors de la batterie jusqu'au correctif :
-    // `TX_ARRET_ROUGE_ATTENDU=1` le joue.
-    if std::env::var_os("TX_ARRET_ROUGE_ATTENDU").is_none() {
-        println!("rouge attendu (défaut du moteur) : TX_ARRET_ROUGE_ATTENDU=1 pour le jouer");
-        return;
-    }
+fn un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit() {
+    // Rouge jusqu'à eb2d78e46 (ticket
+    // `2026-10-05-cle-perdue-par-l-index-de-cle-primaire`) : une clé sortait
+    // de l'index de clé primaire après deux COPY de 50 000 lignes, et le COPY
+    // des arêtes DEFINES était refusé avant le paquet piégé.
     GROS.with(|f| f.set(true));
     ECHEC_AU_PAQUET.with(|f| f.set(1));
     let dossier = dossier_sur_disque("gros-rollback");
@@ -622,13 +617,18 @@ fn rouge_attendu_defaut_du_moteur_un_gros_paquet_defait_se_reprend_et_son_point_
     assert!(statut.success(), "la reprise va au bout ({:?}) :\n{}", statut, sortie.chars().take(3000).collect::<String>());
     let repris = comptes_rendus("repreneur", &sortie);
     let duree = point_de_reprise_final(&sortie);
+    let replis_reprise = ligne(&sortie, "REPLIS_EN_MASSE ");
     let temoin_dossier = dossier_sur_disque("gros-temoin");
     let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 1);
     GROS.with(|f| f.set(false));
     ECHEC_AU_PAQUET.with(|f| f.set(6));
     assert!(statut.success(), "le témoin va au bout");
     let temoin = comptes_rendus("temoin", &sortie);
-    println!("▸ gros paquet défait : point de reprise final en {duree} ms ; scopes {:?}", repris.get("nœuds Scope"));
+    println!(
+        "▸ gros paquet défait : point de reprise final en {duree} ms ; scopes {:?} ; replis en masse : reprise {replis_reprise}, témoin {}",
+        repris.get("nœuds Scope"),
+        ligne(&sortie, "REPLIS_EN_MASSE ")
+    );
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 100_000, "{temoin:?}");
     assert_eq!(repris, temoin, "après un gros paquet défait et une reprise, les comptes d'une passe sans échec");
     assert!(duree < 60_000, "le point de reprise final finit en temps borné : {duree} ms");
