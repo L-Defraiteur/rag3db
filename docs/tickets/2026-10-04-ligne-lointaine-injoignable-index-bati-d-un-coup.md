@@ -205,3 +205,10 @@ le revoit :
 **Une passe de plus, sans urgence**, quand le correctif de l'index de clé primaire
 (`splitSlots`, cœur C++) sera sur master : le vrai déroulé `fond` une fois, pour un chiffre
 sur le moteur corrigé.
+
+**La passe sur le moteur corrigé** (5 octobre 2026, 07 h 40, moteur ≥ `eb2d78e46`, le vrai
+déroulé `fond` de rag3weaver, src/ à 12 461 morceaux) : **1 introuvable** (un Scope_Chunk,
+premier rendu à 0,05), 0 repli en masse. C'est le niveau de `tout` et `masse`. Le correctif
+de la division des cases de l'index de clé primaire touche tout point de reprise qui agrandit
+un index de clé, ce qui inclut les points de reprise automatiques pendant les SET du mode
+`fond` : il a pu jouer sur les 18 et 24 des premières passes, sans que rien ne le prouve.
