@@ -647,3 +647,116 @@ fn en_fichiers_hors_transaction_un_arret_entre_lignes_et_plein_texte_se_detecte(
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }
+
+/// Le nombre de résultats d'une recherche par mots à `k`, par le chemin du
+/// produit (résolution des décalages en lignes comprise).
+fn rendus(catalog: &std::sync::Arc<std::sync::Mutex<Catalog>>, mot: &str, k: usize) -> usize {
+    Catalog::rechercher(catalog, rag3weaver::code::SCOPE, mot, rag3weaver::search::SearchOptions {
+        consistency: rag3weaver::search::Consistency::Immediate,
+        signals: Some(rag3weaver::search::SearchSignals::BM25),
+        limit: k,
+        ..Default::default()
+    })
+    .expect("recherche")
+    .results
+    .len()
+}
+
+fn documents_et_lignes(catalog: &Catalog) -> (u64, i64) {
+    let docs = catalog.fts_handle("Scope").expect("index des scopes").num_docs();
+    let lignes = catalog.conn().execute("MATCH (n:Scope) RETURN count(n)").unwrap().rows[0][0].as_i64().unwrap();
+    (docs, lignes)
+}
+
+/// **La garde des comptes** : un document du plein texte dont la ligne est
+/// absente (fabriqué ici, à un décalage qu'aucune ligne ne porte) prend une
+/// place dans les premiers résultats sans être rendu ; la synchronisation
+/// suivante le voit (documents ≠ lignes), rebâtit l'index depuis les lignes,
+/// et une recherche à k rend k. Dans les deux modes du plein texte.
+fn la_garde_retire_un_document_sans_ligne(fichiers: bool) {
+    FICHIERS.with(|f| f.set(fichiers));
+    let dossier = dossier_sur_disque(if fichiers { "garde-fichiers" } else { "garde-blobs" });
+    let base = dossier.join("base.rag3db");
+    // En processus : la variable du mode passe par l'environnement du fils
+    // seulement ; ici le catalogue se monte à la main.
+    let mut catalog = catalogue(&base);
+    if fichiers {
+        drop(catalog);
+        let conn = Rag3dbConnection::new(&base).expect("base");
+        conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur())).unwrap();
+        let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
+        catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
+        catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: format!("{}.fts", base.display()) });
+        catalog.initialize().unwrap();
+        register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    }
+    synchroniser(&mut catalog, false);
+    let (docs, lignes) = documents_et_lignes(&catalog);
+    assert_eq!(docs as i64, lignes, "avant le fantôme, un document par ligne");
+    {
+        let handle = catalog.fts_handle("Scope").unwrap();
+        let texte = "pub ".repeat(200) + "fantomatique";
+        rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), texte)], 9_000_000).unwrap();
+        handle.commit().unwrap();
+    }
+    assert_eq!(documents_et_lignes(&catalog).0 as i64, lignes + 1, "le fantôme compte");
+    let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let avant = rendus(&catalog, "pub", 10);
+    println!("▸ {} : « pub » à k = 10 avec le fantôme : {avant} rendus", if fichiers { "fichiers" } else { "blobs" });
+    assert_eq!(rendus(&catalog, "fantomatique", 10), 0, "un document sans ligne n'est jamais rendu");
+
+    synchroniser(&mut catalog.lock().unwrap(), false);
+    let (docs, lignes) = documents_et_lignes(&catalog.lock().unwrap());
+    assert_eq!(docs as i64, lignes, "la garde a rebâti l'index : un document par ligne");
+    assert_eq!(rendus(&catalog, "pub", 10), 10, "une recherche à k rend k");
+    assert_eq!(rendus(&catalog, "fantomatique", 10), 0);
+    drop(catalog);
+    let _ = std::fs::remove_dir_all(&dossier);
+}
+
+#[test]
+#[ignore]
+fn la_garde_des_comptes_retire_un_document_sans_ligne_en_fichiers() {
+    la_garde_retire_un_document_sans_ligne(true);
+}
+
+#[test]
+#[ignore]
+fn la_garde_des_comptes_retire_un_document_sans_ligne_en_blobs() {
+    la_garde_retire_un_document_sans_ligne(false);
+}
+
+/// **À la relance, une ligne refaite remplace le document de son décalage**
+/// (`upsert_document`) au lieu d'en ajouter un second : un fantôme posé au
+/// décalage que prendra la prochaine ligne est remplacé par elle, sans que la
+/// garde intervienne (ingestion directe, hors synchronisation).
+#[test]
+#[ignore]
+fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
+    let dossier = dossier_sur_disque("relance-decalage");
+    let base = dossier.join("base.rag3db");
+    let mut catalog = catalogue(&base);
+    synchroniser(&mut catalog, false);
+    let (_, lignes) = documents_et_lignes(&catalog);
+    {
+        let handle = catalog.fts_handle("Scope").unwrap();
+        rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], lignes as u64).unwrap();
+        handle.commit().unwrap();
+    }
+    let analyse = rag3weaver::code::analyze("/neuf", vec![("src/neuf.rs".to_string(), "pub fn neuf_unique() -> u32 { 1 }\n".to_string())]);
+    catalog.ingest_code(&analyse).expect("une ligne neuve");
+    let decalage: i64 = catalog
+        .conn()
+        .execute("MATCH (n:Scope) WHERE n.name = 'neuf_unique' RETURN OFFSET(id(n))")
+        .unwrap()
+        .rows[0][0]
+        .as_i64()
+        .unwrap();
+    let (docs, lignes) = documents_et_lignes(&catalog);
+    println!("▸ la ligne neuve a pris le décalage {decalage} (le fantôme était au décalage {}) ; {docs} documents, {lignes} lignes", lignes - 1);
+    let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    assert_eq!(rendus(&catalog, "fantomatique", 10), 0, "le fantôme n'est plus là");
+    assert_eq!(docs as i64, lignes, "un document par ligne : remplacé, pas ajouté");
+    drop(catalog);
+    let _ = std::fs::remove_dir_all(&dossier);
+}

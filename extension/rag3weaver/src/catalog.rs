@@ -845,6 +845,54 @@ impl Catalog {
         self.open_fts_handles_for(&names);
     }
 
+    /// **La garde des comptes du plein texte** : chaque index doit porter
+    /// autant de documents que son entité a de lignes. Un écart — un document
+    /// dont la ligne est revenue absente d'un arrêt brutal (un COPY défait
+    /// quand les blobs ou la génération, eux, reviennent par le journal), ou
+    /// une ligne sans document — fait rebâtir l'index depuis les lignes : en
+    /// mode fichiers par le rebâti par lots, en mode blobs par
+    /// `rebuild_pending_fts`. Un écrivain, hors transaction ; rend les
+    /// entités à rebâtir. Coût : un `COUNT` par entité (le compte de
+    /// documents de lucivy est en mémoire).
+    pub fn check_fts_counts(&mut self) -> Vec<String> {
+        if self.lecture_seule || self.in_transaction || self.plein_texte_natif() {
+            return Vec::new();
+        }
+        let t = std::time::Instant::now();
+        let names: Vec<String> = self
+            .entity_configs
+            .keys()
+            .filter(|e| self.resolve_search_target(e).is_ok_and(|t| t.default_signals.bm25()))
+            .cloned()
+            .collect();
+        self.open_fts_handles_for(&names);
+        let mut ecarts = Vec::new();
+        for entity in names {
+            let Ok(target) = self.resolve_search_target(&entity) else { continue };
+            let table = target.parent_table;
+            if self.fts_rebuild.contains(&table) {
+                continue;
+            }
+            let Some(docs) = self.fts_handles.get(&table).map(|h| h.num_docs()) else { continue };
+            let lignes = self.count_rows_of(&entity) as u64;
+            if docs == lignes {
+                continue;
+            }
+            eprintln!(
+                "[rag3weaver] plein texte de {entity} : {docs} documents pour {lignes} lignes — index rebâti depuis les lignes"
+            );
+            if matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
+                // Le dossier part avec l'index ; la réouverture le trouve
+                // absent, la marque posée : rebâti par lots.
+                self.drop_fts_index(&table);
+            }
+            let _ = self.mark_fts_pending(&[entity.as_str()]);
+            ecarts.push(entity);
+        }
+        crate::ingest_profile::add("garde des comptes du plein texte", t);
+        ecarts
+    }
+
     pub fn verify_fts_files(&mut self) {
         if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
             return;
@@ -929,6 +977,15 @@ impl Catalog {
     pub(crate) fn fts_rebuild_percent(&self, entity: &str) -> Option<u8> {
         let table = self.resolve_search_target(entity).ok()?.parent_table;
         if !self.fts_rebuild.contains(&table) {
+            // Un lecteur calcule aussi la garde des comptes : un index qui
+            // n'a pas autant de documents que la table a de lignes est « à
+            // rebâtir » (voir `check_fts_counts`).
+            if self.lecture_seule {
+                let docs = self.fts_handles.get(&table)?.num_docs();
+                if docs != self.count_rows_of(entity) as u64 {
+                    return Some(0);
+                }
+            }
             return None;
         }
         // Un lecteur sert le dossier tel qu'il l'a trouvé (en avance ou en

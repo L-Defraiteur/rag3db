@@ -575,8 +575,15 @@ fn synchroniser(
     s_files: &str,
     source_id: String,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
-    // Le plein texte en fichiers se vérifie avant la première transaction :
-    // un dossier d'un processus tué se rebâtit ici, pas au milieu d'un paquet.
+    // Le plein texte se vérifie avant la première transaction : la garde des
+    // comptes (un document sans ligne, une ligne sans document) marque à
+    // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
+    // d'un paquet.
+    let t_garde = std::time::Instant::now();
+    let ecarts = catalog.check_fts_counts();
+    if !ecarts.is_empty() {
+        eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
+    }
     catalog.verify_fts_files();
     let cursor = source.cursor();
     let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
