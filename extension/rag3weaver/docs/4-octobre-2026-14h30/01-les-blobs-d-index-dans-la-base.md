@@ -228,3 +228,47 @@ deux passes alternées de chaque — **réfutée** :
 
 Sans fusion, chaque validation lucivy porte de plus en plus de segments et
 ralentit plus que les fusions ne coûtaient. Le réglage a été retiré du code.
+
+## Avec les trois leviers de l'arbre principal (5 octobre, 3 h 18 à 3 h 50)
+
+Moteur bâti à 2 h 38, master avec les leviers 1 à 3 et la garde des comptes,
+transaction par paquet validée tous les 4 paquets, chaque passe seule sous
+`poste mesure`, l'état du poste relevé avant chacune.
+
+| | Passes | Médiane | Étendue | Pic |
+|---|---|---|---|---|
+| blobs en base, 512 | 102 · 99 · 99 s | **99 s** | 99–102 | ~15 Go |
+| fichiers, 512 | 97 · 110 · 119 s | **110 s** | 97–119 | ~9 Go |
+| fichiers, 2 048 (une passe) | 79 s | — | — | 9,2 Go |
+| fichiers, un seul paquet (une passe) | 85 s | — | — | 11,9 Go |
+
+**Le mode fichiers à 512 est sensible à l'activité disque des autres.** Ses
+trois passes sont parties juste après des compilations d'autres sessions
+glissées entre deux mesures (pression d'entrée-sortie 11 à 15 % au départ,
+contre moins de 1 % pour les passes en base) ; la seule étape qui varie est
+la synchronisation des fichiers : 21, 36 puis 39 s. Sur ce poste partagé, la
+médiane de 110 s ne dit donc pas ce que ferait un poste calme ; la passe de
+97 s, si.
+
+**Sous la cible de 90 s : le mode fichiers par paquets de 2 048, 79 s** (une
+passe). Découpage, somme égale au total :
+
+| Poste | Secondes |
+|---|---|
+| analyser (codeparsers et notre aval) | 19,4 |
+| les 4 paquets, `COMMIT` compris | 42,2 |
+| — dont le graphe d'ingestion (insert, plein texte 9,1, …) | 22,1 |
+| — dont les symboles | 9,0 |
+| — dont rendre durable le plein texte | 8,0 |
+| — dont les `COMMIT` | ~3,5 |
+| charger les relations à la fin | 16,8 |
+| le reste | ~0,6 |
+| **total** | **79** |
+
+Les postes qui portent encore le temps : le graphe d'ingestion (22 s),
+l'analyse (19 s, dont 8,5 de codeparsers — le reste est notre aval
+séquentiel, le levier 4), les relations finales (17 s). Un seul paquet ne fait
+pas mieux (85 s : l'analyse d'un bloc perd le parallélisme par paquet, 34 s).
+
+**La garde des comptes** sur le dépôt entier : 14 à 44 ms en mode fichiers ;
+1,9 à 2,7 s en mode blobs, où ouvrir un index le recopie depuis la base.
