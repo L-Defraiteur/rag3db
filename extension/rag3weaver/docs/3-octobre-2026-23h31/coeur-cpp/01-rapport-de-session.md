@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 3 h.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 5 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -36,6 +36,8 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Un `COPY` après des insertions de la même transaction | `f1d8c7190` | le `COPY` verse d'abord dans la table les lignes locales de sa transaction (`LocalStorage::flushNodeTable` : le commit d'une table, appelé plus tôt) ; le refus nommé du 4 octobre disparaît ; les quatre tests Cypher d'origine reprennent leur forme. Non prouvé sous plusieurs écrivains |
 | L'annulation prévient les index | `e1049934e` | après un `COPY` annulé sur une table à index vectoriel, l'index ne se croit plus en avance (la recherche échouait, puis le `COPY` suivant n'était pas relié, en silence) ; crochet `Index::rollbackInsert` ; refus « is behind its table » si le compte dépasse quand même la table. Le refus n'a pas de témoin (le banc l'écrit par les internes) |
 | Le plantage de la reprise | `35d09c466` | poser par `SET` le vecteur d'une ligne créée dans la même transaction, sur une table indexée, plantait (`shrinkForNode`) : la lecture groupée des vecteurs des voisins rendait un tableau plus court que demandé. Défaut d'origine, sans rapport avec l'annulation ; c'est la reprise ordinaire de rag3weaver |
+| Transactions à point de reprise forcé | `37608cf4b` | une transaction qui porte un `COPY` hors journal n'écrit plus rien au journal : entière ou pas du tout. Deux défauts d'origine du chemin par défaut : la transaction « écritures puis `COPY` » revenue à moitié après une mort pendant son point de reprise ; la base qui ne se rouvrait plus après un `COPY` à lignes écartées |
+| Journal d'un `COPY` après un `DROP` | `47a80373e` | le `COPY` journalisé écrit les propriétés du catalogue, pas les colonnes du stockage (plantage du `COPY` de relations après `ALTER … DROP` puis `ADD`, mon défaut de l'étape 3) |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
@@ -62,8 +64,32 @@ joignabilité), et la décision de l'orchestration — mesurer d'abord sur un co
 nul. **Rien à coder avant la mesure.** Le filet « is behind its table » et le remappage du
 versement sous deux écrivains ont maintenant leurs témoins au banc (`efd76bdc9`).
 
-**La suite** : l'étape 4 du chargement journalisé avec le banc (retirer le point de reprise
-forcé et le remède 2a), avec un index vectoriel dans les témoins.
+**L'étape 4 du chargement journalisé est en cours, et elle est plus grosse que prévu.**
+Basculer le défaut et jouer la liste d'origine a rendu des défauts que le réglage éteint
+cachait ; l'état, l'ordre et le compte des passes sont à la page
+`04-le-chargement-en-masse-journalise.md`, §7 bis, et à la stèle (§3.2, point 4). **Rien
+n'est basculé sur master.** Branche locale : `copy-journalise-etape-4`, égale à `master`
+(`47a80373e`), arbre propre. Dans l'ordre :
+1. le plantage de `concurrence_test` sous le défaut basculé — à identifier : bâtir avec
+   `forceCheckpointOnCopy = false` dans `src/include/main/client_config.h`, lancer le
+   binaire seul sous `poste`, lire le dernier `[ RUN ]` ;
+2. mon contrôle du journal qui masque une erreur de tampon plein
+   (`NodeTable::logInsertedRowsToWAL`, « 0 rows were written to the journal ») ;
+3. la borne de mémoire du journal d'une transaction (4b) : au-delà d'une taille, le journal
+   local déborde dans un fichier à lui à côté de la base, recopié à la validation, jeté à
+   l'annulation et à l'ouverture, dans la liste des fichiers d'une copie ;
+4. les pages perdues au rejeu (ticket du banc, sa piste) ;
+5. la liste défaut basculé, jusqu'au bout ; puis le basculement, avec les deux témoins du
+   banc qui exigeaient l'attente (le prévenir avant), les miens, les tests d'origine adaptés
+   (chacun dit pourquoi son attendu change), la description du réglage (transitoire, ce qui
+   le fera retirer).
+Reste aussi, non décidé : journaliser le `COPY` qui écarte des lignes (plus aucun `COPY`
+forcé) — il faut une forme de journal pour un trou ; et la graine réglable de l'index
+vectoriel, à ajouter en repassant dans l'extension.
+
+Un défaut d'origine trouvé en passant, en ticket, non corrigé : retirer une colonne déclarée
+avant la clé primaire casse l'insertion ordinaire
+(`2026-10-05-drop-d-une-colonne-declaree-avant-la-cle-primaire.md`).
 
 Ce qui reste ouvert des lots de la nuit :
 - le refus « is behind its table » du compte en avance n'a aucun témoin ;
@@ -262,6 +288,14 @@ par défaut, **lire, ne pas copier**.
 - Un compte de lignes joignables dans l'index varie d'une passe à l'autre : seuil « toutes
   joignables », plusieurs passes.
 - La pile de `git stash` est commune à tous les arbres du dépôt : ne pas s'en servir.
+- **Un chemin derrière un réglage éteint n'est éprouvé que par ses propres témoins.**
+  Basculer le défaut et jouer la liste d'origine AVANT d'écrire quoi que ce soit : c'est la
+  liste d'origine qui fait le travail de témoin (deux plantages et quatorze rouges que mes
+  étapes 2 et 3 n'avaient pas vus).
+- Un correctif d'une ligne se joue chez celui qui a le témoin le plus dur avant d'être
+  poussé : le banc a montré que « la base se rouvre » laissait une transaction à moitié.
+- Ne pas ajouter un essai à un fichier de tests pendant qu'une liste attend son tour : il
+  entre dans son bâti et, s'il plante, tronque la suite.
 - Un témoin de diagnostic se vérifie à sa PREMIÈRE étape avant d'être lu : six passes du
   témoin des lignes injoignables étaient nulles (fichiers `.batchN` sans `.csv`, aucun `COPY`
   ne passait, « 128 manques sur 128 » partout).

@@ -110,6 +110,28 @@ Le chargement journalisé passe donc avant le câblage des verrous.
    plus de point de reprise forcé, plus d'attente du départ des autres (le remède 2a se
    retire alors, avec ses témoins adaptés). Une page de conception d'abord
    (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md`) ;
+   **Précisé le 5 octobre, par lecture puis par la liste d'origine jouée défaut basculé** :
+   - *Ce qui se retire est le `COPY` de la liste des appelants, pas le mécanisme.* Le point de
+     reprise forcé et son attente restent pour les créations d'index
+     (`CREATE_VECTOR_INDEX`, `CREATE_FTS_INDEX`, la création et la suppression d'un index
+     spatial) et pour le seul `COPY` qui ne sait pas encore se journaliser : un `COPY` de
+     nœuds qui écarte réellement des lignes (`IGNORE_ERRORS`, clé en double ou nulle — il
+     faut au journal une forme pour « un trou »). Ces créations d'index sont refusées dans
+     une transaction explicite. Conséquence pour A3′ : le cycle d'attente vu avec les
+     verrous (une validation qui attend le départ des autres pendant qu'une autre attend
+     un verrou qu'elle tient) existe encore pour ces instructions ; acceptable pour un DDL,
+     mais A3′ doit le savoir — un genre de verrou « base » pour elles seules, ou le refus
+     nommé d'un DDL d'index quand un verrou est tenu.
+   - *Une transaction forcée n'écrit rien au journal* (`37608cf4b`) : son point de reprise
+     est sa seule durabilité, elle revient entière ou pas du tout. Avant, ses écritures
+     ordinaires étaient durables avant son `COPY` — le défaut du chemin par défaut.
+   - *Le réglage `force_checkpoint_on_copy` reste*, à `false` par défaut une fois l'étape
+     livrée : un chemin de sortie pendant une version.
+   - *Quatre conditions du basculement, trouvées en le tentant* : les plantages du chemin
+     journalisé sous la liste d'origine ; la borne de mémoire du journal d'une transaction
+     (un gros `COPY` ne tient pas dans un petit tampon) ; les pages d'un `COPY` rejoué,
+     perdues à chaque reprise après arrêt brutal ; puis la liste d'origine verte jusqu'au
+     bout, défaut basculé.
 5. le câblage des verrous : A3′, A4′, V2, la maintenance de l'index vectoriel au commit.
    Deux témoins attendus d'A3′, nés des limites écrites le 4 octobre : à l'annulation, une
    transaction ne retire de l'index de clé primaire que les clés de **ses** lignes

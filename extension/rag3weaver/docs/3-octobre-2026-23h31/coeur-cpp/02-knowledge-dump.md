@@ -111,6 +111,25 @@ ligne) :
 - Une transaction en erreur refuse tout jusqu'au `ROLLBACK` (T0) : on ne peut pas montrer ce
   qu'elle « voit encore » après un `COPY` refusé.
 
+- **Une transaction « forcée »** (`Transaction::shouldForceCheckpoint`) est durable par le
+  point de reprise que sa validation impose, et depuis `37608cf4b` par lui seul : elle
+  n'écrit rien au fichier du journal. `TransactionManager::commit` attend d'abord le départ
+  des autres (le délai annule avant toute validation), valide en mémoire, puis fait le point
+  de reprise sans condition ; s'il échoue, la base refuse tout jusqu'à sa réouverture. Ses
+  appelants : tout `COPY` tant que `force_checkpoint_on_copy` vaut `true` ; le `COPY` de
+  nœuds qui écarte des lignes ; les créations d'index (vector, fts, spatial), refusées dans
+  une transaction explicite.
+- **Le journal porte des propriétés, pas des colonnes** : une ligne y est la liste des
+  propriétés du catalogue dans leur ordre (la forme du stockage local). Les colonnes du
+  stockage ne sont pas les mêmes après un `ALTER … DROP` (l'emplacement de la colonne retirée
+  reste). Trois endroits confondent encore la position de la clé et son numéro de colonne
+  (ticket du `DROP` d'une colonne déclarée avant la clé).
+- **Une ligne écartée par un `COPY`** (`IGNORE_ERRORS`, clé en double ou nulle) est ajoutée
+  puis supprimée : elle laisse un trou à son décalage. Les lignes mal formées, elles, sont
+  écartées par le lecteur avant l'opérateur et ne consomment rien.
+- **Le journal d'une transaction vit en mémoire non évictable** jusqu'à sa validation
+  (`LocalWAL`, pages de 4 Kio prises au gestionnaire de tampon), sans borne.
+
 ## 2. L'index vectoriel (HNSW) et notre greffe
 
 - **Ce que l'index garde en mémoire, hors du graphe** : `HNSWStorageInfo` — le compte des

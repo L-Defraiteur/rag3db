@@ -81,7 +81,7 @@ transaction annulée n'y écrit rien.
 **Un point à tenir** : les pages qu'un `COPY` validé a écrites directement ne sont connues
 du gestionnaire de pages libres qu'au point de reprise suivant. Après un arrêt brutal, le
 rejeu réinsère les lignes dans des pages neuves ; les anciennes sont au-delà de ce que le
-dernier point de reprise connaît du fichier, donc reprises naturellement **[déduit, à
+dernier point de reprise connaît du fichier, donc reprises naturellement — **FAUX, voir §7 bis (5 octobre)** — **[déduit, à
 éprouver par le témoin « taille du fichier bornée »]**.
 
 ## 4. L'index de clé primaire, et les autres index
@@ -213,6 +213,35 @@ c'est la première chose à vérifier.
 - **Un trou des étapes 2 et 3, dit après coup** : aucun de leurs témoins ne porte d'index
   vectoriel. Un essai (COPY journalisé dans une table indexée, mort, rejeu, `SET` de
   vecteurs) ne plante pas ; le banc ajoute la forme à sa famille `ExtensionIndexRecovery`.
+- **Étape 4, la mesure d'abord** (5 octobre) : le défaut basculé, rien d'autre, et la liste
+  d'origine. Elle n'est pas allée au bout — deux plantages — et a rendu quatorze rouges. Ce
+  n'était pas une queue de tests à adapter mais des défauts que le réglage éteint cachait :
+  1. un `COPY` de relations journalisé après `ALTER … DROP` puis `ADD` plantait (corrigé,
+     `47a80373e` : le journal porte les propriétés du catalogue, pas les colonnes du
+     stockage) ;
+  2. le banc plante sous le défaut basculé (cas non identifié) ;
+  3. **la mémoire** : le journal d'une transaction vit en mémoire non évictable jusqu'à sa
+     validation ; avec le tampon des tests, quatre `COPY` d'origine échouent par « buffer pool
+     is full », et mon contrôle du journal masque une erreur de tampon (« 0 rows were written
+     to the journal for 81306 rows added ») ;
+  4. **les pages perdues au rejeu** : trois tests d'origine de reprise échouent au contrôle
+     des pages libres (403 pages pour 11 attendues) ;
+  5. un test qui supposait un point de reprise après le `COPY`.
+  Et, sur le chemin par défaut d'aujourd'hui, deux défauts d'origine du point de reprise
+  forcé, corrigés à part (`37608cf4b`) : une transaction revenue à moitié, une base qui ne
+  se rouvrait plus.
+- **Ce que la page disait de faux** (§3, « reprises naturellement ») : les pages qu'un
+  `COPY` a écrites directement ne sont PAS reprises après une reprise par rejeu. Le rejeu
+  réinsère les lignes ailleurs ; les pages d'origine ne sont rendues à personne. Avec le
+  `COPY` journalisé par défaut, chaque reprise après un arrêt brutal perd celles de tous les
+  `COPY` pas encore passés par un point de reprise. Condition du basculement (orchestration) ;
+  la piste : à la réouverture, avant le rejeu, rendre au gestionnaire de pages libres la
+  plage au-delà de ce que le dernier point de reprise connaît.
+- **L'ordre, revu** : les plantages ; le masquage ; la borne de mémoire (qui passe AVANT le
+  basculement, pas après l'étape 5) ; les pages perdues ; la liste défaut basculé jusqu'au
+  bout ; alors le basculement, les deux témoins du banc qui exigeaient l'attente, la stèle.
+  Passes jusqu'ici : 6 rebâtis, 3 listes (dont une interrompue par deux plantages et une
+  rendue caduque), 1 ASan.
 
 ## 8. Les étapes, et l'estimation en passes
 
