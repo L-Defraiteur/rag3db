@@ -1,9 +1,9 @@
 # Un accent grave doublé dans un nom n'est pas réduit
 
-- **État** : ouvert
+- **État** : ouvert — **confort** (orchestration, 5 octobre 2026), hors de la condition 1 de la stèle : ni perte ni corruption du stockage, et non atteignable depuis rag3weaver (aucun de ses noms n'a d'accent grave, par lecture). À faire quand la file est vide ; Lucie peut renverser ce classement.
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
-- **Touche rag3weaver** : non vérifié
+- **Touche rag3weaver** : non, par lecture : ses noms de tables et de colonnes (Scope_Chunk, embedding__<modèle>, _embed_hash__…) n'ont jamais d'accent grave
 - **Ouvert le** : 4 octobre 2026, revue des amonts
 - **Pour** : analyseur — à attribuer
 
