@@ -1,6 +1,16 @@
 # Une erreur du moteur dans la branche vecteur fait tomber toute la recherche hybride
 
-- **État** : ouvert. Le comportement a été lu dans le code, pas testé. Le choix d'un repli par branche revient à Lucie.
+- **État** : corrigé `872d60e99`. Le constat a d'abord été éprouvé par un
+  test rouge (e2e_repli_de_branche : l'hybride au modèle absent rendait
+  Err au lieu des mots), puis Lucie a choisi le repli par branche PAR
+  DÉFAUT : chaque nœud de signal attrape sa propre chute, rend vide + un
+  statut nommé sur son port `status` (« dense/text/sparse signal is not
+  available: … » / « … failed: … »), la fusion tourne avec ce qui reste et
+  refuse quand TOUTES les branches actives sont tombées ;
+  `SearchOptions.strict_signals` rend l'erreur entière d'avant. Le runtime
+  est intact pour les autres graphes. Témoins : e2e_repli_de_branche (3),
+  e2e_prise_atomique en strict (13), l'avertissement « status non câblé »
+  au chargement des gabarits.
 - **Gravité** : blocage. La recherche ne rend rien, alors que la branche texte avait répondu.
 - **Atteignable en service** : oui, dès que l'index vectoriel refuse une recherche. C'est le cas de l'index vectoriel laissé en retard par un COPY annulé (« vector::reserve », sonde `sonde_vecteurs_apres_rollback`), et des gardes « is behind its table » du correctif du cœur C++.
 - **Touche rag3weaver** : oui, par toutes les entrées de recherche.
