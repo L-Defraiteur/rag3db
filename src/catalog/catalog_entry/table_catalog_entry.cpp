@@ -90,6 +90,18 @@ common::column_id_t TableCatalogEntry::getColumnID(common::idx_t idx) const {
     return propertyCollection.getColumnID(idx);
 }
 
+common::idx_t TableCatalogEntry::getPropertyPosition(common::column_id_t columnID) const {
+    // Par le nom : les identifiants de propriété ne sont pas des positions non plus (celui
+    // d'une propriété retirée manque).
+    const auto definitions = propertyCollection.getDefinitions();
+    for (auto position = 0u; position < definitions.size(); position++) {
+        if (propertyCollection.getColumnID(definitions[position].getName()) == columnID) {
+            return position;
+        }
+    }
+    return common::INVALID_IDX;
+}
+
 void TableCatalogEntry::addProperty(const PropertyDefinition& propertyDefinition) {
     propertyCollection.add(propertyDefinition);
 }

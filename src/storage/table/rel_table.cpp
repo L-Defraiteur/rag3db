@@ -50,7 +50,8 @@ void RelTableScanState::setToTable(const Transaction* transaction, Table* table_
     nodeGroupIdx = INVALID_NODE_GROUP_IDX;
     if (const auto localRelTable =
             transaction->getLocalStorage()->getLocalTable(table->getTableID())) {
-        auto localTableColumnIDs = LocalRelTable::rewriteLocalColumnIDs(direction, columnIDs);
+        auto localTableColumnIDs =
+            localRelTable->ptrCast<LocalRelTable>()->rewriteLocalColumnIDs(direction, columnIDs);
         localTableScanState = std::make_unique<LocalRelTableScanState>(*this,
             localRelTable->ptrCast<LocalRelTable>(), localTableColumnIDs);
     }

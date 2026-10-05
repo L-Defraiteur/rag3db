@@ -33,6 +33,10 @@ LocalRelTable::LocalRelTable(const catalog::TableCatalogEntry* tableEntry, const
     : LocalTable{table} {
     localNodeGroup = std::make_unique<NodeGroup>(mm, 0, false,
         getTypesForLocalRelTable(*tableEntry), INVALID_ROW_IDX);
+    positionOfColumn.resize(tableEntry->getMaxColumnID() + 1, INVALID_IDX);
+    for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
+        positionOfColumn[columnID] = tableEntry->getPropertyPosition(columnID);
+    }
     const auto& relTable = table.cast<RelTable>();
     for (auto relDirection : relTable.getStorageDirections()) {
         directedIndices.emplace_back(relDirection);
@@ -309,7 +313,7 @@ void LocalRelTable::initializeScan(TableScanState& state) {
 }
 
 std::vector<column_id_t> LocalRelTable::rewriteLocalColumnIDs(RelDataDirection direction,
-    const std::vector<column_id_t>& columnIDs) {
+    const std::vector<column_id_t>& columnIDs) const {
     std::vector<column_id_t> localColumnIDs;
     localColumnIDs.reserve(columnIDs.size());
     for (auto i = 0u; i < columnIDs.size(); i++) {
@@ -319,11 +323,18 @@ std::vector<column_id_t> LocalRelTable::rewriteLocalColumnIDs(RelDataDirection d
     return localColumnIDs;
 }
 
-column_id_t LocalRelTable::rewriteLocalColumnID(RelDataDirection direction, column_id_t columnID) {
-    return columnID == NBR_ID_COLUMN_ID ? direction == RelDataDirection::FWD ?
-                                          LOCAL_NBR_NODE_ID_COLUMN_ID :
-                                          LOCAL_BOUND_NODE_ID_COLUMN_ID :
-                                          columnID + 1;
+column_id_t LocalRelTable::rewriteLocalColumnID(RelDataDirection direction,
+    column_id_t columnID) const {
+    if (columnID == NBR_ID_COLUMN_ID) {
+        return direction == RelDataDirection::FWD ? LOCAL_NBR_NODE_ID_COLUMN_ID :
+                                                    LOCAL_BOUND_NODE_ID_COLUMN_ID;
+    }
+    if (columnID == INVALID_COLUMN_ID || columnID == ROW_IDX_COLUMN_ID) {
+        return columnID;
+    }
+    KU_ASSERT(columnID < positionOfColumn.size() && positionOfColumn[columnID] != INVALID_IDX);
+    // Après les deux colonnes de nœuds.
+    return positionOfColumn[columnID] + 2;
 }
 
 bool LocalRelTable::scan(const Transaction* transaction, TableScanState& state) const {

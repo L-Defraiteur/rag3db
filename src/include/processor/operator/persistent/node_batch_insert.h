@@ -56,7 +56,9 @@ struct NodeBatchInsertInfo final : BatchInsertInfo {
 
 struct NodeBatchInsertSharedState final : BatchInsertSharedState {
     // Primary key info
-    common::column_id_t pkColumnID;
+    // La position de la clé parmi les propriétés : les groupes en mémoire du COPY sont rangés
+    // par position (columnTypes), pas par numéro de colonne.
+    common::idx_t pkPosition;
     common::LogicalType pkType;
     std::optional<IndexBuilder> globalIndexBuilder;
 
@@ -73,7 +75,7 @@ struct NodeBatchInsertSharedState final : BatchInsertSharedState {
     common::offset_t numRowsBeforeCopy = 0;
 
     explicit NodeBatchInsertSharedState(std::shared_ptr<FactorizedTable> fTable)
-        : BatchInsertSharedState{std::move(fTable)}, pkColumnID{0},
+        : BatchInsertSharedState{std::move(fTable)}, pkPosition{0},
           globalIndexBuilder(std::nullopt), tableFuncSharedState{nullptr},
           sharedNodeGroup{nullptr} {}
 

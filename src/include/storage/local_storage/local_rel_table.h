@@ -104,10 +104,13 @@ public:
     }
     NodeGroup& getLocalNodeGroup() const { return *localNodeGroup; }
 
-    static std::vector<common::column_id_t> rewriteLocalColumnIDs(
-        common::RelDataDirection direction, const std::vector<common::column_id_t>& columnIDs);
-    static common::column_id_t rewriteLocalColumnID(common::RelDataDirection direction,
-        common::column_id_t columnID);
+    // La colonne de ce groupe local : les deux nœuds en tête, puis les propriétés rangées par
+    // position (celle du catalogue que voyait la transaction à sa création), pas par numéro de
+    // colonne — ils diffèrent après ALTER TABLE … DROP.
+    std::vector<common::column_id_t> rewriteLocalColumnIDs(common::RelDataDirection direction,
+        const std::vector<common::column_id_t>& columnIDs) const;
+    common::column_id_t rewriteLocalColumnID(common::RelDataDirection direction,
+        common::column_id_t columnID) const;
 
 private:
     common::row_idx_t findMatchingRow(const transaction::Transaction* transaction,
@@ -121,6 +124,8 @@ private:
     // NodeID.
     std::vector<DirectedCSRIndex> directedIndices;
     std::unique_ptr<NodeGroup> localNodeGroup;
+    // Indexé par numéro de colonne : la position de la propriété (getPropertyPosition).
+    std::vector<common::idx_t> positionOfColumn;
 };
 
 } // namespace storage

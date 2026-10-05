@@ -204,18 +204,9 @@ VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
 # mauvaise propriété écrite). Fenêtre B, après le point de reprise : NodeTable::pkColumnID et
 # les numéros de colonnes des index ne suivent pas la renumérotation du catalogue (« Cannot
 # update pk », ligne introuvable même après réouverture, index vectoriel rouvert : SIGSEGV).
-# Vus rouges 3 passes sur 3 le 5 octobre.
-Copy/DropBeforeThePrimaryKey.InsertsCopiesAndReplaysFindTheirKeys/Forced insert-after-drop
-Copy/DropBeforeThePrimaryKey.InsertsCopiesAndReplaysFindTheirKeys/Journaled insert-after-drop
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDrop right-column
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertWhenTheKeyIsLastAfterDrop steps-succeed
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReadOfARowOfTheTransactionAfterDrop right-column
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateOfARowOfTheTransactionAfterDrop right-column
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/CopyAfterDrop steps-succeed
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReplayOfAnInsertAfterDrop right-column
+# Vus rouges 3 passes sur 3 le 5 octobre. La fenêtre A est corrigée (une seule conversion,
+# TableCatalogEntry::getPropertyPosition) ; restent les quatre cas de la fenêtre B.
 Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateAfterDropAndCheckpoint steps-succeed
 Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropAndCheckpoint right-column
 Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropCheckpointAndReopen right-column
 Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/VectorIndexAfterDropCheckpointAndReopen runs
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReadOfARelationOfTheTransactionAfterDrop runs
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateOfARelationOfTheTransactionAfterDrop right-column

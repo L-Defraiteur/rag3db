@@ -20,6 +20,8 @@ class Transaction;
 
 namespace storage {
 
+class LocalNodeTable;
+
 struct RAG3DB_API NodeTableScanState : TableScanState {
     NodeTableScanState(common::ValueVector* nodeIDVector,
         std::vector<common::ValueVector*> outputVectors,
@@ -37,6 +39,11 @@ struct RAG3DB_API NodeTableScanState : TableScanState {
 
     NodeGroupScanResult scanNext(transaction::Transaction* transaction,
         common::offset_t startOffset, common::offset_t numNodes);
+
+    // Les numéros de colonnes du balayage, pour le stockage validé. columnIDs les reprend, ou
+    // leurs positions dans les groupes locaux quand la source est UNCOMMITTED
+    // (NodeTable::initScanState, LocalNodeTable::getLocalColumnIDs).
+    std::vector<common::column_id_t> committedColumnIDs;
 };
 
 // There is a vtable bug related to the Apple clang v15.0.0+. Adding the `FINAL` specifier to
@@ -45,6 +52,9 @@ struct RAG3DB_API NodeTableInsertState : TableInsertState {
     common::ValueVector& nodeIDVector;
     const common::ValueVector& pkVector;
     std::vector<std::unique_ptr<Index::InsertState>> indexInsertStates;
+    // Pour chaque index, les positions de ses colonnes parmi les propriétés : propertyVectors
+    // est rangé par position, les index par numéro de colonne (initInsertState).
+    std::vector<std::vector<common::idx_t>> indexPropertyPositions;
 
     NodeTableInsertState(common::ValueVector& nodeIDVector, const common::ValueVector& pkVector,
         std::vector<common::ValueVector*> propertyVectors)
@@ -138,7 +148,7 @@ public:
 
     // Return the max node offset during insertions.
     common::offset_t validateUniquenessConstraint(const transaction::Transaction* transaction,
-        const std::vector<common::ValueVector*>& propertyVectors) const;
+        const common::ValueVector& pkVector) const;
 
     void initInsertState(main::ClientContext* context, TableInsertState& insertState) override;
     void insert(transaction::Transaction* transaction, TableInsertState& insertState) override;
@@ -239,7 +249,7 @@ private:
     common::DataChunk constructDataChunkForColumns(
         const std::vector<common::column_id_t>& columnIDs) const;
     void scanIndexColumns(main::ClientContext* context, IndexScanHelper& scanHelper,
-        const NodeGroupCollection& nodeGroups_) const;
+        const NodeGroupCollection& nodeGroups_, const LocalNodeTable* localTable = nullptr) const;
 
 private:
     std::vector<std::unique_ptr<Column>> columns;

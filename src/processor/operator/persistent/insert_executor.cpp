@@ -1,5 +1,8 @@
 #include "processor/operator/persistent/insert_executor.h"
 
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/node_table_catalog_entry.h"
+
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -40,7 +43,12 @@ void NodeTableInsertInfo::init(const ResultSet& resultSet, main::ClientContext* 
         evaluator->init(resultSet, context);
         columnDataVectors.push_back(evaluator->resultVector.get());
     }
-    pkVector = columnDataVectors[table->getPKColumnID()];
+    // Les vecteurs sont rangés par position de propriété : la clé à sa position, pas à son
+    // numéro de colonne (ils diffèrent après ALTER TABLE … DROP).
+    const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
+        transaction::Transaction::Get(*context), table->getTableID());
+    pkVector = columnDataVectors[entry->constCast<catalog::NodeTableCatalogEntry>()
+                                     .getPrimaryKeyPosition()];
 }
 
 void NodeInsertExecutor::init(ResultSet* resultSet, const ExecutionContext* context) {
@@ -110,18 +118,23 @@ void NodeInsertExecutor::skipInsert(nodeID_t createdNodeID, main::ClientContext*
     // Le vecteur d'identifiant gardait celui du dernier nœud inséré : un SET ou un RETURN qui
     // suit aurait lu un autre nœud. On repose celui que le lot a créé pour cette clé.
     info.updateNodeID(createdNodeID);
+    // columnVectors est rangé par position de propriété ; le balayage prend des numéros de
+    // colonne, et les traduit lui-même pour les groupes locaux.
+    auto transaction = Transaction::Get(*context);
+    const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction,
+        tableInfo.table->getTableID());
+    const auto properties = entry->getProperties();
     std::vector<column_id_t> columnIDs;
     std::vector<ValueVector*> outputVectors;
     for (auto i = 0u; i < info.columnVectors.size(); ++i) {
         if (info.columnVectors[i] != nullptr) {
-            columnIDs.push_back(i);
+            columnIDs.push_back(entry->getColumnID(properties[i].getName()));
             outputVectors.push_back(info.columnVectors[i]);
         }
     }
     if (outputVectors.empty()) {
         return;
     }
-    auto transaction = Transaction::Get(*context);
     storage::NodeTableScanState scanState{info.nodeIDVector, std::move(outputVectors),
         info.nodeIDVector->state};
     scanState.setToTable(transaction, tableInfo.table, std::move(columnIDs));
@@ -133,7 +146,7 @@ void NodeInsertExecutor::skipInsert(nodeID_t createdNodeID, main::ClientContext*
 bool NodeInsertExecutor::checkConflict(const Transaction* transaction) const {
     if (info.conflictAction == ConflictAction::ON_CONFLICT_DO_NOTHING) {
         auto offset =
-            tableInfo.table->validateUniquenessConstraint(transaction, tableInfo.columnDataVectors);
+            tableInfo.table->validateUniquenessConstraint(transaction, *tableInfo.pkVector);
         if (offset != INVALID_OFFSET) {
             // Conflict. Skip insertion.
             info.updateNodeID({offset, tableInfo.table->getTableID()});

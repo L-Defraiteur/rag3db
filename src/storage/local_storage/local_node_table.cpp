@@ -27,18 +27,51 @@ std::vector<LogicalType> LocalNodeTable::getNodeTableColumnTypes(
 LocalNodeTable::LocalNodeTable(const catalog::TableCatalogEntry* tableEntry, Table& table,
     MemoryManager& mm)
     : LocalTable{table}, overflowFileHandle(nullptr),
-      nodeGroups{mm, getNodeTableColumnTypes(*tableEntry), false /*enableCompression*/} {
+      nodeGroups{mm, getNodeTableColumnTypes(*tableEntry), false /*enableCompression*/},
+      pkPhysicalType{tableEntry->constCast<catalog::NodeTableCatalogEntry>()
+                         .getPrimaryKeyDefinition()
+                         .getType()
+                         .getPhysicalType()} {
+    positionOfColumn.resize(tableEntry->getMaxColumnID() + 1, INVALID_IDX);
+    for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
+        positionOfColumn[columnID] = tableEntry->getPropertyPosition(columnID);
+    }
     initLocalHashIndex(mm);
     startOffset = table.getNumTotalRows(nullptr /* transaction */);
 }
 
 void LocalNodeTable::initLocalHashIndex(MemoryManager& mm) {
-    auto& nodeTable = ku_dynamic_cast<const NodeTable&>(table);
     overflowFile = std::make_unique<InMemOverflowFile>(mm);
     overflowFileHandle = overflowFile->addHandle();
-    hashIndex = std::make_unique<LocalHashIndex>(mm,
-        nodeTable.getColumn(nodeTable.getPKColumnID()).getDataType().getPhysicalType(),
-        overflowFileHandle);
+    hashIndex = std::make_unique<LocalHashIndex>(mm, pkPhysicalType, overflowFileHandle);
+}
+
+column_id_t LocalNodeTable::getLocalColumnID(column_id_t columnID) const {
+    if (columnID == INVALID_COLUMN_ID || columnID == ROW_IDX_COLUMN_ID) {
+        return columnID;
+    }
+    KU_ASSERT(columnID < positionOfColumn.size() && positionOfColumn[columnID] != INVALID_IDX);
+    return positionOfColumn[columnID];
+}
+
+std::vector<column_id_t> LocalNodeTable::getLocalColumnIDs(
+    const std::vector<column_id_t>& columnIDs) const {
+    std::vector<column_id_t> localColumnIDs;
+    localColumnIDs.reserve(columnIDs.size());
+    for (const auto columnID : columnIDs) {
+        localColumnIDs.push_back(getLocalColumnID(columnID));
+    }
+    return localColumnIDs;
+}
+
+std::vector<column_id_t> LocalNodeTable::getCommittedColumnIDs() const {
+    std::vector<column_id_t> columnIDs(nodeGroups.getNumColumns(), INVALID_COLUMN_ID);
+    for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
+        if (const auto position = positionOfColumn[columnID]; position != INVALID_IDX) {
+            columnIDs[position] = columnID;
+        }
+    }
+    return columnIDs;
 }
 
 bool LocalNodeTable::isVisible(const Transaction* transaction, offset_t offset) const {
@@ -81,12 +114,11 @@ bool LocalNodeTable::update(Transaction* transaction, TableUpdateState& updateSt
     KU_ASSERT(nodeUpdateState.nodeIDVector.state->getSelVector().getSelSize() == 1);
     const auto pos = nodeUpdateState.nodeIDVector.state->getSelVector()[0];
     const auto offset = nodeUpdateState.nodeIDVector.readNodeOffset(pos);
-    KU_ASSERT(nodeUpdateState.columnID != table.cast<NodeTable>().getPKColumnID());
     KU_ASSERT(offset >= startOffset);
     const auto [nodeGroupIdx, rowIdxInGroup] =
         StorageUtils::getQuotientRemainder(offset - startOffset, StorageConfig::NODE_GROUP_SIZE);
     const auto nodeGroup = nodeGroups.getNodeGroup(nodeGroupIdx);
-    nodeGroup->update(transaction, rowIdxInGroup, nodeUpdateState.columnID,
+    nodeGroup->update(transaction, rowIdxInGroup, getLocalColumnID(nodeUpdateState.columnID),
         nodeUpdateState.propertyVector);
     return true;
 }
@@ -107,14 +139,15 @@ bool LocalNodeTable::delete_(Transaction* transaction, TableDeleteState& deleteS
 
 bool LocalNodeTable::addColumn(TableAddColumnState& addColumnState) {
     nodeGroups.addColumn(addColumnState);
+    // La table a déjà ajouté sa colonne (le dernier numéro) ; ici, la dernière position.
+    const auto columnID = table.cast<NodeTable>().getNumColumns() - 1;
+    positionOfColumn.resize(columnID + 1, INVALID_IDX);
+    positionOfColumn[columnID] = nodeGroups.getNumColumns() - 1;
     return true;
 }
 
 void LocalNodeTable::clear(MemoryManager& mm) {
-    auto& nodeTable = ku_dynamic_cast<const NodeTable&>(table);
-    hashIndex = std::make_unique<LocalHashIndex>(mm,
-        nodeTable.getColumn(nodeTable.getPKColumnID()).getDataType().getPhysicalType(),
-        overflowFileHandle);
+    hashIndex = std::make_unique<LocalHashIndex>(mm, pkPhysicalType, overflowFileHandle);
     nodeGroups.clear();
 }
 

@@ -55,6 +55,14 @@ public:
     const binder::PropertyDefinition& getProperty(common::idx_t idx) const;
     virtual common::column_id_t getColumnID(const std::string& propertyName) const;
     common::column_id_t getColumnID(common::idx_t idx) const;
+    // La position parmi les propriétés (l'ordre de getProperties()) de la propriété rangée au
+    // numéro de colonne columnID ; INVALID_IDX si aucune. Les lignes d'une insertion, les
+    // groupes locaux d'une transaction et les enregistrements d'insertion du journal sont
+    // rangés par position ; le stockage validé et les index, par numéro de colonne. Les deux
+    // coïncident tant qu'aucune colonne n'a été retirée devant une autre : après
+    // ALTER TABLE … DROP, et jusqu'au point de reprise qui renumérote, ils diffèrent. Tout
+    // passage de l'un à l'autre se fait ici, et nulle part ailleurs.
+    common::idx_t getPropertyPosition(common::column_id_t columnID) const;
     void addProperty(const binder::PropertyDefinition& propertyDefinition);
     void dropProperty(const std::string& propertyName);
     virtual void renameProperty(const std::string& propertyName, const std::string& newName);

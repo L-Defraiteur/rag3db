@@ -58,6 +58,16 @@ public:
     static std::vector<common::LogicalType> getNodeTableColumnTypes(
         const catalog::TableCatalogEntry& table);
 
+    // Les groupes de cette table sont rangés par position de propriété (celle du catalogue que
+    // voyait la transaction à sa création) ; le stockage validé et les index, par numéro de
+    // colonne. La colonne columnID dans ces groupes ; les numéros spéciaux (INVALID_COLUMN_ID,
+    // ROW_IDX_COLUMN_ID) passent tels quels.
+    common::column_id_t getLocalColumnID(common::column_id_t columnID) const;
+    std::vector<common::column_id_t> getLocalColumnIDs(
+        const std::vector<common::column_id_t>& columnIDs) const;
+    // L'inverse, pour chaque position de ces groupes : son numéro de colonne.
+    std::vector<common::column_id_t> getCommittedColumnIDs() const;
+
 private:
     void initLocalHashIndex(MemoryManager& mm);
     bool isVisible(const transaction::Transaction* transaction, common::offset_t offset) const;
@@ -70,6 +80,11 @@ private:
     OverflowFileHandle* overflowFileHandle;
     std::unique_ptr<LocalHashIndex> hashIndex;
     NodeGroupCollection nodeGroups;
+    // Indexé par numéro de colonne : la position de la propriété (getPropertyPosition).
+    std::vector<common::idx_t> positionOfColumn;
+    // Le type de la clé, pris au catalogue : le numéro de colonne de la clé gardé par la table
+    // ne suit pas la renumérotation d'un point de reprise.
+    common::PhysicalTypeID pkPhysicalType;
 };
 
 } // namespace storage

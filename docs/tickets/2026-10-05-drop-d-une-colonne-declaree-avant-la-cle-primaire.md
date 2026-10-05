@@ -1,6 +1,6 @@
 # Retirer une colonne déclarée avant la clé primaire casse l'insertion
 
-- **État** : ouvert
+- **État** : en cours — fenêtre A corrigée (banc, 5 octobre : une seule conversion, `TableCatalogEntry::getPropertyPosition`) ; fenêtre B à venir (quatre témoins encore rouges)
 - **Gravité** : réponse fausse et perte, plus que le blocage d'abord vu. Une ligne acceptée reste introuvable par sa clé, la mauvaise propriété d'une relation est écrite, et deux cas plantent (SIGSEGV). Mesuré au banc le 5 octobre, voir « Étendue »
 - **Atteignable en service** : oui — un `ALTER TABLE … DROP` d'une colonne déclarée avant la clé primaire
 - **Touche rag3weaver** : non (il ne retire jamais de colonne ; ses clés sont déclarées en premier)

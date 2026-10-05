@@ -49,7 +49,6 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
                               ->ptrCast<NodeTableCatalogEntry>();
     auto nodeTable = StorageManager::Get(*clientContext)->getTable(nodeTableEntry->getTableID());
     const auto& pkDefinition = nodeTableEntry->getPrimaryKeyDefinition();
-    auto pkColumnID = nodeTableEntry->getColumnID(pkDefinition.getName());
     // Init info
     info->compressionEnabled = StorageManager::Get(*clientContext)->compressionEnabled();
     auto dataColumnIdx = 0u;
@@ -65,7 +64,7 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     // Init shared state
     auto nodeSharedState = sharedState->ptrCast<NodeBatchInsertSharedState>();
     nodeSharedState->table = nodeTable;
-    nodeSharedState->pkColumnID = pkColumnID;
+    nodeSharedState->pkPosition = nodeTableEntry->getPrimaryKeyPosition();
     nodeSharedState->pkType = pkDefinition.getType().copy();
     // Les lignes que la transaction a déjà insérées dans cette table par le chemin ordinaire
     // vivent dans son stockage local, à des décalages provisoires qui commencent où la table
@@ -232,7 +231,7 @@ void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transacti
         for (const auto warningDataColumn : info->warningDataColumns) {
             warningChunkData.push_back(&nodeGroup->getColumnChunk(warningDataColumn));
         }
-        indexBuilder->insert(nodeGroup->getColumnChunk(nodeSharedState->pkColumnID),
+        indexBuilder->insert(nodeGroup->getColumnChunk(nodeSharedState->pkPosition),
             warningChunkData, nodeOffset, numRowsWritten, errorHandler);
     }
     if (numRowsWritten == nodeGroup->getNumRows()) {

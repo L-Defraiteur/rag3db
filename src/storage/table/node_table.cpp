@@ -253,6 +253,7 @@ void NodeTableScanState::setToTable(const Transaction* transaction, Table* table
     std::vector<column_id_t> columnIDs_, std::vector<ColumnPredicateSet> columnPredicateSets_,
     RelDataDirection) {
     TableScanState::setToTable(transaction, table_, columnIDs_, std::move(columnPredicateSets_));
+    committedColumnIDs = columnIDs;
     columns.resize(columnIDs.size());
     for (auto i = 0u; i < columnIDs.size(); i++) {
         if (const auto columnID = columnIDs[i];
@@ -333,6 +334,9 @@ void NodeTable::initScanState(Transaction* transaction, TableScanState& scanStat
     switch (nodeScanState.source) {
     case TableScanSource::COMMITTED: {
         nodeGroup = nodeGroups->getNodeGroup(nodeScanState.nodeGroupIdx);
+        if (!nodeScanState.committedColumnIDs.empty()) {
+            nodeScanState.columnIDs = nodeScanState.committedColumnIDs;
+        }
     } break;
     case TableScanSource::UNCOMMITTED: {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
@@ -340,6 +344,13 @@ void NodeTable::initScanState(Transaction* transaction, TableScanState& scanStat
         const auto& localNodeTable = localTable->cast<LocalNodeTable>();
         nodeGroup = localNodeTable.getNodeGroup(nodeScanState.nodeGroupIdx);
         KU_ASSERT(nodeGroup);
+        // Les groupes locaux sont rangés par position de propriété : après
+        // ALTER TABLE … DROP, ce n'est plus le numéro de colonne.
+        if (nodeScanState.committedColumnIDs.empty()) {
+            nodeScanState.committedColumnIDs = nodeScanState.columnIDs;
+        }
+        nodeScanState.columnIDs =
+            localNodeTable.getLocalColumnIDs(nodeScanState.committedColumnIDs);
     } break;
     case TableScanSource::NONE: {
         // DO NOTHING.
@@ -440,18 +451,17 @@ template bool NodeTable::lookupMultiple<false>(Transaction* transaction,
     TableScanState& scanState) const;
 
 offset_t NodeTable::validateUniquenessConstraint(const Transaction* transaction,
-    const std::vector<ValueVector*>& propertyVectors) const {
-    const auto pkVector = propertyVectors[pkColumnID];
-    KU_ASSERT(pkVector->state->getSelVector().getSelSize() == 1);
-    const auto pkVectorPos = pkVector->state->getSelVector()[0];
+    const ValueVector& pkVector) const {
+    KU_ASSERT(pkVector.state->getSelVector().getSelSize() == 1);
+    const auto pkVectorPos = pkVector.state->getSelVector()[0];
     if (offset_t offset = INVALID_OFFSET;
-        getPKIndex()->lookup(transaction, propertyVectors[pkColumnID], pkVectorPos, offset,
+        getPKIndex()->lookup(transaction, const_cast<ValueVector*>(&pkVector), pkVectorPos, offset,
             [&](offset_t offset_) { return isVisible(transaction, offset_); })) {
         return offset;
     }
     if (const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID)) {
         return localTable->cast<LocalNodeTable>().validateUniquenessConstraint(transaction,
-            *pkVector);
+            pkVector);
     }
     return INVALID_OFFSET;
 }
@@ -489,6 +499,9 @@ bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* tra
 void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& insertState) {
     auto& nodeInsertState = insertState.cast<NodeTableInsertState>();
     nodeInsertState.indexInsertStates.resize(indexes.size());
+    nodeInsertState.indexPropertyPositions.resize(indexes.size());
+    const auto* tableEntry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
+        transaction::Transaction::Get(*context), tableID);
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
         if (!isWritableIndex(indexHolder, transaction::Transaction::Get(*context))) {
@@ -496,6 +509,10 @@ void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& 
             continue;
         }
         const auto index = indexHolder.getIndex();
+        for (const auto columnID : index->getIndexInfo().columnIDs) {
+            nodeInsertState.indexPropertyPositions[i].push_back(
+                tableEntry->getPropertyPosition(columnID));
+        }
         nodeInsertState.indexInsertStates[i] =
             index->initInsertState(context, [&](offset_t offset) {
                 return isVisible(transaction::Transaction::Get(*context), offset);
@@ -520,8 +537,8 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         }
         auto index = indexes[i].getIndex();
         std::vector<ValueVector*> indexedPropertyVectors;
-        for (const auto columnID : index->getIndexInfo().columnIDs) {
-            indexedPropertyVectors.push_back(insertState.propertyVectors[columnID]);
+        for (const auto position : nodeInsertState.indexPropertyPositions[i]) {
+            indexedPropertyVectors.push_back(insertState.propertyVectors[position]);
         }
         index->insert(transaction, nodeInsertState.nodeIDVector, indexedPropertyVectors,
             *nodeInsertState.indexInsertStates[i]);
@@ -744,6 +761,8 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
             *memoryManager);
     }
     // 2. Set deleted flag for tuples that are deleted in local storage.
+    // La clé d'une ligne locale, à sa position dans les groupes locaux.
+    const auto localPKColumnID = localNodeTable.getLocalColumnID(pkColumnID);
     row_idx_t numLocalRows = 0u;
     for (auto localNodeGroupIdx = 0u; localNodeGroupIdx < localNodeTable.getNumNodeGroups();
          localNodeGroupIdx++) {
@@ -758,10 +777,10 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
                         const auto [chunkedGroup, rowInChunkedGroup] =
                             getChunkedGroupAndRow(*localNodeGroup, row);
                         ValueVector pkVector(
-                            chunkedGroup->getColumnChunk(pkColumnID).getDataType().copy(),
+                            chunkedGroup->getColumnChunk(localPKColumnID).getDataType().copy(),
                             memoryManager, DataChunkState::getSingleValueDataChunkState());
                         ChunkState chunkState;
-                        chunkedGroup->getColumnChunk(pkColumnID)
+                        chunkedGroup->getColumnChunk(localPKColumnID)
                             .lookup(&DUMMY_TRANSACTION, chunkState, rowInChunkedGroup, pkVector, 0);
                         transaction->getLocalWAL().logNodeDeletion(tableID, nodeOffset, &pkVector);
                     }
@@ -805,7 +824,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
             getVisibleFunc(transaction)};
         // We need to scan from local storage here because some tuples in local node groups might
         // have been deleted.
-        scanIndexColumns(context, indexInserter, localNodeTable.getNodeGroups());
+        scanIndexColumns(context, indexInserter, localNodeTable.getNodeGroups(), &localNodeTable);
     }
 
     // 4. Clear local table.
@@ -884,8 +903,9 @@ void NodeTable::reclaimStorage(PageAllocator& pageAllocator) const {
 TableStats NodeTable::getStats(const Transaction* transaction) const {
     auto stats = nodeGroups->getStats();
     if (const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID)) {
-        const auto localStats = localTable->cast<LocalNodeTable>().getStats();
-        stats.merge(localStats);
+        const auto& localNodeTable = localTable->cast<LocalNodeTable>();
+        // Les statistiques locales sont rangées par position de propriété.
+        stats.merge(localNodeTable.getCommittedColumnIDs(), localNodeTable.getStats());
     }
     return stats;
 }
@@ -919,10 +939,14 @@ bool NodeTable::lookupPK(const Transaction* transaction, ValueVector* keyVector,
 }
 
 void NodeTable::scanIndexColumns(main::ClientContext* context, IndexScanHelper& scanHelper,
-    const NodeGroupCollection& nodeGroups_) const {
+    const NodeGroupCollection& nodeGroups_, const LocalNodeTable* localTable) const {
     auto dataChunk = constructDataChunkForColumns(scanHelper.index->getIndexInfo().columnIDs);
     const auto scanState =
         scanHelper.initScanState(transaction::Transaction::Get(*context), dataChunk);
+    if (localTable) {
+        // Les groupes d'une table locale sont rangés par position de propriété.
+        scanState->columnIDs = localTable->getLocalColumnIDs(scanState->committedColumnIDs);
+    }
 
     const auto numNodeGroups = nodeGroups_.getNumNodeGroups();
     for (node_group_idx_t nodeGroupToScan = 0u; nodeGroupToScan < numNodeGroups;

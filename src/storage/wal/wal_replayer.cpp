@@ -6,7 +6,9 @@
 #include <optional>
 
 #include "binder/binder.h"
+#include "catalog/catalog.h"
 #include "catalog/catalog_entry/index_catalog_entry.h"
+#include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/scalar_macro_catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
@@ -620,8 +622,20 @@ void WALReplayer::replayNodeTableInsertRecord(const WALRecord& walRecord) const 
     for (auto i = 0u; i < insertionRecord.ownedVectors.size(); i++) {
         propertyVectors[i] = insertionRecord.ownedVectors[i].get();
     }
-    KU_ASSERT(table.getPKColumnID() < insertionRecord.ownedVectors.size());
-    auto& pkVector = *insertionRecord.ownedVectors[table.getPKColumnID()];
+    // L'enregistrement est rangé par position de propriété, comme les lignes d'une insertion :
+    // la clé à sa position dans le catalogue du rejeu, pas à son numéro de colonne.
+    const auto pkPosition =
+        catalog::Catalog::Get(clientContext)
+            ->getTableCatalogEntry(transaction::Transaction::Get(clientContext), tableID)
+            ->constCast<catalog::NodeTableCatalogEntry>()
+            .getPrimaryKeyPosition();
+    if (pkPosition >= insertionRecord.ownedVectors.size()) {
+        throw RuntimeException(stringFormat("The journal holds an insertion into table {} with "
+                                            "{} properties, too few for its primary key at "
+                                            "position {}.",
+            table.getTableName(), insertionRecord.ownedVectors.size(), pkPosition));
+    }
+    auto& pkVector = *insertionRecord.ownedVectors[pkPosition];
     const auto nodeIDVector = std::make_unique<ValueVector>(LogicalType::INTERNAL_ID());
     nodeIDVector->setState(anchorState);
     const auto insertState =

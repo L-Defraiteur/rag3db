@@ -29,6 +29,11 @@ public:
     const binder::PropertyDefinition& getPrimaryKeyDefinition() const {
         return getProperty(primaryKeyName);
     }
+    // La position de la clé parmi les propriétés (getPropertyPosition), là où la cherchent les
+    // lignes d'une insertion, les groupes locaux et le journal.
+    common::idx_t getPrimaryKeyPosition() const {
+        return getPropertyPosition(getColumnID(primaryKeyName));
+    }
 
     void renameProperty(const std::string& propertyName, const std::string& newName) override;
 
