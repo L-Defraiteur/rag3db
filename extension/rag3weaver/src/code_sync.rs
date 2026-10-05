@@ -300,7 +300,9 @@ pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, e
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SourceSyncOptions {
-    /// Fichiers par paquet d'ingestion.
+    /// Fichiers par paquet d'ingestion. **2 048 par défaut** (défaut basculé,
+    /// en préparation : décision de Lucie ; 64 avant) ; `RAG3WEAVER_BATCH_FILES`
+    /// change ce défaut, l'option `batchFiles` l'emporte sur les deux.
     pub batch_files: usize,
     /// S'arrêter au plan : la source est ingérée (c'est l'avancement), mais
     /// rien n'est retiré et les sessions sont abandonnées. Le rapport dit ce
@@ -373,10 +375,20 @@ fn tout() -> Disponibilites {
     Disponibilites::TOUT
 }
 
+/// Le défaut de `batch_files` : `RAG3WEAVER_BATCH_FILES`, sinon 2 048 —
+/// mesuré par la session embarquements (5 octobre 2026) : 79 s en fichiers
+/// et 78 s en blobs sur le dépôt entier, sous la cible, avec la transaction
+/// par paquet et K = 1.
+pub const BATCH_FILES_DEFAULT: usize = 2_048;
+
+fn paquet_par_defaut() -> usize {
+    std::env::var("RAG3WEAVER_BATCH_FILES").ok().and_then(|v| v.trim().parse().ok()).filter(|&n: &usize| n > 0).unwrap_or(BATCH_FILES_DEFAULT)
+}
+
 impl Default for SourceSyncOptions {
     fn default() -> Self {
         Self {
-            batch_files: 64,
+            batch_files: paquet_par_defaut(),
             plan_only: false,
             takeover: false,
             allow_empty: false,
@@ -825,6 +837,14 @@ fn synchroniser(
     report.relations += resolu.linked_across_batches;
     profil.add("appliquer la fin et résoudre les symboles", t);
     profil.publish();
+    // Combien de COPY journalisés se sont repliés sur un point de reprise
+    // (au-delà de `copy_journal_threshold`, moteur 71cffbc4b) : un dépôt
+    // assez gros pour franchir le seuil se voit ici.
+    if std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some() {
+        if let Ok(r) = catalog.conn().execute("CALL current_setting('copy_journal_fallbacks') RETURN *") {
+            eprintln!("[ingest-profile] replis du COPY journalisé : {:?}", r.rows.first());
+        }
+    }
     Ok((report, avancement))
 }
 
@@ -901,14 +921,27 @@ fn paquets_par_validation() -> usize {
 }
 
 /// Le prototype de la transaction par paquet est-il demandé ?
+///
+/// **Active par défaut** (défaut basculé, en préparation : décision de
+/// Lucie) ; `RAG3WEAVER_TX_PAR_PAQUET=0` revient au chemin d'avant.
 fn transaction_par_paquet() -> bool {
-    std::env::var("RAG3WEAVER_TX_PAR_PAQUET").as_deref() == Ok("1")
+    std::env::var("RAG3WEAVER_TX_PAR_PAQUET").as_deref() != Ok("0")
 }
 
 /// **Ouvrir la transaction d'un paquet** : toutes les écritures du catalogue
 /// passent par la même connexion du moteur, donc par elle. Le catalogue
 /// n'émet plus de DDL tant qu'elle est ouverte.
 fn commencer(catalog: &mut Catalog) -> Result<(), String> {
+    // **Le plein texte en base : le point de reprise forcé** (décision de
+    // l'orchestration, 5 octobre 2026). Ses blobs (~74 Ko par ligne, 849 Mio
+    // sur le dépôt entier) passeraient au journal avec un COPY journalisé,
+    // écrits deux fois (+30 à 40 s) ; le point de reprise forcé du COPY les
+    // rend durables sans journal. En fichiers, le défaut du moteur. Sans effet
+    // tant que le défaut du moteur est encore « forcé » ; un moteur qui ne
+    // connaît pas le réglage l'ignore.
+    if catalog.plein_texte_en_base() {
+        let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=true");
+    }
     catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
     catalog.set_in_transaction(true);
     // Les points de reprise du dataflow n'ont rien à reprendre dans la
