@@ -293,6 +293,15 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     // Les trois temps, séparés : les mots (les paquets), les relations (le
     // chargement final, en masse), puis — plus bas — les vecteurs.
     let mut words_seconds: Option<f64> = None;
+    // **La première chose cherchable** : sous la transaction par paquet, rien
+    // n'est visible avant la première validation, qui tombe après
+    // taille × K fichiers (K = RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION).
+    let par_validation: usize = std::env::var("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(1);
+    let premier_seuil = if par_validation == 0 { usize::MAX } else { batch_files.saturating_mul(par_validation) };
+    let mut premier_vu = false;
     let report = sync_source(&mut catalog, &Snapshot::new("rag3db", kept), &options, &mut |p: SourceSyncProgress| {
         *step.lock().unwrap() = match p.phase {
             SyncPhase::Nodes => format!("paquet suivant {} fichiers faits, {} liens en file", p.files_done, p.relations_pending),
@@ -302,7 +311,12 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
             words_seconds = Some(t.elapsed().as_secs_f64());
             eprintln!("[mots] les mots sont là en {:.0} s ; relations : {} liens à poser", t.elapsed().as_secs_f64(), p.relations_pending);
             eprintln!("[mémoire] {} Mo — les mots posés, {} liens en file", rss(), p.relations_pending);
-        } else if p.phase == SyncPhase::Nodes && (p.files_done >= last + 1_000 || p.files_done == p.files_total) {
+        }
+        if p.phase == SyncPhase::Nodes && !premier_vu && (p.files_done >= premier_seuil.min(p.files_total)) {
+            premier_vu = true;
+            eprintln!("[mots] première chose cherchable à {:.0} s (après {} fichiers sur {})", t.elapsed().as_secs_f64(), p.files_done, p.files_total);
+        }
+        if p.phase == SyncPhase::Nodes && (p.files_done >= last + 1_000 || p.files_done == p.files_total) {
             last = p.files_done;
             eprintln!("[mots] {} / {} fichiers, {} scopes, {} liens en file, {:.0} s", p.files_done, p.files_total, p.scopes_written, p.relations_pending, t.elapsed().as_secs_f64());
             eprintln!("[mémoire] {} Mo — {} fichiers faits", rss(), p.files_done);
@@ -373,6 +387,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     for (reason, n) in &report.files_set_aside {
         eprintln!("[mots] {n} fichiers écartés : {reason}");
     }
+    eprintln!("[mots] chargements en masse refusés (bulk_load_refused) : {} {:?}", report.bulk_load_refused.len(), report.bulk_load_refused);
 
     // Le pic de mémoire résidente du processus : la borne à tenir sur un
     // poste modeste, et l'inconnue d'un chargement de bout en bout.
