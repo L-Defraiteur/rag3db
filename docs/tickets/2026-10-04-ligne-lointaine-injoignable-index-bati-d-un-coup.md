@@ -166,3 +166,42 @@ au sien sort en tête. Le témoin est `extension/rag3weaver/tests/e2e_mesure_joi
 le chemin `bulk_vector_index` plutôt que par SET puis CREATE. On n'y touche pas tant que le
 banc n'a pas dit ce qu'est l'écart de `fond` (décision de l'orchestration) : si c'est un
 défaut du moteur, il se corrige là-bas.
+
+## L'écart du mode `fond` : non reproduit (5 octobre 2026)
+
+**Statut : non reproduit, pas fermé.** L'écart ne bloque plus la stèle. On ne change pas la
+conception, et `e2e_mesure_joignabilite` reste au dépôt.
+
+**Les cinq passes `fond` de rag3weaver** (src/ de rag3weaver, granite-278m, distance cosine),
+en nombre d'introuvables par leur propre vecteur :
+
+| passe | morceaux | introuvables |
+|---|---|---|
+| fond 1 | 12 233 Scope_Chunk | 18 |
+| fond 2 | 12 233 Scope_Chunk | 24 |
+| fond 3, celle de l'export | 12 278 Scope_Chunk | 3 |
+
+En regard, sur les deux mêmes séries de passes : `tout` 1 et 0, `masse` 1 et 0.
+
+**Ce que le banc a éliminé** : il a rejoué sur les 12 278 vecteurs exportés, sans
+rag3weaver, avec le même CREATE sans options.
+- Masse (COPY des vecteurs puis CREATE) : 6 et 1. Fond (COPY sans vecteur, réclamation par
+  lots de 512 en autocommit, SET des vecteurs par lots de 32, puis le même CREATE) : 5 et 3.
+  Sur les mêmes vecteurs, il n'y a **aucun écart** entre les deux chemins.
+- Les vecteurs identiques : 575 lignes en partagent un, par groupes de 42 au plus. Ils sont
+  couverts par la définition (un vecteur identique en tête compte comme trouvé), des deux
+  côtés. Les introuvables de rag3weaver ne viennent pas de là : leur premier rendu est à
+  0,03 à 0,4, jamais à 0.
+
+**Ce qui différait encore dans les deux passes à 18 et 24**, la piste qui reste si quelqu'un
+le revoit :
+1. le point de reprise automatique du moteur, au seuil du journal, pendant les SET ;
+2. l'ordre d'écriture des vecteurs : chaque lot de 512 est trié par longueur de texte
+   croissante (le banc a suivi l'ordre de la réclamation) ;
+3. deux fils producteurs, dont les lots reviennent dans un ordre non garanti ;
+4. un src/ un peu différent (12 233 morceaux au lieu de 12 278), donc d'autres vecteurs que
+   ceux de l'export.
+
+**Une passe de plus, sans urgence**, quand le correctif de l'index de clé primaire
+(`splitSlots`, cœur C++) sera sur master : le vrai déroulé `fond` une fois, pour un chiffre
+sur le moteur corrigé.
