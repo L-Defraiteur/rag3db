@@ -588,7 +588,7 @@ fn synchroniser(
     // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
     // d'un paquet.
     let t_garde = std::time::Instant::now();
-    let ecarts = catalog.check_fts_counts();
+    let ecarts = catalog.check_fts_counts().map_err(|e| e.to_string())?;
     if !ecarts.is_empty() {
         eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
     }

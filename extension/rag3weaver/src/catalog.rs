@@ -859,9 +859,9 @@ impl Catalog {
     /// `rebuild_pending_fts`. Un écrivain, hors transaction ; rend les
     /// entités à rebâtir. Coût : un `COUNT` par entité (le compte de
     /// documents de lucivy est en mémoire).
-    pub fn check_fts_counts(&mut self) -> Vec<String> {
+    pub fn check_fts_counts(&mut self) -> Result<Vec<String>, CatalogError> {
         if self.lecture_seule || self.in_transaction || self.plein_texte_natif() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let t = std::time::Instant::now();
         let names: Vec<String> = self
@@ -886,16 +886,18 @@ impl Catalog {
             eprintln!(
                 "[rag3weaver] plein texte de {entity} : {docs} documents pour {lignes} lignes — index rebâti depuis les lignes"
             );
+            // La marque d'abord, durable : une erreur remonte avant qu'on
+            // touche à l'index.
+            self.mark_fts_pending(&[entity.as_str()])?;
             if matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
                 // Le dossier part avec l'index ; la réouverture le trouve
                 // absent, la marque posée : rebâti par lots.
                 self.drop_fts_index(&table);
             }
-            let _ = self.mark_fts_pending(&[entity.as_str()]);
             ecarts.push(entity);
         }
         crate::ingest_profile::add("garde des comptes du plein texte", t);
-        ecarts
+        Ok(ecarts)
     }
 
     pub fn verify_fts_files(&mut self) {
@@ -1097,7 +1099,10 @@ impl Catalog {
             let marque = self.read_meta_key(&format!("fts_generation:{index_name}")).ok().flatten().and_then(|v| v.parse::<u64>().ok());
             let sur_disque = crate::fts_directory::generation_on_disk(&dir);
             base_generation = marque.unwrap_or(0);
-            self.reprendre_une_promesse();
+            if let Err(e) = self.reprendre_une_promesse() {
+                eprintln!("[rag3weaver] plein texte {table} : promesse illisible ou marque impossible ({e}) — index non ouvert");
+                return None;
+            }
             let entite = self.entity_of_fts_table(table);
             // Un rebâti interrompu (marque durable encore posée) recommence.
             let interrompu = entite
@@ -1119,9 +1124,20 @@ impl Catalog {
                         "[rag3weaver] plein texte {table} : génération du dossier {sur_disque:?}, de la base {marque:?}{} — dossier jeté, rebâti depuis les lignes",
                         if interrompu { ", rebâti interrompu" } else { "" }
                     );
-                    let _ = std::fs::remove_dir_all(&dir);
+                    // La marque d'abord, durable ; le dossier ensuite. Une mort
+                    // ou une erreur entre les deux laisse « à rebâtir », jamais
+                    // un index disparu sans marque.
                     if let Some(e) = &entite {
-                        let _ = self.mark_fts_pending(&[e.as_str()]);
+                        if let Err(err) = self.mark_fts_pending(&[e.as_str()]) {
+                            eprintln!("[rag3weaver] plein texte {table} : marque « à rebâtir » impossible ({err}) — dossier gardé, index non ouvert");
+                            return None;
+                        }
+                    }
+                    if let Err(err) = std::fs::remove_dir_all(&dir) {
+                        if err.kind() != std::io::ErrorKind::NotFound {
+                            eprintln!("[rag3weaver] plein texte {table} : dossier impossible à retirer ({err}) — index non ouvert");
+                            return None;
+                        }
                     }
                     self.fts_rebuild.insert(table.to_string());
                     self.fts_rebuild_cursor.remove(table);
@@ -5842,15 +5858,15 @@ impl Catalog {
     /// **Une promesse orpheline** (posée par un processus mort avant de la
     /// tenir) : toutes les entités au plein texte sont marquées à rebâtir,
     /// durablement, puis la promesse est levée. Un écrivain seulement.
-    fn reprendre_une_promesse(&mut self) {
+    fn reprendre_une_promesse(&mut self) -> Result<(), CatalogError> {
         if self.lecture_seule {
-            return;
+            return Ok(());
         }
-        let promesse = self.read_meta_key(FTS_PROMISE).ok().flatten().unwrap_or_default();
+        let promesse = self.read_meta_key(FTS_PROMISE)?.unwrap_or_default();
         let orpheline = self.fts_promise_orphan.swap(false, std::sync::atomic::Ordering::SeqCst)
             || (!promesse.is_empty() && promesse != self.fts_promise_token);
         if !orpheline {
-            return;
+            return Ok(());
         }
         let entites: Vec<String> = self
             .entity_configs
@@ -5863,10 +5879,17 @@ impl Catalog {
             entites.len()
         );
         let refs: Vec<&str> = entites.iter().map(String::as_str).collect();
-        let _ = self.mark_fts_pending(&refs);
-        if promesse != self.fts_promise_token {
-            let _ = self.persist_meta_key(FTS_PROMISE, "");
+        // La marque d'abord, durable : si elle échoue, la promesse reste, et
+        // la prochaine ouverture la reprend. On ne l'efface qu'une fois les
+        // rebâtis dus posés.
+        if let Err(e) = self.mark_fts_pending(&refs) {
+            self.fts_promise_orphan.store(true, std::sync::atomic::Ordering::SeqCst);
+            return Err(e);
         }
+        if promesse != self.fts_promise_token {
+            self.persist_meta_key(FTS_PROMISE, "")?;
+        }
+        Ok(())
     }
 
     /// `initialize` d'un catalogue en lecture : tout ce qui **lit**, rien de

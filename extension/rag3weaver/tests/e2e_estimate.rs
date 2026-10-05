@@ -448,7 +448,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         // La garde des comptes, sur le dépôt entier, comme une synchronisation
         // la ferait en tête : son coût.
         let tg = Instant::now();
-        let ecarts = reopened.check_fts_counts();
+        let ecarts = reopened.check_fts_counts().expect("garde des comptes");
         eprintln!("[réouverture] garde des comptes du plein texte : {:.0} ms, {} écarts", tg.elapsed().as_secs_f64() * 1e3, ecarts.len());
         let reopened = Arc::new(Mutex::new(reopened));
         let found = Catalog::rechercher(&reopened, SCOPE, "embarquer_le_retard", SearchOptions {

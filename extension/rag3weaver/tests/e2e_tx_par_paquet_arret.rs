@@ -842,3 +842,51 @@ fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
     drop(catalog);
     let _ = std::fs::remove_dir_all(&dossier);
 }
+
+fn catalogue_fichiers(base: &Path) -> Catalog {
+    let conn = Rag3dbConnection::new(base).expect("base");
+    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur())).unwrap();
+    let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
+    catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: format!("{}.fts", base.display()) });
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    catalog
+}
+
+/// **Une marque qui ne s'écrit pas ne laisse jamais un index disparu** : la
+/// base refuse toute écriture (catalogue empoisonné) ; la garde des comptes
+/// trouve un écart, échoue à poser la marque, le dit, et ne touche pas à
+/// l'index ; l'ouverture d'un dossier en désaccord échoue à marquer, n'ouvre
+/// pas l'index et garde le dossier.
+#[test]
+#[ignore]
+fn une_marque_qui_echoue_ne_laisse_jamais_un_index_sans_marque() {
+    let dossier = dossier_sur_disque("marque-echoue");
+    let base = dossier.join("base.rag3db");
+    let fts = PathBuf::from(format!("{}.fts", base.display()));
+    {
+        let mut catalog = catalogue_fichiers(&base);
+        synchroniser(&mut catalog, false);
+        let handle = catalog.fts_handle("Scope").unwrap();
+        rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], 9_000_000).unwrap();
+        handle.commit().unwrap();
+        drop(handle);
+        // La garde, base empoisonnée : erreur dite, index gardé.
+        catalog.poison("test : la base refuse toute écriture");
+        let garde = catalog.check_fts_counts();
+        assert!(garde.is_err(), "la marque n'a pas pu s'écrire : la garde échoue au lieu de jeter l'index : {garde:?}");
+        assert!(catalog.fts_handle("Scope").is_some(), "l'index n'a pas été retiré");
+        assert!(fts.exists(), "le dossier du plein texte est là");
+    }
+    // L'ouverture d'un dossier en désaccord, base empoisonnée.
+    let dir_scope = std::fs::read_dir(&fts).unwrap().flatten().find(|e| e.file_name().to_string_lossy().contains("Scope")).expect("dossier de Scope").path();
+    std::fs::remove_file(dir_scope.join("_generation")).expect("la génération du dossier");
+    let mut catalog = catalogue_fichiers(&base);
+    catalog.poison("test : la base refuse toute écriture");
+    catalog.open_fts_files();
+    assert!(catalog.fts_handle("Scope").is_none(), "sans marque posée, l'index n'est pas ouvert");
+    assert!(dir_scope.exists(), "sans marque posée, le dossier n'est pas jeté");
+    drop(catalog);
+    let _ = std::fs::remove_dir_all(&dossier);
+}
