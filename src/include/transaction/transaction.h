@@ -103,6 +103,12 @@ public:
     int64_t getCurrentTS() const { return currentTS; }
 
     void setForceCheckpoint() { forceCheckpoint = true; }
+    // Le repli d'un COPY journalisé dont le journal dépasse le seuil : la transaction devient
+    // forcée, son journal est vidé et plus rien n'y est écrit. Une transaction forcée est
+    // durable par son seul point de reprise, entière ou pas du tout (Transaction::commit).
+    uint64_t copyJournalThreshold() const;
+    bool journalExceedsCopyThreshold() const;
+    void fallBackToForcedCheckpoint();
     bool shouldAppendToUndoBuffer() const {
         // Only write transactions and recovery transactions should append to the undo buffer.
         return isWriteTransaction() || isRecovery();

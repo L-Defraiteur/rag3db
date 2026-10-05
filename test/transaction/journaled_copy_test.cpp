@@ -1288,6 +1288,271 @@ TEST_F(JournalRawArraysTest, AJournalWrittenBeforeTheRawFormIsStillReplayed) {
         1);
 }
 
+// Le seuil du journal d'un COPY (étape 4, page 05) : le journal d'une transaction vit en
+// mémoire jusqu'à sa validation. Quand un COPY journalisé le porte au-delà de
+// copy_journal_threshold, la transaction se replie sur le point de reprise forcé — son journal
+// est vidé, plus rien n'y est écrit, et elle est durable par son seul point de reprise, entière
+// ou pas du tout. Sous le seuil, rien ne change : le COPY est durable par le journal.
+class CopyJournalThresholdTest : public JournaledCopyTest {
+protected:
+    void ok(const std::string& query) {
+        auto result = conn->query(query);
+        ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
+    }
+
+    void openWithSchema() {
+        createDBAndConn();
+        ok("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);");
+        ok("CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
+        ok("CHECKPOINT;");
+        ok("CALL auto_checkpoint=false;");
+        ok("CALL force_checkpoint_on_copy=false;");
+    }
+
+    // Les lignes id, name, score de [first, first + count), dans un fichier au choix.
+    static void writeDocs(const std::string& path, int64_t first, int64_t count) {
+        std::ofstream csv(path);
+        for (int64_t id = first; id < first + count; id++) {
+            csv << id << ",name " << id << "," << id << ".5\n";
+        }
+    }
+
+    static std::string copyFrom(const std::string& path) {
+        return "COPY Doc FROM '" + path + "';";
+    }
+
+    int64_t fallbacks() {
+        auto result = conn->query("CALL current_setting('copy_journal_fallbacks') RETURN *;");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() && result->hasNext() ?
+                   std::stoll(result->getNext()->getValue(0)->toString()) :
+                   -1;
+    }
+
+    // Ce que 3 000 lignes pèsent au journal, mesuré : les seuils des cas s'en déduisent.
+    uint64_t journalOfThreeThousandRows() {
+        openWithSchema();
+        writeDocs(csvPath, 0, 3000);
+        EXPECT_TRUE(conn->query(copyFrom(csvPath))->isSuccess());
+        EXPECT_EQ(fallbacks(), 0);
+        const auto size = journalSize();
+        EXPECT_GT(size, 50000u);
+        conn.reset();
+        database.reset();
+        std::filesystem::remove(databasePath);
+        std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+        return size;
+    }
+
+    static constexpr const char* SCHEMA_AND_SETTINGS[] = {
+        "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);",
+        "CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);", "CHECKPOINT;"};
+
+    static void childSchema(Connection& child) {
+        for (const auto* statement : SCHEMA_AND_SETTINGS) {
+            must(child, statement);
+        }
+    }
+};
+
+TEST_F(CopyJournalThresholdTest, UnderTheThresholdACopyStaysInTheJournal) {
+    const auto size = journalOfThreeThousandRows();
+    writeDocs(csvPath, 0, 3000);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=" + std::to_string(size * 2) + ";");
+        must(child, copyFrom(csvPath));
+    });
+    ASSERT_GT(journalSize(), 0u) << "the copy must not have checkpointed";
+    createDBAndConn();
+    expectRows(0, 3000);
+}
+
+TEST_F(CopyJournalThresholdTest, AboveTheThresholdACopyFallsBackToItsCheckpoint) {
+    const auto size = journalOfThreeThousandRows();
+    openWithSchema();
+    writeDocs(csvPath, 0, 3000);
+    ok("CALL copy_journal_threshold=" + std::to_string(size / 3) + ";");
+    ok(copyFrom(csvPath));
+    EXPECT_EQ(fallbacks(), 1);
+    EXPECT_EQ(journalSize(), 0u) << "a forced transaction writes nothing to the journal";
+    expectRows(0, 3000);
+    // Le suivant, plus petit, est de nouveau journalisé : le repli est celui d'une transaction.
+    writeDocs(csvPath, 3000, 100);
+    ok(copyFrom(csvPath));
+    EXPECT_EQ(fallbacks(), 1);
+    EXPECT_GT(journalSize(), 0u);
+    expectRows(3000, 100);
+}
+
+// Mort juste après la validation d'un COPY replié : tout est là, par le point de reprise seul.
+TEST_F(CopyJournalThresholdTest, AFallenBackCopySurvivesADeathAfterItsCommit) {
+    const auto size = journalOfThreeThousandRows();
+    writeDocs(csvPath, 0, 3000);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=" + std::to_string(size / 3) + ";");
+        must(child, copyFrom(csvPath));
+    });
+    EXPECT_EQ(journalSize(), 0u);
+    createDBAndConn();
+    expectRows(0, 3000);
+}
+
+// Le franchissement en cours de transaction : ce qu'elle avait déjà au journal avant le seuil —
+// une insertion, une colonne ajoutée, un premier petit COPY — puis le gros.
+class CopyJournalThresholdCrossedTest : public CopyJournalThresholdTest {
+protected:
+    // Dans le fils : la transaction jusqu'au gros COPY compris, sans la finir.
+    void crossingTransaction(Connection& child, uint64_t size) const {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=" + std::to_string(size / 2) + ";");
+        must(child, "BEGIN TRANSACTION;");
+        must(child, "CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+        must(child, "ALTER TABLE Doc ADD extra INT64 DEFAULT 7;");
+        must(child, "COPY Doc(id, name, score) FROM '" + relCsvPath + "';");
+        must(child, "MATCH (d:Doc {id: 100005}) SET d.name = 'changed';");
+        must(child, "COPY Doc(id, name, score) FROM '" + csvPath + "';");
+        must(child, "CREATE (:Doc {id: 900001, name: 'created after', score: 2.5});");
+    }
+
+    void writeBothCsv() const {
+        writeDocs(relCsvPath, 100000, 20); // le petit
+        writeDocs(csvPath, 0, 3000);       // le gros
+    }
+
+    void expectEverything() {
+        EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 3022);
+        expectRows(0, 3000);
+        EXPECT_EQ(text("MATCH (d:Doc {id: 900000}) RETURN d.name;"), "created");
+        EXPECT_EQ(text("MATCH (d:Doc {id: 900001}) RETURN d.name;"), "created after");
+        EXPECT_EQ(text("MATCH (d:Doc {id: 100005}) RETURN d.name;"), "changed");
+        EXPECT_EQ(text("MATCH (d:Doc {id: 100019}) RETURN d.name;"), "name 100019");
+        EXPECT_EQ(single("MATCH (d:Doc) WHERE d.extra = 7 RETURN count(*);"), 3022);
+    }
+
+    void expectNothing() {
+        EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 0);
+        auto extra = conn->query("MATCH (d:Doc) RETURN d.extra;");
+        EXPECT_FALSE(extra->isSuccess()) << "the added column must not have come back";
+    }
+};
+
+TEST_F(CopyJournalThresholdCrossedTest, CommittedThenDeadEverythingIsThereByTheCheckpointAlone) {
+    const auto size = journalOfThreeThousandRows();
+    writeBothCsv();
+    writeThenDie([&](Connection& child) {
+        crossingTransaction(child, size);
+        must(child, "COMMIT;");
+    });
+    EXPECT_EQ(journalSize(), 0u);
+    createDBAndConn();
+    expectEverything();
+    createDBAndConn();
+    expectEverything();
+}
+
+TEST_F(CopyJournalThresholdCrossedTest, DeadBeforeTheCommitNothingComesBackNotEvenHalf) {
+    const auto size = journalOfThreeThousandRows();
+    writeBothCsv();
+    writeThenDie([&](Connection& child) { crossingTransaction(child, size); });
+    createDBAndConn();
+    expectNothing();
+    // Et la base sert : la même transaction, cette fois validée.
+    ASSERT_TRUE(conn->query("CALL force_checkpoint_on_copy=false;")->isSuccess());
+    ok("BEGIN TRANSACTION;");
+    ok("CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+    ok("COPY Doc FROM '" + csvPath + "';");
+    ok("COMMIT;");
+    expectRows(0, 3000);
+}
+
+TEST_F(CopyJournalThresholdCrossedTest, RolledBackNothingIsLeftAndTheSessionGoesOn) {
+    const auto size = journalOfThreeThousandRows();
+    writeBothCsv();
+    openWithSchema();
+    ok("CALL copy_journal_threshold=" + std::to_string(size / 2) + ";");
+    ok("BEGIN TRANSACTION;");
+    ok("CREATE (:Doc {id: 900000, name: 'created', score: 1.5});");
+    ok("ALTER TABLE Doc ADD extra INT64 DEFAULT 7;");
+    ok("COPY Doc(id, name, score) FROM '" + relCsvPath + "';");
+    EXPECT_EQ(fallbacks(), 0) << "the small copy stays under the threshold";
+    ok("COPY Doc(id, name, score) FROM '" + csvPath + "';");
+    EXPECT_EQ(fallbacks(), 1);
+    ok("ROLLBACK;");
+    expectNothing();
+    EXPECT_EQ(journalSize(), 0u);
+    // La session continue, et un COPY sous le seuil y est de nouveau journalisé.
+    ok(copyFrom(relCsvPath));
+    EXPECT_EQ(fallbacks(), 1);
+    EXPECT_GT(journalSize(), 0u);
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 20);
+}
+
+// Le seuil se compte sur la transaction : deux COPY chacun dessous, ensemble dessus.
+TEST_F(CopyJournalThresholdTest, TwoCopiesUnderTheThresholdTogetherAboveIt) {
+    const auto size = journalOfThreeThousandRows();
+    writeDocs(csvPath, 0, 3000);
+    writeDocs(relCsvPath, 3000, 3000);
+    openWithSchema();
+    ok("CALL copy_journal_threshold=" + std::to_string(size * 3 / 2) + ";");
+    ok("BEGIN TRANSACTION;");
+    ok(copyFrom(csvPath));
+    EXPECT_EQ(fallbacks(), 0);
+    ok(copyFrom(relCsvPath));
+    EXPECT_EQ(fallbacks(), 1);
+    ok("COMMIT;");
+    EXPECT_EQ(journalSize(), 0u);
+    expectRows(0, 6000);
+    createDBAndConn();
+    expectRows(0, 6000);
+}
+
+// Un COPY de relations qui franchit le seuil au milieu de ses paquets.
+TEST_F(CopyJournalThresholdTest, ARelationCopyCrossingTheThresholdMidway) {
+    writeDocs(csvPath, 0, 30001);
+    writeRelCsv(0, 30000, 1);
+    openWithSchema();
+    ok("CALL force_checkpoint_on_copy=true;");
+    ok(copyFrom(csvPath));
+    ok("CALL force_checkpoint_on_copy=false;");
+    // 30 000 relations pèsent plus de 2 Mo au journal : le seuil tombe dans le COPY.
+    ok("CALL copy_journal_threshold=400000;");
+    ok(relCopyStatement());
+    EXPECT_EQ(fallbacks(), 1);
+    EXPECT_EQ(journalSize(), 0u);
+    expectRels(30000, 1);
+    createDBAndConn();
+    expectRels(30000, 1);
+}
+
+TEST_F(CopyJournalThresholdTest, AFallenBackRelationCopyDiesAfterAndBeforeItsCommit) {
+    writeDocs(csvPath, 0, 30001);
+    writeRelCsv(0, 30000, 1);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL force_checkpoint_on_copy=true;");
+        must(child, copyFrom(csvPath));
+        must(child, "CALL force_checkpoint_on_copy=false;");
+        must(child, "CALL copy_journal_threshold=400000;");
+        must(child, "BEGIN TRANSACTION;");
+        must(child, relCopyStatement());
+    });
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 30001);
+    EXPECT_EQ(single("MATCH (:Doc)-[l:Link]->(:Doc) RETURN count(l);"), 0);
+    conn.reset();
+    database.reset();
+    writeThenDie([&](Connection& child) {
+        must(child, "CALL copy_journal_threshold=400000;");
+        must(child, relCopyStatement());
+    });
+    EXPECT_EQ(journalSize(), 0u);
+    createDBAndConn();
+    expectRels(30000, 1);
+}
+
 } // namespace
 
 #endif

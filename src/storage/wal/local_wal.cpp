@@ -98,6 +98,12 @@ void LocalWAL::clear() {
     weights.clear();
 }
 
+void LocalWAL::discard() {
+    std::unique_lock lck{mtx};
+    serializer.getWriter()->clear();
+    discarded = true;
+}
+
 bool LocalWAL::profiled() {
     static const bool on = std::getenv("RAG3DB_PROFILE_JOURNAL") != nullptr;
     return on;
@@ -122,6 +128,9 @@ void LocalWAL::addNewWALRecord(const WALRecord& walRecord, table_id_t tableID,
     uint64_t numRows) {
     std::unique_lock lck{mtx};
     KU_ASSERT(walRecord.type != WALRecordType::INVALID_RECORD);
+    if (discarded) {
+        return;
+    }
     const auto sizeBefore = profiled() ? serializer.getWriter()->getSize() : 0;
     serializer.getWriter()->onObjectBegin();
     walRecord.serialize(serializer);

@@ -216,7 +216,14 @@ void Partitioner::executeInternal(ExecutionContext* context) {
                 relOffsetVector->setValue<offset_t>(pos, currentRelOffset++);
             }
             if (journaled && numRels > 0) {
-                logRelsToWAL(context, *relOffsetVector);
+                // Sous le verrou d'ordre : un seul fil à la fois lit et replie.
+                const auto transaction = transaction::Transaction::Get(*context->clientContext);
+                if (!transaction->shouldForceCheckpoint()) {
+                    logRelsToWAL(context, *relOffsetVector);
+                    if (transaction->journalExceedsCopyThreshold()) {
+                        transaction->fallBackToForcedCheckpoint();
+                    }
+                }
             }
         }
         for (auto partitioningIdx = 0u; partitioningIdx < info.infos.size(); partitioningIdx++) {

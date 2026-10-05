@@ -43,6 +43,27 @@ struct ForceCheckpointOnCopySetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
+// Le journal d'une transaction vit en mémoire jusqu'à sa validation. Quand un COPY journalisé le
+// porte au-delà de ce seuil (en octets ; 0 rend le défaut), la transaction se replie sur le
+// point de reprise forcé : son journal est vidé, plus rien n'y est écrit, et sa validation fait
+// un point de reprise, comme un COPY d'avant. CALL copy_journal_threshold=…
+struct CopyJournalThresholdSetting {
+    static constexpr auto name = "copy_journal_threshold";
+    static constexpr auto inputType = common::LogicalTypeID::UINT64;
+    static void setContext(ClientContext* context, const common::Value& parameter);
+    static common::Value getSetting(const ClientContext* context);
+};
+
+// En lecture seule : combien de transactions de cette base se sont repliées ainsi depuis son
+// ouverture — les replis, pas les validations : une transaction repliée puis annulée compte.
+// CALL current_setting('copy_journal_fallbacks') RETURN *
+struct CopyJournalFallbacksSetting {
+    static constexpr auto name = "copy_journal_fallbacks";
+    static constexpr auto inputType = common::LogicalTypeID::UINT64;
+    static void setContext(ClientContext* context, const common::Value& parameter);
+    static common::Value getSetting(const ClientContext* context);
+};
+
 struct ProgressBarSetting {
     static constexpr auto name = "progress_bar";
     static constexpr auto inputType = common::LogicalTypeID::BOOL;

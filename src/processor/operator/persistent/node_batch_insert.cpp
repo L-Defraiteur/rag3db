@@ -299,7 +299,10 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
             std::move(*nodeSharedState->stats));
         nodeSharedState->stats.reset();
     }
-    if (!clientContext->getClientConfig()->forceCheckpointOnCopy && transaction->shouldLogToWAL()) {
+    // Une transaction déjà forcée (un COPY précédent replié, un index créé) n'écrit plus rien au
+    // journal : ce COPY non plus.
+    if (!clientContext->getClientConfig()->forceCheckpointOnCopy && transaction->shouldLogToWAL() &&
+        !transaction->shouldForceCheckpoint()) {
         // Le chargement journalisé : les lignes de ce COPY vont au journal de la transaction,
         // sous la forme d'une insertion, dans l'ordre de leurs décalages — le COPY écrit ses
         // blocs par plusieurs fils, c'est l'ordre de la table qui fait foi au rejeu. Avec des

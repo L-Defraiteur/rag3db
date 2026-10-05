@@ -15,6 +15,8 @@ namespace main {
 static ConfigurationOption options[] = { // NOLINT(cert-err58-cpp):
     GET_CONFIGURATION(ThreadsSetting), GET_CONFIGURATION(TimeoutSetting),
     GET_CONFIGURATION(LockTimeoutSetting), GET_CONFIGURATION(ForceCheckpointOnCopySetting),
+    GET_CONFIGURATION(CopyJournalThresholdSetting),
+    GET_CONFIGURATION(CopyJournalFallbacksSetting),
     GET_CONFIGURATION(WarningLimitSetting), GET_CONFIGURATION(VarLengthExtendMaxDepthSetting),
     GET_CONFIGURATION(SparseFrontierThresholdSetting), GET_CONFIGURATION(EnableSemiMaskSetting),
     GET_CONFIGURATION(DisableMapKeyCheck), GET_CONFIGURATION(EnableZoneMapSetting),

@@ -6,6 +6,8 @@
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
+#include "storage/storage_manager.h"
+#include "storage/wal/wal.h"
 #include "storage/storage_utils.h"
 
 namespace rag3db {
@@ -55,6 +57,26 @@ void ForceCheckpointOnCopySetting::setContext(ClientContext* context,
 
 common::Value ForceCheckpointOnCopySetting::getSetting(const ClientContext* context) {
     return common::Value(context->getClientConfig()->forceCheckpointOnCopy);
+}
+
+void CopyJournalThresholdSetting::setContext(ClientContext* context,
+    const common::Value& parameter) {
+    parameter.validateType(inputType);
+    context->getClientConfigUnsafe()->copyJournalThreshold = parameter.getValue<uint64_t>();
+}
+
+common::Value CopyJournalThresholdSetting::getSetting(const ClientContext* context) {
+    return common::Value(context->getClientConfig()->copyJournalThreshold);
+}
+
+void CopyJournalFallbacksSetting::setContext(ClientContext*, const common::Value&) {
+    throw common::RuntimeException(
+        "copy_journal_fallbacks is a count kept by the database: it cannot be set.");
+}
+
+common::Value CopyJournalFallbacksSetting::getSetting(const ClientContext* context) {
+    return common::Value(
+        storage::StorageManager::Get(*context)->getWAL().getNumCopyJournalFallbacks());
 }
 
 void ProgressBarSetting::setContext(ClientContext* context, const common::Value& parameter) {

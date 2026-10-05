@@ -1071,6 +1071,13 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
             selVector.setToFiltered(kept.size());
             wal.logTableInsertion(tableID, TableType::NODE, kept.size(), vectors);
             numLogged += kept.size();
+            if (transaction->journalExceedsCopyThreshold()) {
+                // Le journal de la transaction, qui vit en mémoire jusqu'à sa validation,
+                // dépasse le seuil : elle se replie sur le point de reprise forcé. Rien de ce
+                // qui était au journal n'y reste, rien de plus n'y va.
+                transaction->fallBackToForcedCheckpoint();
+                return;
+            }
         }
     }
     if (numLogged != endOffset - startOffset) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include "storage/wal/wal_record.h"
 
 namespace rag3db {
@@ -26,6 +27,11 @@ public:
 
     uint64_t getFileSize();
 
+    // Les transactions qu'un COPY journalisé a repliées sur le point de reprise forcé, depuis
+    // l'ouverture de la base (Transaction::fallBackToForcedCheckpoint).
+    void noteCopyJournalFallback() { numCopyJournalFallbacks++; }
+    uint64_t getNumCopyJournalFallbacks() const { return numCopyJournalFallbacks; }
+
     static WAL* Get(const main::ClientContext& context);
 
 private:
@@ -36,6 +42,7 @@ private:
 
 private:
     std::mutex mtx;
+    std::atomic<uint64_t> numCopyJournalFallbacks{0};
     std::string walPath;
     bool inMemory;
     [[maybe_unused]] bool readOnly;

@@ -47,6 +47,9 @@ struct ClientConfig {
     // en masse journalisé n'est pas complet : à faux, un COPY de nœuds écrit ses lignes au
     // journal et ne force plus rien ; un COPY de relations force encore le sien.
     bool forceCheckpointOnCopy = true;
+    // Le seuil du journal d'un COPY journalisé, en octets ; 0 : le défaut, tiré du tampon
+    // (Transaction::copyJournalThreshold).
+    uint64_t copyJournalThreshold = 0;
     // Variable length maximum depth.
     uint32_t varLengthMaxDepth = ClientConfigDefault::VAR_LENGTH_MAX_DEPTH;
     // Threshold determines when to switch from sparse frontier to dense frontier

@@ -60,6 +60,32 @@ bool Transaction::shouldForceCheckpoint() const {
     return !clientContext->isInMemory() && forceCheckpoint;
 }
 
+uint64_t Transaction::copyJournalThreshold() const {
+    const auto configured = clientContext->getClientConfig()->copyJournalThreshold;
+    if (configured != 0) {
+        return configured;
+    }
+    // Le défaut : un huitième du tampon, au plus 256 Mio. Le journal d'une transaction est de
+    // la mémoire que le tampon ne peut pas évincer.
+    static constexpr uint64_t CEILING = 256ull * 1024 * 1024;
+    return std::min(clientContext->getDBConfig()->bufferPoolSize / 8, CEILING);
+}
+
+bool Transaction::journalExceedsCopyThreshold() const {
+    return localWAL && localWAL->getSize() > copyJournalThreshold();
+}
+
+void Transaction::fallBackToForcedCheckpoint() {
+    if (forceCheckpoint) {
+        return;
+    }
+    forceCheckpoint = true;
+    if (localWAL) {
+        localWAL->discard();
+    }
+    storage::StorageManager::Get(*clientContext)->getWAL().noteCopyJournalFallback();
+}
+
 // La sonde RAG3DB_PROFILE_JOURNAL : à la validation, ce que pèse le journal de la transaction,
 // par type d'enregistrement et par table, sur la sortie d'erreur. Une ligne par transaction qui
 // a écrit ; chaque ligne commence par « [journal] ».
@@ -88,7 +114,10 @@ static void printJournalWeights(storage::LocalWAL& localWAL, main::ClientContext
     }
     fprintf(stderr, "[journal] transaction validée : %llu octets au journal%s%s\n",
         static_cast<unsigned long long>(size),
-        forced ? " (non écrits : point de reprise forcé)" : "", detail.c_str());
+        forced ? " (non écrits : point de reprise forcé ; après un repli, les poids sont ceux "
+                 "d'avant lui)" :
+                 "",
+        detail.c_str());
 }
 
 void Transaction::commit(storage::WAL* wal) {

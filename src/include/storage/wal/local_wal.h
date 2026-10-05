@@ -51,6 +51,9 @@ public:
 
     void clear();
     uint64_t getSize();
+    // Vide le journal et n'y écrit plus rien : sa transaction s'est repliée sur le point de
+    // reprise forcé, qui la rend durable seul.
+    void discard();
 
     // La sonde RAG3DB_PROFILE_JOURNAL : ce que pèse ce journal, par type d'enregistrement et par
     // table. Vide si la variable n'est pas posée.
@@ -73,6 +76,7 @@ private:
     std::shared_ptr<common::InMemFileWriter> inMemWriter;
     common::Serializer serializer;
     std::map<std::pair<uint8_t, common::table_id_t>, Weight> weights;
+    bool discarded = false;
 };
 
 } // namespace storage
