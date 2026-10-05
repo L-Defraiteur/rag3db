@@ -1,6 +1,6 @@
 # Une clé sort de l'index de clé primaire après deux COPY de 50 000 lignes
 
-- **État** : corrigé le 5 octobre 2026 par la session cœur C++ (« fix(index de clé): la division des cases ne lit plus une case de débordement dans une mémoire libérée »). Reste, côté rag3weaver : rejouer le témoin rouge attendu et le remettre dans la batterie.
+- **État** : corrigé `eb2d78e46` (moteur, `HashIndex::splitSlots`) ; le témoin rag3weaver est vert et remis dans la batterie (`e31575881`). Une base déjà touchée garde sa clé introuvable : elle se réindexe.
 - **Gravité** : perte. Avant le filet du 5 octobre 2026, des arêtes étaient sautées en silence.
 - **Atteignable en service** : oui, sur le chemin par défaut, sans annulation, sans transaction par paquet, sans panne de mémoire.
 - **Touche rag3weaver** : oui (toute pose de liens par clé : COPY des liens, MERGE des liens).
@@ -121,3 +121,15 @@ autres relations n'ont pas d'invariant aussi simple.
 ## Pour le fermer
 
 Le correctif du moteur, puis le témoin rouge attendu vert et remis dans la batterie.
+
+## La passe qui le ferme (arbre principal, 5 octobre 2026, moteur ≥ `eb2d78e46`)
+
+`e2e_tx_par_paquet_arret::un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit`, joué
+deux fois, est vert :
+- le paquet de rang 1 (200 fichiers, 50 000 scopes) est défait et la base fermée sans point
+  de reprise ;
+- la reprise dans un processus neuf rend les comptes du témoin (100 000 scopes) ;
+- le point de reprise final prend 6 à 19 ms ;
+- 0 repli en masse, à la reprise comme au témoin.
+
+Le témoin n'est plus marqué « rouge attendu », et la batterie le joue.
