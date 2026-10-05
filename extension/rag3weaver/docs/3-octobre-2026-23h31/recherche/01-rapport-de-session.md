@@ -60,7 +60,32 @@ Dans l'ordre, chaque lot avec batterie verte (lib + tuyauterie
     « Liens » de codeparsers : le crochet reçoit les identités que l'outil a
     résolues, jamais de re-calcul.
 
-## En cours (4 octobre 16h — l'essai de la note d'utilité est rendu : négatif net)
+## En cours (5 octobre 3h — le repli par branche est sur master)
+
+- **Le repli par branche (872d60e99, ticket fermé 86e2db44f)** : une
+  branche de signal qui manque ou échoue ne fait plus tomber la fusion.
+  Rouge d'abord (e2e_repli_de_branche : l'hybride au modèle absent
+  jetait les mots), puis la règle DANS LES NŒUDS DE SIGNAL (le runtime
+  intact) : chute attrapée au nœud, liste vide + statut sur le port
+  `status` (émis toujours — lisible nœud par nœud, la règle des ports
+  de la vision) + la méta porte le message (« dense/text/sparse signal
+  is not available: … » / « … failed: … » — ctx.warn seul ne remonte
+  pas, c'est la méta qui voyage). La fusion refuse quand TOUTES les
+  branches actives sont tombées ; strict_signals rend l'erreur
+  d'avant ; avertissement « status non câblé » au chargement des
+  gabarits, testé. Câblé : search_chain + 5 gabarits livrés. Batterie :
+  lib 1244, repli 3/3, prise_atomique 13/13 (strict figé),
+  generic_search, code_sync.
+- **Le flake du lecteur affamé** rencontré en route était le SECOND
+  message du croisement de checkpoint — déjà corrigé par l'arbre
+  principal (f5de0a3f0) ; mon ticket doublon renvoyé au sien et fermé.
+  Leçon re-payée : regarder l'index des tickets AVANT d'en ouvrir un.
+- **Reprise post-OOM** : les sessions ont de nouveaux noms —
+  l'orchestration est rag3db-d3 (ex-21/76/9f), moi rag3db-23 ; la panne
+  venait d'un EXPECT_EQ gtest sur 400 000 lignes (~1,9 To) hors de
+  `poste` ; `poste` plafonne désormais chaque travail à 40 Go.
+
+## Ancien (4 octobre 16h — l'essai de la note d'utilité est rendu : négatif net)
 
 - **« Avant d'éditer » vit aussi sur l'instantané (92dfbf401)** :
   l'asymétrie backend/snapshot relevée par c0 cachait un vrai bug —
