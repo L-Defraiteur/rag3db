@@ -400,10 +400,7 @@ impl Rag3dbConnection {
         // message dit la cause et le réglage — sans lui, la reprise
         // retomberait au même endroit.
         if message.contains(crate::connection::BUFFER_POOL_FULL) {
-            self.reopen.close_without_checkpoint.store(true, std::sync::atomic::Ordering::SeqCst);
-            // Hors transaction, le moteur l'accepte tout de suite ; dans une
-            // transaction défaite, la fermeture le refait après un ROLLBACK.
-            let _ = self.conn.query("CALL force_checkpoint_on_close=false");
+            self.fermer_sans_point_de_reprise();
             let tampon = self
                 .buffer_pool
                 .map(crate::connection::describe_buffer_pool)
@@ -426,6 +423,14 @@ impl Rag3dbConnection {
         }
         *premier = Some(message.clone());
         DbError::QueryError(message)
+    }
+
+    /// Posé une fois, pour la base : hors transaction, le moteur accepte le
+    /// réglage tout de suite ; dans une transaction défaite, la dernière
+    /// connexion le refait après un ROLLBACK (`Drop`).
+    fn fermer_sans_point_de_reprise(&self) {
+        self.reopen.close_without_checkpoint.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = self.conn.query("CALL force_checkpoint_on_close=false");
     }
 
     /// Une instruction a réussi : le refus retenu ne concerne plus la suite.
@@ -544,6 +549,10 @@ impl DbConnection for Rag3dbConnection {
     fn poison(&self, reason: &str) {
         let mut r = self.reopen.reason.lock().unwrap_or_else(|p| p.into_inner());
         r.get_or_insert_with(|| reason.to_string());
+    }
+
+    fn close_without_checkpoint(&self) {
+        self.fermer_sans_point_de_reprise();
     }
 }
 

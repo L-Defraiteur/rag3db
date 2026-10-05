@@ -236,6 +236,12 @@ pub trait DbConnection: Send + Sync {
     /// après un point de reprise échoué : [`must_reopen`](Self::must_reopen)
     /// rend ensuite `reason`. Sans effet pour un moteur qui ne le sait pas.
     fn poison(&self, _reason: &str) {}
+
+    /// **Fermer la base sans point de reprise** : après une annulation ou un
+    /// refus qui a pu laisser le moteur faux en mémoire, un point de reprise
+    /// écrirait cet état (ou ne finirait pas) ; la réouverture repart du
+    /// disque et du journal. Sans effet pour un moteur qui ne le sait pas.
+    fn close_without_checkpoint(&self) {}
 }
 
 /// D'où vient la taille du tampon du moteur.

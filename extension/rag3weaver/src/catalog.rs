@@ -6856,6 +6856,15 @@ impl Catalog {
         }
     }
 
+    /// **La base se fermera sans point de reprise** (toutes ses connexions
+    /// la partagent) : après l'annulation d'un paquet, un point de reprise
+    /// sur l'état d'après un COPY annulé est ce que le banc voit ne pas finir
+    /// (5 octobre 2026). Rien de validé ne l'attend que le journal ne porte
+    /// déjà ; la réouverture repart du disque et du journal.
+    pub fn close_without_checkpoint(&self) {
+        self.conn.close_without_checkpoint();
+    }
+
     fn open_fts_handles_for(&mut self, entity_names: &[String]) {
         let names: std::collections::HashSet<String> =
             entity_names.iter().cloned().collect();

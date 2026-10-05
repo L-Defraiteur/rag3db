@@ -48,6 +48,9 @@ thread_local! {
     static TUER_APRES_LOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Mourir pendant la validation : (n-ième COMMIT, délai en µs).
     static TUER_EN_VALIDATION: std::cell::Cell<Option<(usize, u64)>> = const { std::cell::Cell::new(None) };
+    /// Le corpus gros, et le rang du paquet où l'échoueur échoue.
+    static GROS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static ECHEC_AU_PAQUET: std::cell::Cell<usize> = const { std::cell::Cell::new(6) };
 }
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
@@ -71,7 +74,27 @@ fn dossier_sur_disque(cas: &str) -> PathBuf {
 
 /// 300 fichiers : chacun définit une fonction et appelle la précédente ; un
 /// sur dix importe une bibliothèque. Des arêtes entre paquets, donc.
+/// Le corpus « gros » (`TX_ARRET_GROS`, transmis aux fils) : 400 fichiers
+/// de 250 fonctions, 100 000 scopes, en paquets de 200 fichiers — un paquet
+/// porte 50 000 scopes et autant de morceaux, la taille où le banc voit le
+/// point de reprise après un COPY annulé ne pas finir.
+fn gros() -> bool {
+    std::env::var_os("TX_ARRET_GROS").is_some()
+}
+
+fn paquet() -> usize {
+    if gros() { 200 } else { 32 }
+}
+
 fn corpus() -> Vec<(String, String)> {
+    if gros() {
+        return (0..400)
+            .map(|i| {
+                let corps: String = (0..250).map(|j| format!("pub fn f{i}_{j}() -> u32 {{ {j} }}\n")).collect();
+                (format!("src/g{i:03}.rs"), corps)
+            })
+            .collect();
+    }
     (0..300)
         .map(|i| {
             let import = if i % 10 == 0 { "use serde::Serialize;\n\n" } else { "" };
@@ -113,7 +136,7 @@ fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
 /// un arrêt brutal.
 fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
     let options = SourceSyncOptions {
-        batch_files: 32,
+        batch_files: paquet(),
         relations: Some(RelationsMode::Bulk),
         exige: Disponibilites::RECHERCHE_TEXTE,
         force: true,
@@ -150,7 +173,7 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
         let requete: lucivy_core::query::QueryConfig =
             serde_json::from_value(serde_json::json!({"type": "contains", "field": champ, "value": mot, "distance": 0}))
                 .unwrap();
-        let n = handle.search(&requete, 100_000, None).unwrap().len() as i64;
+        let n = handle.search(&requete, 1_000_000, None).unwrap().len() as i64;
         out.insert(format!("plein texte {entite} « {mot} »"), n);
     }
     for d in rag3weaver::relation_directions::count_both_directions(conn).unwrap() {
@@ -257,7 +280,7 @@ fn role_enfant() {
         // puis lâchée (sa fermeture fait un point de reprise après
         // l'annulation). La reprise se prouve dans un processus neuf.
         let options = SourceSyncOptions {
-            batch_files: 32,
+            batch_files: paquet(),
             relations: Some(RelationsMode::Bulk),
             exige: Disponibilites::RECHERCHE_TEXTE,
             force: true,
@@ -274,6 +297,14 @@ fn role_enfant() {
     synchroniser(&mut catalog, role == "repreneur");
     // L'écrivain n'arrive jamais ici : le crochet le tue au paquet tué.
     println!("COMPTES {role} {}", serde_json::to_string(&comptes(&catalog)).unwrap());
+    if role == "repreneur" {
+        // Un point de reprise explicite à la fin de la reprise : sur l'état
+        // d'après un COPY annulé, il ne finit pas (le banc) ; ici il doit
+        // finir, et vite.
+        let t = std::time::Instant::now();
+        catalog.conn().execute("CHECKPOINT").expect("point de reprise à la fin de la reprise");
+        println!("POINT_DE_REPRISE {}", t.elapsed().as_millis());
+    }
 }
 
 fn lancer(role: &str, base: &Path, tuer: bool) -> (std::process::ExitStatus, String) {
@@ -315,7 +346,12 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         }
     }
     if role == "echoueur" {
-        cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", "6");
+        cmd.env("RAG3WEAVER_TEST_FAIL_IN_BATCH", ECHEC_AU_PAQUET.with(|f| f.get()).to_string());
+    }
+    if GROS.with(|f| f.get()) {
+        cmd.env("TX_ARRET_GROS", "1");
+    } else {
+        cmd.env_remove("TX_ARRET_GROS");
     }
     match TUER_AVANT_SYNC.with(|f| f.get()) {
         Some(n) => {
@@ -516,10 +552,12 @@ fn une_mort_pendant_la_validation_d_un_groupe_le_laisse_entier_ou_absent() {
 }
 
 /// **Le chemin du ROLLBACK** (K = 4) : le paquet 6 échoue au milieu du
-/// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée — sa
-/// fermeture fait un point de reprise après l'annulation, que le moteur rend
-/// sûr depuis 5c8507577 — ; puis la base rouverte dans un processus neuf, et
-/// l'index repris. Les comptes sont ceux d'une passe sans échec.
+/// deuxième groupe ; ROLLBACK, catalogue empoisonné, puis la base lâchée
+/// **sans point de reprise** (depuis le 5 octobre 2026 : un point de reprise
+/// sur l'état d'après un COPY annulé est ce que le banc voit ne pas finir) ;
+/// puis la base rouverte dans un processus neuf, l'index repris, et un point
+/// de reprise explicite à la fin qui finit en temps borné. Les comptes sont
+/// ceux d'une passe sans échec.
 #[test]
 #[ignore]
 fn un_paquet_qui_echoue_est_defait_et_la_reprise_rend_les_memes_comptes() {
@@ -531,12 +569,69 @@ fn un_paquet_qui_echoue_est_defait_et_la_reprise_rend_les_memes_comptes() {
     let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 4);
     assert!(statut.success(), "la base rouvre dans un processus neuf, et la reprise va au bout :\n{sortie}");
     let repris = comptes_rendus("repreneur", &sortie);
+    let sortie_reprise = sortie.clone();
     let temoin_dossier = dossier_sur_disque("temoin-rollback");
     let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
     assert!(statut.success(), "le témoin va au bout :\n{sortie}");
     let temoin = comptes_rendus("temoin", &sortie);
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
     assert_eq!(repris, temoin, "après un ROLLBACK et une reprise, les comptes d'une passe sans échec");
+    let duree = point_de_reprise_final(&sortie_reprise);
+    assert!(duree < 60_000, "le point de reprise final finit en temps borné : {duree} ms");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// Le temps du point de reprise explicite à la fin d'une reprise.
+fn point_de_reprise_final(sortie: &str) -> u128 {
+    ligne(sortie, "POINT_DE_REPRISE ").trim().parse().unwrap()
+}
+
+/// **Un gros paquet défait** (5 octobre 2026), à la taille du banc : le
+/// deuxième paquet (200 fichiers, 50 000 scopes et autant de morceaux, par
+/// COPY) échoue ; ROLLBACK, base fermée sans point de reprise ; la reprise,
+/// dans un processus neuf, refait le même COPY et va au bout aux comptes
+/// d'une passe sans échec, puis un point de reprise explicite finit en temps
+/// borné — la recette du banc (COPY annulé, même COPY validé, point de
+/// reprise) ne se rejoue pas chez nous à travers la réouverture.
+#[test]
+#[ignore]
+fn rouge_attendu_defaut_du_moteur_un_gros_paquet_defait_se_reprend_et_son_point_de_reprise_finit() {
+    // **Rouge attendu, défaut du moteur** (ticket
+    // `2026-10-05-cle-perdue-par-l-index-de-cle-primaire`) : sur ce corpus,
+    // une clé sort de l'index de clé primaire après deux COPY de 50 000
+    // lignes, et le COPY des arêtes DEFINES est refusé avant le paquet
+    // piégé. Hors de la batterie jusqu'au correctif :
+    // `TX_ARRET_ROUGE_ATTENDU=1` le joue.
+    if std::env::var_os("TX_ARRET_ROUGE_ATTENDU").is_none() {
+        println!("rouge attendu (défaut du moteur) : TX_ARRET_ROUGE_ATTENDU=1 pour le jouer");
+        return;
+    }
+    GROS.with(|f| f.set(true));
+    ECHEC_AU_PAQUET.with(|f| f.set(1));
+    let dossier = dossier_sur_disque("gros-rollback");
+    let base = dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("echoueur", &base, None, true, 1);
+    assert!(statut.success(), "échec, ROLLBACK, empoisonnement et fermeture :\n{}", sortie.chars().take(3000).collect::<String>());
+    assert!(
+        sortie.contains("échec au paquet 1") && sortie.contains("FERME"),
+        "le gros paquet a échoué, la base est fermée :\n{}",
+        sortie.lines().filter(|l| l.starts_with("ECHEC") || l.starts_with("FERME") || l.contains("panicked") || l.contains("rror")).take(20).collect::<Vec<_>>().join("\n")
+    );
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 1);
+    assert!(statut.success(), "la reprise va au bout ({:?}) :\n{}", statut, sortie.chars().take(3000).collect::<String>());
+    let repris = comptes_rendus("repreneur", &sortie);
+    let duree = point_de_reprise_final(&sortie);
+    let temoin_dossier = dossier_sur_disque("gros-temoin");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 1);
+    GROS.with(|f| f.set(false));
+    ECHEC_AU_PAQUET.with(|f| f.set(6));
+    assert!(statut.success(), "le témoin va au bout");
+    let temoin = comptes_rendus("temoin", &sortie);
+    println!("▸ gros paquet défait : point de reprise final en {duree} ms ; scopes {:?}", repris.get("nœuds Scope"));
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 100_000, "{temoin:?}");
+    assert_eq!(repris, temoin, "après un gros paquet défait et une reprise, les comptes d'une passe sans échec");
+    assert!(duree < 60_000, "le point de reprise final finit en temps borné : {duree} ms");
     let _ = std::fs::remove_dir_all(&dossier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }

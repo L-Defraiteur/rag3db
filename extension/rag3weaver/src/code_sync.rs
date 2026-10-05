@@ -547,7 +547,7 @@ fn synchroniser_la_source(
     // **Les lignes posées font preuve d'existence** pour le COPY des liens,
     // le temps de cette synchronisation, derrière la transaction par paquet
     // (levier 2 du chargement final). Fermée sur tout chemin de sortie.
-    if transaction_par_paquet() {
+    if transaction_par_paquet() && std::env::var("RAG3WEAVER_TX_SANS_PREUVE").as_deref() != Ok("1") {
         catalog.begin_proving_presence();
     }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id);
@@ -938,6 +938,7 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     catalog.end_proving_presence();
+                    catalog.close_without_checkpoint();
                     format!("valider le paquet : {e}")
                 }
             }
@@ -946,6 +947,8 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             // Défait : les lignes posées n'existent plus, la preuve tombe.
             catalog.end_proving_presence();
             let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
+            // Et la base se fermera sans point de reprise.
+            catalog.close_without_checkpoint();
             format!(
                 "{cause} — le paquet est défait ({})",
                 match defait {
