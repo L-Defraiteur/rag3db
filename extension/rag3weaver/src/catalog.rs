@@ -5011,7 +5011,20 @@ impl Catalog {
             // Les positions suivent la liste, qui n'est plus fixe.
             let i_dense = veut_dense.then_some(1);
             let i_sparse = veut_sparse.then_some(if veut_dense { 2 } else { 1 });
-            let cypher = self.dialect.batch_select(&chunk_table, "uuid", "_parent_uuid", &colonnes);
+            // **L'arête vers le parent compte aussi** (5 octobre 2026) : des
+            // morceaux sans leur `{E}_CHUNKED_FROM` ne se retrouvent pas par
+            // la recherche, et un parent dont les morceaux existaient sans
+            // elle était jugé complet, donc sauté à chaque relance — rien ne
+            // recréait l'arête (un groupe revenu à moitié d'une mort pendant
+            // sa validation). La même requête, une jointure de plus.
+            let i_lien = colonnes.len();
+            let cypher = self.dialect.batch_select_chunks_with_parent_link(
+                &chunk_table,
+                "uuid",
+                &format!("{entity_name}_CHUNKED_FROM"),
+                entity_name,
+                &colonnes,
+            );
             // **Des chunks illisibles ne valent pas qu'on jette la ligne
             // parente.** Cette lecture ne sert qu'à une question : les
             // artefacts dérivés sont-ils complets ? Si elle échoue, la réponse
@@ -5052,30 +5065,32 @@ impl Catalog {
                 );
             };
             // Par parent : combien de chunks, combien embarqués **en dense**,
-            // combien **en sparse**.
+            // combien **en sparse**, combien reliés à lui par leur arête.
             //
             // Les deux se comptent séparément depuis le schéma v3. Avant, un
             // seul `_embed_hash` répondait pour les deux signaux : une entité
             // dont les chunks avaient un vecteur dense mais pas de vecteur
             // sparse était déclarée complète, et le court-circuit de l'inchangé
             // la sautait — définitivement.
-            let mut tally: HashMap<String, (usize, usize, usize)> = HashMap::new();
+            let mut tally: HashMap<String, (usize, usize, usize, usize)> = HashMap::new();
             for row in &result.rows {
                 let Some(parent) = row.first().and_then(|v| v.as_str()) else { continue };
                 let pose = |i: usize| {
                     row.get(i).and_then(|v| v.as_str()).is_some_and(|h| !h.is_empty())
                 };
-                let e = tally.entry(parent.to_string()).or_insert((0, 0, 0));
+                let e = tally.entry(parent.to_string()).or_insert((0, 0, 0, 0));
                 e.0 += 1;
                 e.1 += i_dense.map_or(0, |i| usize::from(pose(i)));
                 e.2 += i_sparse.map_or(0, |i| usize::from(pose(i)));
+                e.3 += usize::from(row.get(i_lien).and_then(|v| v.as_str()) == Some(parent));
             }
             complete = tally
                 .into_iter()
-                .filter(|(_, (chunks, dense, sparse))| {
+                .filter(|(_, (chunks, dense, sparse, relies))| {
                     *chunks > 0
                         && (!veut_dense || dense == chunks)
                         && (!veut_sparse || sparse == chunks)
+                        && relies == chunks
                 })
                 .map(|(uuid, _)| uuid)
                 .collect();

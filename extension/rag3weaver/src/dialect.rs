@@ -400,6 +400,20 @@ pub trait SchemaDialect: Send + Sync {
         return_fields: &[&str],
     ) -> String;
 
+    /// [`batch_select`](Self::batch_select) des morceaux d'une liste de
+    /// parents (`_parent_uuid`), plus une dernière colonne : l'uuid du parent
+    /// au bout de l'arête `rel_table` du morceau, NULL si l'arête manque. Une
+    /// ligne par morceau. La complétude de l'inchangé s'en sert : des morceaux
+    /// sans leur arête ne se retrouvent pas par la recherche.
+    fn batch_select_chunks_with_parent_link(
+        &self,
+        chunk_table: &str,
+        match_field: &str,
+        rel_table: &str,
+        parent_table: &str,
+        return_fields: &[&str],
+    ) -> String;
+
     /// Batch SET a field to NULL for entities by UUID list.
     fn batch_set_null(&self, table: &str, field: &str) -> String;
 
@@ -1274,6 +1288,21 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
+    fn batch_select_chunks_with_parent_link(
+        &self,
+        chunk_table: &str,
+        match_field: &str,
+        rel_table: &str,
+        parent_table: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let returns = return_fields.iter().map(|f| format!("n.{f}")).collect::<Vec<_>>().join(", ");
+        format!(
+            "{} OPTIONAL MATCH (n)-[:{rel_table}]->(__parent:{parent_table}) RETURN {returns}, __parent._uuid",
+            unwind_par_cle("items", &[ParCle { var: "n", label: Some(chunk_table), prop: "_parent_uuid", champ: match_field }], "MATCH")
+        )
+    }
+
     fn batch_set_null(&self, table: &str, field: &str) -> String {
         format!(
             "UNWIND $uuids AS uuid \
@@ -2128,6 +2157,23 @@ impl SchemaDialect for PostgresDialect {
             "SELECT {cols} FROM {table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
              ON {table}.{table_match_col} = v.{match_field}"
+        )
+    }
+
+    fn batch_select_chunks_with_parent_link(
+        &self,
+        chunk_table: &str,
+        match_field: &str,
+        rel_table: &str,
+        _parent_table: &str,
+        return_fields: &[&str],
+    ) -> String {
+        let cols = return_fields.iter().map(|f| format!("{chunk_table}.{f}")).collect::<Vec<_>>().join(", ");
+        format!(
+            "SELECT {cols}, {rel_table}.to_uuid FROM {chunk_table} \
+             INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
+             ON {chunk_table}._parent_uuid = v.{match_field} \
+             LEFT JOIN {rel_table} ON {rel_table}.from_uuid = {chunk_table}._uuid"
         )
     }
 
