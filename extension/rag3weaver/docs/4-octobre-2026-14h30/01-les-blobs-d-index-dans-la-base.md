@@ -272,3 +272,25 @@ pas mieux (85 s : l'analyse d'un bloc perd le parallélisme par paquet, 34 s).
 
 **La garde des comptes** sur le dépôt entier : 14 à 44 ms en mode fichiers ;
 1,9 à 2,7 s en mode blobs, où ouvrir un index le recopie depuis la base.
+
+## La série tenue (5 octobre, 4 h 07 à 4 h 30) : sous 90 s, confirmé
+
+Une seule tenue du verrou pour les douze passes (rien de lourd entre deux),
+`sync` et attente d'une pression d'entrée-sortie sous 2 % avant chacune
+(0 à 38 s d'attente) ; moteur 2 h 38, trois leviers, K = 4. Comptes égaux.
+
+| | Passes | **Médiane** | Étendue | Pic | Réouverture |
+|---|---|---|---|---|---|
+| fichiers, 512 | 97 · 97 · 104 s | **97 s** | 97–104 | 8,5 Go | 0,3 s |
+| blobs, 512 | 112 · 107 · 101 s | **107 s** | 101–112 | 15,4 Go | 2,2 s |
+| fichiers, 2 048 | 74 · 79 · 81 s | **79 s** | 74–81 | 9,4 Go | 0,3 s |
+| blobs, 2 048 | 80 · 78 · 78 s | **78 s** | 78–80 | 14,2 Go | 2,0 s |
+
+- **Sous la cible de 90 s, par paquets de 2 048, dans les deux modes** (79 et
+  78 s en médiane). La passe à 79 s de la nuit est confirmée.
+- À 512, le mode fichiers gagne 10 s ; à 2 048 les deux se valent en durée.
+  Ce que le mode fichiers apporte à toutes les tailles : **un pic de mémoire
+  de 9 Go contre 14 à 15**, la réouverture en 0,3 s contre 2 s, et la
+  tenue dans un tampon de 4 Gio.
+- Sur un disque calme, le mode fichiers ne varie plus (97–104 s) : l'écart de
+  la série précédente (97–119 s) venait des écritures des autres.
