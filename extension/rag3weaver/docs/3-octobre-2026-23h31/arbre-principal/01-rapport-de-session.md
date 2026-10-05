@@ -123,9 +123,17 @@ Ailleurs :
 - `dc6bb2fc4` la complétude de l'inchangé compte l'arête `CHUNKED_FROM` (une jointure de plus dans la requête existante) ; `9280ce3e0` la marque `relations_pending` s'efface par une passe par paquet allée au bout. Témoins : `e2e_reprise_durcie`.
 - **La joignabilité** (`e2e_mesure_joignabilite`, `f810060ef` pour l'export) : src/ de rag3weaver, ~12 400 morceaux, granite-278m. Introuvables par leur propre vecteur : `tout` 1 et 0, `masse` 1 et 0, `fond` 18, 24 et 3. Ce sont toujours de petits morceaux, jamais les mêmes d'une passe à l'autre. L'écart du mode `fond` est confié au banc (rag3db-36), avec l'export des vecteurs et le chemin exact. Il est noté au ticket de la ligne injoignable (`eeacbad79`).
 
+## Fusionné le 5 octobre (matin)
+
+- `99e6f0ee0` **le tampon plein empoisonne la base**. Le message dit la cause et le réglage. La fermeture se fait sans point de reprise. Témoin : `e2e_tampon_plein` (32 Mio).
+- `74df74276` **après tout ROLLBACK de paquet, la fermeture se fait sans point de reprise**. Après un COPY annulé, le point de reprise ne finit pas (le banc).
+- `f0f7f0951` **un COPY refusé par le moteur rend la base à rouvrir**, sans repli MERGE dans la même session. Témoin : `e2e_copy_refuse_rouvre` (une preuve périmée, déterministe).
+- **Trouvé grâce à ce filet** (`2b833a469`, bloque la stèle) : **une clé sort de l'index de clé primaire** après deux COPY de 50 000 lignes, sans annulation ni panne de mémoire, sur le chemin par défaut. Le défaut est déterministe (le symbole f7_144). Avant le filet, le repli MERGE sautait l'arête en silence, sans aucun compte persisté. Le témoin à la taille du banc est rouge attendu, hors batterie. L'isolement est chez le cœur C++.
+- Tickets `d685e8606` : le COPY refusé pour mémoire (où devrait vivre le refus d'estimate) ; les erreurs du moteur avalées par des replis (lecture). Les deux marques du plein texte dans le mauvais ordre sont parties chez rag3db-ac (corrigées en `72fa1f452`).
+
 ## En cours
 
-1. L'allumage par défaut de la transaction par paquet : toutes les pièces demandées sont rendues. Il reste la décision de Lucie et de l'orchestration.
+1. L'allumage par défaut de la transaction par paquet : les pièces sont rendues, la décision est chez Lucie. Le défaut de l'index de clé primaire (ticket du 5 octobre) bloque la stèle : on attend son correctif.
 2. Le banc rejoue le mode `fond` sur les vecteurs exportés. Pas de bascule vers bulk côté rag3weaver avant son verdict.
 3. La garde du plein texte (`num_docs` face au nombre de lignes) : proposée par rag3db-ac, à lui si l'orchestration le confirme.
 
