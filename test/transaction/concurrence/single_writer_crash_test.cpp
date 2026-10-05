@@ -465,6 +465,156 @@ INSTANTIATE_TEST_SUITE_P(Points, CheckpointDeath,
         DeathPoint::AfterJournalCleared, DeathPoint::AfterApplyingShadowPages),
     [](const ::testing::TestParamInfo<DeathPoint>& info) { return deathPointName(info.param); });
 
+// Le seul COPY qui garde son point de reprise forcé sous le chargement journalisé : un COPY
+// de nœuds qui écarte des lignes (IGNORE_ERRORS), dont les décalages ne se rejoueraient pas à
+// l'identique (node_batch_insert.cpp). Sa durabilité, c'est ce point de reprise ; on le fait
+// mourir à chacun des instants, pendant le COMMIT de sa transaction. Deux formes :
+// - seul dans sa transaction : il doit revenir entier ou pas du tout ;
+// - mêlé à des écritures ordinaires de la même transaction (insertions versées au début du
+//   COPY, f1d8c7190, suppressions de ces lignes et de lignes validées), journalisées, elles.
+//   Le 5 octobre, avant 9c0c6532d, la base ne se rouvrait plus aux quatre instants qui
+//   précèdent la marque CHECKPOINT (la suppression des lignes écartées était journalisée sans
+//   leur insertion) ; avec lui, la transaction revenait à moitié (105 lignes : ses écritures
+//   ordinaires sans le COPY) ;
+// - un COPY ordinaire au réglage par défaut (force_checkpoint_on_copy=true), mêlé de même :
+//   la forme MERGE puis COPY de la transaction par paquet de rag3weaver. Elle revient à
+//   moitié, elle aussi, aux mêmes quatre instants.
+// Le remède retenu (orchestration, 5 octobre) : une transaction forcée n'écrit rien au
+// fichier du journal ; son point de reprise, atomique, emporte toutes ses écritures.
+// Attendu aux sept instants : la transaction entière, ou rien.
+class ForcedCopyCheckpointDeath : public SingleWriterCrash,
+                                  public ::testing::WithParamInterface<DeathPoint> {
+public:
+    // IgnoredAlone, IgnoredMixed : le COPY qui écarte des lignes, seul ou mêlé. DefaultMixed :
+    // un COPY ordinaire, au réglage par défaut (force_checkpoint_on_copy=true), mêlé.
+    // CREATE_VECTOR_INDEX, qui garde aussi son point de reprise, ne se mêle pas : le binder le
+    // refuse dans une transaction explicite (« only supported in auto transaction mode »).
+    enum class Form { IgnoredAlone, IgnoredMixed, DefaultMixed };
+
+    void run(Form form) {
+        const auto point = GetParam();
+        const auto mixed = form != Form::IgnoredAlone;
+        const auto ignored = form == Form::IgnoredAlone || form == Form::IgnoredMixed;
+        const auto csv = databasePath + ".ignored.csv";
+        const auto refusedFile = databasePath + ".refused";
+        {
+            std::ofstream out(csv);
+            for (auto i = 2000; i < 3000; ++i) {
+                out << i << ",copied " << i << "\n";
+            }
+            if (ignored) {
+                out << "5,duplicate of a committed key\n";
+                out << "not-a-number,malformed\n";
+            }
+        }
+        runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
+            mustQuery(connection, "CALL auto_checkpoint=false;");
+            if (form != Form::DefaultMixed) {
+                mustQuery(connection, "CALL force_checkpoint_on_copy=false;");
+            }
+            mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, vec "
+                                  "FLOAT[2]);");
+            mustQuery(connection, "CHECKPOINT;");
+            mustQuery(connection, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, name: "
+                                  "'committed ' + CAST(i AS STRING), vec: [CAST(i AS FLOAT), "
+                                  "1.0]});");
+            mustQuery(connection, "BEGIN TRANSACTION;");
+            if (mixed) {
+                mustQuery(connection, "UNWIND range(1000, 1019) AS i CREATE (:Doc {id: i, name: "
+                                      "'local ' + CAST(i AS STRING)});");
+                mustQuery(connection, "MATCH (n:Doc) WHERE n.id >= 1000 AND n.id % 4 = 0 DELETE n;");
+                mustQuery(connection, "MATCH (n:Doc) WHERE n.id < 100 AND n.id % 10 = 0 DELETE n;");
+            }
+            auto copy = connection.query("COPY Doc(id, name) FROM '" + csv + "' (header=false" +
+                                         (ignored ? ", ignore_errors=true" : "") + ");");
+            if (!copy->isSuccess()) {
+                // Refusé : la transaction est défaite ; mourir quand même, base ouverte.
+                std::ofstream(refusedFile) << copy->getErrorMessage();
+                connection.query("ROLLBACK;");
+                dieNow();
+            }
+            FlakyCheckpointer dying([point](rag3db::main::ClientContext& context) {
+                return std::make_unique<DyingCheckpointer>(context, point);
+            });
+            dying.setCheckpointer(*connection.getClientContext());
+            auto commit = connection.query("COMMIT;");
+            // Le point de reprise forcé devait mourir : arriver ici veut dire qu'il n'a pas eu
+            // lieu.
+            std::cerr << "  child: COMMIT returned "
+                      << (commit->isSuccess() ? "ok" : commit->getErrorMessage())
+                      << " without the forced checkpoint\n";
+            _exit(7);
+        });
+        if (HasFatalFailure()) {
+            return;
+        }
+        std::string refusal;
+        if (std::filesystem::exists(refusedFile)) {
+            std::ifstream in(refusedFile);
+            std::getline(in, refusal);
+        }
+        std::cerr << "  copy: " << (refusal.empty() ? "accepted" : refusal) << "\n";
+        if (!reopen()) {
+            return;
+        }
+        const auto count = queryInt("MATCH (n:Doc) RETURN count(n);");
+        const int64_t whole = (mixed ? 105 : 100) + 1000;
+        std::cerr << "  after the death: " << count << " rows\n";
+        if (!refusal.empty()) {
+            ADD_FAILURE() << "[check: copy-accepted] " << refusal;
+            EXPECT_EQ(count, 100) << "[check: refused-transaction-left-nothing] ";
+        } else {
+            EXPECT_TRUE(count == 100 || count == whole)
+                << "[check: transaction-all-or-nothing] " << count << " rows; 100 before the "
+                << "transaction, " << whole << " after it";
+        }
+        if (count == whole) {
+            EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 2000 RETURN count(n);"), 1000)
+                << "[check: copy-rows] ";
+            EXPECT_EQ(queryText("MATCH (n:Doc {id: 2500}) RETURN n.name;"), "copied 2500")
+                << "[check: primary-key-lookup] ";
+            if (mixed) {
+                EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 1000 AND n.id < 2000 RETURN "
+                                   "count(n);"),
+                    15)
+                    << "[check: local-rows] ";
+                EXPECT_EQ(queryText("MATCH (n:Doc {id: 1001}) RETURN n.name;"), "local 1001")
+                    << "[check: primary-key-lookup] ";
+            }
+        } else if (count == 100) {
+            EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id % 10 = 0 RETURN count(n);"), 10)
+                << "[check: deletes-undone] ";
+        }
+        EXPECT_EQ(queryText("MATCH (n:Doc {id: 5}) RETURN n.name;"), "committed 5")
+            << "[check: ignored-duplicate-left-the-original] ";
+        expectIntegrity();
+        expectStillWritable("CREATE (:Doc {id: 5000, name: 'later'});");
+        std::filesystem::remove(csv);
+        std::filesystem::remove(refusedFile);
+    }
+};
+
+TEST_P(ForcedCopyCheckpointDeath, ACopyAloneSurvivesWholeOrNotAtAll) {
+    run(Form::IgnoredAlone);
+}
+
+TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionSurvivesWholeOrNotAtAll) {
+    run(Form::IgnoredMixed);
+}
+
+// La transaction par paquet de rag3weaver d'aujourd'hui (MERGE puis COPY), au réglage par
+// défaut : le COPY ordinaire y garde son point de reprise forcé.
+TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole) {
+    run(Form::DefaultMixed);
+}
+
+
+INSTANTIATE_TEST_SUITE_P(Points, ForcedCopyCheckpointDeath,
+    ::testing::Values(DeathPoint::BeforeStorage, DeathPoint::AfterStorage,
+        DeathPoint::AfterSerialize, DeathPoint::AfterHeader, DeathPoint::AfterCheckpointLogged,
+        DeathPoint::AfterJournalCleared, DeathPoint::AfterApplyingShadowPages),
+    [](const ::testing::TestParamInfo<DeathPoint>& info) { return deathPointName(info.param); });
+
 // La reprise d'un journal terminé par un CHECKPOINT rejoue les pages du fichier fantôme, puis
 // supprime le journal et le fichier fantôme. Une mort entre les deux suppressions ne doit pas
 // empêcher la base de s'ouvrir (ticket « durabilité sur faute d'entrée-sortie, coupure ou mort
