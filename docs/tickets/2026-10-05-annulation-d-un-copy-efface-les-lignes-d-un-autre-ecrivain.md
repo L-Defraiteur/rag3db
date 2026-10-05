@@ -58,7 +58,11 @@ Deux conséquences de plus, depuis le 5 octobre, sans témoin propre :
 - sur une table à index vectoriel, le crochet d'annulation (`e1049934e`) ramène le compte des
   lignes reliées au premier décalage annulé, sous les lignes de l'autre écrivain : elles
   seraient reliées une seconde fois à la fin du COPY suivant (relevé par la session cœur
-  C++).
+  C++) ;
+- par lecture, le 5 octobre (la chasse aux pointeurs gardés à travers une réallocation) :
+  `NodeGroupCollection` prend `lastNodeGroup` sous le verrou, le relâche, puis s'en sert
+  encore. Entre-temps, l'annulation d'un autre écrivain (`removeTrailingGroups`) peut effacer
+  ce groupe s'il est encore vide (`node_group_collection.cpp`, ~121-153 et 228).
 
 ## Cause
 
