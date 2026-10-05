@@ -61,6 +61,10 @@ Ce que (A) ne fait pas :
 - les insertions ordinaires restent sans borne : elles sont journalisées **au commit**, en plus
   de leur stockage local **[lu]** — hors de ce lot ;
 - un `COPY` qui écarte des lignes (`IGNORE_ERRORS`) reste forcé, comme aujourd'hui.
+- sous plusieurs écrivains (mode éteint hors du banc), deux transactions repliées en même
+  temps s'attendent l'une l'autre à leur validation, jusqu'au délai, qui en annule une. Deux
+  `COPY` forcés le font déjà ; le repli le rend possible pour deux transactions qui ne le
+  prévoyaient pas en commençant (remarque du banc à la relecture).
 
 ## 4. La forme
 
@@ -102,6 +106,26 @@ Chaque témoin « mort » tue le processus base ouverte ; dans le cas journalis�
 6. Le seuil compté sur la transaction : deux `COPY` chacun sous le seuil, ensemble au-dessus.
 
 Relecture croisée par le banc (reprise et commit) avant le push.
+
+## 5 bis. Ce que les mesures ont changé (5 octobre, après la page)
+
+- **La forme compacte des tableaux est passée devant** (`1c232f318`) : un `FLOAT[768]` pesait
+  9,2 Ko au journal, il en pèse 3,1. Le seuil se fixera sur cette forme.
+- **Le mécanisme est codé** : `Transaction::fallBackToForcedCheckpoint`, `LocalWAL::discard`,
+  le compteur lisible par `CALL current_setting('copy_journal_fallbacks') RETURN *` (il compte
+  les replis, pas les validations). Les témoins du §5 sont `CopyJournalThresholdTest` et
+  `CopyJournalThresholdCrossedTest` ; le banc ajoute la mort pendant le point de reprise d'une
+  transaction repliée, à ses sept points.
+- **Le défaut du seuil n'est pas fixé.** Quatre passes des embarquements sous `COPY` journalisé :
+  491 Mo de journal pour 62 Mo de texte en mode fichiers, sans gain de temps ; 1 396 Mo et
+  +30 à 40 s en mode blobs, où les blobs du plein texte sont écrits deux fois. Leur guetteur
+  mesure le fichier entre deux points de reprise, pas une transaction : la sonde
+  `RAG3DB_PROFILE_JOURNAL` (`c1c2f9dfc`) rendra le poids par transaction et par table, et le
+  défaut se fixera dessus, avec une marge de ×2 sous le tampon de 4 Gio.
+- **Le basculement ne se justifie pas par la vitesse** (orchestration) mais par la stèle : plus
+  de point de reprise forcé par `COPY`, plus d'attente du départ des autres à la validation,
+  plusieurs `COPY` dans une transaction durable. Son exigence de performance : ne ralentir aucun
+  mode — fichiers à ±3 %, blobs ramenés par le repli à leur temps d'avant.
 
 ## 6. Ensuite
 
