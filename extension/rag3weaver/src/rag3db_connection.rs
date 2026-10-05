@@ -448,7 +448,16 @@ impl Rag3dbConnection {
     /// dizaines de nanosecondes, contre des microsecondes au moins pour la
     /// moindre requête. Une ingestion lente se cherche ailleurs.
     fn before_engine(&self) -> Result<(), DbError> {
+        self.before_engine_for("")
+    }
+
+    /// `ROLLBACK` passe même sur une base empoisonnée : défaire ne peut rien
+    /// fausser, et une transaction ouverte sur un refus doit se fermer.
+    fn before_engine_for(&self, cypher: &str) -> Result<(), DbError> {
         if let Some(reason) = self.must_reopen() {
+            if cypher.trim().eq_ignore_ascii_case("ROLLBACK") {
+                return Ok(());
+            }
             return Err(DbError::MustReopen(reason));
         }
         use std::sync::atomic::Ordering;
@@ -472,7 +481,7 @@ impl Rag3dbConnection {
 
     /// Execute a raw Cypher query (sync, used internally).
     fn query_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
-        self.before_engine()?;
+        self.before_engine_for(cypher)?;
         trace_cypher(cypher, &[]);
         let mut result = self
             .conn

@@ -153,10 +153,12 @@ fn chaque_morceau_se_retrouve_par_son_propre_vecteur() {
         "tout" => {
             let r = sync_source(&mut catalog, &arbre, &options(Disponibilites::TOUT), &mut |_| {}).expect("synchroniser");
             assert_eq!(r.failed, 0, "{r:?}");
+            println!("JOIGNABILITE mode={mode} replis en masse={} {:?}", r.bulk_load_refused.len(), r.bulk_load_refused.first());
         }
         "fond" => {
             let r = sync_source(&mut catalog, &arbre, &options(Disponibilites::RECHERCHE_TEXTE), &mut |_| {}).expect("synchroniser");
             assert_eq!(r.failed, 0, "{r:?}");
+            println!("JOIGNABILITE mode={mode} replis en masse={} {:?}", r.bulk_load_refused.len(), r.bulk_load_refused.first());
             while catalog.embarquer_le_retard(Disponibilites::TOUT, 512, None).expect("rattraper") > 0 {}
         }
         "masse" => {
@@ -167,6 +169,7 @@ fn chaque_morceau_se_retrouve_par_son_propre_vecteur() {
                 .expect("en masse")
                 .expect("synchroniser");
             assert_eq!(r.failed, 0, "{r:?}");
+            println!("JOIGNABILITE mode={mode} replis en masse={} {:?}", r.bulk_load_refused.len(), r.bulk_load_refused.first());
         }
         autre => panic!("MESURE_JOIGNABILITE={autre} : tout, fond ou masse"),
     }

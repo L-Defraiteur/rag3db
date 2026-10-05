@@ -760,6 +760,29 @@ fn csv_sait_ecrire(v: &CypherValue) -> bool {
     }
 }
 
+/// **Un COPY que le moteur a refusé rend la base à rouvrir** (5 octobre
+/// 2026, décision de l'orchestration). Le refus arrive après que le COPY a
+/// réservé, voire écrit, ses lignes ; quelle qu'en soit la raison (une clé
+/// déjà en base, un bout absent, la mémoire), l'état du moteur peut rester
+/// faux en mémoire, et un point de reprise qui suit ne finit pas (le banc :
+/// COPY refusé ou annulé, même COPY validé, point de reprise). Pas de repli
+/// sur MERGE dans la même session : la base est empoisonnée et se fermera
+/// sans point de reprise ; la cause est dite. Les refus d'avant le moteur
+/// (une valeur qui ne s'écrit pas en CSV, le fichier) gardent le repli. **À
+/// retirer** quand le correctif du moteur sera prouvé sur la recette du
+/// banc (ticket `2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire`).
+fn refus_du_copy(conn: &dyn crate::connection::DbConnection, table: &str, e: crate::connection::DbError) -> String {
+    let message = e.to_string();
+    if conn.must_reopen().is_none() {
+        conn.poison(&format!(
+            "{message} — le moteur a refusé le COPY de « {table} » après l'avoir commencé : son état peut être faux en \
+             mémoire, la base doit être rouverte (ce qui n'était pas validé est perdu, la reprise le refait)"
+        ));
+    }
+    conn.close_without_checkpoint();
+    message
+}
+
 /// **Poser un groupe de lignes par COPY.** `Ok(None)` : pas de chemin de
 /// masse ici (moteur sans COPY) — l'appelant reste sur le MERGE. Une valeur
 /// qu'on ne sait pas écrire en CSV est une `Err` : un repli qui se dit. `Ok(Some(ids))` : posé ; la table
@@ -828,7 +851,7 @@ fn copier_les_noeuds(
 
     let t_csv = t0.elapsed().as_millis();
     let t1 = std::time::Instant::now();
-    let resultat = conn.execute(&copie).map_err(|e| e.to_string());
+    let resultat = conn.execute(&copie).map_err(|e| refus_du_copy(conn, table, e));
     let _ = std::fs::remove_file(&chemin);
     let t_copy = t1.elapsed().as_millis();
     let t2 = std::time::Instant::now();
@@ -994,7 +1017,7 @@ fn copier_les_liens(
     }
     let t_csv = t_csv0.elapsed();
     let t1 = std::time::Instant::now();
-    let resultat = if ecrites > 0 { conn.execute(&copie).map(|_| ()).map_err(|e| e.to_string()) } else { Ok(()) };
+    let resultat = if ecrites > 0 { conn.execute(&copie).map(|_| ()).map_err(|e| refus_du_copy(conn, rel_name, e)) } else { Ok(()) };
     let _ = std::fs::remove_file(&chemin);
     if profil {
         eprintln!(
