@@ -257,8 +257,11 @@ amonts (`8c83c3360`, puis le second lot).
         indépendante de la session cœur C++, dont un défaut bloquant (`ff76b1ee3`) ;
       - fenêtre B, après le point de reprise : la clé et les index retrouvent leurs colonnes
         par le catalogue, au point de reprise et à l'ouverture. Une base abîmée par l'ancien
-        moteur est gardée en témoin (`dataset/databases/stale-index-columns`). Commit prêt,
-        en attente de relecture ;
+        moteur est gardée en témoin (`dataset/databases/stale-index-columns`). Poussée en
+        `31ad712c5`, après une seconde relecture de la session cœur C++, qui a trouvé un
+        bloquant : l'ATTACH d'une base rag3db lisait ses tables avec le catalogue de la
+        principale ; corrigé et témoigné. Le ticket du DROP est fermé, avec la limite de la
+        réparation (les numéros, pas des clés déjà mal rangées) ;
     - le point de reprise sans fin après UN COPY annulé ou refusé (ticket
       `2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md`), trouvé en cherchant la
       seconde porte de l'index de clé qui enfle. Le témoin tourne dans un fils borné (en temps,
@@ -284,10 +287,12 @@ amonts (`8c83c3360`, puis le second lot).
         non signé quand `numValues < offset`. Pas de témoin possible : la fonction n'a aucun
         appelant (code mort, par recherche). À retirer, ou à corriger le jour où elle sert.
       `lastNodeGroup` relu hors verrou est allé au ticket A3′ (`9c274b0ca`).
+    - le correctif de la clé perdue de la session cœur C++ (`splitSlots`, un `std::deque`, et le
+      compte des cases de débordement lu une fois avec le type de la transaction), relu et
+      joué sur la liste complète : 63 rouges, comme sans lui. Aucun rouge du banc n'était lui.
 
 ## Ce qui m'attend
 
-- le push de la fenêtre B du DROP après la relecture de la session cœur C++ ;
 - l'étape 4 du chargement journalisé : réécrire mes deux témoins de l'attente (2a) le jour du
   basculement, et sortir `TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout` ;
 - une graine réglable de l'index vectoriel, demandée à la session cœur C++ : elle rendrait
