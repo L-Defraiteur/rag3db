@@ -36,6 +36,16 @@ enum class WALRecordType : uint8_t {
     REL_DETACH_DELETE_RECORD = 34,
     REL_UPDATE_RECORD = 35,
 
+    // Les mêmes enregistrements, leurs tableaux de numériques en octets bruts (la forme
+    // compacte de ValueVector::serialize). Ces numéros n'existent que dans le fichier : écrits à
+    // la place des trois d'origine, relus vers les mêmes structures, dont le type en mémoire
+    // reste celui d'origine. Un journal d'avant, qui porte les numéros d'origine, se relit par
+    // l'ancien décodage ; un moteur d'avant refuse un journal qui porte ceux-ci (« unknown WAL
+    // record type »).
+    TABLE_INSERTION_RECORD_RAW_ARRAYS = 40,
+    NODE_UPDATE_RECORD_RAW_ARRAYS = 42,
+    REL_UPDATE_RECORD_RAW_ARRAYS = 45,
+
     LOAD_EXTENSION_RECORD = 100,
 
     CHECKPOINT_RECORD = 254,
@@ -57,6 +67,12 @@ struct WALRecord {
     virtual void serialize(common::Serializer& serializer) const;
     static std::unique_ptr<WALRecord> deserialize(common::Deserializer& deserializer,
         const main::ClientContext& clientContext);
+
+protected:
+    // Écrit un autre numéro que le type en mémoire (la forme compacte des tableaux).
+    static void serializeTypeAs(common::Serializer& serializer, WALRecordType typeInFile);
+
+public:
 
     template<class TARGET>
     const TARGET& constCast() const {
@@ -180,7 +196,7 @@ struct TableInsertionRecord final : WALRecord {
 
     void serialize(common::Serializer& serializer) const override;
     static std::unique_ptr<TableInsertionRecord> deserialize(common::Deserializer& deserializer,
-        const main::ClientContext& clientContext);
+        const main::ClientContext& clientContext, bool rawNumericArrays = false);
 };
 
 struct NodeDeletionRecord final : WALRecord {
@@ -229,7 +245,7 @@ struct NodeUpdateRecord final : WALRecord {
 
     void serialize(common::Serializer& serializer) const override;
     static std::unique_ptr<NodeUpdateRecord> deserialize(common::Deserializer& deserializer,
-        const main::ClientContext& clientContext);
+        const main::ClientContext& clientContext, bool rawNumericArrays = false);
 };
 
 struct RelDeletionRecord final : WALRecord {
@@ -324,7 +340,7 @@ struct RelUpdateRecord final : WALRecord {
 
     void serialize(common::Serializer& serializer) const override;
     static std::unique_ptr<RelUpdateRecord> deserialize(common::Deserializer& deserializer,
-        const main::ClientContext& clientContext);
+        const main::ClientContext& clientContext, bool rawNumericArrays = false);
 };
 
 struct LoadExtensionRecord final : WALRecord {

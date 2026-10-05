@@ -380,7 +380,39 @@ void ValueVector::initializeValueBuffer() {
     }
 }
 
-void ValueVector::serialize(Serializer& ser) const {
+// La largeur d'un élément si ce type est un tableau de taille fixe de numériques, que le journal
+// peut écrire en octets bruts ; 0 sinon.
+static uint32_t rawArrayElementWidth(const LogicalType& dataType) {
+    if (dataType.getLogicalTypeID() != LogicalTypeID::ARRAY) {
+        return 0;
+    }
+    switch (ArrayType::getChildType(dataType).getPhysicalType()) {
+    case PhysicalTypeID::INT8:
+    case PhysicalTypeID::INT16:
+    case PhysicalTypeID::INT32:
+    case PhysicalTypeID::INT64:
+    case PhysicalTypeID::UINT8:
+    case PhysicalTypeID::UINT16:
+    case PhysicalTypeID::UINT32:
+    case PhysicalTypeID::UINT64:
+    case PhysicalTypeID::FLOAT:
+    case PhysicalTypeID::DOUBLE:
+        return PhysicalTypeUtils::getFixedTypeSize(
+            ArrayType::getChildType(dataType).getPhysicalType());
+    default:
+        return 0;
+    }
+}
+
+// Ce qui précède chaque tableau non nul de la forme compacte.
+enum class RawArrayForm : uint8_t {
+    // Ses éléments, bout à bout, dans la représentation de la machine.
+    RAW = 0,
+    // Une valeur comme avant : le tableau porte un élément nul, ou n'a pas la taille de son type.
+    VALUE = 1,
+};
+
+void ValueVector::serialize(Serializer& ser, bool rawNumericArrays) const {
     // dataType, num_values, data, nullMask, aux
     ser.writeDebuggingInfo("data_type");
     dataType.serialize(ser);
@@ -392,13 +424,40 @@ void ValueVector::serialize(Serializer& ser) const {
         ser.write<bool>(nullMask.isNull(pos));
     }
     ser.writeDebuggingInfo("values");
+    const auto elementWidth = rawNumericArrays ? rawArrayElementWidth(dataType) : 0;
+    if (elementWidth == 0) {
+        for (auto i = 0u; i < selSize; i++) {
+            getAsValue(state->getSelVector()[i])->serialize(ser);
+        }
+        return;
+    }
+    // La forme compacte : rien pour un tableau nul (son drapeau est déjà écrit), et pour les
+    // autres leurs éléments en octets bruts. Une valeur par élément, chacune avec son type,
+    // pesait trois fois le tableau : 9,2 Ko au journal pour un FLOAT[768] de 3 Ko.
+    const auto numElements = ArrayType::getNumElements(dataType);
+    const auto dataVector = ListVector::getDataVector(this);
     for (auto i = 0u; i < selSize; i++) {
-        getAsValue(state->getSelVector()[i])->serialize(ser);
+        const auto pos = state->getSelVector()[i];
+        if (nullMask.isNull(pos)) {
+            continue;
+        }
+        const auto entry = getValue<list_entry_t>(pos);
+        auto raw = entry.size == numElements;
+        for (auto element = 0u; raw && element < entry.size; element++) {
+            raw = !dataVector->isNull(entry.offset + element);
+        }
+        ser.write<uint8_t>(static_cast<uint8_t>(raw ? RawArrayForm::RAW : RawArrayForm::VALUE));
+        if (raw) {
+            ser.write(ListVector::getListValues(this, entry), numElements * elementWidth);
+        } else {
+            getAsValue(pos)->serialize(ser);
+        }
     }
 }
 
 std::unique_ptr<ValueVector> ValueVector::deSerialize(Deserializer& deSer,
-    storage::MemoryManager* mm, std::shared_ptr<DataChunkState> dataChunkState) {
+    storage::MemoryManager* mm, std::shared_ptr<DataChunkState> dataChunkState,
+    bool rawNumericArrays) {
     std::string key;
     deSer.validateDebuggingInfo(key, "data_type");
     auto dataType = LogicalType::deserialize(deSer);
@@ -415,9 +474,37 @@ std::unique_ptr<ValueVector> ValueVector::deSerialize(Deserializer& deSer,
         result->setNull(i, isNull);
     }
     deSer.validateDebuggingInfo(key, "values");
+    const auto elementWidth = rawNumericArrays ? rawArrayElementWidth(result->dataType) : 0;
+    if (elementWidth == 0) {
+        for (auto i = 0u; i < numValues; i++) {
+            auto val = Value::deserialize(deSer);
+            result->copyFromValue(result->state->getSelVector()[i], *val);
+        }
+        return result;
+    }
+    const auto numElements = ArrayType::getNumElements(result->dataType);
     for (auto i = 0u; i < numValues; i++) {
-        auto val = Value::deserialize(deSer);
-        result->copyFromValue(result->state->getSelVector()[i], *val);
+        const auto pos = result->state->getSelVector()[i];
+        if (result->isNull(pos)) {
+            continue;
+        }
+        uint8_t form = 0;
+        deSer.deserializeValue<uint8_t>(form);
+        if (form == static_cast<uint8_t>(RawArrayForm::RAW)) {
+            const auto entry = ListVector::addList(result.get(), numElements);
+            result->setValue<list_entry_t>(pos, entry);
+            deSer.read(ListVector::getListValues(result.get(), entry), numElements * elementWidth);
+            const auto dataVector = ListVector::getDataVector(result.get());
+            for (auto element = 0u; element < numElements; element++) {
+                dataVector->setNull(entry.offset + element, false);
+            }
+        } else if (form == static_cast<uint8_t>(RawArrayForm::VALUE)) {
+            auto val = Value::deserialize(deSer);
+            result->copyFromValue(pos, *val);
+        } else {
+            throw RuntimeException(stringFormat(
+                "Corrupted journal: unknown form {} for an array of the compact form.", form));
+        }
     }
     return result;
 }

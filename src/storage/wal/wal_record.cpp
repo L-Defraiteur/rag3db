@@ -19,6 +19,11 @@ void WALRecord::serialize(Serializer& serializer) const {
     serializer.write(type);
 }
 
+void WALRecord::serializeTypeAs(Serializer& serializer, WALRecordType typeInFile) {
+    serializer.writeDebuggingInfo("type");
+    serializer.write(typeInFile);
+}
+
 std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
     const main::ClientContext& clientContext) {
     std::string key;
@@ -60,6 +65,18 @@ std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
     } break;
     case WALRecordType::REL_UPDATE_RECORD: {
         walRecord = RelUpdateRecord::deserialize(deserializer, clientContext);
+    } break;
+    case WALRecordType::TABLE_INSERTION_RECORD_RAW_ARRAYS: {
+        walRecord = TableInsertionRecord::deserialize(deserializer, clientContext, true);
+        type = WALRecordType::TABLE_INSERTION_RECORD;
+    } break;
+    case WALRecordType::NODE_UPDATE_RECORD_RAW_ARRAYS: {
+        walRecord = NodeUpdateRecord::deserialize(deserializer, clientContext, true);
+        type = WALRecordType::NODE_UPDATE_RECORD;
+    } break;
+    case WALRecordType::REL_UPDATE_RECORD_RAW_ARRAYS: {
+        walRecord = RelUpdateRecord::deserialize(deserializer, clientContext, true);
+        type = WALRecordType::REL_UPDATE_RECORD;
     } break;
     case WALRecordType::COPY_TABLE_RECORD: {
         walRecord = CopyTableRecord::deserialize(deserializer);
@@ -269,7 +286,7 @@ std::unique_ptr<UpdateSequenceRecord> UpdateSequenceRecord::deserialize(
 }
 
 void TableInsertionRecord::serialize(Serializer& serializer) const {
-    WALRecord::serialize(serializer);
+    serializeTypeAs(serializer, WALRecordType::TABLE_INSERTION_RECORD_RAW_ARRAYS);
     serializer.writeDebuggingInfo("table_id");
     serializer.write<table_id_t>(tableID);
     serializer.writeDebuggingInfo("table_type");
@@ -279,12 +296,12 @@ void TableInsertionRecord::serialize(Serializer& serializer) const {
     serializer.writeDebuggingInfo("num_vectors");
     serializer.write<idx_t>(vectors.size());
     for (auto& vector : vectors) {
-        vector->serialize(serializer);
+        vector->serialize(serializer, true /* rawNumericArrays */);
     }
 }
 
 std::unique_ptr<TableInsertionRecord> TableInsertionRecord::deserialize(Deserializer& deserializer,
-    const main::ClientContext& clientContext) {
+    const main::ClientContext& clientContext, bool rawNumericArrays) {
     std::string key;
     table_id_t tableID = INVALID_TABLE_ID;
     auto tableType = TableType::UNKNOWN;
@@ -303,7 +320,7 @@ std::unique_ptr<TableInsertionRecord> TableInsertionRecord::deserialize(Deserial
     valueVectors.reserve(numVectors);
     for (auto i = 0u; i < numVectors; i++) {
         valueVectors.push_back(ValueVector::deSerialize(deserializer,
-            MemoryManager::Get(clientContext), resultChunkState));
+            MemoryManager::Get(clientContext), resultChunkState, rawNumericArrays));
     }
     return std::make_unique<TableInsertionRecord>(tableID, tableType, numRows,
         std::move(valueVectors));
@@ -337,7 +354,7 @@ std::unique_ptr<NodeDeletionRecord> NodeDeletionRecord::deserialize(Deserializer
 }
 
 void NodeUpdateRecord::serialize(Serializer& serializer) const {
-    WALRecord::serialize(serializer);
+    serializeTypeAs(serializer, WALRecordType::NODE_UPDATE_RECORD_RAW_ARRAYS);
     serializer.writeDebuggingInfo("table_id");
     serializer.write<table_id_t>(tableID);
     serializer.writeDebuggingInfo("column_id");
@@ -345,11 +362,11 @@ void NodeUpdateRecord::serialize(Serializer& serializer) const {
     serializer.writeDebuggingInfo("node_offset");
     serializer.write<offset_t>(nodeOffset);
     serializer.writeDebuggingInfo("property_vector");
-    propertyVector->serialize(serializer);
+    propertyVector->serialize(serializer, true /* rawNumericArrays */);
 }
 
 std::unique_ptr<NodeUpdateRecord> NodeUpdateRecord::deserialize(Deserializer& deserializer,
-    const main::ClientContext& clientContext) {
+    const main::ClientContext& clientContext, bool rawNumericArrays) {
     std::string key;
     table_id_t tableID = INVALID_TABLE_ID;
     column_id_t columnID = INVALID_COLUMN_ID;
@@ -363,8 +380,8 @@ std::unique_ptr<NodeUpdateRecord> NodeUpdateRecord::deserialize(Deserializer& de
     deserializer.deserializeValue<offset_t>(nodeOffset);
     deserializer.validateDebuggingInfo(key, "property_vector");
     auto resultChunkState = std::make_shared<DataChunkState>();
-    auto ownedVector =
-        ValueVector::deSerialize(deserializer, MemoryManager::Get(clientContext), resultChunkState);
+    auto ownedVector = ValueVector::deSerialize(deserializer, MemoryManager::Get(clientContext),
+        resultChunkState, rawNumericArrays);
     return std::make_unique<NodeUpdateRecord>(tableID, columnID, nodeOffset,
         std::move(ownedVector));
 }
@@ -430,7 +447,7 @@ std::unique_ptr<RelDetachDeleteRecord> RelDetachDeleteRecord::deserialize(
 }
 
 void RelUpdateRecord::serialize(Serializer& serializer) const {
-    WALRecord::serialize(serializer);
+    serializeTypeAs(serializer, WALRecordType::REL_UPDATE_RECORD_RAW_ARRAYS);
     serializer.writeDebuggingInfo("table_id");
     serializer.write<table_id_t>(tableID);
     serializer.writeDebuggingInfo("column_id");
@@ -442,11 +459,11 @@ void RelUpdateRecord::serialize(Serializer& serializer) const {
     serializer.writeDebuggingInfo("rel_id_vector");
     relIDVector->serialize(serializer);
     serializer.writeDebuggingInfo("property_vector");
-    propertyVector->serialize(serializer);
+    propertyVector->serialize(serializer, true /* rawNumericArrays */);
 }
 
 std::unique_ptr<RelUpdateRecord> RelUpdateRecord::deserialize(Deserializer& deserializer,
-    const main::ClientContext& clientContext) {
+    const main::ClientContext& clientContext, bool rawNumericArrays) {
     std::string key;
     table_id_t tableID = INVALID_TABLE_ID;
     column_id_t columnID = INVALID_COLUMN_ID;
@@ -466,8 +483,8 @@ std::unique_ptr<RelUpdateRecord> RelUpdateRecord::deserialize(Deserializer& dese
     auto relIDVector =
         ValueVector::deSerialize(deserializer, MemoryManager::Get(clientContext), resultChunkState);
     deserializer.validateDebuggingInfo(key, "property_vector");
-    auto propertyVector =
-        ValueVector::deSerialize(deserializer, MemoryManager::Get(clientContext), resultChunkState);
+    auto propertyVector = ValueVector::deSerialize(deserializer, MemoryManager::Get(clientContext),
+        resultChunkState, rawNumericArrays);
     return std::make_unique<RelUpdateRecord>(tableID, columnID, std::move(srcNodeIDVector),
         std::move(dstNodeIDVector), std::move(relIDVector), std::move(propertyVector));
 }

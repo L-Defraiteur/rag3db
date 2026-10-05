@@ -129,9 +129,12 @@ public:
     // For an unflat vector, its selection vector is also updated to the resultSelVector.
     static bool discardNull(ValueVector& vector);
 
-    void serialize(Serializer& ser) const;
+    // rawNumericArrays : un tableau de taille fixe de numériques (FLOAT[N], DOUBLE[N], entiers)
+    // sans élément nul est écrit en octets bruts, au lieu d'une valeur — avec son type — par
+    // élément. Le lecteur doit recevoir le même drapeau : il ne se devine pas dans le flux.
+    void serialize(Serializer& ser, bool rawNumericArrays = false) const;
     static std::unique_ptr<ValueVector> deSerialize(Deserializer& deSer, storage::MemoryManager* mm,
-        std::shared_ptr<DataChunkState> dataChunkState);
+        std::shared_ptr<DataChunkState> dataChunkState, bool rawNumericArrays = false);
 
     SelectionVector* getSelVectorPtr() const {
         return state ? &state->getSelVectorUnsafe() : nullptr;

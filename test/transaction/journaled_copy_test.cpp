@@ -1027,6 +1027,267 @@ TEST_F(CopyStatisticsTest, InsertsThenACopyRolledBackLeaveNothing) {
     });
 }
 
+// La forme compacte des tableaux au journal : un tableau de taille fixe de numériques
+// (FLOAT[N], DOUBLE[N], entiers) y est écrit en octets bruts, sous trois numéros
+// d'enregistrement neufs (insertion, mise à jour d'un nœud, mise à jour d'une relation). Avant,
+// chaque élément y était une valeur avec son type : un FLOAT[768] de 3 Ko pesait 9,2 Ko.
+//
+// La preuve est une parité au bit près : les mêmes instructions jouées dans une base de
+// référence, qui ne passe pas par le journal, et dans une base dont le processus meurt base
+// ouverte, relue par le rejeu — chaque élément comparé par ses octets.
+class JournalRawArraysTest : public JournaledCopyTest {
+protected:
+    static constexpr int64_t DIMENSION = 768;
+    static constexpr int64_t NUM_COPIED = 300;
+
+    static std::string element(int64_t row, int64_t position) {
+        // Des décimales que le flottant n'a pas : l'arrondi est celui de l'analyse du texte,
+        // la même des deux côtés.
+        return std::to_string((row * 7919 + position * 104729) % 200003 - 100001) + "." +
+               std::to_string((row * 31 + position * 17) % 9973);
+    }
+
+    static std::string list(int64_t row, int64_t size, int64_t nullAt = -1) {
+        std::string result = "[";
+        for (int64_t i = 0; i < size; i++) {
+            result += (i ? "," : "") + (i == nullAt ? std::string("NULL") : element(row, i));
+        }
+        return result + "]";
+    }
+
+    static std::string intList(int64_t row, int64_t size, int64_t nullAt = -1) {
+        std::string result = "[";
+        for (int64_t i = 0; i < size; i++) {
+            result += (i ? "," : "") +
+                      (i == nullAt ? std::string("NULL") : std::to_string(row * 1000 + i - 500));
+        }
+        return result + "]";
+    }
+
+    void writeVectorCsv() const {
+        std::ofstream csv(csvPath);
+        for (int64_t id = 1000; id < 1000 + NUM_COPIED; id++) {
+            csv << id << ",\"" << list(id, DIMENSION) << "\",\"" << list(id + 1, 3) << "\",\""
+                << intList(id, 5) << "\"\n";
+        }
+    }
+
+    // Les mêmes écritures pour les deux bases : insertions, COPY, mises à jour, tableaux nuls,
+    // éléments nuls, propriété de relation.
+    void writes(const std::function<void(const std::string&)>& run) const {
+        // Une seule transaction : ses lignes vont au journal dans un même enregistrement, où se
+        // côtoient des tableaux pleins (octets bruts), un tableau nul (rien) et des tableaux à
+        // élément nul (la forme d'avant).
+        run("BEGIN TRANSACTION;");
+        for (int64_t id = 0; id < 5; id++) {
+            run("CREATE (:Doc {id: " + std::to_string(id) + ", v: " + list(id, DIMENSION) +
+                ", w: " + list(id + 2, 3) + ", n: " + intList(id, 5) + "});");
+        }
+        run("CREATE (:Doc {id: 100});");
+        run("CREATE (:Doc {id: 101, v: " + list(101, DIMENSION, 400) + ", w: " + list(101, 3, 0) +
+            ", n: " + intList(101, 5, 4) + "});");
+        // Les valeurs qu'une comparaison de flottants ne distingue pas : pas un nombre, le zéro
+        // négatif, un dénormalisé, les infinis. La parité se juge sur leurs octets.
+        run("CREATE (:Doc {id: 102, w: [CAST('NaN' AS DOUBLE), -0.0, 4.9e-324], n: " +
+            intList(102, 5) + "});");
+        run("CREATE (:Doc {id: 103, w: [CAST('Infinity' AS DOUBLE), CAST('-Infinity' AS DOUBLE), "
+            "2.2250738585072014e-308], n: [2147483647, -2147483648, 0, -1, 1]});");
+        run("COMMIT;");
+        run("MATCH (d:Doc {id: 102}) SET d.w = [-0.0, CAST('NaN' AS DOUBLE), 0.0];");
+        run("COPY Doc FROM '" + csvPath + "' (header=false);");
+        run("MATCH (d:Doc {id: 3}) SET d.v = " + list(9003, DIMENSION) + ";");
+        run("MATCH (d:Doc {id: 1007}) SET d.v = " + list(9007, DIMENSION) + ", d.n = " +
+            intList(77, 5) + ";");
+        run("MATCH (d:Doc {id: 1010}) SET d.w = " + list(9010, 3, 1) + ";");
+        run("MATCH (d:Doc {id: 4}) SET d.v = NULL;");
+        run("MATCH (d:Doc {id: 100}) SET d.w = " + list(9100, 3) + ";");
+        run("MATCH (a:Doc {id: 1}), (b:Doc {id: 1001}) CREATE (a)-[:Link {p: " + list(1, 4) +
+            "}]->(b);");
+        run("MATCH (a:Doc {id: 2}), (b:Doc {id: 1002}) CREATE (a)-[:Link {p: " + list(2, 4) +
+            "}]->(b);");
+        run("MATCH (a:Doc {id: 2})-[l:Link]->(b:Doc) SET l.p = " + list(9202, 4) + ";");
+    }
+
+    static constexpr const char* SCHEMA_DOC =
+        "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, v FLOAT[768], w DOUBLE[3], n INT32[5]);";
+    static constexpr const char* SCHEMA_LINK = "CREATE REL TABLE Link(FROM Doc TO Doc, p FLOAT[4]);";
+
+    // Chaque tableau de chaque ligne, élément par élément : nul des deux côtés ou les mêmes
+    // octets. Rend le nombre d'éléments comparés ; les écarts sont comptés, pas listés.
+    static uint64_t expectSameArrays(Connection& actual, Connection& reference,
+        const std::string& query, const std::string& what) {
+        auto left = actual.query(query);
+        auto right = reference.query(query);
+        EXPECT_TRUE(left->isSuccess()) << what << " : " << left->getErrorMessage();
+        EXPECT_TRUE(right->isSuccess()) << what << " : " << right->getErrorMessage();
+        if (!left->isSuccess() || !right->isSuccess()) {
+            return 0;
+        }
+        EXPECT_EQ(left->getNumTuples(), right->getNumTuples()) << what;
+        uint64_t numCompared = 0;
+        uint64_t numDifferent = 0;
+        while (left->hasNext() && right->hasNext()) {
+            auto leftRow = left->getNext();
+            auto rightRow = right->getNext();
+            for (uint32_t column = 0; column < leftRow->len(); column++) {
+                auto* a = leftRow->getValue(column);
+                auto* b = rightRow->getValue(column);
+                if (a->isNull() || b->isNull()) {
+                    numDifferent += a->isNull() != b->isNull();
+                    numCompared++;
+                    continue;
+                }
+                if (a->getDataType().getLogicalTypeID() != rag3db::common::LogicalTypeID::ARRAY) {
+                    numDifferent += a->toString() != b->toString();
+                    numCompared++;
+                    continue;
+                }
+                const auto size = rag3db::common::NestedVal::getChildrenSize(a);
+                numDifferent += size != rag3db::common::NestedVal::getChildrenSize(b);
+                for (uint32_t i = 0;
+                     i < size && i < rag3db::common::NestedVal::getChildrenSize(b); i++) {
+                    auto* x = rag3db::common::NestedVal::getChildVal(a, i);
+                    auto* y = rag3db::common::NestedVal::getChildVal(b, i);
+                    numCompared++;
+                    if (x->isNull() || y->isNull()) {
+                        numDifferent += x->isNull() != y->isNull();
+                        continue;
+                    }
+                    switch (x->getDataType().getLogicalTypeID()) {
+                    case rag3db::common::LogicalTypeID::FLOAT: {
+                        const auto f = x->getValue<float>();
+                        const auto g = y->getValue<float>();
+                        numDifferent += memcmp(&f, &g, sizeof(f)) != 0;
+                    } break;
+                    case rag3db::common::LogicalTypeID::DOUBLE: {
+                        const auto f = x->getValue<double>();
+                        const auto g = y->getValue<double>();
+                        numDifferent += memcmp(&f, &g, sizeof(f)) != 0;
+                    } break;
+                    default: {
+                        numDifferent += x->getValue<int32_t>() != y->getValue<int32_t>();
+                    } break;
+                    }
+                }
+            }
+        }
+        EXPECT_EQ(numDifferent, 0u) << what << " : elements that differ, of " << numCompared;
+        return numCompared;
+    }
+
+    static void expectSameDatabase(Connection& actual, Connection& reference,
+        const std::string& what) {
+        const auto numNodeElements = expectSameArrays(actual, reference,
+            "MATCH (d:Doc) RETURN d.id, d.v, d.w, d.n ORDER BY d.id;", what + ", nodes");
+        // 309 lignes ; un tableau nul compte pour un élément.
+        EXPECT_GT(numNodeElements, 230000u) << what;
+        const auto numRelElements = expectSameArrays(actual, reference,
+            "MATCH (a:Doc)-[l:Link]->(b:Doc) RETURN a.id, b.id, l.p ORDER BY a.id;",
+            what + ", relationships");
+        EXPECT_EQ(numRelElements, 2u * (2 + 4)) << what;
+    }
+};
+
+TEST_F(JournalRawArraysTest, ArraysAreReplayedBitForBitAndWeighWhatTheyHold) {
+    writeVectorCsv();
+    // La référence : les mêmes écritures, sans journal à rejouer.
+    const auto referencePath = databasePath + ".reference";
+    std::filesystem::remove(referencePath);
+    auto referenceDatabase = std::make_unique<Database>(referencePath, *systemConfig);
+    auto reference = std::make_unique<Connection>(referenceDatabase.get());
+    const auto runReference = [&](const std::string& query) {
+        auto result = reference->query(query);
+        ASSERT_TRUE(result->isSuccess()) << query.substr(0, 120) << " : "
+                                         << result->getErrorMessage();
+    };
+    runReference(SCHEMA_DOC);
+    runReference(SCHEMA_LINK);
+    writes(runReference);
+    runReference("CHECKPOINT;");
+
+    writeThenDie([&](Connection& child) {
+        must(child, SCHEMA_DOC);
+        must(child, SCHEMA_LINK);
+        must(child, "CHECKPOINT;");
+        writes([&](const std::string& query) { must(child, query); });
+    });
+    const auto journal = journalSize();
+    ASSERT_GT(journal, 0u) << "nothing must have checkpointed";
+    // Les 300 lignes du COPY, 5 insérées et 3 mises à jour portent 309 FLOAT[768] : 949 Ko
+    // bruts. La forme d'avant en écrivait le triple.
+    EXPECT_LT(journal, 1300u * 1024) << "the journal weighs " << journal << " bytes";
+    EXPECT_GT(journal, 949u * 1024);
+
+    // En lecture seule d'abord : le journal est rejoué en mémoire et reste où il est.
+    {
+        auto readOnlyConfig = *systemConfig;
+        readOnlyConfig.readOnly = true;
+        Database readOnlyDatabase(databasePath, readOnlyConfig);
+        Connection readOnly(&readOnlyDatabase);
+        expectSameDatabase(readOnly, *reference, "read-only open");
+    }
+    EXPECT_EQ(journalSize(), journal) << "a read-only open must leave the journal as it is";
+
+    createDBAndConn();
+    expectSameDatabase(*conn, *reference, "after the replay");
+    // Et après un point de reprise et une réouverture.
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    createDBAndConn();
+    expectSameDatabase(*conn, *reference, "after a checkpoint and a reopening");
+
+    reference.reset();
+    referenceDatabase.reset();
+    std::filesystem::remove(referencePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(referencePath));
+}
+
+// Un journal écrit par le moteur d'avant la forme compacte (1177f5794) se rejoue : il porte les
+// numéros d'enregistrement d'origine, relus par l'ancien décodage. La base et son journal sont
+// au dépôt, avec le programme qui les a fabriqués (journal_before_raw_arrays/fabrique.cpp) :
+// dix insertions, un tableau nul, un élément nul, un COPY journalisé de cinquante lignes, trois
+// mises à jour ; le processus est mort base ouverte.
+TEST_F(JournalRawArraysTest, AJournalWrittenBeforeTheRawFormIsStillReplayed) {
+    const auto fixture = TestHelper::appendRag3dbRootPath(
+        "test/transaction/journal_before_raw_arrays/base.rag3db");
+    const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+    std::filesystem::remove(databasePath);
+    std::filesystem::remove(walPath);
+    std::filesystem::copy_file(fixture, databasePath);
+    std::filesystem::copy_file(rag3db::storage::StorageUtils::getWALFilePath(fixture), walPath);
+    ASSERT_GT(journalSize(), 0u);
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 62);
+    EXPECT_EQ(text("MATCH (d:Doc {id: 1049}) RETURN d.name;"), "copied 1049");
+    // Une insertion, une ligne du COPY, les trois mises à jour, le tableau nul, l'élément nul.
+    EXPECT_EQ(single("MATCH (d:Doc {id: 7}) WHERE d.v[1] = CAST(7.5 AS FLOAT) AND d.v[3] = "
+                     "CAST(-1.0 AS FLOAT) AND d.v[4] = CAST(7.125 AS FLOAT) AND d.w[1] = "
+                     "7.000001 AND d.w[2] = -2.5 AND d.n[1] = 7 AND d.n[3] = 100000 RETURN "
+                     "count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 1023}) WHERE d.v[1] = CAST(1023.5 AS FLOAT) AND d.v[4] "
+                     "= CAST(7.75 AS FLOAT) AND d.w[1] = 1023.25 AND d.n[1] = 1023 AND d.n[3] = "
+                     "3 RETURN count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 3}) WHERE d.v[1] = CAST(9.5 AS FLOAT) AND d.v[2] = "
+                     "CAST(8.25 AS FLOAT) AND d.v[3] = CAST(7.125 AS FLOAT) AND d.v[4] = "
+                     "CAST(6.0 AS FLOAT) RETURN count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 1001}) WHERE d.w[1] = 0.1 AND d.w[2] = 0.2 RETURN "
+                     "count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 4}) WHERE d.v IS NULL AND d.w[2] = -2.5 RETURN "
+                     "count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 100}) WHERE d.v IS NULL AND d.w IS NULL AND d.n IS NULL "
+                     "RETURN count(*);"),
+        1);
+    EXPECT_EQ(single("MATCH (d:Doc {id: 101}) WHERE d.v[1] = CAST(1.5 AS FLOAT) AND "
+                     "list_extract(d.v, 2) IS NULL AND d.v[3] = CAST(3.5 AS FLOAT) AND "
+                     "list_extract(d.w, 1) IS NULL AND d.w[2] = 1.0 AND d.n[2] = 2 AND "
+                     "list_extract(d.n, 3) IS NULL RETURN count(*);"),
+        1);
+}
+
 } // namespace
 
 #endif
