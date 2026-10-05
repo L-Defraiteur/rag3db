@@ -1,5 +1,8 @@
 #pragma once
 
+#include <map>
+#include <vector>
+
 #include "storage/wal/wal_record.h"
 
 namespace rag3db {
@@ -49,13 +52,27 @@ public:
     void clear();
     uint64_t getSize();
 
+    // La sonde RAG3DB_PROFILE_JOURNAL : ce que pèse ce journal, par type d'enregistrement et par
+    // table. Vide si la variable n'est pas posée.
+    struct Weight {
+        uint8_t recordType;
+        common::table_id_t tableID;
+        uint64_t numBytes;
+        uint64_t numRecords;
+        uint64_t numRows;
+    };
+    std::vector<Weight> getWeights();
+    static bool profiled();
+
 private:
-    void addNewWALRecord(const WALRecord& walRecord);
+    void addNewWALRecord(const WALRecord& walRecord,
+        common::table_id_t tableID = common::INVALID_TABLE_ID, uint64_t numRows = 0);
 
 private:
     std::mutex mtx;
     std::shared_ptr<common::InMemFileWriter> inMemWriter;
     common::Serializer serializer;
+    std::map<std::pair<uint8_t, common::table_id_t>, Weight> weights;
 };
 
 } // namespace storage

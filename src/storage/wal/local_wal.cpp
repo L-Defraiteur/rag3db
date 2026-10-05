@@ -1,5 +1,7 @@
 #include "storage/wal/local_wal.h"
 
+#include <cstdlib>
+
 #include "binder/ddl/bound_alter_info.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "common/serializer/in_mem_file_writer.h"
@@ -46,18 +48,18 @@ void LocalWAL::logAlterCatalogEntryRecord(const BoundAlterInfo* alterInfo) {
 void LocalWAL::logTableInsertion(table_id_t tableID, TableType tableType, row_idx_t numRows,
     const std::vector<ValueVector*>& vectors) {
     TableInsertionRecord walRecord(tableID, tableType, numRows, vectors);
-    addNewWALRecord(walRecord);
+    addNewWALRecord(walRecord, tableID, numRows);
 }
 
 void LocalWAL::logNodeDeletion(table_id_t tableID, offset_t nodeOffset, ValueVector* pkVector) {
     NodeDeletionRecord walRecord(tableID, nodeOffset, pkVector);
-    addNewWALRecord(walRecord);
+    addNewWALRecord(walRecord, tableID, 1);
 }
 
 void LocalWAL::logNodeUpdate(table_id_t tableID, column_id_t columnID, offset_t nodeOffset,
     ValueVector* propertyVector) {
     NodeUpdateRecord walRecord(tableID, columnID, nodeOffset, propertyVector);
-    addNewWALRecord(walRecord);
+    addNewWALRecord(walRecord, tableID, 1);
 }
 
 void LocalWAL::logRelDelete(table_id_t tableID, ValueVector* srcNodeVector,
@@ -93,6 +95,21 @@ void LocalWAL::logLoadExtension(std::string path) {
 void LocalWAL::clear() {
     std::unique_lock lck{mtx};
     serializer.getWriter()->clear();
+    weights.clear();
+}
+
+bool LocalWAL::profiled() {
+    static const bool on = std::getenv("RAG3DB_PROFILE_JOURNAL") != nullptr;
+    return on;
+}
+
+std::vector<LocalWAL::Weight> LocalWAL::getWeights() {
+    std::unique_lock lck{mtx};
+    std::vector<Weight> result;
+    for (auto& [_, weight] : weights) {
+        result.push_back(weight);
+    }
+    return result;
 }
 
 uint64_t LocalWAL::getSize() {
@@ -101,12 +118,23 @@ uint64_t LocalWAL::getSize() {
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): semantically non-const function.
-void LocalWAL::addNewWALRecord(const WALRecord& walRecord) {
+void LocalWAL::addNewWALRecord(const WALRecord& walRecord, table_id_t tableID,
+    uint64_t numRows) {
     std::unique_lock lck{mtx};
     KU_ASSERT(walRecord.type != WALRecordType::INVALID_RECORD);
+    const auto sizeBefore = profiled() ? serializer.getWriter()->getSize() : 0;
     serializer.getWriter()->onObjectBegin();
     walRecord.serialize(serializer);
     serializer.getWriter()->onObjectEnd();
+    if (profiled()) {
+        const auto recordType = static_cast<uint8_t>(walRecord.type);
+        auto& weight = weights[{recordType, tableID}];
+        weight.recordType = recordType;
+        weight.tableID = tableID;
+        weight.numBytes += serializer.getWriter()->getSize() - sizeBefore;
+        weight.numRecords++;
+        weight.numRows += numRows;
+    }
 }
 
 } // namespace storage

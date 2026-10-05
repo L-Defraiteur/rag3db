@@ -60,11 +60,45 @@ bool Transaction::shouldForceCheckpoint() const {
     return !clientContext->isInMemory() && forceCheckpoint;
 }
 
+// La sonde RAG3DB_PROFILE_JOURNAL : à la validation, ce que pèse le journal de la transaction,
+// par type d'enregistrement et par table, sur la sortie d'erreur. Une ligne par transaction qui
+// a écrit ; chaque ligne commence par « [journal] ».
+static void printJournalWeights(storage::LocalWAL& localWAL, main::ClientContext& context,
+    const Transaction& transaction, bool forced) {
+    const auto size = localWAL.getSize();
+    const auto weights = localWAL.getWeights();
+    if (weights.empty()) {
+        return;
+    }
+    std::string detail;
+    for (const auto& weight : weights) {
+        std::string table;
+        if (weight.tableID != common::INVALID_TABLE_ID) {
+            table = " table " + std::to_string(weight.tableID);
+            try {
+                table += " " + Catalog::Get(context)
+                                   ->getTableCatalogEntry(&transaction, weight.tableID)
+                                   ->getName();
+            } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): un nom en moins.
+            }
+        }
+        detail += common::stringFormat(" ; type {}{} : {} octets, {} enregistrements, {} lignes",
+            static_cast<uint32_t>(weight.recordType), table, weight.numBytes, weight.numRecords,
+            weight.numRows);
+    }
+    fprintf(stderr, "[journal] transaction validée : %llu octets au journal%s%s\n",
+        static_cast<unsigned long long>(size),
+        forced ? " (non écrits : point de reprise forcé)" : "", detail.c_str());
+}
+
 void Transaction::commit(storage::WAL* wal) {
     localStorage->commit();
     undoBuffer->commit(commitTS);
     if (shouldLogToWAL()) {
         KU_ASSERT(localWAL && wal);
+        if (storage::LocalWAL::profiled()) {
+            printJournalWeights(*localWAL, *clientContext, *this, shouldForceCheckpoint());
+        }
         if (shouldForceCheckpoint()) {
             // Une transaction dont la durabilité est son point de reprise (un COPY hors journal,
             // la création d'un index) n'écrit RIEN au journal, pas même ses écritures
