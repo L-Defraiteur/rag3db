@@ -29,7 +29,9 @@
 //! MESURE_JOIGNABILITE=tout ./run_e2e.sh --test e2e_mesure_joignabilite
 //! ```
 //! `MESURE_JOIGNABILITE_RACINE` : le dossier à indexer (par défaut `src/` de
-//! ce crate).
+//! ce crate). `MESURE_JOIGNABILITE_EXPORT=<dossier>` : chaque table
+//! vectorielle en CSV (`uuid,decalage,v0,…`, dans l'ordre des décalages) et
+//! la liste de ses introuvables — pour rejouer au banc sur les mêmes vecteurs.
 #![cfg(all(feature = "rag3db-native", feature = "code", feature = "daemon"))]
 
 mod common;
@@ -75,6 +77,7 @@ fn mesurer(catalog: &Catalog) -> Vec<(String, usize, usize, Vec<String>)> {
             .rows;
         let q = format!("CALL QUERY_VECTOR_INDEX('{table}', '{}', $v, 10) RETURN node._uuid, distance", st.index);
         let (mut introuvables, mut exemples) = (0usize, Vec::new());
+        let mut tous: Vec<String> = Vec::new();
         for l in &lignes {
             let uuid = l[0].as_str().unwrap_or("");
             let r = catalog.conn().execute_with_params(&q, &[QueryParam::new("v", l[1].clone())]).expect("chercher");
@@ -82,14 +85,40 @@ fn mesurer(catalog: &Catalog) -> Vec<(String, usize, usize, Vec<String>)> {
             let premier = r.rows.first().and_then(|x| x.get(1)).and_then(CypherValue::as_f64);
             if !le_sien && !premier.is_some_and(|d| d.abs() < 1e-6) {
                 introuvables += 1;
+                tous.push(uuid.to_string());
                 if exemples.len() < 10 {
                     exemples.push(format!("{uuid} (premier à {premier:?}, {} rendus)", r.rows.len()));
                 }
             }
         }
+        if let Ok(dossier) = std::env::var("MESURE_JOIGNABILITE_EXPORT") {
+            exporter(catalog, &table, &st.column, Path::new(&dossier), &tous);
+        }
         rendu.push((table, lignes.len(), introuvables, exemples));
     }
     rendu
+}
+
+/// Les vecteurs d'une table, dans l'ordre de leurs décalages, et ses
+/// introuvables.
+fn exporter(catalog: &Catalog, table: &str, colonne: &str, dossier: &Path, introuvables: &[String]) {
+    use std::io::Write;
+    std::fs::create_dir_all(dossier).unwrap();
+    let lignes = catalog
+        .execute_raw(&format!(
+            "MATCH (c:{table}) WHERE c.{colonne} IS NOT NULL RETURN c._uuid, offset(id(c)) AS o, c.{colonne} ORDER BY o"
+        ))
+        .expect("lire les vecteurs")
+        .rows;
+    let mut f = std::io::BufWriter::new(std::fs::File::create(dossier.join(format!("{table}.csv"))).unwrap());
+    for l in &lignes {
+        let v: Vec<String> = match &l[2] {
+            CypherValue::List(xs) => xs.iter().map(|x| x.as_f64().unwrap_or(f64::NAN).to_string()).collect(),
+            autre => panic!("vecteur illisible : {autre:?}"),
+        };
+        writeln!(f, "{},{},{}", l[0].as_str().unwrap_or(""), l[1].as_i64().unwrap_or(-1), v.join(",")).unwrap();
+    }
+    std::fs::write(dossier.join(format!("{table}.introuvables.txt")), introuvables.join("\n")).unwrap();
 }
 
 #[test]
