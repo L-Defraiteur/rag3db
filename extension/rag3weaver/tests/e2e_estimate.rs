@@ -452,13 +452,45 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
             ..Default::default()
         })
         .expect("recherche après réouverture");
+        let etat = reopened.lock().unwrap().index_state_for(SCOPE).ok();
         eprintln!(
-            "[réouverture] base rouverte en {:.1} s, première recherche par mots rendue à {:.1} s : {} résultats",
+            "[réouverture] base rouverte en {:.1} s, première recherche par mots rendue à {:.1} s : {} résultats ; état des scopes : {:?}",
             opened.as_secs_f64(),
             t.elapsed().as_secs_f64(),
-            found.results.len()
+            found.results.len(),
+            etat.map(|e| (e.text, e.text_percent))
         );
-        assert!(!found.results.is_empty(), "après réouverture, le dépôt reste cherchable par mots");
+        // Un rebâti en fond : attendre qu'il ait fini, en relevant
+        // l'avancement, puis chercher à nouveau.
+        if etat.is_some_and(|e| e.text_percent.is_some()) {
+            let debut = Instant::now();
+            let mut vu = 0u8;
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                let e = reopened.lock().unwrap().index_state_for(SCOPE).ok();
+                match e.and_then(|e| e.text_percent) {
+                    Some(p) => {
+                        if p >= vu + 10 {
+                            vu = p;
+                            eprintln!("[réouverture] rebâti en fond : {p} % à {:.0} s", debut.elapsed().as_secs_f64());
+                        }
+                    }
+                    None => break,
+                }
+            }
+            eprintln!("[réouverture] rebâti en fond fini en {:.1} s (vu depuis la recherche)", debut.elapsed().as_secs_f64());
+            rag3weaver::ingest_profile::publish();
+            let found = Catalog::rechercher(&reopened, SCOPE, "embarquer_le_retard", SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                ..Default::default()
+            })
+            .expect("recherche après le rebâti");
+            eprintln!("[réouverture] après le rebâti : {} résultats", found.results.len());
+            assert!(!found.results.is_empty(), "après le rebâti, le dépôt est cherchable par mots");
+        } else {
+            assert!(!found.results.is_empty(), "après réouverture, le dépôt reste cherchable par mots");
+        }
     }
 }
 

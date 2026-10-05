@@ -202,3 +202,29 @@ tournaient entre les passes, pas pendant.
 la recherche par mots devra dire « mots : en cours » au lieu d'attendre :
 le lot suivant (rebâti en fond au premier écrivain, état calculé à la
 lecture, la recherche répond sur l'index partiel en le disant).
+
+## Le rebâti en fond, et la fusion reportée (5 octobre, 1 h à 2 h 30)
+
+Mode fichiers, dépôt rag3db, 512 sur disque, K = 4, chaque passe seule sous
+`poste mesure`.
+
+**Le rebâti à l'ouverture, en fond** (dossier retiré avant la réouverture) :
+la première recherche répond en **0,8 à 2,1 s** et dit « mots : en cours »
+(2 à 5 %) ; le plein texte des 79 600 scopes est rebâti en **29 s** (deux
+passes), dont 26 s de validations lucivy (une par lot de 2 000 lignes) ; lire
+les pages et indexer les documents : 2 s. Avant : 95 s, recherche bloquée.
+Deux corrections pour y arriver : une pause entre deux lots (le verrou du
+catalogue n'est pas équitable, la recherche attendait tout le rebâti), et une
+seule mise en durabilité à la fin du rebâti (un rebâti interrompu recommence
+de zéro, une génération par lot ne servait à rien).
+
+**La fusion lucivy reportée à la fin** (aucune fusion pendant, une à la fin),
+deux passes alternées de chaque — **réfutée** :
+
+| | Sans report | Fusion à la fin |
+|---|---|---|
+| rebâti en fond | 29,4 · 28,7 s | 43,1 · 59,2 s |
+| premier index complet | 113 · 116 s | 161 · 164 s |
+
+Sans fusion, chaque validation lucivy porte de plus en plus de segments et
+ralentit plus que les fusions ne coûtaient. Le réglage a été retiré du code.

@@ -966,6 +966,7 @@ impl Catalog {
         field_names.sort();
         let fields: Vec<&str> = field_names.iter().map(String::as_str).collect();
         let apres = self.fts_rebuild_cursor.get(&table).copied().unwrap_or(-1);
+        let t = std::time::Instant::now();
         let page = self
             .conn
             .execute_with_params(
@@ -973,6 +974,8 @@ impl Catalog {
                 &[QueryParam::new("apres", CypherValue::Int(apres))],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        crate::ingest_profile::add("rebâti · lire une page de lignes", t);
+        let t = std::time::Instant::now();
         let mut dernier = apres;
         for row in &page.rows {
             let Some(offset) = row.first().and_then(|v| v.as_i64()) else { continue };
@@ -986,10 +989,19 @@ impl Catalog {
                 eprintln!("[rag3weaver] rebâti du plein texte de {entity} : {e}");
             }
         }
+        crate::ingest_profile::add("rebâti · indexer les documents", t);
+        let t = std::time::Instant::now();
         handle.commit().map_err(|e| CatalogError::IndexPersistence(format!("plein texte de {entity} : {e}")))?;
-        self.flush_blob_store("rebâti du plein texte")?;
+        crate::ingest_profile::add("rebâti · commit lucivy", t);
         self.fts_rebuild_cursor.insert(table.clone(), dernier);
         if page.rows.len() < lot {
+            // Rendu durable une fois, à la fin : un rebâti interrompu
+            // recommence de zéro (la marque `fts_pending:` est encore là),
+            // une génération par lot ne servirait à rien — et coûtait 32 s
+            // sur 48 pour le dépôt entier (mesuré le 5 octobre).
+            let t = std::time::Instant::now();
+            self.flush_blob_store("rebâti du plein texte")?;
+            crate::ingest_profile::add("rebâti · rendre durable (génération)", t);
             self.persist_meta_key(&format!("{FTS_PENDING}{entity}"), "")?;
             self.fts_rebuild.remove(&table);
             self.fts_rebuild_cursor.remove(&table);
@@ -11145,7 +11157,10 @@ pub fn spawn_fts_rebuild(catalog: std::sync::Arc<std::sync::Mutex<Catalog>>) {
                 Err(_) => break,
             };
             match reste {
-                Ok(true) => std::thread::yield_now(),
+                // Le verrou du catalogue n'est pas équitable : sans une pause,
+                // ce fil le reprend aussitôt et une recherche qui l'attend
+                // attend tout le rebâti (mesuré le 5 octobre : 47 s).
+                Ok(true) => std::thread::sleep(std::time::Duration::from_millis(20)),
                 Ok(false) => {
                     eprintln!("[rag3weaver] rebâti du plein texte en fond fini en {:.1} s", t.elapsed().as_secs_f64());
                     break;
