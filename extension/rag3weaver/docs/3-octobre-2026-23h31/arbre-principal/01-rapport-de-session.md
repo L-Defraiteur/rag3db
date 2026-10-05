@@ -110,15 +110,24 @@ Ailleurs :
   - (a), échoueur neuf puis repreneur : SIGSEGV encore. La trace a donné la recette à rag3db-e2 : un SET du vecteur sur des lignes insérées par MERGE dans la même transaction. Ce plantage ne dépend pas du COPY annulé et peut arriver dans une reprise ordinaire.
   - Le correctif est `35d09c466`. libvector est à rebâtir, quand rag3db-ac aura fini sa série.
 
+## Fusionné le 5 octobre (fin de nuit)
+
+- **Les trois leviers du chargement final**, derrière `RAG3WEAVER_TX_PAR_PAQUET`, mesurés par rag3db-ac sur le dépôt entier (K = 4, moteur 37608cf4b, comptes égaux partout). Une synchronisation complète passe de ~123 s à ~108 s en moyenne :
+  - levier 1 (`9e3243dfc`, CSV sans allocation) : −0,3 s seulement sur le CSV de MENTIONS ; ses 2,2 s ne viennent pas des allocations ;
+  - levier 2 (`9cf19c98f`, un bout posé par la synchronisation ne se vérifie plus) : l'existence passe de ~1,0 s à ~0,27 s ;
+  - levier 3 (`da6076a60`, pas de point de reprise du dataflow dans la transaction) : −7,7 s, dont une partie repasse dans les COMMIT, soit ~−3,5 s net. `RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE=1` les garde.
+- `3bb2410f0` une transaction défaite dit l'instruction qui l'a défaite ; `RAG3WEAVER_TRACE_CYPHER=1` trace les instructions. C'est cette trace qui a donné au cœur C++ la recette du SIGSEGV de `shrinkForNode` (corrigé en `35d09c466`).
+- `fe97719c1` la sonde des vecteurs après un paquet défait entre dans la batterie (`e2e_tx_vecteurs_apres_rollback`), verte.
+- `f5de0a3f0` « Couldn't replay shadow pages » est le même croisement que le refus nommé, repris sous la borne de 2 s.
+- `d74c0877e` **une mort pendant la validation d'un groupe** : 15 morts entre 0 et 400 ms, resserrées entre 100 et 200 ms ; le groupe est absent 5 fois, entier 10 fois, jamais à moitié, et chaque reprise rend les comptes du témoin. Le moteur `37608cf4b` y est pour beaucoup : une transaction dont la durabilité est son point de reprise n'écrit plus rien au journal.
+- `dc6bb2fc4` la complétude de l'inchangé compte l'arête `CHUNKED_FROM` (une jointure de plus dans la requête existante) ; `9280ce3e0` la marque `relations_pending` s'efface par une passe par paquet allée au bout. Témoins : `e2e_reprise_durcie`.
+- **La joignabilité** (`e2e_mesure_joignabilite`, `f810060ef` pour l'export) : src/ de rag3weaver, ~12 400 morceaux, granite-278m. Introuvables par leur propre vecteur : `tout` 1 et 0, `masse` 1 et 0, `fond` 18, 24 et 3. Ce sont toujours de petits morceaux, jamais les mêmes d'une passe à l'autre. L'écart du mode `fond` est confié au banc (rag3db-36), avec l'export des vecteurs et le chemin exact. Il est noté au ticket de la ligne injoignable (`eeacbad79`).
+
 ## En cours
 
-1. **Levier 2, écrit et non compilé**, en attente du verrou du poste. Les uuids qu'une synchronisation sous `RAG3WEAVER_TX_PAR_PAQUET` a vraiment posés font preuve d'existence :
-   - ce que COPY a posé, plus les lignes qu'un MERGE a rendues ;
-   - les quatre suppressions des drains les retirent ;
-   - la preuve tombe au ROLLBACK et à la fin de la synchronisation.
-   Son témoin est `e2e_preuve_d_existence` : 450 paires sans bout comptées avec et sans la preuve, 55 bouts prouvés, aucun COPY refusé. Le levier 3 suit.
-2. « Couldn't replay shadow pages under read-only mode » est le même croisement que le refus nommé. Il sera repris sous la borne de 2 s (accord de l'orchestration), mais c'est **écrit et pas encore rejoué**. Le test du lecteur affamé échouait une passe sur quatre à cause de lui.
-3. La sonde vectorielle, (a) et (b), sur `35d09c466`. Si elle passe entière, elle entre dans la suite d'arrêt. Des morceaux manquants dans les paquets validés avant l'échec relèvent du second défaut de rag3db-e2, à rapporter avec uuids et distances.
+1. L'allumage par défaut de la transaction par paquet : toutes les pièces demandées sont rendues. Il reste la décision de Lucie et de l'orchestration.
+2. Le banc rejoue le mode `fond` sur les vecteurs exportés. Pas de bascule vers bulk côté rag3weaver avant son verdict.
+3. La garde du plein texte (`num_docs` face au nombre de lignes) : proposée par rag3db-ac, à lui si l'orchestration le confirme.
 
 ## Ce qu'on a appris aujourd'hui
 
