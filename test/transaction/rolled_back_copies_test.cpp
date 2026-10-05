@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <string>
 
 #include <unistd.h>
@@ -126,6 +127,81 @@ TEST_F(RolledBackCopiesTest, NoKeyIsLeftWithWritesBetweenTheCopies) {
     ok("CREATE (:T {k: 'between'});");
     ok("CREATE (:T {k: 'k205'});");
     expectTheRolledBackKeysCanBeCreated(2502);
+}
+
+// Un GROS COPY annulé, puis le même validé, puis un point de reprise (recette du banc,
+// 5 octobre 2026). À cent mille lignes — moins d'un groupe — le point de reprise ne finissait
+// plus : l'index de clé primaire se divisait sans fin. Les petits COPY des cas précédents ne
+// le voyaient pas.
+class RolledBackBigCopyTest : public RolledBackCopiesTest {
+protected:
+    void run(int64_t numRows, const std::function<void()>& firstCopy) {
+        ok("CALL auto_checkpoint=false;");
+        firstCopy();
+        EXPECT_EQ(single("MATCH (n:T) RETURN count(*);"), 0);
+        copyKeys(0, numRows);
+        ok("CREATE (:T {k: 'extra1', v: 1});");
+        ok("CREATE (:T {k: 'extra2', v: 2});");
+        const auto check = [&] {
+            EXPECT_EQ(single("MATCH (n:T) RETURN count(*);"), numRows + 2);
+            EXPECT_EQ(single("MATCH (n:T {k: 'k0'}) RETURN count(*);"), 1);
+            EXPECT_EQ(single("MATCH (n:T {k: 'k" + std::to_string(numRows - 1) +
+                             "'}) RETURN count(*);"),
+                1);
+            EXPECT_EQ(single("MATCH (n:T {k: 'extra2'}) RETURN n.v;"), 2);
+            EXPECT_EQ(single("MATCH (n:T) RETURN max(offset(id(n)));"), numRows + 1);
+        };
+        check();
+        ok("CHECKPOINT;");
+        check();
+        createDBAndConn();
+        check();
+    }
+};
+
+TEST_F(RolledBackBigCopyTest, OneRolledBackCopyOfAHundredThousandRowsThenACheckpoint) {
+    run(100000, [&] {
+        ok("BEGIN TRANSACTION;");
+        copyKeys(0, 100000);
+        ok("ROLLBACK;");
+    });
+}
+
+TEST_F(RolledBackBigCopyTest, ThreeRolledBackCopiesThenACheckpoint) {
+    run(100000, [&] {
+        for (auto i = 0; i < 3; i++) {
+            ok("BEGIN TRANSACTION;");
+            copyKeys(0, 100000);
+            ok("ROLLBACK;");
+        }
+    });
+}
+
+// Un COPY refusé pour une clé en double au milieu d'un gros lot, puis le COPY validé.
+TEST_F(RolledBackBigCopyTest, ACopyRefusedForADuplicateKeyThenACheckpoint) {
+    run(100000, [&] {
+        {
+            std::ofstream csv(csvPath);
+            for (int64_t i = 0; i < 100000; i++) {
+                csv << "k" << (i == 60000 ? 5 : i) << "\n";
+            }
+        }
+        auto refused = conn->query("COPY T(k) FROM '" + csvPath + "' (header=false);");
+        ASSERT_FALSE(refused->isSuccess());
+    });
+}
+
+// La forme de la reprise de rag3weaver : le gros COPY annulé, un point de reprise (celui d'une
+// fermeture), la réouverture, puis le COPY validé et son point de reprise.
+TEST_F(RolledBackBigCopyTest, ARolledBackCopyThenACheckpointAndAReopeningThenTheCopy) {
+    ok("CALL auto_checkpoint=false;");
+    ok("BEGIN TRANSACTION;");
+    copyKeys(0, 100000);
+    ok("ROLLBACK;");
+    ok("CHECKPOINT;");
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (n:T) RETURN count(*);"), 0);
+    run(100000, [] {});
 }
 
 } // namespace

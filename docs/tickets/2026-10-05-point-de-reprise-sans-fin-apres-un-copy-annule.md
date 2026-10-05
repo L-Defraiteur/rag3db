@@ -1,8 +1,12 @@
 # Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas
 
-- **État** : ouvert — **bloque la stèle** (proposé par le banc et par la session cœur C++,
-  5 octobre 2026 ; classement à confirmer par l'orchestration). Cause trouvée par lecture
-  par la session cœur C++ ; correctifs écrits chez elle, pas encore joués.
+- **État** : corrigé le 5 octobre 2026 par la session cœur C++ (« fix(index de clé): le compte de
+  l'index en mémoire recule au retrait d'une clé, et sa réservation ne passe plus sous zéro »).
+  Les deux témoins du banc sont sortis de `known_red.txt` dans ce commit. Le détail de la cause,
+  la taille mesurée et l'essai sur une base déjà abîmée sont au ticket jumeau,
+  `2026-10-05-index-de-cle-primaire-apres-un-copy-a-court-de-memoire.md` ; la base abîmée par
+  l'ancien moteur est gardée hors dépôt, aux annexes de la session
+  (`~/.cache/rag3db-moteur-notes/etape-4/base-abimee-par-l-ancien-moteur.rag3db`).
 - **Gravité** : blocage, et panne de mémoire du poste. Le point de reprise boucle et prend la
   mémoire : de 4 à 8 Gio en une demi-seconde. Sans plafond, c'est une panne de la machine.
   Aucune donnée perdue : avant lui, toutes les clés sont retrouvées.

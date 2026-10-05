@@ -233,7 +233,18 @@ void NodeGroupCollection::rollbackInsert(row_idx_t numRows_, bool updateNumRows)
 
     if (updateNumRows) {
         KU_ASSERT(numRows_ <= numTotalRows);
-        numTotalRows -= numRows_;
+        if (numRows_ > numTotalRows) [[unlikely]] {
+            // Une annulation retire plus de lignes que la table n'en compte : un compte déjà
+            // faux, ou la même annulation jouée deux fois. On ne lève pas d'erreur au milieu
+            // d'une annulation ; on le dit, et le compte s'arrête à zéro.
+            fprintf(stderr,
+                "[rag3db] rollback: %llu rows to remove from a table that counts %llu.\n",
+                static_cast<unsigned long long>(numRows_),
+                static_cast<unsigned long long>(numTotalRows.load()));
+            numTotalRows = 0;
+        } else {
+            numTotalRows -= numRows_;
+        }
     }
 }
 

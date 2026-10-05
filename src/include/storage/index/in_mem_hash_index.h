@@ -206,6 +206,10 @@ public:
             if (newIter.slot->header.numEntries() == 0) {
                 reclaimOverflowSlots(SlotIterator(slotId, this));
             }
+            // Le compte suit le retrait. Il n'était jamais reculé : après l'annulation d'un gros
+            // COPY — qui retire ses clés une à une — l'index en mémoire comptait encore toutes
+            // les clés annulées, et le point de reprise suivant réservait pour elles.
+            this->indexHeader.numEntries--;
 
             return true;
         }

@@ -26,7 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas](2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md) | ouvert, bloque la stèle (proposé) | blocage, panne de mémoire | oui | oui (paquet défait, COPY refusé) |
+| [Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas](2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md) | corrigé | blocage, panne de mémoire | oui | oui (paquet défait, COPY refusé) |
 | [Une transaction qui mêle des écritures et un COPY revient à moitié après une mort pendant le point de reprise de sa validation](2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md) | corrigé | perte (et base inouvrable sous IGNORE_ERRORS) | oui (chemin par défaut) | oui, par la transaction par paquet (éteinte par défaut) |
 | [Retirer une colonne déclarée avant la clé primaire casse l'insertion](2026-10-05-drop-d-une-colonne-declaree-avant-la-cle-primaire.md) | corrigé (fenêtres A et B) | réponse fausse, perte, plantage | oui | non (rag3weaver ne retire jamais de colonne) |
 | [L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur](2026-10-05-annulation-d-un-copy-abime-l-index-vectoriel.md) | requalifié — ce n'est pas l'annulation ; suivi dans « la ligne lointaine » | réponse fausse | oui | oui (paquet défait) |
@@ -98,3 +98,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [L'index RTree de l'extension geo reçoit des décalages provisoires](2026-10-05-rtree-recoit-des-decalages-provisoires.md) | ouvert (confort ; lecture seule, non exécuté) | réponse fausse (annoncée) | incertain | non |
 | [Au journal, un vecteur coûte trois fois sa taille](2026-10-04-un-flottant-coute-douze-octets-au-journal.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (l'embarquement en fond) |
 | [Une propriété de chaîne d'une relation se lit fausse dans un sens ou l'autre après un point de reprise](2026-10-04-propriete-de-chaine-faussee-dans-le-sens-direct.md) | corrigé (les bases déjà écrites se réindexent) | réponse fausse | oui | oui (`resolution`, `usage`, `kind` des arêtes) |
+| [Après un COPY annulé, refusé ou à court de mémoire, le point de reprise de l'index de clé primaire ne finit plus](2026-10-05-index-de-cle-primaire-apres-un-copy-a-court-de-memoire.md) | corrigé | blocage, danger pour l'hôte | oui | oui si un COPY manque de mémoire |

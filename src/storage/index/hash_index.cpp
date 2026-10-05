@@ -233,8 +233,15 @@ void HashIndex<T>::reserve(PageAllocator& pageAllocator, const Transaction* tran
                 numRequiredSlots - numSlotsOfCurrentLevel;
         }
     } else {
-        splitSlots(pageAllocator, transaction, this->indexHeaderForWriteTrx,
-            numRequiredSlots - pSlots->getNumElements(transaction->getType()));
+        // Seulement s'il en manque. L'index peut porter plus de cases que ce nombre d'entrées
+        // n'en demande (une réservation faite pour des clés retirées depuis) : la soustraction,
+        // non signée, rebouclait alors, et la division des cases ne s'arrêtait plus — des
+        // gigaoctets en une demi-seconde, au point de reprise qui suivait un gros COPY annulé.
+        const auto numSlots = pSlots->getNumElements(transaction->getType());
+        if (numRequiredSlots > numSlots) {
+            splitSlots(pageAllocator, transaction, this->indexHeaderForWriteTrx,
+                numRequiredSlots - numSlots);
+        }
     }
 }
 

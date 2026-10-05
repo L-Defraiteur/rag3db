@@ -95,11 +95,14 @@ void NodeTableVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     KU_ASSERT(nodeGroupIdx < table->getNumNodeGroups() || startRow == 0);
     if (nodeGroupIdx < table->getNumNodeGroups()) {
         VersionRecordHandler::rollbackInsert(context, nodeGroupIdx, startRow, numRows);
-        auto* nodeGroup = table->getNodeGroupNoLock(nodeGroupIdx);
-        const auto numRowsToRollback = std::min(numRows, nodeGroup->getNumRows() - startRow);
-        nodeGroup->rollbackInsert(startRow);
-        table->rollbackGroupCollectionInsert(numRowsToRollback);
+        table->getNodeGroupNoLock(nodeGroupIdx)->rollbackInsert(startRow);
     }
+    // Le compte de la table recule de tout ce que cet enregistrement y avait ajouté, que les
+    // lignes aient été écrites ou non. Les décalages sont réservés, et comptés, avant
+    // l'écriture ; quand celle-ci échoue (mémoire épuisée au milieu d'un COPY), le groupe ne
+    // porte pas ces lignes. Ne retirer que ce que le groupe porte laissait le compte trop
+    // haut d'un lot par échec : la table donnait ensuite des décalages au-delà de ses lignes.
+    table->rollbackGroupCollectionInsert(numRows);
 }
 
 NodeGroupScanResult NodeTableScanState::scanNext(Transaction* transaction, offset_t startOffset,
@@ -1064,10 +1067,20 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
         }
     }
     if (numLogged != endOffset - startOffset) {
+        // Le message porte de quoi lire l'écart : la plage attendue, et ce que la table dit
+        // d'elle-même.
+        std::string groups;
+        for (node_group_idx_t idx = 0; idx < nodeGroups->getNumNodeGroups() && idx < 4; idx++) {
+            const auto* group = nodeGroups->getNodeGroupNoLock(idx);
+            groups += stringFormat(" group {}: {} rows, {} chunked groups;", idx,
+                group->getNumRows(), group->getNumChunkedGroups());
+        }
         throw RuntimeException(stringFormat(
-            "Bulk load of table {}: {} rows were written to the journal for {} rows added. "
-            "The load is rolled back.",
-            tableName, numLogged, endOffset - startOffset));
+            "Bulk load of table {}: {} rows were written to the journal for {} rows added "
+            "(offsets {} to {}; the table holds {} rows in {} groups;{}). The load is rolled "
+            "back.",
+            tableName, numLogged, endOffset - startOffset, startOffset, endOffset,
+            nodeGroups->getNumTotalRows(), nodeGroups->getNumNodeGroups(), groups));
     }
 }
 

@@ -166,6 +166,56 @@ TEST_F(CopyTest, NodeCopyBMExceptionRecoverySameConnection) {
     BMExceptionRecoveryTest(cfg);
 }
 
+// Après des COPY échoués par manque de mémoire, la table doit savoir combien de lignes elle
+// porte. Un COPY réserve ses décalages avant d'écrire ses lignes ; quand l'écriture échouait,
+// l'annulation ne retirait du compte que les lignes réellement écrites, et le compte restait
+// trop haut d'un lot par échec. La ligne insérée ensuite par le chemin ordinaire prenait son
+// décalage d'après ce compte.
+TEST_F(CopyTest, RowCountIsRightAfterCopiesThatRanOutOfMemory) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    createDBAndConn();
+    conn->query("CREATE NODE TABLE account(ID INT64, PRIMARY KEY(ID))");
+    resetDBFlaky(true /* canFailDuringExecute */, false, false);
+    const auto copy = common::stringFormat(
+        "COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
+        RAG3DB_ROOT_DIRECTORY);
+    auto numFailures = 0;
+    for (auto i = 0;; i++) {
+        ASSERT_LT(i, 20);
+        auto result = conn->query(copy);
+        if (result->isSuccess()) {
+            break;
+        }
+        numFailures++;
+    }
+    if (numFailures == 0) {
+        GTEST_SKIP() << "no COPY ran out of memory in this run";
+    }
+    // Plus de pannes ; la même session continue.
+    failureFrequency = UINT64_MAX;
+    const auto single = [&](const std::string& query) -> int64_t {
+        auto result = conn->query(query);
+        EXPECT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
+        return result->isSuccess() && result->hasNext() ?
+                   result->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    };
+    EXPECT_EQ(single("MATCH (a:account) RETURN count(*);"), 81306);
+    ASSERT_TRUE(conn->query("CREATE (:account {ID: 999999999});")->isSuccess());
+    // La ligne neuve suit la dernière ligne du COPY.
+    EXPECT_EQ(single("MATCH (a:account {ID: 999999999}) RETURN offset(id(a));"), 81306)
+        << numFailures << " copies ran out of memory before the one that passed";
+    EXPECT_EQ(single("MATCH (a:account) RETURN count(*);"), 81307);
+    EXPECT_EQ(single("MATCH (a:account) RETURN max(offset(id(a)));"), 81306);
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    EXPECT_EQ(single("MATCH (a:account {ID: 999999999}) RETURN count(*);"), 1);
+    resetDB(TestHelper::DEFAULT_BUFFER_POOL_SIZE_FOR_TESTING);
+    EXPECT_EQ(single("MATCH (a:account) RETURN count(*);"), 81307);
+    EXPECT_EQ(single("MATCH (a:account {ID: 999999999}) RETURN offset(id(a));"), 81306);
+}
+
 TEST_F(CopyTest, NodeCopyBMExceptionRecoverySameConnectionStringKey) {
     if (inMemMode) {
         GTEST_SKIP();

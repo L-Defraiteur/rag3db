@@ -195,12 +195,3 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # d'avant tout point de reprise, jusqu'à ce que le COPY garde ses statistiques dans sa transaction
 # (voie (a), étape 4 du chargement journalisé).
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrueAtOnce cardinality-matches-rows-at-once
-#
-# Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas (ticket
-# 2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md, bloque la stèle) : l'index de
-# clé en mémoire ne recule pas son compte au retrait des clés, et sa réservation de cases
-# reboucle en non signé (cause par lecture de la session cœur C++, dont le correctif verdit les
-# deux formes). Le fils du témoin est borné en temps et en mémoire : il échoue par « No more
-# frame groups can be added to the allocator ». Vus rouges le 5 octobre, sur master tel quel.
-Copies/RolledBackCopyThenCheckpoint.TheCheckpointFinishesAndEveryKeyIsFound/RolledBack checkpoint-finishes
-Copies/RolledBackCopyThenCheckpoint.TheCheckpointFinishesAndEveryKeyIsFound/Refused checkpoint-finishes

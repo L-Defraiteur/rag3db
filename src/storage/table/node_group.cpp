@@ -417,6 +417,11 @@ void NodeGroup::rollbackInsert(row_idx_t startRow) {
     const auto numEmptyTrailingGroups = chunkedGroups.getNumEmptyTrailingGroups(lock);
     chunkedGroups.removeTrailingGroups(lock, numEmptyTrailingGroups);
     numRows = startRow;
+    // Le curseur de réservation recule avec les lignes. Il n'était jamais reculé : chaque
+    // insertion annulée rapprochait le groupe de « plein » sans qu'il porte une ligne de plus,
+    // et un groupe tenu pour plein avant de l'être fait ouvrir le suivant — dont les lignes
+    // n'ont alors plus le décalage que la table leur donne.
+    nextRowToAppend = startRow;
 }
 
 void NodeGroup::reclaimStorage(PageAllocator& pageAllocator) const {
