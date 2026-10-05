@@ -194,25 +194,3 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
-#
-# Atomicité d'une transaction dont la validation fait un point de reprise forcé (ticket
-# 2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md, bloque la
-# stèle). Le point de reprise forcé d'un COPY est tué avant sa marque CHECKPOINT (quatre
-# instants sur sept). COPY sous IGNORE_ERRORS qui écarte une clé en double, seul ou mêlé :
-# la base ne se rouvre plus (la suppression de la ligne écartée est journalisée sans son
-# insertion ; 9c0c6532d chez la session cœur C++). COPY ordinaire au réglage par défaut,
-# mêlé à des écritures ordinaires : la transaction revient à moitié (105 lignes, ses
-# écritures sans le COPY). Remède retenu : une transaction forcée n'écrit rien au fichier du
-# journal. Vus rouges 3 passes sur 3 le 5 octobre.
-Points/ForcedCopyCheckpointDeath.ACopyAloneSurvivesWholeOrNotAtAll/BeforeStorage database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.ACopyAloneSurvivesWholeOrNotAtAll/AfterStorage database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.ACopyAloneSurvivesWholeOrNotAtAll/AfterSerialize database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.ACopyAloneSurvivesWholeOrNotAtAll/AfterHeader database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.AMixedTransactionSurvivesWholeOrNotAtAll/BeforeStorage database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.AMixedTransactionSurvivesWholeOrNotAtAll/AfterStorage database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.AMixedTransactionSurvivesWholeOrNotAtAll/AfterSerialize database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.AMixedTransactionSurvivesWholeOrNotAtAll/AfterHeader database-opens-without-crash
-Points/ForcedCopyCheckpointDeath.AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole/BeforeStorage transaction-all-or-nothing
-Points/ForcedCopyCheckpointDeath.AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole/AfterStorage transaction-all-or-nothing
-Points/ForcedCopyCheckpointDeath.AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole/AfterSerialize transaction-all-or-nothing
-Points/ForcedCopyCheckpointDeath.AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole/AfterHeader transaction-all-or-nothing

@@ -26,6 +26,11 @@ void NodeBatchInsertErrorHandler::deleteCurrentErroneousRow() {
         *offsetVector,
         *keyVector,
     };
+    // Pas au journal. La ligne écartée a été écrite par le COPY, dont les lignes ne sont pas
+    // journalisées quand il en écarte : il garde alors son point de reprise. Sa suppression
+    // seule au journal serait rejouée, après une mort avant la fin de ce point de reprise,
+    // sur une table qui n'a pas la ligne — la base ne se rouvrait plus (plantage au rejeu).
+    deleteState.logToWAL = false;
     nodeTable->delete_(transaction::Transaction::Get(*context->clientContext), deleteState);
 }
 

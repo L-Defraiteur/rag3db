@@ -1,9 +1,14 @@
 # Une transaction qui mêle des écritures et un COPY revient à moitié après une mort pendant le point de reprise de sa validation
 
-- **État** : ouvert — **bloque la stèle** (orchestration, 5 octobre 2026, atomicité).
-  Remède retenu, chez la session cœur C++ : une transaction dont la validation force un point
-  de reprise n'écrit rien au fichier du journal ; son point de reprise, atomique, emporte
-  toutes ses écritures.
+- **État** : corrigé le 5 octobre 2026 (« fix(transactions): une transaction dont la
+  durabilité est son point de reprise n'écrit rien au journal — elle revient entière ou pas
+  du tout »). Une transaction forcée n'écrit plus rien au fichier du journal ; son point de
+  reprise, atomique, emporte toutes ses écritures. La suppression d'une ligne écartée par un
+  COPY n'est plus journalisée. Les douze cas du banc quittent `known_red.txt`.
+  **Ce qui reste à faire, hors de ce ticket** : journaliser aussi le COPY qui écarte des
+  lignes, pour qu'aucun COPY ne soit plus forcé — il faut au journal une forme pour « un
+  trou » (une ligne écartée est une clé en double ou nulle, que le rejeu par insertion
+  ordinaire refuserait), donc un enregistrement neuf et la question de la version du journal.
 - **Gravité** : perte et réponse fausse. Une transaction jamais acquittée revient en partie.
   Avec IGNORE_ERRORS, la base ne se rouvre plus.
 - **Atteignable en service** : oui, par le chemin par défaut (COPY avec point de reprise

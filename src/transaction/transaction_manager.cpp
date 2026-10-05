@@ -264,8 +264,9 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
         // name as the refusals that follow, after its cause.
         throw CheckpointException{RuntimeException(common::stringFormat(
             "{} {}: the checkpoint did not complete. Transactions already written to the "
-            "journal are replayed when the database is reopened; a statement whose durability "
-            "is its own checkpoint (COPY FROM) is not, and must be run again.",
+            "journal are replayed when the database is reopened; a transaction whose durability "
+            "is its own checkpoint (it holds a COPY FROM outside the journal, or creates an "
+            "index) is not: nothing of it remains, and it must be run again.",
             e.what(), REOPEN_AFTER_FAILED_CHECKPOINT))};
     }
 }

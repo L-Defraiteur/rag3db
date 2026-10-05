@@ -65,8 +65,25 @@ void Transaction::commit(storage::WAL* wal) {
     undoBuffer->commit(commitTS);
     if (shouldLogToWAL()) {
         KU_ASSERT(localWAL && wal);
-        localWAL->logCommit();
-        wal->logCommittedWAL(*localWAL, clientContext);
+        if (shouldForceCheckpoint()) {
+            // Une transaction dont la durabilité est son point de reprise (un COPY hors journal,
+            // la création d'un index) n'écrit RIEN au journal, pas même ses écritures
+            // ordinaires. Les y écrire avec leur COMMIT les rendait durables avant ce qu'elle
+            // n'y écrit pas : après une mort pendant le point de reprise, la réouverture
+            // rejouait la moitié de la transaction. Le point de reprise, atomique, emporte tout
+            // son état — elle revient entière, ou pas du tout.
+            //
+            // L'invariant qui le permet, tenu par TransactionManager::commit : une transaction
+            // forcée ne finit jamais sa validation sans que son point de reprise ait abouti.
+            // L'attente du départ des autres a lieu avant, et son délai annule ; le point de
+            // reprise qui suit n'est ni reporté ni soumis à auto_checkpoint ; s'il échoue, la
+            // base refuse tout jusqu'à sa réouverture, où rien de la transaction ne revient.
+            // « Forcée » exclut la base en mémoire (shouldForceCheckpoint), et le rejeu ne
+            // force jamais.
+        } else {
+            localWAL->logCommit();
+            wal->logCommittedWAL(*localWAL, clientContext);
+        }
         localWAL->clear();
     }
     if (hasCatalogChanges) {

@@ -633,5 +633,138 @@ TEST_F(FlakyCheckpointerTest, ShadowFileDatabaseIDMismatchCorruptedDB) {
     EXPECT_THROW(createDBAndConn(), InternalException);
 }
 
+// Le seul COPY qui garde son point de reprise forcé : un COPY de nœuds qui écarte des lignes
+// (IGNORE_ERRORS, clé en double). Les lignes écartées sont ajoutées puis supprimées, et leur
+// suppression est écrite au journal — sans leur insertion, que le point de reprise devait
+// porter. Quand le point de reprise échouait après l'écriture du journal, la réouverture
+// rejouait ces suppressions sur une table qui n'a pas les lignes du COPY : plantage au rejeu,
+// la base ne se rouvrait plus. Ces suppressions ne vont plus au journal.
+TEST_F(FlakyCheckpointerTest, ACopyThatSkipsRowsThenAFailedCheckpointLeavesTheTableReadable) {
+    if (inMemMode || systemConfig->checkpointThreshold == 0) {
+        GTEST_SKIP();
+    }
+    conn->query("CALL force_checkpoint_on_close=false;");
+    conn->query("CALL auto_checkpoint=false");
+    ASSERT_TRUE(
+        conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")->isSuccess());
+    ASSERT_TRUE(conn->query("UNWIND range(0, 99) AS i CREATE (:test {id: i, name: 'old'});")
+                    ->isSuccess());
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    const auto csvPath = databasePath + ".skipped.csv";
+    {
+        std::ofstream csv(csvPath);
+        for (auto i = 100; i < 200; i++) {
+            csv << i << ",new\n";
+        }
+        csv << "5,duplicate\n7,duplicate\n";
+    }
+    FlakyCheckpointer([](main::ClientContext& context) {
+        return std::make_unique<FlakyCheckpointerFailsOnCheckpointStorage>(context);
+    }).setCheckpointer(*getClientContext(*conn));
+    auto copy = conn->query("COPY test FROM '" + csvPath + "' (IGNORE_ERRORS=true);");
+    ASSERT_FALSE(copy->isSuccess()) << "the forced checkpoint of the COPY must have failed";
+    createDBAndConn();
+    auto count = conn->query("MATCH (a:test) RETURN COUNT(a);");
+    ASSERT_TRUE(count->isSuccess()) << count->getErrorMessage();
+    // Le COPY a rendu une erreur : rien de lui ne reste, et rien d'ancien n'est parti.
+    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 100);
+    for (const auto id : {0, 5, 7, 99}) {
+        auto old =
+            conn->query("MATCH (a:test {id: " + std::to_string(id) + "}) RETURN a.name;");
+        ASSERT_TRUE(old->isSuccess()) << old->getErrorMessage();
+        ASSERT_TRUE(old->hasNext()) << "row " << id << " is gone";
+        EXPECT_EQ(old->getNext()->getValue(0)->getValue<std::string>(), "old") << id;
+    }
+    ASSERT_TRUE(conn->query("CREATE (:test {id: 100000, name: 'after'});")->isSuccess());
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    std::filesystem::remove(csvPath);
+}
+
+// Une transaction dont la durabilité est son point de reprise (elle porte un COPY forcé) et
+// qui porte aussi des écritures ordinaires. Elle écrivait son journal et son COMMIT avant son
+// point de reprise : quand celui-ci n'aboutissait pas, la réouverture rejouait les écritures
+// ordinaires sans les lignes du COPY — une transaction non acquittée revenait à moitié
+// (témoin du banc par une vraie mort, 5 octobre 2026). Une transaction forcée n'écrit plus
+// rien au journal : elle revient entière, par son point de reprise, ou pas du tout.
+class ForcedTransactionTest : public FlakyCheckpointerTest {
+public:
+    void wholeOrNothing(const std::string& setting, const std::string& copyOptions,
+        bool withDuplicates) {
+        if (inMemMode || systemConfig->checkpointThreshold == 0) {
+            GTEST_SKIP();
+        }
+        conn->query("CALL force_checkpoint_on_close=false;");
+        conn->query("CALL auto_checkpoint=false");
+        ASSERT_TRUE(conn->query(setting)->isSuccess());
+        ASSERT_TRUE(conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")
+                        ->isSuccess());
+        ASSERT_TRUE(conn->query("CREATE REL TABLE link(FROM test TO test);")->isSuccess());
+        ASSERT_TRUE(conn->query("UNWIND range(0, 99) AS i CREATE (:test {id: i, name: 'old'});")
+                        ->isSuccess());
+        ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+        const auto csvPath = databasePath + ".forced.csv";
+        {
+            std::ofstream csv(csvPath);
+            for (auto i = 1000; i < 2000; i++) {
+                csv << i << ",new\n";
+            }
+            if (withDuplicates) {
+                csv << "5,duplicate\n7,duplicate\n";
+            }
+        }
+        FlakyCheckpointer([](main::ClientContext& context) {
+            return std::make_unique<FlakyCheckpointerFailsOnCheckpointStorage>(context);
+        }).setCheckpointer(*getClientContext(*conn));
+        ASSERT_TRUE(conn->query("BEGIN TRANSACTION;")->isSuccess());
+        ASSERT_TRUE(conn->query("UNWIND range(500, 514) AS i CREATE (:test {id: i, name: "
+                                "'local'});")
+                        ->isSuccess());
+        ASSERT_TRUE(conn->query("MATCH (a:test) WHERE a.id < 10 AND a.id <> 5 AND a.id <> 7 "
+                                "DELETE a;")
+                        ->isSuccess());
+        ASSERT_TRUE(conn->query("MATCH (a:test {id: 50}) SET a.name = 'changed';")->isSuccess());
+        ASSERT_TRUE(conn->query("MATCH (a:test {id: 60}), (b:test {id: 61}) CREATE "
+                                "(a)-[:link]->(b);")
+                        ->isSuccess());
+        auto copy = conn->query("COPY test FROM '" + csvPath + "'" + copyOptions + ";");
+        ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+        auto commit = conn->query("COMMIT;");
+        ASSERT_FALSE(commit->isSuccess()) << "the forced checkpoint must have failed";
+        // Rien ne se lit plus dans cette session.
+        EXPECT_FALSE(conn->query("MATCH (a:test) RETURN COUNT(a);")->isSuccess());
+        createDBAndConn();
+        const auto single = [&](const std::string& query) -> int64_t {
+            auto result = conn->query(query);
+            EXPECT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
+            return result->isSuccess() && result->hasNext() ?
+                       result->getNext()->getValue(0)->getValue<int64_t>() :
+                       -1;
+        };
+        // Rien de la transaction : ni ses insertions, ni ses suppressions, ni sa mise à jour,
+        // ni sa relation, ni son COPY.
+        EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), 100);
+        EXPECT_EQ(single("MATCH (a:test) WHERE a.id < 100 AND a.name = 'old' RETURN COUNT(a);"),
+            100);
+        EXPECT_EQ(single("MATCH (a:test {id: 3}) RETURN COUNT(a);"), 1);
+        EXPECT_EQ(single("MATCH (a:test {id: 505}) RETURN COUNT(a);"), 0);
+        EXPECT_EQ(single("MATCH (a:test {id: 1500}) RETURN COUNT(a);"), 0);
+        EXPECT_EQ(single("MATCH (:test)-[l:link]->(:test) RETURN COUNT(l);"), 0);
+        // Et la base sert : la même transaction, sans panne, passe entière.
+        ASSERT_TRUE(conn->query("CREATE (:test {id: 505, name: 'after'});")->isSuccess());
+        ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+        std::filesystem::remove(csvPath);
+    }
+};
+
+// Le COPY d'aujourd'hui, forcé par le réglage.
+TEST_F(ForcedTransactionTest, OrdinaryWritesAndAForcedCopyAreWholeOrNothing) {
+    wholeOrNothing("CALL force_checkpoint_on_copy=true;", "", false);
+}
+
+// Le COPY qui écarte des lignes, forcé sous les deux réglages.
+TEST_F(ForcedTransactionTest, OrdinaryWritesAndACopyThatSkipsRowsAreWholeOrNothing) {
+    wholeOrNothing("CALL force_checkpoint_on_copy=false;", " (IGNORE_ERRORS=true)", true);
+}
+
 } // namespace testing
 } // namespace rag3db
