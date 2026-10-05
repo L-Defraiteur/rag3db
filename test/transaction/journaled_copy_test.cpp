@@ -485,6 +485,131 @@ TEST_F(JournaledCopyTest, ACopyThatSkipsRowsStillForcesItsCheckpoint) {
     expectRows(0, 500);
 }
 
+// Après ALTER TABLE … DROP puis ADD d'une colonne. Le stockage garde l'emplacement de la
+// colonne retirée ; le journal, lui, porte les propriétés du catalogue dans leur ordre. Un COPY
+// de relations journalisé comptait les colonnes du stockage et lisait après la fin de son plan
+// (plantage, trouvé par le test Cypher d'origine ddl_empty.CopyRelAfterDropAddColNewGroup dès
+// que le chargement journalisé a été essayé par défaut) ; un COPY de nœuds écrivait les
+// colonnes du stockage au lieu des propriétés.
+// (La colonne retirée est déclarée APRÈS la clé : retirer une colonne déclarée avant elle
+// casse l'insertion ordinaire elle-même — défaut d'origine, ticket du 5 octobre 2026.)
+class JournaledCopyAfterAlterTest : public JournaledCopyTest {
+protected:
+    // Une table dont une colonne est retirée, puis une colonne ajoutée ; une table de relations
+    // de même.
+    static void alteredSchema(Connection& connection) {
+        must(connection, "CREATE NODE TABLE Item(id INT64, extra STRING, name STRING, PRIMARY KEY "
+                         "(id));");
+        must(connection, "CREATE REL TABLE Tie(FROM Item TO Item, comment STRING, weight INT64);");
+        must(connection, "ALTER TABLE Item DROP extra;");
+        must(connection, "ALTER TABLE Item ADD age INT64;");
+        must(connection, "ALTER TABLE Tie DROP comment;");
+        must(connection, "ALTER TABLE Tie ADD since INT64;");
+        must(connection, "CHECKPOINT;");
+    }
+
+    // id, name, age pour id dans [0, count).
+    void writeItems(int64_t count) const {
+        std::ofstream csv(csvPath);
+        for (int64_t id = 0; id < count; id++) {
+            csv << id << ",item " << id << "," << id + 20 << "\n";
+        }
+    }
+
+    // i -> i + 1, weight i, since 2000 + i, pour i dans [0, count).
+    void writeTies(int64_t count) const {
+        std::ofstream csv(relCsvPath);
+        for (int64_t i = 0; i < count; i++) {
+            csv << i << "," << i + 1 << "," << i << "," << 2000 + i << "\n";
+        }
+    }
+
+    void expectItems(int64_t count) {
+        EXPECT_EQ(single("MATCH (n:Item) RETURN count(*);"), count);
+        EXPECT_EQ(single("MATCH (n:Item) WHERE n.age = n.id + 20 AND n.name = 'item ' + CAST(n.id "
+                         "AS STRING) RETURN count(*);"),
+            count);
+        for (const auto id : {int64_t{0}, count / 2, count - 1}) {
+            EXPECT_EQ(text("MATCH (n:Item {id: " + std::to_string(id) + "}) RETURN n.name;"),
+                "item " + std::to_string(id));
+        }
+    }
+
+    void expectTies(int64_t count) {
+        EXPECT_EQ(single("MATCH (:Item)-[t:Tie]->(:Item) RETURN count(t);"), count);
+        EXPECT_EQ(single("MATCH (:Item)<-[t:Tie]-(:Item) RETURN count(t);"), count);
+        EXPECT_EQ(single("MATCH (a:Item)-[t:Tie]->(b:Item) WHERE b.id = a.id + 1 AND t.weight = "
+                         "a.id AND t.since = 2000 + a.id RETURN count(t);"),
+            count);
+        EXPECT_EQ(single("MATCH (b:Item)<-[t:Tie]-(a:Item) WHERE b.id = a.id + 1 AND t.weight = "
+                         "a.id AND t.since = 2000 + a.id RETURN count(t);"),
+            count);
+    }
+};
+
+// Des COPY de nœuds puis de relations, journalisés, après le DROP et l'ADD ; la mort ; le rejeu.
+TEST_F(JournaledCopyAfterAlterTest, CopiesAfterADroppedAndAnAddedColumnAreReplayed) {
+    writeItems(500);
+    writeTies(499);
+    writeThenDie([&](Connection& child) {
+        alteredSchema(child);
+        must(child, "COPY Item FROM '" + csvPath + "';");
+        must(child, "COPY Tie FROM '" + relCsvPath + "';");
+    });
+    ASSERT_GT(journalSize(), 0u) << "nothing must have checkpointed";
+    createDBAndConn();
+    expectItems(500);
+    expectTies(499);
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    createDBAndConn();
+    expectItems(500);
+    expectTies(499);
+}
+
+// Les mêmes lignes par le chemin ordinaire : garde-fou, ce chemin journalise déjà les
+// propriétés dans leur ordre.
+TEST_F(JournaledCopyAfterAlterTest, OrdinaryInsertsAfterADroppedAndAnAddedColumnAreReplayed) {
+    writeThenDie([&](Connection& child) {
+        alteredSchema(child);
+        must(child, "UNWIND range(0, 499) AS i CREATE (:Item {id: i, name: 'item ' + CAST(i AS "
+                    "STRING), age: i + 20});");
+        must(child, "UNWIND range(0, 498) AS i MATCH (a:Item {id: i}), (b:Item {id: i + 1}) "
+                    "CREATE (a)-[:Tie {weight: i, since: 2000 + i}]->(b);");
+    });
+    ASSERT_GT(journalSize(), 0u) << "nothing must have checkpointed";
+    createDBAndConn();
+    expectItems(500);
+    expectTies(499);
+}
+
+// Sans mort : les mêmes COPY, lus dans la session, après un point de reprise et une
+// réouverture — sous les deux réglages.
+TEST_F(JournaledCopyAfterAlterTest, CopiesAfterADroppedAndAnAddedColumnInOneSession) {
+    writeItems(500);
+    writeTies(499);
+    for (const auto* setting : {"CALL force_checkpoint_on_copy=true;",
+             "CALL force_checkpoint_on_copy=false;"}) {
+        SCOPED_TRACE(setting);
+        conn.reset();
+        database.reset();
+        std::filesystem::remove(databasePath);
+        std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+        createDBAndConn();
+        alteredSchema(*conn);
+        ASSERT_TRUE(conn->query(setting)->isSuccess());
+        auto copy = conn->query("COPY Item FROM '" + csvPath + "';");
+        ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+        copy = conn->query("COPY Tie FROM '" + relCsvPath + "';");
+        ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+        expectItems(500);
+        expectTies(499);
+        ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+        createDBAndConn();
+        expectItems(500);
+        expectTies(499);
+    }
+}
+
 // Dans une transaction, des insertions ordinaires puis un COPY dans la même table (défaut
 // d'origine : les lignes locales portent des décalages provisoires qui commencent au nombre de
 // lignes de la table, et le COPY écrivait les siennes aux mêmes décalages — par la clé d'une

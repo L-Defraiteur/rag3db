@@ -1,6 +1,9 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
+#include "common/exception/runtime.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
+#include "catalog/catalog.h"
 #include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "processor/warning_context.h"
@@ -149,8 +152,19 @@ void Partitioner::logRelsToWAL(ExecutionContext* context,
     const auto numRels = selVector.getSelSize();
     // Les colonnes du journal : l'origine, l'arrivée, l'identité, puis les propriétés — la
     // forme d'une relation locale, celle que le rejeu attend.
-    const idx_t numColumns = relTable.getNumColumns() + 1;
-    KU_ASSERT(numColumns <= dataInfo.columnEvaluators.size());
+    // Leur nombre vient du catalogue, pas du stockage : après un ALTER TABLE … DROP, la table
+    // garde l'emplacement de la colonne retirée, que ni le plan du COPY ni le rejeu ne
+    // connaissent (compter les colonnes du stockage faisait lire après la fin du plan).
+    const auto transaction = transaction::Transaction::Get(*clientContext);
+    const idx_t numColumns = 2 + catalog::Catalog::Get(*clientContext)
+                                     ->getTableCatalogEntry(transaction, relTable.getRelGroupID())
+                                     ->getNumProperties();
+    if (numColumns > dataInfo.columnEvaluators.size()) [[unlikely]] {
+        throw RuntimeException(stringFormat(
+            "Bulk load of relationship table {}: {} columns to journal for {} columns loaded. "
+            "The load is rolled back.",
+            dataInfo.tableName, numColumns, dataInfo.columnEvaluators.size()));
+    }
     const table_id_t tableIDs[] = {relTable.getFromNodeTableID(), relTable.getToNodeTableID(),
         relTable.getTableID()};
     const auto state = std::make_shared<DataChunkState>();
@@ -178,9 +192,8 @@ void Partitioner::logRelsToWAL(ExecutionContext* context,
         vectors.push_back(vector.get());
         ownedVectors.push_back(std::move(vector));
     }
-    transaction::Transaction::Get(*clientContext)
-        ->getLocalWAL()
-        .logTableInsertion(relTable.getTableID(), TableType::REL, numRels, vectors);
+    transaction->getLocalWAL().logTableInsertion(relTable.getTableID(), TableType::REL, numRels,
+        vectors);
 }
 
 void Partitioner::executeInternal(ExecutionContext* context) {

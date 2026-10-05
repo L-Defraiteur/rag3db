@@ -1,5 +1,6 @@
 #include "storage/table/node_table.h"
 
+#include "catalog/catalog.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
 #include "common/data_chunk/data_chunk_state.h"
@@ -952,9 +953,14 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
         return;
     }
     const auto transaction = transaction::Transaction::Get(*context);
+    // Les colonnes du journal sont les propriétés du catalogue, dans leur ordre : c'est la forme
+    // d'une ligne insérée par le chemin ordinaire, celle que le rejeu attend. Les colonnes du
+    // stockage ne sont pas les mêmes après un ALTER TABLE … DROP.
+    const auto tableEntry =
+        catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, tableID);
     std::vector<column_id_t> columnIDs;
-    for (column_id_t columnID = 0; columnID < columns.size(); columnID++) {
-        columnIDs.push_back(columnID);
+    for (auto& property : tableEntry->getProperties()) {
+        columnIDs.push_back(tableEntry->getColumnID(property.getName()));
     }
     auto dataChunk = constructDataChunkForColumns(columnIDs);
     std::vector<ValueVector*> vectors;
