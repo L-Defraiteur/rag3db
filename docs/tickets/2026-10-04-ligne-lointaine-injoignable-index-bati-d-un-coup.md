@@ -136,3 +136,33 @@ rattrapage hors du chemin chaud — en fin de `COPY` ou au point de reprise, che
 lignes sans arête entrante et les rattacher ; (a), la garantie à l'insertion même
 (`keepNodeReachable` après chaque élagage), seulement si (b) ne suffit pas. Rien n'est codé
 avant la mesure.
+
+## La mesure sur un corpus réel (arbre principal, 5 octobre 2026)
+
+Le corpus est `src/` de rag3weaver : 138 fichiers, 12 396 morceaux (12 233 Scope_Chunk, 138
+File_Chunk, 25 Library_Chunk). Les vecteurs sont ceux de granite-278m, par le service
+distant, en cosine, sur le moteur `35d09c466`. Pour chaque morceau, on cherche par son propre
+vecteur avec k = 10. Le morceau est trouvé s'il est parmi les dix, ou si un vecteur identique
+au sien sort en tête. Le témoin est `extension/rag3weaver/tests/e2e_mesure_joignabilite.rs`
+(`MESURE_JOIGNABILITE=tout|fond|masse`).
+
+| construction | passe 1 | passe 2 |
+|---|---|---|
+| `tout` : les vecteurs avec les lignes, des COPY successifs dans une table indexée (le défaut) | 1 | 0 |
+| `fond` : un premier index sans vecteurs, puis la dette posée par SET ; l'index tombe au-delà de 2 000 de dette et se rebâtit à dette nulle | 18 | 24 |
+| `masse` : `bulk_vector_index` (l'index tombe, la synchronisation pose les vecteurs, puis l'index est rebâti) | 1 | 0 |
+
+- `tout` et `masse` : 0 ou 1 introuvable sur 12 396, la rareté d'un index approché.
+- `fond` : 0,15 à 0,2 %. C'est pourtant le même CREATE sur une table pleine que `masse` :
+  seule l'origine des vecteurs change (des SET plutôt qu'un COPY). C'est la piste d'un défaut
+  du moteur, confiée au banc pour un témoin sans rag3weaver. Elle est peut-être voisine de
+  « mise à jour massive de vecteurs ».
+- Les introuvables changent d'une passe à l'autre. Tous sont minuscules, de 24 à 150
+  caractères : des blocs de `use` en tête de fichier, des méthodes d'une ligne, de petites
+  structures. Pour la moitié d'entre eux, le premier rendu est à 0,03 à 0,12 (un voisin
+  quasi identique) ; pour l'autre moitié, à 0,3 à 0,4 (des isolés).
+
+**Repli possible côté rag3weaver, non décidé** : rattraper une grosse dette de vecteurs par
+le chemin `bulk_vector_index` plutôt que par SET puis CREATE. On n'y touche pas tant que le
+banc n'a pas dit ce qu'est l'écart de `fond` (décision de l'orchestration) : si c'est un
+défaut du moteur, il se corrige là-bas.
