@@ -3,6 +3,101 @@
 Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 après-midi, après les correctifs du planificateur et des
 amonts (`8c83c3360`, puis le second lot).
 
+## En pause depuis le 5 octobre à midi : l'élagage de l'index HNSW
+
+Lucie a mis la session en pause jusqu'à ce soir ou ce week-end. La passe de mesure en cours a
+été arrêtée proprement : aucun processus ne reste, et le poste est libre. Rien n'est commité de
+ce lot. Le travail est dans l'arbre `rag3db-banc` (branche `banc-verrous`, avancée sur master
+`0cf8d71fb`), et sauvé dans `~/.cache/rag3db-banc-notes/en-pause-elagage-5-oct.patch`.
+
+**Ce qui a été établi.**
+- Le `i = 0` de `shrinkForNode` (au lieu de `i = 1`, depuis l'amont `725046754`) répare la
+  ligne lointaine (10/10 vert), `ProductReloadRecovery` et `TenThousandRows` (97 à 100 %
+  joignables). Mais sur le vrai corpus, il fait passer les introuvables de 2–13 à 9–31.
+  L'orchestration refuse qu'il parte seul.
+- **« Îlots de doublons » : réfuté**, par ma propre sonde. La recherche exhaustive atteint les
+  12 278 lignes, et les introuvables y sont tous. Aucun n'est retrouvé par son propre vecteur,
+  même à efs = 2000 : leurs arêtes entrantes viennent de loin. « Le groupe perdu en entier »
+  était un artefact de mon comptage, puisque des copies identiques lancent la même requête.
+- **Corrélation avec les quasi-doublons** : 40,5 % des introuvables ont un voisin distinct à
+  moins de 1e-4, contre 1,5 % des vecteurs.
+- **La règle d'élagage est inversée** par rapport à l'article (algorithme 4) et à hnswlib
+  (`getNeighborsByHeuristic2`, lu). Chez nous, un voisin part si un candidat **plus lointain**
+  est près de lui. La comparaison des trois règles est écrite au ticket
+  `2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.md`.
+- **L'aval de l'orchestration** pour la règle classique, avec trois conditions : une borne sur
+  les copies exactes, la mesure avant/après, et un témoin déterministe. Les critères de push :
+  - aucune classe (exacts, quasi-doublons, ordinaires) ne recule ;
+  - le rappel@10 ne baisse pas ;
+  - le temps de bâti ne dépasse pas +20 %.
+
+**Ce qui est écrit (non commité).**
+- `selectNeighbours` (`hnsw_index.cpp`) : la règle classique, à inégalité stricte, avec
+  l'alpha de DiskANN. Les copies du vecteur du nœud sont reconnues octet pour octet (le cosinus
+  de simsimd rend 0 ou un bruit d'environ 1e-7). Il en reste au plus la moitié du degré,
+  choisies en anneau par décalage. Elle sert aux deux `shrinkForNode`, le bâti en mémoire et le
+  chemin disque, qui est aussi celui du rejeu.
+- `EmbeddingColumnInfo::getNumBytes` (`hnsw_graph.h`).
+- Le témoin `NearCopiesAndExactCopiesAreAllFound` : 40 amas de quasi-copies à 1e-5, des
+  groupes exacts de 2 à 9 et un de 49, la moitié bâtie en mémoire, l'autre insérée après.
+  **Il est vert sur master aussi** : il ne départage pas, il faut le durcir.
+- La sonde `RealVectorsReachability` :
+  - `BANC_MANQUES` (garder chaque introuvable) ;
+  - `BANC_EXHAUSTIF` (îlot ou non) ;
+  - le rappel@10 sur 300 requêtes contre la force brute ;
+  - le degré de la couche basse, maintenant lu par les internes (`lowerGraphEdgeCount`), pas
+    encore rejoué.
+
+**Les mesures, à moitié faites** (`~/.cache/rag3db-banc-notes/mesure-regle-{apres,avant}/`) :
+
+| | règle classique + borne | master |
+|---|---|---|
+| copies (témoin) | vert ×3 | vert ×3 |
+| masse, introuvables | 22, 9, 15 | 6, 10, (arrêté) |
+| fond, introuvables | 145, 19, 3 | (pas joué) |
+| rappel@10 masse | 0,998 ; 1 ; 0,9997 | 1 ; 0,9993 |
+| rappel@10 fond | 0,993 ; 1 ; 1 | (pas joué) |
+| ligne lointaine | 10/10 vert, les trois | (pas joué) |
+| TenThousandRows joignables | 99,9 %, 82 %, 84 % | 68–79 % (mesure du matin) |
+| ProductReload | 1 rouge sur 30, sur deux variantes | 28 à 29 rouges sur 30 selon la variante (mesure du matin) |
+
+Lecture provisoire :
+- en « masse », la règle classique fait **moins bien** que master (9 à 22 contre 6 et 10) ;
+- en « fond », la variance est énorme (145, puis 3) ;
+- classés, les introuvables de la règle classique restent surtout des points ordinaires
+  (`classes-apres.txt`), et des groupes exacts réels sont encore perdus.
+**Critère non atteint en l'état : rien ne part.**
+
+Une piste à mesurer, pas encore écrite : l'option `keepPrunedConnections` de l'algorithme 4
+(remplir les places libres avec les écartés). Sur des données presque alignées (le cas de
+`TenThousandRows`, en dimension 4), la règle classique ne garde qu'environ deux voisins par
+nœud, et un graphe en chaîne casse au premier vecteur déplacé.
+
+**Reprendre :**
+1. `mesure-regle.sh avant` en entier, sur le poste libre (environ 40 min), pour la colonne
+   master.
+2. Classer les deux colonnes (`classes.py <dossier manques>`). Rendre les chiffres à
+   l'orchestration avant toute décision : elle les attend entre la mesure et le commit.
+3. Durcir le témoin des copies jusqu'à ce qu'il soit rouge sur master, ou le dire.
+4. Essayer `keepPrunedConnections` si la règle classique seule ne passe pas les critères.
+
+**À faire ensuite** (`~/.cache/rag3db-banc-notes/a-faire.txt`) :
+- La cinquième forme de `ForcedCopyCheckpointDeath` : un COPY journalisé qui franchit le seuil
+  du repli (`71cffbc4b`), seuil à 8 Ko, avec `copy_journal_fallbacks` = 1 vérifié dans
+  l'enfant, aux sept points de mort.
+- `ExplicitCopyCommitWhileATransactionIsOpen` : des résultats de requête survivent à
+  `reopen()` (SIGSEGV quand le COMMIT réussit, vu par la session cœur C++ sous le défaut
+  journalisé). Corriger la portée dans tout le fichier. Au basculement, réécrire ce que le
+  témoin affirme.
+- Relire le correctif du ticket `2026-10-05-pages-d-un-copy-journalise-perdues-au-rejeu`.
+- La mise à jour massive de vecteurs attend ce lot : sa référence de coût se prendra sur
+  l'élagage retenu.
+
+**Relu ce matin, sans bloquant** (session cœur C++) :
+- la forme compacte des tableaux au journal (`1c232f318`) ;
+- le repli au seuil du journal d'un COPY (`71cffbc4b`) ;
+- `setForceCheckpoint` qui vide le journal local (patch `force-src`).
+
 ## Où en est le banc
 
 - **Sur master**, tout est fusionné. Derniers commits de la session : `67c910f0d` (cas

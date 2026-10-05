@@ -212,3 +212,58 @@ premier rendu à 0,05), 0 repli en masse. C'est le niveau de `tout` et `masse`. 
 de la division des cases de l'index de clé primaire touche tout point de reprise qui agrandit
 un index de clé, ce qui inclut les points de reprise automatiques pendant les SET du mode
 `fond` : il a pu jouer sur les 18 et 24 des premières passes, sans que rien ne le prouve.
+
+## La règle d'élagage, mise à côté de l'article et de hnswlib (5 octobre 2026)
+
+**« Des îlots de vecteurs identiques » : réfuté.** Après le `i = 0`, j'avais lu les
+introuvables comme des groupes de doublons devenus îlots. Une sonde l'a démenti. La recherche
+exhaustive (k et efs = 12 278) atteint les 12 278 lignes à chaque passe. Les 46 introuvables
+de trois passes « masse » y sont tous, et aucun n'est retrouvé par son propre vecteur, même à
+efs = 2000. Ils sont dans le graphe, mais leurs arêtes entrantes viennent de loin.
+« Le groupe perdu en entier » était un artefact de comptage : des copies identiques lancent la
+même requête, elles ont forcément le même sort.
+
+**Ce qui les distingue : les quasi-doublons.** Sur les 11 874 vecteurs distincts, 40,5 % des
+introuvables ont un voisin distinct à moins de 1e-4 en cosinus, contre 1,5 % de l'ensemble ;
+à moins de 0,015, c'est 48,6 % contre 3,9 %. Les autres introuvables sont des points
+ordinaires.
+
+**Les trois règles**, pour la liste d'un nœud `q` dont les candidats sont triés par distance
+croissante :
+
+| | qui est comparé | un candidat est écarté si |
+|---|---|---|
+| la nôtre (`shrinkForNode`, depuis `725046754`) | `i` contre tout candidat **plus lointain** `j`, gardé ou non | `alpha·d(i, j) < d(q, i)` |
+| l'article (Malkov et Yashunin, algorithme 4) | le candidat `e` contre les voisins **déjà gardés**, plus proches | `e` n'est pas plus proche de `q` que de chacun d'eux |
+| hnswlib (`getNeighborsByHeuristic2`, lu) | idem, du plus proche au plus lointain, jusqu'à M gardés | `d(gardé, c) < d(q, c)`, inégalité stricte |
+
+Notre règle est inversée : le plus lointain d'un amas serré est toujours gardé, et le plus
+proche part. Dans un amas de quasi-doublons, un nœud voisin de l'amas ne garde que le membre
+le plus loin de lui. Un membre peut ainsi ne recevoir d'arêtes que de nœuds placés « derrière »
+l'amas, ce que la sonde voit.
+
+**alpha.** Il vaut 1,1 par défaut chez nous. L'article et hnswlib n'en ont pas, ce qui revient
+à alpha = 1. Le RobustPrune de DiskANN l'emploie dans le sens classique : `p'` est écarté si
+`alpha·d(p*, p') ≤ d(p, p')`, avec alpha ≥ 1, ce qui garde davantage d'arêtes longues. La règle
+classique s'entend donc avec notre alpha sans changer son sens. Nous gardons l'inégalité
+stricte de hnswlib : avec `≤` et alpha = 1, une copie exacte gardée couvrirait tous les autres
+candidats (`d ≤ d`).
+
+**Les copies exactes.** Avec l'inégalité stricte, deux copies du vecteur de `q` ne se couvrent
+jamais (`0 < 0` est faux). Elles s'accumulent dans la liste, comme chez hnswlib, et un groupe
+plus grand que le degré n'aurait plus de sortie. Il faut donc une borne.
+- Une copie se reconnaît octet pour octet, pas par une distance nulle : le cosinus de simsimd
+  passe par une racine inverse approchée et rend 0 ou un bruit d'environ 1e-7 pour deux
+  vecteurs identiques.
+- Les copies d'un autre voisin déjà gardé sont couvertes par la règle classique elle-même
+  (`alpha·0 < d(q, c)`).
+
+**Les index existants** gardent leur graphe d'avant. Pour profiter de la nouvelle règle, il
+faut les recréer (DROP puis CREATE_VECTOR_INDEX). Le format ne change pas.
+
+**État au 5 octobre, midi (en pause).** La règle classique et la borne des copies sont
+écrites, pas commitées. Mesure à moitié faite : en « masse », 9 à 22 introuvables contre 6 et
+10 sur master ; le critère de l'orchestration (aucune classe ne recule) n'est pas atteint en
+l'état. Le détail et la suite sont au rapport du banc
+(`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/01-rapport-de-session.md`,
+« En pause depuis le 5 octobre à midi »).
