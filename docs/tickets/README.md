@@ -45,6 +45,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus se suivent](2026-10-04-lecteur-affame-par-les-points-de-reprise.md) | ouvert (confort pour la stèle) | blocage | oui | oui (`read_only`, e2e_prise_atomique) |
 | [RETURN DISTINCT … SKIP sans LIMIT rend zéro ligne](2026-10-04-distinct-skip-sans-limit.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
+| [Un refus d'ouverture en lecture sur quelques centaines n'est pas le refus nommé](2026-10-05-un-refus-d-ouverture-sur-quelques-centaines-n-est-pas-le-nomme.md) | ouvert | réponse fausse | oui | oui (Rag3dbConnection::read_only) |
 | [Un terme de WHERE qui ne cite que des paramètres est ignoré](2026-10-04-where-sur-parametres-seuls-ignore.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [L'étiquette d'une variable liée plus tôt sans étiquette est ignorée](2026-10-04-etiquette-d-une-variable-deja-liee-ignoree.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
 | [OPTIONAL MATCH qui répète un nœud lié double les lignes](2026-10-04-optional-match-qui-repete-un-noeud-lie.md) | corrigé | réponse fausse | oui | non (vérifié par l'arbre principal) |
