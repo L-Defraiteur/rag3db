@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -200,6 +201,244 @@ TEST_F(UpstreamFixes, CheckpointAfterDroppingARelationColumn) {
     });
     EXPECT_EQ(values, "") << "[check: values-after-drop] " << values;
 }
+
+// Le même défaut que 308ebd17e, ailleurs (ticket 2026-10-05-drop-d-une-colonne-declaree-
+// avant-la-cle-primaire) : après le DROP d'une colonne déclarée AVANT la clé primaire, les
+// lignes d'une insertion voyagent dans l'ordre des propriétés du catalogue, mais la clé y est
+// cherchée au numéro de sa colonne dans le stockage — une position trop loin. Trois chemins :
+// l'insertion ordinaire, le commit des lignes locales (l'inscription des clés à l'index), le
+// rejeu du journal. Des lignes écrites avant le DROP, d'autres après, un COPY, une relation ;
+// puis la mort base ouverte et le rejeu ; puis un point de reprise et la réouverture. Le
+// paramètre : le COPY journalisé (force_checkpoint_on_copy=false), dont l'enregistrement a la
+// forme de celui d'une insertion ordinaire depuis 47a80373e ; ou forcé.
+class DropBeforeThePrimaryKey : public UpstreamFixes, public ::testing::WithParamInterface<bool> {};
+
+TEST_P(DropBeforeThePrimaryKey, InsertsCopiesAndReplaysFindTheirKeys) {
+    const auto journaledCopy = GetParam();
+    const auto csv = databasePath + ".after-drop.csv";
+    {
+        std::ofstream out(csv);
+        for (auto i = 500; i < 1000; ++i) {
+            out << i << ",item " << i << "\n";
+        }
+    }
+    // 0 si chaque clé mène à sa ligne et la relation relie 1 et 2 ; sinon le code du contrôle.
+    const auto expectRows = [](rag3db::main::Connection& connection) {
+        auto count = connection.query("MATCH (n:Item) RETURN count(n);");
+        if (!count->isSuccess() || count->getNext()->getValue(0)->getValue<int64_t>() != 1000) {
+            return 8;
+        }
+        for (const auto key : {0, 99, 100, 250, 499, 500, 750, 999}) {
+            auto row = connection.query(
+                "MATCH (n:Item {id: " + std::to_string(key) + "}) RETURN n.name;");
+            if (!row->isSuccess() || !row->hasNext() ||
+                row->getNext()->getValue(0)->toString() != "item " + std::to_string(key)) {
+                std::cerr << "  key " << key << ": "
+                          << (row->isSuccess() ? row->toString() : row->getErrorMessage()) << "\n";
+                return 9;
+            }
+        }
+        auto link = connection.query(
+            "MATCH (a:Item {id: 1})-[:Link]->(b:Item {id: 2}) RETURN count(*);");
+        return link->isSuccess() && link->getNext()->getValue(0)->getValue<int64_t>() == 1 ? 0 :
+                                                                                            10;
+    };
+    const auto written = inChild([&](rag3db::main::Connection& connection) {
+        if (journaledCopy && runOrFail(connection, "CALL force_checkpoint_on_copy=false;")) {
+            return 4;
+        }
+        if (const auto failed =
+                runOrFail(connection, "CREATE NODE TABLE Item(extra STRING, id INT64, name STRING, "
+                                      "PRIMARY KEY (id));") +
+                runOrFail(connection, "CREATE REL TABLE Link(FROM Item TO Item);") +
+                runOrFail(connection, "UNWIND range(0, 99) AS i CREATE (:Item {extra: 'x', id: i, "
+                                      "name: 'item ' + CAST(i AS STRING)});") +
+                runOrFail(connection, "CHECKPOINT;") +
+                runOrFail(connection, "ALTER TABLE Item DROP extra;")) {
+            return failed;
+        }
+        if (runOrFail(connection, "UNWIND range(100, 499) AS i CREATE (:Item {id: i, name: 'item ' "
+                                  "+ CAST(i AS STRING)});")) {
+            return 5;
+        }
+        if (runOrFail(connection, "COPY Item(id, name) FROM '" + csv + "' (header=false);")) {
+            return 6;
+        }
+        if (runOrFail(connection,
+                "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link]->(b);")) {
+            return 7;
+        }
+        // Sortie base ouverte : le fils suivant rejoue le journal.
+        return expectRows(connection);
+    });
+    const auto checkFor = [](const std::string& outcome) -> std::string {
+        if (outcome == "exit code 5") {
+            return "insert-after-drop";
+        }
+        if (outcome == "exit code 6") {
+            return "copy-after-drop";
+        }
+        if (outcome == "exit code 7") {
+            return "relation-after-drop";
+        }
+        if (outcome == "exit code 8" || outcome == "exit code 9" || outcome == "exit code 10") {
+            return "keys-lead-to-their-rows";
+        }
+        return "runs";
+    };
+    EXPECT_EQ(written, "") << "[check: " << checkFor(written) << "] while writing: " << written;
+    if (!written.empty()) {
+        std::filesystem::remove(csv);
+        return;
+    }
+    const auto replayed = inChild(expectRows);
+    EXPECT_EQ(replayed, "") << "[check: replay-after-drop] " << replayed;
+    const auto checkpointed = inChild([&](rag3db::main::Connection& connection) {
+        if (runOrFail(connection, "CHECKPOINT;")) {
+            return 4;
+        }
+        return expectRows(connection);
+    });
+    EXPECT_EQ(checkpointed, "") << "[check: checkpoint-after-drop] " << checkpointed;
+    std::filesystem::remove(csv);
+}
+
+INSTANTIATE_TEST_SUITE_P(Copy, DropBeforeThePrimaryKey, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) {
+        return info.param ? "Journaled" : "Forced";
+    });
+
+// La famille du numéro de colonne pris pour une position, par cas (passe de lecture du
+// 5 octobre). Deux fenêtres :
+// - A, entre le DROP et le point de reprise : les numéros de colonne du catalogue ne valent
+//   plus les positions des propriétés, et les lignes d'une insertion, les groupes locaux et le
+//   journal sont rangés par position ;
+// - B, après le point de reprise : il renumérote le catalogue (vacuumColumnIDs) et compacte
+//   les colonnes, mais pas NodeTable::pkColumnID, ni les numéros de colonnes des index, que
+//   l'index garde jusque sur disque.
+// Chaque cas : des étapes, « REOPEN » pour rouvrir dans un processus neuf ; puis une requête
+// dont la première valeur doit valoir l'attendu. Chaque processus sort base ouverte.
+struct ColumnPositionCase {
+    std::string name;
+    std::vector<std::string> steps;
+    std::string check;
+    std::string expected;
+    bool vector = false;
+};
+
+class ColumnIdTakenForAPosition : public UpstreamFixes,
+                                  public ::testing::WithParamInterface<ColumnPositionCase> {};
+
+TEST_P(ColumnIdTakenForAPosition, TheRightColumnIsReadAndWritten) {
+    const auto& theCase = GetParam();
+    std::vector<std::vector<std::string>> sessions(1);
+    for (const auto& step : theCase.steps) {
+        if (step == "REOPEN") {
+            sessions.emplace_back();
+        } else {
+            sessions.back().push_back(step);
+        }
+    }
+    for (auto i = 0u; i < sessions.size(); ++i) {
+        const auto last = i + 1 == sessions.size();
+        const auto outcome = inChild([&](rag3db::main::Connection& connection) {
+            if (theCase.vector) {
+                concurrency::loadVectorExtension(connection);
+            }
+            for (const auto& step : sessions[i]) {
+                if (runOrFail(connection, step)) {
+                    return 4;
+                }
+            }
+            if (!last) {
+                return 0;
+            }
+            auto result = connection.query(theCase.check);
+            const auto value = !result->isSuccess() ? "<error> " + result->getErrorMessage() :
+                               result->hasNext()    ? result->getNext()->getValue(0)->toString() :
+                                                      std::string("<no row>");
+            std::cerr << "  " << theCase.check << " => " << value << "\n";
+            return value == theCase.expected ? 0 : 5;
+        });
+        const auto check = outcome == "exit code 4" ? "steps-succeed" :
+                           outcome == "exit code 5" ? "right-column" :
+                                                      "runs";
+        EXPECT_EQ(outcome, "") << "[check: " << check << "] session " << i << ": " << outcome;
+        if (!outcome.empty()) {
+            return;
+        }
+    }
+}
+
+const std::string ITEM = "CREATE NODE TABLE Item(extra STRING, id INT64, name STRING, note STRING, "
+                         "PRIMARY KEY (id));";
+const std::string ROW = "CREATE (:Item {extra: 'e', id: 1, name: 'a', note: 'n'});";
+
+INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
+    ::testing::Values(
+        // Fenêtre A.
+        ColumnPositionCase{"InsertAfterDrop",
+            {ITEM, "ALTER TABLE Item DROP extra;", "CREATE (:Item {id: 1, name: 'a', note: 'n'});"},
+            "MATCH (n:Item {id: 1}) RETURN n.name;", "a"},
+        ColumnPositionCase{"InsertWhenTheKeyIsLastAfterDrop",
+            {"CREATE NODE TABLE T(extra STRING, id INT64, PRIMARY KEY (id));",
+                "ALTER TABLE T DROP extra;", "CREATE (:T {id: 1});"},
+            "MATCH (n:T {id: 1}) RETURN count(*);", "1"},
+        ColumnPositionCase{"ReadOfARowOfTheTransactionAfterDrop",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;", "BEGIN TRANSACTION;",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});"},
+            "MATCH (n:Item) WHERE n.id = 2 RETURN n.note;", "m"},
+        ColumnPositionCase{"UpdateOfARowOfTheTransactionAfterDrop",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;",
+                "CREATE (n:Item {id: 2, name: 'b', note: 'm'}) SET n.name = 'c';"},
+            "MATCH (n:Item {id: 2}) RETURN n.name + '/' + n.note;", "c/m"},
+        ColumnPositionCase{"CopyAfterDrop",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;",
+                "COPY Item(id, name, note) FROM (UNWIND range(10, 19) AS i RETURN i, 'c' + "
+                "CAST(i AS STRING), 'n');"},
+            "MATCH (n:Item {id: 15}) RETURN n.name;", "c15"},
+        ColumnPositionCase{"ReplayOfAnInsertAfterDrop",
+            {ITEM, ROW, "CHECKPOINT;", "ALTER TABLE Item DROP extra;",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});", "REOPEN"},
+            "MATCH (n:Item {id: 2}) RETURN n.name;", "b"},
+        // Fenêtre B.
+        ColumnPositionCase{"UpdateAfterDropAndCheckpoint",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;", "CHECKPOINT;",
+                "MATCH (n:Item {id: 1}) SET n.name = 'b';"},
+            "MATCH (n:Item {id: 1}) RETURN n.name;", "b"},
+        ColumnPositionCase{"InsertAfterDropAndCheckpoint",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;", "CHECKPOINT;",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});"},
+            "MATCH (n:Item {id: 2}) RETURN n.name;", "b"},
+        ColumnPositionCase{"InsertAfterDropCheckpointAndReopen",
+            {ITEM, ROW, "ALTER TABLE Item DROP extra;", "CHECKPOINT;", "REOPEN",
+                "CREATE (:Item {id: 2, name: 'b', note: 'm'});"},
+            "MATCH (n:Item {id: 2}) RETURN n.name;", "b"},
+        ColumnPositionCase{"VectorIndexAfterDropCheckpointAndReopen",
+            {"CREATE NODE TABLE V(id INT64, extra STRING, emb FLOAT[3], PRIMARY KEY (id));",
+                "UNWIND range(0, 49) AS i CREATE (:V {id: i, extra: 'e', emb: [CAST(i AS FLOAT), "
+                "1.0, 2.0]});",
+                "CALL CREATE_VECTOR_INDEX('V', 'vi', 'emb', metric := 'l2');",
+                "ALTER TABLE V DROP extra;", "CHECKPOINT;", "REOPEN",
+                "CREATE (:V {id: 100, emb: [100.0, 1.0, 2.0]});"},
+            "CALL QUERY_VECTOR_INDEX('V', 'vi', [100.0, 1.0, 2.0], 1) RETURN node.id;", "100",
+            true},
+        // Les relations.
+        ColumnPositionCase{"ReadOfARelationOfTheTransactionAfterDrop",
+            {"CREATE NODE TABLE P(id INT64, PRIMARY KEY (id));",
+                "CREATE REL TABLE R(FROM P TO P, a INT64, b STRING, c STRING);",
+                "CREATE (:P {id: 1}), (:P {id: 2});", "ALTER TABLE R DROP a;",
+                "BEGIN TRANSACTION;",
+                "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[:R {b: 'v', c: 'w'}]->(y);"},
+            "MATCH ()-[r:R]->() RETURN r.c;", "w"},
+        ColumnPositionCase{"UpdateOfARelationOfTheTransactionAfterDrop",
+            {"CREATE NODE TABLE P(id INT64, PRIMARY KEY (id));",
+                "CREATE REL TABLE R(FROM P TO P, a INT64, b STRING, c STRING);",
+                "CREATE (:P {id: 1}), (:P {id: 2});", "ALTER TABLE R DROP a;",
+                "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[r:R {b: 'v', c: 'w'}]->(y) SET "
+                "r.b = 'z';"},
+            "MATCH ()-[r:R]->() RETURN r.b + '/' + r.c;", "z/w"}),
+    [](const ::testing::TestParamInfo<ColumnPositionCase>& info) { return info.param.name; });
 
 // Garde-fou vert : la lecture partielle d'une colonne de chaînes de relations au point de
 // reprise d'une seule région (Ladybug 254a7444d, chaînes réécrites aux mauvaises lignes).

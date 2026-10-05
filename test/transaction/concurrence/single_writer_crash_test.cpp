@@ -489,20 +489,38 @@ public:
     // un COPY ordinaire, au réglage par défaut (force_checkpoint_on_copy=true), mêlé.
     // CREATE_VECTOR_INDEX, qui garde aussi son point de reprise, ne se mêle pas : le binder le
     // refuse dans une transaction explicite (« only supported in auto transaction mode »).
-    enum class Form { IgnoredAlone, IgnoredMixed, DefaultMixed };
+    // RelIgnoredMixed : un COPY de relations qui écarte une relation (extrémité absente), mêlé
+    // (rel_batch_insert.cpp le force aussi).
+    enum class Form { IgnoredAlone, IgnoredMixed, DefaultMixed, RelIgnoredMixed };
+    // Les relations valides du COPY de relations : entre lignes validées que la transaction
+    // ne supprime pas (identifiants 1 à 99 hors des multiples de 10).
+    static constexpr int64_t NUM_COPIED_RELS = 90;
 
     void run(Form form) {
         const auto point = GetParam();
         const auto mixed = form != Form::IgnoredAlone;
-        const auto ignored = form == Form::IgnoredAlone || form == Form::IgnoredMixed;
+        const auto rels = form == Form::RelIgnoredMixed;
+        const auto ignored = form != Form::DefaultMixed;
         const auto csv = databasePath + ".ignored.csv";
         const auto refusedFile = databasePath + ".refused";
         {
             std::ofstream out(csv);
-            for (auto i = 2000; i < 3000; ++i) {
-                out << i << ",copied " << i << "\n";
+            if (rels) {
+                int64_t written = 0;
+                for (auto i = 1; i < 100; ++i) {
+                    if (i % 10 != 0) {
+                        out << i << "," << 100 - i << "\n";
+                        written++;
+                    }
+                }
+                EXPECT_EQ(written, NUM_COPIED_RELS) << "[check: setup] ";
+                out << "5,99999\n";
+            } else {
+                for (auto i = 2000; i < 3000; ++i) {
+                    out << i << ",copied " << i << "\n";
+                }
             }
-            if (ignored) {
+            if (ignored && !rels) {
                 out << "5,duplicate of a committed key\n";
                 out << "not-a-number,malformed\n";
             }
@@ -514,6 +532,7 @@ public:
             }
             mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, vec "
                                   "FLOAT[2]);");
+            mustQuery(connection, "CREATE REL TABLE Link(FROM Doc TO Doc);");
             mustQuery(connection, "CHECKPOINT;");
             mustQuery(connection, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, name: "
                                   "'committed ' + CAST(i AS STRING), vec: [CAST(i AS FLOAT), "
@@ -525,8 +544,9 @@ public:
                 mustQuery(connection, "MATCH (n:Doc) WHERE n.id >= 1000 AND n.id % 4 = 0 DELETE n;");
                 mustQuery(connection, "MATCH (n:Doc) WHERE n.id < 100 AND n.id % 10 = 0 DELETE n;");
             }
-            auto copy = connection.query("COPY Doc(id, name) FROM '" + csv + "' (header=false" +
-                                         (ignored ? ", ignore_errors=true" : "") + ");");
+            auto copy = connection.query(
+                (rels ? "COPY Link FROM '" : "COPY Doc(id, name) FROM '") + csv +
+                "' (header=false" + (ignored ? ", ignore_errors=true" : "") + ");");
             if (!copy->isSuccess()) {
                 // Refusé : la transaction est défaite ; mourir quand même, base ouverte.
                 std::ofstream(refusedFile) << copy->getErrorMessage();
@@ -558,7 +578,14 @@ public:
             return;
         }
         const auto count = queryInt("MATCH (n:Doc) RETURN count(n);");
-        const int64_t whole = (mixed ? 105 : 100) + 1000;
+        const int64_t whole = (mixed ? 105 : 100) + (rels ? 0 : 1000);
+        const auto numRels = queryInt("MATCH ()-[r:Link]->() RETURN count(r);");
+        if (rels) {
+            EXPECT_TRUE((count == whole && numRels == NUM_COPIED_RELS) ||
+                        (count == 100 && numRels == 0))
+                << "[check: relations-with-their-transaction] " << count << " rows, " << numRels
+                << " relations";
+        }
         std::cerr << "  after the death: " << count << " rows\n";
         if (!refusal.empty()) {
             ADD_FAILURE() << "[check: copy-accepted] " << refusal;
@@ -568,11 +595,13 @@ public:
                 << "[check: transaction-all-or-nothing] " << count << " rows; 100 before the "
                 << "transaction, " << whole << " after it";
         }
-        if (count == whole) {
+        if (count == whole && !rels) {
             EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 2000 RETURN count(n);"), 1000)
                 << "[check: copy-rows] ";
             EXPECT_EQ(queryText("MATCH (n:Doc {id: 2500}) RETURN n.name;"), "copied 2500")
                 << "[check: primary-key-lookup] ";
+        }
+        if (count == whole) {
             if (mixed) {
                 EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id >= 1000 AND n.id < 2000 RETURN "
                                    "count(n);"),
@@ -606,6 +635,10 @@ TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionSurvivesWholeOrNotAtAll) {
 // défaut : le COPY ordinaire y garde son point de reprise forcé.
 TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole) {
     run(Form::DefaultMixed);
+}
+
+TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithARelationCopyThatSkipsSurvivesWhole) {
+    run(Form::RelIgnoredMixed);
 }
 
 

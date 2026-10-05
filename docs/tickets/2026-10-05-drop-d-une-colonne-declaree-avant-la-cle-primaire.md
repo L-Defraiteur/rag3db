@@ -1,7 +1,7 @@
 # Retirer une colonne déclarée avant la clé primaire casse l'insertion
 
 - **État** : ouvert
-- **Gravité** : blocage (toute insertion ordinaire dans la table est refusée ou lit la mauvaise colonne comme clé)
+- **Gravité** : réponse fausse et perte, plus que le blocage d'abord vu. Une ligne acceptée reste introuvable par sa clé, la mauvaise propriété d'une relation est écrite, et deux cas plantent (SIGSEGV). Mesuré au banc le 5 octobre, voir « Étendue »
 - **Atteignable en service** : oui — un `ALTER TABLE … DROP` d'une colonne déclarée avant la clé primaire
 - **Touche rag3weaver** : non (il ne retire jamais de colonne ; ses clés sont déclarées en premier)
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (en écrivant les témoins du chargement journalisé après un `DROP`)
@@ -38,6 +38,63 @@ Aucun au dépôt. La recette ci-dessus ; puis la même suivie d'une mort base ou
 ## Le correctif de l'amont
 
 Non regardé.
+
+## Étendue (banc, 5 octobre 2026)
+
+Une passe de lecture systématique de `src/` et des extensions a trouvé la même confusion à
+une dizaine d'endroits, dans **deux fenêtres** :
+
+- **A, entre le DROP et le point de reprise** : les numéros de colonne du catalogue ne
+  valent plus les positions des propriétés. Or les lignes d'une insertion
+  (`columnDataVectors`, `propertyVectors`), les groupes locaux (`LocalNodeTable`) et les
+  enregistrements d'insertion du journal sont rangés par position ;
+- **B, après le point de reprise** : il renumérote le catalogue (`vacuumColumnIDs`) et
+  compacte les colonnes, mais ne touche ni `NodeTable::pkColumnID`, calculé une fois à la
+  construction, ni les numéros de colonnes des index (`IndexInfo::columnIDs` : clé
+  primaire, hnsw, fts). L'index les garde jusque sur disque.
+
+Témoins, tous rouges et stables, dans `known_red.txt` (`upstream_fixes_test.cpp`,
+`Cases/ColumnIdTakenForAPosition.*` et `Copy/DropBeforeThePrimaryKey.*`) :
+
+| Cas | Fenêtre | Ce qu'on voit |
+|---|---|---|
+| InsertAfterDrop | A | l'insertion passe ; la ligne est introuvable par sa clé |
+| InsertWhenTheKeyIsLastAfterDrop | A | `vector::_M_range_check` |
+| ReadOfARowOfTheTransactionAfterDrop | A | ligne de la transaction introuvable |
+| UpdateOfARowOfTheTransactionAfterDrop | A | idem |
+| CopyAfterDrop | A | le COPY échoue |
+| ReplayOfAnInsertAfterDrop | A | après le rejeu, ligne introuvable par sa clé |
+| ReadOfARelationOfTheTransactionAfterDrop | A | SIGSEGV |
+| UpdateOfARelationOfTheTransactionAfterDrop | A | la mauvaise propriété est écrite (« v/z » au lieu de « z/w ») |
+| UpdateAfterDropAndCheckpoint | B | « Cannot update pk » sur une autre propriété |
+| InsertAfterDropAndCheckpoint | B | ligne introuvable par sa clé |
+| InsertAfterDropCheckpointAndReopen | B | idem, **après réouverture** (les numéros de l'index sont persistés) |
+| VectorIndexAfterDropCheckpointAndReopen | B | SIGSEGV |
+| DropBeforeThePrimaryKey (COPY forcé, COPY journalisé) | A | « duplicated primary key » à l'insertion |
+
+Les endroits, par lecture : `insert_executor.cpp:43` ;
+`NodeTable::validateUniquenessConstraint` (`node_table.cpp:444`, 448) ;
+`NodeTable::insert` (`node_table.cpp:524`, les vecteurs passés aux index, donc fts mal
+indexé) ; `NodeTable::commit` (le balayage des colonnes d'index sur les groupes locaux, et
+`node_table.cpp:761`, 764) ; le balayage et la lecture d'une ligne locale
+(`ChunkedNodeGroup::scan` et `lookup` sur `chunks[columnID]`) ; `LocalNodeTable::update` ;
+`LocalNodeTable`, le type de l'index de hachage local en fenêtre B ;
+`node_batch_insert.cpp:235` ; la fusion des statistiques locales (`node_table.cpp:886`) ;
+`LocalRelTable::rewriteLocalColumnID` (`columnID + 1`) ; le rejeu
+(`wal_replayer.cpp:623`) ; en fenêtre B, `pkColumnID` et `IndexInfo::columnIDs` (hnsw
+`hnsw_index.cpp:483` et suivants, fts `fts_index.cpp`, `fts_update_state.cpp`).
+
+Deux formes de correctif, à choisir :
+
+- **(i)** garder le local, les vecteurs d'insertion et le journal rangés par position, avec
+  une seule conversion « numéro de colonne → position » tirée du catalogue, utilisée à chaque
+  accès au local et aux `propertyVectors` ;
+- **(ii)** ranger le local par numéro de colonne, comme les groupes validés.
+
+Dans les deux cas, la fenêtre B demande que le point de reprise réécrive `pkColumnID` et les
+`columnIDs` de chaque index au moment de la renumérotation, ou qu'on ne les garde plus (les
+recalculer depuis le catalogue). Les bases déjà écrites après un tel DROP portent des numéros
+d'index périmés sur disque : une réécriture à l'ouverture, ou un rebâti.
 
 ## Pour le fermer
 

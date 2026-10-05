@@ -194,3 +194,28 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # réouverture. STATS_INFO la rend, le planificateur la lit. Trouvé le 4 octobre par l'essai
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
+#
+# Le numéro de colonne pris pour une position, après ALTER TABLE … DROP d'une colonne qui en
+# précède d'autres (ticket 2026-10-05-drop-d-une-colonne-declaree-avant-la-cle-primaire.md ;
+# même famille que 308ebd17e). Fenêtre A, entre le DROP et le point de reprise : l'insertion
+# (clé lue dans la mauvaise colonne, ligne introuvable par sa clé), une clé en dernière
+# position (hors du tableau), la lecture et la mise à jour d'une ligne de la transaction, le
+# COPY, le rejeu, les relations de la transaction (lecture : SIGSEGV ; mise à jour : la
+# mauvaise propriété écrite). Fenêtre B, après le point de reprise : NodeTable::pkColumnID et
+# les numéros de colonnes des index ne suivent pas la renumérotation du catalogue (« Cannot
+# update pk », ligne introuvable même après réouverture, index vectoriel rouvert : SIGSEGV).
+# Vus rouges 3 passes sur 3 le 5 octobre.
+Copy/DropBeforeThePrimaryKey.InsertsCopiesAndReplaysFindTheirKeys/Forced insert-after-drop
+Copy/DropBeforeThePrimaryKey.InsertsCopiesAndReplaysFindTheirKeys/Journaled insert-after-drop
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDrop right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertWhenTheKeyIsLastAfterDrop steps-succeed
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReadOfARowOfTheTransactionAfterDrop right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateOfARowOfTheTransactionAfterDrop right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/CopyAfterDrop steps-succeed
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReplayOfAnInsertAfterDrop right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateAfterDropAndCheckpoint steps-succeed
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropAndCheckpoint right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropCheckpointAndReopen right-column
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/VectorIndexAfterDropCheckpointAndReopen runs
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/ReadOfARelationOfTheTransactionAfterDrop runs
+Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateOfARelationOfTheTransactionAfterDrop right-column
