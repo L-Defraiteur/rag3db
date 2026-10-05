@@ -3,7 +3,7 @@
 Relevé de connaissances sur le moteur. Ce qui est affirmé porte un fichier, un commit ou
 une mesure ; ce qui ne l'est pas est dit « non vérifié ». Les numéros de ligne datent du
 3 octobre 2026 et bougent : chercher le nom de la fonction.
-**Dernière mise à jour : 4 octobre 2026, dans la nuit.**
+**Dernière mise à jour : 5 octobre 2026, 7 h.**
 
 Le relevé du 2 octobre (journal, point de reprise, lecteurs concurrents, mode
 multi-écrivains) reste valable :
@@ -129,6 +129,37 @@ ligne) :
   écartées par le lecteur avant l'opérateur et ne consomment rien.
 - **Le journal d'une transaction vit en mémoire non évictable** jusqu'à sa validation
   (`LocalWAL`, pages de 4 Kio prises au gestionnaire de tampon), sans borne.
+
+### L'index de clé primaire (5 octobre 2026)
+
+- **Deux étages.** Sur disque, `HashIndex` : 256 parts (par les bits hauts du hachage), chacune
+  un hachage linéaire à cases de 256 octets — 9 entrées par case pour une clé de chaîne, 14 pour
+  un entier —, des cases primaires (`pSlots`) et de débordement (`oSlots`), et pour les chaînes
+  longues un fichier de débordement. En mémoire, `InMemHashIndex` : les insertions d'une
+  transaction, fusionnées au point de reprise (`HashIndex::checkpoint` → `reserve` →
+  `splitSlots`, puis `mergeBulkInserts`). Les insertions ordinaires et les `COPY` passent par
+  la même fusion.
+- **Une clé retirée de l'étage en mémoire doit reculer son compte** (`deleteKey`,
+  `836edfc29`) : l'annulation d'un `COPY` retire ses clés une à une par là, et la réservation
+  de l'étage sur disque se dimensionne sur ce compte.
+- **`reserve` ne divise que s'il manque des cases** : la soustraction était non signée. C'est
+  aussi ce qui laisse ouvrir une base dont l'index a été écrit trop grand.
+- **`splitSlots` garde ses cases de débordement neuves de côté et les ajoute à la fin** (les
+  itérateurs du tableau sur disque ne peuvent pas tenir deux pages de `oSlots`). Une case
+  créée dans l'appel peut être redivisée dans le même appel (le niveau monte quand la part
+  fait plus que doubler) : tout pointeur vers ces cases doit rester valide à travers un ajout
+  — un `std::deque`, depuis `eb2d78e46`. `getNumElements()` sans argument rend le compte
+  VALIDÉ (lecture), pas celui de la transaction en cours.
+- **Un défaut de ce genre se voit sous ASan en une passe, et en Release par une clé sur
+  cent mille.** Pour le reproduire sans le harnais : relire les clés d'une base par
+  `MATCH (n:T) RETURN n.k ORDER BY offset(id(n))`, les recharger dans une table neuve du moteur
+  nu, chercher chaque clé (`annexes`, `essai-reel.cpp`). Les clés synthétiques ne perdent rien
+  à 2 × 50 000 ; elles perdent à 47 000 puis 200 000.
+- **Une assertion dans une fonction auxiliaire d'un test ne l'arrête pas** (`ASSERT_TRUE` dans
+  un `ok()` qui rend `void`) : un cas peut être « rouge » pour une instruction refusée plus haut
+  et non pour le défaut. Lire la première erreur d'un rouge avant de le compter.
+- **Une transaction de 200 000 `CREATE` déborde le tampon de la base de test** (« The buffer
+  pool is full ») : par lots de 10 000.
 
 ## 2. L'index vectoriel (HNSW) et notre greffe
 

@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 5 h.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 7 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -38,11 +38,40 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Le plantage de la reprise | `35d09c466` | poser par `SET` le vecteur d'une ligne créée dans la même transaction, sur une table indexée, plantait (`shrinkForNode`) : la lecture groupée des vecteurs des voisins rendait un tableau plus court que demandé. Défaut d'origine, sans rapport avec l'annulation ; c'est la reprise ordinaire de rag3weaver |
 | Transactions à point de reprise forcé | `37608cf4b` | une transaction qui porte un `COPY` hors journal n'écrit plus rien au journal : entière ou pas du tout. Deux défauts d'origine du chemin par défaut : la transaction « écritures puis `COPY` » revenue à moitié après une mort pendant son point de reprise ; la base qui ne se rouvrait plus après un `COPY` à lignes écartées |
 | Journal d'un `COPY` après un `DROP` | `47a80373e` | le `COPY` journalisé écrit les propriétés du catalogue, pas les colonnes du stockage (plantage du `COPY` de relations après `ALTER … DROP` puis `ADD`, mon défaut de l'étape 3) |
+| Point de reprise sans fin après un `COPY` annulé | `836edfc29` | après un gros `COPY` annulé, refusé ou à court de mémoire, le point de reprise suivant ne finissait plus et prenait des gigaoctets : le compte de l'index de clé en mémoire recule au retrait d'une clé, sa réservation ne passe plus sous zéro ; le compte de lignes et le curseur de réservation de la table reculent avec l'annulation. Deux défauts d'origine. Seuil mesuré : 16 000 lignes passent, 18 000 non |
+| La clé perdue par l'index qui grandit | `eb2d78e46` | défaut d'origine de `HashIndex::splitSlots` : une lecture en mémoire libérée quand une part de l'index fait plus que doubler laissait une clé sur disque sous une mauvaise empreinte — ligne présente, introuvable par sa clé, pour toujours. Trouvé par l'arbre principal (deux `COPY` de 50 000 symboles). Une base déjà touchée se réindexe |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
+
+**Où j'en suis (5 octobre, 7 h).** Tout est poussé (`master` à `eb2d78e46`), l'arbre
+`rag3db-moteur` est propre, sur la branche locale `copy-journalise-etape-4`. Les deux derniers
+lots sont l'index de clé primaire : `836edfc29` et `eb2d78e46` (tableau ci-dessus). La suite,
+dans l'ordre : l'étape 4 du chargement journalisé — la borne de mémoire du journal d'une
+transaction, les statistiques d'un `COPY` gardées dans sa transaction (la « voie (a) » du
+ticket de la cardinalité gonflée ; le banc a fait le recalage au point de reprise,
+`62f5c9817`), le témoin des pages perdues au rejeu (au banc), la liste jouée défaut basculé,
+puis le basculement ; ensuite les verrous. Le banc m'enverra à relire son correctif de
+l'élagage de l'index vectoriel (`shrinkForNode` écarte toujours le plus proche voisin).
+
+**Ce que ces deux lots laissent ouvert :**
+- la comparaison du banc a rendu une fois « Segmentation fault, no result » (sous un plafond de
+  12 Go, avant le correctif de `splitSlots`) ; jamais revue en quatre comparaisons depuis. Cause
+  non prouvée ; la lecture en mémoire libérée de `splitSlots` est l'hypothèse ;
+- après le dernier rebase (sur `62f5c9817`) je n'ai rejoué que `transaction_test`, `copy_tests`,
+  `local_hash_index_test` et la comparaison du banc ; la liste complète était verte juste avant ;
+- quatre suspects faibles relevés par le banc en chassant le même motif (rapport du banc,
+  `13d2dff01`), pas encore en tickets : `mergeSlot` (un pointeur dans une page que l'ajout peut
+  désépingler), `disk_array.cpp:48`, `dictionary_chunk.cpp:63-66`, et
+  `OverflowFileHandle::setStringOverflow` si la lecture optimiste rejoue sa fonction ;
+- TSan : les tests ouvrent la base avec `MAX_DB_SIZE=68719476736`, sinon la réservation de 8 Tio
+  du gestionnaire de tampon est refusée (« Mmap for size 8796093022208 failed ») et la passe ne
+  prouve rien — c'est arrivé une fois, vu au compte des rapports resté à zéro avec onze échecs.
+
+*(Les paragraphes qui suivent datent d'avant ces deux lots.)*
+
 
 **Où j'en suis (5 octobre, 1 h 30).** Tout est poussé, l'arbre `rag3db-moteur` est propre, sur
 la branche locale `copy-apres-insertions` (égale à `master`, `e1049934e`). La suite, dans l'ordre
