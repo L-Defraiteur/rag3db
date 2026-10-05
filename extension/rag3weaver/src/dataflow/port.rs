@@ -221,6 +221,16 @@ pub fn merge_port_values(a: PortValue, b: PortValue) -> Result<PortValue, String
         return Ok(PortValue::new(map_a));
     }
 
+    // Try branch-status merge (fan-in du port `status` vers la fusion)
+    if a.is::<Vec<crate::dataflow::generic_search_nodes::SignalBranchStatus>>()
+        && b.is::<Vec<crate::dataflow::generic_search_nodes::SignalBranchStatus>>()
+    {
+        let mut va = take_or_clone::<Vec<crate::dataflow::generic_search_nodes::SignalBranchStatus>>(a).unwrap();
+        let vb = take_or_clone::<Vec<crate::dataflow::generic_search_nodes::SignalBranchStatus>>(b).unwrap();
+        va.extend(vb);
+        return Ok(PortValue::new(va));
+    }
+
     // Try Results merge
     if a.is::<Vec<UnifiedResult>>() && b.is::<Vec<UnifiedResult>>() {
         let mut vec_a = take_or_clone::<Vec<UnifiedResult>>(a).unwrap();

@@ -413,6 +413,13 @@ impl SearchOptions {
 pub struct SearchOptions {
     pub limit: usize,
     pub offset: usize,
+    /// **Mode strict des signaux** (5 octobre 2026) : une branche de signal
+    /// qui manque ou échoue rend l'erreur entière, comme avant le repli par
+    /// branche. Par défaut (`false`), la branche tombée rend une liste vide
+    /// et un statut nommé, la fusion tourne avec les branches restantes —
+    /// toutes tombées, c'est une erreur.
+    #[serde(default)]
+    pub strict_signals: bool,
     /// Le raccourci nommé — trois mots qu'on retient. Traduit en
     /// [`Disponibilites`] par [`Consistency::en_disponibilites`].
     pub consistency: Consistency,
@@ -500,6 +507,7 @@ impl Default for SearchOptions {
         Self {
             limit: 10,
             offset: 0,
+            strict_signals: false,
             consistency: Consistency::default(),
             exige: None,
             attendre_les_autres: None,

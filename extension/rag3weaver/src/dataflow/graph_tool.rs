@@ -1923,6 +1923,11 @@ mod tests {
                 EdgeDef { from_node: "weigh".into(), from_port: "meta".into(), to_node: "render".into(), to_port: "meta".into() },
                 EdgeDef { from_node: "vector".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "vector".into() },
                 EdgeDef { from_node: "sparse".into(), from_port: "results".into(), to_node: "fuse".into(), to_port: "sparse".into() },
+                // Les statuts des branches (repli par branche, 5 octobre
+                // 2026) : la fusion refuse quand toutes sont tombées.
+                EdgeDef { from_node: "bm25".into(), from_port: "status".into(), to_node: "fuse".into(), to_port: "status".into() },
+                EdgeDef { from_node: "vector".into(), from_port: "status".into(), to_node: "fuse".into(), to_port: "status".into() },
+                EdgeDef { from_node: "sparse".into(), from_port: "status".into(), to_node: "fuse".into(), to_port: "status".into() },
                 // D'où viennent les poids : l'appelant, la base de
                 // connaissances, ou le gabarit — la fusion doit voir la requête.
                 EdgeDef { from_node: "source".into(), from_port: "query".into(), to_node: "fuse".into(), to_port: "query".into() },
@@ -2020,9 +2025,10 @@ mod tests {
             vars.insert(k.to_string(), v.to_string());
         }
         let def = parse_mermaid_template(SEARCH_BASE_MERMAID, &vars).unwrap();
-        // Onze nœuds et vingt-cinq arêtes depuis `cohere` (4 octobre 2026).
+        // Onze nœuds ; vingt-huit arêtes depuis les statuts des branches
+        // (repli par branche, 5 octobre 2026).
         assert_eq!(def.nodes.len(), 11);
-        assert_eq!(def.edges.len(), 25);
+        assert_eq!(def.edges.len(), 28);
     }
 
     // ── Aller-retour Mermaid avec la fiche ──────────────────────────

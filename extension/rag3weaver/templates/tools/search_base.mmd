@@ -123,8 +123,11 @@ graph LR
     weigh -->|meta| render
     rerank -->|meta| render
     bm25 -->|results:bm25| fuse
+    bm25 -->|status| fuse
     vector -->|results:vector| fuse
+    vector -->|status| fuse
     sparse -->|results:sparse| fuse
+    sparse -->|status| fuse
     fuse -->|results| cohere
     cohere -->|results| weigh
     weigh -->|results| rerank

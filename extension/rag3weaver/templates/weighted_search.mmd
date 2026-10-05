@@ -20,7 +20,10 @@ graph LR
     source -->|query:query| rerank
     source -->|query:query| resolve
     title -->|results:signals| fuse
+    title -->|status| fuse
     content -->|results:signals| fuse
+    content -->|status| fuse
     vector -->|results:signals| fuse
+    vector -->|status| fuse
     fuse -->|results| rerank
     rerank -->|results| resolve

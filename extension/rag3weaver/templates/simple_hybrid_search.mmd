@@ -17,5 +17,7 @@ graph LR
     source -->|query| bm25
     source -->|query:query| resolve
     vector -->|results:vector| fuse
+    vector -->|status| fuse
     bm25 -->|results:bm25| fuse
+    bm25 -->|status| fuse
     fuse -->|results| resolve

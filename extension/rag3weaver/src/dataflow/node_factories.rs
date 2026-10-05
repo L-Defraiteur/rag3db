@@ -921,6 +921,16 @@ fn results_out() -> PortDef {
     PortDef { name: "results", port_type: PortType::Results, required: false }
 }
 
+/// **Le statut d'une branche de signal** (repli par branche, 5 octobre
+/// 2026) : émis TOUJOURS — « disponible » compris — pour que l'exécution se
+/// lise nœud par nœud ; la fusion le prend en fan-in et refuse quand toutes
+/// les branches actives sont tombées. Non câblé, le repli reste DIT (les
+/// warnings), mais un « tout tombé » rend vide sans erreur — la vérification
+/// du gabarit l'avertit au chargement.
+fn status_out() -> PortDef {
+    PortDef { name: "status", port_type: PortType::Meta, required: false }
+}
+
 /// Factory for VectorSearchNode (config: limit, result_mode, signal).
 pub struct VectorSearchNodeFactory;
 
@@ -952,7 +962,7 @@ impl NodeFactory for VectorSearchNodeFactory {
             node_type: "VectorSearchNode",
             description: "Vector similarity search on chunk embeddings",
             inputs: vec![query_in()],
-            outputs: vec![results_out(), meta_out()],
+            outputs: vec![results_out(), meta_out(), status_out()],
             config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }
@@ -1005,7 +1015,7 @@ impl NodeFactory for BM25SearchNodeFactory {
             node_type: "BM25SearchNode",
             description: "BM25 full-text search with highlight→chunk resolution",
             inputs: vec![query_in()],
-            outputs: vec![results_out(), meta_out()],
+            outputs: vec![results_out(), meta_out(), status_out()],
             config_params: vec![
                 limit_param(),
                 ConfigParam {
@@ -1078,7 +1088,7 @@ impl NodeFactory for SparseSearchNodeFactory {
             // sparse sur des chunks non embarqués ne pouvait pas dire qu'il
             // était une dette et non une absence — le vecteur le disait, le
             // sparse non : le demi-portage que `Catalog::search` n'avait pas.
-            outputs: vec![results_out(), meta_out()],
+            outputs: vec![results_out(), meta_out(), status_out()],
             config_params: vec![limit_param(), result_mode_param(), signal_param()],
         }
     }
@@ -1183,6 +1193,7 @@ impl NodeFactory for FuseResultsNodeFactory {
                 PortDef { name: "bm25", port_type: PortType::Results, required: false },
                 PortDef { name: "sparse", port_type: PortType::Results, required: false },
                 PortDef { name: "signals", port_type: PortType::Results, required: false },
+                PortDef { name: "status", port_type: PortType::Meta, required: false },
                 // La requête, pour savoir d'où viennent les poids (appelant,
                 // base de connaissances, gabarit). Facultatif : sans elle, le
                 // gabarit décide.

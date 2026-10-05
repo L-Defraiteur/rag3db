@@ -255,6 +255,41 @@ pub struct HookGraph {
     #[serde(default)]
     pub data: BTreeMap<String, PathBuf>,
 }
+/// **La vérification du repli par branche** (5 octobre 2026) : un nœud de
+/// signal dont le port `status` ne va à aucune fusion est une déclaration
+/// acceptée qui ne fait pas ce qu'on croit — le repli reste DIT (les
+/// warnings), mais un échec de TOUTES les branches rendra un résultat vide
+/// au lieu d'une erreur. Ça se dit au chargement du gabarit, pas à la
+/// première panne. Avertissement, jamais une erreur : un graphe à signal
+/// seul, sans fusion, n'a rien à câbler.
+fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Vec<String> {
+    const SIGNAUX: [&str; 3] = ["VectorSearchNode", "BM25SearchNode", "SparseSearchNode"];
+    let une_fusion = def.nodes.iter().any(|m| m.node_type == "FuseResultsNode");
+    if !une_fusion {
+        return vec![];
+    }
+    def.nodes
+        .iter()
+        .filter(|n| SIGNAUX.contains(&n.node_type.as_str()))
+        .filter(|n| {
+            !def.edges.iter().any(|e| {
+                e.from_node == n.name
+                    && e.from_port == "status"
+                    && def
+                        .nodes
+                        .iter()
+                        .any(|m| m.name == e.to_node && m.node_type == "FuseResultsNode")
+            })
+        })
+        .map(|n| {
+            format!(
+                "{outil} : le port status de {} ne va à aucune fusion — un échec                  de toutes les branches rendra un résultat vide (status non câblé)",
+                n.name
+            )
+        })
+        .collect()
+}
+
 struct PreparedHook {
     tool: GraphTool,
     data: Value,
@@ -589,6 +624,9 @@ impl PreparedBackend {
                 if !tool.params().iter().any(|p| p.name == key) {
                     return Err(format!("{name}: unknown binding {key}"));
                 }
+            }
+            for avertissement in statuts_non_cables(name, tool.template()) {
+                eprintln!("[backend] {avertissement}");
             }
             if let Some(hook) = &attachment.after {
                 // Le graphe du crochet se charge et se valide ICI : un
@@ -1923,6 +1961,32 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn un_status_non_cable_s_avertit_au_chargement() {
+        use crate::dataflow::GraphTool;
+        // Câblé : aucun avertissement.
+        let cable = GraphTool::from_mermaid(
+            "%% tool: t\n%% description: d\n%% result: fuse.results\n\ngraph LR\n    v[\"VectorSearchNode\"]\n    fuse[\"FuseResultsNode\"]\n    v -->|results:vector| fuse\n    v -->|status| fuse\n",
+        )
+        .expect("gabarit câblé");
+        assert!(super::statuts_non_cables("t", cable.template()).is_empty());
+        // Non câblé : l'avertissement nomme le nœud et la conséquence.
+        let nu = GraphTool::from_mermaid(
+            "%% tool: t\n%% description: d\n%% result: fuse.results\n\ngraph LR\n    v[\"VectorSearchNode\"]\n    fuse[\"FuseResultsNode\"]\n    v -->|results:vector| fuse\n",
+        )
+        .expect("gabarit nu");
+        let avert = super::statuts_non_cables("t", nu.template());
+        assert_eq!(avert.len(), 1, "{avert:?}");
+        assert!(avert[0].contains("status non câblé"), "{}", avert[0]);
+        // Sans fusion : un signal seul n'a rien à câbler, pas d'avertissement.
+        let seul = GraphTool::from_mermaid(
+            "%% tool: t\n%% description: d\n%% result: v.results\n\ngraph LR\n    v[\"VectorSearchNode\"]\n",
+        )
+        .expect("gabarit à signal seul");
+        assert!(super::statuts_non_cables("t", seul.template()).is_empty());
+    }
+
+
     use super::*;
     #[test]
     fn search_verbs_run_through_library_without_a_transport() {

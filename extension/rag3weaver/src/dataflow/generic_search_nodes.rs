@@ -42,6 +42,120 @@ use super::node::{Node, NodeContext};
 use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
 use super::services::ConnService;
 
+// ─── Le statut d'une branche de signal (repli par branche, 5 octobre 2026) ──
+
+/// **Ce qu'une branche de signal a rendu**, émis sur le port `status` de
+/// chaque nœud de signal — TOUJOURS, « disponible » compris : l'exécution se
+/// lit nœud par nœud, dans ce que le nœud a rendu, jamais dans un registre à
+/// côté (la règle des ports de la vision). `FuseResultsNode` les lit en
+/// fan-in : toutes les branches actives tombées, c'est une erreur — pas un
+/// résultat vide.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignalBranchStatus {
+    /// L'étiquette de fusion de la branche (« vector », « bm25 », « sparse »
+    /// ou le `signal` déclaré du nœud).
+    pub label: String,
+    pub state: BranchState,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BranchState {
+    /// La branche a répondu (même avec zéro résultat : un zéro légitime).
+    Available,
+    /// Le signal n'existe pas ici pour une raison connue : modèle absent,
+    /// index jamais bâti, en retard sur sa table, plein texte en rebâti.
+    NotAvailable(String),
+    /// La branche a échoué sur une erreur du moteur.
+    Failed(String),
+}
+
+impl SignalBranchStatus {
+    /// Le message pour l'agent, en anglais comme le rendu : « dense signal
+    /// is not available: … » / « text signal failed: … ».
+    pub fn message(&self, mot: &str) -> Option<String> {
+        match &self.state {
+            BranchState::Available => None,
+            BranchState::NotAvailable(raison) => {
+                Some(format!("{mot} signal is not available: {raison}"))
+            }
+            BranchState::Failed(raison) => Some(format!("{mot} signal failed: {raison}")),
+        }
+    }
+
+    pub fn tombee(&self) -> bool {
+        !matches!(self.state, BranchState::Available)
+    }
+}
+
+/// La chute d'une branche, classée au site de l'erreur.
+enum Chute {
+    Indisponible(String),
+    Echec(String),
+}
+
+/// **Le repli d'un nœud de signal** : en mode par défaut, la branche tombée
+/// rend une liste vide, son statut sur le port `status`, et le DIT
+/// (`ctx.warn` → les warnings du résultat) — jamais un repli muet. En mode
+/// strict (`SearchOptions.strict_signals`), l'erreur d'origine, entière,
+/// comme avant le 5 octobre.
+fn replier_la_branche(
+    ctx: &mut NodeContext,
+    strict: bool,
+    label: &str,
+    mot: &str,
+    query: &str,
+    target: &str,
+    signals: crate::search::SearchSignals,
+    chute: Chute,
+) -> Result<(), String> {
+    let (etat, erreur) = match chute {
+        Chute::Indisponible(r) => (BranchState::NotAvailable(r.clone()), r),
+        Chute::Echec(r) => (BranchState::Failed(r.clone()), r),
+    };
+    if strict {
+        return Err(erreur);
+    }
+    let status = SignalBranchStatus { label: label.to_string(), state: etat };
+    let message = status.message(mot).unwrap_or_default();
+    // `ctx.warn` reste dans le journal du nœud ; ce qui touche à la justesse
+    // du résultat passe par la MÉTA — un repli muet pour l'appelant serait
+    // exactement ce que la décision interdit.
+    ctx.warn(&message);
+    ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+    ctx.set_output("status", PortValue::new(vec![status]));
+    ctx.set_output(
+        "meta",
+        PortValue::new(crate::search::SearchMeta {
+            query: query.to_string(),
+            target: target.to_string(),
+            signals,
+            consistency: crate::search::Consistency::default(),
+            partial: true,
+            pending_count: 0,
+            vector_count: 0,
+            bm25_count: 0,
+            sparse_count: 0,
+            fused_count: 0,
+            reranked_count: 0,
+            warnings: vec![message],
+            search_time_ms: 0,
+            diagnostics: None,
+        }),
+    );
+    Ok(())
+}
+
+/// Le statut « disponible », émis au succès d'une branche.
+fn statut_disponible(ctx: &mut NodeContext, label: &str) {
+    ctx.set_output(
+        "status",
+        PortValue::new(vec![SignalBranchStatus {
+            label: label.to_string(),
+            state: BranchState::Available,
+        }]),
+    );
+}
+
 // ─── SearchSourceNode ────────────────────────────────────────────────────────
 
 /// Resolves a `SearchTarget` from the catalog and emits a Query with it.
@@ -552,6 +666,11 @@ impl Node for VectorSearchNode {
             return Ok(());
         }
 
+        // Le repli par branche (5 octobre 2026) : l'étiquette et le mode,
+        // connus d'emblée — chaque chute du signal passe par replier_la_branche.
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let strict = options.strict_signals;
+
         let conn = ctx
             .service::<ConnService>("conn")
             .ok_or("VectorSearchNode: 'conn' service not found")?
@@ -608,8 +727,21 @@ impl Node for VectorSearchNode {
             Some(e) => e,
             None => {
                 let mut cache = HashMap::new();
-                embed_query(&*embedder, &query_str, &mut cache)
-                    .map_err(|e| format!("VectorSearchNode: embed failed: {e}"))?
+                match embed_query(&*embedder, &query_str, &mut cache) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        return replier_la_branche(
+                            ctx,
+                            strict,
+                            &label,
+                            "dense",
+                            &query_str,
+                            &target.name,
+                            crate::search::SearchSignals::VECTOR,
+                            Chute::Indisponible(format!("VectorSearchNode: embed failed: {e}")),
+                        )
+                    }
+                }
             }
         };
 
@@ -644,12 +776,32 @@ impl Node for VectorSearchNode {
                                 });
                             match vivant {
                                 Some(Ok(st)) => (st.index, st.column),
-                                Some(Err(e)) => return Err(format!("VectorSearchNode: {e}")),
+                                Some(Err(e)) => {
+                                    return replier_la_branche(
+                                        ctx,
+                                        strict,
+                                        &label,
+                                        "dense",
+                                        &query_str,
+                                        &target.name,
+                                        crate::search::SearchSignals::VECTOR,
+                                        Chute::Indisponible(format!("VectorSearchNode: {e}")),
+                                    )
+                                }
                                 None => {
-                                    return Err(format!(
-                                        "VectorSearchNode: {}",
-                                        crate::embedding_storage::unavailable_message(&s, &m)
-                                    ))
+                                    return replier_la_branche(
+                                        ctx,
+                                        strict,
+                                        &label,
+                                        "dense",
+                                        &query_str,
+                                        &target.name,
+                                        crate::search::SearchSignals::VECTOR,
+                                        Chute::Indisponible(format!(
+                                            "VectorSearchNode: {}",
+                                            crate::embedding_storage::unavailable_message(&s, &m)
+                                        )),
+                                    )
                                 }
                             }
                         }
@@ -685,8 +837,22 @@ impl Node for VectorSearchNode {
                 &filter_params,
                 filter_match.as_deref(),
             ),
-        }
-        .map_err(|e| format!("VectorSearchNode: search failed: {e}"))?;
+        };
+        let chunk_results = match chunk_results {
+            Ok(r) => r,
+            Err(e) => {
+                return replier_la_branche(
+                    ctx,
+                    strict,
+                    &label,
+                    "dense",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::VECTOR,
+                    Chute::Echec(format!("VectorSearchNode: search failed: {e}")),
+                )
+            }
+        };
 
         // Resolve chunk-level results → parent-level with data enrichment
         // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
@@ -704,9 +870,23 @@ impl Node for VectorSearchNode {
             self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
         )
-        .map_err(|e| format!("VectorSearchNode: resolve chunks failed: {e}"))?;
+        ;
+        let results = match results {
+            Ok(r) => r,
+            Err(e) => {
+                return replier_la_branche(
+                    ctx,
+                    strict,
+                    &label,
+                    "dense",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::VECTOR,
+                    Chute::Echec(format!("VectorSearchNode: resolve chunks failed: {e}")),
+                )
+            }
+        };
 
-        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
@@ -730,6 +910,7 @@ impl Node for VectorSearchNode {
         }
 
         ctx.set_output("results", PortValue::new(unified));
+        statut_disponible(ctx, &label);
         ctx.set_output(
             "meta",
             PortValue::new(crate::search::SearchMeta {
@@ -955,15 +1136,34 @@ impl Node for BM25SearchNode {
                 diag_bm25.as_mut(),
                 &mut node_warnings,
             )
-            .map_err(|e| format!("BM25SearchNode: recherche native: {e}"))?;
+            ;
+            let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+            let results = match results {
+                Ok(r) => r,
+                Err(e) => {
+                    for w in &node_warnings {
+                        ctx.warn(w);
+                    }
+                    return replier_la_branche(
+                        ctx,
+                        options.strict_signals,
+                        &label,
+                        "text",
+                        &query_str,
+                        &target.name,
+                        crate::search::SearchSignals::BM25,
+                        Chute::Echec(format!("BM25SearchNode: recherche native: {e}")),
+                    );
+                }
+            };
             for w in &node_warnings {
                 ctx.warn(w);
             }
-            let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
             let unified =
                 finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
             let nombre = unified.len();
             ctx.set_output("results", PortValue::new(unified));
+            statut_disponible(ctx, &label);
             ctx.set_output(
                 "meta",
                 PortValue::new(crate::search::SearchMeta {
@@ -1017,17 +1217,43 @@ impl Node for BM25SearchNode {
             // Handle FTS de la table parente si le service l'expose ; sinon on
             // reste sur le chemin C++.
             fts_handle.as_deref(),
-        )
-        .map_err(|e| format!("BM25SearchNode: search failed: {e}"))?;
+        );
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let results = match results {
+            Ok(r) => r,
+            Err(e) => {
+                for w in &node_warnings {
+                    ctx.warn(w);
+                }
+                let texte = format!("BM25SearchNode: search failed: {e}");
+                // « aucun index FTS ouvert » : le signal n'existe pas ici —
+                // index jamais bâti ou en rebâti — contre un vrai échec.
+                let chute = if texte.contains("aucun index FTS") {
+                    Chute::Indisponible(texte)
+                } else {
+                    Chute::Echec(texte)
+                };
+                return replier_la_branche(
+                    ctx,
+                    options.strict_signals,
+                    &label,
+                    "text",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::BM25,
+                    chute,
+                );
+            }
+        };
 
         for w in &node_warnings {
             ctx.warn(w);
         }
 
-        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
+        statut_disponible(ctx, &label);
 
         // **Une fiche honnête de ce que *ce* nœud a fait.** Les compteurs des
         // autres signaux sont à zéro parce qu'il ne les a pas exécutés — c'est
@@ -1161,6 +1387,8 @@ impl Node for SparseSearchNode {
             .service::<ConnService>("conn")
             .ok_or("SparseSearchNode: 'conn' service not found")?
             .0.clone();
+        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let strict = options.strict_signals;
 
         // Le pré-filtre sparse est **exact** : pas de statistique de corpus,
         // donc un filtre ne peut retirer que des lignes, jamais changer un
@@ -1178,25 +1406,74 @@ impl Node for SparseSearchNode {
             // aussi : pas de seconde passe avant ici.
             sv
         } else if let Some(dual) = dual_emb {
-            let (_, sparse_vecs) = dual
-                .embed_dual(&[query_str.clone()])
-                .map_err(|e| format!("SparseSearchNode: dual embed failed: {e}"))?;
-            sparse_vecs.into_iter().next().unwrap()
+            match dual.embed_dual(&[query_str.clone()]) {
+                Ok((_, sparse_vecs)) => sparse_vecs.into_iter().next().unwrap(),
+                Err(e) => {
+                    return replier_la_branche(
+                        ctx,
+                        strict,
+                        &label,
+                        "sparse",
+                        &query_str,
+                        &target.name,
+                        crate::search::SearchSignals::SPARSE,
+                        Chute::Indisponible(format!("SparseSearchNode: dual embed failed: {e}")),
+                    )
+                }
+            }
         } else if let Some(sparse) = sparse_emb {
-            let vecs = sparse
-                .embed_sparse(&[query_str.clone()])
-                .map_err(|e| format!("SparseSearchNode: sparse embed failed: {e}"))?;
-            vecs.into_iter().next().unwrap()
+            match sparse.embed_sparse(&[query_str.clone()]) {
+                Ok(vecs) => vecs.into_iter().next().unwrap(),
+                Err(e) => {
+                    return replier_la_branche(
+                        ctx,
+                        strict,
+                        &label,
+                        "sparse",
+                        &query_str,
+                        &target.name,
+                        crate::search::SearchSignals::SPARSE,
+                        Chute::Indisponible(format!("SparseSearchNode: sparse embed failed: {e}")),
+                    )
+                }
+            }
         } else {
-            return Err("SparseSearchNode: no 'dual_embedder' or 'sparse_embedder' service".into());
+            return replier_la_branche(
+                ctx,
+                strict,
+                &label,
+                "sparse",
+                &query_str,
+                &target.name,
+                crate::search::SearchSignals::SPARSE,
+                Chute::Indisponible(
+                    "SparseSearchNode: no 'dual_embedder' or 'sparse_embedder' service".to_string(),
+                ),
+            );
         };
 
         let handles = ctx
             .service::<HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>("sparse_handles").cloned()
             .ok_or("SparseSearchNode: 'sparse_handles' service not found")?;
 
-        let handle = handles.get(&target.chunk_table)
-            .ok_or_else(|| format!("SparseSearchNode: no sparse handle for '{}'", target.chunk_table))?;
+        let handle = match handles.get(&target.chunk_table) {
+            Some(h) => h,
+            None => {
+                return replier_la_branche(
+                    ctx,
+                    strict,
+                    &label,
+                    "sparse",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::SPARSE,
+                    Chute::Indisponible(format!(
+                        "SparseSearchNode: no sparse handle for '{}'",
+                        target.chunk_table
+                    )),
+                )
+            }
+        };
 
         let backend = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog")
@@ -1231,8 +1508,22 @@ impl Node for SparseSearchNode {
                 limite,
                 &[], // empty fields for chunked entities (fields are on parent table)
             ),
-        }
-        .map_err(|e| format!("SparseSearchNode: search failed: {e}"))?;
+        };
+        let chunk_results = match chunk_results {
+            Ok(r) => r,
+            Err(e) => {
+                return replier_la_branche(
+                    ctx,
+                    strict,
+                    &label,
+                    "sparse",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::SPARSE,
+                    Chute::Echec(format!("SparseSearchNode: search failed: {e}")),
+                )
+            }
+        };
 
         // Resolve chunk-level results → parent-level with data enrichment
         // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
@@ -1250,9 +1541,23 @@ impl Node for SparseSearchNode {
             self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
         )
-        .map_err(|e| format!("SparseSearchNode: resolve chunks failed: {e}"))?;
+        ;
+        let results = match results {
+            Ok(r) => r,
+            Err(e) => {
+                return replier_la_branche(
+                    ctx,
+                    strict,
+                    &label,
+                    "sparse",
+                    &query_str,
+                    &target.name,
+                    crate::search::SearchSignals::SPARSE,
+                    Chute::Echec(format!("SparseSearchNode: resolve chunks failed: {e}")),
+                )
+            }
+        };
 
-        let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
@@ -1277,6 +1582,7 @@ impl Node for SparseSearchNode {
         }
 
         ctx.set_output("results", PortValue::new(unified));
+        statut_disponible(ctx, &label);
         ctx.set_output(
             "meta",
             PortValue::new(crate::search::SearchMeta {
@@ -1502,6 +1808,33 @@ impl Node for FuseResultsNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::FuseResultsNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        // **Les statuts des branches** (port `status`, fan-in, facultatif —
+        // repli par branche du 5 octobre 2026) : une branche tombée a rendu
+        // une liste vide et son état ; la fusion tourne avec ce qui reste.
+        // TOUTES les branches actives tombées, c'est une erreur agrégée —
+        // jamais un résultat vide qui se fait passer pour un zéro légitime.
+        let statuts: Vec<SignalBranchStatus> = ctx
+            .take_input("status")
+            .and_then(|pv| take_or_clone::<Vec<SignalBranchStatus>>(pv))
+            .unwrap_or_default();
+        if !statuts.is_empty() && statuts.iter().all(SignalBranchStatus::tombee) {
+            let raisons: Vec<String> = statuts
+                .iter()
+                .filter_map(|st| {
+                    let mot = match st.label.as_str() {
+                        "vector" => "dense",
+                        "bm25" => "text",
+                        autre => autre,
+                    };
+                    st.message(mot)
+                })
+                .collect();
+            return Err(format!(
+                "FuseResultsNode: every signal branch is down — {}",
+                raisons.join(" ; ")
+            ));
+        }
+
         // Listes étiquetées, dans l'ordre : ports nommés, puis fan-in par
         // étiquette (ordre de première apparition).
         let mut groups: Vec<(String, Vec<UnifiedResult>)> = Vec::new();
@@ -2340,13 +2673,16 @@ mod tests {
         let node = VectorSearchNode::new("vec", 10);
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
-        assert_eq!(node.outputs().len(), 2);
+        assert_eq!(node.outputs().len(), 3);
         assert_eq!(node.outputs()[0].name, "results");
         assert_eq!(node.outputs()[0].port_type, PortType::Results);
         // Le canal des avertissements, comme sur BM25 : sans lui, « les
         // résultats ne sont PAS restreints » restait dans le journal du nœud.
         assert_eq!(node.outputs()[1].name, "meta");
         assert_eq!(node.outputs()[1].port_type, PortType::Meta);
+        // Le statut de la branche (repli par branche, 5 octobre 2026) :
+        // émis toujours, lu par la fusion en fan-in.
+        assert_eq!(node.outputs()[2].name, "status");
         assert_eq!(node.node_type(), "VectorSearchNode");
     }
 
@@ -2355,10 +2691,12 @@ mod tests {
         let node = BM25SearchNode::new("bm25", 10);
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
-        // Deux sorties : les résultats, et ce que le moteur a dit d'eux.
-        assert_eq!(node.outputs().len(), 2);
+        // Trois sorties : les résultats, ce que le moteur a dit d'eux, et le
+        // statut de la branche (repli par branche, 5 octobre 2026).
+        assert_eq!(node.outputs().len(), 3);
         assert_eq!(node.outputs()[0].name, "results");
         assert_eq!(node.outputs()[1].name, "meta");
+        assert_eq!(node.outputs()[2].name, "status");
         assert_eq!(node.node_type(), "BM25SearchNode");
     }
 
@@ -2366,26 +2704,29 @@ mod tests {
     fn sparse_search_node_ports() {
         let node = SparseSearchNode::new("sparse", 10);
         assert_eq!(node.inputs().len(), 1);
-        assert_eq!(node.outputs().len(), 2);
+        assert_eq!(node.outputs().len(), 3);
         assert_eq!(node.outputs()[0].name, "results");
         // Le canal des avertissements, comme sur le vecteur et BM25. C'est
         // par lui qu'un zéro sparse dit s'il est une dette d'embarquement ou
         // une absence — le troisième signal était le seul à ne pas le dire.
         assert_eq!(node.outputs()[1].name, "meta");
         assert_eq!(node.outputs()[1].port_type, PortType::Meta);
+        assert_eq!(node.outputs()[2].name, "status");
         assert_eq!(node.node_type(), "SparseSearchNode");
     }
 
     #[test]
     fn fuse_results_node_ports() {
         let node = FuseResultsNode::new("fuse");
-        assert_eq!(node.inputs().len(), 5);
+        assert_eq!(node.inputs().len(), 6);
         assert_eq!(node.inputs()[0].name, "vector");
         assert_eq!(node.inputs()[1].name, "bm25");
         assert_eq!(node.inputs()[2].name, "sparse");
         assert_eq!(node.inputs()[3].name, "signals");
+        // Les statuts des branches, en fan-in : toutes tombées = une erreur.
+        assert_eq!(node.inputs()[4].name, "status");
         // La requête, facultative : d'où viennent les poids (B4).
-        assert_eq!(node.inputs()[4].name, "query");
+        assert_eq!(node.inputs()[5].name, "query");
         assert!(node.inputs().iter().all(|p| !p.required));
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0].name, "results");

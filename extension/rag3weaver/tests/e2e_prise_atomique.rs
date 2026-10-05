@@ -841,6 +841,10 @@ fn recherche_vectorielle(c: &Arc<Mutex<rag3weaver::Catalog>>, requete: &str) -> 
             consistency: Consistency::Immediate,
             exige: Some(rag3weaver::disponibilite::Disponibilites::DENSE),
             signals: Some(SearchSignals::VECTOR),
+            // Le contrat de cette suite est l'ERREUR nommée : le mode strict
+            // le fige, indépendamment du repli par branche (5 octobre 2026) —
+            // dont le pendant par défaut vit dans e2e_repli_de_branche.
+            strict_signals: true,
             ..Default::default()
         },
     )

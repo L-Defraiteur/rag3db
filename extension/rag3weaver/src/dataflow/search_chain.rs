@@ -426,6 +426,9 @@ impl Compiler<'_, '_> {
                 let n = self.node(kind, json!({}));
                 self.edge(&source, "query", &n, "query");
                 self.edge(&n, "results", &fuse, signal);
+                // Le statut de la branche (repli par branche, 5 octobre
+                // 2026) : la fusion refuse quand toutes sont tombées.
+                self.edge(&n, "status", &fuse, "status");
                 self.metadata_nodes.push(n);
             }
         }
