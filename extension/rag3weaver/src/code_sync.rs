@@ -923,6 +923,7 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             // demandé : on ne sait pas séparer les deux d'ici (minuterie de
             // rag3db-eb).
             let t = std::time::Instant::now();
+            tuer_pendant_la_validation();
             let r = catalog.conn().execute("COMMIT");
             crate::ingest_profile::add("sync · COMMIT du paquet (et son point de reprise)", t);
             match r {
@@ -978,6 +979,27 @@ fn tuer_avant_la_poussee() {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
+}
+
+/// **Crochet de test** (`RAG3WEAVER_TEST_KILL_IN_COMMIT=<n>:<µs>`) : pendant
+/// le n-ième COMMIT de ce processus (1 pour le premier), un autre fil tue le
+/// processus par SIGKILL après ce délai — une mort pendant la validation
+/// d'un groupe, et son point de reprise, que l'on balaie en variant le
+/// délai (`tests/e2e_tx_mort_pendant_la_validation.rs`).
+#[doc(hidden)]
+fn tuer_pendant_la_validation() {
+    static VALIDATIONS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let Ok(v) = std::env::var("RAG3WEAVER_TEST_KILL_IN_COMMIT") else { return };
+    let rang = VALIDATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let Some((n, delai)) = v.split_once(':').and_then(|(n, d)| Some((n.parse::<usize>().ok()?, d.parse::<u64>().ok()?))) else { return };
+    if n != rang {
+        return;
+    }
+    eprintln!("[rag3weaver] crochet de test : SIGKILL {delai} µs après le début de la validation {rang}");
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_micros(delai));
+        let _ = std::process::Command::new("kill").args(["-KILL", &std::process::id().to_string()]).status();
+    });
 }
 
 /// **Crochet de test** (`RAG3WEAVER_TEST_KILL_IN_BATCH=<rang>`) : le processus

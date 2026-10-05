@@ -46,6 +46,8 @@ thread_local! {
     static TUER_AVANT_SYNC: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
     /// Le rôle « un-lot » meurt-il après son lot ?
     static TUER_APRES_LOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Mourir pendant la validation : (n-ième COMMIT, délai en µs).
+    static TUER_EN_VALIDATION: std::cell::Cell<Option<(usize, u64)>> = const { std::cell::Cell::new(None) };
 }
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
@@ -177,6 +179,28 @@ fn role_enfant() {
         println!("DOSSIER {}", Path::new(&format!("{}.fts", base.display())).exists());
         return;
     }
+    if role == "constat" {
+        // Juste après une mort, avant toute reprise : un groupe est là en
+        // entier ou pas du tout. Ni morceau sans son arête, ni parent marqué
+        // découpé sans morceau.
+        // En écriture, sans initialiser le catalogue : une ouverture en
+        // lecture seule ne rejouerait pas les pages fantômes d'un point de
+        // reprise interrompu ; seules des lectures suivent.
+        let conn = rag3weaver::Rag3dbConnection::new(&base).expect("rouvrir la base");
+        let compte = |q: &str| rag3weaver::connection::DbConnection::execute(&conn, q).unwrap().rows[0][0].as_i64().unwrap();
+        let fichiers = compte("MATCH (f:File) RETURN count(f)");
+        let mut orphelins = 0;
+        let mut sans_morceau = 0;
+        for e in ["File", "Scope"] {
+            orphelins += compte(&format!("MATCH (c:{e}_Chunk) WHERE NOT EXISTS {{ MATCH (c)-[:{e}_CHUNKED_FROM]->(:{e}) }} RETURN count(c)"));
+            sans_morceau += compte(&format!(
+                "MATCH (p:{e}) WHERE p._chunked_hash IS NOT NULL AND p._chunked_hash <> '' \
+                 AND NOT EXISTS {{ MATCH (:{e}_Chunk)-[:{e}_CHUNKED_FROM]->(p) }} RETURN count(p)"
+            ));
+        }
+        println!("CONSTAT fichiers={fichiers} morceaux_sans_arete={orphelins} parents_sans_morceau={sans_morceau}");
+        return;
+    }
     let mut catalog = catalogue(&base);
     if role == "un-lot" {
         // Un écrivain qui ne fait qu'un lot du rebâti ; avec
@@ -273,7 +297,11 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         .env_remove("RAG3WEAVER_TEST_KILL_IN_BATCH")
         .env_remove("RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH")
         .env_remove("RAG3WEAVER_TX_POUSSEE_A_LA_FIN")
-        .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH");
+        .env_remove("RAG3WEAVER_TEST_FAIL_IN_BATCH")
+        .env_remove("RAG3WEAVER_TEST_KILL_IN_COMMIT");
+    if let Some((n, delai)) = TUER_EN_VALIDATION.with(|f| f.get()) {
+        cmd.env("RAG3WEAVER_TEST_KILL_IN_COMMIT", format!("{n}:{delai}"));
+    }
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }
@@ -430,6 +458,60 @@ fn un_arret_au_milieu_d_un_groupe_de_quatre_paquets_se_reprend_aux_memes_comptes
     assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 300, "{temoin:?}");
     assert_eq!(repris, temoin, "à K = 4, la reprise rend les comptes d'une passe sans arrêt");
     let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+/// **Une mort pendant la validation d'un groupe** (5 octobre 2026). Un
+/// groupe de quatre paquets mêle des écritures ordinaires (MERGE, SET) et des
+/// COPY ; sa validation force un point de reprise. Le moteur, avant
+/// `37608cf4b`, rejouait par le journal les écritures ordinaires d'un groupe
+/// mort pendant ce point de reprise, sans les lignes du COPY : un groupe à
+/// moitié, des morceaux sans leur arête que la reprise ne refaisait jamais.
+/// Ici, un autre fil tue l'écrivain un délai donné après le début de la
+/// deuxième validation (`RAG3WEAVER_TEST_KILL_IN_COMMIT`), balayé pour
+/// tomber avant, pendant et après le point de reprise. Juste après chaque
+/// mort, en lecture : 128, 256 ou 300 fichiers (un groupe entier ou pas du
+/// tout), aucun morceau sans arête, aucun parent découpé sans morceau ; puis
+/// la reprise rend les comptes d'une passe sans arrêt.
+#[test]
+#[ignore]
+fn une_mort_pendant_la_validation_d_un_groupe_le_laisse_entier_ou_absent() {
+    let temoin_dossier = dossier_sur_disque("temoin-validation");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_dossier.join("base.rag3db"), None, true, 4);
+    assert!(statut.success(), "le témoin va au bout :\n{sortie}");
+    let temoin = comptes_rendus("temoin", &sortie);
+    let mut constats = Vec::new();
+    // Le point de reprise de la validation tombe, sur ce corpus, entre 100 et
+    // 200 ms : le pas s'y resserre.
+    let delais = [0u64, 10_000, 50_000, 100_000, 110_000, 120_000, 130_000, 140_000, 150_000, 160_000, 170_000, 180_000, 190_000, 200_000, 400_000];
+    for delai in delais {
+        let dossier = dossier_sur_disque(&format!("validation-{delai}"));
+        let base = dossier.join("base.rag3db");
+        TUER_EN_VALIDATION.with(|f| f.set(Some((2, delai))));
+        let (statut, sortie) = lancer_avec("ecrivain", &base, None, true, 4);
+        TUER_EN_VALIDATION.with(|f| f.set(None));
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(statut.signal(), Some(9), "mort par SIGKILL pendant la deuxième validation ({delai} µs) :\n{sortie}");
+        let (statut, sortie) = lancer_avec("constat", &base, None, true, 4);
+        assert!(statut.success(), "la base rouvre après la mort ({delai} µs) :\n{sortie}");
+        let constat = ligne(&sortie, "CONSTAT ");
+        println!("▸ {delai:>7} µs : {constat}");
+        let lire = |cle: &str| -> i64 {
+            constat.split_whitespace().find_map(|m| m.strip_prefix(cle)).and_then(|v| v.parse().ok()).unwrap()
+        };
+        assert!([128, 256, 300].contains(&lire("fichiers=")), "un groupe à moitié ({delai} µs) : {constat}");
+        assert_eq!(lire("morceaux_sans_arete="), 0, "des morceaux sans leur arête ({delai} µs) : {constat}");
+        assert_eq!(lire("parents_sans_morceau="), 0, "des parents découpés sans morceau ({delai} µs) : {constat}");
+        constats.push(lire("fichiers="));
+        let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 4);
+        assert!(statut.success(), "la reprise va au bout ({delai} µs) :\n{sortie}");
+        let repris = comptes_rendus("repreneur", &sortie);
+        assert_eq!(repris, temoin, "après une mort pendant la validation ({delai} µs), les comptes d'une passe sans arrêt");
+        let _ = std::fs::remove_dir_all(&dossier);
+    }
+    let absent = constats.iter().filter(|&&n| n == 128).count();
+    let entier = constats.iter().filter(|&&n| n == 256).count();
+    println!("▸ {} morts : groupe absent {absent}, groupe entier {entier}, plus loin {}", constats.len(), constats.len() - absent - entier);
     let _ = std::fs::remove_dir_all(&temoin_dossier);
 }
 
