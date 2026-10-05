@@ -903,6 +903,9 @@ fn transaction_par_paquet() -> bool {
 fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
     catalog.set_in_transaction(true);
+    // Les points de reprise du dataflow n'ont rien à reprendre dans la
+    // transaction : coupés, sauf `RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE=1`.
+    catalog.set_checkpoints_in_transaction(std::env::var("RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE").as_deref() == Ok("1"));
     Ok(())
 }
 

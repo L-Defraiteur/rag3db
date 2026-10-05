@@ -246,6 +246,10 @@ pub struct Catalog {
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
     /// annulation emporterait sinon le schéma avec les lignes.
     in_transaction: bool,
+    /// Garder les points de reprise du dataflow dans une transaction
+    /// ([`set_checkpoints_in_transaction`](Self::set_checkpoints_in_transaction)) ;
+    /// coupés par défaut.
+    checkpoints_in_transaction: bool,
     /// **Une première indexation en cours** (`begin_fresh_ingest`) : les
     /// entités dont la table était vide à son début, les uuids que cette
     /// indexation y a déjà écrits, et la marque de session que leurs lignes
@@ -453,6 +457,7 @@ impl Catalog {
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
             in_transaction: false,
+            checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
             merge_in_transaction: HashSet::new(),
@@ -5638,7 +5643,7 @@ impl Catalog {
         let mode = entity_config.checkpoint.unwrap_or(self.config.checkpoint_mode);
         crate::ingest_profile::add("entités · runtime, définition et empreinte du graphe", t);
         let t = std::time::Instant::now();
-        let result = match (&self.checkpoint_store, mode) {
+        let result = match (self.checkpoint_store_for_execution(), mode) {
             (Some(store), crate::config::CheckpointMode::Full | crate::config::CheckpointMode::Operations) => runtime
                 .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
             _ => runtime.execute(&mut graph),
@@ -6783,6 +6788,23 @@ impl Catalog {
         self.merge_in_transaction.clear();
     }
 
+    /// **Les points de reprise du dataflow, dans une transaction** : coupés
+    /// par défaut (levier 3 du chargement final, 5 octobre 2026). Une
+    /// exécution dans la transaction d'un paquet n'a rien à reprendre — le
+    /// paquet échoué est défait (ROLLBACK) et refait en entier —, et ses
+    /// lignes d'état (`_DataflowNodeState`, `_DataflowExecution`, deux
+    /// écritures par nœud) partiraient avec lui. `true` les garde, pour
+    /// comparer. Hors transaction, rien ne change.
+    pub fn set_checkpoints_in_transaction(&mut self, keep: bool) {
+        self.checkpoints_in_transaction = keep;
+    }
+
+    /// Le magasin de points de reprise d'une exécution qui commence : aucun
+    /// dans une transaction, sauf si on les y garde.
+    fn checkpoint_store_for_execution(&self) -> Option<&Arc<dyn CheckpointStore>> {
+        self.checkpoint_store.as_ref().filter(|_| !self.in_transaction || self.checkpoints_in_transaction)
+    }
+
     /// **Rendre ce catalogue inutilisable**, comme après un point de reprise
     /// échoué : toutes les connexions de la base refusent ensuite tout, et
     /// [`must_reopen`](Self::must_reopen) donne `reason`. Après l'annulation
@@ -7222,7 +7244,7 @@ impl Catalog {
         phase("runtime et abonnements", &mut horloge);
 
         let mode = self.config.checkpoint_mode;
-        let result = match (&self.checkpoint_store, mode) {
+        let result = match (self.checkpoint_store_for_execution(), mode) {
             (Some(store), crate::config::CheckpointMode::Full | crate::config::CheckpointMode::Operations) => runtime
                 .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
             _ => runtime.execute(&mut graph),
@@ -10602,6 +10624,34 @@ mod tests {
         // Checkpoint should be marked completed (no pending checkpoints)
         let pending = catalog.check_pending_checkpoints().unwrap();
         assert!(pending.is_empty(), "checkpoint should be cleaned up after successful drain");
+    }
+
+    /// **Dans une transaction, pas de point de reprise du dataflow** (levier
+    /// 3) ; hors transaction, comme avant ; gardés sur demande.
+    #[test]
+    fn checkpoints_are_cut_inside_a_transaction_and_kept_outside() {
+        let (mut catalog, store) = make_catalog_with_mock_checkpoint();
+        catalog.initialize().unwrap();
+        let executions = || {
+            let mut n = 0;
+            store.mutate_all(|all| n = all.len());
+            n
+        };
+        catalog.create("Document", make_doc_data("Dehors", "Corps")).unwrap();
+        assert_eq!(catalog.drain().failed, 0);
+        let hors = executions();
+        assert!(hors > 0, "hors transaction, l'exécution a ses points de reprise");
+
+        catalog.set_in_transaction(true);
+        catalog.create("Document", make_doc_data("Dedans", "Corps")).unwrap();
+        assert_eq!(catalog.drain().failed, 0);
+        assert_eq!(executions(), hors, "dans la transaction, aucun point de reprise");
+
+        catalog.set_checkpoints_in_transaction(true);
+        catalog.create("Document", make_doc_data("Gardes", "Corps")).unwrap();
+        assert_eq!(catalog.drain().failed, 0);
+        assert!(executions() > hors, "gardés sur demande");
+        catalog.set_in_transaction(false);
     }
 
     #[test]
