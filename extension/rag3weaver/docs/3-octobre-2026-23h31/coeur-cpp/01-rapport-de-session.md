@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 7 h.**
+Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 9 h.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -40,23 +40,44 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Journal d'un `COPY` après un `DROP` | `47a80373e` | le `COPY` journalisé écrit les propriétés du catalogue, pas les colonnes du stockage (plantage du `COPY` de relations après `ALTER … DROP` puis `ADD`, mon défaut de l'étape 3) |
 | Point de reprise sans fin après un `COPY` annulé | `836edfc29` | après un gros `COPY` annulé, refusé ou à court de mémoire, le point de reprise suivant ne finissait plus et prenait des gigaoctets : le compte de l'index de clé en mémoire recule au retrait d'une clé, sa réservation ne passe plus sous zéro ; le compte de lignes et le curseur de réservation de la table reculent avec l'annulation. Deux défauts d'origine. Seuil mesuré : 16 000 lignes passent, 18 000 non |
 | La clé perdue par l'index qui grandit | `eb2d78e46` | défaut d'origine de `HashIndex::splitSlots` : une lecture en mémoire libérée quand une part de l'index fait plus que doubler laissait une clé sur disque sous une mauvaise empreinte — ligne présente, introuvable par sa clé, pour toujours. Trouvé par l'arbre principal (deux `COPY` de 50 000 symboles). Une base déjà touchée se réindexe |
+| Statistiques d'un `COPY` dans sa transaction (étape 4, lot 1) | `1177f5794` | la cardinalité et les comptes de distincts d'un `COPY` ne rejoignent la table qu'à la validation ; un `COPY` annulé ou refusé ne les gonfle plus ; des insertions suivies d'un `COPY` dans la même transaction ne sont plus comptées deux fois (deux défauts de `f1d8c7190`) |
+| Forme compacte des tableaux au journal | `1c232f318` | un tableau de taille fixe de numériques s'écrit en octets bruts : un `FLOAT[768]` pèse 3,1 Ko au journal au lieu de 9,3, par `COPY` comme par `SET` ; trois numéros d'enregistrement neufs (40, 42, 45), l'ancien décodage gardé ; un journal neuf n'est pas lisible par un moteur d'avant |
+| Sonde du poids du journal | `c1c2f9dfc` | `RAG3DB_PROFILE_JOURNAL=1` : à chaque validation, les octets du journal de la transaction par type d'enregistrement et par table, sur la sortie d'erreur |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
 
-**Où j'en suis (5 octobre, 7 h).** Tout est poussé (`master` à `eb2d78e46`), l'arbre
-`rag3db-moteur` est propre, sur la branche locale `copy-journalise-etape-4`. Les deux derniers
-lots sont l'index de clé primaire : `836edfc29` et `eb2d78e46` (tableau ci-dessus). La suite,
-dans l'ordre : l'étape 4 du chargement journalisé — la borne de mémoire du journal d'une
-transaction, les statistiques d'un `COPY` gardées dans sa transaction (la « voie (a) » du
-ticket de la cardinalité gonflée ; le banc a fait le recalage au point de reprise,
-`62f5c9817`), le témoin des pages perdues au rejeu (au banc), la liste jouée défaut basculé,
-puis le basculement ; ensuite les verrous. Le banc m'enverra à relire son correctif de
-l'élagage de l'index vectoriel (`shrinkForNode` écarte toujours le plus proche voisin).
+**Où j'en suis (5 octobre, 9 h).** `master` à `c1c2f9dfc`, branche locale
+`copy-journalise-etape-4`. L'étape 4 du chargement journalisé est en cours ; sa page est
+`05-la-borne-du-journal-d-un-copy.md`.
 
-**Ce que ces deux lots laissent ouvert :**
+- **Fait et poussé** : le lot 1 (statistiques), la forme compacte des tableaux, la sonde.
+- **Codé, pas poussé** (dans l'arbre `rag3db-moteur`, non commité) : le mécanisme du repli —
+  `CALL copy_journal_threshold`, `Transaction::fallBackToForcedCheckpoint`, `LocalWAL::discard`,
+  le compteur `copy_journal_fallbacks` — et ses neuf témoins (`CopyJournalThresholdTest`), verts.
+  Liste complète lancée dessus, patch chez le banc
+  (`~/.cache/rag3db-moteur-notes/etape-4/repli/repli-src.patch`). Le défaut du seuil est
+  provisoire (un huitième du tampon, plafonné à 256 Mio).
+- **En attente** : deux passes sondées des embarquements (fichiers et blobs à 2 048 fichiers par
+  paquet, `RAG3DB_PROFILE_JOURNAL=1`), quand l'arbre principal sera rebâti sur `c1c2f9dfc`. Elles
+  doivent dire la plus grosse transaction, d'où vient le facteur 8 (491 Mo de journal pour 62 Mo
+  de texte), et fixer le défaut du seuil avec une marge de ×2 sous le tampon de 4 Gio.
+- **Ce que la première mesure des embarquements a montré** (quatre passes sous `COPY`
+  journalisé, aucun refus ni plantage) : pas de gain de temps en mode fichiers (80 s contre
+  78–79), une perte en mode blobs (117 s contre 78–89) — les blobs sont écrits deux fois, au
+  journal puis aux pages. Le basculement du défaut ne se justifie donc pas par la vitesse
+  (décision de l'orchestration : il se justifie par la stèle), et il ne doit ralentir aucun
+  mode : fichiers à ±3 %, blobs ramenés par le repli à leur temps d'avant, prouvé par une série
+  des embarquements avant de basculer.
+- **Si le facteur 8 est le coût par cellule** (chaque valeur réécrit son type au journal) : ne
+  pas le corriger dans la foulée ; rendre le chiffre et la taille du correctif à l'orchestration.
+- **Ensuite** : la liste « défaut basculé », le basculement (réécrire les deux témoins du banc
+  qui attendent le point de reprise d'un `COPY`), puis les verrous. Le banc m'enverra à relire
+  son correctif de l'élagage (`shrinkForNode`, `i = 0`).
+
+**Ce que les lots de l'index de clé laissent ouvert :**
 - la comparaison du banc a rendu une fois « Segmentation fault, no result » (sous un plafond de
   12 Go, avant le correctif de `splitSlots`) ; jamais revue en quatre comparaisons depuis. Cause
   non prouvée ; la lecture en mémoire libérée de `splitSlots` est l'hypothèse ;

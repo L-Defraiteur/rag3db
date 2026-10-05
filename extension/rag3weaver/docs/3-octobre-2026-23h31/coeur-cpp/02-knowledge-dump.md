@@ -3,7 +3,7 @@
 Relevé de connaissances sur le moteur. Ce qui est affirmé porte un fichier, un commit ou
 une mesure ; ce qui ne l'est pas est dit « non vérifié ». Les numéros de ligne datent du
 3 octobre 2026 et bougent : chercher le nom de la fonction.
-**Dernière mise à jour : 5 octobre 2026, 7 h.**
+**Dernière mise à jour : 5 octobre 2026, 9 h.**
 
 Le relevé du 2 octobre (journal, point de reprise, lecteurs concurrents, mode
 multi-écrivains) reste valable :
@@ -129,6 +129,32 @@ ligne) :
   écartées par le lecteur avant l'opérateur et ne consomment rien.
 - **Le journal d'une transaction vit en mémoire non évictable** jusqu'à sa validation
   (`LocalWAL`, pages de 4 Kio prises au gestionnaire de tampon), sans borne.
+
+### Ce que pèse le journal (5 octobre 2026)
+
+- **Mesuré, octets de journal** (un `COPY` journalisé depuis un CSV, taille du `.wal` après la
+  validation) : une ligne clé + texte de 200 caractères, 270 ; texte de 2 000, 2 070 — les
+  chaînes passent presque au poids du CSV. Une relation sans propriété, 75 ; avec deux chaînes,
+  143. Un `FLOAT[768]`, 9 236 avant `1c232f318` (12 octets par flottant), 3 074 depuis.
+- **Pourquoi** : `ValueVector::serialize` écrit une `Value` par cellule, et `Value::serialize`
+  réécrit à chaque fois le type, la nullité et le nombre d'enfants. Pour un tableau, chaque
+  élément était une `Value`. Les tableaux de numériques ont leur forme brute ; les autres
+  cellules gardent ce coût fixe (non mesuré par colonne).
+- **Le drapeau d'une forme de sérialisation ne se devine pas dans le flux** : il est porté par
+  le numéro d'enregistrement (40, 42, 45 pour 30, 32, 35). `WALRecord::deserialize` remet le
+  type d'origine : le rejeu ne voit que 30, 32, 35.
+- **Le guetteur d'un `.wal` ne mesure pas une transaction** : le fichier grossit de validation
+  en validation jusqu'au point de reprise automatique (seuil de 16 Mio, regardé après chaque
+  validation). « Plus gros journal » est une somme. La sonde `RAG3DB_PROFILE_JOURNAL` rend le
+  poids par transaction.
+- **Un `COPY` journalisé ne supprime pas le point de reprise** tant que `auto_checkpoint` est
+  actif : un paquet qui écrit plus de 16 Mio de journal en déclenche un à sa validation. Les
+  données sont alors écrites deux fois. C'est pourquoi la première mesure ne gagne pas de temps.
+- **Une transaction forcée n'écrit rien au journal** (`37608cf4b`) : c'est ce qui permet de
+  replier en cours de route un `COPY` trop gros — vider le journal local et ne plus y écrire —
+  sans rien perdre : le point de reprise de la validation emporte tout, ou rien.
+- **`ASSERT` dans une fonction auxiliaire, `x[2] IS NULL`** : l'analyseur refuse `d.v[2] IS
+  NULL` ; écrire `list_extract(d.v, 2) IS NULL`.
 
 ### L'index de clé primaire (5 octobre 2026)
 
