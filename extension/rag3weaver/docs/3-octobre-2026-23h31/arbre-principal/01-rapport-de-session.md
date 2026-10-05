@@ -131,6 +131,13 @@ Ailleurs :
 - **Trouvé grâce à ce filet** (`2b833a469`, bloque la stèle) : **une clé sort de l'index de clé primaire** après deux COPY de 50 000 lignes, sans annulation ni panne de mémoire, sur le chemin par défaut. Le défaut est déterministe (le symbole f7_144). Avant le filet, le repli MERGE sautait l'arête en silence, sans aucun compte persisté. Le témoin à la taille du banc est rouge attendu, hors batterie. L'isolement est chez le cœur C++.
 - Tickets `d685e8606` : le COPY refusé pour mémoire (où devrait vivre le refus d'estimate) ; les erreurs du moteur avalées par des replis (lecture). Les deux marques du plein texte dans le mauvais ordre sont parties chez rag3db-ac (corrigées en `72fa1f452`).
 
+## Fusionné le 5 octobre (matinée)
+
+- `e31575881` le gros paquet défait (100 000 scopes) **vert sur `eb2d78e46`** (la clé perdue, corrigée par le cœur C++), remis dans la batterie ; ticket fermé (`10fcec5b6`).
+- `6cb5923c0` **la lecture seule d'une base fermée sans point de reprise**, journal présent, relit juste (écritures ordinaires, COPY refusé, index vectoriel). Le core dump vu par le cœur C++ venait d'une extension d'un autre bâti chargée au rejeu (ticket `461a3a52a`, hors stèle).
+- `52f58815d` **le filet 1 part**, sur preuve : gros paquet défait, fermeture avec point de reprise, reprise ; comparé au témoin ligne à ligne sur 38 tables (empreintes), 0 écart, chaque uuid trouvé par sa clé, deux passes. Restent `close_without_checkpoint` pour le COPY refusé et le tampon plein, sans date de retrait.
+- La joignabilité en mode `fond` sur le moteur corrigé : 1 introuvable sur 12 461 (`4ac2b4a84`, ticket « non reproduit »).
+
 ## En cours
 
 1. L'allumage par défaut de la transaction par paquet : les pièces sont rendues, la décision est chez Lucie. Le défaut de l'index de clé primaire (ticket du 5 octobre) bloque la stèle : on attend son correctif.
