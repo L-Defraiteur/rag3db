@@ -244,17 +244,39 @@ amonts (`8c83c3360`, puis le second lot).
         ici, appliqué temporairement : il ne suffit pas pour le second. Le remède retenu
         est qu'une transaction forcée n'écrive rien au fichier du journal ;
       - ticket `2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md`.
+22. **Le matin du 5 octobre** :
+    - l'atomicité : la relecture de `82bb0b2c5` (rien n'est écrit au journal par une
+      transaction forcée), sans objection ; le correctif est sur master (`37608cf4b`). Le COPY
+      de relations qui écarte des lignes est ajouté au témoin, vert ;
+    - le DROP d'une colonne qui en précède d'autres (ticket de la session cœur C++, confié au
+      banc) :
+      - la passe de lecture systématique a trouvé une dizaine d'endroits, dans deux fenêtres ;
+        quatorze témoins rouges (`1e41b33a0`) ;
+      - fenêtre A, entre le DROP et le point de reprise : une seule conversion,
+        `TableCatalogEntry::getPropertyPosition` (`99059fb69`) ; puis la relecture
+        indépendante de la session cœur C++, dont un défaut bloquant (`ff76b1ee3`) ;
+      - fenêtre B, après le point de reprise : la clé et les index retrouvent leurs colonnes
+        par le catalogue, au point de reprise et à l'ouverture. Une base abîmée par l'ancien
+        moteur est gardée en témoin (`dataset/databases/stale-index-columns`). Commit prêt,
+        en attente de relecture ;
+    - le point de reprise sans fin après UN COPY annulé ou refusé (ticket
+      `2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md`), trouvé en cherchant la
+      seconde porte de l'index de clé qui enfle. Le témoin tourne dans un fils borné (en temps,
+      tampon, réservation, `RLIMIT_DATA`), sans quoi la portée de `poste` emportait la passe.
+      Le correctif de la session cœur C++ (`f3a581fb8`), joué ici, le verdit ;
+    - la joignabilité « fond » contre « masse », sur les vrais vecteurs de l'arbre principal :
+      pas d'écart au banc. Le premier compte était faussé par 159 lignes dans des groupes de
+      plus de dix vecteurs identiques.
 
 ## Ce qui m'attend
 
-- la relecture croisée du remède de la session cœur C++ pour l'atomicité : l'invariant
-  (jamais validée sans journal et sans point de reprise abouti) et le point de reprise qui
-  échoue sans mort (toute la transaction défaite). Les douze lignes sortent de
-  `known_red.txt` dans son commit ;
+- le push de la fenêtre B du DROP après la relecture de la session cœur C++ ;
 - l'étape 4 du chargement journalisé : réécrire mes deux témoins de l'attente (2a) le jour du
   basculement, et sortir `TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout` ;
 - une graine réglable de l'index vectoriel, demandée à la session cœur C++ : elle rendrait
-  `ProductReloadRecovery` déterministe.
+  `ProductReloadRecovery` déterministe ;
+- la mesure du coût d'insertion demandée par la relecture de la fenêtre A (un million de
+  CREATE sur trente colonnes, avant et après) : pas encore faite.
 
 ## Décisions et pourquoi
 
