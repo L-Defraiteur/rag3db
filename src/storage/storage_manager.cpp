@@ -297,6 +297,10 @@ void StorageManager::deserialize(main::ClientContext* context, const Catalog* ca
                               ->ptrCast<NodeTableCatalogEntry>();
         tables[tableID] = std::make_unique<NodeTable>(this, tableEntry, &memoryManager);
         tables[tableID]->deserialize(context, this, deSer);
+        // Les numéros de la clé et des index lus sur disque peuvent être périmés (une base
+        // écrite avant ce correctif, après un DROP puis un point de reprise). Avec CE catalogue :
+        // à la lecture d'une base attachée, celui du contexte est encore celui de la principale.
+        tables[tableID]->cast<NodeTable>().renumberColumns(*catalog, *tableEntry);
     }
     deSer.validateDebuggingInfo(key, "num_rel_groups");
     uint64_t numRelGroups = 0;

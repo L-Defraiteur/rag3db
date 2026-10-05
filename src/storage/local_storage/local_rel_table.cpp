@@ -5,6 +5,8 @@
 
 #include "common/data_chunk/data_chunk_state.h"
 #include "common/enums/rel_direction.h"
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "common/system_config.h"
 #include "storage/table/rel_table.h"
 #include "storage/wal/local_wal.h"
@@ -336,9 +338,25 @@ column_id_t LocalRelTable::rewriteLocalColumnID(RelDataDirection direction,
     if (columnID == INVALID_COLUMN_ID || columnID == ROW_IDX_COLUMN_ID) {
         return columnID;
     }
-    KU_ASSERT(columnID < positionOfColumn.size() && positionOfColumn[columnID] != INVALID_IDX);
+    if (columnID >= positionOfColumn.size() || positionOfColumn[columnID] == INVALID_IDX)
+        [[unlikely]] {
+        throw RuntimeException(stringFormat("Column {} of table {} has no place in the relations "
+                                            "this transaction holds for it.",
+            columnID, table.getTableName()));
+    }
     // Après les deux colonnes de nœuds.
     return positionOfColumn[columnID] + 2;
+}
+
+std::vector<column_id_t> LocalRelTable::getCommittedPropertyColumnIDs() const {
+    std::vector<column_id_t> columnIDs(localNodeGroup->getDataTypes().size() - 2,
+        INVALID_COLUMN_ID);
+    for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
+        if (const auto position = positionOfColumn[columnID]; position != INVALID_IDX) {
+            columnIDs[position] = columnID;
+        }
+    }
+    return columnIDs;
 }
 
 bool LocalRelTable::scan(const Transaction* transaction, TableScanState& state) const {

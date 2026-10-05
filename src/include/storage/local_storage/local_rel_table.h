@@ -111,6 +111,8 @@ public:
         const std::vector<common::column_id_t>& columnIDs) const;
     common::column_id_t rewriteLocalColumnID(common::RelDataDirection direction,
         common::column_id_t columnID) const;
+    // Pour chaque propriété de ce groupe local, dans son ordre : son numéro de colonne.
+    std::vector<common::column_id_t> getCommittedPropertyColumnIDs() const;
 
 private:
     common::row_idx_t findMatchingRow(const transaction::Transaction* transaction,

@@ -24,6 +24,7 @@
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "processor/result/flat_tuple.h"
+#include "storage/storage_utils.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -620,6 +621,141 @@ TEST_P(RolledBackCopyThenCheckpoint, TheCheckpointFinishesAndEveryKeyIsFound) {
 INSTANTIATE_TEST_SUITE_P(Copies, RolledBackCopyThenCheckpoint,
     ::testing::Values("RolledBack", "Refused"),
     [](const ::testing::TestParamInfo<std::string>& info) { return info.param; });
+
+// Le fabricant de la base gardée de StaleIndexColumnsAreRepairedAtOpening : sauté, sauf si
+// BANC_FABRIQUER donne un dossier. À jouer sur un moteur d'AVANT la fenêtre B, qui écrit sur
+// disque les numéros de colonnes d'index d'avant la renumérotation.
+TEST_F(UpstreamFixes, FabricateADatabaseWithStaleIndexColumns) {
+    const char* target = std::getenv("BANC_FABRIQUER");
+    if (target == nullptr) {
+        GTEST_SKIP() << "only run to fabricate the kept database";
+    }
+    concurrency::loadVectorExtension(*conn);
+    for (const auto* query :
+        {"CREATE NODE TABLE Item(extra STRING, id INT64, name STRING, PRIMARY KEY (id));",
+            "UNWIND range(0, 99) AS i CREATE (:Item {extra: 'e', id: i, name: 'item ' + CAST(i AS "
+            "STRING)});",
+            "CREATE NODE TABLE V(id INT64, extra STRING, emb FLOAT[3], PRIMARY KEY (id));",
+            "UNWIND range(0, 49) AS i CREATE (:V {id: i, extra: 'e', emb: [CAST(i AS FLOAT), 1.0, "
+            "2.0]});",
+            "CALL CREATE_VECTOR_INDEX('V', 'vi', 'emb', metric := 'l2');",
+            "ALTER TABLE Item DROP extra;", "ALTER TABLE V DROP extra;", "CHECKPOINT;"}) {
+        mustRun(query);
+    }
+    conn.reset();
+    database.reset();
+    std::filesystem::create_directories(target);
+    std::filesystem::copy(databasePath, std::string(target) + "/db.kz",
+        std::filesystem::copy_options::overwrite_existing);
+    const auto extensions = rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath);
+    if (std::filesystem::exists(extensions)) {
+        std::filesystem::copy(extensions,
+            std::string(target) + "/" + std::filesystem::path(extensions).filename().string(),
+            std::filesystem::copy_options::overwrite_existing);
+    }
+}
+
+// La fenêtre B, sur une base écrite par l'ANCIEN moteur (dataset/databases/stale-index-columns,
+// fabriquée le 5 octobre par FabricateADatabaseWithStaleIndexColumns sur ff76b1ee3) : DROP
+// d'une colonne avant la clé et avant le vecteur indexé, puis un point de reprise qui a
+// renuméroté le catalogue sans les numéros des index, écrits ainsi sur disque. À l'ouverture,
+// ils se recalculent depuis le catalogue : la clé et l'index vectoriel servent.
+TEST_F(UpstreamFixes, StaleIndexColumnsAreRepairedAtOpening) {
+    conn.reset();
+    database.reset();
+    std::filesystem::remove_all(databasePath);
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("dataset/databases/stale-index-columns/db.kz.gz");
+    ASSERT_EQ(std::system(("gzip -dc '" + fixture + "' > '" + databasePath + "'").c_str()), 0)
+        << "[check: setup] the kept database could not be unpacked";
+    // 0 si tout sert ; le code du contrôle sinon.
+    const auto everythingServes = [](rag3db::main::Connection& connection) {
+        concurrency::loadVectorExtension(connection);
+        const auto text = [&](const std::string& query) {
+            auto result = connection.query(query);
+            return !result->isSuccess() ? "<error> " + result->getErrorMessage() :
+                   result->hasNext()    ? result->getNext()->getValue(0)->toString() :
+                                          std::string("<no row>");
+        };
+        for (const auto& [query, expected] : std::vector<std::pair<std::string, std::string>>{
+                 {"MATCH (n:Item {id: 50}) RETURN n.name;", "item 50"},
+                 {"CALL QUERY_VECTOR_INDEX('V', 'vi', [7.0, 1.0, 2.0], 1) RETURN node.id;", "7"},
+             }) {
+            if (const auto value = text(query); value != expected) {
+                std::cerr << "  " << query << " => " << value << "\n";
+                return 5;
+            }
+        }
+        if (runOrFail(connection, "CREATE (:Item {id: 1000, name: 'new'});") ||
+            runOrFail(connection, "MATCH (n:Item {id: 1}) SET n.name = 'changed';") ||
+            runOrFail(connection, "CREATE (:V {id: 100, emb: [100.0, 1.0, 2.0]});")) {
+            return 4;
+        }
+        for (const auto& [query, expected] : std::vector<std::pair<std::string, std::string>>{
+                 {"MATCH (n:Item {id: 1000}) RETURN n.name;", "new"},
+                 {"MATCH (n:Item {id: 1}) RETURN n.name;", "changed"},
+                 {"CALL QUERY_VECTOR_INDEX('V', 'vi', [100.0, 1.0, 2.0], 1) RETURN node.id;",
+                     "100"},
+             }) {
+            if (const auto value = text(query); value != expected) {
+                std::cerr << "  " << query << " => " << value << "\n";
+                return 6;
+            }
+        }
+        return runOrFail(connection, "CHECKPOINT;") ? 7 : 0;
+    };
+    const auto first = inChild(everythingServes);
+    EXPECT_EQ(first, "") << "[check: repaired-at-opening] " << first;
+    if (first.empty()) {
+        const auto second = inChild([](rag3db::main::Connection& connection) {
+            concurrency::loadVectorExtension(connection);
+            auto result = connection.query("MATCH (n:Item {id: 1000}) RETURN n.name;");
+            return result->isSuccess() && result->hasNext() &&
+                           result->getNext()->getValue(0)->toString() == "new" ?
+                       0 :
+                       5;
+        });
+        EXPECT_EQ(second, "") << "[check: repaired-after-a-checkpoint] " << second;
+    }
+}
+
+// La relecture de la fenêtre B (session cœur C++) : à l'ATTACH d'une base rag3db, la lecture
+// de ses tables passait par le catalogue du contexte, encore celui de la base principale. Une
+// table de la base attachée absente de la principale faisait échouer l'ATTACH ; une autre
+// table au même numéro aurait donné sa clé et ses index. La base attachée a subi un DROP
+// devant sa clé puis un point de reprise ; la principale est vide.
+TEST_F(UpstreamFixes, AttachedDatabaseIsReadWithItsOwnCatalog) {
+    const auto attachedPath = databasePath + ".attached";
+    {
+        rag3db::main::Database attached(attachedPath, *systemConfig);
+        rag3db::main::Connection connection(&attached);
+        for (const auto* query :
+            {"CREATE NODE TABLE Item(extra STRING, id INT64, name STRING, PRIMARY KEY (id));",
+                "UNWIND range(0, 99) AS i CREATE (:Item {extra: 'e', id: i, name: 'item ' + "
+                "CAST(i AS STRING)});",
+                "ALTER TABLE Item DROP extra;", "CHECKPOINT;"}) {
+            auto result = connection.query(query);
+            ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << query << "\n"
+                                             << result->getErrorMessage();
+        }
+    }
+    const auto outcome = inChild([&](rag3db::main::Connection& connection) {
+        if (runOrFail(connection, "ATTACH '" + attachedPath + "' AS other (dbtype rag3db);") ||
+            runOrFail(connection, "USE other;")) {
+            return 4;
+        }
+        auto result = connection.query("MATCH (n:Item {id: 50}) RETURN n.name;");
+        const auto value = !result->isSuccess() ? "<error> " + result->getErrorMessage() :
+                           result->hasNext()    ? result->getNext()->getValue(0)->toString() :
+                                                  std::string("<no row>");
+        std::cerr << "  key 50 in the attached database => " << value << "\n";
+        return value == "item 50" ? 0 : 5;
+    });
+    EXPECT_EQ(outcome, "") << "[check: "
+                           << (outcome == "exit code 4" ? "attach-succeeds" : "attached-key-found")
+                           << "] " << outcome;
+    std::filesystem::remove_all(attachedPath);
+}
 
 // Garde-fou vert : la lecture partielle d'une colonne de chaînes de relations au point de
 // reprise d'une seule région (Ladybug 254a7444d, chaînes réécrites aux mauvaises lignes).

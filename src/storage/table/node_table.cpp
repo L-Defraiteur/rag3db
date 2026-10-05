@@ -1,6 +1,10 @@
 #include "storage/table/node_table.h"
 
+#include <algorithm>
+#include <cstdio>
+
 #include "catalog/catalog.h"
+#include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
 #include "common/data_chunk/data_chunk_state.h"
@@ -752,11 +756,10 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
     const auto startNodeOffset = nodeGroups->getNumTotalRows();
     auto& localNodeTable = localTable->cast<LocalNodeTable>();
 
-    std::vector<column_id_t> columnIDsToCommit;
-    for (auto& property : tableEntry->getProperties()) {
-        auto columnID = tableEntry->getColumnID(property.getName());
-        columnIDsToCommit.push_back(columnID);
-    }
+    // L'ordre des colonnes des groupes locaux, tel que la table locale l'a reçu du catalogue
+    // à sa création, et non celui du catalogue du commit : un ALTER dans la transaction, après
+    // des lignes locales, les ferait différer.
+    const auto columnIDsToCommit = localNodeTable.getCommittedColumnIDs();
 
     auto transaction = transaction::Transaction::Get(*context);
     // 1. Append all tuples from local storage to nodeGroups regardless of deleted or not.
@@ -872,6 +875,8 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
             index.checkpoint(context, pageAllocator);
         }
         tableEntry->vacuumColumnIDs(0 /*nextColumnID*/);
+        renumberColumns(*catalog::Catalog::Get(*context),
+            tableEntry->constCast<NodeTableCatalogEntry>());
         hasChanges = false;
     }
     return ret;
@@ -1154,6 +1159,39 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
             storageInfoBufferSizes[i]));
         if (indexInfos[i].isBuiltin) {
             indexes[i].load(context, storageManager);
+        }
+    }
+    // Les numéros lus sur disque peuvent être périmés : StorageManager::deserialize les
+    // recalcule ensuite (renumberColumns), avec le catalogue de cette base.
+}
+
+void NodeTable::renumberColumns(const catalog::Catalog& catalog,
+    const NodeTableCatalogEntry& tableEntry) {
+    pkColumnID = tableEntry.getColumnID(tableEntry.getPrimaryKeyName());
+    const auto indexEntries = catalog.getIndexEntries(&DUMMY_CHECKPOINT_TRANSACTION, tableID);
+    for (auto& index : indexes) {
+        std::vector<column_id_t> columnIDs;
+        if (index.getIndexInfo().isPrimary) {
+            columnIDs = {pkColumnID};
+        } else {
+            const auto found = std::find_if(indexEntries.begin(), indexEntries.end(),
+                [&](const auto* indexEntry) { return indexEntry->getIndexName() == index.getName(); });
+            if (found == indexEntries.end()) {
+                // Aucun cas connu (DROP_VECTOR_INDEX retire l'index de la table et du catalogue
+                // ensemble) ; on ne fait pas échouer l'ouverture pour lui, mais l'écart se voit.
+                fprintf(stderr,
+                    "[rag3db] index %s of table %s has no catalog entry; its columns are left "
+                    "as stored\n",
+                    index.getName().c_str(), tableName.c_str());
+                continue;
+            }
+            for (const auto propertyID : (*found)->getPropertyIDs()) {
+                // getColumnID(idx_t) prend un identifiant de propriété (pas une position).
+                columnIDs.push_back(tableEntry.getColumnID(common::idx_t{propertyID}));
+            }
+        }
+        if (index.setColumnIDs(std::move(columnIDs))) {
+            hasChanges = true;
         }
     }
 }

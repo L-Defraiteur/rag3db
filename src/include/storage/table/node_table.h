@@ -239,6 +239,16 @@ public:
     void deserialize(main::ClientContext* context, StorageManager* storageManager,
         common::Deserializer& deSer) override;
 
+    // Le numéro de colonne de la clé et ceux des index ne sont pas une vérité gardée : ils se
+    // recalculent ici depuis le catalogue (par le nom de la clé, par les propriétés de l'entrée
+    // de chaque index), à la renumérotation du point de reprise (vacuumColumnIDs) et à la
+    // lecture de la table. Une base écrite avant ce correctif, après un DROP, gardait sur
+    // disque des numéros d'index périmés : elle se répare à l'ouverture.
+    // Le catalogue est celui de la base de cette table : à la lecture d'une base attachée, ce
+    // n'est pas celui du contexte (StorageManager::deserialize le passe).
+    void renumberColumns(const catalog::Catalog& catalog,
+        const catalog::NodeTableCatalogEntry& tableEntry);
+
 private:
     // Un index dans lequel une écriture peut passer. Un index non chargé ne l'est pas :
     // pendant le rejeu du journal il est détaché (la table reçoit la ligne, l'index sera à

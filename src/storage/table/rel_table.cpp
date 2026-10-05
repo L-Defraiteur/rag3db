@@ -450,10 +450,11 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
     // For both forward and backward directions, re-org local storage into compact CSR node groups.
     auto& localNodeGroup = localRelTable.getLocalNodeGroup();
 
+    // L'ordre des propriétés du groupe local, tel que la table locale l'a reçu du catalogue à
+    // sa création, et non celui du catalogue du commit (un ALTER dans la transaction).
     std::vector<column_id_t> columnIDsToCommit;
     columnIDsToCommit.push_back(0); // NBR column.
-    for (auto& property : tableEntry->getProperties()) {
-        auto columnID = tableEntry->getColumnID(property.getName());
+    for (const auto columnID : localRelTable.getCommittedPropertyColumnIDs()) {
         columnIDsToCommit.push_back(columnID);
     }
     // commit rel table data

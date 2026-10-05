@@ -195,22 +195,6 @@ UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 # déterministe de la corruption d'e2e_code.
 VectorIndexUpdate.RefusedCopyLeavesTheCardinalityTrue cardinality-matches-rows
 #
-# Le numéro de colonne pris pour une position, après ALTER TABLE … DROP d'une colonne qui en
-# précède d'autres (ticket 2026-10-05-drop-d-une-colonne-declaree-avant-la-cle-primaire.md ;
-# même famille que 308ebd17e). Fenêtre A, entre le DROP et le point de reprise : l'insertion
-# (clé lue dans la mauvaise colonne, ligne introuvable par sa clé), une clé en dernière
-# position (hors du tableau), la lecture et la mise à jour d'une ligne de la transaction, le
-# COPY, le rejeu, les relations de la transaction (lecture : SIGSEGV ; mise à jour : la
-# mauvaise propriété écrite). Fenêtre B, après le point de reprise : NodeTable::pkColumnID et
-# les numéros de colonnes des index ne suivent pas la renumérotation du catalogue (« Cannot
-# update pk », ligne introuvable même après réouverture, index vectoriel rouvert : SIGSEGV).
-# Vus rouges 3 passes sur 3 le 5 octobre. La fenêtre A est corrigée (une seule conversion,
-# TableCatalogEntry::getPropertyPosition) ; restent les quatre cas de la fenêtre B.
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/UpdateAfterDropAndCheckpoint steps-succeed
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropAndCheckpoint right-column
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/InsertAfterDropCheckpointAndReopen right-column
-Cases/ColumnIdTakenForAPosition.TheRightColumnIsReadAndWritten/VectorIndexAfterDropCheckpointAndReopen runs
-#
 # Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas (ticket
 # 2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md, bloque la stèle) : l'index de
 # clé en mémoire ne recule pas son compte au retrait des clés, et sa réservation de cases

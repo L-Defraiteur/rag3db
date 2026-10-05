@@ -1,6 +1,6 @@
 # Retirer une colonne déclarée avant la clé primaire casse l'insertion
 
-- **État** : en cours — fenêtre A corrigée (banc, 5 octobre : une seule conversion, `TableCatalogEntry::getPropertyPosition`) ; fenêtre B à venir (quatre témoins encore rouges)
+- **État** : corrigé — fenêtre A en `99059fb69` et `ff76b1ee3`, fenêtre B et réparation à l'ouverture dans le commit qui suit (banc, 5 octobre 2026)
 - **Gravité** : réponse fausse et perte, plus que le blocage d'abord vu. Une ligne acceptée reste introuvable par sa clé, la mauvaise propriété d'une relation est écrite, et deux cas plantent (SIGSEGV). Mesuré au banc le 5 octobre, voir « Étendue »
 - **Atteignable en service** : oui — un `ALTER TABLE … DROP` d'une colonne déclarée avant la clé primaire
 - **Touche rag3weaver** : non (il ne retire jamais de colonne ; ses clés sont déclarées en premier)
@@ -95,6 +95,26 @@ Dans les deux cas, la fenêtre B demande que le point de reprise réécrive `pkC
 `columnIDs` de chaque index au moment de la renumérotation, ou qu'on ne les garde plus (les
 recalculer depuis le catalogue). Les bases déjà écrites après un tel DROP portent des numéros
 d'index périmés sur disque : une réécriture à l'ouverture, ou un rebâti.
+
+## Limite de la réparation à l'ouverture
+
+La réparation corrige les NUMÉROS de colonnes de la clé et des index, pas leur CONTENU. Un
+ancien moteur qui a inséré dans une table après « DROP d'une colonne avant la clé, puis point
+de reprise » a rangé ces clés d'après la colonne périmée : elles restent fausses dans l'index
+de clé, et seul un rebâti les corrige. La base gardée en témoin s'arrête avant toute insertion
+de ce genre ; seul le cas favorable est témoigné (relecture de la session cœur C++).
+
+Sans témoin, par lecture seulement : l'index plein texte ; l'index vectoriel dans la même
+session après DROP et point de reprise (la réouverture est témoignée) ; l'extension non chargée
+pendant le DROP ; les deux gardes en Release.
+
+## Pourquoi pas la voie de PostgreSQL
+
+PostgreSQL ne renumérote jamais : une colonne retirée garde son numéro, marquée retirée.
+Ici, le point de reprise renumérote déjà le catalogue et compacte les colonnes du stockage
+(depuis l'amont). Ne plus renuméroter changerait le format sur disque et le point de
+reprise. Recalculer depuis le catalogue les deux seuls numéros gardés à part (la clé, les
+index) est plus petit, et répare les bases déjà écrites.
 
 ## Pour le fermer
 

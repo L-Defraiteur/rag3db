@@ -125,6 +125,11 @@ public:
     bool isLoaded() const { return loaded; }
     std::string getName() const { return indexInfo.name; }
     IndexInfo getIndexInfo() const { return indexInfo; }
+    // Les numéros de colonnes de l'index, recalculés depuis le catalogue après une
+    // renumérotation (NodeTable::renumberColumns).
+    void setColumnIDs(std::vector<common::column_id_t> columnIDs) {
+        indexInfo.columnIDs = std::move(columnIDs);
+    }
 
     virtual std::unique_ptr<InsertState> initInsertState(main::ClientContext* context,
         visible_func isVisible) = 0;
@@ -206,6 +211,17 @@ public:
 
     std::string getName() const { return indexInfo.name; }
     const IndexInfo& getIndexInfo() const { return indexInfo; }
+    // Rend vrai si les numéros changent ; l'index chargé suit (NodeTable::renumberColumns).
+    bool setColumnIDs(std::vector<common::column_id_t> columnIDs) {
+        if (columnIDs == indexInfo.columnIDs) {
+            return false;
+        }
+        indexInfo.columnIDs = columnIDs;
+        if (index) {
+            index->setColumnIDs(std::move(columnIDs));
+        }
+        return true;
+    }
     bool isLoaded() const { return loaded; }
     // Détaché : le rejeu du journal a écrit dans la table sans pouvoir tenir cet index à
     // jour (son extension n'était pas chargée). Il n'est plus un index de la table : il

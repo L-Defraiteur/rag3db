@@ -2,6 +2,8 @@
 
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "common/exception/message.h"
 #include "common/types/types.h"
 #include "common/types/value/value.h"
@@ -50,7 +52,12 @@ column_id_t LocalNodeTable::getLocalColumnID(column_id_t columnID) const {
     if (columnID == INVALID_COLUMN_ID || columnID == ROW_IDX_COLUMN_ID) {
         return columnID;
     }
-    KU_ASSERT(columnID < positionOfColumn.size() && positionOfColumn[columnID] != INVALID_IDX);
+    if (columnID >= positionOfColumn.size() || positionOfColumn[columnID] == INVALID_IDX)
+        [[unlikely]] {
+        throw RuntimeException(stringFormat("Column {} of table {} has no place in the rows this "
+                                            "transaction holds for it.",
+            columnID, table.getTableName()));
+    }
     return positionOfColumn[columnID];
 }
 
