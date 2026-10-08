@@ -1,9 +1,9 @@
 # rag3weaver
 
-**Work in progress.** A Rust orchestrator where an agent's whole world lives in
-one embedded database: the data, the words, the vectors, the code graph, the
-processing graphs, the tools and the memories — all declared, all addressable,
-all in one process.
+**Work in progress.** A Rust agent runtime and orchestrator where an agent's
+whole world lives in one embedded database: the data, the words, the vectors,
+the code graph, the processing graphs, the tools, the sessions and the memories
+— all declared, all addressable, all in one process.
 
 It runs on [rag3db](../../README.md) (graph + HNSW, embedded) and on
 [lucivy](https://github.com/L-Defraiteur/lucivy/) (BM25, in-process). Native only.
@@ -132,6 +132,38 @@ edge saying how it was found (by path, by name, guessed). The synchronizer
 indexes by batches, marks what it has proven, and on restart redoes only what is
 incomplete. Tools built on it: `usages`, `impact` (what depends on this), links
 rendered as a tree.
+
+## The agent
+
+rag3weaver is not a library an agent calls; it is where the agent runs.
+
+- **The loop** (`agent.rs`): generate, execute the requested tools, feed the
+  results back, start again — until the model answers or a bound bites. It is
+  short because everything it assembles already exists.
+- **Tools are nodes.** A tool definition for the model is generated from a
+  node's schema (`tools.rs`): name, description, typed parameters. Nothing is
+  written twice, and a tool call is a graph execution, with its report.
+- **A backend is a manifest** (`backend.rs`): payload schemas and the graph
+  tools it chooses to expose. No domain vocabulary in the engine; the code
+  backend (`backend_code.rs`) declares its `workspace` — which files, under
+  which root, read-only or not, with which command gate — so the same engine
+  serves a cloud agent on a snapshot and a desktop agent on the real tree.
+- **Sessions, postures, work domain** (`session.rs`, `postures.rs`,
+  `work_domain.rs`): what is kept from one turn to the next and what stops
+  being paid for; who stayed silent towards whom in a multi-party
+  conversation; the dispersed set of repositories and notes an agent has in
+  view.
+- **Event-driven graphs** (`dataflow/reactor.rs`, `react_nodes.rs`): a graph
+  declares what it reacts to on the bus (`each` / `batch` / `debounce`) and
+  runs when it happens — the piece that lets a change in the data trigger
+  work.
+- **The model is a service**, like the embedder: `LlmNode`, a `decider`
+  (a text, a closed list of options, a probability per option), an
+  OpenAI-compatible client or a local server; streaming is in the trait.
+
+The binaries `rag3weaver-backend` and `rag3weaver-chat` are this runtime served
+over HTTP, with sections rendered after each tool so that a person reading over
+the agent's shoulder sees what it did.
 
 ## Embeddings and rerankers
 

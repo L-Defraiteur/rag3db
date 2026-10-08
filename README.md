@@ -1,7 +1,8 @@
 # rag3db
 
 **Work in progress.** An embedded graph database for agents that read, write and
-search in one place — and the engine under [rag3weaver](extension/rag3weaver/README.md).
+search in one place — and the engine under [rag3weaver](extension/rag3weaver/README.md),
+the agent runtime built on it.
 
 rag3db is a fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2: a graph
 database that runs inside your process, speaks Cypher, and carries its own
