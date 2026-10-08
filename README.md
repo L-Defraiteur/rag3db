@@ -1,187 +1,123 @@
 # rag3db
 
-Fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 — embeddable graph database with full-text search (lucivy, in rag3weaver), vector search (HNSW), sparse vector search, spatial indexing (R-tree), and a complete RAG framework (rag3weaver). Native + browser WASM.
+**Work in progress.** An embedded graph database for agents that read, write and
+search in one place — and the engine under [rag3weaver](extension/rag3weaver/README.md).
 
-## Cypher-Native Index Search
+rag3db is a fork of [Kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2: a graph
+database that runs inside your process, speaks Cypher, and carries its own
+indexes. On top of the fork we keep two native extensions (HNSW vectors, spatial
+R-tree), and we spend most of our time on the write, rollback and recovery paths,
+because an agent that writes into a live database must never lose or corrupt it.
 
-All search types integrate directly into Cypher `WHERE` clauses via the generalized `INDEX_SCAN` optimizer. No table functions needed — just `MATCH ... WHERE ... RETURN`.
+Full-text search (BM25) and learned-sparse search are **not** C++ extensions:
+they live in rag3weaver, through [lucivy](https://github.com/L-Defraiteur/lucivy/).
 
-```cypher
--- Full-text search (BM25, fuzzy, regex, multi-field highlights)
-MATCH (d:Document)
-WHERE SEARCH(d.body, 'rust programming', 'contains_split')
-RETURN d.title, SEARCH_SCORE() AS score, SEARCH_HIGHLIGHTS() AS hl
-ORDER BY score DESC LIMIT 10
+## The idea
 
--- Sparse vector search (BM42/SPLADE-style lexical embeddings)
-MATCH (d:Document)
-WHERE SPARSE_SEARCH(d.ID, [42, 108, 256], [0.5, 0.3, 0.2])
-RETURN d.title, SPARSE_SCORE() AS score
-ORDER BY score DESC LIMIT 10
+*Everything lives in one system, and everything in it is declared.*
 
--- Vector similarity search (HNSW, cosine/L2/IP)
-MATCH (d:Document)
-WHERE VECTOR_SEARCH(d.embedding, [0.1, 0.2, ..., 0.5], 10)
-RETURN d.title, VECTOR_DISTANCE() AS dist
-ORDER BY dist ASC LIMIT 10
+The database (graph, words, vectors), the processing (graphs of typed nodes), the
+tools, the memories, the views: one more declared thing, and the system knows how
+to run it — no side service, no side code. What makes that possible is the
+plumbing this repository is about:
+
+| Because the engine… | …the product can |
+|---|---|
+| keeps everything in one system, with an address for each thing | make everything clickable: a row, a query, a graph, an execution step |
+| records each execution node by node | show what the agent does, instead of having it tell |
+| holds the graph, the words and the meaning together | give living context cards: what changed, what depends, what looks alike |
+| validates and recovers properly | let an agent write into a database in service without losing it |
+| will let several writers in at once | let a team work on the same site, each with their own agent |
+
+The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
+
+## Where the engine stands
+
+The engine has a written stopping point, **the stele**
+([`docs/4-octobre-2026-16h57/01-la-stele-du-moteur.md`](docs/4-octobre-2026-16h57/01-la-stele-du-moteur.md)):
+four conditions, and when they hold we tag a version and stop looking at the
+engine except on a defect observed in the product.
+
+| Condition | State (8 October 2026) |
+|---|---|
+| no known defect that corrupts or loses data | the defects found by the benches since 3 October are fixed on `master` (COPY rollback and its primary-key index, a key lost by the index when it grows, DROP COLUMN at checkpoint, read-only open with a non-empty journal, estimated statistics); what remains is in the vector index (reachability after bulk updates, the pruning rule) |
+| journaled bulk load — `COPY` no longer forces its own checkpoint | written and tested, **behind a setting** (`CALL force_checkpoint_on_copy=false`); one defect blocks making it the default (pages left without an owner after a crash) |
+| locks | the lock manager exists; the finer levels come after the bulk load |
+| parallel writers | last; the mode is off outside the concurrency bench |
+
+Every known defect is a file in [`docs/tickets/`](docs/tickets/) (78 at the time of
+writing), with its state, a minimal recipe and its witness test.
+[`docs/journal-des-chantiers.md`](docs/journal-des-chantiers.md) lists what is
+open, unmerged or waiting for a decision. Design notes, session reports and
+tickets are written in French.
+
+## What the fork changes
+
+- **Vector search in Cypher `WHERE`.** `VECTOR_SEARCH(column, query, k)` is an
+  index-scan predicate: the optimizer runs the HNSW search and exposes
+  `VECTOR_DISTANCE()` as a column. The table functions
+  (`CREATE_VECTOR_INDEX`, `QUERY_VECTOR_INDEX`, `DROP_VECTOR_INDEX`) remain.
+- **Deletes and updates reach the HNSW index**, with batched edge cleanup, and
+  rollback tells the index what it must forget.
+- **A spatial extension**: N-dimensional R-tree with KNN, radius, bounding box,
+  oriented box and frustum queries, plus 19 scalar geometry functions
+  (`CREATE_SPATIAL_INDEX`, `QUERY_SPATIAL_INDEX`, `geo_*`).
+- **Hardened write paths**: all-or-nothing forced transactions, checkpoints that
+  no longer hold a public lock while waiting, a second open for writing refused
+  by name inside the same process, `fsync` after replay, a compact journal form
+  for numeric arrays, and a journal memory bound with a fallback to a forced
+  checkpoint above it.
+- **A concurrency bench** (`test/`, `known_red` list) that plays the forms an
+  agent produces: kill during a bulk load, reopen, replay, compare row by row.
+
+Nothing is sent upstream: the fork stays proprietary; upstream is read, not
+copied.
+
+## Layout
+
 ```
-
-Each function sets `isIndexScanPredicate` — the optimizer intercepts it, runs the index search, and provides virtual expressions (`SEARCH_SCORE()`, `SPARSE_SCORE()`, `VECTOR_DISTANCE()`) as output columns. Standard Cypher `AND` filters, `ORDER BY`, and `LIMIT` compose naturally.
-
-The table function API (`CALL QUERY_*`) remains available for advanced use cases (filtered search, projected graphs, etc.).
-
-## Extensions
-
-### Full-Text Search — in rag3weaver, not a Cypher extension
-
-Full-text search (BM25, substring/fuzzy/regex `contains`, exact symbol search with
-separators, highlights aligned to chunks) is provided by
-[lucivy](https://github.com/L-Defraiteur/lucivy/) v3 compiled **into rag3weaver**
-(Rust, in-process, index stored as blobs in the database). There is no
-`CREATE_LUCIVY_INDEX` / `SEARCH` Cypher function anymore: the former `lucivy_fts`
-C++ extension was removed on 2026-08-24 — every document was being indexed twice.
-See `extension/rag3weaver/README.md` (BM25 modes) for the API.
-### vector — HNSW Vector Search
-
-Kuzu's vector extension with DELETE and UPDATE support:
-
-```cypher
-CALL CREATE_VECTOR_INDEX('docs', 'emb_idx', 'embedding', metric := 'cosine')
-CALL QUERY_VECTOR_INDEX('docs', 'emb_idx', $query_embedding, 10)
-RETURN node.id, node.title, distance
+rag3db (fork of Kuzu v0.11.2.2)
+|-- src/, test/                     the engine and its tests (incl. the concurrency bench)
+|-- extension/vector/               HNSW extension (+ DELETE/UPDATE, VECTOR_SEARCH predicate)
+|-- extension/geo/                  spatial extension (R-tree + 19 geo functions)
+|-- extension/rag3weaver/           the Rust orchestrator (own README)
+|   |-- codeparsers/                submodule: scopes, usages, relations for 13 languages
+|   +-- visions/                    where the project is going (French)
+|-- extension/lucivy/ld-lucivy/     submodule, reference only (rag3weaver takes lucivy from crates.io)
+|-- docs/                           stele, tickets, journal, design notes (French)
+|-- tools/wasm/, tools/nodejs_api/  browser and Node.js builds, last built 24 August 2026
++-- BUILD.md
 ```
-
-Node deletions and updates automatically propagate to the HNSW index (batched edge cleanup).
-
-### Sparse vectors — in rag3weaver, not a Cypher extension
-
-Learned-sparse search (BGE-M3 sparse head) runs on the `sparse-vector` crate
-(WAND pruning, Apache-2.0, derived in part from Qdrant — a lucivy *friend* crate
-persisted through lucistore), compiled **into rag3weaver**. The former
-`sparse_vector` C++ extension (`CREATE_SPARSE_VECTOR_INDEX`, `SPARSE_SEARCH`) was
-removed on 2026-08-24: rag3weaver never called it.
-### geo — Spatial Indexing & Geometry
-
-N-dimensional R-tree spatial index with 5 query modes, plus 19 scalar geometry functions:
-
-```cypher
--- Create spatial index (haversine for lat/lon, euclidean for N-D)
-CALL CREATE_SPATIAL_INDEX('places', 'geo_idx', ['lat', 'lon'], metric := 'haversine')
-
--- KNN: 10 nearest neighbors
-CALL QUERY_SPATIAL_INDEX('places', 'geo_idx', [48.856, 2.352], 10)
-RETURN node_id, distance
-
--- Radius: all points within 5km
-CALL QUERY_SPATIAL_INDEX('places', 'geo_idx', [48.856, 2.352], 100,
-    radius := 5000.0)
-RETURN node_id, distance
-
--- OBB: oriented bounding box (3D with quaternion rotation)
-CALL QUERY_SPATIAL_INDEX('objects', 'pos_idx', [0,0,0], 50,
-    obb_center := [10.0, 5.0, 2.0],
-    obb_half_extents := [2.0, 1.0, 0.5],
-    obb_quaternion := [0.7071, 0.0, 0.7071, 0.0])
-RETURN node_id, distance
-
--- Frustum: camera field-of-view query
-CALL QUERY_SPATIAL_INDEX('objects', 'pos_idx', [0,0,0], 100,
-    frustum_planes := geo_frustum_from_camera(
-        [cam.x, cam.y, cam.z], [cam.qw, cam.qx, cam.qy, cam.qz],
-        1.047, 0.785, 0.3, 50.0))
-RETURN node_id, distance
-
-CALL DROP_SPATIAL_INDEX('places', 'geo_idx')
-```
-
-**5 query modes**: KNN, radius, bounding box, oriented bounding box (OBB), frustum/convex hull.
-
-**19 scalar functions**:
-
-| Category | Functions |
-|----------|-----------|
-| Distance | `geo_distance` (haversine), `geo_distance_euclidean` (N-D) |
-| 2D containment | `geo_within_bbox`, `geo_within_bbox_nd`, `geo_within_polygon`, `geo_within_circle` |
-| 3D containment | `geo_within_sphere`, `geo_within_obb`, `geo_within_obb_matrix`, `geo_within_polygon_3d`, `geo_within_polygon_3d_matrix`, `geo_within_frustum`, `geo_within_convex` |
-| Quaternion | `geo_quat_rotate`, `geo_quat_inverse`, `geo_quat_multiply`, `geo_quat_from_axis_angle`, `geo_quat_to_matrix` |
-| Matrix3 | `geo_matrix_rotate`, `geo_matrix_multiply`, `geo_matrix_transpose` |
-| Helper | `geo_frustum_from_camera` (position + quaternion + FOV -> 6 clip planes) |
-
-Persistent R-tree with automatic CRUD hooks. Header-only math (quaternion, matrix3, geometry) — zero external dependencies, WASM-compatible.
-
-## rag3weaver — RAG Framework
-
-High-level Rust framework that orchestrates all extensions above. Provides CRUD, ingestion, chunking, embeddings, and hybrid search via a `Catalog` API. See [rag3weaver/README.md](extension/rag3weaver/README.md) for full documentation.
-
-```rust
-let mut catalog = Catalog::new(conn, embedder, config);
-catalog.set_dual_embedder(bge_m3.clone()); // single forward pass for dense + sparse
-catalog.initialize().await?;
-
-// Ingestion
-catalog.create("Document", data)?;
-catalog.drain().await?; // pipeline: chunk -> insert -> link -> embed (dense+sparse)
-
-// Hybrid search (vector + BM25 + sparse)
-let response = catalog.search("main", "rust programming", &options).await?;
-```
-
-## Targets
-
-| Target | Status | Tests |
-|--------|--------|-------|
-| Native (Linux x86_64) | OK | ~600 Rust unit tests + 12 E2E suites (rag3weaver, `run_e2e.sh`) |
-| Node.js native (NAPI) | OK | contains/fuzzy/regex/phrase/parse verified |
-| Browser WASM | OK | Playwright (FTS + vector + persistence IDBFS) |
-
-Statically linked extensions in WASM: vector, json, algo (FTS and sparse index are inside rag3weaver).
 
 ## Build
 
-See **[BUILD.md](BUILD.md)** for the full guide.
+See [BUILD.md](BUILD.md).
 
 ```bash
-# Quick build (all extensions: vector, geo)
-./build.sh
+./build.sh            # engine + vector + geo
+./build.sh test       # + extension tests
 
-# Build + run all extension tests
-./build.sh test
-
-# Build + test a single extension
-./build.sh vector
-
-# Manual cmake (extensions default to vector;geo)
+# or by hand
 mkdir -p build/release && cd build/release
 cmake ../.. -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSION_TESTS=TRUE \
   -DBUILD_SHELL=FALSE -DBUILD_TESTS=FALSE
-cmake --build . -j$(nproc)
-
-# E2E tests (rag3weaver)
-cd extension/rag3weaver && bash run_e2e.sh phase0
+cmake --build . --parallel 8
 ```
 
-## Architecture
+The Rust side links the shared library this build produces; see the rag3weaver
+README for its tests.
 
-```
-rag3db (fork Kuzu v0.11.2.2)
-|-- extension/lucivy/ld-lucivy/    Submodule lucivy (référence ; rag3weaver compile
-|                                    lucivy-core par chemin, voir extension/rag3weaver/Cargo.toml)
-|-- extension/vector/                HNSW extension (+ DELETE/UPDATE)
-|-- extension/geo/                   Spatial extension (R-tree + 19 geo functions)
-|-- extension/rag3weaver/            RAG framework (Rust)
-|   |-- src/                         Catalog, search, chunker, queue, embedders
-|   +-- tests/                       E2E native (e2e_search.rs)
-|-- tools/wasm/                      WASM build + tests
-+-- tools/nodejs_api/                Node.js native build
-```
+## Targets
 
-The **cxx** bridge (not extern C) provides typed Rust <-> C++ structs, zero JSON on the hot path.
+| Target | State |
+|---|---|
+| Native, Linux x86_64 | the one we work on daily |
+| Node.js (NAPI), browser WASM | built and tested on 24 August 2026, not maintained since; rag3weaver itself is native only |
 
-## Provenance
+## Provenance and license
 
-- **Kuzu**: [kuzudb/kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2 (MIT License, see NOTICE)
-- **Lucivy**: [L-Defraiteur/lucivy](https://github.com/L-Defraiteur/lucivy/) (fork of v0.26.0, LRSL v1.2)
+- **Kuzu**: [kuzudb/kuzu](https://github.com/kuzudb/kuzu) v0.11.2.2, MIT (see `NOTICE`).
+- **lucivy**: [L-Defraiteur/lucivy](https://github.com/L-Defraiteur/lucivy/), LRSL v1.2.
 
-## License
-
-[Luciform Research Source License (LRSL) v1.2](LICENSE) — source-available, free under 100K EUR/year revenue.
+[Luciform Research Source License (LRSL) v1.2](LICENSE) — source-available, free
+under 100K EUR/year of revenue.
