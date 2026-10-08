@@ -161,6 +161,37 @@ Ce sur quoi les deux s'accordent :
   corrompt ou qui perd) ;
 - tout n'attend pas la stèle : un agent seul sur un dépôt marche déjà.
 
+### La preuve de l'agent (8 octobre 2026)
+
+L'agent dans les graphes est, à ce jour, la preuve la plus nette de « une
+déclaration et quelques nœuds » : la boucle (`src/agent.rs`) assemble des
+pièces qui existaient pour autre chose — les outils sont tirés des schémas de
+nœuds, le retour d'un outil est le rapport d'exécution d'un graphe, le
+déclenchement est le réacteur sur le bus, le modèle est un service comme
+l'embarqueur. Aucune pièce n'a été écrite pour l'agent seul.
+
+Lucie, 8 octobre : « ça fonctionne étonnamment bien, l'agentique dans les DAG ;
+j'ai été étonnée comme on a progressé vite sur l'inclure. Ça a été même plus
+vite que d'écrire un agent LangChain ou Google ADK, et ça me semble plus
+pratique : si on travaille direct en DAG, c'est bien mieux pour décrire des
+boucles et des harnais. »
+
+Ce qu'on en garde, et la réserve :
+
+- la vitesse vient de ce que le cadre ne connaît que des choses déclarées,
+  pas d'une astuce propre à l'agent ; c'est l'argument pour les marches 2 et 3
+  (le backend et les vues déclarés devraient coûter de même) ;
+- « mieux pour les boucles » se lit ainsi : le graphe est sans cycle, la boucle
+  est autour (la boucle d'agent, le réacteur), et le harnais (bornes, rapports
+  de validation, `src/harness.rs`) est déclaré au même endroit que ce qu'il
+  borne ; un cadre à graphes cycliques (LangGraph) sait aussi dessiner une
+  boucle — la différence n'est pas « graphe contre pas graphe », c'est que
+  chez nous le graphe, ses exécutions, les données et les outils vivent dans
+  le même système, avec une adresse chacun ;
+- c'est jugé sur ce dépôt, par nous : pas de mesure extérieure encore (un jeu
+  de tâches qui n'est pas de notre main, un utilisateur qui n'est pas Lucie).
+  Même règle que pour le reste : mesurer avant de l'affirmer dehors.
+
 ### Le moteur et les autres bases (décision de Lucie, 5 octobre 2026)
 
 > « Je pense qu'on garde rag3db, mais on rend rag3weaver vraiment compatible,
