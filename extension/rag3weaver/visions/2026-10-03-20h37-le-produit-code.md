@@ -8,6 +8,29 @@ Le point de départ : un agent muni de grep sait déjà lire du code. Ce que nou
 avons en plus est un graphe persistant, synchronisé, mêlé à la recherche par
 sens. Chaque idée ci-dessous s'appuie sur cela.
 
+## 0. Une commande en fond, que l'agent consulte pendant qu'elle écrit (Lucie, 8 octobre)
+
+Lucie : « l'exécuteur de commandes devrait avoir une option pour que l'agent
+choisisse fond ou pas ; en fond, il peut à tout moment consulter la sortie
+pendant qu'elle s'écrit dans un fichier temporaire systématique — un peu
+comme dans Claude Code. » Noté, à faire après ; rien n'est lancé.
+
+Ce qui existe déjà (`src/dataflow/run_nodes.rs`, `src/commande.rs`) : chaque
+flux d'une commande est **déjà dérivé en entier vers un journal** sous
+`rag3weaver-commandes/` (l'agent ne reçoit qu'un aperçu borné, et le chemin
+du journal) ; `wait` attend qu'un motif apparaisse dans ce journal, et sait
+dire « pas encore » ; la boucle d'agent sait rendre un accusé « en cours » et
+livrer le vrai résultat plus tard dans sa boîte (`is_async`). La description
+de `run` renvoie déjà à « la variante de fond », qui n'existe pas.
+
+Ce qui manque : un paramètre `background` sur `run`, qui rend tout de suite la
+poignée et le chemin du journal au lieu d'attendre ; un verbe « montre-moi la
+fin du journal » (les N dernières lignes, ou depuis mon dernier regard), à
+côté de `wait` qui cherche un motif ; la fin de la commande livrée comme
+message dans la boîte, avec son code de sortie ; et le plafond de 1 800 s
+remplacé, en fond, par une mort propre du processus à la fin du run. Le
+dossier des journaux ne s'ouvre qu'à ses propres fichiers, comme aujourd'hui.
+
 ## 1. L'impact avant l'édition, les tests après
 
 Avant d'éditer une fonction, l'agent voit « 23 appelants, 4 tests la

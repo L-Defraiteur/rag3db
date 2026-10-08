@@ -293,6 +293,14 @@ Une réponse à débattre (proposition de l'orchestration, rien d'essayé) :
   marche 3 arrive ; d'ici là, la marche 2 doit seulement éviter de coller le
   cœur des graphes à tokio plus qu'il ne l'est.
 
+- **Tranché par Lucie, 8 octobre** : le navigateur (WASM) est **abandonné
+  pour l'instant** — « chiant de se passer d'async partout ». Plus aucune
+  restriction sur la marche 2 pour le ménager : tokio partout, la boucle
+  d'agent et le réacteur restent des fils, et ce qui est asynchrone chez les
+  outils le reste. Le jour où le navigateur revient, ce sera **un projet pour
+  améliorer luciole** (l'exécuteur asynchrone de Lucie), pas des restrictions
+  dans rag3weaver. Les deux voies ci-dessus restent écrites pour ce jour-là.
+
 Trois règles pour tenir ce cap :
 
 - **Lucie est la première utilisatrice** : les marches 1 à 4 tournent d'abord
