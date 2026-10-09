@@ -105,6 +105,7 @@ déclaration.
 | `2026-10-04-14h58-fiches-de-contexte-et-contexte-comme-une-vue.md` | curseurs, lectures réunies par fichier, commits avec leur raison, états d'une fiche, le contexte comme une vue | brouillon, en débat |
 | `2026-10-04-16h17-depot-de-reference.md` | indexer un dépôt figé à la demande ; le grep par l'index y est sûr | brouillon |
 | `2026-10-04-16h24-montrer-nos-produits.md` | démos, positionnement, ce que la personne voit, backend en graphes, secrets et intégrations, contributions | brouillon |
+| `2026-10-09-13h36-plusieurs-produits-un-seul-atelier.md` | le même atelier Westworld avec un domaine différent à chaque fois : decks, code, DXF, Blender… ; ce qui est commun, ce qui est propre à chaque domaine | vision de Lucie |
 
 À côté, hors de ce dossier : la feuille de route de septembre
 (`../docs/vision_roadmap_09_2026/`), les propositions de la session mémoire
