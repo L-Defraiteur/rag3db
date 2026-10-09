@@ -135,6 +135,21 @@ Deux croisements à savoir : C et F touchent tous deux `postgres_connection.rs`
 après ; B et D partagent `test/` du moteur et le rebâti exclusif — un seul à
 la fois sous le verrou, comme avant la pause.
 
+### G — Session nouvelle, dans son propre worktree : le paquet npm (9 octobre)
+
+- **Page** : `03-le-paquet-npm.md` (ce dossier). Décisions de Lucie : GPU en
+  option, embarquements en service par défaut, la CI ne fait que publier,
+  des Docker de bâti par plateforme commités.
+- **Premier geste** : un bâti Linux x86_64 dans un Docker du binaire
+  `rag3weaver-backend` (moteur en statique, sans `burn-embedder`), puis le
+  même sous Windows sur un runner GitHub — la liste réelle des accrocs hors
+  Linux.
+- **Rend** : les Dockerfiles sous `tools/build-images/`, le paquet JS qui
+  lance le binaire, le `release.yml` copié de lucivy avec sa porte fermée.
+- **Fichiers** : `tools/build-images/`, `.github/workflows/`,
+  `extension/rag3weaver/bindings/nodejs/` (nouveau). Aucun fichier de A à F.
+- **Place dans l'ordre** : à dire par Lucie.
+
 ## 4. Ce que l'orchestration fait pendant ce temps
 
 - Les envois tracel-ai A, C, D, E au mot de Lucie ; la réservation du nom sur
