@@ -141,7 +141,8 @@ public:
 
     using BufferKeyType =
         typename std::conditional<std::same_as<T, common::ku_string_t>, std::string, T>::type;
-    // Appends the buffer to the index. Returns the number of values successfully inserted
+    // Appends the buffer to the index. Returns the number of values successfully inserted, which
+    // is also the position (from bufferOffset) of the first key that failed to insert.
     // Note that this function does not acquire locks internally, as the caller is expected to hold
     // the lock already.
     size_t appendNoLock(const transaction::Transaction* transaction,
@@ -149,18 +150,22 @@ public:
         // Check if values already exist in persistent storage
         if (indexHeaderForWriteTrx.numEntries > 0) {
             localStorage->reserveSpaceForAppendNoLock(buffer.size() - bufferOffset);
-            size_t numValuesInserted = 0;
             common::offset_t result = 0;
             for (size_t i = bufferOffset; i < buffer.size(); i++) {
                 auto& [key, value] = buffer[i];
                 if (lookupInPersistentIndex(transaction, key, result, isVisible)) {
                     return i - bufferOffset;
-                } else {
-                    numValuesInserted +=
-                        localStorage->appendNoLock(std::move(key), value, isVisible);
+                }
+                // Un doublon déjà inséré par ce même ajout : s'arrêter à lui, comme la branche
+                // en mémoire (InMemHashIndex::append). L'appelant prend la valeur rendue pour la
+                // position de l'échec ; continuer et rendre le nombre d'insertions réussies lui
+                // faisait écarter une autre ligne. La clé n'est déplacée qu'à l'insertion : elle
+                // reste lisible pour nommer le refus.
+                if (!localStorage->appendNoLock(std::move(key), value, isVisible)) {
+                    return i - bufferOffset;
                 }
             }
-            return numValuesInserted;
+            return buffer.size() - bufferOffset;
         } else {
             return localStorage->appendNoLock(buffer, bufferOffset, isVisible);
         }
