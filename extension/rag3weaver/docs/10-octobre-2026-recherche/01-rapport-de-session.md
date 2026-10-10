@@ -1,5 +1,52 @@
 # Session recherche — rapport (chantier C : l'exécution asynchrone des graphes)
 
+## 23 h 15 — LE LOT C EST FUSIONNÉ : master `afdc6923e`
+
+Avance rapide après DEUX rebases de course (master prenait l'IR
+Select/Hop, le moteur de script du chantier I, un refactor recherche
+pendant mes rejeux) ; un seul conflit (Cargo.toml, la ligne tokio contre
+les dépendances script), rejeu final **1361/1361** et toutes les cibles
+compilent. Les signes sont envoyés : 73 rebase commande-en-fond-3 dessus,
+96 monte Reactor::watch_bound après sa fusion, « everything declarative »
+rejoue ses noms possédés par-dessus et a reçu son message d'entrée sur
+src/dataflow/ (relecture de reactor.rs/runtime.rs par moi avant chacun de
+ses commits qui les touchent).
+
+**La mesure (fenêtre exclusive accordée par l'orchestration)** — avant =
+`001054116`, après = la tête rebasée, banc réparé `aeec6888f`, granite-278m
++ bge-m3 : l'asynchrone ne coûte RIEN de visible. Banc 441,5 s avant
+(passe stabilisée ; la première, 689 s, est le contrôle à froid après
+bâti) contre 448,3 / 445,0 s après (~+1 %, bruit) ; MRR au millième
+(0,456→0,455 ; 0,467→0,466 ; 0,433→0,435), « tel quel » identique
+(0,440 / 14 / 27) ; latences 127-149 → 133-146 ms. `test_backend_code`
+HORS comparaison (rouge aux deux bouts pour des raisons différentes, voir
+20 h 45). **Moteur : le MÊME `.so` aux quatre passes** (bâti 21:26, âges
+0/15/22/30 min dans les lignes d'âge).
+
+**Trouvaille de méthode, vérifiée par rag3db-96 contre ses journaux** :
+`RAG3DB_BUILD` non posée + un worktree qui a bâti = `run_e2e.sh` se replie
+EN SILENCE sur le moteur du worktree (`BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"`)
+— on mesure son propre moteur sans le savoir. Sans conséquence ici (C++
+identique à mes deux bouts, `d10b92306` dedans : la réserve MOTEUR_ANCIEN
+tombe), et la ligne d'âge l'attrape parce qu'elle imprime le CHEMIN, pas
+seulement la date. Garde-fou suggéré à 73 (dire le repli, ou refuser
+`ROOT` sans `BUILD`/`LIBRARY_DIR`).
+
+**L'autopsie des 307 Go** (target-C effacé à la demande de l'orchestration,
+disque 92 % → 67 %) : deps = 302 Go, debug seul, incremental bien à 0 —
+171 binaires e2e d'environ 1,4 Go chacun (`cargo test --tests --no-run`
+toutes-features les bâtit TOUS, et deux fois après les rebases qui
+changent les empreintes), moteur C++ lié EN STATIQUE dans chacun
+(RAG3DB_SHARED absent du bâti). Règles qui en sortent : vérifier les
+cibles par `cargo check --tests` (dix fois plus petit), ne bâtir en
+binaire que les suites jouées, et RAG3DB_SHARED=1 sur les bâtis de test.
+
+Reste ouvert, hors lot : e2e_postgres vivante (le conteneur pgvector
+attend Lucie ; F la joue dès qu'il existe — fusionné avec cette limite
+dite, actée par l'orchestration) ; persistence/sparse (tampon 256 Mio)
+chez 73 ; la suite de C (§4 de la page 02 : ports-flux, puits
+d'affichage, run en fond, parallélisme async) attend ses pages.
+
 ## 20 h 45 — la batterie est rendue : tout vert sauf trois rouges DE MASTER
 
 Reprise après le nettoyage : worktree `rag3db-async` remonté sur
