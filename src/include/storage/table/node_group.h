@@ -213,6 +213,8 @@ public:
         common::row_idx_t rowIdxInGroup) const;
     bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
         common::row_idx_t rowIdxInGroup) const;
+    bool wasWrittenByCommitAfter(common::transaction_t startTS,
+        common::transaction_t transactionID, common::row_idx_t rowIdxInGroup) const;
     bool isVisibleNoLock(const transaction::Transaction* transaction,
         common::row_idx_t rowIdxInGroup) const;
     bool isDeleted(const transaction::Transaction* transaction,

@@ -153,6 +153,14 @@ public:
     static constexpr const char* REL_NOT_FOUND_IN_ONE_DIRECTION = "was not found in the";
 
     common::table_id_t getFromNodeTableID() const { return fromNodeTableID; }
+    // Marche A4′ : les deux extrémités d'une relation se verrouillent par leur clé — en partagé
+    // pour la créer (un nœud-carrefour reçoit des relations de tous sans attente), en exclusif
+    // pour la supprimer ou la mettre à jour. Un nœud de la transaction n'est pas verrouillé. Après
+    // l'attente, une extrémité supprimée par une validation postérieure à l'instantané donne
+    // l'erreur de sérialisation.
+    void lockEndpoints(transaction::Transaction* transaction,
+        const common::ValueVector& srcNodeIDVector, const common::ValueVector& dstNodeIDVector,
+        transaction::LockMode mode) const;
     common::table_id_t getToNodeTableID() const { return toNodeTableID; }
 
     void initScanState(transaction::Transaction* transaction, TableScanState& scanState,

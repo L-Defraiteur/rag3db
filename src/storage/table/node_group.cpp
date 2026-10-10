@@ -762,6 +762,20 @@ bool NodeGroup::isVisible(transaction_t startTS, transaction_t transactionID,
            chunkedGroup->isInserted(startTS, transactionID, rowIdxInChunkedGroup);
 }
 
+bool NodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowIdxInGroup) const {
+    ChunkedNodeGroup* chunkedGroup = nullptr;
+    {
+        const auto lock = chunkedGroups.lock();
+        chunkedGroup = findChunkedGroupFromRowIdx(lock, rowIdxInGroup);
+    }
+    if (!chunkedGroup) {
+        return false;
+    }
+    return chunkedGroup->wasWrittenByCommitAfter(startTS, transactionID,
+        rowIdxInGroup - chunkedGroup->getStartRowIdx());
+}
+
 bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdxInGroup) const {
     // Sans le verrou de chunkedGroups, mais sous la garde partagée : la liste des blocs
     // peut s'allonger sous un lecteur.
