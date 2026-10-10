@@ -2223,12 +2223,16 @@ impl Catalog {
     /// **Les types différés, résolus** : pour une mention sans type lu qui en
     /// porte un, le type du champ (`FieldOf`) ou du retour (`ReturnOf`) lu
     /// sur les scopes en base, pelé par sa chaîne (`receveur`), devient son
-    /// `qualifier_types` — la branche du type lu fait le reste. Un nom de
-    /// classe ou de fonction porté par deux scopes aux types différents ne
-    /// donne rien : on ne devine pas.
+    /// `qualifier_types` — la branche du type lu fait le reste. Une chaîne de
+    /// champs (`tableInfo.table`) se suit pas à pas : chaque tour charge les
+    /// classes que le tour d'avant a demandées, quatre tours au plus. Un nom
+    /// de classe ou de fonction porté par deux scopes aux types différents
+    /// ne donne rien : on ne devine pas.
     fn resoudre_les_types_differes(&self, mentions: &mut std::collections::HashMap<String, Vec<Mention>>) -> Result<(), CatalogError> {
         use codeparsers::scope_extraction::types::DeferredType as D;
-        let mut noms: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        use std::collections::{BTreeSet, HashMap};
+        let debut = std::time::Instant::now();
+        let mut noms: BTreeSet<String> = BTreeSet::new();
         for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
             for d in &m.deferred {
                 noms.insert(match d {
@@ -2240,6 +2244,76 @@ impl Catalog {
         if noms.is_empty() {
             return Ok(());
         }
+        // (classe, champ) → type écrit ; fonction → (retour écrit, parent).
+        // `None` : deux déclarations qui ne s'accordent pas.
+        let mut champs: HashMap<(String, String), Option<String>> = HashMap::new();
+        let mut retours: HashMap<String, Option<(String, String)>> = HashMap::new();
+        let mut charges: BTreeSet<String> = BTreeSet::new();
+        let nom_du_type = |ecrit: &str, peel: &[String], champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+            if peel.is_empty() {
+                codeparsers::scope_extraction::usage::base_type_name(ecrit)
+            } else {
+                codeparsers::scope_extraction::receveur::peel_avec(ecrit, peel, champ).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
+            }
+        };
+        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+            match d {
+                D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ)),
+                D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
+                    // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
+                    let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
+                    let lu = nom_du_type(&t, &chaine, champ)?;
+                    if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
+                }),
+            }
+        };
+        let mut tours = 0;
+        loop {
+            let a_charger: Vec<String> = noms.difference(&charges).cloned().collect();
+            if a_charger.is_empty() || tours == 4 {
+                break;
+            }
+            tours += 1;
+            self.charger_les_types_ecrits(&a_charger, &mut champs, &mut retours)?;
+            charges.extend(a_charger);
+            // Les classes qu'un pas de champ demande, pas encore chargées.
+            let demandes = std::cell::RefCell::new(BTreeSet::new());
+            let champ = |classe: &str, f: &str| -> Option<String> {
+                if !charges.contains(classe) {
+                    demandes.borrow_mut().insert(classe.to_string());
+                }
+                champs.get(&(classe.to_string(), f.to_string())).cloned().flatten()
+            };
+            for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
+                for d in &m.deferred {
+                    let _ = resoudre(d, &champs, &retours, &champ);
+                }
+            }
+            noms.extend(demandes.into_inner());
+        }
+        let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
+        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty()) {
+            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &champ)).collect();
+            if let Some(mut v) = lus {
+                v.sort();
+                v.dedup();
+                m.qualifier_types = v;
+            }
+        }
+        if std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+            eprintln!("[ingest-profile] {:>6} ms  types différés ({} noms, {tours} tours)", debut.elapsed().as_millis(), charges.len());
+        }
+        Ok(())
+    }
+
+    /// Les champs typés et les types de retour des scopes de ces noms, versés
+    /// dans les tables de [`Self::resoudre_les_types_differes`].
+    fn charger_les_types_ecrits(
+        &self,
+        noms: &[String],
+        champs: &mut std::collections::HashMap<(String, String), Option<String>>,
+        retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
+    ) -> Result<(), CatalogError> {
         let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
         let result = self
             .conn()
@@ -2248,10 +2322,6 @@ impl Catalog {
                 &[crate::connection::QueryParam::new("noms", param)],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        // (classe, champ) → type écrit ; fonction → (retour écrit, parent).
-        // `None` : deux déclarations qui ne s'accordent pas.
-        let mut champs: std::collections::HashMap<(String, String), Option<String>> = std::collections::HashMap::new();
-        let mut retours: std::collections::HashMap<String, Option<(String, String)>> = std::collections::HashMap::new();
         for row in &result.rows {
             let texte = |i: usize| row.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
             let nom = texte(0);
@@ -2271,38 +2341,14 @@ impl Catalog {
             let retour = texte(2);
             if !retour.trim().is_empty() {
                 let v = (retour, texte(3));
-                retours.entry(nom).and_modify(|o| {
-                    if o.as_ref() != Some(&v) {
-                        *o = None;
-                    }
-                }).or_insert(Some(v));
-            }
-        }
-        let nom_du_type = |ecrit: &str, peel: &[String]| -> Option<String> {
-            if peel.is_empty() {
-                codeparsers::scope_extraction::usage::base_type_name(ecrit)
-            } else {
-                codeparsers::scope_extraction::receveur::peel(ecrit, peel).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
-            }
-        };
-        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty()) {
-            let lus: Option<Vec<String>> = m
-                .deferred
-                .iter()
-                .map(|d| match d {
-                    D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel)),
-                    D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
-                        // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
-                        let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
-                        let lu = nom_du_type(&t, &chaine)?;
-                        if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
-                    }),
-                })
-                .collect();
-            if let Some(mut v) = lus {
-                v.sort();
-                v.dedup();
-                m.qualifier_types = v;
+                retours
+                    .entry(nom)
+                    .and_modify(|o| {
+                        if o.as_ref() != Some(&v) {
+                            *o = None;
+                        }
+                    })
+                    .or_insert(Some(v));
             }
         }
         Ok(())
