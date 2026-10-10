@@ -131,12 +131,16 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
     if !catalog.entity_config(&rel.to).is_some_and(|c| c.fields.contains_key(&d.field)) {
         return Ok(Vec::new());
     }
-    let mut colonnes = vec![format!("p.{}", cfg.title)];
-    colonnes.extend(cfg.path_fields.iter().map(|f| format!("p.{f}")));
-    colonnes.push(format!("p.{}", d.field));
-    let colonnes = colonnes.join(", ");
     let rows = if definitions.is_empty() {
-        let q = format!("MATCH (p:{t}) WHERE p.{f} CONTAINS $nom RETURN '', {colonnes}", t = rel.to, f = d.field);
+        // Sans définition : les conteneurs qui déclarent le nom ; la première
+        // colonne (la définition) est vide.
+        let mut champs = vec![rag3weaver_ir::Column::Null, rag3weaver_ir::Column::Node(cfg.title.clone())];
+        champs.extend(cfg.path_fields.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())));
+        champs.push(rag3weaver_ir::Column::Node(d.field.clone()));
+        let q = catalog
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::filtered(&rel.to, rag3weaver_ir::Predicate::Contains { field: d.field.clone(), param: "nom".into() }, champs))
+            .map_err(|e| format!("UsagesNode: {e}"))?;
         catalog.execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
     } else {
         // Le saut des définitions vers leurs conteneurs, dit par le dialecte ;
@@ -296,7 +300,14 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
         let data = BTreeMap::from([(cfg.key.clone(), CypherValue::String(name.to_string()))]);
         vec![catalog.entity_uuid(&cfg.pivot, &data).map_err(err)?]
     } else {
-        let q = format!("MATCH (x:{p}) WHERE x.{k} = $name RETURN x._uuid", p = cfg.pivot, k = cfg.key);
+        let q = catalog
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::filtered(
+                &cfg.pivot,
+                rag3weaver_ir::Predicate::Equals { field: cfg.key.clone(), param: "name".into() },
+                vec![rag3weaver_ir::Column::Node("_uuid".into())],
+            ))
+            .map_err(|e| format!("UsagesNode: {e}"))?;
         let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
         rows.rows.iter().map(|r| texte(r.first())).filter(|u| !u.is_empty()).collect()
     };

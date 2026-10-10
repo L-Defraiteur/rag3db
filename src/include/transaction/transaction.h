@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <span>
 
 #include "common/types/types.h"
 
@@ -74,6 +75,10 @@ private:
     std::mutex mtx;
 };
 
+struct LockRequest;
+struct LockResource;
+enum class LockMode : uint8_t;
+
 class RAG3DB_API Transaction {
     friend class TransactionManager;
 
@@ -82,6 +87,11 @@ public:
     static constexpr common::transaction_t DUMMY_START_TIMESTAMP = 0;
     static constexpr common::transaction_t START_TRANSACTION_ID =
         static_cast<common::transaction_t>(1) << 63;
+    // L'instantané qui voit toute ligne validée, quel que soit l'instant de sa validation : un
+    // horodatage de validation est toujours inférieur au premier identifiant de transaction.
+    // Le contrôle d'unicité d'une clé primaire regarde le dernier état validé avec lui, et non
+    // l'instantané de la transaction (marche A3′, NodeTable::isVisibleToLatestCommit).
+    static constexpr common::transaction_t LATEST_COMMITTED_TS = START_TRANSACTION_ID - 1;
 
     Transaction(main::ClientContext& clientContext, TransactionType transactionType,
         common::transaction_t transactionID, common::transaction_t startTS);
@@ -155,6 +165,17 @@ public:
     static Transaction* Get(const main::ClientContext& context);
 
     main::ClientContext* getClientContext() const { return clientContext; }
+
+    // Les verrous des écritures parallèles (marches A3′, A4′, V2). Une transaction d'écriture
+    // ordinaire prend ses verrous sous le mode multi-écrivains ; hors de ce mode, en reprise, ou
+    // sans contexte, elle ne prend rien et acquireLocks ne fait rien.
+    bool usesLocks() const;
+    // Prend les verrous demandés, en attendant s'il le faut : au plus lock_timeout, en regardant
+    // l'interruption de la connexion. Sur un interblocage, un délai dépassé ou une interruption,
+    // lève l'erreur nommée du gestionnaire (TransactionManagerException) : l'instruction échoue,
+    // la transaction est annulée par là, et rend tout ce qu'elle tient.
+    void acquireLocks(std::span<const LockRequest> requests) const;
+    void acquireLock(const LockResource& resource, LockMode mode) const;
 
 private:
     common::offset_t getMinUncommittedNodeOffset(common::table_id_t tableID) const;

@@ -1,6 +1,7 @@
 #include "storage/table/node_table.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 
 #include "catalog/catalog.h"
@@ -17,6 +18,7 @@
 #include "storage/local_storage/local_table.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::catalog;
@@ -481,7 +483,7 @@ void NodeTable::validatePkNotExists(const Transaction* transaction, ValueVector*
         throw RuntimeException(ExceptionMessage::nullPKException());
     }
     if (getPKIndex()->lookup(transaction, pkVector, selVector[0], dummyOffset,
-            [&](offset_t offset) { return isVisible(transaction, offset); })) {
+            getUniquenessVisibleFunc(transaction))) {
         throw RuntimeException(
             ExceptionMessage::duplicatePKException(pkVector->getAsValue(selVector[0])->toString()));
     }
@@ -546,6 +548,19 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         return;
     }
     const auto localTable = transaction->getLocalStorage()->getOrCreateLocalTable(*this);
+    // Marche A3′ : sous le mode multi-écrivains, l'insertion tient l'index de la table en
+    // partagé (un COPY le tient en exclusif : les deux ne se croisent pas) et la clé en
+    // exclusif, jusqu'à la fin de la transaction. Une seconde insertion de la même clé attend
+    // ici ; puis le contrôle d'unicité, contre le dernier état validé, la refuse ou la laisse
+    // passer selon ce que la première a fait.
+    if (transaction->usesLocks()) {
+        const auto pkPos = nodeInsertState.pkVector.state->getSelVector()[0];
+        const std::array requests{
+            LockRequest{LockResource::index(tableID), LockMode::SHARED},
+            LockRequest{LockResource::row(tableID, lockKeyOf(nodeInsertState.pkVector, pkPos)),
+                LockMode::EXCLUSIVE}};
+        transaction->acquireLocks(requests);
+    }
     validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
     localTable->insert(transaction, insertState);
     for (auto i = 0u; i < indexes.size(); i++) {
@@ -836,8 +851,12 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
         if (!index.needCommitInsert()) {
             continue;
         }
+        // L'index de clé primaire contrôle l'unicité avec la visibilité de l'insertion : un
+        // contrôle qui différerait ici ferait échouer la validation après l'ajout des lignes
+        // aux groupes (étape 1), une transaction à moitié validée (C7 du banc, 10 octobre).
         UncommittedIndexInserter indexInserter{startNodeOffset, this, index.getIndex(),
-            getVisibleFunc(transaction)};
+            index.getIndex()->isPrimary() ? getUniquenessVisibleFunc(transaction) :
+                                            getVisibleFunc(transaction)};
         // We need to scan from local storage here because some tuples in local node groups might
         // have been deleted.
         scanIndexColumns(context, indexInserter, localNodeTable.getNodeGroups(), &localNodeTable);
@@ -850,6 +869,21 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
 visible_func NodeTable::getVisibleFunc(const Transaction* transaction) const {
     return
         [this, transaction](offset_t offset_) -> bool { return isVisible(transaction, offset_); };
+}
+
+// Sous les verrous (marche A3′), l'unicité se contrôle contre le dernier état validé et non
+// contre l'instantané : une clé validée par un autre écrivain après l'instantané de cette
+// transaction est un doublon (PostgreSQL lit l'état de validation de toute ligne qui porte la
+// clé), et une clé dont la ligne a été supprimée et validée après l'instantané est libre. Le
+// verrou de la clé, tenu par l'autre jusqu'à la fin de sa transaction, a fait attendre jusque-là :
+// s'il a validé son insertion, c'est l'erreur de clé en double ; s'il a annulé, la clé est libre.
+visible_func NodeTable::getUniquenessVisibleFunc(const Transaction* transaction) const {
+    if (!transaction->usesLocks()) {
+        return getVisibleFunc(transaction);
+    }
+    return [this, transaction](offset_t offset_) -> bool {
+        return isVisibleToLatestCommit(transaction, offset_);
+    };
 }
 
 bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tableEntry,
@@ -936,9 +970,22 @@ TableStats NodeTable::getStats(const Transaction* transaction) const {
 }
 
 bool NodeTable::isVisible(const Transaction* transaction, offset_t offset) const {
+    return isVisible(transaction->getStartTS(), transaction->getID(), offset);
+}
+
+bool NodeTable::isVisible(transaction_t startTS, transaction_t transactionID,
+    offset_t offset) const {
     auto [nodeGroupIdx, offsetInGroup] = StorageUtils::getNodeGroupIdxAndOffsetInChunk(offset);
     const auto* nodeGroup = getNodeGroup(nodeGroupIdx);
-    return nodeGroup->isVisible(transaction, offsetInGroup);
+    return nodeGroup->isVisible(startTS, transactionID, offsetInGroup);
+}
+
+bool NodeTable::isVisibleToLatestCommit(const Transaction* transaction, offset_t offset) const {
+    return isVisible(Transaction::LATEST_COMMITTED_TS, transaction->getID(), offset);
+}
+
+std::string NodeTable::lockKeyOf(const ValueVector& pkVector, sel_t pos) {
+    return pkVector.getAsValue(pos)->toString();
 }
 
 bool NodeTable::isVisibleNoLock(const Transaction* transaction, offset_t offset) const {

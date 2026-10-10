@@ -584,3 +584,60 @@ qui ont servi aux mesures (à remettre dans `test/transaction/` et dans son `CMa
 pour les rejouer), et les patchs essayés puis écartés. Ils vivaient dans
 `~/.cache/rag3db-moteur-notes/`, qui n'est pas durable ; les journaux d'exécution y sont
 restés.
+
+## A3′ faite (10 octobre 2026, 20 h 30) — sur master en avance rapide
+
+Trois commits sur master : `21b6cb370` (le câblage), `79b7be75f` (known_red, le témoin de la
+famine, deux témoins du banc adaptés), `9a57a17b2` (les trois témoins demandés à la relecture, la
+forme forcée des deux validations dans known_red, la mesure). Relu par le banc (rag3db-10) à
+chaque étape ; liste complète jouée deux fois : sur le poste principal au premier lot, puis sur
+**luciepc** sur la branche rebasée (transaction_test 221, api 104, c_api 136, copy 23, stockage
+81, banc conforme à known_red 50 rouges comparés / 197 verts, vector 74 et 63, Cypher 1867).
+
+Ce qu'A3′ fait, en une ligne chacune (le détail : page 07 §5, le knowledge dump §4) :
+- l'insertion prend l'index de sa table en partagé et sa clé en exclusif, jusqu'à la fin de la
+  transaction ; le COPY prend l'index en exclusif, **sur le fil du client avant
+  l'ordonnancement** ; une seconde insertion de la même clé attend, puis reçoit l'erreur de clé en
+  double ou passe, selon que la première a validé ou annulé ;
+- l'unicité se contrôle contre le dernier état validé, avec **une seule visibilité** à
+  l'insertion et à la validation ;
+- une attente de verrou sur un fil ouvrier lance un **fil de remplacement** de l'ordonnanceur
+  (`TaskScheduler::BlockingWait`) ; le témoin de la famine est rouge sans lui (59,8 s) et vert
+  avec (216 ms) ;
+- tout cela sous le mode multi-écrivains seulement, **éteint hors du banc**.
+
+Ce que le banc compte : 59 rouges attendus avant A3′, 56 après le rebase sur master (mes 10
+lignes sorties, une ligne entrée pour la forme forcée des deux validations, C7 après arrêt brutal
+qui change d'étiquettes et passe sous A4′ ; les lignes ajoutées par le banc sur master entre-temps
+s'y ajoutent). Les messages des commits disent 50 puis 52 : ils comptaient avant le rebase.
+
+La mesure (luciepc, un million de lignes par `UNWIND … CREATE` dans une transaction, pool de 8
+fils, trois passes, tenue exclusive, **non comparable aux chiffres du poste principal**) :
+
+| mode | insertion (ms) | validation (ms) |
+|---|---|---|
+| multi-écrivains éteint (le produit) | 1 073 / 790 / 722 | 242 / 233 / 244 |
+| allumé (un verrou de clé par ligne) | 1 479 / 1 437 / 1 408 | 465 / 485 / 476 |
+
+Sous les verrous : +0,65 µs par ligne à l'insertion, +0,23 µs à la validation (rendre un million
+de verrous). Le mode éteint est le chemin d'avant plus un test booléen par ligne ; la comparaison
+avec `ff9bad960` sur la même machine reste à faire quand un bâti d'avant y existera (confort :
+la clé en octets bruts, la libération par lot, pour le jour où le mode s'allume dans le produit).
+
+Ce qu'A3′ ne fait pas, et où ça va : la part **reprise** d'un journal à doublon (le témoin du
+banc reste rouge sur `database-reopens`, il rejoue le journal gardé au dépôt,
+`test/transaction/journal_with_duplicate_key`) — à faire avec A4′ ou juste après ; le COPY de
+relations ; **A4′** (mises à jour, suppressions, relations) ensuite, puis V2 (la `CALL`, à
+prévenir rag3db-50 avant `src/function`), puis l'index au commit.
+
+Tickets : fermé « L'annulation d'un COPY efface les lignes d'un autre écrivain » (par le verrou) ;
+ouvert « Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la
+transaction à moitié validée » (demandé par le banc) ; signalé à rag3db-50 un rouge probabiliste
+hors du lot (IGNORE_ERRORS et la ligne de clé en double gardée).
+
+Le cœur C++ travaille désormais sur **luciepc** (décision de Lucie, 10 octobre au soir) :
+worktree `~/git_workspaces/rag3db-moteur` là-bas, `build/moteur` gardé entre les lots ; ici, le
+worktree moteur n'a plus de bâti ; les notes restent dans `~/.cache/rag3db-moteur-notes/a3/`.
+
+Faute du jour, notée en mémoire : un `pidof concurrence_test` nu a tué un test du banc ; on ne
+tue que les pids qu'on a lancés.

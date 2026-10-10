@@ -4,7 +4,7 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 10 octobre 2026, soir — lot (a) dans master, lot (c) en cours (le défaut de sélection corrigé, `CALL analyze` à coder).**
+**Dernière mise à jour : 10 octobre 2026, 20 h 40 — lot `CALL analyze` fini sur luciepc, prêt pour master.**
 
 ## L'arbre
 
@@ -150,6 +150,43 @@ et des refus par essai (en patch).
   rebalayer au point de reprise).
 - Reste : les témoins rouges de `STATS_INFO` après `IGNORE_ERRORS`, `DELETE`, `SET` ; `analyze` ;
   la réouverture ; la mesure de 100 000 lignes sous `poste mesure`.
+
+## Arrêt du 10 octobre au soir (nettoyage du disque, demandé par Lucie)
+
+- **Poussé en branche `statistiques`, non fusionné** : `CALL analyze('Table')`, le recalage de la
+  cardinalité sur les lignes vivantes (point de reprise, ouverture), `NodeGroup::getNumLiveRows`,
+  `NodeTable::replaceStats` (accords de la session cœur C++ pour `src/storage`), les témoins
+  `TableAnalyzeTest`, deux tickets (`analyze` non transactionnel ; l'ouverture sans une extension
+  dont une table dépend), la page 03 à jour.
+- **Joué avant l'arrêt** : les quatre premiers témoins `TableAnalyzeTest`, rouges avant et verts
+  après ; le témoin du recalage vu rouge sur l'ancien recalage ; la liste complète verte
+  (transaction_test 217, api 104, c_api 136, copy 23, stockage, column_stats 2, banc conforme à
+  `known_red` 59/181, vector 74 et 63, e2e 1867).
+- **Pas joué** : le témoin du ROLLBACK (`AnAnalyzeInARolledBackTransactionLeavesAStaleEstimate`,
+  écrit après la liste) ; la mesure des 100 000 lignes (arrêtée avant d'avoir eu le verrou ;
+  l'essai est gardé dans `~/.cache/rag3db-tickets-notes/analyze_measure_scratch_test.cpp`, qui
+  n'est pas dans un dossier effacé — à vérifier à la reprise).
+- **Pas fait** : montrer le diff de `src/storage` à la session cœur C++ ; la fusion.
+- **À la reprise** : un worktree neuf sur `origin/statistiques` (le mien est effacé), `cmake`
+  Release avec `vector;geo`, bâti sous `poste lourd`, le témoin du ROLLBACK, la mesure sous
+  `poste mesure`, le diff à la session cœur C++, rebase et avance rapide.
+
+## Reprise sur luciepc (10 octobre, soir)
+
+- Décision de Lucie : le cœur C++ travaille sur luciepc. Worktree `~/git_workspaces/rag3db-tickets`
+  là-bas, branche `statistiques-2` (la branche reposée sur master, poussée sous un nom neuf) ;
+  bâti complet en 3 min 30 (lib et binaires à 19 h 52, après le commit de 19 h 00).
+- Joué là-bas : les cinq `TableAnalyzeTest`, le témoin du ROLLBACK compris (la cardinalité gardée
+  vaut bien 1 000, ce que l'analyze annulé avait vu) ; la liste complète, verte sauf un rouge
+  probabiliste étranger au lot (`ForcedTransactionJournalTest.OrdinaryWritesBeforeACopyThatSkipsRowsCommittedThenDead`,
+  2 999 lignes pour 3 000, vu aussi par la session cœur C++ sans ce lot : ticket à écrire).
+- Relecture de la session cœur C++ sur `src/storage` : d'accord, une demande — le recalage limité
+  aux groupes de nœuds (un groupe CSR garde sa part persistée hors de ses blocs) : `a1bd6c8a6`,
+  bâti et joué (TableAnalyze et CopyStatistics 10, rel_tests 7).
+- La mesure (page 03, §5 ter) : `analyze` 4 ms sur 100 000 lignes clé + chaîne, 24 ms avec un
+  `FLOAT[768]` (95 ms à froid). Deux essais nuls d'abord, dits.
+- Piège de luciepc : un `scp` n'a pas gardé le droit d'exécution d'un script ; les binaires de test
+  se lient à `librag3db.a`, pas au `.so` (prouver la date de la statique).
 
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 

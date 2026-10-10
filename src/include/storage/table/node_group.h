@@ -112,6 +112,10 @@ public:
 
     virtual bool isEmpty() const { return numRows.load() == 0; }
     virtual common::row_idx_t getNumRows() const { return numRows.load(); }
+    // Les lignes validées et non supprimées, d'après les informations de version de ses blocs
+    // (persistées avec eux) : sans relire les colonnes. Un groupe vidé au point de reprise
+    // (ChunkedNodeGroup::flushEmpty) n'a plus de bloc porteur de lignes et compte 0.
+    common::row_idx_t getNumLiveRows() const;
     void moveNextRowToAppend(common::row_idx_t numRowsToAppend) {
         nextRowToAppend += numRowsToAppend;
     }
@@ -206,6 +210,8 @@ public:
     }
 
     bool isVisible(const transaction::Transaction* transaction,
+        common::row_idx_t rowIdxInGroup) const;
+    bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
         common::row_idx_t rowIdxInGroup) const;
     bool isVisibleNoLock(const transaction::Transaction* transaction,
         common::row_idx_t rowIdxInGroup) const;

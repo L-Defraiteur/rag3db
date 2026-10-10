@@ -163,6 +163,7 @@ pub mod dataflow;
 pub mod query;
 pub mod refs;
 pub mod schema;
+pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,
 /// rafale » qui décide si le poste reste utilisable pendant qu'on travaille.
 /// **Exécuter une commande sans donner la machine** : la porte, les faits, le

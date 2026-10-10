@@ -110,6 +110,7 @@ public:
         children.push_back(std::move(child));
     }
 
+    void acquireLocksBeforeExecution(ExecutionContext* context) override;
     void initGlobalStateInternal(ExecutionContext* context) override;
 
     void initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) override;

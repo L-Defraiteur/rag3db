@@ -1,6 +1,8 @@
 #include "transaction/transaction.h"
 
 #include "common/exception/runtime.h"
+#include "common/exception/transaction_manager.h"
+#include "common/task_system/task_scheduler.h"
 #include "main/client_context.h"
 #include "main/db_config.h"
 #include "storage/local_storage/local_node_table.h"
@@ -8,7 +10,9 @@
 #include "storage/storage_manager.h"
 #include "storage/undo_buffer.h"
 #include "storage/wal/local_wal.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction_context.h"
+#include "transaction/transaction_manager.h"
 
 using namespace rag3db::catalog;
 
@@ -50,6 +54,42 @@ Transaction::Transaction(TransactionType transactionType, common::transaction_t 
       clientContext{nullptr}, undoBuffer{nullptr}, forceCheckpoint{false},
       hasCatalogChanges{false} {
     currentTS = common::Timestamp::getCurrentTimestamp().value;
+}
+
+bool Transaction::usesLocks() const {
+    return isWriteTransaction() && clientContext != nullptr &&
+           clientContext->getDBConfig()->enableMultiWrites;
+}
+
+void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
+    if (requests.empty() || !usesLocks()) {
+        return;
+    }
+    auto& lockManager = TransactionManager::Get(*clientContext)->getLockManager();
+    const auto interrupted = [this] { return clientContext->interrupted(); };
+    LockResource failedOn;
+    // D'abord sans attendre : une prise libre ne coûte rien de plus.
+    auto outcome =
+        lockManager.acquire(ID, requests, LockManager::clock::now(), interrupted, &failedOn);
+    if (outcome == LockOutcome::TIMEOUT) {
+        // Il faut attendre. Sur un fil ouvrier de l'ordonnanceur, l'attente rend son fil à la
+        // file (un remplaçant sert pendant ce temps) : sinon N attentes occupent les N fils, et
+        // la transaction qui doit valider pour les libérer n'en trouve plus.
+        const common::TaskScheduler::BlockingWait blocking{
+            common::TaskScheduler::Get(*clientContext)};
+        const auto deadline = LockManager::clock::now() + std::chrono::milliseconds{
+                                                              clientContext->getClientConfig()
+                                                                  ->lockTimeoutInMS};
+        outcome = lockManager.acquire(ID, requests, deadline, interrupted, &failedOn);
+    }
+    if (outcome != LockOutcome::ACQUIRED) {
+        throw common::TransactionManagerException(LockManager::describe(outcome, failedOn));
+    }
+}
+
+void Transaction::acquireLock(const LockResource& resource, LockMode mode) const {
+    const LockRequest request{resource, mode};
+    acquireLocks(std::span<const LockRequest>{&request, 1});
 }
 
 bool Transaction::shouldLogToWAL() const {

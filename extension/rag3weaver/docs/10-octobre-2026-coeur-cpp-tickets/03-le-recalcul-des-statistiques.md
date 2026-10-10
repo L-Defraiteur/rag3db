@@ -96,6 +96,51 @@ statistiques recalculées.
 **La mesure demandée** : le coût du balayage sur une table de 100 000 lignes (clé, chaîne,
 `FLOAT[768]`), seul sur le poste ; le déclenchement automatique se décide après, sur ce chiffre.
 
+## 5 bis. Ce qui est fait (10 octobre, soir)
+
+- **Le défaut de sélection** : corrigé seul d'abord (`d10b92306`), rouge « estimation 1 pour
+  1000 » puis vert.
+- **`CALL analyze('Table')`** (`src/function/table/analyze.cpp`) : un balayage des colonnes
+  validées, la sélection écarte les lignes supprimées, `TableStats::update` par colonne ; puis
+  `NodeTable::replaceStats`, qui marque la table pour le point de reprise.
+- **Le recalage** au point de reprise et à l'ouverture se fait sur les lignes vivantes
+  (`NodeGroup::getNumLiveRows` : par bloc, lignes moins suppressions, d'après les informations de
+  version persistées avec lui) ; `numTotalRows` intact. Témoin rouge sur l'ancien recalage (2 000
+  au lieu de 1 000), vert après.
+- **Les témoins** (`TableAnalyzeTest`) : rouges avant (cardinalité 2 000 pour 1 000 après
+  `IGNORE_ERRORS` et `DELETE` ; noms distincts 2 051 et 1 931 pour 1 000, 10 pour 1 000 après
+  `SET` ; encore après réouverture), justes après `analyze` et après la réouverture.
+- **Un écart à la forme du §3** : le remplacement se fait pendant l'exécution du `CALL`, pas à la
+  validation de sa transaction. Un `analyze` dans une transaction annulée laisse donc ses
+  statistiques — des estimations, que rien d'autre ne lit qu'un planificateur. Le faire à la
+  validation demanderait un « remplacement en attente » dans `LocalStorage`, à côté des
+  statistiques en attente d'un `COPY`. **Accepté tel quel par l'orchestration** (Lucie peut
+  renverser) : c'est ce que fait PostgreSQL pour `reltuples`/`relpages`, mis à jour sur place et
+  gardés après un `ROLLBACK`, seul `pg_statistic` étant transactionnel (Tom Lane, pgsql-bugs,
+  22 octobre 2014, [BUG #11638](https://www.postgresql.org/message-id/10043.1413988524%40sss.pgh.pa.us)).
+  Témoin `AnAnalyzeInARolledBackTransactionLeavesAStaleEstimate` ; ticket
+  `2026-10-10-analyze-non-transactionnel.md`.
+- **Un effet de bord voulu** : un `COPY` forcé (ce qu'est encore un `COPY` sous
+  `IGNORE_ERRORS`) fait son point de reprise, qui recale maintenant la cardinalité sur les lignes
+  vivantes : après le `COPY` qui écarte des clés, elle est juste avant même `analyze`.
+
+## 5 ter. La mesure (10 octobre, 20 h 33, sur luciepc)
+
+Sous `poste mesure` sur luciepc (24 cœurs, charge 5 à 6), les deux colonnes sur la même machine ;
+les 100 000 lignes comptées avant de mesurer (un premier essai avait mesuré une table vide : la
+compréhension de liste n'existe pas dans le dialecte). Essai gardé hors du dépôt
+(`~/.cache/rag3db-tickets-notes/analyze_measure_scratch_test.cpp`, journal à côté).
+
+| Table de 100 000 lignes | `CALL analyze` | `CHECKPOINT` qui suit | `CHECKPOINT` sans analyze |
+|---|---|---|---|
+| clé + chaîne | 3,6 à 4,2 ms (trois passes) | 3,9 à 4,8 ms | 2,9 ms |
+| clé + chaîne + `FLOAT[768]` | 95 ms à froid, puis 24 ms | 8 à 11 ms | 3,2 ms |
+
+Le balayage complet coûte peu : l'écart à l'échantillon de PostgreSQL (§2) n'a pas à être revu à
+cette taille. La colonne `FLOAT[768]` est lue sans servir (un tableau n'a pas d'HyperLogLog) :
+la sauter rendrait le cas des vecteurs proche de l'autre, si un jour ça compte. Le déclenchement
+automatique se décide sur ces chiffres (orchestration).
+
 ## 6. Ce qui reste dehors
 
 - Le déclenchement automatique (après la mesure).

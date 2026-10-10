@@ -41,7 +41,7 @@ std::string LockManager::describe(LockOutcome outcome, const LockResource& resou
 }
 
 LockOutcome LockManager::acquire(transaction_t transactionID, std::span<const LockRequest> requests,
-    clock::time_point deadline, const interrupted_func_t& interrupted) {
+    clock::time_point deadline, const interrupted_func_t& interrupted, LockResource* failedOn) {
     // L'ordre unique des prises groupées : par ressource, chaque ressource une seule fois, dans
     // son mode le plus fort.
     std::vector<LockRequest> ordered(requests.begin(), requests.end());
@@ -61,6 +61,9 @@ LockOutcome LockManager::acquire(transaction_t transactionID, std::span<const Lo
     for (const auto& request : ordered) {
         const auto outcome = acquireOneNoLock(lck, transactionID, request, deadline, interrupted);
         if (outcome != LockOutcome::ACQUIRED) {
+            if (failedOn) {
+                *failedOn = request.resource;
+            }
             return outcome;
         }
     }

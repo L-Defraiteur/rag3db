@@ -235,6 +235,13 @@ pub trait SchemaDialect: Send + Sync {
         Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Count" })
     }
 
+    /// **Une sélection** ([`rag3weaver_ir::Select`]) dans la langue de ce
+    /// dialecte ; refusée par défaut en la nommant.
+    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        let _ = select;
+        Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select" })
+    }
+
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
     /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
     /// leur place cette instruction, qui échoue à l'analyse **en nommant la
@@ -1058,6 +1065,41 @@ pub trait SchemaDialect: Send + Sync {
 pub struct Rag3dbDialect;
 
 impl SchemaDialect for Rag3dbDialect {
+    /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
+    /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
+    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::{Column, Predicate};
+        select.validate()?;
+        fn condition(p: &Predicate) -> String {
+            match p {
+                Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
+                Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
+                Predicate::AnyOf(v) => v.iter().map(condition).collect::<Vec<_>>().join(" OR "),
+            }
+        }
+        let colonnes: Vec<String> = select
+            .returns
+            .iter()
+            .map(|c| match c {
+                Column::Node(f) => format!("m.{f}"),
+                Column::Whole => "m".to_string(),
+                _ => "NULL".to_string(),
+            })
+            .collect();
+        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", condition(p))).unwrap_or_default();
+        let ordre = if select.order_by.is_empty() {
+            String::new()
+        } else {
+            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{f}")).collect::<Vec<_>>().join(", "))
+        };
+        let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        Ok(if select.by_uuids {
+            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN u, {}{ordre}{borne}", select.table, colonnes.join(", "))
+        } else {
+            format!("MATCH (m:{}){filtre} RETURN {}{ordre}{borne}", select.table, colonnes.join(", "))
+        })
+    }
+
     /// Le degré : `UNWIND $uuids AS u MATCH (d:Départ {_uuid: u})<-[r:REL]-()
     /// RETURN u, count(r)` — la forme exacte que `graph_walk` écrivait.
     fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
@@ -2832,6 +2874,28 @@ mod tests {
         let c = Count::Edges { start: "Scope".into(), relation: "CONSUMES".into(), direction: Direction::Incoming };
         assert_eq!(Rag3dbDialect.count(&c).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-() RETURN u, count(r)");
         assert_eq!(PostgresDialect.count(&c).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Count");
+    }
+
+    /// La sélection : rag3db la traduit, PostgreSQL la refuse en la nommant.
+    #[test]
+    fn la_selection_se_traduit_ou_se_refuse() {
+        use rag3weaver_ir::{Column, Predicate, Select};
+        let s = Select::by_uuids("Scope", vec![Column::Node("name".into()), Column::Null]);
+        assert_eq!(Rag3dbDialect.select(&s).unwrap(), "UNWIND $uuids AS u MATCH (m:Scope {_uuid: u}) RETURN u, m.name, NULL");
+        let mut f = Select::filtered(
+            "Scope",
+            Predicate::AnyOf(vec![
+                Predicate::Equals { field: "file_path".into(), param: "file".into() },
+                Predicate::Equals { field: "source".into(), param: "file".into() },
+            ]),
+            vec![Column::Node("_uuid".into())],
+        );
+        f.order_by.push("_uuid".into());
+        f.limit = Some(3);
+        assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:Scope) WHERE m.file_path = $file OR m.source = $file RETURN m._uuid ORDER BY m._uuid LIMIT 3");
+        assert_eq!(PostgresDialect.select(&s).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Select");
+        f.returns.push(Column::Edge("x".into()));
+        assert!(Rag3dbDialect.select(&f).is_err());
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

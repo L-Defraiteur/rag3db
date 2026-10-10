@@ -35,6 +35,7 @@ std::unique_ptr<main::QueryResult> QueryProcessor::execute(PhysicalPlan* physica
         decomposePlanIntoTask(sink->getChild(i), task.get(), context);
     }
     initTask(task.get());
+    acquireLocksBeforeExecution(task.get(), context);
     auto progressBar = ProgressBar::Get(*context->clientContext);
     progressBar->startProgress(context->queryID);
     taskScheduler->scheduleTaskAndWaitOrError(task, context);
@@ -59,6 +60,15 @@ void QueryProcessor::decomposePlanIntoTask(PhysicalOperator* op, Task* task,
             decomposePlanIntoTask(op->getChild(i), task, context);
         }
     }
+}
+
+// Les verrous de tout le plan, pris sur le fil du client avant qu'une tâche ne soit
+// ordonnancée (PhysicalOperator::acquireLocksBeforeExecution).
+void QueryProcessor::acquireLocksBeforeExecution(Task* task, ExecutionContext* context) {
+    for (auto& child : task->children) {
+        acquireLocksBeforeExecution(child.get(), context);
+    }
+    ku_dynamic_cast<ProcessorTask*>(task)->sink->acquireLocksBeforeExecution(context);
 }
 
 void QueryProcessor::initTask(Task* task) {

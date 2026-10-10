@@ -106,9 +106,11 @@ public:
     // en exclusif.
     //
     // Sur un résultat autre qu'ACQUIRED, les verrous déjà pris restent tenus : la transaction
-    // doit être annulée, et c'est releaseAll qui les rend.
+    // doit être annulée, et c'est releaseAll qui les rend. failedOn, s'il est donné, reçoit la
+    // ressource sur laquelle la prise a échoué (pour le message).
     LockOutcome acquire(common::transaction_t transactionID, std::span<const LockRequest> requests,
-        clock::time_point deadline, const interrupted_func_t& interrupted = nullptr);
+        clock::time_point deadline, const interrupted_func_t& interrupted = nullptr,
+        LockResource* failedOn = nullptr);
 
     LockOutcome acquire(common::transaction_t transactionID, const LockResource& resource,
         LockMode mode, clock::time_point deadline, const interrupted_func_t& interrupted = nullptr) {

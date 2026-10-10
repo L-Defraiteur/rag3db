@@ -390,6 +390,18 @@ bool NodeGroup::delete_(const Transaction* transaction, row_idx_t rowIdxInGroup)
     return groupToDelete->delete_(transaction, rowIdxInChunkedGroup);
 }
 
+row_idx_t NodeGroup::getNumLiveRows() const {
+    const auto lock = chunkedGroups.lock();
+    row_idx_t numLiveRows = 0;
+    for (auto i = 0u; i < chunkedGroups.getNumGroups(lock); i++) {
+        const auto chunkedGroup = chunkedGroups.getGroup(lock, i);
+        const auto numRowsInGroup = chunkedGroup->getNumRows();
+        numLiveRows += numRowsInGroup - chunkedGroup->getNumDeletions(
+                                            &DUMMY_CHECKPOINT_TRANSACTION, 0, numRowsInGroup);
+    }
+    return numLiveRows;
+}
+
 bool NodeGroup::hasDeletions(const Transaction* transaction) const {
     const auto lock = chunkedGroups.lock();
     for (auto i = 0u; i < chunkedGroups.getNumGroups(lock); i++) {
@@ -732,6 +744,11 @@ NodeGroup::scanAllInsertedAndVersions<ResidencyState::IN_MEMORY>(MemoryManager& 
     const std::vector<const Column*>& columns) const;
 
 bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGroup) const {
+    return isVisible(transaction->getStartTS(), transaction->getID(), rowIdxInGroup);
+}
+
+bool NodeGroup::isVisible(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowIdxInGroup) const {
     ChunkedNodeGroup* chunkedGroup = nullptr;
     {
         const auto lock = chunkedGroups.lock();
@@ -741,8 +758,8 @@ bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGrou
         return false;
     }
     const auto rowIdxInChunkedGroup = rowIdxInGroup - chunkedGroup->getStartRowIdx();
-    return !chunkedGroup->isDeleted(transaction, rowIdxInChunkedGroup) &&
-           chunkedGroup->isInserted(transaction, rowIdxInChunkedGroup);
+    return !chunkedGroup->isDeleted(startTS, transactionID, rowIdxInChunkedGroup) &&
+           chunkedGroup->isInserted(startTS, transactionID, rowIdxInChunkedGroup);
 }
 
 bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdxInGroup) const {

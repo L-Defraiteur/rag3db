@@ -12,42 +12,36 @@
 # constant (un seul fil, une graine, des délais choisis) avant de le laisser là. Les cas
 # probabilistes sont dans probabilistic.txt.
 #
-# Marche A3′ (verrou de clé, unicité contre le dernier état validé) — C1 : deux insertions de la
-# même clé validées toutes les deux. Après un VRAI arrêt brutal (variante Crash corrigée le
-# 3 octobre au soir), la base ne se rouvre plus : le rejeu refuse le doublon.
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyTwoWriters/Thread_Crash database-reopens
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SamePrimaryKeyThreeWriters/Thread_Crash database-reopens
+# Marche A3′ (verrou de clé, unicité contre le dernier état validé) : FAITE le 10 octobre 2026.
+# Verts depuis : C1_SamePrimaryKeyTwoWriters et ThreeWriters (Hot, Reopen, Crash),
+# C1_SnapshotPredatesCommit (les trois), la base de C7_RandomMix/Thread_Crash qui se rouvre (le
+# doublon ne naît plus ; il reste rouge pour A4′, ci-dessous),
+# LockBench.SameKeyWaitsThenGetsDuplicateKey et SameKeyWaitsThenInsertsAfterRollback,
+# Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst (réécrit à deux fils : c'est
+# le verrou d'index du COPY qui ferme la première limite du 4 octobre, le second COPY attend).
 #
-# Marche A3′ — le mélange de C7 après un vrai arrêt brutal : des clés en double validées
-# sous concurrence rendent la base impossible à rouvrir (20 fois sur 20, 3 octobre au
-# soir). Ses variantes à chaud et après réouverture restent probabilistes.
-Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash database-reopens
-#
-# Marche A3′, second témoin — ce que la reprise fait d'un journal qui porte un doublon
-# validé sous le mode multi-écrivains (éteint hors du banc) : aujourd'hui la base ne se
-# rouvre plus ; attendu, refuser la transaction fautive en nommant la clé et ouvrir la
-# base.
+# A3′, la part REPRISE, pas faite — ce que la reprise fait d'un journal qui porte un doublon
+# validé sous le mode multi-écrivains, fabriqué par le moteur d'avant A3′ et gardé au dépôt
+# (test/transaction/journal_with_duplicate_key) : aujourd'hui la base ne se rouvre plus ;
+# attendu, refuser la transaction fautive en nommant la clé et ouvrir la base.
 LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen database-reopens
 #
-# Marche A3′ — la même clé sans chevauchement, depuis un instantané antérieur au commit de
-# l'autre : le contrôle d'unicité doit regarder le dernier état validé.
-Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Hot one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Reopen one-commit,primary-key-index-agrees,primary-key-unique
-Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash database-reopens
+# Marche A4′ — le mélange de C7 après un vrai arrêt brutal : depuis A3′ la base se rouvre (plus
+# de clé en double au journal) ; ce qui reste est celui de C2 (relations vers des nœuds
+# supprimés par un autre écrivain). same-answers y compris : les lignes qui n'existent qu'après
+# le rejeu sont toutes des relations à une extrémité manquante (« <missing> », 3 à 6 lignes
+# par passe, 3 passes sur 3 le 10 octobre) — le rejeu « répare » la relation pendante, comme pour
+# C2_DetachRelationCommitsFirst/Thread_Crash ; ce n'est pas la durabilité. Ses variantes à chaud
+# et après réouverture restent probabilistes.
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-endpoints-exist,same-answers,stored-endpoints-visible
 #
-# Marche A3′ — les deux limites écrites le 4 octobre (stèle, étape 5), sous le mode
-# multi-écrivains. L'annulation d'un COPY copié le premier efface les lignes et les clés
-# d'un COPY copié après lui dans le même bloc, que l'autre écrivain valide ensuite (dans
-# l'autre ordre, vert). La seconde limite — deux validations qui voulaient chacune leur point
-# de reprise, la première jusqu'au délai, son annulation effaçant les lignes de la seconde
-# (LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout) — a verdi avec le COPY
-# journalisé en défaut (10 octobre 2026) : un COPY ne veut plus de point de reprise à sa
-# validation, les deux passent.
-Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst committed-rows,other-writer-key-unique,other-writer-keys-kept,primary-key-index-agrees
+# Marche A7 (l'attente d'un point de reprise forcé à la validation) — la seconde limite du
+# 4 octobre, sur son chemin d'origine : deux COPY FORCÉS (force_checkpoint_on_copy=true, le
+# réglage existe toujours) de deux tables, deux validations qui veulent chacune leur point de
+# reprise ; la première attend le départ de la seconde jusqu'au délai (5 s) et échoue. Sa forme
+# journalisée (le défaut depuis ff9bad960) est verte : aucun des deux ne veut de point de
+# reprise. Mesuré sur luciepc le 10 octobre : 5 014 ms.
+Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
 # Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
 # nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux
@@ -87,10 +81,9 @@ Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
 # deux : le verrou est à la ligne.
 MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
 #
-# Marche V1 puis A3′ / A4′ — l'attente prouvée par l'ordre des événements (lock_bench_test.cpp,
-# §6.1 de la note) : aujourd'hui l'écriture du second finit aussitôt (étiquette waited).
-LockBench.SameKeyWaitsThenGetsDuplicateKey waited,waiter-does-not-commit,waiter-gets-duplicated-key,waiter-refused
-LockBench.SameKeyWaitsThenInsertsAfterRollback waited
+# Marche V1 puis A4′ — l'attente prouvée par l'ordre des événements (lock_bench_test.cpp,
+# §6.1 de la note) : aujourd'hui l'écriture du second finit aussitôt (étiquette waited). Les
+# deux cas de la clé (SameKey…) sont verts depuis A3′.
 LockBench.SameRowUpdateWaitsThenGetsSerializationError waited,waiter-gets-serialization-error
 LockBench.SameRowUpdateWaitsThenWritesAfterRollback waited,waiter-commits,waiter-value,waiter-writes
 LockBench.SameRowOtherColumnWaitsThenGetsSerializationError waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused

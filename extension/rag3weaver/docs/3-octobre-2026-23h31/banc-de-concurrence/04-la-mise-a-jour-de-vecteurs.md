@@ -137,3 +137,45 @@ Les témoins existent, rouges ou probabilistes : `SetToAnotherVectorInBatchesOf5
     rencontre ;
   - si elle voit un piège à garder un état d'index le temps d'une instruction : verrous,
     lignes locales, rejeu.
+
+## 7. État au 10 octobre, avant le code
+
+**Ce qui a changé depuis le 5 octobre.**
+- L'élagage est redressé sur master (`2da041058`, `c841d507c`). Le `i = 1` du §2 n'existe plus.
+  `shrinkForNode` suit la règle classique, avec les places libres reprises par le plus lointain
+  et les copies bornées. Le « hors de cette proposition » du §4 est donc fait.
+- **Les décisions de l'orchestration** (5 octobre) :
+  - la proposition du §4 est acceptée ;
+  - plafond de coût : ×2 sur la durée de `TenThousandRowsInBatchesOf512`, prise SUR LE NOUVEL
+    élagage ; entre ×2 et ×5, je rends le chiffre avant de pousser ; au-delà, non ;
+  - **mesurer d'abord** la taille de l'union à recontrôler par lot de 512, avant d'écrire la fin
+    d'instruction ;
+  - le chemin de rag3weaver (`SetFromNull*`, `ReplaceThroughNull*`) ne doit pas bouger ;
+  - les lignes de la transaction sautées par `update` partent dans **un commit à part, avec son
+    témoin**.
+- **Les quatre pièges relevés par la session cœur C++** (5 octobre), à tenir dans le code :
+  1. **la frontière du rejeu, c'est le COMMIT**, pas l'enregistrement. Une instruction est
+     écrite au journal en plusieurs enregistrements de mise à jour : la fin d'instruction au rejeu
+     se fait quand la transaction rejouée valide, pas à chaque enregistrement (le §4.4 est à
+     corriger en ce sens) ;
+  2. **les lignes versées** : une ligne locale versée dans la table par un COPY (`f1d8c7190`) n'est
+     plus locale ; la fin d'instruction doit la traiter comme validée ;
+  3. **l'échec en cours d'instruction** : si l'instruction échoue après quelques lignes, l'état
+     noté est jeté avec l'annulation, sans contrôle de fin ;
+  4. **le parallélisme de l'opérateur** : si l'exécuteur SET tourne sur plusieurs fils, l'état
+     de l'instruction est partagé et doit être protégé, ou bien un par fil puis fusionné à la fin.
+
+**L'insertion double, vérifiée à la source le 10 octobre** [lu] : `NodeTable::update`
+(`node_table.cpp:~617-623`) appelle `index->update` pour chaque index sans tester si la ligne
+est locale à la transaction, et `OnDiskHNSWIndex::update` réinsère la ligne dans le graphe. Le
+commit l'insère ensuite de nouveau par `commitInsert` (`needCommitInsert`). Une ligne créée puis
+mise à jour dans la même transaction entre donc deux fois dans le graphe. À ne pas confondre avec
+le versement par COPY, mesuré le 10 octobre : là, une seule insertion par ligne.
+
+**L'ordre de travail.**
+1. Le commit à part : `update` saute les lignes locales, avec un témoin (une ligne créée puis
+   mise à jour dans une transaction : une seule insertion, une sonde qui compte les insertions par
+   ligne, la recherche juste après le COMMIT et après réouverture).
+2. La mesure de l'union par lot de 512 sur `TenThousandRowsInBatchesOf512`, et la référence de
+   durée prise sur le nouvel élagage, dans une tenue « mesure ».
+3. La fin d'instruction du §4, avec les quatre pièges, puis les témoins du §5 et le coût.

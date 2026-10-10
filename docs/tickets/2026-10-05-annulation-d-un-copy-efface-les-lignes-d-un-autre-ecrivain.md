@@ -1,6 +1,6 @@
 # L'annulation d'un COPY efface les lignes qu'un autre écrivain valide ensuite
 
-- **État** : ouvert, pour la marche A3′ (câblage des verrous, stèle étape 5).
+- **État** : corrigé par la marche A3′ (branche `verrous-a3`, 10 octobre 2026) — par le verrou, pas par l'annulation : un COPY tient l'index de sa table en exclusif jusqu'à la fin de sa transaction, le second COPY attend, deux COPY ne partagent plus jamais un bloc non validé. Témoin réécrit à deux fils, vert dans ses deux ordres.
 - **Gravité** : perte (une validation annoncée réussie dont les lignes disparaissent), et
   réponse fausse (une clé en double acceptée ensuite).
 - **Atteignable en service** : non. Il faut le mode multi-écrivains
@@ -71,7 +71,11 @@ partir de son début (`ChunkedNodeGroup::rollbackInsert`,
 `VectorVersionInfo::rollbackInsertions`, `RollbackPKDeleter`). Rien n'y distingue les lignes
 d'un autre écrivain ajoutées après. **[déduit]**
 
-## Pour le fermer
+## Fermé par
+
+Le verrou d'index exclusif du COPY (A3′, sous le mode multi-écrivains) : la limite ne peut plus se produire. L'annulation elle-même (`RollbackPKDeleter`, qui défait le bloc depuis son début) n'est pas changée : hors du mode multi-écrivains un seul écrivain existe, et sous le mode le verrou l'isole. Les deux conséquences « sans témoin propre » (versement avant COPY, crochet de l'index vectoriel) tombent sous le même verrou : le versement est celui du COPY, dans la même transaction.
+
+## Pour le fermer (tel qu'écrit le 5 octobre)
 
 Il faut que l'annulation ne touche qu'aux lignes de sa transaction, ou que deux COPY d'une
 même table ne puissent plus se croiser (verrou de table pour le COPY, à décider avec A3′).

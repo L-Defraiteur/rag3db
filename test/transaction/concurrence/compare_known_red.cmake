@@ -27,12 +27,16 @@ if (set_aside_filter)
 endif()
 
 file(REMOVE ${RESULT_FILE})
+# La sortie du banc est gardée à côté du résultat : les témoins y écrivent le détail de chaque
+# essai (par exemple, pour l'index vectoriel, une ligne hors du graphe ou seulement hors de la
+# recherche de son vecteur), que le JSON ne porte pas toujours.
+file(REMOVE ${RESULT_FILE}.log)
 execute_process(COMMAND ${BENCH} --gtest_filter=${filter} --gtest_output=json:${RESULT_FILE}
     RESULT_VARIABLE bench_status
-    OUTPUT_QUIET ERROR_QUIET)
+    OUTPUT_FILE ${RESULT_FILE}.log ERROR_FILE ${RESULT_FILE}.log)
 if (NOT EXISTS ${RESULT_FILE})
     message(FATAL_ERROR "the bench wrote no result (exit status: ${bench_status}): "
-        "it probably crashed; run ${BENCH} directly")
+        "it probably crashed; its output is in ${RESULT_FILE}.log, or run ${BENCH} directly")
 endif()
 
 file(READ ${RESULT_FILE} result)
@@ -122,7 +126,9 @@ if (problems)
     # Le résultat d'une passe en échec est gardé : le suivant écraserait la preuve.
     string(TIMESTAMP stamp "%Y%m%d-%H%M%S")
     file(COPY_FILE ${RESULT_FILE} ${RESULT_FILE}.failed-${stamp})
-    list(APPEND problems "result kept in ${RESULT_FILE}.failed-${stamp}")
+    file(COPY_FILE ${RESULT_FILE}.log ${RESULT_FILE}.failed-${stamp}.log)
+    list(APPEND problems "result kept in ${RESULT_FILE}.failed-${stamp}, the bench output in "
+        "${RESULT_FILE}.failed-${stamp}.log")
     list(JOIN problems "\n  " text)
     message(FATAL_ERROR "the bench disagrees with known_red.txt "
         "(${num_red} red, ${num_passed} green):\n  ${text}")
