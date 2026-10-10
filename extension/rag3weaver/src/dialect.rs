@@ -217,6 +217,13 @@ pub trait SchemaDialect: Send + Sync {
     /// existant, et un dialecte qui ne se prononce pas ne doit rien changer.
     fn speaks_cypher(&self) -> bool { self.capabilities().cypher }
 
+    /// **Les mots que ce dialecte refuse comme nom** (de table, de relation, de
+    /// champ), en majuscules. Un nom réservé est refusé à la création du
+    /// schéma, en le nommant ([`crate::schema::validate_name`]).
+    fn reserved_words(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
@@ -1144,6 +1151,11 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
 }
 
 impl SchemaDialect for Rag3dbDialect {
+    /// Tirés de la grammaire du moteur par `scripts/mots_reserves.py`.
+    fn reserved_words(&self) -> &'static [&'static str] {
+        crate::mots_reserves_rag3db::RAG3DB_RESERVED_WORDS
+    }
+
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
@@ -1975,6 +1987,25 @@ impl SchemaDialect for PostgresDialect {
              RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT \
              AS $$ SELECT rag3weaver.unaccent('rag3weaver.unaccent'::regdictionary, $1) $$"
                 .into(),
+        ]
+    }
+
+    /// Les mots réservés de PostgreSQL : catégories « reserved » et « reserved
+    /// (can be function or type) » de `src/include/parser/kwlist.h`
+    /// (PostgreSQL 17), écrits ici faute de grammaire à lire sur les postes.
+    /// À revoir contre le `kwlist.h` de la version servie.
+    fn reserved_words(&self) -> &'static [&'static str] {
+        &[
+            "ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "AUTHORIZATION", "BINARY", "BOTH",
+            "CASE", "CAST", "CHECK", "COLLATE", "COLLATION", "COLUMN", "CONCURRENTLY", "CONSTRAINT", "CREATE", "CROSS",
+            "CURRENT_CATALOG", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_SCHEMA", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DESC", "DISTINCT", "DO", "ELSE", "END", "EXCEPT", "FALSE", "FETCH",
+            "FOR", "FOREIGN", "FREEZE", "FROM", "FULL", "GRANT", "GROUP", "HAVING", "ILIKE", "IN", "INITIALLY", "INNER",
+            "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "LATERAL", "LEADING", "LEFT", "LIKE", "LIMIT", "LOCALTIME",
+            "LOCALTIMESTAMP", "NATURAL", "NOT", "NOTNULL", "NULL", "OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER",
+            "OVERLAPS", "PLACING", "PRIMARY", "REFERENCES", "RETURNING", "RIGHT", "SELECT", "SESSION_USER", "SIMILAR",
+            "SOME", "SYMMETRIC", "SYSTEM_USER", "TABLE", "TABLESAMPLE", "THEN", "TO", "TRAILING", "TRUE", "UNION",
+            "UNIQUE", "USER", "USING", "VARIADIC", "VERBOSE", "WHEN", "WHERE", "WINDOW", "WITH",
         ]
     }
 
@@ -3051,6 +3082,26 @@ mod tests {
         assert_eq!(Rag3dbDialect.write(&noeuds).unwrap(), Rag3dbDialect.copy_nodes_from_csv("Doc", &["_uuid", "titre"], "/tmp/x.csv").unwrap());
         assert_eq!(Rag3dbDialect.write(&liens).unwrap(), Rag3dbDialect.copy_links_from_csv("CITES", ("Doc", "Doc"), &["ligne"], "/tmp/y.csv").unwrap());
         assert_eq!(PostgresDialect.write(&noeuds).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Write::Load");
+    }
+
+    /// La liste rag3db suit la grammaire du moteur : relue ici, elle doit être
+    /// celle que le script a écrite. Sans les fichiers de grammaire (crate hors
+    /// du dépôt), le test se tait.
+    #[test]
+    fn les_mots_reserves_suivent_la_grammaire() {
+        let antlr = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/antlr4");
+        let (Ok(mots), Ok(g4)) = (std::fs::read_to_string(antlr.join("keywords.txt")), std::fs::read_to_string(antlr.join("Cypher.g4"))) else {
+            return;
+        };
+        let debut = g4.find("\nkU_NonReservedKeywords").expect("la règle kU_NonReservedKeywords");
+        let regle = &g4[debut..];
+        let regle = &regle[regle.find(':').unwrap() + 1..regle.find(';').unwrap()];
+        let libres: std::collections::BTreeSet<String> = regle.split('|').map(|m| m.trim().to_uppercase()).filter(|m| !m.is_empty()).collect();
+        let attendus: std::collections::BTreeSet<String> =
+            mots.lines().map(|l| l.trim().to_uppercase()).filter(|m| !m.is_empty() && !libres.contains(m)).collect();
+        let ecrits: std::collections::BTreeSet<String> = Rag3dbDialect.reserved_words().iter().map(|m| m.to_string()).collect();
+        assert_eq!(ecrits, attendus, "la grammaire a changé : relancer scripts/mots_reserves.py");
+        assert!(ecrits.contains("ORDER") && !ecrits.contains("MATCH"));
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

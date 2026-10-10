@@ -165,6 +165,7 @@ pub mod routes;
 #[cfg(feature = "daemon")]
 pub mod serve;
 pub mod schema;
+mod mots_reserves_rag3db;
 pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,
 /// rafale » qui décide si le poste reste utilisable pendant qu'on travaille.
