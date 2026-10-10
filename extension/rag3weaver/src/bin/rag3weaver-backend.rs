@@ -5,7 +5,118 @@ use std::{
     io::{self, BufRead, Write},
     path::Path,
 };
+/// **Le serveur MCP** : les outils du manifeste, exposés à un client MCP sur
+/// stdio. Le protocole est dans [`rag3weaver::mcp`] ; ici on ne fait qu'ouvrir
+/// un backend et le lui donner.
+///
+/// ```text
+/// rag3weaver-backend mcp --manifest <backend.json> [--keys dev,admin] [--demon 127.0.0.1:7979]
+/// ```
+///
+/// **Deux modes, et c'est la propriété de la base qui les sépare.**
+///
+/// Sans `--demon`, le serveur **possède** la base : bon pour un backend de code
+/// en lecture, une session. Mais une base rag3db ne s'ouvre que par un seul
+/// processus, et Claude Code lance **un processus MCP par session** — donc deux
+/// sessions sur la même mémoire seraient deux écrivains, refusés par le moteur.
+///
+/// Avec `--demon`, le serveur ne possède plus rien : son backend reste local
+/// (ses outils et ses schémas ne demandent aucune base) et sa **connexion**
+/// passe par `rag3daemon`, qui est le processus unique qui tient la base.
+/// N serveurs, un écrivain, et aucun protocole à relayer — `DaemonConnection`
+/// est une `DbConnection` comme une autre. C'est la forme produit : installer
+/// rag3weaver, c'est installer un démon.
+fn servir_mcp(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
+                         [--keys dev,admin] [--demon <adresse>]";
+    let mut manifeste: Option<String> = None;
+    let mut cles: Vec<String> = Vec::new();
+    let mut demon: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        let valeur = |i: usize| -> Result<String, String> {
+            args.get(i + 1).cloned().ok_or_else(|| format!("{} attend une valeur\n{USAGE}", args[i]))
+        };
+        match args[i].as_str() {
+            "--manifest" => { manifeste = Some(valeur(i)?); i += 2; }
+            "--demon" => { demon = Some(valeur(i)?); i += 2; }
+            "--keys" => {
+                cles = valeur(i)?
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|k| !k.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                i += 2;
+            }
+            autre => return Err(format!("option inconnue : {autre}\n{USAGE}")),
+        }
+    }
+    let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
+    let prepared = PreparedBackend::load(Path::new(&manifeste))?;
+    let database = prepared.path(&prepared.manifest.database);
+    if let Some(parent) = database.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let embedder = if prepared.needs_embeddings() {
+        Some(prepared.connect_embedder()?.0)
+    } else {
+        None
+    };
+    // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
+    // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
+    // aucun gabarit livré n'en porte encore, donc rien n'est écarté
+    // aujourd'hui — et c'est dit, parce qu'une liste d'outils vide sans
+    // explication serait un défaut et non une sécurité.
+    let outils = prepared.describe()["tools"].as_array().map(Vec::len).unwrap_or(0);
+    eprintln!(
+        "[mcp] {} — {outils} outils, clés présentées : {}",
+        prepared.manifest.name,
+        if cles.is_empty() { "aucune".to_string() } else { cles.join(",") }
+    );
+    let conn: Box<dyn rag3weaver::connection::DbConnection> = match &demon {
+        Some(adresse) => {
+            let serveur = rag3weaver::daemon::DaemonConnection::serveur(
+                adresse.clone(),
+                "rag3daemon",
+                database.display().to_string(),
+            );
+            eprintln!("[mcp] la base est tenue par le démon sur {adresse} — ce serveur ne la possède pas");
+            Box::new(
+                rag3weaver::daemon::DaemonConnection::assurer(&serveur)
+                    .map_err(|e| format!("le démon sur {adresse} : {e}"))?,
+            )
+        }
+        None => Box::new(
+            Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
+                .map_err(|e| e.to_string())?,
+        ),
+    };
+    let mut backend = prepared.open(conn, embedder)?;
+    let mut entree = io::BufReader::new(io::stdin());
+    let mut sortie = io::stdout();
+    match rag3weaver::mcp::servir(&backend, &cles, &mut entree, &mut sortie)? {
+        rag3weaver::mcp::Suite::Fini => backend.shutdown(),
+        // **Le client a été prévenu avant qu'on parte** (décision du
+        // 10 octobre). Rouvrir sous le même processus demande de lâcher le
+        // catalogue et de tout remonter ; on s'arrête en le disant, et le
+        // client relance — ce qui est le comportement qu'un client MCP sait
+        // déjà traiter, contrairement à une disparition muette.
+        rag3weaver::mcp::Suite::DoitRouvrir(raison) => {
+            drop(backend);
+            eprintln!("[mcp] la base doit être rouverte ({raison}) — arrêt pour relance");
+            std::process::exit(rag3weaver::connection::EXIT_MUST_REOPEN);
+        }
+    }
+}
+
 fn run() -> Result<(), String> {
+    // La sous-commande se reconnaît au premier mot ; la forme positionnelle
+    // d'avant (`rag3weaver-backend backend.json [--describe]`) reste intacte.
+    let tous: Vec<String> = std::env::args().skip(1).collect();
+    if tous.first().map(String::as_str) == Some("mcp") {
+        return servir_mcp(&tous[1..]);
+    }
     let mut args = std::env::args().skip(1);
     let path = args
         .next()

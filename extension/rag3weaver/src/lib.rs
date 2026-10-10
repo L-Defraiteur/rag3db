@@ -275,4 +275,7 @@ pub mod backend;
 pub mod backend_code;
 /// Le filet des gabarits livrés : chacun doit se charger, sinon la lib rougit.
 mod gabarits;
+/// **Le serveur MCP** : les outils que le manifeste déclare, exposés à un
+/// client MCP sur stdio. Le protocole seulement — l'hôte est un `Backend`.
+pub mod mcp;
 mod backend_nodes;
