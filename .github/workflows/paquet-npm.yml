@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   windows-x64:
-    name: windows-x64 (essai, liste des accrocs)
+    name: "windows-x64 (sous-paquet : binaire, extension vecteur, épreuve JS)"
     if: ${{ inputs.windows }}
     runs-on: windows-latest
     timeout-minutes: 180
@@ -119,9 +119,25 @@ jobs:
           toolchain: 1.98.1
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Le cache du bâti : tout C:/rs — le moteur bâti par cmake pour la crate
+      # rag3db y vit (release/build/rag3db-*/out), c'est lui qui coûte 45 min.
+      # Pas Swatinem/rust-cache : il purge les artefacts des crates par chemin,
+      # dont rag3db. Clé : les sources du moteur, le lock, l'extension vecteur.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            C:/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: windows-x64-rs-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            windows-x64-rs-
       - name: Outils
         run: |
-          cmake --version | head -1; ninja --version; rustc --version; cl 2>&1 | head -1 || true
+          cmake --version | head -1; ninja --version; rustc --version; node --version; cl 2>&1 | head -1 || true
       # En PowerShell, pas en bash : le bash de Git met son propre `link.exe`
       # (coreutils) devant celui de MSVC, et l'éditeur de liens de Rust échoue
       # dès le premier script de bâti (vu le 10 octobre 2026).
@@ -131,6 +147,24 @@ jobs:
         run: |
           cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # L'extension vecteur, que le backend charge à l'exécution : le même
+      # bâti cmake que cargo a fait pour le moteur, avec l'extension en plus
+      # (la recette Linux de tools/build-images/linux-x64-gnu/build.sh).
+      - name: L'extension vecteur
+        shell: pwsh
+        run: |
+          $bdir = (Get-ChildItem -Directory C:/rs/release/build -Filter 'rag3db-*' | ForEach-Object { Join-Path $_.FullName 'out/build' } | Where-Object { Test-Path $_ } | Select-Object -First 1)
+          if (-not $bdir) { throw "pas de bâti cmake du moteur sous C:/rs/release/build" }
+          Write-Host "bâti cmake du moteur : $bdir"
+          cmake -S . -B $bdir -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF 2>&1 | Tee-Object -FilePath cmake-vector-windows.log | Select-Object -Last 3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build $bdir --target rag3db_vector_extension -j 4 2>&1 | Tee-Object -FilePath cmake-vector-windows.log -Append | Select-Object -Last 3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ext = Get-ChildItem -Recurse -Path $bdir, extension/vector -Filter '*.rag3db_extension' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $ext) { throw "extension vecteur introuvable après le bâti" }
+          New-Item -ItemType Directory -Force dist/windows-x64 | Out-Null
+          Copy-Item $ext.FullName dist/windows-x64/
+          Get-ChildItem dist/windows-x64
       # Le binaire s'est lié au dixième essai (10 octobre 2026, 31 min 50 s,
       # 60 Mo). L'artefact doit être sous l'espace de travail : on l'y copie.
       - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
@@ -159,12 +193,21 @@ jobs:
           ./dist/windows-x64/rag3weaver-backend.exe $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
           echo "--- sandbox off"
           ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+      # L'épreuve du paquet, sur le runner : le sous-paquet windows-x64 garni
+      # depuis dist/, puis « un dossier vide, trois fichiers, une recherche ».
+      - name: L'épreuve JS du paquet (npm test)
+        working-directory: extension/rag3weaver/bindings/nodejs
+        run: |
+          bash scripts/preparer.sh
+          ls -la npm/windows-x64/
+          npm test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: bati-windows-x64-journal
           path: |
             bati-windows.log
+            cmake-vector-windows.log
             dist/windows-x64/
           if-no-files-found: warn
 

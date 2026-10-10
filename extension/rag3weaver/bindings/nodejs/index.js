@@ -83,7 +83,16 @@ function prepareManifest(templatePath, overrides = {}) {
     return node;
   };
   absolutize(m);
-  return deepMerge(m, overrides);
+  const manifest = deepMerge(m, overrides);
+  // Le bac à sable des commandes est Landlock, Linux seulement : ailleurs,
+  // le backend refuse de démarrer tant que le manifeste ne dit pas
+  // `"sandbox": {"mode": "off"}` en le sachant. Le paquet le dit pour vous,
+  // sauf si vous l'avez écrit vous-même — et les commandes restent fermées
+  // tant que `workspace.commands` ne les ouvre pas.
+  if (process.platform !== 'linux' && manifest.workspace && manifest.workspace.sandbox === undefined) {
+    manifest.workspace.sandbox = { mode: 'off' };
+  }
+  return manifest;
 }
 
 function deepMerge(a, b) {
