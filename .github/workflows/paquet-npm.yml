@@ -184,6 +184,14 @@ jobs:
           New-Item -ItemType Directory -Force dist/windows-x64 | Out-Null
           Copy-Item $ext.FullName dist/windows-x64/
           Get-ChildItem dist/windows-x64
+          # L'identifiant de bâti : le même pour le moteur et l'extension. Sous
+          # Windows il dit « nogit » (la copie rag3db-src n'a pas de .git) tant
+          # que build.rs ne passe pas le commit au cmake : dit, pas refusé.
+          $idBin = (Select-String -Path C:/rs/paquet/rag3weaver-backend.exe -Pattern 'rag3db-build-[A-Za-z0-9._-]+' -AllMatches | ForEach-Object { $_.Matches } | Select-Object -First 1).Value
+          $idExt = (Select-String -Path $ext.FullName -Pattern 'rag3db-build-[A-Za-z0-9._-]+' -AllMatches | ForEach-Object { $_.Matches } | Select-Object -First 1).Value
+          Write-Host "identifiant de bâti : moteur $idBin · extension $idExt"
+          if ($idBin -ne $idExt) { throw "identifiants différents : l'extension serait refusée" }
+          if ($idBin -like '*-nogit-*') { Write-Host "identifiant sans commit (nogit) : attendu sous Windows pour l'instant" }
       # Le binaire s'est lié au dixième essai (10 octobre 2026, 31 min 50 s,
       # 60 Mo). L'artefact doit être sous l'espace de travail : on l'y copie.
       - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
@@ -313,6 +321,13 @@ jobs:
           ext=$(find "$bdir" extension/vector "$src/extension/vector" -name '*.rag3db_extension' 2>/dev/null | head -1)
           [ -n "$ext" ] || { echo "extension vecteur introuvable après le bâti"; tail -20 "$RUNNER_TEMP/cmake-vector-macos.log"; exit 1; }
           mkdir -p dist/darwin-arm64 && cp "$ext" dist/darwin-arm64/ && ls -la dist/darwin-arm64/
+          # L'identifiant de bâti : le même pour le moteur et l'extension, et il
+          # nomme le commit (« nogit » est une marque fixe, refusée).
+          id_bin=$(strings /tmp/rs/paquet/rag3weaver-backend | grep -m1 '^rag3db-build-' || true)
+          id_ext=$(strings "$ext" | grep -m1 '^rag3db-build-' || true)
+          echo "identifiant de bâti : moteur $id_bin · extension $id_ext"
+          [ "$id_bin" = "$id_ext" ] || { echo "identifiants différents : l'extension serait refusée"; exit 1; }
+          case "$id_bin" in *-nogit-*) echo "identifiant sans commit (nogit) : refusé"; exit 1 ;; esac
       - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
         if: always()
         run: |

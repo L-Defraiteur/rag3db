@@ -52,12 +52,19 @@ cmake -S "$SRC" -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_S
 cmake --build "$bdir" --target rag3db_vector_extension -j "$JOBS" >> "$DIST/cmake-vector.log" 2>&1
 echo "bâti de l'extension vecteur : $(( ($(date +%s) - d) / 60 )) min $(( ($(date +%s) - d) % 60 )) s" | tee -a "$releve"
 
-# 3. Ce qu'on rend.
+# 3. Ce qu'on rend — et l'identifiant de bâti (cœur C++, 11 octobre 2026) : le
+#    moteur et l'extension doivent porter le même, et il doit nommer le commit ;
+#    « nogit » est une marque fixe que deux commits différents partageraient.
 bin=$CARGO_TARGET_DIR/paquet/rag3weaver-backend
 ext=$(find "$bdir" "$SRC/extension/vector/build" -name 'libvector.rag3db_extension' 2>/dev/null | head -1)
 cp "$bin" "$DIST/rag3weaver-backend"
 strip "$DIST/rag3weaver-backend"
 [ -n "$ext" ] && cp "$ext" "$DIST/libvector.rag3db_extension" && strip "$DIST/libvector.rag3db_extension"
+id_bin=$(strings "$DIST/rag3weaver-backend" | grep -m1 '^rag3db-build-' || true)
+id_ext=$([ -n "$ext" ] && strings "$DIST/libvector.rag3db_extension" | grep -m1 '^rag3db-build-' || true)
+echo "identifiant de bâti : moteur $id_bin · extension $id_ext" | tee -a "$releve"
+if [ -n "$ext" ] && [ "$id_bin" != "$id_ext" ]; then echo "identifiants différents : l'extension serait refusée" | tee -a "$releve"; exit 1; fi
+case "$id_bin" in *-nogit-*) echo "identifiant sans commit (nogit) : le dépôt n'était pas lisible par git — archive refusée" | tee -a "$releve"; exit 1 ;; esac
 {
   echo "binaire avant strip : $(du -h "$bin" | cut -f1) ; après : $(du -h "$DIST/rag3weaver-backend" | cut -f1)"
   [ -n "$ext" ] && echo "extension vecteur après strip : $(du -h "$DIST/libvector.rag3db_extension" | cut -f1)" || echo "extension vecteur : INTROUVABLE"
