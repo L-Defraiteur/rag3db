@@ -110,9 +110,11 @@ struct StorageInfoFunction final {
     static function_set getFunctionSet();
 };
 
-// STATS_INFO rend des estimations destinées au planificateur, pas des comptes : `cardinality`
-// compte aussi les lignes d'un COPY refusé (ticket 2026-10-04-copy-refuse-gonfle-la-cardinalite),
-// et les `*_distinct_count` sont approchés. Pour le nombre exact de lignes : MATCH … count(*).
+// STATS_INFO rend des estimations destinées au planificateur, pas des comptes. Elles sont
+// tenues à l'ajout : une suppression, un SET ou une ligne écartée par IGNORE_ERRORS ne les
+// reculent pas ; `cardinality` est recalée sur les lignes vivantes au point de reprise et à
+// l'ouverture, les `*_distinct_count` (HyperLogLog) seulement par CALL analyze('Table'), qui
+// rebâtit le tout. Pour le nombre exact de lignes : MATCH … count(*).
 struct StatsInfoFunction final {
     static constexpr const char* name = "STATS_INFO";
 
