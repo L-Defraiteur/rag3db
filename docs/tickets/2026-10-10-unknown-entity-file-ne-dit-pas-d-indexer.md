@@ -1,36 +1,47 @@
-# « unknown entity: File » ne dit pas d'indexer — le premier mur de tout usage MCP
+# « unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`
 
-- **État** : ouvert
-- **Gravité** : réponse fausse d'interprétation — un modèle lira un défaut d'outil là où il y a un ordre à suivre
-- **Atteignable en service** : oui, **systématiquement** : toute base neuve est dans cet état
-- **Touche rag3weaver** : oui, et c'est la première chose qu'un utilisateur rencontre
+- **État** : ouvert ; correctif en cours par l'arbre principal (branche `unknown-entity`)
+- **Gravité** : réponse fausse d'interprétation — un modèle lira un défaut d'outil là où il y a une **déclaration manquante**
+- **Atteignable en service** : seulement avec un manifeste qui **ne déclare pas** `workspace.index: "code"`
+- **Touche rag3weaver** : oui — toute la surface de code, et le message est le seul indice
+
+> **Corrigé dans sa prémisse le 10 octobre au soir, par l'arbre principal (rag3db-73),
+> et il avait raison.** La première version de ce ticket disait « systématiquement sur
+> toute base neuve » et « le premier mur de tout usage MCP ». **C'est faux.** Le schéma
+> du code (`File`, `Scope`, `Symbol`) est déclaré à l'ouverture dès que le manifeste
+> porte `workspace.index: "code"` (`backend.rs:1190-1198`) ; une base **vide** mais
+> déclarée ne produit pas cette erreur — `entity_uuid` se calcule, `get` rend `None`, et
+> `read_file` passe. Je ne l'ai observée qu'en ayant **moi-même retiré** la déclaration de
+> mon manifeste de test, et j'ai pris la condition que j'avais créée pour l'état par
+> défaut du produit. Le gabarit livré, lui, la déclare.
 
 ## Ce que c'est
 
-Sur une base **neuve** servie par le gabarit `code`, le premier appel d'un outil
-de code répond :
+Avec un manifeste de code qui **ne déclare pas** `workspace.index: "code"`, le
+premier appel d'un outil de code répond :
 
 ```
 ReadFileNode: unknown entity: File
 ```
 
-C'est exact et inutilisable. Le remède n'y est pas, et il est simple : **la base
-n'est pas encore indexée, il faut appeler l'outil `index` d'abord.** Un modèle
-qui lit ce message conclut que l'outil est cassé ; au mieux il réessaie, au pire
-il abandonne la piste et répond sans avoir cherché.
+C'est exact et inutilisable. Le remède n'y est pas, et **ce n'est pas celui que
+j'avais écrit** : « appelle `index` d'abord » ne sert à rien, puisque `index` n'a
+aucun schéma à remplir. Ce qui manque est une **déclaration du manifeste**. Un
+modèle qui lit ce message conclut que l'outil est cassé ; au mieux il réessaie,
+au pire il abandonne la piste et répond sans avoir cherché.
 
-**Pourquoi ça compte plus qu'un message maladroit** : c'est le **premier** mur de
-tout usage MCP. Une base neuve est l'état de départ de chaque nouvelle
-installation — donc tout le monde le rencontre, une fois, avant d'avoir rien
-compris au produit. Et le dépôt soigne ses refus partout ailleurs : celui du
-chemin hors workspace, par comparaison, dit la règle **et** la valeur fautive
-(« path must be relative to the source and without '..': ../../../etc/passwd »).
+**Pourquoi ça compte quand même**, prémisse corrigée : c'est un message qui
+désigne un symptôme interne (`File`) au lieu de la cause déclarative, et qui
+mène son lecteur à une mauvaise action — j'ai moi-même écrit le mauvais remède
+dans la première version de ce ticket **à cause de ce message**. Le dépôt soigne
+ses refus partout ailleurs : celui du chemin hors workspace dit la règle **et**
+la valeur fautive (« path must be relative to the source and without '..' »).
 
 ## La recette minimale
 
 ```sh
-# un manifeste du gabarit code sur une base qui n'existe pas encore
-rag3weaver-backend mcp --manifest <copie de templates/backends/code/backend.json>
+# un manifeste du gabarit code dont on a RETIRÉ workspace.index
+rag3weaver-backend mcp --manifest <copie sans workspace.index>
 # puis, par le protocole :
 {"jsonrpc":"2.0","id":1,"method":"tools/call",
  "params":{"name":"read_file","arguments":{"path":"un/fichier.rs"}}}
@@ -38,17 +49,22 @@ rag3weaver-backend mcp --manifest <copie de templates/backends/code/backend.json
 
 Mesuré le 10 octobre 2026 avec `read_file` et `list_files`. **Toute** la surface
 de code passe par l'entité `File`, donc tous ces outils sont concernés, pas
-seulement ceux qui cherchent.
+seulement ceux qui cherchent. Et le contre-cas est mesuré aussi, par le même
+témoin : la déclaration remise, une base vide laisse passer `read_file`.
 
 ## La formulation attendue
 
-> `read_file` : cette base n'est pas encore indexée (l'entité `File` n'existe
-> pas). Appelle l'outil `index` d'abord ; `estimate` dit ce que ça coûtera.
+Celle de l'arbre principal, qui remplace la mienne et qui est juste :
 
-Trois choses qu'elle a et que l'actuelle n'a pas : **ce qui manque** en clair
-plutôt qu'en nom interne, **le verbe à appeler**, et **le verbe qui permet de
-décider avant** — puisque l'indexation d'un gros dépôt n'est pas gratuite et que
-`index` refuse de lui-même au-delà d'un seuil sans confirmation.
+> cette base n'a pas le schéma du code (l'entité `File` n'existe pas) : le
+> manifeste du backend doit déclarer `workspace.index: "code"`, puis l'outil
+> `index` remplit l'index (`estimate` dit ce que ça coûtera).
+
+Elle a ce que la mienne n'avait pas : **la vraie cause** (une déclaration
+absente, pas un index vide), **dans le bon ordre** (déclarer, puis indexer), et
+le verbe qui permet de décider avant d'indexer. Ma formulation envoyait le
+lecteur appeler `index` sur un backend qui n'a pas de schéma à remplir — donc
+vers un second échec.
 
 ## Le chemin du code
 
