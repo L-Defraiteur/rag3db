@@ -169,7 +169,7 @@ fn run() -> Result<(), String> {
         }
         let result = request.and_then(|v| -> Result<Value, String> {
             match v["op"].as_str() {
-                Some("describe") => Ok(backend.prepared.describe()),
+                Some("describe") => Ok(backend.prepared().describe()),
                 Some("call") => {
                     calls += 1;
                     if fail_at_call == Some(calls) {

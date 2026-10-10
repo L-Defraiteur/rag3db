@@ -449,6 +449,8 @@ pub struct OutputPort {
 }
 
 pub struct PreparedBackend {
+    /// Le manifeste lu, pour le relire : un rechargement repart de lui.
+    manifest_path: PathBuf,
     pub manifest: BackendManifest,
     /// L'embarquement dense, résolu au chargement (`BackendManifest::embed_source`).
     embed: crate::model_source::ModelSource,
@@ -1007,6 +1009,7 @@ impl PreparedBackend {
             }
         }
         Ok(Self {
+            manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             manifest,
             embed,
             directory,
@@ -1251,7 +1254,8 @@ impl PreparedBackend {
         };
         Ok(Backend {
             decider,
-            prepared: self,
+            prepared: std::sync::RwLock::new(Arc::new(self)),
+            version: std::sync::atomic::AtomicU64::new(0),
             catalog: Arc::new(Mutex::new(cat)),
             #[cfg(feature = "code")]
             file_source,
@@ -1268,6 +1272,51 @@ impl PreparedBackend {
 /// (27 septembre 2026). Accepté : les textes livrés tels quels ; refusé : les
 /// erreurs ; les avertissements en clair dessous. Une présentation déjà posée
 /// par le graphe de l'outil n'est pas touchée.
+/// Ce qui, d'une version des déclarations à l'autre, a été fixé à
+/// l'ouverture de la base — nommé par sa clé de manifeste. Les entités sont
+/// comparées après fusion de leur schéma JSON (un champ ajouté au schéma est
+/// un changement d'entité), sans leur description.
+fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> {
+    fn value<T: Serialize>(v: &T) -> Value {
+        serde_json::to_value(v).unwrap_or(Value::Null)
+    }
+    fn entities(p: &PreparedBackend) -> Value {
+        let mut all = value(&p.entities);
+        if let Some(map) = all.as_object_mut() {
+            for entity in map.values_mut() {
+                if let Some(entity) = entity.as_object_mut() {
+                    entity.remove("description");
+                }
+            }
+        }
+        all
+    }
+    let (a, b) = (&old.manifest, &new.manifest);
+    let mut changed = Vec::new();
+    for (key, before, after) in [
+        ("database", value(&a.database), value(&b.database)),
+        ("embeddings", value(&a.embeddings), value(&b.embeddings)),
+        ("models", value(&a.models), value(&b.models)),
+        ("vector_extension", value(&a.vector_extension), value(&b.vector_extension)),
+        ("workspace", value(&a.workspace), value(&b.workspace)),
+        ("fts_positions", value(&a.fts_positions), value(&b.fts_positions)),
+        ("buffer_pool", value(&a.buffer_pool), value(&b.buffer_pool)),
+        ("relations", value(&a.relations), value(&b.relations)),
+        ("entities", entities(old), entities(new)),
+    ] {
+        if before != after {
+            changed.push(format!("« {key} »"));
+        }
+    }
+    changed
+}
+
+/// Ce qu'un rechargement accepté a mis en service.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reloaded {
+    pub version: u64,
+}
+
 fn harness_presentation(response: &mut Value) {
     let Some(validation) = response.get("validation").cloned() else { return };
     if response.get("presentation").is_some_and(|p| p.is_string()) {
@@ -1474,7 +1523,13 @@ impl PreparedBackend {
 }
 
 pub struct Backend {
-    pub prepared: PreparedBackend,
+    /// **Les déclarations en service.** Un appel prend la version courante au
+    /// départ et la garde jusqu'au bout : un rechargement qui la remplace
+    /// pendant ce temps ne change rien à l'appel en cours.
+    prepared: std::sync::RwLock<Arc<PreparedBackend>>,
+    /// Le numéro de la version en service : 0 à l'ouverture, +1 par
+    /// rechargement accepté.
+    version: std::sync::atomic::AtomicU64,
     pub catalog: Arc<Mutex<Catalog>>,
     /// La source de fichiers du `workspace` déclaré — construite à
     /// l'ouverture (un instantané lit l'arbre une fois).
@@ -1488,12 +1543,65 @@ pub struct Backend {
     decider: Option<Arc<dyn crate::decider::Decider>>,
 }
 impl Backend {
+    /// La version des déclarations en service.
+    pub fn prepared(&self) -> Arc<PreparedBackend> {
+        self.prepared
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Le numéro de la version des déclarations en service (0 à l'ouverture,
+    /// +1 par rechargement) — à ne pas confondre avec `manifest.version`, le
+    /// format du manifeste.
+    pub fn declarations_version(&self) -> u64 {
+        self.version.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// **Relit les déclarations et les met en service d'un coup.**
+    ///
+    /// Le manifeste et tout ce qu'il nomme (graphes, scripts, schémas,
+    /// crochets) sont relus et revérifiés comme au chargement ; si la
+    /// nouvelle version est valide et ne change rien de ce qui a été fixé à
+    /// l'ouverture, elle remplace l'ancienne d'un seul geste. Sinon l'ancienne
+    /// reste en service et l'erreur dit quoi corriger. Un appel en cours
+    /// finit sur la version qu'il a prise à son départ.
+    ///
+    /// Ce qui a été fixé à l'ouverture (la base, les modèles, l'extension
+    /// vectorielle, l'espace de travail, les entités et relations inscrites
+    /// en base) ne se recharge pas : un changement de schéma est une
+    /// migration, pas un rechargement.
+    pub fn reload(&self) -> Result<Reloaded, String> {
+        let refused = |why: String| {
+            format!("rechargement refusé, l'ancienne version reste en service : {why}")
+        };
+        let current = self.prepared();
+        let next = PreparedBackend::load(&current.manifest_path).map_err(refused)?;
+        let changed = opening_changes(&current, &next);
+        if !changed.is_empty() {
+            return Err(refused(format!(
+                "{} change — fixé à l'ouverture de la base : c'est une migration, pas un \
+                 rechargement",
+                changed.join(", ")
+            )));
+        }
+        let mut slot = self.prepared.write().unwrap_or_else(|e| e.into_inner());
+        *slot = Arc::new(next);
+        let version = self
+            .version
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1;
+        drop(slot);
+        Ok(Reloaded { version })
+    }
+
     /// Library API shared by applications and future transports. No MCP dispatch.
     pub fn run_search_program(
         &self,
         program: &crate::dataflow::search_chain::SearchProgram,
     ) -> Result<Value, String> {
-        let plan = self.prepared.compile_search_program(program)?;
+        let prepared = self.prepared();
+        let plan = prepared.compile_search_program(program)?;
         let metadata = plan
             .metadata_nodes
             .iter()
@@ -1503,6 +1611,7 @@ impl Backend {
             })
             .collect::<Vec<_>>();
         let mut response = self.execute_plan(
+            &prepared,
             (&plan.result_node, "results"),
             &plan.graph,
             &metadata,
@@ -1521,7 +1630,17 @@ impl Backend {
     }
 
     fn call_tool(&self, name: &str, args: Value) -> Result<Value, String> {
-        if self.prepared.manifest.search_graphs && SEARCH_TOOLS.contains(&name) {
+        self.call_tool_on(&self.prepared(), name, args)
+    }
+
+    /// Un appel sur **une** version des déclarations, de bout en bout.
+    fn call_tool_on(
+        &self,
+        prepared: &PreparedBackend,
+        name: &str,
+        args: Value,
+    ) -> Result<Value, String> {
+        if prepared.manifest.search_graphs && SEARCH_TOOLS.contains(&name) {
             let definition = search_tool_definitions()
                 .into_iter()
                 .find(|t| t["name"] == name)
@@ -1531,11 +1650,11 @@ impl Backend {
                 .validate(&args)
                 .map_err(|e| e.to_string())?;
             if name == "describe_backend" {
-                return Ok(self.prepared.search_description());
+                return Ok(prepared.search_description());
             }
             let request: SearchGraphRequest =
                 serde_json::from_value(args).map_err(|e| e.to_string())?;
-            let (tool, def) = self.prepared.prepare_search(&request)?;
+            let (tool, def) = prepared.prepare_search(&request)?;
             if name == "validate_search" {
                 return Ok(
                     json!({"valid":true,"read_only":true,"graph_hash":def.hash(),"plan":def,
@@ -1544,6 +1663,7 @@ impl Backend {
                 );
             }
             let mut response = self.execute_graph(
+                prepared,
                 &tool,
                 &def,
                 &request.metadata,
@@ -1552,12 +1672,11 @@ impl Backend {
             response["graph_hash"] = json!(def.hash());
             return Ok(response);
         }
-        let tool = self
-            .prepared
+        let tool = prepared
             .tools
             .get(name)
             .ok_or_else(|| format!("unexposed tool {name}"))?;
-        let attachment = &self.prepared.manifest.tools[name];
+        let attachment = &prepared.manifest.tools[name];
         let mut args = args
             .as_object()
             .ok_or("arguments must be an object")?
@@ -1570,7 +1689,7 @@ impl Backend {
                 return Err(format!("unknown argument {key}"));
             }
         }
-        let errors: Vec<Value> = self.prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":e.to_string()})).collect();
+        let errors: Vec<Value> = prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":e.to_string()})).collect();
         if !errors.is_empty() {
             if attachment.harness.input_schema.is_none()
                 && attachment.harness.before.is_empty()
@@ -1587,8 +1706,8 @@ impl Backend {
             );
         }
         let mut context = json!({"tool":name,"arguments":args,"result":null});
-        let harness = &self.prepared.harnesses[name];
-        let before = self.validate_hooks(&harness.before, &context);
+        let harness = &prepared.harnesses[name];
+        let before = self.validate_hooks(prepared, &harness.before, &context);
         if !before.accepted {
             return Ok(json!({"validation":before,"stage":"before","executed":false}));
         }
@@ -1612,9 +1731,9 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
-        let mut response = self.execute_graph(tool, &def, &metadata_ports, &policy)?;
+        let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy)?;
         context["result"] = response["result"].clone();
-        let mut report = self.validate_hooks(&harness.after, &context);
+        let mut report = self.validate_hooks(prepared, &harness.after, &context);
         report.warnings.extend(before.warnings);
         if !report.accepted {
             response["validation"] = serde_json::to_value(report).unwrap();
@@ -1625,7 +1744,7 @@ impl Backend {
         response["validation"] = serde_json::to_value(report).unwrap();
         let mut deliveries = Vec::new();
         for hook in &harness.on_accept {
-            match self.call_hook(hook, &context) {
+            match self.call_hook(prepared, hook, &context) {
                 Ok(value) => deliveries.push(value),
                 Err(error) => {
                     response["delivery"] = json!({"ok":false,"error":error,"completed":deliveries});
@@ -1635,7 +1754,7 @@ impl Backend {
         }
         response["delivery"] = json!({"ok":true,"results":deliveries});
         if attachment.after.is_some() {
-            self.enrich_with_after_hook(name, &args_for_hook, &mut response);
+            self.enrich_with_after_hook(prepared, name, &args_for_hook, &mut response);
         }
         Ok(response)
     }
@@ -1648,12 +1767,12 @@ impl Backend {
     /// erreur — sans lui, le défaut sûr serait un défaut invisible.
     fn enrich_with_after_hook(
         &self,
+        prepared: &PreparedBackend,
         tool_name: &str,
         args: &serde_json::Map<String, Value>,
         response: &mut Value,
     ) {
-        let Some(hook) = self
-            .prepared
+        let Some(hook) = prepared
             .manifest
             .tools
             .get(tool_name)
@@ -1661,7 +1780,7 @@ impl Backend {
         else {
             return;
         };
-        let Some(graph) = self.prepared.after_hooks.get(tool_name) else {
+        let Some(graph) = prepared.after_hooks.get(tool_name) else {
             return;
         };
         if let Some(entite) = &hook.silent_unless_vectors_ready {
@@ -1702,17 +1821,16 @@ impl Backend {
         // sont ceux de la source (le silence du crochet sur snapshot.json,
         // 4 octobre, venait de là).
         if declares.contains("path_in_source") {
-            if let (Some(w), Some(Value::String(chemin))) = (
-                self.prepared.manifest.workspace.as_ref(),
-                args.get("path"),
-            ) {
+            if let (Some(w), Some(Value::String(chemin))) =
+                (prepared.manifest.workspace.as_ref(), args.get("path"))
+            {
                 let valeur = match w.source {
                     crate::backend_code::WorkspaceSource::Snapshot => chemin.clone(),
                     _ => {
                         let racine = if w.root.is_absolute() {
                             w.root.clone()
                         } else {
-                            self.prepared.directory.join(&w.root)
+                            prepared.directory.join(&w.root)
                         };
                         racine.join(chemin).to_string_lossy().to_string()
                     }
@@ -1736,12 +1854,11 @@ impl Backend {
                 hargs.insert("result_uuids".to_string(), json!(uuids));
                 // La métadonnée empruntée pour le crochet ne reste dans la
                 // réponse que si l'outil la déclarait lui-même.
-                let declaree = self
-                    .prepared
-                    .manifest
-                    .tools
-                    .get(tool_name)
-                    .is_some_and(|a| a.metadata.iter().any(|p| p.node == port.node && p.port == port.port));
+                let declaree = prepared.manifest.tools.get(tool_name).is_some_and(|a| {
+                    a.metadata
+                        .iter()
+                        .any(|p| p.node == port.node && p.port == port.port)
+                });
                 if !declaree {
                     response["metadata"].as_object_mut().map(|m| m.remove(&cle));
                 }
@@ -1754,6 +1871,7 @@ impl Backend {
             .map_err(|e| e.to_string())
             .and_then(|def| {
                 self.execute_graph(
+                    prepared,
                     graph,
                     &def,
                     &[],
@@ -1807,7 +1925,12 @@ impl Backend {
             }
         }
     }
-    fn call_hook(&self, hook: &PreparedHook, context: &Value) -> Result<Value, String> {
+    fn call_hook(
+        &self,
+        prepared: &PreparedBackend,
+        hook: &PreparedHook,
+        context: &Value,
+    ) -> Result<Value, String> {
         let mut context = context.clone();
         context["data"] = hook.data.clone();
         let def = hook
@@ -1816,6 +1939,7 @@ impl Backend {
             .map_err(|e| e.to_string())?;
         // Hook graphs compute over supplied facts. They cannot invoke shell or mutate the DB.
         let response = self.execute_graph(
+            prepared,
             &hook.tool,
             &def,
             &[],
@@ -1825,6 +1949,7 @@ impl Backend {
     }
     fn validate_hooks(
         &self,
+        prepared: &PreparedBackend,
         hooks: &[PreparedHook],
         context: &Value,
     ) -> crate::harness::ValidationReport {
@@ -1836,7 +1961,7 @@ impl Backend {
         };
         for hook in hooks {
             match self
-                .call_hook(hook, context)
+                .call_hook(prepared, hook, context)
                 .and_then(ValidationReport::from_value)
             {
                 Ok(report) => {
@@ -1862,22 +1987,24 @@ impl Backend {
     }
     fn execute_graph(
         &self,
+        prepared: &PreparedBackend,
         tool: &GraphTool,
         def: &GraphDefinition,
         metadata_ports: &[OutputPort],
         policy: &NodeTypePolicy,
     ) -> Result<Value, String> {
-        self.execute_plan(tool.result(), def, metadata_ports, policy)
+        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
     }
     fn execute_plan(
         &self,
+        prepared: &PreparedBackend,
         result_port: (&str, &str),
         def: &GraphDefinition,
         metadata_ports: &[OutputPort],
         policy: &NodeTypePolicy,
     ) -> Result<Value, String> {
         let mut graph =
-            build_definition(def, &self.prepared.nodes, policy).map_err(|e| e.to_string())?;
+            build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
         // The host serializes tool calls; services are fresh so shutdown owns all handles.
         let mut services = ServiceRegistry::new();
         self.catalog
@@ -1898,17 +2025,20 @@ impl Backend {
                     crate::code_tools::FILE_SOURCE_SERVICE,
                     source.clone(),
                 );
-                if let Some(w) = &self.prepared.manifest.workspace {
-                    services.register(crate::generated::GENERATED_POLICY_SERVICE, w.generated.clone());
+                if let Some(w) = &prepared.manifest.workspace {
+                    services.register(
+                        crate::generated::GENERATED_POLICY_SERVICE,
+                        w.generated.clone(),
+                    );
                 }
             }
             if let Some(garde) = &self.garde {
                 services.register(crate::dataflow::run_nodes::GARDE_SERVICE, garde.clone());
-                if let Some(w) = &self.prepared.manifest.workspace {
+                if let Some(w) = &prepared.manifest.workspace {
                     let racine = if w.root.is_absolute() {
                         w.root.clone()
                     } else {
-                        self.prepared.directory.join(&w.root)
+                        prepared.directory.join(&w.root)
                     };
                     if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine) {
                         services.register(
@@ -1919,16 +2049,16 @@ impl Backend {
                 }
             }
         }
-        services.register("rhai_scripts", self.prepared.scripts.clone());
+        services.register("rhai_scripts", prepared.scripts.clone());
         services.register(
             "backend_relations",
-            self.prepared.manifest.relations.clone(),
+            prepared.manifest.relations.clone(),
         );
-        services.register("backend_mappings", self.prepared.mappings.clone());
-        services.register("backend_validators", self.prepared.validators.clone());
+        services.register("backend_mappings", prepared.mappings.clone());
+        services.register("backend_validators", prepared.validators.clone());
         services.register(
             "backend_write_policies",
-            self.prepared
+            prepared
                 .manifest
                 .entities
                 .iter()
@@ -1979,7 +2109,7 @@ impl Backend {
         #[cfg(feature = "code")]
         {
         let entites: &[&str] = match self
-            .prepared
+            .prepared()
             .manifest
             .workspace
             .as_ref()
@@ -2338,7 +2468,8 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
-            prepared,
+            prepared: std::sync::RwLock::new(Arc::new(prepared)),
+            version: std::sync::atomic::AtomicU64::new(0),
             catalog: Arc::new(Mutex::new(catalog)),
             #[cfg(feature = "code")]
             file_source: None,
@@ -2545,7 +2676,8 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
-            prepared,
+            prepared: std::sync::RwLock::new(Arc::new(prepared)),
+            version: std::sync::atomic::AtomicU64::new(0),
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
@@ -2930,3 +3062,7 @@ mod tests {
         assert!(!validator.is_valid(&json!({"record":{"key":""}})));
     }
 }
+
+#[cfg(test)]
+#[path = "backend_reload_tests.rs"]
+mod reload_tests;

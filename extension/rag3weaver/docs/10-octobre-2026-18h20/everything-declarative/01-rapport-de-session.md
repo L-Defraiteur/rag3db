@@ -58,8 +58,8 @@ dans `02-knowledge-dump.md`, à côté.
 | Lot | État |
 |---|---|
 | 1 — moteur de script générique, rhai + TypeScript/JavaScript | **sur master** (`6932a7da2`, page `03-lot-1-le-moteur-de-script.md`) |
-| 2 — nœud entièrement scripté | **vert, pas commité** : attend la fusion de l'exécution asynchrone (page `04-lot-2-le-noeud-scripte.md`) |
-| 3 — rechargement à chaud | — |
+| 2 — nœud entièrement scripté | **sur master** (`a944079a4`, page `04-lot-2-le-noeud-scripte.md`) |
+| 3 — rechargement à chaud | **sur master** (page `05-lot-3-le-rechargement-a-chaud.md`) ; la montre des fichiers attend `watch_bound` |
 | 4 — route → graphe → vue, `serve` | — |
 | 5 — l'outil `declare` | — |
 | 6 — la page vivante | — |

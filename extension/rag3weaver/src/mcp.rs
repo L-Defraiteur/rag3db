@@ -259,18 +259,18 @@ pub fn servir(
 
 impl Hote for crate::backend::Backend {
     fn nom(&self) -> String {
-        self.prepared.manifest.name.clone()
+        self.prepared().manifest.name.clone()
     }
 
     fn version(&self) -> u32 {
-        self.prepared.manifest.version
+        self.prepared().manifest.version
     }
 
     /// **La liste vient de `describe()`**, donc de `NodeSchema` par `tools.rs` :
     /// la même source que les formes OpenAI et Anthropic, et déjà sous la forme
     /// `{name, description, inputSchema}` que MCP attend. Rien à traduire.
     fn outils(&self) -> Vec<Value> {
-        self.prepared
+        self.prepared()
             .describe()
             .get("tools")
             .and_then(Value::as_array)
