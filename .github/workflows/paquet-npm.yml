@@ -8,7 +8,8 @@ name: paquet npm
 # Linux : l'image Docker commitée sous tools/build-images/linux-x64-gnu, la
 # même recette qu'un poste. Windows : un essai sur le runner, pour la liste
 # réelle des accrocs du moteur hors Linux — le job peut être rouge, son journal
-# est gardé en artefact.
+# est gardé en artefact. macOS arm64 (10 octobre 2026, « go » de Lucie) : la
+# même recette que Windows, clang d'Apple, x64 ensuite si arm64 passe.
 #
 # Le sous-module third_party/fuzzy-fst est privé et ne sert qu'à l'extension
 # fts : on ne l'initialise pas. codeparsers (public) est nécessaire à la
@@ -25,6 +26,10 @@ on:
         description: "essayer aussi le bâti Windows (liste des accrocs)"
         type: boolean
         default: true
+      macos:
+        description: "essayer aussi le bâti macOS arm64 (liste des accrocs)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -161,4 +166,67 @@ jobs:
           path: |
             bati-windows.log
             dist/windows-x64/
+          if-no-files-found: warn
+
+  macos-arm64:
+    name: macos-arm64 (essai, liste des accrocs)
+    if: ${{ inputs.macos }}
+    runs-on: macos-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TARGET_DIR: /tmp/rs
+      CARGO_BUILD_JOBS: 3
+      NUM_JOBS: 3
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sous-module codeparsers (par https, sans clé)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - name: Outils
+        run: |
+          brew install ninja > /dev/null
+          sw_vers; uname -m; cmake --version | head -1; ninja --version; rustc --version; clang --version | head -1
+      - name: Bâti (le journal est l'artefact, rouge ou vert)
+        working-directory: extension/rag3weaver
+        run: |
+          set -o pipefail
+          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-macos.log
+      - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
+        if: always()
+        run: |
+          mkdir -p dist/darwin-arm64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          cp /tmp/rs/release/rag3weaver-backend dist/darwin-arm64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          ls -la dist/darwin-arm64/; file dist/darwin-arm64/rag3weaver-backend; otool -L dist/darwin-arm64/rag3weaver-backend
+          python3 - <<'PY'
+          import json, os
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          ici = os.getcwd()
+          m["vector_extension"] = ici + "/dist/darwin-arm64/libvector.rag3db_extension"
+          m["workspace"]["root"] = ici + "/essai/ws"; m["database"] = ici + "/essai/code.rag3db"
+          g = "extension/rag3weaver/templates/backends/code/"
+          json.dump(m, open(g + "tel-quel.json", "w"))
+          m["workspace"]["sandbox"] = {"mode": "off"}
+          json.dump(m, open(g + "sans-bac.json", "w"))
+          PY
+          g=extension/rag3weaver/templates/backends/code
+          echo "--- tel quel (Landlock demandé : le refus attendu)"
+          ./dist/darwin-arm64/rag3weaver-backend $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          echo "--- sandbox off"
+          ./dist/darwin-arm64/rag3weaver-backend $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bati-macos-arm64-journal
+          path: |
+            bati-macos.log
+            dist/darwin-arm64/
           if-no-files-found: warn
