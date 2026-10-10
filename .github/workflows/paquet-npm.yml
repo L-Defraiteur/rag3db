@@ -102,7 +102,7 @@ jobs:
       # l'exécutable final ne se lient — des destructeurs de std::variant
       # que clang-cl n'émet pas avec la STL de MSVC. L'accroc qui avait
       # poussé vers clang-cl (tree-sitter-scss et son drapeau GCC) est réglé à
-      # la source : extension/rag3weaver/third_party/tree-sitter-scss.
+      # la source chez codeparsers (vendor/tree-sitter-scss, master 4c7897c).
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
@@ -126,15 +126,33 @@ jobs:
         run: |
           cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Le binaire, s'il existe
+      # Le binaire s'est lié au dixième essai (10 octobre 2026, 31 min 50 s,
+      # 60 Mo). L'artefact doit être sous l'espace de travail : on l'y copie.
+      - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
         if: always()
         run: |
-          ls -la C:/rs/release/rag3weaver-backend.exe 2>/dev/null && C:/rs/release/rag3weaver-backend.exe --help | head -20 || echo "pas de binaire"
+          mkdir -p dist/windows-x64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          cp C:/rs/release/rag3weaver-backend.exe dist/windows-x64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          ls -la dist/windows-x64/
+          python3 - <<'PY'
+          import json, os
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          ici = os.getcwd().replace("\\", "/")
+          m["vector_extension"] = ici + "/dist/windows-x64/vector.rag3db_extension"
+          m["workspace"]["root"] = ici + "/essai/ws"; m["database"] = ici + "/essai/code.rag3db"
+          json.dump(m, open("essai/tel-quel.json", "w"))
+          m["workspace"]["sandbox"] = {"mode": "off"}
+          json.dump(m, open("essai/sans-bac.json", "w"))
+          PY
+          echo "--- tel quel (Landlock demandé : le refus attendu)"
+          ./dist/windows-x64/rag3weaver-backend.exe essai/tel-quel.json --describe 2>&1 | head -c 400; echo
+          echo "--- sandbox off"
+          ./dist/windows-x64/rag3weaver-backend.exe essai/sans-bac.json --describe 2>&1 | head -c 600; echo
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: bati-windows-x64-journal
           path: |
             bati-windows.log
-            C:/rs/release/rag3weaver-backend.exe
+            dist/windows-x64/
           if-no-files-found: warn
