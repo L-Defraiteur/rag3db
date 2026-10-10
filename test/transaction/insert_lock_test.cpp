@@ -225,6 +225,99 @@ TEST_F(FewWorkerThreadsLockTest, TheHolderCommitsWhileMoreWaitersThanWorkerThrea
     EXPECT_EQ(locks().getNumResources(), 0u);
 }
 
+// ── Marche A4′ : les écritures d'une ligne et d'une relation sous les verrous ─────────────
+// Le banc prouve l'attente entre fils ; ici, dans un seul fil, ce que le second voit APRÈS
+// que le premier a validé entre son instantané et son écriture.
+
+// Un DETACH DELETE détache aussi une relation attachée et validée par un autre après son
+// instantané (lecture validée de Neo4j, le nœud tenu en exclusif), et non l'instantané de
+// PostgreSQL : ni nœud ni relation ne restent, avant comme après une réouverture.
+TEST_F(InsertLockTest, DetachDeleteAlsoDetachesARelationCommittedAfterTheSnapshot) {
+    Connection other(database.get());
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);");
+    mustRun(other, "MATCH (n:Item {id: 1}) DETACH DELETE n;");
+    mustRun(other, "COMMIT;");
+    for (auto pass = 0; pass < 2; pass++) {
+        auto nodes = conn->query("MATCH (n:Item) RETURN n.id ORDER BY n.id;");
+        ASSERT_TRUE(nodes->isSuccess());
+        ASSERT_TRUE(nodes->hasNext());
+        EXPECT_EQ(nodes->getNext()->getValue(0)->getValue<int64_t>(), 2) << "pass " << pass;
+        EXPECT_FALSE(nodes->hasNext()) << "pass " << pass;
+        auto rels = conn->query("MATCH ()-[r:Link]->() RETURN count(r);");
+        ASSERT_TRUE(rels->isSuccess());
+        EXPECT_EQ(rels->getNext()->getValue(0)->getValue<int64_t>(), 0) << "pass " << pass;
+        auto dangling = conn->query("MATCH (a)-[r:Link]->(b) RETURN count(a) + count(b);");
+        ASSERT_TRUE(dangling->isSuccess());
+        EXPECT_EQ(dangling->getNext()->getValue(0)->getValue<int64_t>(), 0) << "pass " << pass;
+        if (pass == 0) {
+            createDBAndConn();
+        }
+    }
+}
+
+// Un DELETE sans DETACH est refusé par « has connected edges » d'après le dernier état validé :
+// la relation attachée et validée par un autre après l'instantané compte. La base est intacte.
+TEST_F(InsertLockTest, DeleteIsRefusedByARelationCommittedAfterTheSnapshot) {
+    Connection other(database.get());
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);");
+    const auto refused = failureOf(other, "MATCH (n:Item {id: 1}) DELETE n;");
+    EXPECT_NE(refused.find("has connected edges"), std::string::npos) << refused;
+    mustRun(other, "ROLLBACK;");
+    auto nodes = conn->query("MATCH (n:Item) RETURN count(n);");
+    ASSERT_TRUE(nodes->isSuccess());
+    EXPECT_EQ(nodes->getNext()->getValue(0)->getValue<int64_t>(), 2);
+    auto rels = conn->query("MATCH (a:Item {id: 1})-[r:Link]->(b:Item {id: 2}) RETURN r.w;");
+    ASSERT_TRUE(rels->isSuccess());
+    ASSERT_TRUE(rels->hasNext());
+    EXPECT_EQ(rels->getNext()->getValue(0)->getValue<int64_t>(), 7);
+}
+
+// Une mise à jour d'une ligne qu'un autre a mise à jour (autre colonne comprise) ou supprimée
+// et validée après l'instantané : l'erreur de sérialisation (option A, PostgreSQL en lecture
+// répétable) ; si l'autre a annulé, l'écriture passe.
+TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializationError) {
+    Connection other(database.get());
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0}), (:Item {id: 3, v: 0});");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 10;");
+    mustRun(*conn, "MATCH (n:Item {id: 2}) DETACH DELETE n;");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "MATCH (n:Item {id: 3}) SET n.v = 30;");
+    mustRun(*conn, "ROLLBACK;");
+    const auto updated = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = 1;");
+    EXPECT_NE(updated.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << updated;
+    mustRun(other, "ROLLBACK;");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (n:Item {id: 3}) SET n.v = 33;");
+    const auto deleted = failureOf(other, "MATCH (n:Item {id: 2}) SET n.v = 2;");
+    EXPECT_NE(deleted.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << deleted;
+    mustRun(other, "ROLLBACK;");
+    // Le dernier état validé : v = 10, la ligne 2 absente, v = 33 ; et depuis un instantané
+    // neuf, la ligne 3 se met à jour.
+    mustRun(other, "MATCH (n:Item {id: 3}) SET n.v = 3;");
+    auto result = conn->query("MATCH (n:Item) RETURN n.id, n.v ORDER BY n.id;");
+    ASSERT_TRUE(result->isSuccess());
+    std::vector<std::pair<int64_t, int64_t>> rows;
+    while (result->hasNext()) {
+        auto row = result->getNext();
+        rows.emplace_back(row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>());
+    }
+    EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 10}, {3, 3}}));
+}
+
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {
     // Hors du mode, rien ne change : un seul écrivain à la fois, l'autre connexion attend
     // son tour pour écrire, et le doublon est vu comme avant.
