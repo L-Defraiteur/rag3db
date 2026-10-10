@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 10 octobre 2026, soir.
+Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, nuit.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
 plus grande possible de codeparsers, C++ et Rust d'abord, mesurée sur nos
@@ -44,14 +44,27 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | Le préprocesseur | codeparsers `75edad9` | Une ligne de directive (`#pragma`, `#include`, `#define`, `#if`, suite `\`) ne nomme rien en C/C++ ; le `#include` reste un import. rag3db src : non-résolues 100 813 → 86 796, imports reliés 10,1 → 34,4 % (entre fichiers 24,9 → 99,3 %). `banc/comparer.sh` : la vérification se fait avant / après sur le même corpus (une ligne fixe faisait « reculer » un dépôt qui grossit). |
 | B2a — les receveurs C++ dans le fichier | codeparsers `876f606` | Pointeurs intelligents traversés ; fabriques et conversions (`make_unique<T>`, `cast<T>()`, `static_cast<T*>`…) rendent `T`. Témoin `tests/receveurs_cpp.rs` (8 formes). rag3db src : appels reliés entre fichiers 35,0 → 39,2 %. Appelants de `NodeTable::update` (`--appelants`) : 0 → 1 entre fichiers. |
 | Les champs C++ | codeparsers `e8e2893` | Un champ de classe en pointeur ou référence (`NodeTable* table;`) n'était pas relevé ; il l'est avec son type (champ `type` du nœud, déclarateurs déballés, `int a, b` en donne deux). rag3db src : appels reliés entre fichiers 39,2 → 40,3 %. |
-| B2b — les types différés au rendez-vous (B1) | rag3db, branche `types-differes` (`5a14bd842` pointeur e8e2893, `d9b3e1408` code.rs +175), proposée à l'arbre principal | `field_types` et `return_type` sur Scope, `deferred` sur MENTIONS, résolus à la matérialisation en `qualifier_types`. Témoin `e2e_types_differes` : les trois formes réelles des appelants de `NodeTable::update`, rouge (deux sur trois) puis vert. Pas de mode entre fichiers dans codeparsers : le graphe ne dépend pas du paquet. |
+| B2b — les types différés au rendez-vous (B1) | rag3db master `6002c3ccd` (fusionné par l'arbre principal, avec le pointeur e8e2893) | `field_types` et `return_type` sur Scope, `deferred` sur MENTIONS, résolus à la matérialisation en `qualifier_types`. Témoin `e2e_types_differes` : les trois formes réelles des appelants de `NodeTable::update`, rouge (deux sur trois) puis vert. Pas de mode entre fichiers dans codeparsers : le graphe ne dépend pas du paquet. |
 | B3 — les verrous (codeparsers) | codeparsers `65c1c7a`, `8881d52` | Deux genres d'usage, `Lock` et `SharedLock` : une référence au champ mutex, le propriétaire en qualificatif. Gardes RAII C++ certaines (`unique_lock`, `lock_guard`, `scoped_lock`, `shared_lock`, accolades ou parenthèses — `std::lock_guard lck(mtx);` se lit comme une fonction) ; `.lock()` / `.read()` / `.write()` seulement sur un champ déclaré mutex ou RwLock dans le fichier. Un verrou est compris : hors du relevé des non-résolues. rag3db src : 140 exclusifs, 32 partagés (188 gardes dans le texte) ; rag3weaver : 75 et 1. |
-| B3 — la relation LOCKS (rag3weaver) | rag3db, branche `verrous` (`acf4f9fb7` pointeur 8881d52, `f53092caf` code.rs +72), proposée à l'arbre principal | Un symbole `Classe::champ` par champ typé, défini par sa classe ; un verrou est la relation LOCKS du scope vers ce symbole (genre, ligne), posée à l'ingestion. « Qui verrouille NodeTable::mtx » = les LOCKS entrants du symbole. Témoin `e2e_verrous`. |
+| B3 — la relation LOCKS (rag3weaver) | rag3db master `2a29c10c6` (fusionné, pointeur 8881d52) | Un symbole `Classe::champ` par champ typé, défini par sa classe ; un verrou est la relation LOCKS du scope vers ce symbole (genre, ligne), posée à l'ingestion. « Qui verrouille NodeTable::mtx » = les LOCKS entrants du symbole. Témoin `e2e_verrous`. |
+| B2c — les chaînes de champs | codeparsers `55c27d1` ; rag3db, branche `chaines-de-champs` (`e94c29959` pointeur, `5999cb640` code.rs), proposée | Le premier champ d'une chaîne dit le propriétaire, les suivants deviennent des pas de champ (`.b`) ; le lecteur du fichier et la résolution au rendez-vous (par tours, quatre au plus) les suivent. Forme réelle : `tableInfo.table->update()` de set_executor.cpp. |
+
+## La mesure réelle : le C++ de rag3db indexé par rag3weaver
+
+Sonde `tests/sonde_cpp_rag3db.rs` (tout `rag3db/src`, 1 543 fichiers,
+19 044 scopes, en mémoire, embarqueur de hachage), avec B2b, B3 et B2c :
+
+- **appelants de `NodeTable::update`** : 0 au départ, 1 avec B2a/B2b
+  (`replayNodeUpdateRecord`), **2 avec B2c** (`set` de set_executor.cpp) —
+  tous marqués « type ». (`localTable->update()` vise `LocalNodeTable::update`.)
+- CONSUMES par marque : fichier 5 086, type 3 375, import 4, nom 8 719.
+- **LOCKS : 169**, sur des mutex réels (`ChunkedNodeGroup::versionInfoMtx`
+  18, `HashIndexLocalStorage::mtx` 13, `UpdateInfo::mtx` 9, `WAL::mtx` 5…).
+- La résolution des types différés : 97 ms pour 1 543 noms en 3 tours, sur
+  une ingestion de 167 s (remarque de relecture de l'arbre principal).
 
 ## Suite
 
-B2b et `verrous` attendent leur fusion par l'arbre principal (rag3db-73,
-pointeur 8881d52 avec `verrous`, jamais seul : `usage_name` est exhaustif).
-Ensuite : la section « verrous sur le chemin » d'impact (code_tools et IR,
-en proposition), les remarques de relecture de B2b (mesurer la requête des
-types différés sur l'index de rag3db src, la borner à la source).
+B2c attend sa fusion par l'arbre principal. Ensuite : la section
+« verrous sur le chemin » d'impact (en proposition), la borne à la source
+de la requête des types différés (remarque de relecture).
