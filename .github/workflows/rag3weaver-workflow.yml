@@ -64,7 +64,7 @@ jobs:
           - label: wasm-emscripten
             flags: '--features wasm-emscripten'
     steps:
-      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
       # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
       # viennent d'un clone de lucivy à la révision épinglée par le submodule
       # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.
@@ -92,7 +92,7 @@ jobs:
     name: tests unitaires
     runs-on: ubuntu-latest
     steps:
-      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
       # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
       # viennent d'un clone de lucivy à la révision épinglée par le submodule
       # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.
@@ -118,7 +118,7 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      # Pas de submodules (third_party/fuzzy-fst n'est pas accessible publiquement).
+      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
       # Les deps `path` hors dépôt (lucivy-core, luciole, sparse-vector, lucistore)
       # viennent d'un clone de lucivy à la révision épinglée par le submodule
       # extension/lucivy/ld-lucivy — lue avec `git ls-tree`, sans l'initialiser.

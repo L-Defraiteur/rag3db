@@ -10,9 +10,9 @@ name: paquet npm
 # réelle des accrocs du moteur hors Linux — le job peut être rouge, son journal
 # est gardé en artefact.
 #
-# Le sous-module third_party/fuzzy-fst est privé et ne sert qu'à l'extension
-# fts : on ne l'initialise pas. codeparsers (public) est nécessaire à la
-# feature `code`.
+# Un seul sous-module est nécessaire : codeparsers (public), pour la feature
+# `code`. (fuzzy-fst, retiré le 10 octobre 2026, ne servait qu'à l'extension fts
+# de l'amont, qui n'est pas bâtie.)
 
 on:
   workflow_dispatch:
