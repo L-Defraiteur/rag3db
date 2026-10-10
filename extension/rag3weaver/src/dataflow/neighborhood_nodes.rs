@@ -114,6 +114,8 @@ pub struct NeighborhoodReport {
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
+/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+#[cfg(test)]
 fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
     let s = &cfg.start;
     let mut c = vec![format!("{alias}._uuid"), format!("{alias}.{}", s.title), format!("{alias}.{}", s.kind_field)];
@@ -188,6 +190,10 @@ struct Moteur<'a> {
 
 impl Moteur<'_> {
     fn err(e: CatalogError) -> String {
+        format!("NeighborhoodNode: {e}")
+    }
+
+    fn err_ir(e: rag3weaver_ir::TranslateError) -> String {
         format!("NeighborhoodNode: {e}")
     }
 
@@ -324,8 +330,14 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
         None => cfg.start.pivot.clone(),
     };
     let moteur = Moteur { catalog, cfg, rels };
-    let condition = cfg.start.path_fields.iter().map(|f| format!("s.{f} = $file")).collect::<Vec<_>>().join(" OR ");
-    let q = format!("MATCH (s:{table}) WHERE {condition} RETURN s._uuid, {}", champs("s", cfg));
+    // Les scopes du fichier, par l'un de ses champs de chemin ; l'uuid
+    // d'abord, puis les champs que lit `reached_from`.
+    let condition = rag3weaver_ir::Predicate::AnyOf(
+        cfg.start.path_fields.iter().map(|f| rag3weaver_ir::Predicate::Equals { field: f.clone(), param: "file".into() }).collect(),
+    );
+    let mut colonnes_depart = vec![Column::Node("_uuid".into())];
+    colonnes_depart.extend(colonnes(cfg));
+    let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::filtered(&table, condition, colonnes_depart)).map_err(Moteur::err_ir)?;
     let rows = catalog
         .execute_raw_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
         .map_err(Moteur::err)?;
@@ -429,7 +441,7 @@ fn fiches(moteur: &Moteur<'_>, uuids: &[String]) -> Result<Vec<Reached>, String>
         Direction::Incoming => &rel.from,
         Direction::Outgoing => &rel.to,
     };
-    let q = format!("UNWIND $uuids AS u MATCH (m:{table} {{_uuid: u}}) RETURN u, {}", champs("m", moteur.cfg));
+    let q = moteur.catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(table, colonnes(moteur.cfg))).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
     let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     Ok(rows.rows.iter().map(|r| reached_from(r, 1, moteur.cfg)).collect())

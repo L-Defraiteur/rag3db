@@ -309,11 +309,12 @@ fn fiches(catalog: &Catalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[Strin
         return Ok(out);
     }
     for t in tables {
-        let mut champs = vec![format!("m.{}", cfg.title)];
-        champs.extend(cfg.path_fields.iter().map(|p| format!("m.{p}")));
-        champs.push(format!("m.{}", cfg.line_field));
-        champs.push(if cfg.kind_field.is_empty() { "NULL".into() } else { format!("m.{}", cfg.kind_field) });
-        let q = format!("UNWIND $uuids AS u MATCH (m:{t} {{_uuid: u}}) RETURN u, {}", champs.join(", "));
+        use rag3weaver_ir::Column;
+        let mut champs = vec![Column::Node(cfg.title.clone())];
+        champs.extend(cfg.path_fields.iter().map(|p| Column::Node(p.clone())));
+        champs.push(Column::Node(cfg.line_field.clone()));
+        champs.push(if cfg.kind_field.is_empty() { Column::Null } else { Column::Node(cfg.kind_field.clone()) });
+        let Ok(q) = catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(t, champs)) else { continue };
         // Une table qui n'a pas ces champs n'a pas de fiche : le nœud garde
         // son uuid, le lien reste vrai.
         let Ok(rows) = catalog.execute_raw_with_params(&q, &[uuid_param(uuids)]) else { continue };

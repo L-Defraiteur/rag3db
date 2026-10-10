@@ -3,7 +3,7 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`] et [`Count`]. Viendront `Select`, `Write` et `Tx`.
+//! Aujourd'hui : [`Hop`], [`Count`] et [`Select`]. Viendront `Write` et `Tx`.
 
 use std::fmt;
 
@@ -120,6 +120,78 @@ impl Count {
         };
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Une condition sur les champs d'une ligne ; les valeurs viennent des
+/// paramètres nommés de la requête.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Predicate {
+    /// Le champ vaut le paramètre.
+    Equals { field: String, param: String },
+    /// Le champ (un texte) contient le paramètre.
+    Contains { field: String, param: String },
+    /// L'une au moins des conditions.
+    AnyOf(Vec<Predicate>),
+}
+
+impl Predicate {
+    fn names(&self, out: &mut Vec<String>) {
+        match self {
+            Predicate::Equals { field, param } | Predicate::Contains { field, param } => {
+                out.push(field.clone());
+                out.push(param.clone());
+            }
+            Predicate::AnyOf(v) => v.iter().for_each(|p| p.names(out)),
+        }
+    }
+}
+
+/// **Une sélection** dans une table : les lignes de uuids donnés (le
+/// paramètre `$uuids`, l'uuid donné en première colonne), ou celles qu'une
+/// condition retient ; puis des colonnes, un ordre, une limite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Select {
+    pub table: String,
+    pub by_uuids: bool,
+    pub filter: Option<Predicate>,
+    /// Des champs de la ligne ([`Column::Node`]), des colonnes vides, ou la
+    /// ligne entière ; pas de champ d'arête ici.
+    pub returns: Vec<Column>,
+    pub order_by: Vec<String>,
+    pub limit: Option<usize>,
+}
+
+impl Select {
+    /// Les lignes de uuids donnés.
+    pub fn by_uuids(table: impl Into<String>, returns: Vec<Column>) -> Self {
+        Self { table: table.into(), by_uuids: true, filter: None, returns, order_by: Vec::new(), limit: None }
+    }
+
+    /// Les lignes qu'une condition retient.
+    pub fn filtered(table: impl Into<String>, filter: Predicate, returns: Vec<Column>) -> Self {
+        Self { table: table.into(), by_uuids: false, filter: Some(filter), returns, order_by: Vec::new(), limit: None }
+    }
+
+    pub fn validate(&self) -> Result<(), TranslateError> {
+        let mut noms = vec![self.table.clone()];
+        noms.extend(self.order_by.iter().cloned());
+        if let Some(p) = &self.filter {
+            p.names(&mut noms);
+        }
+        for c in &self.returns {
+            match c {
+                Column::Node(f) => noms.push(f.clone()),
+                Column::Null | Column::Whole => {}
+                Column::Edge(_) | Column::Label => {
+                    return Err(TranslateError::Invalid("sélection : pas d'arête ni d'étiquette dans une table".into()));
+                }
+            }
+        }
+        match noms.iter().find(|n| !crate::is_valid_identifier(n)) {
+            Some(n) => Err(TranslateError::Invalid(format!("sélection : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
         }
     }
