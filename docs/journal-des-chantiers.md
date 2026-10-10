@@ -519,11 +519,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : sept façons de prendre son harnais pour un résultat
+## Méthode : huit façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante, la sixième le 4 octobre
-(quatre fois le même jour) et la septième le 10. Elles se sont présentées à la suite,
+(quatre fois le même jour), la septième et la huitième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -563,6 +563,27 @@ git checkout -q <sha du pointeur>
 Le `<sha>` se lit par `git ls-tree HEAD extension/rag3weaver/codeparsers`, et
 `git -C … rev-parse HEAD` dit où l'on est : **les deux doivent coïncider**,
 c'est la seule vérification qui attrape ce piège.
+
+**Et cette recette échoue à son tour quand l'arbre principal est lui-même en
+retard** — le 10 octobre 2026, le cas s'est présenté : le pointeur était passé
+sur master par le push d'une autre session, sans transiter par l'arbre
+principal, dont le clone de sous-module ne connaissait pas le commit. Un
+`fetch origin <sha>` ne peut pas donner ce qu'il n'a pas, et l'erreur ressemble
+à la précédente.
+
+La sortie de secours est la **source déclarée**, qui ne dépend de personne :
+
+```sh
+cd extension/rag3weaver/codeparsers
+git fetch git@github.com:L-Defraiteur/codeparsers.git <sha du pointeur>
+git checkout -q --detach <sha du pointeur>
+```
+
+L'URL se lit dans `.gitmodules` — c'est elle qui est vraie, pas l'`origin` du
+clone local, recâblé sur un chemin de fichier. Et cela **sans** desserrer
+`protocol.file.allow` : affaiblir un garde-fou global pour contourner un remote
+mal câblé est le mauvais échange, et c'est le genre de concession qu'on ne
+reprend jamais.
 
 **2. `git stash` est partagé entre les worktrees.** C'est une pile **par
 dépôt**, pas par arbre de travail. Un `stash` qui n'empile rien suivi d'un
@@ -686,7 +707,36 @@ manquante n'était ni la bibliothèque ni les sources, mais **la date du binaire
 mesuré lui-même**. Une mesure commence par prouver que l'artefact chargé vient
 du code qu'on croit mesurer — pas seulement que ses sources sont à jour.
 
-**Et la forme commune aux sept**, qui est aussi celle des défauts qu'on
+**8. Le diff qui montre vos propres fichiers comme supprimés.** 10 octobre
+2026, avant une fusion : `git diff --stat HEAD..origin/master` pour savoir ce
+qu'un rebase allait apporter, et la sortie annonce `src/gabarits.rs | 163 -----`
+— mon fichier, celui que je venais d'écrire, en voie de disparition. J'ai
+failli chercher qui le retirait.
+
+Il ne manquait rien : `HEAD..origin/master` compare **deux têtes**, donc tout
+ce que ma branche a et que master n'a pas encore paraît comme une suppression.
+La question « qu'est-ce que master apporte ? » se pose depuis la base de
+fusion, jamais depuis ma tête :
+
+```sh
+base=$(git merge-base HEAD origin/master)
+git log  --oneline $base..origin/master
+git diff --stat      $base..origin/master
+```
+
+Ce qui le rend dangereux n'est pas la subtilité, c'est la **crédibilité** : la
+sortie est bien formée, le chiffre est juste, le fichier existe, et la seule
+chose fausse est la question qu'on croyait poser. Un rouge franc se corrige ;
+une réponse exacte à une autre question se croit.
+
+Et le détail qui achève de convaincre : la **même** sortie m'était passée sous
+les yeux deux heures plus tôt, sur un rebase précédent, et je l'avais
+reconnue — « c'est attendu, master n'a pas encore mes commits ». Savoir
+pourquoi une sortie trompe ne protège pas de s'y laisser prendre la fois
+suivante, quand elle nomme un fichier auquel on tient. C'est la commande qu'il
+faut changer, pas la vigilance.
+
+**Et la forme commune aux huit**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
 d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
