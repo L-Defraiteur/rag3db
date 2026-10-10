@@ -104,3 +104,25 @@ banc qui dit ce que coûte la fin d'instruction et pourquoi, et une forme qui ne
   d'abord que les écrivains d'une table indexée ne s'attendent pas — alors la mesure d'abord.
 - Au banc : confirmer que H3 attend bien `all-commit` sous I1 (le second valide après avoir
   attendu), et dire ce que sa branche `essai-fin-d-instruction-maj` a mesuré, pour I2.
+
+## 5. I1 faite (11 octobre 2026, 2 h 30) — ce que le code a tranché
+
+- `NodeTable::lockIndexForWrite` : sur une table qui porte un index secondaire **chargé**
+  (`hasLoadedSecondaryIndex`), l'insertion prend `INDEX{table}` en exclusif au lieu de partagé, la
+  mise à jour et la suppression d'une ligne validée le prennent avant la clé ; une ligne locale de
+  la transaction n'a rien à prendre (l'index est déjà tenu depuis son insertion).
+- **L'instantané repris après l'attente**, si la transaction n'a encore rien écrit
+  (`Transaction::hasWritten`, `TransactionManager::refreshSnapshot`, comme l'annonce de V2) : c'est
+  ce qui fait valider H3 — le second deleter recoud sur le graphe que le premier a validé ; sans
+  ça il aurait réécrit des arêtes déjà supprimées (« Write-write conflict » de nouveau, remarque du
+  banc). Une transaction qui a déjà écrit garde son instantané et le conflit nommé reste possible
+  pour elle ; une lecture faite avant la première écriture a vu un état plus ancien (comme V2).
+- **Témoins** : `IndexedTableLockTest` (une connexion qui insère, met à jour ou supprime tient
+  l'index, l'autre attend sur les trois écritures puis écrit une fois rendu ; H3 à un fil, les deux
+  valident, la recherche rend exactement les lignes vivantes par `node.id`) ;
+  `IndexedTableRollbackTest` (quatre pièces hors du mode, vertes) ; au banc, IndexLockBench ×3, H3
+  ×2 verts, H2 ×4 et H5 ×4 réécrits par le banc (« celui qui valide le premier écrit le premier,
+  l'attente prouvée ») verts ; `known_red` : 15 attendus.
+- **Trouvé en route** : `CALL QUERY_VECTOR_INDEX` nu rend des nœuds supprimés que la projection
+  par `node` filtre ensuite (ticket du banc) ; et après des écritures annulées puis des mises à
+  jour validées, la recherche ne rend plus qu'une ligne (ticket du 11 octobre, au banc).

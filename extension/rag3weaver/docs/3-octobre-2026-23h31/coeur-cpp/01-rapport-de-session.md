@@ -691,3 +691,15 @@ column_stats 2, vector 74 et 63, Cypher 1867 ; banc de concurrence en tenue excl
 `known_red.txt`, 13 rouges comparés, 240 verts (19 lignes attendues). Une course de témoin
 trouvée en route et bornée avec l'accord du banc : « l'une après l'autre » se mesure au début du
 commit du premier (le verrou est rendu pendant le COMMIT, avant sa marque).
+
+## I1 (11 octobre 2026, 2 h 30) — le genre « index », fait
+
+Branche `verrous-i1-2` (page 09 §0 le découpage, §5 ce que le code a tranché) : tout écrivain
+d'une table indexée tient l'index en exclusif de sa première écriture à sa validation,
+l'instantané repris après l'attente. Témoins : six d'un fil, et au banc IndexLockBench ×3, H3 ×2
+verts (sortis de `known_red`, 15 attendus), H2 ×4 et H5 ×4 réécrits par le banc verts. Tickets
+ouverts en route : la recherche qui ne rend plus qu'une ligne après annulations puis mises à jour
+(au banc), le CALL nu qui rend des nœuds supprimés (ticket du banc). I2 (la maintenance au
+commit) attend la mesure du banc.
+
+Passe : PASSE_I1.
