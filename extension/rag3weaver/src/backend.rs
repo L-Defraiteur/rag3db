@@ -1231,10 +1231,12 @@ impl PreparedBackend {
             }
             (None, _) => {}
         }
+        // Le chemin cité pour Cypher (barres obliques inverses et apostrophes
+        // échappées) : un `D:\a\…` nu cassait la requête sous Windows.
         let ext = self.path(&self.manifest.vector_extension);
         cat.execute_raw(&format!(
-            "LOAD EXTENSION '{}'",
-            ext.to_string_lossy().replace('\'', "''")
+            "LOAD EXTENSION {}",
+            crate::connection::cypher_path_literal(&ext)
         ))
         .map_err(|e| e.to_string())?;
         cat.initialize().map_err(|e| e.to_string())?;

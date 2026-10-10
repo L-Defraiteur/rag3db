@@ -189,6 +189,54 @@ pub fn total_memory() -> Option<u64> {
 }
 
 
+/// **Un chemin de fichier cité dans une instruction Cypher**, apostrophes
+/// comprises : `'D:\\a\\x\'y'`. Le parseur du moteur lit `\` comme le début
+/// d'une séquence d'échappement — un `D:\a\…` nu casse la requête (seizième
+/// essai Windows du paquet npm, 10 octobre 2026). Une seule fonction pour
+/// tout chemin qui entre dans du Cypher : `LOAD EXTENSION`, `COPY … FROM`.
+pub fn cypher_path_literal(path: &std::path::Path) -> String {
+    let texte = path.to_string_lossy();
+    let mut lit = String::with_capacity(texte.len() + 2);
+    lit.push('\'');
+    for c in texte.chars() {
+        match c {
+            '\\' => lit.push_str("\\\\"),
+            '\'' => lit.push_str("\\'"),
+            autre => lit.push(autre),
+        }
+    }
+    lit.push('\'');
+    lit
+}
+
+#[cfg(test)]
+mod chemin_cypher {
+    use std::path::Path;
+
+    /// La forme citée : chaque barre oblique inverse doublée, l'apostrophe
+    /// échappée, rien d'autre ne change.
+    #[test]
+    fn la_forme_citee() {
+        assert_eq!(super::cypher_path_literal(Path::new(r"D:\a\x'y")), r"'D:\\a\\x\'y'");
+        assert_eq!(super::cypher_path_literal(Path::new("/tmp/ext/libvector.rag3db_extension")), "'/tmp/ext/libvector.rag3db_extension'");
+    }
+
+    /// Le moteur relit le chemin tel quel : `RETURN <littéral>` rend la
+    /// chaîne d'origine, barres et apostrophe comprises.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn le_moteur_relit_le_chemin() {
+        use crate::connection::DbConnection;
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        for chemin in [r"D:\a\x'y", r"C:\Users\RUNNER~1\AppData\Local\Temp\essai.csv", "/tmp/o'neil/x.csv"] {
+            let requete = format!("RETURN {} AS p", super::cypher_path_literal(Path::new(chemin)));
+            let r = conn.execute(&requete).expect(&requete);
+            let lu = r.rows[0][0].as_str().unwrap_or_default();
+            assert_eq!(lu, chemin, "{requete}");
+        }
+    }
+}
+
 /// D'où `total_memory` lit la mémoire vive sur ce système — pour que le
 /// message qui s'en sert dise sa source.
 pub fn total_memory_source() -> &'static str {

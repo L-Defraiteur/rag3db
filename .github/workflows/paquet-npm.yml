@@ -160,7 +160,12 @@ jobs:
           $bdir = (Get-ChildItem -Directory C:/rs/release/build -Filter 'rag3db-*' | ForEach-Object { Join-Path $_.FullName 'out/build' } | Where-Object { Test-Path $_ } | Select-Object -First 1)
           if (-not $bdir) { throw "pas de bâti cmake du moteur sous C:/rs/release/build" }
           Write-Host "bâti cmake du moteur : $bdir"
+          # Le cache cmake avant et après la reconfiguration, en artefact : au
+          # seizième essai, elle a recompilé les 996 objets du moteur (37 min)
+          # sans qu'on sache quel drapeau avait changé.
+          Copy-Item "$bdir/CMakeCache.txt" CMakeCache-avant.txt
           cmake -S . -B $bdir -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF 2>&1 | Tee-Object -FilePath cmake-vector-windows.log | Select-Object -Last 3
+          Copy-Item "$bdir/CMakeCache.txt" CMakeCache-apres.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build $bdir --target rag3db_vector_extension -j 4 2>&1 | Tee-Object -FilePath cmake-vector-windows.log -Append | Select-Object -Last 3
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -220,6 +225,8 @@ jobs:
           path: |
             bati-windows.log
             cmake-vector-windows.log
+            CMakeCache-avant.txt
+            CMakeCache-apres.txt
             dist/windows-x64/
           if-no-files-found: warn
 

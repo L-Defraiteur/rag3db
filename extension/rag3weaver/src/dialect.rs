@@ -1276,8 +1276,11 @@ impl SchemaDialect for Rag3dbDialect {
         // deux colonnes (COPY refusé, repli par lots : 56 s et 145 s sur le
         // dépôt entier), ou une cellule changeait de valeur sans erreur, et
         // un saut de ligne restait échappé (3 octobre 2026, `e2e_copy_liens`).
+        // Le chemin cité pour Cypher : sous Windows, un chemin nu dans la
+        // requête est lu comme des séquences d'échappement.
+        let path = crate::connection::cypher_path_literal(std::path::Path::new(path));
         Some(format!(
-            "COPY {rel_table}{colonnes} FROM '{path}' (from='{from}', to='{to}', escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
+            "COPY {rel_table}{colonnes} FROM {path} (from='{from}', to='{to}', escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
             csv_null()
         ))
     }
@@ -1295,8 +1298,9 @@ impl SchemaDialect for Rag3dbDialect {
         // Et le NULL est un mot convenu, pas la cellule vide : le moteur lit
         // `""` comme un NULL, or une chaîne vide en est une (`_embed_hash` à
         // la naissance d'un chunk) — la comparer à NULL la ferait réécrire.
+        let path = crate::connection::cypher_path_literal(std::path::Path::new(path));
         Some(format!(
-            "COPY {table} ({}) FROM '{path}' (escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
+            "COPY {table} ({}) FROM {path} (escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
             columns.join(", "),
             csv_null()
         ))
