@@ -519,10 +519,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : six façons de prendre son harnais pour un résultat
+## Méthode : sept façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
-la cinquième est tombée la nuit suivante. Elles se sont présentées à la suite,
+la cinquième est tombée la nuit suivante, la sixième le 4 octobre
+(quatre fois le même jour) et la septième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -658,10 +659,37 @@ suffisait pas : un `grep` sur `extension/vector/build` dans `tests/` — par le
 chaque rebase** : un second site du même motif est arrivé sur master le jour
 même, et un grep joué avant le rebase ne pouvait pas le voir.
 
-**Et la forme commune aux six**, qui est aussi celle des défauts qu'on
+**7. Le binaire de test plus vieux que le moteur qu'il charge.** 10 octobre
+2026 : trois rouges d'un coup, `undefined symbol: setForceCheckpoint`, dans une
+suite qui passait la veille. Le symbole existe bien dans la bibliothèque du
+moteur du jour — le binaire de test, lui, datait du **4 octobre**, et cargo ne
+l'avait pas rebâti parce qu'aucune de **ses** sources n'avait changé. J'ai failli
+l'imputer au moteur.
+
+C'est le sixième piège d'un cran plus loin, et il échappe aux deux remèdes
+qu'on s'est donnés : la ligne d'âge de la bibliothèque surveille la
+**bibliothèque**, le contrôle des sources surveille les **sources** — et
+**personne ne surveille l'âge du binaire qui charge l'une et compile les
+autres**. Les deux gardes regardent les deux bouts de la chaîne et laissent le
+milieu.
+
+Ce qui le rend vicieux : rien n'est périmé au sens de cargo. Le binaire est à
+jour par rapport à ses sources, la bibliothèque est à jour par rapport aux
+siennes, et les deux sont pourtant incompatibles parce qu'elles ne se lient
+qu'au **chargement**. Un `cargo test` qui ne recompile rien n'est donc pas une
+bonne nouvelle quand le moteur a bougé sous lui : c'est exactement le cas où il
+faut forcer. `touch` sur une source du crate, ou `--tests --no-run` après tout
+rebâti du moteur.
+
+Et la leçon de forme, la même que les six autres : la condition de validité
+manquante n'était ni la bibliothèque ni les sources, mais **la date du binaire
+mesuré lui-même**. Une mesure commence par prouver que l'artefact chargé vient
+du code qu'on croit mesurer — pas seulement que ses sources sont à jour.
+
+**Et la forme commune aux sept**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
-d'une bibliothèque — et, pour la cinquième, son âge **à la fin**. Un banc, un
+d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
 test ou un rapport doivent **porter leur condition de validité à côté de leur
 verdict**, sinon le verdict se lit tout seul et on le croit.
 

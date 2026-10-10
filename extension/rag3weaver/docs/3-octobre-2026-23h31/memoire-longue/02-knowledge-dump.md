@@ -266,3 +266,44 @@ massivement la relecture de l'état d'avant, et **jamais son échec**.
 - **Mesurer plutôt que raisonner, quand les deux sont possibles.** Aucun de
   mes raisonnements sur l'émission de `EntitiesChanged` n'a tenu ; les cinq
   jalons imprimés ont tranché en une exécution.
+
+## 8. Ce que le 10 octobre a ajouté au savoir transférable
+
+**Un chemin de manifeste se trouve par sa clé, pas par sa place.** Toute
+réécriture de chemins dans un `backend.json` doit être un parcours **récursif**
+par clé (`graph`, `schema`, `input_schema`) plus l'extension `.rhai` pour les
+scripts, dont la clé est le *nom* du script. Énumérer les endroits rate
+`input_schema` et le `graph` d'un crochet `before` — et la panne ressemble à un
+gabarit cassé alors que c'est la réécriture qui l'est. Mesuré : deux gabarits sur
+quatre tombaient.
+
+**Un refus se teste depuis une fonction pure, ou il ne se teste pas.** Les
+validations de manifeste écrites à l'intérieur de `load` ne s'éprouvent qu'en
+fabriquant un manifeste sur le disque — donc on ne les éprouve pas, donc on les
+découvre à la première panne. `valider_une_reaction` est séparée de `load` pour
+cette seule raison, et ses cinq refus ont un témoin chacun.
+
+**Le compte d'une liste blanche s'épingle.** Une liste de sécurité s'élargit par
+accident : on ajoute un nœud « pour un cas » et la surface de tous les outils
+grandit sans décision. Un `assert_eq!` sur sa longueur ne juge pas le contenu —
+il exige seulement que l'ajout soit **décidé**.
+
+**`poste lourd` prend le verrou en partagé** (`flock -s poste.lock`) : plusieurs
+lourds tournent ensemble, c'est son intérêt. Il protège donc la **mémoire** et la
+**priorité**, jamais l'**arbre** : aucun `git checkout` n'est sérialisé par lui.
+Un worktree partagé entre sessions se fait arracher ses sources. Corollaire
+rassurant, vérifié dans le script : le message « porte tenue depuis 600 s, le
+lourd entre quand même » ne perturbe **pas** une mesure en cours — la porte ne
+parle que des mesures en attente, et une mesure qui tourne tient le verrou en
+exclusif.
+
+**Deux faits de `dataflow/reactor.rs` à connaître avant de monter une réaction**
+(relus, pas devinés) : `run_tool` instancie avec `json!({})` — les liaisons d'un
+manifeste ne l'atteignent pas sans travail ; et il exécute sous
+`NodeTypePolicy::All` — la liste blanche réactive est le **seul** garde-fou, et
+il est au chargement.
+
+**Le C++ du moteur se rebâtit par cmake dès `rag3db-native`**, sauf si
+`RAG3DB_SHARED` est posée. Sur une machine neuve, ce n'est pas `cargo` qu'on
+lance mais `run_e2e.sh` (qui lit `RAG3DB_BUILD`) — sinon on paie un build
+complet du moteur sans s'en apercevoir.
