@@ -84,3 +84,17 @@ la première épreuve du backend déclaré), le DXF quand le paquet npm et le
 bâti Windows existent (chantier G), Blender quand un service `bpy` vaut la
 peine d'être écrit. Un domaine à la fois ; chacun doit tenir les trois
 conditions du §4 avant le suivant.
+
+## 6. Le magicien du chaos (Lucie, 10 octobre au soir)
+
+Entre « rien » et « un produit », il y a un agent dont le domaine est le
+système lui-même. Une fois les services et le modèle déclarés (par un
+formulaire ou la CLI : rien d'autre à ce stade, pas de code à indexer), le
+**magicien du chaos** sait ce qui est disponible et te monte un produit à la
+demande — le code, les decks, le dessin, un autre — comme un outil de
+*boilerplate*, sauf que le boilerplate est une déclaration (un backend, son
+gabarit, ses graphes) écrite dans le même système : la boucle étrange en
+boilerplate. Puis il te donne le lien de l'**agent dédié** de ce produit, qui
+a ses propres outils et sa propre page. Le magicien n'est pas une pièce à
+part : c'est un backend comme les autres, dont les outils sont « créer un
+backend depuis un gabarit » — il vient avec la marche 2.

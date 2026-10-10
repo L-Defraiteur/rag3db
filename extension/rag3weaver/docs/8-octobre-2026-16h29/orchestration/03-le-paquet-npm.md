@@ -91,24 +91,33 @@ tu as un vrai magicien ».
    un `.env` s'ils existent ; sans rien, il fait ce qu'il peut (plein texte,
    pas de vecteurs, pas de modèle) et dit ce qui lui manque. Aucune question
    à l'installation. `rag3weaver doctor` montre ce qui est branché.
-2. **Le réglage, un formulaire — pas un agent.** La première page servie par
-   le démon, quand rien n'est réglé : le code à indexer ; les embarquements
-   (*servis par nous* / *un service existant* / *local sur votre carte* /
-   *pas maintenant*) ; le modèle de langage (*aucun* / *API compatible
-   OpenAI* / *Anthropic* / *serveur local*) et sa clé. Le formulaire écrit le
-   manifeste et le `.env` (jamais une clé dans le manifeste). **Chaque champ
-   montre son équivalent en ligne de commande** (`rag3weaver init --embed
-   service=… --llm anthropic`), et la CLI fait exactement la même chose, pour
-   les scripts, la CI et qui n'ouvre pas de page. Pas d'agent à ce stade :
-   il n'y a pas encore de modèle pour le faire parler.
-3. **Le magicien.** Dès qu'un modèle est déclaré, la même page devient l'atelier
-   : l'agent est là, et c'est lui qui aide pour la suite (brancher un service
-   de plus, indexer un autre dépôt, …), par les mêmes déclarations.
+2. **Le réglage, un formulaire — pas un agent, et pas encore de produit.**
+   La première page servie par le démon, quand rien n'est réglé, ne demande
+   **que ce qui est disponible** : les embarquements (*servis par nous* /
+   *un service existant* / *local sur votre carte* / *pas maintenant*) ; le
+   modèle de langage (*aucun* / *API compatible OpenAI* / *Anthropic* /
+   *serveur local*) et sa clé ; rien d'autre — pas de « code à indexer »,
+   pas de produit. Le formulaire écrit le manifeste et le `.env` (jamais une
+   clé dans le manifeste). **Chaque champ montre son équivalent en ligne de
+   commande** (`rag3weaver init --embed service=… --llm anthropic`), et la
+   CLI fait exactement la même chose. Pas d'agent à ce stade : il n'y a pas
+   encore de modèle pour le faire parler.
+3. **Le magicien du chaos.** Dès qu'un modèle est déclaré, la page devient un
+   agent dont le domaine est **le système lui-même** : il sait ce que tu as
+   de disponible (quels services, quel modèle, quelle carte) et il te
+   *monte un produit* si tu veux — le code, les decks, le dessin, un autre —
+   comme un outil de *boilerplate*, sauf que le boilerplate est ici une
+   déclaration (un backend, son gabarit, ses graphes) écrite dans le même
+   système : la boucle étrange en boilerplate. Puis il te donne **le lien de
+   l'agent dédié** de ce produit, qui a ses propres outils et sa propre page.
+   Lucie, 10 octobre : « le magicien du chaos te fait ce premier boilerplate,
+   te donne le lien pour parler à l'agent dédié ensuite ».
 
 Ce que ça fixe pour le chantier G : le paquet livre le démon et `doctor` ;
 `init` en CLI est petit et peut venir avec lui ; la page du réglage attend la
 marche 3 (vues déclarées), et c'est la première page de l'interface, pas un
-écran à part.
+écran à part. Le magicien est un backend comme les autres, dont les outils
+sont « créer un backend depuis un gabarit » : il vient avec la marche 2.
 
 ## 6. Le bâti : des Docker par plateforme, la CI ne fait que publier
 
