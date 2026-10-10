@@ -44,6 +44,16 @@ pub struct BackendManifest {
     pub relations: HashMap<String, RelationDef>,
     /// Only these attachments become tools. Bindings cannot be overridden by callers.
     pub tools: BTreeMap<String, ToolAttachment>,
+    /// **Les graphes réactifs, à côté des outils et jamais parmi eux.** Un
+    /// outil est appelé par l'agent, une réaction par un événement du bus ;
+    /// le moteur fait déjà respecter la distinction, et c'est lui qui me l'a
+    /// apprise — déclarer une fiche réactive dans `tools` faisait refuser le
+    /// manifeste **entier**. Sa liste blanche est la sienne
+    /// ([`crate::backend_code::reaction_nodes`]) et n'ouvre aucune capacité
+    /// de fichier ni de commande. Proposition du 5 octobre 2026
+    /// (`docs/5-octobre-2026-00h00/01`), tranchée par l'orchestration.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reactions: BTreeMap<String, ReactionAttachment>,
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
@@ -185,6 +195,126 @@ pub struct ToolAttachment {
     /// 3 octobre 2026 (docs/3-octobre-2026-23h05/01), validée.
     #[serde(default)]
     pub after: Option<AfterToolHook>,
+}
+
+/// **Une réaction** : un graphe monté au chargement du backend et déclenché
+/// par un sujet du bus, non par l'agent.
+///
+/// Même forme d'attachement qu'un outil — un graphe et ses liaisons — parce
+/// qu'un gabarit qui sait déclarer un outil doit savoir déclarer une réaction
+/// sans apprendre une seconde grammaire. Ce qu'elle porte en plus, elle le
+/// porte **déjà dans sa fiche** : les sujets (`%% on:`) et la politique de
+/// déclenchement (`%% policy: each | batch <ms> | debounce <ms>`). Rien à
+/// ajouter à la grammaire des fiches.
+///
+/// Et ce qu'elle n'a pas, volontairement : **pas de `policy` de capacités**.
+/// Une réaction part sans personne devant l'écran ; elle écrit en base par
+/// les verbes du catalogue — donc sous la garde de cycle de vie — et ne
+/// touche ni fichier ni commande.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReactionAttachment {
+    pub graph: PathBuf,
+    /// **Les liaisons déterminent la réaction entièrement.** Vérifié au
+    /// chargement : la fiche doit s'instancier avec ces seules liaisons, car
+    /// personne n'est là pour fournir un argument manquant à l'exécution.
+    #[serde(default)]
+    pub bindings: serde_json::Map<String, Value>,
+    /// Surcharge la ligne `%% description:` de la fiche, comme pour un outil.
+    /// Elle ne paraît dans aucun jeu d'outils — une réaction n'est pas
+    /// appelable — mais elle se lit au journal et au reçu d'ouverture.
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Les nœuds qu'une réaction peut traverser, et le refus qui dit quoi faire.
+///
+/// Trois formes de refus, parce qu'un refus utile nomme le remède et pas
+/// seulement la règle (la leçon du constructeur de decks) : un nœud d'outil
+/// à capacité (« déclare-le dans `tools`, avec sa politique »), un nœud
+/// inconnu, et le cas tout court. La liste, elle, vit auprès de ses sœurs
+/// dans `backend_code` : une liste de sécurité rangée loin des autres est une
+/// liste que personne ne relira.
+fn valider_noeuds_de_reaction(
+    reaction: &str,
+    node_types: impl IntoIterator<Item = String>,
+) -> Result<(), String> {
+    let permis = crate::backend_code::reaction_nodes();
+    for node_type in node_types {
+        if permis.contains(&node_type.as_str()) {
+            continue;
+        }
+        return Err(match crate::backend_code::capacite_pour(&node_type) {
+            Some(capacite) => format!(
+                "la réaction « {reaction} » contient {node_type}, qui demande la capacité \
+                 {capacite} : une réaction n'en a aucune — déclarez cette fiche dans \
+                 \"tools\" avec \"policy\": {{\"{capacite}\": true}}, ou retirez le nœud"
+            ),
+            None => format!(
+                "la réaction « {reaction} » contient {node_type}, qui n'est pas un nœud de \
+                 graphe réactif"
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// **Tout ce qu'une réaction doit satisfaire pour être montée**, en une
+/// fonction pure : la fiche est déjà lue et liée, il ne reste que les règles.
+///
+/// Elle est séparée du chargement exprès. Les quatre refus sont la vraie
+/// valeur de cette section du manifeste, et un refus qu'on ne peut éprouver
+/// qu'en fabriquant un manifeste sur le disque est un refus qu'on n'éprouve
+/// pas — c'est ainsi qu'on finit par les découvrir à la première panne.
+fn valider_une_reaction(
+    nom: &str,
+    graphe: &crate::dataflow::GraphTool,
+    bindings: &serde_json::Map<String, Value>,
+    est_aussi_un_outil: bool,
+) -> Result<(), String> {
+    // 1. Un nom partagé entre les deux sections n'est pas une coquette
+    //    ambiguïté : le curseur du réacteur **est** ce nom
+    //    (`bus.cursor(sujet, nom)`), donc deux choses homonymes
+    //    partageraient un curseur en silence.
+    if est_aussi_un_outil {
+        return Err(format!(
+            "« {nom} » est déclaré à la fois dans \"tools\" et dans \"reactions\" : le \
+             curseur du réacteur EST ce nom, donc les deux partageraient un curseur sans \
+             le dire — renommez l'une des deux"
+        ));
+    }
+    // 2. La liste blanche réactive.
+    valider_noeuds_de_reaction(nom, graphe.template().nodes.iter().map(|n| n.node_type.clone()))?;
+    // 3. Sans `%% on:`, le réacteur refuse déjà, mot pour mot — mais il
+    //    refuserait au montage, loin du manifeste fautif. Ici le refus nomme
+    //    la réaction et l'autre porte de sortie.
+    if graphe.on().is_empty() {
+        return Err(format!(
+            "la réaction « {nom} » : rien à surveiller — sa fiche n'a pas de ligne \
+             « %% on: <sujet> ». Ajoutez-la, ou déclarez ce graphe dans \"tools\" si c'est \
+             l'agent qui doit l'appeler"
+        ));
+    }
+    for cle in bindings.keys() {
+        if !graphe.params().iter().any(|p| p.name == *cle) {
+            return Err(format!(
+                "la réaction « {nom} » : liaison inconnue {cle} — sa fiche ne déclare pas ce \
+                 paramètre"
+            ));
+        }
+    }
+    // 4. **Déterminée entièrement par ses liaisons**, ou refusée. Une
+    //    réaction part sans personne pour compléter un argument : un
+    //    paramètre obligatoire non lié n'est pas un défaut d'exécution à
+    //    venir, c'est un manifeste faux maintenant.
+    graphe.instantiate(&Value::Object(bindings.clone())).map_err(|e| {
+        format!(
+            "la réaction « {nom} » n'est pas déterminée par ses liaisons ({e}) : personne ne \
+             fournira l'argument manquant à l'exécution — liez-le dans \"bindings\", ou \
+             donnez-lui un défaut dans sa fiche"
+        )
+    })?;
+    Ok(())
 }
 
 /// Une section au rendu d'un outil, depuis un petit graphe. Il ne peut ni
@@ -334,6 +464,12 @@ pub struct PreparedBackend {
     /// Les graphes des crochets après outil, chargés et validés au même
     /// moment que les outils qu'ils suivent.
     after_hooks: BTreeMap<String, GraphTool>,
+    /// Les graphes réactifs, lus et liés au chargement. **Personne ne les
+    /// monte encore** : `Reactor::watch` attend l'exécution asynchrone. Ils
+    /// sont ici pour que le montage les prenne tels quels — et exposés par
+    /// [`PreparedBackend::reaction_graphs`], parce qu'une déclaration que
+    /// rien ne peut consulter est le défaut qu'on écrit en boucle.
+    reactions: BTreeMap<String, GraphTool>,
     scripts: BTreeMap<String, String>,
     /// Les entités **décrites** que chaque outil vise (payloads, bindings,
     /// nœuds de sélection/recherche) : ce que `describe()` reprend.
@@ -352,6 +488,16 @@ impl PreparedBackend {
             },
             &self.nodes,
         )
+    }
+
+    /// **Les graphes réactifs déclarés, lus et validés**, par leur nom.
+    ///
+    /// Le montage les prendra ici — un par `Reactor::watch`, avec les
+    /// liaisons de leur attachement (`manifest.reactions[nom].bindings`), que
+    /// `run_tool` ne sait pas encore porter. Vide tant qu'aucun gabarit ne
+    /// déclare de section `"reactions"`, ce qui est le cas aujourd'hui.
+    pub fn reaction_graphs(&self) -> &BTreeMap<String, GraphTool> {
+        &self.reactions
     }
 
     /// Pure preparation: read and validate descriptors before opening a database.
@@ -781,6 +927,42 @@ impl PreparedBackend {
                 )?;
             }
         }
+        // ── Les graphes réactifs ─────────────────────────────────────────
+        //
+        // Lus, construits et liés ici, au même étage que les outils : un
+        // manifeste invalide se refuse au **chargement**, jamais à la
+        // première panne. Ce que le montage fera de ces graphes n'est pas
+        // écrit ici — `Reactor::watch` n'a encore aucun appelant dans tout
+        // `src/`, et il attend l'exécution asynchrone.
+        //
+        // **Deux faits du réacteur que le montage devra prendre en compte**,
+        // relevés en lisant `dataflow/reactor.rs` et écrits ici parce qu'un
+        // manifeste validé doit exécuter le graphe qu'il déclare :
+        //
+        // 1. `run_tool` instancie avec `json!({})` — les liaisons déclarées
+        //    ici ne l'atteignent pas encore. C'est pourquoi on vérifie plus
+        //    bas que la fiche s'instancie **avec ses liaisons** : sans ce
+        //    passage, une réaction liée partirait avec d'autres valeurs que
+        //    celles du manifeste, ou pas du tout ;
+        // 2. il exécute sous `NodeTypePolicy::All`. La liste blanche
+        //    ci-dessous est donc **le seul** garde-fou, et il est au
+        //    chargement. À dire au montage plutôt qu'à découvrir.
+        let mut reactions = BTreeMap::new();
+        for (name, attachment) in &manifest.reactions {
+            crate::schema::validate_identifier(name, "reaction").map_err(|e| e.to_string())?;
+            let source = std::fs::read_to_string(directory.join(&attachment.graph))
+                .map_err(|e| format!("la réaction « {name} » : {e}"))?;
+            let graphe = GraphTool::from_mermaid(&source)
+                .and_then(|t| t.bind(&nodes))
+                .map_err(|e| format!("la réaction « {name} » : {e}"))?;
+            valider_une_reaction(
+                name,
+                &graphe,
+                &attachment.bindings,
+                manifest.tools.contains_key(name),
+            )?;
+            reactions.insert(name.clone(), graphe);
+        }
         // Les entités décrites que chaque outil vise : par ses payloads, par
         // un binding qui nomme une entité, ou par ses nœuds de sélection et
         // de recherche (entité littérale ou liée). `describe()` les reprend.
@@ -833,6 +1015,7 @@ impl PreparedBackend {
             validators,
             tools,
             after_hooks,
+            reactions,
             nodes,
             tool_schemas,
             tool_validators,
@@ -1961,6 +2144,111 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
+    /// Une fiche réactive en mémoire, pour éprouver les refus sans manifeste.
+    ///
+    /// Elle est calquée sur la vraie
+    /// (`templates/backends/memory/graphs/review_anchored.mmd`) : le port
+    /// s'appelle `events`, la clé `topics`. Une fiche de test qui parle une
+    /// syntaxe supposée éprouve la supposition, pas le code.
+    fn fiche(entete: &str, corps: &str, result: &str) -> crate::dataflow::GraphTool {
+        crate::dataflow::GraphTool::from_mermaid(&format!(
+            "%% tool: r\n%% description: d\n{entete}%% result: {result}\n\ngraph LR\n{corps}"
+        ))
+        .expect("fiche lisible")
+    }
+
+    /// La fiche réactive de référence : une source d'événements, une
+    /// transition, et le port `events` entre les deux.
+    fn fiche_reactive(entete: &str) -> crate::dataflow::GraphTool {
+        fiche(
+            entete,
+            "    events[\"EventSourceNode(topics='catalog', cursor='r', limit=1000)\"]\n    \
+             react[\"ReactTransitionNode(target=$target)\"]\n    events -->|events| react\n",
+            "react.report",
+        )
+    }
+
+    /// **Les quatre refus d'une réaction disent chacun quoi faire.**
+    ///
+    /// Ils sont la valeur de la section `"reactions"` : sans eux, un manifeste
+    /// faux se découvre à la première panne, dans un flux que personne ne lit.
+    /// Le test regarde donc le **texte** du refus, pas seulement qu'il y en
+    /// ait un — un refus qui ne nomme pas le remède ne sert ni à une personne
+    /// ni à un modèle.
+    #[test]
+    fn les_refus_d_une_reaction_nomment_le_remede() {
+        use serde_json::Map;
+        let vide = Map::new();
+        let bonne =
+            fiche_reactive("%% on: catalog\n%% policy: debounce 500\n%% param: target string = \"Memory\" -- la cible\n");
+
+        // Vert d'abord : la forme attendue passe, sinon les rouges ci-dessous
+        // ne prouveraient rien.
+        super::valider_une_reaction("review", &bonne, &vide, false).expect("la forme attendue");
+
+        // 1. Homonyme d'un outil — le curseur du réacteur EST ce nom.
+        let e = super::valider_une_reaction("review", &bonne, &vide, true).unwrap_err();
+        assert!(e.contains("curseur"), "{e}");
+
+        // 2. Un nœud hors de la liste réactive, avec sa capacité : le refus
+        //    renvoie vers `tools` ET nomme la politique à déclarer.
+        let lit = fiche(
+            "%% on: catalog\n",
+            "    lu[\"ReadFileNode(path='x')\"]\n",
+            "lu.content",
+        );
+        let e = super::valider_une_reaction("review", &lit, &vide, false).unwrap_err();
+        assert!(e.contains("read_files") && e.contains("tools"), "{e}");
+
+        // 3. Pas de `%% on:` — et l'autre porte de sortie est nommée.
+        let muette = fiche_reactive("%% param: target string = \"Memory\" -- la cible\n");
+        let e = super::valider_une_reaction("review", &muette, &vide, false).unwrap_err();
+        assert!(e.contains("%% on:") && e.contains("tools"), "{e}");
+
+        // 4. Une liaison que la fiche ne déclare pas.
+        let mut inconnue = Map::new();
+        inconnue.insert("cible".into(), json!("Memory"));
+        let e = super::valider_une_reaction("review", &bonne, &inconnue, false).unwrap_err();
+        assert!(e.contains("liaison inconnue cible"), "{e}");
+
+        // 5. Non déterminée par ses liaisons : un paramètre obligatoire que
+        //    personne ne remplira à l'exécution.
+        let exigeante = fiche_reactive("%% on: catalog\n%% param: target string! -- la cible\n");
+        let e = super::valider_une_reaction("review", &exigeante, &vide, false).unwrap_err();
+        assert!(e.contains("n'est pas déterminée par ses liaisons"), "{e}");
+        // Liée, la même fiche passe.
+        let mut liee = Map::new();
+        liee.insert("target".into(), json!("Memory"));
+        super::valider_une_reaction("review", &exigeante, &liee, false).expect("liée");
+    }
+
+    /// **Le compte de chaque liste blanche est épinglé.**
+    ///
+    /// Une liste de sécurité s'élargit par accident : on ajoute un nœud à
+    /// `BASE_NODES` « pour un cas », et la surface de tous les outils et de
+    /// toutes les réactions grandit sans que personne l'ait voulu. Ce test ne
+    /// juge pas le contenu — il exige seulement qu'un ajout soit **décidé**,
+    /// en faisant rougir la lib au lieu de passer.
+    #[test]
+    fn les_listes_blanches_ne_s_elargissent_pas_en_silence() {
+        let outil = crate::backend_code::allowed_nodes(&Default::default());
+        let reactif = crate::backend_code::reaction_nodes();
+        assert_eq!(
+            outil.len(),
+            37,
+            "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
+             ce compte dans le même commit — et dites pourquoi dans son message",
+            outil.len()
+        );
+        assert_eq!(
+            reactif.len(),
+            outil.len() + 2,
+            "la liste réactive est la base plus EventSourceNode et ReactTransitionNode, \
+             soit deux entrées — elle en a {}",
+            reactif.len() - outil.len()
+        );
+    }
+
     #[test]
     fn un_status_non_cable_s_avertit_au_chargement() {
         use crate::dataflow::GraphTool;
