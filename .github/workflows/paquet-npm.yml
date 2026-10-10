@@ -53,9 +53,30 @@ jobs:
           docker run --rm -v "$PWD:/src" -v "$HOME/cache:/cache" -e JOBS=4 \
             rag3weaver-build-linux-x64-gnu /src/tools/build-images/linux-x64-gnu/build.sh
           cat dist/linux-x64-gnu/bati.txt
-      - name: Le binaire démarre-t-il hors de l'image ?
+      # Deux épreuves légères : le binaire démarre-t-il hors de l'image (glibc
+      # du runner), et le bac à sable Landlock se monte-t-il DANS l'image
+      # (Docker filtre des appels système par seccomp) ? `--describe` charge le
+      # manifeste et refuse si Landlock ne se monte pas sur ce noyau.
+      - name: Un manifeste de code pour l'épreuve
         run: |
-          ./dist/linux-x64-gnu/rag3weaver-backend --help | head -20 || true
+          mkdir -p essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          python3 - <<'PY'
+          import json
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          m["vector_extension"] = "/src/dist/linux-x64-gnu/libvector.rag3db_extension"
+          m["workspace"]["root"] = "/src/essai/ws"; m["database"] = "/src/essai/code.rag3db"
+          json.dump(m, open("extension/rag3weaver/templates/backends/code/essai.json", "w"))
+          PY
+      - name: Hors de l'image, sur le runner
+        run: |
+          ./dist/linux-x64-gnu/rag3weaver-backend 2>&1 | head -3 || true
+          sed -i 's#/src/#'"$PWD"'/#g' extension/rag3weaver/templates/backends/code/essai.json
+          ./dist/linux-x64-gnu/rag3weaver-backend extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo
+          sed -i 's#'"$PWD"'/#/src/#g' extension/rag3weaver/templates/backends/code/essai.json
+      - name: Dans l'image (Landlock sous Docker)
+        run: |
+          docker run --rm -v "$PWD:/src" rag3weaver-build-linux-x64-gnu -c \
+            '/src/dist/linux-x64-gnu/rag3weaver-backend /src/extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo; uname -r'
       - uses: actions/upload-artifact@v4
         with:
           name: rag3weaver-backend-linux-x64-gnu
