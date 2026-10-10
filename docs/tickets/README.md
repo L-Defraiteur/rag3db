@@ -74,6 +74,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Les comptes de valeurs distinctes se trompent d'environ 13 % : 64 registres](2026-10-10-hyperloglog-a-64-registres.md) | ouvert, confort | estimation imprécise | toujours | non |
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 
+| [« unknown entity: File » ne dit pas d'indexer — le premier mur de tout usage MCP](2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | ouvert | interprétation : un modèle y lit un défaut d'outil au lieu d'un ordre à suivre | oui, **systématiquement** sur toute base neuve | oui — toute la surface de code |
 ### Fermés (48), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
