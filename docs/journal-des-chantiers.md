@@ -525,11 +525,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : huit façons de prendre son harnais pour un résultat
+## Méthode : neuf façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante, la sixième le 4 octobre
-(quatre fois le même jour), la septième et la huitième le 10. Elles se sont présentées à la suite,
+(quatre fois le même jour), la septième, la huitième et la neuvième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -758,7 +758,28 @@ pourquoi une sortie trompe ne protège pas de s'y laisser prendre la fois
 suivante, quand elle nomme un fichier auquel on tient. C'est la commande qu'il
 faut changer, pas la vigilance.
 
-**Et la forme commune aux huit**, qui est aussi celle des défauts qu'on
+**9. Le « bâti à part » qui n'est pas à part.** 10 octobre 2026, au soir.
+L'arbre principal devait rebâtir la bibliothèque du moteur pendant qu'une
+batterie tournait contre elle ; je lui ai conseillé de **bâtir à part**, dans un
+autre dossier de bâti, pour ne pas la remplacer sous la passe. Mauvais conseil,
+et c'est lui qui l'a vu avant de l'appliquer : **le bâti écrit aussi l'extension
+vectorielle à un chemin fixe de l'arbre principal**
+(`extension/vector/build/libvector.rag3db_extension`), quel que soit le dossier
+de bâti. Un bâti « à part » aurait donc remplacé l'extension sous la batterie,
+sans toucher à la bibliothèque — la moitié de l'artefact échangée en vol, ce qui
+est pire qu'un échange franc.
+
+La règle, donc : **on ne bâtit pas le moteur pendant qu'une passe le charge, et
+« ailleurs » n'y change rien.** Ce qui se négocie, c'est l'attente — annoncer,
+attendre le « fini », rebâtir, prouver les artefacts, annoncer de nouveau. C'est
+exactement le protocole qui a fonctionné ce soir-là.
+
+Et la leçon de forme, qui est la même que les huit autres sous un angle neuf :
+un conseil que l'on donne n'est pas moins à vérifier qu'une mesure que l'on
+prend. J'ai dit « bâtis à part » avec l'assurance d'une solution évidente, sans
+savoir où va l'extension.
+
+**Et la forme commune aux neuf**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
 d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
