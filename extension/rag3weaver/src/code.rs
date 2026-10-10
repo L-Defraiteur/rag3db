@@ -2229,11 +2229,52 @@ impl Catalog {
     /// de classe ou de fonction porté par deux scopes aux types différents
     /// ne donne rien : on ne devine pas.
     fn resoudre_les_types_differes(&self, mentions: &mut std::collections::HashMap<String, Vec<Mention>>) -> Result<(), CatalogError> {
+        // **Bornée à la source et au dépôt** : une classe homonyme d'une autre
+        // source (un instantané, un dépôt distant) ou d'un autre dépôt de la
+        // même base ne compte pas — chaque mention se résout avec les types
+        // écrits de la source et du dépôt de son scope.
+        let froms: Vec<String> = mentions
+            .values()
+            .flatten()
+            .filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty())
+            .map(|m| m.from.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        if froms.is_empty() {
+            return Ok(());
+        }
+        let param = CypherValue::List(froms.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let result = self
+            .conn()
+            .execute_with_params(
+                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) RETURN u, s.source, s.repo"),
+                &[crate::connection::QueryParam::new("uuids", param)],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let texte = |r: &[CypherValue], i: usize| r.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let source_de: std::collections::HashMap<String, (String, String)> =
+            result.rows.iter().filter_map(|r| Some((r.first()?.as_str()?.to_string(), (texte(r, 1), texte(r, 2))))).collect();
+        let sources: std::collections::BTreeSet<(String, String)> = source_de.values().cloned().collect();
+        for source in sources {
+            self.resoudre_les_types_differes_de(mentions, &source, &source_de)?;
+        }
+        Ok(())
+    }
+
+    /// [`Self::resoudre_les_types_differes`] pour les mentions d'une source.
+    fn resoudre_les_types_differes_de(
+        &self,
+        mentions: &mut std::collections::HashMap<String, Vec<Mention>>,
+        source: &(String, String),
+        source_de: &std::collections::HashMap<String, (String, String)>,
+    ) -> Result<(), CatalogError> {
         use codeparsers::scope_extraction::types::DeferredType as D;
         use std::collections::{BTreeSet, HashMap};
         let debut = std::time::Instant::now();
+        let de_la_source = |m: &Mention| source_de.get(&m.from) == Some(source);
         let mut noms: BTreeSet<String> = BTreeSet::new();
-        for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
+        for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
             for d in &m.deferred {
                 noms.insert(match d {
                     D::FieldOf { owner, .. } => owner.clone(),
@@ -2274,7 +2315,7 @@ impl Catalog {
                 break;
             }
             tours += 1;
-            self.charger_les_types_ecrits(&a_charger, &mut champs, &mut retours)?;
+            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours)?;
             charges.extend(a_charger);
             // Les classes qu'un pas de champ demande, pas encore chargées.
             let demandes = std::cell::RefCell::new(BTreeSet::new());
@@ -2284,7 +2325,7 @@ impl Catalog {
                 }
                 champs.get(&(classe.to_string(), f.to_string())).cloned().flatten()
             };
-            for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
+            for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
                 for d in &m.deferred {
                     let _ = resoudre(d, &champs, &retours, &champ);
                 }
@@ -2292,7 +2333,7 @@ impl Catalog {
             noms.extend(demandes.into_inner());
         }
         let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
-        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty()) {
+        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty() && de_la_source(m)) {
             let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &champ)).collect();
             if let Some(mut v) = lus {
                 v.sort();
@@ -2311,6 +2352,7 @@ impl Catalog {
     fn charger_les_types_ecrits(
         &self,
         noms: &[String],
+        source: &(String, String),
         champs: &mut std::collections::HashMap<(String, String), Option<String>>,
         retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
     ) -> Result<(), CatalogError> {
@@ -2318,8 +2360,14 @@ impl Catalog {
         let result = self
             .conn()
             .execute_with_params(
-                &format!("UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) RETURN n, s.field_types, s.return_type, s.parent_name"),
-                &[crate::connection::QueryParam::new("noms", param)],
+                &format!(
+                    "UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) WHERE s.source = $source AND s.repo = $repo RETURN n, s.field_types, s.return_type, s.parent_name"
+                ),
+                &[
+                    crate::connection::QueryParam::new("noms", param),
+                    crate::connection::QueryParam::new("source", CypherValue::String(source.0.clone())),
+                    crate::connection::QueryParam::new("repo", CypherValue::String(source.1.clone())),
+                ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
