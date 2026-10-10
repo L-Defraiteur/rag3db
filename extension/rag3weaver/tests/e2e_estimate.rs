@@ -587,15 +587,16 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let progress = catalog.lock().unwrap().index_progress().expect("avancement");
     assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
     // Par entité : `Scope` est prêt des deux côtés ; `Symbol`, plein texte
-    // seul, est cherchable par mots et jamais par vecteurs ; une entité
-    // inconnue est une erreur, pas un « jamais ».
+    // seul, est cherchable par mots, et ses vecteurs sont « non déclarés »
+    // (`NotDeclared` depuis le 10 octobre 2026 : « jamais » se lisait comme une
+    // panne) ; une entité inconnue est une erreur, pas un « jamais ».
     {
         use rag3weaver::code::SYMBOL;
         let guard = catalog.lock().unwrap();
         let scope = guard.index_state_for(SCOPE).expect("état de Scope");
         assert_eq!((scope.text, scope.vectors, scope.vectors_percent), (Level::Ready, Level::Ready, 100), "{scope:?}");
         let symbol = guard.index_state_for(SYMBOL).expect("état de Symbol");
-        assert_eq!((symbol.text, symbol.vectors), (Level::Ready, Level::Never), "{symbol:?}");
+        assert_eq!((symbol.text, symbol.vectors), (Level::Ready, Level::NotDeclared), "{symbol:?}");
         assert!(guard.index_state_for("Inconnue").is_err());
     }
     let after = catalog.lock().unwrap().index_state().expect("état");
