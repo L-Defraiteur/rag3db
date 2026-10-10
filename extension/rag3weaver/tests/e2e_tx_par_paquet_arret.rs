@@ -51,6 +51,8 @@ thread_local! {
     /// Le corpus gros, et le rang du paquet où l'échoueur échoue.
     static GROS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static ECHEC_AU_PAQUET: std::cell::Cell<usize> = const { std::cell::Cell::new(6) };
+    /// Le corpus de la fuite, et le COPY journalisé.
+    static FUITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
@@ -82,11 +84,36 @@ fn gros() -> bool {
     std::env::var_os("TX_ARRET_GROS").is_some()
 }
 
+/// Le corpus de la fuite (`TX_ARRET_FUITE`, transmis aux fils) : 600
+/// fichiers de 250 fonctions, puis 10 petits. Paquets de 600 fichiers : le
+/// premier porte 150 000 scopes, au-delà des 131 072 lignes d'un groupe
+/// plein — la taille où une mort pendant un COPY journalisé perdait ses
+/// pages dans le fichier (ticket des pages d'un COPY journalisé, corrigé par
+/// `0aed3c4b5`). Le second, petit, est celui où l'écrivain meurt : le premier
+/// est validé, au journal, et la réouverture le rejoue.
+fn fuite() -> bool {
+    std::env::var_os("TX_ARRET_FUITE").is_some()
+}
+
 fn paquet() -> usize {
-    if gros() { 200 } else { 32 }
+    if fuite() {
+        600
+    } else if gros() {
+        200
+    } else {
+        32
+    }
 }
 
 fn corpus() -> Vec<(String, String)> {
+    if fuite() {
+        let gros_fichiers = (0..600).map(|i| {
+            let corps: String = (0..250).map(|j| format!("pub fn g{i}_{j}() -> u32 {{ {j} }}\n")).collect();
+            (format!("src/g{i:03}.rs"), corps)
+        });
+        let petits = (0..10).map(|i| (format!("src/p{i:02}.rs"), format!("pub fn p{i}() -> u32 {{ {i} }}\n")));
+        return gros_fichiers.chain(petits).collect();
+    }
     if gros() {
         return (0..400)
             .map(|i| {
@@ -142,7 +169,8 @@ fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
     let options = SourceSyncOptions {
         batch_files: paquet(),
         relations: Some(RelationsMode::Bulk),
-        exige: Disponibilites::RECHERCHE_TEXTE,
+        // La fuite se cherche aussi par vecteur : les vecteurs s'écrivent.
+        exige: if fuite() { Disponibilites::TOUT } else { Disponibilites::RECHERCHE_TEXTE },
         force: true,
         takeover: reprendre,
         ..Default::default()
@@ -396,6 +424,35 @@ fn role_enfant() {
         println!("EMPREINTE {role} {}", serde_json::to_string(&e).unwrap());
         println!("INTROUVABLES_PAR_CLE {introuvables}");
     }
+    if fuite() {
+        // Les COPY journalisés repliés sur un point de reprise : zéro, sinon
+        // rien n'a été journalisé et le cas ne prouve rien.
+        let replis = catalog
+            .conn()
+            .execute("CALL current_setting('copy_journal_fallbacks') RETURN *")
+            .map(|r| format!("{:?}", r.rows.first()))
+            .unwrap_or_else(|e| format!("illisible : {e}"));
+        println!("REPLIS_DU_JOURNAL {role} {replis}");
+        // Une fonction du premier paquet, celui que la réouverture a rejoué
+        // du journal, cherchée par son nom et par son texte.
+        let partage = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+        let cherche = |requete: &str, signaux| {
+            Catalog::rechercher(&partage, rag3weaver::code::SCOPE, requete, rag3weaver::search::SearchOptions {
+                signals: Some(signaux),
+                ..Default::default()
+            })
+            .expect("recherche")
+            .results
+            .iter()
+            .any(|x| format!("{x:?}").contains("g005.rs"))
+        };
+        println!(
+            "TROUVE {role} mot={} vecteur={}",
+            cherche("g5_7", rag3weaver::search::SearchSignals::BM25),
+            cherche("pub fn g5_7() -> u32 { 7 }", rag3weaver::search::SearchSignals::VECTOR)
+        );
+        catalog = std::sync::Arc::try_unwrap(partage).ok().unwrap().into_inner().unwrap();
+    }
     if role == "repreneur" {
         // Un point de reprise explicite à la fin de la reprise : sur l'état
         // d'après un COPY annulé, il ne finit pas (le banc) ; ici il doit
@@ -451,6 +508,11 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         cmd.env("TX_ARRET_GROS", "1");
     } else {
         cmd.env_remove("TX_ARRET_GROS");
+    }
+    if FUITE.with(|f| f.get()) {
+        cmd.env("TX_ARRET_FUITE", "1").env("RAG3WEAVER_TEST_COPY_JOURNALISE", "1");
+    } else {
+        cmd.env_remove("TX_ARRET_FUITE").env_remove("RAG3WEAVER_TEST_COPY_JOURNALISE");
     }
     match TUER_AVANT_SYNC.with(|f| f.get()) {
         Some(n) => {
@@ -1118,4 +1180,73 @@ fn une_marque_qui_echoue_ne_laisse_jamais_un_index_sans_marque() {
     assert!(dir_scope.exists(), "sans marque posée, le dossier n'est pas jeté");
     drop(catalog);
     let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// **Le témoin produit de la fuite de pages** (10 octobre 2026) : une mort
+/// pendant un COPY journalisé, puis la réouverture qui le rejoue, puis la
+/// recherche par mot et par vecteur.
+///
+/// Le crochet `RAG3WEAVER_TEST_COPY_JOURNALISE` coupe le point de reprise
+/// forcé dans les deux stockages, et lève le seuil du journal. En fichiers,
+/// le COPY journalisé est le défaut du moteur depuis ff9bad960 ; avant, sans
+/// le crochet, rien n'était journalisé. En blobs, le produit force toujours
+/// le point de reprise : ce cas éprouve le moteur hors du chemin du produit.
+///
+/// L'écrivain valide le premier paquet (150 000 scopes, un groupe plein,
+/// au journal) et meurt au second. Le repreneur rouvre, rejoue, va au bout ;
+/// ses comptes sont ceux d'un témoin sans arrêt, et la fonction `g5_7` du
+/// premier paquet se retrouve par son nom et par son texte. La taille des
+/// deux bases est dite, pas jugée : 559 pages perdues pour 200 000 lignes
+/// avant le correctif, soit quelques Mio sur une base bien plus grosse.
+fn mort_pendant_un_copy_journalise(fichiers: bool) {
+    FICHIERS.with(|f| f.set(fichiers));
+    FUITE.with(|f| f.set(true));
+    let cas = if fichiers { "fuite-fichiers" } else { "fuite-blobs" };
+    let dossier = dossier_sur_disque(cas);
+    let base = dossier.join("base.rag3db");
+    let t = std::time::Instant::now();
+    let (statut, sortie) = lancer_avec("ecrivain", &base, Some(1), true, 1);
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(statut.signal(), Some(9), "l'écrivain meurt au paquet 1 :\n{}", sortie.chars().take(3000).collect::<String>());
+    let wal = journal(&dossier);
+    println!("▸ {cas} : écrivain mort en {:.0?}, journal {wal:?}", t.elapsed());
+    assert!(wal.iter().any(|(_, t)| *t > 0), "journal vide : le premier paquet n'est pas journalisé, le test ne prouverait rien");
+
+    let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 1);
+    assert!(statut.success(), "la base rouvre et la reprise va au bout :\n{}", sortie.chars().take(3000).collect::<String>());
+    let repris = comptes_rendus("repreneur", &sortie);
+    let trouve = ligne(&sortie, "TROUVE repreneur ");
+
+    let temoin_dossier = dossier_sur_disque(&format!("{cas}-temoin"));
+    let temoin_base = temoin_dossier.join("base.rag3db");
+    let (statut, sortie) = lancer_avec("temoin", &temoin_base, None, true, 1);
+    assert!(statut.success(), "le témoin va au bout :\n{}", sortie.chars().take(3000).collect::<String>());
+    let temoin = comptes_rendus("temoin", &sortie);
+    let replis = ligne(&sortie, "REPLIS_DU_JOURNAL temoin ");
+
+    let taille = |p: &Path| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    println!(
+        "▸ {cas} : {:.0?} en tout ; base reprise {} octets, témoin {} octets ; {trouve} ; replis du témoin {replis}",
+        t.elapsed(),
+        taille(&base),
+        taille(&temoin_base)
+    );
+    assert!(temoin.get("nœuds Scope").copied().unwrap_or(0) >= 150_000, "le témoin a indexé le corpus : {temoin:?}");
+    assert!(replis.contains("\"0\"") || replis.contains("(0)"), "aucun COPY du témoin ne s'est replié sur un point de reprise : {replis}");
+    assert_eq!(repris, temoin, "la reprise rend les comptes d'une passe sans arrêt");
+    assert_eq!(trouve, "mot=true vecteur=true", "g5_7, du paquet rejoué, se retrouve par mot et par vecteur");
+    let _ = std::fs::remove_dir_all(&dossier);
+    let _ = std::fs::remove_dir_all(&temoin_dossier);
+}
+
+#[test]
+#[ignore]
+fn en_fichiers_une_mort_pendant_un_copy_journalise_se_rejoue_et_se_retrouve() {
+    mort_pendant_un_copy_journalise(true);
+}
+
+#[test]
+#[ignore]
+fn en_blobs_une_mort_pendant_un_copy_journalise_se_rejoue_et_se_retrouve() {
+    mort_pendant_un_copy_journalise(false);
 }
