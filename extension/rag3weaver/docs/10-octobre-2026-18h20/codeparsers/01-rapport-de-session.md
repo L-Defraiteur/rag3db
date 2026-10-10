@@ -50,6 +50,9 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | B2c — les chaînes de champs | codeparsers `55c27d1` ; rag3db master (`d6a2827ce`, fusionné par l'arbre principal) | Le premier champ d'une chaîne dit le propriétaire, les suivants deviennent des pas de champ (`.b`) ; le lecteur du fichier et la résolution au rendez-vous (par tours, quatre au plus) les suivent. Forme réelle : `tableInfo.table->update()` de set_executor.cpp. |
 | B3 — les verrous sur le chemin, dans `impact` | rag3db master (`d6a2827ce`) | Un relevé générique du nœud de voisinage, déclaré au gabarit (`collect='LOCKS>'`) : pour la méthode modifiée et chaque scope qui en dépend, les mutex qu'il verrouille, groupés par `Classe::champ`. L'IR n'a rien à changer (Hop suit LOCKS par son nom). Témoin `e2e_verrous`. |
 
+| Impact : les sûrs d'abord | branche `impact-surs` (`99e449806`, `6451dad2a`), proposée à l'arbre principal ; oui de l'orchestration pour Lucie, renversable | Les usages trouvés par le nom seul (nom ambigu, attribués à aucune définition) ne sont plus listés ni comptés parmi les touchés : une ligne « N par le nom seul, non montrés », dans le rendu complet et dans le résumé. `include_by_name` (bool, défaut false) au schéma d'`impact` les remontre, marqués. Sur `NodeTable::update` : 2 appelants au lieu de 30 lignes. Témoins `impact_rendu` et `e2e_impact` (gabarit réel, avec et sans le paramètre). |
+| L'outil « ce que ça appelle » | branche `callees` (`026e9ca53`, empilée), proposée | `templates/tools/callees.mmd` : le même nœud de voisinage, CONSUMES sortants, arêtes « nom » non suivies, la même section des verrous ; déclaré dans les deux manifestes (treize outils). Le nœud gagne `heading` (titre du rendu), la ligne de définition de l'appelé en sortant (c'était celle du site d'appel, chez l'appelant), et se tait sur le groupe quand aucun n'est déclaré. Témoin `e2e_verrous` : depuis `top`, `bulk` puis `insert`, `Index::autre` puis `Index::mtx`. |
+
 | La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
@@ -74,7 +77,8 @@ Tout est sur master (`d6a2827ce`, sonde `36cd2604c`). La page pour Lucie :
 gestionnaire de verrous de la transaction sous `update`, pas chez les
 appelants), les chiffres avant / après la nuit, ce qui reste.
 
-Lots suivants proposés à l'orchestration : ranger à part les usages « par
-le nom » d'un nom ambigu dans `impact` ; une liste de fonctions de verrou
-par dépôt (verrous applicatifs) ; un outil « ce que ça appelle » (le
-voisinage sortant).
+Ordre donné par l'orchestration (11 oct., nuit) : (1) impact, les sûrs
+d'abord — fait, branche `impact-surs` ; (3) « ce que ça appelle » — fait,
+branche `callees` ; (2) les fonctions de verrou applicatives déclarées par
+dépôt dans le manifeste (`locks_via`), qui posent LOCKS par l'appel — en
+cours ; puis B2d, les 8 720 arêtes par le nom (receveurs non typés).
