@@ -1135,6 +1135,47 @@ TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
     runCase(indexedDeleteVersusInsert({1, 0}));
 }
 
+// H5 — deux écrivains insèrent chacun cinq documents placés tout près du même document (le 50),
+// dans des transactions ouvertes ensemble, puis valident dans l'ordre donné : leurs nouveaux
+// nœuds ont des voisins communs, dont l'index réécrit les listes pour l'un et pour l'autre. Sous
+// A4′, ces écritures internes de l'index ne prennent pas de verrou (takesLocks = false) et l'index
+// est tenu en partagé par les deux inséreurs : rien ne les sépare. Invariant : les deux valident,
+// et l'index rend exactement les lignes vivantes (le vérificateur d'intégrité). Ce que la marche
+// « l'index au commit » devra garantir ; demandé par le cœur C++ le 10 octobre.
+static BenchCase indexedInsertsSharingANeighbour(std::vector<uint32_t> commitOrder) {
+    return {.numWorkers = 2,
+        .setup = createIndexedDocs,
+        .scenario =
+            [commitOrder](Worker& worker) {
+                const int64_t first = 1000 + worker.index() * 100;
+                // Le vecteur du document 50, sa première composante décalée d'un cent-millième par
+                // ligne : tout près de lui, et distincts entre eux.
+                auto near = docVector("50");
+                near.insert(near.find(','), " + CAST(i AS FLOAT) / 100000");
+                worker.begin();
+                worker.writeInTurn(stringFormat(
+                    "UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first, first + 4,
+                    near));
+                worker.commitInOrderByEvents(commitOrder);
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS + 10)
+                    << "[check: row-count] ";
+            },
+        .vectorExtension = true,
+        .isolated = true};
+}
+
+TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourFirstCommitsFirst) {
+    runCase(indexedInsertsSharingANeighbour({0, 1}));
+}
+
+TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourSecondCommitsFirst) {
+    runCase(indexedInsertsSharingANeighbour({1, 0}));
+}
+
 // H3 — deux écrivains suppriment deux documents dont les voisinages dans le graphe de
 // l'index se recouvrent (le cas que l'étude n'avait pas su tirer). Le recouvrement est
 // construit en lisant les arêtes stockées de l'index (table interne
