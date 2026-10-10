@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 10 h — mise en pause à la demande de Lucie.**
+Mis à jour sur place. **Dernière mise à jour : 10 octobre 2026 — pause pour le redémarrage du poste.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -50,6 +50,46 @@ A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec u
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
+
+**Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
+veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.
+
+### Où j'en suis exactement
+
+- **Branche `etendue-du-fichier`**, poussée sur `origin` (hash dans le message « prêt » à
+  l'orchestration ; `git log origin/etendue-du-fichier`), basée sur `master` à `27eeb6a7f`.
+  **Pas à fusionner dans `master`** : ni liste complète, ni relecture du banc, ni témoins joués
+  sur le correctif.
+- Elle porte : le correctif de la page 06 (l'étendue du fichier dans l'en-tête, version de
+  stockage 40, l'excédent rendu à l'ouverture en écriture — `DatabaseHeader::numDataPages`,
+  `Checkpointer::returnOwnerlessPages`) ; les neuf témoins `OwnerlessPagesTest` ; sept contrôles
+  de fuite ajoutés aux témoins du point de reprise interrompu (`checkpoint_test.cpp`) ; la base
+  de la version 39 (`test/transaction/database_before_extent/`, compressée, lue par `gzip -dc`) ;
+  et la copie de `NodeTableDeleteState` interdite (chantier G).
+- **Vérifié** : sans harnais, sur la bibliothèque corrigée, un COPY de 200 000 lignes tué avant
+  sa validation laisse 4 pages occupées au lieu de 559 ; replié, 4 au lieu de 560 ; journalisé
+  validé puis rejoué, 4 au lieu de 559. L'ancien moteur refuse une base en version 40 :
+  « Trying to read a database file with a different version. Database file version: 40 ».
+  Les quatre premiers témoins ont été vus **rouges** sur le moteur d'avant : 640, 638, 637 et
+  1 269 pages occupées pour 9.
+- **Pas vérifié** : les neuf témoins et les sept contrôles n'ont pas été joués sur le correctif
+  (le bâti de `transaction_test` a échoué sur une liste d'initialisation du témoin de parité,
+  corrigée depuis ; le rebâti a été arrêté pour le redémarrage). Le témoin du plein texte
+  (`TheReplayReadsNothingBeyondTheExtentWithAFullTextIndex`) se saute tant que l'extension fts
+  n'est pas bâtie : le sous-module `third_party/fuzzy-fst` est initialisé dans l'arbre, mais la
+  reconfiguration `cmake -DBUILD_EXTENSIONS="vector;geo;fts"` a échoué avant lui et a laissé
+  `build/moteur` en configuration incomplète — **à refaire d'abord** (ou revenir à
+  `vector;geo`), puis rebâtir.
+- **À la reprise, dans l'ordre** : reconfigurer et rebâtir `build/moteur` sous `poste lourd` ;
+  jouer `OwnerlessPagesTest.*`, `FlakyCheckpointerTest.*`, et les suites de la reprise ; le
+  témoin plein texte ; la liste complète ; le contrôle de fuite de la suite Cypher sur toute la
+  liste **défaut basculé** (exigence c) ; relecture du banc ; rebase et avance rapide.
+- Deux exigences de l'orchestration en plus du correctif : (a) le rejeu ne lit rien au-delà de
+  l'étendue — témoigné par la réutilisation de l'excédent et la parité avec une base témoin,
+  pour id/texte/nombre/FLOAT[4], avec index vectoriel, avec index plein texte ; (b) le point de
+  reprise interrompu après sa marque — les sept contrôles.
+- Le ticket est reclassé (défaut du moteur d'aujourd'hui, hors stèle, corrigé maintenant) ;
+  page 06 et relevé complétés (seuil du groupe plein : 131 072 lignes).
 
 **Mise en pause (5 octobre 2026, 10 h).** Lucie reprend le week-end ou un soir. Cette section
 suffit pour reprendre ; les sections plus bas sont plus anciennes.
