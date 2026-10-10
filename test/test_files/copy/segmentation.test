@@ -12,6 +12,9 @@
 # Should fit in one segment
 -STATEMENT COPY nums from (UNWIND range(1, 64000) as num RETURN num);
 ---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire avant de les regarder.
+-STATEMENT CHECKPOINT;
+---- ok
 -STATEMENT CALL STORAGE_INFO("nums") where node_group_id = 0 and column_name = "num" RETURN COUNT(*);
 ---- 1
 1
@@ -32,6 +35,8 @@ True
 0
 # Make second copy larger so its guaranteed to result in more than 3 segments
 -STATEMENT COPY nums from (UNWIND range(64000, 131072) as num RETURN num * 1000000000);
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT CALL STORAGE_INFO("nums") where node_group_id = 0 and column_name = "num" RETURN COUNT(*) > 3;
 ---- 1

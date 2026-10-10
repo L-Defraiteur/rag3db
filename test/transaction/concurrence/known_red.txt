@@ -42,11 +42,12 @@ Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash database-reope
 # Marche A3′ — les deux limites écrites le 4 octobre (stèle, étape 5), sous le mode
 # multi-écrivains. L'annulation d'un COPY copié le premier efface les lignes et les clés
 # d'un COPY copié après lui dans le même bloc, que l'autre écrivain valide ensuite (dans
-# l'autre ordre, vert). Deux validations qui veulent chacune leur point de reprise : la
-# première va jusqu'au délai (5 s) et échoue ; son annulation efface alors les lignes de
-# la seconde, validée (committed-rows à 0).
+# l'autre ordre, vert). La seconde limite — deux validations qui voulaient chacune leur point
+# de reprise, la première jusqu'au délai, son annulation effaçant les lignes de la seconde
+# (LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout) — a verdi avec le COPY
+# journalisé en défaut (10 octobre 2026) : un COPY ne veut plus de point de reprise à sa
+# validation, les deux passent.
 Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst committed-rows,other-writer-key-unique,other-writer-keys-kept,primary-key-index-agrees
-LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
 # Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
 # nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux

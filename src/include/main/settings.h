@@ -34,8 +34,10 @@ struct LockTimeoutSetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
-// Transitoire (chargement en masse journalisé) : CALL force_checkpoint_on_copy=false fait
-// journaliser les lignes d'un COPY de nœuds au lieu de forcer un point de reprise.
+// Le chargement en masse journalisé est le défaut : un COPY écrit ses lignes au journal de sa
+// transaction. CALL force_checkpoint_on_copy=true rend le point de reprise forcé d'avant — pour
+// une transaction dont le journal serait énorme (le plein texte en base), ou un test qui regarde
+// l'état des pages juste après un COPY.
 struct ForceCheckpointOnCopySetting {
     static constexpr auto name = "force_checkpoint_on_copy";
     static constexpr auto inputType = common::LogicalTypeID::BOOL;

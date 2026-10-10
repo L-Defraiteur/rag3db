@@ -75,11 +75,38 @@ Timeout waiting for active transactions to leave the system before checkpointing
 -STATEMENT [conn1] BEGIN TRANSACTION READ ONLY;
 ---- ok
 -CREATE_CONNECTION conn2
+# Un COPY forcé (le réglage) attend le départ des autres transactions pour son point de reprise.
+-STATEMENT [conn2] CALL force_checkpoint_on_copy=true
+---- ok
 -STATEMENT [conn2] COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/primary-key-tests/vPerson.csv"
 ---- error
 Timeout waiting for active transactions to leave the system before checkpointing. If you have an open transaction, please close it and try again.
 -STATEMENT [conn1] MATCH (a:person) WHERE a.ID=100 RETURN a.age;
 ---- 0
+
+# Journalisé (le défaut), un COPY n'attend personne : il est durable par le journal, et le
+# lecteur ouvert garde sa vue d'avant.
+-CASE JournaledCopyDoesNotWaitForAnOpenReader
+-SKIP_IN_MEM
+-CHECKPOINT_WAIT_TIMEOUT 10000
+-STATEMENT CALL auto_checkpoint=true
+---- ok
+-STATEMENT CREATE NODE TABLE person(ID INT64, name STRING, age INT64, PRIMARY KEY(ID));
+---- ok
+-CREATE_CONNECTION conn1
+-STATEMENT [conn1] BEGIN TRANSACTION READ ONLY;
+---- ok
+-CREATE_CONNECTION conn2
+-STATEMENT [conn2] COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/primary-key-tests/vPerson.csv"
+---- ok
+-STATEMENT [conn1] MATCH (a:person) RETURN count(*);
+---- 1
+0
+-STATEMENT [conn1] COMMIT;
+---- ok
+-STATEMENT [conn1] MATCH (a:person) RETURN count(*);
+---- 1
+2
 
 -CASE ForceCheckpointWhenClosingDB
 -SKIP_IN_MEM

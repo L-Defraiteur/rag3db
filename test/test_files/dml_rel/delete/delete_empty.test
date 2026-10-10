@@ -73,12 +73,18 @@ Runtime exception: Cannot detach delete from node table 'person' as it has conne
 ---- ok
 -STATEMENT copy knows from ["${RAG3DB_ROOT_DIRECTORY}/dataset/ldbc-sf01/Person_knows_Person.csv","${RAG3DB_ROOT_DIRECTORY}/dataset/ldbc-sf01/Person_knows_Person_1.csv"](parallel=false)
 ---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire, pour que la suppression
+# les libère et que le COPY suivant les reprenne.
+-STATEMENT CHECKPOINT;
+---- ok
 -STATEMENT call checkpoint_threshold=0
 ---- ok
 -STATEMENT match (a)-[k:knows]->(b) delete k
 ---- ok
 # re-copy, page allocation should start from end of Person since the pages for knows are reclaimed + truncated
 -STATEMENT copy knows from ["${RAG3DB_ROOT_DIRECTORY}/dataset/ldbc-sf01/Person_knows_Person.csv","${RAG3DB_ROOT_DIRECTORY}/dataset/ldbc-sf01/Person_knows_Person_1.csv"](parallel=false)
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT call fsm_info() return count(*) <= 1
 ---- 1

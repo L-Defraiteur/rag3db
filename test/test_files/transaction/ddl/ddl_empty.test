@@ -581,6 +581,9 @@ Binder exception: Cannot find property since for k.
 ---- ok
 -STATEMENT COPY movies FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vMovies.csv";
 ---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire avant de les compter.
+-STATEMENT CHECKPOINT;
+---- ok
 -STATEMENT call file_info() with num_pages match (s:stats) where s.id = 0 set s.numPages = num_pages
 ---- ok
 -STATEMENT drop table movies
@@ -591,6 +594,8 @@ Binder exception: Cannot find property since for k.
 -STATEMENT create node table movies (name STRING, length INT32, note STRING, description STRUCT(rating DOUBLE, stars INT8, views INT64, release TIMESTAMP, release_ns TIMESTAMP_NS, release_ms TIMESTAMP_MS, release_sec TIMESTAMP_SEC, release_tz TIMESTAMP_TZ, film DATE, u8 UINT8, u16 UINT16, u32 UINT32, u64 UINT64, hugedata INT128), content BYTEA, audience MAP(STRING, INT64), grade union(credit boolean, grade1 double, grade2 int64), PRIMARY KEY (name));
 ---- ok
 -STATEMENT COPY movies FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vMovies.csv";
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT call file_info() with num_pages match (s:stats) where s.id = 0 return num_pages <= s.numPages
 ---- 1
@@ -626,6 +631,10 @@ Roma|298
 -STATEMENT COPY movies FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vMovies.csv";
 ---- ok
 -STATEMENT commit
+---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire, pour qu'un DROP ait
+# des pages à rendre.
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT call fsm_info() return *
 ---- 0
