@@ -1,7 +1,7 @@
 # Les défauts basculés : plein texte en fichiers, transaction par paquet, paquets de 2 048
 
-*Branche `defauts-bascules`, préparée le 5 octobre 2026 et **non fusionnée** : la décision
-revient à Lucie.*
+*Préparée le 5 octobre 2026 sur la branche `defauts-bascules`. **Ce sont les défauts
+depuis le 10 octobre 2026** (master `21a1d67c5`), après le oui de Lucie.*
 
 ## Les trois défauts
 
@@ -82,14 +82,25 @@ d'un repli silencieux. Sur le dépôt entier, avec un tampon d'au moins 8 Gio, l
   `e2e_impact_fichier`, `e2e_rouvrir`, `e2e_reprise_durcie`, `e2e_preuve_d_existence`,
   `e2e_copy_refuse_rouvre`, `e2e_tx_vecteurs_apres_rollback`,
   `e2e_lecture_seule_apres_fermeture_sans_point_de_reprise`.
-- **La batterie complète n'est pas jouée** : elle le sera une fois, au moment de fusionner,
-  si la décision est oui.
+- Deux suites ajustées à la fusion (10 octobre) :
+  - `e2e_points_de_reprise_nettoyes` : une source neuve passe en transaction par paquet,
+    qui coupe les points de reprise du dataflow. Rien n'était écrit, et la garde « le test
+    ne prouverait rien » tombait. Son fils pose `RAG3WEAVER_TX_PAR_PAQUET=0`.
+  - `e2e_agent_loop` : son rouge ne venait pas de la bascule (l'assertion d'un rendu changé
+    le 4 octobre, rouge aussi sur master).
+- **La batterie complète** a été jouée une fois avant la fusion, le 10 octobre (hors carte
+  locale, régime doux) : 72 suites vertes sur 74, et les deux rouges sont ceux ci-dessus.
+  Après le rebase sur master, avec la lib commune rebâtie sur la version de stockage 40,
+  la lib et sept suites ont été rejouées, toutes vertes.
 
-## Ce qui reste à décider
+## Ce que Lucie a décidé (10 octobre)
 
-1. La bascule elle-même (Lucie).
-2. Les bases existantes : on garde la coexistence (proposée ici), ou on migre à
-   l'ouverture (rebâtir le plein texte en fichiers depuis les lignes, puis abandonner les
-   blobs) ?
+1. La bascule : oui.
+2. Les bases existantes : la coexistence. Pas de migration à l'ouverture, pas de refus.
 3. Le délai avant la première chose cherchable, environ 9 s au lieu de moins de 2 s :
-   acceptable, ou faut-il un premier paquet plus petit ?
+   accepté.
+
+La transaction par paquet suit aussi ce que déclare le dialecte (`DialectCapabilities`,
+commit `a67c083a3`). Sur un dialecte sans `transactions`, elle est coupée, et le rapport
+de synchronisation le dit dans `warnings`. Demandée explicitement
+(`RAG3WEAVER_TX_PAR_PAQUET=1`), elle donne un refus nommé.
