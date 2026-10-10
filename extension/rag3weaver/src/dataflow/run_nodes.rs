@@ -93,6 +93,19 @@ pub fn dossier_journaux() -> std::path::PathBuf {
         .clone()
 }
 
+/// Le dossier des journaux de ce run. Un run sans identifiant (un nœud
+/// exécuté hors de la boucle, en test) prend un dossier par processus : les
+/// poignées `cmd-N` repartent de 1 dans chaque processus, et deux processus
+/// ne doivent pas écrire dans le même journal.
+fn dossier_du_run(ctx: &NodeContext) -> std::path::PathBuf {
+    let run = ctx.run_id();
+    if run.is_empty() {
+        dossier_journaux().join(format!("processus-{}", std::process::id()))
+    } else {
+        dossier_journaux().join(run)
+    }
+}
+
 /// Les journaux d'un run sont gardés 7 jours (défaut confirmé le 10 octobre
 /// 2026), `RAG3WEAVER_JOURNAUX_JOURS` pour un autre nombre.
 pub const JOURS_GARDES: u64 = 7;
@@ -265,7 +278,7 @@ impl Node for RunCommandNode {
         let mut atelier = Atelier::dans(&racine)
             .avec_delai(std::time::Duration::from_secs(self.delai_s))
             .avec_max_sortie(self.max_sortie)
-            .avec_journaux(dossier_journaux().join(ctx.run_id()));
+            .avec_journaux(dossier_du_run(ctx));
         // Le bac à sable du manifeste, s'il y en a un : le noyau borne ce
         // que la commande voit — la garde refuse tôt et parle, le bac tient.
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE) {
@@ -338,7 +351,7 @@ impl RunCommandNode {
         let poignee = poignee();
         let mut atelier = Atelier::dans(racine)
             .avec_max_sortie(self.max_sortie)
-            .avec_journaux(dossier_journaux().join(ctx.run_id()))
+            .avec_journaux(dossier_du_run(ctx))
             .avec_nom_journaux(poignee.clone());
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE) {
             atelier = atelier.avec_bac_a_sable(bac.as_ref().clone());
