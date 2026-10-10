@@ -1213,6 +1213,12 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Sous `IGNORE_ERRORS`, un doublon de clé du même COPY fait supprimer une ligne innocente~~ —
+  **corrigé le 10 octobre 2026** (`de8fc8c0f`, seconde session cœur C++) : `HashIndex::appendNoLock`
+  rendait le nombre d'insertions réussies au lieu de la position du premier échec dès que l'index
+  de clé avait des entrées sur disque. Ticket
+  `docs/tickets/2026-10-10-ignore-errors-supprime-une-ligne-innocente.md` ; reste, en confort,
+  laquelle des deux lignes survit (ordre des fils).
 - ~~Un backend qui déclare un signal creux n'a pas d'embarqueur creux~~ —
   **corrigé le 3 octobre 2026** (lot 3 de « un modèle, en service ou en
   local »). `models.sparse` se déclare comme les autres ; le backend branche

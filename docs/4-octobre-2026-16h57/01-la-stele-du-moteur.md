@@ -74,6 +74,7 @@ la stèle.
 
 | Ticket | Verdict | Pourquoi |
 |---|---|---|
+| Sous `IGNORE_ERRORS`, un doublon de clé fait supprimer une ligne innocente (10 octobre) | corrigé (`de8fc8c0f`) | perte et réponse fausse en silence quand l'index de clé a des entrées sur disque ; témoin `IgnoreErrorsDuplicateKeyTest` ; non atteint par rag3weaver |
 | Une corruption de mémoire tue `e2e_code` | corrigé dans le moteur (`57c8389b4`) | la cause : une double ouverture en écriture dans un même processus, maintenant refusée par son nom ; reste à rag3weaver d'attendre la fin de la fermeture |
 | Le point de reprise plante, à jamais, après `ALTER TABLE … DROP` | **bloque** | mémoire (SIGSEGV) et durabilité : la base ne peut plus écrire de point de reprise ; rag3weaver ne supprime pas de colonne, mais le défaut corrompt |
 | Dans une transaction, après des insertions puis un `COPY` dans la même table, la clé d'une ligne mène à une autre ligne | **bloque** — refusé par son nom (`0f4a54b2c`), le vrai correctif après le chargement journalisé des relations | résultat faux et écriture sur la mauvaise ligne, validés en silence (défaut d'origine, exécuté le 4 octobre) ; les tables de relations ne sont pas touchées |
