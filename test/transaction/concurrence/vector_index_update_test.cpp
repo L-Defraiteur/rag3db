@@ -976,6 +976,125 @@ TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
     EXPECT_TRUE(failures.empty()) << "[check: copies-all-found]" << failures;
 }
 
+// La recette de l'arbre principal (10 octobre) : une note d'embedder.rs, vue une fois le 25 août
+// 2026, disait que l'index HNSW plantait (shrinkForNode → computeDistance) sur quelques centaines
+// de vecteurs identiques — 1 402 vecteurs NULS du MockEmbedder. Rejouée sur le moteur d'aujourd'hui,
+// dans un fils (un plantage n'emporte pas la passe) : le même vecteur pour toutes les lignes, nul
+// (une norme nulle : le cosinus divise par zéro) ou non nul (des doublons seuls) ; l'index créé
+// avant ou après les lignes ; les lignes une à une ou par COPY. L'attendu : ni plantage ni erreur,
+// la recherche rend, et chaque ligne est joignable par la recherche exhaustive.
+struct SameVectorCase {
+    bool zero;
+    bool indexFirst;
+    bool copy;
+};
+
+class SameVectorForEveryRow : public VectorIndexUpdate,
+                              public ::testing::WithParamInterface<SameVectorCase> {};
+
+TEST_P(SameVectorForEveryRow, NeitherCrashesNorLosesRows) {
+    constexpr int NUM_ROWS = 1402;
+    constexpr int DIMENSION = 384;
+    const auto [zero, indexFirst, copy] = GetParam();
+    std::string vector = "[";
+    for (auto d = 0; d < DIMENSION; d++) {
+        vector += (d ? "," : "") + std::string(zero ? "0" : (d % 3 == 0 ? "0.5" : "-0.25"));
+    }
+    vector += "]";
+    const auto csv = databasePath + ".same.csv";
+    if (copy) {
+        std::ofstream out(csv);
+        for (auto i = 0; i < NUM_ROWS; i++) {
+            out << i << ",\"" << vector << "\"\n";
+        }
+    }
+    const auto report = databasePath + ".same.report";
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        alarm(300);
+        int code = 0;
+        try {
+            rag3db::main::Database childDatabase(databasePath, *systemConfig);
+            rag3db::main::Connection connection(&childDatabase);
+            concurrency::loadVectorExtension(connection);
+            const auto run = [&](const std::string& query) {
+                auto result = connection.query(query);
+                if (!result->isSuccess()) {
+                    std::ofstream(report) << "query failed: " << query.substr(0, 120) << ": "
+                                          << result->getErrorMessage();
+                    _exit(4);
+                }
+                return result;
+            };
+            run(stringFormat(
+                "CREATE NODE TABLE T(id INT64, v FLOAT[{}], PRIMARY KEY(id));", DIMENSION));
+            const auto createIndex = [&] {
+                run("CALL CREATE_VECTOR_INDEX('T', 'idx', 'v', metric := 'cosine');");
+            };
+            if (indexFirst) {
+                createIndex();
+            }
+            if (copy) {
+                run("COPY T FROM '" + csv + "' (header=false);");
+            } else {
+                for (auto i = 0; i < NUM_ROWS; i++) {
+                    run(stringFormat("CREATE (:T {id: {}, v: {}});", i, vector));
+                }
+            }
+            if (!indexFirst) {
+                createIndex();
+            }
+            auto top = run("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vector +
+                           ", 10) RETURN node.id;");
+            const auto numTop = top->getNumTuples();
+            auto all = run(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('T', 'idx', {}, {}, efs := {}) RETURN node.id;", vector,
+                NUM_ROWS, NUM_ROWS));
+            std::set<int64_t> reached;
+            while (all->hasNext()) {
+                reached.insert(all->getNext()->getValue(0)->getValue<int64_t>());
+            }
+            std::ofstream(report) << "top " << numTop << ", reached " << reached.size() << "/"
+                                  << NUM_ROWS;
+            code = numTop == 10 && reached.size() == NUM_ROWS ? 0 : 5;
+        } catch (const std::exception& e) {
+            std::ofstream(report) << "exception: " << e.what();
+            code = 3;
+        }
+        _exit(code);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    std::string detail;
+    if (std::filesystem::exists(report)) {
+        std::ifstream in(report);
+        std::getline(in, detail);
+    }
+    std::cerr << "  " << (zero ? "zero" : "same") << (indexFirst ? ", index first" : ", rows first")
+              << (copy ? ", COPY" : ", line by line") << ": " << detail << "\n";
+    EXPECT_FALSE(WIFSIGNALED(status))
+        << "[check: same-vector-no-crash] killed by signal " << WTERMSIG(status) << "; " << detail;
+    if (WIFEXITED(status)) {
+        EXPECT_EQ(WEXITSTATUS(status), 0) << "[check: same-vector-all-reachable] " << detail;
+    }
+    std::filesystem::remove(csv);
+    std::filesystem::remove(report);
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, SameVectorForEveryRow,
+    ::testing::Values(SameVectorCase{true, true, false}, SameVectorCase{true, true, true},
+        SameVectorCase{true, false, false}, SameVectorCase{true, false, true},
+        SameVectorCase{false, true, false}, SameVectorCase{false, true, true},
+        SameVectorCase{false, false, false}, SameVectorCase{false, false, true}),
+    [](const ::testing::TestParamInfo<SameVectorCase>& info) {
+        return std::string(info.param.zero ? "Zero" : "Same") +
+               (info.param.indexFirst ? "IndexFirst" : "RowsFirst") +
+               (info.param.copy ? "Copy" : "LineByLine");
+    });
+
 class RealVectorsReachability : public VectorIndexUpdate,
                                 public ::testing::WithParamInterface<std::string> {};
 

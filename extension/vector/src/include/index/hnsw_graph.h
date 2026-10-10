@@ -18,10 +18,13 @@ struct EmbeddingColumnInfo {
     explicit EmbeddingColumnInfo(common::ArrayTypeInfo typeInfo) : typeInfo{std::move(typeInfo)} {}
 
     common::length_t getDimension() const { return typeInfo.getNumElements(); }
-    // La taille d'un vecteur en octets : deux vecteurs identiques le sont octet pour octet.
+    // La taille d'un vecteur en octets : deux vecteurs identiques le sont octet pour octet. Pas par
+    // PhysicalTypeUtils::getFixedTypeSize, que la bibliothèque du moteur n'exporte pas à
+    // l'extension ; l'index n'admet que FLOAT et DOUBLE (HNSWIndexUtils::validateColumnType).
     uint64_t getNumBytes() const {
-        return getDimension() *
-               common::PhysicalTypeUtils::getFixedTypeSize(typeInfo.getChildType().getPhysicalType());
+        const auto isDouble =
+            typeInfo.getChildType().getPhysicalType() == common::PhysicalTypeID::DOUBLE;
+        return getDimension() * (isDouble ? sizeof(double) : sizeof(float));
     }
 
     common::ArrayTypeInfo typeInfo;
