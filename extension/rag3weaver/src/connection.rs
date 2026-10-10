@@ -4,8 +4,6 @@
 //! allowing the pipeline to execute Cypher queries without depending on
 //! the concrete database implementation.
 
-use std::collections::BTreeMap;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Errors that can occur during database operations.
@@ -53,140 +51,9 @@ pub const BUFFER_POOL_FULL: &str = "The buffer pool is full";
 /// la mémoire en savait, comme PostgreSQL après un PANIC.
 pub const EXIT_MUST_REOPEN: i32 = 75;
 
-/// A Cypher-compatible value. Mirrors the types that rag3db (Kuzu) supports.
-///
-/// Variant order matters for `#[serde(untagged)]`: `Int` before `Float`
-/// ensures that `42` deserializes as `Int(42)`, not `Float(42.0)`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum CypherValue {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    String(String),
-    List(Vec<CypherValue>),
-    Map(BTreeMap<String, CypherValue>),
-    #[serde(skip)]
-    Blob(Vec<u8>),
-    /// Parameter-only type annotation; stored records/checkpoints retain plain values.
-    #[serde(skip)]
-    Typed { value: Box<CypherValue>, field_type: crate::config::FieldType },
-}
-
-impl CypherValue {
-    /// Validate explicit parameter types before crossing the native FFI boundary.
-    pub fn validate_parameter_types(&self) -> Result<(), String> {
-        match self {
-            Self::Typed { value, field_type } => {
-                crate::config::validate_payload_type(field_type, 0)?;
-                let json = serde_json::to_value(value).map_err(|e| e.to_string())?;
-                crate::json_schema::normalize(field_type, &json).map(|_| ())
-            }
-            Self::List(values) => values.iter().try_for_each(Self::validate_parameter_types),
-            Self::Map(values) => values.values().try_for_each(Self::validate_parameter_types),
-            _ => Ok(()),
-        }
-    }
-
-    pub fn is_null(&self) -> bool {
-        matches!(self, Self::Null)
-    }
-
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::String(s) => Some(s.as_str()),
-            _ => None,
-        }
-    }
-
-    pub fn as_i64(&self) -> Option<i64> {
-        match self {
-            Self::Int(n) => Some(*n),
-            _ => None,
-        }
-    }
-
-    pub fn as_f64(&self) -> Option<f64> {
-        match self {
-            Self::Float(f) => Some(*f),
-            Self::Int(n) => Some(*n as f64),
-            _ => None,
-        }
-    }
-
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Self::Bool(b) => Some(*b),
-            _ => None,
-        }
-    }
-
-    pub fn as_blob(&self) -> Option<&[u8]> {
-        match self {
-            Self::Blob(b) => Some(b.as_slice()),
-            _ => None,
-        }
-    }
-}
-
-impl From<String> for CypherValue {
-    fn from(s: String) -> Self {
-        Self::String(s)
-    }
-}
-
-impl From<&str> for CypherValue {
-    fn from(s: &str) -> Self {
-        Self::String(s.to_owned())
-    }
-}
-
-impl From<i64> for CypherValue {
-    fn from(n: i64) -> Self {
-        Self::Int(n)
-    }
-}
-
-impl From<f64> for CypherValue {
-    fn from(f: f64) -> Self {
-        Self::Float(f)
-    }
-}
-
-impl From<bool> for CypherValue {
-    fn from(b: bool) -> Self {
-        Self::Bool(b)
-    }
-}
-
-impl From<Vec<u8>> for CypherValue {
-    fn from(v: Vec<u8>) -> Self {
-        Self::Blob(v)
-    }
-}
-
-impl<T: Into<CypherValue>> From<Vec<T>> for CypherValue {
-    fn from(v: Vec<T>) -> Self {
-        Self::List(v.into_iter().map(Into::into).collect())
-    }
-}
-
-/// A named query parameter.
-#[derive(Debug, Clone)]
-pub struct QueryParam {
-    pub name: String,
-    pub value: CypherValue,
-}
-
-impl QueryParam {
-    pub fn new(name: impl Into<String>, value: impl Into<CypherValue>) -> Self {
-        Self {
-            name: name.into(),
-            value: value.into(),
-        }
-    }
-}
+/// La valeur et le paramètre vivent dans `rag3weaver-ir`, sous des noms sans
+/// base ; ce chemin et ce nom restent le temps que les sites se renomment.
+pub use rag3weaver_ir::{QueryParam, Value as CypherValue};
 
 /// The result of a database query.
 #[derive(Debug, Clone, Default)]
@@ -391,6 +258,7 @@ impl DbConnection for MockConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn cypher_value_null() {

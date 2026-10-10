@@ -9,43 +9,8 @@ use serde::{Deserialize, Serialize};
 
 // ─── Field Types ─────────────────────────────────────────────────────────────
 
-/// Type of a field in an entity definition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum FieldType {
-    #[serde(alias = "String")]
-    String,
-    #[serde(alias = "Text")]
-    Text,
-    #[serde(alias = "Int64")]
-    Int64,
-    #[serde(alias = "integer", alias = "Integer")]
-    Integer,
-    #[serde(alias = "Double")]
-    Double,
-    #[serde(alias = "number", alias = "Number")]
-    Number,
-    #[serde(alias = "Boolean")]
-    Boolean,
-    #[serde(alias = "Timestamp")]
-    Timestamp,
-    #[serde(alias = "Json", alias = "JSON")]
-    Json,
-    #[serde(alias = "Tags")]
-    Tags,
-    #[serde(alias = "Choice")]
-    Choice,
-    /// Native typed array. Legacy `Tags` remains text for compatibility.
-    List(Box<FieldType>),
-    /// Fixed, named object fields; deterministic ordering is part of its type.
-    Struct(std::collections::BTreeMap<String, FieldType>),
-}
-
-impl Default for FieldType {
-    fn default() -> Self {
-        Self::String
-    }
-}
+/// Le type déclaré d'un champ vit dans `rag3weaver-ir`.
+pub use rag3weaver_ir::{validate_payload_type, FieldType};
 
 // ─── Field Definition ────────────────────────────────────────────────────────
 
@@ -1874,22 +1839,6 @@ mod tests {
 }
 
 /// Validate recursively before generating DDL (including direct Rust configs).
-pub fn validate_payload_type(ty: &FieldType, depth: usize) -> Result<(), String> {
-    if depth > 32 { return Err("payload type nesting exceeds 32".into()); }
-    match ty {
-        FieldType::List(item) => validate_payload_type(item, depth + 1),
-        FieldType::Struct(fields) => {
-            if fields.is_empty() { return Err("empty struct: use explicit Json for open objects".into()); }
-            for (name, ty) in fields {
-                crate::schema::validate_identifier(name, "struct field").map_err(|e| e.to_string())?;
-                validate_payload_type(ty, depth + 1)?;
-            }
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
-
 #[cfg(test)]
 mod tests_field_weights_compat {
     use super::EntityConfig;

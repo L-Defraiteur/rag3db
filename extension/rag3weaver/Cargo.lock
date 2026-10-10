@@ -6509,6 +6509,7 @@ dependencies = [
  "minijinja",
  "postgres-types",
  "rag3db",
+ "rag3weaver-ir",
  "rayon",
  "regex",
  "reqwest",
@@ -6527,6 +6528,14 @@ dependencies = [
  "tokio-postgres",
  "ureq 3.4.0",
  "wgpu",
+]
+
+[[package]]
+name = "rag3weaver-ir"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
