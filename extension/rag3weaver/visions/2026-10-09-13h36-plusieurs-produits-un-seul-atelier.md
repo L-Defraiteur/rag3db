@@ -98,3 +98,17 @@ boilerplate. Puis il te donne le lien de l'**agent dédié** de ce produit, qui
 a ses propres outils et sa propre page. Le magicien n'est pas une pièce à
 part : c'est un backend comme les autres, dont les outils sont « créer un
 backend depuis un gabarit » — il vient avec la marche 2.
+
+Deux ajouts de Lucie, le même soir :
+
+- **Le premier cas, très simple** : « donne-moi des outils MCP sur ce projet
+  de code pour chercher dedans via rag3weaver » — et, dans la foulée, « l'agent
+  demande aussi si tu veux une mémoire long terme accessible à Claude ». Les
+  deux sont le même mécanisme : un backend déclaré (code, mémoire) exposé en
+  serveur MCP, ses outils tirés de ses schémas. C'est le chantier H du plan de
+  reprise ; le magicien le fera d'une phrase.
+- **Les noms sont des thèmes.** « Le magicien du chaos », « le classeur de
+  Dawson du chaos » : c'est fun, et on pourra le vendre avec un thème plus
+  sérieux sans rien changer dessous — les noms sont des déclarations comme le
+  reste, pas du code.
+
