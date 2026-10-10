@@ -2,7 +2,7 @@
 
 Session « cœur C++ » : le moteur (fork de Kuzu), son journal, sa reprise après arrêt,
 l'index vectoriel, les lecteurs et écrivains concurrents, les verrous à venir.
-Mis à jour sur place. **Dernière mise à jour : 5 octobre 2026, 10 h — mise en pause à la demande de Lucie.**
+Mis à jour sur place. **Dernière mise à jour : 10 octobre 2026 — pause pour le redémarrage du poste.**
 
 Le registre commun est `docs/journal-des-chantiers.md` (§1 pour l'ordre et les
 livraisons, §4 pour les décisions, §6 pour les défauts). Ce fichier dit ce que le journal
@@ -44,12 +44,99 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Forme compacte des tableaux au journal | `1c232f318` | un tableau de taille fixe de numériques s'écrit en octets bruts : un `FLOAT[768]` pèse 3,1 Ko au journal au lieu de 9,3, par `COPY` comme par `SET` ; trois numéros d'enregistrement neufs (40, 42, 45), l'ancien décodage gardé ; un journal neuf n'est pas lisible par un moteur d'avant |
 | Sonde du poids du journal | `c1c2f9dfc` | `RAG3DB_PROFILE_JOURNAL=1` : à chaque validation, les octets du journal de la transaction par type d'enregistrement et par table, sur la sortie d'erreur |
 | Repli d'un `COPY` journalisé (étape 4, lot 2) | `71cffbc4b` | au-delà de `copy_journal_threshold` (défaut : un huitième du tampon, plafonné à 256 Mio), la transaction vide son journal et redevient durable par son point de reprise ; compteur `copy_journal_fallbacks`. Inerte tant que `force_checkpoint_on_copy` vaut `true` |
+| Le fichier de la base a une étendue connue | `0aed3c4b5` | les pages d'un `COPY` tué ou rejoué ne sont plus perdues : l'étendue du fichier dans l'en-tête au point de reprise (version de stockage 40), l'excédent rendu à l'espace libre à l'ouverture en écriture ; 559 pages perdues par COPY de 200 000 lignes tué, avant |
 | Transaction forcée sans journal en mémoire | `fb98852e1` | une transaction à point de reprise forcé (tout `COPY` d'aujourd'hui) ne sérialise plus son journal en mémoire pour le jeter : 411 Ko puis 823 Ko gardés avant, 0 après |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
 écrivain**, pas seulement sous le mode multi-écrivains (qui reste éteint hors du banc).
 
 ## Ce qui est en cours
+
+### Ce qu'une seconde session cœur C++ doit savoir (10 octobre 2026)
+
+Lucie ouvre une seconde session cœur C++ pour les correctifs et les tickets ; celle-ci garde
+la stèle (fuite de pages → basculement du COPY journalisé → verrous → écritures parallèles) et
+tient `src/transaction/` et `src/storage/` (journal, tampon, verrous) : demander avant d'y
+toucher ; le reste est à l'autre.
+
+1. **Un arbre à soi**, worktree de `rag3db` (jamais l'arbre principal
+   `/home/lucied/git_workspaces/rag3db`, ni `rag3db-moteur` qui est celui-ci, ni `rag3db-banc`) ;
+   `git config user.email luciedefraiteur@gmail.com` ; sous-modules à initialiser
+   (`third_party/fuzzy-fst` pour l'extension fts). Un bâti Release avec les tests :
+   `cmake -B build/moteur -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_EXTENSIONS="vector;geo;fts"`,
+   puis **toujours** `~/.cache/rag3weaver-build/poste lourd cmake --build build/moteur -j 8`
+   (jamais `ninja` nu : alias `-j32`, le poste fige). Un rebâti complet : 20 à 30 min ;
+   `transaction_test` seul : 4 min. Un seul rebâti exclusif à la fois à trois (banc, celle-ci,
+   elle) : le dire par message avant de lancer.
+2. **La liste complète** : `~/.cache/rag3db-moteur-notes/copy-journalise/liste-cpp.sh`
+   (douze suites gtest, le banc comparé à `known_red.txt`, vector disque et mémoire, Cypher
+   1866) sous `poste lourd`, ~40 min ; ses codes dans `copy-journalise/liste/codes`. Une fois
+   avant la fusion, pas à chaque rebase ; pendant le travail, les témoins du changement.
+   Jamais de rebâti dans un arbre où une liste tourne. `poste mesure` seulement pour ce qui
+   mesure.
+3. **Les pièges** : une assertion dans une fonction auxiliaire (`ok()`) n'arrête pas le test —
+   lire la première erreur d'un rouge ; un COPY n'écrit ses pages avant la validation qu'à
+   131 072 lignes ; le tampon des tests est petit (un index vectoriel de 140 000 lignes le
+   déborde : `systemConfig->bufferPoolSize`) ; un témoin de mort tue dans la portée de la
+   `Database` et exige un `.wal` non vide ; pas d'`EXPECT_EQ` entre deux grands textes ; un
+   programme nu lié à `build/moteur/src` (annexes, `essai-*.cpp`) mesure plus vite qu'un
+   témoin.
+4. **Les règles** : commit par chemins explicites, message en français sans attribution, push
+   en avance rapide seulement, pas de `git stash` (patch), un ticket par défaut non corrigé
+   dans `docs/tickets/`, le rapport de session tenu dans ce dossier (le sien à part), rien vers
+   les amonts.
+5. **Ce qui lui est confié** (par l'orchestration) : `RelCopyBMExceptionRecoverySameConnection`
+   (lire d'abord pourquoi le repli ne s'est pas déclenché sous un tampon minuscule), le
+   plantage HNSW sur vecteurs identiques (recette de l'arbre principal, avec le banc), la voie
+   (a) des statistiques, les tickets confort. Les tickets ouverts sont listés plus bas.
+
+**Où j'en suis (10 octobre 2026, après-midi).** La fuite de pages est corrigée et sur
+`master` : `0aed3c4b5` (liste complète verte, relecture du banc close, ticket fermé). Chantier B,
+la suite dans l'ordre : la liste « défaut basculé » avec le contrôle de fuite de la suite
+Cypher (exigence c), les huit tests qui supposaient le point de reprise d'un `COPY`, le reste du
+banc sous ce défaut, la série des embarquements (rag3db-6f, sur cette lib), puis le basculement
+de `force_checkpoint_on_copy` ; ensuite les verrous. La seconde session cœur C++ tient les
+correctifs et tickets ; je tiens `src/transaction/` et `src/storage/`.
+
+**Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
+veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.
+
+### Où j'en suis exactement
+
+- **Branche `etendue-du-fichier`**, poussée sur `origin` (hash dans le message « prêt » à
+  l'orchestration ; `git log origin/etendue-du-fichier`), basée sur `master` à `27eeb6a7f`.
+  **Pas à fusionner dans `master`** : ni liste complète, ni relecture du banc, ni témoins joués
+  sur le correctif.
+- Elle porte : le correctif de la page 06 (l'étendue du fichier dans l'en-tête, version de
+  stockage 40, l'excédent rendu à l'ouverture en écriture — `DatabaseHeader::numDataPages`,
+  `Checkpointer::returnOwnerlessPages`) ; les neuf témoins `OwnerlessPagesTest` ; sept contrôles
+  de fuite ajoutés aux témoins du point de reprise interrompu (`checkpoint_test.cpp`) ; la base
+  de la version 39 (`test/transaction/database_before_extent/`, compressée, lue par `gzip -dc`) ;
+  et la copie de `NodeTableDeleteState` interdite (chantier G).
+- **Vérifié** : sans harnais, sur la bibliothèque corrigée, un COPY de 200 000 lignes tué avant
+  sa validation laisse 4 pages occupées au lieu de 559 ; replié, 4 au lieu de 560 ; journalisé
+  validé puis rejoué, 4 au lieu de 559. L'ancien moteur refuse une base en version 40 :
+  « Trying to read a database file with a different version. Database file version: 40 ».
+  Les quatre premiers témoins ont été vus **rouges** sur le moteur d'avant : 640, 638, 637 et
+  1 269 pages occupées pour 9.
+- **Pas vérifié** : les neuf témoins et les sept contrôles n'ont pas été joués sur le correctif
+  (le bâti de `transaction_test` a échoué sur une liste d'initialisation du témoin de parité,
+  corrigée depuis ; le rebâti a été arrêté pour le redémarrage). Le témoin du plein texte
+  (`TheReplayReadsNothingBeyondTheExtentWithAFullTextIndex`) se saute tant que l'extension fts
+  n'est pas bâtie : le sous-module `third_party/fuzzy-fst` est initialisé dans l'arbre, mais la
+  reconfiguration `cmake -DBUILD_EXTENSIONS="vector;geo;fts"` a échoué avant lui et a laissé
+  `build/moteur` en configuration incomplète — **à refaire d'abord** (ou revenir à
+  `vector;geo`), puis rebâtir.
+- **À la reprise, dans l'ordre** : reconfigurer et rebâtir `build/moteur` sous `poste lourd` ;
+  jouer `OwnerlessPagesTest.*`, `FlakyCheckpointerTest.*`, et les suites de la reprise ; le
+  témoin plein texte ; la liste complète ; le contrôle de fuite de la suite Cypher sur toute la
+  liste **défaut basculé** (exigence c) ; relecture du banc ; rebase et avance rapide.
+- Deux exigences de l'orchestration en plus du correctif : (a) le rejeu ne lit rien au-delà de
+  l'étendue — témoigné par la réutilisation de l'excédent et la parité avec une base témoin,
+  pour id/texte/nombre/FLOAT[4], avec index vectoriel, avec index plein texte ; (b) le point de
+  reprise interrompu après sa marque — les sept contrôles.
+- Le ticket est reclassé (défaut du moteur d'aujourd'hui, hors stèle, corrigé maintenant) ;
+  page 06 et relevé complétés (seuil du groupe plein : 131 072 lignes).
 
 **Mise en pause (5 octobre 2026, 10 h).** Lucie reprend le week-end ou un soir. Cette section
 suffit pour reprendre ; les sections plus bas sont plus anciennes.

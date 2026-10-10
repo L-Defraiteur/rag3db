@@ -1,3 +1,7 @@
+#include <atomic>
+
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/string_format.h"
 #include "graph_test/base_graph_test.h"
@@ -5,6 +9,7 @@
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
+#include "storage/table/rel_table.h"
 #include "test_helper/flaky_buffer_manager.h"
 #include "test_runner/fsm_leak_checker.h"
 #include "test_runner/test_parser.h"
@@ -85,6 +90,8 @@ public:
     }
     std::string getInputDir() override { KU_UNREACHABLE; }
     void BMExceptionRecoveryTest(BMExceptionRecoveryTestConfig cfg);
+    void relCopyBMExceptionRecovery(bool journaled);
+    void relCopyRefusedOnAPage(bool journaled, uint64_t pageToRefuse);
     std::atomic<uint64_t> failureFrequency;
     FlakyBufferManager* currentBM;
 };
@@ -242,37 +249,93 @@ TEST_F(CopyTest, NodeCopyBMExceptionRecoverySameConnectionStringKey) {
     BMExceptionRecoveryTest(cfg);
 }
 
-TEST_F(CopyTest, RelCopyBMExceptionRecoverySameConnection) {
-    if (inMemMode ||
-        common::StorageConfig::NODE_GROUP_SIZE_LOG2 != TestParser::STANDARD_NODE_GROUP_SIZE_LOG_2) {
-        GTEST_SKIP();
-    }
+static void createTwitterAccounts(main::Connection* conn) {
+    conn->query("CREATE NODE TABLE account(ID INT64, PRIMARY KEY(ID))");
+    conn->query("CREATE REL TABLE follows(FROM account TO account);");
+    ASSERT_TRUE(conn->query(
+        common::stringFormat("COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
+            RAG3DB_ROOT_DIRECTORY)));
+}
+
+static std::string copyTwitterFollows() {
+    return common::stringFormat(
+        "COPY follows FROM '{}/dataset/snap/twitter/csv/twitter-edges.csv' (DELIM=' ')",
+        RAG3DB_ROOT_DIRECTORY);
+}
+
+static constexpr int64_t NUM_TWITTER_FOLLOWS = 2420766;
+static constexpr auto COUNT_TWITTER_FOLLOWS =
+    "MATCH (a:account)-[:follows]->(b:account) RETURN COUNT(*)";
+static constexpr auto BUFFER_POOL_FULL = "Buffer manager exception: Unable to allocate memory! "
+                                         "The buffer pool is full and no memory could be freed!";
+
+static void expectFollowsCount(main::Connection* conn, int64_t expected) {
+    auto result = conn->query(COUNT_TWITTER_FOLLOWS);
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    ASSERT_EQ(expected, result->getNext()->getValue(0)->getValue<int64_t>());
+}
+
+// Le partitionnement réserve beaucoup ; l'insertion en masse vient ensuite, à la fin du COPY.
+// Pour qu'un refus tombe dans l'insertion en masse, la fréquence se règle sur le nombre de
+// réservations du COPY, compté une fois sans refus dans une transaction annulée : chacun des
+// premiers essais refuse une réservation un peu avant la fin, le suivant passe. Une pente fixe
+// (512 × (i + 15), au plus 17 408) ne le permet pas : journalisé, le COPY réserve en plus une
+// page de 4 Kio par page de son journal local (~44 000 ici, pour ~9 700 au défaut), et le test
+// refusait vingt essais de suite dans le partitionnement.
+void CopyTest::relCopyBMExceptionRecovery(bool journaled) {
+    static constexpr int NUM_REFUSED_TRIES = 4;
+    static constexpr uint64_t RESERVATIONS_BEFORE_THE_END_STEP = 256;
+    storage::RelTable* follows = nullptr;
+    uint64_t numReservationsOfACopy = 0;
+    common::offset_t relOffsetAtTryStart = 0;
+    std::atomic<uint64_t> refusalsAfterPartitioning = 0;
     BMExceptionRecoveryTestConfig cfg{.canFailDuringExecute = true,
         .canFailDuringCheckpoint = false,
         .canFailDuringCommit = false,
-        .initFunc =
-            [](main::Connection* conn) {
-                conn->query("CREATE NODE TABLE account(ID INT64, PRIMARY KEY(ID))");
-                conn->query("CREATE REL TABLE follows(FROM account TO account);");
-                ASSERT_TRUE(conn->query(common::stringFormat(
-                    "COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
-                    RAG3DB_ROOT_DIRECTORY)));
-            },
+        .initFunc = createTwitterAccounts,
         .executeFunc =
-            [this](main::Connection* conn, int i) {
-                // there are many allocations in the partitioning phase
-                // we scale the failure frequency linearly so that we trigger at least one
-                // allocation failure in the batch insert phase
-                static constexpr auto failureFrequencyMultiplier =
-                    512 * ((common::StorageConfig::MAX_SEGMENT_SIZE_LOG2 ==
-                               TestParser::STANDARD_MAX_SEGMENT_SIZE_LOG_2) ?
-                                  1 :
-                                  (1 << 10));
-                failureFrequency = failureFrequencyMultiplier * (i + 15);
-
-                return conn->query(common::stringFormat(
-                    "COPY follows FROM '{}/dataset/snap/twitter/csv/twitter-edges.csv' (DELIM=' ')",
-                    RAG3DB_ROOT_DIRECTORY));
+            [&](main::Connection* conn, int i) -> std::unique_ptr<main::QueryResult> {
+                failureFrequency = UINT64_MAX;
+                if (journaled) {
+                    conn->query("CALL force_checkpoint_on_copy=false");
+                }
+                if (i == 0) {
+                    conn->query("BEGIN TRANSACTION");
+                    const auto context = conn->getClientContext();
+                    const auto entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
+                        transaction::Transaction::Get(*context), "follows");
+                    const auto oid =
+                        entry->ptrCast<catalog::RelGroupCatalogEntry>()->getSingleRelEntryInfo().oid;
+                    follows = &storage::StorageManager::Get(*context)
+                                   ->getTable(oid)
+                                   ->cast<storage::RelTable>();
+                    // Le partitionneur réserve les identités de toutes les relations avant
+                    // l'insertion en masse : un refus qui les trouve toutes réservées tombe
+                    // après le partitionnement. reserveRelOffsets(0) lit le compte sous son
+                    // verrou sans rien réserver.
+                    currentBM->onRefusal = [&]() {
+                        if (follows->reserveRelOffsets(0) - relOffsetAtTryStart ==
+                            static_cast<common::offset_t>(NUM_TWITTER_FOLLOWS)) {
+                            refusalsAfterPartitioning++;
+                        }
+                    };
+                    currentBM->numReservations = 0;
+                    auto calibration = conn->query(copyTwitterFollows());
+                    numReservationsOfACopy = currentBM->numReservations;
+                    conn->query("ROLLBACK");
+                    if (!calibration->isSuccess()) {
+                        return calibration;
+                    }
+                }
+                failureFrequency =
+                    i < NUM_REFUSED_TRIES ?
+                        numReservationsOfACopy -
+                            RESERVATIONS_BEFORE_THE_END_STEP * (NUM_REFUSED_TRIES - i) :
+                        2 * numReservationsOfACopy;
+                currentBM->reserveCount = 0;
+                relOffsetAtTryStart = follows->reserveRelOffsets(0);
+                return conn->query(copyTwitterFollows());
             },
         .earlyExitOnFailureFunc =
             [this](main::QueryResult*) {
@@ -283,12 +346,77 @@ TEST_F(CopyTest, RelCopyBMExceptionRecoverySameConnection) {
                 currentBM->removeEvictedCandidates();
                 return false;
             },
-        .checkFunc =
-            [](main::Connection* conn) {
-                return conn->query("MATCH (a:account)-[:follows]->(b:account) RETURN COUNT(*)");
-            },
-        .checkResult = 2420766};
+        .checkFunc = [](main::Connection* conn) { return conn->query(COUNT_TWITTER_FOLLOWS); },
+        .checkResult = NUM_TWITTER_FOLLOWS};
     BMExceptionRecoveryTest(cfg);
+    EXPECT_GT(refusalsAfterPartitioning.load(), 0u)
+        << "aucun refus n'est tombé dans l'insertion en masse (" << numReservationsOfACopy
+        << " réservations pour un COPY)";
+}
+
+TEST_F(CopyTest, RelCopyBMExceptionRecoverySameConnection) {
+    if (inMemMode ||
+        common::StorageConfig::NODE_GROUP_SIZE_LOG2 != TestParser::STANDARD_NODE_GROUP_SIZE_LOG_2) {
+        GTEST_SKIP();
+    }
+    relCopyBMExceptionRecovery(false /* journaled */);
+}
+
+TEST_F(CopyTest, JournaledRelCopyBMExceptionRecoverySameConnection) {
+    if (inMemMode ||
+        common::StorageConfig::NODE_GROUP_SIZE_LOG2 != TestParser::STANDARD_NODE_GROUP_SIZE_LOG_2) {
+        GTEST_SKIP();
+    }
+    relCopyBMExceptionRecovery(true /* journaled */);
+}
+
+// Le contrat : un COPY de relations refusé pour mémoire sur une réservation d'une page de 4 Kio
+// — journalisé, une page de son journal local — est annulé en entier. Rien n'en reste, ni dans
+// la connexion ni après une réouverture ; le COPY suivant passe, et aucune page n'est perdue.
+void CopyTest::relCopyRefusedOnAPage(bool journaled, uint64_t pageToRefuse) {
+    createDBAndConn();
+    createTwitterAccounts(conn.get());
+    failureFrequency = UINT64_MAX;
+    resetDBFlaky(true /* canFailDuringExecute */, false /* canFailDuringCheckpoint */,
+        false /* canFailDuringCommit */);
+    if (journaled) {
+        ASSERT_TRUE(conn->query("CALL force_checkpoint_on_copy=false")->isSuccess());
+    }
+    currentBM->onlyFailPageReservations = true;
+    currentBM->reserveCount = 0;
+    failureFrequency = pageToRefuse;
+    auto refused = conn->query(copyTwitterFollows());
+    failureFrequency = UINT64_MAX;
+    currentBM->onlyFailPageReservations = false;
+    ASSERT_FALSE(refused->isSuccess());
+    ASSERT_EQ(refused->getErrorMessage(), BUFFER_POOL_FULL);
+    expectFollowsCount(conn.get(), 0);
+
+    // Le tampon par défaut, celui de la doublure : le tampon des tests (≈ 73 Mio) ne tient pas
+    // ce COPY, journalisé ou non.
+    resetDB(main::SystemConfig{}.bufferPoolSize);
+    expectFollowsCount(conn.get(), 0);
+    if (journaled) {
+        ASSERT_TRUE(conn->query("CALL force_checkpoint_on_copy=false")->isSuccess());
+    }
+    auto copied = conn->query(copyTwitterFollows());
+    ASSERT_TRUE(copied->isSuccess()) << copied->getErrorMessage();
+    expectFollowsCount(conn.get(), NUM_TWITTER_FOLLOWS);
+    FSMLeakChecker::checkForLeakedPages(conn.get());
+}
+
+TEST_F(CopyTest, RelCopyRefusedOnAPageRollsBack) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    relCopyRefusedOnAPage(false /* journaled */, 500);
+}
+
+TEST_F(CopyTest, JournaledRelCopyRefusedOnAJournalPageRollsBack) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    relCopyRefusedOnAPage(true /* journaled */, 5000);
 }
 
 TEST_F(CopyTest, NodeInsertBMExceptionDuringCommitRecovery) {

@@ -41,6 +41,8 @@ pub struct Rag3dbConnection {
     /// répond plus ensuite que « a statement in it failed » : l'erreur rendue
     /// porte alors ce refus d'origine, qu'un repli de l'appelant a pu avaler.
     first_refusal: std::sync::Mutex<Option<String>>,
+    /// Le chemin de la base sur disque ; `None` en mémoire.
+    path: Option<std::path::PathBuf>,
 }
 
 /// **`RAG3WEAVER_TRACE_CYPHER=1`** : chaque instruction sur la sortie
@@ -181,6 +183,7 @@ impl Rag3dbConnection {
             match Self::with_config(path, Self::default_config().read_only(true)) {
                 Ok(mut c) => {
                     c.open_retries = croisees;
+                    c.path = Some(path.to_path_buf());
                     return Ok(c);
                 }
                 // **Un point de reprise d'un autre processus a croisé
@@ -297,6 +300,7 @@ impl Rag3dbConnection {
         let choix = buffer_pool_choice(manifest);
         let mut conn = Self::open_for_writing(path.as_ref(), Self::config_with_buffer_pool(choix))?;
         conn.buffer_pool = Some(choix);
+        conn.path = Some(path.as_ref().to_path_buf());
         Ok(conn)
     }
 
@@ -349,10 +353,12 @@ impl Rag3dbConnection {
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
     pub fn with_config(path: impl AsRef<Path>, config: rag3db::SystemConfig) -> Result<Self, DbError> {
         let db = Arc::new(
-            rag3db::Database::new(path, config)
+            rag3db::Database::new(path.as_ref(), config)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
-        Self::connect(db, Self::fresh_reopen_state())
+        let mut conn = Self::connect(db, Self::fresh_reopen_state())?;
+        conn.path = Some(path.as_ref().to_path_buf());
+        Ok(conn)
     }
 
     fn fresh_reopen_state() -> Arc<ReopenState> {
@@ -372,7 +378,7 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None) })
+        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None), path: None })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
@@ -380,6 +386,7 @@ impl Rag3dbConnection {
     pub fn create_sync_connection(&self) -> Result<Arc<dyn crate::connection::SyncDbConnection>, DbError> {
         let mut conn = Self::connect(self.db.clone(), self.reopen.clone())?;
         conn.buffer_pool = self.buffer_pool;
+        conn.path = self.path.clone();
         Ok(Arc::new(conn))
     }
 
@@ -562,6 +569,10 @@ impl DbConnection for Rag3dbConnection {
 
     fn close_without_checkpoint(&self) {
         self.fermer_sans_point_de_reprise();
+    }
+
+    fn database_path(&self) -> Option<std::path::PathBuf> {
+        self.path.clone()
     }
 }
 

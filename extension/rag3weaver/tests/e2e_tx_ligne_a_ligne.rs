@@ -183,7 +183,7 @@ fn lancer(role: &str, base: &Path, transaction: bool) -> std::process::Output {
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", "4")
-        .env_remove("RAG3WEAVER_TX_PAR_PAQUET");
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "0");
     if transaction {
         cmd.env("RAG3WEAVER_TX_PAR_PAQUET", "1");
     }

@@ -12,6 +12,9 @@ because an agent that writes into a live database must never lose or corrupt it.
 
 Full-text search (BM25) and learned-sparse search are **not** C++ extensions:
 they live in rag3weaver, through [lucivy](https://github.com/L-Defraiteur/lucivy/).
+Upstream's `fts` extension was removed from the tree on 10 October 2026 (it had
+not been built since August); git history keeps it. Full text in Cypher for a
+standalone rag3db is a question for the day rag3db ships on its own.
 
 ## The idea
 

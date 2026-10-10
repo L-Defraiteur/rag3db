@@ -241,6 +241,9 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// Le mot « embarquement demandé, embarqueur absent » est-il déjà dit ?
+    /// Une fois par catalogue : chaque paquet le redirait.
+    absent_signale: std::sync::atomic::AtomicBool,
     /// **Une transaction de l'appelant est ouverte** (`set_in_transaction`) :
     /// aucun DDL ne part plus d'ici — les index vectoriels ne tombent pas et
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
@@ -360,6 +363,10 @@ pub struct Catalog {
     /// (a) blob-backed rematérialise tout à chaque ouverture, (b) copie locale
     /// durable + deltas ne le fait jamais. Décision d'archi, pas un réglage.
     fts_storage: crate::fts_handle::FtsStorage,
+    /// Le stockage du plein texte a-t-il été posé par l'appelant
+    /// ([`set_fts_storage`](Self::set_fts_storage)) ? Sinon, l'initialisation
+    /// le choisit ([`choisir_le_stockage_du_plein_texte`](Self::choisir_le_stockage_du_plein_texte)).
+    fts_storage_pose: bool,
     fts_positions: bool,
     /// **L'identité de cet écrivain**, pour que sa marque de travail en attente
     /// ne se confonde pas avec celle d'un autre processus. Tirée à la
@@ -456,6 +463,7 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
+            absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
             checkpoints_in_transaction: false,
             fresh_ingest: None,
@@ -496,6 +504,7 @@ impl Catalog {
             fts_promise_orphan: std::sync::atomic::AtomicBool::new(false),
             fts_promise_token: format!("{}-{}", std::process::id(), crate::dataflow::checkpoint::timestamp_ms()),
             fts_storage: Default::default(),
+            fts_storage_pose: false,
             fts_positions: true,
             writer_id: crate::uuid::hashsafe_uuid(
                 "_writer",
@@ -645,6 +654,22 @@ impl Catalog {
     /// On ne peut pas trancher au moment où le dual est posé : les entités se
     /// déclarent après. On refuse donc **à l'enregistrement de l'entité**, où
     /// ses signaux sont connus.
+    /// **L'avertissement nommé du montage sans service** : sur la sortie
+    /// d'erreur, que personne n'a à écouter, et sur le bus.
+    fn dire_l_embarqueur_absent(&self) {
+        if !self.embedder.is_absent() {
+            return;
+        }
+        let message = format!(
+            "{} (modèle attendu « {} », {} dimensions) — la recherche dense dira « not available »",
+            crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
+            self.embedder.name(),
+            self.embedder.dim()
+        );
+        eprintln!("[rag3weaver] {message}");
+        self.emit_event(CatalogEvent::Warning { context: "initialize".to_string(), message });
+    }
+
     fn warn_mock_query_embedder(&self) {
         if !self.embedder.is_mock() || self.dual_embedder.is_none() {
             return;
@@ -730,6 +755,63 @@ impl Catalog {
     /// Choose storage before opening any FTS handle.
     pub fn set_fts_storage(&mut self, storage: crate::fts_handle::FtsStorage) {
         self.fts_storage = storage;
+        self.fts_storage_pose = true;
+    }
+
+    /// Ce que le dialecte de ce catalogue déclare savoir faire.
+    pub fn dialect_capabilities(&self) -> crate::dialect::DialectCapabilities {
+        self.dialect.capabilities()
+    }
+
+    /// Le nom du dialecte, pour le dire dans un refus ou un avertissement.
+    pub fn dialect_name(&self) -> &str {
+        self.dialect.name()
+    }
+
+    /// Le plein texte vit-il dans la base (`_index_blobs`) ?
+    pub fn plein_texte_en_base(&self) -> bool {
+        matches!(self.fts_storage, crate::fts_handle::FtsStorage::BlobBacked { .. })
+    }
+
+    /// **Le plein texte en fichiers, par défaut, pour une base neuve sur
+    /// disque** (défaut basculé, en préparation : décision de Lucie). Dans
+    /// l'ordre :
+    /// 1. posé par l'appelant (`set_fts_storage`) : gardé ;
+    /// 2. `RAG3WEAVER_FTS=blobs` ou `fichiers` : le moyen de revenir en
+    ///    arrière, ou de forcer ;
+    /// 3. une base sans chemin (en mémoire) : dans la base (blobs) ;
+    /// 4. `<base>.fts` existe : en fichiers ;
+    /// 5. `_index_blobs` n'est pas vide : **une base existante garde ses
+    ///    blobs** — pas de migration silencieuse ;
+    /// 6. sinon, une base neuve : en fichiers, dans `<base>.fts`.
+    /// Le lecteur et l'écrivain d'une même base font le même choix.
+    fn choisir_le_stockage_du_plein_texte(&mut self) {
+        if self.fts_storage_pose {
+            return;
+        }
+        let Some(chemin) = self.conn.database_path() else { return };
+        let dossier = format!("{}.fts", chemin.display());
+        let fichiers = crate::fts_handle::FtsStorage::Files { base_path: dossier.clone() };
+        match std::env::var("RAG3WEAVER_FTS").as_deref() {
+            Ok("blobs") => return,
+            Ok("fichiers") => {
+                self.fts_storage = fichiers;
+                return;
+            }
+            _ => {}
+        }
+        if std::path::Path::new(&dossier).is_dir() {
+            self.fts_storage = fichiers;
+            return;
+        }
+        let des_blobs = self
+            .conn
+            .execute("MATCH (b:_index_blobs) RETURN b._key LIMIT 1")
+            .map(|r| !r.rows.is_empty())
+            .unwrap_or(false);
+        if !des_blobs {
+            self.fts_storage = fichiers;
+        }
     }
 
     /// Ferme les index FTS ouverts, en drainant leurs merges.
@@ -1283,6 +1365,8 @@ impl Catalog {
     }
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
+        self.choisir_le_stockage_du_plein_texte();
+        self.dire_l_embarqueur_absent();
         if self.lecture_seule {
             return self.initialiser_en_lecture();
         }
@@ -1554,7 +1638,7 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
-        if self.dialect.name() != "rag3db" && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
+        if !self.dialect.capabilities().structured_fields && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
             return Err(CatalogError::SchemaError("native structured payloads currently require rag3db".into()));
         }
 
@@ -3453,6 +3537,29 @@ impl Catalog {
         Ok(())
     }
 
+    /// **Embarquer, si un embarqueur est là.** Avec un [`AbsentEmbedder`],
+    /// jamais : les chunks s'écrivent sans vecteur, et la dette d'embarquement
+    /// naît comme pour une ingestion qui ne l'exige pas.
+    ///
+    /// [`AbsentEmbedder`]: crate::embedder::AbsentEmbedder
+    fn peut_embarquer(&self, demande: bool) -> bool {
+        if demande && self.embedder.is_absent() {
+            if !self.absent_signale.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "ingest".to_string(),
+                    message: format!(
+                        "vecteurs demandés, {} : cette écriture se replie sur le plein texte, \
+                         les vecteurs de « {} » restent en dette",
+                        crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
+                        self.embedder.name()
+                    ),
+                });
+            }
+            return false;
+        }
+        demande
+    }
+
     pub fn embarquer_le_retard(
         &mut self,
         exige: crate::disponibilite::Disponibilites,
@@ -3461,6 +3568,11 @@ impl Catalog {
     ) -> Result<usize, CatalogError> {
         self.check_embedding_model()?;
         if !exige.dense() && !exige.sparse() {
+            return Ok(0);
+        }
+        // Sans service, rien à rattraper : la dette reste notée, et l'index
+        // n'est ni tombé ni rebâti pour un retard qu'on ne paiera pas.
+        if self.embedder.is_absent() {
             return Ok(0);
         }
 
@@ -3614,6 +3726,7 @@ impl Catalog {
         limite: usize,
         embarquer: bool,
     ) -> Result<usize, CatalogError> {
+        let embarquer = self.peut_embarquer(embarquer);
         let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
         let cibles: Vec<(String, search::SearchSignals)> = self
             .entity_configs
@@ -5380,7 +5493,7 @@ impl Catalog {
         records: Vec<BTreeMap<String, CypherValue>>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
-        let avec_embarquement = exige.dense() || exige.sparse();
+        let avec_embarquement = self.peut_embarquer(exige.dense() || exige.sparse());
         let t_appel = std::time::Instant::now();
         let t = std::time::Instant::now();
         self.check_initialized()?;
@@ -6195,6 +6308,7 @@ impl Catalog {
         limite: usize,
         embarquer: bool,
     ) -> Result<usize, CatalogError> {
+        let embarquer = self.peut_embarquer(embarquer);
         let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
         let mut derivees: Vec<(String, String)> = self
             .entity_configs
@@ -6917,6 +7031,7 @@ impl Catalog {
         // les groupes qui n'ont pas abouti
         Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>,
     ) {
+        let avec_embarquement = self.peut_embarquer(avec_embarquement);
         // Le lot est choisi par l'appelant — la file entière, ou la fermeture
         // d'une cible. Ce graphe ne touche plus à `self.pending`.
         let mut pending = lot;
@@ -7213,6 +7328,7 @@ impl Catalog {
         avec_decoupage: bool,
         cible: Option<(&str, bool)>,
     ) -> FlushResult {
+        let avec_embarquement = self.peut_embarquer(avec_embarquement);
         if !avec_embarquement && self.has_pending() {
             // On s'apprête à poser des chunks sans les embarquer : la dette
             // naît ici, et l'indice la note.
@@ -8403,6 +8519,9 @@ impl Catalog {
         need_sparse: bool,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
         self.check_embedding_model()?;
+        // Absent, pas de vecteur de requête : la branche dense le dira
+        // « not available » par son repli, sans erreur ici.
+        let need_dense = need_dense && !self.embedder.is_absent();
         let vecteurs = if need_dense && need_sparse {
             if let Some(ref dual_emb) = self.dual_embedder {
                 // Single forward pass → dense + sparse

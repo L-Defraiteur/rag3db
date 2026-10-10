@@ -309,22 +309,7 @@ pub fn search_options_schema(filter_description: &str) -> Value {
     })
 }
 
-pub(crate) fn normalize(ty: &FieldType, v: &Value) -> Result<CypherValue, String> {
-    if v.is_null() { return Ok(CypherValue::Null); }
-    Ok(match ty {
-        FieldType::Struct(fields) => {
-            let obj = v.as_object().ok_or("expected object")?;
-            if let Some(k) = obj.keys().find(|k| !fields.contains_key(*k)) { return Err(format!("undeclared field {k}")); }
-            CypherValue::Map(fields.iter().map(|(k,t)| Ok((k.clone(), normalize(t, obj.get(k).unwrap_or(&Value::Null)).map_err(|e| format!("{k}: {e}"))?))).collect::<Result<_,String>>()?)
-        }
-        FieldType::List(item) => CypherValue::List(v.as_array().ok_or("expected array")?.iter().map(|v| normalize(item,v)).collect::<Result<_,_>>()?),
-        FieldType::Json => CypherValue::String(serde_json::to_string(v).map_err(|e| e.to_string())?),
-        FieldType::Int64 | FieldType::Integer => CypherValue::Int(v.as_i64().ok_or("expected signed integer")?),
-        FieldType::Double | FieldType::Number => CypherValue::Float(v.as_f64().ok_or("expected number")?),
-        FieldType::Boolean => CypherValue::Bool(v.as_bool().ok_or("expected boolean")?),
-        _ => CypherValue::String(v.as_str().ok_or("expected string")?.into()),
-    })
-}
+pub(crate) use rag3weaver_ir::normalize;
 
 #[cfg(test)]
 mod tests {

@@ -13,8 +13,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <functional>
 #include <string>
 
@@ -22,6 +24,7 @@
 #include "main/connection.h"
 #include "main/database.h"
 #include "storage/table/node_table.h"
+#include "test_runner/fsm_leak_checker.h"
 #include "storage/storage_utils.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/transaction.h"
@@ -1733,6 +1736,341 @@ TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommi
     EXPECT_EQ(journalSize(), 0u);
     createDBAndConn();
     expectTheMixedTransaction();
+}
+
+// Les pages sans propriétaire après une réouverture (page coeur-cpp/06) : ce qu'un travail qui
+// n'a pas atteint de point de reprise a ajouté à la fin du fichier y reste, compté et à
+// personne — le fichier n'a pas d'étendue connue. La mesure est celle du contrôle de fuite de
+// la suite Cypher : toutes les tables retirées, un point de reprise, puis les pages du fichier
+// moins les pages libres, comparées à celles d'une base qui a fait le même travail sans mourir.
+class OwnerlessPagesTest : public CopyJournalThresholdTest {
+protected:
+    // Plus qu'un groupe de nœuds : un COPY n'écrit ses pages avant la validation que par groupe
+    // plein ; en deçà, tout reste en mémoire jusqu'au point de reprise, et rien ne fuit.
+    static constexpr int64_t NUM_ROWS = 200000;
+
+    // La base rouverte en écriture, puis le contrôle de fuite de la suite Cypher : toutes les
+    // tables retirées, un point de reprise, et les pages occupées sont celles de l'en-tête, du
+    // catalogue et des métadonnées. Rouge avant le correctif : 640 pages occupées pour 9.
+    void expectNoOwnerlessPagesAfterReopening() {
+        createDBAndConn();
+        ASSERT_TRUE(conn->query("MATCH (d:Doc) RETURN count(*);")->isSuccess());
+        FSMLeakChecker::checkForLeakedPages(conn.get());
+    }
+};
+
+TEST_F(OwnerlessPagesTest, AJournaledCopyReplayedLeavesNoPageBehind) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=1073741824;");
+        must(child, copyFrom(csvPath));
+    });
+    ASSERT_GT(journalSize(), 0u);
+    expectNoOwnerlessPagesAfterReopening();
+}
+
+TEST_F(OwnerlessPagesTest, AForcedCopyKilledBeforeItsCommitLeavesNoPageBehind) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    writeThenDie(
+        [&](Connection& child) {
+            childSchema(child);
+            must(child, "BEGIN TRANSACTION;");
+            must(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    expectNoOwnerlessPagesAfterReopening();
+}
+
+TEST_F(OwnerlessPagesTest, AFallenBackCopyKilledBeforeItsCommitLeavesNoPageBehind) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=65536;");
+        must(child, "BEGIN TRANSACTION;");
+        must(child, copyFrom(csvPath));
+    });
+    expectNoOwnerlessPagesAfterReopening();
+}
+
+// Deux morts de suite sans point de reprise entre elles : la fuite ne s'additionne pas.
+TEST_F(OwnerlessPagesTest, TwoDeathsInARowDoNotAddUp) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    writeThenDie(
+        [&](Connection& child) {
+            childSchema(child);
+            must(child, "BEGIN TRANSACTION;");
+            must(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    writeThenDie(
+        [&](Connection& child) {
+            must(child, "BEGIN TRANSACTION;");
+            must(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    expectNoOwnerlessPagesAfterReopening();
+}
+
+// Entre la mort et la réouverture en écriture, une ouverture en lecture seule : elle ne rend
+// rien, n'écrit rien, et lit juste ; c'est l'ouverture en écriture d'après qui rend l'excédent.
+TEST_F(OwnerlessPagesTest, AReadOnlyOpenInBetweenChangesNothing) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    writeThenDie([&](Connection& child) {
+        childSchema(child);
+        must(child, "CALL copy_journal_threshold=1073741824;");
+        must(child, copyFrom(csvPath));
+    });
+    const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+    const auto fileSizeBefore = std::filesystem::file_size(databasePath);
+    const auto journalBefore = std::filesystem::file_size(walPath);
+    {
+        auto readOnlyConfig = *systemConfig;
+        readOnlyConfig.readOnly = true;
+        Database readOnlyDatabase(databasePath, readOnlyConfig);
+        Connection readOnly(&readOnlyDatabase);
+        auto count = readOnly.query("MATCH (d:Doc) RETURN count(*);");
+        ASSERT_TRUE(count->isSuccess()) << count->getErrorMessage();
+        EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), NUM_ROWS);
+        auto freePages = readOnly.query("CALL fsm_info() RETURN sum(num_pages);");
+        ASSERT_TRUE(freePages->isSuccess());
+        auto* numFree = freePages->getNext()->getValue(0);
+        EXPECT_TRUE(numFree->isNull() || numFree->toString() == "0")
+            << "a read-only open must not give back the excess: " << numFree->toString();
+    }
+    EXPECT_EQ(std::filesystem::file_size(databasePath), fileSizeBefore);
+    EXPECT_EQ(std::filesystem::file_size(walPath), journalBefore);
+    expectNoOwnerlessPagesAfterReopening();
+}
+
+// Le rejeu ne lit rien au-delà de l'étendue : les lignes d'un COPY journalisé reviennent par
+// leur valeur, depuis le journal. Preuve par la réutilisation : l'excédent rendu à l'ouverture
+// est réécrit par le premier point de reprise, qui y range les lignes rejouées ; chaque ligne est
+// ensuite comparée à celle d'une base témoin qui n'est pas morte — par sa clé, son texte et ses
+// nombres, sommés et échantillonnés.
+TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtent) {
+    const auto rowsCsv = csvPath;
+    {
+        std::ofstream csv(rowsCsv);
+        for (int64_t id = 0; id < NUM_ROWS; id++) {
+            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7
+                << "," << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
+        }
+    }
+    const auto schema = "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE, "
+                        "vec FLOAT[4]);";
+    const auto digest = [](Connection& connection) {
+        auto result = connection.query(
+            "MATCH (d:Doc) RETURN count(*), sum(d.id), sum(size(d.name)), sum(d.score), "
+            "sum(d.vec[1] * 3.0 + d.vec[2] * 5.0 + d.vec[3] * 7.0 + d.vec[4] * 11.0), "
+            "min(d.name), max(d.name);");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() ? result->getNext()->toString() : std::string("<error>");
+    };
+    const auto sample = [](Connection& connection, int64_t id) {
+        auto result = connection.query("MATCH (d:Doc {id: " + std::to_string(id) +
+                                       "}) RETURN d.name, d.score, d.vec;");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() && result->hasNext() ? result->getNext()->toString() :
+                                                          std::string("<none>");
+    };
+    // La base témoin, qui ne meurt pas.
+    const auto referencePath = databasePath + ".reference";
+    std::filesystem::remove(referencePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(referencePath));
+    Database referenceDatabase(referencePath, *systemConfig);
+    Connection reference(&referenceDatabase);
+    ASSERT_TRUE(reference.query(schema)->isSuccess());
+    ASSERT_TRUE(reference.query("COPY Doc FROM '" + rowsCsv + "';")->isSuccess());
+    ASSERT_TRUE(reference.query("CHECKPOINT;")->isSuccess());
+    const auto referenceDigest = digest(reference);
+
+    writeThenDie([&](Connection& child) {
+        must(child, schema);
+        must(child, "CHECKPOINT;");
+        must(child, "CALL copy_journal_threshold=1073741824;");
+        must(child, "COPY Doc FROM '" + rowsCsv + "';");
+    });
+    ASSERT_GT(journalSize(), 0u);
+    createDBAndConn();
+    // Le point de reprise réécrit l'excédent rendu : ce que le rejeu aurait lu là est écrasé.
+    ok("CHECKPOINT;");
+    EXPECT_EQ(digest(*conn), referenceDigest) << "after the replay and a checkpoint";
+    for (const int64_t id : {0, 1, 131071, 131072, 131073, 150000, 199999}) {
+        EXPECT_EQ(sample(*conn, id), sample(reference, id)) << id;
+    }
+    createDBAndConn();
+    EXPECT_EQ(digest(*conn), referenceDigest) << "after a reopening";
+    std::filesystem::remove(referencePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(referencePath));
+}
+
+// Une base écrite avant la version 40 du stockage, dont l'en-tête n'a pas d'étendue : elle
+// s'ouvre, rien n'est rendu (l'étendue est inconnue), son contenu est intact, et son premier
+// point de reprise lui donne une étendue ; une mort après est alors rattrapée comme pour les
+// autres. Fabriquée par un moteur d'avant (test/transaction/database_before_extent/fabrique.cpp).
+TEST_F(OwnerlessPagesTest, ADatabaseFromBeforeTheExtentOpensAndAcquiresIt) {
+    // Gardée compressée (2,9 Mo de pages presque vides, 25 Ko compressés) ; gzip et un shell.
+    const auto fixture = TestHelper::appendRag3dbRootPath(
+        "test/transaction/database_before_extent/base.rag3db.gz");
+    std::filesystem::remove(databasePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+    ASSERT_EQ(std::system(("gzip -dc '" + fixture + "' > '" + databasePath + "'").c_str()), 0);
+    ASSERT_EQ(std::filesystem::file_size(databasePath), 2912256u);
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 501);
+    EXPECT_EQ(text("MATCH (d:Doc {id: 1000}) RETURN d.name;"), "created");
+    EXPECT_EQ(text("MATCH (d:Doc {id: 499}) RETURN d.name;"), "name 499");
+    auto freePages = conn->query("CALL fsm_info() RETURN sum(num_pages);");
+    ASSERT_TRUE(freePages->isSuccess());
+    EXPECT_TRUE(freePages->getNext()->getValue(0)->isNull())
+        << "an unknown extent gives nothing back";
+    ok("CREATE (:Doc {id: 1001, name: 'by the new engine'});");
+    ok("CHECKPOINT;");
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 502);
+    EXPECT_EQ(text("MATCH (d:Doc {id: 1001}) RETURN d.name;"), "by the new engine");
+    // Depuis ce point de reprise l'étendue est connue : une mort pendant un gros COPY est
+    // rattrapée.
+    {
+        std::ofstream csv(csvPath); // la table d'avant n'a que id et name
+        for (int64_t id = 2000; id < 2000 + NUM_ROWS; id++) {
+            csv << id << ",name " << id << "\n";
+        }
+    }
+    const auto occupiedBefore = [&] {
+        auto fileInfo = conn->query("CALL file_info() RETURN num_pages;");
+        return fileInfo->getNext()->getValue(0)->getValue<int64_t>();
+    }();
+    conn.reset();
+    database.reset();
+    writeThenDie(
+        [&](Connection& child) {
+            must(child, "BEGIN TRANSACTION;");
+            must(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    createDBAndConn();
+    ok("CHECKPOINT;");
+    auto fileInfo = conn->query("CALL file_info() RETURN num_pages;");
+    EXPECT_LE(fileInfo->getNext()->getValue(0)->getValue<int64_t>(), occupiedBefore + 2)
+        << "the pages of the killed copy must have been given back";
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 502);
+}
+
+// La même preuve avec un index vectoriel et un index de plein texte, rejoués eux aussi depuis le
+// journal. Les pages orphelines viennent du gros COPY sans index (le seul à écrire avant la
+// validation) ; la petite table indexée, chargée par un COPY journalisé dans la même session
+// morte, est rejouée, et ses index rebâtis par le rejeu ; le point de reprise d'après réécrit
+// l'excédent rendu, puis la recherche par vecteur et par mot rend la bonne ligne. Une table
+// indexée de la taille d'un groupe plein prendrait vingt minutes à indexer et déborderait le
+// tampon des tests. Sauté si une des deux extensions n'est pas bâtie.
+TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithIndexes) {
+    const auto vectorExtension =
+        TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
+    const auto ftsExtension =
+        TestHelper::appendRag3dbRootPath("extension/fts/build/libfts.rag3db_extension");
+    if (!std::filesystem::exists(vectorExtension) || !std::filesystem::exists(ftsExtension)) {
+        GTEST_SKIP() << "the vector and fts extensions must both be built";
+    }
+    constexpr int64_t numTagged = 2000;
+    // Un mot propre à la ligne, en lettres seules : l'analyseur du plein texte sépare les
+    // chiffres (« word77 » devenait « word »), et le radical doit rester distinct.
+    const auto wordOf = [](int64_t id) {
+        std::string word = "zq";
+        for (auto rest = id; rest > 0 || word.size() == 2; rest /= 26) {
+            word += static_cast<char>('a' + rest % 26);
+            if (rest < 26) {
+                break;
+            }
+        }
+        return word;
+    };
+    const auto vectorOf = [](int64_t id) {
+        return "[" + std::to_string(id % 97) + "." + std::to_string(id % 7) + "," +
+               std::to_string((id * 31) % 89) + ".25," + std::to_string((id * 7) % 13) +
+               ".0," + std::to_string(id % 5) + ".5]";
+    };
+    writeDocs(csvPath, 0, NUM_ROWS);
+    {
+        std::ofstream csv(relCsvPath);
+        for (int64_t id = 0; id < numTagged; id++) {
+            csv << id << ",row " << id << " says " << wordOf(id) << " and common,\"" << vectorOf(id)
+                << "\"\n";
+        }
+    }
+    writeThenDie([&](Connection& child) {
+        must(child, "LOAD EXTENSION '" + vectorExtension + "';");
+        must(child, "LOAD EXTENSION '" + ftsExtension + "';");
+        childSchema(child);
+        must(child, "CREATE NODE TABLE Tagged(id INT64 PRIMARY KEY, body STRING, vec FLOAT[4]);");
+        must(child, "CALL CREATE_VECTOR_INDEX('Tagged', 'tagged_vec', 'vec', metric := 'l2');");
+        must(child, "CALL CREATE_FTS_INDEX('Tagged', 'tagged_fts', ['body']);");
+        must(child, "CHECKPOINT;");
+        must(child, "CALL copy_journal_threshold=1073741824;");
+        must(child, copyFrom(csvPath));
+        must(child, "COPY Tagged FROM '" + relCsvPath + "';");
+    });
+    ASSERT_GT(journalSize(), 0u);
+    createDBAndConn();
+    ok("CHECKPOINT;");
+    ok("LOAD EXTENSION '" + vectorExtension + "';");
+    ok("LOAD EXTENSION '" + ftsExtension + "';");
+    EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), NUM_ROWS);
+    EXPECT_EQ(single("MATCH (t:Tagged) RETURN count(*);"), numTagged);
+    for (const auto id : {0, 77, 1234, 1999}) {
+        // La recherche approchée : la ligne dont c'est le vecteur est parmi les trois premières.
+        auto nearest = conn->query("CALL QUERY_VECTOR_INDEX('Tagged', 'tagged_vec', CAST(" +
+                                   vectorOf(id) + " AS FLOAT[4]), 3) RETURN node.id;");
+        ASSERT_TRUE(nearest->isSuccess()) << nearest->getErrorMessage();
+        bool found = false;
+        while (nearest->hasNext()) {
+            found |= nearest->getNext()->getValue(0)->getValue<int64_t>() == id;
+        }
+        EXPECT_TRUE(found) << "vector of " << id;
+        EXPECT_EQ(single("CALL QUERY_FTS_INDEX('Tagged', 'tagged_fts', '" + wordOf(id) +
+                         "') RETURN node.id;"),
+            id)
+            << "word of " << id << " : " << wordOf(id);
+    }
+    EXPECT_EQ(single("CALL QUERY_FTS_INDEX('Tagged', 'tagged_fts', 'common') RETURN count(*);"),
+        numTagged);
+    FSMLeakChecker::checkForLeakedPages(conn.get());
+}
+
+// Les pages rendues servent : après un COPY tué et la réouverture en écriture, le même COPY
+// validé range ses lignes dans l'excédent rendu, et le fichier ne grandit pas (ou de peu) par
+// rapport à une base qui n'est pas morte. Demandé par le banc à la relecture.
+TEST_F(OwnerlessPagesTest, TheGivenBackPagesAreReusedByTheNextCopy) {
+    writeDocs(csvPath, 0, NUM_ROWS);
+    const auto numPagesInFile = [&] {
+        auto result = conn->query("CALL file_info() RETURN num_pages;");
+        EXPECT_TRUE(result->isSuccess());
+        return result->isSuccess() ? result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+    };
+    // La base témoin : le COPY validé, un point de reprise.
+    openWithSchema();
+    ok("CALL force_checkpoint_on_copy=true;");
+    ok(copyFrom(csvPath));
+    const auto control = numPagesInFile();
+    EXPECT_GT(control, 500);
+    conn.reset();
+    database.reset();
+    std::filesystem::remove(databasePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+    // La base qui meurt pendant le COPY, puis le refait.
+    writeThenDie(
+        [&](Connection& child) {
+            childSchema(child);
+            must(child, "BEGIN TRANSACTION;");
+            must(child, copyFrom(csvPath));
+        },
+        false /* journaled */);
+    createDBAndConn();
+    ok(copyFrom(csvPath));
+    EXPECT_LE(numPagesInFile(), control + 8)
+        << "the second copy must have reused the pages of the killed one";
+    expectRows(0, NUM_ROWS);
 }
 
 } // namespace

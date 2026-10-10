@@ -128,3 +128,21 @@ lecture de `resolution` n'est sûre (Liens, impact, usages), quel que soit le
 sens — c'est le planificateur qui choisit le rangement lu. Les chiffres du
 banc et des sondes de cette page sont à rejouer sur une indexation de zéro
 après le correctif.
+
+## Un appel nu importé par `use` (10 octobre)
+
+Alerte de la recherche (chantier C), close le jour même : un appel nu d'une
+fonction importée (`use crate::util::outil_commun;` puis `outil_commun()`)
+est marqué `import`, pas `nom`, et reste donc dans `impact`. Le chemin :
+`attach_import_origins` (codeparsers `parallel/parser_worker.rs`), puis
+`modules_lus` et `choose_target` / `module_designe_fichier` (`code.rs`).
+Témoin Rust : `tests/e2e_usages.rs`, `une_arete_devinee_se_dit_et_ne_se_suit_pas`
+(avec `use`, `import`, gardé ; sans `use`, `nom`, écarté). Le rouge venait
+de la fixture de `scripts/test_backend_code.py`, un appel nu sans `use` qui
+ne compile pas, cassée depuis 4351d4567 faute d'avoir été rejouée.
+
+**Trou connu** : TypeScript (`import { f } from './util'`) et Python
+(`from util import f`) passent par le même mécanisme, lu mais sans e2e
+ciblé. Seul le test unitaire de `choose_target` couvre leurs chaînes de
+module. Pour le fermer : un cas par langage dans `e2e_usages`, appel nu
+importé → `import`, appel nu sans import → `nom`.

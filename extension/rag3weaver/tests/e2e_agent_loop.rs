@@ -616,8 +616,9 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
     assert!(!turn.content.starts_with("{\"error\""), "{}", turn.content);
     // Markdown compact : le voisin est une ligne, pas un objet de trente
     // colonnes dont vingt-huit nulles.
-    // Le voisin est dans le graphe de dépendances, groupé par relation.
-    assert!(turn.content.contains("[SENT_TO]"), "{}", turn.content);
+    // Le voisin est dans le graphe de dépendances, groupé par relation ; la
+    // ligne de relation se lit « ~ Sent to ~ » depuis 98478b5ef.
+    assert!(turn.content.contains("~ Sent to ~"), "{}", turn.content);
     assert!(turn.content.contains("run_id=run-b"), "{}", turn.content);
     assert!(turn.content.contains("kind=agent"), "{}", turn.content);
     assert!(!turn.content.contains("null"), "aucun champ nul : {}", turn.content);

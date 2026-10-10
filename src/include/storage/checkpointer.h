@@ -49,6 +49,7 @@ protected:
 private:
     static void readCheckpoint(main::ClientContext* context, catalog::Catalog* catalog,
         StorageManager* storageManager);
+    static void returnOwnerlessPages(const DatabaseHeader& header, StorageManager* storageManager);
 
     PageRange serializeCatalog(const catalog::Catalog& catalog, StorageManager& storageManager);
     PageRange serializeMetadata(const catalog::Catalog& catalog, StorageManager& storageManager);

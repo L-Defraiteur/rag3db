@@ -42,6 +42,21 @@ Ce qui fuit par un autre chemin, **hors de ce lot** (pages prises sans l'allocat
 d'un index FTS annulée, un `ALTER … ADD` annulé sur des groupes déjà sur disque, un point de
 reprise annulé (`FreeSpaceManager::rollbackCheckpoint`). À ticketer à part.
 
+## 1 bis. Mesuré le 10 octobre, avant de coder
+
+Les deux formes « déduites » sont mesurées (programme nu, un `COPY` de 200 000 lignes, mort
+base ouverte, réouverture, tables retirées, point de reprise, pages occupées ; 9 pour la scène
+validée avec point de reprise) : **`COPY` forcé d'aujourd'hui tué avant sa validation, 559
+pages ; `COPY` replié tué, 560** ; journalisé validé puis tué, 559 ; deux morts de suite,
+1 269 — la fuite s'additionne. Le défaut est donc **celui du moteur d'aujourd'hui**, le `COPY`
+journalisé n'y ajoute que la réouverture par le rejeu ; reclassé par l'orchestration hors de la
+condition 1 de la stèle (de l'espace, pas une perte), corrigé maintenant.
+
+**Le seuil du groupe plein** : un `COPY` n'écrit ses pages avant la validation que par groupe
+plein de nœuds (131 072 lignes) ; en deçà rien ne fuit (3 000 lignes : 4 pages occupées). Les
+témoins écrits avant la pause à 60 000 lignes étaient verts sur le moteur d'aujourd'hui — un
+faux rouge évité par la mesure ; ils sont à 200 000.
+
 ## 2. Ce que font les moteurs établis
 
 PostgreSQL ne rend rien au rejeu : les pages d'une transaction morte restent dans le fichier
@@ -88,6 +103,15 @@ Risques à lever par des témoins, pas par lecture :
 - une page allouée mais jamais écrite (le fichier plus court que l'étendue) : ne rien faire ;
 - la plage rendue est réutilisable **tout de suite**, pendant le rejeu : c'est voulu, et sûr
   seulement si rien ne lit ces pages — le témoin du point de reprise interrompu le dira.
+
+## 3 bis. Deux limites (relecture du banc, 10 octobre)
+
+- **Les pages perdues avant la version 40 ne reviennent jamais** : le premier point de reprise
+  en 40 écrit une étendue qui les englobe. Une base qui a subi des morts sous l'ancien moteur
+  garde ses pages orphelines ; seule une réindexation les rend.
+- **Une ouverture en écriture qui rend des pages a « quelque chose à persister »** (le
+  gestionnaire d'espace libre marque sa version) : un point de reprise de fermeture, s'il y en
+  a un, écrira, sans qu'aucune requête ait écrit. C'est voulu.
 
 ## 4. Les témoins (rouges d'abord)
 

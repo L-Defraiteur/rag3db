@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <exception>
+#include <functional>
 #include <string>
 
 #include "main/client_context.h"
@@ -37,11 +38,20 @@ public:
             !inCheckpoint && ctx && transaction::Transaction::Get(*ctx) &&
             transaction::Transaction::Get(*ctx)->getCommitTS() != common::INVALID_TRANSACTION;
         const bool inExecute = (!inCommit && !inCheckpoint);
+        // Pour viser les réservations d'une page de 4 Kio, dont celles du journal local d'une
+        // transaction (InMemFileWriter) : les autres ne sont ni comptées ni refusées.
+        if (onlyFailPageReservations && sizeToReserve != common::RAG3DB_PAGE_SIZE) {
+            return storage::BufferManager::reserve(sizeToReserve);
+        }
+        numReservations++;
         reserveCount = (reserveCount + 1) % failureFrequency;
         if (!inRollback && !inDBInit && (canFailDuringCommit || !inCommit) &&
             (canFailDuringCheckpoint || !inCheckpoint) && (canFailDuringExecute || !inExecute) &&
             reserveCount == 0) {
             failureFrequency = failureFrequency * 2;
+            if (onRefusal) {
+                onRefusal();
+            }
             return false;
         }
         return storage::BufferManager::reserve(sizeToReserve);
@@ -55,6 +65,12 @@ public:
     bool canFailDuringExecute;
     bool canFailDuringCommit;
     std::atomic<uint64_t> reserveCount = 0;
+    bool onlyFailPageReservations = false;
+    // Les réservations vues (celles qui avancent reserveCount), pour qu'un test règle sa
+    // fréquence de refus sur la taille réelle d'une requête.
+    std::atomic<uint64_t> numReservations = 0;
+    // Appelé à chaque refus, dans le fil qui réserve : un test y relève où en est la requête.
+    std::function<void()> onRefusal;
 };
 
 } // namespace testing

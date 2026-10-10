@@ -320,4 +320,8 @@ Trois règles pour tenir ce cap :
   déploiement) — à écrire dans la LRSL ou à côté ;
 - l'ordre des trois chantiers de la stèle ;
 - où vit une référence, où vit une mémoire (une base chacune, ou une seule) ;
-- les conditions d'une contribution dans un produit sous LRSL.
+- les conditions d'une contribution dans un produit sous LRSL ;
+- rag3db donné seul : Lucie, 10 octobre, « un jour, quand on publiera pour de
+  vrai rag3weaver, on donnera rag3db en MIT à côté ; on réfléchira alors à
+  remettre lucivy dessus, utilisable par Cypher ». Une intention, pas une
+  décision ; en attendant, l'extension `fts` de l'amont est retirée du dépôt.
