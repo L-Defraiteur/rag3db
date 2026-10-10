@@ -104,6 +104,10 @@
     "impact": {
       "graph": "../../tools/impact.mmd",
       "description": "Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer."
+    },
+    "callees": {
+      "graph": "../../tools/callees.mmd",
+      "description": "Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas."
     }
   }
 }
