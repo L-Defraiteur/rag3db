@@ -484,6 +484,27 @@ runners changent de clé avec lui (`target/paquet`) : un bâti à froid de
 plus par plateforme, puis le cache tient. Les trois sous-paquets de la
 séance se bâtissent avec ce profil.
 
+### La séance du 11 octobre : quatre archives du même commit
+
+Décision de l'orchestration : une seule version pour la tête et ses trois
+sous-paquets, `0.0.1-alpha.2`, tous du commit e52091ea0 (fsync corrigé,
+profil `paquet`, lot 1 dedans), la tête épinglant en version exacte —
+convention des paquets natifs, et ce que l'identifiant de bâti exigera ;
+Linux est republié avec les autres. Quatre `npm publish` avec les OTP de
+Lucie : linux, windows, darwin, puis la tête. Prêt sous
+`~/.cache/rag3weaver-build/paquet-npm-garde/publier/` (les alpha.1 publiées
+rangées sous `alpha-1-publiee/`) :
+
+| archive | source | binaire |
+|---|---|---|
+| `rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz` (22 Mo) | Docker luciepc, 11 min | **61 Mo** strippé (79 avant le profil), glibc 2.28 |
+| `rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz` (19 Mo) | run 6 (26 min, cache à refaire) | **52 Mo** après `strip -x` (81 avant le profil) |
+| `rag3weaver-windows-x64-0.0.1-alpha.2.tgz` | run 20, en cours | |
+| `rag3weaver-0.0.1-alpha.2.tgz` (27 ko) | la tête, README anglais | |
+
+La démo rejouée contre la tête et le sous-paquet Linux locaux : verte,
+index en 18 s avec le service et 2,6 s sans (le profil `paquet` se sent).
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
