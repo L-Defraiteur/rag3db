@@ -554,6 +554,10 @@ OnDiskHNSWIndex::HNSWInsertState::HNSWInsertState(main::ClientContext* context,
             deleteChunk.getValueVectorMutable(0), deleteChunk.getValueVectorMutable(1));
     relInsertState->logToWAL = false;
     relDeleteState->logToWAL = false;
+    // Les arêtes de l'index ne sont pas des écritures de l'utilisateur : pas de verrou
+    // d'extrémités ni de contrôle de sérialisation (marche A4′, TableInsertState::takesLocks).
+    relInsertState->takesLocks = false;
+    relDeleteState->takesLocks = false;
 }
 
 OnDiskHNSWIndex::OnDiskHNSWIndex(const main::ClientContext* context, IndexInfo indexInfo,
