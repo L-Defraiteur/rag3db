@@ -5,6 +5,10 @@
 // transaction ; une seconde insertion de la même clé par une autre connexion attend (ici
 // jusqu'au délai) ; et le contrôle d'unicité regarde le dernier état validé, non l'instantané.
 
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -17,6 +21,7 @@
 #include "main/database.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
+#include "storage/storage_utils.h"
 #include "transaction/transaction_manager.h"
 
 using namespace rag3db::common;
@@ -258,6 +263,59 @@ TEST_F(InsertLockTest, DetachDeleteAlsoDetachesARelationCommittedAfterTheSnapsho
             createDBAndConn();
         }
     }
+}
+
+// Le même détachement, puis la mort base ouverte (journal non vide) : le rejeu doit détacher la
+// même relation que la transaction vivante a détachée sur le dernier état validé — sinon une
+// relation pendante naît au rejeu seulement (C7 après arrêt brutal, 10 octobre).
+TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADeath) {
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        try {
+            Database child(databasePath, *systemConfig);
+            Connection first(&child);
+            Connection second(&child);
+            for (const auto& [connection, query] :
+                std::vector<std::pair<Connection*, const char*>>{
+                    {&first, "CALL debug_enable_multi_writes=true;"},
+                    {&first, "CALL auto_checkpoint=false;"},
+                    {&first, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);"},
+                    {&first, "CHECKPOINT;"},
+                    {&first, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});"},
+                    {&second, "BEGIN TRANSACTION;"},
+                    {&second, "MATCH (n:Item) RETURN count(n);"},
+                    {&first, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);"},
+                    {&second, "MATCH (n:Item {id: 1}) DETACH DELETE n;"},
+                    {&second, "COMMIT;"}}) {
+                if (!connection->query(query)->isSuccess()) {
+                    _exit(2);
+                }
+            }
+            kill(getpid(), SIGKILL);
+        } catch (...) {
+            _exit(3);
+        }
+        _exit(4);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL) << "the child did not die as planned";
+    ASSERT_GT(std::filesystem::file_size(rag3db::storage::StorageUtils::getWALFilePath(databasePath)), 0u)
+        << "the journal must not be empty: nothing would be replayed";
+    createDBAndConn();
+    auto nodes = conn->query("MATCH (n:Item) RETURN n.id ORDER BY n.id;");
+    ASSERT_TRUE(nodes->isSuccess());
+    ASSERT_TRUE(nodes->hasNext());
+    EXPECT_EQ(nodes->getNext()->getValue(0)->getValue<int64_t>(), 2);
+    EXPECT_FALSE(nodes->hasNext());
+    auto rels = conn->query("MATCH ()-[r:Link]->() RETURN count(r);");
+    ASSERT_TRUE(rels->isSuccess());
+    EXPECT_EQ(rels->getNext()->getValue(0)->getValue<int64_t>(), 0) << "a dangling relation survived the replay";
+    auto backward = conn->query("MATCH (b:Item {id: 2})<-[r:Link]-() RETURN count(r);");
+    ASSERT_TRUE(backward->isSuccess());
+    EXPECT_EQ(backward->getNext()->getValue(0)->getValue<int64_t>(), 0);
 }
 
 // Un DELETE sans DETACH est refusé par « has connected edges » d'après le dernier état validé :
