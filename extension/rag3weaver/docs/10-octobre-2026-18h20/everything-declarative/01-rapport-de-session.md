@@ -57,8 +57,8 @@ dans `02-knowledge-dump.md`, à côté.
 
 | Lot | État |
 |---|---|
-| 1 — moteur de script générique, rhai + TypeScript/JavaScript | **vert**, prêt à fusionner (page `03-lot-1-le-moteur-de-script.md`) |
-| 2 — nœud entièrement scripté | — |
+| 1 — moteur de script générique, rhai + TypeScript/JavaScript | **sur master** (`6932a7da2`, page `03-lot-1-le-moteur-de-script.md`) |
+| 2 — nœud entièrement scripté | **vert, pas commité** : attend la fusion de l'exécution asynchrone (page `04-lot-2-le-noeud-scripte.md`) |
 | 3 — rechargement à chaud | — |
 | 4 — route → graphe → vue, `serve` | — |
 | 5 — l'outil `declare` | — |
@@ -88,3 +88,41 @@ dans `02-knowledge-dump.md`, à côté.
 - Une erreur de ma part : la première passe des voisins sans features
   (trois rouges et des cibles non compilées, tous « feature `code` »).
 - Taille ajoutée au binaire : non mesurée.
+
+## 5. Lot 1 sur master, plateformes et poids (11 oct.)
+
+- Fusionné en avance rapide `01dc4c7ce..6932a7da2` après la relecture de
+  `harness.rs` par la session recherche (aucune objection).
+- Plateformes (par `rag3db-90`, sur `paquet-npm`) : manylinux_2_28 vert,
+  macOS arm64 vert (`npm test` sur le runner), Windows MSVC en cours.
+- **Poids** : binaire Linux 79 → 89 Mo strippé, macOS 81 → 93. Mesuré sur un
+  binaire témoin en release : QuickJS +1,35 Mo, `swc_ts_fast_strip` +7,2 Mo
+  (+4,85 avec LTO complète ; le parseur swc seul +2,1). Options rendues à
+  l'orchestration : garder ; LTO au profil de publication ; notre effaceur
+  sur le seul parseur swc ; oxc. Recommandé : garder pour le proto.
+
+## 6. Lot 2 (11 oct., nuit)
+
+- **Noms possédés** : `PortDef`, `ConfigParam`, `NodeSchema` en
+  `Cow<'static, str>`, `NodeFactory::node_type()` emprunté, registre par
+  `String`. **Deux fuites trouvées en service** par le témoin (un allocateur
+  qui compte) : `GraphNode::from_definition` fuyait chaque nom de port libre
+  à chaque création de nœud, `graph_tool.rs` les noms et descriptions des
+  paramètres d'un outil lu d'un fichier. Rouge (+193 000 / +72 000 octets
+  pour mille), puis stable. Fait par trois scripts rejouables
+  (`~/.cache/rag3weaver-build/I/owned_names*.py` sur luciepc et ici, et
+  `apply-owned-names.sh`). Relu et approuvé par la session recherche, **à
+  commiter après sa fusion**, scripts rejoués sur sa tête.
+- **Le nœud scripté** : forme décidée par l'orchestration (déclaration
+  `nodes/<nom>.node.json` + script relatif, dossier découvert), JSON Schema
+  par port vérifié à la frontière, configuration vérifiée à la création,
+  script préparé une fois et partagé, nombres sous une seule forme. Témoins
+  rouges sur l'exécution (5, bouchon) puis 11 sur 11 ; lib complète avec les
+  features de `run_e2e.sh` 1 289 verts, 0 rouge.
+- Hors lot, dit dans la page : le branchement du dossier `nodes/` dans un
+  backend et les listes blanches (lot 4), ce que le script peut appeler,
+  `Node::node_type()` possédé (après la fusion de la recherche).
+- Erreurs en route : un bâti lancé sans les variables de la lib commune
+  (arrêté par son pid, vérifié dans `/proc/<pid>/cwd`) ; le script des
+  littéraux qui sautait les littéraux imbriqués et prenait un type de retour
+  pour un littéral (corrigé, rejoué depuis les sources).
