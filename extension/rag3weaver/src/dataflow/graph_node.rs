@@ -33,6 +33,12 @@ impl std::fmt::Debug for GraphNode {
 
 pub struct GraphNode {
     name: String,
+    /// `GraphNode` pour un sous-graphe monté à la main ; le type déclaré
+    /// quand une [`GraphNodeFactory`] le crée.
+    node_type: String,
+    /// La configuration reçue de la fabrique — ce qu'un point de reprise
+    /// lui repassera ; `None` pour un sous-graphe monté à la main.
+    config: Option<serde_json::Value>,
     definition: GraphDefinition,
     registry: Arc<NodeRegistry>,
     inputs: Vec<PortDef>,
@@ -134,6 +140,8 @@ impl GraphNode {
 
         Ok(Self {
             name: name.to_string(),
+            node_type: "GraphNode".into(),
+            config: None,
             definition,
             registry,
             inputs,
@@ -224,11 +232,14 @@ impl Node for GraphNode {
         Ok(())
     }
 
-    fn node_type(&self) -> &'static str {
-        "GraphNode"
+    fn node_type(&self) -> &str {
+        &self.node_type
     }
 
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        if let Some(config) = &self.config {
+            return Some(Box::new(config.clone()));
+        }
         let val = serde_json::to_value(&self.definition).unwrap_or_default();
         Some(Box::new(val))
     }
@@ -313,7 +324,9 @@ impl NodeFactory for GraphNodeFactory {
                 .map_err(|e| format!("{}: {e}", self.schema.node_type))?;
             super::graph_tool::substitute_definition(&self.definition, &args)
         };
-        let node = GraphNode::from_definition(name, definition, self.registry.clone())?;
+        let mut node = GraphNode::from_definition(name, definition, self.registry.clone())?;
+        node.node_type = self.schema.node_type.to_string();
+        node.config = Some(config.clone());
         Ok(Box::new(node))
     }
 
@@ -554,7 +567,7 @@ mod tests {
 
         let node = factory.create("my_search", &serde_json::json!({})).unwrap();
         assert_eq!(node.name(), "my_search");
-        assert_eq!(node.node_type(), "GraphNode");
+        assert_eq!(node.node_type(), "SearchPipeline");
     }
 
     // ── Test 10: GraphNode in parent graph ───────────────────────────
@@ -592,5 +605,36 @@ mod tests {
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"));
         assert!(output_names.contains(&"ps.meta"));
+    }
+
+    /// Un sous-graphe déclaré sous un nom garde ce nom à travers
+    /// `to_definition` : c'est par lui qu'un point de reprise le retrouve.
+    #[test]
+    fn a_declared_subgraph_keeps_its_type_through_a_definition_round_trip() {
+        let inner = test_registry();
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        registry.register(Box::new(
+            GraphNodeFactory::new(
+                "Ingest",
+                "declared ingestion",
+                ingestion_subgraph_def(),
+                inner,
+            )
+            .unwrap(),
+        ));
+        let outer = GraphDefinition {
+            nodes: vec![NodeDef {
+                name: "sub".into(),
+                node_type: "Ingest".into(),
+                config: serde_json::json!({}),
+            }],
+            edges: vec![],
+        };
+        let graph =
+            crate::dataflow::graph::DataflowGraph::from_definition(&outer, &registry).unwrap();
+        let back = graph.to_definition();
+        assert_eq!(back.nodes[0].node_type, "Ingest");
+        crate::dataflow::graph::DataflowGraph::from_definition(&back, &registry).unwrap();
     }
 }

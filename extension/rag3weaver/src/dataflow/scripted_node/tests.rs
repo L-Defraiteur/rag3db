@@ -376,3 +376,25 @@ fn a_type_declared_twice_is_refused() {
         "{errors:?}"
     );
 }
+
+/// Un point de reprise réécrit le graphe depuis ses nœuds (`to_definition`) :
+/// le type déclaré doit y survivre, sinon la restauration ne le retrouve pas.
+#[test]
+fn a_scripted_node_keeps_its_declared_type_through_a_definition_round_trip() {
+    let registry = registry_with(decl("typescript", TS));
+    let first = DataflowGraph::from_definition(
+        &graph(json!({"name": "a", "price": 10}), json!({"rate": 0.5})),
+        &registry,
+    )
+    .unwrap();
+    let definition = first.to_definition();
+    let price = definition.nodes.iter().find(|n| n.name == "price").unwrap();
+    assert_eq!(price.node_type, "PriceWithTax");
+    assert_eq!(price.config, json!({"rate": 0.5}));
+    let (priced, _) = run(&registry, &definition).unwrap();
+    assert_eq!(priced["with_tax"], json!(15));
+    let text = crate::dataflow::mermaid::to_mermaid(&definition);
+    let parsed = crate::dataflow::mermaid::parse_mermaid(&text).unwrap();
+    let price = parsed.nodes.iter().find(|n| n.name == "price").unwrap();
+    assert_eq!(price.node_type, "PriceWithTax", "{text}");
+}

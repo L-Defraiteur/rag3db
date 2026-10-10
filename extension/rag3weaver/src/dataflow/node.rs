@@ -50,8 +50,12 @@ pub struct NodeLogEntry {
 /// `tokio::task::block_in_place` : le fil sort du pool le temps de l'appel,
 /// et le résultat est celui d'aujourd'hui.
 pub trait Node: Send {
-    /// Type identifier for the node (e.g., "InsertRecordNode").
-    fn node_type(&self) -> &'static str;
+    /// Type identifier for the node (e.g., "InsertRecordNode") — the name it
+    /// is registered under, so that `DataflowGraph::to_definition` (a
+    /// checkpoint, a mermaid round trip) finds it again. Borrowed from the
+    /// node: a declared type (a scripted node, a sub-graph from a factory)
+    /// owns its name; a node written in code returns a `&'static str`.
+    fn node_type(&self) -> &str;
 
     /// Input port declarations.
     fn inputs(&self) -> Vec<PortDef> {

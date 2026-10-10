@@ -265,8 +265,8 @@ struct ScriptedNode {
 }
 
 impl Node for ScriptedNode {
-    fn node_type(&self) -> &'static str {
-        "ScriptedNode"
+    fn node_type(&self) -> &str {
+        &self.declared.decl.name
     }
 
     fn inputs(&self) -> Vec<PortDef> {
