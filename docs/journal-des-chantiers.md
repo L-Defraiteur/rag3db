@@ -766,21 +766,38 @@ L'arbre principal devait rebâtir la bibliothèque du moteur pendant qu'une
 batterie tournait contre elle ; je lui ai conseillé de **bâtir à part**, dans un
 autre dossier de bâti, pour ne pas la remplacer sous la passe. Mauvais conseil,
 et c'est lui qui l'a vu avant de l'appliquer : **le bâti écrit aussi l'extension
-vectorielle à un chemin fixe de l'arbre principal**
-(`extension/vector/build/libvector.rag3db_extension`), quel que soit le dossier
-de bâti. Un bâti « à part » aurait donc remplacé l'extension sous la batterie,
-sans toucher à la bibliothèque — la moitié de l'artefact échangée en vol, ce qui
-est pire qu'un échange franc.
+vectorielle à un chemin fixe de l'arbre** —
+`<arbre>/extension/vector/build/libvector.rag3db_extension` — **quel que soit le
+dossier de bâti**. Choisir `build/autre` au lieu de `build/lecteurs-csv` ne
+déplace donc que la bibliothèque : l'extension, elle, est réécrite au même
+endroit. Un bâti « à part » dans le même arbre aurait remplacé l'extension sous
+la batterie **sans** toucher à la bibliothèque — la moitié de l'artefact
+échangée en vol, et pire qu'un échange franc : la ligne d'âge de `run_e2e.sh`
+surveille la bibliothèque, donc elle n'aurait rien signalé.
 
-La règle, donc : **on ne bâtit pas le moteur pendant qu'une passe le charge, et
-« ailleurs » n'y change rien.** Ce qui se négocie, c'est l'attente — annoncer,
-attendre le « fini », rebâtir, prouver les artefacts, annoncer de nouveau. C'est
-exactement le protocole qui a fonctionné ce soir-là.
+**Précision du même soir, et elle corrige la première version de cette note**
+(rag3db-10, qui s'est fait avertir à tort) : « le même arbre » est la borne
+exacte. Un bâti dans un **autre worktree** écrit dans *son* chemin d'extension
+(`~/git_workspaces/rag3db-banc-a4/extension/vector/build/`) et ne touche à rien
+de l'arbre commun. **Bâtir ailleurs est donc possible — à condition qu'« ailleurs »
+soit un autre arbre, pas un autre dossier de bâti.** J'avais écrit « ailleurs n'y
+change rien », ce qui aurait fait attendre pour rien quelqu'un qui bâtissait
+chez lui.
 
-Et la leçon de forme, qui est la même que les huit autres sous un angle neuf :
-un conseil que l'on donne n'est pas moins à vérifier qu'une mesure que l'on
-prend. J'ai dit « bâtis à part » avec l'assurance d'une solution évidente, sans
-savoir où va l'extension.
+La règle, donc : **on ne bâtit pas le moteur d'un arbre pendant qu'une passe
+charge les artefacts de cet arbre**, et changer de dossier de bâti n'y change
+rien. Ce qui se négocie, c'est l'attente — annoncer, attendre le « fini »,
+rebâtir, prouver les artefacts, annoncer de nouveau. Et la question à poser
+avant de s'inquiéter ou de rassurer : *de quel arbre vient l'artefact que la
+passe charge ?*
+
+Et la leçon de forme, qui est la même que les huit autres sous deux angles
+neufs : **un conseil que l'on donne n'est pas moins à vérifier qu'une mesure que
+l'on prend.** J'ai dit « bâtis à part » avec l'assurance d'une solution
+évidente, sans savoir où va l'extension — puis j'ai écrit la correction *trop
+large* et averti quelqu'un qui ne risquait rien. Se tromper par excès de
+prudence a un coût : une attente inutile, et un avertissement qu'on finit par
+ne plus écouter.
 
 **Et la forme commune aux neuf**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le

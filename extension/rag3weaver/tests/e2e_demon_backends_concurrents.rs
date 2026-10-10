@@ -77,6 +77,31 @@ fn manifeste(ou: &Path, base: &Path) -> PathBuf {
          moteur est bâti (depuis un worktree, c'est l'arbre principal).",
         ext.display()
     );
+    // **`schema` est obligatoire sur une entité de manifeste** — un chemin vers
+    // un JSON Schema, pas un objet en ligne. Lu dans `BackendEntity` après
+    // m'être fait refuser « missing field `schema` » : c'est la cinquième
+    // interface que j'aurai supposée au lieu de la lire aujourd'hui, et la
+    // cinquième passe perdue pour dix secondes de lecture.
+    let schema = ou.join("note.json");
+    std::fs::write(
+        &schema,
+        serde_json::to_vec_pretty(&json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "text", "revision", "created_at", "updated_at"],
+            "properties": {
+                "key": {"type": "string", "minLength": 1},
+                "text": {"type": "string"},
+                "revision": {"type": "integer", "minimum": 1},
+                "created_at": {"type": "integer"},
+                "updated_at": {"type": "integer"}
+            }
+        }))
+        .unwrap(),
+    )
+    .expect("écrire le schéma");
+
     let m = json!({
         "version": 1,
         "name": "concurrence",
@@ -84,6 +109,7 @@ fn manifeste(ou: &Path, base: &Path) -> PathBuf {
         "vector_extension": ext.to_string_lossy(),
         "entities": {
             "Note": {
+                "schema": schema.to_string_lossy(),
                 "config": {
                     "fields": { "key": {"type":"string"}, "text": {"type":"string","isContent":true} },
                     "hashsafe": ["key"],
