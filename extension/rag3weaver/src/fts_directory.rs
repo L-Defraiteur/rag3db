@@ -45,6 +45,25 @@
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
+
+/// **`fsync` d'un dossier**, pour rendre durable un fichier qu'on vient d'y
+/// renommer. Sous Windows, `File::open` sur un dossier est refusé (« Access
+/// is denied », os error 5 : il faudrait FILE_FLAG_BACKUP_SEMANTICS) et le
+/// système de fichiers journalise lui-même ses métadonnées : rien à faire.
+/// C'était la cause du « création de l'index FTS … échouée » du dix-neuvième
+/// essai Windows du paquet npm (10 octobre 2026) : le fichier était écrit,
+/// seul le fsync du dossier tombait.
+fn fsync_dir(path: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let _ = path;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        File::open(path)?.sync_all()
+    }
+}
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -95,7 +114,7 @@ impl FtsDirectory {
             }
         }
         if !paths.is_empty() {
-            File::open(&self.root)?.sync_all()?;
+            fsync_dir(&self.root)?;
         }
         Ok(paths.len())
     }
@@ -234,7 +253,7 @@ impl FtsShardStorage {
         f.write_all(g.to_string().as_bytes())?;
         f.sync_data()?;
         std::fs::rename(&tmp, &path)?;
-        File::open(&self.base_path)?.sync_all()?;
+        fsync_dir(&self.base_path)?;
         Ok(g)
     }
 
@@ -254,7 +273,7 @@ impl FtsShardStorage {
             n += dir.sync_generation()?;
         }
         if n > 0 {
-            File::open(&self.base_path)?.sync_all()?;
+            fsync_dir(&self.base_path)?;
         }
         Ok(n)
     }
@@ -280,7 +299,7 @@ impl ShardStorage for SharedFtsStorage {
         let mut f = File::create(&tmp).map_err(|e| format!("écrire {name} : {e}"))?;
         f.write_all(data).and_then(|_| f.sync_data()).map_err(|e| format!("écrire {name} : {e}"))?;
         std::fs::rename(&tmp, &path).map_err(|e| format!("écrire {name} : {e}"))?;
-        File::open(&self.0.base_path).and_then(|d| d.sync_all()).map_err(|e| format!("écrire {name} : {e}"))
+        fsync_dir(&self.0.base_path).map_err(|e| format!("écrire {name} : {e}"))
     }
 
     fn read_root_file(&self, name: &str) -> Result<Vec<u8>, String> {
