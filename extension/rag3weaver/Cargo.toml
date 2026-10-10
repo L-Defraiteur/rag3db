@@ -360,6 +360,9 @@ opt-level = 3
 # `cubecl_common::Device` ne sont pas le même trait. Les trois forks sont au
 # tag exact du lock ; tout le reste est identique à crates.io.
 [patch.crates-io]
+# tree-sitter-scss 1.0.0 (par codeparsers) passe à MSVC un drapeau GCC qu'il
+# refuse : copie locale avec `flag_if_supported`, voir third_party/tree-sitter-scss/ORIGINE.md.
+tree-sitter-scss = { path = "third_party/tree-sitter-scss" }
 burn = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-autodiff = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-backend = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }

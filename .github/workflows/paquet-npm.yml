@@ -97,16 +97,12 @@ jobs:
       CARGO_TARGET_DIR: C:/rs
       CARGO_BUILD_JOBS: 4
       NUM_JOBS: 4
-      # Premier accroc (10 octobre 2026) : tree-sitter-scss 1.0.0 passe à `cl`
-      # un drapeau GCC (-Wno-unused-parameter) qu'il refuse (D8021). clang-cl
-      # accepte les deux dialectes : on le donne à cc-rs pour les crates C ;
-      # Deuxième accroc : cmake refuse de mélanger clang-cl (C) et cl (C++)
-      # pour le moteur ; donc clang-cl pour les deux, moteur compris.
-      CC_x86_64_pc_windows_msvc: clang-cl
-      CXX_x86_64_pc_windows_msvc: clang-cl
-      # Troisième accroc : avec clang-cl, cc-rs n'active pas les exceptions
-      # C++ (la crate cxx échoue sur un `throw`) ; /EHsc le fait.
-      CXXFLAGS_x86_64_pc_windows_msvc: /EHsc
+      # MSVC (cl) pour tout, comme l'amont. La voie clang-cl a été essayée le
+      # 10 octobre 2026 (cinq essais) : le moteur compile, mais ni sa DLL ni
+      # l'exécutable final ne se lient — des destructeurs de std::variant
+      # que clang-cl n'émet pas avec la STL de MSVC. L'accroc qui avait
+      # poussé vers clang-cl (tree-sitter-scss et son drapeau GCC) est réglé à
+      # la source : extension/rag3weaver/third_party/tree-sitter-scss.
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
