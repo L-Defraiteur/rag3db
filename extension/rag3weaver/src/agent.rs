@@ -63,27 +63,54 @@ use crate::tools::ToolDef;
 /// fond y enregistre sa fermeture de mort (SIGTERM puis SIGKILL sur son
 /// groupe de processus, côté chantier A) : le run ne l'attend plus, et la
 /// boîte reçoit « tuée à la fin du run ». (Chantier C, 10 octobre 2026.)
-#[derive(Default)]
 pub struct RunScope {
-    morts: std::sync::Mutex<Vec<Box<dyn FnOnce() + Send>>>,
+    /// `None` = la portée est déjà vidée. Une fermeture enregistrée APRÈS la
+    /// vidange s'exécute immédiatement — sans quoi la course du 10 octobre :
+    /// la boucle (deux tours de mock) finissait le run et vidait la portée
+    /// AVANT que le fil de l'outil en fond ait enregistré sa mort ; la
+    /// fermeture dormait dans la liste, l'outil attendait son message pour
+    /// toujours, et le join de `thread::scope` avec lui (vu au core : deux
+    /// fils en futex_wait, `blocage.txt`).
+    morts: std::sync::Mutex<Option<Vec<Box<dyn FnOnce() + Send>>>>,
+}
+
+impl Default for RunScope {
+    fn default() -> Self {
+        Self { morts: std::sync::Mutex::new(Some(Vec::new())) }
+    }
 }
 
 impl RunScope {
     /// Enregistre une fermeture jouée à la fin du run. L'ordre d'exécution
-    /// est l'ordre d'enregistrement.
+    /// est l'ordre d'enregistrement. Si la portée est DÉJÀ vidée (le run est
+    /// fini), la fermeture s'exécute tout de suite : mieux vaut une mort
+    /// immédiate qu'un orphelin que plus personne ne tuera.
     pub fn defer(&self, mort: Box<dyn FnOnce() + Send>) {
-        if let Ok(mut m) = self.morts.lock() {
-            m.push(mort);
+        let tardive = match self.morts.lock() {
+            Ok(mut m) => match m.as_mut() {
+                Some(v) => {
+                    v.push(mort);
+                    None
+                }
+                None => Some(mort),
+            },
+            // Verrou empoisonné : l'état est inconnu — tuer plutôt que
+            // laisser vivre sans gardien.
+            Err(_) => Some(mort),
+        };
+        if let Some(mort) = tardive {
+            mort();
         }
     }
 
-    /// Joue et retire toutes les fermetures. Idempotent.
+    /// Joue et retire toutes les fermetures, et SCELLE la portée : toute
+    /// `defer` ultérieure s'exécutera immédiatement. Idempotent.
     pub fn vider(&self) {
         let prises = match self.morts.lock() {
-            Ok(mut m) => std::mem::take(&mut *m),
+            Ok(mut m) => m.take(),
             Err(_) => return,
         };
-        for mort in prises {
+        for mort in prises.into_iter().flatten() {
             mort();
         }
     }
@@ -1725,6 +1752,22 @@ mod tests {
         // Si la vidange venait après le join, ce run bloquerait sans fin.
         let run = agent.run(&mut turns, &mut sink).unwrap();
         assert!(run.text.contains("fini"), "{}", run.text);
+    }
+
+    /// Le bras tardif de la portée, SANS course : une `defer` enregistrée
+    /// après `vider()` s'exécute immédiatement, dans le fil qui l'enregistre.
+    /// C'est la règle qui ferme l'interblocage du 10 octobre (la boucle
+    /// vidait la portée avant que le fil de l'outil ait enregistré sa mort).
+    #[test]
+    fn une_defer_apres_la_vidange_s_execute_immediatement() {
+        let scope = RunScope::default();
+        scope.vider();
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        scope.defer(Box::new(move || {
+            let _ = tx.send(());
+        }));
+        rx.recv_timeout(std::time::Duration::from_secs(1))
+            .expect("la defer tardive doit s'exécuter immédiatement");
     }
 
     #[test]
