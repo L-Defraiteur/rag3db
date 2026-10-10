@@ -3,7 +3,7 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`]. Viendront `Count`, `Select`, `Write` et `Tx`.
+//! Aujourd'hui : [`Hop`] et [`Count`]. Viendront `Select`, `Write` et `Tx`.
 
 use std::fmt;
 
@@ -80,6 +80,30 @@ impl Hop {
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("saut : « {n} » n'est pas un identifiant"))),
+            None => Ok(()),
+        }
+    }
+}
+
+/// **Un compte.**
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Count {
+    /// Les lignes d'une table, en une colonne.
+    Rows { table: String },
+    /// Le degré : pour chaque uuid de départ (le paramètre `$uuids`), le
+    /// nombre d'arêtes d'une relation dans un sens. Deux colonnes : l'uuid,
+    /// le compte ; un départ sans arête n'a pas de ligne.
+    Edges { start: String, relation: String, direction: Direction },
+}
+
+impl Count {
+    pub fn validate(&self) -> Result<(), TranslateError> {
+        let noms: Vec<&str> = match self {
+            Count::Rows { table } => vec![table],
+            Count::Edges { start, relation, .. } => vec![start, relation],
+        };
+        match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+            Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
         }
     }

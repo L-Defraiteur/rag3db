@@ -37,7 +37,7 @@ use super::node::{Node, NodeContext};
 use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{PortDef, PortType, PortValue};
 use super::usage_nodes::{rel_info, usages_of, RelInfo, UsagesConfig};
-pub use super::graph_walk::{degree_query, Direction};
+pub use super::graph_walk::{degree_count, Direction};
 use crate::catalog::{Catalog, CatalogError};
 use crate::connection::{CypherValue, QueryParam};
 use rag3weaver_ir::{Column, Hop};
