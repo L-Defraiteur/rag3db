@@ -66,13 +66,20 @@ sont ce qui la montre.
 - Deux branchements : **rhai** (ce qui existe, déplacé derrière l'interface,
   ses tests inchangés) et **JavaScript** par un moteur embarqué léger et
   isolé (QuickJS par une crate Rust, à vérifier : taille, isolation, limites
-  de temps). TypeScript ensuite : retirer les types à la volée par un outil
-  Rust, avant de donner le script au moteur — pas dans ce lot.
+  de temps). **TypeScript dès ce lot** (Lucie, 22 h 30 : son langage de
+  cœur) : le langage déclaré est `typescript` ; un outil Rust retire les
+  types à la volée au chargement (oxc ou swc en mode « retirer les types »
+  seul, le plus petit qui suffit, à vérifier), puis le JavaScript obtenu va au
+  moteur ; pas de vérification de types à la `tsc`, ce sont les ports du nœud
+  qui vérifient entrées et sorties à la frontière ; `javascript` reste accepté
+  (du TypeScript sans types).
 - Témoins : le même nœud scripté en rhai et en JavaScript rend les mêmes
   sorties ; un script qui boucle est arrêté par sa limite ; un script qui
   tente un accès interdit est refusé en le nommant.
-- Décision de Lucie (10 oct.) : JavaScript dès le proto, parce que c'est ce
-  que les modèles écrivent le mieux.
+- Témoin de plus : un nœud en TypeScript annoté rend les mêmes sorties que le
+  même nœud en JavaScript.
+- Décision de Lucie (10 oct.) : TypeScript dès le proto, parce que c'est son
+  langage et ce que les modèles écrivent le mieux.
 
 ### Lot 2 — le nœud entièrement scripté
 
@@ -159,7 +166,7 @@ sont ce qui la montre.
 ## 4. Ce qui est décidé, ce qui ne l'est pas
 
 Décidé par Lucie : le moteur de script générique ; le nœud 100 % scripté ;
-JavaScript dès le proto ; les produits sont des paquets de déclarations
+TypeScript dès le proto (JavaScript exécuté) ; les produits sont des paquets de déclarations
 (« des plugins ») que l'agent propose de télécharger — hors proto, mais
 chaque déclaration du proto doit pouvoir voyager (un dossier, pas des
 chemins en dur) ; une session dédiée, sur luciepc.
