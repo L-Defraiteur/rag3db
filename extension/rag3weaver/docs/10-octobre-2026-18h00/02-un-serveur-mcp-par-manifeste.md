@@ -163,6 +163,117 @@ c'est déjà le modèle du bin. Deux conséquences à écrire quelque part :
   code en lecture seule, c'est sans objet ; avec la mémoire, non. À trancher avec
   Lucie, et ma préférence est un serveur par base, pas par session.
 
+## Les deux décisions, et une correction de forme sur la seconde
+
+Tranché par l'orchestration le 10 octobre au soir.
+
+**1. `must_reopen` devient un refus MCP nommé.** Un client ne doit jamais voir
+son serveur disparaître sans explication : le refus dit ce qui s'est passé, puis
+le serveur **rouvre et continue** si c'est possible, et sort après l'avoir dit
+sinon.
+
+**2. Un serveur par base, jamais par session** — et c'est la bonne réponse,
+parce qu'on ne contrôle pas le client : Claude Code lance **un processus MCP par
+session**. Donc deux sessions sur la même mémoire seraient deux écrivains, ce
+que le moteur refuse par `F_WRLCK`. La conclusion de l'orchestration est juste :
+**le processus MCP ne doit pas posséder la base.**
+
+Mais la forme proposée — un pont stdio vers « le démon `rag3weaver-backend` » —
+repose sur une confusion qu'il vaut mieux lever maintenant : **`rag3weaver-backend`
+n'est pas un démon et n'a pas d'adresse.** C'est un processus stdio. Celui qui
+tient une adresse est `rag3daemon`, et ce qu'il sert est une **connexion**
+(`DbConnection`), pas des outils : « une base rag3db ne s'ouvre que par un seul
+processus — ce binaire est ce processus-là, mis derrière une adresse ».
+
+Et cette distinction rend le second mode **plus simple que le pont**, sans rien
+écrire de neuf :
+
+- `DaemonConnection` **implémente `DbConnection`** (`src/daemon/db.rs:366`) et
+  porte un `assurer` qui démarre le démon s'il ne répond pas déjà ;
+- `PreparedBackend::open(conn: Box<dyn DbConnection>, …)` prend **n'importe
+  quelle** connexion.
+
+Donc : `mcp --manifest <…> --demon <adresse>` ouvre le backend **localement** —
+ses outils, ses graphes, ses schémas, qui ne demandent aucune base — et branche
+sa connexion sur le démon. N squelettes MCP, **un seul écrivain**, et *aucun
+protocole à relayer* : pas de `describe`/`call` transportés, pas de second
+vocabulaire à garder synchrone. C'est le mode par connexion, pas par pont.
+
+Ce que le pont aurait apporté et que celui-ci n'apporte pas, à nommer plutôt
+qu'à découvrir : les N processus ont chacun **leur** `Catalog`, donc leur état
+en mémoire (états d'index, caches) et leur `initialize`. Or `initialize` repose
+des DDL. Plusieurs backends qui s'ouvrent en même temps sur la même base via le
+démon vont donc les reposer concurremment — `IF NOT EXISTS` partout, mais c'est
+à éprouver et non à supposer, et c'est le premier test que j'écrirai pour ce
+mode. Si ça se révèle faux, **alors** le pont redevient la bonne réponse, et
+pour une raison mesurée.
+
+Les deux modes, donc :
+
+| mode | qui possède la base | pour quoi |
+|---|---|---|
+| `mcp --manifest <m>` | le serveur | un backend de code en lecture, une session |
+| `mcp --manifest <m> --demon <adr>` | `rag3daemon` | la mémoire partagée, et la forme produit |
+
+Et la forme produit est bien la seconde : « installer rag3weaver, c'est installer
+un démon ».
+
+## Déclaré n'est pas exposé — contrainte de conception
+
+Vision §7 (Lucie, 10 octobre au soir). Chaque déclaration — outil, agent,
+réaction, graphe, cellule de données — porte `exposure: <expression sur des
+clés>` ; un contexte **présente** ses clés ; une déclaration est **chargée** si
+son expression est vraie, sinon **elle n'existe pas** pour ce contexte. La
+grammaire minimale : des clés libres, `|`, `&`, des parenthèses
+(`dev & (alice | bob)`). Absence d'exposition : jamais exposé hors `dev`.
+
+Pour ce serveur : **`--keys dev,admin`, et rien par défaut.** C'est la seule
+ligne de code que la marche 1 doit déjà porter.
+
+Mais le point dur de la vision a une conséquence précise sur **où** ça
+s'implante, et elle tombe dans mon fichier : *« la frontière se tient au
+chargement, pas par la politesse des outils »*. Donc ce n'est **pas** un filtre
+sur `tools/list`. C'est un filtre dans `PreparedBackend::load` : un outil non
+exposé n'est pas lu, pas construit, pas lié, pas dans `tools`. `tools/list` le
+reflète parce qu'il n'a rien à refléter — et `tools/call` sur son nom répond
+« outil inconnu », pas « outil interdit », ce qui est la bonne réponse : un nom
+dont l'existence n'est pas révélée ne fuit rien.
+
+Trois choses que je vois d'ici et que la vision ne dit pas :
+
+**1. Une expression illisible doit être un refus nommé au chargement, jamais un
+« faux ».** Si `exposure: dev &` était traité comme non satisfait, l'outil
+disparaîtrait **en silence** — et quelqu'un passerait une heure à se demander
+pourquoi son serveur n'expose rien. C'est exactement la classe de défaut que ce
+dépôt passe ses journées à nommer. Un refus : « la clé d'exposition de l'outil
+« X » ne se lit pas (`dev &`) : attendu des clés séparées par `|` ou `&`, avec
+parenthèses ».
+
+**2. Le défaut sûr a un coût de migration qu'il faut nommer maintenant.** Aucun
+gabarit livré ne porte d'`exposure` aujourd'hui. Avec « absence = jamais exposé
+hors `dev` », un serveur lancé `--keys published` sur le gabarit `code`
+exposerait **zéro outil** — correct, et déroutant. Donc : soit chaque gabarit
+livré gagne ses lignes d'`exposure` dans le même lot que le code, soit le
+serveur **dit** pourquoi sa liste est vide (« 7 déclarations écartées faute de
+clés : …, lancez avec `--keys dev` »). Je ferais les deux, et la seconde
+compte plus : une liste vide sans explication est un défaut, pas une sécurité.
+
+**3. Ma section `"reactions"` est concernée au même titre.** Une réaction non
+exposée ne doit pas être **montée** — pas « montée puis silencieuse ». Le
+montage de `Reactor::watch_bound` lira donc l'exposition avant de surveiller,
+et c'est une raison de plus pour que la politique de nœuds reste en dur dans le
+montage : l'exposition décide *si* une réaction vit, la liste blanche décide *ce
+qu'elle peut faire*, et mélanger les deux donnerait un gabarit capable de
+s'élargir ses droits en se déclarant exposé.
+
+Une question ouverte, qui n'est pas la mienne à trancher : **les clés
+présentées sont-elles vérifiables ?** Un serveur MCP lancé `--keys admin` se
+donne `admin` lui-même. C'est juste pour un atelier local — c'est Lucie qui
+lance le serveur — et insuffisant dès qu'un contexte est distant. La vision
+parle d'un abonnement et d'une personne comme porteurs de clés ; ces deux-là
+demanderont une preuve, pas une déclaration. À distinguer avant qu'un produit
+publié en dépende.
+
 ## Ce qu'on ne fait pas
 
 `resources` et `prompts` : plus tard, et déclarés absents dans les `capabilities`
