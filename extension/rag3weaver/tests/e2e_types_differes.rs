@@ -53,6 +53,10 @@ const CORPUS: &[(&str, &str)] = &[
     ("rel_table.h", "#pragma once\n\nclass RelTable {\npublic:\n    void update(int v) {\n    }\n};\n"),
     ("set_info.h", "#pragma once\n#include \"node_table.h\"\n\nstruct SetInfo {\n    NodeTable* table;\n};\n"),
     ("set_executor.cpp", "#include \"set_info.h\"\n\nvoid run(SetInfo& info) {\n    info.table->update(1);\n}\n"),
+    // La forme réelle de set_executor.cpp : `tableInfo` est un membre de la
+    // classe, `table` un champ de ce membre.
+    ("executor.h", "#pragma once\n#include \"set_info.h\"\n\nclass Executor {\npublic:\n    void set();\nprivate:\n    SetInfo tableInfo;\n};\n"),
+    ("executor.cpp", "#include \"executor.h\"\n\nvoid Executor::set() {\n    tableInfo.table->update(4);\n}\n"),
     ("holder.h", "#pragma once\n#include \"local_table.h\"\n\nclass Holder {\npublic:\n    void go();\nprivate:\n    LocalTable* localTable;\n};\n"),
     ("holder.cpp", "#include \"holder.h\"\n\nvoid Holder::go() {\n    localTable->update(2);\n}\n"),
     (
@@ -88,4 +92,5 @@ fn les_trois_formes_des_appelants_de_node_table_update() {
     assert_eq!(vers("replay"), vec![("node_table.cpp".to_string(), "type".to_string())], "auto& … cast<NodeTable>() : typé dans le fichier");
     assert_eq!(vers("run"), vec![("node_table.cpp".to_string(), "type".to_string())], "info.table : le champ table de SetInfo, déclaré dans set_info.h");
     assert_eq!(vers("go"), vec![("local_table.cpp".to_string(), "type".to_string())], "localTable : le membre de Holder, déclaré dans holder.h");
+    assert_eq!(vers("set"), vec![("node_table.cpp".to_string(), "type".to_string())], "tableInfo.table : le champ table du membre tableInfo, deux pas de champ");
 }
