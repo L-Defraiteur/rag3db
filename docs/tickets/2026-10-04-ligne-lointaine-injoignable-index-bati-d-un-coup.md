@@ -1,6 +1,6 @@
 # Une ligne très loin des autres est injoignable dans un index bâti d'un coup
 
-- **État** : ouvert — **bloque la stèle, provisoirement** (orchestration, 5 octobre 2026) : tant qu'une mesure sur un corpus réel n'a pas dit si c'est la rareté d'un jeu fait dur exprès ou un taux réel. Une ligne indexée invisible durablement n'est pas un rappel approché
+- **État** : **corrigé** `d91e4e106` et `4fcf8a98a` (10 octobre 2026), voir « Fermé le 10 octobre » en fin de ticket. Il bloquait la stèle, provisoirement (orchestration, 5 octobre)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui, sans aucune mise à jour
 - **Touche rag3weaver** : non mesuré. La forme du 5 octobre (plus bas) est celle de son chargement : index posé d'avance, morceaux par `COPY` successifs. Mesure demandée à l'arbre principal sur un corpus réel (taux de morceaux introuvables par leur propre vecteur)
@@ -271,3 +271,64 @@ vérifiée. Seul chiffre valable de la vraie règle de master : en « masse », 
 introuvables, et un rappel@10 de 0,992 à 0,996. Le détail et la suite sont au rapport du banc
 (`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/01-rapport-de-session.md`,
 « En pause depuis le 5 octobre à midi »).
+
+## Fermé le 10 octobre 2026 : l'élagage redressé (`d91e4e106`, `4fcf8a98a`)
+
+Deux défauts de `shrinkForNode`, présents depuis le premier commit de l'amont (`725046754`),
+dans les deux chemins : le bâti en mémoire, et le chemin disque qui est aussi celui du rejeu.
+- La boucle partait de 1 et écartait toujours le plus proche voisin (`d91e4e106`).
+- La règle était inversée par rapport à l'algorithme 4 de l'article et à hnswlib (`4fcf8a98a`,
+  la comparaison est plus haut). Elle est remplacée par la règle classique, avec les places
+  libres reprises par les écartés **du plus lointain au plus proche** (keepPrunedConnections),
+  les copies du vecteur du nœud bornées à la moitié du degré, au plus près en décalage, et le
+  nœud lui-même jamais gardé.
+
+**L'archéologie du i = 1.** Sur le chemin disque, le nœud se trouve parmi ses propres candidats,
+à distance 0 : la garde « jamais soi-même » change le résultat de deux tests du moteur
+(relecture du cœur C++, 10 octobre). Le i = 1 de l'amont écartait donc nbrs[0] — souvent le nœud
+lui-même — par accident, et avec lui le vrai plus proche voisin quand le nœud n'y était pas. Le
+i = 0 seul gardait l'arête vers soi ; la garde la retire.
+
+**Pourquoi le remplissage par le plus lointain.** Repris du plus proche d'abord, les places
+gardaient les listes pleines (60) : chaque arête inverse les débordait, et chaque élagage
+pouvait écarter une ligne lointaine « couverte » par un voisin plus proche d'elle qui ne la vise
+pas (il ne l'a jamais eue pour candidate). La plus lointaine ne revenait jamais, et une région
+éloignée perdait sa dernière arête entrante. VectorIndexAfterFailedCopyTest et
+VectorIndexRollbackTest (des lignes versées par un COPY dans une transaction, loin du reste)
+rougissaient 6 fois sur 6 ; par le plus lointain, 6 verts. Remplir jusqu'aux trois quarts
+seulement ne suffisait pas (6 rouges).
+
+Mesuré le 10 octobre, master contre ce lot, chaque extension prouvée bâtie de sa source :
+- **la ligne lointaine** (`HnswBuiltOnTheFirstHundredRowsLosesANode`,
+  `FarRowInAnIndexBuiltAtOnce`, `FarRowFromATightCloudInAnIndexBuiltAtOnce`, 10 passes
+  chacun) : 10 rouges sur 30 → **30 verts sur 30** ; les deux lignes sortent de `known_red.txt` ;
+- **les COPY successifs** (`Ends/ProductReloadRecovery`, 30 passes par fin) : 83 rouges sur 120
+  → **3 sur 120**. Ils restent dans `probabilistic.txt`, rares mais pas nuls ;
+- **le vrai corpus** (12 278 vecteurs de 768 dimensions, 3 passes « masse » et 3 « fond ») :
+  introuvables par leur propre vecteur 4/1/3 et 5/4/6 → 0/0/0 et 0/0/0 ; en vecteurs distincts
+  (exacts / quasi-doublons / ordinaires) 0/2/21 → 0/0/0 ; rappel@10 0,992–0,995 → 1 ;
+- **le prix** : un degré de 35 → 60, le temps par requête de +3 à 5 % (médiane 10,7 →
+  11,0–11,3 ms), le fichier +2 %, le bâti égal.
+
+**Les index existants gardent leur graphe d'avant.** Le format ne change pas, et seules les
+listes des nœuds qu'une écriture touche sont réécrites sous la nouvelle règle. Pour profiter de
+l'élagage, il faut recréer l'index (`DROP_VECTOR_INDEX` puis `CREATE_VECTOR_INDEX`).
+
+**Non témoigné : le mélange des deux règles.** Un index gardé d'avant, avec un journal écrit
+sous l'ancienne règle et rejoué par le nouveau moteur. Le journal est logique, donc le rejeu
+réinsère sous la nouvelle règle dans l'ancien graphe. Le raisonnement de la relecture du cœur
+C++ : chaque liste réécrite garde son plus proche voisin non copie, donc l'invariant de
+joignabilité tient, et le mélange ne crée pas de cas nouveau. Le témoin serait une base
+fabriquée par l'ancien moteur avec un journal non rejoué, sur le modèle de
+`dataset/databases/stale-index-columns` : à suivre, pas pour ce lot.
+
+**Le témoin des copies ne départage pas.** `NearCopiesAndExactCopiesAreAllFound` (amas de
+quasi-copies à 1e-5, groupes exacts jusqu'à 49) est vert sur master comme sur ce lot. Il garde
+ce que les deux règles tiennent ; ce qui les sépare, c'est la sonde sur le vrai corpus
+(`RealVectorsReachability`, dans `long.txt`).
+
+**Reste ouvert, à part** :
+- un groupe de copies bien plus grand que le degré
+  (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`) ;
+- les lignes injoignables après une mise à jour massive de vecteurs
+  (`2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`, le lot suivant du banc).
