@@ -1,6 +1,6 @@
 # Les pages d'un COPY journalisé sont perdues quand la base rouvre par le rejeu
 
-- **État** : ouvert — reclassé le 10 octobre 2026 par l'orchestration : **un défaut du moteur d'aujourd'hui**, pas seulement du `COPY` journalisé ; ne perd ni ne corrompt (de l'espace, qui s'accumule), donc hors de la condition 1 de la stèle ; corrigé maintenant parce que le chargement final des relations de rag3weaver (1,1 million de lignes en une transaction) est dans la zone à chaque arrêt brutal. Correctif en cours (page 06)
+- **État** : corrigé le 10 octobre 2026 (`0aed3c4b5`, « fix(stockage): le fichier de la base a une étendue connue ») — l'étendue du fichier dans l'en-tête au point de reprise, version de stockage 40, l'excédent rendu à l'espace libre à l'ouverture en écriture, sans troncature. Reclassé le 10 octobre : un défaut du moteur d'aujourd'hui, hors stèle. Limites à la fin
 - **Gravité** : espace perdu dans le fichier de la base, pour toujours, qui s'accumule à chaque mort. Aucune donnée perdue, aucune réponse fausse
 - **Atteignable en service** : oui, aujourd'hui : toute mort du processus pendant un `COPY` d'au moins un groupe plein de nœuds (131 072 lignes), journalisé ou non ; et après un `COPY` journalisé validé, toute réouverture par le rejeu
 - **Touche rag3weaver** : oui — le chargement final des relations d'une première indexation (1,1 million de lignes) ; les paquets de 2 048 fichiers (~30 000 scopes) sont en deçà du groupe plein
@@ -45,9 +45,12 @@ rien ne fuit. Un `COPY` de 3 000 lignes, journalisé, fermé sans point de repri
 
 ## Témoins
 
-`test/transaction/journaled_copy_test.cpp`, `OwnerlessPagesTest` : les trois formes de `COPY`
-tuées, et deux morts de suite — rouges avant le correctif (640, 638, 637, 1 269 pages occupées
-pour 9).
+`test/transaction/journaled_copy_test.cpp`, `OwnerlessPagesTest` (neuf cas) : les trois formes de
+`COPY` tuées et deux morts de suite — rouges avant le correctif (640, 638, 637, 1 269 pages
+occupées pour 9) ; la lecture seule entre-temps ; le rejeu par valeur (parité avec une base
+témoin, puis avec index vectoriel et plein texte) ; la base de la version 39 ; les pages rendues
+réutilisées par le COPY suivant. Et les sept témoins du point de reprise interrompu
+(`checkpoint_test.cpp`) font le contrôle de fuite.
 
 ## Non mesuré encore (périmé)
 

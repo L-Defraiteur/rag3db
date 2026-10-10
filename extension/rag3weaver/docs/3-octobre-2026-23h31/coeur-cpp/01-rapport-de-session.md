@@ -44,6 +44,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Forme compacte des tableaux au journal | `1c232f318` | un tableau de taille fixe de numériques s'écrit en octets bruts : un `FLOAT[768]` pèse 3,1 Ko au journal au lieu de 9,3, par `COPY` comme par `SET` ; trois numéros d'enregistrement neufs (40, 42, 45), l'ancien décodage gardé ; un journal neuf n'est pas lisible par un moteur d'avant |
 | Sonde du poids du journal | `c1c2f9dfc` | `RAG3DB_PROFILE_JOURNAL=1` : à chaque validation, les octets du journal de la transaction par type d'enregistrement et par table, sur la sortie d'erreur |
 | Repli d'un `COPY` journalisé (étape 4, lot 2) | `71cffbc4b` | au-delà de `copy_journal_threshold` (défaut : un huitième du tampon, plafonné à 256 Mio), la transaction vide son journal et redevient durable par son point de reprise ; compteur `copy_journal_fallbacks`. Inerte tant que `force_checkpoint_on_copy` vaut `true` |
+| Le fichier de la base a une étendue connue | `0aed3c4b5` | les pages d'un `COPY` tué ou rejoué ne sont plus perdues : l'étendue du fichier dans l'en-tête au point de reprise (version de stockage 40), l'excédent rendu à l'espace libre à l'ouverture en écriture ; 559 pages perdues par COPY de 200 000 lignes tué, avant |
 | Transaction forcée sans journal en mémoire | `fb98852e1` | une transaction à point de reprise forcé (tout `COPY` d'aujourd'hui) ne sérialise plus son journal en mémoire pour le jeter : 411 Ko puis 823 Ko gardés avant, 0 après |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
@@ -88,6 +89,14 @@ toucher ; le reste est à l'autre.
    (lire d'abord pourquoi le repli ne s'est pas déclenché sous un tampon minuscule), le
    plantage HNSW sur vecteurs identiques (recette de l'arbre principal, avec le banc), la voie
    (a) des statistiques, les tickets confort. Les tickets ouverts sont listés plus bas.
+
+**Où j'en suis (10 octobre 2026, après-midi).** La fuite de pages est corrigée et sur
+`master` : `0aed3c4b5` (liste complète verte, relecture du banc close, ticket fermé). Chantier B,
+la suite dans l'ordre : la liste « défaut basculé » avec le contrôle de fuite de la suite
+Cypher (exigence c), les huit tests qui supposaient le point de reprise d'un `COPY`, le reste du
+banc sous ce défaut, la série des embarquements (rag3db-6f, sur cette lib), puis le basculement
+de `force_checkpoint_on_copy` ; ensuite les verrous. La seconde session cœur C++ tient les
+correctifs et tickets ; je tiens `src/transaction/` et `src/storage/`.
 
 **Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
 veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.
