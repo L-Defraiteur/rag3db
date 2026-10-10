@@ -140,16 +140,20 @@ jobs:
           ici = os.getcwd().replace("\\", "/")
           m["vector_extension"] = ici + "/dist/windows-x64/vector.rag3db_extension"
           m["workspace"]["root"] = ici + "/essai/ws"; m["database"] = ici + "/essai/code.rag3db"
-          json.dump(m, open("essai/tel-quel.json", "w"))
+          # À côté du gabarit : ses graphes lui sont relatifs (douzième et
+          # quatorzième essais : écrit sous essai/, ../../tools/edit.mmd manque).
+          g = "extension/rag3weaver/templates/backends/code/"
+          json.dump(m, open(g + "tel-quel.json", "w"))
           m["workspace"]["sandbox"] = {"mode": "off"}
-          json.dump(m, open("essai/sans-bac.json", "w"))
+          json.dump(m, open(g + "sans-bac.json", "w"))
           PY
+          g=extension/rag3weaver/templates/backends/code
           echo "--- tel quel (Landlock demandé : le refus attendu)"
           # Le refus attendu sort en code 1 : ne pas arrêter l'étape dessus
           # (onzième essai : l'épreuve « sandbox off » n'a jamais joué).
-          ./dist/windows-x64/rag3weaver-backend.exe essai/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          ./dist/windows-x64/rag3weaver-backend.exe $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
           echo "--- sandbox off"
-          ./dist/windows-x64/rag3weaver-backend.exe essai/sans-bac.json --describe 2>&1 | head -c 600; echo
+          ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe 2>&1 | head -c 600; echo
       - uses: actions/upload-artifact@v4
         if: always()
         with:
