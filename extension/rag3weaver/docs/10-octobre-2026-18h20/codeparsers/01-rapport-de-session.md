@@ -48,6 +48,7 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | B3 — les verrous (codeparsers) | codeparsers `65c1c7a`, `8881d52` | Deux genres d'usage, `Lock` et `SharedLock` : une référence au champ mutex, le propriétaire en qualificatif. Gardes RAII C++ certaines (`unique_lock`, `lock_guard`, `scoped_lock`, `shared_lock`, accolades ou parenthèses — `std::lock_guard lck(mtx);` se lit comme une fonction) ; `.lock()` / `.read()` / `.write()` seulement sur un champ déclaré mutex ou RwLock dans le fichier. Un verrou est compris : hors du relevé des non-résolues. rag3db src : 140 exclusifs, 32 partagés (188 gardes dans le texte) ; rag3weaver : 75 et 1. |
 | B3 — la relation LOCKS (rag3weaver) | rag3db master `2a29c10c6` (fusionné, pointeur 8881d52) | Un symbole `Classe::champ` par champ typé, défini par sa classe ; un verrou est la relation LOCKS du scope vers ce symbole (genre, ligne), posée à l'ingestion. « Qui verrouille NodeTable::mtx » = les LOCKS entrants du symbole. Témoin `e2e_verrous`. |
 | B2c — les chaînes de champs | codeparsers `55c27d1` ; rag3db, branche `chaines-de-champs` (`e94c29959` pointeur, `5999cb640` code.rs), proposée | Le premier champ d'une chaîne dit le propriétaire, les suivants deviennent des pas de champ (`.b`) ; le lecteur du fichier et la résolution au rendez-vous (par tours, quatre au plus) les suivent. Forme réelle : `tableInfo.table->update()` de set_executor.cpp. |
+| B3 — les verrous sur le chemin, dans `impact` | rag3db, branche `verrous-dans-impact` (`627b3e6a9`, empilée sur B2c), proposée | Un relevé générique du nœud de voisinage, déclaré au gabarit (`collect='LOCKS>'`) : pour la méthode modifiée et chaque scope qui en dépend, les mutex qu'il verrouille, groupés par `Classe::champ`. L'IR n'a rien à changer (Hop suit LOCKS par son nom). Témoin `e2e_verrous`. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
 
@@ -65,6 +66,7 @@ Sonde `tests/sonde_cpp_rag3db.rs` (tout `rag3db/src`, 1 543 fichiers,
 
 ## Suite
 
-B2c attend sa fusion par l'arbre principal. Ensuite : la section
-« verrous sur le chemin » d'impact (en proposition), la borne à la source
-de la requête des types différés (remarque de relecture).
+B2c et `verrous-dans-impact` attendent leur fusion par l'arbre principal.
+Ensuite : la borne à la source de la requête des types différés (remarque
+de relecture), puis la sonde relancée pour l'exemple réel d'`impact` sur
+`NodeTable::update` (appelants et verrous pris), à montrer à Lucie.
