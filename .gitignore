@@ -106,3 +106,6 @@ references/
 /experiments/mtga/.venv/
 /experiments/mtga/node_modules/
 /experiments/mtga/rag3bridge/target/
+
+# Les binaires rendus par tools/build-images (paquet npm) : jamais dans git.
+/dist/
