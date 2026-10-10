@@ -219,7 +219,15 @@ impl ChatSession {
             events: events.clone(),
         };
         let mut sink = ChatSink { events, cancelled };
+        // Le bus du run : c'est par lui qu'un outil en mode fond rend tout de
+        // suite et poste sa fin (la boucle le passe aux outils dans
+        // `ToolInvocation`), et c'est la boîte (`with_inbox`) qui ramène cette
+        // fin dans la conversation au tour suivant. Personne d'autre n'y est
+        // abonné : s'il déborde, le plus ancien tombe, le chat ne ralentit pas.
+        let bus = crate::events::EventBus::new(64);
         Agent::new(&observed_llm, &observed)
+            .with_events(bus)
+            .with_inbox()
             .with_completion_check(
                 config
                     .completion_tool
