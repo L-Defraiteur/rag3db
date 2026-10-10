@@ -78,3 +78,8 @@ Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Death
 # deux fois sur trois, 1 222 la troisième (10 octobre). Le cas non nul (SameIndexFirstCopy) est
 # vert trois fois sur trois. Ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstCopy
+# Son voisin non nul (SameIndexFirstCopy), vert neuf fois (trois répétitions, le témoin de la
+# variante retenue, quatre comparaisons du banc), puis rouge une fois : la comparaison du banc
+# sur verrous-a4 jouée seule sur luciepc, charge 5 (10 octobre, 22 h 40). Non attribué : rien
+# n'établit qu'A4′ y soit pour quelque chose. Même ticket.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
