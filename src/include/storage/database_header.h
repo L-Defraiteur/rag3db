@@ -17,6 +17,14 @@ struct DatabaseHeader {
     // Used to ensure that files such as the WAL match the current database
     common::ku_uuid_t databaseID{0};
 
+    // L'étendue du fichier de données — son nombre de pages — au moment où ce point de reprise
+    // a écrit l'en-tête. Toutes les pages qu'il désigne sont en deçà. Ce que le fichier porte
+    // au-delà à l'ouverture est à personne : écrit par un travail qui n'a pas atteint de point de
+    // reprise (un COPY tué, un point de reprise interrompu, une queue libérée sans troncature) ;
+    // l'ouverture en écriture le rend à l'espace libre. INVALID_PAGE_IDX : inconnue (une base
+    // écrite avant la version 40 du stockage).
+    common::page_idx_t numDataPages = common::INVALID_PAGE_IDX;
+
     void updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange);
     void freeMetadataPageRange(PageManager& pageManager) const;
     void serialize(common::Serializer& ser) const;
