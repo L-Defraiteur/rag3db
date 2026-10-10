@@ -142,16 +142,33 @@ fn suivies() -> &'static std::sync::Mutex<std::collections::HashMap<String, std:
     S.get_or_init(Default::default)
 }
 
-/// La poignée d'une commande en fond. **En attendant la boucle en tâches**
-/// (session recherche, `ctx.async_handle()`), un compteur du processus.
-fn poignee() -> String {
+/// La poignée d'une commande en fond : celle de l'appel d'outil quand la
+/// boucle la donne (`ctx.tool_handle()`, « #outil-N »), un compteur du
+/// processus sinon. Le registre est du processus et la boucle numérote par
+/// run : une poignée déjà prise par un autre run reçoit un suffixe.
+fn poignee(ctx: &NodeContext) -> String {
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    format!("cmd-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    let suivant = || N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let Some(appel) = ctx.tool_handle().map(|h| h.trim_start_matches('#').to_string()).filter(|h| !h.is_empty()) else {
+        return format!("cmd-{}", suivant());
+    };
+    let prises = suivies().lock().unwrap_or_else(|p| p.into_inner());
+    if prises.contains_key(&appel) {
+        format!("{appel}-{}", suivant())
+    } else {
+        appel
+    }
 }
 
 /// Ce qu'on dit de la fin d'une commande.
 pub fn dire_la_fin(poignee: &str, f: &Fin) -> String {
+    dire_la_fin_de(poignee, f, false)
+}
+
+/// `fin_du_run` : la mort vient de la portée du run qui se vide.
+fn dire_la_fin_de(poignee: &str, f: &Fin, fin_du_run: bool) -> String {
     let comment = match (f.code, f.signal, f.tuee) {
+        (_, _, true) if fin_du_run => "tuée à la fin du run".to_string(),
         (_, _, true) => "tuée".to_string(),
         (Some(c), _, _) => format!("code {c}"),
         (None, Some(s), _) => format!("tuée par le signal {s}"),
@@ -326,8 +343,10 @@ impl Node for RunCommandNode {
 impl RunCommandNode {
     /// **En fond** : une seule commande (un enchaînement se lance par un
     /// script), partie dans son propre groupe ; la poignée et les journaux
-    /// rendus tout de suite. La fin est rangée ; la livrer dans la boîte de
-    /// l'agent attend la boucle en tâches (session recherche).
+    /// rendus tout de suite. Sa fin est rangée, et postée dans la boîte de
+    /// l'agent quand la boucle donne son bus (`"agent_bus"`, `"agent_inbox"`).
+    /// Sa mort est confiée à la portée du run (`"run_scope"`) : le run ne
+    /// l'attend pas, il la tue en finissant.
     fn lancer_en_fond(
         &self,
         ctx: &mut NodeContext,
@@ -348,7 +367,7 @@ impl RunCommandNode {
         }
         let (c, _) = &parties[0];
         let laissez = garde.autoriser(c, contexte).map_err(|v| format!("run: {} : {}", c.lisible(), v.motif))?;
-        let poignee = poignee();
+        let poignee = poignee(ctx);
         let mut atelier = Atelier::dans(racine)
             .avec_max_sortie(self.max_sortie)
             .avec_journaux(dossier_du_run(ctx))
@@ -357,7 +376,29 @@ impl RunCommandNode {
             atelier = atelier.avec_bac_a_sable(bac.as_ref().clone());
         }
         let delai = self.delai_donne.then(|| std::time::Duration::from_secs(self.delai_s));
-        let en_fond = lancer_en_fond(laissez, &atelier, delai, Box::new(|_| {})).map_err(|e| format!("run: {e}"))?;
+        // La fin, postée dans la boîte du run. Sans boîte (un graphe lancé
+        // hors de la boucle), elle reste rangée et `tail` la dit.
+        let par_la_portee = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let bus = ctx.service::<crate::events::EventBus>("agent_bus").cloned();
+        let boite = ctx.service::<String>("agent_inbox").cloned();
+        let a_la_fin: Box<dyn FnOnce(&Fin) + Send> = match (bus, boite) {
+            (Some(bus), Some(boite)) => {
+                let (nom, portee) = (poignee.clone(), par_la_portee.clone());
+                Box::new(move |f: &Fin| {
+                    let fin_du_run = portee.load(std::sync::atomic::Ordering::SeqCst);
+                    bus.send_message(&boite, &format!("#{nom}"), &boite, &dire_la_fin_de(&nom, f, fin_du_run));
+                })
+            }
+            _ => Box::new(|_| {}),
+        };
+        let en_fond = lancer_en_fond(laissez, &atelier, delai, a_la_fin).map_err(|e| format!("run: {e}"))?;
+        if let Some(portee) = ctx.service::<Arc<crate::agent::RunScope>>("run_scope").cloned() {
+            let nom = poignee.clone();
+            portee.defer(Box::new(move || {
+                par_la_portee.store(true, std::sync::atomic::Ordering::SeqCst);
+                tuer_en_fond(&nom, GRACE_EN_FIN_DE_RUN);
+            }));
+        }
         let chemin = |p: &Option<std::path::PathBuf>| p.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
         let texte = format!(
             "**En fond** : `#{poignee}` · `{}` (pid {}).\n\n- sortie : `{}`\n- erreurs : `{}`\n\n\
@@ -380,6 +421,9 @@ impl RunCommandNode {
         rendre(ctx, texte)
     }
 }
+
+/// Le délai entre SIGTERM et SIGKILL quand le run finit.
+const GRACE_EN_FIN_DE_RUN: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// **Tuer une commande en fond** et tout son groupe (la fin du run).
 pub fn tuer_en_fond(poignee: &str, grace: std::time::Duration) -> bool {
@@ -838,6 +882,40 @@ mod tests {
         NodeContext::with_services(Arc::new(services))
     }
 
+    /// Le contexte que la boucle pose pour un appel d'outil : la poignée, le
+    /// bus et la boîte du run, la portée du run.
+    fn contexte_de_boucle(
+        racine: &std::path::Path,
+        bus: &crate::events::EventBus,
+        boite: &str,
+        portee: &Arc<crate::agent::RunScope>,
+        appel: &str,
+    ) -> NodeContext {
+        let mut services = ServiceRegistry::new();
+        services.register(GARDE_SERVICE, Arc::new(Garde::new(Mode::Auto)));
+        let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(racine));
+        services.register(FILE_SOURCE_SERVICE, source);
+        services.register("tool_handle", appel.to_string());
+        services.register("agent_bus", bus.clone());
+        services.register("agent_inbox", boite.to_string());
+        services.register("run_scope", portee.clone());
+        NodeContext::with_services(Arc::new(services))
+    }
+
+    /// Les messages de la boîte, attendus jusqu'à en avoir `n` (5 s au plus).
+    fn messages(rx: &mut async_broadcast::Receiver<crate::events::Event>, n: usize) -> Vec<(String, String)> {
+        let mut dits = Vec::new();
+        let debut = std::time::Instant::now();
+        while dits.len() < n && debut.elapsed() < std::time::Duration::from_secs(5) {
+            match rx.try_recv() {
+                Ok(crate::events::Event::Message { from, content, .. }) => dits.push((from, content)),
+                Ok(_) => {}
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+        dits
+    }
+
     fn texte(ctx: &mut NodeContext) -> String {
         ctx.drain_outputs()
             .remove("result")
@@ -977,7 +1055,7 @@ mod tests {
     // ── En fond, et `tail` (10 octobre 2026) ────────────────────────────
 
     fn poignee_de(t: &str) -> String {
-        let i = t.find("`#cmd-").expect("une poignée") + 1;
+        let i = t.find("**En fond** : `#").expect("une poignée") + "**En fond** : `".len();
         t[i..].split('`').next().unwrap().to_string()
     }
 
@@ -1035,6 +1113,91 @@ mod tests {
         assert!(tuer_en_fond(&p, std::time::Duration::from_secs(2)), "la poignée est connue");
         let t = lire(&mut ctx, TailNode::new("tail", &p).lignes(1));
         assert!(t.contains("a fini") && t.contains("tuée"), "{t}");
+    }
+
+    /// **La fin arrive dans la boîte**, sous la poignée de l'appel, avec son
+    /// code : 0, puis 2, puis tuée.
+    #[test]
+    fn la_fin_arrive_dans_la_boite_avec_son_code() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let suivi = dossier.path().join("suivi.log");
+        std::fs::write(&suivi, "l1\n").unwrap();
+        let bus = crate::events::EventBus::new(64);
+        let boite = "run-boite";
+        let mut rx = bus.subscribe(&crate::events::inbox_topic(boite));
+        let portee = Arc::new(crate::agent::RunScope::default());
+        let lancer = |appel: &str, ligne: String| {
+            let mut ctx = contexte_de_boucle(dossier.path(), &bus, boite, &portee, appel);
+            RunCommandNode::new("run", ligne).en_fond(true).execute(&mut ctx).expect("lancée");
+            poignee_de(&texte(&mut ctx))
+        };
+        let ok = lancer("#essai-boite-1", "ls".into());
+        assert_eq!(ok, "#essai-boite-1", "la poignée est celle de l'appel");
+        let dits = messages(&mut rx, 1);
+        assert!(dits.len() == 1 && dits[0].0 == "#essai-boite-1" && dits[0].1.contains("code 0"), "{dits:?}");
+        lancer("#essai-boite-2", "ls n-existe-pas-du-tout".into());
+        let dits = messages(&mut rx, 1);
+        assert!(dits.len() == 1 && dits[0].1.contains("code 2"), "{dits:?}");
+        let long = lancer("#essai-boite-3", format!("tail -f {}", suivi.display()));
+        assert!(tuer_en_fond(&long, std::time::Duration::from_secs(2)));
+        let dits = messages(&mut rx, 1);
+        assert!(dits.len() == 1 && dits[0].1.contains("tuée") && !dits[0].1.contains("fin du run"), "{dits:?}");
+    }
+
+    /// **Le run fini tue la commande** : la portée vidée l'arrête, son
+    /// processus n'existe plus, et la boîte reçoit « tuée à la fin du run ».
+    #[test]
+    fn la_portee_videe_tue_la_commande_et_le_dit() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let suivi = dossier.path().join("suivi.log");
+        std::fs::write(&suivi, "l1\n").unwrap();
+        let bus = crate::events::EventBus::new(64);
+        let boite = "run-portee";
+        let mut rx = bus.subscribe(&crate::events::inbox_topic(boite));
+        let portee = Arc::new(crate::agent::RunScope::default());
+        let mut ctx = contexte_de_boucle(dossier.path(), &bus, boite, &portee, "#essai-portee-1");
+        RunCommandNode::new("run", format!("tail -f {}", suivi.display())).en_fond(true).execute(&mut ctx).unwrap();
+        let t = texte(&mut ctx);
+        let pid: u32 = t.split("(pid ").nth(1).and_then(|r| r.split(')').next()).and_then(|p| p.parse().ok()).expect("le pid");
+        assert!(messages(&mut rx, 1).is_empty(), "elle tourne : rien dans la boîte");
+        let t0 = std::time::Instant::now();
+        portee.vider();
+        println!("▸ portée vidée en {:?}", t0.elapsed());
+        let dits = messages(&mut rx, 1);
+        assert!(dits.len() == 1 && dits[0].1.contains("tuée à la fin du run"), "{dits:?}");
+        let vivant = std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().unwrap().success();
+        assert!(!vivant, "le processus {pid} est mort");
+        portee.vider();
+        assert!(messages(&mut rx, 1).is_empty(), "une seconde vidange ne redit rien");
+    }
+
+    /// **Deux commandes du même programme dans le même run** : deux poignées,
+    /// deux journaux, deux fins livrées. Une poignée déjà prise reçoit un
+    /// suffixe.
+    #[test]
+    fn deux_commandes_du_meme_programme_ont_deux_journaux_et_deux_fins() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let bus = crate::events::EventBus::new(64);
+        let boite = "run-deux";
+        let mut rx = bus.subscribe(&crate::events::inbox_topic(boite));
+        let portee = Arc::new(crate::agent::RunScope::default());
+        let mut journaux = Vec::new();
+        let mut poignees = Vec::new();
+        for appel in ["#essai-deux-1", "#essai-deux-2", "#essai-deux-1"] {
+            let mut ctx = contexte_de_boucle(dossier.path(), &bus, boite, &portee, appel);
+            RunCommandNode::new("run", "ls").en_fond(true).execute(&mut ctx).unwrap();
+            let t = texte(&mut ctx);
+            poignees.push(poignee_de(&t).trim_start_matches('#').to_string());
+            let sortie = t.split("- sortie : `").nth(1).and_then(|r| r.split('`').next()).unwrap_or_default().to_string();
+            journaux.push(sortie);
+        }
+        assert_eq!(&poignees[..2], ["essai-deux-1", "essai-deux-2"]);
+        assert!(poignees[2].starts_with("essai-deux-1-"), "la poignée reprise reçoit un suffixe : {poignees:?}");
+        let distincts: std::collections::HashSet<&String> = journaux.iter().collect();
+        assert_eq!(distincts.len(), 3, "trois journaux : {journaux:?}");
+        let dits = messages(&mut rx, 3);
+        let de: std::collections::HashSet<String> = dits.iter().map(|(f, _)| f.trim_start_matches('#').to_string()).collect();
+        assert_eq!(de, poignees.iter().cloned().collect(), "les trois fins livrées : {dits:?}");
     }
 
     /// **`tail` dit la fin et son code.**
