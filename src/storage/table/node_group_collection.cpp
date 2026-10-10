@@ -211,10 +211,20 @@ void NodeGroupCollection::checkpoint(MemoryManager& memoryManager,
         typesAfterCheckpoint.push_back(types[state.columnIDs[i]].copy());
     }
     types = std::move(typesAfterCheckpoint);
-    // L'estimation que lisent STATS_INFO et le planificateur compte encore les lignes d'un COPY
-    // annulé ou refusé (il fusionne ses statistiques avant sa validation) : le point de reprise
-    // la recale sur le nombre de lignes, qui inclut les supprimées.
-    stats.setCardinality(numTotalRows);
+    // L'estimation que lisent STATS_INFO et le planificateur n'est tenue qu'à l'ajout : une ligne
+    // supprimée, ou écartée par un COPY sous IGNORE_ERRORS (ajoutée puis supprimée), y reste
+    // comptée. Le point de reprise la recale sur les lignes vivantes, d'après les informations
+    // de version des groupes, sans relire les colonnes. numTotalRows n'est pas touché : il est
+    // aussi l'allocateur des décalages.
+    stats.setCardinality(getNumLiveRows(lock));
+}
+
+row_idx_t NodeGroupCollection::getNumLiveRows(const UniqLock& lock) const {
+    row_idx_t numLiveRows = 0;
+    for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
+        numLiveRows += nodeGroup->getNumLiveRows();
+    }
+    return numLiveRows;
 }
 
 void NodeGroupCollection::reclaimStorage(PageAllocator& pageAllocator) const {
@@ -286,8 +296,9 @@ void NodeGroupCollection::deserialize(Deserializer& deSer, MemoryManager& memory
         numTotalRows += nodeGroup->getNumRows();
     }
     // Et à la lecture : une base écrite avant ce recalage garde sur disque une estimation
-    // gonflée.
-    stats.setCardinality(numTotalRows);
+    // gonflée. Les informations de version sont persistées avec les groupes : les lignes
+    // supprimées se retirent sans relire les colonnes.
+    stats.setCardinality(getNumLiveRows(lock));
 }
 
 } // namespace storage

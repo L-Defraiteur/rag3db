@@ -34,6 +34,8 @@ public:
         InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator);
 
     common::row_idx_t getNumTotalRows() const;
+    // Les lignes validées et non supprimées de toute la collection, sans relire les colonnes.
+    common::row_idx_t getNumLiveRows(const common::UniqLock& lock) const;
     common::node_group_idx_t getNumNodeGroups() const {
         const auto lock = nodeGroups.lock();
         return nodeGroups.getNumGroups(lock);
@@ -109,6 +111,12 @@ public:
     void mergeStats(const std::vector<common::column_id_t>& columnIDs, const TableStats& stats) {
         auto lock = nodeGroups.lock();
         this->stats.merge(columnIDs, stats);
+    }
+    // Les statistiques rebâties depuis les lignes vivantes (CALL analyze) : elles remplacent
+    // celles-ci, qu'une fusion ne pourrait que faire monter.
+    void replaceStats(TableStats newStats) {
+        auto lock = nodeGroups.lock();
+        stats = std::move(newStats);
     }
 
     void serialize(common::Serializer& ser);
