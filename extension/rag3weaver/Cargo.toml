@@ -204,6 +204,10 @@ daemon = ["dep:tiny_http", "dep:ureq", "dep:base64"]
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
 # `gcp_auth` (JWT RS256 + OAuth2, pour Vertex) est inclus : zéro crate de plus.
 openai-llm = ["dep:ureq", "dep:ring", "dep:base64"]
+# L'API Messages d'Anthropic, en HTTP brut sur le même `ureq` — pas de couche
+# de compatibilité OpenAI. Tire `openai-llm` pour partager `Auth`, la
+# politique de réessai et l'horloge, pas pour parler OpenAI.
+anthropic-llm = ["openai-llm"]
 
 [dependencies.rayon]
 version = "1.10"
@@ -301,6 +305,11 @@ required-features = ["burn-ocr"]
 [[example]]
 name = "openai_llm_stream"
 required-features = ["openai-llm"]
+
+# Le même, vers l'API Messages d'Anthropic (ANTHROPIC_API_KEY, jamais écrite).
+[[example]]
+name = "anthropic_llm_stream"
+required-features = ["anthropic-llm"]
 
 # ─── Ce que la compilation écrit sur le disque ───────────────────────────────
 #

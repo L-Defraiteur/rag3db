@@ -146,6 +146,9 @@ pub mod chat;
 pub mod gcp_auth;
 #[cfg(feature = "openai-llm")]
 pub mod openai_llm;
+// L'API Messages d'Anthropic, derrière le même trait `Llm`.
+#[cfg(feature = "anthropic-llm")]
+pub mod anthropic_llm;
 pub mod events;
 pub mod filter;
 pub mod generated;
