@@ -21,11 +21,17 @@
 //! traitent déjà mieux. La recherche par MCP est éprouvée par l'épreuve réelle
 //! (une session Claude Code sur ce dépôt), pas ici.
 //!
-//! Et une conséquence de ce choix, écrite parce qu'elle se verrait sinon comme
-//! une bizarrerie : le manifeste joué ici **retire `workspace.index`**. C'est
-//! lui qui rend `needs_embeddings()` vrai, donc qui exigerait un embarqueur à
-//! l'ouverture. Sans index déclaré, le backend s'ouvre partout — et la lecture
-//! de fichiers, elle, n'a jamais eu besoin d'un vecteur.
+//! **Le gabarit est joué tel qu'il est livré, et il exige un embarqueur.**
+//! J'avais d'abord retiré `workspace.index` du manifeste pour m'en passer —
+//! c'est lui qui rend `needs_embeddings()` vrai. Deux passes ont montré que
+//! c'était faux : **toute** la surface de code passe par l'entité `File`, que
+//! `register_code_schema` déclare, et sans elle même `read_file` répond
+//! « unknown entity: File ». Il faut donc `RAG3WEAVER_EMBED_SERVICE` ; aucun
+//! vecteur n'est calculé ici, on ne fait que se connecter.
+//!
+//! Et ce refus mérite d'être signalé pour lui-même : « unknown entity: File »
+//! ne dit pas à un modèle « cette base n'est pas indexée, appelle `index`
+//! d'abord ». Il lira un défaut d'outil là où il y a un ordre à suivre.
 //!
 //! ```bash
 //! ./run_e2e.sh --test e2e_mcp_stdio
@@ -87,8 +93,6 @@ fn manifeste_jouable(ou: &Path) -> PathBuf {
     }
     if let Some(w) = m.get_mut("workspace").and_then(Value::as_object_mut) {
         w["root"] = json!(atelier.to_string_lossy());
-        // Voir l'en-tête : sans index déclaré, pas d'embarqueur exigé.
-        w.remove("index");
     }
     absolutiser(&mut m, &gabarit);
 
@@ -200,13 +204,43 @@ fn un_client_mcp_voit_les_outils_du_manifeste_et_les_appelle() {
     );
 
     // ── 3. Un appel traverse run_tool et le bac à sable ──────────────────
+    // **Lu, cette fois, et non supposé.** Deux interfaces inventées m'ont
+    // refusée avant d'arriver ici, et la seconde apprend quelque chose sur le
+    // gabarit : `list_files` ne lit pas l'arbre de travail, il liste les
+    // fichiers **indexés** (l'entité `File`). Sur une base neuve il répond
+    // « ListFilesNode: unknown entity: File ». Les outils qui lisent vraiment
+    // le disque sont ceux de la capacité `read_files` — `read_file`,
+    // `grep_files` —, et c'est par eux qu'un appel se prouve sans index.
     let r = s.demander(json!({
         "jsonrpc":"2.0","id":3,"method":"tools/call",
-        "params":{"name":"list_files","arguments":{"path":"."}}
+        "params":{"name":"read_file","arguments":{"path":"port.rs"}}
     }));
     assert_eq!(r["result"]["isError"], false, "{r}");
     let texte = r["result"]["content"][0]["text"].as_str().unwrap_or_default();
-    assert!(texte.contains("port.rs"), "l'atelier contient port.rs : {texte}");
+    assert!(
+        texte.contains("pub fn ouvrir"),
+        "l'appel traverse run_tool et le bac à sable, et rend le fichier : {texte}"
+    );
+
+    // ── 3 bis. Un argument qui n'existe pas est refusé par son nom ────────
+    //
+    // **Ce cas est né d'une erreur à moi** : j'avais appelé `list_files` avec
+    // `path` alors qu'il déclare `path_prefix`, et le serveur a répondu
+    // « unknown argument path » dans `content` avec `isError`. C'est la faute
+    // qu'un modèle commet le plus souvent, et c'est exactement le chemin par
+    // lequel il doit l'apprendre — donc le cas reste, au lieu d'être corrigé
+    // et oublié.
+    let r = s.demander(json!({
+        "jsonrpc":"2.0","id":31,"method":"tools/call",
+        "params":{"name":"read_file","arguments":{"chemin":"port.rs"}}
+    }));
+    assert!(r["error"].is_null(), "un mauvais argument n'est pas une erreur de protocole : {r}");
+    assert_eq!(r["result"]["isError"], true, "{r}");
+    let refus = r["result"]["content"][0]["text"].as_str().unwrap_or_default();
+    assert!(
+        refus.contains("chemin"),
+        "le refus doit nommer l'argument fautif pour qu'un modèle se corrige : {refus}"
+    );
 
     // ── 4. Un refus arrive au modèle ─────────────────────────────────────
     //
