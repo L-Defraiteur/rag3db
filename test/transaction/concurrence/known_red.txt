@@ -62,17 +62,12 @@ Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,c
 # Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
 LockBench.FailedTransactionReleasesItsLocksAtRollback waited
 #
-# Marche V1, genre « index » (et maintenance de l'index HNSW au commit, étude HNSW §4) — H3 :
-# deux suppressions sans rapport dont les voisinages se recouvrent ; le second reçoit un
-# « Write-write conflict ». H4 (probabilistic.txt) est l'autre témoin de ce genre.
-Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
-Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
-#
-# Marche V1, genre « index » — tout écrivain d'une table indexée prend l'index de la table en
-# exclusif : l'écrivain en auto-commit attend puis valide ; en bloc, il attend puis valide ou
-# reçoit « could not serialize ». Aujourd'hui, sans verrou : waited.
-IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits waited
-IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError waited
+# Marche I1 (le genre « index » : tout écrivain d'une table indexée tient l'index en exclusif de
+# sa première écriture à sa validation, l'instantané repris après l'attente) : FAITE le 11 octobre
+# 2026. Verts depuis : H3_IndexedDeletesWithOverlappingNeighbourhoods (Hot, Crash),
+# IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits et
+# BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError. H2 et H5 réécrits (celui qui
+# valide le premier écrit le premier, l'attente prouvée).
 #
 # Marche V2, genre « index » — l'annonce sur une table indexée prend aussi l'index, en exclusif :
 # FAITE le 11 octobre 2026 ; IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit
