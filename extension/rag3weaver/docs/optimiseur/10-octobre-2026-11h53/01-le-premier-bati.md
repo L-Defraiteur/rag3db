@@ -442,8 +442,22 @@ avec le C de quickjs-ng par `cc`, swc_ts_fast_strip + swc_common, ~150
 paquets) est fondu dans `paquet-npm`. Vérifié : **manylinux_2_28** (Docker
 luciepc) vert, binaire strippé 79 → **89 Mo** ; **macOS arm64** vert (run 5,
 22 min), 81 → **93 Mo** après `strip -x` ; natif Linux vert avec `npm test`.
-Le poids (+10 à +12 Mo) est à la session « everything declarative », qui
-mesure la part de swc. Windows : le dix-neuvième essai le bâtit.
+Le poids (+10 à +12 Mo) : « everything declarative » l'a mesuré sur un
+binaire témoin, c'est swc (+7,2 Mo), pas QuickJS (+1,35). Windows : le
+dix-neuvième essai le bâtit.
+
+### Le profil de publication : la LTO complète
+
+Mesuré sur le bâti Linux du paquet (Docker luciepc, lot 1 dedans) :
+`lto = "fat"` + `codegen-units = 1` → binaire strippé **61 Mo contre 89**
+(−31 % ; 69 contre 109 non strippé), extension inchangée, bâti Rust
+6 min 14 s contre 3 min 25 s avec le cache (le moteur C++ est hors de la
+LTO Rust). Décision de l'orchestration : un `[profile.paquet]` dans le
+Cargo.toml de rag3weaver, qui hérite de `release`, pour les seuls bâtis du
+paquet (workflow, recette Docker) ; `release` reste tel quel. Les caches des
+runners changent de clé avec lui (`target/paquet`) : un bâti à froid de
+plus par plateforme, puis le cache tient. Les trois sous-paquets de la
+séance se bâtissent avec ce profil.
 
 ## Ce qui vient ensuite
 
