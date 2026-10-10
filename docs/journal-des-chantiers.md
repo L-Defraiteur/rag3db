@@ -528,11 +528,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : huit façons de prendre son harnais pour un résultat
+## Méthode : neuf façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante, la sixième le 4 octobre
-(quatre fois le même jour), la septième et la huitième le 10. Elles se sont présentées à la suite,
+(quatre fois le même jour), la septième, la huitième et la neuvième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -761,7 +761,45 @@ pourquoi une sortie trompe ne protège pas de s'y laisser prendre la fois
 suivante, quand elle nomme un fichier auquel on tient. C'est la commande qu'il
 faut changer, pas la vigilance.
 
-**Et la forme commune aux huit**, qui est aussi celle des défauts qu'on
+**9. Le « bâti à part » qui n'est pas à part.** 10 octobre 2026, au soir.
+L'arbre principal devait rebâtir la bibliothèque du moteur pendant qu'une
+batterie tournait contre elle ; je lui ai conseillé de **bâtir à part**, dans un
+autre dossier de bâti, pour ne pas la remplacer sous la passe. Mauvais conseil,
+et c'est lui qui l'a vu avant de l'appliquer : **le bâti écrit aussi l'extension
+vectorielle à un chemin fixe de l'arbre** —
+`<arbre>/extension/vector/build/libvector.rag3db_extension` — **quel que soit le
+dossier de bâti**. Choisir `build/autre` au lieu de `build/lecteurs-csv` ne
+déplace donc que la bibliothèque : l'extension, elle, est réécrite au même
+endroit. Un bâti « à part » dans le même arbre aurait remplacé l'extension sous
+la batterie **sans** toucher à la bibliothèque — la moitié de l'artefact
+échangée en vol, et pire qu'un échange franc : la ligne d'âge de `run_e2e.sh`
+surveille la bibliothèque, donc elle n'aurait rien signalé.
+
+**Précision du même soir, et elle corrige la première version de cette note**
+(rag3db-10, qui s'est fait avertir à tort) : « le même arbre » est la borne
+exacte. Un bâti dans un **autre worktree** écrit dans *son* chemin d'extension
+(`~/git_workspaces/rag3db-banc-a4/extension/vector/build/`) et ne touche à rien
+de l'arbre commun. **Bâtir ailleurs est donc possible — à condition qu'« ailleurs »
+soit un autre arbre, pas un autre dossier de bâti.** J'avais écrit « ailleurs n'y
+change rien », ce qui aurait fait attendre pour rien quelqu'un qui bâtissait
+chez lui.
+
+La règle, donc : **on ne bâtit pas le moteur d'un arbre pendant qu'une passe
+charge les artefacts de cet arbre**, et changer de dossier de bâti n'y change
+rien. Ce qui se négocie, c'est l'attente — annoncer, attendre le « fini »,
+rebâtir, prouver les artefacts, annoncer de nouveau. Et la question à poser
+avant de s'inquiéter ou de rassurer : *de quel arbre vient l'artefact que la
+passe charge ?*
+
+Et la leçon de forme, qui est la même que les huit autres sous deux angles
+neufs : **un conseil que l'on donne n'est pas moins à vérifier qu'une mesure que
+l'on prend.** J'ai dit « bâtis à part » avec l'assurance d'une solution
+évidente, sans savoir où va l'extension — puis j'ai écrit la correction *trop
+large* et averti quelqu'un qui ne risquait rien. Se tromper par excès de
+prudence a un coût : une attente inutile, et un avertissement qu'on finit par
+ne plus écouter.
+
+**Et la forme commune aux neuf**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
 d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
