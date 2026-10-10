@@ -53,6 +53,8 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | Impact : les sûrs d'abord | branche `impact-surs` (`99e449806`, `6451dad2a`), proposée à l'arbre principal ; oui de l'orchestration pour Lucie, renversable | Les usages trouvés par le nom seul (nom ambigu, attribués à aucune définition) ne sont plus listés ni comptés parmi les touchés : une ligne « N par le nom seul, non montrés », dans le rendu complet et dans le résumé. `include_by_name` (bool, défaut false) au schéma d'`impact` les remontre, marqués. Sur `NodeTable::update` : 2 appelants au lieu de 30 lignes. Témoins `impact_rendu` et `e2e_impact` (gabarit réel, avec et sans le paramètre). |
 | L'outil « ce que ça appelle » | branche `callees` (`026e9ca53`, empilée), proposée | `templates/tools/callees.mmd` : le même nœud de voisinage, CONSUMES sortants, arêtes « nom » non suivies, la même section des verrous ; déclaré dans les deux manifestes (treize outils). Le nœud gagne `heading` (titre du rendu), la ligne de définition de l'appelé en sortant (c'était celle du site d'appel, chez l'appelant), et se tait sur le groupe quand aucun n'est déclaré. Témoin `e2e_verrous` : depuis `top`, `bulk` puis `insert`, `Index::autre` puis `Index::mtx`. |
 
+| Les verrous applicatifs déclarés (`locks_via`) | branche `locks-via` (`c3e03e736`, `001711935`, `148e8da47`, empilée), oui de l'orchestration pour Lucie, renversable | `workspace.locks_via` dans le manifeste (refusé sans `index: "code"`), posé sur le catalogue à l'ouverture ; un scope qui appelle une fonction déclarée reçoit LOCKS vers le symbole de la fonction, dans le fichier comme au rendez-vous ; marque `via` (« champ » / « appel ») ; titre « Verrous pris sur le chemin » ; page du gabarit code. Sonde rag3db/src avec `acquireLock`, `acquireLocks`, `lockRowForWrite` : LOCKS 169 → 178, `callees` de `NodeTable::update` rend `lockRowForWrite` → `acquireLock` → `acquireLocks`. **Une erreur à moi corrigée** : j'avais d'abord déclaré `lockKeyOf` et `lockKeyOfRow`, qui calculent la clé sans verrouiller (« update prend lockKeyOfRow », faux) ; le mécanisme fait ce qu'on déclare, la page dit lesquelles mettre. |
+
 | La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
@@ -80,5 +82,8 @@ appelants), les chiffres avant / après la nuit, ce qui reste.
 Ordre donné par l'orchestration (11 oct., nuit) : (1) impact, les sûrs
 d'abord — fait, branche `impact-surs` ; (3) « ce que ça appelle » — fait,
 branche `callees` ; (2) les fonctions de verrou applicatives déclarées par
-dépôt dans le manifeste (`locks_via`), qui posent LOCKS par l'appel — en
-cours ; puis B2d, les 8 720 arêtes par le nom (receveurs non typés).
+dépôt dans le manifeste (`locks_via`), qui posent LOCKS par l'appel — fait,
+branche `locks-via`. Les trois reprises par l'arbre principal. Ensuite :
+B2d, les 8 720 arêtes par le nom (receveurs non typés) ; B9 côté Rust
+partagé avec rag3db-97 (à elle l'indexation de rag3weaver et les cas
+minimaux par catégorie, à moi la lecture et les correctifs codeparsers).
