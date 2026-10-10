@@ -35,7 +35,7 @@ minijinja = { version = "2", default-features = false, features = ["builtins", "
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
-tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }
