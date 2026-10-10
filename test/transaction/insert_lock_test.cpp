@@ -5,8 +5,12 @@
 // transaction ; une seconde insertion de la même clé par une autre connexion attend (ici
 // jusqu'au délai) ; et le contrôle d'unicité regarde le dernier état validé, non l'instantané.
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <thread>
+#include <vector>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -165,6 +169,60 @@ TEST_F(InsertLockTest, AKeyDeletedAndCommittedAfterTheSnapshotIsFreeAtCommitToo)
     mustRun(*conn, "CREATE (:Item {id: 8, v: 2});");
     const auto duplicate = failureOf(*conn, "CREATE (:Item {id: 7, v: 2});");
     EXPECT_NE(duplicate.find("duplicated primary key"), std::string::npos) << duplicate;
+}
+
+// La famine des fils de l'ordonnanceur (banc, 10 octobre) : plus d'attendants que de fils
+// ouvriers. Deux fils ouvriers, quatre connexions qui attendent la même clé dans un fil chacune ;
+// le détenteur doit pouvoir valider tout de suite — sans fil de remplacement, sa validation
+// n'avait plus de fil ouvrier et attendait la fin des attentes (le délai des verrous).
+class FewWorkerThreadsLockTest : public InsertLockTest {
+protected:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        systemConfig->maxNumThreads = 2;
+        createDBAndConn();
+        mustRun(*conn, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    }
+};
+
+TEST_F(FewWorkerThreadsLockTest, TheHolderCommitsWhileMoreWaitersThanWorkerThreadsWait) {
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
+    constexpr auto numWaiters = 4u;
+    std::atomic<uint32_t> started{0};
+    std::vector<std::string> errors(numWaiters);
+    std::vector<std::thread> waiters;
+    for (auto i = 0u; i < numWaiters; i++) {
+        waiters.emplace_back([&, i] {
+            Connection waiter(database.get());
+            started.fetch_add(1);
+            errors[i] = failureOf(waiter, "CREATE (:Item {id: 7, v: 1});");
+        });
+    }
+    // Tous en attente du verrou de la clé 7 : la seule chose qui se voit de l'extérieur.
+    const auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    auto& lockManager = locks();
+    while (std::chrono::steady_clock::now() < limit &&
+           (started.load() < numWaiters || lockManager.getNumResources() < 2)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    const auto before = std::chrono::steady_clock::now();
+    mustRun(*conn, "COMMIT;");
+    const auto commitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - before)
+                              .count();
+    EXPECT_LT(commitMs, 3000) << "the holder's COMMIT waited " << commitMs
+                              << " ms: no worker thread was left for it";
+    for (auto& waiter : waiters) {
+        waiter.join();
+    }
+    for (auto i = 0u; i < numWaiters; i++) {
+        EXPECT_NE(errors[i].find("duplicated primary key"), std::string::npos)
+            << "waiter " << i << ": " << errors[i];
+    }
+    EXPECT_EQ(locks().getNumResources(), 0u);
 }
 
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {
