@@ -60,6 +60,16 @@ pub trait Embedder: Send + Sync {
         false
     }
 
+    /// **Le service d'embarquement manque-t-il ?** ([`AbsentEmbedder`])
+    ///
+    /// Un embarqueur absent ne rend aucun vecteur : l'index écrit le plein
+    /// texte seul et laisse les vecteurs en dette, la recherche dense dit
+    /// « not available » par le repli de sa branche, aucun débit n'est
+    /// mesuré. Défaut `false`.
+    fn is_absent(&self) -> bool {
+        false
+    }
+
     /// **Comment il s'appelle** — pour les journaux, les refus, et depuis le
     /// 7 septembre 2026 pour **nommer son stockage** : un index porte
     /// plusieurs modèles, chacun dans sa colonne `embedding__{slug}`, et le
@@ -130,6 +140,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     fn is_mock(&self) -> bool {
         (**self).is_mock()
     }
+    fn is_absent(&self) -> bool {
+        (**self).is_absent()
+    }
     fn name(&self) -> &str {
         (**self).name()
     }
@@ -144,6 +157,51 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn distant(&self) -> bool {
         (**self).distant()
+    }
+}
+
+// ─── AbsentEmbedder ──────────────────────────────────────────────────────────
+
+/// Ce qui précède le message de refus d'un embarqueur absent, et l'avertissement
+/// nommé de son montage.
+pub const AVERTISSEMENT_EMBARQUEUR_ABSENT: &str =
+    "embarqueur absent : pas de service d'embarquement, index en plein texte seul, vecteurs en dette";
+
+/// **L'embarqueur d'un produit sans service d'embarquement** (10 octobre 2026).
+///
+/// Il porte le nom et la dimension du modèle **attendu** : le catalogue
+/// enregistre ce modèle-là, ses colonnes et son index, et la dette de
+/// vecteurs se compte contre lui. Quand le service revient avec ce modèle,
+/// la dette se paie là où elle a été notée, sans réindexer.
+///
+/// Il n'embarque jamais : [`Embedder::embed`] rend une erreur nommée, et le
+/// catalogue ne l'appelle pas ([`Embedder::is_absent`]). Le [`MockEmbedder`]
+/// reste aux tests : lui rend des vecteurs nuls, que l'index écrirait.
+#[derive(Debug, Clone)]
+pub struct AbsentEmbedder {
+    model: String,
+    dim: usize,
+}
+
+impl AbsentEmbedder {
+    /// `model` : le nom du modèle attendu (celui du manifeste), `dim` sa dimension.
+    pub fn new(model: impl Into<String>, dim: usize) -> Self {
+        Self { model: model.into(), dim }
+    }
+}
+
+impl Embedder for AbsentEmbedder {
+    fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Err(EmbedError::ProviderError(format!("{AVERTISSEMENT_EMBARQUEUR_ABSENT} (modèle attendu « {} »)", self.model)))
+    }
+    fn dim(&self) -> usize {
+        self.dim
+    }
+    fn is_absent(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &str {
+        &self.model
     }
 }
 
@@ -188,11 +246,12 @@ impl Embedder for MockEmbedder {
 /// déterministe, dérivé du hash du texte. Deux textes identiques → même
 /// vecteur ; deux textes différents → vecteurs sans rapport.
 ///
-/// À utiliser dès qu'un test ingère plus qu'une poignée de lignes :
-/// [`MockEmbedder`] rend des vecteurs **nuls**, et l'index HNSW de l'extension
-/// vectorielle **segfaute** (`shrinkForNode` → `computeDistance`) quand on lui
-/// insère quelques centaines de points identiques (25 août 2026, 1 402 scopes
-/// de code).
+/// À utiliser dès qu'un test cherche par vecteur : [`MockEmbedder`] rend des
+/// vecteurs **nuls**, sans voisin qui ait un sens. L'index HNSW de l'extension
+/// vectorielle segfaultait sur quelques centaines de points identiques
+/// (25 août 2026, `shrinkForNode` → `computeDistance`) ; ce n'est plus le cas
+/// depuis le correctif du banc (`SameVectorForEveryRow`, huit cas verts, octobre
+/// 2026), mais une recherche sur des vecteurs identiques ne prouve toujours rien.
 #[derive(Debug, Clone)]
 pub struct HashEmbedder {
     dim: usize,
@@ -524,6 +583,20 @@ impl DualEmbedder for CallbackDualEmbedder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn l_embarqueur_absent_porte_le_modele_attendu_et_refuse_d_embarquer() {
+        let absent = AbsentEmbedder::new("granite-278m", 768);
+        assert!(absent.is_absent() && !absent.is_mock());
+        assert_eq!((absent.name(), absent.dim()), ("granite-278m", 768));
+        let erreur = absent.embed(&["x".to_string()]).unwrap_err().to_string();
+        assert!(erreur.contains(AVERTISSEMENT_EMBARQUEUR_ABSENT) && erreur.contains("granite-278m"), "{erreur}");
+        // Derrière un `Arc`, comme dans le catalogue.
+        let partage: std::sync::Arc<dyn Embedder> = std::sync::Arc::new(absent);
+        assert!(partage.is_absent());
+        assert!(crate::estimate::probe_rate(&partage, &["x".to_string()]).unwrap().is_none(), "pas de sonde");
+        assert!(!MockEmbedder::new(4).is_absent(), "le factice des tests n'est pas absent");
+    }
 
     /// **Un `Arc<dyn Embedder>` relaie tout ce que le trait dit**, y compris
     /// les méthodes à défaut. `troncatures()` et `distant()` ne l'étaient pas

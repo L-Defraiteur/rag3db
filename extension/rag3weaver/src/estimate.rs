@@ -275,7 +275,8 @@ impl Rate {
 /// Un premier appel à vide chauffe les noyaux — sans lui la sonde mesurerait
 /// la compilation des pipelines, pas le modèle.
 pub fn probe_rate(embedder: &dyn Embedder, samples: &[String]) -> Result<Option<Rate>, String> {
-    if samples.is_empty() {
+    // Un embarqueur absent n'a pas de débit : ni sonde, ni chiffre noté.
+    if samples.is_empty() || embedder.is_absent() {
         return Ok(None);
     }
     embedder.embed(&samples[..1]).map_err(|e| e.to_string())?;
