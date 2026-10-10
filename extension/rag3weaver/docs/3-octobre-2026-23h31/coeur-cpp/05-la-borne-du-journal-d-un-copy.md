@@ -127,6 +127,22 @@ Relecture croisée par le banc (reprise et commit) avant le push.
   plusieurs `COPY` dans une transaction durable. Son exigence de performance : ne ralentir aucun
   mode — fichiers à ±3 %, blobs ramenés par le repli à leur temps d'avant.
 
+## 5 ter. Une réservation par page du journal (10 octobre, seconde session cœur C++)
+
+- **Lu** : le journal local écrit dans un `InMemFileWriter` qui prend ses pages une à une, 4 Kio
+  chacune (`in_mem_file_writer.cpp:22`) ; hors `TEMP_PAGE_SIZE` c'est `mallocBuffer`, donc un
+  `BufferManager::reserve` par page (`memory_manager.cpp:54-57`, `:70-72`). Le `COPY` de
+  2 420 766 relations de `RelCopyBMExceptionRecoverySameConnection` journalise ~181,6 Mo, soit
+  ~44 300 réservations.
+- **Mesuré** (doublure instrumentée, essais interrompus par un refus) : 20 000 à 45 000
+  réservations de 4 Kio par essai, 0,7 à 1,8 ms passées dans `reserve`, soit ~40 ns chacune,
+  pour un `COPY` de 0,7 à 1,4 s. Le `malloc` de chaque page n'est pas compté. Le coût en temps
+  est négligeable ; la conséquence est ailleurs : toute doublure qui refuse « une réservation
+  sur N » voit le nombre de réservations d'un `COPY` journalisé multiplié par ~6 (7 000 hors
+  journal, 45 000 avec).
+- Le seuil de cette page ne s'applique qu'au tampon configuré : sous le tampon par défaut d'un
+  test (0,8 × la mémoire, ~97 Gio ici) il vaut son plafond, 256 Mio, et le repli ne joue pas.
+
 ## 6. Ensuite
 
 La liste complète jouée « défaut basculé » (`force_checkpoint_on_copy=false`), puis le
