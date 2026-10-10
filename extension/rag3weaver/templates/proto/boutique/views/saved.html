@@ -1,0 +1,6 @@
+{% extends "layout.html" %}
+{% block title %}Enregistré{% endblock %}
+{% block main %}
+<h1>Enregistré</h1>
+<p><a href="/products/{{ result.data.key }}">{{ result.data.name }}</a></p>
+{% endblock %}

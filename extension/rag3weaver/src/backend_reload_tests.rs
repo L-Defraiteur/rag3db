@@ -375,6 +375,7 @@ fn get(backend: &Backend, path: &str, query: &[(&str, &str)]) -> crate::routes::
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
         body: None,
+        form: vec![],
     })
 }
 
@@ -471,6 +472,66 @@ fn an_edited_view_changes_the_page_after_a_reload() {
         get(&backend, "/hello/Lucie", &[]).body,
         "<p>Salut Lucie</p>"
     );
+}
+
+// ─── Un formulaire est lu selon le type des paramètres (lot 4d) ─────────────
+
+const TIMES_DECL: &str = r#"{
+  "name": "Times",
+  "script": "times.ts",
+  "outputs": { "value": { "schema": { "type": "object", "required": ["n"] } } },
+  "config": { "n": { "schema": { "type": "integer" }, "required": true } }
+}"#;
+
+const TIMES_GRAPH: &str = "%% tool: times
+%% description: doubles an integer
+%% param: n int! -- the integer
+%% result: times.value
+graph LR
+    times[\"Times(n=$n)\"]
+";
+
+#[test]
+fn a_form_field_is_read_with_the_type_of_its_parameter() {
+    let (dir, backend) = toy_with_routes();
+    write(&dir.path().join("nodes"), "times.node.json", TIMES_DECL);
+    write(
+        &dir.path().join("nodes"),
+        "times.ts",
+        "function run({ config }: { config: { n: number } }) { return { value: { n: config.n * 2 } }; }",
+    );
+    write(dir.path(), "times.mmd", TIMES_GRAPH);
+    write(
+        dir.path(),
+        "backend.json",
+        &routes_manifest(&ROUTES.replace(
+            "\"GET /echo\": { \"tool\": \"echo\" }",
+            "\"GET /echo\": { \"tool\": \"echo\" },\n    \"POST /times\": { \"tool\": \"times\" }",
+        ).replace("\"greet\": { \"graph\": \"greet.mmd\" }, ", "\"greet\": { \"graph\": \"greet.mmd\" }, \"times\": { \"graph\": \"times.mmd\" }, ")),
+    );
+    backend.reload().unwrap();
+    let answer = backend.route(&crate::routes::RouteRequest {
+        method: "POST".into(),
+        path: "/times".into(),
+        form: vec![("n".into(), "21".into())],
+        ..Default::default()
+    });
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    assert_eq!(answer.result, Some(json!({"n": 42})));
+}
+
+// ─── Le jouet livré (lot 4d) ────────────────────────────────────────────────
+
+/// `templates/proto/boutique` se charge : manifeste, schémas, graphes, nœuds
+/// scriptés, routes et vues — sans base.
+#[test]
+fn the_shipped_toy_shop_loads() {
+    let manifest =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/proto/boutique/backend.json");
+    let prepared = PreparedBackend::load(&manifest).unwrap();
+    assert!(!prepared.needs_embeddings());
+    let tools = prepared.describe()["tools"].as_array().unwrap().len();
+    assert_eq!(tools, 7);
 }
 
 // ─── serve : les routes sur HTTP (lot 4c) ───────────────────────────────────

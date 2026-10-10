@@ -84,10 +84,40 @@ sur le backend jouet monté sans base, et `src/serve.rs` :
   s'arrête par `POST /arret` et rend le backend à son appelant seul ;
   refuse une adresse hors de la boucle ; le décodage des requêtes.
 
+## 4 bis. Le backend jouet (4d)
+
+`templates/proto/boutique/` : trois entités sans embarquement (`Category`,
+`Product`, `Purchase`), des outils génériques liés par le manifeste
+(`graphs/list.mmd`, `get.mmd`, `put.mmd`, `save_product.mmd`), deux nœuds
+scriptés en TypeScript (`Identity` bâtit l'identité d'une fiche depuis sa
+clé ; `ProductForm` bâtit un produit depuis le formulaire), trois vues
+(`layout.html` étendue par `products.html`, `product.html`, `saved.html`) et
+sept routes (la liste, la fiche, le formulaire en HTML ; catégories et
+commandes en JSON).
+
+- Un **formulaire** est lu à part du corps JSON (`RouteRequest.form`), et ses
+  valeurs comme la requête : selon le type du paramètre (« 12.5 » devient un
+  nombre pour `price float!`).
+- Les vues s'étendent (`extends`, `block`) : la feature `multi_template` de
+  minijinja est ajoutée ; une vue qui ne se compile pas est refusée au
+  chargement avec sa ligne (l'erreur d'ajout n'est plus avalée).
+- **L'e2e** (`tests/e2e_proto_boutique.rs`, sur une vraie base) : le
+  formulaire écrit un produit, la liste et la fiche le relisent, une fiche
+  absente dit « Introuvable », les routes JSON écrivent et lisent, un
+  formulaire invalide (prix « abc ») est refusé en 422 et n'écrit rien — et
+  **la recette commence** : une colonne « Prix » ajoutée à `products.html`
+  en service apparaît après `reload()`, sans compilation.
+- **Trouvé en route, un défaut du produit** : une entité nommée `Order` (mot
+  réservé de Cypher) casse l'ouverture au lieu d'être refusée au chargement
+  — le DDL n'échappe pas les noms. Ticket
+  `docs/tickets/2026-10-11-une-entite-au-nom-reserve-casse-l-ouverture.md`,
+  pour la session embarquements (le dialecte) ; l'entité du jouet s'appelle
+  `Purchase`. Et une entité sans champ de contenu est refusée à l'ouverture,
+  pas au chargement (le jouet marque `name` ou `product`).
+
 ## 5. La suite
 
-- **4d — le backend jouet** (produit, catégorie, commande), avec une liste,
-  une fiche et un formulaire, et son e2e sur une vraie base : la recette du
-  §1 de la page du proto commence là.
+- Lot 5 : l'outil `declare` — l'agent écrit ces déclarations (vues, graphes,
+  nœuds), chaque écriture est un commit avec sa raison, puis recharge.
 - La montre sur les fichiers est dans l'hôte, écrite par la session mémoire
   avec `watch_bound` ; elle appellera `check_reload` / `apply_reload`.

@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}{{ result.data.name if result.data else "Introuvable" }}{% endblock %}
+{% block main %}
+{% if result.data %}
+<h1>{{ result.data.name }}</h1>
+<dl>
+  <dt>Clé</dt><dd>{{ result.data.key }}</dd>
+  <dt>Prix</dt><dd>{{ result.data.price }}</dd>
+  {% if result.data.category %}<dt>Catégorie</dt><dd>{{ result.data.category }}</dd>{% endif %}
+</dl>
+{% else %}
+<h1>Introuvable</h1>
+<p>Aucun produit sous la clé « {{ arguments.key }} ».</p>
+{% endif %}
+{% endblock %}

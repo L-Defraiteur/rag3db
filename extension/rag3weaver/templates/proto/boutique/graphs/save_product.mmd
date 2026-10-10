@@ -1,0 +1,12 @@
+%% tool: save_product
+%% description: Crée ou remplace un produit à partir du formulaire.
+%% param: empty json! -- Lié par le manifeste.
+%% param: key string! -- La clé du produit.
+%% param: name string! -- Son nom.
+%% param: price float! -- Son prix.
+%% param: category string = "" -- Sa catégorie (une clé), facultative.
+%% result: write.record
+graph LR
+    form["ProductForm(key=$key, name=$name, price=$price, category=$category)"]
+    write["EntityRecordNode(entity=Product, action='put', record=$empty)"]
+    form -->|record:record| write

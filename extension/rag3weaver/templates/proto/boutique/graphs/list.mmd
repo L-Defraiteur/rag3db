@@ -1,0 +1,8 @@
+%% tool: list_records
+%% description: Les enregistrements d'une entité.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: filter json = {} -- Filtre (FilterCondition) ; vide : tout.
+%% param: limit int = -1 -- Combien au plus ; -1 : cinquante sans filtre, tout avec un filtre.
+%% result: select.results
+graph LR
+    select["SelectRecordsNode(entity=$entity, filter=$filter, limit=$limit, unfiltered_limit=50)"]

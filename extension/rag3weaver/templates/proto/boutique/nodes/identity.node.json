@@ -1,0 +1,7 @@
+{
+  "name": "Identity",
+  "description": "L'identité d'un enregistrement à partir de sa clé.",
+  "script": "identity.ts",
+  "outputs": { "record": { "schema": { "type": "object", "required": ["key"] } } },
+  "config": { "key": { "schema": { "type": "string", "minLength": 1 }, "required": true } }
+}

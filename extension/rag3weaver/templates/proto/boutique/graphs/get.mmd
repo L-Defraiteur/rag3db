@@ -1,0 +1,10 @@
+%% tool: get_record
+%% description: Un enregistrement par sa clé.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: empty json! -- Lié par le manifeste.
+%% param: key string! -- La clé de l'enregistrement.
+%% result: read.record
+graph LR
+    identity["Identity(key=$key)"]
+    read["EntityRecordNode(entity=$entity, action='get', record=$empty)"]
+    identity -->|record:record| read

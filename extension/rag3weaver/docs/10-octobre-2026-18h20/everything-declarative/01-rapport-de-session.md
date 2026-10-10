@@ -60,7 +60,7 @@ dans `02-knowledge-dump.md`, à côté.
 | 1 — moteur de script générique, rhai + TypeScript/JavaScript | **sur master** (`6932a7da2`, page `03-lot-1-le-moteur-de-script.md`) |
 | 2 — nœud entièrement scripté | **sur master** (`a944079a4`, page `04-lot-2-le-noeud-scripte.md`) |
 | 3 — rechargement à chaud | **sur master** (page `05-lot-3-le-rechargement-a-chaud.md`) ; la montre des fichiers attend `watch_bound` |
-| 4 — route → graphe → vue, `serve` | 4a-4c **sur master** (page `06-lot-4-route-graphe-vue.md`) ; 4d le jouet et son e2e en cours |
+| 4 — route → graphe → vue, `serve` | **sur master** (page `06-lot-4-route-graphe-vue.md` ; le jouet `templates/proto/boutique`, son e2e vert) |
 | 5 — l'outil `declare` | — |
 | 6 — la page vivante | — |
 

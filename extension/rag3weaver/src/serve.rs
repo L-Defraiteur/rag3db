@@ -12,7 +12,7 @@
 //! `exit` qui couperait le journal.
 use crate::backend::Backend;
 use crate::routes::{RouteRequest, RouteResponse};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -97,7 +97,7 @@ fn path_of(url: &str) -> &str {
 
 /// Une requête HTTP en [`RouteRequest`] : chemin et requête décodés (`%xx`,
 /// `+`), corps JSON (un objet) ou formulaire (`application/x-www-form-urlencoded`,
-/// des chaînes). Rien d'autre n'est lu.
+/// du texte, gardé à part). Rien d'autre n'est lu.
 pub fn decode(
     method: &str,
     url: &str,
@@ -114,6 +114,7 @@ pub fn decode(
     let kind = content_type
         .map(|c| c.split(';').next().unwrap_or(c).trim().to_ascii_lowercase())
         .unwrap_or_default();
+    let mut form_fields = Vec::new();
     let body = if body.is_empty() {
         None
     } else if kind == "application/json" {
@@ -128,13 +129,8 @@ pub fn decode(
             }
         }
     } else if kind == "application/x-www-form-urlencoded" {
-        let text = String::from_utf8_lossy(body);
-        Some(Value::Object(
-            form(&text)
-                .into_iter()
-                .map(|(k, v)| (k, Value::String(v)))
-                .collect::<Map<_, _>>(),
-        ))
+        form_fields = form(&String::from_utf8_lossy(body));
+        None
     } else {
         return Err(RouteResponse::text(
             415,
@@ -146,6 +142,7 @@ pub fn decode(
         path,
         query,
         body,
+        form: form_fields,
     })
 }
 
@@ -219,9 +216,13 @@ mod tests {
             b"name=Chaise%20%26%20table&price=12",
         )
         .unwrap();
+        assert_eq!(r.body, None);
         assert_eq!(
-            r.body,
-            Some(json!({"name": "Chaise & table", "price": "12"}))
+            r.form,
+            [
+                ("name".to_string(), "Chaise & table".to_string()),
+                ("price".to_string(), "12".to_string())
+            ]
         );
         let r = decode(
             "POST",

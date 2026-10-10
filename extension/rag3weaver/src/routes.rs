@@ -60,6 +60,9 @@ pub struct RouteRequest {
     pub query: Vec<(String, String)>,
     /// Un corps JSON (objet), s'il y en a un.
     pub body: Option<Value>,
+    /// Un corps de formulaire (`application/x-www-form-urlencoded`) : du
+    /// texte, lu comme la requête selon le type des paramètres.
+    pub form: Vec<(String, String)>,
 }
 
 /// Ce qu'une route rend : la page (ou le JSON) **et** le résultat du graphe,
@@ -146,14 +149,14 @@ impl Routes {
                 .map(|s| matches!(s, Segment::Param(_)))
                 .collect::<Vec<_>>()
         });
-        let checked = Self { routes, views };
-        // Chaque vue se compile, avec toutes les autres (extends, include).
-        let env = checked.environment();
-        for name in checked.views.keys() {
-            env.get_template(name)
+        // Chaque vue se compile ; l'erreur dit laquelle, et à quelle ligne.
+        let mut env = minijinja::Environment::new();
+        for (name, source) in &views {
+            env.add_template(name, source)
                 .map_err(|e| format!("views/{name} : {}", describe(&e)))?;
         }
-        Ok(checked)
+        drop(env);
+        Ok(Self { routes, views })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -201,17 +204,19 @@ impl Routes {
     fn environment(&self) -> minijinja::Environment<'_> {
         let mut env = minijinja::Environment::new();
         for (name, source) in &self.views {
-            // Vérifié par `load` : une erreur ici serait un défaut à nous.
-            let _ = env.add_template(name, source);
+            // Compilé sans erreur par `load` : rien à rapporter ici.
+            env.add_template(name, source)
+                .expect("vue vérifiée au chargement");
         }
         env
     }
 }
 
-/// Les arguments de l'outil : le corps (un objet JSON), puis la requête, puis
-/// le chemin. Une même clé donnée deux fois est refusée en la nommant. Une
-/// valeur de chemin ou de requête est du texte ; elle est lue comme JSON
-/// quand le paramètre de l'outil n'est pas une chaîne.
+/// Les arguments de l'outil : le corps (un objet JSON), puis le formulaire,
+/// la requête, le chemin. Une même clé donnée deux fois est refusée en la
+/// nommant. Une valeur de formulaire, de requête ou de chemin est du texte ;
+/// elle est lue comme JSON quand le paramètre de l'outil n'est pas une
+/// chaîne.
 pub(crate) fn arguments(
     request: &RouteRequest,
     path: Map<String, Value>,
@@ -232,7 +237,11 @@ pub(crate) fn arguments(
             serde_json::from_str(text).unwrap_or_else(|_| Value::String(text.to_string()))
         }
     };
-    let query = request.query.iter().map(|(k, v)| (k.clone(), typed(k, v)));
+    let query = request
+        .form
+        .iter()
+        .chain(&request.query)
+        .map(|(k, v)| (k.clone(), typed(k, v)));
     let path = path.into_iter().map(|(k, v)| {
         let text = v.as_str().unwrap_or_default().to_string();
         (k.clone(), typed(&k, &text))
@@ -241,7 +250,7 @@ pub(crate) fn arguments(
         if args.insert(key.clone(), value).is_some() {
             return Err(RouteResponse::text(
                 400,
-                format!("« {key} » est donné deux fois (corps, requête ou chemin)"),
+                format!("« {key} » est donné deux fois (corps, formulaire, requête ou chemin)"),
             ));
         }
     }
