@@ -355,6 +355,15 @@ split-debuginfo = "unpacked"
 # incrémentale rapide), les dépendances non.
 [profile.dev.package."*"]
 opt-level = 3
+# **Pas de débogage pour les dépendances** (10 octobre 2026, disque plein) :
+# la crate cc lit DEBUG et compile le C/C++ des dépendances (tree-sitter,
+# QuickJS, lucivy…) avec -g dès qu'il n'est pas « false ». Un binaire e2e
+# portait ~245 Mo de sections .debug_* pour 88 Mo de code, et une batterie
+# en bâtit des dizaines. Le code de rag3weaver garde ses lignes.
+debug = false
+
+[profile.test.package."*"]
+debug = false
 
 # **Trois forks, une ligne chacun** (6 septembre 2026) : sans elles, Flex32 —
 # stockage f32, matmul f16 sur les tensor cores, accumulation f32 — n'était
