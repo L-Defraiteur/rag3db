@@ -41,8 +41,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <chrono>
 #include <map>
+#include <unordered_map>
 #include <optional>
+#include <random>
+#include <algorithm>
 #include <set>
 
 #include "bench_harness.h"
@@ -750,6 +754,25 @@ offset_t indexedRowCount(rag3db::main::Connection& connection, const std::string
     return count;
 }
 
+// Le nombre d'arêtes de la couche basse de l'index : sa table de relations cachée, que Cypher ne
+// voit pas, lue par les internes.
+int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index) {
+    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    auto* context = connection.getClientContext();
+    auto* transaction = rag3db::transaction::Transaction::Get(*context);
+    const auto* entry =
+        rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, table);
+    auto* storage = rag3db::storage::StorageManager::Get(*context);
+    auto& nodeTable = storage->getTable(entry->getTableID())->cast<rag3db::storage::NodeTable>();
+    const auto& info = static_cast<const HNSWStorageInfoMirror&>(
+        nodeTable.getIndex(index).value()->getStorageInfo());
+    const auto count =
+        static_cast<int64_t>(storage->getTable(info.lowerRelTableID)->getNumTotalRows(transaction));
+    EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
+    return count;
+}
+
 // Le filet de e1049934e : un index qui compte plus de lignes reliées que sa table n'en contient
 // (une base écrite avant le crochet d'annulation) refuse sous le nom « is behind its table », que
 // rag3weaver reconnaît pour retirer l'index et le rebâtir. Aucune base abîmée ne le déclenche
@@ -800,6 +823,484 @@ TEST_F(VectorIndexUpdate, IndexCountingMoreRowsThanItsTableIsRefusedByName) {
     EXPECT_TRUE(failed.empty()) << checks;
     std::filesystem::remove(csv);
 }
+
+// SONDE, non commitée : la joignabilité sur les vrais vecteurs de l'arbre principal
+// (~/.cache/rag3weaver-build/joignabilite-export/Scope_Chunk.csv : uuid, décalage, 768
+// composantes), « masse » (COPY des vecteurs, puis l'index) contre « fond » (COPY sans
+// vecteur, une réclamation par lots de 512, les vecteurs par lots de 32, puis l'index).
+// Des amas de quasi-copies et des groupes de copies exactes (banc, 5 octobre). Sur les vrais
+// vecteurs, les introuvables étaient surtout des quasi-doublons : joignables par une recherche
+// exhaustive, pas par la leur. La règle d'élagage était inversée : le plus lointain d'un amas
+// serré restait, le plus proche partait. La règle classique laisse les copies exactes
+// s'accumuler (deux copies ne se couvrent jamais) : un groupe plus grand que le degré n'aurait
+// plus de sortie, d'où le groupe de 49 (ml = 60, mu = 30).
+//
+// Données tirées d'une graine fixe : 2 000 points au hasard, 40 amas de 10 quasi-copies à
+// environ 1e-5 l'une de l'autre en cosinus, trois groupes exacts de chaque taille de 2 à 9, et
+// un groupe exact de 49. La moitié des lignes est chargée par COPY avant l'index (le graphe
+// bâti en mémoire), l'autre insérée après (l'élagage sur disque). L'attendu : chaque ligne est
+// joignable par une recherche exhaustive, et sa propre recherche (k = 10) la rend, ou rend une
+// de ses copies exactes à distance nulle.
+TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
+    constexpr int DIMENSION = 64;
+    std::mt19937 random{20261005};
+    std::normal_distribution<double> normal{0.0, 1.0};
+    const auto unit = [&](std::vector<double> v) {
+        double norm = 0;
+        for (const auto x : v) {
+            norm += x * x;
+        }
+        for (auto& x : v) {
+            x /= std::sqrt(norm);
+        }
+        return v;
+    };
+    const auto draw = [&] {
+        std::vector<double> v(DIMENSION);
+        for (auto& x : v) {
+            x = normal(random);
+        }
+        return unit(v);
+    };
+    // Une ligne : son vecteur, et le numéro de son groupe exact (-1 si seule).
+    std::vector<std::pair<std::vector<double>, int>> rows;
+    for (auto i = 0; i < 2000; i++) {
+        rows.emplace_back(draw(), -1);
+    }
+    for (auto cluster = 0; cluster < 40; cluster++) {
+        const auto center = draw();
+        for (auto member = 0; member < 10; member++) {
+            // Un écart de norme ~4,5e-3 : une distance cosinus de l'ordre de 1e-5.
+            auto v = center;
+            for (auto& x : v) {
+                x += normal(random) * 4.5e-3 / std::sqrt(DIMENSION);
+            }
+            rows.emplace_back(unit(v), -1);
+        }
+    }
+    auto group = 0;
+    std::vector<int> sizes;
+    for (auto size = 2; size <= 9; size++) {
+        sizes.insert(sizes.end(), {size, size, size});
+    }
+    sizes.push_back(49);
+    for (const auto size : sizes) {
+        const auto v = draw();
+        for (auto copy = 0; copy < size; copy++) {
+            rows.emplace_back(v, group);
+        }
+        group++;
+    }
+    std::shuffle(rows.begin(), rows.end(), random);
+    std::vector<std::string> texts;
+    for (const auto& [v, g] : rows) {
+        std::string text = "[";
+        for (auto d = 0; d < DIMENSION; d++) {
+            text += (d ? "," : "") + stringFormat("{}", static_cast<float>(v[d]));
+        }
+        texts.push_back(text + "]");
+    }
+    const auto numRows = static_cast<int64_t>(rows.size());
+    const auto half = numRows / 2;
+    // Le contrôle commun (check) cherche la ligne première à égalité près parmi trente, ce que
+    // le groupe de 49 ne permet pas : ce témoin a le sien.
+    const auto checkCopies = [&]() -> std::string {
+        std::set<int64_t> reached;
+        auto exhaustive = conn->query(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, {}, efs := {}) RETURN node.id;",
+            table, texts[0], numRows, numRows));
+        if (!exhaustive->isSuccess()) {
+            return exhaustive->getErrorMessage();
+        }
+        while (exhaustive->hasNext()) {
+            reached.insert(exhaustive->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        int64_t notFound = 0;
+        std::string firstMisses;
+        for (auto i = 0; i < numRows; i++) {
+            auto own = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, 10) RETURN node.id, distance;",
+                table, texts[i]));
+            auto found = false;
+            while (own->isSuccess() && own->hasNext()) {
+                auto tuple = own->getNext();
+                const auto id = tuple->getValue(0)->getValue<int64_t>();
+                found |= id == i || (rows[i].second >= 0 && rows[id].second == rows[i].second &&
+                                        std::stod(tuple->getValue(1)->toString()) < 1e-6);
+            }
+            if (!found && ++notFound <= 5) {
+                firstMisses += stringFormat(" {} (group {})", i, rows[i].second);
+            }
+        }
+        if (reached.size() == static_cast<size_t>(numRows) && notFound == 0) {
+            return "";
+        }
+        return stringFormat("{}/{} reachable, {} not found by their own vector;{}",
+            reached.size(), numRows, notFound, firstMisses);
+    };
+    std::string failures;
+    const auto runs = forcedRuns > 0 ? forcedRuns : 3;
+    for (auto run = 0; run < runs; run++) {
+        table = stringFormat("Copies{}", run);
+        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[{}]);", table,
+            DIMENSION));
+        const auto csv = databasePath + stringFormat(".copies{}.csv", run);
+        {
+            std::ofstream out(csv);
+            for (auto i = 0; i < half; i++) {
+                out << i << ",\"" << texts[i] << "\"\n";
+            }
+        }
+        mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
+        std::filesystem::remove(csv);
+        mustRun(stringFormat(
+            "CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := 'cosine');", table));
+        for (auto first = half; first < numRows; first += 64) {
+            std::string items;
+            for (auto i = first; i < std::min(numRows, first + 64); i++) {
+                items +=
+                    (items.empty() ? "" : ", ") + stringFormat("{id: {}, v: {}}", i, texts[i]);
+            }
+            mustRun(stringFormat("UNWIND [{}] AS item CREATE (:{} {id: item.id, vec: item.v});",
+                items, table));
+        }
+        if (HasFatalFailure()) {
+            return;
+        }
+        const auto failure = checkCopies();
+        std::cerr << "  run " << run << ": " << (failure.empty() ? "all found" : failure) << "\n";
+        if (!failure.empty()) {
+            failures += stringFormat(" run {}: {}", run, failure);
+        }
+    }
+    EXPECT_TRUE(failures.empty()) << "[check: copies-all-found]" << failures;
+}
+
+// La recette de l'arbre principal (10 octobre) : une note d'embedder.rs, vue une fois le 25 août
+// 2026, disait que l'index HNSW plantait (shrinkForNode → computeDistance) sur quelques centaines
+// de vecteurs identiques — 1 402 vecteurs NULS du MockEmbedder. Rejouée sur le moteur d'aujourd'hui,
+// dans un fils (un plantage n'emporte pas la passe) : le même vecteur pour toutes les lignes, nul
+// (une norme nulle : le cosinus divise par zéro) ou non nul (des doublons seuls) ; l'index créé
+// avant ou après les lignes ; les lignes une à une ou par COPY. L'attendu : ni plantage ni erreur,
+// la recherche rend, et chaque ligne est joignable par la recherche exhaustive.
+struct SameVectorCase {
+    bool zero;
+    bool indexFirst;
+    bool copy;
+};
+
+class SameVectorForEveryRow : public VectorIndexUpdate,
+                              public ::testing::WithParamInterface<SameVectorCase> {};
+
+TEST_P(SameVectorForEveryRow, NeitherCrashesNorLosesRows) {
+    constexpr int NUM_ROWS = 1402;
+    constexpr int DIMENSION = 384;
+    const auto [zero, indexFirst, copy] = GetParam();
+    std::string vector = "[";
+    for (auto d = 0; d < DIMENSION; d++) {
+        vector += (d ? "," : "") + std::string(zero ? "0" : (d % 3 == 0 ? "0.5" : "-0.25"));
+    }
+    vector += "]";
+    const auto csv = databasePath + ".same.csv";
+    if (copy) {
+        std::ofstream out(csv);
+        for (auto i = 0; i < NUM_ROWS; i++) {
+            out << i << ",\"" << vector << "\"\n";
+        }
+    }
+    const auto report = databasePath + ".same.report";
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        alarm(300);
+        int code = 0;
+        try {
+            rag3db::main::Database childDatabase(databasePath, *systemConfig);
+            rag3db::main::Connection connection(&childDatabase);
+            concurrency::loadVectorExtension(connection);
+            const auto run = [&](const std::string& query) {
+                auto result = connection.query(query);
+                if (!result->isSuccess()) {
+                    std::ofstream(report) << "query failed: " << query.substr(0, 120) << ": "
+                                          << result->getErrorMessage();
+                    _exit(4);
+                }
+                return result;
+            };
+            run(stringFormat(
+                "CREATE NODE TABLE T(id INT64, v FLOAT[{}], PRIMARY KEY(id));", DIMENSION));
+            const auto createIndex = [&] {
+                run("CALL CREATE_VECTOR_INDEX('T', 'idx', 'v', metric := 'cosine');");
+            };
+            if (indexFirst) {
+                createIndex();
+            }
+            if (copy) {
+                run("COPY T FROM '" + csv + "' (header=false);");
+            } else {
+                for (auto i = 0; i < NUM_ROWS; i++) {
+                    run(stringFormat("CREATE (:T {id: {}, v: {}});", i, vector));
+                }
+            }
+            if (!indexFirst) {
+                createIndex();
+            }
+            auto top = run("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vector +
+                           ", 10) RETURN node.id;");
+            const auto numTop = top->getNumTuples();
+            auto all = run(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('T', 'idx', {}, {}, efs := {}) RETURN node.id;", vector,
+                NUM_ROWS, NUM_ROWS));
+            std::set<int64_t> reached;
+            while (all->hasNext()) {
+                reached.insert(all->getNext()->getValue(0)->getValue<int64_t>());
+            }
+            std::ofstream(report) << "top " << numTop << ", reached " << reached.size() << "/"
+                                  << NUM_ROWS;
+            code = numTop == 10 && reached.size() == NUM_ROWS ? 0 : 5;
+        } catch (const std::exception& e) {
+            std::ofstream(report) << "exception: " << e.what();
+            code = 3;
+        }
+        _exit(code);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    std::string detail;
+    if (std::filesystem::exists(report)) {
+        std::ifstream in(report);
+        std::getline(in, detail);
+    }
+    std::cerr << "  " << (zero ? "zero" : "same") << (indexFirst ? ", index first" : ", rows first")
+              << (copy ? ", COPY" : ", line by line") << ": " << detail << "\n";
+    EXPECT_FALSE(WIFSIGNALED(status))
+        << "[check: same-vector-no-crash] killed by signal " << WTERMSIG(status) << "; " << detail;
+    if (WIFEXITED(status)) {
+        EXPECT_EQ(WEXITSTATUS(status), 0) << "[check: same-vector-all-reachable] " << detail;
+    }
+    std::filesystem::remove(csv);
+    std::filesystem::remove(report);
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, SameVectorForEveryRow,
+    ::testing::Values(SameVectorCase{true, true, false}, SameVectorCase{true, true, true},
+        SameVectorCase{true, false, false}, SameVectorCase{true, false, true},
+        SameVectorCase{false, true, false}, SameVectorCase{false, true, true},
+        SameVectorCase{false, false, false}, SameVectorCase{false, false, true}),
+    [](const ::testing::TestParamInfo<SameVectorCase>& info) {
+        return std::string(info.param.zero ? "Zero" : "Same") +
+               (info.param.indexFirst ? "IndexFirst" : "RowsFirst") +
+               (info.param.copy ? "Copy" : "LineByLine");
+    });
+
+class RealVectorsReachability : public VectorIndexUpdate,
+                                public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
+    const std::string source = std::string(std::getenv("HOME")) +
+                               "/.cache/rag3weaver-build/joignabilite-export/Scope_Chunk.csv";
+    if (!std::filesystem::exists(source)) {
+        GTEST_SKIP() << "no export";
+    }
+    std::vector<std::string> uuids;
+    std::unordered_map<std::string, std::string> vectors;
+    const auto withVectors = databasePath + ".with.csv";
+    const auto withoutVectors = databasePath + ".without.csv";
+    {
+        std::ifstream in(source);
+        std::ofstream with(withVectors);
+        std::ofstream without(withoutVectors);
+        std::string line;
+        while (std::getline(in, line)) {
+            const auto first = line.find(',');
+            const auto second = line.find(',', first + 1);
+            const auto uuid = line.substr(0, first);
+            const auto vector = "[" + line.substr(second + 1) + "]";
+            uuids.push_back(uuid);
+            vectors[uuid] = vector;
+            with << uuid << ",\"" << vector << "\"\n";
+            without << uuid << "\n";
+        }
+    }
+    table = "T";
+    mustRun("CREATE NODE TABLE T(uuid STRING PRIMARY KEY, claim STRING, emb FLOAT[768]);");
+    const auto start = std::chrono::steady_clock::now();
+    if (GetParam() == "Masse") {
+        mustRun("COPY T(uuid, emb) FROM '" + withVectors + "' (header=false);");
+    } else {
+        mustRun("COPY T(uuid) FROM '" + withoutVectors + "' (header=false);");
+        while (true) {
+            auto claim = conn->query("MATCH (n:T) WHERE n.claim IS NULL WITH n LIMIT 512 SET "
+                                     "n.claim = 'c' RETURN n.uuid;");
+            ASSERT_TRUE(claim->isSuccess()) << claim->getErrorMessage();
+            std::vector<std::string> claimed;
+            while (claim->hasNext()) {
+                claimed.push_back(claim->getNext()->getValue(0)->toString());
+            }
+            if (claimed.empty()) {
+                break;
+            }
+            for (auto first = 0u; first < claimed.size(); first += 32) {
+                std::string items;
+                for (auto i = first; i < std::min<size_t>(claimed.size(), first + 32); i++) {
+                    items += (items.empty() ? "" : ", ") + std::string("{u: '") + claimed[i] +
+                             "', v: " + vectors[claimed[i]] + "}";
+                }
+                mustRun("UNWIND [" + items +
+                        "] AS item MATCH (n:T {uuid: item.u}) SET n.emb = item.v;");
+            }
+        }
+    }
+    const auto indexStart = std::chrono::steady_clock::now();
+    mustRun("CALL CREATE_VECTOR_INDEX('T', 'idx', 'emb', metric := 'cosine');");
+    const auto built = std::chrono::steady_clock::now();
+    std::cerr << "  " << GetParam() << ": index built in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(built - indexStart).count()
+              << " ms\n";
+    int64_t missed = 0;
+    std::string firstMisses;
+    std::vector<std::string> missedUuids;
+    for (const auto& uuid : uuids) {
+        // Retrouvée : parmi les dix, ou la recherche atteint un vecteur identique au sien (des
+        // groupes de vecteurs identiques, jusqu'à 49, ne tiennent pas dans dix).
+        auto result = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vectors[uuid] +
+                                  ", 10) RETURN node.uuid, distance;");
+        auto found = false;
+        while (result->isSuccess() && result->hasNext()) {
+            auto tuple = result->getNext();
+            found |= tuple->getValue(0)->toString() == uuid ||
+                     std::stod(tuple->getValue(1)->toString()) < 1e-6;
+        }
+        if (!found) {
+            missedUuids.push_back(uuid);
+        }
+        if (!found && ++missed <= 5) {
+            firstMisses += " " + uuid;
+        }
+    }
+    std::cerr << "  " << GetParam() << ": " << missed << " of " << uuids.size()
+              << " not found by their own vector (loaded and indexed in "
+              << std::chrono::duration_cast<std::chrono::seconds>(built - start).count()
+              << " s);" << firstMisses << "\n";
+    {
+        // Le rappel@10 moyen sur 300 requêtes tirées d'une graine fixe, contre la force brute
+        // (cosinus en double) : un rendu compte s'il est à une distance au plus égale à la
+        // dixième vraie, à 1e-6 près (les copies exactes sont interchangeables).
+        std::vector<std::vector<float>> parsed;
+        parsed.reserve(uuids.size());
+        for (const auto& uuid : uuids) {
+            std::vector<float> v;
+            const auto& text = vectors[uuid];
+            const char* p = text.c_str() + 1;
+            char* end = nullptr;
+            while (true) {
+                v.push_back(std::strtof(p, &end));
+                if (*end != ',') {
+                    break;
+                }
+                p = end + 1;
+            }
+            parsed.push_back(std::move(v));
+        }
+        const auto cosine = [](const std::vector<float>& a, const std::vector<float>& b) {
+            double ab = 0, a2 = 0, b2 = 0;
+            for (auto d = 0u; d < a.size(); d++) {
+                ab += double(a[d]) * b[d];
+                a2 += double(a[d]) * a[d];
+                b2 += double(b[d]) * b[d];
+            }
+            return 1 - ab / std::sqrt(a2 * b2);
+        };
+        std::unordered_map<std::string, size_t> index;
+        for (auto i = 0u; i < uuids.size(); i++) {
+            index[uuids[i]] = i;
+        }
+        std::mt19937 random{20261005};
+        double recallSum = 0;
+        std::vector<int64_t> latencies;
+        constexpr int QUERIES = 300;
+        for (auto q = 0; q < QUERIES; q++) {
+            const auto row = random() % uuids.size();
+            std::vector<double> dists;
+            dists.reserve(uuids.size());
+            for (const auto& v : parsed) {
+                dists.push_back(cosine(parsed[row], v));
+            }
+            auto sorted = dists;
+            std::nth_element(sorted.begin(), sorted.begin() + 9, sorted.end());
+            const auto tenth = sorted[9];
+            const auto queryStart = std::chrono::steady_clock::now();
+            auto result = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " +
+                                      vectors[uuids[row]] + ", 10) RETURN node.uuid;");
+            latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - queryStart)
+                                    .count());
+            int hits = 0;
+            while (result->isSuccess() && result->hasNext()) {
+                hits += dists[index[result->getNext()->getValue(0)->toString()]] <= tenth + 1e-6;
+            }
+            recallSum += std::min(hits, 10) / 10.0;
+        }
+        const auto numEdges = lowerGraphEdgeCount(*conn, "T", "idx");
+        // Le temps d'une requête (k = 10, efs par défaut), mesuré autour de conn->query : le
+        // prix d'un degré plus grand. Puis la taille du fichier après un point de reprise : à
+        // données égales, l'écart entre deux règles est celui de l'index.
+        std::ranges::sort(latencies);
+        mustRun("CHECKPOINT;");
+        std::cerr << "  " << GetParam() << ": query latency median "
+                  << latencies[latencies.size() / 2] << " us, p90 "
+                  << latencies[latencies.size() * 9 / 10] << " us; database file "
+                  << std::filesystem::file_size(databasePath) / 1024 << " KiB after a checkpoint\n";
+        std::cerr << "  " << GetParam() << ": recall@10 " << recallSum / QUERIES
+                  << " over " << QUERIES << " queries; lower degree "
+                  << (numEdges < 0 ? -1.0 : double(numEdges) / uuids.size()) << "\n";
+    }
+    if (std::getenv("BANC_EXHAUSTIF") && !missedUuids.empty()) {
+        // Sonde : un introuvable est-il hors du graphe (îlot) ou seulement hors du chemin
+        // de la recherche ? Une recherche exhaustive depuis le premier vecteur le dit.
+        std::set<std::string> reached;
+        auto all = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vectors[uuids.front()] +
+                               ", " + std::to_string(uuids.size()) + ", efs := " +
+                               std::to_string(uuids.size()) + ") RETURN node.uuid;");
+        while (all->isSuccess() && all->hasNext()) {
+            reached.insert(all->getNext()->getValue(0)->toString());
+        }
+        int64_t inGraph = 0;
+        for (const auto& uuid : missedUuids) {
+            inGraph += reached.contains(uuid);
+        }
+        std::cerr << "  exhaustive: " << reached.size() << "/" << uuids.size()
+                  << " reached; of the " << missedUuids.size() << " misses, " << inGraph
+                  << " are reached by the exhaustive search\n";
+        for (const auto& uuid : missedUuids) {
+            auto wide = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vectors[uuid] +
+                                    ", 10, efs := 2000) RETURN node.uuid, distance;");
+            auto found = false;
+            while (wide->isSuccess() && wide->hasNext()) {
+                auto tuple = wide->getNext();
+                found |= tuple->getValue(0)->toString() == uuid ||
+                         std::stod(tuple->getValue(1)->toString()) < 1e-6;
+            }
+            std::cerr << "    " << uuid << (reached.contains(uuid) ? " in graph" : " ISLAND")
+                      << (found ? ", found at efs 2000" : ", not found at efs 2000") << "\n";
+        }
+    }
+    if (const char* dir = std::getenv("BANC_MANQUES")) {
+        static int pass = 0;
+        std::ofstream out(std::string(dir) + "/" + GetParam() + "-" + std::to_string(++pass) +
+                          ".txt");
+        for (const auto& uuid : missedUuids) {
+            out << uuid << "\n";
+        }
+    }
+    std::filesystem::remove(withVectors);
+    std::filesystem::remove(withoutVectors);
+}
+
+INSTANTIATE_TEST_SUITE_P(Paths, RealVectorsReachability, ::testing::Values("Masse", "Fond"),
+    [](const ::testing::TestParamInfo<std::string>& info) { return info.param; });
 
 } // namespace
 
