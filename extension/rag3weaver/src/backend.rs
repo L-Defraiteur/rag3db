@@ -2438,6 +2438,25 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
+    /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
+    /// moteur est bâti), sinon à côté de ce crate. Un worktree n'a pas
+    /// d'extension à lui (il n'en bâtit pas, et n'a plus de lien vers
+    /// l'arbre principal depuis le 10 octobre 2026) : sans la variable,
+    /// le moteur refusait par une « Binder exception » qui ne disait pas
+    /// quoi faire. On refuse ici, en le disant.
+    #[allow(dead_code)]
+    fn extension_vector_de_test() -> String {
+        let racine = std::env::var("RAG3DB_ROOT").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+        });
+        let chemin = racine.join("extension/vector/build/libvector.rag3db_extension");
+        assert!(
+            chemin.exists(),
+            "pas d'extension vector sous {} : posez RAG3DB_ROOT sur l'arbre où le moteur est bâti",
+            racine.display()
+        );
+        chemin.display().to_string()
+    }
     /// Une fiche réactive en mémoire, pour éprouver les refus sans manifeste.
     ///
     /// Elle est calquée sur la vraie
@@ -2811,11 +2830,7 @@ mod tests {
         // trouvait « fermée » (le rouge du 3 octobre au soir ; le scénario
         // de tuyauterie, sur une vraie base, passait). Trouvé par ce test.
         let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
-        let root = std::env::var("RAG3DB_ROOT")
-            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
-        conn.execute(&format!(
-            "LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'"
-        ))
+        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test()))
         .unwrap();
         let mut catalog = Catalog::new(
             Box::new(conn),
@@ -2936,10 +2951,7 @@ mod tests {
         manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
         manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
         manifest["embeddings"]["address"] = json!("127.0.0.1:9");
-        let root = std::env::var("RAG3DB_ROOT")
-            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
-        manifest["vector_extension"] =
-            json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+        manifest["vector_extension"] = json!(extension_vector_de_test());
         std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
         let prepared = PreparedBackend::load(&chemin).unwrap();
         assert!(!prepared.needs_embeddings(), "aucun signal vecteur déclaré");
@@ -3003,11 +3015,7 @@ mod tests {
             manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
             manifest["embeddings"]["address"] = json!("127.0.0.1:9");
             manifest["tools"]["put_note"]["after"] = after;
-            let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string()
-            });
-            manifest["vector_extension"] =
-                json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+            manifest["vector_extension"] = json!(extension_vector_de_test());
             std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
             let prepared = PreparedBackend::load(&chemin);
             (dir, prepared)
