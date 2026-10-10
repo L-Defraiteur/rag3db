@@ -121,5 +121,15 @@ bouchon (5), puis 11 sur 11.
   fichiers, ni réseau, ni commande) : il entrera dans toutes les politiques.
 - **Ce que le script peut appeler** (requêter par le dialecte, journaliser) :
   rien encore ; à donner quand un nœud du jouet en aura besoin.
-- `Node::node_type()` possédé : le rapport d'exécution dit `ScriptedNode`
-  pour le type d'un nœud scripté, pas son nom déclaré, jusqu'à ce pas-là.
+- ~~`Node::node_type()` possédé~~ **fait le 11 octobre** (trouvé par la
+  session recherche en relisant le nœud) : `Node::node_type()` rendait
+  `ScriptedNode` pour tout type scripté, et `to_definition` — donc un point
+  de reprise ou un aller-retour mermaid — écrivait un type que le registre
+  ne retrouvait pas ; même trou pour un sous-graphe de `GraphNodeFactory`
+  (« GraphNode »). Le trait emprunte désormais le nom à l'instance ; un
+  nœud scripté rend son nom déclaré, un sous-graphe de fabrique son type
+  déclaré et la configuration reçue. **Reste, préexistant** : un sous-graphe
+  monté à la main (`GraphNode::from_definition` sans fabrique) garde le type
+  « GraphNode », qui n'est pas un type enregistré — l'aller-retour vaut pour
+  les types *déclarés* ; un montage à la main ne se restaure pas par le
+  registre.
