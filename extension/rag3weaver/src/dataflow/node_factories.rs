@@ -1542,6 +1542,32 @@ mod tests {
         registry
     }
 
+        /// **Un seul des deux par nœud** (chantier C) : tout nœud du registre
+    /// marqué `is_async()` doit laisser `execute` au défaut — la preuve est
+    /// l'erreur-défaut « ni execute ni execute_async » sur un contexte vide
+    /// (sans effet : un nœud async n'a pas de corps synchrone à exécuter).
+    /// Le mensonge inverse (execute_async implémenté sans le marqueur)
+    /// n'est pas détectable sans exécuter le nœud ; le contrat du trait le
+    /// dit, et ce test tient le sens détectable.
+    #[test]
+    fn un_noeud_marque_async_laisse_execute_au_defaut() {
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        for ty in registry.types() {
+            let node = registry.create(&ty, "temoin", &serde_json::json!({}));
+            let Ok(mut node) = node else { continue }; // une config minimale peut être refusée
+            if !node.is_async() {
+                continue;
+            }
+            let mut ctx = crate::dataflow::node::NodeContext::new();
+            let erreur = node.execute(&mut ctx).unwrap_err();
+            assert!(
+                erreur.contains("ni execute ni execute_async"),
+                "{ty} se dit async mais implémente execute : {erreur}"
+            );
+        }
+    }
+
     #[test]
     fn register_builtins_has_all_builtin_types() {
         let registry = builtin_registry();

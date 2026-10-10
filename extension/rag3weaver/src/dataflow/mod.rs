@@ -48,6 +48,7 @@ pub mod code_nodes;
 #[cfg(feature = "code")]
 pub mod index_nodes;
 pub mod catalog_read;
+pub(crate) mod rt;
 pub mod react_nodes;
 pub mod ref_nodes;
 pub mod usage_nodes;

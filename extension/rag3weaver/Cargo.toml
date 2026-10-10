@@ -35,7 +35,7 @@ minijinja = { version = "2", default-features = false, features = ["builtins", "
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
-tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
 # **Le moteur de script générique** (`src/script/`) : rhai, et TypeScript —
 # le langage du produit. TypeScript n'est jamais compilé : `swc_ts_fast_strip`
 # (le retrait de types de Node) efface les annotations en blancs, lignes et
