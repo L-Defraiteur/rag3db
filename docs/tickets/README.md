@@ -25,7 +25,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (44)
+### Ouverts (45)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -73,6 +73,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Pas d'analyze automatique : les distincts restent gonflés jusqu'à un CALL analyze](2026-10-10-analyze-au-seuil.md) | ouvert, à ouvrir sur un mauvais plan | estimation fausse | oui | au plus des plans moins bons |
 | [Les comptes de valeurs distinctes se trompent d'environ 13 % : 64 registres](2026-10-10-hyperloglog-a-64-registres.md) | ouvert, confort | estimation imprécise | toujours | non |
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
+| [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
 ### Fermés (48), dans `closed/`
 
