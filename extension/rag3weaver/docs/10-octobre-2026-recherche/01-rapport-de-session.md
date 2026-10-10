@@ -1,5 +1,36 @@
 # Session recherche — rapport (chantier C : l'exécution asynchrone des graphes)
 
+## 18 h 20 — nettoyage du disque : TOUT est poussé, batterie à rejouer
+
+L'orchestration efface les target cargo et les worktrees (disque saturé).
+État exact au moment de l'arrêt :
+
+- **Branche `execution-asynchrone-2`, tête `a0c3e809c`** — rebase sur
+  master `001054116` (= le « avant » des mesures), lib REJOUÉE après le
+  rebase : 1261/1261. Contenu depuis la 1 : fix RunScope scellé
+  (`50a585028` — l'interblocage attrapé par l'orchestration, preuve au
+  core, 200/200 tours + témoin déterministe), postgres (`d6b102262` —
+  runtime possédé, constructeurs synchrones, bras Typed + denuder),
+  chat bus+boîte (`a0c3e809c`). La branche `execution-asynchrone` (hashes
+  d'avant rebase, tête `ca757a315`) reste en ligne : `commande-en-fond-3`
+  de l'arbre principal est bâtie dessus.
+- **Interrompu : la batterie complète** (script
+  `scratchpad/batterie.sh` de ma session) — bâti des bins VERT (879 s),
+  arrêtée pendant le bâti des e2e. À REJOUER ENTIÈRE après le nettoyage :
+  e2e_code, e2e_dataflow_observe, e2e_checkpoint, 8 suites backend,
+  2 suites chat (régime doux + SANS_CARTE_LOCALE de jour, embed service
+  7979-7981, lib de l'arbre principal, timeout 1800 partout).
+- **Puis les mesures**, au créneau demandé à l'orchestration après le
+  « fini » de la batterie de l'arbre principal : une tenue exclusive,
+  « avant » = `001054116`, « après » = `a0c3e809c`, banc réparé de
+  `aeec6888f`, MÊME lib commune des deux côtés (celle de 17 h 36 —
+  MOTEUR_ANCIEN assumé et dit, seul écart `d10b92306`, statistiques),
+  l'âge du moteur relevé dans les deux journaux.
+- Après : fusion master en avance rapide, signe à rag3db-73 (rebase de
+  commande-en-fond-3) et à rag3db-96 ; e2e_postgres vivante dès que Lucie
+  lance le conteneur pgvector (ni moi ni F n'avons docker) — F la joue sur
+  ma branche.
+
 ## État au 10 octobre au soir
 
 Branche `execution-asynchrone` (worktree `rag3db-async`, target sous
