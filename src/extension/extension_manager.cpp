@@ -4,7 +4,10 @@
 #include <filesystem>
 #include <fstream>
 
+#include "common/build_id.h"
+#include "common/exception/runtime.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/string_format.h"
 #include "common/string_utils.h"
 #include "extension/extension.h"
 #include "generated_extension_loader.h"
@@ -25,6 +28,26 @@ static void executeExtensionLoader(main::ClientContext* context, const std::stri
         auto load = libLoader.getLoadFunc();
         (*load)(context);
     }
+}
+
+// Une extension d'un autre bâti que le moteur n'est pas chargée : ses structures ne sont pas
+// celles du moteur (une ouverture qui ne rendait jamais la main, ticket
+// 2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati). Contrôlé avant son init(), donc
+// avant qu'une ligne de son code ne s'exécute ; au rejeu, le refus est un chargement manqué
+// (loadExtensionForRecovery) et l'index qu'elle tient se dit en retard, avec cette raison. Pas de
+// contournement : un mélange se corrige en rebâtissant l'extension avec le moteur.
+static void checkBuildId(ExtensionLibLoader& libLoader, const std::string& extensionName) {
+    const auto buildIdFunc = libLoader.findBuildIdFunc();
+    const std::string extensionBuildId =
+        buildIdFunc ? (*buildIdFunc)() : "an engine without build ids";
+    if (extensionBuildId == RAG3DB_BUILD_ID) {
+        return;
+    }
+    libLoader.unload();
+    throw common::RuntimeException(common::stringFormat(
+        "Extension {} was built from {}, this engine from {}: rebuild the extension with the "
+        "engine.",
+        extensionName, extensionBuildId, RAG3DB_BUILD_ID));
 }
 
 void ExtensionManager::loadExtension(const std::string& path, main::ClientContext* context) {
@@ -48,6 +71,7 @@ void ExtensionManager::loadExtension(const std::string& path, main::ClientContex
         libLoader.unload();
         return;
     }
+    checkBuildId(libLoader, extensionName);
     auto init = libLoader.getInitFunc();
     (*init)(context);
     loadedExtensions.push_back(LoadedExtension(extensionName, fullPath,
