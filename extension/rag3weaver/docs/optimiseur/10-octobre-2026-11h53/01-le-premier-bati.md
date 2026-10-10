@@ -77,11 +77,32 @@ codeparsers.
 
 Ce que le dixième essai n'a pas donné : l'artefact (le binaire était hors de
 l'espace de travail du runner, `C:/rs`, et `upload-artifact` le refuse), et
-l'épreuve `--describe`. Le onzième (38048487047) copie le binaire sous
-`dist/windows-x64/` et l'éprouve deux fois, tel quel (le refus Landlock
-attendu, nommé) et avec `"sandbox": {"mode": "off"}`. L'extension vecteur
-n'est pas encore bâtie sous Windows (le job ne lance que cargo) : c'est le
-même geste que sous Linux, à ajouter.
+l'épreuve `--describe`. Le onzième (38048487047, 47 min 38 s à froid sans
+cache) copie le binaire sous `dist/windows-x64/` et l'a téléversé (artefact
+`bati-windows-x64-journal`, 20 Mo compressé ; gardé sous
+`~/.cache/rag3weaver-build/paquet-npm/artefacts/windows-11/`). Tel quel,
+le binaire refuse comme prévu, en nommant quoi faire :
+
+```
+le bac à sable Landlock demande Linux — "sandbox": {"mode": "off"} en le sachant
+```
+
+Ce refus sort en code 1 et l'étape bash s'est arrêtée dessus : l'épreuve
+avec `"sandbox": {"mode": "off"}` n'a pas joué au onzième. Au douzième
+(38051420894, 47 min 32 s), elle a joué et rendu, tout nu :
+
+```
+The system cannot find the path specified. (os error 3)
+```
+
+C'était l'épreuve, pas le binaire : le manifeste était écrit sous `essai/`
+alors que les graphes du gabarit lui sont relatifs (`../../tools/…`). Deux
+corrections : le manifeste s'écrit à côté du gabarit, comme sous Linux ; et
+les lectures du chargement nomment le chemin dans leur erreur
+(`lire_octets`, `lire_texte` dans backend.rs) — un « os error 3 » sans
+chemin ne dit pas lequel des graphes manque. Le treizième essai les joue.
+L'extension vecteur n'est pas encore bâtie sous Windows (le job ne lance
+que cargo) : c'est le même geste que sous Linux, à ajouter.
 
 ## Windows x64 : la liste des accrocs
 
