@@ -32,7 +32,9 @@ if(NOT WIN32)
 endif()
 # Seems to be needed for clang on linux only
 # for compiling std::atomic<T>::compare_exchange_weak
-if ((NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND NOT __WASM__ AND NOT __SINGLE_THREADED__)
+# (clang-cl sous Windows n'a pas de atomic.lib : lld-link échouait sur
+# rag3db_shared.dll au premier bâti Windows, 10 octobre 2026.)
+if ((NOT APPLE AND NOT WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND NOT __WASM__ AND NOT __SINGLE_THREADED__)
         set(RAG3DB_LIBRARIES atomic ${RAG3DB_LIBRARIES})
 endif()
 if (ENABLE_BACKTRACES)
