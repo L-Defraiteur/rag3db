@@ -562,24 +562,32 @@ bool VersionInfo::hasInsertions() const {
 
 bool VersionInfo::isDeleted(const transaction::Transaction* transaction,
     row_idx_t rowInChunk) const {
-    auto [vectorIdx, rowInVector] =
-        StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
-    const auto vectorVersion = getVectorVersionInfo(vectorIdx);
-    if (vectorVersion) {
-        return vectorVersion->isDeleted(transaction->getStartTS(), transaction->getID(),
-            rowInVector);
-    }
-    return false;
+    return isDeleted(transaction->getStartTS(), transaction->getID(), rowInChunk);
 }
 
 bool VersionInfo::isInserted(const transaction::Transaction* transaction,
+    row_idx_t rowInChunk) const {
+    return isInserted(transaction->getStartTS(), transaction->getID(), rowInChunk);
+}
+
+bool VersionInfo::isDeleted(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowInChunk) const {
     auto [vectorIdx, rowInVector] =
         StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
     const auto vectorVersion = getVectorVersionInfo(vectorIdx);
     if (vectorVersion) {
-        return vectorVersion->isInserted(transaction->getStartTS(), transaction->getID(),
-            rowInVector);
+        return vectorVersion->isDeleted(startTS, transactionID, rowInVector);
+    }
+    return false;
+}
+
+bool VersionInfo::isInserted(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowInChunk) const {
+    auto [vectorIdx, rowInVector] =
+        StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
+    const auto vectorVersion = getVectorVersionInfo(vectorIdx);
+    if (vectorVersion) {
+        return vectorVersion->isInserted(startTS, transactionID, rowInVector);
     }
     return true;
 }

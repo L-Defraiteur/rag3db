@@ -123,6 +123,10 @@ public:
     common::idx_t getNumChildren() const { return children.size(); }
     std::unique_ptr<PhysicalOperator> moveUnaryChild();
 
+    // Les verrous qu'un opérateur prend pour tout le plan, avant son ordonnancement, sur le fil
+    // du client (marche A3′ : l'index de la table d'un COPY). Pas dans initGlobalState : il
+    // tourne sous le mutex de la tâche, où une attente gèle l'ordonnanceur entier.
+    virtual void acquireLocksBeforeExecution(ExecutionContext* /*context*/) {}
     // Global state is initialized once.
     void initGlobalState(ExecutionContext* context);
     // Local state is initialized for each thread.
