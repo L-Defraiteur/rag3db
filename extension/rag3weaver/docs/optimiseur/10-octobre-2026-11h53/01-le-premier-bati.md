@@ -396,6 +396,22 @@ les OTP de Lucie.
   minutes perdues au premier essai) ; et la section Liens n'est pas dans
   `presentation` mais sous `after` — le client doit la rendre lui-même.
 
+### L'alpha.2 : les trois plateformes
+
+Préparé le 10 octobre au soir, rien de publié (séance d'OTP avec Lucie en
+une fois, quand Windows est vert) : sous
+`~/.cache/rag3weaver-build/paquet-npm-garde/publier/`, la tête
+`rag3weaver-0.0.1-alpha.2.tgz` (README **en anglais**, demande de Lucie :
+work in progress, l'idée, l'agent runtime, les trois plateformes,
+l'embarqueur optionnel ; les trois sous-paquets épinglés `0.0.1-alpha.1`),
+`rag3weaver-darwin-arm64-0.0.1-alpha.1.tgz` emballé depuis l'artefact du
+quatrième essai macOS (28,4 Mo, Mach-O arm64 strippé), les deux archives
+alpha.1 déjà publiées, et le sous-paquet Windows à venir du run vert. La démo
+rejouée contre l'archive de tête locale (`DEMO_SOURCE`, qui n'installe plus
+que la tête) prouve que les sous-paquets épinglés se résolvent depuis npm et
+que les non publiés n'empêchent rien (optionnels, autre plateforme). Ordre
+de publication : windows, darwin, puis la tête.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
