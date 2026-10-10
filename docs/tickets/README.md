@@ -25,11 +25,10 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (46)
+### Ouverts (45)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une entité au nom réservé (« Order ») casse l'ouverture du backend, au lieu d'être refusée au chargement](2026-10-11-une-entite-au-nom-reserve-casse-l-ouverture.md) | ouvert (trouvé par l'e2e du jouet, chantier I) | blocage | oui | oui (DDL des entités) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
@@ -76,10 +75,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
-### Fermés (53), dans `closed/`
+### Fermés (54), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une entité au nom réservé (« Order ») casse l'ouverture du backend, au lieu d'être refusée au chargement](closed/2026-10-11-une-entite-au-nom-reserve-casse-l-ouverture.md) | corrigé `56079f1cb` | blocage | oui | oui (DDL des entités) |
 | [« duplicate node name: sparse » à la première recherche de test_backend_sparse](closed/2026-10-10-duplicate-node-name-sparse-par-la-fixture.md) | corrigé `413e7ba93` | réponse fausse (un rouge de fixture pris pour un défaut du moteur) | non — fixture de suite seulement | oui — tests seulement, plus le filet des 31 fiches d'outils |
 | [Un NULL en tête d'une liste de paramètres type sa colonne en STRING](closed/2026-10-04-null-en-tete-d-une-liste-de-parametres-type-string.md) | corrigé (11 octobre) | perte | oui | oui, par `LinkRecordNode` |
 | [« unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`](closed/2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | corrigé `9dc3f083a` | interprétation : un modèle y lit un défaut d'outil au lieu d'une déclaration absente | seulement avec un manifeste qui ne déclare pas `workspace.index: "code"` | oui — toute la surface de code |
