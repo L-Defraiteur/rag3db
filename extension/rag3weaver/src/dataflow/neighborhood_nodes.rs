@@ -72,6 +72,31 @@ pub struct NeighborhoodConfig {
     pub also_path: Vec<Step>,
     pub also_same: String,
     pub also_label: String,
+    /// Un relevé sur le chemin : pour chaque nœud atteint (départs compris),
+    /// la relation déclarée suivie d'un pas — pour le code, les verrous que
+    /// chaque scope prend (`LOCKS>`).
+    pub collect: Option<Collect>,
+}
+
+/// **Un relevé sur le chemin**, déclaré au gabarit : la relation et son sens,
+/// le champ montré de la cible (`name`), celui de l'arête (`usage`), et le
+/// titre de la section. Rien ici ne parle de verrous.
+#[derive(Debug, Clone)]
+pub struct Collect {
+    pub step: Step,
+    pub field: String,
+    pub note: String,
+    pub title: String,
+}
+
+/// Un relevé : qui, à quel niveau (0 : un départ), quelle cible, et la note
+/// de l'arête.
+#[derive(Debug, Clone, Serialize)]
+pub struct Collected {
+    pub by: String,
+    pub level: usize,
+    pub target: String,
+    pub note: String,
 }
 
 /// Un nœud atteint.
@@ -110,6 +135,8 @@ pub struct NeighborhoodReport {
     /// Nœuds trouvés mais non rendus, faute de budget.
     pub cut: usize,
     pub depth: usize,
+    /// Le relevé sur le chemin (vide sans `collect`).
+    pub collected: Vec<Collected>,
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -263,6 +290,40 @@ impl Moteur<'_> {
     }
 }
 
+/// **Le relevé sur le chemin** : la relation déclarée (`collect`), suivie
+/// d'un pas depuis les départs (niveau 0) et chaque nœud atteint.
+fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: &[Reached]) -> Result<Vec<Collected>, String> {
+    let Some(c) = &moteur.cfg.collect else { return Ok(Vec::new()) };
+    let mut qui: HashMap<String, (String, usize)> = HashMap::new();
+    for d in departs {
+        qui.insert(d.uuid.clone(), (d.title.clone(), 0));
+    }
+    for r in atteints {
+        qui.entry(r.uuid.clone()).or_insert_with(|| (r.title.clone(), r.level));
+    }
+    if qui.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rel = rel_info(moteur.catalog, &c.step.relation)?;
+    let mut hop = super::graph_walk::hop_of(&rel, c.step.direction, &super::graph_walk::EdgeMark::default());
+    hop.returns.push(Column::Node(c.field.clone()));
+    hop.returns.push(Column::Edge(c.note.clone()));
+    let q = moteur.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+    let liste = CypherValue::List(qui.keys().map(|u| CypherValue::String(u.clone())).collect());
+    let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
+    let mut out: Vec<Collected> = rows
+        .rows
+        .iter()
+        .filter_map(|r| {
+            let (by, level) = qui.get(&texte(r.first()))?.clone();
+            Some(Collected { by, level, target: texte(r.get(2)), note: texte(r.get(3)) })
+        })
+        .collect();
+    out.sort_by(|a, b| (&a.target, a.level, &a.by, &a.note).cmp(&(&b.target, b.level, &b.by, &b.note)));
+    out.dedup_by(|a, b| a.target == b.target && a.by == b.by && a.note == b.note);
+    Ok(out)
+}
+
 /// Le voisinage d'un nom, jusqu'à `depth` sauts, au plus `budget` nœuds
 /// rendus, sans traverser un nœud de degré supérieur à `max_degree`.
 pub fn neighborhood_of(
@@ -312,7 +373,8 @@ pub fn neighborhood_of(
     }
 
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
-    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth })
+    let collected = relever(&moteur, &usages.definitions, &atteints)?;
+    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth, collected })
 }
 
 /// **L'impact d'un fichier** : le même voisinage, parti de toutes les
@@ -353,7 +415,8 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     let uuids: Vec<String> = departs.iter().map(|d| d.uuid.clone()).collect();
     let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(_, m)| m).collect();
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
-    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth })
+    let collected = relever(&moteur, &departs, &atteints)?;
+    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth, collected })
 }
 
 /// Le parcours par niveaux, commun aux deux départs : dédoublonner, couper
@@ -503,6 +566,11 @@ impl NeighborhoodReport {
     }
 
     pub fn markdown(&self, group_title: &str, rest_title: &str, also_label: &str, limit: usize) -> String {
+        self.markdown_avec(group_title, rest_title, also_label, None, limit)
+    }
+
+    /// [`Self::markdown`], avec la section du relevé sur le chemin, sous ce titre.
+    pub fn markdown_avec(&self, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize) -> String {
         let mut out = format!("# impact: {}\n\n", self.name);
         out.push_str(&format!("## Départ ({})\n", self.starts.len()));
         if self.starts.is_empty() {
@@ -567,6 +635,29 @@ impl NeighborhoodReport {
             }
             if surs.len() > limit {
                 out.push_str(&format!("… {} de plus\n", surs.len() - limit));
+            }
+        }
+        if let Some(titre) = collect_title {
+            if !self.collected.is_empty() {
+                let mut cibles: Vec<&str> = self.collected.iter().map(|c| c.target.as_str()).collect();
+                cibles.dedup();
+                out.push_str(&format!("\n## {titre} ({})\n", cibles.len()));
+                for cible in cibles.iter().take(limit) {
+                    let qui: Vec<String> = self
+                        .collected
+                        .iter()
+                        .filter(|c| c.target == *cible)
+                        .map(|c| {
+                            let ou = if c.level == 0 { "départ".to_string() } else { format!("{} saut{}", c.level, if c.level > 1 { "s" } else { "" }) };
+                            let note = if c.note.is_empty() { String::new() } else { format!(", {}", c.note) };
+                            format!("{} ({ou}{note})", c.by)
+                        })
+                        .collect();
+                    out.push_str(&format!("- `{cible}` — {}\n", qui.join(" ; ")));
+                }
+                if cibles.len() > limit {
+                    out.push_str(&format!("… {} de plus\n", cibles.len() - limit));
+                }
             }
         }
         let aussi: Vec<&Reached> = self.reached.iter().filter(|r| r.by_also).collect();
@@ -645,7 +736,13 @@ impl Node for NeighborhoodNode {
         } else if self.summary {
             serde_json::Value::String(report.summary(&self.group_title, &self.rest_title, self.limit, &self.summary_group))
         } else {
-            serde_json::Value::String(report.markdown(&self.group_title, &self.rest_title, &self.cfg.also_label, self.limit))
+            serde_json::Value::String(report.markdown_avec(
+                &self.group_title,
+                &self.rest_title,
+                &self.cfg.also_label,
+                self.cfg.collect.as_ref().map(|c| c.title.as_str()),
+                self.limit,
+            ))
         };
         ctx.set_output("result", PortValue::new(with_status(status.as_deref(), value, self.json)));
         Ok(())
@@ -713,6 +810,15 @@ impl NodeFactory for NeighborhoodNodeFactory {
             also_same: s("also_same").unwrap_or_else(|| "name".into()),
             also_label: s("also_label").unwrap_or_else(|| "Aussi, peut-être".into()),
             also_path,
+            collect: match s("collect").filter(|c| !c.is_empty()) {
+                Some(c) => Some(Collect {
+                    step: pas(&c)?,
+                    field: s("collect_field").unwrap_or_else(|| "name".into()),
+                    note: s("collect_note").unwrap_or_default(),
+                    title: s("collect_title").unwrap_or_else(|| "Relevé sur le chemin".into()),
+                }),
+                None => None,
+            },
         };
         // Des identifiants seulement : ils entrent dans le texte des requêtes.
         let ident = |x: &str| x.is_empty() || x.chars().all(|c| c.is_alphanumeric() || c == '_');
@@ -725,6 +831,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .chain(cfg.relations.iter().map(String::as_str))
             .chain(st.path_fields.iter().map(String::as_str))
             .chain(cfg.also_path.iter().map(|p| p.relation.as_str()))
+            .chain(cfg.collect.iter().flat_map(|c| [c.step.relation.as_str(), c.field.as_str(), c.note.as_str()]))
             .collect();
         if let Some(x) = tous.iter().find(|x| !ident(x)) {
             return Err(format!("NeighborhoodNode: « {x} » n'est pas un identifiant"));
@@ -795,6 +902,10 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("also_path", S, false, Some(serde_json::json!("")), "Départ supplémentaire : pas REL> ou <REL, séparés par |"),
                 p("also_same", S, false, Some(serde_json::json!("name")), "Champ qui doit valoir celui du départ, au bout du chemin"),
                 p("also_label", S, false, Some(serde_json::json!("Aussi, peut-être")), "Libellé du groupe du départ supplémentaire"),
+                p("collect", S, false, Some(serde_json::json!("")), "Relevé sur le chemin : une relation et son sens, suivie d'un pas depuis chaque nœud atteint (`LOCKS>`)"),
+                p("collect_field", S, false, Some(serde_json::json!("name")), "Champ montré de la cible du relevé"),
+                p("collect_note", S, false, Some(serde_json::json!("")), "Champ de l'arête du relevé, montré entre parenthèses (`usage`)"),
+                p("collect_title", S, false, Some(serde_json::json!("Relevé sur le chemin")), "Titre de la section du relevé"),
                 p("usage_field", S, false, Some(serde_json::json!("usage")), "Propriété d'arête : genre"),
                 p("usages_field", S, false, Some(serde_json::json!("usages")), "Propriété d'arête : ensemble des genres"),
                 p("line", S, false, Some(serde_json::json!("line")), "Propriété d'arête : ligne du site"),
@@ -851,6 +962,7 @@ mod tests_saut {
             also_path: vec![],
             also_same: "name".into(),
             also_label: String::new(),
+            collect: None,
         }
     }
 

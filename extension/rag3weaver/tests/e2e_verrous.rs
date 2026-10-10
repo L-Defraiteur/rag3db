@@ -45,6 +45,10 @@ const CORPUS: &[(&str, &str)] = &[
         "#include \"index.h\"\n\nvoid Index::insert(int k) {\n    std::unique_lock lck{mtx};\n}\n\nvoid Index::read(int k) const {\n    std::shared_lock lck{mtx};\n    std::lock_guard g(autre);\n}\n",
     ),
     (
+        "service.cpp",
+        "#include \"index.h\"\n\nvoid bulk(Index& i) {\n    std::lock_guard g(i.autre);\n    i.insert(1);\n}\n\nvoid top(Index& i) {\n    bulk(i);\n}\n",
+    ),
+    (
         "store.rs",
         "use std::sync::Mutex;\n\npub struct Store {\n    inner: Mutex<u32>,\n}\n\nimpl Store {\n    pub fn a(&self) -> u32 {\n        *self.inner.lock().unwrap()\n    }\n}\n",
     ),
@@ -64,6 +68,7 @@ fn les_verrous_vont_au_symbole_du_champ() {
     eprintln!("{verrous:#?}");
     let attendu: Vec<Vec<String>> = [
         ["a", "Store::inner", "lock"],
+        ["bulk", "Index::autre", "lock"],
         ["insert", "Index::mtx", "lock"],
         ["read", "Index::autre", "lock"],
         ["read", "Index::mtx", "shared_lock"],
@@ -75,4 +80,29 @@ fn les_verrous_vont_au_symbole_du_champ() {
     // La classe porte son mutex : qui verrouille Index::mtx, et chez qui.
     let porteur = lignes("MATCH (c:Scope)-[:DEFINES]->(s:Symbol {name: 'Index::mtx'}) RETURN c.name");
     assert_eq!(porteur, vec![vec!["Index".to_string()]]);
+}
+
+/// **Les verrous pris sur le chemin**, dans `impact` : la méthode modifiée
+/// (`insert`, départ) prend `Index::mtx` ; son appelant `bulk` (un saut)
+/// prend `Index::autre` ; `top` (deux sauts) n'en prend pas.
+#[test]
+#[ignore]
+fn impact_dit_les_verrous_pris_sur_le_chemin() {
+    use rag3weaver::dataflow::graph_tool::GraphTool;
+    use rag3weaver::dataflow::node_factories::register_builtins;
+    use rag3weaver::dataflow::node_registry::NodeRegistry;
+    use rag3weaver::dataflow::ServiceRegistry;
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = CORPUS.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "insert"})).unwrap();
+    eprintln!("{md}");
+    assert!(md.contains("## Verrous pris sur le chemin (Classe::champ) (2)"), "{md}");
+    assert!(md.contains("- `Index::mtx` — insert (départ, lock)"), "{md}");
+    assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
 }

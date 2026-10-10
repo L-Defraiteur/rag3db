@@ -56,6 +56,7 @@ fn le_rendu_dit_les_niveaux_les_tests_les_carrefours_et_le_budget() {
         ],
         cut: 7,
         depth: 2,
+        collected: vec![],
     };
     let md = r.markdown("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", 30);
     assert!(md.contains("**5 touchés** (3 à 1 saut, 2 à 2 sauts) — dont **2 Tests qui la traversent**"), "{md}");
