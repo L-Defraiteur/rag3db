@@ -80,8 +80,23 @@ accroc** (38064174599) :
 | tel quel | le refus Landlock nommé, comme sous Windows |
 | `"sandbox": {"mode": "off"}` | `--describe` entier du gabarit de code |
 
-x64 ensuite (job `macos-15-large` ou `macos-13`, même recette) ; l'extension
-vecteur reste à bâtir dans le job, comme sous Windows.
+x64 ensuite (job `macos-15-large` ou `macos-13`, même recette).
+
+**Deuxième essai, le sous-paquet** (38068584216) : l'extension vecteur se
+bâtit par le cmake de cargo en 17 s (697 Ko), `--describe` passe, `npm test`
+est rouge au `LOAD EXTENSION` : « symbol not found in flat namespace :
+TableFunction::emptyTableFunc ». **La cause, en une ligne : ld64 purge
+(`-dead_strip`, passé par rustc) tout ce que l'exécutable n'appelle pas
+lui-même, et nos extensions se lient contre lui par dlopen
+(`-undefined dynamic_lookup`)** — le binaire macOS exporte 9 836 symboles
+contre 21 672 pour le binaire Linux, où lld garde ce que `--export-dynamic`
+exporte. Le `-rdynamic` de build.rs (que clang traduit en
+`-export_dynamic`) ne suffit pas sous ld64 à protéger les globaux de la
+purge. Correctif au troisième essai (38070177768) : `RUSTFLAGS=-C
+link-dead-code` (plus de `-dead_strip`) ; si le binaire grossit trop, la
+variante à essayer est `-C link-args=-Wl,-export_dynamic` seule, ou une
+liste de symboles exportés. Le cache du bâti se sauve désormais même quand
+l'épreuve est rouge (`actions/cache/restore` + `save` en `always()`).
 
 ## Windows x64 : le binaire se lie
 
