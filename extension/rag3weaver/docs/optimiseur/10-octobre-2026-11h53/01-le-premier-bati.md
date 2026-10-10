@@ -100,7 +100,19 @@ alors que les graphes du gabarit lui sont relatifs (`../../tools/…`). Deux
 corrections : le manifeste s'écrit à côté du gabarit, comme sous Linux ; et
 les lectures du chargement nomment le chemin dans leur erreur
 (`lire_octets`, `lire_texte` dans backend.rs) — un « os error 3 » sans
-chemin ne dit pas lequel des graphes manque. Le treizième essai les joue.
+chemin ne dit pas lequel des graphes manque. Le treizième essai
+(38054741151, 37 min 25 s) a nommé le fichier, et la vraie cause avec :
+
+```
+\\?\D:\a\rag3db\tools\edit.mmd : The system cannot find the path specified. (os error 3)
+```
+
+Sous Windows, `canonicalize` rend un chemin **verbatim** (`\\?\D:\…`), que
+le noyau prend à la lettre : les `..` d'un graphe relatif au gabarit
+(`../../tools/edit.mmd`) n'y sont plus résolus — le fichier cherché n'est
+pas celui qu'on croit. Le dossier du manifeste reprend sa forme ordinaire
+(`sans_prefixe_verbatim`, `D:\…`) ; sous Linux rien ne change. Le
+quatorzième essai le joue.
 L'extension vecteur n'est pas encore bâtie sous Windows (le job ne lance
 que cargo) : c'est le même geste que sous Linux, à ajouter.
 

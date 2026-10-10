@@ -343,6 +343,31 @@ pub struct PreparedBackend {
 /// « The system cannot find the path specified. (os error 3) » sans chemin
 /// ne dit pas lequel des graphes ou des schémas manque (vu au premier
 /// `--describe` sous Windows, 10 octobre 2026).
+/// Sous Windows, `canonicalize` rend un chemin verbatim (`\\?\D:\…`), que le
+/// noyau prend à la lettre : les `..` des graphes relatifs au gabarit
+/// (`../../tools/edit.mmd`) n'y sont plus résolus, et le fichier « manque »
+/// (treizième essai du paquet npm, 10 octobre 2026). On rend au dossier du
+/// manifeste sa forme ordinaire (`D:\…`) ; ailleurs, rien ne change.
+fn sans_prefixe_verbatim(chemin: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        let mut composants = chemin.components();
+        if let Some(Component::Prefix(prefixe)) = composants.next() {
+            if let Prefix::VerbatimDisk(lettre) = prefixe.kind() {
+                let mut ordinaire = PathBuf::from(format!("{}:\\", lettre as char));
+                for c in composants {
+                    match c {
+                        Component::RootDir => {}
+                        autre => ordinaire.push(autre.as_os_str()),
+                    }
+                }
+                return ordinaire;
+            }
+        }
+    }
+    chemin
+}
 fn lire_octets(chemin: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
 }
@@ -379,12 +404,13 @@ impl PreparedBackend {
         {
             return Err("backend requires a persistent database path".into());
         }
-        let directory = path
-            .canonicalize()
-            .map_err(|e| e.to_string())?
-            .parent()
-            .unwrap()
-            .to_path_buf();
+        let directory = sans_prefixe_verbatim(
+            path.canonicalize()
+                .map_err(|e| format!("{} : {e}", path.display()))?
+                .parent()
+                .unwrap()
+                .to_path_buf(),
+        );
         if let Some(w) = &manifest.workspace {
             if let Some(nom) = &w.index {
                 if !crate::backend_code::KNOWN_INDEX_SCHEMAS.contains(&nom.as_str()) {
