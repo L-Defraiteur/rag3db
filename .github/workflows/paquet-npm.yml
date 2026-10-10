@@ -83,6 +83,9 @@ jobs:
       # pour le moteur ; donc clang-cl pour les deux, moteur compris.
       CC_x86_64_pc_windows_msvc: clang-cl
       CXX_x86_64_pc_windows_msvc: clang-cl
+      # Troisième accroc : avec clang-cl, cc-rs n'active pas les exceptions
+      # C++ (la crate cxx échoue sur un `throw`) ; /EHsc le fait.
+      CXXFLAGS_x86_64_pc_windows_msvc: /EHsc
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
