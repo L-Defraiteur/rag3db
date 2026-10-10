@@ -22,6 +22,7 @@ lecture répétable ; le détachement suit Neo4j. C'est un mélange, assumé, et
 | suppression, mise à jour d'une relation validée | les deux extrémités en exclusif | une extrémité supprimée : `could not serialize…` ; la relation elle-même déjà écrite : `Write-write conflict` (ticket du 10 octobre) | Neo4j |
 | `DELETE` d'un nœud (sans `DETACH`) | la clé en exclusif | une relation attachée et validée après l'instantané compte : refus `has connected edges` | une contrainte, pas une sérialisation |
 | `DETACH DELETE` d'un nœud | la clé en exclusif | les relations validées après l'instantané sont **détachées aussi** : la transaction détache ce qu'elle n'a pas vu à son instantané | Neo4j (lecture validée), pas PostgreSQL |
+| écritures internes d'un index (les arêtes de l'index vectoriel, à la validation) | **rien** (`TableInsertState::takesLocks = false`) : ce ne sont pas des écritures de l'utilisateur, l'index est couvert par les verrous de la table qu'il sert | — ; deux transactions qui réécrivent le graphe en même temps (deux insertions, l'index en partagé) restent ce qu'elles étaient avant A4′ : couvert par H2, H3, H4 du banc, pas protégé | l'index au commit (marche suivante) |
 | lecture | rien | — | PostgreSQL, Neo4j |
 
 ## 1. Ce qui existe déjà : V1, le gestionnaire seul (`022c78402`)
