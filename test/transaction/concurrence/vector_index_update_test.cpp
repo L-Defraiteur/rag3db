@@ -142,7 +142,9 @@ public:
             "CALL QUERY_VECTOR_INDEX('{}', '{}', {}, {}, efs := {}) RETURN node.id;", table, index,
             rows.front().second, numRows, numRows));
         if (!exhaustive->isSuccess()) {
-            std::cerr << label << ": " << exhaustive->getErrorMessage() << "\n";
+            lastCheckSummary = label + " : the exhaustive search failed: " +
+                               exhaustive->getErrorMessage();
+            std::cerr << lastCheckSummary << "\n";
             failed.insert("query");
             return failed;
         }
@@ -192,9 +194,11 @@ public:
                 std::cerr << " (" << results.size() << " results)\n";
             }
         }
-        std::cerr << label << ": " << reached.size() << "/" << numRows
-                  << " reachable, " << foundFirst << "/" << asked << " find themselves, " << dead
-                  << " dead rows returned\n";
+        lastCheckSummary = stringFormat(
+            "{} : {}/{} reachable by the exhaustive search, {}/{} find themselves by their own "
+            "vector, {} dead rows returned",
+            label, reached.size(), numRows, foundFirst, asked, dead);
+        std::cerr << lastCheckSummary << "\n";
         // Une seule étiquette pour les deux contrôles : d'une passe à l'autre, la même
         // perte se voit par l'un, par l'autre ou par les deux.
         if (reached.size() != numRows || foundFirst != asked) {
@@ -213,6 +217,7 @@ public:
     template<typename Scenario>
     void runRepeatedly(Scenario scenario, int64_t ownStep = 1, int runs = 5) {
         std::set<std::string> failed;
+        std::string details;
         int failedRuns = 0;
         if (forcedRuns > 0) {
             runs = forcedRuns;
@@ -223,9 +228,15 @@ public:
                 return;
             }
             auto runFailed = check(stringFormat("run {}", run), ownStep);
+            if (!runFailed.empty()) {
+                details += "\n  " + lastCheckSummary;
+            }
             if (checkSecondIndex) {
                 const auto second =
                     check(stringFormat("run {}, second index", run), ownStep, "doc_index2", "vec2");
+                if (!second.empty()) {
+                    details += "\n  " + lastCheckSummary;
+                }
                 runFailed.insert(second.begin(), second.end());
             }
             failedRuns += !runFailed.empty();
@@ -235,12 +246,17 @@ public:
         for (const auto& name : failed) {
             checks += "[check: " + name + "] ";
         }
+        // Le détail des essais perdants entre dans le message d'échec, donc dans le JSON de la
+        // comparaison : un rouge probabiliste dit de lui-même si la ligne manque à la recherche
+        // exhaustive (hors du graphe) ou seulement à la recherche de son propre vecteur.
         EXPECT_TRUE(failed.empty()) << checks << failedRuns << " of " << runs
-                                    << " runs lose rows in the vector index";
+                                    << " runs lose rows in the vector index:" << details;
     }
 
     int forcedRuns = 0;
     bool checkSecondIndex = false;
+    // Le compte du dernier contrôle (check), pour le message d'un essai perdant.
+    std::string lastCheckSummary;
     std::string table;
 };
 
