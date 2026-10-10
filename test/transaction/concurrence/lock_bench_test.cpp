@@ -150,17 +150,20 @@ Scenario holderAndWaiter(HolderAndWaiter script) {
     };
 }
 
-// L'écrivain 1 a-t-il attendu ? Sa fin d'écriture vient après la fin de la transaction
-// du détenteur.
+// L'écrivain 1 a-t-il attendu ? Sa fin d'écriture vient après le DÉBUT de la fin de
+// transaction du détenteur (« end:start »). Pas après sa fin : le verrou est rendu pendant le
+// COMMIT ou le ROLLBACK, et l'attendant, réveillé, peut marquer sa fin d'écriture avant que le
+// détenteur ne marque « end:done » (vu 1 fois sur 20, 10 octobre). Sans verrou, l'attendant
+// finit son écriture pendant la pause HOLD du détenteur, donc avant « end:start ».
 void expectWaited(const SharedArea& area) {
-    const auto holderEnd = eventIndex(area, 0, "end:done");
+    const auto holderEnd = eventIndex(area, 0, "end:start");
     auto waiterEnd = eventIndex(area, 1, "write:done");
     if (waiterEnd < 0) {
         waiterEnd = eventIndex(area, 1, "write:failed");
     }
     EXPECT_GT(waiterEnd, holderEnd)
         << "[check: waited] the second writer's write ended before the first writer's "
-           "transaction ended: it did not wait for the lock";
+           "transaction began to end: it did not wait for the lock";
 }
 
 void expectWaiterSucceeds(const SharedArea& area) {

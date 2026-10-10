@@ -4,6 +4,7 @@
 //! - [`NodeFactory`] — creates `Box<dyn Node>` from name + JSON config
 //! - [`NodeRegistry`] — maps node_type → factory, enables checkpoint/mermaid integration
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use super::node::Node;
@@ -93,10 +94,11 @@ impl Choices {
                     return None;
                 }
                 let cat = catalog?;
-                let rows = cat
-                    .execute_raw(&format!("MATCH (n:{entity}) RETURN n.{field}"))
-                    .ok()?
-                    .rows;
+                let q = cat
+                    .dialect_arc()
+                    .select(&rag3weaver_ir::Select::all(entity, vec![rag3weaver_ir::Column::Node(field.to_string())]))
+                    .ok()?;
+                let rows = cat.execute_raw(&q).ok()?.rows;
                 let mut vues: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
                 for l in &rows {
                     if let Some(v) = l.first().and_then(|v| v.as_str()) {
@@ -129,11 +131,11 @@ impl Choices {
 /// Describes a configuration parameter accepted by a node factory.
 #[derive(Debug, Clone)]
 pub struct ConfigParam {
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub param_type: ConfigParamType,
     pub required: bool,
     pub default: Option<serde_json::Value>,
-    pub description: &'static str,
+    pub description: Cow<'static, str>,
     /// Valeurs admises d'un paramètre `String` — `enum` dans le schéma,
     /// refus avant instanciation. `None` : chaîne libre.
     pub choices: Option<Choices>,
@@ -150,7 +152,7 @@ pub struct ConfigParam {
 pub fn check_fixed_choices(params: &[ConfigParam], config: &serde_json::Value) -> Result<(), String> {
     for p in params {
         let Some(Choices::Fixed(values)) = &p.choices else { continue };
-        let Some(value) = config.get(p.name).and_then(|v| v.as_str()) else { continue };
+        let Some(value) = config.get(&*p.name).and_then(|v| v.as_str()) else { continue };
         if !values.iter().any(|v| v == value) {
             return Err(format!(
                 "'{}' : '{value}' n'est pas une valeur admise ; admises : {}",
@@ -169,8 +171,8 @@ pub fn check_fixed_choices(params: &[ConfigParam], config: &serde_json::Value) -
 /// Used for introspection, validation, Mermaid graph rendering, and documentation.
 #[derive(Debug, Clone)]
 pub struct NodeSchema {
-    pub node_type: &'static str,
-    pub description: &'static str,
+    pub node_type: Cow<'static, str>,
+    pub description: Cow<'static, str>,
     pub inputs: Vec<PortDef>,
     pub outputs: Vec<PortDef>,
     pub config_params: Vec<ConfigParam>,
@@ -189,8 +191,9 @@ pub trait NodeFactory: Send + Sync {
     /// - `config` — JSON configuration (e.g. `{"relation": "HAS_FILE", "limit": 10}`)
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String>;
 
-    /// Node type identifier (must match `Node::node_type()`).
-    fn node_type(&self) -> &'static str;
+    /// Node type identifier (must match `Node::node_type()`). Emprunté à la
+    /// fabrique : un type déclaré (sous-graphe, nœud scripté) possède son nom.
+    fn node_type(&self) -> &str;
 
     /// Declarative schema for this node type.
     fn schema(&self) -> NodeSchema;
@@ -202,7 +205,7 @@ pub trait NodeFactory: Send + Sync {
 ///
 /// Used by checkpoint restore, Mermaid parser, and graph builder helpers.
 pub struct NodeRegistry {
-    factories: HashMap<&'static str, Box<dyn NodeFactory>>,
+    factories: HashMap<String, Box<dyn NodeFactory>>,
 }
 
 /// Les ports **déclarés** d'un type de nœud, lus là où ils le sont : le
@@ -233,7 +236,7 @@ impl NodeRegistry {
 
     /// Register a factory. Keyed by `factory.node_type()`.
     pub fn register(&mut self, factory: Box<dyn NodeFactory>) {
-        self.factories.insert(factory.node_type(), factory);
+        self.factories.insert(factory.node_type().to_string(), factory);
     }
 
     /// Create a node instance from type, name, and config.
@@ -258,8 +261,8 @@ impl NodeRegistry {
     }
 
     /// List all registered node types.
-    pub fn types(&self) -> Vec<&'static str> {
-        self.factories.keys().copied().collect()
+    pub fn types(&self) -> Vec<&str> {
+        self.factories.keys().map(String::as_str).collect()
     }
 
     /// Check if a node type is registered.
@@ -276,9 +279,9 @@ impl NodeRegistry {
 /// ```ignore
 /// simple_factory!(ComposeNodeFactory, ComposeNode, "ComposeNode",
 ///     "Attaches fetched children to root results",
-///     &[PortDef { name: "results", port_type: PortType::Results, required: true },
-///       PortDef { name: "children", port_type: PortType::Children, required: false }],
-///     &[PortDef { name: "results", port_type: PortType::Results, required: false }],
+///     &[PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+///       PortDef { name: "children".into(), port_type: PortType::Children, required: false }],
+///     &[PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
 /// );
 /// ```
 #[macro_export]
@@ -301,8 +304,8 @@ macro_rules! simple_factory {
 
             fn schema(&self) -> $crate::dataflow::node_registry::NodeSchema {
                 $crate::dataflow::node_registry::NodeSchema {
-                    node_type: $type_name,
-                    description: $desc,
+                    node_type: ($type_name).into(),
+                    description: ($desc).into(),
                     inputs: $inputs.to_vec(),
                     outputs: $outputs.to_vec(),
                     config_params: vec![],
@@ -333,8 +336,8 @@ macro_rules! named_factory {
 
             fn schema(&self) -> $crate::dataflow::node_registry::NodeSchema {
                 $crate::dataflow::node_registry::NodeSchema {
-                    node_type: $type_name,
-                    description: $desc,
+                    node_type: ($type_name).into(),
+                    description: ($desc).into(),
                     inputs: $inputs.to_vec(),
                     outputs: $outputs.to_vec(),
                     config_params: vec![],
@@ -371,7 +374,7 @@ mod tests {
         fn name(&self) -> &str { &self.node_name }
         fn inputs(&self) -> Vec<PortDef> { vec![] }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out", port_type: PortType::Empty, required: false }]
+            vec![PortDef { name: "out".into(), port_type: PortType::Empty, required: false }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Trigger);
@@ -392,16 +395,16 @@ mod tests {
         fn node_type(&self) -> &'static str { "FakeNode" }
         fn schema(&self) -> NodeSchema {
             NodeSchema {
-                node_type: "FakeNode",
-                description: "A fake node for testing",
+                node_type: "FakeNode".into(),
+                description: "A fake node for testing".into(),
                 inputs: vec![],
-                outputs: vec![PortDef { name: "out", port_type: PortType::Empty, required: false }],
+                outputs: vec![PortDef { name: "out".into(), port_type: PortType::Empty, required: false }],
                 config_params: vec![ConfigParam {
-                    name: "value",
+                    name: "value".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(0)),
-                    description: "A fake value",
+                    description: "A fake value".into(),
                     choices: None,
                     json_schema: None,
                 }],
@@ -468,7 +471,7 @@ mod tests {
         "SimpleFake",
         "Simple fake node",
         &[],
-        &[PortDef { name: "out", port_type: PortType::Empty, required: false }],
+        &[PortDef { name: "out".into(), port_type: PortType::Empty, required: false }],
     );
 
     #[test]

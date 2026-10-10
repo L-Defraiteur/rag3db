@@ -43,55 +43,18 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-en
 # reprise. Mesuré sur luciepc le 10 octobre : 5 014 ms.
 Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
-# Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
-# nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux
-# ordres). C2_DetachRelationCommitsFirst/Thread_Crash : le rejeu « répare » la relation
-# pendante, les réponses changent avant et après l'arrêt.
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_RelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationDeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DestinationRelationCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachDeleteCommitsFirst/Thread_Crash one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Hot one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Reopen one-commit,rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible
-Launchers/ConcurrencyBench.C2_DetachRelationCommitsFirst/Thread_Crash one-commit,same-answers
-#
-# Marche A4′ — C6 : suppression et mise à jour de la même ligne validées toutes les deux.
-# Attendu sous l'option A (tranchée le 3 octobre) : jamais les deux.
-MinimalReproduction.C6_DeleteCommitsFirstSingleThread not-both-commit
-MinimalReproduction.C6_UpdateCommitsFirstSingleThread not-both-commit
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Hot one-commit
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Reopen one-commit
-Launchers/ConcurrencyBench.C6_DeleteCommitsFirst/Thread_Crash one-commit
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Hot one-commit
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Reopen one-commit
-Launchers/ConcurrencyBench.C6_UpdateCommitsFirst/Thread_Crash one-commit
-#
-# Marche A4′ — deux mises à jour de la même ligne sur deux colonnes, validées toutes les
-# deux : le verrou est à la ligne.
-MinimalReproduction.SameRowTwoColumnsSingleThread one-commit
-#
-# Marche V1 puis A4′ — l'attente prouvée par l'ordre des événements (lock_bench_test.cpp,
-# §6.1 de la note) : aujourd'hui l'écriture du second finit aussitôt (étiquette waited). Les
-# deux cas de la clé (SameKey…) sont verts depuis A3′.
-LockBench.SameRowUpdateWaitsThenGetsSerializationError waited,waiter-gets-serialization-error
-LockBench.SameRowUpdateWaitsThenWritesAfterRollback waited,waiter-commits,waiter-value,waiter-writes
-LockBench.SameRowOtherColumnWaitsThenGetsSerializationError waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
-LockBench.DeleteThenUpdateWaitsThenGetsSerializationError waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
-LockBench.DeleteThenNewRelationWaitsThenGetsSerializationError rel-directions-agree,rel-endpoints-exist,stored-endpoints-visible,waited,waiter-does-not-commit,waiter-gets-serialization-error,waiter-refused
-#
-# Marche V1 — l'interblocage : exactement une erreur « deadlock », l'autre valide.
-LockBench.DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits no-immediate-conflict,one-deadlock-error
+# Marche A4′ (la ligne en exclusif à la mise à jour et à la suppression, les extrémités d'une
+# relation en partagé pour créer et en exclusif pour écrire, l'erreur de sérialisation après
+# l'attente, le détachement sur le dernier état validé) : FAITE le 10 octobre 2026 au soir.
+# Verts depuis : C2 ×18, C6 ×6 et les deux MinimalReproduction.C6, SameRowTwoColumnsSingleThread,
+# LockBench.SameRowUpdate/OtherColumn/DeleteThenUpdate/DeleteThenNewRelation…, et
+# LockTimeoutGivesNamedErrorAndRollsBack, DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits et
+# InterruptedWaitGivesInterruptedAndRollsBack (la mise à jour attend : l'interblocage se détecte,
+# l'interruption réveille).
+# C5_DoubleDelete, réécrit par le banc pour A4′ (le second DELETE attend, puis reçoit l'erreur de
+# sérialisation : option A) : vert. Les ordres « la relation / la mise à jour d'abord » de C2 et
+# C6 sont réécrits aussi (celui qui valide le premier écrit le premier, l'attente prouvée), et
+# les trois MinimalReproduction à un seul fil reçoivent un délai de verrou court.
 #
 # Marche V2 — l'annonce en tête. ROUGE : LA FONCTION N'EXISTE PAS (acquire-locks-exists), en
 # plus du comportement.
@@ -99,14 +62,6 @@ LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn acquire-locks-exists,al
 #
 # Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
 LockBench.FailedTransactionReleasesItsLocksAtRollback waited
-#
-# Marche V1 — l'interruption pendant une attente : « Interrupted » après le délai, transaction
-# annulée.
-LockBench.InterruptedWaitGivesInterruptedAndRollsBack waited-the-delay,waiter-gets-interrupted
-#
-# Marche A4′ — le délai d'attente d'un verrou. Le réglage existe depuis V1 (CALL lock_timeout) ;
-# reste le comportement : la mise à jour d'une ligne ne prend pas encore de verrou.
-LockBench.LockTimeoutGivesNamedErrorAndRollsBack waited-the-delay,waiter-gets-lock-timeout
 #
 # Marche V1, genre « index » (et maintenance de l'index HNSW au commit, étude HNSW §4) — H3 :
 # deux suppressions sans rapport dont les voisinages se recouvrent ; le second reçoit un

@@ -108,6 +108,8 @@ void GeoExtension::load(main::ClientContext* context) {
 } // namespace rag3db
 
 #if defined(BUILD_DYNAMIC_LOAD)
+#include "common/build_id.h"
+
 extern "C" {
 #if defined(_WIN32)
 #define INIT_EXPORT __declspec(dllexport)
@@ -119,6 +121,11 @@ INIT_EXPORT void init(rag3db::main::ClientContext* context) {
 }
 INIT_EXPORT const char* name() {
     return rag3db::geo_extension::GeoExtension::EXTENSION_NAME;
+}
+
+// L'identifiant de bâti de cette extension, que LOAD EXTENSION compare à celui du moteur.
+INIT_EXPORT const char* build_id() {
+    return RAG3DB_BUILD_ID;
 }
 }
 #endif

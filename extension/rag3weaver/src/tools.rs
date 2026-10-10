@@ -242,11 +242,11 @@ mod tests {
         ];
         for (param_type, expected) in cases {
             let p = ConfigParam {
-                name: "x",
+                name: "x".into(),
                 param_type,
                 required: false,
                 default: None,
-                description: "d",
+                description: "d".into(),
                 choices: None,
                 json_schema: None,
             };
@@ -258,11 +258,11 @@ mod tests {
     #[test]
     fn defaults_are_carried_over() {
         let p = ConfigParam {
-            name: "limit",
+            name: "limit".into(),
             param_type: ConfigParamType::Int,
             required: false,
             default: Some(json!(10)),
-            description: "max results",
+            description: "max results".into(),
             choices: None,
             json_schema: None,
         };

@@ -197,6 +197,11 @@ ext_install_func_t ExtensionLibLoader::getInstallFunc() {
     return (ext_install_func_t)getDynamicLibFunc(EXTENSION_INSTALL_FUNC_NAME);
 }
 
+ext_build_id_func_t ExtensionLibLoader::findBuildIdFunc() {
+    KU_ASSERT(libHdl != nullptr);
+    return (ext_build_id_func_t)dlsym(libHdl, EXTENSION_BUILD_ID_FUNC_NAME);
+}
+
 void ExtensionLibLoader::unload() {
     KU_ASSERT(libHdl != nullptr);
     dlclose(libHdl);

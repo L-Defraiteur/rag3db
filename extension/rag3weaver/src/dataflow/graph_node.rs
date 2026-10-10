@@ -33,6 +33,12 @@ impl std::fmt::Debug for GraphNode {
 
 pub struct GraphNode {
     name: String,
+    /// `GraphNode` pour un sous-graphe monté à la main ; le type déclaré
+    /// quand une [`GraphNodeFactory`] le crée.
+    node_type: String,
+    /// La configuration reçue de la fabrique — ce qu'un point de reprise
+    /// lui repassera ; `None` pour un sous-graphe monté à la main.
+    config: Option<serde_json::Value>,
     definition: GraphDefinition,
     registry: Arc<NodeRegistry>,
     inputs: Vec<PortDef>,
@@ -108,14 +114,13 @@ impl GraphNode {
             }
         }
 
-        // Build PortDefs — we use leaked &'static str for the names
-        // since PortDef requires &'static str and these are dynamic.
+        // Les noms des ports libres sont possédés par le nœud : rien ne fuit
+        // quand il est jeté (une fabrique rebâtie, un graphe rechargé).
         let inputs: Vec<PortDef> = input_defs
             .iter()
             .map(|(name, pt, req)| {
-                let leaked: &'static str = Box::leak(name.clone().into_boxed_str());
                 PortDef {
-                    name: leaked,
+                    name: name.clone().into(),
                     port_type: *pt,
                     required: *req,
                 }
@@ -125,9 +130,8 @@ impl GraphNode {
         let outputs: Vec<PortDef> = output_defs
             .iter()
             .map(|(name, pt, req)| {
-                let leaked: &'static str = Box::leak(name.clone().into_boxed_str());
                 PortDef {
-                    name: leaked,
+                    name: name.clone().into(),
                     port_type: *pt,
                     required: *req,
                 }
@@ -136,6 +140,8 @@ impl GraphNode {
 
         Ok(Self {
             name: name.to_string(),
+            node_type: "GraphNode".into(),
+            config: None,
             definition,
             registry,
             inputs,
@@ -156,8 +162,7 @@ impl GraphNode {
 
         // Update the PortDef
         if let Some(pd) = self.inputs.iter_mut().find(|p| p.name == inner) {
-            let leaked: &'static str = Box::leak(alias.to_string().into_boxed_str());
-            pd.name = leaked;
+            pd.name = alias.to_string().into();
         }
         Ok(())
     }
@@ -173,8 +178,7 @@ impl GraphNode {
 
         // Update the PortDef
         if let Some(pd) = self.outputs.iter_mut().find(|p| p.name == inner) {
-            let leaked: &'static str = Box::leak(alias.to_string().into_boxed_str());
-            pd.name = leaked;
+            pd.name = alias.to_string().into();
         }
         Ok(())
     }
@@ -228,11 +232,14 @@ impl Node for GraphNode {
         Ok(())
     }
 
-    fn node_type(&self) -> &'static str {
-        "GraphNode"
+    fn node_type(&self) -> &str {
+        &self.node_type
     }
 
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        if let Some(config) = &self.config {
+            return Some(Box::new(config.clone()));
+        }
         let val = serde_json::to_value(&self.definition).unwrap_or_default();
         Some(Box::new(val))
     }
@@ -285,13 +292,9 @@ impl GraphNodeFactory {
         // que les schémas de types, jamais les valeurs.
         let temp = GraphNode::from_definition("__schema_probe", definition.clone(), registry.clone())?;
 
-        // Leak type_name for &'static str
-        let leaked_type: &'static str = Box::leak(type_name.to_string().into_boxed_str());
-        let leaked_desc: &'static str = Box::leak(description.to_string().into_boxed_str());
-
         let schema = NodeSchema {
-            node_type: leaked_type,
-            description: leaked_desc,
+            node_type: type_name.to_string().into(),
+            description: description.to_string().into(),
             inputs: temp.inputs.clone(),
             outputs: temp.outputs.clone(),
             config_params,
@@ -321,12 +324,14 @@ impl NodeFactory for GraphNodeFactory {
                 .map_err(|e| format!("{}: {e}", self.schema.node_type))?;
             super::graph_tool::substitute_definition(&self.definition, &args)
         };
-        let node = GraphNode::from_definition(name, definition, self.registry.clone())?;
+        let mut node = GraphNode::from_definition(name, definition, self.registry.clone())?;
+        node.node_type = self.schema.node_type.to_string();
+        node.config = Some(config.clone());
         Ok(Box::new(node))
     }
 
-    fn node_type(&self) -> &'static str {
-        self.schema.node_type
+    fn node_type(&self) -> &str {
+        &self.schema.node_type
     }
 
     fn schema(&self) -> NodeSchema {
@@ -410,7 +415,7 @@ mod tests {
         // LinkRecordNode inputs: relations (required), trigger (optional)
         //   - trigger is connected (edge from inserts.done)
         //   - relations is free
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(input_names.contains(&"inserts.entities"), "inputs: {:?}", input_names);
         assert!(input_names.contains(&"inserts.trigger"), "inputs: {:?}", input_names);
         assert!(input_names.contains(&"links.relations"), "inputs: {:?}", input_names);
@@ -418,7 +423,7 @@ mod tests {
         assert!(!input_names.contains(&"links.trigger"), "inputs: {:?}", input_names);
 
         // Outputs: InsertRecordNode has inserted (free), LinkRecordNode has done (free)
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"inserts.inserted"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"links.done"), "outputs: {:?}", output_names);
     }
@@ -434,12 +439,12 @@ mod tests {
         // KBQuerySourceNode n'a pas d'entrée ; l'entrée `query` de
         // `SearchSourceNode` (optionnelle depuis le pas B) est câblée par
         // l'arête → pas libre, donc pas exposée.
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(!input_names.contains(&"ps.query"), "inputs: {:?}", input_names);
 
         // Sorties libres : la sortie `query` de l'amont est câblée → absorbée ;
         // `query` et `meta` de la source restent libres.
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"ps.meta"), "outputs: {:?}", output_names);
     }
@@ -484,7 +489,7 @@ mod tests {
 
         gn.alias_input("entities", "inserts.entities").unwrap();
 
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(input_names.contains(&"entities"), "inputs: {:?}", input_names);
         assert!(!input_names.contains(&"inserts.entities"), "inputs: {:?}", input_names);
 
@@ -504,7 +509,7 @@ mod tests {
 
         gn.alias_output("payload", "ps.query").unwrap();
 
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"payload"), "outputs: {:?}", output_names);
         assert!(!output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
     }
@@ -562,7 +567,7 @@ mod tests {
 
         let node = factory.create("my_search", &serde_json::json!({})).unwrap();
         assert_eq!(node.name(), "my_search");
-        assert_eq!(node.node_type(), "GraphNode");
+        assert_eq!(node.node_type(), "SearchPipeline");
     }
 
     // ── Test 10: GraphNode in parent graph ───────────────────────────
@@ -597,8 +602,39 @@ mod tests {
         let registry = test_registry();
         let gn = GraphNode::from_definition("mermaid_search", def, registry).unwrap();
 
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"));
         assert!(output_names.contains(&"ps.meta"));
+    }
+
+    /// Un sous-graphe déclaré sous un nom garde ce nom à travers
+    /// `to_definition` : c'est par lui qu'un point de reprise le retrouve.
+    #[test]
+    fn a_declared_subgraph_keeps_its_type_through_a_definition_round_trip() {
+        let inner = test_registry();
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        registry.register(Box::new(
+            GraphNodeFactory::new(
+                "Ingest",
+                "declared ingestion",
+                ingestion_subgraph_def(),
+                inner,
+            )
+            .unwrap(),
+        ));
+        let outer = GraphDefinition {
+            nodes: vec![NodeDef {
+                name: "sub".into(),
+                node_type: "Ingest".into(),
+                config: serde_json::json!({}),
+            }],
+            edges: vec![],
+        };
+        let graph =
+            crate::dataflow::graph::DataflowGraph::from_definition(&outer, &registry).unwrap();
+        let back = graph.to_definition();
+        assert_eq!(back.nodes[0].node_type, "Ingest");
+        crate::dataflow::graph::DataflowGraph::from_definition(&back, &registry).unwrap();
     }
 }

@@ -641,3 +641,34 @@ worktree moteur n'a plus de bâti ; les notes restent dans `~/.cache/rag3db-mote
 
 Faute du jour, notée en mémoire : un `pidof concurrence_test` nu a tué un test du banc ; on ne
 tue que les pids qu'on a lancés.
+
+## A4′ (10 octobre 2026, nuit) — ce qui est fait, ce qui reste
+
+Branche `verrous-a4-2` (rebasée sur master `e0fad1325` : IGNORE_ERRORS, l'index vectoriel, analyze),
+six commits, relue par le banc au fil de l'eau ; les sémantiques d'un coup d'œil : page 07 §0 ;
+ce que le code a appris : page 07 §6. En une ligne chacune, sous le mode multi-écrivains :
+la ligne en exclusif (clé) à la mise à jour et à la suppression, puis l'erreur de sérialisation
+si un autre a validé une écriture de la ligne après l'instantané ; les deux extrémités d'une
+relation en partagé pour créer, en exclusif pour écrire ; `DELETE` refusé par
+`has connected edges` sur le dernier état validé ; `DETACH DELETE` qui détache aussi ce qu'il
+n'a pas vu à son instantané (Neo4j) ; les écritures internes d'un index sans verrou.
+
+Trouvé en route : H2 validait à moitié (les arêtes de l'index prenaient les extrémités) ;
+les huit cas Cypher `WWConflict*` de l'amont attendent désormais le verrou (délai de 300 ms,
+erreur nommée) ; deux lignes de V1 (interblocage, interruption) verdissent avec A4′.
+
+**Reste nommé** : C7_RandomMix après arrêt brutal (relations à une extrémité manquante qui
+n'existent qu'après le rejeu ; le témoin « détachement sur le dernier état validé, mort base
+ouverte, rejeu » est vert, le chemin n'est pas trouvé) — ticket, à chercher avec le banc ; la
+seconde suppression d'une même relation après attente nommée « Write-write conflict » (ticket) ;
+les témoins {1,0} et C5 réécrits par le banc sur sa branche, à relire.
+
+**Sur master** (avance rapide, 11 commits de `9904fefc0` à `67ff3816b`, le 10 octobre à 23 h 40 ;
+les cinq derniers sont les témoins du banc, relus). Passe, sur luciepc, bâti de la branche
+rebasée : transaction_test 233, api 104, c_api 136, copy 23, stockage 81 + column_stats 2,
+vector 74 et 63, Cypher 1867 (les huit `WWConflict*` adaptés compris) ; banc de concurrence en
+tenue exclusive, conforme à `known_red.txt` : 15 rouges comparés, 238 verts (21 lignes attendues,
+dont 6 mises de côté par `long.txt` et `probabilistic.txt`) — 56 lignes avant A4′, 21 après.
+Les deux premières comparaisons, jouées pendant qu'un autre banc tournait là-bas, avaient
+montré des « waited » de charge : c'est ce qui a donné la règle du soir (le banc entier en tenue
+exclusive, annoncée). Le message complet du lot : `~/.cache/rag3db-moteur-notes/a4/message.txt`.

@@ -54,6 +54,8 @@ void VectorExtension::load(main::ClientContext* context) {
 } // namespace rag3db
 
 #if defined(BUILD_DYNAMIC_LOAD)
+#include "common/build_id.h"
+
 extern "C" {
 // Because we link against the static library on windows, we implicitly inherit RAG3DB_STATIC_DEFINE,
 // which cancels out any exporting, so we can't use RAG3DB_API.
@@ -68,6 +70,11 @@ INIT_EXPORT void init(rag3db::main::ClientContext* context) {
 
 INIT_EXPORT const char* name() {
     return rag3db::vector_extension::VectorExtension::EXTENSION_NAME;
+}
+
+// L'identifiant de bâti de cette extension, que LOAD EXTENSION compare à celui du moteur.
+INIT_EXPORT const char* build_id() {
+    return RAG3DB_BUILD_ID;
 }
 }
 #endif

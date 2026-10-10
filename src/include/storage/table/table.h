@@ -87,6 +87,11 @@ struct RAG3DB_API TableInsertState {
     std::vector<common::ValueVector*> propertyVectors;
     // TODO(Guodong): Remove this when we have a better way to skip WAL logging for FTS.
     bool logToWAL;
+    // Marche A4′ : une écriture interne d'un index (les tables de relations de l'index vectoriel,
+    // à la validation) ne prend pas de verrou d'extrémités et ne contrôle pas leur sérialisation :
+    // l'index est couvert par les verrous de la table qu'il sert, et un voisin supprimé entre
+    // temps est l'affaire de l'index, pas un conflit de l'utilisateur.
+    bool takesLocks = true;
 
     explicit TableInsertState(std::vector<common::ValueVector*> propertyVectors);
     virtual ~TableInsertState();
@@ -106,6 +111,7 @@ struct RAG3DB_API TableUpdateState {
     common::ValueVector& propertyVector;
     // TODO(Guodong): Remove this when we have a better way to skip WAL logging for FTS.
     bool logToWAL;
+    bool takesLocks = true; // voir TableInsertState
 
     TableUpdateState(common::column_id_t columnID, common::ValueVector& propertyVector);
     virtual ~TableUpdateState();
@@ -122,6 +128,7 @@ struct RAG3DB_API TableUpdateState {
 
 struct RAG3DB_API TableDeleteState {
     bool logToWAL;
+    bool takesLocks = true; // voir TableInsertState
 
     TableDeleteState();
 

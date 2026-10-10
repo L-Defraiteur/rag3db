@@ -134,7 +134,7 @@ Témoins : `CopyStatisticsTest` (`test/transaction/journaled_copy_test.cpp`), so
 
 - Une ligne écartée par `IGNORE_ERRORS` (clé en double ou nulle) reste comptée, dans la cardinalité comme dans les distincts : elle est ajoutée puis supprimée.
 - `DELETE` et `UPDATE` ne touchent jamais ces statistiques. La cardinalité est recalée au point de reprise ; les comptes de distincts ne reculent pas.
-- Les relations : ticket `2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md`.
+- Les relations : ticket `../2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md`.
 - Une valeur nulle compte comme une valeur distincte : `computeHash` lui donne `NULL_HASH`, que
   `ColumnStats::update` insère comme les autres (`column_stats.cpp`). Une colonne à moitié nulle
   annonce un distinct de plus. Noté le 10 octobre 2026 (seconde session cœur C++), sans

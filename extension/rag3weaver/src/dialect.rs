@@ -242,6 +242,14 @@ pub trait SchemaDialect: Send + Sync {
         Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select" })
     }
 
+    /// **Une écriture** ([`rag3weaver_ir::Write`]). Chaque variante se dit par
+    /// la méthode d'écriture que le dialecte écrit déjà (`batch_upsert`,
+    /// `batch_link_labeled`) : un dialecte la traduit dès qu'il a celles-ci,
+    /// et le texte reste celui d'avant.
+    fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+        write_by_methods(self, write)
+    }
+
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
     /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
     /// leur place cette instruction, qui échoue à l'analyse **en nommant la
@@ -1064,19 +1072,80 @@ pub trait SchemaDialect: Send + Sync {
 /// Cypher DDL/DML for rag3db (Kuzu fork).
 pub struct Rag3dbDialect;
 
+/// **Une écriture dite par les méthodes d'écriture du dialecte**
+/// (`batch_upsert`, `batch_link_labeled`, `batch_update_fields`,
+/// `batch_set_null`) : la traduction par défaut, qui garde le texte d'avant.
+pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+    write.validate()?;
+    Ok(match write {
+        rag3weaver_ir::Write::Upsert { table, columns } => {
+            let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+            d.batch_upsert(table, &cols)
+        }
+        rag3weaver_ir::Write::Link { relation, ends, props } => {
+            let props: Vec<&str> = props.iter().map(String::as_str).collect();
+            d.batch_link_labeled(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props)
+        }
+        rag3weaver_ir::Write::Update { table, columns } => {
+            let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+            d.batch_update_fields(table, &cols)
+        }
+        // Vider un champ se dit par `batch_set_null` ; une marque plus
+        // large demande au dialecte de la dire lui-même.
+        rag3weaver_ir::Write::Mark { table, set } => match set.as_slice() {
+            [(field, None)] => d.batch_set_null(table, field),
+            _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Mark" }),
+        },
+    })
+}
+
+/// **Le texte d'une écriture, ou un refus nommé** : une écriture que le
+/// dialecte ne sait pas dire rend l'instruction d'un seul mot de la porte
+/// ([`SchemaDialect::untranslated`]), qui échoue à l'exécution en se nommant.
+/// Pour les appelants qui ne rendent pas d'erreur à cet endroit.
+pub fn ecriture<D: SchemaDialect + ?Sized>(dialect: &D, write: &rag3weaver_ir::Write) -> String {
+    dialect.write(write).unwrap_or_else(|_| dialect.untranslated("Write"))
+}
+
+/// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
+fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
+    use rag3weaver_ir::Predicate;
+    match p {
+        Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
+        Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
+        Predicate::AtLeast { field, param } => format!("m.{field} >= ${param}"),
+        Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
+        Predicate::Compiled(c) => c.clone(),
+    }
+}
+
 impl SchemaDialect for Rag3dbDialect {
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
-    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
-        use rag3weaver_ir::{Column, Predicate};
-        select.validate()?;
-        fn condition(p: &Predicate) -> String {
-            match p {
-                Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
-                Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
-                Predicate::AnyOf(v) => v.iter().map(condition).collect::<Vec<_>>().join(" OR "),
+    fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+        write.validate()?;
+        match write {
+            // Une marque quelconque : `UNWIND $uuids … SET n.f = NULL | $p`,
+            // comme `batch_set_null` quand c'est un champ vidé.
+            rag3weaver_ir::Write::Mark { table, set } if set.len() != 1 || set[0].1.is_some() => {
+                let assigns: Vec<String> = set
+                    .iter()
+                    .map(|(f, p)| match p {
+                        Some(p) => format!("n.{f} = ${p}"),
+                        None => format!("n.{f} = NULL"),
+                    })
+                    .collect();
+                Ok(format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) SET {}", assigns.join(", ")))
             }
+            // Le reste : les méthodes d'écriture de ce dialecte.
+            _ => write_by_methods(self, write),
         }
+    }
+
+    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::Column;
+        select.validate()?;
+        let condition = rag3db_condition;
         let colonnes: Vec<String> = select
             .returns
             .iter()
@@ -1106,6 +1175,7 @@ impl SchemaDialect for Rag3dbDialect {
         count.validate()?;
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
+            rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{table}) WHERE {} RETURN count(m)", rag3db_condition(filter)),
             rag3weaver_ir::Count::Edges { start, relation, direction } => match direction {
                 rag3weaver_ir::Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})<-[r:{relation}]-() RETURN u, count(r)"),
                 rag3weaver_ir::Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})-[r:{relation}]->() RETURN u, count(r)"),
@@ -1124,12 +1194,24 @@ impl SchemaDialect for Rag3dbDialect {
             rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{}]->(m{m})", hop.relation),
             rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{}]-(m{m})", hop.relation),
         };
-        let filtre = match &hop.exclude {
-            Some(x) => {
-                let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
-                format!(" WHERE r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field)
-            }
-            None => String::new(),
+        let mut conditions: Vec<String> = Vec::new();
+        if let Some(x) = &hop.exclude {
+            let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
+            conditions.push(format!("r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field));
+        }
+        if let Some(p) = &hop.filter {
+            conditions.push(rag3db_condition(p));
+        }
+        // Une condition seule garde son texte d'avant ; deux s'entourent.
+        let filtre = match conditions.len() {
+            0 => String::new(),
+            1 => format!(" WHERE {}", conditions[0]),
+            _ => format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")),
+        };
+        let ordre = if hop.order_by.is_empty() {
+            String::new()
+        } else {
+            format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{f}")).collect::<Vec<_>>().join(", "))
         };
         let colonnes: Vec<String> = std::iter::once("u".to_string())
             .chain(hop.returns.iter().map(|c| match c {
@@ -1141,7 +1223,7 @@ impl SchemaDialect for Rag3dbDialect {
             }))
             .collect();
         let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
-        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{borne}", colonnes.join(", ")))
+        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{ordre}{borne}", colonnes.join(", ")))
     }
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
@@ -2860,6 +2942,14 @@ mod tests {
         let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
+        let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
+        journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];
+        journal.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
+        journal.order_by = vec!["at_ms".into(), "seq".into()];
+        assert_eq!(
+            Rag3dbDialect.hop(&journal).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:Conversation {_uuid: u})<-[r:IN_CONVERSATION]-(m:Message) WHERE m.at_ms >= $since RETURN u, m.at_ms ORDER BY m.at_ms, m.seq"
+        );
         libre.limit = Some(5);
         assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m._uuid, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
@@ -2894,8 +2984,36 @@ mod tests {
         f.limit = Some(3);
         assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:Scope) WHERE m.file_path = $file OR m.source = $file RETURN m._uuid ORDER BY m._uuid LIMIT 3");
         assert_eq!(PostgresDialect.select(&s).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Select");
+        let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
+        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:Card) WHERE m.cost > $filter_p0 RETURN count(m)");
+        assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:Card) RETURN m");
         f.returns.push(Column::Edge("x".into()));
         assert!(Rag3dbDialect.select(&f).is_err());
+    }
+
+    /// L'écriture dit, dans chaque dialecte, le texte de sa méthode d'avant.
+    #[test]
+    fn l_ecriture_est_le_texte_d_avant() {
+        use rag3weaver_ir::Write;
+        let up = Write::Upsert { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] };
+        let lien = Write::Link { relation: "CITES".into(), ends: Some(("Doc".into(), "Doc".into())), props: vec!["ligne".into()] };
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            assert_eq!(d.write(&up).unwrap(), d.batch_upsert("Doc", &["_uuid", "titre"]));
+            assert_eq!(d.write(&lien).unwrap(), d.batch_link_labeled("CITES", Some(("Doc", "Doc")), &["ligne"]));
+        }
+        assert!(Rag3dbDialect.write(&Write::Upsert { table: "Doc".into(), columns: vec!["x y".into()] }).is_err());
+        let maj = Write::Update { table: "Doc".into(), columns: vec!["_chunked_hash".into()] };
+        let vide = Write::Mark { table: "Doc".into(), set: vec![("_sparse_hash".into(), None)] };
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            assert_eq!(d.write(&maj).unwrap(), d.batch_update_fields("Doc", &["_chunked_hash"]));
+            assert_eq!(d.write(&vide).unwrap(), d.batch_set_null("Doc", "_sparse_hash"));
+        }
+        let marque = Write::Mark { table: "Doc".into(), set: vec![("_snapshot".into(), Some("session".into())), ("_absent_since".into(), None)] };
+        assert_eq!(
+            Rag3dbDialect.write(&marque).unwrap(),
+            "UNWIND $uuids AS uuid MATCH (n:Doc {_uuid: uuid}) SET n._snapshot = $session, n._absent_since = NULL"
+        );
+        assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

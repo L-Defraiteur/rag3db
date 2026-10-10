@@ -93,6 +93,22 @@ d'un repli silencieux. Sur le dépôt entier, avec un tampon d'au moins 8 Gio, l
   Après le rebase sur master, avec la lib commune rebâtie sur la version de stockage 40,
   la lib et sept suites ont été rejouées, toutes vertes.
 
+### Vérifier les cibles de test, sans remplir le disque (10 octobre, au soir)
+
+Les vérifications ci-dessus disent « `--tests --no-run` ». **Ne plus le faire sur tout le
+dépôt.** Cette commande bâtit d'un coup les ~90 binaires e2e, et chacun pesait jusqu'à
+1,35 Go : le disque a été plein deux fois le même soir.
+- **Pour vérifier que toutes les cibles compilent**, `cargo check --tests` : rien n'est lié,
+  c'est dix fois plus petit.
+- **Un binaire ne se bâtit que pour la suite qu'on joue**, par `./run_e2e.sh --test <suite>`.
+- **`run_e2e.sh` lie la lib commune** (`RAG3DB_SHARED` + `RAG3DB_LIBRARY_DIR` +
+  `RAG3DB_INCLUDE_DIR`). Un `cargo` lancé à la main sans ces trois variables lie le moteur
+  en statique dans chaque binaire.
+- **Les dépendances se compilent sans débogage** (`[profile.test.package."*"]`
+  et `[profile.dev.package."*"] debug = false`) : 469 → 273 Mo pour `e2e_generic_search`.
+- **`run_e2e.sh` garde un seul jeu de features** (`postgres` toujours), et efface à la sortie
+  les vieux binaires de chaque suite.
+
 ## Ce que Lucie a décidé (10 octobre)
 
 1. La bascule : oui.

@@ -34,12 +34,12 @@ named_factory!(
     "ComposeNode",
     "Attaches fetched children to root results",
     &[
-        PortDef { name: "results", port_type: PortType::Results, required: true },
-        PortDef { name: "children", port_type: PortType::Children, required: false },
+        PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+        PortDef { name: "children".into(), port_type: PortType::Children, required: false },
         // Le parent de chaque résultat, pour la vue par parent (`GroupFrameNode`).
-        PortDef { name: "frames", port_type: PortType::Children, required: false },
+        PortDef { name: "frames".into(), port_type: PortType::Children, required: false },
     ],
-    &[PortDef { name: "results", port_type: PortType::Results, required: false }],
+    &[PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
 );
 
 named_factory!(
@@ -47,8 +47,8 @@ named_factory!(
     GroupFrameNode,
     "GroupFrameNode",
     "Le parent de chaque résultat, selon le group_by déclaré par son entité — pour l'encadrer au rendu",
-    &[PortDef { name: "results", port_type: PortType::Results, required: true }],
-    &[PortDef { name: "frames", port_type: PortType::Children, required: false }],
+    &[PortDef { name: "results".into(), port_type: PortType::Results, required: true }],
+    &[PortDef { name: "frames".into(), port_type: PortType::Children, required: false }],
 );
 
 // ─── Macro-generated factories (named_factory!) ─────────────────────────────
@@ -121,52 +121,52 @@ impl NodeFactory for FieldWeightNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "FieldWeightNode",
+            node_type: "FieldWeightNode".into(),
             description: "Reweighs results by a field's value (a weight, never a filter); \
                           'weights' is a graph CHOICE (beats the entity), 'default_weights' \
-                          a template DEFAULT (only when nobody declares)",
+                          a template DEFAULT (only when nobody declares)".into(),
             inputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: true },
-                PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
             ],
             outputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: false },
-                PortDef { name: "meta", port_type: PortType::Meta, required: false },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
             ],
             config_params: vec![
                 ConfigParam {
-                    name: "field",
+                    name: "field".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "The result-data field whose value picks the weight",
+                    description: "The result-data field whose value picks the weight".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "weights",
+                    name: "weights".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Graph CHOICE: 'value:weight,…' (beats the entity's declaration)",
+                    description: "Graph CHOICE: 'value:weight,…' (beats the entity's declaration)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "default_weights",
+                    name: "default_weights".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Template DEFAULT: 'value:weight,…' (applies only when nobody declares)",
+                    description: "Template DEFAULT: 'value:weight,…' (applies only when nobody declares)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "default",
+                    name: "default".into(),
                     param_type: ConfigParamType::Float,
                     required: false,
                     default: Some(serde_json::json!(1.0)),
-                    description: "Weight of a value missing from the table (1.0 = neutral)",
+                    description: "Weight of a value missing from the table (1.0 = neutral)".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -181,12 +181,12 @@ named_factory!(
     "InsertRecordNode",
     "UNWIND MERGE on _uuid from Vec<EntityRecord>",
     &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-        PortDef { name: "inserted", port_type: PortType::Entities, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef { name: "inserted".into(), port_type: PortType::Entities, required: false },
     ],
 );
 
@@ -196,13 +196,13 @@ named_factory!(
     "DeriveNode",
     "Rend les lignes d'une entité dérivée depuis sa racine et ses voisines, par gabarit",
     &[
-        PortDef { name: "derivations", port_type: PortType::Derivations, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "derivations".into(), port_type: PortType::Derivations, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-        PortDef { name: "entities", port_type: PortType::Entities, required: false },
-        PortDef { name: "relations", port_type: PortType::Relations, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: false },
+        PortDef { name: "relations".into(), port_type: PortType::Relations, required: false },
     ],
 );
 
@@ -212,10 +212,10 @@ named_factory!(
     "LinkRecordNode",
     "UNWIND MATCH+MERGE from Vec<RelationRecord>",
     &[
-        PortDef { name: "relations", port_type: PortType::Relations, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "relations".into(), port_type: PortType::Relations, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
-    &[PortDef { name: "done", port_type: PortType::Empty, required: false }],
+    &[PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
 );
 
 named_factory!(
@@ -224,15 +224,15 @@ named_factory!(
     "ChunkRecordNode",
     "Parallel chunking for simple entities, outputs chunk entities + links",
     &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-        PortDef { name: "chunks", port_type: PortType::Entities, required: false },
-        PortDef { name: "chunk_links", port_type: PortType::Relations, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef { name: "chunks".into(), port_type: PortType::Entities, required: false },
+        PortDef { name: "chunk_links".into(), port_type: PortType::Relations, required: false },
         // Les parents, pour `MarquerDecoupeNode`.
-        PortDef { name: "parents", port_type: PortType::Entities, required: false },
+        PortDef { name: "parents".into(), port_type: PortType::Entities, required: false },
     ],
 );
 
@@ -242,11 +242,11 @@ named_factory!(
     "MarquerDecoupeNode",
     "Pose _chunked_hash = _content_hash sur les parents dont les chunks viennent d'être posés",
     &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
     ],
 );
 
@@ -256,11 +256,11 @@ named_factory!(
     "DeleteRecordNode",
     "Batch cascade-delete entities + chunks from Vec<DeleteRecord>",
     &[
-        PortDef { name: "deletes", port_type: PortType::Deletes, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "deletes".into(), port_type: PortType::Deletes, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
     ],
 );
 
@@ -270,12 +270,12 @@ named_factory!(
     "UpdateRecordNode",
     "Batch field update + change detection from Vec<UpdateRecord>",
     &[
-        PortDef { name: "updates", port_type: PortType::Updates, required: true },
-        PortDef { name: "trigger", port_type: PortType::Empty, required: false },
+        PortDef { name: "updates".into(), port_type: PortType::Updates, required: true },
+        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
     ],
     &[
-        PortDef { name: "done", port_type: PortType::Empty, required: false },
-        PortDef { name: "rechunk_entities", port_type: PortType::Entities, required: false },
+        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef { name: "rechunk_entities".into(), port_type: PortType::Entities, required: false },
     ],
 );
 
@@ -285,10 +285,10 @@ named_factory!(
     "RechunkDeleteNode",
     "Delete old chunks before re-chunking",
     &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: true },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
     ],
     &[
-        PortDef { name: "entities", port_type: PortType::Entities, required: false },
+        PortDef { name: "entities".into(), port_type: PortType::Entities, required: false },
     ],
 );
 
@@ -319,21 +319,21 @@ impl NodeFactory for FlushNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "FlushNode",
-            description: "Flush Lucivy FTS indexes for configured tables",
+            node_type: "FlushNode".into(),
+            description: "Flush Lucivy FTS indexes for configured tables".into(),
             config_params: vec![
                 ConfigParam {
-                    name: "table",
+                    name: "table".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Single table name to flush",
+                    description: "Single table name to flush".into(),
                     choices: None,
                     json_schema: None,
                 },
             ],
-            inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
-            outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
+            inputs: vec![PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false }],
+            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
         }
     }
 }
@@ -365,21 +365,21 @@ impl NodeFactory for SparseCommitNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "SparseCommitNode",
-            description: "Commit dirty sparse vector indexes for configured tables",
+            node_type: "SparseCommitNode".into(),
+            description: "Commit dirty sparse vector indexes for configured tables".into(),
             config_params: vec![
                 ConfigParam {
-                    name: "table",
+                    name: "table".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Single table name to commit",
+                    description: "Single table name to commit".into(),
                     choices: None,
                     json_schema: None,
                 },
             ],
-            inputs: vec![PortDef { name: "trigger", port_type: PortType::Empty, required: false }],
-            outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
+            inputs: vec![PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false }],
+            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
         }
     }
 }
@@ -421,39 +421,39 @@ impl NodeFactory for KBQuerySourceNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "KBQuerySourceNode",
-            description: "Emits search query + options",
+            node_type: "KBQuerySourceNode".into(),
+            description: "Emits search query + options".into(),
             inputs: vec![],
             outputs: vec![PortDef {
-                name: "query",
+                name: "query".into(),
                 port_type: PortType::Query,
                 required: false,
             }],
             config_params: vec![
                 ConfigParam {
-                    name: "kb_name",
+                    name: "kb_name".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Knowledge base name",
+                    description: "Knowledge base name".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "query",
+                    name: "query".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Search query text",
+                    description: "Search query text".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "options",
+                    name: "options".into(),
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: None,
-                    description: "SearchOptions as JSON",
+                    description: "SearchOptions as JSON".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -509,52 +509,52 @@ impl NodeFactory for FetchRelatedNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "FetchRelatedNode",
-            description: "Cypher graph traversal from parent results",
+            node_type: "FetchRelatedNode".into(),
+            description: "Cypher graph traversal from parent results".into(),
             inputs: vec![PortDef {
-                name: "results",
+                name: "results".into(),
                 port_type: PortType::Results,
                 required: true,
             }],
             outputs: vec![PortDef {
-                name: "children",
+                name: "children".into(),
                 port_type: PortType::Children,
                 required: false,
             }],
             config_params: vec![
                 ConfigParam {
-                    name: "relation",
+                    name: "relation".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Relationship type (e.g. HAS_FILE)",
+                    description: "Relationship type (e.g. HAS_FILE)".into(),
                     choices: Some(Choices::Relations),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "direction",
+                    name: "direction".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("Outgoing")),
-                    description: "Outgoing or Incoming",
+                    description: "Outgoing or Incoming".into(),
                     choices: Some(Choices::fixed(["Outgoing", "Incoming"])),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "limit",
+                    name: "limit".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(10)),
-                    description: "Max children per parent (0 = unlimited)",
+                    description: "Max children per parent (0 = unlimited)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "source_entity",
+                    name: "source_entity".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Filter results by source entity type",
+                    description: "Filter results by source entity type".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -598,67 +598,67 @@ impl NodeFactory for EmbedNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "EmbedNode",
-            description: "Embedding for simple entities (configurable columns)",
+            node_type: "EmbedNode".into(),
+            description: "Embedding for simple entities (configurable columns)".into(),
             inputs: vec![
                 PortDef {
-                    name: "entities",
+                    name: "entities".into(),
                     port_type: PortType::Entities,
                     required: true,
                 },
                 PortDef {
-                    name: "trigger",
+                    name: "trigger".into(),
                     port_type: PortType::Empty,
                     required: false,
                 },
             ],
             outputs: vec![
-                PortDef { name: "done", port_type: PortType::Empty, required: false },
-                PortDef { name: "embedded", port_type: PortType::Entities, required: false },
+                PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+                PortDef { name: "embedded".into(), port_type: PortType::Entities, required: false },
             ],
             config_params: vec![
                 ConfigParam {
-                    name: "gpu_batch_size",
+                    name: "gpu_batch_size".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(64)),
-                    description: "GPU batch size for embedding calls",
+                    description: "GPU batch size for embedding calls".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "signals",
+                    name: "signals".into(),
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: Some(serde_json::json!(["bm25", "vector"])),
-                    description: "Search signals array (bm25, vector, sparse)",
+                    description: "Search signals array (bm25, vector, sparse)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "text_field",
+                    name: "text_field".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("_text")),
-                    description: "Field name containing text to embed",
+                    description: "Field name containing text to embed".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "embedding_col",
+                    name: "embedding_col".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("embedding")),
-                    description: "Column name for dense embeddings",
+                    description: "Column name for dense embeddings".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "sparse_col",
+                    name: "sparse_col".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("sparse")),
-                    description: "Prefix for sparse columns ({prefix}_indices, {prefix}_weights)",
+                    description: "Prefix for sparse columns ({prefix}_indices, {prefix}_weights)".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -745,35 +745,35 @@ impl NodeFactory for SearchSourceNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "SearchSourceNode",
+            node_type: "SearchSourceNode".into(),
             description: "Resolves SearchTarget and emits query; an optional \
-                          'query' input (QueryPayload) overrides the config",
+                          'query' input (QueryPayload) overrides the config".into(),
             inputs: vec![PortDef {
-                name: "query",
+                name: "query".into(),
                 port_type: PortType::Query,
                 required: false,
             }],
             outputs: vec![
                 PortDef {
-                    name: "query",
+                    name: "query".into(),
                     port_type: PortType::Query,
                     required: false,
                 },
                 // Ce que la consigne de cohérence a trouvé : le reste en file,
                 // `partial`, et l'avertissement qui le dit à l'agent.
                 PortDef {
-                    name: "meta",
+                    name: "meta".into(),
                     port_type: PortType::Meta,
                     required: false,
                 },
             ],
             config_params: vec![
                 ConfigParam {
-                    name: "consistency",
+                    name: "consistency".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("eventual")),
-                    description: "Ce qui doit être prêt avant de chercher : immediate (n'attendre rien), eventual (poser les entités en file), strict (tout vider et attendre les écritures des autres processus)",
+                    description: "Ce qui doit être prêt avant de chercher : immediate (n'attendre rien), eventual (poser les entités en file), strict (tout vider et attendre les écritures des autres processus)".into(),
                     // Liste close : un « strickt » mal tapé devient une erreur
                     // `bad_choice` nommée, et non une attente qui n'a pas lieu.
                     choices: Some(Choices::Fixed(vec![
@@ -784,20 +784,20 @@ impl NodeFactory for SearchSourceNodeFactory {
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "timeout_ms",
+                    name: "timeout_ms".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(5000)),
-                    description: "Délai maximum d'attente des écritures des autres processus, en strict",
+                    description: "Délai maximum d'attente des écritures des autres processus, en strict".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "mode",
+                    name: "mode".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("auto")),
-                    description: "Comment choisir entre l'index et les fichiers : auto (l'état de l'index décide — balayage si rien n'est indexé), indexed (toujours l'index), scan (toujours le balayage)",
+                    description: "Comment choisir entre l'index et les fichiers : auto (l'état de l'index décide — balayage si rien n'est indexé), indexed (toujours l'index), scan (toujours le balayage)".into(),
                     choices: Some(Choices::Fixed(vec![
                         "auto".to_string(),
                         "indexed".to_string(),
@@ -806,29 +806,29 @@ impl NodeFactory for SearchSourceNodeFactory {
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "target_name",
+                    name: "target_name".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Target name (KB or entity)",
+                    description: "Target name (KB or entity)".into(),
                     choices: Some(Choices::Targets),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "query",
+                    name: "query".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Search query text",
+                    description: "Search query text".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "options",
+                    name: "options".into(),
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: None,
-                    description: "SearchOptions as JSON",
+                    description: "SearchOptions as JSON".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -870,11 +870,11 @@ pub(super) fn parse_str_list(v: &serde_json::Value, node: &str, key: &str) -> Re
 
 fn signal_param() -> ConfigParam {
     ConfigParam {
-        name: "signal",
+        name: "signal".into(),
         param_type: ConfigParamType::String,
         required: false,
         default: None,
-        description: "Étiquette des résultats (défaut : nom du nœud) ; sert à la fusion par le port 'signals'",
+        description: "Étiquette des résultats (défaut : nom du nœud) ; sert à la fusion par le port 'signals'".into(),
         choices: None,
         json_schema: None,
     }
@@ -882,11 +882,11 @@ fn signal_param() -> ConfigParam {
 
 fn result_mode_param() -> ConfigParam {
     ConfigParam {
-        name: "result_mode",
+        name: "result_mode".into(),
         param_type: ConfigParamType::String,
         required: false,
         default: Some(serde_json::json!("aggregated")),
-        description: "aggregated | detailed | source_resolved (KB → entité source, pour fusionner plusieurs KB)",
+        description: "aggregated | detailed | source_resolved (KB → entité source, pour fusionner plusieurs KB)".into(),
         choices: Some(Choices::fixed(["aggregated", "detailed", "source_resolved"])),
         json_schema: None,
     }
@@ -894,18 +894,18 @@ fn result_mode_param() -> ConfigParam {
 
 fn limit_param() -> ConfigParam {
     ConfigParam {
-        name: "limit",
+        name: "limit".into(),
         param_type: ConfigParamType::Int,
         required: false,
         default: None,
-        description: "Combien ce signal va chercher ; absent = (limit + offset) × 2 de la requête, relevé au pool du rerank",
+        description: "Combien ce signal va chercher ; absent = (limit + offset) × 2 de la requête, relevé au pool du rerank".into(),
         choices: None,
         json_schema: None,
     }
 }
 
 fn query_in() -> PortDef {
-    PortDef { name: "query", port_type: PortType::Query, required: true }
+    PortDef { name: "query".into(), port_type: PortType::Query, required: true }
 }
 
 /// **Le canal des avertissements d'un nœud de signal.**
@@ -914,11 +914,11 @@ fn query_in() -> PortDef {
 /// composition de graphes, et un port absent du schéma est invisible depuis
 /// l'extérieur — même quand le nœud le remplit fidèlement.
 fn meta_out() -> PortDef {
-    PortDef { name: "meta", port_type: PortType::Meta, required: false }
+    PortDef { name: "meta".into(), port_type: PortType::Meta, required: false }
 }
 
 fn results_out() -> PortDef {
-    PortDef { name: "results", port_type: PortType::Results, required: false }
+    PortDef { name: "results".into(), port_type: PortType::Results, required: false }
 }
 
 /// **Le statut d'une branche de signal** (repli par branche, 5 octobre
@@ -928,7 +928,7 @@ fn results_out() -> PortDef {
 /// warnings), mais un « tout tombé » rend vide sans erreur — la vérification
 /// du gabarit l'avertit au chargement.
 fn status_out() -> PortDef {
-    PortDef { name: "status", port_type: PortType::Meta, required: false }
+    PortDef { name: "status".into(), port_type: PortType::Meta, required: false }
 }
 
 /// Factory for VectorSearchNode (config: limit, result_mode, signal).
@@ -959,8 +959,8 @@ impl NodeFactory for VectorSearchNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "VectorSearchNode",
-            description: "Vector similarity search on chunk embeddings",
+            node_type: "VectorSearchNode".into(),
+            description: "Vector similarity search on chunk embeddings".into(),
             inputs: vec![query_in()],
             outputs: vec![results_out(), meta_out(), status_out()],
             config_params: vec![limit_param(), result_mode_param(), signal_param()],
@@ -1012,36 +1012,36 @@ impl NodeFactory for BM25SearchNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "BM25SearchNode",
-            description: "BM25 full-text search with highlight→chunk resolution",
+            node_type: "BM25SearchNode".into(),
+            description: "BM25 full-text search with highlight→chunk resolution".into(),
             inputs: vec![query_in()],
             outputs: vec![results_out(), meta_out(), status_out()],
             config_params: vec![
                 limit_param(),
                 ConfigParam {
-                    name: "fuzzy_distance",
+                    name: "fuzzy_distance".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(0)),
-                    description: "Levenshtein distance for fuzzy matching (0 = exact)",
+                    description: "Levenshtein distance for fuzzy matching (0 = exact)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "mode",
+                    name: "mode".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("auto")),
-                    description: "auto (une phrase se pèse en BM25, un identifiant se cherche contigu) | contains | contains_split | regex | parse | symbol (exact, séparateurs compris)",
+                    description: "auto (une phrase se pèse en BM25, un identifiant se cherche contigu) | contains | contains_split | regex | parse | symbol (exact, séparateurs compris)".into(),
                     choices: Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "parse", "symbol"])),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "fields",
+                    name: "fields".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Champs indexés à interroger, 'a,b' (défaut : tous ceux de la cible) — une branche par champ pour les peser à la fusion",
+                    description: "Champs indexés à interroger, 'a,b' (défaut : tous ceux de la cible) — une branche par champ pour les peser à la fusion".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -1080,8 +1080,8 @@ impl NodeFactory for SparseSearchNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "SparseSearchNode",
-            description: "Sparse vector search (SPLADE/BGE-M3)",
+            node_type: "SparseSearchNode".into(),
+            description: "Sparse vector search (SPLADE/BGE-M3)".into(),
             inputs: vec![query_in()],
             // `meta` depuis le 6 septembre 2026 : c'est le seul canal qui
             // remonte jusqu'à la fiche rendue à un agent. Sans lui, un zéro
@@ -1186,69 +1186,69 @@ impl NodeFactory for FuseResultsNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "FuseResultsNode",
-            description: "Fusion N-aire de signaux étiquetés (RRF ou pondérée) ; ports nommés + port 'signals' en fan-in",
+            node_type: "FuseResultsNode".into(),
+            description: "Fusion N-aire de signaux étiquetés (RRF ou pondérée) ; ports nommés + port 'signals' en fan-in".into(),
             inputs: vec![
-                PortDef { name: "vector", port_type: PortType::Results, required: false },
-                PortDef { name: "bm25", port_type: PortType::Results, required: false },
-                PortDef { name: "sparse", port_type: PortType::Results, required: false },
-                PortDef { name: "signals", port_type: PortType::Results, required: false },
-                PortDef { name: "status", port_type: PortType::Meta, required: false },
+                PortDef { name: "vector".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "bm25".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "sparse".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "signals".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "status".into(), port_type: PortType::Meta, required: false },
                 // La requête, pour savoir d'où viennent les poids (appelant,
                 // base de connaissances, gabarit). Facultatif : sans elle, le
                 // gabarit décide.
-                PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
             ],
             outputs: vec![results_out()],
             config_params: vec![
                 ConfigParam {
-                    name: "duplicates", param_type: ConfigParamType::String, required: false,
+                    name: "duplicates".into(), param_type: ConfigParamType::String, required: false,
                     default: Some(serde_json::json!("merge")),
-                    description: "merge: one result per (entity, uuid); keep: original occurrences with their object's fused score",
+                    description: "merge: one result per (entity, uuid); keep: original occurrences with their object's fused score".into(),
                     choices: Some(Choices::fixed(["merge", "keep"])), json_schema: None,
                 },
                 ConfigParam {
-                    name: "strategy",
+                    name: "strategy".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("rrf")),
-                    description: "rrf | weighted",
+                    description: "rrf | weighted".into(),
                     choices: Some(Choices::fixed(["rrf", "weighted"])),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "rrf_k",
+                    name: "rrf_k".into(),
                     param_type: ConfigParamType::Float,
                     required: false,
                     default: Some(serde_json::json!(crate::search::DEFAULT_RRF_K)),
-                    description: "Constante RRF",
+                    description: "Constante RRF".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "weights",
+                    name: "weights".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Poids par étiquette, 'label:w,label:w' (défauts : vector 0.7, bm25 0.3, sparse 0.2, autres 1.0)",
+                    description: "Poids par étiquette, 'label:w,label:w' (défauts : vector 0.7, bm25 0.3, sparse 0.2, autres 1.0)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "boost",
+                    name: "boost".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Étiquettes en rôle boost, 'a,b' : elles modulent le score fusionné au lieu d'y entrer",
+                    description: "Étiquettes en rôle boost, 'a,b' : elles modulent le score fusionné au lieu d'y entrer".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "top_k",
+                    name: "top_k".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: None,
-                    description: "Troncature de chaque liste avant fusion",
+                    description: "Troncature de chaque liste avant fusion".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -1295,38 +1295,38 @@ impl NodeFactory for RerankNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "RerankNode",
-            description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée. Sans `candidates`, le pool vient de la requête",
+            node_type: "RerankNode".into(),
+            description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée. Sans `candidates`, le pool vient de la requête".into(),
             inputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: true },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
                 query_in(),
             ],
             outputs: vec![results_out(), meta_out()],
             config_params: vec![
                 ConfigParam {
-                    name: "candidates",
+                    name: "candidates".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: None,
-                    description: "Taille du pool re-scoré ; 0 = passe-plat exact (ni service consulté, ni étiquette touchée)",
+                    description: "Taille du pool re-scoré ; 0 = passe-plat exact (ni service consulté, ni étiquette touchée)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "keep_signal",
+                    name: "keep_signal".into(),
                     param_type: ConfigParamType::Bool,
                     required: false,
                     default: Some(serde_json::json!(false)),
-                    description: "Garder l'étiquette d'origine des résultats (leur provenance) au lieu de la remplacer par le nom de ce nœud",
+                    description: "Garder l'étiquette d'origine des résultats (leur provenance) au lieu de la remplacer par le nom de ce nœud".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "service",
+                    name: "service".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("reranker")),
-                    description: "Clé du service Arc<dyn Reranker> (plusieurs cross-encoders possibles dans un graphe)",
+                    description: "Clé du service Arc<dyn Reranker> (plusieurs cross-encoders possibles dans un graphe)".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -1357,11 +1357,11 @@ impl NodeFactory for PaginateNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "PaginateNode",
-            description: "La page demandée (offset, limit de la requête), et rien de plus",
+            node_type: "PaginateNode".into(),
+            description: "La page demandée (offset, limit de la requête), et rien de plus".into(),
             inputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: true },
-                PortDef { name: "query", port_type: PortType::Query, required: true },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+                PortDef { name: "query".into(), port_type: PortType::Query, required: true },
             ],
             outputs: vec![results_out()],
             config_params: vec![],
@@ -1392,23 +1392,23 @@ impl NodeFactory for ResolveParentNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ResolveParentNode",
-            description: "Resolve chunks to parent entities with data enrichment",
+            node_type: "ResolveParentNode".into(),
+            description: "Resolve chunks to parent entities with data enrichment".into(),
             inputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: true },
-                PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
             ],
             outputs: vec![PortDef {
-                name: "results",
+                name: "results".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
             config_params: vec![ConfigParam {
-                name: "return_fields",
+                name: "return_fields".into(),
                 param_type: ConfigParamType::Json,
                 required: false,
                 default: None,
-                description: "Fields to return from parent entity (JSON array of strings)",
+                description: "Fields to return from parent entity (JSON array of strings)".into(),
                 choices: None,
                 json_schema: None,
             }],
@@ -1488,12 +1488,13 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::template_nodes::AdoptTemplateNodeFactory));
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
+        registry.register(Box::new(super::run_nodes::TailNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 13 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 14 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1540,6 +1541,32 @@ mod tests {
         let mut registry = NodeRegistry::new();
         register_builtins(&mut registry);
         registry
+    }
+
+        /// **Un seul des deux par nœud** (chantier C) : tout nœud du registre
+    /// marqué `is_async()` doit laisser `execute` au défaut — la preuve est
+    /// l'erreur-défaut « ni execute ni execute_async » sur un contexte vide
+    /// (sans effet : un nœud async n'a pas de corps synchrone à exécuter).
+    /// Le mensonge inverse (execute_async implémenté sans le marqueur)
+    /// n'est pas détectable sans exécuter le nœud ; le contrat du trait le
+    /// dit, et ce test tient le sens détectable.
+    #[test]
+    fn un_noeud_marque_async_laisse_execute_au_defaut() {
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        for ty in registry.types() {
+            let node = registry.create(&ty, "temoin", &serde_json::json!({}));
+            let Ok(mut node) = node else { continue }; // une config minimale peut être refusée
+            if !node.is_async() {
+                continue;
+            }
+            let mut ctx = crate::dataflow::node::NodeContext::new();
+            let erreur = node.execute(&mut ctx).unwrap_err();
+            assert!(
+                erreur.contains("ni execute ni execute_async"),
+                "{ty} se dit async mais implémente execute : {erreur}"
+            );
+        }
     }
 
     #[test]
@@ -1718,6 +1745,7 @@ mod tests {
                 "ValidationRuleNode" => serde_json::json!({"script":"#{valid:true}","code":"test", "message":"failed", "value":{}}),
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
+                "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 _ => serde_json::json!({}),
@@ -1809,15 +1837,15 @@ impl NodeFactory for ScanFilesNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ScanFilesNode",
+            node_type: "ScanFilesNode".into(),
             description: "Balaye les fichiers de la source quand la requête est en mode \
                           balayage (posé par SearchSourceNode) : mots exacts, classés par \
                           mots trouvés puis proximité, bornés au budget de rendu — la méta \
-                          dit combien d'autres. Hors mode balayage, il se tait.",
-            inputs: vec![PortDef { name: "query", port_type: PortType::Query, required: true }],
+                          dit combien d'autres. Hors mode balayage, il se tait.".into(),
+            inputs: vec![PortDef { name: "query".into(), port_type: PortType::Query, required: true }],
             outputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: false },
-                PortDef { name: "meta", port_type: PortType::Meta, required: false },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
             ],
             config_params: vec![],
         }

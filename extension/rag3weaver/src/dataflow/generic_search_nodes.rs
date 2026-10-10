@@ -31,8 +31,8 @@ use crate::catalog::Catalog;
 use crate::embedder::{DualEmbedder, Embedder, SparseEmbedder};
 use crate::reranker::{passage_text, Reranker};
 use crate::search::{
-    embed_query, enrich_results_with_data, fuse_signals,
-    search_bm25_chunked, search_sparse, search_vector, search_vector_via_backend, BM25Mode,
+    embed_query, fuse_signals,
+    search_bm25_chunked, search_vector_via_backend, BM25Mode,
     FusionConfig, FusionStrategy, ResultMode, SearchOptions, SearchResult, SearchTarget,
     SignalConfig, SignalRole, DEFAULT_RRF_K,
 };
@@ -829,33 +829,19 @@ impl Node for VectorSearchNode {
             }
         };
 
-        let backend = ctx
-            .service::<Arc<Mutex<Catalog>>>("catalog")
-            .and_then(|c| c.lock().unwrap().search_backend());
-        let chunk_results = match backend {
-            Some(backend) => search_vector_via_backend(
-                backend.as_ref(),
-                &target.chunk_table,
-                &index_name,
-                &column,
-                &embedding,
-                limite,
-                filter_where.as_deref(),
-                &filter_params,
-                filter_match.as_deref(),
-                &mut node_warnings,
-            ),
-            None => search_vector(
-                &*conn,
-                &target.chunk_table,
-                &index_name,
-                &embedding,
-                limite,
-                filter_where.as_deref(),
-                &filter_params,
-                filter_match.as_deref(),
-            ),
-        };
+        let backend = moteur_de_recherche(ctx, &conn);
+        let chunk_results = search_vector_via_backend(
+            backend.as_ref(),
+            &target.chunk_table,
+            &index_name,
+            &column,
+            &embedding,
+            limite,
+            filter_where.as_deref(),
+            &filter_params,
+            filter_match.as_deref(),
+            &mut node_warnings,
+        );
         let chunk_results = match chunk_results {
             Ok(r) => r,
             Err(e) => {
@@ -1493,40 +1479,18 @@ impl Node for SparseSearchNode {
             }
         };
 
-        let backend = ctx
-            .service::<Arc<Mutex<Catalog>>>("catalog")
-            .and_then(|c| c.lock().unwrap().search_backend());
-        let chunk_results = match (&allowed, backend) {
-            // Le chemin filtré passe par le backend : c'est lui qui expose
-            // `search_filtered`.
-            (Some(ids), Some(backend)) => crate::search::search_sparse_via_backend(
-                handle,
-                backend.as_ref(),
-                &target.chunk_table,
-                &sparse_vec,
-                limite,
-                &[],
-                Some(ids),
-            ),
-            (Some(_), None) => {
-                // Un filtre non appliqué touche à la justesse du résultat :
-                // il passe par la méta, où l'agent l'entend.
-                node_warnings.push(
-                    "SparseSearchNode: un filtre est demandé mais aucun backend de \
-                     recherche — les résultats ne sont PAS restreints au domaine demandé"
-                        .to_string(),
-                );
-                search_sparse(handle, &*conn, &target.chunk_table, &sparse_vec, limite, &[])
-            }
-            (None, _) => search_sparse(
-                handle,
-                &*conn,
-                &target.chunk_table,
-                &sparse_vec,
-                limite,
-                &[], // empty fields for chunked entities (fields are on parent table)
-            ),
-        };
+        // Toujours par un backend : celui du catalogue, sinon celui de rag3db
+        // sur la connexion du graphe ; le filtre (ids permis) suit.
+        let backend = moteur_de_recherche(ctx, &conn);
+        let chunk_results = crate::search::search_sparse_via_backend(
+            handle,
+            backend.as_ref(),
+            &target.chunk_table,
+            &sparse_vec,
+            limite,
+            &[], // empty fields for chunked entities (fields are on parent table)
+            allowed.as_deref(),
+        );
         let chunk_results = match chunk_results {
             Ok(r) => r,
             Err(e) => {
@@ -2130,21 +2094,16 @@ impl Node for RerankNode {
         // passer.
         if let Some(target) = qp.target.as_ref() {
             if results.iter().any(|r| r.data.is_none()) && !target.enrich_fields.is_empty() {
-                let backend = ctx
-                    .service::<Arc<Mutex<Catalog>>>("catalog")
-                    .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()));
                 let conn = ctx.service::<ConnService>("conn").map(|c| c.0.clone());
+                let backend = conn.as_ref().map(|c| moteur_de_recherche(ctx, c));
                 let signaux: Vec<Option<String>> = results.iter().map(|r| r.signal.clone()).collect();
                 let mut plats: Vec<SearchResult> =
                     results.iter().cloned().map(SearchResult::from).collect();
-                let issue = match (backend, conn) {
-                    (Some(b), _) => crate::search::enrich_results_with_data_via_backend(
+                let issue = match backend {
+                    Some(b) => crate::search::enrich_results_with_data_via_backend(
                         b.as_ref(), &target.parent_table, &target.enrich_fields, &mut plats,
                     ),
-                    (None, Some(c)) => enrich_results_with_data(
-                        &*c, &target.parent_table, &target.enrich_fields, &mut plats,
-                    ),
-                    (None, None) => Ok(()),
+                    None => Ok(()),
                 };
                 match issue {
                     Ok(()) => {
@@ -2388,15 +2347,10 @@ impl Node for ResolveParentNode {
         // par `enrich_results_with_data_via_backend` ; ce nœud non, et sur
         // PostgreSQL il échouait sur `MATCH`. Sans service `catalog`, le
         // Cypher direct reste le chemin — c'est le montage minimal des tests.
-        let backend = ctx
-            .service::<Arc<Mutex<Catalog>>>("catalog")
-            .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()));
-        match backend {
-            Some(b) => crate::search::enrich_results_with_data_via_backend(
-                b.as_ref(), &target.parent_table, return_fields, &mut search_results,
-            ),
-            None => enrich_results_with_data(&*conn, &target.parent_table, return_fields, &mut search_results),
-        }
+        let backend = moteur_de_recherche(ctx, &conn);
+        crate::search::enrich_results_with_data_via_backend(
+            backend.as_ref(), &target.parent_table, return_fields, &mut search_results,
+        )
         .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
         // **Vers l'entité source, après la page** (`SourceResolved`), avec la
@@ -2489,6 +2443,16 @@ fn extract_query_and_target(
 ///
 /// Sans catalogue dans le registre, on ne peut pas résoudre : on le **dit**
 /// plutôt que de rendre un résultat trop large en silence.
+/// **Le moteur de recherche du graphe** : celui du catalogue s'il est
+/// servi, sinon celui de rag3db sur la connexion du graphe (le montage
+/// minimal des tests). Les requêtes de recherche vivent sous lui, jamais
+/// en Cypher direct dans un nœud.
+fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbConnection>) -> Arc<dyn crate::search_backend::SearchBackend> {
+    ctx.service::<Arc<Mutex<Catalog>>>("catalog")
+        .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()))
+        .unwrap_or_else(|| Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone())))
+}
+
 fn allowed_ids_for(
     ctx: &mut NodeContext,
     node_type: &str,

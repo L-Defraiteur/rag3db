@@ -110,6 +110,24 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"
 WEAVER="$ROOT/extension/rag3weaver"
 
+# **Un worktree ne lie pas son propre moteur en silence** (10 octobre 2026).
+# Sans `RAG3DB_BUILD`, `BUILD` est le `build/lecteurs-csv` **du worktree** :
+# s'il en a un (une session qui y a bâti), la passe le lie sans le dire, et
+# une mesure compare deux moteurs en croyant n'en voir qu'un (vécu par la
+# session recherche pendant sa tenue de mesure). Un worktree nomme donc sa
+# lib, ou déclare qu'il éprouve la sienne (`RAG3WEAVER_MOTEUR_DU_WORKTREE=1`,
+# le cas du cœur C++).
+if [ -z "${RAG3DB_BUILD:-}" ] && [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" != 1 ]; then
+  commun="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  propre="$(git -C "$ROOT" rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
+  if [ -n "$commun" ] && [ "$commun" != "$propre" ]; then
+    echo "✗ worktree sans RAG3DB_BUILD : la passe lierait le moteur du worktree ($BUILD) sans le dire."
+    echo "  Nommez la lib commune (RAG3DB_BUILD=<arbre principal>/build/lecteurs-csv, et RAG3DB_ROOT pour"
+    echo "  l'extension vector), ou RAG3WEAVER_MOTEUR_DU_WORKTREE=1 pour éprouver le moteur de ce worktree."
+    exit 2
+  fi
+fi
+
 # ── Confiner la pression mémoire ────────────────────────────────────────────
 #
 # Le 27 août 2026 : le poste ramait, et ce n'était pas le CPU. Un gros build
@@ -181,9 +199,31 @@ arreter_les_demons_de_la_passe() {
     fi
   done
 }
+# **Les vieux binaires de test s'effacent** (10 octobre 2026, disque plein) :
+# le hachage d'un binaire change avec le jeu de features, le profil, et le
+# **chemin du paquet** — chaque worktree qui partage un target y laisse les
+# siens. Un target de session en portait 3 par suite. À la sortie, on garde
+# le plus récent de chaque `e2e_*` et on efface les autres, avec leurs `.d`
+# et leurs `.dwo`. Un binaire effacé se rebâtit s'il resservait.
+balayer_les_vieux_binaires() {
+  local deps="${CARGO_TARGET_DIR:-$WEAVER/target}/debug/deps" nom garde f h efface=0
+  [ -d "$deps" ] || return 0
+  for nom in $(find "$deps" -maxdepth 1 -type f -perm -u+x -name 'e2e_*-????????????????' -printf '%f\n' | sed 's/-[0-9a-f]*$//' | sort -u); do
+    garde="$(ls -t "$deps/$nom"-???????????????? 2>/dev/null | head -1)"
+    for f in "$deps/$nom"-????????????????; do
+      [ -f "$f" ] && [ "$f" != "$garde" ] || continue
+      h="${f##*-}"
+      rm -f -- "$deps/$nom-$h" "$deps/$nom-$h.d" "$deps/$nom-$h".*.dwo
+      efface=$((efface + 1))
+    done
+  done
+  [ "$efface" -gt 0 ] && echo "▸ $efface vieux binaires de test effacés (le plus récent de chaque suite est gardé)"
+  return 0
+}
 a_la_sortie() {
   [ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true
   arreter_les_demons_de_la_passe
+  balayer_les_vieux_binaires
 }
 trap a_la_sortie EXIT
 
@@ -223,8 +263,12 @@ NEED_BUILD=false
 if [ "$FORCE_BUILD" = true ]; then
   NEED_BUILD=true
 elif [ ! -f "$BUILD/src/librag3db.so" ]; then
-  echo "▸ No existing build found, building..."
-  NEED_BUILD=true
+  # **Pas de bâti du moteur implicite** (10 octobre 2026) : il partait ici
+  # sans rien demander — vingt minutes de C++, la mémoire du poste, et un
+  # moteur de plus dans un dossier que personne ne nommait.
+  echo "✗ pas de lib sous $BUILD/src : rien n'est bâti sans le demander."
+  echo "  RAG3DB_BUILD vers une lib existante, ou --build pour bâtir celle-ci."
+  exit 2
 fi
 
 if [ "$NEED_BUILD" = true ]; then
@@ -280,7 +324,14 @@ cd "$WEAVER"
 # `DaemonEmbedder` sans condition. Sans la feature, **aucune suite utilisant
 # burn ne compile** — l'oubli a survécu parce que les suites qui n'y touchent
 # pas (e2e_code) passaient très bien.
-FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+# **Un seul jeu de features, quoi qu'il arrive** (10 octobre 2026) : `postgres`
+# y est toujours. Il n'y entrait que si le conteneur répondait, et changer de
+# jeu change le hachage de **tous** les binaires de test — une passe avec le
+# conteneur puis une sans rebâtissaient tout, et gardaient les deux (un
+# binaire e2e pèse des centaines de Mo). Ses dépendances sont du Rust pur ;
+# seule la suite `e2e_postgres` dépend du conteneur, et elle est écartée sans
+# lui (ci-dessous).
+FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
 
 # ── PostgreSQL : dans la passe, ou absent **en le disant** ──────────────────
 #
@@ -306,7 +357,6 @@ PG_PORT=$(printf '%s' "$PG_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
 if [ -z "${RAG3WEAVER_SANS_PG:-}" ]; then
   if timeout 2 bash -c "echo > /dev/tcp/$PG_HOTE/$PG_PORT" 2>/dev/null; then
     PG_DANS_LA_PASSE=true
-    FEATURES="$FEATURES,postgres"
   else
     PG_RAISON="rien n'écoute sur $PG_HOTE:$PG_PORT — \`docker start rag3weaver-pg\`"
   fi

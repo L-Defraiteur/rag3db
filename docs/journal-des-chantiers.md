@@ -35,7 +35,8 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
-- **10 octobre 2026, 23 h — chantier I « everything declarative », branche `proto-declaratif`** (worktree `~/git_workspaces/rag3db-proto` sur luciepc, target `target-I`) : le proto « tout déclaratif » en six lots (moteur de script générique avec rhai et TypeScript par rquickjs + swc_ts_fast_strip, nœud entièrement scripté, rechargement à chaud, route → graphe → vue, l'outil `declare`, la page vivante) ; lots fusionnés un par un en avance rapide. **Lot 1 vert** (moteur de script générique : `src/script/`, rhai derrière l’interface, TypeScript et JavaScript par QuickJS ; page `03-lot-1-le-moteur-de-script.md`). Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/03-le-proto-tout-declaratif.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/everything-declarative/01-rapport-de-session.md`.
+- **10 octobre 2026, soir — codeparsers, chantier « indexer nos propres dépôts » (B4, B5, B2/B1, B3), master de codeparsers en avance rapide** (clone `~/git_workspaces/codeparsers-couverture`, target `~/.cache/rag3weaver-build/codeparsers-couverture`, sonde C++ `~/.cache/rag3weaver-build/sonde-cpp`) : la couverture la plus grande possible, C++ et Rust d'abord, mesurée sur nos dépôts. **B4 vert** (`eb41801`) : les références non résolues sont relevées avec leur raison (le relevé rendait 0). Suite : B5, le banc de couverture avec une ligne de référence commitée par dépôt. Mesure de chaque lot : les appelants de `NodeTable::update` (0 aujourd'hui). Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/04-indexer-nos-propres-depots.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`.
+- **10 octobre 2026, 23 h — chantier I « everything declarative », branche `proto-declaratif`** (worktree `~/git_workspaces/rag3db-proto` sur luciepc, target `target-I`) : le proto « tout déclaratif » en six lots (moteur de script générique avec rhai et TypeScript par rquickjs + swc_ts_fast_strip, nœud entièrement scripté, rechargement à chaud, route → graphe → vue, l'outil `declare`, la page vivante) ; lots fusionnés un par un en avance rapide. **Lots 1 et 2 sur master** (1 : le moteur de script générique, `src/script/`, rhai, TypeScript et JavaScript par QuickJS ; 2 : les noms possédés du moteur de graphes — deux fuites en service fermées — et le nœud entièrement scripté, `nodes/<nom>.node.json` ; pages 03 et 04). Lot 3 sur master (le rechargement à chaud : `Backend::reload`, une version par appel, refus nommé de ce qui est une migration ; page 05) ; la montre sur les fichiers viendra sur `watch_bound`. Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/03-le-proto-tout-declaratif.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/everything-declarative/01-rapport-de-session.md`.
 - **10 octobre 2026, 20 h 30 — cœur C++, marche A3′ sur master** (`21b6cb370`, `79b7be75f`, `9a57a17b2`) : verrou de clé à l'insertion, verrou d'index du COPY pris avant l'ordonnancement, unicité contre le dernier état validé (une seule visibilité), fil de remplacement de l'ordonnanceur pendant une attente ; sous le mode multi-écrivains seulement, éteint hors du banc ; known_red 59 → 56 ; liste complète verte sur luciepc. Suite : A4′. Rapport : `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/01-rapport-de-session.md`.
 
 **Arrêt du 2 octobre 2026, 01 h 25** : toutes les sessions ont cessé de
@@ -528,11 +529,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : huit façons de prendre son harnais pour un résultat
+## Méthode : neuf façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante, la sixième le 4 octobre
-(quatre fois le même jour), la septième et la huitième le 10. Elles se sont présentées à la suite,
+(quatre fois le même jour), la septième, la huitième et la neuvième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -732,6 +733,37 @@ manquante n'était ni la bibliothèque ni les sources, mais **la date du binaire
 mesuré lui-même**. Une mesure commence par prouver que l'artefact chargé vient
 du code qu'on croit mesurer — pas seulement que ses sources sont à jour.
 
+**7 bis. L'extension et la bibliothèque d'âges différents, et rien ne le voit.**
+10 octobre 2026, 23 h. L'extension vectorielle de l'arbre principal portait la
+date de **21 h 26** et la bibliothèque du moteur celle de **17 h 27** : quatre
+heures d'écart entre deux artefacts qui se chargent ensemble, et **aucune passe
+ne s'en est plainte**. Plusieurs d'entre elles ont tourné sur ce mélange sans le
+savoir.
+
+Le garde-fou existant ne pouvait pas le voir, et c'est ce qui en fait un piège
+distinct du septième : **la ligne d'âge dit l'âge de chacun, jamais leur
+cohérence entre eux.** Elle compare chaque artefact au dernier commit de *ses*
+sources — deux contrôles justes, côte à côte, dont aucun ne regarde l'autre.
+
+Et **le remède n'est pas dans le harnais** : comparer deux dates ne prouverait
+rien (un bâti incrémental peut laisser deux horodatages très écartés pour un
+même bâti, et deux bâtis successifs en donner de très proches). La seule
+vérification qui vaille est **au chargement, par un identifiant de bâti embarqué
+dans les deux** : le moteur refuse à `LOAD EXTENSION` une extension qui ne vient
+pas de son propre bâti. C'est le ticket ouvert
+`docs/tickets/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md`.
+
+Comment il a été trouvé mérite d'être dit, parce que ce n'est pas par une
+mesure : l'orchestration a relevé l'horodatage et l'empreinte de l'artefact,
+puis **demandé à chaque session si elle l'avait écrit**. Personne. Un fait que
+personne n'a produit et que personne ne surveille est exactement ce qu'un
+contrôle au chargement attraperait.
+
+Et une leçon d'enquête, pour la prochaine fois : **la taille d'un artefact n'est
+pas son empreinte.** La première hypothèse désignait un bâti précis « à la
+taille exacte » — mais 912 048 octets était aussi la taille d'un autre bâti du
+même jour. Un md5 tranche, une taille accuse.
+
 **8. Le diff qui montre vos propres fichiers comme supprimés.** 10 octobre
 2026, avant une fusion : `git diff --stat HEAD..origin/master` pour savoir ce
 qu'un rebase allait apporter, et la sortie annonce `src/gabarits.rs | 163 -----`
@@ -761,7 +793,45 @@ pourquoi une sortie trompe ne protège pas de s'y laisser prendre la fois
 suivante, quand elle nomme un fichier auquel on tient. C'est la commande qu'il
 faut changer, pas la vigilance.
 
-**Et la forme commune aux huit**, qui est aussi celle des défauts qu'on
+**9. Le « bâti à part » qui n'est pas à part.** 10 octobre 2026, au soir.
+L'arbre principal devait rebâtir la bibliothèque du moteur pendant qu'une
+batterie tournait contre elle ; je lui ai conseillé de **bâtir à part**, dans un
+autre dossier de bâti, pour ne pas la remplacer sous la passe. Mauvais conseil,
+et c'est lui qui l'a vu avant de l'appliquer : **le bâti écrit aussi l'extension
+vectorielle à un chemin fixe de l'arbre** —
+`<arbre>/extension/vector/build/libvector.rag3db_extension` — **quel que soit le
+dossier de bâti**. Choisir `build/autre` au lieu de `build/lecteurs-csv` ne
+déplace donc que la bibliothèque : l'extension, elle, est réécrite au même
+endroit. Un bâti « à part » dans le même arbre aurait remplacé l'extension sous
+la batterie **sans** toucher à la bibliothèque — la moitié de l'artefact
+échangée en vol, et pire qu'un échange franc : la ligne d'âge de `run_e2e.sh`
+surveille la bibliothèque, donc elle n'aurait rien signalé.
+
+**Précision du même soir, et elle corrige la première version de cette note**
+(rag3db-10, qui s'est fait avertir à tort) : « le même arbre » est la borne
+exacte. Un bâti dans un **autre worktree** écrit dans *son* chemin d'extension
+(`~/git_workspaces/rag3db-banc-a4/extension/vector/build/`) et ne touche à rien
+de l'arbre commun. **Bâtir ailleurs est donc possible — à condition qu'« ailleurs »
+soit un autre arbre, pas un autre dossier de bâti.** J'avais écrit « ailleurs n'y
+change rien », ce qui aurait fait attendre pour rien quelqu'un qui bâtissait
+chez lui.
+
+La règle, donc : **on ne bâtit pas le moteur d'un arbre pendant qu'une passe
+charge les artefacts de cet arbre**, et changer de dossier de bâti n'y change
+rien. Ce qui se négocie, c'est l'attente — annoncer, attendre le « fini »,
+rebâtir, prouver les artefacts, annoncer de nouveau. Et la question à poser
+avant de s'inquiéter ou de rassurer : *de quel arbre vient l'artefact que la
+passe charge ?*
+
+Et la leçon de forme, qui est la même que les huit autres sous deux angles
+neufs : **un conseil que l'on donne n'est pas moins à vérifier qu'une mesure que
+l'on prend.** J'ai dit « bâtis à part » avec l'assurance d'une solution
+évidente, sans savoir où va l'extension — puis j'ai écrit la correction *trop
+large* et averti quelqu'un qui ne risquait rien. Se tromper par excès de
+prudence a un coût : une attente inutile, et un avertissement qu'on finit par
+ne plus écouter.
+
+**Et la forme commune aux neuf**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
 d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
@@ -1213,6 +1283,18 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Une extension d'un autre bâti que le moteur se charge sans un mot~~ — **corrigé le 10 octobre
+  2026** (`458ff7157`, seconde session cœur C++) : identifiant de bâti dans le moteur et chaque extension,
+  régénéré à chaque bâti, refus nommé à `LOAD EXTENSION` et au rejeu (l'index se dit en retard avec
+  la raison). **Toute extension bâtie avant est refusée** : la lib et ses extensions se rebâtissent
+  ensemble — la lib commune de luciepc et celle de l'arbre principal comprises. Ticket
+  `docs/tickets/closed/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md`.
+- ~~Sous `IGNORE_ERRORS`, un doublon de clé du même COPY fait supprimer une ligne innocente~~ —
+  **corrigé le 10 octobre 2026** (`de8fc8c0f`, seconde session cœur C++) : `HashIndex::appendNoLock`
+  rendait le nombre d'insertions réussies au lieu de la position du premier échec dès que l'index
+  de clé avait des entrées sur disque. Ticket
+  `docs/tickets/2026-10-10-ignore-errors-supprime-une-ligne-innocente.md` ; reste, en confort,
+  laquelle des deux lignes survit (ordre des fils).
 - ~~Un backend qui déclare un signal creux n'a pas d'embarqueur creux~~ —
   **corrigé le 3 octobre 2026** (lot 3 de « un modèle, en service ou en
   local »). `models.sparse` se déclare comme les autres ; le backend branche

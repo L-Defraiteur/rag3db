@@ -367,7 +367,9 @@ impl Node for InsertRecordNode {
                 Some(ids) => ids,
                 None => {
                     // Build batch upsert via dialect (idempotent MERGE/INSERT ON CONFLICT)
-                    let cypher = dialect.batch_upsert(entity_name, &col_refs);
+                    let cypher = dialect
+                        .write(&rag3weaver_ir::Write::Upsert { table: entity_name.to_string(), columns: col_refs.iter().map(|c| c.to_string()).collect() })
+                        .map_err(|e| e.to_string())?;
 
                     // Build items list param. Un vecteur porté par
                     // l'enregistrement se pose avec la ligne, ici aussi.
@@ -1137,7 +1139,9 @@ impl Node for LinkRecordNode {
                         .strip_suffix("_CHUNKED_FROM")
                         .map(|entity| (format!("{entity}_Chunk"), entity.to_string()))
                 });
-            let cypher = dialect.batch_link_labeled(rel_name, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &prop_refs);
+            let cypher = dialect
+                .write(&rag3weaver_ir::Write::Link { relation: rel_name.to_string(), ends: ends.clone(), props: prop_refs.iter().map(|p| p.to_string()).collect() })
+                .map_err(|e| e.to_string())?;
 
             // **En masse, par COPY**, quand le lot est gros, que la relation
             // a ses deux étiquettes et que le moteur sait le faire : 200 000
@@ -1608,7 +1612,7 @@ impl Node for MarquerDecoupeNode {
         let mut marques = 0usize;
         for (table, lignes) in par_table {
             let n = lignes.len();
-            let cypher = dialect.batch_update_fields(&table, &["_chunked_hash"]);
+            let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Update { table: table.to_string(), columns: vec!["_chunked_hash".into()] });
             // Un marquage raté laisse la dette visible : ces parents seront
             // redécoupés une fois de trop, jamais une fois de moins. Ce n'est
             // pas une disponibilité perdue, c'est un travail en double.
@@ -2308,8 +2312,10 @@ impl Node for EmbedNode {
                                         CypherValue::Map(m)
                                     }).collect(),
                                 );
-                                let pose = dialect
-                                    .batch_update_fields(entity_name, &["_sparse_hash"]);
+                                let pose = crate::dialect::ecriture(
+                                    &*dialect,
+                                    &rag3weaver_ir::Write::Update { table: entity_name.to_string(), columns: vec!["_sparse_hash".into()] },
+                                );
                                 conn.execute_with_params(
                                     &pose,
                                     &[QueryParam { name: "items".into(), value: marques }],
@@ -2556,7 +2562,7 @@ impl Node for EmbedNode {
             // `_sparse_hash` posé : le chunk serait réembarqué en dense et
             // jamais en sparse, sans que rien ne le signale.
             for colonne in [marker.as_str(), "_sparse_hash"] {
-                let cypher = dialect.batch_set_null(entity_name, colonne);
+                let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] });
                 conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuid_params.clone() }],
@@ -3203,7 +3209,9 @@ impl Node for DeleteRecordNode {
             // une colonne INT64) : la ligne recréée l'a nulle de toute façon.
             let nulles = colonnes_toutes_nulles(items);
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).filter(|k| !nulles.contains(*k)).collect();
-            let cypher = dialect.batch_upsert(entity_name, &columns);
+            let cypher = dialect
+                .write(&rag3weaver_ir::Write::Upsert { table: entity_name.to_string(), columns: columns.iter().map(|c| c.to_string()).collect() })
+                .map_err(|e| e.to_string())?;
 
             let items_param = CypherValue::List(
                 items.iter().map(|m| CypherValue::Map(
@@ -3546,7 +3554,10 @@ impl Node for UpdateRecordNode {
 
                 let mut update_cols: Vec<&str> = field_keys.iter().map(|s| s.as_str()).collect();
                 update_cols.push("_content_hash");
-                let set_cypher = dialect.batch_update_fields(entity_name, &update_cols);
+                let set_cypher = crate::dialect::ecriture(
+                    &*dialect,
+                    &rag3weaver_ir::Write::Update { table: entity_name.to_string(), columns: update_cols.iter().map(|c| c.to_string()).collect() },
+                );
                 conn.execute_with_params(
                     &set_cypher,
                     &[QueryParam { name: "items".into(), value: items_param }],
@@ -3765,14 +3776,17 @@ impl Node for UpdateRecordNode {
                 let uuids = CypherValue::List(items.iter().filter_map(|m| m.get("_uuid").cloned()).collect());
                 for colonne in &nulles {
                     conn.execute_with_params(
-                        &dialect.batch_set_null(entity_name, colonne),
+                        &crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] }),
                         &[QueryParam { name: "uuids".into(), value: uuids.clone() }],
                     ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
                 }
             }
             if other_cols.is_empty() { continue; }
 
-            let cypher = dialect.batch_update_fields(entity_name, &other_cols);
+            let cypher = crate::dialect::ecriture(
+                &**dialect,
+                &rag3weaver_ir::Write::Update { table: entity_name.to_string(), columns: other_cols.iter().map(|c| c.to_string()).collect() },
+            );
 
             let items_param = CypherValue::List(
                 items.iter().map(|m| CypherValue::Map(m.clone())).collect()

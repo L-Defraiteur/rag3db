@@ -302,6 +302,13 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // une déclaration n'est pas un scope (son corps est ailleurs) : c'est ici
     // qu'elle se lit, et `usages` la rend (« déclaré foo.h:5 dans Foo »).
     fields.insert("declarations".into(), field(FieldType::String));
+    // **Les types écrits** : les champs typés d'une classe (`[{name, type}]`,
+    // le type tel qu'écrit) et le type de retour d'une fonction — de quoi
+    // typer au rendez-vous un receveur qui passe par un champ ou un retour
+    // déclaré dans un autre fichier (`info.table->update()`, le champ dans un
+    // .h). Vides quand il n'y en a pas.
+    fields.insert("field_types".into(), field(FieldType::String));
+    fields.insert("return_type".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
     // Les enfants repliés dans `content` : de quoi rendre un extrait avec
@@ -515,6 +522,11 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             props.insert("qualifier_types".to_string(), field_def(FieldType::String));
             props.insert("import_modules".to_string(), field_def(FieldType::String));
             props.insert("self_types".to_string(), field_def(FieldType::String));
+            // Le type à lire ailleurs (codeparsers `DeferredType`, en JSON) :
+            // le champ d'une classe, le retour d'une fonction, et la chaîne
+            // à peler — résolu à la matérialisation, quand les classes sont
+            // en base.
+            props.insert("deferred".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -596,6 +608,12 @@ pub struct ScopeRecord {
     /// [`scope_config`].
     #[serde(default)]
     pub declarations: String,
+    /// Les champs typés d'une classe, en JSON `[{name, type}]` ; vide sinon.
+    #[serde(default)]
+    pub field_types: String,
+    /// Le type de retour écrit d'une fonction ; vide sinon.
+    #[serde(default)]
+    pub return_type: String,
     pub start_line: usize,
     pub end_line: usize,
     pub start_byte: usize,
@@ -670,6 +688,13 @@ pub struct CodeAnalysis {
     /// n'en est pas un.
     #[serde(default)]
     pub pending_self_types: Vec<(String, String, Vec<String>)>,
+    /// Les types à lire ailleurs (`DeferredType` en JSON), quand **toutes**
+    /// les références du scope à ce nom sans type lu en portent un. Le
+    /// rendez-vous les résout à la matérialisation, par les champs et les
+    /// retours des scopes en base : le graphe ne dépend pas de l'ordre des
+    /// fichiers, et codeparsers reste en fichier seul.
+    #[serde(default)]
+    pub pending_deferred: Vec<(String, String, Vec<String>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -931,6 +956,8 @@ pub fn analyze_in_project(
             test_certainty: String::new(),
             test_name: String::new(),
             declarations: String::new(),
+            field_types: String::new(),
+            return_type: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
             start_byte: sc.scope_start_byte,
@@ -1022,6 +1049,8 @@ pub fn analyze_in_project(
                 test_certainty: s.test.as_ref().map_or_else(String::new, |t| test_certainty_name(&t.certainty).to_string()),
                 test_name: s.test.as_ref().and_then(|t| t.name.clone()).unwrap_or_default(),
                 declarations: declarations_of(s),
+                field_types: field_types_of(s),
+                return_type: s.return_type.clone().unwrap_or_default(),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
                 start_byte: s.scope_start_byte,
@@ -1091,6 +1120,8 @@ pub fn analyze_in_project(
             let mut modules_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : le type englobant, quand on l'atteint par `self`.
             let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Par nom : les types à lire ailleurs, pour les références sans type lu.
+            let mut differes_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             for r in &sc.identifier_references {
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
@@ -1170,6 +1201,17 @@ pub fn analyze_in_project(
                     }
                     _ => *englobants = None,
                 }
+                let differes = differes_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
+                if r.qualifier_type.is_none() {
+                    match (differes.as_mut(), r.qualifier_deferred.as_ref().and_then(|d| serde_json::to_string(d).ok())) {
+                        (Some(v), Some(d)) => {
+                            if !v.contains(&d) {
+                                v.push(d);
+                            }
+                        }
+                        _ => *differes = None,
+                    }
+                }
                 if !seen.insert(id.to_string()) {
                     continue;
                 }
@@ -1221,6 +1263,12 @@ pub fn analyze_in_project(
                 if let Some(mut v) = englobants.filter(|v| !v.is_empty()) {
                     v.sort();
                     analysis.pending_self_types.push((key.clone(), name, v));
+                }
+            }
+            for (name, differes) in differes_lus {
+                if let Some(mut v) = differes.filter(|v| !v.is_empty()) {
+                    v.sort();
+                    analysis.pending_deferred.push((key.clone(), name, v));
                 }
             }
         }
@@ -1632,6 +1680,8 @@ impl ScopeRecord {
             ("test_certainty".into(), s(&self.test_certainty)),
             ("test_name".into(), s(&self.test_name)),
             ("declarations".into(), s(&self.declarations)),
+            ("field_types".into(), s(&self.field_types)),
+            ("return_type".into(), s(&self.return_type)),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
             ("start_byte".into(), i(self.start_byte)),
@@ -1890,6 +1940,8 @@ impl Catalog {
             analysis.pending_import_modules.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         let englobants_of: HashMap<(&str, &str), &Vec<String>> =
             analysis.pending_self_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let differes_of: HashMap<(&str, &str), &Vec<String>> =
+            analysis.pending_deferred.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -1908,6 +1960,8 @@ impl Catalog {
             props.insert("import_modules".to_string(), s(&modules));
             let englobants = englobants_of.get(&(scope_key.as_str(), name.as_str())).map(|v| v.join(",")).unwrap_or_default();
             props.insert("self_types".to_string(), s(&englobants));
+            let differes = differes_of.get(&(scope_key.as_str(), name.as_str())).map(|v| format!("[{}]", v.join(","))).unwrap_or_default();
+            props.insert("deferred".to_string(), s(&differes));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -1954,7 +2008,8 @@ impl Catalog {
         report: &mut CodeIngestReport,
     ) -> Result<(), CatalogError> {
         let definers_by_symbol = self.linked_from_many("DEFINES", uuids)?;
-        let mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        let mut mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        self.resoudre_les_types_differes(&mut mentioners_by_symbol)?;
         // Le parent des définisseurs, pour les noms qu'une mention typée
         // atteint (`n.run()` avec `n: Node` vise le `run` de `Node`).
         // Et le fichier des définisseurs, pour les noms qu'une mention atteint
@@ -2101,6 +2156,94 @@ impl Catalog {
         Ok((parents, fichiers, genres))
     }
 
+    /// **Les types différés, résolus** : pour une mention sans type lu qui en
+    /// porte un, le type du champ (`FieldOf`) ou du retour (`ReturnOf`) lu
+    /// sur les scopes en base, pelé par sa chaîne (`receveur`), devient son
+    /// `qualifier_types` — la branche du type lu fait le reste. Un nom de
+    /// classe ou de fonction porté par deux scopes aux types différents ne
+    /// donne rien : on ne devine pas.
+    fn resoudre_les_types_differes(&self, mentions: &mut std::collections::HashMap<String, Vec<Mention>>) -> Result<(), CatalogError> {
+        use codeparsers::scope_extraction::types::DeferredType as D;
+        let mut noms: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
+            for d in &m.deferred {
+                noms.insert(match d {
+                    D::FieldOf { owner, .. } => owner.clone(),
+                    D::ReturnOf { function, .. } => function.clone(),
+                });
+            }
+        }
+        if noms.is_empty() {
+            return Ok(());
+        }
+        let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
+        let result = self
+            .conn()
+            .execute_with_params(
+                &format!("UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) RETURN n, s.field_types, s.return_type, s.parent_name"),
+                &[crate::connection::QueryParam::new("noms", param)],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        // (classe, champ) → type écrit ; fonction → (retour écrit, parent).
+        // `None` : deux déclarations qui ne s'accordent pas.
+        let mut champs: std::collections::HashMap<(String, String), Option<String>> = std::collections::HashMap::new();
+        let mut retours: std::collections::HashMap<String, Option<(String, String)>> = std::collections::HashMap::new();
+        for row in &result.rows {
+            let texte = |i: usize| row.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let nom = texte(0);
+            if let Ok(serde_json::Value::Array(liste)) = serde_json::from_str::<serde_json::Value>(&texte(1)) {
+                for c in liste {
+                    let (Some(f), Some(t)) = (c.get("name").and_then(|v| v.as_str()), c.get("type").and_then(|v| v.as_str())) else { continue };
+                    champs
+                        .entry((nom.clone(), f.to_string()))
+                        .and_modify(|v| {
+                            if v.as_deref() != Some(t) {
+                                *v = None;
+                            }
+                        })
+                        .or_insert_with(|| Some(t.to_string()));
+                }
+            }
+            let retour = texte(2);
+            if !retour.trim().is_empty() {
+                let v = (retour, texte(3));
+                retours.entry(nom).and_modify(|o| {
+                    if o.as_ref() != Some(&v) {
+                        *o = None;
+                    }
+                }).or_insert(Some(v));
+            }
+        }
+        let nom_du_type = |ecrit: &str, peel: &[String]| -> Option<String> {
+            if peel.is_empty() {
+                codeparsers::scope_extraction::usage::base_type_name(ecrit)
+            } else {
+                codeparsers::scope_extraction::receveur::peel(ecrit, peel).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
+            }
+        };
+        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty()) {
+            let lus: Option<Vec<String>> = m
+                .deferred
+                .iter()
+                .map(|d| match d {
+                    D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel)),
+                    D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
+                        // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
+                        let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
+                        let lu = nom_du_type(&t, &chaine)?;
+                        if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
+                    }),
+                })
+                .collect();
+            if let Some(mut v) = lus {
+                v.sort();
+                v.dedup();
+                m.qualifier_types = v;
+            }
+        }
+        Ok(())
+    }
+
     /// Comme [`Self::linked_from_many`], mais rend aussi la propriété `kind`
     /// et l'usage (`usage`, `usages`, `line`)
     /// de l'arête quand `with_kind` — le genre inscrit au rendez-vous.
@@ -2121,7 +2264,7 @@ impl Catalog {
         saut.start = Some(SYMBOL.to_string());
         if with_kind {
             saut.returns.extend(
-                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
+                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
             );
         }
         let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -2154,7 +2297,11 @@ impl Catalog {
                 };
                 let import_modules = liste(7);
                 let self_types = liste(8);
-                out.entry(to.clone()).or_default().push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types });
+                let deferred: Vec<codeparsers::scope_extraction::types::DeferredType> =
+                    row.get(9).and_then(|v| v.as_str()).filter(|t| !t.is_empty()).and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
+                out.entry(to.clone())
+                    .or_default()
+                    .push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types, deferred });
             }
         }
         Ok(out)
@@ -2164,6 +2311,24 @@ impl Catalog {
 /// Les genres de scope qui peuvent être le parent d'une définition faite
 /// ailleurs.
 const GENRES_CONTENEURS: [&str; 5] = ["class", "interface", "namespace", "module", "enum"];
+
+/// Les champs typés d'un scope, en JSON `[{name, type}]` (le type tel
+/// qu'écrit, génériques compris) ; vide s'il n'en a pas.
+fn field_types_of(s: &codeparsers::scope_extraction::types::ScopeInfo) -> String {
+    use codeparsers::scope_extraction::types::ClassMemberInfoMemberType as M;
+    let liste: Vec<serde_json::Value> = s
+        .members
+        .iter()
+        .flatten()
+        .filter(|m| m.member_type == M::Property)
+        .filter_map(|m| m.r#type.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(|t| serde_json::json!({ "name": m.name, "type": t })))
+        .collect();
+    if liste.is_empty() {
+        String::new()
+    } else {
+        serde_json::Value::Array(liste).to_string()
+    }
+}
 
 /// Les méthodes et fonctions qu'un scope déclare, en JSON
 /// `[{name, line, signature, kind}]` ; vide s'il n'en déclare aucune.
@@ -2207,6 +2372,9 @@ struct Mention {
     import_modules: Vec<String>,
     /// Le type englobant, quand le mentionneur atteint le nom par `self`.
     self_types: Vec<String>,
+    /// Les types à lire ailleurs (champ, retour), résolus à la
+    /// matérialisation en `qualifier_types`.
+    deferred: Vec<codeparsers::scope_extraction::types::DeferredType>,
 }
 
 /// **Comment une arête du rendez-vous a été résolue** : la marque qu'elle
@@ -2842,6 +3010,7 @@ mod tests_resolution {
             qualifier_types: types.iter().map(|t| t.to_string()).collect(),
             import_modules: imports.iter().map(|t| t.to_string()).collect(),
             self_types: Vec::new(),
+            deferred: Vec::new(),
         }
     }
 

@@ -1,6 +1,7 @@
 #include "storage/table/rel_table.h"
 
 #include <algorithm>
+#include <optional>
 
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/message.h"
@@ -14,8 +15,10 @@
 #include "storage/storage_utils.h"
 #include "storage/table/column_chunk.h"
 #include "storage/table/column_chunk_data.h"
+#include "storage/table/node_table.h"
 #include "storage/table/rel_table_data.h"
 #include "storage/wal/local_wal.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 #include <ranges>
 
@@ -195,7 +198,47 @@ void RelTable::checkRelMultiplicityConstraint(Transaction* transaction,
     }
 }
 
+void RelTable::lockEndpoints(Transaction* transaction, const ValueVector& srcNodeIDVector,
+    const ValueVector& dstNodeIDVector, LockMode mode) const {
+    if (!transaction->usesLocks()) {
+        return;
+    }
+    struct Endpoint {
+        NodeTable* table;
+        offset_t offset;
+        std::string key;
+    };
+    std::vector<Endpoint> endpoints;
+    std::vector<LockRequest> requests;
+    for (const auto* vector : {&srcNodeIDVector, &dstNodeIDVector}) {
+        const auto pos = vector->state->getSelVector()[0];
+        if (vector->isNull(pos)) {
+            continue;
+        }
+        const auto nodeID = vector->getValue<nodeID_t>(pos);
+        if (transaction->isUnCommitted(nodeID.tableID, nodeID.offset)) {
+            continue;
+        }
+        auto& nodeTable = StorageManager::Get(*transaction->getClientContext())
+                              ->getTable(nodeID.tableID)
+                              ->cast<NodeTable>();
+        auto key = nodeTable.lockKeyOfRow(transaction, nodeID.offset);
+        requests.push_back(LockRequest{LockResource::row(nodeID.tableID, key), mode});
+        endpoints.push_back(Endpoint{&nodeTable, nodeID.offset, std::move(key)});
+    }
+    transaction->acquireLocks(requests);
+    for (const auto& endpoint : endpoints) {
+        endpoint.table->throwIfDeletedByAnotherCommitAfterSnapshot(transaction, endpoint.offset,
+            endpoint.key);
+    }
+}
+
 void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
+    const auto& relInsertState = insertState.constCast<RelTableInsertState>();
+    if (insertState.takesLocks) {
+        lockEndpoints(transaction, relInsertState.srcNodeIDVector, relInsertState.dstNodeIDVector,
+            LockMode::SHARED);
+    }
     checkRelMultiplicityConstraint(transaction, insertState);
 
     KU_ASSERT(transaction->getLocalStorage());
@@ -221,6 +264,10 @@ void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
         KU_ASSERT(localTable);
         localTable->update(&DUMMY_TRANSACTION, updateState);
     } else {
+        if (updateState.takesLocks) {
+            lockEndpoints(transaction, relUpdateState.srcNodeIDVector,
+                relUpdateState.dstNodeIDVector, LockMode::EXCLUSIVE);
+        }
         for (auto& relData : directedRelData) {
             relData->update(transaction,
                 relUpdateState.getBoundNodeIDVector(relData->getDirection()),
@@ -250,6 +297,10 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
         KU_ASSERT(localTable);
         isDeleted = localTable->delete_(transaction, deleteState);
     } else {
+        if (deleteState.takesLocks) {
+            lockEndpoints(transaction, relDeleteState.srcNodeIDVector,
+                relDeleteState.dstNodeIDVector, LockMode::EXCLUSIVE);
+        }
         auto numDirectionsDeleted = 0u;
         for (auto& relData : directedRelData) {
             isDeleted = relData->delete_(transaction,
@@ -303,6 +354,14 @@ void RelTable::detachDelete(Transaction* transaction, RelTableDeleteState* delet
         directedRelData.size() == NUM_REL_DIRECTIONS ?
             getDirectedTableData(RelDirectionUtils::getOppositeDirection(direction)) :
             nullptr;
+    // Marche A4′ : le nœud est tenu en exclusif (NodeTable::delete_, avant d'arriver ici) ; les
+    // relations qu'un autre écrivain lui a attachées et validées pendant l'attente sont
+    // détachées aussi — comme Neo4j, qui détache ce qu'il voit en tenant le nœud. Sans cela,
+    // une relation validée après l'instantané resterait pendante.
+    std::optional<Transaction::LatestCommittedView> latestCommitted;
+    if (transaction->usesLocks() && deleteState->takesLocks) {
+        latestCommitted.emplace(*transaction);
+    }
     auto relReadState =
         std::make_unique<RelTableScanState>(*memoryManager, &deleteState->srcNodeIDVector,
             std::vector{&deleteState->dstNodeIDVector, &deleteState->relIDVector},
@@ -350,6 +409,12 @@ void RelTable::throwIfNodeHasRels(Transaction* transaction, RelDataDirection dir
     ValueVector* srcNodeIDVector, const rel_multiplicity_constraint_throw_func_t& throwFunc) const {
     const auto nodeIDPos = srcNodeIDVector->state->getSelVector()[0];
     const auto nodeOffset = srcNodeIDVector->getValue<nodeID_t>(nodeIDPos).offset;
+    // Marche A4′ : sous les verrous, une relation validée après l'instantané compte aussi (le
+    // nœud supprimé est tenu en exclusif : ce qui est validé maintenant ne bougera plus).
+    std::optional<Transaction::LatestCommittedView> latestCommitted;
+    if (transaction->usesLocks()) {
+        latestCommitted.emplace(*transaction);
+    }
     if (checkIfNodeHasRels(transaction, direction, srcNodeIDVector)) {
         throwFunc(tableName, nodeOffset, direction);
     }

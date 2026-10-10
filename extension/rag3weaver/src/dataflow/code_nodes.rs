@@ -449,11 +449,11 @@ impl Node for EditFileNode {
 
 fn format_param() -> ConfigParam {
     ConfigParam {
-        name: "format",
+        name: "format".into(),
         param_type: ConfigParamType::String,
         required: false,
         default: Some(serde_json::json!("markdown")),
-        description: "markdown (compact, pour le modèle) | json (structuré)",
+        description: "markdown (compact, pour le modèle) | json (structuré)".into(),
         choices: Some(Choices::fixed(["markdown", "json"])),
         json_schema: None,
     }
@@ -484,14 +484,14 @@ impl NodeFactory for ReadFileNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ReadFileNode",
-            description: "Reads a file from the file source (numbered lines, paginated), annotated with the scopes of the window and an index-staleness check",
+            node_type: "ReadFileNode".into(),
+            description: "Reads a file from the file source (numbered lines, paginated), annotated with the scopes of the window and an index-staleness check".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)", choices: None, json_schema: None },
-                ConfigParam { name: "offset", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)", choices: None, json_schema: None },
-                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_READ_LIMIT)), description: "Nombre maximum de lignes (plafond 2000)", choices: None, json_schema: None },
+                ConfigParam { name: "path".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)".into(), choices: None, json_schema: None },
+                ConfigParam { name: "offset".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)".into(), choices: None, json_schema: None },
+                ConfigParam { name: "limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_READ_LIMIT)), description: "Nombre maximum de lignes (plafond 2000)".into(), choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -523,21 +523,21 @@ impl NodeFactory for GrepNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "GrepNode",
-            description: "Regex search over the file source; each (file, line) is annotated with the narrowest scope containing it",
+            node_type: "GrepNode".into(),
+            description: "Regex search over the file source; each (file, line) is annotated with the narrowest scope containing it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "pattern", param_type: ConfigParamType::String, required: true, default: None, description: "Expression régulière", choices: None, json_schema: None },
-                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que sous ce préfixe de chemin", choices: None, json_schema: None },
-                ConfigParam { name: "extension", param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que cette extension (ex. 'rs')", choices: None, json_schema: None },
-                ConfigParam { name: "case_insensitive", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse", choices: None, json_schema: None },
-                ConfigParam { name: "max_results", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés", choices: None, json_schema: None },
-                ConfigParam { name: "context_lines", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)", choices: None, json_schema: None },
+                ConfigParam { name: "pattern".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Expression régulière".into(), choices: None, json_schema: None },
+                ConfigParam { name: "path_prefix".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que sous ce préfixe de chemin".into(), choices: None, json_schema: None },
+                ConfigParam { name: "extension".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que cette extension (ex. 'rs')".into(), choices: None, json_schema: None },
+                ConfigParam { name: "case_insensitive".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse".into(), choices: None, json_schema: None },
+                ConfigParam { name: "max_results".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés".into(), choices: None, json_schema: None },
+                ConfigParam { name: "context_lines".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)".into(), choices: None, json_schema: None },
                 // **Le graphe se greffe là où les agents vont.** Mesuré le
                 // 28 août 2026 : `grep` 10 appels, l'outil de graphe séparé 0.
-                ConfigParam { name: "relation", param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion", choices: Some(Choices::Relations), json_schema: None },
-                ConfigParam { name: "relation_limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_RELATION_LIMIT)), description: "Voisins rendus par scope (plafond 20)", choices: None, json_schema: None },
+                ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::Relations), json_schema: None },
+                ConfigParam { name: "relation_limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_RELATION_LIMIT)), description: "Voisins rendus par scope (plafond 20)".into(), choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -559,16 +559,16 @@ impl NodeFactory for ParseCodeNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ParseCodeNode",
-            description: "Parses source files (tree-sitter, 12 languages) into File/Scope/Library records and resolved relations",
-            inputs: vec![PortDef { name: "sources", port_type: PortType::Code, required: false }],
-            outputs: vec![PortDef { name: "code", port_type: PortType::Code, required: false }],
+            node_type: "ParseCodeNode".into(),
+            description: "Parses source files (tree-sitter, 12 languages) into File/Scope/Library records and resolved relations".into(),
+            inputs: vec![PortDef { name: "sources".into(), port_type: PortType::Code, required: false }],
+            outputs: vec![PortDef { name: "code".into(), port_type: PortType::Code, required: false }],
             config_params: vec![ConfigParam {
-                name: "root",
+                name: "root".into(),
                 param_type: ConfigParamType::String,
                 required: false,
                 default: None,
-                description: "Racine du projet ; lue sur le disque si 'sources' n'est pas connecté",
+                description: "Racine du projet ; lue sur le disque si 'sources' n'est pas connecté".into(),
                 choices: None,
                 json_schema: None,
             }],
@@ -588,12 +588,12 @@ impl NodeFactory for CodeIngestNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "CodeIngestNode",
-            description: "Persists a code analysis into the catalog (File, Scope, Library and their relations)",
-            inputs: vec![PortDef { name: "code", port_type: PortType::Code, required: true }],
-            outputs: vec![PortDef { name: "done", port_type: PortType::Empty, required: false }],
+            node_type: "CodeIngestNode".into(),
+            description: "Persists a code analysis into the catalog (File, Scope, Library and their relations)".into(),
+            inputs: vec![PortDef { name: "code".into(), port_type: PortType::Code, required: true }],
+            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
             config_params: vec![
-                ConfigParam { name: "bulk_index", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Détruire l'index vectoriel, charger, le reconstruire — 24x sur un gros lot, une perte sèche sur un petit", choices: None, json_schema: None },
+                ConfigParam { name: "bulk_index".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Détruire l'index vectoriel, charger, le reconstruire — 24x sur un gros lot, une perte sèche sur un petit".into(), choices: None, json_schema: None },
             ],
         }
     }
@@ -623,14 +623,14 @@ impl NodeFactory for ListFilesNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ListFilesNode",
-            description: "Lists the files of the file source under a path prefix, with line counts and index state (indexed / stale)",
+            node_type: "ListFilesNode".into(),
+            description: "Lists the files of the file source under a path prefix, with line counts and index state (indexed / stale)".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path_prefix", param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe", choices: None, json_schema: None },
-                ConfigParam { name: "limit", param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés", choices: None, json_schema: None },
-                ConfigParam { name: "with_state", param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(true)), description: "Lire chaque fichier pour compter ses lignes et comparer au catalogue", choices: None, json_schema: None },
+                ConfigParam { name: "path_prefix".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe".into(), choices: None, json_schema: None },
+                ConfigParam { name: "limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés".into(), choices: None, json_schema: None },
+                ConfigParam { name: "with_state".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(true)), description: "Lire chaque fichier pour compter ses lignes et comparer au catalogue".into(), choices: None, json_schema: None },
                 format_param(),
             ],
         }
@@ -659,15 +659,15 @@ impl NodeFactory for EditFileNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "EditFileNode",
-            description: "Edits a file of the file source — replace one unique occurrence (old → new) or write the whole content — then re-indexes it",
+            node_type: "EditFileNode".into(),
+            description: "Edits a file of the file source — replace one unique occurrence (old → new) or write the whole content — then re-indexes it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
-                ConfigParam { name: "path", param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source", choices: None, json_schema: None },
-                ConfigParam { name: "old", param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)", choices: None, json_schema: None },
-                ConfigParam { name: "new", param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement", choices: None, json_schema: None },
-                ConfigParam { name: "content", param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)", choices: None, json_schema: None },
+                ConfigParam { name: "path".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source".into(), choices: None, json_schema: None },
+                ConfigParam { name: "old".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)".into(), choices: None, json_schema: None },
+                ConfigParam { name: "new".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement".into(), choices: None, json_schema: None },
+                ConfigParam { name: "content".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)".into(), choices: None, json_schema: None },
                 format_param(),
             ],
         }

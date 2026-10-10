@@ -600,6 +600,23 @@ TEST_P(ConcurrencyBench, C1_SnapshotPredatesCommit) {
             }});
 }
 
+// L'attente sous les verrous (A4′), prouvée par l'ordre des événements : la fin d'écriture de
+// l'écrivain 1 vient après le DÉBUT de la validation de l'écrivain 0. Pas après sa fin : le
+// verrou est rendu pendant la validation, et l'écrivain 1, réveillé, peut marquer sa fin
+// d'écriture avant que l'écrivain 0 ne marque la sienne (vu sur luciepc, 10 octobre). Sans
+// verrou, l'écriture de l'écrivain 1 finit bien avant : commitInOrderByEvents fait attendre
+// l'écrivain 0 jusqu'à deux secondes qu'elle s'achève avant de valider.
+static void expectSecondWriterWaited(const SharedArea& area) {
+    const auto firstCommit = eventIndex(area, 0, "commit:start");
+    auto secondWrite = eventIndex(area, 1, "write:done");
+    if (secondWrite < 0) {
+        secondWrite = eventIndex(area, 1, "write:failed");
+    }
+    EXPECT_GT(secondWrite, firstCommit)
+        << "[check: waited] the second writer's write ended before the first writer began to "
+           "commit";
+}
+
 // C2 — relation contre suppression d'une de ses extrémités. Les nœuds 1 et 2 sont
 // validés avant. L'écrivain 0 supprime un nœud (la source 1, la destination 2, ou la
 // source par DETACH DELETE) ; l'écrivain 1 crée une relation 1 -> 2. Puis les deux
@@ -609,7 +626,20 @@ TEST_P(ConcurrencyBench, C1_SnapshotPredatesCommit) {
 // DELETE viennent de la relecture du cœur C++ (3 octobre) : l'autre direction de la
 // CSR, et une suppression qui détache ce qu'elle voit — pas la relation encore non
 // validée de l'autre.
-static BenchCase deleteVersusNewRelation(std::string deletion, std::vector<uint32_t> commitOrder) {
+// Sous les verrous (A4′), celui qui doit valider le premier écrit aussi le premier : l'écrivain
+// 0 écrit, l'écrivain 1 attend dans son écriture (writeInTurn), et les validations suivent
+// l'ordre {0, 1}. relationFirst : l'écrivain 0 crée la relation et l'écrivain 1 supprime ; sinon
+// l'inverse. Attendus (page 07 du cœur C++, §0) :
+// - la suppression d'abord : la relation voit une extrémité supprimée par une validation
+//   postérieure à son instantané, erreur de sérialisation (comme PostgreSQL) ;
+// - la relation d'abord, DELETE sans DETACH : refus « has connected edges » d'après le dernier
+//   état validé ;
+// - la relation d'abord, DETACH DELETE : le nœud tenu, le détachement voit le dernier état
+//   validé et détache la relation de l'autre (comme Neo4j) — les deux valident, et il ne reste
+//   ni nœud ni relation.
+// Dans tous les cas, l'écrivain 1 a attendu : sa fin d'écriture vient après la validation de
+// l'écrivain 0.
+static BenchCase deleteVersusNewRelation(std::string deletion, bool relationFirst) {
     return {.numWorkers = 2,
         .setup =
             [](ConcurrencyBench& bench) {
@@ -619,21 +649,38 @@ static BenchCase deleteVersusNewRelation(std::string deletion, std::vector<uint3
                 bench.mustRun("CREATE (:Item {id: 1, writer: -1}), (:Item {id: 2, writer: -1});");
             },
         .scenario =
-            [deletion, commitOrder](Worker& worker) {
+            [deletion, relationFirst](Worker& worker) {
                 worker.begin();
-                if (worker.index() == 0) {
-                    worker.writeInTurn(deletion);
-                } else {
+                if ((worker.index() == 0) == relationFirst) {
                     worker.writeInTurn("MATCH (a:Item {id: 1}), (b:Item {id: 2}) "
                                        "CREATE (a)-[:Link {src_id: 1, dst_id: 2}]->(b);");
+                } else {
+                    worker.writeInTurn(deletion);
                 }
-                worker.commitInOrderByEvents(commitOrder);
+                worker.commitInOrderByEvents({0, 1});
             },
         .expect =
-            [](ConcurrencyBench&, const SharedArea& area) {
+            [deletion, relationFirst](ConcurrencyBench& bench, const SharedArea& area) {
+                expectSecondWriterWaited(area);
+                const bool detaches = deletion.find("DETACH") != std::string::npos;
+                if (relationFirst && detaches) {
+                    EXPECT_EQ(totalCommits(area), 2u)
+                        << "[check: both-commit] the DETACH DELETE detaches the relation "
+                           "committed before it";
+                    EXPECT_EQ(bench.queryInt("MATCH (a:Item {id: 1}) RETURN count(a);"), 0)
+                        << "[check: node-deleted] ";
+                    EXPECT_EQ(bench.queryInt("MATCH ()-[r:Link]->() RETURN count(r);"), 0)
+                        << "[check: no-dangling-relation] ";
+                    return;
+                }
                 EXPECT_EQ(totalCommits(area), 1u)
                     << "[check: one-commit] "
                     << "the delete and the new relation cannot both commit";
+                const auto refusal =
+                    relationFirst ? Refusal::ConnectedEdges : Refusal::SerializationFailure;
+                EXPECT_EQ(totalRefusals(area, refusal), 1u)
+                    << "[check: named-refusal] the second writer must get "
+                    << (relationFirst ? "« has connected edges »" : "the serialization error");
             }};
 }
 
@@ -641,33 +688,28 @@ static constexpr const char* DELETE_SOURCE = "MATCH (a:Item {id: 1}) DELETE a;";
 static constexpr const char* DELETE_DESTINATION = "MATCH (b:Item {id: 2}) DELETE b;";
 static constexpr const char* DETACH_DELETE_SOURCE = "MATCH (a:Item {id: 1}) DETACH DELETE a;";
 
-// À RÉÉCRIRE PAR A4′ : avec l'attente sur verrou, l'ordre de commit {1, 0} devient
-// impossible ici — l'écrivain 1, bloqué dans son écriture derrière le verrou de
-// l'écrivain 0, ne peut pas valider le premier (le premier à valider l'attendrait
-// jusqu'au délai de 30 s). Les cas C2_*RelationCommitsFirst et C6_UpdateCommitsFirst
-// seront réécrits avec mark / waitFor, sur le modèle de lock_bench_test.cpp.
 TEST_P(ConcurrencyBench, C2_DeleteCommitsFirst) {
-    runCase(deleteVersusNewRelation(DELETE_SOURCE, {0, 1}));
+    runCase(deleteVersusNewRelation(DELETE_SOURCE, false));
 }
 
 TEST_P(ConcurrencyBench, C2_RelationCommitsFirst) {
-    runCase(deleteVersusNewRelation(DELETE_SOURCE, {1, 0}));
+    runCase(deleteVersusNewRelation(DELETE_SOURCE, true));
 }
 
 TEST_P(ConcurrencyBench, C2_DestinationDeleteCommitsFirst) {
-    runCase(deleteVersusNewRelation(DELETE_DESTINATION, {0, 1}));
+    runCase(deleteVersusNewRelation(DELETE_DESTINATION, false));
 }
 
 TEST_P(ConcurrencyBench, C2_DestinationRelationCommitsFirst) {
-    runCase(deleteVersusNewRelation(DELETE_DESTINATION, {1, 0}));
+    runCase(deleteVersusNewRelation(DELETE_DESTINATION, true));
 }
 
 TEST_P(ConcurrencyBench, C2_DetachDeleteCommitsFirst) {
-    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, {0, 1}));
+    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, false));
 }
 
 TEST_P(ConcurrencyBench, C2_DetachRelationCommitsFirst) {
-    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, {1, 0}));
+    runCase(deleteVersusNewRelation(DETACH_DELETE_SOURCE, true));
 }
 
 // C3 — offsets locaux qui se chevauchent (marche A2). Chaque écrivain, dans une seule
@@ -767,10 +809,10 @@ TEST_P(ConcurrencyBench, C4_Transfers) {
 // réouverture, 52/200 après arrêt brutal — les deux valident. C'est la course du chemin
 // de suppression sans verrou (marche A5) ; le cas est donc probabiliste
 // (probabilistic.txt), et son témoin sous ThreadSanitizer sort 9 passes sur 10.
-// À RÉÉCRIRE PAR A4′ : les deux DELETE partent en même temps ; avec le verrou exclusif
-// de ligne, celui qui attend ne peut pas valider dans l'ordre {0, 1} s'il est
-// l'écrivain 0. C1 n'a pas besoin de réécriture : il passera, avec 2 s d'attente de plus
-// (commitInOrderByEvents).
+// Sous les verrous (A4′) : l'écrivain 0 supprime le premier, l'écrivain 1 attend le verrou de
+// la ligne, puis reçoit l'erreur de sérialisation — la ligne a été supprimée et validée après son
+// instantané (option A, comme PostgreSQL). Plus « en même temps » : l'ordre de prise du verrou
+// déciderait de l'ordre des validations, et {0, 1} attendrait jusqu'au délai.
 TEST_P(ConcurrencyBench, C5_DoubleDelete) {
     runCase({.numWorkers = 2,
         .setup =
@@ -781,15 +823,16 @@ TEST_P(ConcurrencyBench, C5_DoubleDelete) {
         .scenario =
             [](Worker& worker) {
                 worker.begin();
-                worker.runMarked("MATCH (n:Item {id: 1}) DELETE n;", "write");
+                worker.writeInTurn("MATCH (n:Item {id: 1}) DELETE n;");
                 worker.commitInOrderByEvents({0, 1});
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
                 EXPECT_EQ(totalCommits(area), 1u)
                     << "[check: one-commit] " << "exactly one delete may commit";
-                EXPECT_EQ(totalRefusals(area, Refusal::WriteWriteConflict), 1u)
-                    << "[check: ww-refusal] ";
+                expectSecondWriterWaited(area);
+                EXPECT_EQ(totalRefusals(area, Refusal::SerializationFailure), 1u)
+                    << "[check: serialization-refusal] ";
                 EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), 1)
                     << "[check: row-count] ";
             }});
@@ -812,8 +855,12 @@ TEST_P(ConcurrencyBench, C5_DoubleDelete) {
 // Sous l'une comme sous l'autre, ce qui est un défaut aujourd'hui : il n'y a ni attente
 // ni détection croisée (la mise à jour ne regarde que les mises à jour, update_info.cpp ;
 // la suppression que les suppressions, version_info.cpp), et ThreadSanitizer voit une
-// course sur isDeleted. Le cas reste rouge tel quel jusqu'à la décision.
-static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
+// course sur isDeleted. Lucie a retenu l'option A ; A4′ la met en œuvre (attente, puis erreur
+// de sérialisation).
+// Sous les verrous (A4′), celui qui doit valider le premier écrit le premier : l'écrivain 0
+// supprime (ou met à jour, updateFirst), l'écrivain 1 attend le verrou de la ligne, puis reçoit
+// l'erreur de sérialisation (option A) ; les validations suivent l'ordre {0, 1}.
+static BenchCase deleteVersusUpdate(bool updateFirst) {
     return {.numWorkers = 2,
         .setup =
             [](ConcurrencyBench& bench) {
@@ -821,17 +868,20 @@ static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
                 bench.mustRun("CREATE (:Item {id: 1, writer: -1});");
             },
         .scenario =
-            [commitOrder](Worker& worker) {
+            [updateFirst](Worker& worker) {
                 worker.begin();
-                if (worker.index() == 0) {
-                    worker.writeInTurn("MATCH (n:Item {id: 1}) DELETE n;");
-                } else {
+                if ((worker.index() == 0) == updateFirst) {
                     worker.writeInTurn("MATCH (n:Item {id: 1}) SET n.writer = 1;");
+                } else {
+                    worker.writeInTurn("MATCH (n:Item {id: 1}) DELETE n;");
                 }
-                worker.commitInOrderByEvents(commitOrder);
+                worker.commitInOrderByEvents({0, 1});
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
+                expectSecondWriterWaited(area);
+                EXPECT_EQ(totalRefusals(area, Refusal::SerializationFailure), 1u)
+                    << "[check: serialization-refusal] ";
                 EXPECT_EQ(totalCommits(area), 1u)
                     << "[check: one-commit] "
                     << "the delete and the update of the same row cannot both commit";
@@ -844,17 +894,12 @@ static BenchCase deleteVersusUpdate(std::vector<uint32_t> commitOrder) {
             }};
 }
 
-// À RÉÉCRIRE PAR A4′ : avec l'attente sur verrou, l'ordre de commit {1, 0} devient
-// impossible ici — l'écrivain 1, bloqué dans son écriture derrière le verrou de
-// l'écrivain 0, ne peut pas valider le premier (le premier à valider l'attendrait
-// jusqu'au délai de 30 s). Les cas C2_*RelationCommitsFirst et C6_UpdateCommitsFirst
-// seront réécrits avec mark / waitFor, sur le modèle de lock_bench_test.cpp.
 TEST_P(ConcurrencyBench, C6_DeleteCommitsFirst) {
-    runCase(deleteVersusUpdate({0, 1}));
+    runCase(deleteVersusUpdate(false));
 }
 
 TEST_P(ConcurrencyBench, C6_UpdateCommitsFirst) {
-    runCase(deleteVersusUpdate({1, 0}));
+    runCase(deleteVersusUpdate(true));
 }
 
 // C7 — mélange aléatoire sur un petit domaine de clés : créations (doublons
@@ -1093,6 +1138,47 @@ TEST_P(ConcurrencyBench, H2_IndexedDeleteCommitsFirst) {
 
 TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
     runCase(indexedDeleteVersusInsert({1, 0}));
+}
+
+// H5 — deux écrivains insèrent chacun cinq documents placés tout près du même document (le 50),
+// dans des transactions ouvertes ensemble, puis valident dans l'ordre donné : leurs nouveaux
+// nœuds ont des voisins communs, dont l'index réécrit les listes pour l'un et pour l'autre. Sous
+// A4′, ces écritures internes de l'index ne prennent pas de verrou (takesLocks = false) et l'index
+// est tenu en partagé par les deux inséreurs : rien ne les sépare. Invariant : les deux valident,
+// et l'index rend exactement les lignes vivantes (le vérificateur d'intégrité). Ce que la marche
+// « l'index au commit » devra garantir ; demandé par le cœur C++ le 10 octobre.
+static BenchCase indexedInsertsSharingANeighbour(std::vector<uint32_t> commitOrder) {
+    return {.numWorkers = 2,
+        .setup = createIndexedDocs,
+        .scenario =
+            [commitOrder](Worker& worker) {
+                const int64_t first = 1000 + worker.index() * 100;
+                // Le vecteur du document 50, sa première composante décalée d'un cent-millième par
+                // ligne : tout près de lui, et distincts entre eux.
+                auto near = docVector("50");
+                near.insert(near.find(','), " + CAST(i AS FLOAT) / 100000");
+                worker.begin();
+                worker.writeInTurn(stringFormat(
+                    "UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first, first + 4,
+                    near));
+                worker.commitInOrderByEvents(commitOrder);
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS + 10)
+                    << "[check: row-count] ";
+            },
+        .vectorExtension = true,
+        .isolated = true};
+}
+
+TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourFirstCommitsFirst) {
+    runCase(indexedInsertsSharingANeighbour({0, 1}));
+}
+
+TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourSecondCommitsFirst) {
+    runCase(indexedInsertsSharingANeighbour({1, 0}));
 }
 
 // H3 — deux écrivains suppriment deux documents dont les voisinages dans le graphe de

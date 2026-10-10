@@ -116,6 +116,27 @@ liaisons sont livrées, dont `x86_64-pc-windows-msvc` et
 pur. Ce sont les runners du paquet npm qui le prouveront : `rag3db-90` est
 prévenue à la fusion.
 
+## 7 bis. Le poids (mesuré le 11 octobre)
+
+Le paquet npm a grossi de 79 à 89 Mo strippé sous Linux, de 81 à 93 Mo sous
+macOS (`rag3db-90`). Mesuré sur un binaire témoin en release strippé, chaque
+variante exerçant vraiment le code :
+
+| Variante | Taille | Écart |
+|---|---|---|
+| base (serde_json) | 0,39 Mo | — |
+| + QuickJS (`rquickjs`) | 1,74 Mo | +1,35 Mo |
+| + `swc_ts_fast_strip` | 7,55 Mo | +7,2 Mo |
+| + `swc_ts_fast_strip`, LTO complète | 5,19 Mo | +4,85 Mo |
+| le parseur swc seul | 2,51 Mo | +2,1 Mo |
+
+**C'est swc qui pèse, pas QuickJS** : `swc_ts_fast_strip` tire ses
+transformations TypeScript et React (son mode `Transform`), non
+optionnelles. Décidé (orchestration, 11 oct.) : garder tel quel pour le
+proto ; la LTO complète au profil de publication est proposée à la session
+du paquet (elle réduirait tout le binaire) ; un effaceur à nous sur le seul
+parseur swc (~+2,1 Mo) seulement si Lucie demande le poids.
+
 ## 8. Pour la suite
 
 - Lot 2 : en tête, les noms possédés (`Arc<str>`) dans `PortDef`,

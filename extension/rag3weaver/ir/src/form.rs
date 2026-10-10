@@ -3,7 +3,8 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`], [`Count`] et [`Select`]. Viendront `Write` et `Tx`.
+//! Aujourd'hui : [`Hop`], [`Count`], [`Select`] et les premières variantes
+//! de [`Write`]. `Tx` est un appel sur la connexion, pas une forme.
 
 use std::fmt;
 
@@ -56,6 +57,10 @@ pub struct Hop {
     pub direction: Direction,
     pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
+    /// Une condition sur le nœud atteint.
+    pub filter: Option<Predicate>,
+    /// L'ordre des lignes, par des champs du nœud atteint.
+    pub order_by: Vec<String>,
     /// Au plus tant de lignes en tout (pour un départ unique : par départ).
     pub limit: Option<usize>,
 }
@@ -70,6 +75,8 @@ impl Hop {
             direction,
             returns: vec![Column::Node("_uuid".into())],
             exclude: None,
+            filter: None,
+            order_by: Vec::new(),
             limit: None,
         }
     }
@@ -94,6 +101,12 @@ impl Hop {
             noms.push(&x.field);
             noms.extend(x.values.iter().map(String::as_str));
         }
+        noms.extend(self.order_by.iter().map(String::as_str));
+        let mut du_filtre = Vec::new();
+        if let Some(p) = &self.filter {
+            p.names(&mut du_filtre);
+        }
+        noms.extend(du_filtre.iter().map(String::as_str));
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("saut : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
@@ -110,6 +123,8 @@ pub enum Count {
     /// nombre d'arêtes d'une relation dans un sens. Deux colonnes : l'uuid,
     /// le compte ; un départ sans arête n'a pas de ligne.
     Edges { start: String, relation: String, direction: Direction },
+    /// Les lignes qu'une condition retient, en une colonne.
+    Matching { table: String, filter: Predicate },
 }
 
 impl Count {
@@ -117,6 +132,14 @@ impl Count {
         let noms: Vec<&str> = match self {
             Count::Rows { table } => vec![table],
             Count::Edges { start, relation, .. } => vec![start, relation],
+            Count::Matching { table, filter } => {
+                let mut v = vec![table.clone()];
+                filter.names(&mut v);
+                return match v.iter().find(|n| !crate::is_valid_identifier(n)) {
+                    Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
+                    None => Ok(()),
+                };
+            }
         };
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
@@ -133,18 +156,25 @@ pub enum Predicate {
     Equals { field: String, param: String },
     /// Le champ (un texte) contient le paramètre.
     Contains { field: String, param: String },
+    /// Le champ vaut au moins le paramètre.
+    AtLeast { field: String, param: String },
     /// L'une au moins des conditions.
     AnyOf(Vec<Predicate>),
+    /// Une condition déjà dite dans la langue du dialecte, par son propre
+    /// parseur de filtres (`FilterParser`), sur l'alias `m` : le filtre d'un
+    /// utilisateur, avec ses paramètres. Elle ne se valide pas ici.
+    Compiled(String),
 }
 
 impl Predicate {
     fn names(&self, out: &mut Vec<String>) {
         match self {
-            Predicate::Equals { field, param } | Predicate::Contains { field, param } => {
+            Predicate::Equals { field, param } | Predicate::Contains { field, param } | Predicate::AtLeast { field, param } => {
                 out.push(field.clone());
                 out.push(param.clone());
             }
             Predicate::AnyOf(v) => v.iter().for_each(|p| p.names(out)),
+            Predicate::Compiled(_) => {}
         }
     }
 }
@@ -170,6 +200,11 @@ impl Select {
         Self { table: table.into(), by_uuids: true, filter: None, returns, order_by: Vec::new(), limit: None }
     }
 
+    /// Toutes les lignes de la table.
+    pub fn all(table: impl Into<String>, returns: Vec<Column>) -> Self {
+        Self { table: table.into(), by_uuids: false, filter: None, returns, order_by: Vec::new(), limit: None }
+    }
+
     /// Les lignes qu'une condition retient.
     pub fn filtered(table: impl Into<String>, filter: Predicate, returns: Vec<Column>) -> Self {
         Self { table: table.into(), by_uuids: false, filter: Some(filter), returns, order_by: Vec::new(), limit: None }
@@ -192,6 +227,62 @@ impl Select {
         }
         match noms.iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("sélection : « {n} » n'est pas un identifiant"))),
+            None => Ok(()),
+        }
+    }
+}
+
+/// **Une écriture**, née de l'ingestion. Les lignes arrivent dans le
+/// paramètre `$items` (une carte par ligne, ses clés sont les colonnes).
+/// Les variantes suivantes (`Update`, `Mark`, `Delete`, `Unlink`, `Load`)
+/// viendront à leur tour ; voir
+/// `docs/8-octobre-2026-16h29/embarquements/05-write-et-tx.md`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Write {
+    /// Créer ou remplacer des lignes par leur `_uuid`, en rendant
+    /// `(identifiant interne, _uuid)` pour chacune.
+    Upsert { table: String, columns: Vec<String> },
+    /// Poser des arêtes entre des lignes données par leurs uuids
+    /// (`from_uuid`, `to_uuid`, puis les propriétés). Les tables des deux
+    /// bouts, quand on les connaît, évitent de chercher dans toutes.
+    Link { relation: String, ends: Option<(String, String)>, props: Vec<String> },
+    /// Mettre à jour des champs, **une valeur par ligne** : `$items` porte
+    /// `_uuid` et les champs.
+    Update { table: String, columns: Vec<String> },
+    /// Marquer une liste d'uuids (`$uuids`) d'**une seule valeur** par champ :
+    /// `None` pour vider le champ, `Some(param)` pour le paramètre nommé.
+    Mark { table: String, set: Vec<(String, Option<String>)> },
+}
+
+impl Write {
+    pub fn validate(&self) -> Result<(), TranslateError> {
+        let mut noms: Vec<&str> = Vec::new();
+        match self {
+            Write::Upsert { table, columns } => {
+                noms.push(table);
+                noms.extend(columns.iter().map(String::as_str));
+            }
+            Write::Link { relation, ends, props } => {
+                noms.push(relation);
+                if let Some((f, t)) = ends {
+                    noms.extend([f.as_str(), t.as_str()]);
+                }
+                noms.extend(props.iter().map(String::as_str));
+            }
+            Write::Update { table, columns } => {
+                noms.push(table);
+                noms.extend(columns.iter().map(String::as_str));
+            }
+            Write::Mark { table, set } => {
+                noms.push(table);
+                for (f, p) in set {
+                    noms.push(f);
+                    noms.extend(p.as_deref());
+                }
+            }
+        }
+        match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+            Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
         }
     }

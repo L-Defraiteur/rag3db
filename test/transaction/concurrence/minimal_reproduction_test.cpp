@@ -275,6 +275,10 @@ static void deleteAndUpdateSingleThread(MinimalReproduction& test, rag3db::main:
                   << (result.isSuccess() ? "ok" : "ERROR " + result.getErrorMessage()) << "\n";
         return result.isSuccess();
     };
+    // Sous les verrous (A4′), la seconde écriture attend la première ; dans un seul fil, elle ne
+    // peut qu'attendre jusqu'au délai. Un délai court la fait échouer par son nom, en une
+    // demi-seconde au lieu de trente (le pendant à deux fils est dans LockBench).
+    show("updater lock_timeout", *updater.query("CALL lock_timeout=500;"));
     show("deleter BEGIN", *deleter.query("BEGIN TRANSACTION;"));
     show("updater BEGIN", *updater.query("BEGIN TRANSACTION;"));
     show("deleter DELETE", *deleter.query("MATCH (n:Item {id: 1}) DELETE n;"));
@@ -361,6 +365,10 @@ static void updateSameRow(MinimalReproduction& test, rag3db::main::Database& dat
                   << (result.isSuccess() ? "ok" : "ERROR " + result.getErrorMessage()) << "\n";
         return result.isSuccess();
     };
+    // Sous les verrous (A4′), le second SET attend le premier ; dans un seul fil, il ne peut
+    // qu'attendre jusqu'au délai : un délai court le fait échouer par son nom, en une
+    // demi-seconde (le pendant à deux fils est dans LockBench).
+    show("w1 lock_timeout", *second.query("CALL lock_timeout=500;"));
     show("w0 BEGIN", *first.query("BEGIN TRANSACTION;"));
     show("w1 BEGIN", *second.query("BEGIN TRANSACTION;"));
     show("w0 SET n.a = 1", *first.query("MATCH (n:Item {id: 1}) SET n.a = 1;"));

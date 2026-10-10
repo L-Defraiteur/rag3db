@@ -38,7 +38,13 @@ def prepare(tmp, manifest_name, patch=None):
     shutil.copytree(CRATE / "templates/tools", Path(tmp) / "tools", dirs_exist_ok=True)
     ws = d / "workspace"
     ws.mkdir()
-    (ws / "main.rs").write_text("fn main() { depart(); outil_commun(); }\n")
+    # L'import puis l'appel NU : la forme courante du vrai code. Depuis le
+    # filtre des arêtes devinées (4351d4567), un appel résolu par le nom seul
+    # (resolution = nom) n'entre plus dans l'impact ; l'appel d'une fonction
+    # importée est résolu par l'import (resolution = import), gardée — c'est
+    # elle que le témoin éprouve (vérifié par l'arbre principal, 10 octobre :
+    # e2e_usages, une_arete_devinee_se_dit_et_ne_se_suit_pas).
+    (ws / "main.rs").write_text("use crate::util::outil_commun;\nmod util;\nfn main() { depart(); outil_commun(); }\n")
     (ws / "lib.rs").write_text("pub fn depart() {}\n")
     # util.rs : une dépendance qui SURVIT aux éditions du scénario (main.rs
     # perd depart() en route) — c'est elle que le crochet « avant d'éditer »
@@ -211,8 +217,14 @@ def main():
         t = json.dumps(r, ensure_ascii=False)
         assert "Avant d'éditer" in t, f"la section d'impact après read_file : {r}"
         # Le résumé compte les dépendants (il ne nomme que les tests) :
-        # main.rs consomme outil_commun, donc « 1 directement ».
-        assert "1 directement" in t.split("Avant d'éditer", 1)[1], f"un dépendant direct compté : {r}"
+        # DEUX unités dépendent d'outil_commun — le scope du fichier main.rs
+        # (le `use crate::util::outil_commun;` est au niveau du fichier) et
+        # `fn main` (l'appel). Bissection de la session embarquements
+        # (10 oct. 2026, même lib, quatre socles) : ce compte est stable
+        # depuis toujours avec CETTE fixture ; l'ancien « 1 directement »
+        # venait de la forme d'avant (appel qualifié, sans use).
+        assert "2 directement, 2 en tout sur 2 niveaux" in t.split("Avant d'éditer", 1)[1], \
+            f"les deux dépendants comptés (le scope du fichier par le use, fn main par l'appel) : {r}"
         # Et un fichier dont rien ne dépend garde un read_file SANS section :
         # « rien quand rien n'en dépend ».
         r = host.ask(op="call", name="read_file", arguments={"path": "lib.rs"})

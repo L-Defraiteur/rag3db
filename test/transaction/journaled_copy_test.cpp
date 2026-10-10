@@ -1627,9 +1627,28 @@ protected:
                     "9}]->(b);");
     }
 
-    void expectTheMixedTransaction() {
+    // keySeventeenMayBeTheDuplicate : le COPY sous IGNORE_ERRORS porte deux lignes de clé 17
+    // (« name 17 », 17,5 et « again », 0,5). Laquelle reste suit l'ordre d'arrivée dans l'index
+    // de clé, donc celui des fils de lecture du CSV — les tests d'origine le disent
+    // (test/test_files/exceptions/copy/duplicated.test:81-82). Le sujet ici est le journal : la clé
+    // 17 une seule fois, l'une ou l'autre de ses deux lignes, et toutes les autres justes.
+    void expectTheMixedTransaction(bool keySeventeenMayBeTheDuplicate = false) {
         EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 3000 + 199 + 2);
-        expectRows(0, 3000);
+        if (keySeventeenMayBeTheDuplicate) {
+            EXPECT_EQ(single("MATCH (n:Doc) WHERE n.id >= 0 AND n.id < 3000 RETURN count(*);"),
+                3000);
+            EXPECT_EQ(single("MATCH (n:Doc {id: 17}) RETURN count(*);"), 1);
+            EXPECT_EQ(single("MATCH (n:Doc) WHERE n.id >= 0 AND n.id < 3000 AND n.id <> 17 AND "
+                             "n.score = CAST(n.id AS DOUBLE) + 0.5 AND n.name = 'name ' + "
+                             "CAST(n.id AS STRING) RETURN count(*);"),
+                2999);
+            EXPECT_EQ(single("MATCH (n:Doc {id: 17}) WHERE (n.name = 'name 17' AND n.score = "
+                             "17.5) OR (n.name = 'again' AND n.score = 0.5) RETURN count(*);"),
+                1)
+                << "la ligne 17 n'est ni l'une ni l'autre des deux du fichier";
+        } else {
+            expectRows(0, 3000);
+        }
         EXPECT_EQ(text("MATCH (d:Doc {id: 900000}) RETURN d.name;"), "created");
         EXPECT_EQ(text("MATCH (d:Doc {id: 900001}) RETURN d.name;"), "created after");
         EXPECT_EQ(single("MATCH (d:Doc) WHERE d.id >= 500000 AND d.id < 500200 AND size(d.name) "
@@ -1754,7 +1773,7 @@ TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommi
     });
     EXPECT_EQ(journalSize(), 0u);
     createDBAndConn();
-    expectTheMixedTransaction();
+    expectTheMixedTransaction(true /* keySeventeenMayBeTheDuplicate */);
 }
 
 // Les pages sans propriétaire après une réouverture (page coeur-cpp/06) : ce qu'un travail qui

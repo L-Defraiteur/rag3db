@@ -77,23 +77,42 @@ même lot.
 
 ### 3.2 Le runtime
 
-- `DataflowRuntime::execute` devient `async` (et ses variantes
-  `execute_with_report`, `execute_with_checkpoint`). Un `execute_blocking`
-  reste pour les appelants synchrones et les tests, par `block_on` sur un
-  runtime dédié — jamais depuis une tâche tokio.
-- L'ordre topologique ne change pas dans ce lot : un nœud à la fois,
-  `await` sur chacun. Le parallélisme des nœuds indépendants est une étape
-  d'après, pas celle-ci.
+- **Corrigé le 10 octobre en codant** (la page disait « `execute` devient
+  async, un `execute_blocking` reste » — le code a pris l'inverse, fidèle à
+  la décision-mère « une variante async plutôt que forcé, pour les nœuds
+  comme pour `execute` ») : `execute` GARDE son nom et reste le pont
+  synchrone (`block_on` sur le runtime du crate, `dataflow/rt.rs` —
+  paresseux, multi-fil, 2 fils ; refus nommé depuis une tâche tokio), et
+  `execute_async` est le cœur, avec ses variantes `execute_as_async`,
+  `execute_with_report_async`, `execute_with_checkpoint(_mode)_async`.
+  Aucun des douze appelants de production ni des tests n'a bougé.
+- **Corrigé le 10 octobre en codant** (la page disait « un nœud à la fois,
+  `await` sur chacun » — le code parallélisait DÉJÀ les niveaux par fils de
+  portée, `run_level`) : un niveau tout-synchrone garde `run_level` au fil
+  près, sous un seul `block_in_place` ; un niveau qui contient un nœud
+  asynchrone passe par `run_level_async` — dans l'ordre, `await` sur
+  chacun, les synchrones séquentialisés sous leur défaut (dit, et VU par le
+  témoin « niveau mixte »). Le parallélisme des nœuds asynchrones entre eux
+  est une étape d'après, pas celle-ci.
 - Les rapports, les points de reprise et `undo` ne changent pas.
 
 ### 3.3 La boucle d'agent et le réacteur
 
-- La boucle d'agent devient une tâche ; ses outils asynchrones deviennent des
-  `tokio::spawn` dont la poignée est gardée par le run (joints à sa fin,
-  comme les fils de portée aujourd'hui : aucun résultat ne survit à l'agent
-  qui l'a demandé). Le protocole ne change pas : un accusé « en cours » dans
-  le tour, le vrai résultat plus tard dans la boîte.
-- Le réacteur devient une tâche qui attend sur le bus ; son `block_on` disparaît.
+- **Corrigé le 10 octobre en codant** (la page disait « la boucle d'agent
+  devient une tâche » — le coût réel, c'est 48 sites `Agent::new` et leurs
+  appelants synchrones à migrer, pour un gain nul tant que la boucle n'a
+  rien à attendre d'asynchrone) : la boucle RESTE un fil dans ce lot ;
+  elle deviendra une tâche avec le run en fond (§4.3), où le gain existe.
+  Ce qui est pris maintenant est indépendant du véhicule et y survivra :
+  la portée du run (`RunScope`, vidée AVANT le join des fils), la poignée
+  d'outil et ses services (`ToolInvocation` — `tool_handle`, `agent_bus`,
+  `agent_inbox`, `run_scope` — par `ToolBox::call_with`), et les outils en
+  fond qui rendent tout de suite et postent leur fin par le bus. Le
+  protocole ne change pas : un accusé « en cours » dans le tour, le vrai
+  résultat plus tard dans la boîte.
+- Le réacteur devient une tâche qui attend sur le bus (fait) ; son
+  `block_on` de veille disparaît, et `stop()` est un arrêt ATTENDU par le
+  pont du crate — refus nommé depuis un fil unique, jamais une panique.
 - `Llm::generate` reste synchrone dans ce lot : appelé depuis un nœud qui
   implémente `execute` (donc sous `block_in_place`), il bloque comme
   aujourd'hui. Un `Llm::generate_async` viendra avec les ports-flux (§4).

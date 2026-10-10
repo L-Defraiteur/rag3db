@@ -123,37 +123,37 @@ impl NodeFactory for FilterResultsNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "FilterResultsNode",
+            node_type: "FilterResultsNode".into(),
             description: "Garde les résultats au-dessus d'un seuil de score, et \
                           écarte ceux dont un champ vaut une valeur donnée — un \
-                          filtre, rien n'est relu ni recalculé.",
-            inputs: vec![PortDef { name: "results", port_type: PortType::Results, required: true }],
-            outputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+                          filtre, rien n'est relu ni recalculé.".into(),
+            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: true }],
+            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
             config_params: vec![
                 ConfigParam {
-                    name: "min_score",
+                    name: "min_score".into(),
                     param_type: ConfigParamType::Float,
                     required: false,
                     default: Some(serde_json::json!(0.0)),
-                    description: "Score minimal pour rester (0 = pas de seuil)",
+                    description: "Score minimal pour rester (0 = pas de seuil)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "exclude_field",
+                    name: "exclude_field".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Champ de l'exclusion (avec exclude_value)",
+                    description: "Champ de l'exclusion (avec exclude_value)".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "exclude_value",
+                    name: "exclude_value".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Valeur à écarter dans exclude_field",
+                    description: "Valeur à écarter dans exclude_field".into(),
                     choices: None,
                     json_schema: None,
                 },

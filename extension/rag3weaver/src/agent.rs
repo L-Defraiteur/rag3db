@@ -57,6 +57,80 @@ use crate::tools::ToolDef;
 ///    (`kind: http|code|mcp`) ; rien dans la boucle ne doit présumer qu'un
 ///    outil est un graphe.
 ///
+/// **La portée d'un run** : ce qui doit mourir quand le run se termine.
+/// La boucle en crée une par run et la VIDE à la fin — toutes voies de
+/// sortie confondues, AVANT de joindre ses fils de portée. Une commande en
+/// fond y enregistre sa fermeture de mort (SIGTERM puis SIGKILL sur son
+/// groupe de processus, côté chantier A) : le run ne l'attend plus, et la
+/// boîte reçoit « tuée à la fin du run ». (Chantier C, 10 octobre 2026.)
+pub struct RunScope {
+    /// `None` = la portée est déjà vidée. Une fermeture enregistrée APRÈS la
+    /// vidange s'exécute immédiatement — sans quoi la course du 10 octobre :
+    /// la boucle (deux tours de mock) finissait le run et vidait la portée
+    /// AVANT que le fil de l'outil en fond ait enregistré sa mort ; la
+    /// fermeture dormait dans la liste, l'outil attendait son message pour
+    /// toujours, et le join de `thread::scope` avec lui (vu au core : deux
+    /// fils en futex_wait, `blocage.txt`).
+    morts: std::sync::Mutex<Option<Vec<Box<dyn FnOnce() + Send>>>>,
+}
+
+impl Default for RunScope {
+    fn default() -> Self {
+        Self { morts: std::sync::Mutex::new(Some(Vec::new())) }
+    }
+}
+
+impl RunScope {
+    /// Enregistre une fermeture jouée à la fin du run. L'ordre d'exécution
+    /// est l'ordre d'enregistrement. Si la portée est DÉJÀ vidée (le run est
+    /// fini), la fermeture s'exécute tout de suite : mieux vaut une mort
+    /// immédiate qu'un orphelin que plus personne ne tuera.
+    pub fn defer(&self, mort: Box<dyn FnOnce() + Send>) {
+        let tardive = match self.morts.lock() {
+            Ok(mut m) => match m.as_mut() {
+                Some(v) => {
+                    v.push(mort);
+                    None
+                }
+                None => Some(mort),
+            },
+            // Verrou empoisonné : l'état est inconnu — tuer plutôt que
+            // laisser vivre sans gardien.
+            Err(_) => Some(mort),
+        };
+        if let Some(mort) = tardive {
+            mort();
+        }
+    }
+
+    /// Joue et retire toutes les fermetures, et SCELLE la portée : toute
+    /// `defer` ultérieure s'exécutera immédiatement. Idempotent.
+    pub fn vider(&self) {
+        let prises = match self.morts.lock() {
+            Ok(mut m) => m.take(),
+            Err(_) => return,
+        };
+        for mort in prises.into_iter().flatten() {
+            mort();
+        }
+    }
+}
+
+/// **L'invocation d'un appel d'outil** : ce que la boucle sait de CET appel
+/// et que l'outillage transmet aux services du graphe (une couche par
+/// appel) — la poignée (« #run-3 », la boucle numérote chaque appel du
+/// run ; un outil en mode fond nomme ses journaux avec), le bus et la boîte
+/// du run (un outil qui rend tout de suite y poste sa fin plus tard), et la
+/// portée du run ([`RunScope`]). Services posés par [`GraphToolBox`] :
+/// `"tool_handle"` (String), `"agent_bus"` (EventBus), `"agent_inbox"`
+/// (String) et `"run_scope"` (Arc<RunScope>).
+pub struct ToolInvocation {
+    pub handle: String,
+    pub bus: Option<crate::events::EventBus>,
+    pub inbox: String,
+    pub scope: Arc<RunScope>,
+}
+
 /// **Le contrat, et il n'est pas négociable :** [`Self::call`] ne peut pas
 /// échouer. Un outil qui explose rend un [`Turn::tool_result`] dont le
 /// contenu décrit l'échec — c'est ce qui permet au modèle de se rattraper, et
@@ -80,6 +154,15 @@ pub trait ToolBox {
     /// qui n'expose rien (un `ToolBox` de test qui refuse tout).
     fn tool_defs(&self) -> Vec<ToolDef> {
         Vec::new()
+    }
+
+    /// Le même appel, avec l'**invocation** : la poignée de cet appel, la
+    /// boîte du run et sa portée. Par défaut, l'appel d'avant — l'outillage
+    /// qui sait s'en servir ([`GraphToolBox`]) la transmet aux services du
+    /// graphe. (Les trois pièces de la commande en fond, chantier A.)
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        let _ = inv;
+        self.call_in(call, run)
     }
 
     /// Cet outil rend-il un **accusé** tout de suite, son résultat plus tard ?
@@ -106,6 +189,13 @@ impl ToolBox for ToolOutputLimit<'_> {
     fn call(&self, call: &ToolCall) -> Turn { self.call_in(call, "") }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         let mut result = self.inner.call_in(call, run);
+        if result.content.len() > self.max_bytes {
+            result.content = truncate_tool_output(&result.content, self.max_bytes);
+        }
+        result
+    }
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        let mut result = self.inner.call_with(call, run, inv);
         if result.content.len() > self.max_bytes {
             result.content = truncate_tool_output(&result.content, self.max_bytes);
         }
@@ -144,6 +234,9 @@ impl<T: ToolBox + ?Sized> ToolBox for &T {
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         (**self).call_in(call, run)
     }
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        (**self).call_with(call, run, inv)
+    }
     fn tool_defs(&self) -> Vec<ToolDef> {
         (**self).tool_defs()
     }
@@ -155,6 +248,9 @@ impl<T: ToolBox + ?Sized> ToolBox for Arc<T> {
     }
     fn is_async(&self, tool: &str) -> bool {
         (**self).is_async(tool)
+    }
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        (**self).call_with(call, run, inv)
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         (**self).call_in(call, run)
@@ -262,6 +358,24 @@ impl ToolBox for GraphToolBox<'_> {
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         let mut layer = crate::dataflow::ServiceRegistry::layered(self.services.clone());
         layer.register("parent_run", run.to_string());
+        self.tools
+            .call_with_policy(call, self.nodes, Arc::new(layer), &self.policy)
+    }
+
+    /// La couche de `call_in`, PLUS l'invocation : la poignée de l'appel
+    /// (`"tool_handle"`), le bus et la boîte du run (`"agent_bus"`,
+    /// `"agent_inbox"`) et la portée du run (`"run_scope"`) — ce qu'un nœud
+    /// en mode fond lit pour nommer ses journaux, poster sa fin et
+    /// enregistrer sa mort (chantier A).
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        let mut layer = crate::dataflow::ServiceRegistry::layered(self.services.clone());
+        layer.register("parent_run", run.to_string());
+        layer.register("tool_handle", inv.handle.clone());
+        if let Some(bus) = &inv.bus {
+            layer.register("agent_bus", bus.clone());
+            layer.register("agent_inbox", inv.inbox.clone());
+        }
+        layer.register("run_scope", inv.scope.clone());
         self.tools
             .call_with_policy(call, self.nodes, Arc::new(layer), &self.policy)
     }
@@ -909,6 +1023,7 @@ impl<'a> Agent<'a> {
         run_id: &str,
         handle: &str,
         scope: &'s std::thread::Scope<'s, '_>,
+        portee: Arc<RunScope>,
     ) {
         let Some(bus) = self.events.clone() else { return };
         let call = call.clone();
@@ -919,7 +1034,13 @@ impl<'a> Agent<'a> {
         let agent = self.name.clone();
         scope.spawn(move || {
             let started = std::time::Instant::now();
-            let result = tools.call_in(&call, &child);
+            let invocation = ToolInvocation {
+                handle: handle.clone(),
+                bus: Some(bus.clone()),
+                inbox: inbox.clone(),
+                scope: portee,
+            };
+            let result = tools.call_with(&call, &child, &invocation);
             // `send_message` publie **sur la boîte du destinataire** en plus
             // du sujet des messages ; `emit` seul irait dans `messages` et
             // l'agent ne le verrait jamais.
@@ -1146,7 +1267,19 @@ impl<'a> Agent<'a> {
         // outil (une salutation passe, un « c'est fait » inventé est relancé
         // une fois), **deux** après un travail commencé sans soumission acceptée.
         let mut completion_nudges = 0usize;
+        // **La portée du run** : les commandes en fond y enregistrent leur
+        // mort ; elle est vidée à la sortie du scope — toutes voies
+        // confondues, par la garde — AVANT que les fils de portée soient
+        // joints : le run ne les attend plus.
+        let portee_du_run = Arc::new(RunScope::default());
+        struct Vidange(Arc<RunScope>);
+        impl Drop for Vidange {
+            fn drop(&mut self) {
+                self.0.vider();
+            }
+        }
         let interrupted: Result<(), LlmError> = std::thread::scope(|scope| {
+        let _vidange = Vidange(portee_du_run.clone());
         loop {
             if run.iterations >= self.limits.max_iterations {
                 run.stop = StopReason::MaxIterations;
@@ -1400,7 +1533,7 @@ impl<'a> Agent<'a> {
                 // réponse », mais « une réponse qui dit que ça travaille ».
                 let result = if self.tools.is_async(&call.name) && self.events.is_some() {
                     let handle = format!("#{}-{}", call.name, run.tool_calls + 1);
-                    self.spawn_async_tool(call, run_id, &handle, scope);
+                    self.spawn_async_tool(call, run_id, &handle, scope, portee_du_run.clone());
                     Turn::tool_result(
                         call.id.clone(),
                         call.name.clone(),
@@ -1411,7 +1544,16 @@ impl<'a> Agent<'a> {
                         ),
                     )
                 } else {
-                    self.tools.call_in(call, run_id)
+                    self.tools.call_with(
+                        call,
+                        run_id,
+                        &ToolInvocation {
+                            handle: format!("#{}-{}", call.name, run.tool_calls + 1),
+                            bus: self.events.clone(),
+                            inbox: run_id.to_string(),
+                            scope: portee_du_run.clone(),
+                        },
+                    )
                 };
                 run.tool_calls += 1;
                 if self.events.is_some() {
@@ -1555,6 +1697,79 @@ mod tests {
     /// distingue d'un résultat ; le vrai résultat arrive plus tard **dans la
     /// boîte**, préfixé de cette poignée ; et l'agent a produit du texte
     /// entre les deux, ce qui est tout l'objet de l'exercice.
+    /// **La portée du run** (chantier C, pour la commande en fond d'A) :
+    /// une mort enregistrée par un outil — via l'invocation — joue à la fin
+    /// du run, AVANT que les fils de portée soient joints. L'outil
+    /// asynchrone de ce test bloque sur un canal : si la vidange venait
+    /// après le join, le run ne finirait jamais — sa fin PROUVE l'ordre.
+    #[test]
+    fn la_portee_du_run_tue_avant_de_joindre() {
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let rx = std::sync::Mutex::new(rx);
+        struct FondBox {
+            defs: Vec<ToolDef>,
+            rx: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+            tx: std::sync::mpsc::Sender<()>,
+        }
+        impl ToolBox for FondBox {
+            fn call(&self, call: &ToolCall) -> Turn {
+                // Le « processus en fond » : il ne finit que tué.
+                let _ = self.rx.lock().unwrap().recv();
+                Turn::tool_result(call.id.clone(), call.name.clone(), "tuée à la fin du run".to_string())
+            }
+            fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+                // La fermeture de mort : elle débloque le « processus ».
+                let tx = self.tx.clone();
+                inv.scope.defer(Box::new(move || {
+                    let _ = tx.send(());
+                }));
+                self.call_in(call, run)
+            }
+            fn is_async(&self, tool: &str) -> bool {
+                tool == "fond"
+            }
+            fn tool_defs(&self) -> Vec<ToolDef> {
+                self.defs.clone()
+            }
+        }
+        let tools = FondBox {
+            defs: vec![ToolDef {
+                name: "fond".to_string(),
+                description: "d".to_string(),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+            }],
+            rx,
+            tx,
+        };
+        let llm = scripted(vec![
+            MockLlm::new("").with_tool_calls(vec![("fond", "{}")]),
+            MockLlm::new("fini"),
+        ]);
+        let bus = crate::events::EventBus::new(64);
+        let agent = Agent::new(&llm, &tools).with_events(bus.clone()).with_inbox();
+        let mut turns = vec![Turn::user("lance en fond")];
+        let mut sink = StringSink::default();
+        // Si la vidange venait après le join, ce run bloquerait sans fin.
+        let run = agent.run(&mut turns, &mut sink).unwrap();
+        assert!(run.text.contains("fini"), "{}", run.text);
+    }
+
+    /// Le bras tardif de la portée, SANS course : une `defer` enregistrée
+    /// après `vider()` s'exécute immédiatement, dans le fil qui l'enregistre.
+    /// C'est la règle qui ferme l'interblocage du 10 octobre (la boucle
+    /// vidait la portée avant que le fil de l'outil ait enregistré sa mort).
+    #[test]
+    fn une_defer_apres_la_vidange_s_execute_immediatement() {
+        let scope = RunScope::default();
+        scope.vider();
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        scope.defer(Box::new(move || {
+            let _ = tx.send(());
+        }));
+        rx.recv_timeout(std::time::Duration::from_secs(1))
+            .expect("la defer tardive doit s'exécuter immédiatement");
+    }
+
     #[test]
     fn an_async_tool_answers_with_a_handle_and_the_result_comes_later() {
         use std::sync::atomic::{AtomicBool, Ordering};

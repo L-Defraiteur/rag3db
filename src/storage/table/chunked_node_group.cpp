@@ -1,5 +1,7 @@
 #include "storage/table/chunked_node_group.h"
 
+#include "transaction/transaction.h"
+
 #include <exception>
 
 #include "common/assert.h"
@@ -457,6 +459,20 @@ bool ChunkedNodeGroup::isInserted(transaction_t startTS, transaction_t transacti
         return rowInChunk < getNumRows();
     }
     return versionInfo->isInserted(startTS, transactionID, rowInChunk);
+}
+
+bool ChunkedNodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowInChunk) const {
+    if (isDeleted(Transaction::LATEST_COMMITTED_TS, transactionID, rowInChunk) &&
+        !isDeleted(startTS, transactionID, rowInChunk)) {
+        return true;
+    }
+    for (auto i = 0u; i < getNumColumns(); i++) {
+        if (getColumnChunk(i).hasCommittedUpdateAfter(startTS, rowInChunk)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ChunkedNodeGroup::hasAnyUpdates(const Transaction* transaction, column_id_t columnID,

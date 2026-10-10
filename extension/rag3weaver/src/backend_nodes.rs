@@ -26,11 +26,11 @@ fn param(
     description: &'static str,
 ) -> ConfigParam {
     ConfigParam {
-        name,
+        name: name.into(),
         param_type: ty,
         required,
         default: None,
-        description,
+        description: description.into(),
         choices: None,
         json_schema: None,
     }
@@ -47,7 +47,7 @@ impl NodeFactory for EntityRecordFactory {
             "Read or put one record",
         );
         action.choices = Some(Choices::fixed(["get", "put"]));
-        NodeSchema{node_type:self.node_type(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy",inputs:vec![PortDef{name:"record",port_type:PortType::Map,required:false}],outputs:vec![PortDef{name:"record",port_type:PortType::Map,required:false}],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],outputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         for key in ["entity", "action"] {
@@ -244,7 +244,7 @@ impl NodeFactory for EntityBatchFactory {
         );
         records.json_schema =
             Some(json!({"type":"array","maxItems":512,"items":{"type":"object"}}));
-        NodeSchema { node_type:self.node_type(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies", inputs:vec![], outputs:vec![PortDef{name:"report",port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
+        NodeSchema { node_type:self.node_type().to_owned().into(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies".into(), inputs:vec![], outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -442,8 +442,8 @@ impl NodeFactory for SnapshotSessionFactory {
         let mut action = param("action", ConfigParamType::String, true, "begin: open a session and return its id; abort: close it without removing anything");
         action.json_schema = Some(json!({"type":"string","enum":["begin","abort"]}));
         NodeSchema {
-            node_type: self.node_type(),
-            description: "Open (begin) or abandon (abort) a synchronisation session on a scope; one open session per scope",
+            node_type: self.node_type().to_owned().into(),
+            description: "Open (begin) or abandon (abort) a synchronisation session on a scope; one open session per scope".into(),
             inputs: vec![],
             outputs: vec![PortDef { name: "session".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
@@ -523,8 +523,8 @@ impl NodeFactory for SnapshotFinishFactory {
         let mut scope = param("scope", ConfigParamType::Json, true, "The scope values, one per scope field declared by the entity ({} for the whole entity)");
         scope.json_schema = Some(json!({"type":"object"}));
         NodeSchema {
-            node_type: self.node_type(),
-            description: "End a synchronisation session: missing rows of the scope are removed or follow the declared transition; refuses an empty session or too many missing rows unless told otherwise",
+            node_type: self.node_type().to_owned().into(),
+            description: "End a synchronisation session: missing rows of the scope are removed or follow the declared transition; refuses an empty session or too many missing rows unless told otherwise".into(),
             inputs: vec![],
             outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
@@ -608,8 +608,8 @@ impl NodeFactory for SnapshotUndoFactory {
         let mut scope = param("scope", ConfigParamType::Json, true, "The scope values of the finished session");
         scope.json_schema = Some(json!({"type":"object"}));
         NodeSchema {
-            node_type: self.node_type(),
-            description: "Undo an applied synchronisation finish: removed rows come back from their set-aside copies, transitioned rows get their previous state back",
+            node_type: self.node_type().to_owned().into(),
+            description: "Undo an applied synchronisation finish: removed rows come back from their set-aside copies, transitioned rows get their previous state back".into(),
             inputs: vec![],
             outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
@@ -691,7 +691,7 @@ impl NodeFactory for RelationBatchFactory {
         links.json_schema = Some(
             json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}}}}}),
         );
-        NodeSchema{node_type:self.node_type(),description:"Idempotent snapshot links between existing declared endpoints; validates entire batch before writes",inputs:vec![],outputs:vec![PortDef{name:"report",port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared property-free relation"),links]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent snapshot links between existing declared endpoints; validates entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared property-free relation"),links]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(

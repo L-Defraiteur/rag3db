@@ -195,26 +195,26 @@ impl NodeFactory for EstimateNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "EstimateNode",
-            description: "Estimates what indexing the file source will cost: files kept and skipped (with reasons), first-index model and why, predicted vector time, and whether indexing will ask for confirmation. Writes nothing.",
+            node_type: "EstimateNode".into(),
+            description: "Estimates what indexing the file source will cost: files kept and skipped (with reasons), first-index model and why, predicted vector time, and whether indexing will ask for confirmation. Writes nothing.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 ConfigParam {
-                    name: "probe",
+                    name: "probe".into(),
                     param_type: ConfigParamType::Bool,
                     required: false,
                     default: Some(serde_json::json!(true)),
-                    description: "Sonder le débit de l'embarqueur (une à deux secondes) quand aucun n'est noté ; sans sonde ni débit noté, la durée est dite inconnue",
+                    description: "Sonder le débit de l'embarqueur (une à deux secondes) quand aucun n'est noté ; sans sonde ni débit noté, la durée est dite inconnue".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "format",
+                    name: "format".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("markdown")),
-                    description: "markdown (compact, pour le modèle) | json (structuré)",
+                    description: "markdown (compact, pour le modèle) | json (structuré)".into(),
                     choices: Some(Choices::fixed(["markdown", "json"])),
                     json_schema: None,
                 },
@@ -466,26 +466,26 @@ impl NodeFactory for IndexNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "IndexNode",
-            description: "Indexes the file source in the background: full text first, vectors afterwards. Refuses without confirm=true when the estimate exceeds the declared threshold. Returns the path of a journal that `wait` can follow.",
+            node_type: "IndexNode".into(),
+            description: "Indexes the file source in the background: full text first, vectors afterwards. Refuses without confirm=true when the estimate exceeds the declared threshold. Returns the path of a journal that `wait` can follow.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 ConfigParam {
-                    name: "confirm",
+                    name: "confirm".into(),
                     param_type: ConfigParamType::Bool,
                     required: false,
                     default: Some(serde_json::json!(false)),
-                    description: "Lancer même si l'estimation dépasse le seuil de confirmation",
+                    description: "Lancer même si l'estimation dépasse le seuil de confirmation".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "format",
+                    name: "format".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("markdown")),
-                    description: "markdown (compact, pour le modèle) | json (structuré)",
+                    description: "markdown (compact, pour le modèle) | json (structuré)".into(),
                     choices: Some(Choices::fixed(["markdown", "json"])),
                     json_schema: None,
                 },

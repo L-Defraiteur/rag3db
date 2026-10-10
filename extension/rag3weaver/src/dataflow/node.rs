@@ -35,13 +35,27 @@ pub struct NodeLogEntry {
 
 // ─── Node trait ─────────────────────────────────────────────────────────────
 
-/// A synchronous DAG node (luciole-compatible API).
+/// A DAG node (luciole-compatible API).
 ///
 /// Mirrors `luciole::Node` exactly. When we swap runtimes,
 /// nodes implement `luciole::Node` directly (same method signatures).
+///
+/// **Deux méthodes, une seule à écrire par nœud** (chantier C, 10 octobre
+/// 2026, décision de Lucie : « une variante async plutôt que forcé ») :
+/// un nœud d'aujourd'hui implémente [`Node::execute`] et ne bouge pas ;
+/// un nœud nouveau implémente [`Node::execute_async`] et pose
+/// [`Node::is_async`] à `true`, en laissant `execute` au défaut — le test
+/// du registre vérifie ce contrat. Le runtime n'appelle plus que
+/// `execute_async`, dont le défaut joue `execute` sous
+/// `tokio::task::block_in_place` : le fil sort du pool le temps de l'appel,
+/// et le résultat est celui d'aujourd'hui.
 pub trait Node: Send {
-    /// Type identifier for the node (e.g., "InsertRecordNode").
-    fn node_type(&self) -> &'static str;
+    /// Type identifier for the node (e.g., "InsertRecordNode") — the name it
+    /// is registered under, so that `DataflowGraph::to_definition` (a
+    /// checkpoint, a mermaid round trip) finds it again. Borrowed from the
+    /// node: a declared type (a scripted node, a sub-graph from a factory)
+    /// owns its name; a node written in code returns a `&'static str`.
+    fn node_type(&self) -> &str;
 
     /// Input port declarations.
     fn inputs(&self) -> Vec<PortDef> {
@@ -54,7 +68,33 @@ pub trait Node: Send {
     }
 
     /// Execute the node: read from ctx inputs, write to ctx outputs.
-    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String>;
+    ///
+    /// Au défaut, l'erreur « ni execute ni execute_async » : un nœud
+    /// asynchrone n'implémente QUE `execute_async`, et ce défaut est la
+    /// preuve qu'il n'a pas menti (voir le test du registre).
+    fn execute(&mut self, _ctx: &mut NodeContext) -> Result<(), String> {
+        Err(format!("{} : ni execute ni execute_async", self.name()))
+    }
+
+    /// La variante asynchrone. Au défaut : `execute`, sous
+    /// `block_in_place` — tokio sait que ce fil va bloquer. Exige le
+    /// runtime multi-fil (celui du crate, `dataflow::rt`), et ne doit
+    /// jamais être atteinte depuis un `block_on` imbriqué.
+    fn execute_async<'a>(
+        &'a mut self,
+        ctx: &'a mut NodeContext,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+        Box::pin(async move { tokio::task::block_in_place(|| self.execute(ctx)) })
+    }
+
+    /// `true` ssi le nœud implémente `execute_async` (et laisse `execute`
+    /// au défaut). Déclaré, jamais deviné — le test du registre tient le
+    /// sens « marqué async ⇒ execute rend l'erreur-défaut » ; le mensonge
+    /// inverse (execute_async implémenté sans le marqueur) n'est pas
+    /// détectable sans exécuter le nœud, et reste interdit par ce contrat.
+    fn is_async(&self) -> bool {
+        false
+    }
 
     /// Whether this node supports undo (rollback).
     fn can_undo(&self) -> bool {
@@ -146,6 +186,14 @@ impl NodeContext {
     /// Emit a trigger signal on an output port.
     pub fn trigger(&mut self, port: &str) {
         self.outputs.insert(port.to_string(), PortValue::Trigger);
+    }
+
+    /// **La poignée de l'appel d'outil** qui exécute ce graphe (« #run-3 »),
+    /// posée par la boucle d'agent via l'invocation ([`crate::agent::ToolInvocation`]) ;
+    /// absente hors d'un appel d'outil. Un nœud en mode fond nomme ses
+    /// journaux avec (la commande en fond, chantier A).
+    pub fn tool_handle(&self) -> Option<&String> {
+        self.service::<String>("tool_handle")
     }
 
     /// Record a numeric metric.

@@ -939,42 +939,6 @@ pub(crate) fn inline_params(query: &str, params: &[QueryParam]) -> String {
     result
 }
 
-/// Vector similarity search via HNSW index (O(log N)).
-///
-/// Always uses `QUERY_VECTOR_INDEX`. When filters are present, creates a
-/// temporary projected graph via `PROJECT_GRAPH_CYPHER` so the HNSW search
-/// operates on a SemiMask (Roaring Bitmap) — no brute-force fallback needed.
-pub fn search_vector(
-    conn: &dyn DbConnection,
-    entity: &str,
-    // L'index HNSW du modèle courant sur cette table — résolu par le
-    // catalogue (`vector_storage`), plus jamais dérivé du nom de la table.
-    index_name: &str,
-    embedding: &[f32],
-    limit: usize,
-    extra_where: Option<&str>,
-    extra_params: &[QueryParam],
-    extra_match: Option<&str>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    let embedding_value = CypherValue::List(
-        embedding
-            .iter()
-            .map(|&f| CypherValue::Float(f as f64))
-            .collect(),
-    );
-
-    let has_filters = extra_where.is_some() || extra_match.is_some();
-
-    if has_filters {
-        search_vector_hnsw_filtered(
-            conn, entity, index_name, &embedding_value, limit,
-            extra_where, extra_params, extra_match,
-        )
-    } else {
-        search_vector_hnsw(conn, entity, index_name, &embedding_value, limit)
-    }
-}
-
 /// Vector search via SearchBackend (multi-backend).
 pub fn search_vector_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
@@ -1037,188 +1001,6 @@ pub fn search_vector_via_backend(
     }).collect())
 }
 
-/// HNSW index search via QUERY_VECTOR_INDEX. O(log N), no filters.
-///
-/// L'index est celui du modèle courant, résolu par le catalogue — la
-/// convention `{entity}_vec` n'est plus qu'un cas parmi d'autres (`legacy`).
-/// Cosine metric returns distance = 1 - similarity, so we convert back.
-fn search_vector_hnsw(
-    conn: &dyn DbConnection,
-    entity: &str,
-    index_name: &str,
-    embedding_value: &CypherValue,
-    limit: usize,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    let cypher = format!(
-        "CALL QUERY_VECTOR_INDEX('{entity}', '{index_name}', $embedding, {limit}) \
-         RETURN node._uuid, distance"
-    );
-
-    let params = vec![QueryParam {
-        name: "embedding".to_string(),
-        value: embedding_value.clone(),
-    }];
-
-    let result = conn
-        .execute_with_params(&cypher, &params)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    Ok(parse_hnsw_results(&result, entity))
-}
-
-/// HNSW index search with filters via PROJECT_GRAPH_CYPHER.
-///
-/// 1. Creates a temporary projected graph from the filter Cypher query
-/// 2. Queries HNSW on that projected graph (SemiMask filtering, O(log N))
-/// 3. Drops the projected graph
-///
-/// The filter parameters are inlined into the Cypher string because
-/// PROJECT_GRAPH_CYPHER takes a literal query string (no $param support).
-fn search_vector_hnsw_filtered(
-    conn: &dyn DbConnection,
-    entity: &str,
-    index_name: &str,
-    embedding_value: &CypherValue,
-    limit: usize,
-    extra_where: Option<&str>,
-    extra_params: &[QueryParam],
-    extra_match: Option<&str>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    let graph_name = format!("_vf_{entity}");
-
-    // Build filter Cypher with inlined parameters (PROJECT_GRAPH_CYPHER doesn't support $params)
-    let match_clause = match extra_match {
-        Some(m) => format!("MATCH (n:{entity}) {m}"),
-        None => format!("MATCH (n:{entity})"),
-    };
-    let where_clause = match extra_where {
-        Some(w) => format!(" WHERE {w}"),
-        None => String::new(),
-    };
-    let filter_cypher = inline_params(
-        &format!("{match_clause}{where_clause} RETURN n"),
-        extra_params,
-    );
-    // Escape single quotes for embedding in the outer CALL string
-    let escaped = filter_cypher.replace('\\', "\\\\").replace('\'', "\\'");
-
-    // Drop previous projected graph if it exists (ignore errors)
-    let _ = conn
-        .execute(&format!(
-            "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
-        ))
-        ;
-
-    // Create projected graph from filter
-    conn.execute(&format!(
-        "CALL PROJECT_GRAPH_CYPHER('{graph_name}', '{escaped}')"
-    ))
-    .map_err(|e| CatalogError::DbError(format!("PROJECT_GRAPH_CYPHER failed: {e}")))?;
-
-    // Query HNSW on projected graph
-    let cypher = format!(
-        "CALL QUERY_VECTOR_INDEX('{graph_name}', '{index_name}', $embedding, {limit}) \
-         RETURN node._uuid, distance"
-    );
-    let params = vec![QueryParam {
-        name: "embedding".to_string(),
-        value: embedding_value.clone(),
-    }];
-
-    let result = conn
-        .execute_with_params(&cypher, &params);
-
-    // Always cleanup the projected graph
-    let _ = conn
-        .execute(&format!(
-            "CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)"
-        ))
-        ;
-
-    let result = result.map_err(|e| CatalogError::DbError(e.to_string()))?;
-    Ok(parse_hnsw_results(&result, entity))
-}
-
-/// Parse HNSW query results (node._uuid, distance) into SearchResults.
-/// Converts cosine distance (1 - similarity) back to similarity score.
-fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> Vec<SearchResult> {
-    result
-        .rows
-        .iter()
-        .map(|row| {
-            let uuid = row
-                .get(0)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let distance = row.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0);
-            let score = 1.0 - distance;
-            SearchResult {
-                uuid,
-                score,
-                entity: Some(entity.to_string()),
-                data: None,
-                chunk: None,
-                chunks: None,
-            }
-        })
-        .collect()
-}
-
-/// Enrich search results with parent entity data (title, body, etc.).
-///
-/// Batch-fetches entity data for all result UUIDs and populates `result.data`.
-pub fn enrich_results_with_data(
-    conn: &dyn DbConnection,
-    entity: &str,
-    fields: &[String],
-    results: &mut [SearchResult],
-) -> Result<(), CatalogError> {
-    if results.is_empty() || fields.is_empty() {
-        return Ok(());
-    }
-
-    let uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-    let uuid_list = uuids
-        .iter()
-        .map(|u| format!("'{}'", u.replace('\'', "''")))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let return_cols: Vec<String> = std::iter::once("n._uuid AS _uuid".to_string())
-        .chain(fields.iter().map(|f| format!("n.{f} AS {f}")))
-        .collect();
-    let return_clause = return_cols.join(", ");
-
-    let cypher = format!(
-        "MATCH (n:{entity}) WHERE n._uuid IN [{uuid_list}] RETURN {return_clause}"
-    );
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    // Build uuid → data map
-    let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
-    for row in &result.rows {
-        let uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let mut data = BTreeMap::new();
-        for (i, field) in fields.iter().enumerate() {
-            if let Some(val) = row.get(i + 1) {
-                data.insert(field.clone(), val.clone());
-            }
-        }
-        data_map.insert(uuid, data);
-    }
-
-    // Populate results
-    for r in results.iter_mut() {
-        if let Some(data) = data_map.remove(&r.uuid) {
-            r.data = Some(data);
-        }
-    }
-
-    Ok(())
-}
 
 /// Enrich search results via SearchBackend (multi-backend).
 pub fn enrich_results_with_data_via_backend(
@@ -1249,82 +1031,6 @@ pub fn enrich_results_with_data_via_backend(
     }
 
     Ok(())
-}
-
-/// Resolve offsets to UUIDs + entity data (legacy, rag3db Cypher).
-///
-/// Prefer the SearchBackend version when available.
-pub fn resolve_and_enrich(
-    conn: &dyn DbConnection,
-    entity: &str,
-    offsets_scores: &[(u64, f64)],
-    return_fields: &[String],
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if offsets_scores.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let offset_list = offsets_scores
-        .iter()
-        .map(|(o, _)| o.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let mut return_cols: Vec<String> = vec![
-        "OFFSET(id(n)) AS _offset".to_string(),
-        "n._uuid AS _uuid".to_string(),
-    ];
-    for f in return_fields {
-        return_cols.push(format!("n.{f} AS {f}"));
-    }
-    let return_clause = return_cols.join(", ");
-
-    let cypher = format!(
-        "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] RETURN {return_clause}"
-    );
-    let result = conn
-        .execute(&cypher)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    let mut offset_map: HashMap<u64, (String, Option<BTreeMap<String, CypherValue>>)> =
-        HashMap::new();
-    for row in &result.rows {
-        let offset = match row.get(0).and_then(|v| v.as_i64()) {
-            Some(o) => o as u64,
-            None => continue,
-        };
-        let uuid = match row.get(1).and_then(|v| v.as_str()) {
-            Some(u) => u.to_string(),
-            None => continue,
-        };
-        let data = if !return_fields.is_empty() {
-            let mut map = BTreeMap::new();
-            for (i, field) in return_fields.iter().enumerate() {
-                if let Some(val) = row.get(i + 2) {
-                    map.insert(field.clone(), val.clone());
-                }
-            }
-            Some(map)
-        } else {
-            None
-        };
-        offset_map.insert(offset, (uuid, data));
-    }
-
-    Ok(offsets_scores
-        .iter()
-        .filter_map(|(offset, score)| {
-            let (uuid, data) = offset_map.get(offset)?;
-            Some(SearchResult {
-                uuid: uuid.clone(),
-                score: *score,
-                entity: Some(entity.to_string()),
-                data: data.clone(),
-                chunk: None,
-                chunks: None,
-            })
-        })
-        .collect())
 }
 
 /// Resolve offsets to UUIDs + entity data via SearchBackend (multi-backend).
@@ -1663,72 +1369,6 @@ pub fn resolve_vector_chunks_with_dialect(
         .collect();
     resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     Ok(resolved)
-}
-
-/// Brute-force vector scan with `array_cosine_similarity`. O(N).
-///
-/// Legacy fallback — kept for environments where the HNSW vector extension
-/// is not loaded. Not used in the normal search path.
-#[allow(dead_code)]
-fn search_vector_bruteforce(
-    conn: &dyn DbConnection,
-    entity: &str,
-    kb_name: &str,
-    embedding_value: &CypherValue,
-    limit: usize,
-    extra_where: Option<&str>,
-    extra_params: &[QueryParam],
-    extra_match: Option<&str>,
-) -> Result<Vec<SearchResult>, CatalogError> {
-    let embedding_col = format!("{kb_name}_embedding");
-
-    let match_clause = match extra_match {
-        Some(m) => format!("MATCH (n:{entity}) {m}"),
-        None => format!("MATCH (n:{entity})"),
-    };
-
-    let where_clause = match extra_where {
-        Some(w) => format!("WHERE n.{embedding_col} IS NOT NULL AND {w}"),
-        None => format!("WHERE n.{embedding_col} IS NOT NULL"),
-    };
-
-    let cypher = format!(
-        "{match_clause} {where_clause} \
-         WITH n, array_cosine_similarity(n.{embedding_col}, $embedding) AS sim \
-         ORDER BY sim DESC LIMIT {limit} \
-         RETURN n._uuid, sim"
-    );
-
-    let mut params = vec![QueryParam {
-        name: "embedding".to_string(),
-        value: embedding_value.clone(),
-    }];
-    params.extend_from_slice(extra_params);
-
-    let result = conn
-        .execute_with_params(&cypher, &params)
-        .map_err(|e| CatalogError::DbError(e.to_string()))?;
-
-    Ok(result
-        .rows
-        .iter()
-        .map(|row| {
-            let uuid = row
-                .get(0)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let score = row.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
-            SearchResult {
-                uuid,
-                score,
-                entity: Some(entity.to_string()),
-                data: None,
-                chunk: None,
-                chunks: None,
-            }
-        })
-        .collect())
 }
 
 /// Build the JSON query config for QUERY_LUCIVY_INDEX.
@@ -2229,7 +1869,6 @@ pub fn search_texte_natif(
     classes.sort_by(|a, b| b.1.total_cmp(&a.1));
     classes.truncate(limit * FACTEUR_RAPPEL);
 
-
     let par_decalage: std::collections::HashMap<u64, f64> = classes.iter().copied().collect();
     let decalages: Vec<u64> = classes.iter().map(|(o, _)| *o).collect();
 
@@ -2332,7 +1971,6 @@ pub fn search_texte_natif(
     }
     Ok(sortie)
 }
-
 
 /// Partie commune aux deux chemins BM25 (Rust direct et extension C++) :
 /// résolution des offsets, appariement highlights↔chunks, mise en forme.
@@ -2535,45 +2173,6 @@ fn finish_bm25_chunked(
     }
 
     Ok(results)
-}
-
-
-/// Sparse vector search via direct SparseHandle.
-///
-/// 1. Calls `handle.search()` → (node_id offset, score) pairs
-/// 2. Resolves offsets → UUIDs via `MATCH ... WHERE OFFSET(id(n)) IN [...]`
-/// 3. Returns `SearchResult` with real UUIDs, sorted by descending score.
-pub fn search_sparse(
-    handle: &sparse_vector::handle::SparseHandle,
-    conn: &dyn DbConnection,
-    entity: &str,
-    query_vector: &SparseVector,
-    limit: usize,
-    return_fields: &[String],
-) -> Result<Vec<SearchResult>, CatalogError> {
-    if query_vector.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 1. Search via SparseHandle directly
-    let sv = sparse_vector::index::SparseVector::new(
-        query_vector.indices.clone(),
-        query_vector.values.clone(),
-    );
-    let raw_results = handle.search(&sv, limit);
-
-    if raw_results.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 2. Convert (u64, f32) → (u64, f64) for resolve_and_enrich
-    let offsets_scores: Vec<(u64, f64)> = raw_results
-        .into_iter()
-        .map(|(offset, score)| (offset, score as f64))
-        .collect();
-
-    // 3. Resolve offsets → UUIDs + fetch entity data in one query
-    resolve_and_enrich(conn, entity, &offsets_scores, return_fields)
 }
 
 /// Sparse search via SearchBackend (multi-backend).
@@ -3085,16 +2684,6 @@ mod tests {
     }
 
     // ── search_vector / search_bm25 ─────────────────────────────────────
-
-    #[test]
-    fn search_vector_empty() {
-        let conn = MockConnection::new();
-        let embedding = vec![0.1_f32; 384];
-
-        let results = search_vector(&conn, "Document", "Document_vec", &embedding, 10, None, &[], None)
-            .unwrap();
-        assert!(results.is_empty());
-    }
 
     // ── build_bm25_query ────────────────────────────────────────────────
 

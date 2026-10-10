@@ -57,6 +57,15 @@ Rouges connus : les six cas toujours rouges sont dans `known_red.txt`, le cas in
 retenu) dans `probabilistic.txt`. Les deux cas « une à une, index avant » sont dans
 `long.txt`.
 
+**Un second instable, le 10 octobre au soir** : `SameIndexFirstCopy` (le même vecteur non nul,
+index posé avant, COPY), vert neuf fois sur l'élagage retenu (trois répétitions, le témoin de la
+variante, quatre comparaisons du banc), puis rouge une fois, dans la comparaison du banc jouée
+seule sur luciepc (charge 5), sur la branche d'A4′ (`verrous-a4`). **Non attribué** : A4′ ne
+touche pas le chemin d'insertion du graphe (ses écritures internes ne prennent pas de verrou),
+et rien n'établit qu'il y soit pour quelque chose ; le compte détaillé de l'essai rouge n'a pas
+été gardé. Il rejoint `ZeroIndexFirstCopy` dans `probabilistic.txt` : un probabiliste de plus
+est un aveu, pas une solution — la cause reste celle de ce ticket.
+
 ## Cause
 
 L'élagage retenu (`selectNeighbours`, `hnsw_index.cpp`) garde au plus la moitié du degré en

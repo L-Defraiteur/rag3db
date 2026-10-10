@@ -173,26 +173,26 @@ impl NodeFactory for SchemaNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "SchemaNode",
-            description: "La carte du graphe : les cibles cherchables et les relations valides entre elles.",
+            node_type: "SchemaNode".into(),
+            description: "La carte du graphe : les cibles cherchables et les relations valides entre elles.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 ConfigParam {
-                    name: "target",
+                    name: "target".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Ne détailler que cette cible, avec ses champs et les relations qui la touchent. Vide : tout le schéma.",
+                    description: "Ne détailler que cette cible, avec ses champs et les relations qui la touchent. Vide : tout le schéma.".into(),
                     choices: Some(super::node_registry::Choices::Targets),
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "template",
+                    name: "template".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("schema")),
-                    description: "Gabarit de rendu : un nom fourni, un chemin, ou la source elle-même.",
+                    description: "Gabarit de rendu : un nom fourni, un chemin, ou la source elle-même.".into(),
                     choices: None,
                     json_schema: None,
                 },

@@ -657,9 +657,9 @@ mod tests {
             if empty {
                 return Ok(QueryResult::default());
             }
-            let rows = if q.starts_with("MATCH (n:Ability)") {
+            let rows = if q.starts_with("MATCH (m:Ability)") {
                 ["a", "b"].iter().map(|s| vec![card(s)]).collect()
-            } else if q.starts_with("MATCH (n:Card)") {
+            } else if q.starts_with("MATCH (m:Card)") {
                 let ids = if q.contains("owned") {
                     vec!["c1", "c2"]
                 } else {

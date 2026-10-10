@@ -307,3 +307,58 @@ il est au chargement.
 `RAG3DB_SHARED` est posée. Sur une machine neuve, ce n'est pas `cargo` qu'on
 lance mais `run_e2e.sh` (qui lit `RAG3DB_BUILD`) — sinon on paie un build
 complet du moteur sans s'en apercevoir.
+
+## 9. Deux pièges de worktree, et une recette de push qui n'était pas évidente
+
+**Dans un worktree neuf, `git worktree add` ne peuple pas le sous-module. La
+séquence est donc en deux commandes, toujours :**
+
+```sh
+git -C <dépôt> worktree add <chemin> <branche>
+git -C <chemin> submodule update --init extension/rag3weaver/codeparsers
+```
+
+**Écrit ainsi après m'y être reprise** (10 octobre, 23 h 30) : la première
+version de cette note décrivait le *symptôme difficile* — le `rev-parse` qui
+mente, voir plus bas — et j'y suis retombée vingt minutes plus tard par le cas
+**facile**, un `Cargo.toml` introuvable qui arrête cargo net. Une note qui dit
+« vérifie en deux temps » ne sert à rien si on ne la relit pas avant d'agir ;
+une note qui donne la **séquence** rend la vérification inutile. Le relevé doit
+dire quoi faire, pas quoi reconnaître.
+
+**Et il ment dans l'autre sens si on oublie quand même.** Après `git worktree add`, `extension/rag3weaver/codeparsers` est
+un dossier **vide**, et `git -C extension/rag3weaver/codeparsers rev-parse HEAD`
+rend alors le hash du **dépôt parent** : git remonte depuis le dossier vide
+jusqu'au `.git` du superprojet. On lit donc un pointeur qui ressemble à une
+aberration monstrueuse (le commit qu'on vient d'écrire, comme s'il était dans
+codeparsers) au lieu d'un dossier manquant.
+
+C'est la variante trompeuse du piège 1 du journal : là, un pointeur en retard
+qu'on ne voit pas ; ici, un pointeur aberrant qui n'existe pas. La vérification
+honnête est donc en deux temps — le dossier est-il peuplé, **puis** les deux
+hashes coïncident-ils. `git submodule update --init <chemin>` règle le cas, et
+**le clone initial fonctionne** : c'est le `fetch` dans un clone **existant** que
+le transport `file` refuse, pas le clone.
+
+**Pousser depuis luciepc demande la forme `ssh://`.** Son `origin` est en https
+sans identifiants, et une réécriture **globale** la rend inévitable :
+
+```
+url.https://github.com/.insteadof git@github.com:
+```
+
+Donc `git push git@github.com:…` est réécrit en https et échoue. La sortie n'est
+pas de desserrer cette configuration — c'est celle de Lucie sur sa machine — mais
+d'employer une forme que le motif ne reconnaît pas :
+
+```sh
+git push ssh://git@github.com/L-Defraiteur/rag3db.git HEAD:<branche>
+```
+
+La clé SSH de luciepc est valide (`ssh -T git@github.com` répond « Hi
+L-Defraiteur »), c'est seulement l'URL qui était réécrite.
+
+**Et la règle du target, corrigée le soir du 10 octobre** : on ne nettoie plus à
+chaque fusion (15 à 20 minutes de rebâti, mesuré par F). Un seul target par
+chantier, `CARGO_INCREMENTAL=0`, et on efface au-delà de 60 Go ou à la fin du
+chantier. Le mien faisait 14 Go après le lot MCP.
