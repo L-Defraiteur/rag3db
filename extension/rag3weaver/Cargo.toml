@@ -236,6 +236,15 @@ windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation"] 
 [dependencies.rayon]
 version = "1.10"
 
+# Le profil de publication du paquet npm, et de lui seul (workflow, Docker
+# manylinux) : la LTO complète ramène le binaire strippé de 89 à 61 Mo
+# (−31 %, Linux, 10 octobre 2026) pour un bâti Rust de 6 min 14 s contre
+# 3 min 25 s. `release` reste tel quel pour tout le monde.
+[profile.paquet]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }

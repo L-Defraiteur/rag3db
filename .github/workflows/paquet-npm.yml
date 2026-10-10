@@ -136,9 +136,9 @@ jobs:
             C:/rs
             ~/.cargo/registry
             ~/.cargo/git
-          key: windows-x64-rs-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
+          key: windows-x64-rs-paquet-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
           restore-keys: |
-            windows-x64-rs-
+            windows-x64-rs-paquet-
       - name: Outils
         run: |
           cmake --version | head -1; ninja --version; rustc --version; node --version; cl 2>&1 | head -1 || true
@@ -149,7 +149,7 @@ jobs:
         shell: pwsh
         working-directory: extension/rag3weaver
         run: |
-          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # L'extension vecteur, que le backend charge à l'exécution : le même
       # bâti cmake que cargo a fait pour le moteur, avec l'extension en plus
@@ -157,8 +157,8 @@ jobs:
       - name: L'extension vecteur
         shell: pwsh
         run: |
-          $bdir = (Get-ChildItem -Directory C:/rs/release/build -Filter 'rag3db-*' | ForEach-Object { Join-Path $_.FullName 'out/build' } | Where-Object { Test-Path $_ } | Select-Object -First 1)
-          if (-not $bdir) { throw "pas de bâti cmake du moteur sous C:/rs/release/build" }
+          $bdir = (Get-ChildItem -Directory C:/rs/paquet/build -Filter 'rag3db-*' | ForEach-Object { Join-Path $_.FullName 'out/build' } | Where-Object { Test-Path $_ } | Select-Object -First 1)
+          if (-not $bdir) { throw "pas de bâti cmake du moteur sous C:/rs/paquet/build" }
           Write-Host "bâti cmake du moteur : $bdir"
           # Le cache cmake avant et après la reconfiguration, en artefact : au
           # seizième essai, elle a recompilé les 996 objets du moteur (37 min)
@@ -187,7 +187,7 @@ jobs:
         if: always()
         run: |
           mkdir -p dist/windows-x64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
-          cp C:/rs/release/rag3weaver-backend.exe dist/windows-x64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          cp C:/rs/paquet/rag3weaver-backend.exe dist/windows-x64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
           ls -la dist/windows-x64/
           python3 - <<'PY'
           import json, os
@@ -251,6 +251,8 @@ jobs:
       CARGO_BUILD_JOBS: 3
       NUM_JOBS: 3
       CMAKE_GENERATOR: Ninja
+      # Le profil `paquet` (release + LTO complète) : 61 Mo au lieu de 89 sous
+      # Linux ; le cache change de clé avec lui (dossier target/paquet).
       # Les extensions (dlopen, -undefined dynamic_lookup) résolvent les
       # symboles du moteur dans le binaire. Sous macOS, rustc passe
       # -dead_strip à ld64, qui retire tout ce que le binaire lui-même
@@ -283,9 +285,9 @@ jobs:
             /tmp/rs
             ~/.cargo/registry
             ~/.cargo/git
-          key: macos-arm64-rs-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
+          key: macos-arm64-rs-paquet-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
           restore-keys: |
-            macos-arm64-rs-
+            macos-arm64-rs-paquet-
       - name: Outils
         run: |
           brew install ninja > /dev/null
@@ -294,13 +296,13 @@ jobs:
         working-directory: extension/rag3weaver
         run: |
           set -o pipefail
-          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-macos.log
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-macos.log
       # L'extension vecteur, par le bâti cmake que cargo a fait pour le moteur
       # (la recette Linux de tools/build-images/linux-x64-gnu/build.sh).
       - name: L'extension vecteur
         run: |
           set -o pipefail
-          bdir=$(ls -d /tmp/rs/release/build/rag3db-*/out/build | head -1)
+          bdir=$(ls -d /tmp/rs/paquet/build/rag3db-*/out/build | head -1)
           src=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$bdir/CMakeCache.txt")
           echo "bâti cmake du moteur : $bdir · source : $src"
           cmake -S "$src" -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF > cmake-vector-macos.log 2>&1
@@ -312,7 +314,7 @@ jobs:
         if: always()
         run: |
           mkdir -p dist/darwin-arm64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
-          cp /tmp/rs/release/rag3weaver-backend dist/darwin-arm64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          cp /tmp/rs/paquet/rag3weaver-backend dist/darwin-arm64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
           # strip -x : les symboles locaux et de débogage partent, les globaux
           # (que les extensions résolvent par dlopen) restent.
           echo "avant strip : $(stat -f %z dist/darwin-arm64/rag3weaver-backend) octets"
