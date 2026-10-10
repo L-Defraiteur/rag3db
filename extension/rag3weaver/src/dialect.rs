@@ -220,6 +220,14 @@ pub trait SchemaDialect: Send + Sync {
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
+    /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
+    /// défaut le refuse en le nommant : une forme se traduit, elle ne
+    /// s'hérite pas en Cypher.
+    fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
+        let _ = hop;
+        Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Hop" })
+    }
+
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
     /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
     /// leur place cette instruction, qui échoue à l'analyse **en nommant la
@@ -1043,6 +1051,29 @@ pub trait SchemaDialect: Send + Sync {
 pub struct Rag3dbDialect;
 
 impl SchemaDialect for Rag3dbDialect {
+    /// `UNWIND $uuids AS u MATCH (d:Départ {_uuid: u})-[r:REL]->(m:Arrivée)`
+    /// : une liste de valeurs simples jointe par hachage, jamais `item.champ`
+    /// (journal, §6). La forme exacte que `graph_walk` écrivait à la main.
+    fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
+        hop.validate()?;
+        let pattern = match hop.direction {
+            rag3weaver_ir::Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", hop.start, hop.relation, hop.end),
+            rag3weaver_ir::Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", hop.start, hop.relation, hop.end),
+        };
+        let filtre = match &hop.exclude {
+            Some(x) => {
+                let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
+                format!(" WHERE r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field)
+            }
+            None => String::new(),
+        };
+        let colonnes: Vec<String> = std::iter::once("u".to_string())
+            .chain(hop.fields.iter().map(|f| format!("m.{f}")))
+            .chain(hop.edge_fields.iter().map(|f| format!("r.{f}")))
+            .collect();
+        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}", colonnes.join(", ")))
+    }
+
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
         format!("MERGE (n:{table} {{_uuid: ${id_param}}}) ON CREATE SET n.name = ${id_param}")
     }
@@ -2733,6 +2764,26 @@ mod tests {
             assert_eq!(requete, format!("RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__{methode}"));
         }
         assert!(Rag3dbDialect.select_page_after_offset("Doc", &["texte"], 10).starts_with("MATCH"));
+    }
+
+    /// Le saut rag3db est, au caractère près, ce que `graph_walk` écrivait ;
+    /// PostgreSQL le refuse en le nommant ; un nom douteux est refusé avant.
+    #[test]
+    fn le_saut_se_traduit_ou_se_refuse() {
+        use rag3weaver_ir::{Direction, EdgeExclusion, Hop};
+        let mut h = Hop::new("Scope", "CONSUMES", "Scope", Direction::Incoming);
+        assert_eq!(Rag3dbDialect.hop(&h).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-(m:Scope) RETURN u, m._uuid");
+        h.exclude = Some(EdgeExclusion { field: "resolution".into(), values: vec!["nom".into(), "import".into()] });
+        h.direction = Direction::Outgoing;
+        h.fields.push("name".into());
+        h.edge_fields.push("resolution".into());
+        assert_eq!(
+            Rag3dbDialect.hop(&h).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, r.resolution"
+        );
+        assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
+        h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
+        assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

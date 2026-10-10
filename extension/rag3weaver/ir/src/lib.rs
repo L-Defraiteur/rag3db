@@ -13,9 +13,11 @@
 //! d'usage se renomment, par touches.
 
 mod filter;
+mod form;
 mod scope;
 mod value;
 
 pub use filter::{FilterCondition, FilterOp, FilterValue};
+pub use form::{Direction, EdgeExclusion, Hop, TranslateError};
 pub use scope::{Scope, DEFAULT_ID, ORG_COLUMN, PROJECT_COLUMN};
 pub use value::{is_valid_identifier, normalize, validate_payload_type, FieldType, QueryParam, Value};
