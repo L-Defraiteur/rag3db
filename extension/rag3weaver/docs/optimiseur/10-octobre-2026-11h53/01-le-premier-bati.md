@@ -200,6 +200,17 @@ et parle au backend en lignes JSON (`Backend.open`, `describe`, `call`,
 copie le binaire et l'extension de `dist/` et les gabarits ; rien n'est
 publié.
 
+**Emballé à blanc et installé dans un dossier vide** (17 h 35) :
+`npm pack` rend `rag3weaver-0.1.0.tgz` (25 ko, 37 fichiers : index, types,
+README, 33 gabarits) et `rag3weaver-linux-x64-gnu-0.1.0.tgz` (29 Mo
+compressés, 85 Mo déballés : le binaire et l'extension vecteur). Dans un
+dossier vide, `npm install` des deux archives, puis `require('rag3weaver')`
+trouve le binaire et l'extension dans `node_modules/rag3weaver-linux-x64-gnu/`
+et les gabarits dans `node_modules/rag3weaver/templates/`. Le binaire de ce
+`dist/` est encore celui du troisième run (avant les portes) : le bâti
+Docker de la branche est relancé sur luciepc pour le remplacer, et
+l'épreuve entière se rejouera depuis le dossier vide.
+
 ### Le service d'embarquement devient optionnel au démarrage
 
 L'épreuve `npm test` — un dossier vide, trois fichiers, une recherche — a
