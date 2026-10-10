@@ -253,18 +253,18 @@ fn read_and_grep_as_graph_tools() {
     // Un seul outil de recherche depuis le 28 août 2026 : `search_expand` était
     // appelé zéro fois sur quarante, la relation est devenue un paramètre.
     //
-    // Onze verbes depuis le 30 août, en quatre familles — la liste est épinglée
+    // Douze verbes depuis le 10 octobre (`tail`, la commande en fond), en quatre familles — la liste est épinglée
     // en entier pour qu'un ajout se voie ici plutôt que chez un modèle :
     //
     // - lire et écrire du code : `read`, `grep`, `list`, `edit`, `search` ;
     // - poser du connu : `place`, `adopt` (catalogue de gabarits) ;
-    // - agir : `run`, `run_bg`, `wait` (commandes, avec la porte de `commande.rs`) ;
+    // - agir : `run` (et `background`), `run_bg`, `tail`, `wait` (commandes, avec la porte de `commande.rs`) ;
     // - voir : `schema` (la carte du catalogue, pas son DDL).
     assert_eq!(
         names,
         vec![
             "adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "schema",
-            "search", "wait",
+            "search", "tail", "wait",
         ]
     );
 
