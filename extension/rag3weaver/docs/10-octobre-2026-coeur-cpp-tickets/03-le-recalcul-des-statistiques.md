@@ -96,6 +96,34 @@ statistiques recalculées.
 **La mesure demandée** : le coût du balayage sur une table de 100 000 lignes (clé, chaîne,
 `FLOAT[768]`), seul sur le poste ; le déclenchement automatique se décide après, sur ce chiffre.
 
+## 5 bis. Ce qui est fait (10 octobre, soir)
+
+- **Le défaut de sélection** : corrigé seul d'abord (`d10b92306`), rouge « estimation 1 pour
+  1000 » puis vert.
+- **`CALL analyze('Table')`** (`src/function/table/analyze.cpp`) : un balayage des colonnes
+  validées, la sélection écarte les lignes supprimées, `TableStats::update` par colonne ; puis
+  `NodeTable::replaceStats`, qui marque la table pour le point de reprise.
+- **Le recalage** au point de reprise et à l'ouverture se fait sur les lignes vivantes
+  (`NodeGroup::getNumLiveRows` : par bloc, lignes moins suppressions, d'après les informations de
+  version persistées avec lui) ; `numTotalRows` intact. Témoin rouge sur l'ancien recalage (2 000
+  au lieu de 1 000), vert après.
+- **Les témoins** (`TableAnalyzeTest`) : rouges avant (cardinalité 2 000 pour 1 000 après
+  `IGNORE_ERRORS` et `DELETE` ; noms distincts 2 051 et 1 931 pour 1 000, 10 pour 1 000 après
+  `SET` ; encore après réouverture), justes après `analyze` et après la réouverture.
+- **Un écart à la forme du §3** : le remplacement se fait pendant l'exécution du `CALL`, pas à la
+  validation de sa transaction. Un `analyze` dans une transaction annulée laisse donc ses
+  statistiques — des estimations, que rien d'autre ne lit qu'un planificateur. Le faire à la
+  validation demanderait un « remplacement en attente » dans `LocalStorage`, à côté des
+  statistiques en attente d'un `COPY`. **Accepté tel quel par l'orchestration** (Lucie peut
+  renverser) : c'est ce que fait PostgreSQL pour `reltuples`/`relpages`, mis à jour sur place et
+  gardés après un `ROLLBACK`, seul `pg_statistic` étant transactionnel (Tom Lane, pgsql-bugs,
+  22 octobre 2014, [BUG #11638](https://www.postgresql.org/message-id/10043.1413988524%40sss.pgh.pa.us)).
+  Témoin `AnAnalyzeInARolledBackTransactionLeavesAStaleEstimate` ; ticket
+  `2026-10-10-analyze-non-transactionnel.md`.
+- **Un effet de bord voulu** : un `COPY` forcé (ce qu'est encore un `COPY` sous
+  `IGNORE_ERRORS`) fait son point de reprise, qui recale maintenant la cardinalité sur les lignes
+  vivantes : après le `COPY` qui écarte des clés, elle est juste avant même `analyze`.
+
 ## 6. Ce qui reste dehors
 
 - Le déclenchement automatique (après la mesure).
