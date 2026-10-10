@@ -1,5 +1,28 @@
 # Session recherche — rapport (chantier C : l'exécution asynchrone des graphes)
 
+## 0 h 45 — second lot fusionné : la connexion épinglée (master `bb7dddde5`)
+
+`begin`/`commit`/`rollback` dans `DbConnection` (défauts TEXTE — rien ne
+change pour rag3db) ; chez PostgreSQL, `begin` épingle UNE session du pool
+et tout y passe jusqu'à la clôture — qui la rend au pool, ou la FERME si
+elle échoue (jamais une session à l'état transactionnel inconnu au pool).
+Témoin e2e écrit (`la_transaction_epinglee_tient_sur_une_session`), jouable
+dès que le conteneur pgvector existe ; F bascule
+`DialectCapabilities::transactions` de son côté avec son test 5, « non
+prouvé vivant » dit tant que la base manque. Lib 1376/1376 au rejeu final.
+Ferme la moitié « ensuite » du ticket « la transaction d'un paquet part sur
+deux sessions ». Appris au passage : trois tests lib du backend dérivent le
+chemin de l'extension vector du chemin du code quand `RAG3DB_ROOT` n'est
+pas posé (cinquième site du piège 6 — 73 le ferme) : mes lib se jouent
+avec `RAG3DB_ROOT` désormais, et le lien `extension/vector/build` d'un
+worktree qui bâtit est interdit (règle de l'orchestration).
+
+Et la relecture du proto est en place : le nœud scripté (`9b17f9234`) relu
+post-hoc — un vrai trou nommé (`Node::node_type()` rend "ScriptedNode"
+pour tous les types scriptés : un point de reprise restaurerait le mauvais
+type) ; le proto prend le pas du trait (node_type emprunté) avec témoin
+rouge d'abord, et son diff passe par moi AVANT master.
+
 ## 23 h 15 — LE LOT C EST FUSIONNÉ : master `afdc6923e`
 
 Avance rapide après DEUX rebases de course (master prenait l'IR
