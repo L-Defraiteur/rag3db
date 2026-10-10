@@ -74,10 +74,9 @@ Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread
 IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits waited
 IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError waited
 #
-# Marche V2, genre « index » — l'annonce sur une table indexée prend aussi l'index : deux
-# annonces de clés différentes s'attendent puis valident sans erreur. ROUGE : LA FONCTION
-# N'EXISTE PAS (acquire-locks-exists).
-IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit acquire-locks-exists,both-commit,in-turn,no-error
+# Marche V2, genre « index » — l'annonce sur une table indexée prend aussi l'index, en exclusif :
+# FAITE le 11 octobre 2026 ; IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit
+# est vert.
 #
 # MARCHE « REPRISE AVEC INDEX D'EXTENSION » — mode en service, un seul écrivain ; à part des
 # verrous. LIVRÉE (4 octobre), ses témoins sont verts et ont quitté cette liste.
