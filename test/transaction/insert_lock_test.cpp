@@ -377,6 +377,80 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
     EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 10}, {3, 3}}));
 }
 
+// ── Marche V2 : l'annonce des verrous en tête de transaction (CALL acquire_locks) ─────────
+// Le banc prouve que deux annonces dans l'ordre inverse ne s'interbloquent pas ; ici, dans un
+// seul fil : l'instantané repris après l'attente, et les refus nommés.
+
+// A écrit la ligne 1 et la garde ; B annonce [1] (attend, dans un fil), A valide ; B lit la
+// valeur de A, la met à jour SANS erreur de sérialisation (ce que l'option A refuserait sans
+// annonce), et valide.
+TEST_F(InsertLockTest, AnAnnouncedKeyWaitsThenReadsAndWritesWhatTheHolderCommitted) {
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 10;");
+    std::string announceError, readAndWriteError;
+    int64_t seen = -1;
+    std::atomic<bool> announced{false};
+    std::thread waiter([&] {
+        Connection other(database.get());
+        other.query("BEGIN TRANSACTION;");
+        announceError = failureOf(other, "CALL acquire_locks('Item', [1]);");
+        announced = true;
+        auto read = other.query("MATCH (n:Item {id: 1}) RETURN n.v;");
+        if (read->isSuccess() && read->hasNext()) {
+            seen = read->getNext()->getValue(0)->getValue<int64_t>();
+        }
+        readAndWriteError = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = n.v + 1;");
+        if (readAndWriteError.empty()) {
+            readAndWriteError = failureOf(other, "COMMIT;");
+        } else {
+            other.query("ROLLBACK;");
+        }
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_FALSE(announced.load()) << "the announcement must wait for the holder";
+    mustRun(*conn, "COMMIT;");
+    waiter.join();
+    EXPECT_EQ(announceError, "");
+    EXPECT_EQ(seen, 10) << "after the wait, the snapshot is the holder's commit";
+    EXPECT_EQ(readAndWriteError, "") << "no serialization error on an announced key";
+    auto result = conn->query("MATCH (n:Item {id: 1}) RETURN n.v;");
+    ASSERT_TRUE(result->isSuccess());
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 11);
+    EXPECT_EQ(locks().getNumResources(), 0u);
+}
+
+TEST_F(InsertLockTest, AnAnnouncementIsRefusedAfterAWriteOrTwiceOrInAutoCommit) {
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    const auto autoCommit = failureOf(*conn, "CALL acquire_locks('Item', [1]);");
+    EXPECT_NE(autoCommit.find("explicit transaction"), std::string::npos) << autoCommit;
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    const auto afterWrite = failureOf(*conn, "CALL acquire_locks('Item', [1]);");
+    EXPECT_NE(afterWrite.find("before any write"), std::string::npos) << afterWrite;
+    mustRun(*conn, "ROLLBACK;");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CALL acquire_locks('Item', [1, 2]);");
+    EXPECT_EQ(locks().getNumLocksHeld(transactionIDOf(*conn)), 3u) << "the index and two keys";
+    const auto twice = failureOf(*conn, "CALL acquire_locks('Item', [3]);");
+    EXPECT_NE(twice.find("already called"), std::string::npos) << twice;
+    mustRun(*conn, "ROLLBACK;");
+    EXPECT_EQ(locks().getNumResources(), 0u) << "the rollback gives everything back";
+    const auto unknown = failureOf(*conn, "CALL acquire_locks('Nope', [1]);");
+    EXPECT_NE(unknown.find("does not exist"), std::string::npos) << unknown;
+    const auto notAList = failureOf(*conn, "CALL acquire_locks('Item', 1);");
+    EXPECT_FALSE(notAList.empty());
+}
+
+TEST_F(InsertLockTest, WithoutMultiWritesAnAnnouncementTakesNothing) {
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CALL acquire_locks('Item', [1, 2]);");
+    EXPECT_EQ(locks().getNumResources(), 0u);
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    mustRun(*conn, "COMMIT;");
+}
+
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {
     // Hors du mode, rien ne change : un seul écrivain à la fois, l'autre connexion attend
     // son tour pour écrire, et le doublon est vu comme avant.

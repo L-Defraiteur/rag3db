@@ -79,6 +79,11 @@ public:
     };
 
     explicit UndoBuffer(MemoryManager* mm) : mm{mm} {}
+    // Aucun enregistrement : la transaction n'a rien écrit (ni catalogue, ni ligne, ni version).
+    bool isEmpty() const {
+        return memoryBuffers.empty() ||
+               (memoryBuffers.size() == 1 && memoryBuffers[0].getCurrentPosition() == 0);
+    }
 
     void createCatalogEntry(catalog::CatalogSet& catalogSet, catalog::CatalogEntry& catalogEntry);
     void createSequenceChange(catalog::SequenceCatalogEntry& sequenceEntry,
