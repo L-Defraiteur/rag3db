@@ -235,8 +235,10 @@ void RelTable::lockEndpoints(Transaction* transaction, const ValueVector& srcNod
 
 void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
     const auto& relInsertState = insertState.constCast<RelTableInsertState>();
-    lockEndpoints(transaction, relInsertState.srcNodeIDVector, relInsertState.dstNodeIDVector,
-        LockMode::SHARED);
+    if (insertState.takesLocks) {
+        lockEndpoints(transaction, relInsertState.srcNodeIDVector, relInsertState.dstNodeIDVector,
+            LockMode::SHARED);
+    }
     checkRelMultiplicityConstraint(transaction, insertState);
 
     KU_ASSERT(transaction->getLocalStorage());
@@ -262,8 +264,10 @@ void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
         KU_ASSERT(localTable);
         localTable->update(&DUMMY_TRANSACTION, updateState);
     } else {
-        lockEndpoints(transaction, relUpdateState.srcNodeIDVector, relUpdateState.dstNodeIDVector,
-            LockMode::EXCLUSIVE);
+        if (updateState.takesLocks) {
+            lockEndpoints(transaction, relUpdateState.srcNodeIDVector,
+                relUpdateState.dstNodeIDVector, LockMode::EXCLUSIVE);
+        }
         for (auto& relData : directedRelData) {
             relData->update(transaction,
                 relUpdateState.getBoundNodeIDVector(relData->getDirection()),
@@ -293,8 +297,10 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
         KU_ASSERT(localTable);
         isDeleted = localTable->delete_(transaction, deleteState);
     } else {
-        lockEndpoints(transaction, relDeleteState.srcNodeIDVector, relDeleteState.dstNodeIDVector,
-            LockMode::EXCLUSIVE);
+        if (deleteState.takesLocks) {
+            lockEndpoints(transaction, relDeleteState.srcNodeIDVector,
+                relDeleteState.dstNodeIDVector, LockMode::EXCLUSIVE);
+        }
         auto numDirectionsDeleted = 0u;
         for (auto& relData : directedRelData) {
             isDeleted = relData->delete_(transaction,
@@ -353,7 +359,7 @@ void RelTable::detachDelete(Transaction* transaction, RelTableDeleteState* delet
     // détachées aussi — comme Neo4j, qui détache ce qu'il voit en tenant le nœud. Sans cela,
     // une relation validée après l'instantané resterait pendante.
     std::optional<Transaction::LatestCommittedView> latestCommitted;
-    if (transaction->usesLocks()) {
+    if (transaction->usesLocks() && deleteState->takesLocks) {
         latestCommitted.emplace(*transaction);
     }
     auto relReadState =
