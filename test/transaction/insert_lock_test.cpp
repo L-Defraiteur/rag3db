@@ -292,15 +292,16 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
     mustRun(other, "BEGIN TRANSACTION;");
     mustRun(other, "MATCH (n:Item) RETURN count(n);");
     mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 10;");
-    mustRun(*conn, "MATCH (n:Item {id: 2}) DETACH DELETE n;");
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "MATCH (n:Item {id: 3}) SET n.v = 30;");
     mustRun(*conn, "ROLLBACK;");
     const auto updated = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = 1;");
     EXPECT_NE(updated.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << updated;
     mustRun(other, "ROLLBACK;");
+    // Un instantané neuf, pris avant la suppression de la ligne 2 par l'autre.
     mustRun(other, "BEGIN TRANSACTION;");
     mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (n:Item {id: 2}) DETACH DELETE n;");
     mustRun(*conn, "MATCH (n:Item {id: 3}) SET n.v = 33;");
     const auto deleted = failureOf(other, "MATCH (n:Item {id: 2}) SET n.v = 2;");
     EXPECT_NE(deleted.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << deleted;
