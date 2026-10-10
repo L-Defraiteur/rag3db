@@ -46,6 +46,7 @@ public:
 
 private:
     std::vector<std::unique_ptr<NodeSetExecutor>> executors;
+    bool executorsFinalized = false;
 };
 
 class SetRelProperty final : public PhysicalOperator {

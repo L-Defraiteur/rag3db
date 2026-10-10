@@ -3,6 +3,11 @@
 #include <functional>
 #include <string>
 
+#include <map>
+#include <memory>
+#include <vector>
+
+#include "storage/index/index.h"
 #include "storage/readers_lock.h"
 #include "storage/wal/wal_record.h"
 
@@ -75,6 +80,9 @@ private:
     void replayTableInsertionRecord(const WALRecord& walRecord) const;
     void replayNodeDeletionRecord(const WALRecord& walRecord) const;
     void replayNodeUpdateRecord(const WALRecord& walRecord) const;
+    // La fin d'instruction des mises à jour, au rejeu : à la validation de la transaction
+    // rejouée, comme au COMMIT la frontière que l'exécution avait (Index::finalizeUpdate).
+    void finalizeReplayedUpdates() const;
     void replayRelDeletionRecord(const WALRecord& walRecord) const;
     void replayRelDetachDeletionRecord(const WALRecord& walRecord) const;
     void replayRelUpdateRecord(const WALRecord& walRecord) const;
@@ -135,6 +143,11 @@ private:
     main::ClientContext& clientContext;
     std::string walPath;
     std::string shadowFilePath;
+    // Les états des index tenus d'une mise à jour rejouée à l'autre, par (table, colonne),
+    // jusqu'au COMMIT de la transaction rejouée.
+    mutable std::map<std::pair<common::table_id_t, common::column_id_t>,
+        std::vector<std::unique_ptr<Index::UpdateState>>>
+        pendingIndexUpdates;
 };
 
 } // namespace storage

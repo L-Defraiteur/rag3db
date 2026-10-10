@@ -122,6 +122,8 @@ private:
     std::vector<std::unique_ptr<RelSetExecutor>> onCreateRelSetExecutors;
 
     std::vector<std::unique_ptr<NodeSetExecutor>> onMatchNodeSetExecutors;
+    // La fin d'instruction des SET de MERGE est faite une fois (getNextTuplesInternal).
+    bool executorsFinalized = false;
     std::vector<std::unique_ptr<RelSetExecutor>> onMatchRelSetExecutors;
 
     MergeInfo info;

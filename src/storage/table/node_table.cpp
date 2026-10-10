@@ -597,6 +597,10 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
 
 void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& updateState) const {
     auto& nodeUpdateState = updateState.cast<NodeTableUpdateState>();
+    if (nodeUpdateState.indexUpdateStatesInitialized) {
+        return; // gardés le temps de l'instruction
+    }
+    nodeUpdateState.indexUpdateStatesInitialized = true;
     nodeUpdateState.indexUpdateState.resize(indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
@@ -619,9 +623,11 @@ void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& 
             continue;
         }
         nodeUpdateState.indexUpdateState[i] =
-            index->initUpdateState(context, nodeUpdateState.columnID, [&](offset_t offset) {
-                return isVisible(transaction::Transaction::Get(*context), offset);
-            });
+            // Par valeur : l'état vit le temps de l'instruction, bien après ce paramètre.
+            index->initUpdateState(context, nodeUpdateState.columnID,
+                [this, context](offset_t offset) {
+                    return isVisible(transaction::Transaction::Get(*context), offset);
+                });
     }
 }
 
@@ -701,6 +707,16 @@ void NodeTable::initDeleteStates(const Transaction* transaction, TableDeleteStat
                 getVisibleFunc(transaction));
     }
     nodeDeleteState.indexDeleteStatesInitialized = true;
+}
+
+void NodeTable::finalizeUpdate(Transaction* transaction,
+    std::vector<std::unique_ptr<Index::UpdateState>>& indexUpdateStates) {
+    for (auto i = 0u; i < indexes.size() && i < indexUpdateStates.size(); i++) {
+        if (!indexUpdateStates[i] || !indexes[i].isLoaded()) {
+            continue; // index sauté par initUpdateState
+        }
+        indexes[i].getIndex()->finalizeUpdate(transaction, *indexUpdateStates[i]);
+    }
 }
 
 void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& deleteState) {

@@ -51,13 +51,26 @@ void SingleLabelNodeSetExecutor::set(ExecutionContext* context) {
         return;
     }
     info.evaluator->evaluate();
-    auto updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
-        *info.nodeIDVector, *info.columnDataVector);
-    tableInfo.table->initUpdateState(context->clientContext, *updateState);
+    if (!updateState) {
+        // Une fois par instruction (les vecteurs désignés restent les mêmes d'une ligne à
+        // l'autre) : les index y notent ce que leur fin d'instruction reprendra.
+        updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
+            *info.nodeIDVector, *info.columnDataVector);
+        tableInfo.table->initUpdateState(context->clientContext, *updateState);
+    }
     tableInfo.table->update(transaction::Transaction::Get(*context->clientContext), *updateState);
     if (info.columnVectorPos.isValid()) {
         writeColumnUpdateResult(info.nodeIDVector, info.columnVector, info.columnDataVector);
     }
+}
+
+void SingleLabelNodeSetExecutor::finalize(ExecutionContext* context) {
+    if (!updateState) {
+        return;
+    }
+    tableInfo.table->finalizeUpdate(transaction::Transaction::Get(*context->clientContext),
+        updateState->indexUpdateState);
+    updateState.reset();
 }
 
 void MultiLabelNodeSetExecutor::set(ExecutionContext* context) {
@@ -73,13 +86,27 @@ void MultiLabelNodeSetExecutor::set(ExecutionContext* context) {
         return;
     }
     auto& tableInfo = tableInfos.at(nodeID.tableID);
-    auto updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
-        *info.nodeIDVector, *info.columnDataVector);
-    tableInfo.table->initUpdateState(context->clientContext, *updateState);
+    auto& updateState = updateStates[nodeID.tableID];
+    if (!updateState) {
+        updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
+            *info.nodeIDVector, *info.columnDataVector);
+        tableInfo.table->initUpdateState(context->clientContext, *updateState);
+    }
     tableInfo.table->update(transaction::Transaction::Get(*context->clientContext), *updateState);
     if (info.columnVectorPos.isValid()) {
         writeColumnUpdateResult(info.nodeIDVector, info.columnVector, info.columnDataVector);
     }
+}
+
+void MultiLabelNodeSetExecutor::finalize(ExecutionContext* context) {
+    for (auto& [tableID, updateState] : updateStates) {
+        if (updateState) {
+            tableInfos.at(tableID).table->finalizeUpdate(
+                transaction::Transaction::Get(*context->clientContext),
+                updateState->indexUpdateState);
+        }
+    }
+    updateStates.clear();
 }
 
 void RelSetInfo::init(const ResultSet& resultSet, main::ClientContext* context) {
