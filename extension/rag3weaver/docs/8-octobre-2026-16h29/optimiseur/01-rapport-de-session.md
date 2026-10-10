@@ -10,9 +10,12 @@ tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseu
   plus les deux portes du service optionnel (en bâti natif, à commiter).
   Rien n'est publié, rien dans l'arbre principal.
 - **La branche ne fusionne pas avant le lot « embarqueur absent » de l'arbre
-  principal** (voir le relevé, « Le service d'embarquement devient
-  optionnel ») ; `npm test` est rouge attendu derrière
-  `RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1`.
+  principal** ; il est écrit (branche `embarqueur-absent`, c98d4ff9b) et le
+  témoin est vert dessus, sur une branche d'essai locale (`paquet-npm-absent`,
+  non poussée) — patch de la porte sous
+  `~/.cache/rag3weaver-build/paquet-npm/porte-absent.patch`, à poser sur
+  `paquet-npm` au rebase quand c'est sur master. `npm test` reste rouge
+  attendu derrière `RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1` jusque-là.
 - **Le binaire Windows se lie** (dixième essai, MSVC pur, 31 min 50 s,
   60 Mo) ; le onzième
   (https://github.com/L-Defraiteur/rag3db/actions/runs/38048487047) donne
@@ -74,11 +77,11 @@ en une phrase chacun :
    `bati-windows-x64-journal` le porte ; essayer `--describe` sur un gabarit
    avec `"sandbox": {"mode": "off"}` ; dire à codeparsers ce que `cl`
    refuse dans parser.c/scanner.c, s'il refuse.
-2. Quand l'arbre principal livre l'embarqueur absent (il donne le nom et le
-   constructeur au commit) : le poser dans `PreparedBackend::open` à la
-   place du mock, jouer `RAG3WEAVER_BACKEND=<binaire> RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test`
-   dans `bindings/nodejs`, retirer la porte du rouge attendu, puis rebase et
-   fusion de `paquet-npm`.
+2. Quand l'embarqueur absent est sur master : rebase de `paquet-npm`
+   (conflits connus : node_table.h → prendre master, paquet-npm.yml → garder
+   la branche), `git apply` du patch de la porte, rebâti, `RAG3WEAVER_BACKEND=<binaire> RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test`
+   dans `bindings/nodejs`, retirer la porte du rouge attendu, puis fusion.
+   La branche locale `paquet-npm-absent` (c88b812ec) garde le tout déjà joué.
 3. Premier bâti dans Docker, ici : `tools/build-images/build.sh linux-x64-gnu`
    (il passe par `poste lourd` ; `lucied` doit être dans le groupe docker),
    comparer `dist/linux-x64-gnu/bati.txt` au relevé du runner et de luciepc.

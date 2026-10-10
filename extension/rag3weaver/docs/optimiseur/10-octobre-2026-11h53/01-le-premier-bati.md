@@ -238,6 +238,24 @@ elle-même en passant : `search_code` exige `options` (vide, c'est
 `SearchOptions`) ; et pendant l'indexation, `index_state` rend
 `{"busy": true}` — il porte maintenant les `warnings` aussi dans ce cas.
 
+**L'embarqueur absent est écrit** (arbre principal, branche
+`embarqueur-absent`, c98d4ff9b ; `AbsentEmbedder::new(model, dim)`, porte
+le nom et la dimension du modèle attendu, n'écrit aucun vecteur, laisse la
+dette se poser contre le vrai modèle, `is_absent()`). Le témoin a été joué
+sur une branche d'essai locale (`paquet-npm-absent`, non poussée : paquet-npm
++ master + cette branche), porte de `PreparedBackend::open` sur
+`AbsentEmbedder` pour tout `None`, `allow_mock_embedder` retiré, et
+l'épreuve rendue au témoin demandé (signaux hybrides par défaut, une
+bibliothèque importée) : backend ouvert sans service en 100 ms, trois
+fichiers indexés en plein texte, `vectors: never (0 %)` sur File, Library,
+Scope et Symbol, `search_code` trouve le mot par l'index et dit « not
+available » sur le dense, arrêt propre — **aucun vecteur factice**. Le
+patch de la porte attend sur disque
+(`~/.cache/rag3weaver-build/paquet-npm/porte-absent.patch`) ; il se pose
+sur `paquet-npm` au rebase, quand l'embarqueur est sur master (après la
+batterie complète demandée par l'orchestration), et la porte « rouge
+attendu » de `npm test` tombe alors.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
