@@ -1,6 +1,6 @@
 # Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus se suivent
 
-- **État** : ouvert — classé confort pour la stèle (orchestration, 4 octobre 2026)
+- **État** : corrigé `3498ece5d` (11 octobre 2026, seconde session cœur C++) — le verrou des lecteurs ; témoin moteur nu `ReadOnlyReader.SingleOpenIsNotRefusedByBackToBackCheckpoints` (`f85497354`), rouge avant (34 refus sur 80), vert après
 - **Gravité** : blocage (une ouverture refusée ; rien n'est perdu ni lu faux)
 - **Atteignable en service** : oui, sous un écrivain qui fait beaucoup de points de reprise
 - **Touche rag3weaver** : oui (`Rag3dbConnection::read_only`, et le test
@@ -102,3 +102,47 @@ en plein point de reprise rendrait le second message pour de bon (décision de
 l'orchestration).
 
 À faire côté moteur, avec la marche 5 et pas avant : un seul message pour ce croisement.
+
+## Corrigé (`3498ece5d`) : le point de reprise cède aux ouvertures (11 octobre 2026)
+
+Forme choisie par l'orchestration, à la manière de SQLite en mode WAL : le point de reprise
+cède au lecteur au lieu de le refuser. Le chemin est un verrou des lecteurs, posé sur un
+fichier à côté de la base (`<base>.readers`, `ReadersLock`). Il passe par flock, ou par
+LockFileEx sous Windows, jamais par fcntl : un verrou fcntl appartient au processus et ne
+séparerait pas deux ouvertures d'un même processus.
+
+- **L'ouverture en lecture seule** le tient partagé, de la capture de l'en-tête et du journal
+  jusqu'au rejeu en mémoire. Si un point de reprise est en cours, elle l'attend, **5 s au
+  plus**. Au-delà, elle est refusée, et le refus le dit : « This read-only open waited N ms for
+  a checkpoint of another process to finish… ».
+- **Le point de reprise** le prend exclusif sur la seule fenêtre où le fichier change pour un
+  lecteur. Cette fenêtre va de la marque CHECKPOINT à la suppression du journal ; avant elle, il
+  n'écrit rien que l'en-tête courant désigne (avis de la session cœur C++). À la reprise d'un
+  écrivain, il prend l'exclusif autour du rejeu des pages fantômes et de la troncature du
+  journal. Il attend les ouvertures en cours **1 s au plus**, puis passe, et l'écrit sur la
+  sortie d'erreur (« … waited N ms for read-only openings of the database and went ahead
+  without them »). Il ne peut pas dire combien d'ouvertures il a attendues : flock ne compte pas
+  ceux qui tiennent le verrou.
+- **Le constat d'après coup** (`CHECKPOINT_CROSSED_READ_ONLY_OPEN`) reste le filet. Il joue pour
+  une ouverture plus longue que la borne de l'écrivain (un gros journal à rejouer, un lecteur
+  bloqué), pour une base ouverte en lecture seule dans le processus de l'écrivain au-delà
+  d'1 s, et pour un dossier où le fichier du verrou ne peut pas exister. Son message dit
+  maintenant la borne de 1 s.
+- **Ce que le verrou ne couvre pas** : les lecteurs restés ouverts pendant qu'un point de
+  reprise passe. Ils restent l'affaire de la marche 5 (une époque écrite dans le fichier), avec
+  le message unique pour ce croisement.
+
+Témoins :
+
+- `ReadOnlyReader.SingleOpenIsNotRefusedByBackToBackCheckpoints`, le cas moteur nu : un
+  écrivain sans pause, et 80 ouvertures d'un seul essai, sans la patience de l'appelant. Rouge
+  sur master avec 34 refus sur 80 (25 « checkpointed by another process », 9 « Couldn't replay
+  shadow pages ») ; vert après, 0 sur 80.
+- `ReadOnlyReader.InsistingReaderIsNotStarvedByCheckpoints` : 0 refus à 0,2 ms et sans pause.
+- Les bornes, dans `ReadOnlyOpenTest` :
+  - `ReadOnlyOpenWaitsForACheckpointInProgress` : l'ouverture attend 300 ms, puis s'ouvre ;
+  - `ReadOnlyOpenWaitIsBoundedAndNamed` : le refus nommé arrive à 5 s ;
+  - `CheckpointWaitsForAReadOnlyOpenThenGoesAhead` : le point de reprise passe à 1 s.
+
+Côté rag3weaver, la reprise des deux messages sous la borne de 2 s devient un filet ; elle peut
+rester.

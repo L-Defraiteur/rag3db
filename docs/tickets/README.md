@@ -25,7 +25,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (42)
+### Ouverts (41)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -40,7 +40,6 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Sous les verrous, une seconde suppression ou mise à jour de la même relation, après attente, reçoit « Write-write conflict » et non l'erreur de sérialisation](2026-10-10-seconde-suppression-d-une-relation-apres-attente-sans-erreur-de-serialisation.md) | ouvert (A4′) | nom de l'erreur | non (mode multi-écrivains) | non |
 | [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | ouvert (A4′ faite, chemin non trouvé) | réponse fausse après reprise | non (mode multi-écrivains) | non |
 | [Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit](2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md) | ouvert | blocage | oui | oui (première indexation, poussée des blobs du plein texte) |
-| [Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus se suivent](2026-10-04-lecteur-affame-par-les-points-de-reprise.md) | ouvert (confort pour la stèle) | blocage | oui | oui (`read_only`, e2e_prise_atomique) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
 | [Un NULL en tête d'une liste de paramètres type sa colonne en STRING](2026-10-04-null-en-tete-d-une-liste-de-parametres-type-string.md) | ouvert (contourné dans rag3weaver) | perte | oui | oui, par `LinkRecordNode` |
 | [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert, confort (hors condition 1) | réponse fausse | oui | non |
@@ -75,7 +74,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
-### Fermés (51), dans `closed/`
+### Fermés (52), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -130,3 +129,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Sous IGNORE_ERRORS, un doublon de clé fait supprimer une ligne innocente](closed/2026-10-10-ignore-errors-supprime-une-ligne-innocente.md) | corrigé `de8fc8c0f` | perte, réponse fausse | oui (un COPY sous IGNORE_ERRORS, index de clé sur disque) | non (il n'écrit jamais IGNORE_ERRORS) |
 | [Le tampon de 256 Mio est plein à la première écriture d'un backend](closed/2026-10-10-tampon-de-256-mio-plein-a-la-premiere-ecriture.md) | fermé — non reproduit sur master, sous 256 Mio et 32 fils, sur les deux postes | blocage (annoncé) | non reproduit | oui (backend) |
 | [Une extension chargée au rejeu n'est pas vérifiée contre le bâti du moteur](closed/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md) | corrigé `458ff7157` — identifiant de bâti, refus nommé à LOAD EXTENSION et au rejeu | blocage à l'ouverture au lieu d'un refus nommé | si moteur et extension ne sont pas du même bâti | à l'atelier |
+| [Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus se suivent](closed/2026-10-04-lecteur-affame-par-les-points-de-reprise.md) | corrigé `3498ece5d` — le verrou des lecteurs : l'ouverture attend le point de reprise (5 s, refus nommé au-delà), le point de reprise attend les ouvertures (1 s, puis il passe) | blocage | oui | oui (`read_only`, e2e_prise_atomique ; sa reprise devient un filet) |
