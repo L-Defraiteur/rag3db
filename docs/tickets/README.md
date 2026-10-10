@@ -76,10 +76,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
-### Fermés (51), dans `closed/`
+### Fermés (52), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [« duplicate node name: sparse » à la première recherche de test_backend_sparse](closed/2026-10-10-duplicate-node-name-sparse-par-la-fixture.md) | corrigé `413e7ba93` | réponse fausse (un rouge de fixture pris pour un défaut du moteur) | non — fixture de suite seulement | oui — tests seulement, plus le filet des 31 fiches d'outils |
 | [« unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`](closed/2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | corrigé `9dc3f083a` | interprétation : un modèle y lit un défaut d'outil au lieu d'une déclaration absente | seulement avec un manifeste qui ne déclare pas `workspace.index: "code"` | oui — toute la surface de code |
 | [Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas](closed/2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md) | corrigé | blocage, panne de mémoire | oui | oui (paquet défait, COPY refusé) |
 | [Une transaction qui mêle des écritures et un COPY revient à moitié après une mort pendant le point de reprise de sa validation](closed/2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md) | corrigé | perte (et base inouvrable sous IGNORE_ERRORS) | oui (chemin par défaut) | oui, par la transaction par paquet (éteinte par défaut) |
