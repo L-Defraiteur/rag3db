@@ -1290,6 +1290,14 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus
+  se suivent~~ — **corrigé le 11 octobre 2026** (`b73b62c3f`, seconde session cœur C++) : un
+  verrou des lecteurs à côté de la base (`<base>.readers`), comme SQLite en mode WAL.
+  L'ouverture en lecture seule attend un point de reprise en cours, 5 s au plus, puis donne un
+  refus nommé. Le point de reprise attend les ouvertures en cours, 1 s au plus, puis passe. Le
+  constat d'après coup reste le filet ; les lecteurs restés ouverts restent l'affaire de la
+  marche 5. Le cas moteur nu passe de 34 refus sur 80 à 0. Ticket
+  `docs/tickets/closed/2026-10-04-lecteur-affame-par-les-points-de-reprise.md`.
 - ~~Une extension d'un autre bâti que le moteur se charge sans un mot~~ — **corrigé le 10 octobre
   2026** (`458ff7157`, seconde session cœur C++) : identifiant de bâti dans le moteur et chaque extension,
   régénéré à chaque bâti, refus nommé à `LOAD EXTENSION` et au rejeu (l'index se dit en retard avec
