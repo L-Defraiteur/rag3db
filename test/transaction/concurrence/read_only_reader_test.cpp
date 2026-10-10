@@ -96,26 +96,18 @@ PatientOpen openPatiently(const std::string& path, const rag3db::main::SystemCon
     }
 }
 
-} // namespace
-
-class ReadOnlyReader : public EmptyDBTest {
-public:
-    void SetUp() override {
-        EmptyDBTest::SetUp();
-        createDBAndConn();
-    }
-};
-
-TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
-    conn.reset();
-    database.reset();
+// Le fils écrit sans relâche, un point de reprise tous les cinq enregistrements, avec une pause
+// de `pause` µs entre deux écritures ; le père ouvre la base en lecture seule CYCLES fois par
+// `open`. Rend les refus, par message.
+template<typename Open>
+std::map<std::string, int> readWhileCheckpointing(const std::string& path,
+    const rag3db::main::SystemConfig& baseConfig, useconds_t pause, Open open, int& refused) {
     auto* report = shareReport();
-    const auto path = databasePath;
-    const auto baseConfig = *systemConfig;
-
-    const auto pause = writePauseUs();
     const auto pid = fork();
-    ASSERT_NE(pid, -1);
+    if (pid == -1) {
+        ADD_FAILURE() << "fork";
+        return {};
+    }
     if (pid == 0) {
         try {
             rag3db::main::Database database(path, baseConfig);
@@ -131,9 +123,9 @@ TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
                 if ((i + 1) % 5 == 0) {
                     connection.query("CHECKPOINT;");
                 }
-                // Le rythme d'un écrivain rag3weaver dans le test d'origine : quelques
-                // centaines d'écritures par seconde, pas des milliers.
-                usleep(pause);
+                if (pause > 0) {
+                    usleep(pause);
+                }
             }
         } catch (const std::exception&) {
             report->failed = 1;
@@ -143,23 +135,25 @@ TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
     for (int i = 0; i < 30000 && !report->ready && !report->failed; i++) {
         usleep(1000);
     }
-    ASSERT_EQ(report->failed, 0);
-    ASSERT_EQ(report->ready, 1);
-
+    std::map<std::string, int> reasons;
+    refused = 0;
+    if (report->failed || !report->ready) {
+        ADD_FAILURE() << "the writer did not start";
+        report->stopRequested = 1;
+        waitpid(pid, nullptr, 0);
+        return reasons;
+    }
     const auto start = std::chrono::steady_clock::now();
     const auto rowsAtStart = report->rowsWritten;
-    int refused = 0;
     int read = 0;
-    std::map<std::string, int> reasons;
     for (int cycle = 0; cycle < CYCLES; cycle++) {
-        const auto open = openPatiently(path, baseConfig);
-        if (open.error.empty()) {
+        const auto error = open();
+        if (error.empty()) {
             read++;
         } else {
             refused++;
-            reasons[open.error]++;
-            std::cerr << "  refused after " << open.attempts << " attempts: " << open.error
-                      << "\n";
+            reasons[error]++;
+            std::cerr << "  refused: " << error << "\n";
         }
         usleep(2000);
     }
@@ -172,13 +166,61 @@ TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
     waitpid(pid, &status, 0);
     std::cerr << "  read " << read << ", refused " << refused << ", writes " << rowsDuring
               << " in " << elapsedMs << " ms (" << rowsDuring / 5 << " checkpoints)\n";
-    createDBAndConn();
+    return reasons;
+}
 
+std::string summarize(const std::map<std::string, int>& reasons) {
     std::string summary;
     for (const auto& [reason, count] : reasons) {
-        summary += "\n    " + std::to_string(count) + "× " + reason;
+        summary += "\n    " + std::to_string(count) + "× " + reason.substr(0, 300);
     }
+    return summary;
+}
+
+} // namespace
+
+class ReadOnlyReader : public EmptyDBTest {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        createDBAndConn();
+    }
+};
+
+TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
+    conn.reset();
+    database.reset();
+    const auto path = databasePath;
+    const auto baseConfig = *systemConfig;
+    int refused = 0;
+    const auto reasons = readWhileCheckpointing(path, baseConfig, writePauseUs(),
+        [&]() {
+            const auto open = openPatiently(path, baseConfig);
+            if (!open.error.empty()) {
+                return "after " + std::to_string(open.attempts) + " attempts: " + open.error;
+            }
+            return std::string();
+        },
+        refused);
+    createDBAndConn();
     EXPECT_EQ(refused, 0) << "[check: reader-not-starved] " << refused << " of " << CYCLES
                           << " read-only opens refused beyond " << PATIENCE_MS << " ms:"
-                          << summary;
+                          << summarize(reasons);
+}
+
+// Le moteur nu, sans la patience de l'appelant : un écrivain qui enchaîne les points de reprise
+// sans pause, et des ouvertures en lecture seule d'un seul essai. Une ouverture attend la fin
+// d'un point de reprise qui l'aurait traversée (le verrou des lecteurs, à côté de la base) au
+// lieu d'être refusée ; aucune ne l'est.
+TEST_F(ReadOnlyReader, SingleOpenIsNotRefusedByBackToBackCheckpoints) {
+    conn.reset();
+    database.reset();
+    const auto path = databasePath;
+    const auto baseConfig = *systemConfig;
+    int refused = 0;
+    const auto reasons = readWhileCheckpointing(path, baseConfig, 0 /* pause */,
+        [&]() { return openAndCount(path, baseConfig); }, refused);
+    createDBAndConn();
+    EXPECT_EQ(refused, 0) << "[check: single-open-not-refused] " << refused << " of " << CYCLES
+                          << " single read-only opens refused:" << summarize(reasons);
 }
