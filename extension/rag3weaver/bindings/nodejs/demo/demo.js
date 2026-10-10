@@ -24,6 +24,13 @@ const gris = (t) => `\x1b[2m${t}\x1b[0m`;
 const titre = (t) => console.log(`\n${gras('━━ ' + t)}\n`);
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Les vecteurs d'une entité, en un mot : « non déclarés » (Symbol, en BM25
+// seul : ni une panne ni une dette), sinon le niveau et le pourcentage.
+function vecteurs(v) {
+  if (v.vectors === 'not_declared') return 'sans vecteurs (non déclarés)';
+  return `vecteurs ${v.vectors}${v.vectors_percent != null ? ` (${v.vectors_percent}%)` : ''}`;
+}
+
 // Le rendu lisible d'une réponse d'outil : `presentation` quand le backend
 // l'a composé, sinon `result`, sinon le JSON ; puis la section du crochet
 // « after » (les Liens d'une recherche, l'impact d'un fichier lu), que le
@@ -97,24 +104,24 @@ async function main() {
     await dormir(1000);
     etat = await backend.indexState();
     const ligne = Object.entries(etat).filter(([k]) => k !== 'warnings' && k !== 'busy')
-      .map(([k, v]) => `${k} ${v.text}${v.vectors_percent != null ? ` · vecteurs ${v.vectors_percent}%` : ''}`).join(' | ');
+      .map(([k, v]) => `${k} ${v.text} · ${vecteurs(v)}`).join(' | ');
     if (ligne && ligne !== derniere) { console.log(gris(`  ${ligne}`)); derniere = ligne; }
   }
   // L'indexation rend le verrou avant que les vecteurs soient tous là : on
   // laisse la dette se payer (au plus trois minutes), tant qu'une entité
   // dit ses vecteurs en cours.
   for (let i = 0; i < 180; i++) {
-    const vecteurs = Object.entries(etat).filter(([k]) => k !== 'warnings' && k !== 'busy');
-    const enCours = vecteurs.some(([, v]) => v.vectors === 'in_progress');
+    const entites = Object.entries(etat).filter(([k]) => k !== 'warnings' && k !== 'busy');
+    const enCours = entites.some(([, v]) => v.vectors === 'in_progress');
     if (!enCours) break;
     await dormir(1000);
     etat = await backend.indexState();
-    if (i % 10 === 9) console.log(gris(`  ${vecteurs.map(([k, v]) => `${k} vecteurs ${v.vectors_percent}%`).join(' · ')}`));
+    if (i % 10 === 9) console.log(gris(`  ${entites.map(([k, v]) => `${k} ${vecteurs(v)}`).join(' · ')}`));
   }
   console.log(`\n  indexé en ${((Date.now() - t1) / 1000).toFixed(1)} s`);
   for (const [k, v] of Object.entries(etat)) {
     if (k === 'warnings' || k === 'busy') continue;
-    console.log(`  ${gras(k.padEnd(8))} texte ${v.text} · vecteurs ${v.vectors}${v.vectors_percent != null ? ` (${v.vectors_percent}%)` : ''} · relations ${v.relations}`);
+    console.log(`  ${gras(k.padEnd(8))} texte ${v.text} · ${vecteurs(v)} · relations ${v.relations}`);
   }
   if (Array.isArray(etat.warnings) && etat.warnings.length) {
     console.log(`\n  ${gras('avertissement')} : ${etat.warnings[0]}`);

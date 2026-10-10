@@ -95,7 +95,8 @@ async function main() {
     throw new Error(`la recherche hybride sans service doit dire que le dense n'est pas disponible : ${a2.slice(0, 600)}`);
   }
   console.log('search_code : le dense se replie en le disant (« not available »)');
-  const vecteurs = Object.entries(etat).filter(([k]) => k !== 'warnings').map(([k, v]) => `${k}: vecteurs ${v.vectors} (${v.vectors_percent}%)`);
+  const vecteurs = Object.entries(etat).filter(([k]) => k !== 'warnings')
+    .map(([k, v]) => `${k}: ${v.vectors === 'not_declared' ? 'sans vecteurs (non déclarés)' : `vecteurs ${v.vectors} (${v.vectors_percent}%)`}`);
   console.log(`dette : ${vecteurs.join(' · ')}`);
 
   const exit = await backend.shutdown();
