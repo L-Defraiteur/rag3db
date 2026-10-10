@@ -1488,6 +1488,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::template_nodes::AdoptTemplateNodeFactory));
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
+        registry.register(Box::new(super::run_nodes::TailNodeFactory));
     }
 }
 
