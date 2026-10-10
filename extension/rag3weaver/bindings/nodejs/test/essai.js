@@ -75,6 +75,10 @@ async function main() {
 
   // Indexer les trois fichiers (plein texte seul), puis chercher dans l'index.
   const recu = await backend.call('index', { confirm: true });
+  // Le journal de l'indexation en fond : c'est là que vivent ses erreurs
+  // (vingt-et-unième essai Windows : « plein texte en cours » sans fin, et
+  // rien sur stderr).
+  journalIndex = (String(recu.result || '').match(/journal : (.+)/) || [])[1];
   console.log(`index : ${JSON.stringify(recu).slice(0, 160)}`);
   // L'indexation tourne en fond : on attend qu'elle rende le verrou, puis
   // que le plein texte de chaque entité soit prêt — le verrou se rend entre
@@ -112,7 +116,15 @@ async function main() {
 }
 
 let backendEnCours = null;
+let journalIndex = null;
 main().catch((e) => {
+  if (journalIndex) {
+    try {
+      const j = fs.readFileSync(journalIndex.trim(), 'utf8');
+      console.error(`--- journal de l'indexation (${journalIndex.trim()}, fin) ---`);
+      console.error(j.split('\n').slice(-30).join('\n'));
+    } catch (err) { console.error(`(journal de l'indexation illisible : ${err.message})`); }
+  }
   // Ce que le backend a dit sur stderr : c'est là que vivent les causes
   // (« plein texte … index non ouvert », dix-huitième essai Windows).
   if (backendEnCours && backendEnCours.stderr && backendEnCours.stderr.length) {

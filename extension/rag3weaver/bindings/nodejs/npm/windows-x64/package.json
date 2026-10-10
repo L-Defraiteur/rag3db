@@ -4,7 +4,7 @@
   "description": "rag3weaver prebuilt backend for Windows x64 (MSVC) — installed automatically by the rag3weaver package",
   "files": [
     "rag3weaver-backend.exe",
-    "vector.rag3db_extension"
+    "libvector.rag3db_extension"
   ],
   "license": "MIT",
   "author": "Luciform Research",
