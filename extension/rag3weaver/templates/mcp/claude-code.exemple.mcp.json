@@ -1,0 +1,37 @@
+{
+  "_lisez_moi": "Exemple. Copiez-le en .mcp.json à la racine d'un dépôt À VOUS, remplacez les quatre « À REMPLACER », et lisez templates/mcp/README.md — notamment pourquoi un .mcp.json à la racine est un réglage COMMUN à toutes les sessions du dépôt, et pas un réglage personnel.",
+
+  "mcpServers": {
+    "rag3weaver-code": {
+      "_role": "Chercher dans ce dépôt : search_code, usages, impact, grep_files, read_file, schema…  La liste exacte vient du manifeste, jamais d'ici.",
+      "command": "À REMPLACER/target/debug/rag3weaver-backend",
+      "args": [
+        "mcp",
+        "--manifest", "À REMPLACER/mon-projet/backend.json",
+        "--keys", "dev"
+      ],
+      "env": {
+        "LD_LIBRARY_PATH": "À REMPLACER/build/lecteurs-csv/src",
+        "RAG3DB_ROOT": "À REMPLACER (l'arbre où le moteur est bâti)",
+        "RAG3WEAVER_EMBED_SERVICE": "127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880"
+      }
+    },
+
+    "rag3weaver-memoire": {
+      "_role": "La mémoire longue, d'une session à l'autre : put_memory, get_memory, recall, put_subject, recall_subjects, add_ref, create_ref_type.",
+      "_pourquoi_demon": "Claude Code lance un processus MCP PAR SESSION, et une base rag3db n'a qu'un écrivain. Avec --demon, ce serveur ne possède pas la base : rag3daemon la tient, et N sessions lui parlent. Sans --demon, la deuxième session serait refusée par le moteur.",
+      "command": "À REMPLACER/target/debug/rag3weaver-backend",
+      "args": [
+        "mcp",
+        "--manifest", "À REMPLACER/memoire/backend.json",
+        "--demon", "127.0.0.1:7979",
+        "--keys", "dev"
+      ],
+      "env": {
+        "LD_LIBRARY_PATH": "À REMPLACER/build/lecteurs-csv/src",
+        "RAG3DB_ROOT": "À REMPLACER (l'arbre où le moteur est bâti)",
+        "RAG3WEAVER_EMBED_SERVICE": "127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880"
+      }
+    }
+  }
+}
