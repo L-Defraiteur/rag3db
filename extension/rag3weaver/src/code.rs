@@ -2114,12 +2114,17 @@ impl Catalog {
         if to_uuids.is_empty() {
             return Ok(out);
         }
-        let kind_expr = if with_kind { ", r.kind, r.usage, r.usages, r.line, r.qualifier_types, r.import_modules, r.self_types" } else { "" };
-        let cypher = format!(
-            // Étiqueté : sans `:Symbol`, le moteur cherchait le nœud dans
-            // toutes les tables, à chaque symbole de chaque lot.
-            "UNWIND $uuids AS uid MATCH (n:{SYMBOL} {{_uuid: uid}})<-[r:{rel}]-(m) RETURN uid, m._uuid{kind_expr}"
-        );
+        // Étiqueté au départ : sans `:Symbol`, le moteur cherchait le nœud
+        // dans toutes les tables, à chaque symbole de chaque lot. L'arrivée
+        // est de table quelconque. Le saut est dit par le dialecte.
+        let mut saut = rag3weaver_ir::Hop::untyped(rel, rag3weaver_ir::Direction::Incoming);
+        saut.start = Some(SYMBOL.to_string());
+        if with_kind {
+            saut.returns.extend(
+                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
+            );
+        }
+        let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
             .conn()

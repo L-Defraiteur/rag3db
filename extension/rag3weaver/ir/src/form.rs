@@ -56,6 +56,8 @@ pub struct Hop {
     pub direction: Direction,
     pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
+    /// Au plus tant de lignes en tout (pour un départ unique : par départ).
+    pub limit: Option<usize>,
 }
 
 impl Hop {
@@ -68,6 +70,7 @@ impl Hop {
             direction,
             returns: vec![Column::Node("_uuid".into())],
             exclude: None,
+            limit: None,
         }
     }
 

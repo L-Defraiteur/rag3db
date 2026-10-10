@@ -1098,7 +1098,8 @@ impl SchemaDialect for Rag3dbDialect {
                 rag3weaver_ir::Column::Whole => "m".to_string(),
             }))
             .collect();
-        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}", colonnes.join(", ")))
+        let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{borne}", colonnes.join(", ")))
     }
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
@@ -2813,6 +2814,8 @@ mod tests {
         let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
+        libre.limit = Some(5);
+        assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m._uuid, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
     }

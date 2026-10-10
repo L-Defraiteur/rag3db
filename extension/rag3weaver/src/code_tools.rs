@@ -1004,20 +1004,22 @@ fn voisins_des_scopes(
 
     let mut out = Vec::new();
     for (uuid, nom) in vus {
-        let cypher = format!(
-            "MATCH (n {{_uuid: $uuid}})-[:{relation}]->(m) \
-             RETURN m.name, m.scope_type, m.file_path, m.start_line, m.end_line LIMIT {limit}"
-        );
+        // Un saut depuis ce seul scope, de table quelconque, borné : la
+        // première colonne est son uuid, les champs du voisin viennent après.
+        let mut saut = rag3weaver_ir::Hop::untyped(relation, rag3weaver_ir::Direction::Outgoing);
+        saut.returns = ["name", "scope_type", "file_path", "start_line", "end_line"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec();
+        saut.limit = Some(limit);
+        let cypher = catalog.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
         let rows = catalog
-            .execute_raw_with_params(&cypher, &[crate::connection::QueryParam::new("uuid", CypherValue::String(uuid))])
+            .execute_raw_with_params(&cypher, &[crate::dataflow::graph_walk::uuid_param(&[uuid])])
             .map_err(|e| e.to_string())?;
         let to: Vec<(String, String, String)> = rows
             .rows
             .iter()
             .filter_map(|r| {
-                let nom = r.first()?.as_str()?.to_string();
-                let genre = r.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let ou = match (r.get(2).and_then(|v| v.as_str()), r.get(3).and_then(|v| v.as_i64())) {
+                let nom = r.get(1)?.as_str()?.to_string();
+                let genre = r.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let ou = match (r.get(3).and_then(|v| v.as_str()), r.get(4).and_then(|v| v.as_i64())) {
                     (Some(f), Some(l)) => format!("{f}:{l}"),
                     (Some(f), None) => f.to_string(),
                     _ => String::new(),

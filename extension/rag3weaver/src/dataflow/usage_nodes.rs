@@ -139,7 +139,15 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
         let q = format!("MATCH (p:{t}) WHERE p.{f} CONTAINS $nom RETURN '', {colonnes}", t = rel.to, f = d.field);
         catalog.execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
     } else {
-        let q = format!("UNWIND $uuids AS u MATCH (x:{} {{_uuid: u}})-[:{}]->(p:{}) RETURN u, {colonnes}", rel.from, rel.name, rel.to);
+        // Le saut des définitions vers leurs conteneurs, dit par le dialecte ;
+        // mêmes colonnes, dans le même ordre.
+        let mut saut = rag3weaver_ir::Hop::new(&rel.from, &rel.name, &rel.to, rag3weaver_ir::Direction::Outgoing);
+        saut.returns = std::iter::once(&cfg.title)
+            .chain(cfg.path_fields.iter())
+            .chain(std::iter::once(&d.field))
+            .map(|f| rag3weaver_ir::Column::Node(f.clone()))
+            .collect();
+        let q = catalog.dialect_arc().hop(&saut).map_err(|e| format!("UsagesNode: {e}"))?;
         let uuids = CypherValue::List(definitions.iter().map(|x| CypherValue::String(x.uuid.clone())).collect());
         catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", uuids)])
     }
