@@ -601,15 +601,20 @@ TEST_P(ConcurrencyBench, C1_SnapshotPredatesCommit) {
 }
 
 // L'attente sous les verrous (A4′), prouvée par l'ordre des événements : la fin d'écriture de
-// l'écrivain 1 vient après la validation de l'écrivain 0.
+// l'écrivain 1 vient après le DÉBUT de la validation de l'écrivain 0. Pas après sa fin : le
+// verrou est rendu pendant la validation, et l'écrivain 1, réveillé, peut marquer sa fin
+// d'écriture avant que l'écrivain 0 ne marque la sienne (vu sur luciepc, 10 octobre). Sans
+// verrou, l'écriture de l'écrivain 1 finit bien avant : commitInOrderByEvents fait attendre
+// l'écrivain 0 jusqu'à deux secondes qu'elle s'achève avant de valider.
 static void expectSecondWriterWaited(const SharedArea& area) {
-    const auto firstCommit = eventIndex(area, 0, "commit:done");
+    const auto firstCommit = eventIndex(area, 0, "commit:start");
     auto secondWrite = eventIndex(area, 1, "write:done");
     if (secondWrite < 0) {
         secondWrite = eventIndex(area, 1, "write:failed");
     }
     EXPECT_GT(secondWrite, firstCommit)
-        << "[check: waited] the second writer's write ended before the first writer committed";
+        << "[check: waited] the second writer's write ended before the first writer began to "
+           "commit";
 }
 
 // C2 — relation contre suppression d'une de ses extrémités. Les nœuds 1 et 2 sont
