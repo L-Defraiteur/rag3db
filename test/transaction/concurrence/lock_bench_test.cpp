@@ -350,12 +350,16 @@ TEST_F(LockBench, AnnouncedLocksNeverDeadlockAndBothCommitInTurn) {
     }
     EXPECT_EQ(errors, 0u) << "[check: no-error] ";
     EXPECT_EQ(totalCommits(area), 2u) << "[check: both-commit] ";
-    // L'une après l'autre : l'annonce de l'une se termine après le commit de l'autre.
+    // L'une après l'autre : l'annonce de l'une se termine après le DÉBUT du commit de l'autre —
+    // le verrou est rendu pendant le COMMIT (clearTransactionNoLock → releaseAll), avant que
+    // le fil du premier ne marque commit:done ; la même course qu'expectWaited borne par
+    // end:start (10-11 octobre).
     const bool zeroFirst =
-        eventIndex(area, 0, "commit:done") >= 0 &&
-        eventIndex(area, 1, "announce:done") > eventIndex(area, 0, "commit:done");
-    const bool oneFirst = eventIndex(area, 1, "commit:done") >= 0 &&
-                          eventIndex(area, 0, "announce:done") > eventIndex(area, 1, "commit:done");
+        eventIndex(area, 0, "commit:start") >= 0 &&
+        eventIndex(area, 1, "announce:done") > eventIndex(area, 0, "commit:start");
+    const bool oneFirst =
+        eventIndex(area, 1, "commit:start") >= 0 &&
+        eventIndex(area, 0, "announce:done") > eventIndex(area, 1, "commit:start");
     EXPECT_TRUE(zeroFirst || oneFirst) << "[check: in-turn] ";
     EXPECT_EQ(queryInt("MATCH (n:Item) RETURN sum(n.a);"), 4) << "[check: all-updates] ";
 }
