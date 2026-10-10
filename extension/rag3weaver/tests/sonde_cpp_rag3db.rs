@@ -66,4 +66,30 @@ fn appelants_de_node_table_update_et_verrous() {
          RETURN c.name, s.name, a.name ORDER BY c.name, s.name, a.name LIMIT 20",
     );
     eprintln!("[sonde] verrous des tables et index : {porteurs:#?}");
+
+    // L'outil lui-même : `impact` sur NodeTable::update, tel qu'un agent le
+    // reçoit (la définition de node_table.cpp, par le préfixe de chemin).
+    use rag3weaver::dataflow::graph_tool::GraphTool;
+    use rag3weaver::dataflow::node_factories::register_builtins;
+    use rag3weaver::dataflow::node_registry::NodeRegistry;
+    use rag3weaver::dataflow::ServiceRegistry;
+    let catalog = std::sync::Arc::new(std::sync::Mutex::new(cat));
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    // Le chemin dans le dépôt (`repo_path`), pas le chemin absolu.
+    let chemin = "src/storage/table/node_table.cpp";
+    let md = tool.execute(&registry, std::sync::Arc::new(services), &serde_json::json!({"name": "update", "path": chemin, "depth": 3})).unwrap();
+    eprintln!("[sonde] ---- impact NodeTable::update ----\n{md}\n[sonde] ---- fin ----");
+
+    // Et ce qu'elle appelle, avec les verrous pris en dessous : le même nœud,
+    // dans le sens sortant (ce dont update dépend).
+    let sortant = include_str!("../templates/tools/impact.mmd").replace("direction=incoming", "direction=outgoing").replace("%% tool: impact", "%% tool: dependances");
+    let tool = GraphTool::from_mermaid(&sortant).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let md = tool.execute(&registry, std::sync::Arc::new(services), &serde_json::json!({"name": "update", "path": chemin, "depth": 3})).unwrap();
+    eprintln!("[sonde] ---- appelés de NodeTable::update ----\n{md}\n[sonde] ---- fin ----");
 }
