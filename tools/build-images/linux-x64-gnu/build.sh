@@ -9,8 +9,12 @@
 #   JOBS    tâches de compilation (défaut : 8 — jamais tous les cœurs d'un poste de travail)
 set -euo pipefail
 ici=$(cd "$(dirname "$0")" && pwd)
-SRC=${SRC:-$( [ -d /src/extension/rag3weaver ] && echo /src || cd "$ici/../../.." && pwd )}
-CACHE=${CACHE:-$( [ -d /cache ] && echo /cache || echo "$HOME/.cache/rag3weaver-build/paquet-npm" )}
+if [ -z "${SRC:-}" ]; then
+  if [ -d /src/extension/rag3weaver ]; then SRC=/src; else SRC=$(cd "$ici/../../.." && pwd); fi
+fi
+if [ -z "${CACHE:-}" ]; then
+  if [ -d /cache ]; then CACHE=/cache; else CACHE=$HOME/.cache/rag3weaver-build/paquet-npm; fi
+fi
 JOBS=${JOBS:-8}
 CIBLE=linux-x64-gnu
 DIST=$SRC/dist/$CIBLE
