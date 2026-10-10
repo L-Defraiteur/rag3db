@@ -262,8 +262,12 @@ plus grand que le degré n'aurait plus de sortie. Il faut donc une borne.
 faut les recréer (DROP puis CREATE_VECTOR_INDEX). Le format ne change pas.
 
 **État au 5 octobre, midi (en pause).** La règle classique et la borne des copies sont
-écrites, pas commitées. Mesure à moitié faite : en « masse », 9 à 22 introuvables contre 6 et
-10 sur master ; le critère de l'orchestration (aucune classe ne recule) n'est pas atteint en
-l'état. Le détail et la suite sont au rapport du banc
+écrites, pas commitées. (Une mesure du 5 donnait 9 à 22 introuvables contre 6 et 10 : elle est
+invalide, les deux colonnes tournaient sur l'extension du i = 0 ; voir la note du 10 octobre.)
+
+**État au 10 octobre.** Le code est commité sur la branche `banc-elagage-en-cours`
+(`9c030091d`), pas sur master. Les deux colonnes sont à rejouer avec l'extension rebâtie et
+vérifiée. Seul chiffre valable de la vraie règle de master : en « masse », 33, 2 et 3
+introuvables, et un rappel@10 de 0,992 à 0,996. Le détail et la suite sont au rapport du banc
 (`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/01-rapport-de-session.md`,
 « En pause depuis le 5 octobre à midi »).

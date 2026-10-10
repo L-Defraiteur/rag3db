@@ -484,6 +484,11 @@ impl Catalog {
 
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
     pub fn known_embedding_rate(&self) -> Result<Option<Rate>, CatalogError> {
+        // Absent, rien ne s'embarquera ici : le débit d'un autre montage du
+        // même modèle ne prévoit rien.
+        if self.embedder.is_absent() {
+            return Ok(None);
+        }
         self.embedding_rate(self.embedder.name(), self.embedder_origin())
     }
 

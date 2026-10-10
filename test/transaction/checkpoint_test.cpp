@@ -2,6 +2,7 @@
 #include <fstream>
 
 #include "api_test/private_api_test.h"
+#include "test_runner/fsm_leak_checker.h"
 #include "common/exception/runtime.h"
 #include "flaky_checkpointer.h"
 #include "storage/checkpointer.h"
@@ -66,6 +67,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointStorageFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 class FlakyCheckpointerFailsOnSerialization final : public Checkpointer {
@@ -87,6 +91,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointSerializeFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 // La même panne, sur une table qui a déjà vécu. Les autres tests de ce fichier
@@ -439,6 +446,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointWriteHeaderFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 class FlakyCheckpointerFailsOnFlushingShadow final : public Checkpointer {
@@ -461,6 +471,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointFlushingShadowFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 class FlakyCheckpointerFailsOnLoggingCheckpoint final : public Checkpointer {
@@ -487,6 +500,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointLoggingCheckpointFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 class FlakyCheckpointerFailsOnApplyingShadow final : public Checkpointer {
@@ -520,6 +536,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointApplyingShadowFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 class FlakyCheckpointerFailsOnClearingFiles final : public Checkpointer {
@@ -554,6 +573,9 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointClearingFilesFailure) {
     };
     FlakyCheckpointer flakyCheckpointer(initFlakyCheckpointer);
     runTest(flakyCheckpointer);
+    // Un point de reprise interrompu — avant sa marque comme après — ne laisse aucune page sans
+    // propriétaire : l'étendue de l'en-tête couvre ce qu'il désigne, et l'ouverture rend le reste.
+    FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
 // Simulates a situation where a database attempts to replay a shadow file from an older database

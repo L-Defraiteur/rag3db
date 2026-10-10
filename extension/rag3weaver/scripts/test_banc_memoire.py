@@ -119,6 +119,8 @@ def main():
         'périmés servis comme vrais': 0,
         'contradictions vues': None,
         'propositions jamais appliquées': None,
+        'genres créés en double': 0,
+        'références perdues par un refus': 0,
     }
     non_jouees = []
     artefact = (0, '(non écrit)')
@@ -283,6 +285,89 @@ def main():
             if 'coeurs libres' in json.dumps(ask('recall', {'query': 'coeurs', 'options': {'limit': 5}})):
                 mesures['rappels utiles'] += 1
 
+            # ── Session 6 : citer des choses, et apprendre un genre ─────
+            #
+            # Le scénario connaît ses réponses par construction : un genre qui
+            # n'existe pas, une création non confirmée, une création confirmée,
+            # puis la citation qui passe. Ce qu'on mesure n'est pas « ça
+            # marche » — c'est **qu'un refus ne perd rien** et **qu'un genre de
+            # trop ne se crée pas**.
+            rapport = lambda r: r['result']
+
+            # 1. Un genre inconnu : la réponse doit porter la liste, l'appel
+            #    exact **et la valeur**. Une demande de précision qui perd la
+            #    valeur oblige l'appelant à la retrouver, et c'est ainsi qu'on
+            #    perd une référence.
+            r = rapport(ask('add_ref', {'genre': 'invoice', 'valeur': 'FAC-2026-0412'}))
+            assert r['executed'] is False and r['needs'] == ['genre'], r
+            assert 'create_ref_type' in r['rappel'], r
+            if r.get('valeur') != 'FAC-2026-0412':
+                mesures['références perdues par un refus'] += 1
+
+            # 2. Le premier appel de création n'écrit rien, et montre ce qui
+            #    existe. C'est le garde-fou contre le genre de trop.
+            r = rapport(ask('create_ref_type', {'name': 'invoice',
+                                                'description': 'un numéro de facture, FAC-2026-0412'}))
+            assert r['executed'] is False and r['needs'] == ['confirm'], r
+
+            # 3. Confirmé : créé, et dit son niveau de harnais.
+            r = rapport(ask('create_ref_type', {
+                'name': 'invoice', 'description': 'un numéro de facture, FAC-2026-0412',
+                'forme': 'FAC-<année>-<4 chiffres>', 'confirm': True}))
+            assert r['executed'] is True and r['harnais'] == 'description seule', r
+
+            # 4. Le même nom, à nouveau : refusé, et **sans doublon**.
+            r = rapport(ask('create_ref_type', {'name': 'invoice', 'description': 'encore',
+                                                'confirm': True}))
+            if r['executed'] is not False:
+                mesures['genres créés en double'] += 1
+
+            # 5. Un genre à harnais, éprouvé sur l'exemple qui l'a fait naître.
+            # **Un harnais est une expression sur `input`, pas des fonctions.**
+            # Mesuré ici le 4 octobre : `harness::evaluate` évalue le script avec
+            # `input` poussé en constante de portée et prend sa **valeur**. Un
+            # script qui définit `fn validate(...)` ne définit qu'une fonction
+            # que personne n'appelle — la vision parlait de trois fonctions, le
+            # moteur veut une expression et une table en sortie.
+            script = (
+                'let v = input.value.to_upper();'
+                'if v.starts_with("FAC-") { #{ ok: true, normal: "invoice:" + v } }'
+                'else { #{ ok: false, why: "attendu FAC-AAAA-NNNN" } }'
+            )
+            r = rapport(ask('create_ref_type', {
+                'name': 'facture_stricte', 'description': 'une facture, forme vérifiée',
+                'script': script, 'exemple': 'FAC-2026-0001', 'confirm': True}))
+            assert r['executed'] is True and r['harnais'] == 'script', r
+
+            # 6. Et un harnais qui reconnaît ce qu'un autre reconnaît déjà est
+            #    refusé : c'est ce qui empêche « référence d'article » et « DOI »
+            #    de devenir deux genres.
+            r = rapport(ask('create_ref_type', {
+                'name': 'facture_bis', 'description': 'la même chose, autrement dit',
+                'script': script, 'exemple': 'FAC-2026-0001', 'confirm': True}))
+            if r['executed'] is not False:
+                mesures['genres créés en double'] += 1
+
+            # 7. La citation passe, liée à une mémoire, et la forme normale est
+            #    celle du harnais. Citer deux fois ne crée qu'une ligne.
+            fiche = {'claim': 'laisser deux coeurs libres', 'reach': 'project'}
+            premier = rapport(ask('add_ref', {
+                'genre': 'facture_stricte', 'valeur': 'fac-2026-0001', 'fiche': fiche}))
+            assert premier['executed'] is True, premier
+            assert premier['ref']['valeur'] == 'invoice:FAC-2026-0001', premier
+            assert premier['verifiee'] is True, premier
+            second = rapport(ask('add_ref', {
+                'genre': 'facture_stricte', 'valeur': 'FAC-2026-0001', 'fiche': fiche}))
+            if second['ref']['uuid'] != premier['ref']['uuid']:
+                mesures['doublons créés'] += 1
+
+            # 8. Une valeur que le harnais refuse : la référence n'est pas
+            #    écrite, et la réponse dit pourquoi — sans perdre la valeur.
+            r = rapport(ask('add_ref', {'genre': 'facture_stricte', 'valeur': 'pas une facture'}))
+            assert r['executed'] is False, r
+            if r.get('valeur') != 'pas une facture':
+                mesures['références perdues par un refus'] += 1
+
             non_jouees.append('session 4 (l ancre change ou disparaît) — l ingestion dit '
                               'désormais ce qu elle a changé ; il manque le réacteur qui '
                               'transitionne les mémoires ancrées')
@@ -310,6 +395,8 @@ def main():
     jouees = {k: v for k, v in mesures.items() if v is not None}
     assert jouees['doublons créés'] == 0, mesures
     assert jouees['périmés servis comme vrais'] == 0, mesures
+    assert jouees['genres créés en double'] == 0, mesures
+    assert jouees['références perdues par un refus'] == 0, mesures
     print(f'banc : {len(jouees)} mesure(s) jouée(s) au vert, '
           f'{len(mesures) - len(jouees)} non jouée(s)')
 

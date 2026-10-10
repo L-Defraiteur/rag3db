@@ -13,7 +13,7 @@ using storage_version_t = uint64_t;
 
 struct StorageVersionInfo {
     static std::unordered_map<std::string, storage_version_t> getStorageVersionInfo() {
-        return {{"0.11.1", 39}, {"0.11.0", 39}, {"0.10.0", 38}, {"0.9.0", 37}, {"0.8.0", 36},
+        return {{"0.11.2.2", 40}, {"0.11.1", 39}, {"0.11.0", 39}, {"0.10.0", 38}, {"0.9.0", 37}, {"0.8.0", 36},
             {"0.7.1.1", 35}, {"0.7.0", 34}, {"0.6.0.6", 33}, {"0.6.0.5", 32}, {"0.6.0.2", 31},
             {"0.6.0.1", 31}, {"0.6.0", 28}, {"0.5.0", 28}, {"0.4.2", 27}, {"0.4.1", 27},
             {"0.4.0", 27}, {"0.3.2", 26}, {"0.3.1", 26}, {"0.3.0", 26}, {"0.2.1", 25},
@@ -23,6 +23,12 @@ struct StorageVersionInfo {
     }
 
     static RAG3DB_API storage_version_t getStorageVersion();
+
+    // La version 40 écrit dans l'en-tête l'étendue du fichier de données au point de reprise
+    // (DatabaseHeader::numDataPages). Une base de la version d'avant s'ouvre encore : son
+    // étendue est inconnue jusqu'à son premier point de reprise, qui la passe en 40. Un moteur
+    // d'avant refuse une base en 40.
+    static constexpr storage_version_t VERSION_BEFORE_DATA_FILE_EXTENT = 39;
 
     static constexpr const char* MAGIC_BYTES = "RAG3DB";
 };

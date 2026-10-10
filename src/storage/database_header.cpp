@@ -14,19 +14,23 @@
 #include "storage/storage_version_info.h"
 
 namespace rag3db::storage {
-static void validateStorageVersion(common::Deserializer& deSer) {
+// Rend la version lue : celle du moteur, ou celle d'avant l'étendue du fichier, qui s'ouvre
+// encore.
+static storage_version_t validateStorageVersion(common::Deserializer& deSer) {
     std::string key;
     deSer.validateDebuggingInfo(key, "storage_version");
     storage_version_t savedStorageVersion = 0;
     deSer.deserializeValue(savedStorageVersion);
     const auto storageVersion = StorageVersionInfo::getStorageVersion();
-    if (savedStorageVersion != storageVersion) {
+    if (savedStorageVersion != storageVersion &&
+        savedStorageVersion != StorageVersionInfo::VERSION_BEFORE_DATA_FILE_EXTENT) {
         // TODO(Guodong): Add a test case for this.
         throw common::RuntimeException(
             common::stringFormat("Trying to read a database file with a different version. "
                                  "Database file version: {}, Current build storage version: {}",
                 savedStorageVersion, storageVersion));
     }
+    return savedStorageVersion;
 }
 
 static void validateMagicBytes(common::Deserializer& deSer) {
@@ -77,11 +81,13 @@ void DatabaseHeader::serialize(common::Serializer& ser) const {
     ser.serializeValue(metadataPageRange.numPages);
     ser.writeDebuggingInfo("databaseID");
     ser.serializeValue(databaseID.value);
+    ser.writeDebuggingInfo("data_pages");
+    ser.serializeValue(numDataPages);
 }
 
 DatabaseHeader DatabaseHeader::deserialize(common::Deserializer& deSer) {
     validateMagicBytes(deSer);
-    validateStorageVersion(deSer);
+    const auto savedStorageVersion = validateStorageVersion(deSer);
     PageRange catalogPageRange{}, metaPageRange{};
     common::ku_uuid_t databaseID{};
     std::string key;
@@ -93,7 +99,12 @@ DatabaseHeader DatabaseHeader::deserialize(common::Deserializer& deSer) {
     deSer.deserializeValue(metaPageRange.numPages);
     deSer.validateDebuggingInfo(key, "databaseID");
     deSer.deserializeValue(databaseID.value);
-    return {catalogPageRange, metaPageRange, databaseID};
+    DatabaseHeader header{catalogPageRange, metaPageRange, databaseID};
+    if (savedStorageVersion > StorageVersionInfo::VERSION_BEFORE_DATA_FILE_EXTENT) {
+        deSer.validateDebuggingInfo(key, "data_pages");
+        deSer.deserializeValue(header.numDataPages);
+    }
+    return header;
 }
 
 DatabaseHeader DatabaseHeader::createInitialHeader(common::RandomEngine* randomEngine) {

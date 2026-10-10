@@ -49,12 +49,12 @@ relations), on disk, with embeddings:
 | peak memory | | 9 Go |
 | first searchable results | at the end | after 8–10 s |
 
-The 78 s needs three settings that are **not yet the defaults**: full text stored
-beside the database as files (instead of blobs inside it), one transaction per
-batch, and batches of 2 048 files. The switch is prepared on a branch and waits
-for a decision; today's defaults are 64 files per batch, no batch transaction,
-full text in blobs. Numbers come from a held measurement on one machine (AMD
-Radeon 8060S); they say "faster", not "fast everywhere".
+The 78 s comes from three settings that are **the defaults since 10 October
+2026**: full text stored beside the database as files (instead of blobs inside
+it) for a new database, one transaction per batch, and batches of 2 048 files.
+Each can be turned back: `RAG3WEAVER_FTS=blobs`, `RAG3WEAVER_TX_PAR_PAQUET=0`,
+`RAG3WEAVER_BATCH_FILES=64`. Numbers come from a held measurement on one machine
+(AMD Radeon 8060S); they say "faster", not "fast everywhere".
 
 ## Quick start
 
@@ -120,9 +120,11 @@ When a signal is unavailable or fails, the search falls back on the others and
 says so in its status (`signal is not available` / `signal failed`) — never a
 silent empty result.
 
-Full text is stored either **in the database as blobs** (today's default, nothing
-to back up beside the database) or **as files in `<base>.fts/`** (lower memory,
-faster reopen; opt-in for now).
+Full text is stored either **as files in `<base>.fts/`** (the default for a new
+database on disk: lower memory, faster reopen; the folder is part of the database,
+copy and back it up with it) or **in the database as blobs** (an existing database
+that has them keeps them, and `RAG3WEAVER_FTS=blobs` asks for them). A database in
+memory keeps its full text in itself.
 
 ## The code graph
 
@@ -204,7 +206,8 @@ No feature is on by default.
 
 Runtime knobs are `RAG3WEAVER_*` environment variables (about sixty; the ones
 that matter for ingestion are `RAG3WEAVER_EMBED_MODEL`, `RAG3WEAVER_EMBED_SERVICE`,
-`RAG3WEAVER_GPU_DUTY`, `RAG3WEAVER_EMBED_CHAR_BUDGET`, `RAG3WEAVER_TX_PAR_PAQUET`,
+`RAG3WEAVER_GPU_DUTY`, `RAG3WEAVER_EMBED_CHAR_BUDGET`, `RAG3WEAVER_FTS`,
+`RAG3WEAVER_TX_PAR_PAQUET`, `RAG3WEAVER_BATCH_FILES`,
 `RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION`). They are documented where they are read.
 
 ## Tests

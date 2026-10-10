@@ -3,7 +3,7 @@
 Relevé de connaissances sur le moteur. Ce qui est affirmé porte un fichier, un commit ou
 une mesure ; ce qui ne l'est pas est dit « non vérifié ». Les numéros de ligne datent du
 3 octobre 2026 et bougent : chercher le nom de la fonction.
-**Dernière mise à jour : 5 octobre 2026, 9 h.**
+**Dernière mise à jour : 10 octobre 2026.**
 
 Le relevé du 2 octobre (journal, point de reprise, lecteurs concurrents, mode
 multi-écrivains) reste valable :
@@ -129,6 +129,32 @@ ligne) :
   écartées par le lecteur avant l'opérateur et ne consomment rien.
 - **Le journal d'une transaction vit en mémoire non évictable** jusqu'à sa validation
   (`LocalWAL`, pages de 4 Kio prises au gestionnaire de tampon), sans borne.
+
+### Le fichier de données et ses pages (10 octobre 2026)
+
+- **Le fichier n'avait pas d'étendue connue.** L'en-tête (`DatabaseHeader`) ne portait que les
+  plages du catalogue et des métadonnées ; l'espace libre (`FreeSpaceManager`) est une liste de
+  plages ; le nombre de pages en mémoire est **la taille du fichier** à l'ouverture
+  (`FileHandle::constructPersistentFileHandle`). Depuis la version 40 du stockage, l'en-tête
+  porte `numDataPages`, l'étendue au point de reprise, et l'ouverture en écriture rend à l'espace
+  libre ce qui dépasse (`Checkpointer::returnOwnerlessPages`).
+- **Un COPY écrit ses pages avant sa validation par groupe plein de nœuds** (131 072 lignes),
+  directement dans le fichier, sans page fantôme (`Column::flushData`). En deçà, tout reste en
+  mémoire jusqu'au point de reprise. Un témoin de fuite à 60 000 lignes ne voit rien.
+- **`removePageIdxAndTruncateIfNecessary` ne tronque pas le fichier** : il réduit le nombre de
+  pages en mémoire. Une queue libérée par un point de reprise (`handleLastPageRange`) reste donc
+  dans le fichier et était recomptée à l'ouverture d'après, hors de l'espace libre.
+- **Les pages prises à l'espace libre ne fuient jamais** : la liste persistée les dit encore
+  libres. Seule la fin du fichier fuit.
+- **Le rejeu n'alloue ni n'écrit aucune page** (hors l'application des pages fantômes d'un point
+  de reprise marqué) : il réinsère en mémoire ; le point de reprise suivant écrit. Le journal
+  est logique : aucune page physique n'y est désignée.
+- **Pages jamais rendues à l'annulation dans une session qui continue** (lu dans les
+  commentaires, non mesuré) : création d'un index plein texte annulée, `ALTER … ADD` annulé sur
+  des groupes déjà sur disque, point de reprise annulé. Hors du lot de l'étendue.
+- **Mesurer sans harnais d'abord** : un programme nu lié à `build/moteur/src` (annexes,
+  `essai-fuite.cpp`) a donné les chiffres en dix minutes là où un témoin mal dimensionné
+  aurait menti.
 
 ### Ce que pèse le journal (5 octobre 2026)
 

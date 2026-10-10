@@ -63,6 +63,11 @@ fn une_synchronisation_ne_laisse_pas_ses_points_de_reprise() {
         .args(["--exact", "une_synchronisation_ne_laisse_pas_ses_points_de_reprise", "--nocapture", "--ignored"])
         .env(ENFANT, "1")
         .env("XDG_CACHE_HOME", &cache)
+        // Hors transaction par paquet : depuis la bascule (10 octobre 2026),
+        // la transaction est le défaut, et elle coupe les points de reprise
+        // du dataflow. Rien ne serait écrit, et le test ne prouverait rien.
+        .env("RAG3WEAVER_TX_PAR_PAQUET", "0")
+        .env_remove("RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE")
         .output()
         .expect("lancer le fils");
     let texte = format!("{}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));

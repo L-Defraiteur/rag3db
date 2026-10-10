@@ -10,6 +10,28 @@ Règles communes, inchangées : tout lourd sous `~/.cache/rag3weaver-build/poste
 jamais de force ; tests du changement pendant le travail, la batterie complète
 une fois à la fusion ; rapport de session dans le dossier du jour.
 
+## 0. Pause du 10 octobre 2026, 12 h 40 — redémarrage du poste
+
+Le noyau a été mis à jour par le `pacman -Syu` qui installait Docker ; sans
+redémarrage, Docker ne démarre pas. Toutes les sessions ont commité et poussé
+leur état, rien ne tourne. Où chacune reprend (sa branche, son rapport) :
+
+| Chantier | Branche | Tête | Reprise |
+|---|---|---|---|
+| A arbre principal | `defauts-bascules-2` (non fusionnée) ; `commande-en-fond` (WIP non compilé) | `ac492c0dc` ; `5080aeb06` | rebase sur master, règle des dialectes, batterie complète une fois, fusion, README ; Lucie a dit **oui** à la bascule |
+| B cœur C++ | `etendue-du-fichier` | `dcc9cd476` | correctif codé (4 pages au lieu de 559), témoins écrits non joués ; `build/moteur` à reconfigurer |
+| C recherche | `execution-asynchrone` (= master, rien codé) | `27eeb6a7f` | rejouer les mesures d'avant, puis coder ; rapport `docs/10-octobre-2026-recherche/` |
+| D banc | `banc-elagage-en-cours` | `9c030091d` | bâtir les deux extensions, une tenue de mesure pour les deux colonnes |
+| E Claude en agent | `anthropic-llm` | `af456a6c5` | compiler le dernier commit, pousser, passe d'agent ; clé dans `.vault/anthropic.env` |
+| F embarquements | master | `4c708ace6` | série faite (19/20, +5 % en fichiers sous COPY journalisé, fuite non corrigée) ; contrat du dialecte, porte unique, inventaire rendu ; attend les réponses de Lucie (§ questions de `embarquements/02-…`) |
+| G paquet npm | `paquet-npm` | `f99a58ec5` | lire le 8ᵉ essai Windows, vérifier le changement de `tools/rust_api/build.rs` sous Linux, premier bâti Docker ici |
+| codeparsers | `scss-msvc` (dépôt codeparsers) | `0a09f02` | suite complète, puis master en avance rapide, pointeur dans rag3db |
+
+Règle du poste changée ce jour : un lourd n'attend plus à la porte que 10 min ;
+« mesure » seulement pour ce qui mesure. Les PR tracel-ai sont en pause
+(B fusionnée, A ouverte : cubecl#1804). Après le redémarrage : relancer les
+tunnels vers luciepc (procédure du 3 octobre), `sudo systemctl start docker`.
+
 ## 1. Ce qui attend Lucie avant que certains chantiers partent
 
 | Décision | Chantier bloqué |

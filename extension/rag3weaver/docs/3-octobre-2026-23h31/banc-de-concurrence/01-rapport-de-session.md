@@ -3,6 +3,59 @@
 Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 après-midi, après les correctifs du planificateur et des
 amonts (`8c83c3360`, puis le second lot).
 
+## En pause depuis le 10 octobre (redémarrage du poste) : l'élagage de l'index HNSW
+
+Pause demandée par l'orchestration pour redémarrer le poste. Rien de ce chantier ne tourne :
+les bâtis étaient en file sur le verrou et ont été arrêtés avant de commencer. Le travail est
+commité sur la branche `banc-elagage-en-cours` (`9c030091d`), qui part de master `27eeb6a7f`.
+Rien n'est sur master.
+
+**Règle de mesure, apprise à mes dépens : une mesure commence par prouver que l'artefact
+mesuré est celui du code.** Le banc charge l'extension depuis
+`extension/vector/build/libvector.rag3db_extension`, et la cible `concurrence_test` ne la
+rebâtit pas. La mesure du 5 octobre « règle classique contre master » n'a donc mesuré ni l'une
+ni l'autre. Les deux colonnes ont tourné sur l'extension du i = 0, bâtie le 5 à 6 h 46, et
+leurs chiffres (22/9/15 et 145/19/3 contre 6/10) sont **retirés**. Les scripts gardent
+maintenant la preuve :
+- `batir-colonnes.sh` (une tenue « lourd ») bâtit `rag3db_vector_extension` avec le test.
+  Pour chaque colonne, il exige que `hnsw_index.cpp` ait été recompilé et que l'extension soit
+  plus récente que la source, puis garde l'extension à part (`so-avant.so`, `so-apres.so`) avec
+  les md5 ;
+- `mesurer-colonnes.sh` (une seule tenue « mesure », règle du poste du 10 octobre) installe
+  l'extension de chaque colonne, la vérifie par `cmp` et mesure.
+
+Ce qui reste valable : les mesures du i = 0 (leurs bâtis ont relié l'extension), la sonde des
+îlots et le classement des quasi-doublons. Tous portaient sur le i = 0, comme voulu.
+
+**Le seul chiffre de la vraie règle de master à ce jour** (le 10 octobre, extension rebâtie à
+10 h 51, colonne interrompue après la « masse ») :
+- témoin des copies : vert aux trois passes ;
+- masse : 33, 2 et 3 introuvables ;
+- rappel@10 : 0,992, 0,996 et 0,9947 ;
+- degré moyen de la couche basse : environ 35 ;
+- CREATE_VECTOR_INDEX seul : 12,3 s, 7,3 s et 4,3 s. Ces temps sont bruités : d'autres travaux
+  chargeaient le poste ; ils se reprendront dans la tenue « mesure ».
+
+**Reprendre :**
+1. `cd ../rag3db-banc && git checkout banc-elagage-en-cours` (la branche locale porte le
+   même nom).
+2. Lancer :
+   ```bash
+   P=~/.cache/rag3weaver-build/poste; N=~/.cache/rag3db-banc-notes
+   $P lourd $N/batir-colonnes.sh && POSTE_MEM_MAX=16G $P mesure $N/mesurer-colonnes.sh
+   ```
+   Puis lire `$N/batir-colonnes.txt` et `$N/mesure-regle-{avant,apres}/resume.txt`.
+3. Classer chaque colonne : `uv run --with numpy python classes.py <dossier manques>` (dans
+   `~/.cache/rag3db-banc-notes/`, avec `densite.py`).
+   Rendre les chiffres à l'orchestration **avant** toute décision.
+4. Si le critère n'est pas atteint (aucune classe ne recule, le rappel@10 ne baisse pas, le
+   bâti ne dépasse pas +20 %), essayer la variante `keepPrunedConnections`, déjà écrite :
+   `~/.cache/rag3db-banc-notes/regle-keep/hnsw_index.cpp`.
+5. Le témoin des copies est vert sur la vraie règle de master : le durcir ou le dire.
+
+Le reste de la section du 5 octobre, ci-dessous, tient toujours : ce qui a été établi, ce qui
+est écrit et ce qui attend ensuite. Seul son tableau de mesures est faux.
+
 ## En pause depuis le 5 octobre à midi : l'élagage de l'index HNSW
 
 Lucie a mis la session en pause jusqu'à ce soir ou ce week-end. La passe de mesure en cours a
@@ -48,7 +101,7 @@ ce lot. Le travail est dans l'arbre `rag3db-banc` (branche `banc-verrous`, avanc
   - le degré de la couche basse, maintenant lu par les internes (`lowerGraphEdgeCount`), pas
     encore rejoué.
 
-**Les mesures, à moitié faites** (`~/.cache/rag3db-banc-notes/mesure-regle-{apres,avant}/`) :
+**Les mesures, à moitié faites — INVALIDES (10 octobre : les deux colonnes tournaient sur l'extension du i = 0, voir plus haut)** (`~/.cache/rag3db-banc-notes/mesure-regle-{apres,avant}/`) :
 
 | | règle classique + borne | master |
 |---|---|---|

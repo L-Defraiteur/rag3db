@@ -3,7 +3,7 @@
 %% param: name string! -- Le nom du genre, tel qu'il paraîtra dans la liste que tu verras avant d'appeler add_ref.
 %% param: description string! -- Ce que ce genre désigne, avec deux ou trois exemples. Obligatoire : c'est le seul harnais qu'un genre doit avoir.
 %% param: forme string = "" -- La forme normale en clair (« path:<chemin relatif> »). Lue par un humain et par un modèle ; ce n'est pas elle qui vérifie.
-%% param: script string = "" -- Harnais rhai facultatif : validate (reconnaître et normaliser), resolve, fingerprint. Vide : les références de ce genre seront dites « non vérifiées ».
+%% param: script string = "" -- Harnais rhai facultatif : **une seule expression** sur `input`, dont la valeur est une table { ok, why, normal, fingerprint } — pas un jeu de fonctions. `input.value` est la valeur citée. Exemple : `let v = input.value.to_upper(); if v.starts_with("FAC-") { #{ ok: true, normal: "invoice:" + v } } else { #{ ok: false, why: "attendu FAC-AAAA-NNNN" } }`. Vide : les références seront dites « non vérifiées ». Aucune entrée-sortie n'est prêtée au script, donc « la chose existe-t-elle encore » ne se répond pas ici.
 %% param: exemple string = "" -- La valeur qui a fait naître le genre. Exigée dès qu'un script est donné : c'est sur elle qu'il est éprouvé.
 %% param: confirm bool = false -- false (le défaut) : rien n'est écrit, les genres existants sont montrés. true : créer.
 %% param: types_entity string = "RefType" -- Entité qui porte les genres.

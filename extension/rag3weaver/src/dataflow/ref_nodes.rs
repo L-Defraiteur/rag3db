@@ -90,8 +90,30 @@ struct Verdict {
     empreinte: Option<String>,
 }
 
-/// Jouer `validate` d'un genre sur une valeur. Un script absent rend un verdict
-/// **non vérifié** et non un échec : c'est le niveau 0 assumé.
+/// Jouer le harnais d'un genre sur une valeur.
+///
+/// **Un harnais est une expression, pas un jeu de fonctions.**
+/// `harness::evaluate` pousse `input` en constante de portée et prend la
+/// **valeur** du script ; un script qui définit `fn validate(...)` ne définit
+/// qu'une fonction que personne n'appelle. La vision parlait de trois fonctions
+/// (`validate`, `resolve`, `fingerprint`) ; le moteur veut **une expression et
+/// une table en sortie** — et les trois intentions deviennent trois champs de
+/// cette table :
+///
+/// ```rhai
+/// let v = input.value.to_upper();
+/// if v.starts_with("FAC-") { #{ ok: true, normal: "invoice:" + v } }
+/// else { #{ ok: false, why: "attendu FAC-AAAA-NNNN" } }
+/// ```
+///
+/// **Et `resolve` n'est pas faisable du tout aujourd'hui** : « la chose
+/// existe-t-elle encore » demande de voir le monde, et l'hôte ne prête que
+/// `json_string` et `content_hash` — aucune entrée-sortie, aucun accès au
+/// catalogue. C'est voulu (`no_module`, `eval`/`import`/`export` désactivés),
+/// et c'est une pièce à ajouter sciemment, pas un oubli à contourner.
+///
+/// Un script absent rend un verdict **non vérifié** et non un échec : c'est le
+/// niveau 0 assumé.
 fn eprouver(script: &str, valeur: &str, ctx: &NodeContext) -> Verdict {
     if script.trim().is_empty() {
         return Verdict { ok: true, pourquoi: "genre sans harnais : citée, non vérifiée".into(), normal: None, empreinte: None };
@@ -527,7 +549,7 @@ impl NodeFactory for CreateRefTypeNodeFactory {
                 p("name", true, None, "Name of the genre, as it will appear in the list the caller sees"),
                 p("description", true, None, "What this genre designates, with two or three examples. Mandatory: it is the only harness a genre must have"),
                 p("forme", false, Some(serde_json::json!("")), "The normal form in plain words (« path:<relative path> »); read by a human and by a model, it is not what verifies"),
-                p("script", false, Some(serde_json::json!("")), "Optional rhai harness: validate (recognise and normalise), resolve, fingerprint. Empty: references of this genre are said « not verified »"),
+                p("script", false, Some(serde_json::json!("")), "Optional rhai harness: ONE EXPRESSION over `input`, whose value is a map { ok, why, normal, fingerprint } — not a set of functions. `input.value` is the value cited. Empty: references of this genre are said « not verified ». No host I/O is lent to the script, so « does the thing still exist » cannot be answered here"),
                 p("exemple", false, Some(serde_json::json!("")), "The value that gave birth to the genre; required as soon as a script is given, since the script is tested on it"),
                 ConfigParam {
                     name: "confirm",
