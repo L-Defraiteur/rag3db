@@ -82,7 +82,7 @@ lecture des clés est en place ; le filtrage viendra avec elle. Le serveur
 annonce au démarrage ce qu'il expose et sous quelles clés :
 
 ```
-[mcp] code-poste — 12 outils, clés présentées : dev
+[mcp] code-poste — 13 outils, clés présentées : dev
 ```
 
 Le jour où des déclarations seront écartées, cette ligne est ce qui évitera de

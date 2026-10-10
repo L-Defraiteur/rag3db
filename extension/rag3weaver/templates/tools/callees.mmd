@@ -4,10 +4,11 @@
 %% param: path string = "" -- Ne partir que des définitions sous ce chemin (préfixe de fichier).
 %% param: depth int = 2 -- Sauts suivis, de 1 à 3.
 %% param: budget int = 200 -- Nœuds rendus au plus ; au-delà, ils sont comptés.
+%% param: include_by_name bool = false -- Comme impact : montrer aussi les usages trouvés par le nom seul. En sortant, aucun n'en est rendu aujourd'hui (les arêtes devinées ne sont pas suivies) ; le paramètre garde les deux outils au même schéma.
 %% result: callees.result
 
 graph LR
-    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin (Classe::champ)')"]
+    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, include_by_name=$include_by_name, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin (Classe::champ)')"]
 
 %% Le voisinage d'`impact` dans l'autre sens : les `CONSUMES` **sortants**
 %% — ce que le départ appelle ou utilise —, puis ce que ceux-là appellent.

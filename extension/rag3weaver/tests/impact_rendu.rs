@@ -31,8 +31,10 @@ fn atteint(uuid: &str, title: &str, path: &str, level: usize, group: &str) -> Re
 fn le_gabarit_se_lie_aux_noeuds() {
     let mut registry = NodeRegistry::new();
     register_builtins(&mut registry);
-    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).expect("le gabarit se lit");
-    tool.bind(&registry).expect("et se lie aux nœuds");
+    for gabarit in [include_str!("../templates/tools/impact.mmd"), include_str!("../templates/tools/callees.mmd")] {
+        let tool = GraphTool::from_mermaid(gabarit).expect("le gabarit se lit");
+        tool.bind(&registry).expect("et se lie aux nœuds");
+    }
 }
 
 #[test]

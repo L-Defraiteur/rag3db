@@ -126,9 +126,14 @@ fn callees_dit_ce_qui_est_appele_et_les_verrous_pris() {
     let tool = GraphTool::from_mermaid(include_str!("../templates/tools/callees.mmd")).unwrap().bind(&registry).unwrap();
     let mut services = ServiceRegistry::new();
     services.register("catalog", catalog.clone());
-    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "top"})).unwrap();
+    let services = Arc::new(services);
+    let md = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "top"})).unwrap();
     eprintln!("{md}");
     assert!(md.starts_with("# callees: top"), "{md}");
+    // Le même schéma qu'impact : include_by_name est accepté (rien de plus
+    // en sortant, où aucun usage par le nom seul n'est rendu).
+    let tout = tool.execute(&registry, services, &serde_json::json!({"name": "top", "include_by_name": true})).unwrap();
+    assert_eq!(tout, md);
     // La ligne de l'appelé est celle de sa définition, pas celle du site
     // d'appel (qui est chez l'appelant, dans un autre fichier).
     assert!(md.contains("## Ce qu’il appelle, à 1 saut (1)") && md.contains("bulk — /projet/service.cpp:3"), "{md}");
