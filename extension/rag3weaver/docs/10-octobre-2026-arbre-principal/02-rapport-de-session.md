@@ -147,3 +147,39 @@ journalisé par défaut, `ff9bad960`).
 
 Depuis : les compilations passent par un seul target, `~/.cache/rag3weaver-build/target-A`,
 avec `CARGO_INCREMENTAL=0`.
+
+## L'extension vector réécrite à 21 h 26 (10 octobre, nuit)
+
+**Le fait.** `extension/vector/build/libvector.rag3db_extension` de l'arbre principal a été
+réécrite à 21 h 26 (puis une autre fois à 22 h 50), sans la lib : `build/lecteurs-csv`
+restait à 17 h 27 (`aeec6888f`). C'est le banc, qui rebâtissait ses extensions de
+référence contre le nouveau moteur dans un worktree dont `extension/vector/build` était
+un **lien** vers l'arbre principal : son bâti a écrit à travers le lien. Le cœur C++ l'a
+vu en préparant B8.
+
+**La conséquence.** Les passes jouées sur le poste principal depuis 21 h 26 ont tourné sur
+la lib de 17 h 27 et une extension d'un autre bâti, probablement avec l'élagage HNSW.
+C'est le cas de la mesure avant/après de la session recherche (quatre passes, jusqu'à
+22 h 40) : sans effet sur ses chiffres si ses deux colonnes ont partagé la même extension,
+mais à dire. Mes propres passes depuis 21 h 26 (le lot « poids des tests », la commande
+en fond) n'ont mesuré aucun chiffre.
+
+**La règle adoptée** (orchestration) : un worktree qui bâtit le moteur ou une extension
+n'a jamais de lien `extension/vector/build` vers l'arbre principal. Les passes trouvent
+l'extension par `RAG3DB_ROOT`.
+
+**Le relevé des liens, le 10 octobre vers 23 h 15 :**
+
+| Poste | Worktree | Lien vers |
+|---|---|---|
+| principal | `~/.cache/rag3weaver-build/wt-b6`, `wt-fond`, `wt-fuite` (les miens) | l'arbre principal — **retirés** à 23 h 15 |
+| principal | `~/git_workspaces/rag3db-async` (recherche) | l'arbre principal |
+| luciepc | `~/git_workspaces/rag3db-tickets` (cœur C++) | `rag3db-lourd` |
+
+Les autres worktrees (`rag3db-maj`, `rag3db-moteur`, `rag3db-paquet-npm` ici ;
+`rag3db-banc-a4`, `rag3db-lourd`, `rag3db-moteur` sur luciepc) ont leur propre dossier
+`extension/vector/build`.
+
+**La remise d'accord.** Le rebâti de la lib et de l'extension sur master, quand le cœur
+C++ aura fini de reproduire B8 sur la lib actuelle et que la session mémoire aura fini sa
+vérification.
