@@ -271,6 +271,7 @@ fn valider_une_reaction(
     graphe: &crate::dataflow::GraphTool,
     bindings: &serde_json::Map<String, Value>,
     est_aussi_un_outil: bool,
+    scripted: &BTreeSet<String>,
 ) -> Result<(), String> {
     // 1. Un nom partagé entre les deux sections n'est pas une coquette
     //    ambiguïté : le curseur du réacteur **est** ce nom
@@ -284,7 +285,15 @@ fn valider_une_reaction(
         ));
     }
     // 2. La liste blanche réactive.
-    valider_noeuds_de_reaction(nom, graphe.template().nodes.iter().map(|n| n.node_type.clone()))?;
+    valider_noeuds_de_reaction(
+        nom,
+        graphe
+            .template()
+            .nodes
+            .iter()
+            .map(|n| n.node_type.clone())
+            .filter(|t| !scripted.contains(t)),
+    )?;
     // 3. Sans `%% on:`, le réacteur refuse déjà, mot pour mot — mais il
     //    refuserait au montage, loin du manifeste fautif. Ici le refus nomme
     //    la réaction et l'autre porte de sortie.
@@ -451,6 +460,10 @@ pub struct OutputPort {
 pub struct PreparedBackend {
     /// Le manifeste lu, pour le relire : un rechargement repart de lui.
     manifest_path: PathBuf,
+    /// Les types des nœuds scriptés du dossier `nodes/` (lot 2) : purs — ni
+    /// fichiers, ni réseau, ni commande —, ils entrent dans toutes les
+    /// politiques où entre un calcul.
+    scripted_types: BTreeSet<String>,
     pub manifest: BackendManifest,
     /// L'embarquement dense, résolu au chargement (`BackendManifest::embed_source`).
     embed: crate::model_source::ModelSource,
@@ -624,6 +637,27 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        // ── Les nœuds scriptés du dossier `nodes/` ──────────────────────────
+        //
+        // Découverts, pas listés : un dossier de déclarations se copie tel
+        // quel. Revérifiés à chaque chargement, donc à chaque rechargement.
+        let mut scripted_types = BTreeSet::new();
+        let declared = crate::dataflow::scripted_node::discover(
+            &directory.join("nodes"),
+            &crate::script::ScriptLimits::default(),
+        )
+        .map_err(|errors| format!("nodes/ : {}", errors.join(" ; ")))?;
+        for factory in declared {
+            let name = crate::dataflow::NodeFactory::node_type(&factory).to_string();
+            if nodes.has(&name) {
+                return Err(format!(
+                    "nodes/ : le nœud déclaré « {name} » porte le nom d'un nœud fourni — \
+                     renommez-le"
+                ));
+            }
+            scripted_types.insert(name);
+            nodes.register(Box::new(factory));
+        }
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();
         let mut entities = HashMap::new();
@@ -787,7 +821,9 @@ impl PreparedBackend {
                     .map_err(|e| format!("{name}: crochet after : {e}"))?;
                 let permis = crate::backend_code::hook_nodes(&hook.policy);
                 for node in &hook_tool.template().nodes {
-                    if !permis.contains(&node.node_type.as_str()) {
+                    if !permis.contains(&node.node_type.as_str())
+                        && !scripted_types.contains(&node.node_type)
+                    {
                         return Err(format!(
                             "{name}: crochet after : le nœud {} n'entre pas dans un \
                              crochet — un crochet n'écrit pas, ne bloque pas, ne lance \
@@ -923,7 +959,11 @@ impl PreparedBackend {
             if let Some(tool) = tools.get(name) {
                 crate::backend_code::validate_tool_policy(
                     name,
-                    tool.template().nodes.iter().map(|n| n.node_type.clone()),
+                    tool.template()
+                        .nodes
+                        .iter()
+                        .map(|n| n.node_type.clone())
+                        .filter(|t| !scripted_types.contains(t)),
                     &attachment.policy,
                     manifest.workspace.as_ref(),
                 )?;
@@ -962,6 +1002,7 @@ impl PreparedBackend {
                 &graphe,
                 &attachment.bindings,
                 manifest.tools.contains_key(name),
+                &scripted_types,
             )?;
             reactions.insert(name.clone(), graphe);
         }
@@ -1010,6 +1051,7 @@ impl PreparedBackend {
         }
         Ok(Self {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
+            scripted_types,
             manifest,
             embed,
             directory,
@@ -1272,6 +1314,17 @@ impl PreparedBackend {
 /// (27 septembre 2026). Accepté : les textes livrés tels quels ; refusé : les
 /// erreurs ; les avertissements en clair dessous. Une présentation déjà posée
 /// par le graphe de l'outil n'est pas touchée.
+impl PreparedBackend {
+    /// Une politique de nœuds, plus les nœuds scriptés déclarés.
+    fn with_scripted<S: Into<String>>(&self, base: impl IntoIterator<Item = S>) -> NodeTypePolicy {
+        NodeTypePolicy::only(
+            base.into_iter()
+                .map(Into::into)
+                .chain(self.scripted_types.iter().cloned()),
+        )
+    }
+}
+
 /// Ce qui, d'une version des déclarations à l'autre, a été fixé à
 /// l'ouverture de la base — nommé par sa clé de manifeste. Les entités sont
 /// comparées après fusion de leur schéma JSON (un champ ajouté au schéma est
@@ -1768,9 +1821,7 @@ impl Backend {
         // La politique **déclarée** de l'outil — vérifiée au chargement, elle
         // tient ici le runtime : la base déclarative, plus ce que l'outil a
         // déclaré (fichiers, commandes).
-        let policy = NodeTypePolicy::only(
-            crate::backend_code::allowed_nodes(&attachment.policy),
-        );
+        let policy = prepared.with_scripted(crate::backend_code::allowed_nodes(&attachment.policy));
         // Le crochet qui veut les uuids des résultats les capture au passage
         // de l'outil, par un port de métadonnées de plus — jamais un
         // re-calcul.
@@ -1924,7 +1975,7 @@ impl Backend {
                     graph,
                     &def,
                     &[],
-                    &NodeTypePolicy::only(crate::backend_code::hook_nodes(&hook.policy)),
+                    &prepared.with_scripted(crate::backend_code::hook_nodes(&hook.policy)),
                 )
             });
         match outcome {
@@ -1992,7 +2043,7 @@ impl Backend {
             &hook.tool,
             &def,
             &[],
-            &NodeTypePolicy::only(["RhaiNode", "ValidationRuleNode", "ValidationMergeNode"]),
+            &prepared.with_scripted(["RhaiNode", "ValidationRuleNode", "ValidationMergeNode"]),
         )?;
         Ok(response["result"].clone())
     }
@@ -2372,10 +2423,10 @@ mod tests {
 
         // Vert d'abord : la forme attendue passe, sinon les rouges ci-dessous
         // ne prouveraient rien.
-        super::valider_une_reaction("review", &bonne, &vide, false).expect("la forme attendue");
+        super::valider_une_reaction("review", &bonne, &vide, false, &BTreeSet::new()).expect("la forme attendue");
 
         // 1. Homonyme d'un outil — le curseur du réacteur EST ce nom.
-        let e = super::valider_une_reaction("review", &bonne, &vide, true).unwrap_err();
+        let e = super::valider_une_reaction("review", &bonne, &vide, true, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("curseur"), "{e}");
 
         // 2. Un nœud hors de la liste réactive, avec sa capacité : le refus
@@ -2385,29 +2436,29 @@ mod tests {
             "    lu[\"ReadFileNode(path='x')\"]\n",
             "lu.content",
         );
-        let e = super::valider_une_reaction("review", &lit, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("review", &lit, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("read_files") && e.contains("tools"), "{e}");
 
         // 3. Pas de `%% on:` — et l'autre porte de sortie est nommée.
         let muette = fiche_reactive("%% param: target string = \"Memory\" -- la cible\n");
-        let e = super::valider_une_reaction("review", &muette, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("review", &muette, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("%% on:") && e.contains("tools"), "{e}");
 
         // 4. Une liaison que la fiche ne déclare pas.
         let mut inconnue = Map::new();
         inconnue.insert("cible".into(), json!("Memory"));
-        let e = super::valider_une_reaction("review", &bonne, &inconnue, false).unwrap_err();
+        let e = super::valider_une_reaction("review", &bonne, &inconnue, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("liaison inconnue cible"), "{e}");
 
         // 5. Non déterminée par ses liaisons : un paramètre obligatoire que
         //    personne ne remplira à l'exécution.
         let exigeante = fiche_reactive("%% on: catalog\n%% param: target string! -- la cible\n");
-        let e = super::valider_une_reaction("review", &exigeante, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("review", &exigeante, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("n'est pas déterminée par ses liaisons"), "{e}");
         // Liée, la même fiche passe.
         let mut liee = Map::new();
         liee.insert("target".into(), json!("Memory"));
-        super::valider_une_reaction("review", &exigeante, &liee, false).expect("liée");
+        super::valider_une_reaction("review", &exigeante, &liee, false, &BTreeSet::new()).expect("liée");
     }
 
     /// **Le compte de chaque liste blanche est épinglé.**

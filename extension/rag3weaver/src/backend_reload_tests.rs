@@ -221,3 +221,87 @@ fn a_removed_reaction_is_named_for_the_host() {
         ["watch".to_string()]
     );
 }
+
+// ─── Le dossier nodes/ (lot 4a) ─────────────────────────────────────────────
+
+const DOUBLE_DECL: &str = r#"{
+  "name": "Double",
+  "description": "doubles n",
+  "script": "double.ts",
+  "inputs": { "value": { "schema": { "type": "object", "required": ["n"] } } },
+  "outputs": { "doubled": { "schema": { "type": "object", "required": ["n"] } } }
+}"#;
+
+const DOUBLE_TS: &str = "function run({ inputs }: { inputs: { value: { n: number } } }) {
+  return { doubled: { n: inputs.value.n * 2 } };
+}";
+
+const DOUBLING_GRAPH: &str = "%% tool: echo
+%% description: doubles through a declared node
+%% param: value json! -- anything
+%% result: dbl.doubled
+graph LR
+    src[\"RhaiNode(script_id=answer, value=$value)\"]
+    dbl[\"Double\"]
+    src -->|result:value| dbl
+";
+
+/// Le jouet, avec un nœud déclaré dans `nodes/` et un outil qui s'en sert.
+fn toy_with_nodes() -> (tempfile::TempDir, Backend) {
+    let (dir, backend) = toy();
+    std::fs::create_dir(dir.path().join("nodes")).unwrap();
+    write(&dir.path().join("nodes"), "double.node.json", DOUBLE_DECL);
+    write(&dir.path().join("nodes"), "double.ts", DOUBLE_TS);
+    write(dir.path(), "echo.mmd", DOUBLING_GRAPH);
+    write(dir.path(), "answer.rhai", "input");
+    backend.reload().unwrap();
+    (dir, backend)
+}
+
+fn doubled(backend: &Backend, n: i64) -> Value {
+    let response = backend.call("echo", json!({"value": {"n": n}})).unwrap();
+    response["result"].clone()
+}
+
+#[test]
+fn a_node_declared_in_the_nodes_folder_serves_a_tool() {
+    let (dir, backend) = toy_with_nodes();
+    assert_eq!(doubled(&backend, 21), json!({"n": 42}));
+    // Et un chargement à froid le trouve aussi.
+    PreparedBackend::load(&dir.path().join("backend.json")).unwrap();
+}
+
+#[test]
+fn an_edited_declared_node_is_reloaded() {
+    let (dir, backend) = toy_with_nodes();
+    write(
+        &dir.path().join("nodes"),
+        "double.ts",
+        &DOUBLE_TS.replace("* 2", "* 3"),
+    );
+    assert_eq!(doubled(&backend, 21), json!({"n": 42}), "not before the reload");
+    backend.reload().unwrap();
+    assert_eq!(doubled(&backend, 21), json!({"n": 63}));
+}
+
+#[test]
+fn a_declared_node_named_like_a_provided_one_is_refused() {
+    let (dir, backend) = toy_with_nodes();
+    write(
+        &dir.path().join("nodes"),
+        "double.node.json",
+        &DOUBLE_DECL.replace("\"Double\"", "\"RhaiNode\""),
+    );
+    let refused = backend.reload().unwrap_err();
+    assert!(refused.contains("RhaiNode") && refused.contains("nœud fourni"), "{refused}");
+    assert_eq!(doubled(&backend, 1), json!({"n": 2}));
+}
+
+#[test]
+fn a_bad_declaration_refuses_the_reload_and_names_its_file() {
+    let (dir, backend) = toy_with_nodes();
+    write(&dir.path().join("nodes"), "bad.node.json", "{ \"name\": \"Bad\" }");
+    let refused = backend.reload().unwrap_err();
+    assert!(refused.contains("bad.node.json"), "{refused}");
+    assert_eq!(doubled(&backend, 1), json!({"n": 2}));
+}
