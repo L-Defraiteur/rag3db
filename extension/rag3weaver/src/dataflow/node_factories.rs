@@ -1488,12 +1488,13 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::template_nodes::AdoptTemplateNodeFactory));
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
+        registry.register(Box::new(super::run_nodes::TailNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 13 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 14 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1744,6 +1745,7 @@ mod tests {
                 "ValidationRuleNode" => serde_json::json!({"script":"#{valid:true}","code":"test", "message":"failed", "value":{}}),
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
+                "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 _ => serde_json::json!({}),

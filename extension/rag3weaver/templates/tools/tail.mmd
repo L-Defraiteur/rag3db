@@ -1,0 +1,17 @@
+%% tool: tail
+%% description: Regarde où en est une commande lancée en fond : les dernières lignes de son journal, ou seulement ce qui s'y est ajouté depuis votre dernier regard, et si elle a fini (avec son code). Ne bloque pas.
+%% param: handle string! -- La poignée rendue par `run` en fond, ex. '#cmd-3' (ou un chemin de journal).
+%% param: lines int = 50 -- Combien de dernières lignes rendre.
+%% param: since_last bool = false -- true : seulement ce qui s'est ajouté depuis votre dernier `tail` de cette poignée.
+%% param: stream string = "out" -- 'out' (la sortie) ou 'err' (les erreurs).
+%% result: tail.result
+%%
+%% **À côté de `wait`, pas à sa place.** `wait` attend qu'une ligne précise
+%% sorte ; `tail` regarde sans rien attendre — l'état de la commande, et ce
+%% qu'elle a écrit.
+%%
+%% Un journal qui a dépassé son plafond garde sa fin, et le dit en tête :
+%% « … N octets perdus en tête ». On ne lit que ses propres journaux.
+
+graph LR
+    tail["TailNode(handle=$handle, lines=$lines, since_last=$since_last, stream=$stream)"]

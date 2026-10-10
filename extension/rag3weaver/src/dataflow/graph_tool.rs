@@ -1753,11 +1753,14 @@ pub const RUN_TOOL_MERMAID: &str = include_str!("../../templates/tools/run.mmd")
 pub const RUN_BG_TOOL_MERMAID: &str = include_str!("../../templates/tools/run_bg.mmd");
 #[cfg(feature = "code")]
 pub const WAIT_TOOL_MERMAID: &str = include_str!("../../templates/tools/wait.mmd");
+/// `tail` : où en est une commande en fond, sans rien attendre.
+#[cfg(feature = "code")]
+pub const TAIL_TOOL_MERMAID: &str = include_str!("../../templates/tools/tail.mmd");
 
 /// Les noms des graphes-outils fournis, dans l'ordre où le modèle les voit
 /// (trié — le cache de préfixe en dépend).
 #[cfg(feature = "code")]
-pub const BUILTIN_TOOL_NAMES: [&str; 11] = ["adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "schema", "search", "wait"];
+pub const BUILTIN_TOOL_NAMES: [&str; 12] = ["adopt", "edit", "grep", "list", "place", "read", "run", "run_bg", "schema", "search", "tail", "wait"];
 #[cfg(not(feature = "code"))]
 pub const BUILTIN_TOOL_NAMES: [&str; 2] = ["schema", "search"];
 
@@ -1811,6 +1814,7 @@ pub fn builtin_graph_tools() -> Result<(NodeRegistry, GraphToolRegistry), GraphT
         tools.register(GraphTool::from_mermaid(RUN_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(RUN_BG_TOOL_MERMAID)?.bind(&nodes)?)?;
         tools.register(GraphTool::from_mermaid(WAIT_TOOL_MERMAID)?.bind(&nodes)?)?;
+        tools.register(GraphTool::from_mermaid(TAIL_TOOL_MERMAID)?.bind(&nodes)?)?;
     }
     Ok((nodes, tools))
 }
