@@ -4,8 +4,9 @@
 //!
 //! La liste attendue pour `merge_port_values` a été relevée à la main
 //! (`grep -rn merge_port_values src/dataflow`, 3 octobre 2026) : une
-//! définition, `port.rs:205` ; des appels dans `port.rs` (deux tests, l. 398
-//! et 417) et dans `runtime.rs` (l. 613 et 1020) ; dans `render_nodes.rs` et
+//! définition dans `port.rs` ; des appels dans `port.rs` (deux tests) et dans
+//! `runtime.rs` (deux `match merge_port_values(`) ; les numéros de ligne se
+//! lisent dans les sources au moment du test ; dans `render_nodes.rs` et
 //! `generic_search_nodes.rs`, le nom n'est que dans des chaînes et un
 //! commentaire — pas des usages. Le test compare des **fichiers**, pas des
 //! noms de scopes appelants, qui changent avec l'extraction (les fonctions
@@ -83,8 +84,17 @@ fn usages_rend_la_definition_et_les_appels_releves_a_la_main() {
     let r = usages_of(&cat, &code_config(), "merge_port_values", "").unwrap();
     eprintln!("{}", r.markdown("all", 50));
 
+    // **Les lignes se lisent dans les sources** : ce corpus est vivant, et une
+    // ligne écrite en dur (205, puis 210 au refactor des noms possédés) casse
+    // au moindre ajout au-dessus. Le test compare à ce que dit le fichier.
+    let ligne_de = |fichier: &str, motif: &str| -> i64 {
+        let texte = std::fs::read_to_string(format!("{dir}/{fichier}")).unwrap();
+        texte.lines().position(|l| l.contains(motif)).map(|i| i as i64 + 1).unwrap_or_else(|| panic!("« {motif} » absent de {fichier}"))
+    };
+    let definition = ligne_de("port.rs", "pub fn merge_port_values(");
+    let appel = ligne_de("runtime.rs", "match merge_port_values(");
     let defs: Vec<(String, Option<i64>)> = r.definitions.iter().map(|d| (fichier(&d.path), d.line)).collect();
-    assert_eq!(defs, vec![("port.rs".to_string(), Some(205))], "une définition, port.rs:205");
+    assert_eq!(defs, vec![("port.rs".to_string(), Some(definition))], "une définition, port.rs:{definition}");
     assert!(!r.ambiguous);
 
     let appels: BTreeSet<String> = r
@@ -99,11 +109,11 @@ fn usages_rend_la_definition_et_les_appels_releves_a_la_main() {
         assert!(!tous.contains(f), "{f} ne nomme merge_port_values que dans des chaînes ou un commentaire : {tous:?}");
     }
     let lignes: BTreeSet<(String, i64)> = r.usages.iter().filter_map(|u| u.user.line.map(|l| (fichier(&u.user.path), l))).collect();
-    assert!(lignes.contains(&("runtime.rs".to_string(), 613)), "le site de l'appel, pas la déclaration de l'appelant : {lignes:?}");
+    assert!(lignes.contains(&("runtime.rs".to_string(), appel)), "le site de l'appel (runtime.rs:{appel}), pas la déclaration de l'appelant : {lignes:?}");
     let au_613: Vec<&str> = r
         .usages
         .iter()
-        .filter(|u| fichier(&u.user.path) == "runtime.rs" && u.user.line == Some(613))
+        .filter(|u| fichier(&u.user.path) == "runtime.rs" && u.user.line == Some(appel))
         .map(|u| u.user.kind.as_str())
         .collect();
     assert_eq!(au_613, vec!["method"], "un site, le scope le plus étroit : la méthode, pas aussi sa classe");

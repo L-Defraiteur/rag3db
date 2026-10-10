@@ -25,7 +25,9 @@
 //! ```bash
 //! ./run_e2e.sh --test e2e_lecture_seule_apres_fermeture_sans_point_de_reprise
 //! ```
-#![cfg(feature = "rag3db-native")]
+// `rag3weaver::acces` n'existe qu'avec le démon : sans la feature, ce test ne
+// compilait pas sous `cargo check --tests --features rag3db-native,code`.
+#![cfg(all(feature = "rag3db-native", feature = "daemon"))]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
