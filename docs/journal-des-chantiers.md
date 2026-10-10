@@ -1283,6 +1283,12 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Une extension d'un autre bâti que le moteur se charge sans un mot~~ — **corrigé le 10 octobre
+  2026** (`458ff7157`, seconde session cœur C++) : identifiant de bâti dans le moteur et chaque extension,
+  régénéré à chaque bâti, refus nommé à `LOAD EXTENSION` et au rejeu (l'index se dit en retard avec
+  la raison). **Toute extension bâtie avant est refusée** : la lib et ses extensions se rebâtissent
+  ensemble — la lib commune de luciepc et celle de l'arbre principal comprises. Ticket
+  `docs/tickets/closed/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md`.
 - ~~Sous `IGNORE_ERRORS`, un doublon de clé du même COPY fait supprimer une ligne innocente~~ —
   **corrigé le 10 octobre 2026** (`de8fc8c0f`, seconde session cœur C++) : `HashIndex::appendNoLock`
   rendait le nombre d'insertions réussies au lieu de la position du premier échec dès que l'index

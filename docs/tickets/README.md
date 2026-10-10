@@ -25,7 +25,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (44)
+### Ouverts (43)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -34,7 +34,6 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
 | [Le journal d'une transaction reste sans borne pour les insertions ordinaires](2026-10-05-journal-d-une-transaction-sans-borne-hors-copy.md) | ouvert, suite de la borne du COPY | refus d'une très grosse transaction | oui | le mode à blobs, qui s'en garde |
 | [Au journal, chaque cellule réécrit son type](2026-10-05-cout-par-cellule-au-journal.md) | ouvert, confort | volume et temps | toujours | en volume |
-| [Une extension chargée au rejeu n'est pas vérifiée contre le bâti du moteur](2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md) | ouvert, robustesse du produit | boucle ou plantage à l'ouverture au lieu d'un refus nommé | si moteur et extension ne sont pas du même bâti | à l'atelier |
 | [Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait](2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md) | ouvert côté moteur ; filet rag3weaver `99e6f0ee0` | réponse fausse | oui | oui (repli REPLI_EN_MASSE) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
 | [Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée](2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md) | ouvert (relevé par le banc, 10 oct.) | réponse fausse, puis plantage | en principe oui ; le seul chemin vu est fermé par A3′ | pas de cas connu |
@@ -77,7 +76,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
 | [« unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`](2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | ouvert ; correctif en cours (arbre principal, branche `unknown-entity`) | interprétation : un modèle y lit un défaut d'outil au lieu d'une déclaration absente | seulement avec un manifeste qui ne déclare pas `workspace.index: "code"` | oui — toute la surface de code |
-### Fermés (49), dans `closed/`
+### Fermés (50), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -130,3 +129,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Après un COPY annulé, refusé ou à court de mémoire, le point de reprise de l'index de clé primaire ne finit plus](closed/2026-10-05-index-de-cle-primaire-apres-un-copy-a-court-de-memoire.md) | corrigé | blocage, danger pour l'hôte | oui | oui si un COPY manque de mémoire |
 | [Sous IGNORE_ERRORS, un doublon de clé fait supprimer une ligne innocente](closed/2026-10-10-ignore-errors-supprime-une-ligne-innocente.md) | corrigé `de8fc8c0f` | perte, réponse fausse | oui (un COPY sous IGNORE_ERRORS, index de clé sur disque) | non (il n'écrit jamais IGNORE_ERRORS) |
 | [Le tampon de 256 Mio est plein à la première écriture d'un backend](closed/2026-10-10-tampon-de-256-mio-plein-a-la-premiere-ecriture.md) | fermé — non reproduit sur master, sous 256 Mio et 32 fils, sur les deux postes | blocage (annoncé) | non reproduit | oui (backend) |
+| [Une extension chargée au rejeu n'est pas vérifiée contre le bâti du moteur](closed/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md) | corrigé `458ff7157` — identifiant de bâti, refus nommé à LOAD EXTENSION et au rejeu | blocage à l'ouverture au lieu d'un refus nommé | si moteur et extension ne sont pas du même bâti | à l'atelier |
