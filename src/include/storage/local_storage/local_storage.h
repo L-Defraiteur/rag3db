@@ -26,6 +26,8 @@ public:
     LocalTable* getOrCreateLocalTable(Table& table);
     // Return nullptr if no local table exists.
     LocalTable* getLocalTable(common::table_id_t tableID) const;
+    // Aucune table locale : la transaction n'a rien inséré.
+    bool isEmpty() const { return tables.empty(); }
 
     PageAllocator* addOptimisticAllocator();
 
