@@ -61,3 +61,8 @@ Pas encore proposé. À lire d'abord : ce que le fichier peut porter au-delà de
 ## Pour le fermer
 
 Une page de conception, le rouge par un témoin du moteur (les trois formes : journalisé, forcé tué, replié tué), le correctif, la relecture du banc ; les trois cas Cypher verts sous le défaut basculé.
+
+## Deux limites du correctif (relecture du banc, 10 octobre)
+
+- Les pages perdues avant la version 40 ne reviennent jamais : le premier point de reprise en 40 écrit une étendue qui les englobe. Une base abîmée par l'ancien moteur se réindexe.
+- Une ouverture en écriture qui rend des pages marque l'espace libre à persister : un point de reprise de fermeture écrira, sans qu'aucune requête ait écrit.

@@ -104,6 +104,15 @@ Risques à lever par des témoins, pas par lecture :
 - la plage rendue est réutilisable **tout de suite**, pendant le rejeu : c'est voulu, et sûr
   seulement si rien ne lit ces pages — le témoin du point de reprise interrompu le dira.
 
+## 3 bis. Deux limites (relecture du banc, 10 octobre)
+
+- **Les pages perdues avant la version 40 ne reviennent jamais** : le premier point de reprise
+  en 40 écrit une étendue qui les englobe. Une base qui a subi des morts sous l'ancien moteur
+  garde ses pages orphelines ; seule une réindexation les rend.
+- **Une ouverture en écriture qui rend des pages a « quelque chose à persister »** (le
+  gestionnaire d'espace libre marque sa version) : un point de reprise de fermeture, s'il y en
+  a un, écrira, sans qu'aucune requête ait écrit. C'est voulu.
+
 ## 4. Les témoins (rouges d'abord)
 
 Mesure commune : pages occupées = pages du fichier − pages libres, après avoir retiré toutes
