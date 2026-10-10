@@ -61,44 +61,23 @@ fn conn_str() -> String {
     })
 }
 
-/// Le runtime et sa garde.
+/// Ouvrir la connexion — et rien d'autre.
 ///
-/// `PostgresConnection::execute` est **synchrone** et appelle
-/// `Handle::current().block_on` : il lui faut donc un contexte tokio *sans*
-/// être dans une tâche. C'est exactement ce que donne `rt.enter()` tenu par un
-/// fil de test ordinaire.
-///
-/// L'ordre de déclaration compte : `rt` d'abord, la garde ensuite, pour que la
-/// garde tombe avant le runtime — l'inverse panique.
-struct Contexte {
-    _garde: tokio::runtime::EnterGuard<'static>,
-    rt: &'static tokio::runtime::Runtime,
-}
-
-impl Contexte {
-    fn ouvrir() -> (Self, Arc<PostgresConnection>) {
-        // Fuite volontaire : la garde emprunte le runtime, et un test n'a pas
-        // besoin de le rendre. C'est un test, pas un serveur.
-        let rt: &'static tokio::runtime::Runtime = Box::leak(Box::new(
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .expect("runtime tokio"),
-        ));
-
-        let conn = rt.block_on(PostgresConnection::new(&conn_str())).unwrap_or_else(|e| {
-            panic!(
-                "PostgreSQL injoignable ({e}).\n\
-                 Démarre-le :\n  docker run -d --name rag3weaver-pg \\\n\
-                 \x20   -e POSTGRES_USER=rag3weaver -e POSTGRES_PASSWORD=rag3weaver \\\n\
-                 \x20   -e POSTGRES_DB=rag3weaver_test -p 5433:5432 pgvector/pgvector:pg17\n\
-                 Ou pointe ailleurs avec RAG3WEAVER_PG=..."
-            )
-        });
-
-        let garde = rt.enter();
-        (Contexte { _garde: garde, rt }, Arc::new(conn))
-    }
+/// Il y avait ici un runtime tokio fuité et sa garde `rt.enter()`, parce que
+/// `PostgresConnection::execute` exigeait un contexte tokio ambiant. Depuis le
+/// chantier C (10 octobre 2026), la connexion POSSÈDE son runtime : un fil de
+/// test ordinaire suffit, à la construction comme à l'appel.
+fn ouvrir() -> Arc<PostgresConnection> {
+    let conn = PostgresConnection::new(&conn_str()).unwrap_or_else(|e| {
+        panic!(
+            "PostgreSQL injoignable ({e}).\n\
+             Démarre-le :\n  docker run -d --name rag3weaver-pg \\\n\
+             \x20   -e POSTGRES_USER=rag3weaver -e POSTGRES_PASSWORD=rag3weaver \\\n\
+             \x20   -e POSTGRES_DB=rag3weaver_test -p 5433:5432 pgvector/pgvector:pg17\n\
+             Ou pointe ailleurs avec RAG3WEAVER_PG=..."
+        )
+    });
+    Arc::new(conn)
 }
 
 /// Repartir d'une base vide.
@@ -183,7 +162,7 @@ static VERROU_BASE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Le catalogue branché sur postgres : dialecte, backend de recherche, et le
 /// magasin de blobs qui va avec — les trois pièces qu'un backend doit fournir.
-fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catalog) {
+fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Catalog) {
     catalogue_avec(dim, rag3weaver::search_backend::MoteurTexte::Auto)
 }
 
@@ -191,16 +170,13 @@ fn catalogue(dim: usize) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catal
 fn catalogue_avec(
     dim: usize,
     moteur: rag3weaver::search_backend::MoteurTexte,
-) -> (std::sync::MutexGuard<'static, ()>, Contexte, Catalog) {
+) -> (std::sync::MutexGuard<'static, ()>, Catalog) {
     let garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
-    let (ctx, conn) = Contexte::ouvrir();
+    let conn = ouvrir();
     table_rase(conn.as_ref());
 
-    let boxed: Box<dyn DbConnection> = Box::new(
-        ctx.rt
-            .block_on(PostgresConnection::new(&conn_str()))
-            .expect("seconde connexion"),
-    );
+    let boxed: Box<dyn DbConnection> =
+        Box::new(PostgresConnection::new(&conn_str()).expect("seconde connexion"));
 
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(dim)), config_vide(dim))
         .avec_regime(RegimeEcriture::ParLot);
@@ -214,7 +190,7 @@ fn catalogue_avec(
     // puisqu'elle détermine si un index lucivy s'écrit sur disque.
     catalog.set_moteur_texte(moteur);
     catalog.initialize().expect("initialize sur postgres");
-    (garde, ctx, catalog)
+    (garde, catalog)
 }
 
 // ═══ 1. Le schéma se pose ════════════════════════════════════════════════════
@@ -222,7 +198,7 @@ fn catalogue_avec(
 #[test]
 #[ignore]
 fn le_schema_se_pose() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog
         .register_entity("Product", config_produit())
         .expect("register_entity");
@@ -257,7 +233,7 @@ fn le_schema_se_pose() {
 #[test]
 #[ignore]
 fn l_ingestion_ecrit_des_lignes() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     let res = catalog
@@ -309,7 +285,7 @@ fn l_ingestion_ecrit_des_lignes() {
 #[test]
 #[ignore]
 fn le_vecteur_classe() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -348,7 +324,7 @@ fn le_vecteur_classe() {
 #[test]
 #[ignore]
 fn le_plein_texte_trouve() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -430,7 +406,7 @@ fn le_plein_texte_trouve() {
 #[test]
 #[ignore]
 fn l_hybride_fusionne() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -511,7 +487,7 @@ fn variante(label: &str) -> BTreeMap<String, CypherValue> {
 #[test]
 #[ignore]
 fn les_relations_tiennent() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog.register_entity("Variant", config_variante()).unwrap();
     catalog
@@ -571,7 +547,7 @@ fn les_relations_tiennent() {
 #[test]
 #[ignore]
 fn les_cellules_se_separent() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     let cellule_a = Scope { org: "acme".into(), project: "boutique".into() };
@@ -662,7 +638,7 @@ fn les_cellules_se_separent() {
 #[test]
 #[ignore]
 fn les_accents_ne_coupent_pas() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -725,7 +701,7 @@ fn les_accents_ne_coupent_pas() {
 fn le_filtre_utilisateur_tient() {
     use rag3weaver::filter::{FilterOp, FilterValue};
 
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     let commun = "Ownership, lifetimes and concurrency.";
@@ -820,7 +796,7 @@ fn le_filtre_utilisateur_tient() {
 #[test]
 #[ignore]
 fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     // Cinq domaines, aucun mot commun entre eux : sans ça une requête d'un
@@ -1096,7 +1072,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
 #[test]
 #[ignore]
 fn les_poids_du_combo_se_mesurent() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
 
     let corpus: Vec<(&str, &str)> = vec![
@@ -1249,7 +1225,7 @@ fn les_trois_moteurs_de_texte_marchent() {
 
     // ── Le trigramme, forcé ─────────────────────────────────────────────────
     let noms_natif = {
-        let (_garde, _ctx, mut catalog) = catalogue_avec(8, MoteurTexte::Natif);
+        let (_garde, mut catalog) = catalogue_avec(8, MoteurTexte::Natif);
         assert!(catalog.plein_texte_natif(), "Natif doit forcer le backend");
         catalog.register_entity("Product", config_produit()).unwrap();
         catalog.ingest_entities("Product", produits()).unwrap();
@@ -1282,7 +1258,7 @@ fn les_trois_moteurs_de_texte_marchent() {
     // `PostgresBlobStore`, et la recherche passe par `search_bm25_chunked` avec
     // ses handles — deux organes qui ne se rencontraient nulle part.
     let noms_lucivy = {
-        let (_garde, _ctx, mut catalog) = catalogue_avec(8, MoteurTexte::Lucivy);
+        let (_garde, mut catalog) = catalogue_avec(8, MoteurTexte::Lucivy);
         assert!(
             !catalog.plein_texte_natif(),
             "Lucivy doit forcer lucivy même quand le backend sait faire"
@@ -1330,10 +1306,9 @@ fn les_trois_moteurs_de_texte_marchent() {
 #[test]
 #[ignore]
 fn la_reprise_apres_incident_tient_sur_postgres() {
-    let (_garde, ctx, _catalog) = catalogue(8);
+    let (_garde, _catalog) = catalogue(8);
     let conn: Arc<dyn DbConnection> = Arc::new(
-        ctx.rt
-            .block_on(PostgresConnection::new(&conn_str()))
+        PostgresConnection::new(&conn_str())
             .expect("connexion pour le magasin de checkpoints"),
     );
     let store = rag3weaver::dataflow::checkpoint_store::PostgresCheckpointStore::new(conn);
@@ -1347,7 +1322,7 @@ fn la_reprise_apres_incident_tient_sur_postgres() {
 #[test]
 #[ignore]
 fn le_catalogue_monte_le_magasin_de_checkpoints() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     assert!(
         catalog.has_checkpoint_store(),
         "PostgreSQL doit avoir sa reprise après incident sans qu'on la lui pose à la main"
@@ -1412,13 +1387,12 @@ fn le_catalogue_monte_le_magasin_de_checkpoints() {
 #[test]
 #[ignore]
 fn la_marque_deau_traverse_la_frontiere() {
-    let (_garde, ctx, mut ecrivain) = catalogue(8);
+    let (_garde, mut ecrivain) = catalogue(8);
     ecrivain.register_entity("Product", config_produit()).unwrap();
 
     // Le lecteur : un second catalogue, sa propre file — donc vide.
     let boxed: Box<dyn DbConnection> = Box::new(
-        ctx.rt
-            .block_on(PostgresConnection::new(&conn_str()))
+        PostgresConnection::new(&conn_str())
             .expect("connexion du lecteur"),
     );
     let mut lecteur = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
@@ -1477,15 +1451,14 @@ fn la_marque_deau_traverse_la_frontiere() {
 #[test]
 #[ignore]
 fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
-    let (_garde, ctx, mut ecrivain) = catalogue(8);
+    let (_garde, mut ecrivain) = catalogue(8);
     ecrivain.register_entity("Product", config_produit()).unwrap();
     ecrivain
         .ingest_entities("Product", vec![produit("Sextant", "sextant navigation", 10.0)])
         .unwrap();
 
     let boxed: Box<dyn DbConnection> = Box::new(
-        ctx.rt
-            .block_on(PostgresConnection::new(&conn_str()))
+        PostgresConnection::new(&conn_str())
             .expect("connexion du lecteur"),
     );
     let mut lecteur = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
@@ -1543,7 +1516,7 @@ fn une_recherche_stricte_dit_ce_quelle_ne_peut_pas_tenir() {
 #[test]
 #[ignore]
 fn la_marque_de_confiance_nomme_son_signal() {
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
@@ -1600,7 +1573,7 @@ fn la_marque_de_confiance_nomme_son_signal() {
 #[ignore]
 fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
     use rag3weaver::disponibilite::Disponibilites as D;
-    let (_garde, ctx, mut a) = catalogue(8);
+    let (_garde, mut a) = catalogue(8);
     a.register_entity("Product", config_produit()).unwrap();
     let res = a
         .ingest_entities_jusqu_a(
@@ -1617,8 +1590,7 @@ fn deux_rattrapages_ne_reclament_pas_les_memes_chunks() {
 
     // Le second processus.
     let boxed: Box<dyn DbConnection> = Box::new(
-        ctx.rt
-            .block_on(PostgresConnection::new(&conn_str()))
+        PostgresConnection::new(&conn_str())
             .expect("connexion du second catalogue"),
     );
     let mut b = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8));
@@ -1686,7 +1658,7 @@ fn le_chemin_composable_resout_les_chunks_avec_le_dialecte_postgres() {
     use rag3weaver::search_strategy::UnifiedResult;
     use std::sync::Mutex;
 
-    let (_garde, _ctx, mut catalog) = catalogue(8);
+    let (_garde, mut catalog) = catalogue(8);
     catalog.register_entity("Product", config_produit()).unwrap();
     catalog
         .ingest_entities(
