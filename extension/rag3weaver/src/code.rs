@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 11] = [
+pub const RELATIONS: [(&str, &str, &str); 12] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -59,6 +59,10 @@ pub const RELATIONS: [(&str, &str, &str); 11] = [
     // La couche de rendez-vous : ce qu'un scope offre, ce qu'il attend.
     ("DEFINES", SCOPE, SYMBOL),
     ("MENTIONS", SCOPE, SYMBOL),
+    // **Les verrous qu'un scope prend** : vers le symbole du champ mutex,
+    // `Classe::champ`, que la classe définit (DEFINES). Posée à l'ingestion :
+    // le propriétaire se lit sur place (`this`, `self`, un type lu).
+    ("LOCKS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -473,6 +477,8 @@ fn usage_name(u: &UsageKind) -> &'static str {
         UsageKind::Import => "import",
         UsageKind::Inheritance => "inheritance",
         UsageKind::Other => "other",
+        UsageKind::Lock => "lock",
+        UsageKind::SharedLock => "shared_lock",
     }
 }
 
@@ -488,7 +494,8 @@ fn usage_name(u: &UsageKind) -> &'static str {
 /// écrit une colonne par propriété déclarée, un groupe à qui il en manque
 /// une n'y entrerait pas.
 fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
-    const ORDRE: [UsageKind; 5] = [UsageKind::Inheritance, UsageKind::Call, UsageKind::Type, UsageKind::Import, UsageKind::Other];
+    const ORDRE: [UsageKind; 7] =
+        [UsageKind::Inheritance, UsageKind::Call, UsageKind::Type, UsageKind::Import, UsageKind::Other, UsageKind::Lock, UsageKind::SharedLock];
     let Some(retenu) = ORDRE.iter().find(|k| sites.iter().any(|s| &s.usage == *k)) else {
         return BTreeMap::new();
     };
@@ -528,6 +535,11 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // en base.
             props.insert("deferred".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
+        if rel == "LOCKS" {
+            // Le genre (`lock`, `shared_lock`) et la ligne du verrou.
+            catalog.register_relation_with(rel, from, to, usage_property_defs())?;
             continue;
         }
         if USAGE_RELATIONS.contains(&rel) {
@@ -695,6 +707,9 @@ pub struct CodeAnalysis {
     /// fichiers, et codeparsers reste en fichier seul.
     #[serde(default)]
     pub pending_deferred: Vec<(String, String, Vec<String>)>,
+    /// Les verrous pris : (scope, symbole `Classe::champ`, sites).
+    #[serde(default)]
+    pub pending_locks: Vec<(String, String, Vec<UsageSite>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -1122,7 +1137,26 @@ pub fn analyze_in_project(
             let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : les types à lire ailleurs, pour les références sans type lu.
             let mut differes_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Les verrous pris : symbole `Classe::champ` → sites.
+            let mut verrous: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             for r in &sc.identifier_references {
+                // Un verrou : le champ mutex de son propriétaire, `this` /
+                // `self` (la classe englobante) ou un receveur typé. Sans
+                // propriétaire lu, rien : on ne devine pas la classe.
+                if let Some(u @ (UsageKind::Lock | UsageKind::SharedLock)) = r.usage.clone() {
+                    let proprietaire = match r.qualifier.as_deref() {
+                        Some("this" | "self") => sc.parent.clone().map(|p| p.rsplit("::").next().unwrap_or(&p).to_string()),
+                        _ => r.qualifier_type.clone(),
+                    };
+                    if let Some(p) = proprietaire.filter(|p| !p.is_empty()) {
+                        let site = UsageSite { usage: u, line: Some(r.line) };
+                        let liste = verrous.entry(format!("{p}::{}", r.identifier)).or_default();
+                        if !liste.contains(&site) {
+                            liste.push(site);
+                        }
+                    }
+                    continue;
+                }
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
                     continue;
@@ -1264,6 +1298,9 @@ pub fn analyze_in_project(
                     v.sort();
                     analysis.pending_self_types.push((key.clone(), name, v));
                 }
+            }
+            for (symbole, liste) in verrous {
+                analysis.pending_locks.push((key.clone(), symbole, liste));
             }
             for (name, differes) in differes_lus {
                 if let Some(mut v) = differes.filter(|v| !v.is_empty()) {
@@ -1885,8 +1922,25 @@ impl Catalog {
         use std::collections::{BTreeMap as Map, BTreeSet};
 
         // Les noms en jeu : ceux que le lot définit, ceux qu'il attend.
-        let offered: BTreeSet<&str> = analysis.scopes.iter().map(|s| s.name.as_str()).collect();
-        let expected: BTreeSet<&str> = analysis.pending.iter().map(|(_, n, _)| n.as_str()).collect();
+        // Les champs typés d'une classe : chacun un symbole `Classe::champ`,
+        // que la classe définit — l'identité d'un mutex que des scopes
+        // verrouillent (LOCKS).
+        let champs_definis: Vec<(usize, String)> = analysis
+            .scopes
+            .iter()
+            .enumerate()
+            .filter(|(_, sc)| !sc.field_types.is_empty())
+            .flat_map(|(i, sc)| {
+                let liste: Vec<serde_json::Value> = serde_json::from_str(&sc.field_types).unwrap_or_default();
+                liste
+                    .into_iter()
+                    .filter_map(move |c| c.get("name").and_then(|n| n.as_str()).map(|n| (i, format!("{}::{n}", sc.name))))
+            })
+            .collect();
+        let offered: BTreeSet<&str> =
+            analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).collect();
+        let expected: BTreeSet<&str> =
+            analysis.pending.iter().map(|(_, n, _)| n.as_str()).chain(analysis.pending_locks.iter().map(|(_, n, _)| n.as_str())).collect();
         let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
         if names.is_empty() {
             return Ok(());
@@ -1928,6 +1982,16 @@ impl Catalog {
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
         }
+        for (i, champ) in &champs_definis {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &analysis.scopes[*i].key, ""))?;
+            definitions.push((from, symbol_uuid(self, champ)?, BTreeMap::new()));
+        }
+        let mut verrous: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending_locks.len());
+        for (scope_key, symbole, sites) in &analysis.pending_locks {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+            verrous.push((from, symbol_uuid(self, symbole)?, usage_properties(sites)));
+        }
+        self.mettre_en_file_les_liens("LOCKS", verrous)?;
         // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
         // mentionneurs — pour ne reposer que les arêtes neuves.
         let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();
