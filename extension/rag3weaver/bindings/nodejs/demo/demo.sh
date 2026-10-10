@@ -6,7 +6,8 @@
 #   3. la même chose SANS service : plein texte seul, l'avertissement visible.
 #
 #   demo.sh [dépôt]            dépôt par défaut : extension/rag3weaver/codeparsers/src du dépôt rag3db
-#   DEMO_SOURCE=/chemin/vers/rag3weaver-0.0.1-alpha.1.tgz (et le sous-paquet à côté) pour répéter sans publier
+#   DEMO_SOURCE=/chemin/vers/rag3weaver-<version>.tgz pour répéter sans publier (les sous-paquets épinglés
+#       viennent de npm ; DEMO_SOURCE_SUB=<archive> pour en installer un local avec)
 #   RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981 (défaut) — les tunnels vers luciepc
 #   DEMO_QUERY, DEMO_SYMBOL : la question et le symbole montrés
 #   DEMO_VERSION : la version attendue (défaut : ce que `npm view rag3weaver@next version` rend)
@@ -25,9 +26,11 @@ npm init -y > /dev/null
 
 echo
 if [ -n "${DEMO_SOURCE:-}" ]; then
-  sous=$(dirname "$DEMO_SOURCE")/rag3weaver-linux-x64-gnu-$(basename "$DEMO_SOURCE" | sed 's/^rag3weaver-//')
-  echo "━━ npm install (répétition, depuis les archives) : $DEMO_SOURCE"
-  npm install --no-audit --no-fund "$sous" "$DEMO_SOURCE" 2>&1 | tail -3
+  # L'archive de tête seule : ses sous-paquets épinglés se résolvent depuis
+  # npm (c'est l'épreuve d'avant publication) — sauf DEMO_SOURCE_SUB, une
+  # archive de sous-paquet locale à installer avec.
+  echo "━━ npm install (répétition, depuis l'archive de tête) : $DEMO_SOURCE"
+  npm install --prefer-online --no-audit --no-fund ${DEMO_SOURCE_SUB:-} "$DEMO_SOURCE" 2>&1 | tail -3
 else
   # --prefer-online : sans lui, npm prend le packument de son cache local
   # (périmé de quelques minutes après une publication) et installe la
@@ -37,7 +40,11 @@ else
 fi
 echo
 version=$(node -p "require('rag3weaver/package.json').version")
-attendue=${DEMO_VERSION:-$(npm view --prefer-online rag3weaver@next version 2>/dev/null || true)}
+if [ -n "${DEMO_SOURCE:-}" ]; then
+  attendue=${DEMO_VERSION:-$(basename "$DEMO_SOURCE" .tgz | sed 's/^rag3weaver-//')}
+else
+  attendue=${DEMO_VERSION:-$(npm view --prefer-online rag3weaver@next version 2>/dev/null || true)}
+fi
 echo "   installé : rag3weaver $version · binaire $(node -p "require('rag3weaver').binaryPath()")"
 if [ -n "$attendue" ] && [ "$version" != "$attendue" ]; then
   echo "   la version installée ($version) n'est pas celle attendue ($attendue) : on s'arrête là" >&2
