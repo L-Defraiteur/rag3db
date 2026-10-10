@@ -152,10 +152,13 @@ avec `CARGO_INCREMENTAL=0`.
 
 **Le fait.** `extension/vector/build/libvector.rag3db_extension` de l'arbre principal a été
 réécrite à 21 h 26 (puis une autre fois à 22 h 50), sans la lib : `build/lecteurs-csv`
-restait à 17 h 27 (`aeec6888f`). C'est le banc, qui rebâtissait ses extensions de
-référence contre le nouveau moteur dans un worktree dont `extension/vector/build` était
-un **lien** vers l'arbre principal : son bâti a écrit à travers le lien. Le cœur C++ l'a
-vu en préparant B8.
+restait à 17 h 27 (`aeec6888f`). Le cœur C++ l'a vu en préparant B8. **L'auteur n'est
+pas connu.** La première hypothèse visait le banc, mais ses traces la démentent : ses
+bâtis de 19 h 29, 21 h 18 et 22 h 50 ont écrit dans son propre worktree, pas à travers un
+lien, puisque celui de 22 h 50 n'a pas touché l'extension de l'arbre principal, restée à
+21 h 26. Le md5 de celle-ci (`9ba45dd1…`) ne correspond à aucune de ses extensions
+gardées. La voie la plus probable reste un bâti dans un worktree dont
+`extension/vector/build` est un lien vers l'arbre principal.
 
 **La conséquence.** Les passes jouées sur le poste principal depuis 21 h 26 ont tourné sur
 la lib de 17 h 27 et une extension d'un autre bâti, probablement avec l'élagage HNSW.
@@ -183,3 +186,9 @@ Les autres worktrees (`rag3db-maj`, `rag3db-moteur`, `rag3db-paquet-npm` ici ;
 **La remise d'accord.** Le rebâti de la lib et de l'extension sur master, quand le cœur
 C++ aura fini de reproduire B8 sur la lib actuelle et que la session mémoire aura fini sa
 vérification.
+
+**La remise d'accord, faite** (10 octobre, 23 h 36) : lib et extension rebâties ensemble sur
+`c8cec6086`. `librag3db.so` 23:36:48 (md5 `26741cb7cbae2b91038b6676b3ff0dad`),
+`libvector.rag3db_extension` 23:36:50 (md5 `297a4b0efd178eac2fd9188b1c9a8b71`), toutes deux
+plus récentes que le dernier commit du moteur et de l'extension (`599f0494b`, 21:42).
+Annoncé à toutes les sessions.
