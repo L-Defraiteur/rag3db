@@ -21,7 +21,12 @@ bâti) contre 448,3 / 445,0 s après (~+1 %, bruit) ; MRR au millième
 (0,440 / 14 / 27) ; latences 127-149 → 133-146 ms. `test_backend_code`
 HORS comparaison (rouge aux deux bouts pour des raisons différentes, voir
 20 h 45). **Moteur : le MÊME `.so` aux quatre passes** (bâti 21:26, âges
-0/15/22/30 min dans les lignes d'âge).
+0/15/22/30 min dans les lignes d'âge). Précision demandée par
+l'orchestration : les quatre passes (jusqu'à 22 h 40) ont tourné sur une
+extension vecteur (`libvector.rag3db_extension`, arbre principal) rebâtie
+à 21 h 26 par un autre bâti (le banc, vraisemblablement) — SANS effet sur
+les chiffres : les lignes d'âge prouvent que les deux colonnes ont partagé
+le même artefact (21:26, âges 0/15/22/31 min).
 
 **Trouvaille de méthode, vérifiée par rag3db-96 contre ses journaux** :
 `RAG3DB_BUILD` non posée + un worktree qui a bâti = `run_e2e.sh` se replie
