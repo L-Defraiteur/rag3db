@@ -182,15 +182,47 @@ impl Node for FetchRelatedNode {
             return Ok(());
         }
 
-        let children_map = fetch_related(conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit)?;
+        // Le dialecte du catalogue s'il est servi ; sinon la connexion est
+        // celle de rag3db, comme avant.
+        let dialect: std::sync::Arc<dyn crate::dialect::SchemaDialect> = match ctx.service::<std::sync::Arc<std::sync::Mutex<crate::Catalog>>>("catalog") {
+            Some(c) => c.lock().map_err(|_| "FetchRelatedNode: catalogue empoisonné")?.dialect_arc(),
+            None => std::sync::Arc::new(crate::dialect::Rag3dbDialect),
+        };
+        let children_map = fetch_related_in(dialect.as_ref(), conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit)?;
         ctx.set_output("children", PortValue::new(children_map));
         Ok(())
     }
 }
 
-/// **Les voisins d'une liste d'uuids par une relation**, en une requête.
-/// Partagé par [`FetchRelatedNode`] et [`GroupFrameNode`].
+/// [`fetch_related_in`] dans le dialecte rag3db : le chemin du catalogue
+/// (`catalog.rs`), le temps qu'il passe le sien.
 pub fn fetch_related(
+    conn: &dyn crate::connection::DbConnection,
+    source_uuids: &[String],
+    relation: &str,
+    direction: ExpansionDirection,
+    limit: usize,
+) -> Result<HashMap<String, Vec<ChildSummary>>, String> {
+    fetch_related_in(&crate::dialect::Rag3dbDialect, conn, source_uuids, relation, direction, limit)
+}
+
+/// Le saut de [`fetch_related_in`] : depuis des nœuds de n'importe quelle
+/// table, vers n'importe quelle table, l'uuid, l'étiquette et le nœud entier.
+pub fn related_hop(relation: &str, direction: ExpansionDirection) -> rag3weaver_ir::Hop {
+    use rag3weaver_ir::Column;
+    let sens = match direction {
+        ExpansionDirection::Outgoing => rag3weaver_ir::Direction::Outgoing,
+        ExpansionDirection::Incoming => rag3weaver_ir::Direction::Incoming,
+    };
+    let mut hop = rag3weaver_ir::Hop::untyped(relation, sens);
+    hop.returns.extend([Column::Label, Column::Whole]);
+    hop
+}
+
+/// **Les voisins d'une liste d'uuids par une relation**, en une requête dite
+/// par le dialecte. Partagé par [`FetchRelatedNode`] et [`GroupFrameNode`].
+pub fn fetch_related_in(
+    dialect: &dyn crate::dialect::SchemaDialect,
     conn: &dyn crate::connection::DbConnection,
     source_uuids: &[String],
     relation: &str,
@@ -204,20 +236,7 @@ pub fn fetch_related(
             .collect(),
     );
 
-    let cypher = match direction {
-        ExpansionDirection::Outgoing => format!(
-            "UNWIND $uuids AS uid \
-             MATCH (n {{_uuid: uid}})-[:{}]->(m) \
-             RETURN uid, m._uuid, label(m), m",
-            relation
-        ),
-        ExpansionDirection::Incoming => format!(
-            "UNWIND $uuids AS uid \
-             MATCH (n {{_uuid: uid}})<-[:{}]-(m) \
-             RETURN uid, m._uuid, label(m), m",
-            relation
-        ),
-    };
+    let cypher = dialect.hop(&related_hop(relation, direction)).map_err(|e| e.to_string())?;
 
     let result = conn
         .execute_with_params(&cypher, &[QueryParam::new("uuids", uuids_param)])
@@ -329,16 +348,16 @@ impl Node for GroupFrameNode {
             }
         }
         for (entite, uuids) in par_entite {
-            let (group_by, title_field) = {
+            let (group_by, title_field, dialect) = {
                 let c = catalog.lock().map_err(|_| "GroupFrameNode: catalogue empoisonné")?;
                 let Some(config) = c.entity_config(&entite) else { continue };
                 let Some(g) = config.group_by.clone() else { continue };
                 // Le titre du **parent** : même entité que l'enfant quand la
                 // relation reste dans la table ; sinon celui du parent.
-                (g, config.title_field().map(str::to_string))
+                (g, config.title_field().map(str::to_string), c.dialect_arc())
             };
             let conn = ctx.service::<ConnService>("conn").ok_or("GroupFrameNode: 'conn' service not found")?.0.clone();
-            let parents = fetch_related(conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1)?;
+            let parents = fetch_related_in(dialect.as_ref(), conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1)?;
             for (uuid, mut liste) in parents {
                 let Some(mut parent) = liste.drain(..).next() else { continue };
                 let titre = title_field
@@ -431,6 +450,22 @@ impl Node for ComposeNode {
 
 #[cfg(test)]
 mod tests {
+    /// Le saut des voisins : la requête que rag3db reçoit. Elle ne nomme
+    /// pas les tables, comme avant ; seuls les alias changent (`d`, `r`,
+    /// `u` au lieu de `n`, rien, `uid`), et les lignes sont les mêmes.
+    #[test]
+    fn le_saut_des_voisins_dans_le_dialecte_rag3db() {
+        use crate::dialect::{Rag3dbDialect, SchemaDialect};
+        assert_eq!(
+            Rag3dbDialect.hop(&related_hop("HAS_CHUNK", ExpansionDirection::Outgoing)).unwrap(),
+            "UNWIND $uuids AS u MATCH (d {_uuid: u})-[r:HAS_CHUNK]->(m) RETURN u, m._uuid, label(m), m"
+        );
+        assert_eq!(
+            Rag3dbDialect.hop(&related_hop("HAS_CHUNK", ExpansionDirection::Incoming)).unwrap(),
+            "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:HAS_CHUNK]-(m) RETURN u, m._uuid, label(m), m"
+        );
+    }
+
     use super::super::port::PortType;
     use super::*;
     use crate::search::SearchOptions;

@@ -259,19 +259,17 @@ impl Node for ReactTransitionNode {
             (identifiant(&lc.field, "lifecycle.field")?, t.from, t.to)
         };
 
-        // Remonter la relation. Le label de la source est posé s'il est
-        // déclaré ; sans lui le nœud de départ reste anonyme, ce que la
-        // traversée du moteur accepte déjà.
-        let etiquette_source = source.as_deref().map(|s| format!(":{s}")).unwrap_or_default();
-        let motif = if self.cfg.from_target {
-            format!("(t:{target})-[:{relation}]->(s{etiquette_source} {{_uuid: u}})")
-        } else {
-            format!("(s{etiquette_source} {{_uuid: u}})-[:{relation}]->(t:{target})")
-        };
-        let cypher = format!("UNWIND $uuids AS u MATCH {motif} RETURN t._uuid, t.{champ}");
+        // Remonter la relation, par un saut que dit le dialecte. La table de
+        // la source est posée si elle est déclarée ; sans elle le nœud de
+        // départ est retrouvé par son seul uuid.
+        let sens = if self.cfg.from_target { rag3weaver_ir::Direction::Incoming } else { rag3weaver_ir::Direction::Outgoing };
+        let mut saut = rag3weaver_ir::Hop::new("", &relation, &target, sens);
+        saut.start = source.clone();
+        saut.returns.push(rag3weaver_ir::Column::Node(champ.clone()));
 
         let lignes = {
             let cat = catalog.lock().map_err(|_| "ReactTransitionNode: catalog poisoned".to_string())?;
+            let cypher = cat.dialect_arc().hop(&saut).map_err(|e| format!("ReactTransitionNode: {e}"))?;
             cat.execute_raw_with_params(
                 &cypher,
                 &[QueryParam::new(
@@ -287,10 +285,11 @@ impl Node for ReactTransitionNode {
         let mut concernees: BTreeSet<String> = BTreeSet::new();
         let mut hors_etat = 0usize;
         for ligne in &lignes.rows {
-            let Some(uuid) = ligne.first().and_then(|v| v.as_str()) else { continue };
+            // La première colonne est l'uuid de départ : la cible vient après.
+            let Some(uuid) = ligne.get(1).and_then(|v| v.as_str()) else { continue };
             // Seules les lignes **dans l'état de départ** sont concernées. Les
             // autres ne sont pas un refus : la transition ne les regarde pas.
-            match ligne.get(1).and_then(|v| v.as_str()) {
+            match ligne.get(2).and_then(|v| v.as_str()) {
                 Some(etat) if etat == depuis => {
                     concernees.insert(uuid.to_string());
                 }

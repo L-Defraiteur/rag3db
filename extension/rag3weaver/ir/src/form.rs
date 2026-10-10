@@ -34,6 +34,10 @@ pub enum Column {
     /// Une colonne vide, pour garder les positions quand un champ n'est pas
     /// déclaré (ou qu'une relation ne le porte pas).
     Null,
+    /// La table du nœud atteint (utile quand le saut ne la fixe pas).
+    Label,
+    /// Le nœud atteint entier, tous ses champs.
+    Whole,
 }
 
 /// **Un saut** : depuis une liste d'uuids (le paramètre `$uuids`), suivre une
@@ -43,11 +47,12 @@ pub enum Column {
 /// l'ordre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hop {
-    /// La table du nœud de départ (celle des uuids donnés).
-    pub start: String,
+    /// La table du nœud de départ (celle des uuids donnés) ; `None` : un
+    /// nœud de n'importe quelle table, retrouvé par son seul uuid.
+    pub start: Option<String>,
     pub relation: String,
-    /// La table du nœud atteint.
-    pub end: String,
+    /// La table du nœud atteint ; `None` : n'importe laquelle.
+    pub end: Option<String>,
     pub direction: Direction,
     pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
@@ -57,22 +62,30 @@ impl Hop {
     /// Un saut qui ne rend que l'uuid du nœud atteint.
     pub fn new(start: impl Into<String>, relation: impl Into<String>, end: impl Into<String>, direction: Direction) -> Self {
         Self {
-            start: start.into(),
+            start: Some(start.into()),
             relation: relation.into(),
-            end: end.into(),
+            end: Some(end.into()),
             direction,
             returns: vec![Column::Node("_uuid".into())],
             exclude: None,
         }
     }
 
+    /// Un saut dont le départ et l'arrivée peuvent être de n'importe quelle
+    /// table : les uuids suffisent à les retrouver.
+    pub fn untyped(relation: impl Into<String>, direction: Direction) -> Self {
+        Self { start: None, end: None, ..Self::new("", relation, "", direction) }
+    }
+
     /// Tout ce qui entre dans le texte d'une requête est un identifiant :
     /// tables, relation, champs, et les valeurs écartées.
     pub fn validate(&self) -> Result<(), TranslateError> {
-        let mut noms: Vec<&str> = vec![&self.start, &self.relation, &self.end];
+        let mut noms: Vec<&str> = vec![&self.relation];
+        noms.extend(self.start.as_deref());
+        noms.extend(self.end.as_deref());
         noms.extend(self.returns.iter().filter_map(|c| match c {
             Column::Node(f) | Column::Edge(f) => Some(f.as_str()),
-            Column::Null => None,
+            Column::Null | Column::Label | Column::Whole => None,
         }));
         if let Some(x) = &self.exclude {
             noms.push(&x.field);

@@ -1076,9 +1076,11 @@ impl SchemaDialect for Rag3dbDialect {
     /// (journal, §6). La forme exacte que `graph_walk` écrivait à la main.
     fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
         hop.validate()?;
+        let table = |t: &Option<String>| t.as_deref().map(|t| format!(":{t}")).unwrap_or_default();
+        let (d, m) = (table(&hop.start), table(&hop.end));
         let pattern = match hop.direction {
-            rag3weaver_ir::Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", hop.start, hop.relation, hop.end),
-            rag3weaver_ir::Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", hop.start, hop.relation, hop.end),
+            rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{}]->(m{m})", hop.relation),
+            rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{}]-(m{m})", hop.relation),
         };
         let filtre = match &hop.exclude {
             Some(x) => {
@@ -1092,6 +1094,8 @@ impl SchemaDialect for Rag3dbDialect {
                 rag3weaver_ir::Column::Node(f) => format!("m.{f}"),
                 rag3weaver_ir::Column::Edge(f) => format!("r.{f}"),
                 rag3weaver_ir::Column::Null => "NULL".to_string(),
+                rag3weaver_ir::Column::Label => "label(m)".to_string(),
+                rag3weaver_ir::Column::Whole => "m".to_string(),
             }))
             .collect();
         Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}", colonnes.join(", ")))
@@ -2806,6 +2810,9 @@ mod tests {
             "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, NULL, r.resolution"
         );
         assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
+        let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
+        libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
+        assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
     }
