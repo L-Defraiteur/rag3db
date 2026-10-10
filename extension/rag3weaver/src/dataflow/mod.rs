@@ -51,6 +51,7 @@ pub mod catalog_read;
 pub(crate) mod rt;
 pub mod react_nodes;
 pub mod ref_nodes;
+pub mod scripted_node;
 pub mod usage_nodes;
 pub mod neighborhood_nodes;
 pub mod graph_walk;
