@@ -190,6 +190,15 @@ public:
     // la transaction reste dans son instantané, l'appelant annule et rejoue.
     void lockRowForWrite(transaction::Transaction* transaction, common::offset_t nodeOffset,
         const std::string& key) const;
+    // Marche I1 (le genre « index ») : la table porte un index secondaire chargé (vectoriel).
+    bool hasLoadedSecondaryIndex() const;
+    // Sous le mode multi-écrivains, tout écrivain d'une table indexée tient l'index de la table
+    // en EXCLUSIF de sa première écriture à sa validation : l'index réécrit, pendant la
+    // transaction comme au commit, des arêtes validées de ses voisins et des points d'entrée en
+    // mémoire sans verrou ni annulation ; un écrivain à la fois. Après l'attente, si la
+    // transaction n'a encore rien écrit, son instantané est repris (comme l'annonce de V2) : le
+    // second recoud sur le graphe que le premier a validé, et non sur un graphe périmé.
+    void lockIndexForWrite(transaction::Transaction* transaction) const;
     // L'extrémité d'une relation que l'on crée : la clé en partagé ; si le nœud a été supprimé
     // par une validation postérieure à l'instantané, l'erreur de sérialisation.
     void throwIfWrittenByAnotherCommitAfterSnapshot(const transaction::Transaction* transaction,
