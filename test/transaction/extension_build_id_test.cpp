@@ -109,11 +109,16 @@ TEST_F(ExtensionBuildIdTest, AtRecoveryAnExtensionFromAnotherBuildLeavesTheIndex
         noted << "vector\t" << copy << "\n";
     }
     createDBAndConn();
+    // Le rejeu a refusé la copie : l'extension n'est pas chargée. Celle de ce bâti l'est
+    // ensuite, et trouve son index en retard, avec la raison du refus.
+    ok("LOAD EXTENSION '" + vectorExtension() + "';");
     auto search = conn->query(
         "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1000.0, 1.0, 2.0, 3.0], 1) RETURN node.id;");
     EXPECT_FALSE(search->isSuccess())
         << "l'index répond alors que son extension, d'un autre bâti, a été chargée au rejeu";
     if (!search->isSuccess()) {
+        EXPECT_NE(search->getErrorMessage().find("is behind its table"), std::string::npos)
+            << search->getErrorMessage();
         EXPECT_NE(search->getErrorMessage().find("was built from"), std::string::npos)
             << search->getErrorMessage();
     }
