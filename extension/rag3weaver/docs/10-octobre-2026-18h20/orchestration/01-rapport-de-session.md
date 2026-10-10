@@ -263,3 +263,104 @@ x64 oui ou non ; le jeton crates.io ; le ménage des branches distantes
 `elagage-hnsw-2`, `elagage-hnsw-2-avant-rebase`, `paquet-npm-absent`,
 `statistiques`, `memoire-longue-3/-4/-5`) ; supprimer `.vault/npm.env` ;
 éventuel `docker system prune` sur luciepc (98 Go réclamables).
+
+## 7. La nuit du 10 au 11 octobre (21 h → 23 h 15), ajout de 23 h 16
+
+Lucie dort depuis 23 h 30 ; consignes : « hésite pas à te relancer, fais les
+choix les plus génériques à chaque fois, pas forcément les plus simples ;
+c'est mécanique : les tests e2e, savoir indexer le code, et MCP, dans cet
+ordre » ; « dis aux sessions d'éviter de lancer les suites complètes à chaque
+fois » ; « effacer ensuite après fusion les target et worktree, à chaque
+fois ». L'orchestration se relance toutes les 30 minutes.
+
+### Le disque, deuxième fois (23 h, 92 %)
+
+Cause mesurée, différente du matin : un binaire e2e pesait 1,35 Go (0,88 Go
+de `.debug_*`) parce que **le moteur C++ y était lié en statique** dès que
+`RAG3DB_SHARED` + `RAG3DB_LIBRARY_DIR` + `RAG3DB_INCLUDE_DIR` n'étaient posés
+qu'à l'exécution et pas au bâti ; `cargo test --tests --no-run` sur tout le
+dépôt bâtit 171 binaires (240 Go) ; et chaque jeu de features refait un
+binaire (87 e2e sur 90 en plusieurs hachages). `target-C` faisait 307 Go
+après trois heures. Lot « poids des tests » (A, `c9ff68a4f`) : un binaire
+passe de 469 à 273 Mo (`[profile.test|dev.package."*"] debug = false`,
+lignes gardées), `run_e2e.sh` pose les trois variables, garde un seul jeu de
+features, balaie les vieux hachages à la sortie, refuse le bâti implicite du
+moteur et un worktree sans `RAG3DB_BUILD` ; la page des défauts dit
+« `cargo check --tests`, jamais `--tests --no-run` global ». Règle de Lucie :
+après chaque fusion, le target et le worktree s'effacent. Disque à 53 %.
+
+### Entré sur master (acadcb16b → 70a1b97ab, 26 commits depuis 23 h)
+
+- **C fusionné** (`afdc6923e`) : l'exécution asynchrone des graphes, la
+  portée du run, le réacteur en tâche, postgres avec son runtime, le chat
+  sur le bus ; mesure dans le bruit (441,5 s contre 445-448 s, MRR au
+  millième). Puis la connexion PostgreSQL épinglée (branche, en fusion).
+- **F** : Select avec condition compilée, Hop filtré et ordonné, le journal
+  de conversation par Hop, les nœuds de recherche sans Cypher direct,
+  `query.rs` retiré (décision de Lucie), **Write::Upsert et Link**
+  (`70a1b97ab`) ; page Write/Tx (sept formes, Tx sur la connexion) ; ticket :
+  sur PostgreSQL, défaire un lien ne trouvait rien.
+- **Proto « tout déclaratif »** (session « everything declarative », ouverte
+  à 22 h, briefée de zéro) : lot 1, le moteur de script générique
+  (TypeScript par retrait des types, JavaScript par QuickJS, rhai derrière
+  la même interface ; 18 témoins) ; lot 2, le nœud entièrement scripté
+  déclaré sous un nom (forme A : `nodes/<nom>.node.json` + script relatif,
+  dossier découvert) et les noms possédés qui ferment deux fuites en service ;
+  lot 3 (rechargement à chaud) en cours. Poids du lot 1 : +8,5 Mo, c'est
+  l'effaceur de types ; profil `paquet` avec LTO complète chez G (61 contre
+  89 Mo).
+- **Codeparsers** (priorité maximale de Lucie, « indexer nos propres
+  dépôts ») : B4 le compteur de non-résolues (rendait 0 ; 89 % d'appels non
+  reliés en vrai), B5 le banc de couverture à corpus égal (rag3db src 11,3 /
+  35,0 % d'appels reliés, rag3weaver 14,5 / 27,0 %), le rapport des trous
+  classés par coût (premier coût partout : la méthode sur un receveur non
+  typé), le lot préprocesseur (imports reliés 10 → 34 %), **B2a** les
+  receveurs typés (pointeurs intelligents comme Box/Arc, gabarits qui disent
+  leur type ; appelants de `NodeTable::update` 0 → 1). B2b (types différés
+  résolus à la matérialisation, diff `code.rs` pour A) en cours ; B3 LOCKS
+  ensuite. Page des neuf bloquants :
+  `04-indexer-nos-propres-depots.md`.
+- **Cœur C++** : IGNORE_ERRORS fermé (`e0fad1325`, perte de la condition 4 :
+  un doublon supprimait une ligne innocente) ; analyze non transactionnel
+  accepté (comme `reltuples`), pas de déclenchement automatique (sonde :
+  cardinalité déjà exacte, distincts faux par l'HyperLogLog) ; tickets
+  complétés (estimation des relations, RTree de geo inutilisable) ; B8
+  (tampon de 256 Mio) en départage ici contre la lib de 17 h 27 puis la lib
+  rebâtie. A4′ : code fait, 30/33 témoins, témoins du banc réécrits
+  (`banc-a4-temoins-2`), fusion en attente.
+- **Banc** : insertion double fermée (`a162b43e3`), témoins A4′, mesure de
+  l'union (1,6 nœud par ligne, 38 fois moins que ligne par ligne, référence
+  19,5-24,3 s), fin d'instruction en cours avec le critère « a perdu une
+  arête entrante ».
+- **Tickets** : 48 fermés déplacés dans `docs/tickets/closed/`, index en
+  deux tables (décision de Lucie).
+
+### Décisions prises cette nuit, renversables par Lucie
+
+Forme A du nœud scripté ; sept formes de Write (Mark justifié contre
+Update), Load dans Write sous capacité ; analyze explicite seulement ;
+estimation des relations : ticket, pas de code ; geo après B8 ; profil
+`paquet` LTO ; pas de `.mcp.json` à la racine ; `MustReopen` → le serveur
+MCP sort après l'avoir dit ; fin d'instruction HNSW avec le critère exact
+dès le départ.
+
+### Enquête close : l'extension de 21 h 26
+
+`libvector.rag3db_extension` de l'arbre principal réécrite à 21:26:03
+(912 048 o, md5 `9ba45dd1…`) sans que la lib (17 h 27) change ; banc, G,
+hotfixs, mémoire hors de cause par leurs journaux ; la taille ne désigne
+aucun bâti. Conséquence : toute passe d'ici depuis 21 h 26 a tourné sur un
+mélange (sans effet sur la mesure de C : même artefact aux quatre passes).
+Règles : un worktree qui bâtit n'a jamais de lien `extension/vector/build`
+vers l'arbre principal ; le remède générique est le ticket du 5 octobre
+« extension chargée sans contrôle de bâti » (identifiant de bâti vérifié à
+`LOAD EXTENSION`), confié à hotfixs après B8. A rebâtit la lib et
+l'extension d'ici ensemble après les signes de hotfixs et de la mémoire.
+
+### Pour le matin
+
+Les trois OTP de la séance npm quand Windows 20 est vert (profil `paquet`,
+bâti à froid de 85 min lancé à 23 h) ; les « nouveaux projets émergents » de
+classification pour la page mémoire ; le conteneur pgvector ; le ménage des
+branches distantes (liste au §6, plus `statistiques-3`, `-avant-rebase`,
+`memoire-longue-6/-8`, `banc-a4-temoins`).
