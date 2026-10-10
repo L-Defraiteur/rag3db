@@ -149,7 +149,7 @@ jobs:
         shell: pwsh
         working-directory: extension/rag3weaver
         run: |
-          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/bati-windows.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # L'extension vecteur, que le backend charge à l'exécution : le même
       # bâti cmake que cargo a fait pour le moteur, avec l'extension en plus
@@ -163,7 +163,10 @@ jobs:
           # Le cache cmake avant et après la reconfiguration, en artefact : au
           # seizième essai, elle a recompilé les 996 objets du moteur (37 min)
           # sans qu'on sache quel drapeau avait changé.
-          Copy-Item "$bdir/CMakeCache.txt" CMakeCache-avant.txt
+          # Hors de l'arbre (RUNNER_TEMP) : rien d'ajouté au checkout entre la
+          # passe de cargo et celle-ci — l'identifiant de bâti du moteur et de
+          # l'extension (cœur C++, lot à venir) compte l'arbre modifié.
+          Copy-Item "$bdir/CMakeCache.txt" "$env:RUNNER_TEMP/CMakeCache-avant.txt"
           # La MÊME source que cargo : sous Windows, build.rs copie l'arbre
           # dans tools/rust_api/rag3db-src (pas de lien symbolique) et cmake
           # l'a configuré de là ; reconfigurer depuis la racine du dépôt
@@ -171,10 +174,10 @@ jobs:
           # moteur (dix-huitième essai, 37 min). On lit la source dans le cache.
           $src = (Select-String -Path "$bdir/CMakeCache.txt" -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$').Matches[0].Groups[1].Value
           Write-Host "source cmake : $src"
-          cmake -S $src -B $bdir -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF 2>&1 | Tee-Object -FilePath cmake-vector-windows.log | Select-Object -Last 3
-          Copy-Item "$bdir/CMakeCache.txt" CMakeCache-apres.txt
+          cmake -S $src -B $bdir -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/cmake-vector-windows.log" | Select-Object -Last 3
+          Copy-Item "$bdir/CMakeCache.txt" "$env:RUNNER_TEMP/CMakeCache-apres.txt"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build $bdir --target rag3db_vector_extension -j 4 2>&1 | Tee-Object -FilePath cmake-vector-windows.log -Append | Select-Object -Last 3
+          cmake --build $bdir --target rag3db_vector_extension -j 4 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/cmake-vector-windows.log" -Append | Select-Object -Last 3
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $ext = Get-ChildItem -Recurse -Path $bdir, extension/vector, "$src/extension/vector" -Filter '*.rag3db_extension' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $ext) { throw "extension vecteur introuvable après le bâti" }
@@ -230,10 +233,10 @@ jobs:
         with:
           name: bati-windows-x64-journal
           path: |
-            bati-windows.log
-            cmake-vector-windows.log
-            CMakeCache-avant.txt
-            CMakeCache-apres.txt
+            ${{ runner.temp }}/bati-windows.log
+            ${{ runner.temp }}/cmake-vector-windows.log
+            ${{ runner.temp }}/CMakeCache-avant.txt
+            ${{ runner.temp }}/CMakeCache-apres.txt
             dist/windows-x64/
           if-no-files-found: warn
 
@@ -296,7 +299,7 @@ jobs:
         working-directory: extension/rag3weaver
         run: |
           set -o pipefail
-          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-macos.log
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee "$RUNNER_TEMP/bati-macos.log"
       # L'extension vecteur, par le bâti cmake que cargo a fait pour le moteur
       # (la recette Linux de tools/build-images/linux-x64-gnu/build.sh).
       - name: L'extension vecteur
@@ -305,10 +308,10 @@ jobs:
           bdir=$(ls -d /tmp/rs/paquet/build/rag3db-*/out/build | head -1)
           src=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$bdir/CMakeCache.txt")
           echo "bâti cmake du moteur : $bdir · source : $src"
-          cmake -S "$src" -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF > cmake-vector-macos.log 2>&1
-          cmake --build "$bdir" --target rag3db_vector_extension -j 3 >> cmake-vector-macos.log 2>&1
+          cmake -S "$src" -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF > "$RUNNER_TEMP/cmake-vector-macos.log" 2>&1
+          cmake --build "$bdir" --target rag3db_vector_extension -j 3 >> "$RUNNER_TEMP/cmake-vector-macos.log" 2>&1
           ext=$(find "$bdir" extension/vector "$src/extension/vector" -name '*.rag3db_extension' 2>/dev/null | head -1)
-          [ -n "$ext" ] || { echo "extension vecteur introuvable après le bâti"; tail -20 cmake-vector-macos.log; exit 1; }
+          [ -n "$ext" ] || { echo "extension vecteur introuvable après le bâti"; tail -20 "$RUNNER_TEMP/cmake-vector-macos.log"; exit 1; }
           mkdir -p dist/darwin-arm64 && cp "$ext" dist/darwin-arm64/ && ls -la dist/darwin-arm64/
       - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
         if: always()
@@ -356,7 +359,7 @@ jobs:
         with:
           name: bati-macos-arm64-journal
           path: |
-            bati-macos.log
-            cmake-vector-macos.log
+            ${{ runner.temp }}/bati-macos.log
+            ${{ runner.temp }}/cmake-vector-macos.log
             dist/darwin-arm64/
           if-no-files-found: warn

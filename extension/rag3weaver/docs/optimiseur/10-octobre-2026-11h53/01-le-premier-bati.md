@@ -433,7 +433,32 @@ de publication : windows, darwin, puis la tête.
   (pas de lien symbolique) et cmake l'a configuré de là ; reconfigurer
   depuis la racine du dépôt changeait la source et recompilait les 964
   objets. La source se lit maintenant dans `CMAKE_HOME_DIRECTORY` du cache.
-- **Dix-neuvième** : en cours, pour lire la cause du FTS.
+- **Dix-neuvième** (85 min) : le stderr dit la cause —
+  « création de l'index FTS Scope échouée : écrire _shard_config.json :
+  Access is denied (os error 5) ». Dans rag3weaver, pas dans lucivy :
+  `fts_directory.rs` terminait chaque écriture par un fsync du dossier
+  (`File::open(dossier).sync_all()`), et sous Windows ouvrir un dossier avec
+  `File::open` est refusé ; le fichier était écrit, seul ce pas tombait, et
+  l'index restait « non ouvert ». Correctif : `fsync_dir`, sans objet sous
+  Windows (NTFS journalise ses métadonnées), le même geste ailleurs
+  (e52091ea0). Le lot 1 côté MSVC compile et se lie (binaire 67,6 Mo contre
+  60 non strippé).
+- **Vingtième** (38086904081) : le premier au profil `paquet`, source cmake
+  lue dans le cache, fsync corrigé — en cours, avec macOS 6 et le Docker
+  Linux sur la même tête e52091ea0, pour que les trois archives de la
+  séance viennent du même commit.
+
+**L'identifiant de bâti** (cœur C++, lot à venir) : le moteur et chaque
+extension porteront commit + empreinte du diff suivi + options d'ABI
+(CMAKE_BUILD_TYPE, taille de page, capacité des vecteurs, RAG3DB_RUNTIME_CHECKS),
+et LOAD EXTENSION refusera une extension d'un autre bâti. Mes recettes
+bâtissent moteur et extension dans le même dossier cmake, en deux passes
+aux mêmes options (le cache garde Release et les défauts) ; les fichiers non
+suivis ne comptent pas, mais journaux et copies de cache sortent du
+checkout (RUNNER_TEMP). Sous Windows, la copie `rag3db-src` sans `.git` rend
+une marque « nogit » des deux côtés : pas de refus à tort, et la règle de
+tout rebâtir ensemble reste la garantie. À vérifier au premier run après
+le hash, sur les trois plateformes.
 
 ### Le lot 1 du chantier I (rquickjs, swc) sur les trois plateformes
 
