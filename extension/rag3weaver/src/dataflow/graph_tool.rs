@@ -2926,4 +2926,102 @@ mod tests {
     fn a_trigger_renders_as_ok() {
         assert_eq!(render_port_value(&PortValue::Trigger).unwrap(), r#"{"ok":true}"#);
     }
+
+    /// **Chaque gabarit d'outil livré se construit, et la lib rougit sinon.**
+    ///
+    /// Le filet des gabarits (`gabarits.rs`) couvre les backends livrés ; les
+    /// fiches de `templates/tools/` n'avaient pas le leur, et « duplicate
+    /// node name: sparse » a vécu en service faute de celui-ci (ticket du
+    /// 10 octobre, vu par test_backend_sparse). La construction se fait avec
+    /// des valeurs NEUTRES par type pour chaque `$param` : la validation des
+    /// valeurs réelles appartient aux suites de chaque outil, ici on prouve
+    /// que la FORME du graphe tient (noms uniques, types connus, ports).
+    #[test]
+    fn chaque_gabarit_d_outil_livre_se_construit() {
+        let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let mut fiches: Vec<std::path::PathBuf> = std::fs::read_dir(&dossier)
+            .unwrap_or_else(|e| panic!("templates/tools illisible ({e}) : {}", dossier.display()))
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "mmd"))
+            .collect();
+        fiches.sort();
+        // Zéro fiche n'est pas une réussite : le jour où le dossier déménage,
+        // ce filet doit rougir, pas verdir.
+        assert!(
+            fiches.len() >= 10,
+            "attendu au moins dix fiches dans {}, trouvé {}",
+            dossier.display(),
+            fiches.len()
+        );
+
+        // Le registre RÉEL d'un backend : les fournis + les fabriques que
+        // backend.rs enregistre lui-même (snapshot, lots d'entités et de
+        // relations) — sans elles, les fiches *_snapshot rougiraient pour
+        // une mauvaise raison.
+        let (mut nodes, _) = builtin_graph_tools().expect("les registres fournis");
+        nodes.register(Box::new(crate::backend_nodes::EntityRecordFactory));
+        nodes.register(Box::new(crate::backend_nodes::EntityBatchFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotFinishFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
+        nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        let mut echecs: Vec<String> = Vec::new();
+        for fiche in &fiches {
+            let nom = fiche.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let source = match std::fs::read_to_string(fiche) {
+                Ok(s) => s,
+                Err(e) => {
+                    echecs.push(format!("{nom} : illisible ({e})"));
+                    continue;
+                }
+            };
+            // Tous essayés avant de rendre : un filet qui s'arrête au premier
+            // échec cache les autres.
+            let outil = match GraphTool::from_mermaid(&source).and_then(|t| t.bind(&nodes)) {
+                Ok(t) => t,
+                Err(e) => {
+                    echecs.push(format!("{nom} : {e}"));
+                    continue;
+                }
+            };
+            let mut args = serde_json::Map::new();
+            for p in &outil.params {
+                // Une chaîne à valeurs admises prend la PREMIÈRE admise :
+                // le filet prouve la forme du graphe, pas la sémantique.
+                let neutre = match (&p.param_type, &p.choices) {
+                    (_, Some(crate::dataflow::Choices::Fixed(v))) if !v.is_empty() => {
+                        serde_json::json!(v[0])
+                    }
+                    (ConfigParamType::String, _) => serde_json::json!("x"),
+                    (ConfigParamType::Int, _) => serde_json::json!(1),
+                    (ConfigParamType::Float, _) => serde_json::json!(1.0),
+                    (ConfigParamType::Bool, _) => serde_json::json!(false),
+                    // Un json a deux formes neutres : tableau si son schéma
+                    // le dit (ou si son nom est l'une des listes connues —
+                    // patterns, records, links), objet sinon.
+                    (ConfigParamType::Json, _) => {
+                        let tableau = p
+                            .json_schema
+                            .as_ref()
+                            .and_then(|s| s["type"].as_str())
+                            == Some("array")
+                            || matches!(&*p.name, "patterns" | "records" | "links");
+                        if tableau { serde_json::json!([]) } else { serde_json::json!({}) }
+                    }
+                };
+                args.insert(p.name.to_string(), neutre);
+            }
+            let def = substitute_definition(&outil.template, &args);
+            if let Err(e) = build_definition(&def, &nodes, &NodeTypePolicy::all()) {
+                echecs.push(format!("{nom} : {e}"));
+            }
+        }
+        assert!(
+            echecs.is_empty(),
+            "des gabarits d'outils livrés ne se construisent plus — chaque fiche de \
+             templates/tools doit se construire, et la lib rougit sinon :\n{}",
+            echecs.join("\n")
+        );
+    }
 }
