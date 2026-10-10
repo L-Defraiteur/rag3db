@@ -26,6 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 | [Le tampon de 256 Mio est plein à la première écriture d'un backend](2026-10-10-tampon-de-256-mio-plein-a-la-premiere-ecriture.md) | ouvert, cause non trouvée | blocage | oui (tampon de 256 Mio) | oui (backend) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
