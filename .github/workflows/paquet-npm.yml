@@ -17,6 +17,10 @@ name: paquet npm
 on:
   workflow_dispatch:
     inputs:
+      linux:
+        description: "bâtir Linux x86_64 par l'image"
+        type: boolean
+        default: true
       windows:
         description: "essayer aussi le bâti Windows (liste des accrocs)"
         type: boolean
@@ -32,6 +36,7 @@ env:
 jobs:
   linux-x64-gnu:
     name: linux-x64-gnu (image Docker)
+    if: ${{ inputs.linux }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -71,6 +76,11 @@ jobs:
       CARGO_TARGET_DIR: C:/rs
       CARGO_BUILD_JOBS: 4
       NUM_JOBS: 4
+      # Premier accroc (10 octobre 2026) : tree-sitter-scss 1.0.0 passe à `cl`
+      # un drapeau GCC (-Wno-unused-parameter) qu'il refuse (D8021). clang-cl
+      # accepte les deux dialectes : on le donne à cc-rs pour les crates C ;
+      # le moteur C++ reste bâti par cmake avec MSVC.
+      CC_x86_64_pc_windows_msvc: clang-cl
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
