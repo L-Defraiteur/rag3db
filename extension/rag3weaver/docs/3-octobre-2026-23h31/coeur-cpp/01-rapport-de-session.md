@@ -51,6 +51,44 @@ A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec u
 
 ## Ce qui est en cours
 
+### Ce qu'une seconde session cœur C++ doit savoir (10 octobre 2026)
+
+Lucie ouvre une seconde session cœur C++ pour les correctifs et les tickets ; celle-ci garde
+la stèle (fuite de pages → basculement du COPY journalisé → verrous → écritures parallèles) et
+tient `src/transaction/` et `src/storage/` (journal, tampon, verrous) : demander avant d'y
+toucher ; le reste est à l'autre.
+
+1. **Un arbre à soi**, worktree de `rag3db` (jamais l'arbre principal
+   `/home/lucied/git_workspaces/rag3db`, ni `rag3db-moteur` qui est celui-ci, ni `rag3db-banc`) ;
+   `git config user.email luciedefraiteur@gmail.com` ; sous-modules à initialiser
+   (`third_party/fuzzy-fst` pour l'extension fts). Un bâti Release avec les tests :
+   `cmake -B build/moteur -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DBUILD_EXTENSIONS="vector;geo;fts"`,
+   puis **toujours** `~/.cache/rag3weaver-build/poste lourd cmake --build build/moteur -j 8`
+   (jamais `ninja` nu : alias `-j32`, le poste fige). Un rebâti complet : 20 à 30 min ;
+   `transaction_test` seul : 4 min. Un seul rebâti exclusif à la fois à trois (banc, celle-ci,
+   elle) : le dire par message avant de lancer.
+2. **La liste complète** : `~/.cache/rag3db-moteur-notes/copy-journalise/liste-cpp.sh`
+   (douze suites gtest, le banc comparé à `known_red.txt`, vector disque et mémoire, Cypher
+   1866) sous `poste lourd`, ~40 min ; ses codes dans `copy-journalise/liste/codes`. Une fois
+   avant la fusion, pas à chaque rebase ; pendant le travail, les témoins du changement.
+   Jamais de rebâti dans un arbre où une liste tourne. `poste mesure` seulement pour ce qui
+   mesure.
+3. **Les pièges** : une assertion dans une fonction auxiliaire (`ok()`) n'arrête pas le test —
+   lire la première erreur d'un rouge ; un COPY n'écrit ses pages avant la validation qu'à
+   131 072 lignes ; le tampon des tests est petit (un index vectoriel de 140 000 lignes le
+   déborde : `systemConfig->bufferPoolSize`) ; un témoin de mort tue dans la portée de la
+   `Database` et exige un `.wal` non vide ; pas d'`EXPECT_EQ` entre deux grands textes ; un
+   programme nu lié à `build/moteur/src` (annexes, `essai-*.cpp`) mesure plus vite qu'un
+   témoin.
+4. **Les règles** : commit par chemins explicites, message en français sans attribution, push
+   en avance rapide seulement, pas de `git stash` (patch), un ticket par défaut non corrigé
+   dans `docs/tickets/`, le rapport de session tenu dans ce dossier (le sien à part), rien vers
+   les amonts.
+5. **Ce qui lui est confié** (par l'orchestration) : `RelCopyBMExceptionRecoverySameConnection`
+   (lire d'abord pourquoi le repli ne s'est pas déclenché sous un tampon minuscule), le
+   plantage HNSW sur vecteurs identiques (recette de l'arbre principal, avec le banc), la voie
+   (a) des statistiques, les tickets confort. Les tickets ouverts sont listés plus bas.
+
 **Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
 veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.
 
