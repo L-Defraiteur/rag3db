@@ -1074,20 +1074,28 @@ fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
     let _ = std::fs::remove_dir_all(&dossier);
 }
 
-/// **La borne de temps atteinte** (5 octobre 2026). L'écrivain du test voisin
-/// (un point de reprise toutes les cinq écritures : une ouverture sur deux
-/// environ est croisée) ; un lecteur dont la borne est d'une milliseconde
-/// (`RAG3WEAVER_READ_ONLY_CROSSED_MS=1`) — l'écrivain est plus rapide qu'elle —
-/// et 2 000 ouvertures : à 80, une ouverture qui n'attend plus finissait
-/// parfois avant le moindre croisement.
-/// Un point de reprise à chaque écriture ralentissait tant l'écrivain qu'il
-/// n'en faisait que huit pendant les 80 ouvertures, sans croisement. Ce qui est affirmé : au moins une
-/// ouverture est refusée, **chaque** refus est le refus nommé avec le compte
-/// des reprises, aucune lecture n'est fausse, et une ouverture refusée l'est
-/// vite — en moins de deux secondes, pas après une quarantaine.
+/// **Aucune ouverture n'est croisée sous l'écrivain qui affamait le lecteur**
+/// (11 octobre 2026). Le même écrivain que le test voisin (un point de reprise
+/// toutes les cinq écritures), un lecteur dont la borne est d'une milliseconde
+/// (`RAG3WEAVER_READ_ONLY_CROSSED_MS=1`), et 2 000 ouvertures.
+///
+/// **Ce que ce test mesurait avant** (du 5 au 11 octobre, sous le nom
+/// `un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne`) : la borne
+/// d'une milliseconde exigeait que le moteur affame le lecteur (une ouverture
+/// sur deux environ était croisée par un point de reprise), et le test
+/// affirmait qu'au moins une ouverture était refusée, chaque refus par son nom
+/// avec le compte des reprises, en moins de deux secondes.
+///
+/// **Depuis la coordination à la SQLite** (le verrou des lecteurs du moteur,
+/// `ReadersLock`, ticket fermé `2026-10-04-lecteur-affame-par-les-points-de-reprise`),
+/// le point de reprise attend les ouvertures en cours et l'ouverture attend le
+/// point de reprise : aucune ouverture n'est croisée. Le test affirme
+/// désormais ce que voit le produit : pas un refus, pas une reprise, aucune
+/// lecture fausse. Le chemin du refus nommé de rag3weaver
+/// (`is_checkpoint_crossing`) ne s'atteint plus par ce moyen.
 #[test]
 #[ignore]
-fn un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne() {
+fn aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait() {
     const INSISTANT: &str = "RAG3WEAVER_ENFANT_INSISTANT";
     let dossier = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(format!(
         ".cache/rag3weaver-build/affame-{}-{}",
@@ -1129,11 +1137,10 @@ fn un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne() {
             .and_then(|v| v.parse().ok())
             .unwrap_or_else(|| panic!("« {cle} » illisible dans « {ligne} »"))
     };
-    let (refus, incoherents, nommes, duree) = (lire("REFUS="), lire("INCOHERENTS="), lire("NOMMES="), lire("DUREE_MAX_REFUS_MS="));
+    let (refus, incoherents, reprises) = (lire("REFUS="), lire("INCOHERENTS="), lire("REPRISES="));
     drop(ecrivain);
     let _ = std::fs::remove_dir_all(&dossier);
-    assert_eq!(incoherents, 0, "une ouverture qui réussit lit un compte cohérent");
-    assert!(refus >= 1, "la borne d'une milliseconde doit être atteinte sous cet écrivain ({ligne})");
-    assert_eq!(nommes, refus, "chaque refus est le refus nommé, avec le compte des reprises ({ligne}) ; {autre}");
-    assert!(duree < 2_000, "une ouverture refusée l'est vite : {duree} ms au plus long");
+    assert_eq!(incoherents, 0, "une ouverture qui réussit lit un compte cohérent ({ligne})");
+    assert_eq!(refus, 0, "aucune ouverture n'est refusée sous cet écrivain ({ligne}) ; {autre}");
+    assert_eq!(reprises, 0, "aucune ouverture n'est croisée, donc aucune n'est reprise ({ligne})");
 }

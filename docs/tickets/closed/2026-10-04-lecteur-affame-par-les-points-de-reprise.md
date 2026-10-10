@@ -145,4 +145,19 @@ Témoins :
   - `CheckpointWaitsForAReadOnlyOpenThenGoesAhead` : le point de reprise passe à 1 s.
 
 Côté rag3weaver, la reprise des deux messages sous la borne de 2 s devient un filet ; elle peut
-rester.
+rester. Le refus nommé du moteur après 5 s d'attente n'est pas repris : ce serait reprendre une
+attente que le moteur a déjà bornée (décision de l'orchestration).
+
+`e2e_prise_atomique` sous la lib de la branche : `un_lecteur_qui_insiste_pendant_qu_on_ecrit`
+reste vert. `un_lecteur_affame_est_refuse_par_son_nom_dans_sa_borne` exigeait au moins un
+refus : sa borne d'une milliseconde demandait que le moteur affame le lecteur. Avec le
+correctif, il relève « REFUS=0 LUS=2000 REPRISES=0 » sous 8 656 écritures, soit environ
+1 730 points de reprise. Il est retourné en témoin du correctif côté produit,
+`aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait` (0 refus, 0 reprise, 0 lecture
+fausse), et son texte dit ce qu'il mesurait avant.
+
+**Reste, pour le chantier A** : plus aucun test n'éprouve la reprise de rag3weaver sur un
+croisement (`is_checkpoint_crossing` et le compte des reprises). Le moteur ne croise plus les
+ouvertures sous un écrivain vivant. Le seul cas qui l'atteint encore est un écrivain mort en
+plein point de reprise, qui laisse un journal terminé par CHECKPOINT (le message des pages
+fantômes, pour de bon), et aucun test ne le monte.
