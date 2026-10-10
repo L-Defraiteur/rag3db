@@ -32,6 +32,14 @@ impl Direction {
         }
     }
 
+    /// Ce sens dans le langage intermédiaire.
+    pub fn ir(self) -> rag3weaver_ir::Direction {
+        match self {
+            Direction::Incoming => rag3weaver_ir::Direction::Incoming,
+            Direction::Outgoing => rag3weaver_ir::Direction::Outgoing,
+        }
+    }
+
     /// Le motif `(d:…)…(m:…)` de ce sens ; `r` nomme l'arête.
     pub fn pattern(self, rel: &RelInfo) -> String {
         match self {
@@ -138,12 +146,24 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
     Ok(out)
 }
 
+/// Le saut nu de [`neighbors`], en forme du langage intermédiaire : les
+/// arêtes devinées sont écartées quand la relation porte le champ déclaré.
+pub fn hop_of(rel: &RelInfo, direction: Direction, mark: &EdgeMark) -> rag3weaver_ir::Hop {
+    let (start, end) = direction.tables(rel);
+    let mut hop = rag3weaver_ir::Hop::new(start, &rel.name, end, direction.ir());
+    if mark.applies(rel) {
+        hop.exclude = Some(rag3weaver_ir::EdgeExclusion { field: mark.field.clone(), values: mark.guessed.clone() });
+    }
+    hop
+}
+
 /// Un saut nu : les paires (départ, atteint) par une relation, dans un sens.
+/// La requête vient du dialecte ([`rag3weaver_ir::Hop`]).
 pub fn neighbors(catalog: &Catalog, rel: &RelInfo, direction: Direction, mark: &EdgeMark, uuids: &[String]) -> Result<Vec<(String, String)>, String> {
     if uuids.is_empty() {
         return Ok(Vec::new());
     }
-    let q = format!("UNWIND $uuids AS u MATCH {}{} RETURN u, m._uuid", direction.pattern(rel), mark.clause(rel));
+    let q = catalog.dialect_arc().hop(&hop_of(rel, direction, mark)).map_err(|e| e.to_string())?;
     let rows = catalog.execute_raw_with_params(&q, &[uuid_param(uuids)]).map_err(|e| e.to_string())?;
     Ok(rows.rows.iter().map(|r| (text(r.first()), text(r.get(1)))).collect())
 }
@@ -165,6 +185,21 @@ mod tests {
         // Une relation sans le champ n'est pas touchée.
         assert_eq!(m.clause(&rel(&["usage"])), "");
         assert_eq!(m.column(&rel(&[])), "NULL");
+    }
+
+    /// Parité : le saut traduit par le dialecte rag3db est, au caractère
+    /// près, la requête que `neighbors` écrivait à la main.
+    #[test]
+    fn le_saut_du_dialecte_est_la_requete_d_avant() {
+        use crate::dialect::{Rag3dbDialect, SchemaDialect};
+        let m = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom|import"}), "N").unwrap();
+        let distincte = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Symbol".into(), props: vec!["resolution".into()] };
+        for r in [rel(&["usage", "resolution"]), rel(&["usage"]), distincte] {
+            for d in [Direction::Incoming, Direction::Outgoing] {
+                let avant = format!("UNWIND $uuids AS u MATCH {}{} RETURN u, m._uuid", d.pattern(&r), m.clause(&r));
+                assert_eq!(Rag3dbDialect.hop(&hop_of(&r, d, &m)).unwrap(), avant);
+            }
+        }
     }
 
     #[test]
