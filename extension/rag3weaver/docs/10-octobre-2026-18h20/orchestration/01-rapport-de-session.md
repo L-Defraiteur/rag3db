@@ -138,3 +138,128 @@ Après toute relance : « qui es-tu ? » à toutes, puis la table à chacune.
    `origin/master` (sparse), commit par chemins, push, retrait ; puis
    `git merge --ff-only` dans l'arbre principal s'il est propre, pour que
    l'éditeur de Lucie voie les fichiers.
+
+## 6. La soirée du 10 octobre (18 h 30 → 21 h), ajout de 21 h
+
+Écrit après deux compactions de contexte (relecture des docs, « où en
+es-tu ? » aux neuf sessions, tous les noms inchangés ; `lucied-68` est la
+session d'assistance système de Lucie, hors rag3db).
+
+### Le disque plein, et le nettoyage
+
+À 18 h 45, `/home` (950 Go) avait 2,2 Go libres. Ce n'étaient pas les dépôts
+(le `.git` fait 1,4 Go) mais les bâtis : chaque session avait un target cargo
+de 90 à 180 Go (`target-async` 181, `memoire` 152, `wt-defauts` 86, l'arbre
+principal 98), treize worktrees avec leurs `build/` (≈ 255 Go), l'amont
+tracel-ai 44 Go, les bases d'index MTG 30 Go. Recette, avec le « go » de
+Lucie (« rien qu'on ne puisse regen ») : chaque session a commité et poussé,
+vérification des processus par `/proc/<pid>/cwd` (jamais par nom),
+`git worktree remove --force` de tout sauf l'arbre principal, `rm` des
+targets. De 100 % à 46 % (518 Go libres) en une minute. Gardé :
+`rag3db/build` (la lib lecteurs-csv de 17 h 27, référence commune de la
+soirée), les modèles, les notes du banc et du cœur, `poste`, `envoi-tracel`,
+les scripts d'F, `paquet-npm-garde/` (archives alpha.1, binaires Windows),
+les exports MTG (jsonl/json/sqlite, 360 Mo — « garde que les trucs exportés,
+pas d'index »). Aucune branche locale touchée. Règle posée (mémoire
+`un-target-cargo-par-session`) : un seul target par session,
+`CARGO_INCREMENTAL=0` pour les batteries, le target gardé entre les lots et
+effacé au-delà de 60 Go ou à la fin du chantier (la première version, « cargo
+clean à chaque fusion », coûtait 15-20 min par lot : corrigée sur le retour
+d'F) ; mesurer le disque chaque semaine. Perdu et rejoué : la batterie d'A
+(61 suites avant l'arrêt, 13 après), celle de C, la chaîne A3′ de B.
+
+Sur luciepc : le disque était à 88 % (Steam, 1,6 To) ; Lucie a désinstallé
+dix jeux (384 Go rendus, liste dans `~/jeux-steam-luciepc-2026-10-10.md`,
+hors dépôt). **La lib de `rag3db-lourd` datait de 14 h 20, avant la
+bascule** : deux lots d'F y avaient été validés contre le moteur d'avant
+(la mémoire l'a vu) ; G l'a rebâtie sur f1b5e7407 en 42 s, artefacts
+prouvés. Règle : prouver la date de `librag3db.so` contre la tête de master
+avant toute suite là-bas.
+
+### Le cœur C++ travaille sur luciepc (décision de Lucie, 20 h)
+
+Pour que ses tests de verrous et de famine ne soient pas faussés par la
+charge des batteries d'ici (140 à 522 ce soir). Les deux sessions C++ y ont
+leur worktree et leur `build/moteur` ; leurs mesures s'y font pour leurs deux
+colonnes, dites non comparables au poste principal. Seule exception à « les
+mesures restent ici ».
+
+### Ce qui est entré sur master ce soir (acadcb16b → 03a399d72)
+
+- **Élagage HNSW** (banc, `9a2818df9`) : règle classique, places libres
+  reprises par le plus lointain, copies bornées ; TwentyRows en probabiliste
+  (1 perte sur 400 avec, 0 sur 400 sans, non significatif ; mécanisme non
+  établi, écrit au ticket) ; un rouge de l'index dit désormais de lui-même ce
+  qu'il a perdu (`2d8ad770a`). Un index existant garde son ancien graphe : le
+  recréer (README). Sur la condition 4, reste la mise à jour massive de
+  vecteurs ; l'insertion double (une ligne créée puis mise à jour dans la
+  même transaction entre deux fois dans le graphe, `NodeTable::update`) est
+  vérifiée à la source, correctif en cours chez le banc, relecture du cœur.
+- **A3′** (cœur, `21b6cb370`, `79b7be75f`, `9a57a17b2`) : clé primaire
+  verrouillée à l'insertion, unicité contre le dernier état validé, fil de
+  remplacement de l'ordonnanceur (famine : 59,8 s → 216 ms), journal à
+  doublon gardé ; banc 59 → 56 rouges connus ; coût sur luciepc +0,65 µs par
+  ligne à l'insertion, +0,23 µs à la validation, mode éteint = chemin d'avant
+  plus un booléen. Suite : A4′, V2, index au commit.
+- **Embarqueur absent** (A, `8e85553e4` → `8cd96e733`) : sans service, plein
+  texte seul et vecteurs en dette ; `Level::NotDeclared` ; `count_rows`,
+  `fetch_related_in`. La batterie du basculement : 74 suites vertes, aucun
+  rouge (journal des chantiers, `18f12890d`) — confirmation produit de la
+  condition 2.
+- **Hop complet** (F, `2bef57c6d`, `f1b5e7407`, `e1f490e3e`) : sans table,
+  étiquette ou nœud entier, borné ; tous les sites en forme de saut passent
+  par lui. Select est écrit sur `ir-select`, en attente.
+- Docs et tickets : tampon de 256 Mio plein (`63f0413ca`), démon instable
+  sous charge (`80b7da028`), analyze non transactionnel, ouverture sans une
+  extension dont une table dépend, unknown entity: File, validation à moitié
+  appliquée.
+
+### En vol à 21 h
+
+- **C** (`execution-asynchrone-2`) : batterie rendue, tout vert sauf trois
+  rouges prouvés de master (isolés au commit de base) ; mesure avant/après en
+  cours ; fusion ensuite. Les trois rouges : `test_backend_persistence` et
+  `sparse` (scripts Python hors `run_e2e.sh`, tampon 256 Mio, suspect : les
+  défauts basculés) → A ; `test_backend_code` « 2 directement » → F a
+  prouvé par bissection que ce n'est pas Hop, le 2 paraît juste (le scope du
+  fichier par l'import, `main` par l'appel), vérification sur 27eeb6a7f.
+- **Mémoire** (`memoire-longue-6`) : batterie 472 verts / 75 suites sur
+  3416feddc ; master a pris 21 commits pendant ; arbitrage : rejeu ciblé (lib,
+  deux suites MCP, réacteur, arrêt brutal) puis fusion, pas de seconde
+  batterie. MCP : douze outils du gabarit `code` sur stdio, recette
+  `templates/mcp/README.md` ; pas de `.mcp.json` à la racine (réglage
+  commun) ; `MustReopen` → le serveur sort après l'avoir dit.
+- **A** : témoin de la fuite, puis les deux rouges Python, puis le ticket
+  « unknown entity: File » (remède à la surface de code,
+  `code_tools.rs:425-430`) ; rebâti de la lib commune (élagage + A3′) quand C
+  a fini sa mesure — pas de bâti à part, l'extension vecteur s'écrit à un
+  chemin fixe.
+- **B-bis** (`statistiques-2`) : bâti sur luciepc, puis témoin du ROLLBACK,
+  liste, mesure d'analyze, relecture de B, avance rapide. Décision :
+  analyze remplace les statistiques à l'exécution (comme `reltuples` dans
+  PostgreSQL, source vérifiée), accepté avec témoin et ticket.
+- **G** : macOS arm64 vert de bout en bout (essai 4 : `link-dead-code` +
+  `strip -x`, 81 Mo ; mémoire vive lue par système, `390ea9510`) ; Windows
+  essai 17 en cours (essai 16 : tout se lie, rouge sur un chemin `D:\a\…`
+  dans du Cypher → `cypher_path_literal`, `f4f2cd854`). Prêt sous
+  `paquet-npm-garde/publier/` : `rag3weaver-0.0.1-alpha.2.tgz` (README en
+  anglais, trois sous-paquets optionnels épinglés alpha.1) et
+  `rag3weaver-darwin-arm64-0.0.1-alpha.1.tgz`. Séance quand Windows est
+  vert : trois `npm publish` (windows, darwin, tête), trois OTP de Lucie.
+- **Banc** : correctif de l'insertion double (témoin rouge d'abord,
+  relecture du cœur), puis la mesure de l'union par lots, puis la fin
+  d'instruction. Une faute dite par lui : `--force-with-lease` sur sa branche
+  joint au push de master (rien de perdu, ancienne tête sous
+  `elagage-hnsw-2-avant-rebase`) ; règle de forme ajoutée : jamais deux push
+  dans une commande, jamais un flag de force dans une commande qui touche
+  master.
+
+### Ce qui attend Lucie (mis à jour)
+
+Le conteneur `pgvector:pg17` sur 5433 ou `usermod -aG docker lucied` (C et F
+jouent e2e_postgres dès qu'il existe) ; trois OTP à la séance npm ; macOS
+x64 oui ou non ; le jeton crates.io ; le ménage des branches distantes
+(`etendue-du-fichier`, `defauts-bascules`, `relcopy-sous-refus`,
+`elagage-hnsw-2`, `elagage-hnsw-2-avant-rebase`, `paquet-npm-absent`,
+`statistiques`, `memoire-longue-3/-4/-5`) ; supprimer `.vault/npm.env` ;
+éventuel `docker system prune` sur luciepc (98 Go réclamables).
