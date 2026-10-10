@@ -314,6 +314,48 @@ tranchés en tête du §1). Ce qui est décidé en plus, par message :
 - la maintenance de l'index au commit vient juste après V2.
 Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), rouges.
 
+### A3′, câblée (10 octobre 2026) — ce qu'il faut savoir pour A4′ et V2
+
+- **Où prendre un verrou** : `Transaction::acquireLocks(span<LockRequest>)` /
+  `acquireLock(resource, mode)` (`src/transaction/transaction.cpp`) portent toute la politique :
+  rien hors du mode multi-écrivains, en reprise ou sans contexte (`usesLocks`) ; première
+  tentative sans attendre ; puis attente au plus `lock_timeout`, interruption regardée, sous un
+  `TaskScheduler::BlockingWait` ; `TransactionManagerException` avec `LockManager::describe`.
+  A4′ n'a qu'à appeler ça. Les verrous sont rendus par `clearTransactionNoLock`, validée ou
+  annulée ; une instruction en échec annule la transaction (`rollbackAfterStatementFailure`),
+  donc rend.
+- **La clé d'une ligne pour le gestionnaire** : `NodeTable::lockKeyOf(pkVector, pos)` = la
+  valeur imprimée (`getAsValue(pos)->toString()`), pour que le message soit lisible et que A4′
+  (qui tient le décalage, pas la clé) puisse la reconstruire en relisant la colonne de clé.
+- **Deux visibilités existent**, et il faut savoir laquelle on veut : l'instantané
+  (`isVisible(transaction, offset)`) pour lire ; le dernier état validé
+  (`isVisibleToLatestCommit`, `Transaction::LATEST_COMMITTED_TS` = `START_TRANSACTION_ID − 1`
+  comme startTS) pour l'unicité. Toute la chaîne (`VersionInfo`, `ChunkedNodeGroup`,
+  `NodeGroup`, `NodeTable`) a la forme `(startTS, transactionID, row)`. **La même visibilité
+  doit servir à l'insertion et à la validation** (`getUniquenessVisibleFunc`) : sinon la
+  validation lève après l'ajout des lignes aux groupes, transaction à moitié validée.
+- **Les clés quittent l'index à l'exécution, pas à la validation** : `PrimaryKeyIndex::delete_
+  (Transaction*, …)` ne fait rien ; c'est `NodeTable::delete_` qui… non : c'est
+  `HashIndexLocalStorage::deleteKey` par `PrimaryKeyIndex::delete_(ValueVector*)`, appelé à la
+  suppression — et si la clé était dans `localInsertions` (non encore au point de reprise), elle
+  est **retirée tout de suite**, sans visibilité ; sinon elle va dans `localDeletions`. Le
+  stockage local de l'index est **partagé par toutes les transactions** (un par index, pas par
+  transaction) ; les clés non validées d'une transaction, elles, vivent dans sa
+  `LocalNodeTable` jusqu'à sa validation (`commitInsert`).
+- **Une attente ne doit pas tenir un fil ouvrier de l'ordonnanceur**, ni surtout le mutex d'une
+  tâche : `ProcessorTask::run` exécute `initGlobalState` sous `taskMtx`, et `registerThread`
+  (pris sous le mutex de l'ordonnanceur) le prend aussi — une attente là gèle tout. Ce qui doit
+  attendre pour tout le plan se prend **avant l'ordonnancement, sur le fil du client**
+  (`PhysicalOperator::acquireLocksBeforeExecution`) ; une attente par ligne, dans un opérateur,
+  passe par `TaskScheduler::BlockingWait` (fil de remplacement). Même cause, non traitée :
+  l'attente d'un point de reprise forcé à la validation (`stopNewTransactionsAndWaitForOthers`)
+  tient un fil ouvrier — son délai de 5 s en est le filet.
+- **Le banc tolère l'attente** : `writeInTurn` / `commitInOrderByEvents` ont des délais de
+  « settle », pas d'échec ; `holderAndWaiter` a maintenant `waiterRollsBack`.
+- **Fabriquer un état que le moteur ne produit plus** : programme nu contre la bibliothèque
+  d'AVANT, gardé au dépôt avec sa base et son journal (`journal_with_duplicate_key/`), comme
+  `journal_before_raw_arrays/`. Le faire **avant** de rebâtir.
+
 ## 5. Les amonts
 
 - **Kuzu** : notre origine (renommage `c647fbb33`). Défauts d'origine trouvés : le rejeu

@@ -35,6 +35,8 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
+- **10 octobre 2026, 20 h 30 — cœur C++, marche A3′ sur master** (`21b6cb370`, `79b7be75f`, `9a57a17b2`) : verrou de clé à l'insertion, verrou d'index du COPY pris avant l'ordonnancement, unicité contre le dernier état validé (une seule visibilité), fil de remplacement de l'ordonnanceur pendant une attente ; sous le mode multi-écrivains seulement, éteint hors du banc ; known_red 59 → 56 ; liste complète verte sur luciepc. Suite : A4′. Rapport : `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/01-rapport-de-session.md`.
+
 **Arrêt du 2 octobre 2026, 01 h 25** : toutes les sessions ont cessé de
 travailler ; chacune a rendu un rapport et un knowledge dump dans
 `extension/rag3weaver/docs/2-octobre-2026-01h07/<sujet>/`. **Pour reprendre :
