@@ -509,6 +509,49 @@ TEST_F(IndexedTableLockTest, EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUn
         // Rendu : l'autre écrit.
         mustRun(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
     }
+    auto count = conn->query("MATCH (d:Doc) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess());
+    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 100);
+}
+
+// Hors du mode multi-écrivains, ce que l'annulation d'une écriture fait à la recherche : après
+// un CREATE, un SET de vecteur ou un DELETE annulé, la recherche doit encore rendre toutes les
+// lignes vivantes. Vu le 11 octobre sous I1 : après les trois annulations (et des SET validés),
+// la recherche ne rendait plus qu'une ligne — les points d'entrée de l'index vivent en mémoire
+// et ne s'annulent pas (hnsw_index.h). Ces trois cas disent lequel des trois casse.
+class IndexedTableRollbackTest : public IndexedTableLockTest {
+protected:
+    void SetUp() override {
+        IndexedTableLockTest::SetUp();
+        if (IsSkipped()) {
+            return;
+        }
+        mustRun(*conn, "CALL debug_enable_multi_writes=false;");
+    }
+    void rolledBack(const char* write) {
+        mustRun(*conn, "BEGIN TRANSACTION;");
+        mustRun(*conn, write);
+        mustRun(*conn, "ROLLBACK;");
+        EXPECT_EQ(liveRowsByIndex(*conn, 100), 100) << "after rolling back: " << write;
+    }
+};
+
+TEST_F(IndexedTableRollbackTest, ARolledBackInsertKeepsTheIndexSearchable) {
+    rolledBack("CREATE (:Doc {id: 1000, vec: [1.0, 2.0, 3.0, 4.0]});");
+}
+
+TEST_F(IndexedTableRollbackTest, ARolledBackVectorUpdateKeepsTheIndexSearchable) {
+    rolledBack("MATCH (d:Doc {id: 1}) SET d.vec = [9.0, 9.0, 9.0, 9.0];");
+}
+
+TEST_F(IndexedTableRollbackTest, ARolledBackDeleteKeepsTheIndexSearchable) {
+    rolledBack("MATCH (d:Doc {id: 2}) DELETE d;");
+}
+
+TEST_F(IndexedTableRollbackTest, CommittedVectorUpdatesKeepTheIndexSearchable) {
+    for (auto i = 0; i < 3; i++) {
+        mustRun(*conn, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+    }
     EXPECT_EQ(liveRowsByIndex(*conn, 100), 100);
 }
 
