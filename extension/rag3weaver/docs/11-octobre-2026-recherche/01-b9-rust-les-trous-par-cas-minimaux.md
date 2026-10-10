@@ -44,6 +44,12 @@ Même fichier. `usages(jouer)` :
 - **Obtenu** : deux définitions (`method jouer — traits.rs:1` et `:4`), et
   `frappe` rangé « non attribués (nom ambigu) ». L'appel n'entre donc pas
   dans l'impact.
+- **La mécanique, précisée par la session codeparsers** : `choose_target`
+  ne relie un receveur TYPÉ que par son type — un receveur au type connu ne
+  crée jamais d'arête « nom » ; toutes les arêtes « nom » viennent du repli
+  « un seul définisseur » sur un receveur SANS type. T1 est donc bien la
+  cause de T2 : le type dédoublé n'est plus « un seul définisseur », et le
+  repli lui-même se ferme.
 - **Contraste qui situe le trou** : le receveur **dyn** résout —
   `dyn_receveur.rs` :
 
