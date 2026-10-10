@@ -25,6 +25,11 @@ export CARGO_TARGET_DIR=$CACHE/target-$CIBLE
 export CARGO_BUILD_JOBS=$JOBS NUM_JOBS=$JOBS CMAKE_BUILD_PARALLEL_LEVEL=$JOBS
 export CMAKE_GENERATOR=Ninja
 mkdir -p "$DIST" "$CARGO_HOME"
+# Le dépôt monté sous /src appartient à un autre utilisateur que celui du
+# conteneur : sans ceci, git refuse (« dubious ownership ») et l'identifiant
+# de bâti du moteur tombe à « nogit » (vu le 11 octobre 2026) — il doit
+# porter le commit.
+git config --global --add safe.directory '*' 2>/dev/null || true
 releve=$DIST/bati.txt
 {
   echo "rag3weaver-backend · $CIBLE · $(date -u +%Y-%m-%dT%H:%MZ)"
