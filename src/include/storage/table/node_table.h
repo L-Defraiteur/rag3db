@@ -180,6 +180,22 @@ public:
         common::offset_t offset) const;
     // La clé d'une ligne sous la forme que le gestionnaire de verrous reçoit (marches A3′, A4′).
     static std::string lockKeyOf(const common::ValueVector& pkVector, common::sel_t pos);
+    // La même, relue dans la colonne de clé pour une ligne validée désignée par son décalage.
+    std::string lockKeyOfRow(transaction::Transaction* transaction,
+        common::offset_t nodeOffset) const;
+    // Marche A4′ : avant de mettre à jour ou de supprimer une ligne validée, sous le mode
+    // multi-écrivains, la prendre en exclusif (la clé), en attendant s'il le faut ; puis, si
+    // une autre transaction a validé entre-temps une écriture de cette ligne (mise à jour d'une
+    // colonne ou suppression, après l'instantané), l'erreur nommée de sérialisation — option A :
+    // la transaction reste dans son instantané, l'appelant annule et rejoue.
+    void lockRowForWrite(transaction::Transaction* transaction, common::offset_t nodeOffset,
+        const std::string& key) const;
+    // L'extrémité d'une relation que l'on crée : la clé en partagé ; si le nœud a été supprimé
+    // par une validation postérieure à l'instantané, l'erreur de sérialisation.
+    void throwIfWrittenByAnotherCommitAfterSnapshot(const transaction::Transaction* transaction,
+        common::offset_t nodeOffset, const std::string& key) const;
+    void throwIfDeletedByAnotherCommitAfterSnapshot(const transaction::Transaction* transaction,
+        common::offset_t nodeOffset, const std::string& key) const;
 
     bool lookupPK(const transaction::Transaction* transaction, common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t& result) const;

@@ -11,6 +11,8 @@
 #include "common/data_chunk/data_chunk_state.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
+#include "common/exception/transaction_manager.h"
+#include "common/string_format.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
 #include "storage/local_storage/local_node_table.h"
@@ -629,6 +631,12 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         throw RuntimeException("Cannot update pk.");
     }
     const auto nodeOffset = nodeUpdateState.nodeIDVector.readNodeOffset(pos);
+    const auto isLocalRow = transaction->isUnCommitted(tableID, nodeOffset);
+    // Marche A4′ : une ligne validée se prend en exclusif avant d'être écrite (une ligne de la
+    // transaction n'appartient qu'à elle).
+    if (!isLocalRow && transaction->usesLocks()) {
+        lockRowForWrite(transaction, nodeOffset, lockKeyOfRow(transaction, nodeOffset));
+    }
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeUpdateState.needToUpdateIndex(i)) {
             continue;
@@ -637,7 +645,7 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         index->update(transaction, nodeUpdateState.nodeIDVector, nodeUpdateState.propertyVector,
             *nodeUpdateState.indexUpdateState[i]);
     }
-    if (transaction->isUnCommitted(tableID, nodeOffset)) {
+    if (isLocalRow) {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
         KU_ASSERT(localTable);
         localTable->update(&DUMMY_TRANSACTION, updateState);
@@ -701,6 +709,13 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     bool isDeleted = false;
     const auto nodeOffset = nodeDeleteState.nodeIDVector.readNodeOffset(pos);
+    // Marche A4′ : une ligne validée se prend en exclusif avant d'être supprimée ; la clé est
+    // déjà là (le planificateur la lit pour l'index).
+    if (transaction->usesLocks() && !transaction->isUnCommitted(tableID, nodeOffset)) {
+        lockRowForWrite(transaction, nodeOffset,
+            lockKeyOf(nodeDeleteState.pkVector,
+                nodeDeleteState.pkVector.state->getSelVector()[0]));
+    }
     // Use pre-created index delete states (initialized once, reused across calls).
     initDeleteStates(transaction, deleteState);
     for (auto i = 0u; i < indexes.size(); i++) {
@@ -986,6 +1001,54 @@ bool NodeTable::isVisibleToLatestCommit(const Transaction* transaction, offset_t
 
 std::string NodeTable::lockKeyOf(const ValueVector& pkVector, sel_t pos) {
     return pkVector.getAsValue(pos)->toString();
+}
+
+std::string NodeTable::lockKeyOfRow(Transaction* transaction, offset_t nodeOffset) const {
+    const auto state = DataChunkState::getSingleValueDataChunkState();
+    ValueVector nodeIDVector(LogicalType::INTERNAL_ID(), memoryManager, state);
+    nodeIDVector.setValue<internalID_t>(0, internalID_t{nodeOffset, tableID});
+    ValueVector pkVector(columns[pkColumnID]->getDataType().copy(), memoryManager, state);
+    NodeTableScanState scanState{&nodeIDVector, {&pkVector}, state};
+    scanState.setToTable(transaction, const_cast<NodeTable*>(this), {pkColumnID});
+    initScanState(transaction, scanState, tableID, nodeOffset);
+    if (!lookup(transaction, scanState) || pkVector.isNull(0)) {
+        throw RuntimeException(stringFormat(
+            "Row {} of table {} has no primary key to lock: it is not visible to this "
+            "transaction.",
+            nodeOffset, tableName));
+    }
+    return lockKeyOf(pkVector, 0);
+}
+
+static void throwCouldNotSerialize(table_id_t tableID, const std::string& key,
+    const char* what) {
+    throw TransactionManagerException(stringFormat(
+        "Transaction aborted: {} — {} was {} by another transaction after this one started. "
+        "Roll it back and run it again.",
+        LockManager::COULD_NOT_SERIALIZE, LockResource::row(tableID, key).toString(), what));
+}
+
+void NodeTable::throwIfWrittenByAnotherCommitAfterSnapshot(const Transaction* transaction,
+    offset_t nodeOffset, const std::string& key) const {
+    auto [nodeGroupIdx, offsetInGroup] = StorageUtils::getNodeGroupIdxAndOffsetInChunk(nodeOffset);
+    if (getNodeGroup(nodeGroupIdx)
+            ->wasWrittenByCommitAfter(transaction->getStartTS(), transaction->getID(),
+                offsetInGroup)) {
+        throwCouldNotSerialize(tableID, key, "written");
+    }
+}
+
+void NodeTable::throwIfDeletedByAnotherCommitAfterSnapshot(const Transaction* transaction,
+    offset_t nodeOffset, const std::string& key) const {
+    if (!isVisibleToLatestCommit(transaction, nodeOffset)) {
+        throwCouldNotSerialize(tableID, key, "deleted");
+    }
+}
+
+void NodeTable::lockRowForWrite(Transaction* transaction, offset_t nodeOffset,
+    const std::string& key) const {
+    transaction->acquireLock(LockResource::row(tableID, key), LockMode::EXCLUSIVE);
+    throwIfWrittenByAnotherCommitAfterSnapshot(transaction, nodeOffset, key);
 }
 
 bool NodeTable::isVisibleNoLock(const Transaction* transaction, offset_t offset) const {

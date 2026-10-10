@@ -212,6 +212,31 @@ row_idx_t UpdateInfo::getNumUpdatedRows(const Transaction* transaction) const {
     return updatedRows.size();
 }
 
+bool UpdateInfo::hasCommittedUpdateAfter(transaction_t startTS, idx_t vectorIdx,
+    sel_t rowIdxInVector) const {
+    const UpdateNode* head = nullptr;
+    {
+        std::shared_lock lock{mtx};
+        if (vectorIdx >= updates.size() || !updates[vectorIdx]->isEmpty()) {
+            return false;
+        }
+        head = updates[vectorIdx].get();
+    }
+    std::shared_lock chainLock{head->mtx};
+    for (auto current = head->info.get(); current; current = current->getPrev()) {
+        // Une version validée est un horodatage, inférieur au premier identifiant de
+        // transaction ; une version non validée est un identifiant.
+        if (current->version > startTS && current->version < Transaction::START_TRANSACTION_ID) {
+            for (auto i = 0u; i < current->numRowsUpdated; i++) {
+                if (current->rowsInVector[i] == rowIdxInVector) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 bool UpdateInfo::hasUpdates(const Transaction* transaction, row_idx_t startRow,
     length_t numRows) const {
     bool hasUpdates = false;
