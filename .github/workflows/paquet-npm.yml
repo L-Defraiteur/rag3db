@@ -79,8 +79,10 @@ jobs:
       # Premier accroc (10 octobre 2026) : tree-sitter-scss 1.0.0 passe à `cl`
       # un drapeau GCC (-Wno-unused-parameter) qu'il refuse (D8021). clang-cl
       # accepte les deux dialectes : on le donne à cc-rs pour les crates C ;
-      # le moteur C++ reste bâti par cmake avec MSVC.
+      # Deuxième accroc : cmake refuse de mélanger clang-cl (C) et cl (C++)
+      # pour le moteur ; donc clang-cl pour les deux, moteur compris.
       CC_x86_64_pc_windows_msvc: clang-cl
+      CXX_x86_64_pc_windows_msvc: clang-cl
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
