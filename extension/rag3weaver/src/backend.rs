@@ -2029,13 +2029,21 @@ impl Backend {
         if !cat.is_registered_entity(crate::dataflow::trace_nodes::MESSAGE_ENTITY) {
             return Ok(json!({"messages": []}));
         }
+        use crate::dataflow::trace_nodes::{CONVERSATION_ENTITY, IN_CONVERSATION, MESSAGE_ENTITY};
+        // La conversation par son uuid (son identifiant est son identité),
+        // puis ses messages par un saut que dit le dialecte.
+        let cle = std::collections::BTreeMap::from([("conversation_id".to_string(), crate::connection::CypherValue::String(conversation.to_string()))]);
+        let uuid = cat.entity_uuid(CONVERSATION_ENTITY, &cle).map_err(|e| e.to_string())?;
+        let mut saut = rag3weaver_ir::Hop::new(CONVERSATION_ENTITY, IN_CONVERSATION, MESSAGE_ENTITY, rag3weaver_ir::Direction::Incoming);
+        saut.returns = ["at_ms", "at", "from", "to", "content"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec();
+        saut.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
+        saut.order_by = vec!["at_ms".into(), "seq".into()];
+        let q = cat.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
         let rows = cat
             .execute_raw_with_params(
-                "MATCH (m:Message)-[:IN_CONVERSATION]->(c:Conversation) \
-                 WHERE c.conversation_id = $conversation AND m.at_ms >= $since \
-                 RETURN m.at_ms, m.at, m.from, m.to, m.content ORDER BY m.at_ms, m.seq",
+                &q,
                 &[
-                    crate::connection::QueryParam::new("conversation", conversation),
+                    crate::dataflow::graph_walk::uuid_param(&[uuid]),
                     crate::connection::QueryParam::new("since", since_ms),
                 ],
             )
@@ -2045,7 +2053,8 @@ impl Backend {
             .iter()
             .map(|r| {
                 let v = |i: usize| r.get(i).map(|c| serde_json::to_value(c).unwrap_or(Value::Null)).unwrap_or(Value::Null);
-                json!({"at_ms": v(0), "at": v(1), "from": v(2), "to": v(3), "content": v(4)})
+                // La première colonne est l'uuid de la conversation.
+                json!({"at_ms": v(1), "at": v(2), "from": v(3), "to": v(4), "content": v(5)})
             })
             .collect();
         Ok(json!({"messages": messages}))

@@ -1070,6 +1070,7 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
     match p {
         Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
         Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
+        Predicate::AtLeast { field, param } => format!("m.{field} >= ${param}"),
         Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
         Predicate::Compiled(c) => c.clone(),
     }
@@ -1130,12 +1131,24 @@ impl SchemaDialect for Rag3dbDialect {
             rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{}]->(m{m})", hop.relation),
             rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{}]-(m{m})", hop.relation),
         };
-        let filtre = match &hop.exclude {
-            Some(x) => {
-                let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
-                format!(" WHERE r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field)
-            }
-            None => String::new(),
+        let mut conditions: Vec<String> = Vec::new();
+        if let Some(x) = &hop.exclude {
+            let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
+            conditions.push(format!("r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field));
+        }
+        if let Some(p) = &hop.filter {
+            conditions.push(rag3db_condition(p));
+        }
+        // Une condition seule garde son texte d'avant ; deux s'entourent.
+        let filtre = match conditions.len() {
+            0 => String::new(),
+            1 => format!(" WHERE {}", conditions[0]),
+            _ => format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")),
+        };
+        let ordre = if hop.order_by.is_empty() {
+            String::new()
+        } else {
+            format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{f}")).collect::<Vec<_>>().join(", "))
         };
         let colonnes: Vec<String> = std::iter::once("u".to_string())
             .chain(hop.returns.iter().map(|c| match c {
@@ -1147,7 +1160,7 @@ impl SchemaDialect for Rag3dbDialect {
             }))
             .collect();
         let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
-        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{borne}", colonnes.join(", ")))
+        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{ordre}{borne}", colonnes.join(", ")))
     }
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
@@ -2862,6 +2875,14 @@ mod tests {
         let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
+        let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
+        journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];
+        journal.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
+        journal.order_by = vec!["at_ms".into(), "seq".into()];
+        assert_eq!(
+            Rag3dbDialect.hop(&journal).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:Conversation {_uuid: u})<-[r:IN_CONVERSATION]-(m:Message) WHERE m.at_ms >= $since RETURN u, m.at_ms ORDER BY m.at_ms, m.seq"
+        );
         libre.limit = Some(5);
         assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m._uuid, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());

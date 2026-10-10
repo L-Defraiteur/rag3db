@@ -56,6 +56,10 @@ pub struct Hop {
     pub direction: Direction,
     pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
+    /// Une condition sur le nœud atteint.
+    pub filter: Option<Predicate>,
+    /// L'ordre des lignes, par des champs du nœud atteint.
+    pub order_by: Vec<String>,
     /// Au plus tant de lignes en tout (pour un départ unique : par départ).
     pub limit: Option<usize>,
 }
@@ -70,6 +74,8 @@ impl Hop {
             direction,
             returns: vec![Column::Node("_uuid".into())],
             exclude: None,
+            filter: None,
+            order_by: Vec::new(),
             limit: None,
         }
     }
@@ -94,6 +100,12 @@ impl Hop {
             noms.push(&x.field);
             noms.extend(x.values.iter().map(String::as_str));
         }
+        noms.extend(self.order_by.iter().map(String::as_str));
+        let mut du_filtre = Vec::new();
+        if let Some(p) = &self.filter {
+            p.names(&mut du_filtre);
+        }
+        noms.extend(du_filtre.iter().map(String::as_str));
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("saut : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
@@ -143,6 +155,8 @@ pub enum Predicate {
     Equals { field: String, param: String },
     /// Le champ (un texte) contient le paramètre.
     Contains { field: String, param: String },
+    /// Le champ vaut au moins le paramètre.
+    AtLeast { field: String, param: String },
     /// L'une au moins des conditions.
     AnyOf(Vec<Predicate>),
     /// Une condition déjà dite dans la langue du dialecte, par son propre
@@ -154,7 +168,7 @@ pub enum Predicate {
 impl Predicate {
     fn names(&self, out: &mut Vec<String>) {
         match self {
-            Predicate::Equals { field, param } | Predicate::Contains { field, param } => {
+            Predicate::Equals { field, param } | Predicate::Contains { field, param } | Predicate::AtLeast { field, param } => {
                 out.push(field.clone());
                 out.push(param.clone());
             }
