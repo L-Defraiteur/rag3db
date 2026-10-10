@@ -2150,7 +2150,7 @@ impl Catalog {
         // pas vrai, et c'est la ligne qui préviendra.
         let lignes = self
             .conn
-            .execute(&format!("MATCH (n:{table}) RETURN count(n)"))
+            .execute(&self.dialect.count_rows(table))
             .ok()
             .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
             .unwrap_or(-1);
