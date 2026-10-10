@@ -111,8 +111,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
 
 function_set AcquireLocksFunction::getFunctionSet() {
     function_set functionSet;
+    // Le second argument est déclaré ANY : un type LIST sans type d'élément ne se construit pas
+    // au liage (« Trying to create nested type LIST without child information ») ; bindFunc
+    // vérifie que c'est bien une liste.
     auto func = std::make_unique<TableFunction>(name,
-        std::vector{LogicalTypeID::STRING, LogicalTypeID::LIST});
+        std::vector{LogicalTypeID::STRING, LogicalTypeID::ANY});
     func->tableFunc = tableFunc;
     func->bindFunc = bindFunc;
     func->initSharedStateFunc = TableFunction::initEmptySharedState;
