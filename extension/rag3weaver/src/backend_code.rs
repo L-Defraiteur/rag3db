@@ -68,6 +68,14 @@ pub struct WorkspaceConfig {
     /// n'est pas du code.
     #[serde(default)]
     pub generated: crate::generated::GeneratedPolicy,
+    /// **Les fonctions de verrou applicatives de ce dépôt** (le gestionnaire
+    /// de verrous d'une transaction : `["acquireLock", "lockRowForWrite"]`) :
+    /// un scope qui en appelle une la verrouille — la relation LOCKS vers le
+    /// symbole de la fonction, posée à l'ingestion, comme les gardes sur un
+    /// mutex que l'analyse relève seule. Par le nom nu. Exige
+    /// `index: "code"`.
+    #[serde(default)]
+    pub locks_via: Vec<String>,
 }
 
 /// Les schémas de workspace que le moteur sait enregistrer.
@@ -486,6 +494,7 @@ mod tests {
             sandbox: SandboxConfig::default(),
             index: Some("code".into()),
             generated: Default::default(),
+            locks_via: Vec::new(),
         }
     }
 

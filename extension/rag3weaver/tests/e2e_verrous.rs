@@ -142,3 +142,49 @@ fn callees_dit_ce_qui_est_appele_et_les_verrous_pris() {
     assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
     assert!(md.contains("- `Index::mtx` — insert (2 sauts, lock)"), "{md}");
 }
+
+/// **Les fonctions de verrou déclarées** (`workspace.locks_via` du manifeste,
+/// posé sur le catalogue par `declare_lock_calls`) : un scope qui appelle
+/// l'une d'elles la verrouille — LOCKS vers le symbole de la fonction, genre
+/// `lock`. Dans le fichier (`lockKeyOf` → `acquireLock`) comme entre
+/// fichiers (`update` → `acquireLock`). Sans déclaration, rien : jamais en
+/// dur.
+#[test]
+#[ignore]
+fn les_fonctions_de_verrou_declarees_posent_locks_par_l_appel() {
+    const APPLICATIF: &[(&str, &str)] = &[
+        (
+            "txn.h",
+            "#pragma once\n\nclass Txn {\npublic:\n    void acquireLock(int k);\n    void lockKeyOf(int k);\n};\n",
+        ),
+        (
+            "txn.cpp",
+            "#include \"txn.h\"\n\nvoid Txn::acquireLock(int k) {\n}\n\nvoid Txn::lockKeyOf(int k) {\n    acquireLock(k);\n}\n",
+        ),
+        (
+            "table.cpp",
+            "#include \"txn.h\"\n\nvoid update(Txn* t) {\n    t->acquireLock(1);\n}\n\nvoid lire(Txn* t) {\n}\n",
+        ),
+    ];
+    let verrous = |declare: bool| -> Vec<Vec<String>> {
+        let catalog = setup();
+        if declare {
+            catalog.lock().unwrap().declare_lock_calls(vec!["acquireLock".to_string()]);
+        }
+        let fichiers: Vec<(String, String)> = APPLICATIF.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
+        catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+        let cat = catalog.lock().unwrap();
+        cat.execute_raw("MATCH (a:Scope)-[r:LOCKS]->(s:Symbol) RETURN a.name, s.name, r.usage ORDER BY a.name")
+            .unwrap()
+            .rows
+            .iter()
+            .map(|r| r.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect())
+            .collect()
+    };
+    let declares = verrous(true);
+    eprintln!("{declares:#?}");
+    let attendu: Vec<Vec<String>> =
+        [["lockKeyOf", "acquireLock", "lock"], ["update", "acquireLock", "lock"]].iter().map(|l| l.iter().map(|x| x.to_string()).collect()).collect();
+    assert_eq!(declares, attendu);
+    assert!(verrous(false).is_empty(), "sans déclaration, aucun verrou par l'appel");
+}
