@@ -4,7 +4,7 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 10 octobre 2026, soir — lot (a) dans master, lot (c) en cours (le défaut de sélection corrigé, `CALL analyze` à coder).**
+**Dernière mise à jour : 10 octobre 2026, soir — arrêt pour le nettoyage du disque : `CALL analyze` poussé en branche `statistiques`, non fusionné.**
 
 ## L'arbre
 
@@ -150,6 +150,26 @@ et des refus par essai (en patch).
   rebalayer au point de reprise).
 - Reste : les témoins rouges de `STATS_INFO` après `IGNORE_ERRORS`, `DELETE`, `SET` ; `analyze` ;
   la réouverture ; la mesure de 100 000 lignes sous `poste mesure`.
+
+## Arrêt du 10 octobre au soir (nettoyage du disque, demandé par Lucie)
+
+- **Poussé en branche `statistiques`, non fusionné** : `CALL analyze('Table')`, le recalage de la
+  cardinalité sur les lignes vivantes (point de reprise, ouverture), `NodeGroup::getNumLiveRows`,
+  `NodeTable::replaceStats` (accords de la session cœur C++ pour `src/storage`), les témoins
+  `TableAnalyzeTest`, deux tickets (`analyze` non transactionnel ; l'ouverture sans une extension
+  dont une table dépend), la page 03 à jour.
+- **Joué avant l'arrêt** : les quatre premiers témoins `TableAnalyzeTest`, rouges avant et verts
+  après ; le témoin du recalage vu rouge sur l'ancien recalage ; la liste complète verte
+  (transaction_test 217, api 104, c_api 136, copy 23, stockage, column_stats 2, banc conforme à
+  `known_red` 59/181, vector 74 et 63, e2e 1867).
+- **Pas joué** : le témoin du ROLLBACK (`AnAnalyzeInARolledBackTransactionLeavesAStaleEstimate`,
+  écrit après la liste) ; la mesure des 100 000 lignes (arrêtée avant d'avoir eu le verrou ;
+  l'essai est gardé dans `~/.cache/rag3db-tickets-notes/analyze_measure_scratch_test.cpp`, qui
+  n'est pas dans un dossier effacé — à vérifier à la reprise).
+- **Pas fait** : montrer le diff de `src/storage` à la session cœur C++ ; la fusion.
+- **À la reprise** : un worktree neuf sur `origin/statistiques` (le mien est effacé), `cmake`
+  Release avec `vector;geo`, bâti sous `poste lourd`, le témoin du ROLLBACK, la mesure sous
+  `poste mesure`, le diff à la session cœur C++, rebase et avance rapide.
 
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
