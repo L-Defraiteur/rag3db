@@ -8,6 +8,23 @@ validation), petit et mesurable ; ensuite, et seulement sur mesure, **la mainten
 (deux écrivains d'une table indexée ne s'attendent qu'à la validation). **[lu]** : cartographie
 d'un agent à `11887dc21`, non rejouée ; **[déduit]** : raisonné ; rien n'est mesuré.
 
+## 0. Le découpage, décidé (orchestration, 11 octobre 2026, 1 h 45 — un choix que Lucie peut renverser)
+
+**I1 maintenant** : les écrivains d'une table indexée **s'attendent** — `INDEX{table}` en exclusif
+de la première écriture au commit, pour l'insertion, la mise à jour et la suppression (l'annonce
+et le `COPY` le prennent déjà). Après l'attente, si la transaction n'a encore rien écrit, son
+instantané est repris (comme l'annonce de V2) : le second recoud sur le graphe que le premier a
+validé, et non sur un graphe périmé (sinon il réécrirait des arêtes déjà supprimées : « Write-write
+conflict » de nouveau, remarque du banc). C'est la forme sûre, zéro coût hors du mode, et le
+produit d'aujourd'hui (un écrivain à la fois sur une table indexée).
+
+**I2 après mesure** : la maintenance au commit — deux écrivains d'une table indexée ne s'attendent
+qu'à la validation. Rien de promis sans la mesure du banc sur l'état par instruction (sa fin
+d'instruction fait régresser le ligne à ligne ×7-×13 ; d'après le banc, c'est le recontrôle par
+recherche complète de chaque voisin qui coûte, pas l'état par instruction : une maintenance au
+commit qui garde l'heuristique en filtre et ne vide pas les élagages différés devrait rester près
+de la base — à mesurer sur `SetToAnotherVectorLineByLine` et `TenThousandRowsInBatchesOf512`).
+
 ## 1. Ce que l'index fait aujourd'hui, et quand **[lu]**
 
 | Écriture | Quand | Ce qu'elle touche |
