@@ -179,3 +179,41 @@ le versement par COPY, mesuré le 10 octobre : là, une seule insertion par lign
 2. La mesure de l'union par lot de 512 sur `TenThousandRowsInBatchesOf512`, et la référence de
    durée prise sur le nouvel élagage, dans une tenue « mesure ».
 3. La fin d'instruction du §4, avec les quatre pièges, puis les témoins du §5 et le coût.
+
+## 8. Ce qui est fait, et la mesure de l'union (10 octobre au soir)
+
+**L'étape 1 est faite** : `a162b43e3`. Une ligne créée puis mise à jour dans la même transaction
+n'entre plus deux fois dans le graphe. Avant le correctif, 741 arêtes en double pour dix lignes
+(0 au contrôle), et rien de visible par la recherche. Témoins `Kinds/RowsCreatedInATransaction.*`
+et `RowsFlushedByACopyThenUpdatedFollowTheirVector`.
+
+**L'étape 2, mesurée** sur le poste principal en tenue « mesure », avec l'extension prouvée
+(bâtie de sa source, md5 au résumé). Une sonde temporaire dans `OnDiskHNSWIndex::update` et
+`shrinkForNode` comptait, par transaction, les lignes mises à jour, leurs anciens voisins et les
+nœuds que l'élagage écarte (le patch est gardé dans les notes du banc, pas dans le dépôt).
+Sur `TenThousandRowsInBatchesOf512` (20 instructions de 512 lignes) :
+
+| | par lot de 512 | sur 10 000 lignes |
+|---|---|---|
+| lignes mises à jour | 512 | 10 000 |
+| anciens voisins (distincts) | 667 à 756 | — |
+| nœuds écartés par l'élagage | 497 à 695 | — |
+| **union à recontrôler** | **680 à 910** | **16 051**, soit 1,6 par ligne |
+| somme naïve (lignes × anciens voisins) | ~31 000 | 617 989 |
+
+L'union est **38 fois plus petite** que la somme ligne par ligne, comme le §5 le supposait : les
+lignes d'un même lot sont voisines entre elles.
+
+**La référence de durée** de `TenThousandRowsInBatchesOf512` sur le nouvel élagage : 19,5 s,
+24,3 s et 20,1 s (charge de 5 à 8). Le plafond ×2 se situe donc vers 40 à 48 s.
+
+**Le coût attendu, une estimation à vérifier** : `110a65f15` donnait ~800 s pour la recherche
+naïve par ligne, ~617 000 contrôles, soit ~1,3 ms par contrôle. 16 000 contrôles en fin
+d'instruction feraient ~21 s de plus, **à peu près ×2, à la limite du plafond**. Si la mesure
+dépasse, le premier levier : ne recontrôler que les nœuds qui ont PERDU une arête entrante
+(anciens voisins et écartés), et non les lignes mises à jour elles-mêmes, que leur réinsertion
+vient de relier.
+
+**Une remarque du cœur C++ pour l'étape 3** (relecture du 10 octobre) : la même question qu'à
+l'étape 1 se pose à `NodeTable::delete_`. Une ligne locale supprimée avant le COMMIT n'a jamais
+été dans l'index vectoriel, et `index->delete_` sur elle est au mieux un non-sens silencieux.
