@@ -215,6 +215,12 @@ Binder exception: Cannot drop property vec in table embeddings because it is use
 # après l'autre. La seconde numérotait ses nœuds depuis la même taille de table que la
 # première ; à son commit, l'index lisait ses nouveaux nœuds par leurs offsets définitifs,
 # que le moteur prenait encore pour des offsets de son stockage local : plantage.
+# Depuis la marche I1 (11 octobre 2026), sous le mode multi-écrivains, tout écrivain d'une table
+# indexée tient l'index de la table en exclusif de sa première écriture à sa validation : deux
+# transactions ouvertes n'insèrent plus en même temps dans une table indexée — la seconde attend.
+# Dans ce fichier à un seul fil, la première ne valide pas pendant l'attente : la seconde reçoit
+# l'erreur nommée du délai (CALL lock_timeout=300), annule, puis insère une fois la première
+# validée. L'index rend les dix lignes, comme avant.
 -CASE TwoOpenTransactionsInsertVectors
 -LOAD_DYNAMIC_EXTENSION vector
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -229,6 +235,8 @@ Binder exception: Cannot drop property vec in table embeddings because it is use
 ---- ok
 -CREATE_CONNECTION conn1
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT [conn1] BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -236,8 +244,15 @@ Binder exception: Cannot drop property vec in table embeddings because it is use
 -STATEMENT [conn1] UNWIND range(5000, 5004) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
 ---- ok
 -STATEMENT [conn2] UNWIND range(6000, 6004) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
+---- error
+Transaction aborted: lock timeout while waiting for the index of table 0. Roll it back and run it again, or raise lock_timeout.
+-STATEMENT [conn2] ROLLBACK;
 ---- ok
 -STATEMENT [conn1] COMMIT;
+---- ok
+-STATEMENT [conn2] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [conn2] UNWIND range(6000, 6004) AS i CREATE (:embeddings {id: i, vec: [0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557]});
 ---- ok
 -STATEMENT [conn2] COMMIT;
 ---- ok
