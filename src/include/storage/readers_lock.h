@@ -34,6 +34,9 @@ namespace storage {
 // processus, et ne séparerait pas une ouverture en lecture seule du point de reprise d'un
 // écrivain du même processus. Un processus mort rend son verrou par le noyau.
 //
+// Le verrou se rend à la destruction de l'objet (le descripteur est fermé) : une exception entre
+// la prise et release() ne le laisse pas tenu. release() le rend plus tôt.
+//
 // Sans fichier possible (une base en mémoire ou distante, un dossier où l'on ne peut pas créer
 // le fichier), le verrou n'est pas pris et ne l'empêche pas : le filet seul joue, comme avant.
 class ReadersLock {
