@@ -373,7 +373,7 @@ fn run() -> Result<(), String> {
     let llm: Box<dyn Llm> = if demo {
         Box::new(MockLlm::new("Mode démonstration : les deux interfaces partagent cet agent. Configurez un modèle pour rechercher et créer des exports."))
     } else {
-        Box::new(config.connect_llm()?.0)
+        config.connect_llm()?.0
     };
     let tools = AppTools::new(&config)?;
     // L'écrivain du journal en base : un fil à part, pour que l'agent n'attende
