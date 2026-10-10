@@ -396,6 +396,175 @@ TEST_F(VectorIndexUpdate, UpdateInARolledBackTransaction) {
     });
 }
 
+// Une ligne créée puis mise à jour dans la même transaction (page 04, §7). NodeTable::update
+// appelait index->update sans tester si la ligne est locale : OnDiskHNSWIndex::update l'insérait
+// dans le graphe, et le commit l'insérait de nouveau (commitInsert). Attendu : la ligne n'entre
+// qu'une fois dans l'index — aucune arête en double dans le graphe, la recherche exhaustive rend
+// chaque ligne une seule fois, chaque ligne se retrouve par son vecteur final — après le COMMIT
+// et après réouverture. La recherche ne voyait pas le doublon : seul le graphe le montre.
+// Le paramètre : la ligne est-elle mise à jour dans la transaction (le cas), ou créée directement
+// avec son vecteur final (le contrôle, qui dit ce que vaut un graphe sain sur ces données) ?
+class RowsCreatedInATransaction : public VectorIndexUpdate,
+                                  public ::testing::WithParamInterface<bool> {};
+
+TEST_P(RowsCreatedInATransaction, AreIndexedOnce) {
+    const auto updated = GetParam();
+    std::string failures;
+    const auto runs = forcedRuns > 0 ? forcedRuns : 5;
+    for (auto run = 0; run < runs; run++) {
+        createDocs(run, 200);
+        mustRun("BEGIN TRANSACTION;");
+        if (updated) {
+            mustRun(stringFormat(
+                "UNWIND range(1000, 1009) AS i CREATE (:{} {id: i, vec: [9000, 9000, 9000, i]});",
+                table));
+            mustRun(stringFormat(
+                "MATCH (n:{}) WHERE n.id >= 1000 SET n.vec = [500, 500, 500, n.id];", table));
+        } else {
+            mustRun(stringFormat(
+                "UNWIND range(1000, 1009) AS i CREATE (:{} {id: i, vec: [500, 500, 500, i]});",
+                table));
+        }
+        mustRun("COMMIT;");
+        if (HasFatalFailure()) {
+            return;
+        }
+        for (const auto* moment : {"after the commit", "after reopening"}) {
+            if (std::string(moment) == "after reopening") {
+                conn.reset();
+                database.reset();
+                createDBAndConn();
+                mustRun("CALL auto_checkpoint=false;");
+                concurrency::loadVectorExtension(*conn);
+            }
+            // La recherche exhaustive : chaque ligne une fois, aucune absente.
+            std::map<int64_t, int> seen;
+            auto all = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [500, 500, 500, 1005], 210, efs := "
+                "210) RETURN node.id;",
+                table));
+            ASSERT_TRUE(all->isSuccess()) << "[check: query] " << all->getErrorMessage();
+            while (all->hasNext()) {
+                seen[all->getNext()->getValue(0)->getValue<int64_t>()]++;
+            }
+            int64_t twice = 0;
+            for (const auto& [id, count] : seen) {
+                twice += count > 1;
+            }
+            int64_t newRows = 0;
+            for (auto id = 1000; id < 1010; id++) {
+                newRows += seen.contains(id);
+            }
+            // Chaque ligne mise à jour, par son vecteur final.
+            int64_t ownFound = 0;
+            for (auto id = 1000; id < 1010; id++) {
+                auto own = conn->query(stringFormat(
+                    "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [500, 500, 500, {}], 1) RETURN "
+                    "node.id;",
+                    table, id));
+                ASSERT_TRUE(own->isSuccess()) << "[check: query] " << own->getErrorMessage();
+                ownFound += own->hasNext() && own->getNext()->getValue(0)->getValue<int64_t>() == id;
+            }
+            // Le graphe lui-même (sa couche basse, une table de relations cachée) : une ligne
+            // insérée deux fois y laisse des arêtes en double, que la recherche ne montre pas
+            // (10 octobre : 741 arêtes en double pour dix lignes mises à jour, 0 au contrôle).
+            auto tables = conn->query("CALL SHOW_TABLES() RETURN id, name;");
+            ASSERT_TRUE(tables->isSuccess()) << "[check: query] " << tables->getErrorMessage();
+            std::string lower;
+            while (tables->hasNext()) {
+                auto tuple = tables->getNext();
+                if (tuple->getValue(1)->toString() == table) {
+                    lower = stringFormat("_{}_doc_index_LOWER", tuple->getValue(0)->toString());
+                }
+            }
+            // Les tables du graphe ne sont visibles qu'avec le catalogue interne.
+            mustRun("CALL ENABLE_INTERNAL_CATALOG=true;");
+            const auto graphCount = [&](const std::string& query) -> int64_t {
+                auto result = conn->query(query);
+                EXPECT_TRUE(result->isSuccess()) << "[check: query] " << query << "\n"
+                                                 << result->getErrorMessage();
+                return result->isSuccess() && result->hasNext() ?
+                           result->getNext()->getValue(0)->getValue<int64_t>() :
+                           -1;
+            };
+            const auto duplicated = graphCount(stringFormat(
+                "MATCH (a:{})-[r:{}]->(b:{}) WITH a.id AS s, b.id AS d, count(*) AS c WHERE c > 1 "
+                "RETURN count(*);",
+                table, lower, table));
+            const auto toItself = graphCount(stringFormat(
+                "MATCH (a:{})-[r:{}]->(b:{}) WHERE a.id = b.id RETURN count(*);", table, lower,
+                table));
+            mustRun("CALL ENABLE_INTERNAL_CATALOG=false;");
+            const auto summary = stringFormat(
+                "run {} {} : {} rows returned by the exhaustive search, {} returned twice, {}/10 "
+                "rows of the transaction reachable, {}/10 found first by their final vector ; in "
+                "the graph, {} duplicated edges, {} edges to a row itself",
+                run, moment, seen.size(), twice, newRows, ownFound, duplicated, toItself);
+            std::cerr << "  " << summary << "\n";
+            if (twice != 0 || newRows != 10 || seen.size() != 210 || ownFound != 10 ||
+                duplicated != 0 || toItself != 0) {
+                failures += "\n  " + summary;
+            }
+        }
+    }
+    EXPECT_TRUE(failures.empty()) << "[check: updated-local-row-indexed-once]" << failures;
+}
+
+// Le pendant : des lignes de la transaction VERSÉES dans la table par un COPY (f1d8c7190) ne
+// sont plus locales — elles sont dans l'index depuis le versement. Leur mise à jour doit donc
+// l'atteindre : le correctif qui saute les lignes locales ne doit pas les sauter, sans quoi
+// l'index garderait leur ancien vecteur (getMinUncommittedNodeOffset rend INVALID_OFFSET après
+// un versement, la table locale vide).
+TEST_F(VectorIndexUpdate, RowsFlushedByACopyThenUpdatedFollowTheirVector) {
+    std::string failures;
+    const auto runs = forcedRuns > 0 ? forcedRuns : 5;
+    for (auto run = 0; run < runs; run++) {
+        createDocs(run, 200);
+        const auto csv = databasePath + stringFormat(".flushed{}.csv", run);
+        {
+            std::ofstream out(csv);
+            for (auto id = 2000; id < 2005; id++) {
+                out << id << ",\"[1,2,3," << id << "]\"\n";
+            }
+        }
+        mustRun("BEGIN TRANSACTION;");
+        mustRun(stringFormat(
+            "UNWIND range(1000, 1009) AS i CREATE (:{} {id: i, vec: [9000, 9000, 9000, i]});",
+            table));
+        mustRun(stringFormat("COPY {}(id, vec) FROM '{}' (header=false);", table, csv));
+        mustRun(stringFormat(
+            "MATCH (n:{}) WHERE n.id >= 1000 AND n.id < 1010 SET n.vec = [500, 500, 500, n.id];",
+            table));
+        mustRun("COMMIT;");
+        std::filesystem::remove(csv);
+        if (HasFatalFailure()) {
+            return;
+        }
+        int64_t ownFound = 0;
+        for (auto id = 1000; id < 1010; id++) {
+            auto own = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [500, 500, 500, {}], 1) RETURN "
+                "node.id;",
+                table, id));
+            ASSERT_TRUE(own->isSuccess()) << "[check: query] " << own->getErrorMessage();
+            ownFound += own->hasNext() && own->getNext()->getValue(0)->getValue<int64_t>() == id;
+        }
+        const auto summary =
+            stringFormat("run {} : {}/10 flushed then updated rows found by their final vector",
+                run, ownFound);
+        std::cerr << "  " << summary << "\n";
+        if (ownFound != 10) {
+            failures += "\n  " + summary;
+        }
+    }
+    EXPECT_TRUE(failures.empty()) << "[check: flushed-row-update-reaches-the-index]" << failures;
+}
+
+INSTANTIATE_TEST_SUITE_P(Kinds, RowsCreatedInATransaction, ::testing::Bool(),
+    [](const ::testing::TestParamInfo<bool>& info) {
+        return std::string(info.param ? "ThenUpdated" : "WithTheirFinalVector");
+    });
+
 // Ce que rag3weaver fait réellement au moteur (session des embarquements, 4 octobre,
 // extension/rag3weaver/tests/e2e_invariant_des_vecteurs.rs).
 

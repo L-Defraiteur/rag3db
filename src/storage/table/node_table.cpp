@@ -629,8 +629,15 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         throw RuntimeException("Cannot update pk.");
     }
     const auto nodeOffset = nodeUpdateState.nodeIDVector.readNodeOffset(pos);
+    // Une ligne de la transaction n'est pas encore dans un index qui l'insère à la validation
+    // (commitInsert, l'index vectoriel) : il l'y insérera avec sa valeur finale. La mettre à jour
+    // ici l'insérait deux fois — des arêtes en double dans le graphe (banc, 10 octobre).
+    const auto isLocalRow = transaction->isUnCommitted(tableID, nodeOffset);
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeUpdateState.needToUpdateIndex(i)) {
+            continue;
+        }
+        if (isLocalRow && indexes[i].needCommitInsert()) {
             continue;
         }
         auto index = indexes[i].getIndex();
