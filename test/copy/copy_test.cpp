@@ -263,6 +263,13 @@ static std::string copyTwitterFollows() {
         RAG3DB_ROOT_DIRECTORY);
 }
 
+// Les deux chemins d'un COPY, posés explicitement : le journalisé est le défaut depuis
+// ff9bad960, le forcé reste couvert tant que le réglage existe.
+static std::string copyModeSetting(bool journaled) {
+    return journaled ? "CALL force_checkpoint_on_copy=false" :
+                       "CALL force_checkpoint_on_copy=true";
+}
+
 static constexpr int64_t NUM_TWITTER_FOLLOWS = 2420766;
 static constexpr auto COUNT_TWITTER_FOLLOWS =
     "MATCH (a:account)-[:follows]->(b:account) RETURN COUNT(*)";
@@ -281,7 +288,7 @@ static void expectFollowsCount(main::Connection* conn, int64_t expected) {
 // réservations du COPY, compté une fois sans refus dans une transaction annulée : chacun des
 // premiers essais refuse une réservation un peu avant la fin, le suivant passe. Une pente fixe
 // (512 × (i + 15), au plus 17 408) ne le permet pas : journalisé, le COPY réserve en plus une
-// page de 4 Kio par page de son journal local (~44 000 ici, pour ~9 700 au défaut), et le test
+// page de 4 Kio par page de son journal local (~44 000 ici, pour ~9 700 en COPY forcé), et le test
 // refusait vingt essais de suite dans le partitionnement.
 void CopyTest::relCopyBMExceptionRecovery(bool journaled) {
     static constexpr int NUM_REFUSED_TRIES = 4;
@@ -297,9 +304,7 @@ void CopyTest::relCopyBMExceptionRecovery(bool journaled) {
         .executeFunc =
             [&](main::Connection* conn, int i) -> std::unique_ptr<main::QueryResult> {
                 failureFrequency = UINT64_MAX;
-                if (journaled) {
-                    conn->query("CALL force_checkpoint_on_copy=false");
-                }
+                conn->query(copyModeSetting(journaled));
                 if (i == 0) {
                     conn->query("BEGIN TRANSACTION");
                     const auto context = conn->getClientContext();
@@ -379,9 +384,7 @@ void CopyTest::relCopyRefusedOnAPage(bool journaled, uint64_t pageToRefuse) {
     failureFrequency = UINT64_MAX;
     resetDBFlaky(true /* canFailDuringExecute */, false /* canFailDuringCheckpoint */,
         false /* canFailDuringCommit */);
-    if (journaled) {
-        ASSERT_TRUE(conn->query("CALL force_checkpoint_on_copy=false")->isSuccess());
-    }
+    ASSERT_TRUE(conn->query(copyModeSetting(journaled))->isSuccess());
     currentBM->onlyFailPageReservations = true;
     currentBM->reserveCount = 0;
     failureFrequency = pageToRefuse;
@@ -396,16 +399,14 @@ void CopyTest::relCopyRefusedOnAPage(bool journaled, uint64_t pageToRefuse) {
     // ce COPY, journalisé ou non.
     resetDB(main::SystemConfig{}.bufferPoolSize);
     expectFollowsCount(conn.get(), 0);
-    if (journaled) {
-        ASSERT_TRUE(conn->query("CALL force_checkpoint_on_copy=false")->isSuccess());
-    }
+    ASSERT_TRUE(conn->query(copyModeSetting(journaled))->isSuccess());
     auto copied = conn->query(copyTwitterFollows());
     ASSERT_TRUE(copied->isSuccess()) << copied->getErrorMessage();
     expectFollowsCount(conn.get(), NUM_TWITTER_FOLLOWS);
     FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
-TEST_F(CopyTest, RelCopyRefusedOnAPageRollsBack) {
+TEST_F(CopyTest, ForcedRelCopyRefusedOnAPageRollsBack) {
     if (inMemMode) {
         GTEST_SKIP();
     }
