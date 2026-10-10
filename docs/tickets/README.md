@@ -26,6 +26,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
 | [Après un COPY annulé ou refusé, le point de reprise suivant ne finit pas](2026-10-05-point-de-reprise-sans-fin-apres-un-copy-annule.md) | corrigé | blocage, panne de mémoire | oui | oui (paquet défait, COPY refusé) |
 | [Une transaction qui mêle des écritures et un COPY revient à moitié après une mort pendant le point de reprise de sa validation](2026-10-05-transaction-a-moitie-apres-une-mort-pendant-son-point-de-reprise.md) | corrigé | perte (et base inouvrable sous IGNORE_ERRORS) | oui (chemin par défaut) | oui, par la transaction par paquet (éteinte par défaut) |
