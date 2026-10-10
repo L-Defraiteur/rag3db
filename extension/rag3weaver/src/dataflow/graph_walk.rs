@@ -106,6 +106,11 @@ impl EdgeMark {
         if self.applies(rel) { format!("r.{}", self.field) } else { "NULL".into() }
     }
 
+    /// [`Self::column`] dans le langage intermédiaire.
+    pub fn column_ir(&self, rel: &RelInfo) -> rag3weaver_ir::Column {
+        if self.applies(rel) { rag3weaver_ir::Column::Edge(self.field.clone()) } else { rag3weaver_ir::Column::Null }
+    }
+
     pub fn is_guessed(&self, valeur: &str) -> bool {
         self.guessed.iter().any(|g| g == valeur)
     }

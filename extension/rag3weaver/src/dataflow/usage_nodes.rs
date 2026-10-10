@@ -207,17 +207,20 @@ pub fn pivot_usages_query(cfg: &UsagesConfig, used_by: &RelInfo) -> String {
     )
 }
 
-/// Les usages directs des définitions : une liste de valeurs simples, que le
-/// moteur joint par hachage.
-pub fn direct_usages_query(cfg: &UsagesConfig, rel: &RelInfo) -> String {
-    format!(
-        "UNWIND $uuids AS u MATCH (d:{to} {{_uuid: u}})<-[r:{name}]-(m:{from}) RETURN u, {c}, {props}",
-        to = rel.to,
-        name = rel.name,
-        from = rel.from,
-        c = champs("m", cfg),
-        props = proprietes(rel, cfg)
-    )
+/// Les usages directs des définitions : un saut entrant depuis leurs uuids,
+/// les champs de l'usager puis les propriétés de l'arête (vides quand la
+/// relation ne les porte pas). La requête vient du dialecte.
+pub fn direct_usages_hop(cfg: &UsagesConfig, rel: &RelInfo) -> rag3weaver_ir::Hop {
+    use rag3weaver_ir::Column;
+    let mut hop = rag3weaver_ir::Hop::new(&rel.to, &rel.name, &rel.from, rag3weaver_ir::Direction::Incoming);
+    hop.returns = vec![Column::Node("_uuid".into()), Column::Node(cfg.title.clone()), Column::Node(cfg.kind_field.clone())];
+    hop.returns.extend(cfg.path_fields.iter().map(|p| Column::Node(p.clone())));
+    hop.returns.push(Column::Node(cfg.line_field.clone()));
+    for p in [&cfg.group_by, &cfg.usages_field, &cfg.line] {
+        hop.returns.push(if rel.props.iter().any(|x| x == p) { Column::Edge(p.clone()) } else { Column::Null });
+    }
+    hop.returns.push(cfg.edge_mark.column_ir(rel));
+    hop
 }
 
 /// Une relation déclarée au catalogue : ses extrémités et ses propriétés.
@@ -303,7 +306,7 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     if !def_uuids.is_empty() {
         for name_rel in &cfg.direct {
             let rel = rel_info(catalog, name_rel)?;
-            let q = direct_usages_query(cfg, &rel);
+            let q = catalog.dialect_arc().hop(&direct_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
             let rows = catalog
                 .execute_raw_with_params(&q, &[QueryParam::new("uuids", CypherValue::List(def_uuids.clone()))])
                 .map_err(err)?;
@@ -676,6 +679,53 @@ impl NodeFactory for UsagesNodeFactory {
                 p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
                 format,
             ],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_saut {
+    use super::*;
+    use super::super::graph_walk::EdgeMark;
+    use crate::dialect::{Rag3dbDialect, SchemaDialect};
+
+    /// La requête que `direct_usages_query` écrivait avant le dialecte.
+    fn requete_d_avant(cfg: &UsagesConfig, rel: &RelInfo) -> String {
+        format!(
+            "UNWIND $uuids AS u MATCH (d:{to} {{_uuid: u}})<-[r:{name}]-(m:{from}) RETURN u, {c}, {props}",
+            to = rel.to,
+            name = rel.name,
+            from = rel.from,
+            c = champs("m", cfg),
+            props = proprietes(rel, cfg)
+        )
+    }
+
+    /// Parité : au caractère près, avec et sans propriétés d'arête, avec et
+    /// sans marque d'arête devinée.
+    #[test]
+    fn les_usages_directs_sont_la_requete_d_avant() {
+        let mark = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom"}), "N").unwrap();
+        for edge_mark in [EdgeMark::default(), mark] {
+            let cfg = UsagesConfig {
+                pivot: "Symbol".into(),
+                key: "name".into(),
+                defined_by: None,
+                used_by: None,
+                direct: vec![],
+                group_by: "usage".into(),
+                usages_field: "usages".into(),
+                line: "line".into(),
+                title: "name".into(),
+                kind_field: "kind".into(),
+                path_fields: vec!["file_path".into(), "source".into()],
+                line_field: "start_line".into(),
+                edge_mark,
+            };
+            for props in [vec![], vec!["usage".to_string(), "line".into(), "resolution".into()]] {
+                let rel = RelInfo { name: "CONSUMES".into(), from: "Scope".into(), to: "Symbol".into(), props };
+                assert_eq!(Rag3dbDialect.hop(&direct_usages_hop(&cfg, &rel)).unwrap(), requete_d_avant(&cfg, &rel));
+            }
         }
     }
 }

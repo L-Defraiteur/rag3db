@@ -22,7 +22,7 @@ use rag3weaver::connection::{CypherValue, QueryParam};
 use rag3weaver::dataflow::graph_tool::GraphTool;
 use rag3weaver::dataflow::node_factories::register_builtins;
 use rag3weaver::dataflow::node_registry::NodeRegistry;
-use rag3weaver::dataflow::usage_nodes::{direct_usages_query, definitions_query, pivot_usages_query, usages_of, RelInfo, UsagesConfig};
+use rag3weaver::dataflow::usage_nodes::{direct_usages_hop, definitions_query, pivot_usages_query, usages_of, RelInfo, UsagesConfig};
 use rag3weaver::dataflow::ServiceRegistry;
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -181,7 +181,7 @@ fn les_requetes_de_usages_passent_par_l_index() {
     let requetes = [
         (definitions_query(&cfg, &rel("DEFINES")), &un[..]),
         (pivot_usages_query(&cfg, &rel("MENTIONS")), &un[..]),
-        (direct_usages_query(&cfg, &rel("CONSUMES")), &liste[..]),
+        (cat.dialect_arc().hop(&direct_usages_hop(&cfg, &rel("CONSUMES"))).unwrap(), &liste[..]),
     ];
     for (q, params) in requetes {
         let plan = cat.execute_raw_with_params(&format!("EXPLAIN {q}"), params).unwrap();
