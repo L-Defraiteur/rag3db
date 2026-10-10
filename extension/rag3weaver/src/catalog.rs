@@ -293,6 +293,10 @@ pub struct Catalog {
     event_bus: EventBus,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
     entity_configs: HashMap<String, crate::config::EntityConfig>,
+    /// Les fonctions de verrou déclarées par le manifeste
+    /// (`workspace.locks_via`) : un scope qui appelle l'une d'elles la
+    /// verrouille (LOCKS, à l'ingestion du code). Vide : aucune.
+    declared_lock_calls: Vec<String>,
     /// **Les modèles que ce processus sait enregistrés**, en plus de ce que la
     /// méta rend. Un modèle qu'on vient d'enregistrer *est* enregistré, quoi
     /// que la base réponde ensuite — et une connexion factice ne répond rien.
@@ -481,6 +485,7 @@ impl Catalog {
             // bloquer, et le drain le dit (`EventsMissed`).
             event_bus: EventBus::new(1024),
             entity_configs: HashMap::new(),
+            declared_lock_calls: Vec::new(),
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
@@ -8368,6 +8373,18 @@ impl Catalog {
     /// Les configurations d'entités simples enregistrées.
     pub fn entity_configs(&self) -> &HashMap<String, crate::config::EntityConfig> {
         &self.entity_configs
+    }
+
+    /// Déclare les fonctions de verrou applicatives de ce dépôt (le
+    /// gestionnaire de verrous d'une transaction : `acquireLock`…) ; les
+    /// ingestions suivantes posent LOCKS de chaque appelant vers le symbole
+    /// de la fonction. Une déclaration, jamais une règle câblée.
+    pub fn declare_lock_calls(&mut self, names: Vec<String>) {
+        self.declared_lock_calls = names;
+    }
+
+    pub fn declared_lock_calls(&self) -> &[String] {
+        &self.declared_lock_calls
     }
 
     // ── Schema queries ─────────────────────────────────────────────────

@@ -1991,6 +1991,35 @@ impl Catalog {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             verrous.push((from, symbol_uuid(self, symbole)?, usage_properties(sites)));
         }
+        // Les fonctions de verrou déclarées (`workspace.locks_via`) : un appel
+        // à l'une d'elles est un verrou pris, vers le symbole de la fonction —
+        // l'appel résolu dans le fichier comme celui qui attend le
+        // rendez-vous. Par le nom : la liste est celle de ce dépôt.
+        if !self.declared_lock_calls().is_empty() {
+            let declarees: BTreeSet<&str> = self.declared_lock_calls().iter().map(String::as_str).collect();
+            let en_verrou = |sites: &[UsageSite]| -> Vec<UsageSite> {
+                sites.iter().filter(|x| x.usage == UsageKind::Call).map(|x| UsageSite { usage: UsageKind::Lock, line: x.line }).collect()
+            };
+            let nom_de: HashMap<&str, &str> = analysis.scopes.iter().map(|sc| (sc.key.as_str(), sc.name.as_str())).collect();
+            let mut appels: Vec<(&str, &str, Vec<UsageSite>)> = Vec::new();
+            for r in analysis.relations.iter().filter(|r| r.rel == "CONSUMES" && r.from_entity == SCOPE) {
+                if let Some(nom) = nom_de.get(r.to_key.as_str()).filter(|n| declarees.contains(**n)) {
+                    appels.push((r.from_key.as_str(), nom, en_verrou(&r.sites)));
+                }
+            }
+            for (scope_key, nom, sites) in &analysis.pending_sites {
+                if declarees.contains(nom.as_str()) {
+                    appels.push((scope_key.as_str(), nom.as_str(), en_verrou(sites)));
+                }
+            }
+            for (scope_key, nom, sites) in appels {
+                if sites.is_empty() {
+                    continue;
+                }
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                verrous.push((from, symbol_uuid(self, nom)?, usage_properties(&sites)));
+            }
+        }
         self.mettre_en_file_les_liens("LOCKS", verrous)?;
         // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
         // mentionneurs — pour ne reposer que les arêtes neuves.

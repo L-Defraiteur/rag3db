@@ -554,6 +554,11 @@ impl PreparedBackend {
             // **Les signaux montés sur le schéma nommé se valident ici, dans
             // les deux sens** : un signal qui demande un modèle refuse sans
             // lui, et un modèle que rien ne lit refuse aussi.
+            if !w.locks_via.is_empty() && w.index.as_deref() != Some("code") {
+                return Err("workspace.locks_via sans workspace.index = \"code\" : les fonctions de \
+                     verrou se lisent à l'ingestion du code — une déclaration que rien ne lit"
+                    .to_string());
+            }
             if !w.index_signals.is_empty() && w.index.is_none() {
                 return Err(
                     "workspace.index_signals sans workspace.index : les signaux se montent \
@@ -1253,6 +1258,10 @@ impl PreparedBackend {
         {
             crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
                 .map_err(|e| e.to_string())?;
+            // Les fonctions de verrou déclarées pour ce dépôt.
+            if let Some(w) = &self.manifest.workspace {
+                cat.declare_lock_calls(w.locks_via.clone());
+            }
             // Les signaux déclarés par le manifeste montent sur les entités
             // du schéma — la déclaration du moteur reste neutre, chaque
             // produit choisit. Une entité inconnue refuse en listant.
@@ -3103,6 +3112,27 @@ mod tests {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
         let e = p.err().unwrap();
         assert!(e.contains("fuzzy"), "{e}");
+    }
+
+    /// **Les fonctions de verrou déclarées** (`workspace.locks_via`) se
+    /// lisent à l'ingestion du code : sans `index: "code"`, refusées au
+    /// chargement ; avec, lues telles quelles.
+    #[test]
+    fn locks_via_exige_le_schema_de_code() {
+        let patch = |m: &mut Value| {
+            m["workspace"]["locks_via"] = json!(["acquireLock"]);
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("workspace.locks_via"), "{e}");
+
+        let patch = |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["locks_via"] = json!(["acquireLock", "lockRowForWrite"]);
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let p = p.expect("déclarées avec le schéma de code");
+        assert_eq!(p.manifest.workspace.as_ref().unwrap().locks_via, vec!["acquireLock", "lockRowForWrite"]);
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
