@@ -222,7 +222,12 @@ void NodeGroupCollection::checkpoint(MemoryManager& memoryManager,
 row_idx_t NodeGroupCollection::getNumLiveRows(const UniqLock& lock) const {
     row_idx_t numLiveRows = 0;
     for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
-        numLiveRows += nodeGroup->getNumLiveRows();
+        // Un groupe CSR (table de relations) garde sa part persistée hors de ses blocs
+        // (CSRNodeGroup::persistentChunkGroup) : NodeGroup::getNumLiveRows n'en verrait que la
+        // part en mémoire. Il compte toutes ses lignes, comme avant.
+        numLiveRows += nodeGroup->getFormat() == NodeGroupDataFormat::REGULAR ?
+                           nodeGroup->getNumLiveRows() :
+                           nodeGroup->getNumRows();
     }
     return numLiveRows;
 }
