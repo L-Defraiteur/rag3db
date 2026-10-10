@@ -4,7 +4,7 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 10 octobre 2026, soir — arrêt pour le nettoyage du disque : `CALL analyze` poussé en branche `statistiques`, non fusionné.**
+**Dernière mise à jour : 10 octobre 2026, 20 h 40 — lot `CALL analyze` fini sur luciepc, prêt pour master.**
 
 ## L'arbre
 
@@ -170,6 +170,23 @@ et des refus par essai (en patch).
 - **À la reprise** : un worktree neuf sur `origin/statistiques` (le mien est effacé), `cmake`
   Release avec `vector;geo`, bâti sous `poste lourd`, le témoin du ROLLBACK, la mesure sous
   `poste mesure`, le diff à la session cœur C++, rebase et avance rapide.
+
+## Reprise sur luciepc (10 octobre, soir)
+
+- Décision de Lucie : le cœur C++ travaille sur luciepc. Worktree `~/git_workspaces/rag3db-tickets`
+  là-bas, branche `statistiques-2` (la branche reposée sur master, poussée sous un nom neuf) ;
+  bâti complet en 3 min 30 (lib et binaires à 19 h 52, après le commit de 19 h 00).
+- Joué là-bas : les cinq `TableAnalyzeTest`, le témoin du ROLLBACK compris (la cardinalité gardée
+  vaut bien 1 000, ce que l'analyze annulé avait vu) ; la liste complète, verte sauf un rouge
+  probabiliste étranger au lot (`ForcedTransactionJournalTest.OrdinaryWritesBeforeACopyThatSkipsRowsCommittedThenDead`,
+  2 999 lignes pour 3 000, vu aussi par la session cœur C++ sans ce lot : ticket à écrire).
+- Relecture de la session cœur C++ sur `src/storage` : d'accord, une demande — le recalage limité
+  aux groupes de nœuds (un groupe CSR garde sa part persistée hors de ses blocs) : `a1bd6c8a6`,
+  bâti et joué (TableAnalyze et CopyStatistics 10, rel_tests 7).
+- La mesure (page 03, §5 ter) : `analyze` 4 ms sur 100 000 lignes clé + chaîne, 24 ms avec un
+  `FLOAT[768]` (95 ms à froid). Deux essais nuls d'abord, dits.
+- Piège de luciepc : un `scp` n'a pas gardé le droit d'exécution d'un script ; les binaires de test
+  se lient à `librag3db.a`, pas au `.so` (prouver la date de la statique).
 
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 

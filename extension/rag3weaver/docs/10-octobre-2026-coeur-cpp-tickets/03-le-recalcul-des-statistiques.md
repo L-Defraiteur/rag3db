@@ -124,6 +124,23 @@ statistiques recalculées.
   `IGNORE_ERRORS`) fait son point de reprise, qui recale maintenant la cardinalité sur les lignes
   vivantes : après le `COPY` qui écarte des clés, elle est juste avant même `analyze`.
 
+## 5 ter. La mesure (10 octobre, 20 h 33, sur luciepc)
+
+Sous `poste mesure` sur luciepc (24 cœurs, charge 5 à 6), les deux colonnes sur la même machine ;
+les 100 000 lignes comptées avant de mesurer (un premier essai avait mesuré une table vide : la
+compréhension de liste n'existe pas dans le dialecte). Essai gardé hors du dépôt
+(`~/.cache/rag3db-tickets-notes/analyze_measure_scratch_test.cpp`, journal à côté).
+
+| Table de 100 000 lignes | `CALL analyze` | `CHECKPOINT` qui suit | `CHECKPOINT` sans analyze |
+|---|---|---|---|
+| clé + chaîne | 3,6 à 4,2 ms (trois passes) | 3,9 à 4,8 ms | 2,9 ms |
+| clé + chaîne + `FLOAT[768]` | 95 ms à froid, puis 24 ms | 8 à 11 ms | 3,2 ms |
+
+Le balayage complet coûte peu : l'écart à l'échantillon de PostgreSQL (§2) n'a pas à être revu à
+cette taille. La colonne `FLOAT[768]` est lue sans servir (un tableau n'a pas d'HyperLogLog) :
+la sauter rendrait le cas des vecteurs proche de l'autre, si un jour ça compte. Le déclenchement
+automatique se décide sur ces chiffres (orchestration).
+
 ## 6. Ce qui reste dehors
 
 - Le déclenchement automatique (après la mesure).
