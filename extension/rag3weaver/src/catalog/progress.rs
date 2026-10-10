@@ -45,6 +45,15 @@ pub struct IndexProgress {
     /// synchronisation n'en retient — le graphe est celui des lignes.
     #[serde(default)]
     pub relations_pending: Option<usize>,
+    /// L'entité déclare-t-elle des vecteurs ? `false` pour une entité en
+    /// plein texte seul (Symbol) : rien ne lui manque, et son état le dit
+    /// [`Level::NotDeclared`] plutôt que « jamais ».
+    #[serde(default = "vrai")]
+    pub vectors_declared: bool,
+}
+
+fn vrai() -> bool {
+    true
 }
 
 impl IndexProgress {
@@ -105,7 +114,9 @@ impl IndexProgress {
         };
         let chunks = self.chunks();
         let missing = self.dense_missing();
-        let mut line = if missing == 0 {
+        let mut line = if !self.vectors_declared {
+            format!("{text} · sans vecteurs (non déclarés)")
+        } else if missing == 0 {
             format!("{text} · vecteurs prêts ({chunks} morceaux, {})", self.model)
         } else {
             format!("{text} · vecteurs {} sur {chunks} ({} %, {})", chunks - missing.min(chunks), self.dense_percent(), self.model)
@@ -138,6 +149,10 @@ pub enum Level {
     Running,
     /// Tout ce qui est écrit est cherchable à ce niveau.
     Ready,
+    /// **Pas prévu** : l'entité ne déclare pas ce signal (Symbol, en plein
+    /// texte seul, n'a pas de vecteurs). Ni « jamais » ni une dette — rien ne
+    /// manque. Rendu « sans vecteurs (non déclarés) » (10 octobre 2026).
+    NotDeclared,
 }
 
 /// **L'état de l'index, lisible à chaque recherche.** Une seule lecture de
@@ -214,10 +229,14 @@ impl IndexState {
                 (_, None) => Level::Ready,
                 (_, Some(_)) => Level::Running,
             },
-            vectors: level(progress.dense_missing()),
-            vectors_percent: if chunks == 0 { 0 } else { progress.dense_percent() },
+            vectors: if progress.vectors_declared { level(progress.dense_missing()) } else { Level::NotDeclared },
+            vectors_percent: if chunks == 0 || !progress.vectors_declared { 0 } else { progress.dense_percent() },
             vectors_seconds_left: None,
-            sparse: progress.sparse_state(),
+            sparse: if progress.vectors_declared {
+                progress.sparse_state()
+            } else {
+                Some(SignalState { level: Level::NotDeclared, percent: 0 })
+            },
             text_percent: None,
             updated_ms: now_ms,
         }
@@ -278,12 +297,14 @@ impl Catalog {
         if self.vector_tables().contains(&chunks) {
             return self.progress_of(vec![chunks]);
         }
+        // Rien ne lui manque : elle ne déclare pas de vecteurs.
         let rows = self.count_rows_of(entity);
         Ok(IndexProgress {
             model: self.current_embedding_entry().name.clone(),
-            tables: vec![TableProgress { table: entity.to_string(), chunks: rows, dense_missing: rows, sparse_missing: None }],
+            tables: vec![TableProgress { table: entity.to_string(), chunks: rows, dense_missing: 0, sparse_missing: None }],
             writes_pending: self.pending.total_count(),
             relations_pending: self.relations_pending()?,
+            vectors_declared: false,
         })
     }
 
@@ -296,6 +317,8 @@ impl Catalog {
     }
 
     fn progress_of(&self, vector_tables: Vec<String>) -> Result<IndexProgress, CatalogError> {
+        // Un catalogue sans aucune table à vecteurs n'en déclare pas.
+        let vectors_declared = !vector_tables.is_empty();
         let mut tables = Vec::new();
         for table in vector_tables {
             let chunks = self.count_rows_of(&table);
@@ -319,6 +342,7 @@ impl Catalog {
             tables,
             writes_pending: self.pending.total_count(),
             relations_pending: self.relations_pending()?,
+            vectors_declared,
         })
     }
 
@@ -536,7 +560,23 @@ mod tests {
             tables: vec![TableProgress { table: "Scope_Chunk".into(), chunks, dense_missing, sparse_missing }],
             writes_pending,
             relations_pending: None,
+            vectors_declared: true,
         }
+    }
+
+    /// **Une entité sans vecteurs déclarés n'est pas « jamais »** : son état
+    /// dit `not_declared`, sa ligne « sans vecteurs (non déclarés) ».
+    #[test]
+    fn une_entite_sans_vecteurs_declares_le_dit() {
+        let mut p = progress(120, 0, None, 0);
+        p.vectors_declared = false;
+        let etat = IndexState::from_progress(&p, 1);
+        assert_eq!((etat.text, etat.vectors), (Level::Ready, Level::NotDeclared));
+        assert_eq!(etat.sparse, Some(SignalState { level: Level::NotDeclared, percent: 0 }));
+        assert!(!etat.running());
+        assert_eq!(serde_json::to_value(etat.vectors).unwrap(), serde_json::json!("not_declared"));
+        assert!(p.line(None, 1).contains("sans vecteurs (non déclarés)"), "{}", p.line(None, 1));
+        assert!(p.complete(), "rien ne manque");
     }
 
     #[test]
