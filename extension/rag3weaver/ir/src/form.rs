@@ -24,12 +24,23 @@ pub struct EdgeExclusion {
     pub values: Vec<String>,
 }
 
+/// Une colonne rendue par un saut.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Column {
+    /// Un champ du nœud atteint.
+    Node(String),
+    /// Un champ de l'arête suivie.
+    Edge(String),
+    /// Une colonne vide, pour garder les positions quand un champ n'est pas
+    /// déclaré (ou qu'une relation ne le porte pas).
+    Null,
+}
+
 /// **Un saut** : depuis une liste d'uuids (le paramètre `$uuids`), suivre une
 /// relation dans un sens, et rendre une ligne par arête suivie.
 ///
-/// Les colonnes rendues, dans cet ordre : l'uuid de départ, puis les champs
-/// du nœud atteint ([`Hop::fields`]), puis ceux de l'arête
-/// ([`Hop::edge_fields`]).
+/// Les colonnes rendues : l'uuid de départ, puis [`Hop::returns`] dans
+/// l'ordre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hop {
     /// La table du nœud de départ (celle des uuids donnés).
@@ -38,8 +49,7 @@ pub struct Hop {
     /// La table du nœud atteint.
     pub end: String,
     pub direction: Direction,
-    pub fields: Vec<String>,
-    pub edge_fields: Vec<String>,
+    pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
 }
 
@@ -51,8 +61,7 @@ impl Hop {
             relation: relation.into(),
             end: end.into(),
             direction,
-            fields: vec!["_uuid".into()],
-            edge_fields: Vec::new(),
+            returns: vec![Column::Node("_uuid".into())],
             exclude: None,
         }
     }
@@ -61,8 +70,10 @@ impl Hop {
     /// tables, relation, champs, et les valeurs écartées.
     pub fn validate(&self) -> Result<(), TranslateError> {
         let mut noms: Vec<&str> = vec![&self.start, &self.relation, &self.end];
-        noms.extend(self.fields.iter().map(String::as_str));
-        noms.extend(self.edge_fields.iter().map(String::as_str));
+        noms.extend(self.returns.iter().filter_map(|c| match c {
+            Column::Node(f) | Column::Edge(f) => Some(f.as_str()),
+            Column::Null => None,
+        }));
         if let Some(x) = &self.exclude {
             noms.push(&x.field);
             noms.extend(x.values.iter().map(String::as_str));

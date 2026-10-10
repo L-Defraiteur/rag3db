@@ -40,6 +40,7 @@ use super::usage_nodes::{rel_info, usages_of, RelInfo, UsagesConfig};
 pub use super::graph_walk::{degree_query, Direction};
 use crate::catalog::{Catalog, CatalogError};
 use crate::connection::{CypherValue, QueryParam};
+use rag3weaver_ir::{Column, Hop};
 
 pub const MAX_DEPTH: usize = 3;
 pub const MAX_BUDGET: usize = 2_000;
@@ -124,10 +125,27 @@ fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
     c.join(", ")
 }
 
-/// Un saut : depuis une liste d'uuid, par une relation, dans un sens.
-pub fn hop_query(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
-    let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
-    format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
+/// Les colonnes du nœud atteint, dans l'ordre de [`champs`] ; une colonne
+/// vide garde la place d'un champ non déclaré.
+fn colonnes(cfg: &NeighborhoodConfig) -> Vec<Column> {
+    let s = &cfg.start;
+    let mut c = vec![Column::Node("_uuid".into()), Column::Node(s.title.clone()), Column::Node(s.kind_field.clone())];
+    c.extend(s.path_fields.iter().map(|p| Column::Node(p.clone())));
+    c.push(Column::Node(s.line_field.clone()));
+    for f in [&cfg.group_by, &cfg.label_field, &cfg.note_field] {
+        c.push(if f.is_empty() { Column::Null } else { Column::Node(f.clone()) });
+    }
+    c
+}
+
+/// Un saut : depuis une liste d'uuid, par une relation, dans un sens ; les
+/// colonnes du nœud atteint, puis la ligne portée par l'arête si la relation
+/// la porte. La requête vient du dialecte.
+pub fn hop_of(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> Hop {
+    let mut hop = super::graph_walk::hop_of(rel, direction, &cfg.start.edge_mark);
+    hop.returns = colonnes(cfg);
+    hop.returns.push(if rel.props.iter().any(|p| p == &cfg.start.line) { Column::Edge(cfg.start.line.clone()) } else { Column::Null });
+    hop
 }
 
 fn texte(v: Option<&CypherValue>) -> String {
@@ -181,7 +199,7 @@ impl Moteur<'_> {
         let liste = CypherValue::List(depuis.iter().map(|u| CypherValue::String(u.clone())).collect());
         let mut out = Vec::new();
         for rel in &self.rels {
-            let q = hop_query(self.cfg, rel, self.cfg.direction);
+            let q = self.catalog.dialect_arc().hop(&hop_of(self.cfg, rel, self.cfg.direction)).map_err(|e| format!("NeighborhoodNode: {e}"))?;
             let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(Self::err)?;
             for r in &rows.rows {
                 let de = texte(r.first());
@@ -212,12 +230,11 @@ impl Moteur<'_> {
         for (i, pas) in cfg.also_path.iter().enumerate() {
             let rel = rel_info(self.catalog, &pas.relation)?;
             let dernier = i + 1 == cfg.also_path.len();
-            let (motif, champ) = (pas.direction.pattern(&rel), "m");
-            let q = if dernier {
-                format!("UNWIND $uuids AS u MATCH {motif} RETURN u, {champ}._uuid, {champ}.{}", cfg.also_same)
-            } else {
-                format!("UNWIND $uuids AS u MATCH {motif} RETURN u, {champ}._uuid")
-            };
+            let mut hop = super::graph_walk::hop_of(&rel, pas.direction, &super::graph_walk::EdgeMark::default());
+            if dernier {
+                hop.returns.push(Column::Node(cfg.also_same.clone()));
+            }
+            let q = self.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
             let liste = CypherValue::List(courant.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
             let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Self::err)?;
             let origine: HashMap<&str, &str> = courant.iter().map(|(u, n)| (u.as_str(), n.as_str())).collect();
@@ -787,6 +804,77 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("limit", Int, false, Some(serde_json::json!(30)), "Lignes par section"),
                 format,
             ],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_saut {
+    use super::*;
+    use crate::dialect::{Rag3dbDialect, SchemaDialect};
+    use super::super::graph_walk::EdgeMark;
+
+    fn cfg(group_by: &str, mark: EdgeMark) -> NeighborhoodConfig {
+        NeighborhoodConfig {
+            start: UsagesConfig {
+                pivot: "Symbol".into(),
+                key: "name".into(),
+                defined_by: None,
+                used_by: None,
+                direct: vec![],
+                group_by: "usage".into(),
+                usages_field: "usages".into(),
+                line: "line".into(),
+                title: "name".into(),
+                kind_field: "kind".into(),
+                path_fields: vec!["file_path".into(), "source".into()],
+                line_field: "start_line".into(),
+                edge_mark: mark,
+            },
+            relations: vec!["CONSUMES".into()],
+            direction: Direction::Incoming,
+            group_by: group_by.into(),
+            label_field: String::new(),
+            note_field: "test_certainty".into(),
+            also_path: vec![],
+            also_same: "name".into(),
+            also_label: String::new(),
+        }
+    }
+
+    /// La requête que `hop_query` écrivait avant de passer par le dialecte.
+    fn requete_d_avant(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
+        let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
+        format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
+    }
+
+    /// Parité : au caractère près, pour les deux sens, avec et sans ligne
+    /// sur l'arête, avec et sans arêtes devinées, champs déclarés ou non.
+    #[test]
+    fn le_saut_du_voisinage_est_la_requete_d_avant() {
+        let mark = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom"}), "N").unwrap();
+        let rels = [
+            RelInfo { name: "CONSUMES".into(), from: "Scope".into(), to: "Scope".into(), props: vec!["usage".into(), "line".into(), "resolution".into()] },
+            RelInfo { name: "TESTS".into(), from: "Test".into(), to: "Scope".into(), props: vec![] },
+        ];
+        for c in [cfg("", EdgeMark::default()), cfg("kind", mark)] {
+            for r in &rels {
+                for d in [Direction::Incoming, Direction::Outgoing] {
+                    assert_eq!(Rag3dbDialect.hop(&hop_of(&c, r, d)).unwrap(), requete_d_avant(&c, r, d));
+                }
+            }
+        }
+    }
+
+    /// Le pas « aussi » : `RETURN u, m._uuid`, et le champ comparé au dernier pas.
+    #[test]
+    fn le_pas_aussi_est_la_requete_d_avant() {
+        let r = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Scope".into(), props: vec![] };
+        for d in [Direction::Incoming, Direction::Outgoing] {
+            let mut h = super::super::graph_walk::hop_of(&r, d, &EdgeMark::default());
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid", d.pattern(&r)));
+            h.returns.push(Column::Node("name".into()));
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid, m.name", d.pattern(&r)));
         }
     }
 }

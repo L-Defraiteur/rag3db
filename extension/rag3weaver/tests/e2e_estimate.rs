@@ -211,6 +211,12 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         boxed.execute("CALL force_checkpoint_on_copy=false").expect("COPY journalisé");
         eprintln!("[mots] COPY journalisé (force_checkpoint_on_copy=false)");
     }
+    // Depuis `ff9bad960` le COPY journalisé est le défaut du moteur :
+    // `RAG3WEAVER_ESTIMATE_COPY_JOURNALISE=0` rend le COPY forcé d'avant.
+    if std::env::var("RAG3WEAVER_ESTIMATE_COPY_JOURNALISE").as_deref() == Ok("0") {
+        boxed.execute("CALL force_checkpoint_on_copy=true").expect("COPY forcé");
+        eprintln!("[mots] COPY forcé (force_checkpoint_on_copy=true)");
+    }
     eprintln!("[mots] point de reprise automatique : {auto_checkpoint} ; seuil : {:?}", std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok());
     // Les points de reprise réellement posés, comptés par la taille du
     // journal : elle ne retombe que quand le moteur le replie (le guetteur de

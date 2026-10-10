@@ -1068,8 +1068,11 @@ impl SchemaDialect for Rag3dbDialect {
             None => String::new(),
         };
         let colonnes: Vec<String> = std::iter::once("u".to_string())
-            .chain(hop.fields.iter().map(|f| format!("m.{f}")))
-            .chain(hop.edge_fields.iter().map(|f| format!("r.{f}")))
+            .chain(hop.returns.iter().map(|c| match c {
+                rag3weaver_ir::Column::Node(f) => format!("m.{f}"),
+                rag3weaver_ir::Column::Edge(f) => format!("r.{f}"),
+                rag3weaver_ir::Column::Null => "NULL".to_string(),
+            }))
             .collect();
         Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}", colonnes.join(", ")))
     }
@@ -2775,11 +2778,12 @@ mod tests {
         assert_eq!(Rag3dbDialect.hop(&h).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-(m:Scope) RETURN u, m._uuid");
         h.exclude = Some(EdgeExclusion { field: "resolution".into(), values: vec!["nom".into(), "import".into()] });
         h.direction = Direction::Outgoing;
-        h.fields.push("name".into());
-        h.edge_fields.push("resolution".into());
+        h.returns.push(rag3weaver_ir::Column::Node("name".into()));
+        h.returns.push(rag3weaver_ir::Column::Null);
+        h.returns.push(rag3weaver_ir::Column::Edge("resolution".into()));
         assert_eq!(
             Rag3dbDialect.hop(&h).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, r.resolution"
+            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, NULL, r.resolution"
         );
         assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
