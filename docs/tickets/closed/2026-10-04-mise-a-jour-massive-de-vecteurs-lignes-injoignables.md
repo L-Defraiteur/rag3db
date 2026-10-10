@@ -1,6 +1,6 @@
 # Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index
 
-- **État** : ouvert
+- **État** : corrigé le 11 octobre 2026 par le commit « vector: la mise à jour de vecteurs ne perd plus de lignes » (deux défauts : le contrôle n'entrait pas comme une requête, et l'insertion d'une ligne mise à jour partait d'elle-même)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : peu. Son chemin principal, des lignes créées sans vecteur puis remplies, est vert ; seul le réembarquement d'une ligne gardée passe par ce défaut, et rag3weaver repasse par NULL ligne à ligne, ce qui est vert
@@ -75,6 +75,24 @@ D'après la session cœur C++ : l'élagage des voisins retire des arêtes entran
 que personne ne recontrôle. Il faudrait un passage en fin d'instruction, comme le
 `finalize` de la suppression. L'état de mise à jour de l'index est aujourd'hui recréé à
 chaque ligne.
+
+## Cause trouvée (11 octobre)
+
+L'hypothèse de la section précédente, un passage en fin d'instruction, a été écrite et mesurée,
+puis écartée : elle fait régresser le ligne à ligne de ×7 à ×13 (branche
+`essai-fin-d-instruction-maj`). Les pertes venaient de deux défauts :
+1. `keepNodeReachable` cherchait le nœud depuis le point d'entrée de la couche basse, alors
+   qu'une requête entre par la couche haute. Les lignes d'une même mise à jour, regroupées,
+   formaient un îlot dans lequel une ligne restait introuvable.
+2. `insertInternal`, pour une ligne mise à jour, descendait jusqu'à la ligne elle-même, qui
+   venait de perdre ses arêtes : elle revenait sans aucune arête.
+
+Le détail et les comptes sont au §9 de la page 04 du banc
+(`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/04-la-mise-a-jour-de-vecteurs.md`).
+Les quatre rouges connus passent au vert à chaque essai. `SetToAnotherVectorLineByLine` est vert
+sur vingt essais (2 sur 5 perdaient sur la base) et sort des probabilistes.
+`TenThousandRowsInBatchesOf512` y reste jusqu'à sa mesure. `TwentyRowsToTheSameVectorInOneStatement`
+relève des groupes de copies, son propre sujet.
 
 ## Correctif de l'amont (à lire, ne pas copier)
 

@@ -89,19 +89,6 @@ IndexLockBench.BlockWriterWaitsForTheIndexThenCommitsOrGetsSerializationError wa
 # (fragment « is behind its table »). Ses témoins IndexToRebuildIsNamed retirent la liste
 # avant de rouvrir.
 #
-# Marche « mise à jour de l'index : contrôle en fin d'instruction » (index vectoriel juste
-# en service, hors des verrous ; vector_index_update_test.cpp). Un seul écrivain, ni arrêt ni
-# rejeu : après une mise à jour de vecteurs, une recherche exhaustive ne rend plus toutes les
-# lignes, ou une ligne n'est pas rendue première sur son propre vecteur. Après c8fdaf196 (les
-# anciens voisins restent joignables), un essai sur deux environ perd encore des lignes :
-# chaque cas répète assez d'essais pour rougir à chaque passe (4 octobre, trois passes).
-# Ces cas sont longs (long.txt) : comparés seulement avec CONCURRENCE_LONG=1.
-# Le chemin du produit (depuis NULL, et le remplacement qui repasse par NULL) est vert.
-VectorIndexUpdate.SetToAnotherVectorInBatchesOf512 vector-index-exact
-VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine vector-index-exact
-VectorIndexUpdate.OneRowUpdatedManyTimes vector-index-exact
-VectorIndexUpdate.UpdateThenDelete vector-index-exact
-#
 # Marche « correctifs de l'amont à reprendre » (upstream_fixes_test.cpp, revue du 4 octobre) :
 # des défauts hérités de Kuzu que Ladybug (tag ladybug-main-2026-08-31) ou Vela (tag
 # vela-master-2026-09-03) ont corrigés. Le commit de l'amont est nommé dans chaque cas ; on le

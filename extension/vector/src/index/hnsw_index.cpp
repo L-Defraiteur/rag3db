@@ -947,18 +947,29 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
         return;
     }
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
-    auto entryPoint = hnswStorageInfo.lowerEntryPoint;
-    if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
-        entryPoint = findLiveNode(transaction, insertState.searchState, offset);
-    }
-    if (entryPoint == common::INVALID_OFFSET) {
-        return; // it is the only node left
-    }
     auto& searchState = insertState.searchState;
     const auto vector =
         searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState);
     if (vector.isNull()) {
         return;
+    }
+    // Enter the lower layer where a query for this vector enters it: through the upper layer.
+    // Reachable from the lower entry point is not enough. The rows of one update gather around
+    // their new vectors, and their edges point to each other: a query that lands among them
+    // stays there, and a row they do not point to is lost to it (« 9 results » for k = 30 and
+    // efs = 1000 in TwentyRowsToDistinctVectorsLineByLine, the row reachable all the same).
+    auto entryPoint = searchNNInUpperLayer(vector, searchState);
+    if (entryPoint == offset) {
+        return; // the query starts on it
+    }
+    if (entryPoint == common::INVALID_OFFSET) {
+        entryPoint = hnswStorageInfo.lowerEntryPoint;
+    }
+    if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
+        entryPoint = findLiveNode(transaction, insertState.searchState, offset);
+    }
+    if (entryPoint == common::INVALID_OFFSET) {
+        return; // it is the only node left
     }
     // The test is the one that matters: search for the node's own vector from the entry point.
     // Having an edge pointing to it would not be enough — two survivors may point to each other
@@ -1239,7 +1250,15 @@ void OnDiskHNSWIndex::insertInternal(Transaction* transaction, common::offset_t 
     insertState.pendingOffset = offset;
     insertState.pendingVector = &vector;
     // Search fow lower layer entry point.
-    const auto entryPoint = searchNNInUpperLayer(vector, insertState.searchState);
+    auto entryPoint = searchNNInUpperLayer(vector, insertState.searchState);
+    if (entryPoint == offset) {
+        // An updated row: the edges of other nodes still lead to it, and its new vector is the
+        // target, so the upper layer leads to the row itself. Its own edges were just removed:
+        // a search from it finds nothing else, and the row came back without a single edge
+        // (OneRowUpdatedManyTimes: a query that entered on it returned it alone). Start from
+        // the lower entry point instead.
+        entryPoint = common::INVALID_OFFSET;
+    }
     insertToLayer(transaction, offset, entryPoint, vector, insertState, false /*isUpperLayer*/);
     // Search the lower layer to insert new vector.
     const auto rand = randomEngine.nextRandomInteger(INSERT_TO_UPPER_LAYER_RAND_UPPER_BOUND);

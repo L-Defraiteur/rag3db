@@ -29,6 +29,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
@@ -58,7 +59,6 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
 | [Un COPY de relations annulé laisse gonflée l'estimation du nombre de relations](2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md) | ouvert, confort | estimation fausse | oui | non |
 | [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (`_index_blobs`, contourné) |
-| [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | ouvert | réponse fausse | oui | peu |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (usages, Liens, impact) |
@@ -75,10 +75,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
-### Fermés (54), dans `closed/`
+### Fermés (55), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | corrigé (11 oct.) | réponse fausse | oui | peu |
 | [Une entité au nom réservé (« Order ») casse l'ouverture du backend, au lieu d'être refusée au chargement](closed/2026-10-11-une-entite-au-nom-reserve-casse-l-ouverture.md) | corrigé `56079f1cb` | blocage | oui | oui (DDL des entités) |
 | [« duplicate node name: sparse » à la première recherche de test_backend_sparse](closed/2026-10-10-duplicate-node-name-sparse-par-la-fixture.md) | corrigé `413e7ba93` | réponse fausse (un rouge de fixture pris pour un défaut du moteur) | non — fixture de suite seulement | oui — tests seulement, plus le filet des 31 fiches d'outils |
 | [Un NULL en tête d'une liste de paramètres type sa colonne en STRING](closed/2026-10-04-null-en-tete-d-une-liste-de-parametres-type-string.md) | corrigé (11 octobre) | perte | oui | oui, par `LinkRecordNode` |

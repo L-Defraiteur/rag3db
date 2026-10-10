@@ -1,7 +1,7 @@
 # La mise à jour de vecteurs dans l'index HNSW — une page avant le code
 
 5 octobre 2026, session du banc. Ticket :
-`docs/tickets/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`. Cette page
+`docs/tickets/closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`. Cette page
 s'appuie sur une lecture de l'extension vector et des opérateurs SET et DELETE, à `31ad712c5`
 (**[lu]** : vu dans le code ; **[déduit]** : tiré de cette lecture, non exécuté).
 
@@ -217,3 +217,64 @@ vient de relier.
 **Une remarque du cœur C++ pour l'étape 3** (relecture du 10 octobre) : la même question qu'à
 l'étape 1 se pose à `NodeTable::delete_`. Une ligne locale supprimée avant le COMMIT n'a jamais
 été dans l'index vectoriel, et `index->delete_` sur elle est au mieux un non-sens silencieux.
+
+## 9. La cause, et pourquoi la fin d'instruction n'est pas retenue (11 octobre, nuit)
+
+**Le crochet du §4 a été écrit et mesuré, puis écarté.** Il est complet : `Index::finalizeUpdate`,
+appelé par SET et MERGE à l'épuisement de l'enfant, et au rejeu juste avant le COMMIT de la
+transaction rejouée. Côté HNSW, l'heuristique par ligne de `110a65f15` est retirée, et les nœuds
+qui perdent une arête entrante sont recontrôlés une fois en fin d'instruction. Il est gardé sur la
+branche `essai-fin-d-instruction-maj` (`a67594b48`), sans fusion. Deux variantes ont été mesurées :
+« pertes seules » (les anciens voisins et les nœuds écartés par l'élagage) et « union » (avec en
+plus les lignes mises à jour).
+
+| | base `7f6d77bf6` | fin d'instruction |
+|---|---|---|
+| `SetFromNullLineByLine` | 79 s | 592 s |
+| `SetToAnotherVectorLineByLine` | 108 s | 1 371 s |
+
+En ligne à ligne, l'union d'une instruction se réduit aux pertes d'une seule ligne, et chaque nœud
+y reçoit une recherche complète. C'est le coût que l'heuristique par ligne évitait. Seul le mode
+par lots en profite. Le crochet est à reprendre si ce mode le demande un jour.
+
+Le premier bâti vidait aussi, à chaque instruction, les élagages différés (l'étape 3.1 du §4).
+L'insertion ne le fait jamais : `commitInsert` laisse un nœud dépasser son degré jusqu'au seuil.
+Vider à chaque instruction brassait les arêtes en mémoire, ce qu'un profil gdb a montré (lectures
+de `CSRNodeGroup::scanCommittedInMem`, COMMIT dans `updateCSRIndex`).
+`AThousandUpdatesInOneBlock` tombait alors sur « buffer pool full » à la 845e instruction.
+L'étape 3.1 du §4 était donc fausse.
+
+**Les rouges venaient de deux défauts, que les comptes des essais perdants ont montrés.**
+
+1. **Le contrôle ne passait pas par le chemin d'une requête.** `keepNodeReachable` cherchait le
+   nœud depuis le point d'entrée de la couche basse. Une requête, elle, descend d'abord par la
+   couche haute. Les lignes d'une même mise à jour se rassemblent autour de leurs nouveaux
+   vecteurs et pointent les unes vers les autres. Une requête qui entre parmi elles y reste, et
+   une ligne qu'elles ne désignent pas lui est perdue, alors qu'elle reste joignable depuis le
+   point d'entrée. Sur master, `TwentyRowsToDistinctVectorsLineByLine` le montrait : « row 104
+   not first; nearest: 105@2 … (9 results) » pour k = 30 et efs = 1000. Le contrôle entre
+   maintenant comme la requête.
+2. **L'insertion d'une ligne mise à jour partait de la ligne elle-même.** `insertInternal`
+   descend la couche haute vers le nouveau vecteur. Les arêtes des autres nœuds mènent encore à
+   la ligne, et son nouveau vecteur est la cible : la descente aboutit sur elle. Or
+   `deleteFromGraph` venait de lui retirer ses arêtes. La recherche ne trouvait donc qu'elle, et
+   la ligne revenait sans aucune arête. C'est `OneRowUpdatedManyTimes` : « 1 result », la ligne
+   500 seule, dans 19 essais sur 20. L'insertion repart maintenant du point d'entrée de la
+   couche basse.
+
+Avec ces deux correctifs seuls, sur la structure de master (heuristique par ligne, aucun crochet),
+voici les résultats. Le tableau compte les essais qui perdent des lignes.
+
+| témoin | base | correctifs |
+|---|---|---|
+| `SetToAnotherVectorInBatchesOf512` | 1 / 10 | 0 / 10 |
+| `TwentyRowsToDistinctVectorsLineByLine` | 8 / 20 | 0 / 20 |
+| `OneRowUpdatedManyTimes` | 19 / 20 | 0 / 20 |
+| `UpdateThenDelete` | 4 / 10 | 0 / 10 |
+| `SetToAnotherVectorLineByLine` | 2 / 5 | 0 / 5 |
+
+Les durées du ligne à ligne restent celles de la base : `SetFromNullLineByLine` prend 76 s contre
+79 s.
+
+Le §5 supposait que les pertes venaient du contrôle fait ligne par ligne sur un graphe qui bouge.
+C'était faux : les deux défauts seuls suffisent à les expliquer.
