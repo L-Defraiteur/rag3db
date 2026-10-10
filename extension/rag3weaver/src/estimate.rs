@@ -71,15 +71,26 @@ impl BufferCheck {
 /// clair. Un choix sans octets est le défaut du moteur : 80 % de la mémoire
 /// du poste.
 pub fn buffer_pool_of(choice: crate::connection::BufferPoolChoice) -> (u64, String) {
-    let bytes = choice.bytes.unwrap_or_else(|| {
-        let total = std::fs::read_to_string("/proc/meminfo")
-            .ok()
-            .and_then(|m| m.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok())))
-            .map(|kb| kb * 1024)
-            .unwrap_or(0);
-        total / 10 * 8
-    });
-    (bytes, crate::connection::describe_buffer_pool(choice))
+    // Sans octets choisis, le moteur prendra 80 % de la mémoire vive : on
+    // la lit ici, et on dit d'où — un « 0,0 Gio » muet a fait refuser un
+    // index sous macOS (10 octobre 2026) sans dire que la lecture manquait.
+    let lue = crate::connection::total_memory();
+    let bytes = choice.bytes.unwrap_or_else(|| lue.unwrap_or(0) / 10 * 8);
+    let description = match (choice.bytes, lue) {
+        (Some(_), _) => crate::connection::describe_buffer_pool(choice),
+        (None, Some(total)) => format!(
+            "{}, mémoire vive lue : {:.1} Gio par {}",
+            crate::connection::describe_buffer_pool(choice),
+            total as f64 / (1u64 << 30) as f64,
+            crate::connection::total_memory_source()
+        ),
+        (None, None) => format!(
+            "{}, mémoire vive inconnue : {}",
+            crate::connection::describe_buffer_pool(choice),
+            crate::connection::total_memory_source()
+        ),
+    };
+    (bytes, description)
 }
 
 /// Le tampon qu'une connexion ouverte par ce processus prendrait, sans

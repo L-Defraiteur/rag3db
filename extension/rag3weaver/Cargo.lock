@@ -6504,6 +6504,7 @@ dependencies = [
  "jsonschema",
  "landlock",
  "ld-lucivy",
+ "libc",
  "log",
  "lucivy-core",
  "minijinja",
@@ -6528,6 +6529,7 @@ dependencies = [
  "tokio-postgres",
  "ureq 3.4.0",
  "wgpu",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

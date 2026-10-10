@@ -298,6 +298,11 @@ jobs:
         run: |
           mkdir -p dist/darwin-arm64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
           cp /tmp/rs/release/rag3weaver-backend dist/darwin-arm64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          # strip -x : les symboles locaux et de débogage partent, les globaux
+          # (que les extensions résolvent par dlopen) restent.
+          echo "avant strip : $(stat -f %z dist/darwin-arm64/rag3weaver-backend) octets"
+          strip -x dist/darwin-arm64/rag3weaver-backend
+          echo "après strip -x : $(stat -f %z dist/darwin-arm64/rag3weaver-backend) octets"
           ls -la dist/darwin-arm64/; file dist/darwin-arm64/rag3weaver-backend; otool -L dist/darwin-arm64/rag3weaver-backend
           python3 - <<'PY'
           import json, os

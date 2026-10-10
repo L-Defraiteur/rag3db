@@ -141,6 +141,81 @@ pub struct BufferPoolChoice {
 
 /// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
 /// rapport.
+/// La mémoire vive du poste, en octets : `MemTotal` de `/proc/meminfo` sous
+/// Linux, `hw.memsize` sous macOS, `GlobalMemoryStatusEx` sous Windows.
+/// `None` quand on ne sait pas : la règle ne joue pas, le moteur choisit.
+/// (Le paquet npm sous macOS, 10 octobre 2026 : sans ce repli, « 0,0 Gio »
+/// et l'index refusé.)
+pub fn total_memory() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
+        let ligne = meminfo.lines().find(|l| l.starts_with("MemTotal:"))?;
+        let kio: u64 = ligne.split_whitespace().nth(1)?.parse().ok()?;
+        Some(kio * 1024)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let mut octets: u64 = 0;
+        let mut taille = std::mem::size_of::<u64>();
+        let nom = c"hw.memsize";
+        // SAFETY: `nom` est une chaîne C valide ; `octets` et `taille` sont
+        // des emplacements valides de la taille annoncée.
+        let code = unsafe {
+            libc::sysctlbyname(
+                nom.as_ptr(),
+                &mut octets as *mut u64 as *mut libc::c_void,
+                &mut taille,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        (code == 0 && octets > 0).then_some(octets)
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        // SAFETY: la structure est zéro-initialisée, sa longueur renseignée
+        // comme l'API le demande, et elle reste valide pendant l'appel.
+        let mut etat: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+        etat.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        let ok = unsafe { GlobalMemoryStatusEx(&mut etat) } != 0;
+        (ok && etat.ullTotalPhys > 0).then_some(etat.ullTotalPhys)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+    {
+        None
+    }
+}
+
+
+/// D'où `total_memory` lit la mémoire vive sur ce système — pour que le
+/// message qui s'en sert dise sa source.
+pub fn total_memory_source() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "/proc/meminfo"
+    } else if cfg!(target_os = "macos") {
+        "sysctl hw.memsize"
+    } else if cfg!(windows) {
+        "GlobalMemoryStatusEx"
+    } else {
+        "aucune lecture sur ce système"
+    }
+}
+
+#[cfg(test)]
+mod memoire_vive {
+    /// Sur l'hôte des tests (Linux, macOS ou Windows), la mémoire vive se
+    /// lit et vaut plus que zéro : sinon le tampon du moteur part de 0 et
+    /// l'index se refuse (le paquet npm sous macOS, 10 octobre 2026).
+    #[test]
+    fn la_memoire_vive_se_lit_sur_l_hote() {
+        let lue = super::total_memory();
+        assert!(lue.is_some_and(|o| o > 0), "mémoire vive non lue ({}) : {lue:?}", super::total_memory_source());
+        assert!(lue.unwrap() >= 256 << 20, "moins de 256 Mio lus : {lue:?}");
+    }
+}
+
 pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
     let source = match choice.source {
         BufferPoolSource::Environment => "RAG3DB_BUFFER_POOL_SIZE",

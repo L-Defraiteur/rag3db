@@ -738,7 +738,7 @@ pub fn buffer_pool_choice(manifest: Option<u64>) -> BufferPoolChoice {
     if let Some(v) = manifest {
         return BufferPoolChoice { bytes: Some(v), source: BufferPoolSource::Manifest };
     }
-    choice_by_rule(total_memory())
+    choice_by_rule(crate::connection::total_memory())
 }
 
 fn choice_by_rule(total_memory: Option<u64>) -> BufferPoolChoice {
@@ -746,15 +746,6 @@ fn choice_by_rule(total_memory: Option<u64>) -> BufferPoolChoice {
         Some(ram) => BufferPoolChoice { bytes: Some((ram / 2).min(BUFFER_POOL_RULE_MAX)), source: BufferPoolSource::Rule },
         None => BufferPoolChoice { bytes: None, source: BufferPoolSource::EngineDefault },
     }
-}
-
-/// La mémoire vive du poste, en octets (`MemTotal` de `/proc/meminfo`).
-/// `None` hors de Linux : la règle ne joue pas, le moteur choisit.
-fn total_memory() -> Option<u64> {
-    let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
-    let ligne = meminfo.lines().find(|l| l.starts_with("MemTotal:"))?;
-    let kio: u64 = ligne.split_whitespace().nth(1)?.parse().ok()?;
-    Some(kio * 1024)
 }
 
 // ─── Une instance en écriture par base et par processus ───────────────────
