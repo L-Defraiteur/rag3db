@@ -43,10 +43,11 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | Le rapport des trous | codeparsers `9b1460d`, page `02-les-trous-classes-par-cout.md` | `--trous` : chaque non-résolue rangée par forme, pondérée par son coût pour les outils (storage/transaction pèse double). Premier coût partout : la méthode sur un receveur non typé. L'IR en cinquième référence. |
 | Le préprocesseur | codeparsers `75edad9` | Une ligne de directive (`#pragma`, `#include`, `#define`, `#if`, suite `\`) ne nomme rien en C/C++ ; le `#include` reste un import. rag3db src : non-résolues 100 813 → 86 796, imports reliés 10,1 → 34,4 % (entre fichiers 24,9 → 99,3 %). `banc/comparer.sh` : la vérification se fait avant / après sur le même corpus (une ligne fixe faisait « reculer » un dépôt qui grossit). |
 | B2a — les receveurs C++ dans le fichier | codeparsers `876f606` | Pointeurs intelligents traversés ; fabriques et conversions (`make_unique<T>`, `cast<T>()`, `static_cast<T*>`…) rendent `T`. Témoin `tests/receveurs_cpp.rs` (8 formes). rag3db src : appels reliés entre fichiers 35,0 → 39,2 %. Appelants de `NodeTable::update` (`--appelants`) : 0 → 1 entre fichiers. |
+| Les champs C++ | codeparsers `e8e2893` | Un champ de classe en pointeur ou référence (`NodeTable* table;`) n'était pas relevé ; il l'est avec son type (champ `type` du nœud, déclarateurs déballés, `int a, b` en donne deux). rag3db src : appels reliés entre fichiers 39,2 → 40,3 %. |
+| B2b — les types différés au rendez-vous (B1) | rag3db, branche `types-differes` (`5a14bd842` pointeur e8e2893, `d9b3e1408` code.rs +175), proposée à l'arbre principal | `field_types` et `return_type` sur Scope, `deferred` sur MENTIONS, résolus à la matérialisation en `qualifier_types`. Témoin `e2e_types_differes` : les trois formes réelles des appelants de `NodeTable::update`, rouge (deux sur trois) puis vert. Pas de mode entre fichiers dans codeparsers : le graphe ne dépend pas du paquet. |
 
 ## Suite
 
-B2b — les types différés au rendez-vous (réponse à B1, validée : pas de mode
-entre fichiers dans codeparsers, le graphe ne dépendrait plus seulement du
-dépôt mais du paquet) : `FieldOf` / `ReturnOf` portés par MENTIONS, résolus
-à la matérialisation (code.rs, proposé à l'arbre principal). Puis B3, LOCKS.
+B2b attend sa fusion par l'arbre principal. B3, LOCKS : une relation d'un
+scope vers le champ mutex qu'il verrouille (gardes RAII, `.lock()`),
+`Classe::champ` résolu à la matérialisation comme les types différés.
