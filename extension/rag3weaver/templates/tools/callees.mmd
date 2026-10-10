@@ -1,5 +1,5 @@
 %% tool: callees
-%% description: Ce que ce nom appelle et utilise, directement puis à deux ou trois sauts — le chemin qu'il emprunte, avec fichier:ligne — et les verrous pris en route (Classe::champ). À prendre pour savoir où se fait réellement un travail ou où se prend un verrou que l'appelant ne tient pas ; impact dit l'autre sens (qui en dépend). Une fonction qui appelle de tout est montrée mais pas traversée. Un nom défini plusieurs fois part de toutes ses définitions ; `path` restreint celles qu'on regarde.
+%% description: Ce que ce nom appelle et utilise, directement puis à deux ou trois sauts — le chemin qu'il emprunte, avec fichier:ligne — et les verrous pris en route (un mutex Classe::champ, ou une fonction de verrou déclarée par le dépôt). À prendre pour savoir où se fait réellement un travail ou où se prend un verrou que l'appelant ne tient pas ; impact dit l'autre sens (qui en dépend). Une fonction qui appelle de tout est montrée mais pas traversée. Un nom défini plusieurs fois part de toutes ses définitions ; `path` restreint celles qu'on regarde.
 %% param: name string! -- Le nom de la fonction ou de la méthode dont on suit les appels.
 %% param: path string = "" -- Ne partir que des définitions sous ce chemin (préfixe de fichier).
 %% param: depth int = 2 -- Sauts suivis, de 1 à 3.
@@ -8,7 +8,7 @@
 %% result: callees.result
 
 graph LR
-    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, include_by_name=$include_by_name, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin (Classe::champ)')"]
+    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, include_by_name=$include_by_name, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin')"]
 
 %% Le voisinage d'`impact` dans l'autre sens : les `CONSUMES` **sortants**
 %% — ce que le départ appelle ou utilise —, puis ce que ceux-là appellent.
@@ -16,6 +16,7 @@ graph LR
 %% supplémentaire. Les arêtes devinées (`resolution = nom`) ne sont pas
 %% suivies : seul le chemin sûr est rendu. La même section des verrous
 %% qu'`impact` (`collect='LOCKS>'`) : pour le départ et chaque scope
-%% atteint, les mutex qu'il verrouille. C'est cette vue qui a dit où
+%% atteint, les verrous qu'il prend (mutex `Classe::champ`, ou fonction de
+%% verrou déclarée par le dépôt, `workspace.locks_via`). C'est cette vue qui a dit où
 %% `NodeTable::update` prend son verrou (lockKeyOfRow → lockKeyOf →
 %% acquireLock), alors qu'aucun appelant n'en tenait (11 oct. 2026).

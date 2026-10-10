@@ -34,7 +34,7 @@ fn appelants_de_node_table_update_et_verrous() {
     cat.initialize().unwrap();
     register_code_schema(&mut cat, default_scope_chunking()).unwrap();
     // Les fonctions de verrou applicatives, comme un manifeste les déclare
-    // (`workspace.locks_via`) : `SONDE_LOCKS_VIA=acquireLock,lockKeyOf`.
+    // (`workspace.locks_via`) : `SONDE_LOCKS_VIA=acquireLock,acquireLocks,lockRowForWrite`.
     let locks_via: Vec<String> =
         std::env::var("SONDE_LOCKS_VIA").unwrap_or_default().split(',').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect();
     eprintln!("[sonde] fonctions de verrou déclarées : {locks_via:?}");
