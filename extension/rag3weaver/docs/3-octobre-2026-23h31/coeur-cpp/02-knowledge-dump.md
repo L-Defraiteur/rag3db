@@ -352,6 +352,15 @@ Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), 
   tient un fil ouvrier — son délai de 5 s en est le filet.
 - **Le banc tolère l'attente** : `writeInTurn` / `commitInOrderByEvents` ont des délais de
   « settle », pas d'échec ; `holderAndWaiter` a maintenant `waiterRollsBack`.
+- **A4′ (10 octobre, nuit)** : `NodeTable::lockRowForWrite(transaction, offset, key)` prend la clé
+  en exclusif puis `throwIfWrittenByAnotherCommitAfterSnapshot` ; `lockKeyOfRow` relit la clé
+  par le décalage ; `RelTable::lockEndpoints(transaction, src, dst, mode)` pour les deux
+  extrémités (partagé à la création, exclusif à l'écriture) puis
+  `throwIfDeletedByAnotherCommitAfterSnapshot` ; `Transaction::LatestCommittedView` pour lire le
+  dernier état validé le temps d'un balayage (DELETE, DETACH DELETE). « Validé après mon
+  instantané » = `startTS < version < START_TRANSACTION_ID` dans les chaînes d'`UpdateInfo` et
+  les `VersionInfo` (`ChunkedNodeGroup::wasWrittenByCommitAfter`). Le tableau des sémantiques :
+  page 07 §0.
 - **Fabriquer un état que le moteur ne produit plus** : programme nu contre la bibliothèque
   d'AVANT, gardé au dépôt avec sa base et son journal (`journal_with_duplicate_key/`), comme
   `journal_before_raw_arrays/`. Le faire **avant** de rebâtir.

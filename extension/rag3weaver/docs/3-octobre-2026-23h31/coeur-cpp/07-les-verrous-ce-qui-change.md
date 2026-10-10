@@ -8,6 +8,22 @@ transitoire après attente ; une relation : verrou partagé sur ses extrémités
 rouvre ; cette page dit ce que chaque marche **branche** dans le moteur, dans quel ordre, et
 ce qu'elle prouve. **[lu]** : lu dans le code à `ff9bad960` ; **[déduit]** : raisonné.
 
+## 0. Les sémantiques retenues, d'un coup d'œil (A3′ faite, A4′ en cours — 10 octobre 2026)
+
+Sous le mode multi-écrivains seulement (éteint hors du banc). Les lignes suivent PostgreSQL en
+lecture répétable ; le détachement suit Neo4j. C'est un mélange, assumé, et le voici en clair.
+
+| Opération | Verrou (jusqu'à la fin de la transaction) | Après l'attente, si un autre a validé entre-temps | Comme |
+|---|---|---|---|
+| insertion d'un nœud | index de la table en partagé, clé en exclusif | la même clé validée : `duplicated primary key` ; annulée : l'insertion passe | PostgreSQL |
+| `COPY` de nœuds | index de la table en exclusif, pris sur le fil du client avant l'ordonnancement | — | (le COPY écrit dans les blocs avant de valider) |
+| mise à jour, suppression d'un nœud validé | la clé en exclusif | une écriture validée de la ligne après l'instantané (colonne ou suppression) : `could not serialize access due to concurrent update`, l'appelant annule et rejoue | PostgreSQL (lecture répétable, option A) |
+| création d'une relation | les deux extrémités en partagé (un nœud de la transaction : rien) | une extrémité supprimée et validée après l'instantané : `could not serialize…` | Neo4j (les nœuds), PostgreSQL (l'erreur) |
+| suppression, mise à jour d'une relation validée | les deux extrémités en exclusif | une extrémité supprimée : `could not serialize…` ; la relation elle-même déjà écrite : `Write-write conflict` (ticket du 10 octobre) | Neo4j |
+| `DELETE` d'un nœud (sans `DETACH`) | la clé en exclusif | une relation attachée et validée après l'instantané compte : refus `has connected edges` | une contrainte, pas une sérialisation |
+| `DETACH DELETE` d'un nœud | la clé en exclusif | les relations validées après l'instantané sont **détachées aussi** : la transaction détache ce qu'elle n'a pas vu à son instantané | Neo4j (lecture validée), pas PostgreSQL |
+| lecture | rien | — | PostgreSQL, Neo4j |
+
 ## 1. Ce qui existe déjà : V1, le gestionnaire seul (`022c78402`)
 
 `src/transaction/lock_manager.{h,cpp}` **[lu]** : des ressources de deux genres (`ROW` : une
@@ -166,3 +182,46 @@ Ce qu'A3′ ne fait pas : la reprise d'un journal à doublon (il ne peut plus na
 d'avant est gardé au dépôt, `test/transaction/journal_with_duplicate_key`, et son témoin reste
 rouge pour la même raison qu'avant) ; le COPY de relations ; les mises à jour, suppressions et
 relations (A4′).
+
+## 6. A4′ : câblée (10 octobre 2026, nuit) — ce que le code a appris de plus que la page
+
+Le câblage est celui du §2, relu par le banc, avec le tableau du §0 pour les sémantiques.
+Ce que la page ne disait pas, trouvé en codant **[lu, mesuré par le filtre A4′ du banc sur
+luciepc : 30 de ses 33 témoins verts au premier jet, les 3 autres attendent le nouveau nom de
+leur refus]** :
+
+- **La mise à jour ne connaît pas sa clé.** `NodeTable::update` reçoit un décalage, jamais la
+  clé ; la ressource de verrou est la clé (A3′). Elle est relue dans la colonne de clé par un
+  `lookup` d'une ligne (`NodeTable::lockKeyOfRow`), une lecture par ligne mise à jour sous le
+  mode multi-écrivains, rien hors de lui. La suppression a sa clé dans son état
+  (`NodeTableDeleteState::pkVector`, lue par le planificateur pour l'index).
+- **« Validé après mon instantané » se lit dans les chaînes de versions**, sans accesseur
+  nouveau au niveau des lignes : une version de mise à jour validée garde son horodatage
+  (`UpdateInfo::commit`), un identifiant de transaction est toujours supérieur au premier
+  identifiant (`START_TRANSACTION_ID`) ; donc « validée après moi » = `startTS < version <
+  START_TRANSACTION_ID`, par colonne et par vecteur (`UpdateInfo::hasCommittedUpdateAfter`),
+  remonté par `ColumnChunk`, `ChunkedNodeGroup::wasWrittenByCommitAfter` (toutes les colonnes,
+  plus la suppression : `isDeleted(LATEST) && !isDeleted(startTS)`) et `NodeGroup`. Les
+  « Write-write conflict » d'avant ne regardaient que la colonne écrite : c'est pour ça que deux
+  colonnes de la même ligne validaient toutes les deux (SameRowTwoColumns).
+- **Les extrémités d'une relation se verrouillent par la clé de leurs nœuds**, relue par le
+  décalage dans la table de nœuds (`StorageManager::getTable(nodeID.tableID)`), en une prise
+  groupée des deux ; un nœud de la transaction (décalage provisoire) n'est pas verrouillé. Le
+  nœud-carrefour (huit écrivains) ne fait attendre personne : 26 ms.
+- **La vue du dernier état validé est une portée sur la transaction**
+  (`Transaction::LatestCommittedView` : `startTS` remplacé par `LATEST_COMMITTED_TS` le temps
+  d'un balayage, sur le fil qui écrit). Elle sert au `DELETE` (`throwIfNodeHasRels`) et au
+  `DETACH DELETE` (le balayage des relations) ; elle évite de faire passer un couple
+  (startTS, identifiant) à travers tout le code de balayage. Ses limites : le fil qui la tient
+  lit tout au dernier état validé pendant ce temps ; une instruction d'écriture s'exécute sur
+  un seul fil, c'est ce qui la rend sûre.
+- **Le choix de Neo4j pour le détachement** : avec le nœud tenu en exclusif, plus aucune
+  relation ne peut s'y attacher (l'insertion prend l'extrémité en partagé) ; celles validées
+  entre l'instantané et la prise sont détachées aussi. **La transaction qui détache peut donc
+  détacher une relation qu'elle n'a pas vue à son instantané.** C'est la lecture validée de
+  Neo4j, pas l'instantané de PostgreSQL (qui aurait levé une erreur de sérialisation) ; le rejeu,
+  qui rejoue dans l'ordre des validations, détache la même chose.
+- **Ce qui reste nommé** : la relation elle-même déjà écrite par un autre (seconde suppression
+  après attente) reçoit encore « Write-write conflict », pas l'erreur de sérialisation — ticket
+  du 10 octobre ; le contrôle demanderait `CSRNodeGroup::wasWrittenByCommitAfter` par
+  `findMatchingRow`.
