@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <optional>
 
@@ -27,6 +28,7 @@
 #include "processor/expression_mapper.h"
 #include "storage/file_db_id_utils.h"
 #include "storage/local_storage/local_rel_table.h"
+#include "storage/readers_lock.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
@@ -200,8 +202,9 @@ void WALReplayer::throwIfCheckpointCrossedReadOnlyOpen(const ReadOnlyOpenIdentit
     if (crossed) {
         throw RuntimeException(stringFormat(
             "{}: what it read may mix the state before and after that checkpoint, so the open is "
-            "refused rather than served. Retry the open.",
-            CHECKPOINT_CROSSED_READ_ONLY_OPEN));
+            "refused rather than served. A checkpoint waits up to {} ms for the read-only opens "
+            "in progress, then goes ahead. Retry the open.",
+            CHECKPOINT_CROSSED_READ_ONLY_OPEN, ReadersLock::CHECKPOINT_WAIT.count()));
     }
 }
 
@@ -213,7 +216,22 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
     // checkpoint of a writer crossed it (see ReadOnlyOpenIdentity). This protects the open only:
     // a reader that stays open while a checkpoint passes is NOT protected by it.
     std::optional<ReadOnlyOpenIdentity> identity;
-    if (StorageManager::Get(clientContext)->isReadOnly()) {
+    // Tenu partagé jusqu'à la fin du rejeu : le point de reprise d'un écrivain attend qu'il soit
+    // rendu avant de changer ce que l'ouverture lit (voir ReadersLock). Pris avant la capture.
+    ReadersLock readersLock;
+    const auto storageManager = StorageManager::Get(clientContext);
+    if (storageManager->isReadOnly()) {
+        if (!storageManager->isInMemory()) {
+            readersLock = ReadersLock::acquire(storageManager->getDatabasePath(),
+                ReadersLock::Mode::SHARED, ReadersLock::READ_ONLY_OPEN_WAIT);
+            if (readersLock.timedOut()) {
+                throw RuntimeException(stringFormat(
+                    "This read-only open waited {} ms for a checkpoint of another process to "
+                    "finish, and it has not: the open is refused rather than served from a "
+                    "database being rewritten. Retry the open.",
+                    readersLock.waitedMs()));
+            }
+        }
         identity = captureReadOnlyOpenIdentity();
     }
     auto refusedAsCrossed = false;
@@ -294,12 +312,16 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // fichier fantôme absent veut dire qu'une reprise précédente l'avait déjà rejoué et
             // supprimé, puis est morte avant de supprimer le journal (l'ordre d'avant le 4
             // octobre) : il n'y a plus rien à recopier.
+            // Le point de reprise interrompu s'achève ici : comme lui, il attend les ouvertures en
+            // lecture seule d'autres processus avant de changer le fichier (voir ReadersLock).
+            auto writerLock = holdReadersLock();
             if (VirtualFileSystem::GetUnsafe(clientContext)
                     ->fileOrPathExists(shadowFilePath, &clientContext)) {
                 ShadowFile::replayShadowPageRecords(clientContext);
             }
             runRecoveryHook(RecoveryPoint::SHADOW_PAGES_REPLAYED);
             removeWALAndShadowFiles();
+            writerLock.release();
             // Re-read checkpointed data from disk again as now the shadow file is applied.
             checkpointer.readCheckpoint();
         } else {
@@ -877,9 +899,28 @@ void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {
         return;
     }
     if (fileInfo.getFileSize() > size) {
+        // Couper le journal change ce qu'une ouverture en lecture seule en a lu.
+        auto writerLock = holdReadersLock();
         fileInfo.truncate(size);
         fileInfo.syncFile();
     }
+}
+
+ReadersLock WALReplayer::holdReadersLock() const {
+    const auto storageManager = StorageManager::Get(clientContext);
+    if (storageManager->isReadOnly() || storageManager->isInMemory()) {
+        return ReadersLock{};
+    }
+    auto lock = ReadersLock::acquire(storageManager->getDatabasePath(),
+        ReadersLock::Mode::EXCLUSIVE, ReadersLock::CHECKPOINT_WAIT);
+    if (lock.timedOut()) {
+        // Comme Checkpointer::holdReadersLock : la reprise passe, le constat d'après coup reste.
+        fprintf(stderr,
+            "recovery of %s waited %lu ms for read-only openings of the database and went ahead "
+            "without them\n",
+            storageManager->getDatabasePath().c_str(), static_cast<unsigned long>(lock.waitedMs()));
+    }
+    return lock;
 }
 
 } // namespace storage
