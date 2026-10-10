@@ -574,7 +574,7 @@ impl Node for InsertRecordNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
-            let cypher = dialect.batch_cascade_delete(entity_name);
+            let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Delete { table: entity_name.to_string(), by: "_uuid".into(), cascade: true, count: false });
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
@@ -1292,7 +1292,7 @@ impl Node for LinkRecordNode {
                 }).collect()
             );
 
-            let cypher = dialect.batch_delete_relation(rel_name);
+            let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Unlink { relation: rel_name.to_string() });
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "items".into(), value: items_param }],
@@ -2872,7 +2872,7 @@ impl Node for RechunkDeleteNode {
                 .ok_or("RechunkDeleteNode: 'dialect' service not registered")?;
             let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
             ctx.metric("sparse_removed", creux as f64);
-            let cypher = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
+            let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
             oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
             let result = conn
                 .execute_with_params(
@@ -3034,7 +3034,7 @@ impl Node for DeleteRecordNode {
                 );
                 let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
                 ctx.metric("sparse_removed", creux as f64);
-                let del_chunks = dialect.batch_cascade_delete_returning_count(&chunk_table, "_parent_uuid");
+                let del_chunks = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
                 oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
                 let result = conn
                     .execute_with_params(
@@ -3092,7 +3092,7 @@ impl Node for DeleteRecordNode {
             }
 
             // Delete entities themselves
-            let del_entities = dialect.batch_cascade_delete(entity_name);
+            let del_entities = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: entity_name.to_string(), by: "_uuid".into(), cascade: true, count: false });
             oublier_les_prouves(ctx.service::<ProvenPresent>(PROVEN_PRESENT), entity_name, uuids.iter());
             conn.execute_with_params(
                 &del_entities,

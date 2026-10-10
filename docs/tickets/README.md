@@ -73,7 +73,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Pas d'analyze automatique : les distincts restent gonflés jusqu'à un CALL analyze](2026-10-10-analyze-au-seuil.md) | ouvert, à ouvrir sur un mauvais plan | estimation fausse | oui | au plus des plans moins bons |
 | [Les comptes de valeurs distinctes se trompent d'environ 13 % : 64 registres](2026-10-10-hyperloglog-a-64-registres.md) | ouvert, confort | estimation imprécise | toujours | non |
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
-| [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
+| [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
 | [« unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`](2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | ouvert ; correctif en cours (arbre principal, branche `unknown-entity`) | interprétation : un modèle y lit un défaut d'outil au lieu d'une déclaration absente | seulement avec un manifeste qui ne déclare pas `workspace.index: "code"` | oui — toute la surface de code |
 ### Fermés (50), dans `closed/`

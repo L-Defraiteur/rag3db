@@ -1096,6 +1096,14 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             [(field, None)] => d.batch_set_null(table, field),
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Mark" }),
         },
+        // Les trois suppressions que les dialectes savent dire aujourd'hui.
+        rag3weaver_ir::Write::Delete { table, by, cascade, count } => match (by.as_str(), cascade, count) {
+            ("_uuid", true, false) => d.batch_cascade_delete(table),
+            ("_uuid", false, false) => d.batch_delete(table),
+            (field, true, true) => d.batch_cascade_delete_returning_count(table, field),
+            _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
+        },
+        rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
     })
 }
 
@@ -2393,8 +2401,8 @@ impl SchemaDialect for PostgresDialect {
     fn batch_delete_relation(&self, rel_table: &str) -> String {
         format!(
             "DELETE FROM {rel_table} \
-             USING jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT) \
-             WHERE {rel_table}.from_uuid = v.from_uuid AND {rel_table}.to_uuid = v.to_uuid"
+             USING jsonb_to_recordset($items::text::jsonb) AS v(\"from\" TEXT, \"to\" TEXT) \
+             WHERE {rel_table}.from_uuid = v.\"from\" AND {rel_table}.to_uuid = v.\"to\""
         )
     }
 
@@ -3010,6 +3018,14 @@ mod tests {
             "UNWIND $uuids AS uuid MATCH (n:Doc {_uuid: uuid}) SET n._snapshot = $session, n._absent_since = NULL"
         );
         assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            let del = |by: &str, cascade, count| Write::Delete { table: "Doc".into(), by: by.into(), cascade, count };
+            assert_eq!(d.write(&del("_uuid", true, false)).unwrap(), d.batch_cascade_delete("Doc"));
+            assert_eq!(d.write(&del("_uuid", false, false)).unwrap(), d.batch_delete("Doc"));
+            assert_eq!(d.write(&del("_parent_uuid", true, true)).unwrap(), d.batch_cascade_delete_returning_count("Doc", "_parent_uuid"));
+            assert!(d.write(&del("_uuid", false, true)).is_err());
+            assert_eq!(d.write(&Write::Unlink { relation: "CITES".into() }).unwrap(), d.batch_delete_relation("CITES"));
+        }
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**
@@ -3303,8 +3319,10 @@ mod tests {
         let d = PostgresDialect;
         let stmt = d.batch_delete_relation("authored_by");
         assert!(stmt.contains("DELETE FROM authored_by"));
-        // Types déclarés sur place : `jsonb_to_recordset` suffit.
-        assert!(stmt.contains("jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT)"));
+        // Types déclarés sur place : `jsonb_to_recordset` suffit. Les clés
+        // sont celles que l'annulation d'un lien envoie, `from` et `to`
+        // (ticket 2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien).
+        assert!(stmt.contains(r#"jsonb_to_recordset($items::text::jsonb) AS v("from" TEXT, "to" TEXT)"#), "{stmt}");
         assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
     }
 

@@ -252,6 +252,13 @@ pub enum Write {
     /// Marquer une liste d'uuids (`$uuids`) d'**une seule valeur** par champ :
     /// `None` pour vider le champ, `Some(param)` pour le paramètre nommé.
     Mark { table: String, set: Vec<(String, Option<String>)> },
+    /// Supprimer les lignes dont le champ `by` (souvent `_uuid`) est dans
+    /// `$uuids`, avec ou sans leurs arêtes ; `count` : rendre, par valeur de
+    /// `by`, le nombre de lignes supprimées.
+    Delete { table: String, by: String, cascade: bool, count: bool },
+    /// Supprimer des arêtes données par leurs bouts : `$items` porte `from`
+    /// et `to` (les uuids), une carte par arête.
+    Unlink { relation: String },
 }
 
 impl Write {
@@ -280,6 +287,8 @@ impl Write {
                     noms.extend(p.as_deref());
                 }
             }
+            Write::Delete { table, by, .. } => noms.extend([table.as_str(), by.as_str()]),
+            Write::Unlink { relation } => noms.push(relation),
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
