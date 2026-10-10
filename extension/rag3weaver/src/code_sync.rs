@@ -986,10 +986,14 @@ fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     // moteur depuis ff9bad960 : le crochet n'y fait plus que lever le seuil.
     // Le seuil du journal est levé à 4 Gio : au défaut (un huitième du
     // tampon, au plus 256 Mio), un gros paquet se replierait sur le point de
-    // reprise forcé, et rien ne serait journalisé.
+    // reprise forcé, et rien ne serait journalisé. Le point de reprise
+    // automatique est coupé : après la validation d'un gros paquet, il
+    // replierait le journal, et la réouverture n'aurait rien à rejouer
+    // (151 octets de journal au premier essai, le 10 octobre).
     if std::env::var("RAG3WEAVER_TEST_COPY_JOURNALISE").as_deref() == Ok("1") {
         let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=false");
         let _ = catalog.conn().execute("CALL copy_journal_threshold=4294967296");
+        let _ = catalog.conn().execute("CALL auto_checkpoint=false");
     } else if catalog.plein_texte_en_base() {
         let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=true");
     }
