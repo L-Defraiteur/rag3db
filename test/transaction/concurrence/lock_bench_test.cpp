@@ -30,6 +30,7 @@
 #include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
+#include "storage/storage_utils.h"
 #include "integrity/integrity_checker.h"
 #include "processor/result/flat_tuple.h"
 
@@ -104,6 +105,8 @@ struct HolderAndWaiter {
     std::string holderWrite;
     std::string waiterWrite;
     bool holderRollsBack = false;
+    // L'attendant annule au lieu de valider (événement « rollback »).
+    bool waiterRollsBack = false;
     // Une instruction qui échoue après l'écriture du détenteur, avant son ROLLBACK : la
     // transaction en échec doit, elle aussi, libérer ses verrous à l'annulation.
     std::string holderFailingStatement;
@@ -137,7 +140,13 @@ Scenario holderAndWaiter(HolderAndWaiter script) {
         }
         worker.begin();
         worker.runMarked(script.waiterWrite, "write");
-        worker.commitMarked("commit");
+        if (script.waiterRollsBack) {
+            worker.mark("rollback:start");
+            worker.rollback();
+            worker.mark("rollback:done");
+        } else {
+            worker.commitMarked("commit");
+        }
     };
 }
 
@@ -603,47 +612,28 @@ TEST_F(IndexReopen, DropAfterCheckpointThenCrashLeavesAnUnloadedIndex) {
 }
 
 // ── A3′, second témoin : ce que la reprise fait d'un journal qui porte un doublon ─────
-// Sous le mode multi-écrivains (éteint hors du banc), deux transactions valident la même
-// clé primaire (C1) ; si le processus meurt base ouverte, le rejeu du journal bute sur
-// le doublon (« Found duplicated primary key value 7 ») et la base ne se rouvre plus —
-// déterministe (3 octobre au soir). Le verrou de clé d'A3′ empêche le doublon de naître ;
-// ce cas-ci demande en plus à la reprise de ne pas rendre la base inouvrable : refuser la
-// transaction fautive en nommant la clé (la forme du nom reste à décider), et ouvrir la
-// base avec une seule ligne de clé 7. Le doublon est fabriqué dans un seul fil, par deux
-// connexions, pour être sûr.
+// Avant A3′, sous le mode multi-écrivains (éteint hors du banc), deux transactions pouvaient
+// valider la même clé primaire (C1) ; si le processus mourait base ouverte, le rejeu du
+// journal butait sur le doublon (« Found duplicated primary key value 7 ») et la base ne se
+// rouvrait plus — déterministe (3 octobre au soir). Le verrou de clé d'A3′ empêche le doublon
+// de naître : le journal est donc fabriqué par le moteur d'avant et gardé au dépôt, avec sa
+// base et le programme qui les a produits (journal_with_duplicate_key/fabrique.cpp : deux
+// connexions, chacune sa transaction, chacune CREATE (:Item {id: 7}), chacune COMMIT, mort
+// base ouverte). Ce cas-ci demande à la reprise de ne pas rendre la base inouvrable : refuser
+// la transaction fautive en nommant la clé (la forme du nom reste à décider), et ouvrir la
+// base avec une seule ligne de clé 7.
 TEST_F(LockBench, RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen) {
-    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    const auto fixture = TestHelper::appendRag3dbRootPath(
+        "test/transaction/journal_with_duplicate_key/base.rag3db");
     conn.reset();
     database.reset();
-    const auto pid = fork();
-    if (pid == 0) {
-        disableCoreDumps();
-        try {
-            rag3db::main::Database childDatabase(databasePath, *systemConfig);
-            rag3db::main::Connection first(&childDatabase);
-            rag3db::main::Connection second(&childDatabase);
-            applyBenchSettings(first);
-            for (const auto& [connection, query] :
-                std::vector<std::pair<rag3db::main::Connection*, const char*>>{
-                    {&first, "BEGIN TRANSACTION;"}, {&second, "BEGIN TRANSACTION;"},
-                    {&first, "CREATE (:Item {id: 7, v: 0});"},
-                    {&second, "CREATE (:Item {id: 7, v: 1});"}, {&first, "COMMIT;"},
-                    {&second, "COMMIT;"}}) {
-                if (!connection->query(query)->isSuccess()) {
-                    _exit(2);
-                }
-            }
-            // Mourir base ouverte : le doublon n'est que dans le journal.
-            kill(getpid(), SIGKILL);
-        } catch (...) {
-            _exit(3);
-        }
-        _exit(4);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
-    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
-        << "[check: setup] the child could not commit the duplicate before its kill";
+    const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+    std::filesystem::remove(databasePath);
+    std::filesystem::remove(walPath);
+    std::filesystem::copy_file(fixture, databasePath);
+    std::filesystem::copy_file(rag3db::storage::StorageUtils::getWALFilePath(fixture), walPath);
+    ASSERT_GT(std::filesystem::file_size(walPath), 0u)
+        << "[check: setup] the journal of the fixture must not be empty";
     std::string reopenError;
     try {
         createDBAndConn();
@@ -673,32 +663,37 @@ std::string writeKeysCsv(const std::string& path, int64_t first, int64_t count) 
 // Première limite (5c8507577, node_table.cpp, RollbackPKDeleter) : à l'annulation, une
 // transaction retire de l'index de clé primaire la clé de toute ligne non validée du bloc,
 // celles d'un autre écrivain comprises. Un COPY écrit directement dans les blocs de la
-// table : deux COPY non validés de deux écrivains partagent le dernier bloc. L'un annule,
-// l'autre valide : ses lignes et ses clés doivent rester. Dans un seul fil, par deux
-// connexions, pour être sûr. Joué le 5 octobre : vert quand celui qui annule a copié en
-// second ; quand il a copié le premier, son annulation efface aussi les lignes de l'autre,
-// validées ensuite (compte 0), et leurs clés — plus que la limite écrite.
+// table : deux COPY non validés de deux écrivains partageaient le dernier bloc ; quand celui
+// qui annulait avait copié le premier, son annulation effaçait aussi les lignes de l'autre,
+// validées ensuite (joué le 5 octobre, dans un seul fil). Depuis A3′, c'est le verrou qui
+// ferme la limite : un COPY tient l'index de sa table en exclusif jusqu'à la fin de sa
+// transaction, le second COPY ATTEND, et ne partage jamais un bloc non validé avec le
+// premier. Deux fils : le détenteur copie, l'attendant copie (il attend, prouvé par l'ordre
+// des événements), le détenteur finit, l'attendant passe. Ce qui doit rester : les lignes et
+// les clés de celui qui valide, toutes ; celles de celui qui annule, aucune ; l'index de clé
+// primaire d'accord avec la table.
 class RollbackOfACopy : public LockBench, public ::testing::WithParamInterface<bool> {};
 
-// Le paramètre : l'écrivain qui annule a-t-il copié le premier ?
+// Le paramètre : l'écrivain qui annule a-t-il copié le premier (il est alors le détenteur) ?
 TEST_P(RollbackOfACopy, RemovesOnlyItsOwnKeys) {
     const auto rolledBackFirst = GetParam();
     mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
     const auto keptCopy = writeKeysCsv(databasePath + ".kept.csv", 0, 100);
     const auto rolledBackCopy = writeKeysCsv(databasePath + ".rolled-back.csv", 1000, 100);
-    rag3db::main::Connection other(database.get());
-    std::vector<std::pair<rag3db::main::Connection*, std::string>> steps{
-        {&other, "BEGIN TRANSACTION;"}, {conn.get(), "BEGIN TRANSACTION;"}};
+    SharedMapping mapping(2);
+    auto& area = mapping.get();
     if (rolledBackFirst) {
-        steps.insert(steps.end(), {{conn.get(), rolledBackCopy}, {&other, keptCopy}});
+        launchCase(area, holderAndWaiter({.holderWrite = rolledBackCopy,
+                             .waiterWrite = keptCopy,
+                             .holderRollsBack = true}));
+        expectWaited(area);
+        expectWaiterSucceeds(area);
     } else {
-        steps.insert(steps.end(), {{&other, keptCopy}, {conn.get(), rolledBackCopy}});
-    }
-    steps.insert(steps.end(), {{conn.get(), "ROLLBACK;"}, {&other, "COMMIT;"}});
-    for (const auto& [connection, query] : steps) {
-        auto result = connection->query(query);
-        ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << query << "\n"
-                                         << result->getErrorMessage();
+        launchCase(area, holderAndWaiter({.holderWrite = keptCopy,
+                             .waiterWrite = rolledBackCopy,
+                             .waiterRollsBack = true}));
+        expectWaited(area);
+        EXPECT_GE(eventIndex(area, 1, "rollback:done"), 0) << "[check: waiter-rolls-back] ";
     }
     EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 100) << "[check: committed-rows] ";
     int64_t found = 0;
@@ -708,6 +703,8 @@ TEST_P(RollbackOfACopy, RemovesOnlyItsOwnKeys) {
     EXPECT_EQ(found, 5) << "[check: other-writer-keys-kept] the keys of the writer that "
                            "committed must still lead to their rows; found "
                         << found << " of 5";
+    EXPECT_EQ(queryInt("MATCH (n:Item) WHERE n.id >= 1000 RETURN count(n);"), 0)
+        << "[check: rolled-back-rows-gone] ";
     auto duplicate = conn->query("CREATE (:Item {id: 50, v: -1});");
     EXPECT_FALSE(duplicate->isSuccess())
         << "[check: other-writer-key-unique] a second row with key 50 was accepted";

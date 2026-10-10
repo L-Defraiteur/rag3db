@@ -428,17 +428,27 @@ void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& a
 }
 
 bool ChunkedNodeGroup::isDeleted(const Transaction* transaction, row_idx_t rowInChunk) const {
-    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
-        return false;
-    }
-    std::shared_lock lck{versionInfoMtx};
-    if (!versionInfo) {
-        return false;
-    }
-    return versionInfo->isDeleted(transaction, rowInChunk);
+    return isDeleted(transaction->getStartTS(), transaction->getID(), rowInChunk);
 }
 
 bool ChunkedNodeGroup::isInserted(const Transaction* transaction, row_idx_t rowInChunk) const {
+    return isInserted(transaction->getStartTS(), transaction->getID(), rowInChunk);
+}
+
+bool ChunkedNodeGroup::isDeleted(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowInChunk) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::shared_lock lck{versionInfoMtx};
+    if (!versionInfo) {
+        return false;
+    }
+    return versionInfo->isDeleted(startTS, transactionID, rowInChunk);
+}
+
+bool ChunkedNodeGroup::isInserted(transaction_t startTS, transaction_t transactionID,
+    row_idx_t rowInChunk) const {
     if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
         return rowInChunk < getNumRows();
     }
@@ -446,7 +456,7 @@ bool ChunkedNodeGroup::isInserted(const Transaction* transaction, row_idx_t rowI
     if (!versionInfo) {
         return rowInChunk < getNumRows();
     }
-    return versionInfo->isInserted(transaction, rowInChunk);
+    return versionInfo->isInserted(startTS, transactionID, rowInChunk);
 }
 
 bool ChunkedNodeGroup::hasAnyUpdates(const Transaction* transaction, column_id_t columnID,
