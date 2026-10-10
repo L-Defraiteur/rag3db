@@ -18,6 +18,11 @@ struct EmbeddingColumnInfo {
     explicit EmbeddingColumnInfo(common::ArrayTypeInfo typeInfo) : typeInfo{std::move(typeInfo)} {}
 
     common::length_t getDimension() const { return typeInfo.getNumElements(); }
+    // La taille d'un vecteur en octets : deux vecteurs identiques le sont octet pour octet.
+    uint64_t getNumBytes() const {
+        return getDimension() *
+               common::PhysicalTypeUtils::getFixedTypeSize(typeInfo.getChildType().getPhysicalType());
+    }
 
     common::ArrayTypeInfo typeInfo;
 };
@@ -73,6 +78,7 @@ public:
         GetEmbeddingsScanState& scanState) const = 0;
 
     common::length_t getDimension() const { return info.getDimension(); }
+    uint64_t getNumBytes() const { return info.getNumBytes(); }
     virtual std::unique_ptr<GetEmbeddingsScanState> constructScanState() const = 0;
 
 protected:

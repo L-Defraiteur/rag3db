@@ -216,6 +216,65 @@ static bool checkEmbeddingValidity(const std::vector<NodeWithDistanceAndEmbeddin
                embeddings.getDimension()) == 0;
 }
 
+// Les voisins que garde la liste d'un nœud, parmi nbrs triés par distance croissante : l'
+// heuristique de HNSW (Malkov et Yashunin, algorithme 4 ; hnswlib, getNeighborsByHeuristic2),
+// avec l'alpha de DiskANN. Du plus proche au plus lointain, un candidat est écarté si un voisin
+// déjà gardé est plus proche de lui que le nœud, à alpha près : alpha · d(gardé, c) < d(nœud, c).
+//
+// Jusqu'au 5 octobre, la règle était inversée (depuis le premier commit de l'amont, 725046754) :
+// un voisin partait dès qu'un candidat plus lointain, gardé ou non, était près de lui. Le plus
+// lointain d'un amas serré restait seul, et un membre de l'amas pouvait ne plus recevoir
+// d'arêtes que de nœuds placés derrière lui, joignable par une recherche exhaustive mais pas
+// par la sienne (banc, 5 octobre : sur les vrais vecteurs, surtout des quasi-doublons).
+//
+// Les copies du vecteur du nœud, octet pour octet (le cosinus de simsimd rend 0 ou un bruit
+// d'environ 1e-7 pour deux vecteurs identiques : la distance ne les reconnaît pas), ne se
+// couvrent jamais entre elles et rempliraient la liste : au plus la moitié du degré, choisies
+// dans l'ordre des décalages à partir du nœud, en anneau, pour que dans un grand groupe de
+// copies chacune soit visée par les précédentes. Elles ne couvrent personne : une copie du nœud
+// est à la même distance que lui de tout candidat.
+template<typename Distance>
+static std::vector<common::idx_t> selectNeighbours(
+    const std::vector<NodeWithDistanceAndEmbedding>& nbrs, common::offset_t nodeOffset,
+    const void* nodeVector, uint64_t numBytes, double alpha, uint64_t maxDegree,
+    const Distance& distance) {
+    std::vector<common::idx_t> copies;
+    std::vector<bool> isCopy(nbrs.size(), false);
+    for (auto i = 0u; i < nbrs.size(); i++) {
+        if (nodeVector != nullptr && nbrs[i].getPtr() != nullptr &&
+            std::memcmp(nbrs[i].getPtr(), nodeVector, numBytes) == 0) {
+            copies.push_back(i);
+            isCopy[i] = true;
+        }
+    }
+    std::ranges::sort(copies, [&](common::idx_t l, common::idx_t r) {
+        // Le sens de l'anneau : la différence non signée fait le tour.
+        return nbrs[l].getNodeOffset() - nodeOffset < nbrs[r].getNodeOffset() - nodeOffset;
+    });
+    std::vector<common::idx_t> kept;
+    const auto maxCopies = std::max<uint64_t>(1, maxDegree / 2);
+    for (auto i = 0u; i < copies.size() && i < maxCopies && kept.size() < maxDegree; i++) {
+        kept.push_back(copies[i]);
+    }
+    const auto numCopiesKept = kept.size();
+    for (auto c = 0u; c < nbrs.size() && kept.size() < maxDegree; c++) {
+        if (isCopy[c]) {
+            continue;
+        }
+        bool keep = true;
+        for (auto k = numCopiesKept; k < kept.size(); k++) {
+            if (alpha * distance(kept[k], c) < nbrs[c].getDist()) {
+                keep = false;
+                break;
+            }
+        }
+        if (keep) {
+            kept.push_back(c);
+        }
+    }
+    return kept;
+}
+
 void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGraph* graph,
     common::offset_t nodeOffset, common::length_t numNbrs, GetEmbeddingsScanState& scanState) {
     auto nbrs = populateNeighbours(info, graph, nodeOffset, numNbrs, scanState);
@@ -223,26 +282,18 @@ void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGrap
         [](const NodeWithDistanceAndEmbedding& l, const NodeWithDistanceAndEmbedding& r) {
             return l.getDist() < r.getDist();
         });
+    const auto nodeVector = info.getEmbedding(nodeOffset, scanState);
+    const auto kept = selectNeighbours(nbrs, nodeOffset, nodeVector.getPtr(),
+        info.embeddings->getNumBytes(), info.alpha, info.maxDegree,
+        [&](common::idx_t a, common::idx_t b) {
+            KU_ASSERT(checkEmbeddingValidity(nbrs, a, info, scanState));
+            KU_ASSERT(checkEmbeddingValidity(nbrs, b, info, scanState));
+            return info.metricFunc(nbrs[a].getPtr(), nbrs[b].getPtr(), info.getDimension());
+        });
     uint16_t newSize = 0;
-    for (auto i = 1u; i < nbrs.size(); i++) {
-        bool keepNbr = true;
-        for (auto j = i + 1; j < nbrs.size(); j++) {
-            KU_ASSERT(checkEmbeddingValidity(nbrs, i, info, scanState));
-            KU_ASSERT(checkEmbeddingValidity(nbrs, j, info, scanState));
-            const auto dist = info.metricFunc(nbrs[i].getPtr(), nbrs[j].getPtr(),
-                info.getDimension());
-            if (info.alpha * dist < nbrs[i].getDist()) {
-                keepNbr = false;
-                break;
-            }
-        }
-        if (keepNbr) {
-            const auto startCSROffset = nodeOffset * info.degreeThresholdToShrink;
-            graph->setDstNode(startCSROffset + newSize++, nbrs[i].getNodeOffset());
-        }
-        if (newSize == info.maxDegree) {
-            break;
-        }
+    const auto startCSROffset = nodeOffset * info.degreeThresholdToShrink;
+    for (const auto i : kept) {
+        graph->setDstNode(startCSROffset + newSize++, nbrs[i].getNodeOffset());
     }
     graph->setCSRLength(nodeOffset, newSize);
 }
@@ -1563,30 +1614,18 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
     insertState.relDeleteState->detachDeleteDirection = common::RelDataDirection::FWD;
     relTable.detachDelete(transaction, insertState.relDeleteState.get());
     // Perform the actual shrinking and insertion of shrinked rels.
-    uint16_t newSize = 0;
-    for (auto i = 1u; i < nbrs.size(); i++) {
-        bool keepNbr = true;
-        for (auto j = i + 1; j < nbrs.size(); j++) {
-            KU_ASSERT(checkEmbeddingValidity(nbrs, i, embeddings, embeddingScanState));
-            KU_ASSERT(checkEmbeddingValidity(nbrs, j, embeddings, embeddingScanState));
-            const auto dist =
-                metricFunc(nbrs[i].getPtr(), nbrs[j].getPtr(), embeddings.getDimension());
-            if (config.alpha * dist < nbrs[i].getDist()) {
-                keepNbr = false;
-                break;
-            }
-        }
-        if (keepNbr) {
-            insertState.relInsertState->srcNodeIDVector.setValue(0,
-                common::nodeID_t{offset, indexInfo.tableID});
-            insertState.relInsertState->dstNodeIDVector.setValue(0,
-                common::nodeID_t{nbrs[i].getNodeOffset(), indexInfo.tableID});
-            relTable.insert(transaction, *insertState.relInsertState);
-            newSize++;
-            if (newSize == maxDegree) {
-                break;
-            }
-        }
+    const auto kept = selectNeighbours(nbrs, offset, vectorPtr, embeddings.getNumBytes(),
+        config.alpha, maxDegree, [&](common::idx_t a, common::idx_t b) {
+            KU_ASSERT(checkEmbeddingValidity(nbrs, a, embeddings, embeddingScanState));
+            KU_ASSERT(checkEmbeddingValidity(nbrs, b, embeddings, embeddingScanState));
+            return metricFunc(nbrs[a].getPtr(), nbrs[b].getPtr(), embeddings.getDimension());
+        });
+    for (const auto i : kept) {
+        insertState.relInsertState->srcNodeIDVector.setValue(0,
+            common::nodeID_t{offset, indexInfo.tableID});
+        insertState.relInsertState->dstNodeIDVector.setValue(0,
+            common::nodeID_t{nbrs[i].getNodeOffset(), indexInfo.tableID});
+        relTable.insert(transaction, *insertState.relInsertState);
     }
 }
 
