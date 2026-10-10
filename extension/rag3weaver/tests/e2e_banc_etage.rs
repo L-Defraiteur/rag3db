@@ -1,16 +1,44 @@
 //! **L'étage qui perd la moitié** — 0,35 de MRR par la recherche contre 0,84
-//! au cosinus nu, mêmes 45 questions, même modèle. Trois mesures, une chose
+//! au cosinus nu, mêmes 43 questions, même modèle. Trois mesures, une chose
 //! changée à la fois, pour isoler l'étage. Conception : §9 de
 //! `docs/18-septembre-2026-20h22/01-le-banc-de-ponderation-du-texte-brut.md`.
 //!
 //! | ligne | ce qui change |
 //! |---|---|
 //! | tel quel | `Catalog::search`, vecteur seul, sur `src/` ingéré par le chemin réel |
-//! | M1 | **le texte** : les 66 scopes à l'aiguille du banc de qualité, un texte par fonction, un chunk par texte |
+//! | M1 | **le texte** : les 63 scopes à l'aiguille du banc de qualité, un texte par fonction, un chunk par texte |
 //! | M2 | **l'index** : cosinus exact contre tous les chunks au lieu du HNSW, même résolution |
 //! | M3 | **la résolution** : les 20 chunks bruts du HNSW avant résolution au parent |
 //! | M1b | **le texte seul** : les 4 819 scopes de `src/`, chacun un texte `nom + doc + signature + corps` — même corpus que tel quel, même texte que M1 |
 //! | G | **le genre** : tel quel, `scope_type` filtré sur `function | method` — ce que pèsent les scopes de fichier entier et les espaces de noms |
+//!
+//! **Ce que ce banc a cessé de couvrir (10 octobre 2026).** Il lit des
+//! FICHIERS sous `src/`, pas des réexports. La crate `rag3weaver-ir`
+//! (`41b869ba4`) a déplacé quatre de ses aiguilles hors de `src/` : le commit
+//! dit vrai — « aucun site d'usage ne bouge » — mais un banc à corpus vivant
+//! ne lit pas les usages, il lit l'arborescence. Les quatre sont remplacées
+//! par des fonctions restées dans `src/`, chacune nommée comme remplacement à
+//! sa ligne, et le banc **ne couvre donc plus** `Scope::validate_id`,
+//! `Scope::index_name`, `Scope::stamp` (passées dans `ir/src/scope.rs`) ni
+//! `is_valid_identifier` (passée dans `ir/src/value.rs`).
+//!
+//! **Et ses chiffres d'avant ne sont pas comparables à ceux d'après**, pas à
+//! cause de cette réparation mais à cause du déménagement lui-même : les
+//! lignes « tel quel » et M1b indexent `src/`, qui a perdu des fichiers. Deux
+//! des 43 questions changent aussi de cible (celles qui visaient `validate_id`
+//! et `index_name`), le compte restant à 43. Une mesure « après » se rejoue
+//! donc contre un « avant » rejoué sur ce banc-ci, jamais contre un chiffre
+//! d'avant le 10 octobre.
+//!
+//! **Quand étendre le corpus à `ir/src/`, et pas avant** (F, 10 octobre) :
+//! aujourd'hui `ir` ne porte que du vocabulaire trivial pour une recherche —
+//! valider un identifiant, nommer un index, estamper. Le jour où la crate
+//! portera les **formes** du dialecte (`Hop` est là, `Count` et `Select`
+//! suivent), ce sera du vocabulaire qu'un agent cherche vraiment, et l'étendre
+//! aura du sens. À faire **en une fois** à ce moment-là, en rejouant toutes les
+//! lignes de référence : une recalibration n'est pas une réparation, et elle ne
+//! se fait pas au milieu d'une fusion. Rien ne doit quitter `src/` avant
+//! `Select` ; `Hop` et `Count` ajoutent dans `ir` sans rien retirer d'ici.
 //!
 //! Un banc mesure, il n'échoue pas. Les aiguilles, l'extraction et les
 //! questions sont copiées de `e2e_banc_qualite.rs` — deux binaires de test ne
@@ -58,10 +86,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("daemon/embeddings.rs", "pub fn est_a_jour_avec("),
     ("daemon/embeddings.rs", "pub fn quitter("),
     ("daemon/embeddings.rs", "pub fn identite(&self) -> Identite"),
-    // scope.rs
-    ("scope.rs", "pub fn validate_id("),
-    ("scope.rs", "pub fn index_name("),
-    ("scope.rs", "pub fn stamp("),
+    // scope.rs — trois aiguilles remplacées, les parties nommées en regard
+    ("scope.rs", "pub fn is_scope_column("),   // remplace validate_id, passée dans ir/src/scope.rs
+    ("scope.rs", "pub fn fts_filter_fields("), // remplace index_name, passée dans ir/src/scope.rs
     ("scope.rs", "pub fn scope_columns("),
     // search.rs
     ("search.rs", "pub fn embed_query("),
@@ -109,7 +136,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("fts_handle.rs", "pub fn index_document("),
     ("fts_handle.rs", "pub fn search_hits("),
     ("filter.rs", "pub fn combine_where("),
-    ("filter.rs", "pub fn is_valid_identifier("),
+    ("filter.rs", "pub fn parse_condition("),  // remplace scope.rs::stamp, passée dans ir/src/scope.rs
+    ("filter.rs", "pub fn has_any("),          // remplace is_valid_identifier, passée dans ir/src/value.rs
 ];
 
 const QUESTIONS: &[(&str, &[&str])] = &[
@@ -124,8 +152,10 @@ const QUESTIONS: &[(&str, &[&str])] = &[
     ("lancer le serveur d'embeddings et écouter sur une adresse", &["servir"]),
     ("se connecter au démon, ou le démarrer s'il n'est pas là", &["assurer"]),
     ("savoir si le démon qui tourne vient du même binaire que nous", &["est_a_jour_avec"]),
-    ("vérifier qu'un identifiant d'organisation ou de projet est valide", &["validate_id"]),
-    ("le nom de l'index pour un scope donné", &["index_name"]),
+    // remplace « vérifier qu'un identifiant … est valide » (visait validate_id, partie dans ir)
+    ("savoir si une colonne est une colonne système de périmètre", &["is_scope_column"]),
+    // remplace « le nom de l'index pour un scope donné » (visait index_name, partie dans ir)
+    ("les champs de filtre du plein texte pour le périmètre", &["fts_filter_fields"]),
     ("fusionner les résultats de plusieurs signaux de recherche", &["fuse_signals"]),
     ("construire la requête BM25 à partir du texte tapé par l'utilisateur", &["build_bm25_query"]),
     ("une similarité entre deux chaînes qui tolère les fautes de frappe", &["jaro_winkler", "jaro"]),
@@ -153,7 +183,8 @@ const QUESTIONS: &[(&str, &[&str])] = &[
     ("pick the GPU the desktop uses the least", &["least_watched_card"]),
     ("register the code schema tables in the catalog", &["register_code_schema"]),
     ("the name of the full-text index for a table", &["fts_index_name"]),
-    ("validate an organization or project identifier", &["validate_id"]),
+    // remplace « validate an organization or project identifier » (idem, en anglais)
+    ("tell whether a column is a system scope column", &["is_scope_column"]),
     ("embed the user query before searching vectors", &["embed_query"]),
     ("round a batch size so that batch shapes repeat", &["stable_count", "stable_batches"]),
     ("which burn device for a given model role", &["for_role"]),
@@ -163,6 +194,62 @@ const QUESTIONS: &[(&str, &[&str])] = &[
 fn nom_de(aiguille: &str) -> String {
     let apres = &aiguille[aiguille.find("fn ").unwrap() + 3..];
     apres.split(|c: char| c == '(' || c == '<').next().unwrap().to_string()
+}
+
+/// **Toutes les aiguilles manquantes d'un coup, et un seul échec.**
+///
+/// `extraire` paniquait sur la première introuvable, donc un déménagement qui
+/// en emportait quatre n'en annonçait qu'une : on corrigeait, on rejouait
+/// 167 secondes, on en découvrait une autre. Quatre tours pour un seul défaut.
+/// C'est la même leçon que le filet des gabarits — essayer tous les cas avant
+/// de rendre — et elle vaut davantage ici, vu le prix de la passe.
+///
+/// Le relevé est statique : il ne lit que les fichiers, aucune base, aucun
+/// embarquement. Il tourne donc avant la mesure et ne lui coûte rien.
+fn verifier_les_aiguilles(src_dir: &std::path::Path) {
+    let mut manquantes: Vec<String> = Vec::new();
+    for (fichier, aiguille) in CORPUS {
+        match std::fs::read_to_string(src_dir.join(fichier)) {
+            Ok(source) => {
+                if !source.lines().any(|l| l.contains(aiguille)) {
+                    manquantes.push(format!("{fichier} :: {aiguille} — aiguille absente du fichier"));
+                }
+            }
+            Err(e) => manquantes.push(format!("{fichier} — illisible ({e})")),
+        }
+    }
+    // **Les deux comptes sont épinglés.** La prose de ce banc annonçait 66
+    // aiguilles et 45 questions ; il en avait 63 et 43, et personne ne l'avait
+    // vu — un nombre écrit dans un commentaire dérive, celui-là avait dérivé
+    // avant la réparation du 10 octobre. Ces deux lignes ne jugent pas le
+    // contenu : elles exigent qu'un ajout ou un retrait soit DÉCIDÉ, et que la
+    // prose change dans le même commit.
+    assert_eq!(
+        CORPUS.len(),
+        63,
+        "le corpus à l'aiguille a changé ({} entrées) : corrigez ce compte ET la prose \
+         en tête du banc dans le même commit, en disant ce qui entre ou sort",
+        CORPUS.len()
+    );
+    assert_eq!(
+        QUESTIONS.len(),
+        43,
+        "les questions ont changé ({} entrées) : le MRR se compare à nombre de questions \
+         égal — corrigez ce compte, la prose, et dites à quelle mesure « avant » ces \
+         chiffres restent comparables",
+        QUESTIONS.len()
+    );
+    assert!(
+        manquantes.is_empty(),
+        "{} aiguilles du corpus vivant sur {} ne sont plus dans src/ — une fonction \
+         renommée ou déménagée les emporte, et ce banc lit des FICHIERS, pas des \
+         réexports. Remplacez-les par des fonctions restées dans src/, en nommant \
+         la partie en regard, et dites en tête du banc ce qu'il a cessé de couvrir \
+         (la réparation du 10 octobre 2026 en est l'exemple) :\n  {}",
+        manquantes.len(),
+        CORPUS.len(),
+        manquantes.join("\n  ")
+    );
 }
 
 fn extraire(source: &str, aiguille: &str, sans_commentaires: bool) -> String {
@@ -309,7 +396,7 @@ fn parents_uniques(noms: impl IntoIterator<Item = String>) -> Vec<String> {
     noms.into_iter().filter(|n| vus.insert(n.clone())).collect()
 }
 
-/// **Les quatre lignes**, vecteur seul, sur les 45 questions.
+/// **Les quatre lignes**, vecteur seul, sur les 43 questions.
 #[test]
 #[ignore]
 fn banc_etage_qui_perd() {
@@ -916,12 +1003,13 @@ Extrait :
     }
 
     // ── M1 : le même texte que le cosinus nu — un texte par fonction ────
-    // Les 66 scopes à l'aiguille, entité d'un seul champ de contenu, un chunk
+    // Les 63 scopes à l'aiguille, entité d'un seul champ de contenu, un chunk
     // par texte (Fixed, 4 000 > 1 500), vecteur seul.
     let embedder_m1b = embedder.clone();
     let nu = Arc::new(Mutex::new(base(embedder, "etage-m1")));
     nu.lock().unwrap().register_entity("Fonction", fonction_config()).expect("enregistrer Fonction");
     let src_dir = std::path::Path::new(&racine).join("src");
+    verifier_les_aiguilles(&src_dir);
     let lignes: Vec<std::collections::BTreeMap<String, CypherValue>> = CORPUS
         .iter()
         .map(|(fichier, aiguille)| {
@@ -932,7 +1020,7 @@ Extrait :
             d
         })
         .collect();
-    let r = nu.lock().unwrap().ingest_entities("Fonction", lignes).expect("ingérer les 66 scopes");
+    let r = nu.lock().unwrap().ingest_entities("Fonction", lignes).expect("ingérer les scopes à l'aiguille");
     eprintln!("[étage] M1 : {} scopes à l'aiguille, {} en échec", r.processed, r.failed);
     let mut m1 = Mesure::default();
     for (q, attendus) in QUESTIONS {
@@ -941,7 +1029,7 @@ Extrait :
     }
 
     // ── M1b : le texte de M1, sur le corpus de tel quel ─────────────────
-    // M1 change le texte *et* la taille du corpus (67 contre 4 819). Ici les
+    // M1 change le texte *et* la taille du corpus (63 contre 4 819). Ici les
     // mêmes 4 819 scopes que tel quel, chacun embarqué comme un texte assemblé
     // côté test depuis `analysis.scopes` — nom, doc, signature, corps, coupé
     // comme le cosinus nu — sans rien changer à `EntityConfig`. Si M1b tient

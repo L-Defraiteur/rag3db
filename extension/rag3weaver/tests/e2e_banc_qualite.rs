@@ -14,6 +14,29 @@
 //! le démon en place peut appartenir à une autre session (il sert peut-être
 //! un autre modèle), et un test qui le trouve périmé le remplacerait.
 //!
+//! **Ce que ce banc a cessé de couvrir (10 octobre 2026).** Il lit des
+//! FICHIERS sous `src/`, pas des réexports. La crate `rag3weaver-ir`
+//! (`41b869ba4`) a déplacé quatre de ses aiguilles hors de `src/` : le commit
+//! dit vrai — « aucun site d'usage ne bouge » — mais un banc à corpus vivant
+//! ne lit pas les usages, il lit l'arborescence, et les réexports lui sont
+//! invisibles. Les quatre sont remplacées par des fonctions restées dans
+//! `src/`, nommées comme remplacement à leur ligne ; le banc **ne couvre donc
+//! plus** `Scope::validate_id`, `Scope::index_name`, `Scope::stamp` (passées
+//! dans `ir/src/scope.rs`) ni `is_valid_identifier` (passée dans
+//! `ir/src/value.rs`). Les quatre mêmes remplacements sont faits dans
+//! `e2e_banc_etage.rs`, qui copie ce corpus : **les deux ne doivent pas
+//! diverger**, c'est tout l'intérêt de la copie.
+//!
+//! **Un MRR d'avant cette date ne se compare pas à un MRR d'après** : deux des
+//! questions changent de cible (celles qui visaient `validate_id` et
+//! `index_name`), à nombre de questions égal. Pour comparer deux modèles, les
+//! deux se mesurent sur ce banc-ci.
+//!
+//! Quand étendre le corpus à `ir/src/` : le jour où la crate portera les
+//! **formes** du dialecte (`Hop` est là, `Count` et `Select` suivent), parce
+//! que ce sera du vocabulaire qu'un agent cherche. En une fois, en rejouant
+//! toutes les références (F, 10 octobre).
+//!
 //! ```text
 //! RAG3WEAVER_SANS_DEMON=1 cargo test --features burn-embedder,daemon \
 //!     --test e2e_banc_qualite -- --ignored --nocapture
@@ -55,9 +78,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("daemon/embeddings.rs", "pub fn quitter("),
     ("daemon/embeddings.rs", "pub fn identite(&self) -> Identite"),
     // scope.rs
-    ("scope.rs", "pub fn validate_id("),
-    ("scope.rs", "pub fn index_name("),
-    ("scope.rs", "pub fn stamp("),
+    ("scope.rs", "pub fn is_scope_column("),   // remplace validate_id, passée dans ir/src/scope.rs
+    ("scope.rs", "pub fn fts_filter_fields("), // remplace index_name, passée dans ir/src/scope.rs
     ("scope.rs", "pub fn scope_columns("),
     // search.rs
     ("search.rs", "pub fn embed_query("),
@@ -105,7 +127,8 @@ const CORPUS: &[(&str, &str)] = &[
     ("fts_handle.rs", "pub fn index_document("),
     ("fts_handle.rs", "pub fn search_hits("),
     ("filter.rs", "pub fn combine_where("),
-    ("filter.rs", "pub fn is_valid_identifier("),
+    ("filter.rs", "pub fn parse_condition("),  // remplace scope.rs::stamp, passée dans ir/src/scope.rs
+    ("filter.rs", "pub fn has_any("),          // remplace is_valid_identifier, passée dans ir/src/value.rs
 ];
 
 /// **Les questions**, avec le nom de la fonction attendue (plusieurs quand
@@ -123,8 +146,10 @@ const QUESTIONS: &[(&str, &[&str])] = &[
     ("lancer le serveur d'embeddings et écouter sur une adresse", &["servir"]),
     ("se connecter au démon, ou le démarrer s'il n'est pas là", &["assurer"]),
     ("savoir si le démon qui tourne vient du même binaire que nous", &["est_a_jour_avec"]),
-    ("vérifier qu'un identifiant d'organisation ou de projet est valide", &["validate_id"]),
-    ("le nom de l'index pour un scope donné", &["index_name"]),
+    // remplace « vérifier qu'un identifiant … est valide » (visait validate_id, partie dans ir)
+    ("savoir si une colonne est une colonne système de périmètre", &["is_scope_column"]),
+    // remplace « le nom de l'index pour un scope donné » (visait index_name, partie dans ir)
+    ("les champs de filtre du plein texte pour le périmètre", &["fts_filter_fields"]),
     ("fusionner les résultats de plusieurs signaux de recherche", &["fuse_signals"]),
     ("construire la requête BM25 à partir du texte tapé par l'utilisateur", &["build_bm25_query"]),
     ("une similarité entre deux chaînes qui tolère les fautes de frappe", &["jaro_winkler", "jaro"]),
@@ -152,7 +177,8 @@ const QUESTIONS: &[(&str, &[&str])] = &[
     ("pick the GPU the desktop uses the least", &["least_watched_card"]),
     ("register the code schema tables in the catalog", &["register_code_schema"]),
     ("the name of the full-text index for a table", &["fts_index_name"]),
-    ("validate an organization or project identifier", &["validate_id"]),
+    // remplace « validate an organization or project identifier » (idem, en anglais)
+    ("tell whether a column is a system scope column", &["is_scope_column"]),
     ("embed the user query before searching vectors", &["embed_query"]),
     ("round a batch size so that batch shapes repeat", &["stable_count", "stable_batches"]),
     ("which burn device for a given model role", &["for_role"]),
@@ -214,8 +240,45 @@ fn extraire(source: &str, aiguille: &str, sans_commentaires: bool) -> String {
     texte
 }
 
+/// **Toutes les aiguilles manquantes d'un coup, et un seul échec.**
+///
+/// `extraire` paniquait sur la première introuvable — et c'est ce qui rendait
+/// `le_corpus_se_lit` muet sur le vrai sujet : il meurt dans `corpus()` avant
+/// d'atteindre ses propres gardes, qui vérifient pourtant que chaque question
+/// a sa cible. Un déménagement qui emportait quatre aiguilles n'en annonçait
+/// donc qu'une, et la garde qui aurait tout dit ne s'exécutait jamais.
+///
+/// Le relevé est statique : il ne lit que les fichiers, aucun modèle, aucune
+/// carte. Il ne coûte rien à la mesure.
+fn verifier_les_aiguilles(racine: &Path) {
+    let mut manquantes: Vec<String> = Vec::new();
+    for (fichier, aiguille) in CORPUS {
+        match std::fs::read_to_string(racine.join(fichier)) {
+            Ok(source) => {
+                if !source.lines().any(|l| l.contains(aiguille)) {
+                    manquantes.push(format!("{fichier} :: {aiguille} — aiguille absente du fichier"));
+                }
+            }
+            Err(e) => manquantes.push(format!("{fichier} — illisible ({e})")),
+        }
+    }
+    assert!(
+        manquantes.is_empty(),
+        "{} aiguilles du corpus vivant sur {} ne sont plus dans src/ — une fonction \
+         renommée ou déménagée les emporte, et ce banc lit des FICHIERS, pas des \
+         réexports. Remplacez-les par des fonctions restées dans src/, en nommant la \
+         partie en regard, dites en tête ce que le banc a cessé de couvrir, et faites \
+         le MÊME remplacement dans e2e_banc_etage.rs — les deux corpus ne doivent pas \
+         diverger (réparation du 10 octobre 2026) :\n  {}",
+        manquantes.len(),
+        CORPUS.len(),
+        manquantes.join("\n  ")
+    );
+}
+
 fn corpus(sans_commentaires: bool) -> Vec<Scope> {
     let racine = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    verifier_les_aiguilles(&racine);
     CORPUS.iter().map(|(fichier, aiguille)| {
         let source = std::fs::read_to_string(racine.join(fichier)).unwrap_or_else(|e| panic!("{fichier} : {e}"));
         Scope { nom: nom_de(aiguille), texte: extraire(&source, aiguille, sans_commentaires) }

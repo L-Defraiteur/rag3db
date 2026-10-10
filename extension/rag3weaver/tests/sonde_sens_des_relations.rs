@@ -18,6 +18,37 @@ use rag3weaver::connection::DbConnection;
 use rag3weaver::relation_directions::count_both_directions;
 use rag3weaver::Rag3dbConnection;
 
+/// **Le chemin du moteur ne se dérive jamais du chemin du code.** `RAG3DB_ROOT`
+/// d'abord, le manifeste en repli, et l'absence **dite** — la règle du journal
+/// (« Méthode », piège 6), écrite après quatre sites trouvés le même jour.
+///
+/// Deux de plus le 10 octobre 2026 — `e2e_graphe_et_paquets` et
+/// `sonde_sens_des_relations` —, trouvés en rejouant le grep du motif par le
+/// **chemin** après un rebase. Le journal dit de le rejouer pour cette raison
+/// exacte : un nouveau site arrive sur master sans rapport avec le précédent.
+/// Depuis un worktree, le code vit ici et l'extension est bâtie dans l'arbre
+/// qui a lancé cmake : un chemin dérivé de `CARGO_MANIFEST_DIR` cherche donc la
+/// bibliothèque là où elle n'est pas.
+fn extension_vectorielle() -> String {
+    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("racine du dépôt")
+            .display()
+            .to_string()
+    });
+    let chemin = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    assert!(
+        std::path::Path::new(&chemin).exists(),
+        "l'extension vectorielle est absente : {chemin}\n\
+         Posez RAG3DB_ROOT sur l'arbre où le moteur est bâti (depuis un worktree, \
+         c'est l'arbre principal), ou bâtissez-la ici — run_e2e.sh le fait et \
+         exporte la variable."
+    );
+    chemin
+}
+
 #[test]
 #[ignore]
 fn la_recette_du_banc_garde_les_deux_sens_egaux() {
@@ -89,9 +120,8 @@ fn un_fichier_retire_ne_fait_pas_perdre_les_aretes_des_autres_regions() {
             })
             .collect()
     };
-    let racine = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
     let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine.display())).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", extension_vectorielle())).unwrap();
     let config = CatalogConfig { name: Some("sonde-produit".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
     catalog.initialize().unwrap();
