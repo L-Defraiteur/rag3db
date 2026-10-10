@@ -24,6 +24,8 @@ namespace extension {
 
 typedef void (*ext_init_func_t)(main::ClientContext*);
 typedef const char* (*ext_name_func_t)();
+// L'identifiant de bâti d'une extension (cmake/build_id.cmake), comparé à celui du moteur.
+typedef const char* (*ext_build_id_func_t)();
 using ext_load_func_t = ext_init_func_t;
 typedef void (*ext_install_func_t)(const std::string&, main::ClientContext&);
 
@@ -168,6 +170,8 @@ public:
 
     static constexpr const char* EXTENSION_INSTALL_FUNC_NAME = "install";
 
+    static constexpr const char* EXTENSION_BUILD_ID_FUNC_NAME = "build_id";
+
 public:
     ExtensionLibLoader(const std::string& extensionName, const std::string& path);
 
@@ -178,6 +182,9 @@ public:
     ext_name_func_t getNameFunc();
 
     ext_install_func_t getInstallFunc();
+
+    // nullptr si l'extension n'exporte pas d'identifiant de bâti (bâtie avant le contrôle).
+    ext_build_id_func_t findBuildIdFunc();
 
     void unload();
 

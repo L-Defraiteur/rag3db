@@ -63,6 +63,8 @@ add_library(rag3db_extension
         extension_manager.cpp
         loaded_extension.cpp
 )
+# extension_manager.cpp lit l'identifiant de bâti, régénéré à chaque bâti.
+add_dependencies(rag3db_extension rag3db_build_id)
 
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_extension>

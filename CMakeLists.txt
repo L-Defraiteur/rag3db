@@ -426,6 +426,19 @@ add_definitions(-DRAG3DB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 add_definitions(-DRAG3DB_CMAKE_VERSION="${CMAKE_PROJECT_VERSION}")
 add_definitions(-DRAG3DB_EXTENSION_VERSION="0.11.1")
 
+# L'identifiant de bâti, porté par le moteur et par chaque extension, comparé par LOAD EXTENSION
+# (cmake/build_id.cmake). Régénéré à chaque bâti ; les options sont celles qui changent l'interface
+# binaire — BUILD_EXTENSIONS n'en est pas, le moteur et ses extensions peuvent se bâtir en deux
+# passes du même dossier.
+set(RAG3DB_BUILD_ID_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/include/common/build_id.h")
+set(RAG3DB_BUILD_ID_OPTIONS
+    "${CMAKE_BUILD_TYPE}-p${RAG3DB_PAGE_SIZE_LOG2}-v${RAG3DB_VECTOR_CAPACITY_LOG2}-g${RAG3DB_NODE_GROUP_SIZE_LOG2}-s${RAG3DB_MAX_SEGMENT_SIZE_LOG2}-rc${ENABLE_RUNTIME_CHECKS}-st${SINGLE_THREADED}-asan${ENABLE_ADDRESS_SANITIZER}-tsan${ENABLE_THREAD_SANITIZER}-ubsan${ENABLE_UBSAN}")
+add_custom_target(rag3db_build_id
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DOUTPUT=${RAG3DB_BUILD_ID_HEADER}
+        -DOPTIONS=${RAG3DB_BUILD_ID_OPTIONS} -P ${PROJECT_SOURCE_DIR}/cmake/build_id.cmake
+    BYPRODUCTS ${RAG3DB_BUILD_ID_HEADER}
+    COMMENT "Identifiant de bâti du moteur et des extensions")
+
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extension/CMakeLists.txt")
     add_subdirectory(extension)
 endif ()
