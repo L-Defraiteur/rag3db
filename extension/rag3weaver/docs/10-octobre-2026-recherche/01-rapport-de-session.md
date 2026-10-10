@@ -1,5 +1,48 @@
 # Session recherche — rapport (chantier C : l'exécution asynchrone des graphes)
 
+## 20 h 45 — la batterie est rendue : tout vert sauf trois rouges DE MASTER
+
+Reprise après le nettoyage : worktree `rag3db-async` remonté sur
+`execution-asynchrone-2` (`a0c3e809c`), target unique
+`~/.cache/rag3weaver-build/target-C` (`CARGO_INCREMENTAL=0`, -j8,
+`timeout 1800` devant tout cargo test — règles du soir de l'orchestration ;
+le target se garde entre les lots, effacé au-delà de 60 Go ou en fin de
+chantier).
+
+**La batterie complète du lot** (régime doux, `SANS_CARTE_LOCALE`, embed
+service 7979-7981, lib commune de l'arbre principal) :
+
+- lib 1261/1261 ; `e2e_code` (838 s), `e2e_dataflow_observe`,
+  `e2e_checkpoint` VERTS ;
+- backend : `harness`, `lifecycle_batch`, `must_reopen`, `snapshot`,
+  `mcp_render` VERTS (mcp : module réinstallé dans un venv durable,
+  `~/.cache/rag3weaver-build/venv-mcp` — l'ancien est parti au nettoyage) ;
+- chat : `test_chat_app` et `test_chat_must_reopen` VERTS — l'étape 4
+  (bus + boîte) tient en suite ;
+- **trois ROUGES, prouvés DE MASTER** (rejoués au commit de base
+  `001054116`, même montage — journaux `isole_*` au scratchpad, signalés à
+  l'orchestration qui route) : `test_backend_persistence` et
+  `test_backend_sparse` (« Buffer manager exception » sous leur tampon de
+  256 Mio — suspect : `1b0d5483b`, paquets de 2 048) ;
+  `test_backend_code` (sur master pur la section « Avant d'éditer » manque
+  — vieille fixture filtrée ; sur ma branche, fixture réparée, le compte
+  passe de « 1 directement » (socle 27eeb6a7f, vert ×2 avant-pause) à
+  « 2 directement » (socle 001054116) — suspect : `1990769aa`, voisinage
+  par la forme Hop). `test_backend_code` SORT de la comparaison de mesure :
+  rouge aux deux bouts pour des raisons différentes.
+
+**Deux pièges de montage à savoir** (coût : une demi-batterie) : un
+worktree neuf n'a PAS `extension/vector/build` (piège 6 — symlink vers
+celui de l'arbre principal posé, il survit aux checkouts) ; et
+`rag3weaver-chat` exige la feature `openai-llm` en plus de la liste
+habituelle. Et `poste lourd` est un verrou PARTAGÉ : deux de mes passes ont
+pu se chevaucher pendant un checkout — toute passe qui bascule le worktree
+doit tenir ses suites DANS la même invocation de `poste`.
+
+Reste : la réponse de l'orchestration sur les trois rouges, puis la tenue
+de mesure (gel de la lib annoncé à rag3db-91 juste avant), la fusion, les
+signes.
+
 ## 18 h 20 — nettoyage du disque : TOUT est poussé, batterie à rejouer
 
 L'orchestration efface les target cargo et les worktrees (disque saturé).
