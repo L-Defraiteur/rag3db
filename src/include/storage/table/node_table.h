@@ -238,6 +238,12 @@ public:
     void mergeStats(const std::vector<common::column_id_t>& columnIDs, const TableStats& stats) {
         nodeGroups->mergeStats(columnIDs, stats);
     }
+    // CALL analyze : les statistiques rebâties depuis les lignes vivantes remplacent celles de
+    // la table, et le point de reprise suivant les écrit.
+    void replaceStats(TableStats stats) {
+        nodeGroups->replaceStats(std::move(stats));
+        setHasChanges();
+    }
 
     void serialize(common::Serializer& serializer) const override;
     void deserialize(main::ClientContext* context, StorageManager* storageManager,
