@@ -2562,7 +2562,7 @@ impl Node for EmbedNode {
             // `_sparse_hash` posé : le chunk serait réembarqué en dense et
             // jamais en sparse, sans que rien ne le signale.
             for colonne in [marker.as_str(), "_sparse_hash"] {
-                let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] });
+                let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] });
                 conn.execute_with_params(
                     &cypher,
                     &[QueryParam { name: "uuids".into(), value: uuid_params.clone() }],
@@ -3776,7 +3776,7 @@ impl Node for UpdateRecordNode {
                 let uuids = CypherValue::List(items.iter().filter_map(|m| m.get("_uuid").cloned()).collect());
                 for colonne in &nulles {
                     conn.execute_with_params(
-                        &crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] }),
+                        &crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Mark { table: entity_name.to_string(), set: vec![(colonne.to_string(), None)] }),
                         &[QueryParam { name: "uuids".into(), value: uuids.clone() }],
                     ).map_err(|e| format!("UpdateRecordNode undo failed: {e}"))?;
                 }
