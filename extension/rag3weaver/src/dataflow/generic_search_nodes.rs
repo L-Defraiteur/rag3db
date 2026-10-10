@@ -678,6 +678,22 @@ impl Node for VectorSearchNode {
         let embedder = ctx
             .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
+        if embedder.is_absent() {
+            return replier_la_branche(
+                ctx,
+                strict,
+                &label,
+                "dense",
+                &query_str,
+                &target.name,
+                crate::search::SearchSignals::VECTOR,
+                Chute::Indisponible(format!(
+                    "no embedding service ({}), the vectors of « {} » are not computed",
+                    crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
+                    embedder.name()
+                )),
+            );
+        }
 
         // Ce que l'agent doit entendre. `ctx.warn` va dans le journal du nœud,
         // que personne ne lit du côté de l'appelant : ce qui touche à la

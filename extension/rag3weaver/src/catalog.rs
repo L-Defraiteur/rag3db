@@ -241,6 +241,9 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// Le mot « embarquement demandé, embarqueur absent » est-il déjà dit ?
+    /// Une fois par catalogue : chaque paquet le redirait.
+    absent_signale: std::sync::atomic::AtomicBool,
     /// **Une transaction de l'appelant est ouverte** (`set_in_transaction`) :
     /// aucun DDL ne part plus d'ici — les index vectoriels ne tombent pas et
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
@@ -460,6 +463,7 @@ impl Catalog {
             config,
             pending: PendingWork::new(),
             peut_devoir_un_embarquement: false,
+            absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
             checkpoints_in_transaction: false,
             fresh_ingest: None,
@@ -650,6 +654,22 @@ impl Catalog {
     /// On ne peut pas trancher au moment où le dual est posé : les entités se
     /// déclarent après. On refuse donc **à l'enregistrement de l'entité**, où
     /// ses signaux sont connus.
+    /// **L'avertissement nommé du montage sans service** : sur la sortie
+    /// d'erreur, que personne n'a à écouter, et sur le bus.
+    fn dire_l_embarqueur_absent(&self) {
+        if !self.embedder.is_absent() {
+            return;
+        }
+        let message = format!(
+            "{} (modèle attendu « {} », {} dimensions) — la recherche dense dira « not available »",
+            crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
+            self.embedder.name(),
+            self.embedder.dim()
+        );
+        eprintln!("[rag3weaver] {message}");
+        self.emit_event(CatalogEvent::Warning { context: "initialize".to_string(), message });
+    }
+
     fn warn_mock_query_embedder(&self) {
         if !self.embedder.is_mock() || self.dual_embedder.is_none() {
             return;
@@ -1346,6 +1366,7 @@ impl Catalog {
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
         self.choisir_le_stockage_du_plein_texte();
+        self.dire_l_embarqueur_absent();
         if self.lecture_seule {
             return self.initialiser_en_lecture();
         }
@@ -3516,6 +3537,29 @@ impl Catalog {
         Ok(())
     }
 
+    /// **Embarquer, si un embarqueur est là.** Avec un [`AbsentEmbedder`],
+    /// jamais : les chunks s'écrivent sans vecteur, et la dette d'embarquement
+    /// naît comme pour une ingestion qui ne l'exige pas.
+    ///
+    /// [`AbsentEmbedder`]: crate::embedder::AbsentEmbedder
+    fn peut_embarquer(&self, demande: bool) -> bool {
+        if demande && self.embedder.is_absent() {
+            if !self.absent_signale.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                self.emit_event(CatalogEvent::Warning {
+                    context: "ingest".to_string(),
+                    message: format!(
+                        "vecteurs demandés, {} : cette écriture se replie sur le plein texte, \
+                         les vecteurs de « {} » restent en dette",
+                        crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
+                        self.embedder.name()
+                    ),
+                });
+            }
+            return false;
+        }
+        demande
+    }
+
     pub fn embarquer_le_retard(
         &mut self,
         exige: crate::disponibilite::Disponibilites,
@@ -3524,6 +3568,11 @@ impl Catalog {
     ) -> Result<usize, CatalogError> {
         self.check_embedding_model()?;
         if !exige.dense() && !exige.sparse() {
+            return Ok(0);
+        }
+        // Sans service, rien à rattraper : la dette reste notée, et l'index
+        // n'est ni tombé ni rebâti pour un retard qu'on ne paiera pas.
+        if self.embedder.is_absent() {
             return Ok(0);
         }
 
@@ -3677,6 +3726,7 @@ impl Catalog {
         limite: usize,
         embarquer: bool,
     ) -> Result<usize, CatalogError> {
+        let embarquer = self.peut_embarquer(embarquer);
         let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
         let cibles: Vec<(String, search::SearchSignals)> = self
             .entity_configs
@@ -5443,7 +5493,7 @@ impl Catalog {
         records: Vec<BTreeMap<String, CypherValue>>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
-        let avec_embarquement = exige.dense() || exige.sparse();
+        let avec_embarquement = self.peut_embarquer(exige.dense() || exige.sparse());
         let t_appel = std::time::Instant::now();
         let t = std::time::Instant::now();
         self.check_initialized()?;
@@ -6258,6 +6308,7 @@ impl Catalog {
         limite: usize,
         embarquer: bool,
     ) -> Result<usize, CatalogError> {
+        let embarquer = self.peut_embarquer(embarquer);
         let retenue = |nom: &str| tables.is_none_or(|t| t.contains(nom));
         let mut derivees: Vec<(String, String)> = self
             .entity_configs
@@ -6980,6 +7031,7 @@ impl Catalog {
         // les groupes qui n'ont pas abouti
         Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>,
     ) {
+        let avec_embarquement = self.peut_embarquer(avec_embarquement);
         // Le lot est choisi par l'appelant — la file entière, ou la fermeture
         // d'une cible. Ce graphe ne touche plus à `self.pending`.
         let mut pending = lot;
@@ -7276,6 +7328,7 @@ impl Catalog {
         avec_decoupage: bool,
         cible: Option<(&str, bool)>,
     ) -> FlushResult {
+        let avec_embarquement = self.peut_embarquer(avec_embarquement);
         if !avec_embarquement && self.has_pending() {
             // On s'apprête à poser des chunks sans les embarquer : la dette
             // naît ici, et l'indice la note.
@@ -8466,6 +8519,9 @@ impl Catalog {
         need_sparse: bool,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
         self.check_embedding_model()?;
+        // Absent, pas de vecteur de requête : la branche dense le dira
+        // « not available » par son repli, sans erreur ici.
+        let need_dense = need_dense && !self.embedder.is_absent();
         let vecteurs = if need_dense && need_sparse {
             if let Some(ref dual_emb) = self.dual_embedder {
                 // Single forward pass → dense + sparse
