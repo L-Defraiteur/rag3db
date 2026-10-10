@@ -15,9 +15,19 @@ tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseu
 - La démo `bindings/nodejs/demo/demo.sh` est répétée et verte (voir le
   relevé) ; les tunnels 7979-7981 vers luciepc (services 7878-7880) sont
   tenus par une autre session, ne pas les rouvrir.
-- Linux x64 publié, Windows et macOS arm64 bâtis et éprouvés (`--describe`)
-  mais sans sous-paquet ; x64 macOS et l'extension vecteur hors Linux
-  restent à faire.
+- Linux x64 publié. **Les sous-paquets Windows x64 et macOS arm64 sont
+  montés** (ba387459f : `npm/windows-x64`, `npm/darwin-arm64`, dépendances
+  optionnelles ; dans le workflow : cache du bâti sur tout le target,
+  extension vecteur par le cmake de cargo, `npm test` sur le runner ;
+  `prepareManifest` pose `sandbox: off` hors Linux) ; leurs premiers runs
+  (Windows 38068526690, macOS 38068584216) tournaient sur GitHub à la pause
+  du nettoyage du disque — lire leur verdict en reprenant. macOS x64 est à
+  Lucie. Ordre tranché par l'orchestration : Windows, macOS arm64, puis le
+  vecteur en statique comme amélioration commune.
+- Pause du 10 octobre au soir : le poste nettoie ses disques, tous les
+  target et worktrees sauf l'arbre principal sont effacés ; les bâtis se
+  refont par Docker sur luciepc (`~/git_workspaces/rag3db-paquet-npm` et
+  `~/.cache/rag3weaver-build/paquet-npm/docker-cache` là-bas).
 
 ## Ce qui est fait
 
