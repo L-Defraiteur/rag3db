@@ -1001,31 +1001,6 @@ pub fn search_vector_via_backend(
     }).collect())
 }
 
-/// Parse HNSW query results (node._uuid, distance) into SearchResults.
-/// Converts cosine distance (1 - similarity) back to similarity score.
-fn parse_hnsw_results(result: &crate::connection::QueryResult, entity: &str) -> Vec<SearchResult> {
-    result
-        .rows
-        .iter()
-        .map(|row| {
-            let uuid = row
-                .get(0)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let distance = row.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0);
-            let score = 1.0 - distance;
-            SearchResult {
-                uuid,
-                score,
-                entity: Some(entity.to_string()),
-                data: None,
-                chunk: None,
-                chunks: None,
-            }
-        })
-        .collect()
-}
 
 /// Enrich search results via SearchBackend (multi-backend).
 pub fn enrich_results_with_data_via_backend(
