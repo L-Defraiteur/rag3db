@@ -63,11 +63,13 @@ void StorageManager::initDataFileHandle(VirtualFileSystem* vfs, main::ClientCont
                 // Reserve the first page for the database header.
                 dataFH->getPageManager()->allocatePage();
                 // Write a dummy database header page.
-                const auto* initialHeader = getOrInitDatabaseHeader(*context);
+                auto initialHeader = *getOrInitDatabaseHeader(*context);
+                // Le fichier n'a que cette page : son étendue.
+                initialHeader.numDataPages = 1;
                 auto headerWriter =
                     std::make_shared<InMemFileWriter>(*MemoryManager::Get(*context));
                 Serializer headerSerializer(headerWriter);
-                initialHeader->serialize(headerSerializer);
+                initialHeader.serialize(headerSerializer);
                 dataFH->getFileInfo()->writeFile(headerWriter->getPage(0).data(), RAG3DB_PAGE_SIZE,
                     StorageConstants::DB_HEADER_PAGE_IDX);
                 dataFH->getFileInfo()->syncFile();

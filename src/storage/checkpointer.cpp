@@ -153,15 +153,20 @@ void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
     }
 }
 
-void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
+void Checkpointer::writeDatabaseHeader(const DatabaseHeader& headerWithoutExtent) {
+    const auto storageManager = StorageManager::Get(clientContext);
+    auto dataFH = storageManager->getDataFH();
+    // L'étendue du fichier à cet instant : tout ce que ce point de reprise désigne — les pages
+    // des tables, des index, du catalogue et des métadonnées — est déjà alloué, donc en deçà.
+    // L'en-tête passe par une page fantôme : l'étendue est atomique avec le point de reprise.
+    auto header = headerWithoutExtent;
+    header.numDataPages = dataFH->getNumPages();
     auto headerWriter =
         std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
     common::Serializer headerSerializer(headerWriter);
     header.serialize(headerSerializer);
     auto headerPage = headerWriter->getPage(0);
 
-    const auto storageManager = StorageManager::Get(clientContext);
-    auto dataFH = storageManager->getDataFH();
     auto& shadowFile = storageManager->getShadowFile();
     auto shadowHeader = ShadowUtils::createShadowVersionIfNecessaryAndPinPage(
         common::StorageConstants::DB_HEADER_PAGE_IDX, true /* skipReadingOriginalPage */, *dataFH,
@@ -266,7 +271,33 @@ void Checkpointer::readCheckpoint(main::ClientContext* context, catalog::Catalog
         storageManager->deserialize(context, catalog, deSer);
         storageManager->getDataFH()->getPageManager()->deserialize(deSer);
     }
+    returnOwnerlessPages(*currentHeader, storageManager);
     storageManager->setDatabaseHeader(std::move(currentHeader));
+}
+
+// Ce que le fichier porte au-delà de l'étendue que le dernier point de reprise a écrite est à
+// personne : ni l'en-tête, ni l'espace libre, ni le journal — qui est logique — ne désignent une
+// page physique au-delà. Un COPY tué avant sa validation (ou validé par le journal, rejoué plus
+// loin), un point de reprise interrompu avant sa marque, une queue qu'un point de reprise a
+// libérée sans tronquer le fichier : leurs pages restaient comptées, perdues pour toujours. Elles
+// sont rendues à l'espace libre, réutilisables tout de suite, et le point de reprise suivant les
+// persiste libres. Rien n'est tronqué (comme PostgreSQL : rendre, ne pas couper). À l'ouverture en
+// écriture seulement ; après l'application des pages fantômes, qui a lieu avant cette lecture.
+// Mesuré avant : un COPY de 200 000 lignes tué avant sa validation laissait 554 pages.
+void Checkpointer::returnOwnerlessPages(const DatabaseHeader& header,
+    StorageManager* storageManager) {
+    if (storageManager->isReadOnly() || header.numDataPages == common::INVALID_PAGE_IDX) {
+        return;
+    }
+    auto dataFH = storageManager->getDataFH();
+    const auto numPagesInFile = dataFH->getNumPages();
+    if (numPagesInFile <= header.numDataPages) {
+        // Rien au-delà ; ou le fichier est plus court que l'étendue (une page allouée par le point
+        // de reprise et jamais écrite) : rien à rendre.
+        return;
+    }
+    dataFH->getPageManager()->freeImmediatelyRewritablePageRange(dataFH,
+        PageRange{header.numDataPages, numPagesInFile - header.numDataPages});
 }
 
 } // namespace storage

@@ -88,6 +88,10 @@ struct RAG3DB_API NodeTableDeleteState : TableDeleteState {
 
     explicit NodeTableDeleteState(common::ValueVector& nodeIDVector, common::ValueVector& pkVector)
         : nodeIDVector{nodeIDVector}, pkVector{pkVector} {}
+
+    // Comme l'état de mise à jour : clang-cl refuse d'instancier la copie implicite d'un vecteur
+    // d'unique_ptr, même jamais appelée.
+    NodeTableDeleteState(const NodeTableDeleteState&) = delete;
 };
 
 class NodeTable;
