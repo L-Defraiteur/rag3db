@@ -149,7 +149,7 @@ pub struct ModelSource {
     /// Absente : elle vient de l'environnement ([`Capability::variables`]).
     #[serde(default, skip_serializing_if = "Addresses::is_empty")]
     pub address: Addresses,
-    /// Pour `compatible` : `openai`, `llama_server`, `vertex`.
+    /// Pour `compatible` : `openai`, `llama_server`, `vertex`, `anthropic`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
     /// Le **nom** de la variable qui porte la clé, jamais la clé.
@@ -522,11 +522,16 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
 ///   (`params.location`, `global` par défaut) ; le jeton vient de
 ///   `gcp_auth::TokenSource`. **Limite** : il est pris à la connexion et dure
 ///   une heure.
+/// - `anthropic` : l'API Messages d'Anthropic (feature `anthropic-llm`). Pas
+///   d'adresse (ou une, pour un mandataire) ; la clé vient de la variable
+///   nommée par `api_key_env`, `ANTHROPIC_API_KEY` par défaut.
+///
+/// Rend un `Box<dyn Llm>` : deux clients, un seul type pour l'appelant.
 ///
 /// Ni `local` ni `service` : un modèle de langage sur ce poste est un
 /// llama-server, donc `compatible` à une adresse locale.
 #[cfg(feature = "openai-llm")]
-pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm, Origin), String> {
+pub fn connect_llm(source: &ModelSource) -> Result<(Box<dyn crate::llm::Llm>, Origin), String> {
     use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
     let what = format!("models.llm ({})", source.model);
     if source.model.trim().is_empty() {
@@ -536,6 +541,24 @@ pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm
         Some(n) => llm.with_context_len(n),
         None => llm,
     };
+    if source.provider == Provider::Compatible && source.protocol.as_deref() == Some("anthropic") {
+        #[cfg(feature = "anthropic-llm")]
+        {
+            use crate::anthropic_llm::{AnthropicLlm, API_KEY_ENV};
+            let variable = source.api_key_env.as_deref().unwrap_or(API_KEY_ENV);
+            let key = secret_from_env(variable).map_err(|e| format!("{what} : {e}"))?;
+            let mut llm = AnthropicLlm::new(key, &source.model);
+            if let Some(url) = source.address.0.first() {
+                llm = llm.with_base_url(url);
+            }
+            if let Some(n) = source.context_tokens {
+                llm = llm.with_context_len(n);
+            }
+            return Ok((Box::new(llm), Origin::Compatible("anthropic".into())));
+        }
+        #[cfg(not(feature = "anthropic-llm"))]
+        return Err(format!("{what} : le protocole anthropic demande la feature `anthropic-llm`"));
+    }
     if source.provider == Provider::Compatible && source.protocol.as_deref() == Some("vertex") {
         let project = source
             .params
@@ -546,7 +569,7 @@ pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm
         let location = source.params.get("location").cloned().unwrap_or_else(|| "global".to_string());
         let token = crate::gcp_auth::TokenSource::from_env().and_then(|s| s.token()).map_err(|e| format!("{what} : jeton Vertex : {e}"))?;
         let llm = with_context(OpenAiLlm::vertex(&project, &location, token, &source.model));
-        return Ok((llm, Origin::Compatible(format!("vertex:{project}/{location}"))));
+        return Ok((Box::new(llm), Origin::Compatible(format!("vertex:{project}/{location}"))));
     }
     let compatible = |address: &str, s: &ModelSource| -> Result<OpenAiLlm, String> {
         match s.protocol.as_deref().unwrap_or("openai") {
@@ -560,12 +583,12 @@ pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm
                 }
                 Ok(llm)
             }
-            other => Err(format!("protocole `{other}` inconnu pour un modèle de langage (openai, vertex)")),
+            other => Err(format!("protocole `{other}` inconnu pour un modèle de langage (openai, vertex, anthropic)")),
         }
     };
     let builders: Builders<OpenAiLlm> = Builders { local: None, service: None, compatible: Some(&compatible) };
     let (llm, origin) = resolve(Capability::Llm, source, &builders, &process_env)?;
-    Ok((with_context(llm), origin))
+    Ok((Box::new(with_context(llm)), origin))
 }
 
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
@@ -731,6 +754,25 @@ mod tests {
 
     /// Le modèle de langage se déclare comme les autres : compatible OpenAI à
     /// une adresse (écrite ou par `RAG3WEAVER_SERVICE_LLM`), avec sa fenêtre.
+    #[cfg(feature = "anthropic-llm")]
+    #[test]
+    fn le_protocole_anthropic_se_declare_sans_adresse_et_la_cle_par_sa_variable() {
+        use crate::llm::Llm;
+        let s: ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "compatible", "protocol": "anthropic", "model": "claude-opus-5",
+            "api_key_env": "RAG3WEAVER_TEST_ANTHROPIC_KEY", "context_tokens": 200000
+        }))
+        .unwrap();
+        std::env::remove_var("RAG3WEAVER_TEST_ANTHROPIC_KEY");
+        let err = connect_llm(&s).err().expect("sans clé, un refus");
+        assert!(err.contains("RAG3WEAVER_TEST_ANTHROPIC_KEY") && !err.contains("sk-"), "{err}");
+        std::env::set_var("RAG3WEAVER_TEST_ANTHROPIC_KEY", "sk-test");
+        let (llm, origin) = connect_llm(&s).expect("la déclaration suffit");
+        assert_eq!(origin, Origin::Compatible("anthropic".into()));
+        assert_eq!((llm.name(), llm.context_len()), ("claude-opus-5", 200_000));
+        std::env::remove_var("RAG3WEAVER_TEST_ANTHROPIC_KEY");
+    }
+
     #[cfg(feature = "openai-llm")]
     #[test]
     fn le_modele_de_langage_se_declare_comme_les_autres() {

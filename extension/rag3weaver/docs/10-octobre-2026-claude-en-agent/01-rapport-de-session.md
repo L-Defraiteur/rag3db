@@ -1,7 +1,7 @@
 # Claude en agent — rapport de session
 
 Chantier E du plan de reprise (`../8-octobre-2026-16h29/orchestration/01`).
-Mis à jour le 10 octobre 2026 à 11 h 30. Ce fichier se met à jour sur place.
+Mis à jour le 10 octobre 2026 à 12 h 00. Ce fichier se met à jour sur place.
 
 ## 1. Le rôle
 
@@ -63,12 +63,21 @@ Worktree `/home/lucied/git_workspaces/rag3db-anthropic`, branche
 - Les séquences d'arrêt sont détectées chez nous (`first_stop` /
   `holdback`), comme pour OpenAI, et ne sont pas envoyées.
 
-## 4. En cours
+## 4. En cours — état au redémarrage du poste (10 octobre, 12 h)
 
-- Compilation des trois fichiers du branchement et du binaire du chat :
-  en attente du verrou du poste (une mesure d'une autre session tient
-  l'exclusif).
-- Puis : push de la branche, et la passe d'agent (`~/.cache/rag3weaver-build/anthropic/passe.sh`).
+**Le dernier commit de code n'est pas compilé.** Il porte les trois
+corrections de la passe 2 dans `anthropic_llm.rs` (deux tests ajoutés, 26),
+le branchement du harnais (`model_source.rs`, `chat.rs`, le binaire du chat)
+et le protocole de la comparaison. La compilation a attendu le verrou du
+poste derrière les mesures en file, puis le poste a été mis en pause pour un
+redémarrage avant qu'elle n'entre. Le commit précédent (`5b65f30ca`, 24
+tests) est, lui, compilé et vert.
+
+Au retour, dans l'ordre : `poste lourd cargo test --lib --features
+anthropic-llm anthropic_llm model_source` ; `poste lourd cargo build --bin
+rag3weaver-chat --features anthropic-llm` ; `poste lourd cargo check --lib
+--bins --features openai-llm` (le `cfg(not)` du protocole anthropic) ; puis
+le backend de la passe (§6) et la passe (`passe.sh claude-1`).
 
 ## 5. Ce qui attend Lucie
 

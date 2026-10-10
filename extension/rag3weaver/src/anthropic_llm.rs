@@ -580,6 +580,7 @@ fn error_message(v: &Value) -> String {
 fn read_sse(
     reader: &mut impl BufRead,
     opts: &GenOptions,
+    context_len: usize,
     sink: &mut dyn TokenSink,
 ) -> Result<(Finish, Usage), LlmError> {
     let mut line = String::new();
@@ -590,6 +591,19 @@ fn read_sse(
     let mut stop_reason: Option<String> = None;
     let mut stop_sequence: Option<String> = None;
     let mut stop_details: Option<Value> = None;
+
+    /// Le compte du prompt, dans la forme d'Anthropic : le cache est compté
+    /// **à part** de `input_tokens`, notre `Usage` le compte **dedans**. On
+    /// additionne pour tenir le contrat du type, et on garde la part lue au
+    /// cache à côté. Rend `false` si l'objet ne porte pas de compte.
+    fn read_input(u: &Value, usage: &mut Usage) -> bool {
+        let Some(input) = u["input_tokens"].as_u64() else { return false };
+        let read = u["cache_read_input_tokens"].as_u64().unwrap_or(0) as usize;
+        let written = u["cache_creation_input_tokens"].as_u64().unwrap_or(0) as usize;
+        usage.prompt_tokens = input as usize + read + written;
+        usage.cached_prompt_tokens = read;
+        true
+    }
 
     let cancelled = |blocks: &BTreeMap<u64, Block>, usage: &mut Usage, emitted: usize| {
         if usage.completion_tokens == 0 {
@@ -627,15 +641,7 @@ fn read_sse(
         match ev["type"].as_str().unwrap_or("") {
             "error" => return Err(LlmError::Model(error_message(&ev))),
             "message_start" => {
-                let u = &ev["message"]["usage"];
-                let input = u["input_tokens"].as_u64().unwrap_or(0) as usize;
-                let read = u["cache_read_input_tokens"].as_u64().unwrap_or(0) as usize;
-                let written = u["cache_creation_input_tokens"].as_u64().unwrap_or(0) as usize;
-                // Anthropic compte le cache **à part** de `input_tokens` ; notre
-                // `Usage` le compte **dedans**. On additionne pour tenir le
-                // contrat du type, et on garde la part lue au cache à côté.
-                usage.prompt_tokens = input + read + written;
-                usage.cached_prompt_tokens = read;
+                read_input(&ev["message"]["usage"], &mut usage);
             }
             "content_block_start" => {
                 let Some(index) = ev["index"].as_u64() else { continue };
@@ -676,7 +682,10 @@ fn read_sse(
                 let Some(index) = ev["index"].as_u64() else { continue };
                 let d = &ev["delta"];
                 match d["type"].as_str().unwrap_or("") {
-                    "text_delta" => {
+                    // Seul un bloc `text` ouvert alimente la réponse : le
+                    // texte d'un bloc d'une autre nature (résultat d'un outil
+                    // serveur, par exemple) n'est pas la parole du modèle.
+                    "text_delta" if matches!(blocks.get(&index), Some(Block::Text)) => {
                         let text = d["text"].as_str().unwrap_or("");
                         if let Some(finish) =
                             push_text(text, opts, sink, &mut pending, &mut emitted, &blocks, &mut usage)?
@@ -717,7 +726,10 @@ fn read_sse(
                 if let Some(d) = details.filter(|d| !d.is_null()) {
                     stop_details = Some(d.clone());
                 }
-                // `output_tokens` est cumulatif : la dernière valeur fait foi.
+                // L'usage de fin est **complet** (relevé sur le flux réel du
+                // 10 octobre 2026 : `input_tokens` et les deux comptes de cache
+                // y sont redits) et cumulatif : la dernière valeur fait foi.
+                read_input(&ev["usage"], &mut usage);
                 if let Some(n) = ev["usage"]["output_tokens"].as_u64() {
                     usage.completion_tokens = n as usize;
                 }
@@ -726,6 +738,17 @@ fn read_sse(
             // `ping`, `content_block_stop`, et ce qui viendra.
             _ => {}
         }
+    }
+
+    // Un flux qui se ferme avant d'avoir dit comment il finit est une
+    // **coupure**, pas une fin : la réponse est tronquée sans que le
+    // fournisseur l'ait dit, et un appel d'outil à moitié reçu n'est pas un
+    // appel. Ce qui a déjà été poussé l'a été ; l'appelant sait par l'erreur
+    // qu'il ne doit pas le prendre pour une réponse.
+    if stop_reason.is_none() {
+        return Err(LlmError::Model(
+            "flux coupé avant `message_delta` : réponse tronquée par la connexion".into(),
+        ));
     }
 
     // Ce qui restait retenu n'amorçait pas de séquence d'arrêt : il sort.
@@ -758,7 +781,7 @@ fn read_sse(
         // le sien, et la suite est une compaction — le même signal que le 400
         // d'un prompt trop long.
         Some("model_context_window_exceeded") => {
-            return Err(LlmError::ContextOverflow { max: 0, got: usage.prompt_tokens });
+            return Err(LlmError::ContextOverflow { max: context_len, got: usage.prompt_tokens });
         }
         Some("stop_sequence") => {
             Finish::stop(stop_sequence.unwrap_or_default()).with_tool_calls(calls)
@@ -907,7 +930,8 @@ impl Llm for AnthropicLlm {
                     // ouvert, pour ne jamais pousser deux fois un début de
                     // réponse (voir `OpenAiLlm`).
                     let mut reader = BufReader::new(resp.body_mut().as_reader());
-                    let (finish, mut usage) = read_sse(&mut reader, opts, sink)?;
+                    let (finish, mut usage) =
+                        read_sse(&mut reader, opts, self.context_len, sink)?;
                     drop(reader);
                     usage.ms = self.clock.now().saturating_duration_since(started).as_millis()
                         as u64;
@@ -1019,7 +1043,7 @@ mod tests {
             })
             .collect();
         let mut r = BufReader::new(body.as_bytes());
-        read_sse(&mut r, opts, sink)
+        read_sse(&mut r, opts, 1_000_000, sink)
     }
 
     /// Une transcription enregistrée : une réponse en texte, avec un bloc de
@@ -1177,6 +1201,29 @@ mod tests {
         let (finish, _) = replay(&events, &GenOptions::default(), &mut StringSink::default()).unwrap();
         assert_eq!(finish.reason, FinishReason::MaxTokens);
         assert_eq!(finish.tool_calls.len(), 1, "l'id doit survivre pour être refermé");
+    }
+
+    #[test]
+    fn a_stream_cut_before_its_end_is_an_error_not_an_answer() {
+        // Tout sauf `message_delta` et `message_stop` : la connexion est tombée.
+        let events: Vec<&str> = TOOL[..TOOL.len() - 2].to_vec();
+        let mut sink = StringSink::default();
+        let err = replay(&events, &GenOptions::default(), &mut sink).unwrap_err();
+        assert!(err.to_string().contains("coupé"), "{err}");
+        assert_eq!(sink.text, "Je regarde.", "ce qui est sorti est sorti ; l'erreur dit de ne pas s'y fier");
+    }
+
+    #[test]
+    fn the_final_usage_of_message_delta_wins() {
+        // Relevé sur le flux réel : `message_delta` redit les comptes d'entrée.
+        let owned = vec![
+            r#"{"type":"message_start","message":{"usage":{"input_tokens":1,"cache_read_input_tokens":0,"output_tokens":1}}}"#.to_string(),
+            r#"{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null,"stop_details":null},"usage":{"input_tokens":49,"cache_creation_input_tokens":10,"cache_read_input_tokens":20,"output_tokens":152,"output_tokens_details":{"thinking_tokens":21}}}"#.to_string(),
+            r#"{"type":"message_stop"}"#.to_string(),
+        ];
+        let events: Vec<&str> = owned.iter().map(String::as_str).collect();
+        let (_, usage) = replay(&events, &GenOptions::default(), &mut StringSink::default()).unwrap();
+        assert_eq!((usage.prompt_tokens, usage.cached_prompt_tokens, usage.completion_tokens), (79, 20, 152));
     }
 
     #[test]

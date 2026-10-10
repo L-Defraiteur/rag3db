@@ -140,7 +140,7 @@ impl ChatConfig {
 
     /// Le client du modèle de langage déclaré, et d'où il calcule.
     #[cfg(feature = "openai-llm")]
-    pub fn connect_llm(&self) -> Result<(crate::openai_llm::OpenAiLlm, crate::model_source::Origin), String> {
+    pub fn connect_llm(&self) -> Result<(Box<dyn crate::llm::Llm>, crate::model_source::Origin), String> {
         crate::model_source::connect_llm(&self.llm_source()?)
     }
 }
@@ -169,7 +169,7 @@ impl LlmProvider {
     /// Gardé pour ses appelants : la connexion passe par la déclaration
     /// commune ([`crate::model_source::connect_llm`]).
     #[cfg(feature = "openai-llm")]
-    pub fn connect(&self) -> Result<crate::openai_llm::OpenAiLlm, String> {
+    pub fn connect(&self) -> Result<Box<dyn crate::llm::Llm>, String> {
         crate::model_source::connect_llm(&self.source()).map(|(llm, _)| llm)
     }
 }
