@@ -33,6 +33,33 @@ pub struct PostgresConnection {
     /// le pont [`bloquer`] refuse NOMMÉMENT sur un fil unique au lieu de
     /// paniquer. (Chantier C, 10 octobre 2026.)
     rt: tokio::runtime::Runtime,
+    /// **La session épinglée d'une transaction.** `begin` prend une session
+    /// du pool, y joue `BEGIN` et la tient ici ; tant qu'elle est tenue,
+    /// TOUTES les instructions de cette connexion passent par elle — c'est
+    /// la seule façon qu'un `COMMIT`/`ROLLBACK` défasse ce que la
+    /// transaction a écrit (ticket « la transaction d'un paquet part sur
+    /// deux sessions du pool »). `commit`/`rollback` la rendent au pool —
+    /// ou la FERMENT si la clôture échoue : on ne rend jamais au pool une
+    /// session dont l'état transactionnel est inconnu.
+    epinglee: std::sync::Mutex<Option<deadpool_postgres::Object>>,
+}
+
+/// La session d'une instruction : l'épinglée si une transaction est ouverte
+/// (le verrou est tenu le temps de l'instruction — les instructions d'une
+/// transaction se suivent, elles ne se doublent pas), une session du pool
+/// sinon.
+enum SessionTenue<'a> {
+    Epinglee(std::sync::MutexGuard<'a, Option<deadpool_postgres::Object>>),
+    DuPool(deadpool_postgres::Object),
+}
+
+impl SessionTenue<'_> {
+    fn client(&self) -> &deadpool_postgres::Object {
+        match self {
+            Self::Epinglee(garde) => garde.as_ref().expect("tenue parce que Some au verrou"),
+            Self::DuPool(objet) => objet,
+        }
+    }
 }
 
 /// **Le pont synchrone de la connexion** : joue un futur sur SON runtime.
@@ -103,7 +130,45 @@ impl PostgresConnection {
         })??;
         drop(_conn);
 
-        Ok(Self { pool, rt })
+        Ok(Self { pool, rt, epinglee: std::sync::Mutex::new(None) })
+    }
+
+    /// La session de CETTE instruction : l'épinglée d'une transaction
+    /// ouverte, ou une session du pool.
+    async fn session(&self) -> Result<SessionTenue<'_>, DbError> {
+        let garde = self.epinglee.lock().unwrap_or_else(|e| e.into_inner());
+        if garde.is_some() {
+            return Ok(SessionTenue::Epinglee(garde));
+        }
+        drop(garde);
+        let objet = self
+            .pool
+            .get()
+            .await
+            .map_err(|e| DbError::ConnectionError(e.to_string()))?;
+        Ok(SessionTenue::DuPool(objet))
+    }
+
+    /// Clore la transaction épinglée par `COMMIT` ou `ROLLBACK`.
+    fn clore(&self, verbe: &'static str) -> Result<(), DbError> {
+        bloquer(&self.rt, "PostgresConnection::clore", async move {
+            let prise = self.epinglee.lock().unwrap_or_else(|e| e.into_inner()).take();
+            let Some(session) = prise else {
+                return Err(DbError::QueryError(format!(
+                    "{verbe} : aucune transaction ouverte sur cette connexion"
+                )));
+            };
+            match session.batch_execute(verbe).await {
+                // La session rentre au pool, propre.
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    // L'état transactionnel de la session est inconnu : la
+                    // retirer du pool (fermée), il en recréera une.
+                    drop(deadpool_postgres::Object::take(session));
+                    Err(Self::dire(e, verbe))
+                }
+            }
+        })?
     }
 
     /// Create from explicit parameters.
@@ -326,10 +391,8 @@ impl PostgresConnection {
 
     /// Internal async execute, called from sync DbConnection via block_on.
     async fn execute_async(&self, sql: &str) -> Result<QueryResult, DbError> {
-        let conn = self.pool.get().await
-            .map_err(|e| DbError::ConnectionError(e.to_string()))?;
-
-        let rows = conn.query(sql, &[]).await
+        let session = self.session().await?;
+        let rows = session.client().query(sql, &[]).await
             .map_err(|e| Self::dire(e, sql))?;
 
         let columns = if let Some(first) = rows.first() {
@@ -361,10 +424,8 @@ impl PostgresConnection {
         let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
             pg_params.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
 
-        let conn = self.pool.get().await
-            .map_err(|e| DbError::ConnectionError(e.to_string()))?;
-
-        let rows = conn.query(&translated_sql, &param_refs).await
+        let session = self.session().await?;
+        let rows = session.client().query(&translated_sql, &param_refs).await
             .map_err(|e| Self::dire(e, &translated_sql))?;
 
         let columns = if let Some(first) = rows.first() {
@@ -398,5 +459,38 @@ impl DbConnection for PostgresConnection {
             "PostgresConnection::execute_with_params",
             self.execute_with_params_async(sql, params),
         )?
+    }
+
+    /// Épingle une session du pool pour la durée de la transaction : le
+    /// `BEGIN` y part, et [`execute`](Self::execute) y route tout jusqu'au
+    /// [`commit`](Self::commit)/[`rollback`](Self::rollback). Une seconde
+    /// transaction sur la même connexion est refusée en son nom.
+    fn begin(&self) -> Result<(), DbError> {
+        bloquer(&self.rt, "PostgresConnection::begin", async {
+            let mut garde = self.epinglee.lock().unwrap_or_else(|e| e.into_inner());
+            if garde.is_some() {
+                return Err(DbError::QueryError(
+                    "begin : une transaction est déjà ouverte sur cette connexion — \
+                     pas de transactions imbriquées"
+                        .to_string(),
+                ));
+            }
+            let session = self
+                .pool
+                .get()
+                .await
+                .map_err(|e| DbError::ConnectionError(e.to_string()))?;
+            session.batch_execute("BEGIN").await.map_err(|e| Self::dire(e, "BEGIN"))?;
+            *garde = Some(session);
+            Ok(())
+        })?
+    }
+
+    fn commit(&self) -> Result<(), DbError> {
+        self.clore("COMMIT")
+    }
+
+    fn rollback(&self) -> Result<(), DbError> {
+        self.clore("ROLLBACK")
     }
 }

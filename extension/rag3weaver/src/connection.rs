@@ -110,6 +110,27 @@ pub trait DbConnection: Send + Sync {
     /// disque et du journal. Sans effet pour un moteur qui ne le sait pas.
     fn close_without_checkpoint(&self) {}
 
+    /// **Ouvre une transaction explicite.** Au défaut, le texte du moteur
+    /// (`BEGIN TRANSACTION`) — juste pour un moteur MONO-SESSION (rag3db),
+    /// où chaque instruction part de toute façon sur la même session. Un
+    /// moteur à POOL doit redéfinir les trois : épingler une session du
+    /// `begin` au `commit`/`rollback`, sinon la transaction part sur
+    /// plusieurs sessions et un paquet « défait » ne défait rien (ticket
+    /// 2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions).
+    fn begin(&self) -> Result<(), DbError> {
+        self.execute("BEGIN TRANSACTION").map(|_| ())
+    }
+
+    /// Valide la transaction ouverte par [`begin`](Self::begin).
+    fn commit(&self) -> Result<(), DbError> {
+        self.execute("COMMIT").map(|_| ())
+    }
+
+    /// Défait la transaction ouverte par [`begin`](Self::begin).
+    fn rollback(&self) -> Result<(), DbError> {
+        self.execute("ROLLBACK").map(|_| ())
+    }
+
     /// Le chemin de la base sur disque, s'il y en a un : `None` en mémoire,
     /// ou pour un moteur qui n'en a pas (PostgreSQL).
     fn database_path(&self) -> Option<std::path::PathBuf> {

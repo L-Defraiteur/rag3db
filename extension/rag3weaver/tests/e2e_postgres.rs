@@ -1701,3 +1701,41 @@ fn le_chemin_composable_resout_les_chunks_avec_le_dialecte_postgres() {
         "chaque résultat doit être enrichi par le dialecte postgres"
     );
 }
+
+// ═══ La transaction épinglée ═════════════════════════════════════════════════
+
+/// `begin`/`commit`/`rollback` tiennent sur UNE session du pool — le ticket
+/// « la transaction d'un paquet part sur deux sessions ». Sans la session
+/// épinglée, le `ROLLBACK` partirait sur une autre session et les premières
+/// lignes resteraient : c'est exactement ce que la première assertion verrait.
+#[test]
+#[ignore]
+fn la_transaction_epinglee_tient_sur_une_session() {
+    let _verrou = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = ouvrir();
+    table_rase(conn.as_ref());
+    conn.execute("CREATE TABLE compte (id INT PRIMARY KEY)").unwrap();
+
+    // Un paquet défait ne laisse rien.
+    conn.begin().unwrap();
+    conn.execute("INSERT INTO compte VALUES (1)").unwrap();
+    conn.execute("INSERT INTO compte VALUES (2)").unwrap();
+    conn.rollback().unwrap();
+    let r = conn.execute("SELECT count(*) FROM compte").unwrap();
+    assert_eq!(r.rows[0][0], CypherValue::Int(0), "un paquet défait ne laisse rien : {r:?}");
+
+    // Un paquet validé laisse tout.
+    conn.begin().unwrap();
+    conn.execute("INSERT INTO compte VALUES (3)").unwrap();
+    conn.commit().unwrap();
+    let r = conn.execute("SELECT count(*) FROM compte").unwrap();
+    assert_eq!(r.rows[0][0], CypherValue::Int(1), "le paquet validé : {r:?}");
+
+    // Les refus nommés : pas d'imbrication, pas de clôture sans ouverture.
+    conn.begin().unwrap();
+    let e = conn.begin().unwrap_err().to_string();
+    assert!(e.contains("déjà ouverte"), "{e}");
+    conn.rollback().unwrap();
+    let e = conn.commit().unwrap_err().to_string();
+    assert!(e.contains("aucune transaction"), "{e}");
+}
