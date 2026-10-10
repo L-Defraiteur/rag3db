@@ -35,6 +35,14 @@ LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen database-reope
 # et après réouverture restent probabilistes.
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-endpoints-exist,same-answers,stored-endpoints-visible
 #
+# Marche A7 (l'attente d'un point de reprise forcé à la validation) — la seconde limite du
+# 4 octobre, sur son chemin d'origine : deux COPY FORCÉS (force_checkpoint_on_copy=true, le
+# réglage existe toujours) de deux tables, deux validations qui veulent chacune leur point de
+# reprise ; la première attend le départ de la seconde jusqu'au délai (5 s) et échoue. Sa forme
+# journalisée (le défaut depuis ff9bad960) est verte : aucun des deux ne veut de point de
+# reprise. Mesuré sur luciepc le 10 octobre : 5 014 ms.
+Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
+#
 # Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
 # nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux
 # ordres). C2_DetachRelationCommitsFirst/Thread_Crash : le rejeu « répare » la relation
