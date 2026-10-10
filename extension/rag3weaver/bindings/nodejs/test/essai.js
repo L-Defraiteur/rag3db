@@ -4,25 +4,18 @@
 // (`warnings` dans describe et index_state), indexe en plein texte, et la
 // recherche dense dit « signal is not available ». Le binaire vient de
 // RAG3WEAVER_BACKEND, du paquet de la plateforme, ou de dist/<plateforme>/.
-//
-// ROUGE ATTENDU (10 octobre 2026) : tant que l'arbre principal n'a pas posé
-// l'embarqueur absent (sans service, le catalogue poserait encore des
-// vecteurs factices), cette épreuve ne joue que sur demande :
-//   RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { Backend, binaryPath, vectorExtensionPath, templatesDir, prepareManifest } = require('..');
 
 async function main() {
-  if (process.env.RAG3WEAVER_ESSAI_ROUGE_ATTENDU !== '1') {
-    console.log('essai ignoré (rouge attendu jusqu\'à l\'embarqueur absent de l\'arbre principal) : RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 pour le jouer');
-    return;
-  }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rag3weaver-essai-'));
   const ws = path.join(tmp, 'ws');
   fs.mkdirSync(ws);
-  fs.writeFileSync(path.join(ws, 'main.rs'), 'fn main() {\n    println!("bonjour depuis rag3weaver");\n}\n');
+  // Une bibliothèque importée : l'entité Library est hybride par défaut,
+  // c'est elle qui prendrait des vecteurs factices s'il y en avait.
+  fs.writeFileSync(path.join(ws, 'main.rs'), 'use serde::Serialize;\n\n#[derive(Serialize)]\nstruct Salut { mot: String }\n\nfn main() {\n    println!("bonjour depuis rag3weaver");\n}\n');
   fs.writeFileSync(path.join(ws, 'README.md'), '# Essai\n\nTrois fichiers, une recherche : le mot cherché est « bonjour ».\n');
   fs.writeFileSync(path.join(ws, 'notes.txt'), 'rien à voir ici\n');
 
@@ -32,11 +25,13 @@ async function main() {
     vector_extension: vectorExtensionPath(),
     // Sans commandes ni bac à sable (le test tourne partout) : la porte fermée
     // exige que l'outil run_command ne soit pas déclaré. Le schéma de code
-    // s'enregistre par `index: "code"` ; en mots seuls (`index_signals` bm25),
-    // le backend démarre sans service d'embarquement.
+    // s'enregistre par `index: "code"` ; sans service d'embarquement, le
+    // backend démarre en le disant (plein texte seul, vecteurs en dette).
     workspace: {
       root: ws, commands: 'off', sandbox: { mode: 'off' },
-      index: 'code', index_signals: { File: ['bm25'], Scope: ['bm25'] },
+      // Les signaux par défaut (hybride) : sans service, le dense se replie
+      // en le disant et les vecteurs restent en dette — c'est le témoin.
+      index: 'code',
     },
     tools: { run_command: undefined },
   });
@@ -96,6 +91,12 @@ async function main() {
     throw new Error(`search_code "bonjour" après l'index : ${a2.slice(0, 400)}`);
   }
   console.log('search_code : après l index, le mot est trouvé');
+  if (!a2.includes('not available')) {
+    throw new Error(`la recherche hybride sans service doit dire que le dense n'est pas disponible : ${a2.slice(0, 600)}`);
+  }
+  console.log('search_code : le dense se replie en le disant (« not available »)');
+  const vecteurs = Object.entries(etat).filter(([k]) => k !== 'warnings').map(([k, v]) => `${k}: vecteurs ${v.vectors} (${v.vectors_percent}%)`);
+  console.log(`dette : ${vecteurs.join(' · ')}`);
 
   const exit = await backend.shutdown();
   console.log(`arrêt propre : code ${exit.code}`);

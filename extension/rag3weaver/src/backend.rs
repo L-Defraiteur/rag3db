@@ -936,6 +936,8 @@ impl PreparedBackend {
     }
     /// Ce que le backend dit quand il déclare du vecteur et démarre sans
     /// service d'embarquement — la même phrase sur stderr et dans le reçu.
+    /// La phrase de fond est celle du catalogue
+    /// (`AVERTISSEMENT_EMBARQUEUR_ABSENT`) ; ici s'ajoute quoi faire.
     pub const AVERTISSEMENT_SANS_SERVICE: &str = "pas de service d'embarquement : index en \
         plein texte seul, vecteurs en dette (ce backend déclare des signaux vecteur ou sparse, \
         ou un workspace indexé) — pour les calculer, donnez models.embed.address (ou \
@@ -974,7 +976,15 @@ impl PreparedBackend {
                 }
                 e
             }
-            None => Box::new(crate::embedder::MockEmbedder::new(self.embed_dimensions())),
+            // Sans service : l'embarqueur **absent** (arbre principal,
+            // 10 octobre 2026), jamais un factice — il porte le nom et la
+            // dimension du modèle attendu, n'écrit aucun vecteur, laisse la
+            // dette se poser contre le vrai modèle, et la recherche dense se
+            // replie en le disant.
+            None => Box::new(crate::AbsentEmbedder::new(
+                self.embed.model.clone(),
+                self.embed_dimensions(),
+            )),
         };
         let mut cat = Catalog::new(
             conn,
@@ -982,7 +992,6 @@ impl PreparedBackend {
             CatalogConfig {
                 name: Some(self.manifest.name.clone()),
                 embedding_dim: self.embed_dimensions(),
-                allow_mock_embedder: sans_service,
                 checkpoint_dir: Some(
                     self.path(&self.manifest.database)
                         .with_extension("checkpoints"),

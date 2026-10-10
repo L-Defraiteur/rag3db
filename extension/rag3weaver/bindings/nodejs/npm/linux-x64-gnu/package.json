@@ -1,6 +1,6 @@
 {
   "name": "rag3weaver-linux-x64-gnu",
-  "version": "0.1.0",
+  "version": "0.0.1-alpha.1",
   "description": "rag3weaver prebuilt backend for linux-x64-gnu (glibc >= 2.28) — installed automatically by the rag3weaver package",
   "files": [
     "rag3weaver-backend",
@@ -12,7 +12,13 @@
     "type": "git",
     "url": "https://github.com/L-Defraiteur/rag3db"
   },
-  "os": ["linux"],
-  "cpu": ["x64"],
-  "libc": ["glibc"]
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ]
 }
