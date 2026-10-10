@@ -687,12 +687,28 @@ moteur du jour — le binaire de test, lui, datait du **4 octobre**, et cargo ne
 l'avait pas rebâti parce qu'aucune de **ses** sources n'avait changé. J'ai failli
 l'imputer au moteur.
 
-C'est le sixième piège d'un cran plus loin, et il échappe aux deux remèdes
-qu'on s'est donnés : la ligne d'âge de la bibliothèque surveille la
-**bibliothèque**, le contrôle des sources surveille les **sources** — et
-**personne ne surveille l'âge du binaire qui charge l'une et compile les
-autres**. Les deux gardes regardent les deux bouts de la chaîne et laissent le
-milieu.
+C'est le sixième piège d'un cran plus loin. **Correction du même jour, 18 h**,
+parce que la première version de cette note accusait un trou qui n'existe pas :
+j'avais écrit que « personne ne surveille l'âge de la bibliothèque » autrement
+qu'à l'horloge. C'est faux, et `run_e2e.sh` me l'a prouvé en me **refusant** une
+passe :
+
+```
+✗ librag3db.so est plus vieux que le dernier commit de ses sources
+  (src : d10b92306 du 10/10 17:53)
+✗ Rebâtir : cmake --build … , ou RAG3WEAVER_MOTEUR_ANCIEN=1 en le sachant.
+```
+
+La garde compare l'artefact au dernier commit de **ses sources**, ce qui est le
+bon critère, et elle nomme son remède et sa dérogation. Je ne l'avais jamais vue
+parce que je ne l'avais jamais déclenchée — et annoncer un garde-fou manquant
+qui existe coûte autant que d'en manquer un : un journal auquel on ne peut pas
+se fier ne sert plus à rien.
+
+**Ce qui reste vrai, et c'est le piège** : cette garde protège la
+**bibliothèque**, pas le **binaire de test** qui la charge. Rien ne compare
+l'âge de `deps/e2e_…` à celui du `.so`, et c'est le seul maillon que les deux
+gardes laissent sans surveillance.
 
 Ce qui le rend vicieux : rien n'est périmé au sens de cargo. Le binaire est à
 jour par rapport à ses sources, la bibliothèque est à jour par rapport aux
