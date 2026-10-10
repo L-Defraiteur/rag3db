@@ -580,15 +580,19 @@ impl NeighborhoodReport {
             out.push_str(&format!("- {} {} — {}\n", s.kind, s.title, lieu(&s.path, s.line)));
         }
         if self.ambiguous {
-            out.push_str("\nNom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont marqués « par le nom ».\n");
+            out.push_str("\nNom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont comptés à part, non montrés.\n");
         }
-        let groupes = self.grouped();
+        // Un usage par le nom seul n'est attribué à aucune définition : il
+        // noierait les sûrs (trente lignes pour deux appelants). Ni listé ni
+        // compté parmi les touchés, il a sa ligne de compte.
+        let par_nom = self.reached.iter().filter(|r| r.by_name && !r.by_also).count();
+        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|r| !r.by_name).collect();
         let resume_niveaux: Vec<String> = (1..=self.depth)
-            .map(|l| format!("{} à {} saut{}", self.reached.iter().filter(|r| r.level == l && !r.by_also).count(), l, if l > 1 { "s" } else { "" }))
+            .map(|l| format!("{} à {} saut{}", self.reached.iter().filter(|r| r.level == l && !r.by_also && !r.by_name).count(), l, if l > 1 { "s" } else { "" }))
             .collect();
         out.push_str(&format!(
             "\n**{} touchés** ({}) — dont **{} {}**",
-            self.reached.iter().filter(|r| !r.by_also).count(),
+            self.reached.iter().filter(|r| !r.by_also && !r.by_name).count(),
             resume_niveaux.join(", "),
             groupes.iter().filter(|r| !r.by_also).count(),
             group_title
@@ -596,20 +600,20 @@ impl NeighborhoodReport {
         if self.cut > 0 {
             out.push_str(&format!(" ; budget atteint, {} de plus non rendus", self.cut));
         }
+        if par_nom > 0 {
+            out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
         out.push_str(".\n");
 
         let ligne = |r: &Reached, out: &mut String| {
             let mut extra = String::new();
-            if r.by_name {
-                extra.push_str(" (par le nom)");
-            }
             if let Some(d) = r.hub {
                 extra.push_str(&format!(" — carrefour, {d} usages, non suivi"));
             }
             out.push_str(&format!("- {} {} — {}{extra}\n", r.kind, r.title, lieu(&r.path, r.line)));
         };
         for l in 1..=self.depth {
-            let tous: Vec<&Reached> = self.reached.iter().filter(|r| r.level == l && !r.by_also && r.group.is_empty()).collect();
+            let tous: Vec<&Reached> = self.reached.iter().filter(|r| r.level == l && !r.by_also && !r.by_name && r.group.is_empty()).collect();
             if tous.is_empty() {
                 continue;
             }
@@ -626,11 +630,10 @@ impl NeighborhoodReport {
             out.push_str(&format!("\n## {} ({})\n", group_title, surs.len()));
             for r in surs.iter().take(limit) {
                 let note = if r.note.is_empty() { String::new() } else { format!(", {}", r.note) };
-                let par = match (&r.through_hub, r.by_name) {
-                (Some(h), _) => format!(", par le carrefour {h}"),
-                (None, true) => ", par le nom".to_string(),
-                _ => String::new(),
-            };
+                let par = match &r.through_hub {
+                    Some(h) => format!(", par le carrefour {h}"),
+                    None => String::new(),
+                };
                 out.push_str(&format!("- `{}` — {} ({} saut{}{note}{par})\n", r.label, lieu(&r.path, r.line), r.level, if r.level > 1 { "s" } else { "" }));
             }
             if surs.len() > limit {

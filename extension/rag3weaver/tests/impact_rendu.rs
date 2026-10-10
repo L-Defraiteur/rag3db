@@ -68,6 +68,28 @@ fn le_rendu_dit_les_niveaux_les_tests_les_carrefours_et_le_budget() {
     assert!(md.contains("## Par le trait (peut-être) (1)") && md.contains("via_trait"), "à part : {md}");
 }
 
+/// Un nom défini par plusieurs classes : `impact` montre les appelants sûrs
+/// et compte à part ceux qu'il n'a trouvés que par le nom — un modèle doit
+/// voir deux appelants, pas trente (`NodeTable::update`, 11 oct. 2026).
+#[test]
+fn les_appelants_par_le_nom_seul_sont_comptes_pas_montres() {
+    let depart = Item { uuid: "d".into(), title: "update".into(), kind: "function".into(), path: "node_table.cpp".into(), line: Some(619) };
+    let mut reached = vec![atteint("s1", "set", "set_executor.cpp", 1, ""), atteint("s2", "replayNodeUpdateRecord", "wal_replayer.cpp", 1, "")];
+    for (i, f) in ["rel_table.cpp", "hash_index.cpp", "column.cpp"].iter().enumerate() {
+        let mut m = atteint(&format!("n{i}"), "bruit", f, 1, "");
+        m.by_name = true;
+        reached.push(m);
+    }
+    reached.push(atteint("s3", "replayWALRecord", "wal_replayer.cpp", 2, ""));
+    let r = NeighborhoodReport { name: "update".into(), starts: vec![depart], ambiguous: true, reached, cut: 0, depth: 2, collected: vec![] };
+    let md = r.markdown("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", 30);
+    assert!(md.contains("## Code qui en dépend, à 1 saut (2)"), "les sûrs seuls : {md}");
+    assert!(md.contains("set — set_executor.cpp:10") && md.contains("replayNodeUpdateRecord — wal_replayer.cpp:10"), "{md}");
+    assert!(!md.contains("bruit"), "aucun usage par le nom seul n'est listé : {md}");
+    assert!(md.contains("3 par le nom seul, non montrés"), "mais ils sont comptés : {md}");
+    assert!(md.contains("**3 touchés** (2 à 1 saut, 1 à 2 sauts)"), "le compte des touchés ne les mêle pas : {md}");
+}
+
 #[test]
 fn la_configuration_refuse_ce_qui_entrerait_mal_dans_une_requete() {
     let base = serde_json::json!({"pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x"});
