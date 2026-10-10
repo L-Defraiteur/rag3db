@@ -449,6 +449,11 @@ pub struct SourceSyncReport {
     /// générés (`SourceSyncOptions::generated`). Ils ne sont pas analysés.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub files_set_aside: BTreeMap<String, usize>,
+    /// **Ce qui a changé le chemin de la synchronisation**, dit en clair :
+    /// par exemple la transaction par paquet coupée parce que le dialecte
+    /// ne déclare pas de transactions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// **Synchroniser une source entière** : voir le module. Les sessions sont
@@ -559,10 +564,11 @@ fn synchroniser_la_source(
     // **Les lignes posées font preuve d'existence** pour le COPY des liens,
     // le temps de cette synchronisation, derrière la transaction par paquet
     // (levier 2 du chargement final). Fermée sur tout chemin de sortie.
-    if transaction_par_paquet() && std::env::var("RAG3WEAVER_TX_SANS_PREUVE").as_deref() != Ok("1") {
+    let tx = decider_la_transaction_par_paquet(catalog)?;
+    if tx.0 && std::env::var("RAG3WEAVER_TX_SANS_PREUVE").as_deref() != Ok("1") {
         catalog.begin_proving_presence();
     }
-    let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id);
+    let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id, tx);
     catalog.end_proving_presence();
     if mode == RelationsMode::Bulk {
         let _ = catalog.persist_meta_key(&marque, "");
@@ -594,6 +600,7 @@ fn synchroniser(
     s_scopes: &str,
     s_files: &str,
     source_id: String,
+    (transaction, coupee): (bool, Option<String>),
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
     // Le plein texte se vérifie avant la première transaction : la garde des
     // comptes (un document sans ligne, une ligne sans document) marque à
@@ -643,7 +650,8 @@ fn synchroniser(
         };
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
-    let par_transaction = mode == RelationsMode::Bulk && transaction_par_paquet();
+    report.warnings.extend(coupee);
+    let par_transaction = mode == RelationsMode::Bulk && transaction;
     // **La poussée des blobs du plein texte, une fois à la fin** — une
     // option (`RAG3WEAVER_TX_POUSSEE_A_LA_FIN=1`), pas le défaut : chaque
     // poussée fait réécrire toute la table des blobs au point de reprise
@@ -920,12 +928,43 @@ fn paquets_par_validation() -> usize {
     }
 }
 
-/// Le prototype de la transaction par paquet est-il demandé ?
+/// **La transaction par paquet de cette synchronisation**, et ce qu'on en
+/// dit. Active par défaut (bascule du 10 octobre 2026, décision de Lucie) ;
+/// `RAG3WEAVER_TX_PAR_PAQUET=0` revient au chemin d'avant.
 ///
-/// **Active par défaut** (défaut basculé, en préparation : décision de
-/// Lucie) ; `RAG3WEAVER_TX_PAR_PAQUET=0` revient au chemin d'avant.
-fn transaction_par_paquet() -> bool {
-    std::env::var("RAG3WEAVER_TX_PAR_PAQUET").as_deref() != Ok("0")
+/// Sur un dialecte qui ne déclare pas de transactions (PostgreSQL : `BEGIN`
+/// et `COMMIT` partent sur deux sessions du pool) — règle convenue avec la
+/// session embarquements :
+/// - demandée explicitement (`=1`) : **refus nommé**, la synchronisation ne
+///   part pas ;
+/// - par défaut : pas de transaction, et un avertissement nommé dans le
+///   rapport — le chemin d'avant, qui marche.
+fn decider_la_transaction_par_paquet(catalog: &Catalog) -> Result<(bool, Option<String>), String> {
+    regle_de_la_transaction_par_paquet(
+        std::env::var("RAG3WEAVER_TX_PAR_PAQUET").ok().as_deref(),
+        catalog.dialect_capabilities().transactions,
+        catalog.dialect_name(),
+    )
+}
+
+fn regle_de_la_transaction_par_paquet(demande: Option<&str>, sait: bool, dialecte: &str) -> Result<(bool, Option<String>), String> {
+    match (demande, sait) {
+        (Some("0"), _) => Ok((false, None)),
+        (Some("1"), false) => Err(format!(
+            "transaction par paquet demandée (RAG3WEAVER_TX_PAR_PAQUET=1), mais le dialecte « {} » ne déclare pas \
+             de transactions : BEGIN et COMMIT n'y tiennent pas sur une seule session. Retirez la variable, ou posez-la à 0.",
+            dialecte
+        )),
+        (_, false) => Ok((
+            false,
+            Some(format!(
+                "transaction par paquet coupée : le dialecte « {} » ne déclare pas de transactions — synchronisation \
+                 sans transaction, comme avant la bascule",
+                dialecte
+            )),
+        )),
+        _ => Ok((true, None)),
+    }
 }
 
 /// **Ouvrir la transaction d'un paquet** : toutes les écritures du catalogue
@@ -1055,5 +1094,29 @@ fn tuer_dans_le_paquet(rang: usize) {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::regle_de_la_transaction_par_paquet as regle;
+
+    /// **La transaction par paquet selon le dialecte** (règle convenue avec la
+    /// session embarquements, 10 octobre 2026).
+    #[test]
+    fn la_transaction_par_paquet_suit_ce_que_le_dialecte_declare() {
+        // Un dialecte qui sait : active par défaut, coupée par 0.
+        assert_eq!(regle(None, true, "rag3db"), Ok((true, None)));
+        assert_eq!(regle(Some("1"), true, "rag3db"), Ok((true, None)));
+        assert_eq!(regle(Some("0"), true, "rag3db"), Ok((false, None)));
+        // Un dialecte qui ne sait pas : coupée et dite par défaut…
+        let (tx, dit) = regle(None, false, "postgres").unwrap();
+        assert!(!tx);
+        assert!(dit.unwrap().contains("« postgres » ne déclare pas de transactions"));
+        // … refusée par son nom quand on la demande…
+        let refus = regle(Some("1"), false, "postgres").unwrap_err();
+        assert!(refus.contains("RAG3WEAVER_TX_PAR_PAQUET=1") && refus.contains("« postgres »"), "{refus}");
+        // … et 0 reste 0, sans un mot.
+        assert_eq!(regle(Some("0"), false, "postgres"), Ok((false, None)));
     }
 }

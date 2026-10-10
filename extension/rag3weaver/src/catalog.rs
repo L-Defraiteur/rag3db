@@ -738,6 +738,16 @@ impl Catalog {
         self.fts_storage_pose = true;
     }
 
+    /// Ce que le dialecte de ce catalogue déclare savoir faire.
+    pub fn dialect_capabilities(&self) -> crate::dialect::DialectCapabilities {
+        self.dialect.capabilities()
+    }
+
+    /// Le nom du dialecte, pour le dire dans un refus ou un avertissement.
+    pub fn dialect_name(&self) -> &str {
+        self.dialect.name()
+    }
+
     /// Le plein texte vit-il dans la base (`_index_blobs`) ?
     pub fn plein_texte_en_base(&self) -> bool {
         matches!(self.fts_storage, crate::fts_handle::FtsStorage::BlobBacked { .. })
@@ -1607,7 +1617,7 @@ impl Catalog {
     ) -> Result<(), CatalogError> {
         // Validate field definitions
         config.validate().map_err(|e| CatalogError::SchemaError(e))?;
-        if self.dialect.name() != "rag3db" && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
+        if !self.dialect.capabilities().structured_fields && config.fields.values().any(|f| matches!(f.field_type, FieldType::List(_) | FieldType::Struct(_))) {
             return Err(CatalogError::SchemaError("native structured payloads currently require rag3db".into()));
         }
 
