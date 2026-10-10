@@ -85,5 +85,5 @@ branche `callees` ; (2) les fonctions de verrou applicatives déclarées par
 dépôt dans le manifeste (`locks_via`), qui posent LOCKS par l'appel — fait,
 branche `locks-via`. Les trois reprises par l'arbre principal. Ensuite :
 B2d, les 8 720 arêtes par le nom (receveurs non typés) ; B9 côté Rust
-partagé avec rag3db-97 (à elle l'indexation de rag3weaver et les cas
+partagé avec rag3db-97 (à rag3db-97 l’indexation de rag3weaver et les cas
 minimaux par catégorie, à moi la lecture et les correctifs codeparsers).
