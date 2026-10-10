@@ -584,3 +584,35 @@ qui ont servi aux mesures (à remettre dans `test/transaction/` et dans son `CMa
 pour les rejouer), et les patchs essayés puis écartés. Ils vivaient dans
 `~/.cache/rag3db-moteur-notes/`, qui n'est pas durable ; les journaux d'exécution y sont
 restés.
+
+## A3′ en cours (10 octobre 2026, 19 h) — état au nettoyage du disque
+
+Interrompue par l'orchestration (le disque sature, tous les bâtis vont être effacés) ; tout est
+poussé en branche, **rien n'est fusionné**.
+
+- **Code** : branche `verrous-a3` de rag3db-moteur (un commit sur `ff9bad960`), message complet
+  dans le commit. Ce qu'elle fait : verrou de clé à l'insertion (index partagé + clé exclusive),
+  verrou d'index exclusif du COPY pris sur le fil du client avant l'ordonnancement, unicité
+  contre le dernier état validé avec **une seule** visibilité (insertion et validation), fil de
+  remplacement de l'ordonnanceur pendant une attente de verrou (`TaskScheduler::BlockingWait`),
+  témoin d'un fil `insert_lock_test.cpp` (7 cas), journal à doublon d'avant A3′ gardé au dépôt
+  (`test/transaction/journal_with_duplicate_key`), deux témoins du banc réécrits
+  (`RollbackOfACopy` à deux fils, `RecoveryOfAJournalWithADuplicateKey…` sur le journal gardé).
+  Page 07 §5 : ce que le code a appris.
+- **Joué** : sur le dernier bâti, transaction_test (InsertLockTest + LockManagerTest) 25 verts ;
+  sur le bâti d'avant le fil de remplacement, C1 ×6, C1_SnapshotPredatesCommit ×3,
+  LockBench.SameKey ×2 verts, plus de SIGSEGV dans C7. **Pas joué** : le filtre A3′ du banc et
+  C7 ×3 sur le dernier bâti (chaîne tuée au nettoyage), la liste complète, la relecture du banc,
+  la mesure du coût par ligne (rag3db-6f).
+- **À faire à la reprise** : rebâtir (`build/moteur` effacé) ; rejouer `LockBench.SameKey*:
+  *C1_*:*RecoveryOfAJournalWithADuplicateKey*:*RollbackOfACopy*` puis `*C7_RandomMix*` ×3
+  (attendu : RollbackOfACopy ×2 verts, plus de garde expirée ; C7 Hot/Reopen restent
+  probabilistes, Crash attendu vert) ; appliquer le script de `known_red.txt`
+  (`~/.cache/rag3db-moteur-notes/a3/known_red.py` : retire C1 ×6, Snapshot ×3, C7 Crash,
+  SameKey ×2, RollbackOfACopy ; garde la ligne de la reprise) — si C7 Crash ne verdit pas
+  toujours, `probabilistic.txt` ; liste complète ; relecture du banc ; push en avance rapide
+  avec le compte des rouges (59 avant A3′) ; fermer le ticket « L'annulation d'un COPY efface
+  les lignes… » (corrigé par le verrou) et le message de commit « Passe : INCOMPLÈTE » se
+  corrige par un second commit, pas par un amend poussé.
+- **Faute du jour** : un `pidof concurrence_test` nu a tué un test du banc ; règle notée (pids
+  lancés par soi, vérifiés par `/proc/<pid>/exe`).

@@ -123,3 +123,46 @@ concurrent : à mesurer, c'est la seule chose que le mode éteint ne doit pas pa
   Je propose : seulement ses extrémités (partagé pour créer, exclusif sur le nœud pour
   supprimer ou mettre à jour ses relations), comme Neo4j verrouille les nœuds d'une relation.
 - V2 : qui écrit la fonction `CALL` (hors de mes dossiers).
+
+## 5. A3′ : faite (10 octobre 2026, soir) — ce que le code a appris de plus que la page
+
+Le câblage est celui du §2, avec trois choses que la page ne prévoyait pas, toutes trouvées
+par le banc le jour même ; **[mesuré]** sauf mention.
+
+- **L'index en partagé pour l'insertion, en exclusif pour le COPY.** Une insertion prend, en
+  une prise groupée, `INDEX{table}` partagé et `ROW{table, clé}` exclusif ; un COPY prend
+  `INDEX{table}` exclusif. Un COPY écrit ses clés dans l'index et ses lignes dans les blocs de
+  la table avant de valider : ni deux COPY ni un COPY et une insertion de la même table ne se
+  croisent plus. C'est ce qui ferme la première limite du 4 octobre (deux COPY non validés dans
+  le même bloc) — par le verrou, pas par un correctif de l'annulation ; le témoin
+  `RollbackOfACopy.RemovesOnlyItsOwnKeys` est réécrit à deux fils (le second COPY attend).
+- **Une seule visibilité d'unicité, à l'insertion et à la validation.** L'unicité se contrôle
+  contre le dernier état validé (`Transaction::LATEST_COMMITTED_TS` : tout horodatage de
+  validation est inférieur au premier identifiant de transaction ; `NodeTable::
+  isVisibleToLatestCommit`). Le premier câblage ne l'avait fait qu'à l'insertion ; la validation
+  (`commitInsert` de l'index de clé) regardait encore l'instantané. Sur une clé supprimée et
+  validée par un autre après l'instantané, l'insertion passait, la validation levait
+  « duplicated primary key » **après** l'ajout des lignes aux groupes : une transaction à moitié
+  validée, puis un SIGSEGV à la validation suivante (C7, trois passes sur trois). Une seule
+  fonction (`NodeTable::getUniquenessVisibleFunc`) sert aux deux. Le défaut général — une erreur
+  pendant la validation après l'étape 1 — est au ticket du 10 octobre.
+- **Une attente de verrou ne doit pas tenir un fil ouvrier de l'ordonnanceur.** Le moteur
+  exécute toute instruction par des tâches sur un nombre fixe de fils ouvriers ; une attente de
+  verrou dans un opérateur occupe l'un d'eux. Avec N attentes, les N fils sont pris, et la
+  transaction qui doit valider pour les libérer ne trouve plus de fil : tout gèle jusqu'au délai
+  des verrous (garde du banc expirée dans C7 et dans le COPY à deux fils ; piles prises sous
+  gdb). Pire pour le COPY : son verrou était pris dans `initGlobalState`, que la tâche exécute
+  sous son mutex, et l'ordonnanceur entier gelait. Deux réponses : le verrou du COPY est pris
+  **avant l'ordonnancement, sur le fil du client** (`PhysicalOperator::
+  acquireLocksBeforeExecution`, appelé par `QueryProcessor::execute` sur chaque tâche du plan),
+  comme PostgreSQL verrouille dans le processus de la connexion ; et toute attente sur un fil
+  ouvrier lance un **fil de remplacement** qui sert la file pendant l'attente
+  (`TaskScheduler::BlockingWait`, le « managed blocker » des ordonnanceurs à nombre de fils
+  fixe), et s'arrête à la fin, après la tâche qu'il a prise. La prise est d'abord tentée sans
+  attendre : une prise libre ne lance rien. Le même mécanisme servira à A4′ et à l'attente d'un
+  point de reprise forcé, qui tient elle aussi un fil ouvrier **[lu, non traité]**.
+
+Ce qu'A3′ ne fait pas : la reprise d'un journal à doublon (il ne peut plus naître ; celui
+d'avant est gardé au dépôt, `test/transaction/journal_with_duplicate_key`, et son témoin reste
+rouge pour la même raison qu'avant) ; le COPY de relations ; les mises à jour, suppressions et
+relations (A4′).
