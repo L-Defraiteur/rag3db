@@ -184,6 +184,14 @@ impl NodeContext {
         self.outputs.insert(port.to_string(), PortValue::Trigger);
     }
 
+    /// **La poignée de l'appel d'outil** qui exécute ce graphe (« #run-3 »),
+    /// posée par la boucle d'agent via l'invocation ([`crate::agent::ToolInvocation`]) ;
+    /// absente hors d'un appel d'outil. Un nœud en mode fond nomme ses
+    /// journaux avec (la commande en fond, chantier A).
+    pub fn tool_handle(&self) -> Option<&String> {
+        self.service::<String>("tool_handle")
+    }
+
     /// Record a numeric metric.
     pub fn metric(&mut self, key: &str, value: f64) {
         self.metrics.push((key.to_string(), value));
