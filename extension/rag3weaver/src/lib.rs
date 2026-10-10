@@ -160,7 +160,6 @@ pub mod origin;
 pub mod records;
 pub mod relation_directions;
 pub mod dataflow;
-pub mod query;
 pub mod refs;
 pub mod schema;
 pub mod script;
@@ -245,7 +244,6 @@ pub use filter::{FilterBuilder, FilterCondition, FilterOp, FilterParser, FilterV
 pub use hash::content_hash;
 pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use records::{EntityRecord, RelationRecord, UpdateRecord, DeleteRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
-pub use query::{PreparedQuery, QueryBuilder};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
 pub use sparse_index::SparseVector;
