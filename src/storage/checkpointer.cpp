@@ -15,6 +15,7 @@
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/database_header.h"
+#include "storage/readers_lock.h"
 #include "storage/shadow_utils.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
@@ -102,13 +103,37 @@ void Checkpointer::writeCheckpoint() {
     dataFH->getPageManager()->resetVersion();
     storageManager->getWAL().reset();
     storageManager->getShadowFile().reset();
+    // Le journal est supprimé : une ouverture en lecture seule trouve maintenant l'état d'après.
+    const auto readersWaitMs = readersLock.waitedMs();
+    readersLock.release();
     if (CheckpointProfile::enabled()) {
         const auto endMs = profile.lap();
         fprintf(stderr,
             "[checkpoint-profile] total=%.1f ms : tables=%.1f catalogue+metadonnees=%.1f "
-            "en-tete=%.1f journal+pages-ombres=%.1f fin=%.1f | fichier=%lu pages\n",
+            "en-tete=%.1f journal+pages-ombres=%.1f fin=%.1f | fichier=%lu pages | attente des "
+            "lecteurs=%lu ms\n",
             profile.total(), storageMs, serializeMs, headerMs, applyMs, endMs,
-            static_cast<unsigned long>(dataFH->getNumPages()));
+            static_cast<unsigned long>(dataFH->getNumPages()),
+            static_cast<unsigned long>(readersWaitMs));
+    }
+}
+
+void Checkpointer::holdReadersLock() {
+    if (isInMemory) {
+        return;
+    }
+    const auto databasePath = StorageManager::Get(clientContext)->getDatabasePath();
+    readersLock = ReadersLock::acquire(databasePath, ReadersLock::Mode::EXCLUSIVE,
+        ReadersLock::CHECKPOINT_WAIT);
+    if (readersLock.timedOut()) {
+        // Une ouverture tient le verrou au-delà de la borne : un lecteur bloqué, ou une base
+        // ouverte en lecture seule dans ce même processus. Le point de reprise passe ; si
+        // l'ouverture lit encore, le constat d'après coup la refuse
+        // (CHECKPOINT_CROSSED_READ_ONLY_OPEN).
+        fprintf(stderr,
+            "checkpoint of %s waited %lu ms for read-only openings of the database and went "
+            "ahead without them\n",
+            databasePath.c_str(), static_cast<unsigned long>(readersLock.waitedMs()));
     }
 }
 
@@ -194,6 +219,9 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     storageManager->getDataFH()->getFileInfo()->syncFile();
     const auto syncDataMs = profile.lap();
     auto wal = WAL::Get(clientContext);
+    // La marque CHECKPOINT est le premier changement qu'une ouverture en lecture seule verrait :
+    // jusqu'ici, rien de ce que désignent l'en-tête et le journal courants n'a été touché.
+    holdReadersLock();
     // Log the checkpoint to the WAL and flush WAL. This indicates that all shadow pages and
     // files (snapshots of catalog and metadata) have been written to disk. The part that is not
     // done is to replace them with the original pages or catalog and metadata files. If the
@@ -225,6 +253,7 @@ void Checkpointer::rollback() {
     auto catalog = catalog::Catalog::Get(clientContext);
     // Any pages freed during the checkpoint are no longer freed
     storageManager->rollbackCheckpoint(*catalog);
+    readersLock.release();
 }
 
 bool Checkpointer::canAutoCheckpoint(const main::ClientContext& clientContext,

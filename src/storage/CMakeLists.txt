@@ -19,6 +19,7 @@ add_library(rag3db_storage
         optimistic_allocator.cpp
         overflow_file.cpp
         page_manager.cpp
+        readers_lock.cpp
         shadow_file.cpp
         shadow_utils.cpp
         storage_manager.cpp
