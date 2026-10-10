@@ -800,7 +800,13 @@ fn copier_les_noeuds(
     relire_les_identifiants: bool,
 ) -> Result<Option<HashMap<String, String>>, String> {
     let chemin = fichier_csv("lignes", table);
-    let Some(copie) = dialect.copy_nodes_from_csv(table, columns, &chemin.to_string_lossy()) else {
+    // Un dialecte sans chargement en masse le refuse en le nommant : le
+    // groupe repasse par l'upsert, comme avant.
+    let charge = rag3weaver_ir::Write::Load {
+        target: rag3weaver_ir::LoadTarget::Nodes { table: table.to_string(), columns: columns.iter().map(|c| c.to_string()).collect() },
+        path: chemin.to_string_lossy().to_string(),
+    };
+    let Ok(copie) = dialect.write(&charge) else {
         return Ok(None);
     };
     // Une valeur que le CSV ne sait pas porter : le groupe repasse par le
@@ -900,7 +906,15 @@ fn copier_les_liens(
     presents_connus: &mut HashMap<String, HashSet<String>>,
 ) -> Result<bool, String> {
     let chemin = fichier_csv("liens", rel_name);
-    let Some(copie) = dialect.copy_links_from_csv(rel_name, ends, prop_refs, &chemin.to_string_lossy()) else {
+    let charge = rag3weaver_ir::Write::Load {
+        target: rag3weaver_ir::LoadTarget::Links {
+            relation: rel_name.to_string(),
+            ends: (ends.0.to_string(), ends.1.to_string()),
+            props: prop_refs.iter().map(|p| p.to_string()).collect(),
+        },
+        path: chemin.to_string_lossy().to_string(),
+    };
+    let Ok(copie) = dialect.write(&charge) else {
         return Ok(false);
     };
     let profil = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();

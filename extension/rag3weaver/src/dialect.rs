@@ -1104,6 +1104,22 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
         },
         rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
+        rag3weaver_ir::Write::Load { target, path } => {
+            let refus = || rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Load" };
+            if !d.capabilities().bulk_load {
+                return Err(refus());
+            }
+            match target {
+                rag3weaver_ir::LoadTarget::Nodes { table, columns } => {
+                    let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+                    d.copy_nodes_from_csv(table, &cols, path).ok_or_else(refus)?
+                }
+                rag3weaver_ir::LoadTarget::Links { relation, ends, props } => {
+                    let props: Vec<&str> = props.iter().map(String::as_str).collect();
+                    d.copy_links_from_csv(relation, (&ends.0, &ends.1), &props, path).ok_or_else(refus)?
+                }
+            }
+        }
     })
 }
 
@@ -3029,6 +3045,12 @@ mod tests {
             assert!(d.write(&del("_uuid", false, true)).is_err());
             assert_eq!(d.write(&Write::Unlink { relation: "CITES".into() }).unwrap(), d.batch_delete_relation("CITES"));
         }
+        use rag3weaver_ir::LoadTarget;
+        let noeuds = Write::Load { target: LoadTarget::Nodes { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] }, path: "/tmp/x.csv".into() };
+        let liens = Write::Load { target: LoadTarget::Links { relation: "CITES".into(), ends: ("Doc".into(), "Doc".into()), props: vec!["ligne".into()] }, path: "/tmp/y.csv".into() };
+        assert_eq!(Rag3dbDialect.write(&noeuds).unwrap(), Rag3dbDialect.copy_nodes_from_csv("Doc", &["_uuid", "titre"], "/tmp/x.csv").unwrap());
+        assert_eq!(Rag3dbDialect.write(&liens).unwrap(), Rag3dbDialect.copy_links_from_csv("CITES", ("Doc", "Doc"), &["ligne"], "/tmp/y.csv").unwrap());
+        assert_eq!(PostgresDialect.write(&noeuds).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Write::Load");
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

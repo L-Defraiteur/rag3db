@@ -3,8 +3,8 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`], [`Count`], [`Select`] et les premières variantes
-//! de [`Write`]. `Tx` est un appel sur la connexion, pas une forme.
+//! Aujourd'hui : [`Hop`], [`Count`], [`Select`] et [`Write`]. `Tx` est un
+//! appel sur la connexion, pas une forme.
 
 use std::fmt;
 
@@ -259,6 +259,19 @@ pub enum Write {
     /// Supprimer des arêtes données par leurs bouts : `$items` porte `from`
     /// et `to` (les uuids), une carte par arête.
     Unlink { relation: String },
+    /// Charger en masse depuis un fichier écrit par l'appelant (le CSV de
+    /// l'ingestion). Un dialecte qui ne déclare pas `bulk_load` le refuse en
+    /// le nommant, et l'appelant repasse par `Upsert` / `Link`.
+    Load { target: LoadTarget, path: String },
+}
+
+/// Ce qu'un [`Write::Load`] remplit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoadTarget {
+    /// Des lignes, colonnes dans l'ordre du fichier.
+    Nodes { table: String, columns: Vec<String> },
+    /// Des arêtes : les deux bouts d'abord, puis les propriétés.
+    Links { relation: String, ends: (String, String), props: Vec<String> },
 }
 
 impl Write {
@@ -289,6 +302,15 @@ impl Write {
             }
             Write::Delete { table, by, .. } => noms.extend([table.as_str(), by.as_str()]),
             Write::Unlink { relation } => noms.push(relation),
+            // Le chemin du fichier n'entre pas comme un nom : il est cité.
+            Write::Load { target: LoadTarget::Nodes { table, columns }, .. } => {
+                noms.push(table);
+                noms.extend(columns.iter().map(String::as_str));
+            }
+            Write::Load { target: LoadTarget::Links { relation, ends, props }, .. } => {
+                noms.extend([relation.as_str(), ends.0.as_str(), ends.1.as_str()]);
+                noms.extend(props.iter().map(String::as_str));
+            }
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
