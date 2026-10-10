@@ -224,7 +224,11 @@ void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGrap
             return l.getDist() < r.getDist();
         });
     uint16_t newSize = 0;
-    for (auto i = 1u; i < nbrs.size(); i++) {
+    // Depuis 0, pas 1 (le cas depuis le premier commit de l'amont, 725046754) : la liste ne
+    // contient jamais le nœud lui-même (pas d'arête vers soi), donc nbrs[0] est son vrai plus
+    // proche voisin, et le sauter l'écartait toujours. Deux points très proches s'écartaient
+    // ainsi l'un l'autre (banc, 5 octobre : la ligne injoignable par des COPY successifs).
+    for (auto i = 0u; i < nbrs.size(); i++) {
         bool keepNbr = true;
         for (auto j = i + 1; j < nbrs.size(); j++) {
             KU_ASSERT(checkEmbeddingValidity(nbrs, i, info, scanState));
@@ -1564,7 +1568,11 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
     relTable.detachDelete(transaction, insertState.relDeleteState.get());
     // Perform the actual shrinking and insertion of shrinked rels.
     uint16_t newSize = 0;
-    for (auto i = 1u; i < nbrs.size(); i++) {
+    // Depuis 0, pas 1 (le cas depuis le premier commit de l'amont, 725046754) : la liste ne
+    // contient jamais le nœud lui-même (pas d'arête vers soi), donc nbrs[0] est son vrai plus
+    // proche voisin, et le sauter l'écartait toujours. Deux points très proches s'écartaient
+    // ainsi l'un l'autre (banc, 5 octobre : la ligne injoignable par des COPY successifs).
+    for (auto i = 0u; i < nbrs.size(); i++) {
         bool keepNbr = true;
         for (auto j = i + 1; j < nbrs.size(); j++) {
             KU_ASSERT(checkEmbeddingValidity(nbrs, i, embeddings, embeddingScanState));
