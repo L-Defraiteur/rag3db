@@ -17,9 +17,13 @@ Native only; no model weights are ever in the package.
 
 | Platform | Sub-package | State |
 |---|---|---|
-| Linux x86_64 (glibc ≥ 2.28) | `rag3weaver-linux-x64-gnu` | published, tested end to end |
+| Linux x86_64 (glibc ≥ 2.28) | `rag3weaver-linux-x64-gnu` | published, tested end to end (demo on a real repository) |
 | macOS arm64 (Apple silicon) | `rag3weaver-darwin-arm64` | built and tested on our runners |
 | Windows x64 (MSVC) | `rag3weaver-windows-x64` | built and tested on our runners |
+
+The sub-packages always carry the version of this package, pinned exactly:
+a head and its platforms are built together, from the same commit, and the
+engine refuses an extension from another build.
 
 Not there yet: Linux musl and arm64, macOS x64. The API is the backend's, in
 JSON lines, without a comfort layer; it may change before 0.1.

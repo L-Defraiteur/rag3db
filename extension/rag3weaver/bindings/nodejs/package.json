@@ -31,8 +31,8 @@
     "test": "node test/essai.js"
   },
   "optionalDependencies": {
-    "rag3weaver-linux-x64-gnu": "0.0.1-alpha.1",
-    "rag3weaver-windows-x64": "0.0.1-alpha.1",
-    "rag3weaver-darwin-arm64": "0.0.1-alpha.1"
+    "rag3weaver-linux-x64-gnu": "0.0.1-alpha.2",
+    "rag3weaver-windows-x64": "0.0.1-alpha.2",
+    "rag3weaver-darwin-arm64": "0.0.1-alpha.2"
   }
 }
