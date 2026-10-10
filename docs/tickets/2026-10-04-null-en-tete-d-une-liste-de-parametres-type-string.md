@@ -1,6 +1,6 @@
 # Un NULL en tête d'une liste de paramètres type sa colonne en STRING
 
-- **État** : ouvert dans le moteur ; contourné dans rag3weaver (l'écrivain de liens ne
+- **État** : ouvert — la cause est dans rag3weaver (lue le 10 octobre 2026), pas dans le moteur ; contourné dans rag3weaver (l'écrivain de liens ne
   regroupe plus que les propriétés non nulles).
 - **Gravité** : perte (les écritures du lot entier sont refusées ; rag3weaver les comptait
   sans les dire).
@@ -46,14 +46,28 @@ du fichier, `#include` compris. Le rapport d'ingestion portait `failed: 5`, que 
 ne lisait. Sur master avant le contournement, des `MENTIONS` ont donc pu manquer dans tout
 index où un rendez-vous sans ligne ouvrait un lot.
 
-## La cause
+## La cause (lue le 10 octobre 2026, seconde session cœur C++) — dans rag3weaver, pas dans le moteur
 
-Non lue dans le binder. Le comportement observé : le type d'un champ de la liste suit sa
-première valeur, et NULL vaut STRING. Le chemin d'annulation l'avait déjà rencontré le
-3 octobre (`_absent_since`, INT64 ; `colonnes_toutes_nulles` dans `record_nodes.rs`).
+- `cypher_to_rag3db_value` (`extension/rag3weaver/src/rag3db_connection.rs:663-688`), qui
+  convertit les paramètres des requêtes préparées :
+  - un `NULL` non typé devient un `NULL` de type `STRING` (`:666`, et un test l'affirme, `:1007`) ;
+  - le type des éléments d'une liste est pris sur le **premier** élément seul (`:672-678`) ;
+  - une map devient une structure dont chaque champ porte le type de sa propre valeur (`:680-686`).
+  `[{line: NULL}, {line: 7}]` devient donc `LIST(STRUCT(line STRING))`.
+- Le moteur fait ce qu'on lui demande : la liaison Rust passe les types tels quels
+  (`tools/rust_api/src/value.rs:729`, `:788-799`), `Value(type, children)` ne les vérifie pas
+  (`value.cpp:334-338`), et un paramètre prend le type de sa valeur
+  (`bind_parameter_expression.cpp:16-17`) ; il ne se laisse retyper que s'il contient `ANY`
+  (`ParameterExpression::cast`, `parameter_expression.cpp:10-20`), d'où le refus du binder.
+- La voie typée de rag3weaver (`CypherValue::Typed`, `typed_rag3db_value`, `:704-712`) donne au
+  `NULL` le type déclaré du champ : elle n'a pas le défaut.
 
 ## Pour le fermer
 
-Que le binder unifie le type d'un champ sur toute la liste (NULL ne contraint rien), ou
-type un NULL de paramètre comme ANY. Le contournement de rag3weaver peut alors rester (il
+Dans rag3weaver (chantier de l'arbre principal) : unifier le type de chaque champ sur toute la
+liste (un `NULL` ne contraint rien), ou typer un `NULL` non typé en `LogicalType::Any` — la
+liaison Rust le prévoit (`tools/rust_api/src/logical_type.rs:9-10`, « Special type for use with
+Value::Null ») ; non vérifié : qu'un champ `ANY` dans une structure se laisse retyper par le
+binder (le témoin le dira). Ou passer par la voie typée. Côté moteur, rien n'est faux ; une
+unification des types des éléments d'une liste de paramètres serait un confort, non demandé. Le contournement de rag3weaver peut alors rester (il
 ne coûte que des groupes de plus quand des lignes manquent) ou partir.
