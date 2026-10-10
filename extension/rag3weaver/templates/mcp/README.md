@@ -100,11 +100,10 @@ stdio seulement.
   la même ligne à la main, l'erreur de chargement s'affiche ;
 - **la liste d'outils est vide** : lisez la ligne `[mcp] …` sur stderr, elle dit
   combien d'outils et sous quelles clés ;
-- **un outil refuse « unknown entity: File »** : votre manifeste ne déclare pas
-  `workspace.index: "code"`, donc le schéma du code n'a pas été posé à
-  l'ouverture. Déclarez-le, **puis** appelez l'outil `index` (`estimate` dit ce
-  que ça coûtera). Appeler `index` sans la déclaration ne sert à rien : il n'a
-  pas de schéma à remplir. (Ce refus ne dit pas encore la cause ; défaut connu,
-  relevé le 10 octobre 2026, correctif en cours.)
+- **un outil dit que « cette base n'a pas le schéma du code »** : votre manifeste
+  ne déclare pas `workspace.index: "code"`, donc le schéma du code n'a pas été
+  posé à l'ouverture. Déclarez-le, **puis** appelez l'outil `index` (`estimate`
+  dit ce que ça coûtera). Le refus le dit lui-même depuis le 11 octobre 2026
+  (`9dc3f083a`) ; avant, il ne disait que « unknown entity: File ».
 - **le serveur s'arrête avec le code 75** : la base demande une réouverture, et
   il vous l'a dit par un `notifications/message` avant de partir. Relancez-le.
