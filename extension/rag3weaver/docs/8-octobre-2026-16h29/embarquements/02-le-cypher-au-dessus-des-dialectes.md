@@ -119,3 +119,27 @@ rendre les **mêmes lignes** que le Cypher qu'elle remplace (comparaison champ
   crate : à retirer, ou des utilisateurs dehors s'en servent ?
 - **Ordre** : la porte unique d'abord (petit), puis `Hop` et `Count` (le
   gros) ?
+
+## Décidé par Lucie (10 octobre)
+
+- **Oui à l'IR en cinq formes**, « tant qu'après c'est scalable » : une
+  forme de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre
+  une suite de `Hop`) reste sous le dialecte.
+- **`query.rs` : à retirer** (personne ne l'instancie, c'est un ancêtre de
+  `Select`). **`dataflow/record.rs` : à garder.** Il est exercé par
+  `e2e_dataflow_observe` (puits fichier et base). C'est aussi la seule pièce
+  qui écrit une exécution dans la base, ce dont les visions ont besoin. Il
+  passera par `Write`, pas avant. « Aucun appelant » plus haut voulait dire
+  aucun appelant dans `src/` : les tests l'appellent.
+- **Oui à l'ordre** : la porte unique (faite, `752e858b4`), puis `Hop` et
+  `Count`, puis `Select` site par site, avec une parité ligne à ligne à
+  chaque pas.
+- **Une crate séparée, pas un dépôt** : `rag3weaver-ir` (`41b869ba4`), sans
+  mot de base dans ses types (`Value`, et non plus `CypherValue`).
+
+## Où on en est
+
+| Pas | Commit | Parité |
+|---|---|---|
+| `Hop` dans la crate, traduit par rag3db, refusé en le nommant ailleurs | `ba11e003b` | tests unitaires de la traduction |
+| `graph_walk::neighbors` passe par `Hop` | `389f5a9dd` | requête identique au caractère près (test) ; e2e_code 27/27, e2e_usages 7/7, usages_rendu 6/6 (luciepc, lib d’avant 0aed3c4b5, sans effet sur ce changement) |
