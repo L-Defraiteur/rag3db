@@ -446,3 +446,122 @@ dépile celui d'une autre session sans que rien ne s'en voie chez elle.
    du *texte complet* du sujet, et une description écrite une fois ne contient
    pas ce qu'on range dessous ;
 6. le nœud de décision **à modèle**, en dernier.
+
+---
+
+## 8. 10 octobre 2026 — le filet des gabarits, et la section `"reactions"`
+
+### 8.1 Le filet des gabarits (lot 3, fini — `4b48cdf98`)
+
+`src/gabarits.rs` : `chaque_gabarit_livre_se_charge` parcourt
+`templates/backends/*/backend.json`, les charge par `PreparedBackend::load`, et
+**essaie tous les gabarits avant de rendre**. Les quatre livrés montent : `code`,
+`memory`, `notebook`, `validated-result`.
+
+Il tient dans la lib, sans base ni service, parce que `PreparedBackend::load`
+fait déjà tout ce qui compte **sans ouvrir de base** — manifeste lu, chaque
+graphe d'outil lu sur le disque, construit, lié au registre, chaque liaison
+vérifiée, politique des nœuds permis appliquée. C'est l'étage exact où la
+régression du 4 octobre est tombée (fiche réactive déclarée dans `tools` →
+manifeste refusé **entier**, trouvé par une sonde à la main et non par une
+suite).
+
+Deux gardes contre un vert pour la mauvaise raison : **au moins trois gabarits
+trouvés** (le jour où ce dossier déménage, un filet qui ne surveille rien serait
+vert), et tous essayés avant de rendre.
+
+**Deux choses apprises en l'écrivant, et qui valent au-delà de ce test :**
+
+1. **un chemin de manifeste se trouve par sa clé, pas par sa place.** Ma
+   première version énumérait les endroits (`graph`, `schema`, les scripts) et
+   deux gabarits sont tombés — `input_schema` et le `graph` d'un crochet
+   `before`, oubliés. Le parcours est maintenant récursif par clé, plus
+   l'extension `.rhai` pour les scripts (dont la clé est le *nom* du script) ;
+2. **la racine d'espace de travail du gabarit `code` n'est pas livrée** : c'est
+   l'appelant qui la fournit. Le test donne le dossier temporaire, et dit
+   pourquoi — il monte un gabarit, il n'indexe rien.
+
+Ce que le filet ne prouve pas, et le dit : il ne joue aucun verbe. Un gabarit
+peut charger et rendre faux ; c'est le travail des bancs.
+
+### 8.2 La section `"reactions"` du manifeste (lot 4)
+
+La proposition du 5 octobre (`docs/5-octobre-2026-00h00/01`) est codée, bornée à
+`backend.rs` et `backend_code.rs` — **rien touché dans `reactor.rs`**, et aucun
+montage de `Reactor::watch` : il attend `execution-asynchrone`.
+
+- `BackendManifest.reactions: BTreeMap<String, ReactionAttachment>` — à côté de
+  `tools`, jamais parmi eux. Le manifeste a `deny_unknown_fields` : avant ce
+  champ, un gabarit qui déclarait `reactions` était refusé par un message de
+  serde, pas par le produit ;
+- `ReactionAttachment { graph, bindings, description }` — **et pas de `policy`**.
+  Une réaction part sans personne devant l'écran : elle écrit en base par les
+  verbes du catalogue (donc sous la garde de cycle de vie) et ne touche ni
+  fichier ni commande. C'est écrit comme une décision, pas subi comme un défaut ;
+- `backend_code::reaction_nodes()` = `BASE_NODES` + `EventSourceNode` +
+  `ReactTransitionNode`, auprès de ses sœurs — une liste de sécurité rangée loin
+  des autres est une liste que personne ne relira ;
+- `valider_une_reaction(nom, graphe, liaisons, est_aussi_un_outil)` — **une
+  fonction pure**, pour que chacun des refus s'éprouve depuis une fiche en
+  mémoire. Un refus qu'on ne peut éprouver qu'en fabriquant un manifeste sur le
+  disque est un refus qu'on n'éprouve pas.
+
+**Les cinq refus, chacun nommant le remède :**
+
+1. un nom partagé entre `tools` et `reactions` — le curseur du réacteur **est**
+   ce nom (`bus.cursor(sujet, nom)`), donc deux homonymes partageraient un
+   curseur en silence ;
+2. un nœud hors de la liste réactive **qui demande une capacité** : le refus
+   renvoie vers `tools` *et* nomme la politique à déclarer ;
+3. un nœud hors de la liste, tout court ;
+4. une fiche sans `%% on:` — et l'autre porte de sortie est nommée ;
+5. une liaison que la fiche ne déclare pas ; et une réaction **non déterminée
+   par ses liaisons** : un paramètre obligatoire non lié n'est pas un défaut
+   d'exécution à venir, c'est un manifeste faux maintenant.
+
+Et le refus d'outil existant dit maintenant où va une fiche réactive mal placée
+(« c'est un nœud de graphe réactif : déclarez-la dans `reactions` ») — le refus
+que j'ai déclenché moi-même le 4 octobre ne disait que la règle.
+
+**Le compte des deux listes blanches est épinglé** (36, et la réactive = base +
+2). Une entrée ajoutée sans intention fait rougir la lib au lieu d'élargir une
+surface de sécurité en silence.
+
+### 8.3 Deux faits du réacteur, relevés en lisant et non en devinant
+
+Ils sont dans `reactor.rs`, que je n'ai pas touché, et ils conditionnent le
+montage. Écrits ici et dans `backend.rs` pour qu'ils soient **dits** plutôt que
+découverts :
+
+1. **`run_tool` instancie avec `json!({})`** — les liaisons déclarées au
+   manifeste ne l'atteignent pas. C'est pourquoi le chargement vérifie que la
+   fiche s'instancie **avec ses liaisons** : sans quoi une réaction liée
+   partirait avec d'autres valeurs que celles du manifeste, ou pas du tout. Le
+   montage devra porter les liaisons jusqu'à `Reactor::watch` ;
+2. **il exécute sous `NodeTypePolicy::All`.** La liste blanche réactive est donc
+   **le seul** garde-fou, et il est au chargement.
+
+### 8.4 Le poste et luciepc
+
+`poste lourd` prend le verrou **en partagé** (`flock -s poste.lock`) : c'est son
+intérêt, plusieurs lourds tournent ensemble. Donc **le verrou ne sérialise pas un
+`git checkout`** — il protège la mémoire et la priorité, pas l'arbre. Un worktree
+partagé à plusieurs sessions sur luciepc aurait fait arracher ses sources à un
+build en cours. Arbitrage de l'orchestration : **un worktree par chantier**
+là-bas (`git -C ~/git_workspaces/rag3db worktree add ~/git_workspaces/rag3db-<chantier>`),
+cible cargo sous `~/.cache/rag3weaver-build/target-<chantier>`, la lib du moteur
+partagée **en lecture** (`RAG3DB_BUILD=~/git_workspaces/rag3db-lourd/build/lecteurs-csv`,
+lu par `run_e2e.sh`) ; `rag3db-lourd` reste détaché sur master, personne n'y
+bascule.
+
+Deux précisions de terrain : la lib du moteur est dans
+`build/lecteurs-csv/**src**/librag3db.so`, et `cargo` **nu** avec
+`rag3db-native` fait bâtir tout le C++ par cmake — sans `RAG3DB_SHARED`, il n'y
+a pas de raccourci. Le chemin prévu là-bas est `run_e2e.sh`, pas un `cargo`
+direct.
+
+Et une inquiétude *dissipée* plutôt que confirmée, qui vaut d'être écrite : le
+message « porte tenue depuis 600 s, le lourd entre quand même » **ne perturbe pas
+une mesure en cours**. La porte ne parle que des mesures *en attente* ; une mesure
+qui tourne tient `poste.lock` en exclusif, et un `-s` attend derrière. Le plafond
+de 600 s ne sacrifie que la priorité des mesures en file.
