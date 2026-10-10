@@ -168,6 +168,8 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
+/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+#[cfg(test)]
 fn champs(alias: &str, cfg: &UsagesConfig) -> String {
     let mut c = vec![format!("{alias}._uuid"), format!("{alias}.{}", cfg.title), format!("{alias}.{}", cfg.kind_field)];
     c.extend(cfg.path_fields.iter().map(|p| format!("{alias}.{p}")));
@@ -175,6 +177,8 @@ fn champs(alias: &str, cfg: &UsagesConfig) -> String {
     c.join(", ")
 }
 
+/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+#[cfg(test)]
 fn proprietes(rel: &RelInfo, cfg: &UsagesConfig) -> String {
     let mut c: Vec<String> = [&cfg.group_by, &cfg.usages_field, &cfg.line]
         .iter()
@@ -184,42 +188,51 @@ fn proprietes(rel: &RelInfo, cfg: &UsagesConfig) -> String {
     c.join(", ")
 }
 
-/// Les définitions d'un pivot : `MATCH (x:Pivot {_uuid: $u})<-[:DEF]-(d:T)`.
-pub fn definitions_query(cfg: &UsagesConfig, defined_by: &RelInfo) -> String {
-    format!(
-        "MATCH (x:{p} {{_uuid: $u}})<-[:{rel}]-(d:{t}) RETURN {c}",
-        p = cfg.pivot,
-        rel = defined_by.name,
-        t = defined_by.from,
-        c = champs("d", cfg)
-    )
+/// Les champs d'un scope rendus par un saut, dans l'ordre que lit [`item`].
+fn colonnes_item(cfg: &UsagesConfig) -> Vec<rag3weaver_ir::Column> {
+    use rag3weaver_ir::Column;
+    let mut c = vec![Column::Node("_uuid".into()), Column::Node(cfg.title.clone()), Column::Node(cfg.kind_field.clone())];
+    c.extend(cfg.path_fields.iter().map(|p| Column::Node(p.clone())));
+    c.push(Column::Node(cfg.line_field.clone()));
+    c
 }
 
-/// Les usages par le rendez-vous : `MATCH (x:Pivot {_uuid: $u})<-[r:USED]-(m:T)`.
-pub fn pivot_usages_query(cfg: &UsagesConfig, used_by: &RelInfo) -> String {
-    format!(
-        "MATCH (x:{p} {{_uuid: $u}})<-[r:{rel}]-(m:{t}) RETURN {c}, {props}",
-        p = cfg.pivot,
-        rel = used_by.name,
-        t = used_by.from,
-        c = champs("m", cfg),
-        props = proprietes(used_by, cfg)
-    )
+/// Les propriétés de l'arête, dans l'ordre que lit [`usage_props`], puis la
+/// marque d'arête devinée ; vides quand la relation ne les porte pas.
+fn colonnes_props(cfg: &UsagesConfig, rel: &RelInfo) -> Vec<rag3weaver_ir::Column> {
+    use rag3weaver_ir::Column;
+    let mut c: Vec<Column> = [&cfg.group_by, &cfg.usages_field, &cfg.line]
+        .into_iter()
+        .map(|p| if rel.props.iter().any(|x| x == p) { Column::Edge(p.clone()) } else { Column::Null })
+        .collect();
+    c.push(cfg.edge_mark.column_ir(rel));
+    c
+}
+
+/// Les définitions des pivots (`$uuids`) : un saut entrant par la relation
+/// de définition. La requête vient du dialecte.
+pub fn definitions_hop(cfg: &UsagesConfig, defined_by: &RelInfo) -> rag3weaver_ir::Hop {
+    let mut hop = rag3weaver_ir::Hop::new(&cfg.pivot, &defined_by.name, &defined_by.from, rag3weaver_ir::Direction::Incoming);
+    hop.returns = colonnes_item(cfg);
+    hop
+}
+
+/// Les usages par le rendez-vous : un saut entrant depuis les pivots, les
+/// champs de l'usager puis les propriétés de l'arête.
+pub fn pivot_usages_hop(cfg: &UsagesConfig, used_by: &RelInfo) -> rag3weaver_ir::Hop {
+    let mut hop = rag3weaver_ir::Hop::new(&cfg.pivot, &used_by.name, &used_by.from, rag3weaver_ir::Direction::Incoming);
+    hop.returns = colonnes_item(cfg);
+    hop.returns.extend(colonnes_props(cfg, used_by));
+    hop
 }
 
 /// Les usages directs des définitions : un saut entrant depuis leurs uuids,
 /// les champs de l'usager puis les propriétés de l'arête (vides quand la
 /// relation ne les porte pas). La requête vient du dialecte.
 pub fn direct_usages_hop(cfg: &UsagesConfig, rel: &RelInfo) -> rag3weaver_ir::Hop {
-    use rag3weaver_ir::Column;
     let mut hop = rag3weaver_ir::Hop::new(&rel.to, &rel.name, &rel.from, rag3weaver_ir::Direction::Incoming);
-    hop.returns = vec![Column::Node("_uuid".into()), Column::Node(cfg.title.clone()), Column::Node(cfg.kind_field.clone())];
-    hop.returns.extend(cfg.path_fields.iter().map(|p| Column::Node(p.clone())));
-    hop.returns.push(Column::Node(cfg.line_field.clone()));
-    for p in [&cfg.group_by, &cfg.usages_field, &cfg.line] {
-        hop.returns.push(if rel.props.iter().any(|x| x == p) { Column::Edge(p.clone()) } else { Column::Null });
-    }
-    hop.returns.push(cfg.edge_mark.column_ir(rel));
+    hop.returns = colonnes_item(cfg);
+    hop.returns.extend(colonnes_props(cfg, rel));
     hop
 }
 
@@ -284,10 +297,12 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     let mut definitions: Vec<Item> = Vec::new();
     if let Some(def) = &cfg.defined_by {
         let rel = rel_info(catalog, def)?;
-        let q = definitions_query(cfg, &rel);
+        let q = catalog.dialect_arc().hop(&definitions_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
+        // Un pivot à la fois, dans leur ordre ; la première colonne est l'uuid
+        // du pivot, la définition vient après.
         for u in &pivots {
-            let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("u", CypherValue::String(u.clone()))]).map_err(err)?;
-            definitions.extend(rows.rows.iter().map(|r| item(r, 0, cfg)));
+            let rows = catalog.execute_raw_with_params(&q, &[super::graph_walk::uuid_param(std::slice::from_ref(u))]).map_err(err)?;
+            definitions.extend(rows.rows.iter().map(|r| item(r, 1, cfg)));
         }
     }
     definitions.sort_by(|a, b| (&a.path, a.line, &a.uuid).cmp(&(&b.path, b.line, &b.uuid)));
@@ -329,17 +344,17 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     // qu'une, sinon « non attribués ».
     if let Some(used) = &cfg.used_by {
         let rel = rel_info(catalog, used)?;
-        let q = pivot_usages_query(cfg, &rel);
+        let q = catalog.dialect_arc().hop(&pivot_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
         let unique = if ambiguous { None } else { definitions.first().map(|d| d.uuid.clone()) };
         let def_set: std::collections::HashSet<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
         for u in &pivots {
-            let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("u", CypherValue::String(u.clone()))]).map_err(err)?;
+            let rows = catalog.execute_raw_with_params(&q, &[super::graph_walk::uuid_param(std::slice::from_ref(u))]).map_err(err)?;
             for r in &rows.rows {
-                let mut user = item(r, 0, cfg);
+                let mut user = item(r, 1, cfg);
                 if def_set.contains(user.uuid.as_str()) {
                     continue;
                 }
-                let (usage, ensemble, site) = usage_props(r, 4 + cfg.path_fields.len());
+                let (usage, ensemble, site) = usage_props(r, 1 + 4 + cfg.path_fields.len());
                 user.line = site.or(user.line);
                 // Déjà trouvé par une arête directe : il compte une fois.
                 if usages.iter().any(|x| x.user.uuid == user.uuid && (x.definition == unique || unique.is_none())) {
@@ -725,6 +740,17 @@ mod tests_saut {
             for props in [vec![], vec!["usage".to_string(), "line".into(), "resolution".into()]] {
                 let rel = RelInfo { name: "CONSUMES".into(), from: "Scope".into(), to: "Symbol".into(), props };
                 assert_eq!(Rag3dbDialect.hop(&direct_usages_hop(&cfg, &rel)).unwrap(), requete_d_avant(&cfg, &rel));
+                // Les définitions et les usages par le rendez-vous partent
+                // maintenant d'une liste d'uuids (un pivot à la fois) : la
+                // première colonne est l'uuid du pivot.
+                assert_eq!(
+                    Rag3dbDialect.hop(&definitions_hop(&cfg, &rel)).unwrap(),
+                    format!("UNWIND $uuids AS u MATCH (d:Symbol {{_uuid: u}})<-[r:CONSUMES]-(m:Scope) RETURN u, {}", champs("m", &cfg))
+                );
+                assert_eq!(
+                    Rag3dbDialect.hop(&pivot_usages_hop(&cfg, &rel)).unwrap(),
+                    format!("UNWIND $uuids AS u MATCH (d:Symbol {{_uuid: u}})<-[r:CONSUMES]-(m:Scope) RETURN u, {}, {}", champs("m", &cfg), proprietes(&rel, &cfg))
+                );
             }
         }
     }
