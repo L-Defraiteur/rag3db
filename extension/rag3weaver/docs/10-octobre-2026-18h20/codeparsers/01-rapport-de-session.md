@@ -1,6 +1,6 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, nuit.
+Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, matin.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
 plus grande possible de codeparsers, C++ et Rust d'abord, mesurée sur nos
@@ -47,8 +47,10 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | B2b — les types différés au rendez-vous (B1) | rag3db master `6002c3ccd` (fusionné par l'arbre principal, avec le pointeur e8e2893) | `field_types` et `return_type` sur Scope, `deferred` sur MENTIONS, résolus à la matérialisation en `qualifier_types`. Témoin `e2e_types_differes` : les trois formes réelles des appelants de `NodeTable::update`, rouge (deux sur trois) puis vert. Pas de mode entre fichiers dans codeparsers : le graphe ne dépend pas du paquet. |
 | B3 — les verrous (codeparsers) | codeparsers `65c1c7a`, `8881d52` | Deux genres d'usage, `Lock` et `SharedLock` : une référence au champ mutex, le propriétaire en qualificatif. Gardes RAII C++ certaines (`unique_lock`, `lock_guard`, `scoped_lock`, `shared_lock`, accolades ou parenthèses — `std::lock_guard lck(mtx);` se lit comme une fonction) ; `.lock()` / `.read()` / `.write()` seulement sur un champ déclaré mutex ou RwLock dans le fichier. Un verrou est compris : hors du relevé des non-résolues. rag3db src : 140 exclusifs, 32 partagés (188 gardes dans le texte) ; rag3weaver : 75 et 1. |
 | B3 — la relation LOCKS (rag3weaver) | rag3db master `2a29c10c6` (fusionné, pointeur 8881d52) | Un symbole `Classe::champ` par champ typé, défini par sa classe ; un verrou est la relation LOCKS du scope vers ce symbole (genre, ligne), posée à l'ingestion. « Qui verrouille NodeTable::mtx » = les LOCKS entrants du symbole. Témoin `e2e_verrous`. |
-| B2c — les chaînes de champs | codeparsers `55c27d1` ; rag3db, branche `chaines-de-champs` (`e94c29959` pointeur, `5999cb640` code.rs), proposée | Le premier champ d'une chaîne dit le propriétaire, les suivants deviennent des pas de champ (`.b`) ; le lecteur du fichier et la résolution au rendez-vous (par tours, quatre au plus) les suivent. Forme réelle : `tableInfo.table->update()` de set_executor.cpp. |
-| B3 — les verrous sur le chemin, dans `impact` | rag3db, branche `verrous-dans-impact` (`627b3e6a9`, empilée sur B2c), proposée | Un relevé générique du nœud de voisinage, déclaré au gabarit (`collect='LOCKS>'`) : pour la méthode modifiée et chaque scope qui en dépend, les mutex qu'il verrouille, groupés par `Classe::champ`. L'IR n'a rien à changer (Hop suit LOCKS par son nom). Témoin `e2e_verrous`. |
+| B2c — les chaînes de champs | codeparsers `55c27d1` ; rag3db master (`d6a2827ce`, fusionné par l'arbre principal) | Le premier champ d'une chaîne dit le propriétaire, les suivants deviennent des pas de champ (`.b`) ; le lecteur du fichier et la résolution au rendez-vous (par tours, quatre au plus) les suivent. Forme réelle : `tableInfo.table->update()` de set_executor.cpp. |
+| B3 — les verrous sur le chemin, dans `impact` | rag3db master (`d6a2827ce`) | Un relevé générique du nœud de voisinage, déclaré au gabarit (`collect='LOCKS>'`) : pour la méthode modifiée et chaque scope qui en dépend, les mutex qu'il verrouille, groupés par `Classe::champ`. L'IR n'a rien à changer (Hop suit LOCKS par son nom). Témoin `e2e_verrous`. |
+
+| La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
 
@@ -66,7 +68,13 @@ Sonde `tests/sonde_cpp_rag3db.rs` (tout `rag3db/src`, 1 543 fichiers,
 
 ## Suite
 
-B2c et `verrous-dans-impact` attendent leur fusion par l'arbre principal.
-Ensuite : la borne à la source de la requête des types différés (remarque
-de relecture), puis la sonde relancée pour l'exemple réel d'`impact` sur
-`NodeTable::update` (appelants et verrous pris), à montrer à Lucie.
+Tout est sur master (`d6a2827ce`, sonde `36cd2604c`). La page pour Lucie :
+`03-impact-node-table-update.md` — la sortie réelle d'`impact` sur
+`NodeTable::update` (les deux appelants réels, le verrou pris par le
+gestionnaire de verrous de la transaction sous `update`, pas chez les
+appelants), les chiffres avant / après la nuit, ce qui reste.
+
+Lots suivants proposés à l'orchestration : ranger à part les usages « par
+le nom » d'un nom ambigu dans `impact` ; une liste de fonctions de verrou
+par dépôt (verrous applicatifs) ; un outil « ce que ça appelle » (le
+voisinage sortant).
