@@ -3784,7 +3784,7 @@ impl Node for UpdateRecordNode {
             if other_cols.is_empty() { continue; }
 
             let cypher = crate::dialect::ecriture(
-                &*dialect,
+                &**dialect,
                 &rag3weaver_ir::Write::Update { table: entity_name.to_string(), columns: other_cols.iter().map(|c| c.to_string()).collect() },
             );
 
