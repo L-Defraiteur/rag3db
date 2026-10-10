@@ -538,8 +538,14 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             continue;
         }
         if rel == "LOCKS" {
-            // Le genre (`lock`, `shared_lock`) et la ligne du verrou.
-            catalog.register_relation_with(rel, from, to, usage_property_defs())?;
+            // Le genre (`lock`, `shared_lock`) et la ligne du verrou ; `via` :
+            // d'où il vient — « champ » (une garde sur un champ mutex, que
+            // l'analyse relève) ou « appel » (l'appel d'une fonction de
+            // verrou déclarée, `workspace.locks_via`). Une base d'avant reçoit
+            // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
+            let mut props = usage_property_defs();
+            props.insert("via".to_string(), field_def(FieldType::String));
+            catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
         if USAGE_RELATIONS.contains(&rel) {
@@ -1989,7 +1995,9 @@ impl Catalog {
         let mut verrous: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending_locks.len());
         for (scope_key, symbole, sites) in &analysis.pending_locks {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
-            verrous.push((from, symbol_uuid(self, symbole)?, usage_properties(sites)));
+            let mut props = usage_properties(sites);
+            props.insert("via".to_string(), s("champ"));
+            verrous.push((from, symbol_uuid(self, symbole)?, props));
         }
         // Les fonctions de verrou déclarées (`workspace.locks_via`) : un appel
         // à l'une d'elles est un verrou pris, vers le symbole de la fonction —
@@ -2017,7 +2025,9 @@ impl Catalog {
                     continue;
                 }
                 let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
-                verrous.push((from, symbol_uuid(self, nom)?, usage_properties(&sites)));
+                let mut props = usage_properties(&sites);
+                props.insert("via".to_string(), s("appel"));
+                verrous.push((from, symbol_uuid(self, nom)?, props));
             }
         }
         self.mettre_en_file_les_liens("LOCKS", verrous)?;

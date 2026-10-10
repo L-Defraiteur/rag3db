@@ -77,6 +77,9 @@ fn les_verrous_vont_au_symbole_du_champ() {
     .map(|l| l.iter().map(|x| x.to_string()).collect())
     .collect();
     assert_eq!(verrous, attendu);
+    // Tous par une garde sur un champ mutex : la marque `via` le dit.
+    let via = lignes("MATCH (:Scope)-[r:LOCKS]->(:Symbol) RETURN DISTINCT r.via");
+    assert_eq!(via, vec![vec!["champ".to_string()]]);
     // La classe porte son mutex : qui verrouille Index::mtx, et chez qui.
     let porteur = lignes("MATCH (c:Scope)-[:DEFINES]->(s:Symbol {name: 'Index::mtx'}) RETURN c.name");
     assert_eq!(porteur, vec![vec!["Index".to_string()]]);
@@ -102,7 +105,7 @@ fn impact_dit_les_verrous_pris_sur_le_chemin() {
     services.register("catalog", catalog.clone());
     let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "insert"})).unwrap();
     eprintln!("{md}");
-    assert!(md.contains("## Verrous pris sur le chemin (Classe::champ) (2)"), "{md}");
+    assert!(md.contains("## Verrous pris sur le chemin (2)"), "{md}");
     assert!(md.contains("- `Index::mtx` — insert (départ, lock)"), "{md}");
     assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
 }
@@ -174,7 +177,7 @@ fn les_fonctions_de_verrou_declarees_posent_locks_par_l_appel() {
         let fichiers: Vec<(String, String)> = APPLICATIF.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
         catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
         let cat = catalog.lock().unwrap();
-        cat.execute_raw("MATCH (a:Scope)-[r:LOCKS]->(s:Symbol) RETURN a.name, s.name, r.usage ORDER BY a.name")
+        cat.execute_raw("MATCH (a:Scope)-[r:LOCKS]->(s:Symbol) RETURN a.name, s.name, r.usage, r.via ORDER BY a.name")
             .unwrap()
             .rows
             .iter()
@@ -184,7 +187,7 @@ fn les_fonctions_de_verrou_declarees_posent_locks_par_l_appel() {
     let declares = verrous(true);
     eprintln!("{declares:#?}");
     let attendu: Vec<Vec<String>> =
-        [["lockKeyOf", "acquireLock", "lock"], ["update", "acquireLock", "lock"]].iter().map(|l| l.iter().map(|x| x.to_string()).collect()).collect();
+        [["lockKeyOf", "acquireLock", "lock", "appel"], ["update", "acquireLock", "lock", "appel"]].iter().map(|l| l.iter().map(|x| x.to_string()).collect()).collect();
     assert_eq!(declares, attendu);
     assert!(verrous(false).is_empty(), "sans déclaration, aucun verrou par l'appel");
 }
