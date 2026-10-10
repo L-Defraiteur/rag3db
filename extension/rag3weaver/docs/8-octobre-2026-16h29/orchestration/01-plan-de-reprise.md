@@ -180,6 +180,25 @@ la fois sous le verrou, comme avant la pause.
   `extension/rag3weaver/bindings/nodejs/` (nouveau). Aucun fichier de A à F.
 - **Place dans l'ordre** : à dire par Lucie.
 
+### H — Session mémoire : rag3weaver en serveur MCP sur un dépôt (10 octobre, soir)
+
+- **Lucie** : « un cas très simple : donne-moi des outils MCP sur ce projet de
+  code pour chercher dedans via rag3weaver ». Utile à nous d'abord : nos
+  sessions Claude Code cherchent dans ce dépôt par `grep`, rag3weaver a le
+  graphe de code, la recherche hybride, `usages`, `impact`.
+- **Forme** : `rag3weaver-backend mcp --manifest …` (ou un bin à part), MCP
+  sur stdio (JSON-RPC 2.0 : initialize, tools/list, tools/call) ; les outils
+  et leurs schémas viennent de `NodeSchema` comme pour OpenAI et Anthropic
+  (`tools.rs`), jamais d'une liste à la main ; `tools/call` passe par
+  `run_tool`, le bac à sable et le rapport ; refus nommés.
+- **Ordre** : page courte (correspondance schéma → outil, ce qu'on expose,
+  session, ce qu'on ne fait pas) → code + test qui parle le protocole sur le
+  backend de code de ce dépôt → épreuve réelle : `.mcp.json` pour Claude Code
+  et une session qui cherche `usages` d'une fonction du dépôt.
+- **Fichiers** : nouveau `src/mcp.rs` + le bin ; `backend.rs` (à elle).
+- **Rend** : la commande, son test, la configuration à coller, et ce que le
+  magicien dira plus tard d'une phrase (vision du 9 octobre, §6).
+
 ## 4. Ce que l'orchestration fait pendant ce temps
 
 - Les envois tracel-ai A, C, D, E au mot de Lucie ; la réservation du nom sur
