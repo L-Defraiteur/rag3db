@@ -8,3 +8,4 @@ add_rag3db_test(node_update_test node_update_test.cpp)
 
 target_include_directories(compression_test PRIVATE ${PROJECT_SOURCE_DIR}/third_party/alp/include)
 add_rag3db_test(string_finalize_test string_finalize_test.cpp)
+add_rag3db_test(column_stats_test column_stats_test.cpp)
