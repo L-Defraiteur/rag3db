@@ -93,10 +93,11 @@ impl Choices {
                     return None;
                 }
                 let cat = catalog?;
-                let rows = cat
-                    .execute_raw(&format!("MATCH (n:{entity}) RETURN n.{field}"))
-                    .ok()?
-                    .rows;
+                let q = cat
+                    .dialect_arc()
+                    .select(&rag3weaver_ir::Select::all(entity, vec![rag3weaver_ir::Column::Node(field.to_string())]))
+                    .ok()?;
+                let rows = cat.execute_raw(&q).ok()?.rows;
                 let mut vues: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
                 for l in &rows {
                     if let Some(v) = l.first().and_then(|v| v.as_str()) {

@@ -110,6 +110,8 @@ pub enum Count {
     /// nombre d'arêtes d'une relation dans un sens. Deux colonnes : l'uuid,
     /// le compte ; un départ sans arête n'a pas de ligne.
     Edges { start: String, relation: String, direction: Direction },
+    /// Les lignes qu'une condition retient, en une colonne.
+    Matching { table: String, filter: Predicate },
 }
 
 impl Count {
@@ -117,6 +119,14 @@ impl Count {
         let noms: Vec<&str> = match self {
             Count::Rows { table } => vec![table],
             Count::Edges { start, relation, .. } => vec![start, relation],
+            Count::Matching { table, filter } => {
+                let mut v = vec![table.clone()];
+                filter.names(&mut v);
+                return match v.iter().find(|n| !crate::is_valid_identifier(n)) {
+                    Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
+                    None => Ok(()),
+                };
+            }
         };
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
@@ -135,6 +145,10 @@ pub enum Predicate {
     Contains { field: String, param: String },
     /// L'une au moins des conditions.
     AnyOf(Vec<Predicate>),
+    /// Une condition déjà dite dans la langue du dialecte, par son propre
+    /// parseur de filtres (`FilterParser`), sur l'alias `m` : le filtre d'un
+    /// utilisateur, avec ses paramètres. Elle ne se valide pas ici.
+    Compiled(String),
 }
 
 impl Predicate {
@@ -145,6 +159,7 @@ impl Predicate {
                 out.push(param.clone());
             }
             Predicate::AnyOf(v) => v.iter().for_each(|p| p.names(out)),
+            Predicate::Compiled(_) => {}
         }
     }
 }
@@ -168,6 +183,11 @@ impl Select {
     /// Les lignes de uuids donnés.
     pub fn by_uuids(table: impl Into<String>, returns: Vec<Column>) -> Self {
         Self { table: table.into(), by_uuids: true, filter: None, returns, order_by: Vec::new(), limit: None }
+    }
+
+    /// Toutes les lignes de la table.
+    pub fn all(table: impl Into<String>, returns: Vec<Column>) -> Self {
+        Self { table: table.into(), by_uuids: false, filter: None, returns, order_by: Vec::new(), limit: None }
     }
 
     /// Les lignes qu'une condition retient.

@@ -196,17 +196,15 @@ impl Node for SetNode {
                 let dialect = cat.dialect_arc();
                 let mut parser = FilterParser::new(&relations, dialect.as_ref());
                 let parsed = parser
-                    .parse_condition(&condition, entity, "n")
+                    .parse_condition(&condition, entity, "m")
                     .map_err(|e| e.to_string())?;
                 if !parsed.match_clauses.is_empty() {
                     return Err("select a single entity then traverse its relations".into());
                 }
                 let predicate = parsed.combine_where();
-                let clause = if predicate.is_empty() {
-                    String::new()
-                } else {
-                    format!(" WHERE {predicate}")
-                };
+                // La condition compilée par le parseur du dialecte entre telle
+                // quelle dans la sélection et dans le compte.
+                let filtre = (!predicate.is_empty()).then(|| rag3weaver_ir::Predicate::Compiled(predicate.clone()));
                 // `limit` explicite l'emporte (0 = sans limite) ; négatif ou absent,
                 // il n'est pas fourni (une fiche d'outil ne sait pas dire `null`
                 // pour un entier) : le plafond déclaré vaut alors pour une
@@ -217,19 +215,25 @@ impl Node for SetNode {
                     None if predicate.is_empty() => self.config["unfiltered_limit"].as_u64().filter(|n| *n > 0),
                     None => None,
                 };
-                let borne = limite.map(|n| format!(" LIMIT {}", n + 1)).unwrap_or_default();
-                let mut rows = cat
-                    .execute_raw_with_params(
-                        &format!("MATCH (n:{entity}){clause} RETURN n ORDER BY n._uuid{borne}"),
-                        &parsed.params,
-                    )
-                    .map_err(|e| e.to_string())?;
+                let mut selection = match &filtre {
+                    Some(f) => rag3weaver_ir::Select::filtered(entity, f.clone(), vec![rag3weaver_ir::Column::Whole]),
+                    None => rag3weaver_ir::Select::all(entity, vec![rag3weaver_ir::Column::Whole]),
+                };
+                selection.order_by.push("_uuid".into());
+                selection.limit = limite.map(|n| n as usize + 1);
+                let q = dialect.select(&selection).map_err(|e| e.to_string())?;
+                let mut rows = cat.execute_raw_with_params(&q, &parsed.params).map_err(|e| e.to_string())?;
                 let mut warnings = Vec::new();
                 if let Some(n) = limite.filter(|n| rows.rows.len() as u64 > *n) {
                     rows.rows.truncate(n as usize);
-                    let total = cat
-                        .execute_raw_with_params(&format!("MATCH (n:{entity}){clause} RETURN count(n)"), &parsed.params)
+                    let compte = match &filtre {
+                        Some(f) => rag3weaver_ir::Count::Matching { table: entity.to_string(), filter: f.clone() },
+                        None => rag3weaver_ir::Count::Rows { table: entity.to_string() },
+                    };
+                    let total = dialect
+                        .count(&compte)
                         .ok()
+                        .and_then(|q| cat.execute_raw_with_params(&q, &parsed.params).ok())
                         .and_then(|r| r.rows.first().and_then(|row| row.first()).and_then(|v| v.as_i64()));
                     let sur = total.map(|t| format!("sur {t}")).unwrap_or_else(|| "sur davantage".into());
                     warnings.push(format!(

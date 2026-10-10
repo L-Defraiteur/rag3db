@@ -343,7 +343,13 @@ fn identity_of(cat: &Catalog, address: &str) -> Result<(String, &'static str), S
     }
     let res = cat
         .execute_raw_with_params(
-            "MATCH (r:Run) WHERE r._uuid = $uuid RETURN r.name",
+            &cat.dialect_arc()
+                .select(&rag3weaver_ir::Select::filtered(
+                    RUN_ENTITY,
+                    rag3weaver_ir::Predicate::Equals { field: "_uuid".into(), param: "uuid".into() },
+                    vec![rag3weaver_ir::Column::Node("name".into())],
+                ))
+                .map_err(|e| e.to_string())?,
             &[crate::connection::QueryParam::new("uuid", uuid.as_str())],
         )
         .map_err(|e| e.to_string())?;

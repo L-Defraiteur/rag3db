@@ -1064,19 +1064,24 @@ pub trait SchemaDialect: Send + Sync {
 /// Cypher DDL/DML for rag3db (Kuzu fork).
 pub struct Rag3dbDialect;
 
+/// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
+fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
+    use rag3weaver_ir::Predicate;
+    match p {
+        Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
+        Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
+        Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
+        Predicate::Compiled(c) => c.clone(),
+    }
+}
+
 impl SchemaDialect for Rag3dbDialect {
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
-        use rag3weaver_ir::{Column, Predicate};
+        use rag3weaver_ir::Column;
         select.validate()?;
-        fn condition(p: &Predicate) -> String {
-            match p {
-                Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
-                Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
-                Predicate::AnyOf(v) => v.iter().map(condition).collect::<Vec<_>>().join(" OR "),
-            }
-        }
+        let condition = rag3db_condition;
         let colonnes: Vec<String> = select
             .returns
             .iter()
@@ -1106,6 +1111,7 @@ impl SchemaDialect for Rag3dbDialect {
         count.validate()?;
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
+            rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{table}) WHERE {} RETURN count(m)", rag3db_condition(filter)),
             rag3weaver_ir::Count::Edges { start, relation, direction } => match direction {
                 rag3weaver_ir::Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})<-[r:{relation}]-() RETURN u, count(r)"),
                 rag3weaver_ir::Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})-[r:{relation}]->() RETURN u, count(r)"),
@@ -2890,6 +2896,9 @@ mod tests {
         f.limit = Some(3);
         assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:Scope) WHERE m.file_path = $file OR m.source = $file RETURN m._uuid ORDER BY m._uuid LIMIT 3");
         assert_eq!(PostgresDialect.select(&s).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Select");
+        let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
+        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:Card) WHERE m.cost > $filter_p0 RETURN count(m)");
+        assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:Card) RETURN m");
         f.returns.push(Column::Edge("x".into()));
         assert!(Rag3dbDialect.select(&f).is_err());
     }

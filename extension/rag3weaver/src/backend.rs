@@ -2297,7 +2297,7 @@ mod tests {
         let plan = prepared.compile_search_program(&program).unwrap();
         assert_eq!(plan.entity, "Note");
         let conn = CallbackConnection::new(|q, _| {
-            Ok(if q.starts_with("MATCH (n:Note)") {
+            Ok(if q.starts_with("MATCH (m:Note)") {
                 QueryResult {
                     columns: vec![],
                     rows: vec![vec![CypherValue::Map(

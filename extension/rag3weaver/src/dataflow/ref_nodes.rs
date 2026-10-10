@@ -55,12 +55,18 @@ fn genres(
     catalog: &Catalog,
     types_entity: &str,
 ) -> Result<Vec<(String, String, String)>, String> {
-    let rows = catalog
-        .execute_raw(&format!(
-            "MATCH (n:{types_entity}) WHERE n.etat = 'current' \
-             RETURN n.name, n.description, n.script"
+    let illisibles = |e: String| format!("les genres de « {types_entity} » sont illisibles : {e}");
+    let q = catalog
+        .dialect_arc()
+        .select(&rag3weaver_ir::Select::filtered(
+            types_entity,
+            rag3weaver_ir::Predicate::Equals { field: "etat".into(), param: "etat".into() },
+            ["name", "description", "script"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
         ))
-        .map_err(|e| format!("les genres de « {types_entity} » sont illisibles : {e}"))?
+        .map_err(|e| illisibles(e.to_string()))?;
+    let rows = catalog
+        .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("etat", "current")])
+        .map_err(|e| illisibles(e.to_string()))?
         .rows;
     let mut out: Vec<(String, String, String)> = rows
         .iter()
