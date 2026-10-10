@@ -93,7 +93,8 @@ codeparsers = { path = "codeparsers", optional = true }
 # Le bac à sable des commandes (Landlock : règles de fichiers sans privilège,
 # posées avant exec, irrévocables). Linux seulement ; ailleurs, bubblewrap ou
 # off, dits au chargement.
-landlock = { version = "0.4", optional = true }
+# (Déclarée plus bas, pour Linux seulement : la crate ne compile pas ailleurs,
+# et tout le code qui s'en sert est déjà sous `cfg(target_os = "linux")`.)
 # Les règles d'exclusion d'un dossier (.gitignore, .ignore, exclusions
 # globales), comme ripgrep : `WorkingTree` les respecte par défaut.
 ignore = { version = "0.4", optional = true }
@@ -205,6 +206,11 @@ daemon = ["dep:tiny_http", "dep:ureq", "dep:base64"]
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
 # `gcp_auth` (JWT RS256 + OAuth2, pour Vertex) est inclus : zéro crate de plus.
 openai-llm = ["dep:ureq", "dep:ring", "dep:base64"]
+
+# Le bac à sable des commandes est Linux seulement (`commande.rs`, `backend.rs`) :
+# la crate landlock n'existe que là. Vu au premier bâti Windows, 10 octobre 2026.
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = { version = "0.4", optional = true }
 
 [dependencies.rayon]
 version = "1.10"
