@@ -48,6 +48,9 @@ ReadOnlyReader.InsistingReaderIsNotStarvedByCheckpoints
 # RolledBackCheckpointThenDeath et RolledBackThenClose rouges 29 fois sur 30 chacune, Close
 # 10 sur 10. Avec les fils par défaut, environ une fois sur deux. Le hasard qui reste est la
 # graine de l'index. Ticket 2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.
+# Après le i = 0 et la règle d'élagage classique (10 octobre, 30 passes chacune) : 3 rouges
+# sur 120 (Death 1, RolledBackThenClose 1, Close 1), contre 83 sur 120 avant. Rares, pas nuls :
+# ils restent ici.
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackCheckpointThenDeath
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackThenClose
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Close
