@@ -9,6 +9,7 @@
 #   DEMO_SOURCE=/chemin/vers/rag3weaver-0.0.1-alpha.1.tgz (et le sous-paquet à côté) pour répéter sans publier
 #   RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981 (défaut) — les tunnels vers luciepc
 #   DEMO_QUERY, DEMO_SYMBOL : la question et le symbole montrés
+#   DEMO_VERSION : la version attendue (défaut : ce que `npm view rag3weaver@next version` rend)
 set -euo pipefail
 
 ici=$(cd "$(dirname "$0")" && pwd)
@@ -28,11 +29,20 @@ if [ -n "${DEMO_SOURCE:-}" ]; then
   echo "━━ npm install (répétition, depuis les archives) : $DEMO_SOURCE"
   npm install --no-audit --no-fund "$sous" "$DEMO_SOURCE" 2>&1 | tail -3
 else
-  echo "━━ npm install rag3weaver@next"
-  npm install --no-audit --no-fund rag3weaver@next 2>&1 | tail -3
+  # --prefer-online : sans lui, npm prend le packument de son cache local
+  # (périmé de quelques minutes après une publication) et installe la
+  # version d'avant — vu le 10 octobre, 0.0.1-alpha.0 au lieu de alpha.1.
+  echo "━━ npm install rag3weaver@next (--prefer-online)"
+  npm install --prefer-online --no-audit --no-fund rag3weaver@next 2>&1 | tail -3
 fi
 echo
-echo "   installé : $(node -p "require('rag3weaver/package.json').version") · binaire $(node -p "require('rag3weaver').binaryPath()")"
+version=$(node -p "require('rag3weaver/package.json').version")
+attendue=${DEMO_VERSION:-$(npm view --prefer-online rag3weaver@next version 2>/dev/null || true)}
+echo "   installé : rag3weaver $version · binaire $(node -p "require('rag3weaver').binaryPath()")"
+if [ -n "$attendue" ] && [ "$version" != "$attendue" ]; then
+  echo "   la version installée ($version) n'est pas celle attendue ($attendue) : on s'arrête là" >&2
+  exit 3
+fi
 cp "$ici/demo.js" .
 
 # Les tunnels sont-ils là ? Sinon, on le dit et on ne joue que la passe sans service.

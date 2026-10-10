@@ -348,6 +348,17 @@ les OTP de Lucie.
   `parse_project` ; sans service, index en 4 s, l'avertissement dans
   `describe` et `index_state`, la même question rend ses résultats BM25 avec
   « dense signal is not available: no embedding service (embarqueur absent…) ».
+  **Publié** (orchestration, OTP de Lucie, 10 octobre en soirée) :
+  `rag3weaver@0.0.1-alpha.1` et `rag3weaver-linux-x64-gnu@0.0.1-alpha.1`,
+  étiquette `next` (npm a d'abord mis le binaire en « staged publishing »,
+  placeholder 0.0.0-stage, puis la version est apparue). Première démo
+  depuis npm, verte de bout en bout (install en ligne, index en 19 s avec
+  le service, 4 s sans) — après un accroc : `npm install rag3weaver@next`
+  prenait le packument du cache local de npm et installait l'alpha.0
+  (« added 1 package in 104ms », puis MODULE_NOT_FOUND) ; la démo installe
+  maintenant avec `--prefer-online`, affiche la version installée et
+  s'arrête si ce n'est pas celle que `npm view rag3weaver@next version`
+  rend (ou `DEMO_VERSION`).
   Deux accrocs de la démo corrigés en passant : l'attente des vecteurs
   guettait `vectors_seconds_left` que `Symbol` (BM25) laisse non nul (dix
   minutes perdues au premier essai) ; et la section Liens n'est pas dans
