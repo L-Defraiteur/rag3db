@@ -51,12 +51,10 @@ Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,c
 # LockTimeoutGivesNamedErrorAndRollsBack, DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits et
 # InterruptedWaitGivesInterruptedAndRollsBack (la mise à jour attend : l'interblocage se détecte,
 # l'interruption réveille).
-# C5_DoubleDelete : rouge d'un nouveau nom — il attend exactement un refus « Write-write
-# conflict » ; sous A4′ le second DELETE attend le premier puis reçoit l'erreur de sérialisation
-# (option A). Le banc réécrit le témoin (Refusal::SerializationFailure) ; d'ici là :
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Hot ww-refusal
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Reopen ww-refusal
-Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Crash ww-refusal
+# C5_DoubleDelete, réécrit par le banc pour A4′ (le second DELETE attend, puis reçoit l'erreur de
+# sérialisation : option A) : vert. Les ordres « la relation / la mise à jour d'abord » de C2 et
+# C6 sont réécrits aussi (celui qui valide le premier écrit le premier, l'attente prouvée), et
+# les trois MinimalReproduction à un seul fil reçoivent un délai de verrou court.
 #
 # Marche V2 — l'annonce en tête. ROUGE : LA FONCTION N'EXISTE PAS (acquire-locks-exists), en
 # plus du comportement.
