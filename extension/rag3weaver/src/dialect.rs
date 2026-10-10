@@ -220,6 +220,16 @@ pub trait SchemaDialect: Send + Sync {
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
+    /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
+    /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
+    /// leur place cette instruction, qui échoue à l'analyse **en nommant la
+    /// méthode** au lieu d'envoyer du Cypher à sa base. Un seul mot, pour que
+    /// l'erreur de syntaxe de n'importe quel moteur le cite tel quel, avant
+    /// même de regarder les paramètres.
+    fn untranslated(&self, method: &str) -> String {
+        format!("RAG3WEAVER_REFUS__le_dialecte_{}_ne_traduit_pas__{method}", self.name())
+    }
+
     /// Poser le nœud d'une cellule (`_Org`, `_Project`) s'il n'y est pas.
     ///
     /// Créer sans écraser : un `name` déjà renseigné ne doit pas retomber sur
@@ -373,6 +383,7 @@ pub trait SchemaDialect: Send + Sync {
     /// pour qu'un chargement en masse garde la sémantique de `MERGE`.
     /// Paramètre `$froms`.
     fn existing_links(&self, rel_table: &str, ends: (&str, &str)) -> String {
+        if !self.capabilities().cypher { return self.untranslated("existing_links"); }
         let (from, to) = ends;
         format!(
             "UNWIND $froms AS f MATCH (a:{from} {{_uuid: f}})-[:{rel_table}]->(b:{to}) RETURN a._uuid, b._uuid"
@@ -381,6 +392,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Le nombre d'arêtes d'une relation.
     fn count_links(&self, rel_table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("count_links"); }
         format!("MATCH ()-[r:{rel_table}]->() RETURN count(r)")
     }
 
@@ -482,6 +494,7 @@ pub trait SchemaDialect: Send + Sync {
     /// **Une page de lignes, dans l'ordre de leur décalage**, après `$apres` :
     /// le décalage d'abord, puis `fields`. Pour rebâtir un index par lots.
     fn select_page_after_offset(&self, table: &str, fields: &[&str], limit: usize) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_page_after_offset"); }
         let offset = self.node_offset_expr("n");
         let returns: Vec<String> = fields.iter().map(|f| format!("n.{f}")).collect();
         format!(
@@ -501,6 +514,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Tous les uuids d'une table — pour re-rendre une entité dérivée entière.
     fn select_all_uuids(&self, table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_all_uuids"); }
         format!("MATCH (n:{table}) RETURN n._uuid")
     }
 
@@ -509,6 +523,7 @@ pub trait SchemaDialect: Send + Sync {
     /// niveau donnée du pas B (doc du 7 septembre 2026) : si le processus
     /// meurt avant le drain, [`Self::select_derivees_a_rendre`] la retrouve.
     fn marquer_derivees_a_rendre(&self, derived_table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("marquer_derivees_a_rendre"); }
         format!(
             "UNWIND $uuids AS u \
              MATCH (d:{derived_table} {{_source_uuid: u}}) \
@@ -519,6 +534,7 @@ pub trait SchemaDialect: Send + Sync {
     /// **Marquer les lignes d'une session de synchronisation** :
     /// `_snapshot = $session` sur les lignes de `$uuids`.
     fn mark_snapshot_session(&self, table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("mark_snapshot_session"); }
         format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL")
     }
 
@@ -527,6 +543,7 @@ pub trait SchemaDialect: Send + Sync {
     /// — la marque monte, elle ne descend jamais. Une ligne écrite est
     /// présente : sa marque d'absence part.
     fn mark_written_session(&self, table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("mark_written_session"); }
         format!(
             "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
              WHERE n._snapshot IS NULL OR n._snapshot <> $session \
@@ -536,12 +553,14 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Une colonne entière à NULL, sur toute la table (une migration).
     fn set_column_null(&self, table: &str, field: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("set_column_null"); }
         format!("MATCH (n:{table}) SET n.{field} = NULL")
     }
 
     /// **Poser la marque d'absence** sur `$uuids`, à `$since`, sauf là où elle
     /// est déjà : c'est la *première* absence constatée qu'elle garde.
     fn mark_absent_since(&self, table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("mark_absent_since"); }
         format!(
             "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
              WHERE n._absent_since IS NULL OR n._absent_since = 0 SET n._absent_since = $since"
@@ -552,6 +571,7 @@ pub trait SchemaDialect: Send + Sync {
     /// périmètre égal à son paramètre `$p0`, `$p1`… (aucun : la table
     /// entière). Rend `_uuid`, `_snapshot`, puis `extra` dans l'ordre.
     fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_snapshot_scope"); }
         let filtre = scope.iter().enumerate()
             .map(|(i, f)| format!("n.{f} = $p{i}"))
             .collect::<Vec<_>>()
@@ -571,6 +591,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// La table de la mise de côté.
     fn create_aside_table(&self) -> String {
+        if !self.capabilities().cypher { return self.untranslated("create_aside_table"); }
         "CREATE NODE TABLE IF NOT EXISTS _snapshot_aside(\n    \
          _key STRING,\n    \
          _entity STRING,\n    \
@@ -587,6 +608,7 @@ pub trait SchemaDialect: Send + Sync {
     /// Poser des copies : `$items` porte `key`, `entity`, `uuid`, `hash`,
     /// `row`, `chunks`, `session`, `at`.
     fn upsert_aside(&self) -> String {
+        if !self.capabilities().cypher { return self.untranslated("upsert_aside"); }
         format!(
             "{} SET a._entity = item.entity, a._uuid = item.uuid, a._content_hash = item.hash, a._row = item.row, \
              a._chunks = item.chunks, a._session = item.session, a._removed_at = item.at",
@@ -597,6 +619,7 @@ pub trait SchemaDialect: Send + Sync {
     /// Les copies vivantes de `$keys` : `_uuid`, `_content_hash`, `_row`,
     /// `_chunks`, `_session`.
     fn select_aside(&self) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_aside"); }
         "UNWIND $keys AS k MATCH (a:_snapshot_aside {_key: k}) WHERE a._row <> '' \
          RETURN a._uuid, a._content_hash, a._row, a._chunks, a._session"
             .into()
@@ -604,6 +627,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Les copies vivantes qu'une session a posées pour `$entity`.
     fn select_aside_by_session(&self) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_aside_by_session"); }
         "MATCH (a:_snapshot_aside) WHERE a._entity = $entity AND a._session = $session AND a._row <> '' \
          RETURN a._uuid, a._content_hash, a._row, a._chunks, a._session"
             .into()
@@ -611,12 +635,14 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Vider les copies de `$keys` (consommées ou périmées).
     fn clear_aside(&self) -> String {
+        if !self.capabilities().cypher { return self.untranslated("clear_aside"); }
         "UNWIND $keys AS k MATCH (a:_snapshot_aside {_key: k}) SET a._row = '', a._chunks = ''".into()
     }
 
     /// **La purge, bornée** : vider au plus `limit` copies de `$entity`
     /// posées avant `$before`. Rend le nombre vidé.
     fn purge_aside_before(&self, limit: usize) -> String {
+        if !self.capabilities().cypher { return self.untranslated("purge_aside_before"); }
         format!(
             "MATCH (a:_snapshot_aside) WHERE a._entity = $entity AND a._row <> '' AND a._removed_at < $before \
              WITH a LIMIT {limit} SET a._row = '', a._chunks = '' RETURN count(a)"
@@ -628,6 +654,7 @@ pub trait SchemaDialect: Send + Sync {
     /// quand le dialecte ne sait pas relire un vecteur : la copie part sans,
     /// et la ligne qui revient est réembarquée.
     fn select_chunk_vectors(&self, chunk_table: &str, column: &str, marker: &str) -> Option<String> {
+        if !self.capabilities().cypher { return None; }
         Some(format!(
             "MATCH (c:{chunk_table}) WHERE c._parent_uuid IN $uuids \
              RETURN c._uuid, c._parent_uuid, c._text_hash, c.{marker}, c.{column}"
@@ -639,6 +666,7 @@ pub trait SchemaDialect: Send + Sync {
     /// `uuid` et `state`. Écrit sans la garde de la machine à états — une
     /// annulation n'est pas une transition.
     fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("revert_lifecycle_state"); }
         format!(
             "{} SET n.{field} = item.state, n._absent_since = NULL",
             unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
@@ -649,12 +677,14 @@ pub trait SchemaDialect: Send + Sync {
     /// les deux sens — ce que `DETACH DELETE` emportera de cette relation.
     /// `None` quand le dialecte ne sait pas le dire.
     fn count_relations_of(&self, table: &str, rel: &str) -> Option<String> {
+        if !self.capabilities().cypher { return None; }
         Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r:{rel}]-() RETURN count(DISTINCT r)"))
     }
 
     /// **Les dérivées en dette de rendu** : `_render_hash` nul ou vide. Rend
     /// `_source_uuid` (la racine à re-rendre), borné.
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_derivees_a_rendre"); }
         format!(
             "MATCH (d:{derived_table}) \
              WHERE d._render_hash IS NULL OR d._render_hash = '' \
@@ -666,6 +696,7 @@ pub trait SchemaDialect: Send + Sync {
     /// été rendue (un processus mort entre les deux, une base migrée). Rend
     /// `_uuid` de la racine, borné.
     fn select_racines_sans_derivee(&self, root_table: &str, derived_table: &str, rel_table: &str, limite: usize) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_racines_sans_derivee"); }
         format!(
             "MATCH (r:{root_table}) \
              OPTIONAL MATCH (d:{derived_table})-[:{rel_table}]->(r) \
@@ -705,6 +736,7 @@ pub trait SchemaDialect: Send + Sync {
     /// qui ne rend rien. Paramètre `$uuids` ; colonnes `_uuid`, identifiant
     /// (au format de [`Self::node_id_expr`]).
     fn select_node_ids(&self, table: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("select_node_ids"); }
         let id = self.node_id_expr("n");
         format!(
             "UNWIND $uuids AS uuid \
@@ -887,6 +919,7 @@ pub trait SchemaDialect: Send + Sync {
         conn: std::sync::Arc<dyn crate::connection::DbConnection>,
         dossier: std::path::PathBuf,
     ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
+        if !self.capabilities().cypher { return None; }
         // Le défaut est le Cypher, comme partout ici.
         Some(std::sync::Arc::new(
             crate::dataflow::checkpoint_store::CypherCheckpointStore::with_directory(conn, dossier),
@@ -917,6 +950,7 @@ pub trait SchemaDialect: Send + Sync {
         return_fields: &[String],
         has_source_refs: bool,
     ) -> String {
+        if !self.capabilities().cypher { return self.untranslated("resolve_parents_with_chunks"); }
         let offset_list = offsets
             .iter()
             .map(|o| o.to_string())
@@ -958,6 +992,7 @@ pub trait SchemaDialect: Send + Sync {
         parent_alias: &str,
         parent_entity: &str,
     ) -> String {
+        if !self.capabilities().cypher { return self.untranslated("chunk_parent_join"); }
         format!(
             "MATCH ({chunk_alias})-[:{parent_entity}_CHUNKED_FROM]->\
              ({parent_alias}:{parent_entity})"
@@ -2683,6 +2718,21 @@ mod tests {
         let p = PostgresDialect.capabilities();
         assert!(!p.cypher && !p.transactions && !p.bulk_load && !p.structured_fields);
         assert!(!PostgresDialect.speaks_cypher() && !PostgresDialect.supports_copy_from());
+    }
+
+    /// La porte : un corps par défaut que PostgreSQL ne redéfinit pas rend un
+    /// refus qui nomme la méthode, jamais du Cypher.
+    #[test]
+    fn un_defaut_cypher_non_traduit_se_refuse_par_son_nom() {
+        let d = PostgresDialect;
+        for (methode, requete) in [
+            ("select_page_after_offset", d.select_page_after_offset("Doc", &["texte"], 10)),
+            ("existing_links", d.existing_links("R", ("A", "B"))),
+            ("count_links", d.count_links("R")),
+        ] {
+            assert_eq!(requete, format!("RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__{methode}"));
+        }
+        assert!(Rag3dbDialect.select_page_after_offset("Doc", &["texte"], 10).starts_with("MATCH"));
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

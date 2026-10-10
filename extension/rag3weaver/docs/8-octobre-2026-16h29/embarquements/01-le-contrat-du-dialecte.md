@@ -164,6 +164,19 @@ Les 19 tests de `e2e_postgres.rs` couvrent déjà une bonne part de 1, 2, 7,
    par défaut pour les requêtes. Un dialecte nouveau ne compile pas tant
    qu'il n'a pas tout écrit. C'est le plus gros changement, et le seul qui
    touche toute l'API du trait : **à décider par Lucie**.
+
+   **Décidé le 10 octobre : la voie du milieu, une seule porte.** Chaque
+   corps par défaut écrit en Cypher commence par regarder `cypher`. Si le
+   dialecte ne le déclare pas, il rend une instruction d'un seul mot :
+   `RAG3WEAVER_REFUS__le_dialecte_<nom>_ne_traduit_pas__<méthode>`. N'importe
+   quel moteur la rejette à l'analyse en la citant, avant même de regarder
+   les paramètres. Les défauts qui rendent une `Option` rendent `None`.
+
+   **C'est un pis-aller, imposé par les signatures** : une méthode du trait
+   rend un texte, pas un `Result`, donc le refus ne peut partir qu'avec la
+   requête, et échouer à l'exécution. La forme propre, refuser **avant**
+   d'exécuter, vient avec le langage intermédiaire (page 02), dont les
+   traductions rendent un `Result`.
 4. **La transaction dans `DbConnection`** (`begin`, `commit`, `rollback` sur
    une session tenue), après que la session recherche (chantier C) a poussé
    son runtime dédié dans `postgres_connection.rs`.
