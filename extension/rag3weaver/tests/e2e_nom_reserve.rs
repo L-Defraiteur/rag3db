@@ -38,7 +38,7 @@ fn catalogue() -> Catalog {
 
 fn entite(champ: &str) -> EntityConfig {
     let mut fields = HashMap::new();
-    fields.insert(champ.to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() });
+    fields.insert(champ.to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() });
     EntityConfig { fields, ..Default::default() }
 }
 
