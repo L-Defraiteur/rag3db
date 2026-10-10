@@ -1,0 +1,17 @@
+{
+  "name": "rag3weaver-darwin-arm64",
+  "version": "0.0.1-alpha.1",
+  "description": "rag3weaver prebuilt backend for macOS arm64 (Apple silicon) — installed automatically by the rag3weaver package",
+  "files": [
+    "rag3weaver-backend",
+    "libvector.rag3db_extension"
+  ],
+  "license": "MIT",
+  "author": "Luciform Research",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/L-Defraiteur/rag3db"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"]
+}
