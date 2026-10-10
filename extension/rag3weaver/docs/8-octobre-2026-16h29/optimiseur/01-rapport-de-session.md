@@ -16,10 +16,12 @@ tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseu
   `~/.cache/rag3weaver-build/paquet-npm/porte-absent.patch`, à poser sur
   `paquet-npm` au rebase quand c'est sur master. `npm test` reste rouge
   attendu derrière `RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1` jusque-là.
-- **Le binaire Windows se lie** (dixième essai, MSVC pur, 31 min 50 s,
-  60 Mo) ; le onzième
-  (https://github.com/L-Defraiteur/rag3db/actions/runs/38048487047) donne
-  l'artefact et l'épreuve `--describe` avec le bac à sable fermé.
+- **Windows est tranché** : le binaire se lie (dixième essai, MSVC pur,
+  60 Mo) et `--describe` passe avec le bac à sable fermé (quinzième,
+  https://github.com/L-Defraiteur/rag3db/actions/runs/38060705890) ; entre
+  les deux, trois accrocs d'épreuve et un vrai (le chemin verbatim de
+  `canonicalize` sous Windows, corrigé). Reste pour le sous-paquet Windows :
+  l'extension vecteur, le cache de bâti, l'épreuve JS sur le runner.
 - L'épreuve JS passe de bout en bout sur le binaire natif porteur des
   portes ; elle reste derrière sa porte (voir le relevé).
 
@@ -72,11 +74,10 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. Lire le dixième essai Windows (`gh run view 38046471828`, compte
-   `L-Defraiteur` par `GH_TOKEN`) : si le binaire se lie, l'artefact
-   `bati-windows-x64-journal` le porte ; essayer `--describe` sur un gabarit
-   avec `"sandbox": {"mode": "off"}` ; dire à codeparsers ce que `cl`
-   refuse dans parser.c/scanner.c, s'il refuse.
+1. Windows, la suite (quand l'orchestration le demande) : l'extension
+   vecteur dans le job Windows, `Swatinem/rust-cache`, l'épreuve JS sur le
+   runner, le sous-paquet `rag3weaver-win32-x64-msvc`. macOS peut maintenant
+   se décider (règle de Lucie : pas avant que Windows soit tranché).
 2. Quand l'embarqueur absent est sur master : rebase de `paquet-npm`
    (conflits connus : node_table.h → prendre master, paquet-npm.yml → garder
    la branche), `git apply` du patch de la porte, rebâti, `RAG3WEAVER_BACKEND=<binaire> RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test`

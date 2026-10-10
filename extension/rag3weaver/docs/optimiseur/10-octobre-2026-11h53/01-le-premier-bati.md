@@ -118,7 +118,21 @@ Le quatorzième essai (38057374360, 48 min 24 s) a rendu le chemin ordinaire,
 correctif « manifeste à côté du gabarit » annoncé au douzième n'avait pas
 été écrit (un script arrêté avant la ligne, et un « yaml ok » sur le
 fichier inchangé). Les deux causes étaient réelles, l'une masquait l'autre.
-Le quinzième essai (38060705890) joue les deux correctifs.
+Le quinzième essai (38060705890, 47 min 42 s) les a joués : **`--describe`
+passe sous Windows avec `"sandbox": {"mode": "off"}`** — le binaire charge le
+manifeste du gabarit de code, ses graphes et ses outils, et rend sa
+description (`capabilities`, `embeddings`, `fts: lucivy`, les onze outils).
+Windows est tranché : le binaire se bâtit, se lie et démarre sur
+`windows-latest`, en MSVC pur. Les accents sortent en mojibake dans le
+journal du runner (console en cp1252, JSON en UTF-8) : ce n'est pas le
+binaire, le paquet lit stdout en UTF-8.
+
+Ce qui reste pour un sous-paquet `rag3weaver-win32-x64-msvc` : l'extension
+vecteur bâtie sous Windows (même geste que sous Linux, à partir du bâti
+cmake de cargo), un bâti plus court (47 min à froid : le cache de cargo,
+`Swatinem/rust-cache`, comme lucivy), `--describe` puis l'épreuve JS entière
+sur le runner, et le gabarit livré avec `"sandbox": {"mode": "off"}` sous
+Windows, avec le pourquoi.
 L'extension vecteur n'est pas encore bâtie sous Windows (le job ne lance
 que cargo) : c'est le même geste que sous Linux, à ajouter.
 
