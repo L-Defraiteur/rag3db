@@ -76,9 +76,14 @@ async function main() {
   // Indexer les trois fichiers (plein texte seul), puis chercher dans l'index.
   const recu = await backend.call('index', { confirm: true });
   console.log(`index : ${JSON.stringify(recu).slice(0, 160)}`);
-  // L'indexation tourne en fond : on attend qu'elle rende le verrou.
+  // L'indexation tourne en fond : on attend qu'elle rende le verrou, puis
+  // que le plein texte de chaque entité soit prêt — le verrou se rend entre
+  // deux phases, et sur un runner lent (Windows, vingtième essai) la
+  // recherche partait pendant « plein texte en cours ».
+  const texteFini = (e) => Object.entries(e).filter(([k]) => k !== 'warnings' && k !== 'busy')
+    .every(([, v]) => v.text === 'ready' || v.text === 'not_declared');
   let etat = await backend.indexState();
-  for (let i = 0; i < 120 && etat.busy; i++) {
+  for (let i = 0; i < 240 && (etat.busy || !texteFini(etat)); i++) {
     await new Promise((r) => setTimeout(r, 500));
     etat = await backend.indexState();
   }

@@ -98,9 +98,11 @@ async function main() {
   const t1 = Date.now();
   const recu = await backend.call('index', { confirm: true });
   console.log(rendu(recu, 8));
+  const texteFini = (e) => Object.entries(e).filter(([k]) => k !== 'warnings' && k !== 'busy')
+    .every(([, v]) => v.text === 'ready' || v.text === 'not_declared');
   let etat = await backend.indexState();
   let derniere = '';
-  while (etat.busy) {
+  while (etat.busy || !texteFini(etat)) {
     await dormir(1000);
     etat = await backend.indexState();
     const ligne = Object.entries(etat).filter(([k]) => k !== 'warnings' && k !== 'busy')
