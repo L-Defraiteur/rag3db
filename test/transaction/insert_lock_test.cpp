@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -470,12 +471,20 @@ protected:
         mustRun(*conn, "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
         mustRun(*conn, "CALL debug_enable_multi_writes=true;");
     }
-    int64_t liveRowsByIndex(Connection& connection, int64_t k) {
+    // Les identifiants que la recherche rend (k au plus), triés.
+    std::vector<int64_t> idsByIndex(Connection& connection, int64_t k) {
         auto result = connection.query(
             "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], " +
-            std::to_string(k) + ") RETURN count(*);");
+            std::to_string(k) + ") RETURN node.id ORDER BY node.id;");
         EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
-        return result->isSuccess() ? result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+        std::vector<int64_t> ids;
+        while (result->isSuccess() && result->hasNext()) {
+            ids.push_back(result->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        return ids;
+    }
+    int64_t liveRowsByIndex(Connection& connection, int64_t k) {
+        return static_cast<int64_t>(idsByIndex(connection, k).size());
     }
 };
 
@@ -530,7 +539,10 @@ TEST_F(IndexedTableLockTest, TwoDeletesWithOverlappingNeighbourhoodsBothCommitIn
     auto count = conn->query("MATCH (d:Doc) RETURN count(d);");
     ASSERT_TRUE(count->isSuccess());
     EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 98);
-    EXPECT_EQ(liveRowsByIndex(*conn, 100), 98) << "the index must return exactly the live rows";
+    const auto ids = idsByIndex(*conn, 100);
+    EXPECT_EQ(ids.size(), 98u) << "the index must return exactly the live rows";
+    EXPECT_EQ(std::count(ids.begin(), ids.end(), 10), 0) << "deleted row 10 came back";
+    EXPECT_EQ(std::count(ids.begin(), ids.end(), 11), 0) << "deleted row 11 came back";
     EXPECT_EQ(locks().getNumResources(), 0u);
 }
 
