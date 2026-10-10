@@ -237,8 +237,13 @@ impl Moteur<'_> {
             for r in &rows.rows {
                 let de = texte(r.first());
                 let mut m = reached_from(r, 1, self.cfg);
-                if let Some(site) = r.get(1 + largeur(self.cfg)).and_then(|v| v.as_i64()) {
-                    m.line = Some(site);
+                // La ligne du site est dans le nœud d'où part l'arête : celle
+                // du nœud atteint en entrant (l'appelant) ; en sortant, il
+                // garde sa propre ligne (l'appelé, là où il est défini).
+                if self.cfg.direction == Direction::Incoming {
+                    if let Some(site) = r.get(1 + largeur(self.cfg)).and_then(|v| v.as_i64()) {
+                        m.line = Some(site);
+                    }
                 }
                 m.relation = rel.name.clone();
                 out.push((de, m));
@@ -575,13 +580,15 @@ impl NeighborhoodReport {
     }
 
     pub fn markdown(&self, group_title: &str, rest_title: &str, also_label: &str, limit: usize) -> String {
-        self.markdown_avec(group_title, rest_title, also_label, None, limit, false)
+        self.markdown_avec("impact", group_title, rest_title, also_label, None, limit, false)
     }
 
-    /// [`Self::markdown`], avec la section du relevé sur le chemin, sous ce
-    /// titre ; `include_by_name` : les usages par le nom seul listés, marqués.
-    pub fn markdown_avec(&self, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize, include_by_name: bool) -> String {
-        let mut out = format!("# impact: {}\n\n", self.name);
+    /// [`Self::markdown`], sous ce titre (`heading`), avec la section du
+    /// relevé sur le chemin, sous le sien ; `include_by_name` : les usages
+    /// par le nom seul listés, marqués. Un `group_title` vide : pas de
+    /// groupe, rien n'en est dit.
+    pub fn markdown_avec(&self, heading: &str, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize, include_by_name: bool) -> String {
+        let mut out = format!("# {heading}: {}\n\n", self.name);
         out.push_str(&format!("## Départ ({})\n", self.starts.len()));
         if self.starts.is_empty() {
             out.push_str("(aucune définition indexée sous ce nom)\n");
@@ -606,12 +613,13 @@ impl NeighborhoodReport {
             .map(|l| format!("{} à {} saut{}", self.reached.iter().filter(|r| r.level == l && !r.by_also && !cache(r)).count(), l, if l > 1 { "s" } else { "" }))
             .collect();
         out.push_str(&format!(
-            "\n**{} touchés** ({}) — dont **{} {}**",
+            "\n**{} touchés** ({})",
             self.reached.iter().filter(|r| !r.by_also && !cache(r)).count(),
-            resume_niveaux.join(", "),
-            groupes.iter().filter(|r| !r.by_also).count(),
-            group_title
+            resume_niveaux.join(", ")
         ));
+        if !group_title.is_empty() {
+            out.push_str(&format!(" — dont **{} {group_title}**", groupes.iter().filter(|r| !r.by_also).count()));
+        }
         if self.cut > 0 {
             out.push_str(&format!(" ; budget atteint, {} de plus non rendus", self.cut));
         }
@@ -720,6 +728,8 @@ pub struct NeighborhoodNode {
     rest_title: String,
     /// Les usages par le nom seul listés au lieu d'être comptés à part.
     include_by_name: bool,
+    /// Le titre du rendu (`# impact: nom`).
+    heading: String,
     json: bool,
 }
 
@@ -761,7 +771,9 @@ impl Node for NeighborhoodNode {
             serde_json::Value::String(report.summary(&self.group_title, &self.rest_title, self.limit, &self.summary_group, self.include_by_name))
         } else {
             serde_json::Value::String(report.markdown_avec(
-                &self.group_title,
+                &self.heading,
+                // Sans regroupement déclaré, rien à en dire.
+                if self.cfg.group_by.is_empty() { "" } else { &self.group_title },
                 &self.rest_title,
                 &self.cfg.also_label,
                 self.cfg.collect.as_ref().map(|c| c.title.as_str()),
@@ -889,6 +901,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             group_title: s("group_title").unwrap_or_else(|| "Groupés".into()),
             rest_title: s("rest_title").unwrap_or_else(|| "Touchés".into()),
             include_by_name: config.get("include_by_name").and_then(|v| v.as_bool()).unwrap_or(false),
+            heading: s("heading").unwrap_or_else(|| "impact".into()),
             json,
         }))
     }
@@ -941,6 +954,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("line_field", S, false, Some(serde_json::json!("start_line")), "Champ de ligne"),
                 p("group_title", S, false, Some(serde_json::json!("Groupés")), "Titre de la section des nœuds groupés"),
                 p("rest_title", S, false, Some(serde_json::json!("Touchés")), "Titre des sections par niveau"),
+                p("heading", S, false, Some(serde_json::json!("impact")), "Titre du rendu markdown (`# impact: nom`)"),
                 p("include_by_name", Bool, false, Some(serde_json::json!(false)), "Lister les usages trouvés par le nom seul (non attribués), au lieu de les compter à part"),
                 p("name", S, false, Some(serde_json::json!("")), "Le nom de départ (ou `file`)"),
                 p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),

@@ -98,7 +98,7 @@ fn les_appelants_par_le_nom_seul_sont_comptes_pas_montres() {
     assert!(resume.contains("Code qui en dépend : 2 directement, 3 en tout sur 2 niveaux ; 4 par le nom seul, non montrés."), "{resume}");
     assert!(resume.contains("Tests à relancer : 1 — `tests::test_set`") && !resume.contains("test_bruit"), "{resume}");
     // Sur demande (`include_by_name`), ils sont listés, marqués, et comptés.
-    let tout = r.markdown_avec("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", None, 30, true);
+    let tout = r.markdown_avec("impact", "Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", None, 30, true);
     assert!(tout.contains("## Code qui en dépend, à 1 saut (5)") && tout.contains("bruit — column.cpp:10 (par le nom)"), "{tout}");
     assert!(!tout.contains("non montrés"), "{tout}");
     let resume = r.summary("Tests à relancer", "Code qui en dépend", 10, "case", true);

@@ -186,11 +186,11 @@ fn un_client_mcp_voit_les_outils_du_manifeste_et_les_appelle() {
     for attendu in [
         "search_code", "read_file", "grep_files", "list_files", "schema",
         "edit_file", "run_command", "wait_output", "estimate", "index",
-        "usages", "impact",
+        "usages", "impact", "callees",
     ] {
         assert!(noms.contains(&attendu), "{attendu} manque : {noms:?}");
     }
-    assert_eq!(noms.len(), 12, "le gabarit code en déclare douze : {noms:?}");
+    assert_eq!(noms.len(), 13, "le gabarit code en déclare treize : {noms:?}");
     // Chaque outil porte son schéma, et il est typé.
     let lecture = outils.iter().find(|t| t["name"] == "read_file").expect("read_file");
     assert_eq!(lecture["inputSchema"]["type"], "object", "{lecture}");

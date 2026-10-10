@@ -106,3 +106,34 @@ fn impact_dit_les_verrous_pris_sur_le_chemin() {
     assert!(md.contains("- `Index::mtx` — insert (départ, lock)"), "{md}");
     assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
 }
+
+/// **Ce que ça appelle**, avec les verrous pris sur le chemin : l'outil
+/// `callees` (le même voisinage dans l'autre sens). Depuis `top` : `bulk` à
+/// un saut (il prend `Index::autre`), `insert` à deux (il prend
+/// `Index::mtx`) — où se prend le verrou que `top` ne tient pas lui-même.
+#[test]
+#[ignore]
+fn callees_dit_ce_qui_est_appele_et_les_verrous_pris() {
+    use rag3weaver::dataflow::graph_tool::GraphTool;
+    use rag3weaver::dataflow::node_factories::register_builtins;
+    use rag3weaver::dataflow::node_registry::NodeRegistry;
+    use rag3weaver::dataflow::ServiceRegistry;
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = CORPUS.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/callees.mmd")).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "top"})).unwrap();
+    eprintln!("{md}");
+    assert!(md.starts_with("# callees: top"), "{md}");
+    // La ligne de l'appelé est celle de sa définition, pas celle du site
+    // d'appel (qui est chez l'appelant, dans un autre fichier).
+    assert!(md.contains("## Ce qu’il appelle, à 1 saut (1)") && md.contains("bulk — /projet/service.cpp:3"), "{md}");
+    assert!(md.contains("## Ce qu’il appelle, à 2 sauts") && md.contains("insert — /projet/index.cpp:3"), "{md}");
+    assert!(!md.contains("Groupés"), "pas de groupe déclaré, rien n'en est dit : {md}");
+    assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
+    assert!(md.contains("- `Index::mtx` — insert (2 sauts, lock)"), "{md}");
+}
