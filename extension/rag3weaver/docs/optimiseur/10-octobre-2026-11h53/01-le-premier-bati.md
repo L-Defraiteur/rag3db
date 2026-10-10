@@ -412,6 +412,39 @@ que la tête) prouve que les sous-paquets épinglés se résolvent depuis npm et
 que les non publiés n'empêchent rien (optionnels, autre plateforme). Ordre
 de publication : windows, darwin, puis la tête.
 
+### Windows, le sous-paquet : où ça en est
+
+- **Seizième essai** (38068526690, 86 min à froid) : l'extension vecteur se
+  bâtit sous MSVC (12,6 Mo — sous Windows elle embarque sa copie du moteur,
+  comme chez l'amont, `WIN32` lie `rag3db` en PRIVATE) ; `npm test` rouge
+  au `LOAD EXTENSION 'D:\a\…'` : le parseur Cypher lit `\a` comme un
+  échappement. Correctif : `connection::cypher_path_literal` (barres
+  obliques inverses doublées, apostrophe échappée), pour LOAD EXTENSION et
+  les deux COPY FROM du dialecte, avec un test de forme et un test de
+  relecture par le moteur.
+- **Dix-septième** : 403 passager de GitHub au clonage du sous-module.
+- **Dix-huitième** (38074829113) : l'extension se charge, le backend
+  démarre, index vert ; rouge sur `search_code` : « aucun index FTS ouvert
+  pour 'Scope' » — l'ouverture de l'index lucivy en mode fichiers échoue
+  sous Windows et sa cause n'est dite que sur stderr, que l'épreuve
+  n'imprimait pas (corrigé : elle l'imprime). **Le cache du bâti est
+  sauvé.** Trouvé aussi pourquoi l'étape de l'extension durait 37 min :
+  sous Windows, build.rs copie l'arbre dans `tools/rust_api/rag3db-src`
+  (pas de lien symbolique) et cmake l'a configuré de là ; reconfigurer
+  depuis la racine du dépôt changeait la source et recompilait les 964
+  objets. La source se lit maintenant dans `CMAKE_HOME_DIRECTORY` du cache.
+- **Dix-neuvième** : en cours, pour lire la cause du FTS.
+
+### Le lot 1 du chantier I (rquickjs, swc) sur les trois plateformes
+
+master 6932a7da2 (dépendances non optionnelles de rag3weaver : rquickjs 0.14
+avec le C de quickjs-ng par `cc`, swc_ts_fast_strip + swc_common, ~150
+paquets) est fondu dans `paquet-npm`. Vérifié : **manylinux_2_28** (Docker
+luciepc) vert, binaire strippé 79 → **89 Mo** ; **macOS arm64** vert (run 5,
+22 min), 81 → **93 Mo** après `strip -x` ; natif Linux vert avec `npm test`.
+Le poids (+10 à +12 Mo) est à la session « everything declarative », qui
+mesure la part de swc. Windows : le dix-neuvième essai le bâtit.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
