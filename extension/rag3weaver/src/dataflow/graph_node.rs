@@ -108,14 +108,13 @@ impl GraphNode {
             }
         }
 
-        // Build PortDefs — we use leaked &'static str for the names
-        // since PortDef requires &'static str and these are dynamic.
+        // Les noms des ports libres sont possédés par le nœud : rien ne fuit
+        // quand il est jeté (une fabrique rebâtie, un graphe rechargé).
         let inputs: Vec<PortDef> = input_defs
             .iter()
             .map(|(name, pt, req)| {
-                let leaked: &'static str = Box::leak(name.clone().into_boxed_str());
                 PortDef {
-                    name: leaked,
+                    name: name.clone().into(),
                     port_type: *pt,
                     required: *req,
                 }
@@ -125,9 +124,8 @@ impl GraphNode {
         let outputs: Vec<PortDef> = output_defs
             .iter()
             .map(|(name, pt, req)| {
-                let leaked: &'static str = Box::leak(name.clone().into_boxed_str());
                 PortDef {
-                    name: leaked,
+                    name: name.clone().into(),
                     port_type: *pt,
                     required: *req,
                 }
@@ -156,8 +154,7 @@ impl GraphNode {
 
         // Update the PortDef
         if let Some(pd) = self.inputs.iter_mut().find(|p| p.name == inner) {
-            let leaked: &'static str = Box::leak(alias.to_string().into_boxed_str());
-            pd.name = leaked;
+            pd.name = alias.to_string().into();
         }
         Ok(())
     }
@@ -173,8 +170,7 @@ impl GraphNode {
 
         // Update the PortDef
         if let Some(pd) = self.outputs.iter_mut().find(|p| p.name == inner) {
-            let leaked: &'static str = Box::leak(alias.to_string().into_boxed_str());
-            pd.name = leaked;
+            pd.name = alias.to_string().into();
         }
         Ok(())
     }
@@ -285,13 +281,9 @@ impl GraphNodeFactory {
         // que les schémas de types, jamais les valeurs.
         let temp = GraphNode::from_definition("__schema_probe", definition.clone(), registry.clone())?;
 
-        // Leak type_name for &'static str
-        let leaked_type: &'static str = Box::leak(type_name.to_string().into_boxed_str());
-        let leaked_desc: &'static str = Box::leak(description.to_string().into_boxed_str());
-
         let schema = NodeSchema {
-            node_type: leaked_type,
-            description: leaked_desc,
+            node_type: type_name.to_string().into(),
+            description: description.to_string().into(),
             inputs: temp.inputs.clone(),
             outputs: temp.outputs.clone(),
             config_params,
@@ -325,8 +317,8 @@ impl NodeFactory for GraphNodeFactory {
         Ok(Box::new(node))
     }
 
-    fn node_type(&self) -> &'static str {
-        self.schema.node_type
+    fn node_type(&self) -> &str {
+        &self.schema.node_type
     }
 
     fn schema(&self) -> NodeSchema {
@@ -410,7 +402,7 @@ mod tests {
         // LinkRecordNode inputs: relations (required), trigger (optional)
         //   - trigger is connected (edge from inserts.done)
         //   - relations is free
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(input_names.contains(&"inserts.entities"), "inputs: {:?}", input_names);
         assert!(input_names.contains(&"inserts.trigger"), "inputs: {:?}", input_names);
         assert!(input_names.contains(&"links.relations"), "inputs: {:?}", input_names);
@@ -418,7 +410,7 @@ mod tests {
         assert!(!input_names.contains(&"links.trigger"), "inputs: {:?}", input_names);
 
         // Outputs: InsertRecordNode has inserted (free), LinkRecordNode has done (free)
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"inserts.inserted"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"links.done"), "outputs: {:?}", output_names);
     }
@@ -434,12 +426,12 @@ mod tests {
         // KBQuerySourceNode n'a pas d'entrée ; l'entrée `query` de
         // `SearchSourceNode` (optionnelle depuis le pas B) est câblée par
         // l'arête → pas libre, donc pas exposée.
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(!input_names.contains(&"ps.query"), "inputs: {:?}", input_names);
 
         // Sorties libres : la sortie `query` de l'amont est câblée → absorbée ;
         // `query` et `meta` de la source restent libres.
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"ps.meta"), "outputs: {:?}", output_names);
     }
@@ -484,7 +476,7 @@ mod tests {
 
         gn.alias_input("entities", "inserts.entities").unwrap();
 
-        let input_names: Vec<&str> = gn.inputs.iter().map(|p| p.name).collect();
+        let input_names: Vec<&str> = gn.inputs.iter().map(|p| &*p.name).collect();
         assert!(input_names.contains(&"entities"), "inputs: {:?}", input_names);
         assert!(!input_names.contains(&"inserts.entities"), "inputs: {:?}", input_names);
 
@@ -504,7 +496,7 @@ mod tests {
 
         gn.alias_output("payload", "ps.query").unwrap();
 
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"payload"), "outputs: {:?}", output_names);
         assert!(!output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
     }
@@ -597,7 +589,7 @@ mod tests {
         let registry = test_registry();
         let gn = GraphNode::from_definition("mermaid_search", def, registry).unwrap();
 
-        let output_names: Vec<&str> = gn.outputs.iter().map(|p| p.name).collect();
+        let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"));
         assert!(output_names.contains(&"ps.meta"));
     }

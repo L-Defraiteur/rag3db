@@ -767,7 +767,7 @@ impl PreparedBackend {
                 .and_then(|t| t.bind(&nodes))
                 .map_err(|e| e.to_string())?;
             for key in attachment.bindings.keys() {
-                if !tool.params().iter().any(|p| p.name == key) {
+                if !tool.params().iter().any(|p| p.name == key.as_str()) {
                     return Err(format!("{name}: unknown binding {key}"));
                 }
             }
@@ -1566,7 +1566,7 @@ impl Backend {
             if attachment.bindings.contains_key(key) {
                 return Err(format!("cannot override binding {key}"));
             }
-            if !tool.params().iter().any(|p| p.name == key) {
+            if !tool.params().iter().any(|p| p.name == key.as_str()) {
                 return Err(format!("unknown argument {key}"));
             }
         }

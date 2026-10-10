@@ -319,20 +319,20 @@ impl NodeFactory for AddRefNodeFactory {
         "AddRefNode"
     }
     fn schema(&self) -> NodeSchema {
-        let p = |name, required, default: Option<serde_json::Value>, description, choices| ConfigParam {
-            name,
+        let p = |name: &'static str, required, default: Option<serde_json::Value>, description: &'static str, choices| ConfigParam {
+            name: name.into(),
             param_type: ConfigParamType::String,
             required,
             default,
-            description,
+            description: description.into(),
             choices,
             json_schema: None,
         };
         NodeSchema {
-            node_type: "AddRefNode",
-            description: "Cites a thing from a record: validates the value against its genre's optional rhai harness, writes the reference (identity = genre + normal form, so citing twice does not duplicate), and links it. An unknown genre is not an error: it returns the current list and the exact create_ref_type call to make, and loses nothing",
+            node_type: "AddRefNode".into(),
+            description: "Cites a thing from a record: validates the value against its genre's optional rhai harness, writes the reference (identity = genre + normal form, so citing twice does not duplicate), and links it. An unknown genre is not an error: it returns the current list and the exact create_ref_type call to make, and loses nothing".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("genre", true, None, "Genre of the thing cited; the list is read from the catalogue at each call, so a genre created a moment ago is already there",
                   Some(Choices::Values { entity: "RefType".into(), field: "name".into() })),
@@ -343,11 +343,11 @@ impl NodeFactory for AddRefNodeFactory {
                 p("from_entity", false, Some(serde_json::json!("Memory")), "Entity of the record that cites", None),
                 p("relation", false, Some(serde_json::json!("CITE")), "Relation from the record to the reference", None),
                 ConfigParam {
-                    name: "fiche",
+                    name: "fiche".into(),
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: None,
-                    description: "Identity fields of the record that cites; omitted, the reference is written alone",
+                    description: "Identity fields of the record that cites; omitted, the reference is written alone".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -537,20 +537,20 @@ impl NodeFactory for CreateRefTypeNodeFactory {
         "CreateRefTypeNode"
     }
     fn schema(&self) -> NodeSchema {
-        let p = |name, required, default: Option<serde_json::Value>, description| ConfigParam {
-            name,
+        let p = |name: &'static str, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
+            name: name.into(),
             param_type: ConfigParamType::String,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
         NodeSchema {
-            node_type: "CreateRefTypeNode",
-            description: "Declares a new genre of reference, for every use to come. Shows the current genres and asks which one is meant before creating (nothing is written on the first call); the description is mandatory, a rhai harness is optional and is tested on the example that gave birth to it — and refused if an existing genre already recognises it",
+            node_type: "CreateRefTypeNode".into(),
+            description: "Declares a new genre of reference, for every use to come. Shows the current genres and asks which one is meant before creating (nothing is written on the first call); the description is mandatory, a rhai harness is optional and is tested on the example that gave birth to it — and refused if an existing genre already recognises it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("name", true, None, "Name of the genre, as it will appear in the list the caller sees"),
                 p("description", true, None, "What this genre designates, with two or three examples. Mandatory: it is the only harness a genre must have"),
@@ -558,11 +558,11 @@ impl NodeFactory for CreateRefTypeNodeFactory {
                 p("script", false, Some(serde_json::json!("")), "Optional rhai harness: ONE EXPRESSION over `input`, whose value is a map { ok, why, normal, fingerprint } — not a set of functions. `input.value` is the value cited. Empty: references of this genre are said « not verified ». No host I/O is lent to the script, so « does the thing still exist » cannot be answered here"),
                 p("exemple", false, Some(serde_json::json!("")), "The value that gave birth to the genre; required as soon as a script is given, since the script is tested on it"),
                 ConfigParam {
-                    name: "confirm",
+                    name: "confirm".into(),
                     param_type: ConfigParamType::Bool,
                     required: false,
                     default: Some(serde_json::json!(false)),
-                    description: "false (the default): nothing is written, the current genres are shown and the exact calls given. true: create",
+                    description: "false (the default): nothing is written, the current genres are shown and the exact calls given. true: create".into(),
                     choices: None,
                     json_schema: None,
                 },

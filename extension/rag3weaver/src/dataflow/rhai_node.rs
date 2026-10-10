@@ -16,25 +16,25 @@ impl NodeFactory for RhaiNodeFactory {
         "RhaiNode"
     }
     fn schema(&self) -> NodeSchema {
-        let param = |name, ty, description| ConfigParam {
-            name,
+        let param = |name: &'static str, ty, description: &'static str| ConfigParam {
+            name: name.into(),
             param_type: ty,
             required: false,
             default: None,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
         NodeSchema {
-            node_type: "RhaiNode",
-            description: "Bounded JSON-to-JSON computation; scripts have no host I/O",
+            node_type: "RhaiNode".into(),
+            description: "Bounded JSON-to-JSON computation; scripts have no host I/O".into(),
             inputs: vec![PortDef {
-                name: "value",
+                name: "value".into(),
                 port_type: PortType::Map,
                 required: false,
             }],
             outputs: vec![PortDef {
-                name: "result",
+                name: "result".into(),
                 port_type: PortType::Map,
                 required: false,
             }],

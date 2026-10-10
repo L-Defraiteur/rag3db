@@ -124,19 +124,19 @@ impl NodeFactory for OcrNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "OcrNode",
-            description: "Recognizes text in an image via the 'ocr' service (text + lines with boxes)",
-            inputs: vec![PortDef { name: "image", port_type: PortType::Image, required: true }],
+            node_type: "OcrNode".into(),
+            description: "Recognizes text in an image via the 'ocr' service (text + lines with boxes)".into(),
+            inputs: vec![PortDef { name: "image".into(), port_type: PortType::Image, required: true }],
             outputs: vec![
-                PortDef { name: "text", port_type: PortType::Text, required: false },
-                PortDef { name: "ocr", port_type: PortType::Ocr, required: false },
+                PortDef { name: "text".into(), port_type: PortType::Text, required: false },
+                PortDef { name: "ocr".into(), port_type: PortType::Ocr, required: false },
             ],
             config_params: vec![ConfigParam {
-                name: "min_confidence",
+                name: "min_confidence".into(),
                 param_type: ConfigParamType::Float,
                 required: false,
                 default: Some(serde_json::json!(0.0)),
-                description: "Drop lines whose confidence is below this threshold [0, 1]",
+                description: "Drop lines whose confidence is below this threshold [0, 1]".into(),
                 choices: None,
                 json_schema: None,
             }],

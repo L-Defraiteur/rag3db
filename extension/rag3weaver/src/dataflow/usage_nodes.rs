@@ -672,11 +672,11 @@ impl NodeFactory for UsagesNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let p = |name: &'static str, param_type, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
-            name,
+            name: name.into(),
             param_type,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
@@ -686,10 +686,10 @@ impl NodeFactory for UsagesNodeFactory {
         let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown (pour le modèle) | json (structuré)");
         format.choices = Some(Choices::fixed(["markdown", "json"]));
         NodeSchema {
-            node_type: "UsagesNode",
-            description: "A thing, what defines it, and what uses it: through a declared pivot entity (definitions and usages relations) and direct relations to each definition, grouped by the usage kind read on the edge, with file and line. Ambiguous names show every definition and leave pivot-only usages unattributed.",
+            node_type: "UsagesNode".into(),
+            description: "A thing, what defines it, and what uses it: through a declared pivot entity (definitions and usages relations) and direct relations to each definition, grouped by the usage kind read on the edge, with file and line. Ambiguous names show every definition and leave pivot-only usages unattributed.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("pivot", S, true, None, "Entité de rendez-vous (ex. Symbol)"),
                 p("key", S, true, None, "Champ d'identité du pivot (ex. name)"),

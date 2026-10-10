@@ -6,6 +6,7 @@
 //! [`QueryPayload`] — typed query data flowing through ports.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -163,9 +164,13 @@ impl PortType {
 // ─── PortDef ─────────────────────────────────────────────────────────────────
 
 /// Definition of a port on a node.
+///
+/// Le nom est **possédé** quand il est déclaré (un sous-graphe, un nœud
+/// scripté) et emprunté quand il est écrit dans le code (`"value".into()`,
+/// sans allocation) : une déclaration rechargée ne laisse rien derrière elle.
 #[derive(Debug, Clone)]
 pub struct PortDef {
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     pub port_type: PortType,
     pub required: bool,
 }

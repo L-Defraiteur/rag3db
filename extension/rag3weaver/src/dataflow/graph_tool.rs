@@ -410,7 +410,7 @@ pub fn resolve_params(
     };
 
     for key in given.keys() {
-        if !params.iter().any(|p| p.name == key) {
+        if !params.iter().any(|p| p.name == key.as_str()) {
             return Err(GraphToolError::UnknownArgument {
                 name: key.clone(),
                 known,
@@ -420,7 +420,7 @@ pub fn resolve_params(
 
     let mut out = Map::new();
     for p in params {
-        match given.get(p.name) {
+        match given.get(&*p.name) {
             Some(v) => {
                 if !value_matches(&p.param_type, v) {
                     return Err(GraphToolError::TypeMismatch {
@@ -675,7 +675,7 @@ pub fn check_choices(
 ) -> Result<(), GraphToolError> {
     for p in params {
         let Some(choices) = &p.choices else { continue };
-        let Some(Value::String(value)) = resolved.get(p.name) else { continue };
+        let Some(Value::String(value)) = resolved.get(&*p.name) else { continue };
         // **Le défaut d'un paramètre est admissible par définition.** Sans
         // cette ligne, `relation` — dont le défaut vide veut dire « pas
         // d'expansion » — se faisait refuser au motif qu'il n'est pas une
@@ -737,7 +737,7 @@ fn wired_params(template: &GraphDefinition, registry: &NodeRegistry, name: &str)
             if val.as_str() != Some(needle.as_str()) {
                 continue;
             }
-            if let Some(cp) = schema.config_params.iter().find(|c| c.name == key) {
+            if let Some(cp) = schema.config_params.iter().find(|c| c.name == key.as_str()) {
                 out.push((format!("{}.{}", node.name, key), cp.clone()));
             }
         }
@@ -859,7 +859,7 @@ impl GraphTool {
     ) -> Result<Self, GraphToolError> {
         let herites: BTreeSet<String> = herites.iter().map(|s| (*s).to_string()).collect();
         for h in &herites {
-            if !params.iter().any(|p| p.name == h) {
+            if !params.iter().any(|p| p.name == h.as_str()) {
                 return Err(GraphToolError::Spec(format!(
                     "paramètre hérité '{h}' : pas déclaré"
                 )));
@@ -937,8 +937,8 @@ impl GraphTool {
         let spec = |d: String| GraphToolError::Spec(d);
         let mut tool = self.clone();
         for p in &mut tool.params {
-            let wired = wired_params(&self.template, registry, p.name);
-            if self.untyped.contains(p.name) {
+            let wired = wired_params(&self.template, registry, &p.name);
+            if self.untyped.contains(&*p.name) {
                 let types: BTreeSet<&'static str> =
                     wired.iter().map(|(_, w)| param_type_name(&w.param_type)).collect();
                 match types.len() {
@@ -1038,7 +1038,7 @@ impl GraphTool {
 
         let mut seen = BTreeSet::new();
         for p in &self.params {
-            if !seen.insert(p.name) {
+            if !seen.insert(&*p.name) {
                 return Err(spec(format!("paramètre '{}' déclaré deux fois", p.name)));
             }
             if p.description.trim().is_empty() || p.description.contains('\n') {
@@ -1058,7 +1058,7 @@ impl GraphTool {
             // que découvert à l'exécution.
             // Un paramètre sans type le prendra du nœud, avec son défaut :
             // la règle s'applique à la liaison.
-            if !p.required && p.default.is_none() && !self.untyped.contains(p.name) {
+            if !p.required && p.default.is_none() && !self.untyped.contains(&*p.name) {
                 return Err(spec(format!(
                     "paramètre facultatif '{}' sans valeur par défaut",
                     p.name
@@ -1079,14 +1079,14 @@ impl GraphTool {
         // La liaison paramètres ↔ graphe est bijective, et vérifiée.
         let used = template_vars(&self.template);
         for v in &used {
-            if !self.params.iter().any(|p| p.name == v) {
+            if !self.params.iter().any(|p| p.name == v.as_str()) {
                 return Err(spec(format!(
                     "le graphe utilise ${v}, qui n'est pas un paramètre déclaré"
                 )));
             }
         }
         for p in &self.params {
-            if !used.contains(p.name) {
+            if !used.contains(&*p.name) {
                 return Err(spec(format!(
                     "le paramètre '{}' n'apparaît nulle part dans le graphe (${})",
                     p.name, p.name
@@ -1211,7 +1211,7 @@ impl GraphTool {
         for p in &self.params {
             let Some(choices) = &p.choices else { continue };
             let Some((values, hint)) = choices.resolve(catalog) else { continue };
-            let Some(schema) = parameters["properties"].get_mut(p.name).and_then(Value::as_object_mut) else {
+            let Some(schema) = parameters["properties"].get_mut(&*p.name).and_then(Value::as_object_mut) else {
                 continue;
             };
             schema.insert("enum".into(), Value::Array(values.into_iter().map(Value::String).collect()));
@@ -1235,7 +1235,7 @@ impl GraphTool {
         out.push_str(&format!("%% description: {}\n", self.description));
         for p in &self.params {
             // Non lié : la fiche se réémet telle qu'écrite, sans type.
-            if self.untyped.contains(p.name) {
+            if self.untyped.contains(&*p.name) {
                 let bang = if p.required { "!" } else { "" };
                 let default = p.default.as_ref().map(|d| format!(" = {d}")).unwrap_or_default();
                 out.push_str(&format!("%% param: {}{bang}{default} -- {}\n", p.name, p.description));
@@ -1532,16 +1532,15 @@ fn parse_param(line: &str) -> Result<(ConfigParam, bool), GraphToolError> {
         })?
     };
 
-    // `ConfigParam` veut du `&'static str` — même fuite volontaire que
-    // `GraphNodeFactory`, pour la même raison : une fiche lue d'un fichier
-    // vit aussi longtemps que le registre qui la porte.
+    // Une fiche lue d'un fichier possède ses noms : rechargée, l'ancienne
+    // part sans rien laisser.
     Ok((
         ConfigParam {
-            name: Box::leak(pname.trim().to_string().into_boxed_str()),
+            name: pname.trim().to_string().into(),
             param_type,
             required: name_required || type_required,
             default,
-            description: Box::leak(description.to_string().into_boxed_str()),
+            description: description.to_string().into(),
             choices: None,
             json_schema: None,
         },
@@ -1840,7 +1839,7 @@ mod tests {
         default: Option<Value>,
         description: &'static str,
     ) -> ConfigParam {
-        ConfigParam { name, param_type, required, default, description, choices: None, json_schema: None }
+        ConfigParam { name: name.into(), param_type, required, default, description: description.into(), choices: None, json_schema: None }
     }
 
     /// Le même gabarit que `templates/tools/search_base.mmd`, construit en Rust.
@@ -1982,7 +1981,7 @@ mod tests {
         let t = GraphTool::from_mermaid(SEARCH_TOOL_MERMAID).unwrap();
         assert_eq!(t.name(), "search");
         assert_eq!(t.result(), ("render", "text"));
-        let names: Vec<&str> = t.params().iter().map(|p| p.name).collect();
+        let names: Vec<&str> = t.params().iter().map(|p| &*p.name).collect();
         assert_eq!(names, vec!["target", "query", "limit", "rerank", "relation", "direction", "expand_limit", "consistency"]);
         assert!(t.params()[1].required);
         assert_eq!(t.params()[2].default, Some(json!(10)));
@@ -2317,8 +2316,8 @@ mod tests {
             }
             fn schema(&self) -> super::super::node_registry::NodeSchema {
                 super::super::node_registry::NodeSchema {
-                    node_type: self.0,
-                    description: "test",
+                    node_type: (self.0).into(),
+                    description: "test".into(),
                     inputs: vec![],
                     outputs: vec![],
                     config_params: self.1.clone(),
@@ -2332,11 +2331,11 @@ mod tests {
 
     fn cp(name: &'static str, choices: Option<Choices>) -> ConfigParam {
         ConfigParam {
-            name,
+            name: name.into(),
             param_type: ConfigParamType::String,
             required: false,
             default: None,
-            description: "d",
+            description: "d".into(),
             choices,
             json_schema: None,
         }
@@ -2601,7 +2600,7 @@ mod tests {
         assert!(
             schema.outputs.iter().any(|p| p.name == "render.meta"),
             "le sous-graphe doit exposer render.meta — sorties : {:?}",
-            schema.outputs.iter().map(|p| p.name).collect::<Vec<_>>()
+            schema.outputs.iter().map(|p| &*p.name).collect::<Vec<_>>()
         );
 
         // 2. L'étage extérieur le branche sur le port `meta` de son rendu.
@@ -2646,7 +2645,8 @@ mod tests {
         let node = nodes
             .create(SEARCH_TOOL_NODE_TYPE, "inner", &inner.config)
             .unwrap();
-        let outs: Vec<&str> = node.outputs().iter().map(|p| p.name).collect();
+        let ports_outs = node.outputs();
+        let outs: Vec<&str> = ports_outs.iter().map(|p| &*p.name).collect();
         // Le nœud de rendu laisse passer les résultats : c'est ce port-là
         // qui reste libre, et c'est par lui que `search` compose.
         assert!(outs.contains(&"render.results"), "ports libres : {outs:?}");
@@ -2668,7 +2668,7 @@ mod tests {
         // Le trou de `GraphNodeFactory` (config_params: vec![]) est bouché.
         let (nodes, _) = builtin_graph_tools().unwrap();
         let schema = nodes.schema(SEARCH_TOOL_NODE_TYPE).unwrap();
-        let names: Vec<&str> = schema.config_params.iter().map(|p| p.name).collect();
+        let names: Vec<&str> = schema.config_params.iter().map(|p| &*p.name).collect();
         assert_eq!(names, vec!["target", "query", "limit", "rerank", "consistency"]);
     }
 

@@ -225,41 +225,41 @@ impl NodeFactory for CypherNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "CypherNode",
-            description: "Execute a Cypher query with optional undo capture",
+            node_type: "CypherNode".into(),
+            description: "Execute a Cypher query with optional undo capture".into(),
             inputs: vec![PortDef {
-                name: "trigger",
+                name: "trigger".into(),
                 port_type: PortType::Empty,
                 required: false,
             }],
             outputs: vec![
                 PortDef {
-                    name: "result",
+                    name: "result".into(),
                     port_type: PortType::Map,
                     required: false,
                 },
                 PortDef {
-                    name: "done",
+                    name: "done".into(),
                     port_type: PortType::Empty,
                     required: false,
                 },
             ],
             config_params: vec![
                 ConfigParam {
-                    name: "query",
+                    name: "query".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Cypher query to execute",
+                    description: "Cypher query to execute".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "capture",
+                    name: "capture".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: None,
-                    description: "Cypher query to capture undo data before mutation",
+                    description: "Cypher query to capture undo data before mutation".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -553,43 +553,43 @@ impl NodeFactory for ValidateNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "ValidateNode",
-            description: "Assert a condition on Cypher query results",
+            node_type: "ValidateNode".into(),
+            description: "Assert a condition on Cypher query results".into(),
             inputs: vec![PortDef {
-                name: "trigger",
+                name: "trigger".into(),
                 port_type: PortType::Empty,
                 required: false,
             }],
             outputs: vec![PortDef {
-                name: "done",
+                name: "done".into(),
                 port_type: PortType::Empty,
                 required: false,
             }],
             config_params: vec![
                 ConfigParam {
-                    name: "query",
+                    name: "query".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Cypher query to execute for validation",
+                    description: "Cypher query to execute for validation".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "assert",
+                    name: "assert".into(),
                     param_type: ConfigParamType::String,
                     required: true,
                     default: None,
-                    description: "Assertion: 'empty', 'not_empty', 'count == N', 'count > N', 'column > N'",
+                    description: "Assertion: 'empty', 'not_empty', 'count == N', 'count > N', 'column > N'".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "message",
+                    name: "message".into(),
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("validation failed")),
-                    description: "Error message when assertion fails",
+                    description: "Error message when assertion fails".into(),
                     choices: None,
                     json_schema: None,
                 },

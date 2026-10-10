@@ -140,7 +140,7 @@ impl DataflowGraph {
                     });
                     let connected_by_initial = self.initial_inputs
                         .get(node.name())
-                        .map_or(false, |ports| ports.contains_key(input.name));
+                        .map_or(false, |ports| ports.contains_key(&*input.name));
                     if !connected_by_edge && !connected_by_initial {
                         warnings.push(format!(
                             "required input '{}' on node '{}' is not connected",
@@ -282,7 +282,7 @@ mod tests {
             name,
             vec![],
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
@@ -293,7 +293,7 @@ mod tests {
         Box::new(TestNode::new(
             name,
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: true,
             }],
@@ -305,12 +305,12 @@ mod tests {
         Box::new(TestNode::new(
             name,
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: true,
             }],
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
@@ -335,7 +335,7 @@ mod tests {
         g.add_node(Box::new(TestNode::new(
             "b",
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Children,
                 required: true,
             }],
@@ -368,12 +368,12 @@ mod tests {
         g.add_node(Box::new(TestNode::new(
             "a",
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
@@ -382,12 +382,12 @@ mod tests {
         g.add_node(Box::new(TestNode::new(
             "b",
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: false,
             }],
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }],

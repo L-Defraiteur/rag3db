@@ -764,11 +764,11 @@ impl NodeFactory for NeighborhoodNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let p = |name: &'static str, param_type, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
-            name,
+            name: name.into(),
             param_type,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
@@ -778,10 +778,10 @@ impl NodeFactory for NeighborhoodNodeFactory {
         let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown | json | summary (les comptes, puis les premiers du groupe)");
         format.choices = Some(Choices::fixed(["markdown", "json", "summary"]));
         NodeSchema {
-            node_type: "NeighborhoodNode",
-            description: "The neighbourhood of a thing by levels: what depends on it directly, then at two and three hops, along declared relations, with a node budget, a degree cap that shows hubs without traversing them, a grouping field, and an optional extra start reached by a declared path (rendered apart).",
+            node_type: "NeighborhoodNode".into(),
+            description: "The neighbourhood of a thing by levels: what depends on it directly, then at two and three hops, along declared relations, with a node budget, a degree cap that shows hubs without traversing them, a grouping field, and an optional extra start reached by a declared path (rendered apart).".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("pivot", S, true, None, "Entité de rendez-vous du départ (ex. Symbol)"),
                 p("key", S, true, None, "Champ d'identité du pivot"),

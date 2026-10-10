@@ -887,32 +887,32 @@ impl NodeFactory for EventSourceNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "EventSourceNode",
-            description: "Drains (non-blocking) the named cursor of each topic on the 'events' bus into a JSON array; an EventsMissed entry precedes a topic that overflowed",
+            node_type: "EventSourceNode".into(),
+            description: "Drains (non-blocking) the named cursor of each topic on the 'events' bus into a JSON array; an EventsMissed entry precedes a topic that overflowed".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "events", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "events".into(), port_type: PortType::Map, required: false }],
             config_params: vec![ConfigParam {
-                name: "topics",
+                name: "topics".into(),
                 param_type: ConfigParamType::String,
                 required: false,
                 default: Some(serde_json::json!(DEFAULT_TOPICS)),
-                description: "Topics to drain, 'a,b' (agent, dataflow, catalog, search, messages, any name created on demand ; 'inbox' and 'self' are relative to the current run)",
+                description: "Topics to drain, 'a,b' (agent, dataflow, catalog, search, messages, any name created on demand ; 'inbox' and 'self' are relative to the current run)".into(),
                 choices: None,
                 json_schema: None,
             }, ConfigParam {
-                name: "cursor",
+                name: "cursor".into(),
                 param_type: ConfigParamType::String,
                 required: false,
                 default: Some(serde_json::json!(DEFAULT_CURSOR)),
-                description: "Name of the kept receiver on each topic — open it before what you want to observe",
+                description: "Name of the kept receiver on each topic — open it before what you want to observe".into(),
                 choices: None,
                 json_schema: None,
             }, ConfigParam {
-                name: "limit",
+                name: "limit".into(),
                 param_type: ConfigParamType::Int,
                 required: false,
                 default: Some(serde_json::json!(DEFAULT_DRAIN_LIMIT)),
-                description: "Maximum events drained per execution",
+                description: "Maximum events drained per execution".into(),
                 choices: None,
                 json_schema: None,
             }],
@@ -986,10 +986,10 @@ impl NodeFactory for TraceSinkNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "TraceSinkNode",
-            description: "Writes each event of the 'events' port into the Trace entity, and runs/messages into Run and Message linked by CHILD_OF / SENT_BY / SENT_TO; outputs {recorded, runs, messages}",
-            inputs: vec![PortDef { name: "events", port_type: PortType::Map, required: true }],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            node_type: "TraceSinkNode".into(),
+            description: "Writes each event of the 'events' port into the Trace entity, and runs/messages into Run and Message linked by CHILD_OF / SENT_BY / SENT_TO; outputs {recorded, runs, messages}".into(),
+            inputs: vec![PortDef { name: "events".into(), port_type: PortType::Map, required: true }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![],
         }
     }
@@ -1061,19 +1061,19 @@ impl NodeFactory for SendMessageNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let p = |name: &'static str, required: bool, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
-            name,
+            name: name.into(),
             param_type: ConfigParamType::String,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
         NodeSchema {
-            node_type: "SendMessageNode",
-            description: "Sends a Message to another run's inbox (run.<to>.inbox) and on the messages topic; fire and forget",
+            node_type: "SendMessageNode".into(),
+            description: "Sends a Message to another run's inbox (run.<to>.inbox) and on the messages topic; fire and forget".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("to", true, None, "The run id to talk to"),
                 p("content", true, None, "The message"),

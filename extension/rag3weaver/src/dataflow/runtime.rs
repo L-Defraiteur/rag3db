@@ -628,7 +628,7 @@ impl DataflowRuntime {
                             )));
                         let has_initial = initial_inputs
                             .get(*name)
-                            .map_or(false, |ports| ports.contains_key(input.name));
+                            .map_or(false, |ports| ports.contains_key(&*input.name));
                         if has_incoming_edge { producers_finished && (!input.required || has_edge_data || has_initial) } else { has_initial }
                     })
                 })
@@ -1041,7 +1041,7 @@ impl DataflowRuntime {
                         // Or initial_inputs provides it
                         let has_initial = initial_inputs
                             .get(*name)
-                            .map_or(false, |ports| ports.contains_key(input.name));
+                            .map_or(false, |ports| ports.contains_key(&*input.name));
                         if has_incoming_edge { producers_finished && (!input.required || has_edge_data || has_initial) } else { has_initial }
                     })
                 })
@@ -1307,7 +1307,7 @@ mod tests {
             vec![]
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out", port_type: PortType::Any, required: false }]
+            vec![PortDef { name: "out".into(), port_type: PortType::Any, required: false }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             std::thread::sleep(Duration::from_millis(self.ms));
@@ -1331,7 +1331,7 @@ mod tests {
             &self.name
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out", port_type: PortType::Any, required: false }]
+            vec![PortDef { name: "out".into(), port_type: PortType::Any, required: false }]
         }
         fn is_async(&self) -> bool {
             true
@@ -1456,14 +1456,14 @@ mod tests {
         }
         fn inputs(&self) -> Vec<PortDef> {
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: true,
             }]
         }
         fn outputs(&self) -> Vec<PortDef> {
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }]
@@ -1495,7 +1495,7 @@ mod tests {
         }
         fn outputs(&self) -> Vec<PortDef> {
             vec![PortDef {
-                name: "out",
+                name: "out".into(),
                 port_type: PortType::Results,
                 required: false,
             }]
@@ -1521,7 +1521,7 @@ mod tests {
         }
         fn inputs(&self) -> Vec<PortDef> {
             vec![PortDef {
-                name: "in",
+                name: "in".into(),
                 port_type: PortType::Results,
                 required: true,
             }]
@@ -1559,8 +1559,8 @@ mod tests {
         impl Node for SilentSource {
             fn name(&self)->&str {"delay"}
             fn node_type(&self)->&'static str {"SilentSource"}
-            fn inputs(&self)->Vec<PortDef>{vec![PortDef{name:"in",port_type:PortType::Results,required:true}]}
-            fn outputs(&self)->Vec<PortDef>{vec![PortDef{name:"out",port_type:PortType::Results,required:false}]}
+            fn inputs(&self)->Vec<PortDef>{vec![PortDef{name:"in".into(),port_type:PortType::Results,required:true}]}
+            fn outputs(&self)->Vec<PortDef>{vec![PortDef{name:"out".into(),port_type:PortType::Results,required:false}]}
             fn execute(&mut self,_:&mut NodeContext)->Result<(),String>{Ok(())}
         }
         for checkpoint in [false, true] {
@@ -1671,14 +1671,14 @@ mod tests {
             }
             fn inputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "in",
+                    name: "in".into(),
                     port_type: PortType::Results,
                     required: true,
                 }]
             }
             fn outputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "out",
+                    name: "out".into(),
                     port_type: PortType::Results,
                     required: false,
                 }]
@@ -1838,7 +1838,7 @@ mod tests {
             }
             fn outputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "done",
+                    name: "done".into(),
                     port_type: PortType::Empty,
                     required: false,
                 }]
@@ -1864,14 +1864,14 @@ mod tests {
             }
             fn inputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "trigger",
+                    name: "trigger".into(),
                     port_type: PortType::Empty,
                     required: true,
                 }]
             }
             fn outputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "done",
+                    name: "done".into(),
                     port_type: PortType::Empty,
                     required: false,
                 }]
@@ -1899,14 +1899,14 @@ mod tests {
             }
             fn inputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "trigger",
+                    name: "trigger".into(),
                     port_type: PortType::Empty,
                     required: false,
                 }]
             }
             fn outputs(&self) -> Vec<PortDef> {
                 vec![PortDef {
-                    name: "done",
+                    name: "done".into(),
                     port_type: PortType::Empty,
                     required: false,
                 }]
@@ -2088,10 +2088,10 @@ mod tests {
                 "PassBatchNode"
             }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef { name: "entities", port_type: PortType::Entities, required: true }]
+                vec![PortDef { name: "entities".into(), port_type: PortType::Entities, required: true }]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef { name: "out", port_type: PortType::Entities, required: false }]
+                vec![PortDef { name: "out".into(), port_type: PortType::Entities, required: false }]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if self.fail_once {

@@ -23,18 +23,18 @@ struct SetNode {
 }
 fn port(name: &'static str, ty: PortType) -> PortDef {
     PortDef {
-        name,
+        name: name.into(),
         port_type: ty,
         required: true,
     }
 }
 fn param(name: &'static str, ty: ConfigParamType) -> ConfigParam {
     ConfigParam {
-        name,
+        name: name.into(),
         param_type: ty,
         required: true,
         default: None,
-        description: name,
+        description: name.into(),
         choices: None,
         json_schema: None,
     }
@@ -89,14 +89,14 @@ impl NodeFactory for SetFactory {
             ),
         };
         NodeSchema {
-            node_type: self.0,
-            description: "Composable entity sets; selection and intersection never paginate",
+            node_type: (self.0).into(),
+            description: "Composable entity sets; selection and intersection never paginate".into(),
             inputs,
             outputs: {
-                let mut out = vec![PortDef { name: "results", port_type: PortType::Results, required: false }];
+                let mut out = vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }];
                 if self.0 == "SelectRecordsNode" {
                     // Ce que la sélection n'a pas montré, pour le rendu.
-                    out.push(PortDef { name: "meta", port_type: PortType::Meta, required: false });
+                    out.push(PortDef { name: "meta".into(), port_type: PortType::Meta, required: false });
                 }
                 out
             },

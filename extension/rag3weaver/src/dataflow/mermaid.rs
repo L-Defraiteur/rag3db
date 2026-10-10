@@ -880,12 +880,14 @@ graph LR
         ).unwrap();
 
         // L'entrée libre requise : les entités à insérer.
-        let input_names: Vec<&str> = gn.inputs().iter().map(|p| p.name).collect();
+        let ports_input_names = gn.inputs();
+        let input_names: Vec<&str> = ports_input_names.iter().map(|p| &*p.name).collect();
         assert!(input_names.contains(&"inserts.entities"), "inputs: {:?}", input_names);
 
         // Les sorties libres : les entités plongées et la fin du flush.
         // `embeds.done` est consommé par `flush_fts.trigger`, donc pas libre.
-        let output_names: Vec<&str> = gn.outputs().iter().map(|p| p.name).collect();
+        let ports_output_names = gn.outputs();
+        let output_names: Vec<&str> = ports_output_names.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"embeds.embedded"), "outputs: {:?}", output_names);
         assert!(!output_names.contains(&"embeds.done"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"flush_fts.done"), "outputs: {:?}", output_names);

@@ -522,11 +522,11 @@ impl NodeFactory for LinksNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let p = |name: &'static str, param_type, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
-            name,
+            name: name.into(),
             param_type,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
@@ -534,10 +534,10 @@ impl NodeFactory for LinksNodeFactory {
         let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown | json");
         format.choices = Some(Choices::fixed(["markdown", "json"]));
         NodeSchema {
-            node_type: "LinksNode",
-            description: "How search results connect: the shortest graph paths between them (up to four hops, both directions, along declared relations), hubs neither traversed nor used as meeting points. Renders one line per link, or nothing — an empty text when the results do not connect.",
-            inputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
-            outputs: vec![PortDef { name: "result", port_type: PortType::Map, required: false }],
+            node_type: "LinksNode".into(),
+            description: "How search results connect: the shortest graph paths between them (up to four hops, both directions, along declared relations), hubs neither traversed nor used as meeting points. Renders one line per link, or nothing — an empty text when the results do not connect.".into(),
+            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
             config_params: vec![
                 p("entity", S, true, None, "Entité des résultats (ex. Scope)"),
                 p("relations", S, true, None, "Relations suivies dans les deux sens, séparées par |"),
@@ -679,20 +679,20 @@ impl NodeFactory for CohesionNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let p = |name: &'static str, param_type, required, default: Option<serde_json::Value>, description: &'static str| ConfigParam {
-            name,
+            name: name.into(),
             param_type,
             required,
             default,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
         use ConfigParamType::{Int, String as S};
         NodeSchema {
-            node_type: "CohesionNode",
-            description: "How cohesive each search candidate is: the sum of 1/hops to the other candidates it reaches within max_hops along declared relations (hubs excluded). Emits a labelled result signal to plug into FuseResultsNode as a boost (weight declared there, 0 = off).",
-            inputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
-            outputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+            node_type: "CohesionNode".into(),
+            description: "How cohesive each search candidate is: the sum of 1/hops to the other candidates it reaches within max_hops along declared relations (hubs excluded). Emits a labelled result signal to plug into FuseResultsNode as a boost (weight declared there, 0 = off).".into(),
+            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
             config_params: vec![
                 p("entity", S, true, None, "Entité des candidats (ex. Scope)"),
                 p("relations", S, true, None, "Relations suivies dans les deux sens, séparées par |"),
@@ -788,13 +788,13 @@ impl NodeFactory for CohesionBoostNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "CohesionBoostNode",
-            description: "After fusion: when SearchOptions.cohesion is set (weight, relations), multiplies each fused score by 1 + weight × normalised cohesion (how many other candidates it reaches within max_hops along the declared relations, hubs excluded) and re-sorts. Without the option, results pass through at no cost.",
+            node_type: "CohesionBoostNode".into(),
+            description: "After fusion: when SearchOptions.cohesion is set (weight, relations), multiplies each fused score by 1 + weight × normalised cohesion (how many other candidates it reaches within max_hops along the declared relations, hubs excluded) and re-sorts. Without the option, results pass through at no cost.".into(),
             inputs: vec![
-                PortDef { name: "results", port_type: PortType::Results, required: false },
-                PortDef { name: "query", port_type: PortType::Query, required: false },
+                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
+                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
             ],
-            outputs: vec![PortDef { name: "results", port_type: PortType::Results, required: false }],
+            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
             config_params: vec![],
         }
     }

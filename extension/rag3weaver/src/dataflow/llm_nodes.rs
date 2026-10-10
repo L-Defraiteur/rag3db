@@ -195,56 +195,56 @@ impl NodeFactory for LlmNodeFactory {
 
     fn schema(&self) -> NodeSchema {
         NodeSchema {
-            node_type: "LlmNode",
-            description: "Generates text from a prompt via the 'llm' service (streaming-capable)",
-            inputs: vec![PortDef { name: "prompt", port_type: PortType::Text, required: true }],
+            node_type: "LlmNode".into(),
+            description: "Generates text from a prompt via the 'llm' service (streaming-capable)".into(),
+            inputs: vec![PortDef { name: "prompt".into(), port_type: PortType::Text, required: true }],
             outputs: vec![
-                PortDef { name: "text", port_type: PortType::Text, required: false },
-                PortDef { name: "llm", port_type: PortType::Llm, required: false },
+                PortDef { name: "text".into(), port_type: PortType::Text, required: false },
+                PortDef { name: "llm".into(), port_type: PortType::Llm, required: false },
             ],
             config_params: vec![
                 ConfigParam {
-                    name: "max_tokens",
+                    name: "max_tokens".into(),
                     param_type: ConfigParamType::Int,
                     required: false,
                     default: Some(serde_json::json!(512)),
-                    description: "Maximum number of tokens to generate",
+                    description: "Maximum number of tokens to generate".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "temperature",
+                    name: "temperature".into(),
                     param_type: ConfigParamType::Float,
                     required: false,
                     default: Some(serde_json::json!(0.0)),
-                    description: "Sampling temperature in [0, 2]; 0 is greedy and deterministic",
+                    description: "Sampling temperature in [0, 2]; 0 is greedy and deterministic".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "top_p",
+                    name: "top_p".into(),
                     param_type: ConfigParamType::Float,
                     required: false,
                     default: Some(serde_json::json!(1.0)),
-                    description: "Nucleus sampling threshold in [0, 1]",
+                    description: "Nucleus sampling threshold in [0, 1]".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "stop",
+                    name: "stop".into(),
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: None,
-                    description: "Array of strings that end generation when produced",
+                    description: "Array of strings that end generation when produced".into(),
                     choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
-                    name: "with_tools",
+                    name: "with_tools".into(),
                     param_type: ConfigParamType::Bool,
                     required: false,
                     default: Some(serde_json::json!(false)),
-                    description: "Expose every registered node type to the model as a tool",
+                    description: "Expose every registered node type to the model as a tool".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -457,7 +457,7 @@ mod tests {
             "PromptSource"
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out", port_type: PortType::Text, required: false }]
+            vec![PortDef { name: "out".into(), port_type: PortType::Text, required: false }]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::new(self.0.clone()));

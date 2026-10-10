@@ -23,7 +23,7 @@ pub fn register(registry: &mut NodeRegistry) {
 }
 fn port(name: &'static str, required: bool) -> PortDef {
     PortDef {
-        name,
+        name: name.into(),
         port_type: PortType::Map,
         required,
     }
@@ -33,23 +33,23 @@ impl NodeFactory for ValidationFactory {
         self.0
     }
     fn schema(&self) -> NodeSchema {
-        let parameter = |name, ty, required, description| ConfigParam {
-            name,
+        let parameter = |name: &'static str, ty, required, description: &'static str| ConfigParam {
+            name: name.into(),
             param_type: ty,
             required,
             default: None,
-            description,
+            description: description.into(),
             choices: None,
             json_schema: None,
         };
         let rule = self.0 == "ValidationRuleNode";
         NodeSchema {
-            node_type: self.0,
-            description: if rule {
+            node_type: (self.0).into(),
+            description: (if rule {
                 "One host-authored Rhai constraint with a parameterized diagnostic"
             } else {
                 "Combine two validation reports, preserving every error and warning"
-            },
+            }).into(),
             inputs: if rule {
                 vec![port("value", false)]
             } else {
