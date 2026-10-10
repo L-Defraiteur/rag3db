@@ -3,7 +3,7 @@
 Ce qui est affirmé porte un fichier et une ligne (à `d2bd94630` ou `ba11e003b`) ou une mesure ;
 le reste est dit « non vérifié ». Complète les relevés de la session cœur C++ (stèle) :
 `../3-octobre-2026-23h31/coeur-cpp/02-knowledge-dump.md`.
-**Dernière mise à jour : 10 octobre 2026.**
+**Dernière mise à jour : 11 octobre 2026, 0 h 30.**
 
 ## Le tampon, le journal local et les doublures
 
@@ -45,3 +45,35 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
   trace (fichier de sortie vide) : relancer et le dire.
 - **Le rapport cœur C++ de l'arbre principal** peut être en retard sur `origin/master` : lire
   les docs depuis un arbre neuf.
+
+## La nuit du 10 au 11 octobre
+
+- **L'index de clé sous `IGNORE_ERRORS`** : `IndexBuilder::maybeConsumeIndex`
+  (`index_builder.cpp:73-93`) prend la valeur rendue par `appendWithIndexPosNoLock` pour la
+  position du premier échec ; `HashIndex::appendNoLock` la rendait juste seulement dans sa branche
+  en mémoire — corrigé `599f0494b`. Laquelle de deux lignes de même clé reste suit l'ordre
+  d'arrivée dans l'index, donc des fils de lecture (pas de tri) ; `duplicated.test:81-82` le dit.
+- **Une fonction de table à paramètre `LIST`** doit fournir `inferInputTypes` : sinon le binder
+  construit `LogicalType(LIST)` sans type d'élément et lève (`bind_table_function.cpp:47-57`,
+  `types.cpp:543-549`) — c'est pourquoi l'index spatial de geo ne se crée pas.
+- **`nextRelOffset`** (`rel_table.h:214-219`) est à la fois l'estimation du nombre de relations
+  (planificateur, `getNumRels`) et l'allocateur de leurs identités : intouchable ; ni l'annulation
+  ni un `DELETE` ne le reculent.
+- **Les paramètres d'une requête préparée** prennent le type de la valeur fournie
+  (`bind_parameter_expression.cpp:16-17`), retypable seulement s'il contient `ANY`
+  (`parameter_expression.cpp:10-20`) ; rag3weaver type un `NULL` non typé en `STRING` et une liste
+  par son premier élément (`rag3db_connection.rs:663-688`).
+- **L'identifiant de bâti** (`458ff7157`) : `cmake/build_id.cmake`, cible `rag3db_build_id`,
+  `build/…/src/include/common/build_id.h` ; chaque extension exporte `build_id()` ;
+  `ExtensionManager::loadExtension` compare entre `name()` et `init()`. Pour le lire :
+  `strings <lib ou extension> | grep rag3db-build-`.
+- **Le premier `put_note` d'un backend sur base neuve** est un `COPY` d'une ligne (rag3weaver,
+  `ingest_entities_jusqu_a`, depuis `c7067475d`) ; un tel `COPY` sous 256 Mio passe dans le moteur
+  nu jusqu'à `FLOAT[1024]`, index vectoriel et 32 fils (sonde, 36 cas). Le groupe local d'un `COPY`
+  (`StorageConfig::NODE_GROUP_SIZE`) ne réserve pas sa capacité d'avance.
+- **Jouer un script de backend sur luciepc** : bâtir `rag3weaver-backend` dans son worktree et son
+  target (`RAG3DB_SHARED=1`, `RAG3DB_LIBRARY_DIR`/`RAG3DB_INCLUDE_DIR`/`RAG3DB_BUILD` vers la lib
+  commune, `CARGO_TARGET_DIR`), un lien du binaire vers `extension/rag3weaver/target/debug/`, une
+  COPIE de l'extension (jamais un lien), `LD_LIBRARY_PATH` vers la lib, les services locaux
+  127.0.0.1:7878/7879/7880 ; le python du venv-mcp pour l'aller-retour MCP (sur le poste principal :
+  `~/.cache/rag3weaver-build/venv-mcp`). Le target fait ~14 Go : l'effacer à la clôture.

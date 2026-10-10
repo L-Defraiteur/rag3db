@@ -4,21 +4,26 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 10 octobre 2026, 20 h 40 — lot `CALL analyze` fini sur luciepc, prêt pour master.**
+**Dernière mise à jour : 11 octobre 2026, 0 h 30 — la nuit du 10 au 11 : quatre lots dans master (analyze, IGNORE_ERRORS, B8 fermé, contrôle de bâti), trois tickets requalifiés.**
 
-## L'arbre
+## L'arbre (depuis le 10 octobre au soir)
 
-- `/home/lucied/git_workspaces/rag3db-tickets`, worktree détaché sur `origin/master`
-  (`d2bd94630`), `user.email` gmail en local. Bâti prévu : `build/moteur` (Release, tests,
-  `vector;geo;fts`), toujours sous `~/.cache/rag3weaver-build/poste lourd … -j 8`.
+- **Le cœur C++ travaille sur luciepc** (décision de Lucie) : un worktree par lot,
+  `~/git_workspaces/rag3db-tickets` là-bas (`git -C ~/git_workspaces/rag3db worktree add …`),
+  bâti Release `vector;geo` sous SON `poste lourd`, `-j 8` ; ici, un worktree du même nom pour écrire
+  et pousser. **Après chaque fusion, worktree et build effacés** des deux côtés (règle de Lucie),
+  après vérification par `/proc/<pid>/cwd`. Les notes vivent hors des worktrees :
+  `~/.cache/rag3db-tickets-notes` (sondes jetables, script de liste, journaux), sur les deux postes.
+- **La liste complète** : `~/.cache/rag3db-tickets-notes/liste-cpp.sh` sur luciepc, qui prend le
+  verrou étape par étape — bâti et suites en `poste lourd`, la comparaison du banc en `poste mesure`
+  (annoncée aux autres sessions), un `timeout` par étape ; ne pas l'envelopper dans un `poste`.
+  Lancée par `~/git_workspaces/rag3db-tickets-liste.sh`, codes dans `…/liste/codes`. Une fois à la
+  fusion ; pendant le travail, les tests du changement.
+- **Qui pousse du C++ sur master rebâtit la lib commune de luciepc** (`rag3db-lourd`,
+  `cmake --build build/lecteurs-csv -j 8`, lib et extension ensemble) et annonce la tête.
 
-**Au prochain rebase** (sur `0aed3c4b5` ou plus, version de stockage 40) : l'extension fts de
-l'amont est retirée (`1275099c2`) et `fuzzy-fst` avec elle ; `rm -rf extension/fts
-third_party/fuzzy-fst` si les dossiers restent, puis reconfigurer avec
-`BUILD_EXTENSIONS="vector;geo"`.
-
-Les noms des sessions depuis le plantage de Codium (10 oct.) : orchestration rag3db-c7, cœur C++
-(stèle) rag3db-91, banc rag3db-10, arbre principal rag3db-73.
+Les noms des sessions (10 oct. au soir) : orchestration rag3db-c7, cœur C++ (stèle) « coeur c++ »
+(rag3db-91 un temps), banc rag3db-10, arbre principal rag3db-73, paquet npm rag3db-90.
 
 ## Les lots, dans l'ordre de l'orchestration
 
@@ -37,7 +42,9 @@ Les noms des sessions depuis le plantage de Codium (10 oct.) : orchestration rag
    banc, ticket avec son lot. Pas de ticket de plantage.
 3. (c) Les comptes de distincts qui ne reculent pas (`IGNORE_ERRORS`, `DELETE`, `UPDATE`) ;
    puis, si la cause est la même, le ticket des relations annulées (lot à part).
-4. (d) Les tickets confort du moteur, le plus petit d'abord.
+   **Fait** : le défaut de sélection de `ColumnStats::update` (`d10b92306`) puis `CALL analyze` et
+   le recalage de la cardinalité sur les lignes vivantes (`dff1adddc`, `9c528349b` ; page 03).
+4. (d) Les tickets confort du moteur, le plus petit d'abord — la nuit du 10 au 11, ci-dessous.
 
 ## Lot (a) — la preuve par le code (lignes à `d2bd94630`), avant l'exécution
 
@@ -187,6 +194,41 @@ et des refus par essai (en patch).
   `FLOAT[768]` (95 ms à froid). Deux essais nuls d'abord, dits.
 - Piège de luciepc : un `scp` n'a pas gardé le droit d'exécution d'un script ; les binaires de test
   se lient à `librag3db.a`, pas au `.so` (prouver la date de la statique).
+
+## La nuit du 10 au 11 octobre
+
+| Quoi | Commits | État |
+|---|---|---|
+| `IGNORE_ERRORS` : un doublon du même COPY faisait supprimer une ligne innocente quand l'index de clé avait des entrées sur disque (perte, condition 4) | témoin `02335d429`, correctif `599f0494b` (`HashIndex::appendNoLock` rend la position du premier échec), test du doublon `721ed2898` | **corrigé**, fermé ; le choix de la ligne gardée (ordre des fils) en ticket confort |
+| `CALL analyze` (après la nuit précédente) | `dff1adddc` … `5798567dc` | dans master ; le déclenchement automatique écarté sur une sonde (ticket « analyze au seuil ») ; la précision de l'HyperLogLog en ticket |
+| Un `NULL` en tête d'une liste de paramètres type sa colonne en `STRING` | ticket relu `018868459` | la cause est dans rag3weaver (`cypher_to_rag3db_value`), pas le moteur ; à l'arbre principal |
+| L'estimation des relations gonflée | ticket relu `018868459` | ni l'annulation ni un `DELETE` ne la reculent ; rien à coder avant un mauvais plan |
+| Le RTree de geo | ticket relu `16ff4fb6d` | injoignable : l'index spatial ne se crée même pas (paramètre `LIST` sans `inferInputTypes`) ; laissé pour plus tard, geo n'a pas d'utilisateur |
+| B8, le tampon de 256 Mio plein à la première écriture | fermé `c8cec6086` | non reproduit sur master, ni sur luciepc (24 fils) ni sur le poste principal (32 fils, la lib de la passe rouge) ; deux différences restantes nommées |
+| L'extension chargée sans contrôle de bâti | témoin `2b6515a87`, correctif `458ff7157`, témoin du rejeu `1e2d9fcd3`, fermeture `97acd579b` | **corrigé** : identifiant de bâti régénéré à chaque bâti, refus nommé ; toute extension d'avant est refusée |
+
+### Ce que la nuit a appris
+
+- **La preuve par les lignes d'abord, puis l'exécution, et dire quand l'exécution contredit** :
+  deux pistes de B8 lues puis réfutées par une sonde (36 cas verts) ; le déclenchement d'`analyze`
+  après un COPY écarté par une sonde (la cardinalité était exacte).
+- **Une sonde se vérifie à sa première étape** : la première mesure d'`analyze` mesurait une table
+  vide (une compréhension de liste refusée par le dialecte), la seconde est restée vingt minutes
+  sur le `COPY` d'un CSV de 400 Mo ; la troisième, minutée par étape après une sonde de 2 000
+  lignes, a rendu ses chiffres.
+- **Un témoin rouge peut l'être pour une autre raison que le défaut** : le témoin du rejeu du
+  contrôle de bâti cherchait l'index sans recharger l'extension de ce bâti.
+- **Les binaires de test se lient à `librag3db.a`** : en prouver la date, pas celle du `.so`.
+- **Faute** : un `--force-with-lease` joint au push de master, sur `statistiques-3` (rien de perdu,
+  ancienne tête republiée sous `statistiques-3-avant-rebase`). Après un push de master, rien
+  d'autre dans la même commande.
+
+### Pour reprendre
+
+Les tickets confort du moteur qui restent sont surtout des décisions ou du stockage de la session
+cœur C++ (le journal sans borne hors COPY, le lecteur affamé, le point de reprise sous un petit
+tampon) ; geo attend un utilisateur. Rien ne tourne de mon côté, aucun worktree ouvert hors celui
+des docs, effacé après ce push.
 
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
