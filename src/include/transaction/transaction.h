@@ -177,6 +177,26 @@ public:
     void acquireLocks(std::span<const LockRequest> requests) const;
     void acquireLock(const LockResource& resource, LockMode mode) const;
 
+    // Pendant cette portée, la transaction lit le dernier état validé au lieu de son instantané
+    // (marche A4′ : après l'attente d'un verrou, ce qu'un autre a validé entre-temps compte —
+    // les relations d'un nœud qu'on supprime, par exemple). À n'ouvrir que sur le fil qui
+    // exécute une écriture, pour la durée d'un balayage : les lectures du même fil, pendant ce
+    // temps, voient aussi le dernier état validé.
+    class LatestCommittedView {
+    public:
+        explicit LatestCommittedView(Transaction& transaction_)
+            : transaction{transaction_}, saved{transaction_.startTS} {
+            transaction.startTS = LATEST_COMMITTED_TS;
+        }
+        ~LatestCommittedView() { transaction.startTS = saved; }
+        LatestCommittedView(const LatestCommittedView&) = delete;
+        LatestCommittedView& operator=(const LatestCommittedView&) = delete;
+
+    private:
+        Transaction& transaction;
+        common::transaction_t saved;
+    };
+
 private:
     common::offset_t getMinUncommittedNodeOffset(common::table_id_t tableID) const;
 

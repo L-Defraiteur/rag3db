@@ -218,6 +218,11 @@ public:
         common::row_idx_t rowInChunk) const;
     bool isInserted(common::transaction_t startTS, common::transaction_t transactionID,
         common::row_idx_t rowInChunk) const;
+    // La ligne a été supprimée, ou l'une de ses colonnes mise à jour, par une validation
+    // postérieure à l'instantané startTS (marche A4′) ; ce que la transaction a fait elle-même
+    // ne compte pas.
+    bool wasWrittenByCommitAfter(common::transaction_t startTS,
+        common::transaction_t transactionID, common::row_idx_t rowInChunk) const;
     bool hasAnyUpdates(const transaction::Transaction* transaction, common::column_id_t columnID,
         common::row_idx_t startRow, common::length_t numRowsToCheck) const;
     common::row_idx_t getNumDeletions(const transaction::Transaction* transaction,

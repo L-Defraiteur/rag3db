@@ -105,6 +105,10 @@ public:
 
     bool hasUpdates(const transaction::Transaction* transaction, common::row_idx_t startRow,
         common::length_t numRows) const;
+    // Une mise à jour de cette ligne validée APRÈS l'instantané startTS, par n'importe quelle
+    // transaction (marche A4′ : l'erreur de sérialisation après l'attente d'un verrou).
+    bool hasCommittedUpdateAfter(common::transaction_t startTS, common::idx_t vectorIdx,
+        common::sel_t rowIdxInVector) const;
 
     bool isSet() const {
         std::shared_lock lock{mtx};
