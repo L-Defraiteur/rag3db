@@ -90,13 +90,25 @@ toucher ; le reste est à l'autre.
    plantage HNSW sur vecteurs identiques (recette de l'arbre principal, avec le banc), la voie
    (a) des statistiques, les tickets confort. Les tickets ouverts sont listés plus bas.
 
-**Où j'en suis (10 octobre 2026, après-midi).** La fuite de pages est corrigée et sur
-`master` : `0aed3c4b5` (liste complète verte, relecture du banc close, ticket fermé). Chantier B,
-la suite dans l'ordre : la liste « défaut basculé » avec le contrôle de fuite de la suite
-Cypher (exigence c), les huit tests qui supposaient le point de reprise d'un `COPY`, le reste du
-banc sous ce défaut, la série des embarquements (rag3db-6f, sur cette lib), puis le basculement
-de `force_checkpoint_on_copy` ; ensuite les verrous. La seconde session cœur C++ tient les
-correctifs et tickets ; je tiens `src/transaction/` et `src/storage/`.
+**Où j'en suis (10 octobre 2026, fin d'après-midi).** La fuite de pages est sur `master`
+(`0aed3c4b5`, ticket fermé). Le **basculement du COPY journalisé en défaut** est codé et
+commité sur ma branche locale `copy-journalise-par-defaut` (arbre `rag3db-moteur`), rebasé sur
+`master` `633d9bf90` : `force_checkpoint_on_copy=false` par défaut, les huit tests adaptés
+(six font un `CHECKPOINT` après le COPY qu'ils regardent ; l'attente du délai ne vaut que pour
+un COPY forcé par le réglage ; un jumeau journalisé qui n'attend pas un lecteur ouvert), le
+banc adapté (`ExplicitCopyCommitWhileATransactionIsOpen` en deux formes, deux témoins forcés
+par le réglage, `LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout` sorti de
+`known_red.txt` : il a verdi). Sous ce défaut, le contrôle de fuite de la suite Cypher est vert
+sur les 1 866 cas (exigence c), le banc conforme à 59 rouges et 181 verts, les autres suites
+vertes. La liste complète finale tourne après rebase ; message de commit prêt
+(`~/.cache/rag3db-moteur-notes/etape-4/bascule2/message.txt`). **Le push attend** : la relecture
+du banc sur le diff du banc (`bascule2/banc.patch`), et la série des embarquements (rag3db-6f,
+sur la lib rebâtie par l'arbre principal : fichiers à quelques pour cent, blobs ramenés par le
+réglage forcé que rag3weaver pose). Piège du jour : sous la porte `poste`, `cmake --build` a
+deux fois répondu « rien à faire » après un changement d'en-tête — vérifier le nombre d'étapes
+du bâti avant de croire une liste. Ensuite : les verrous (A3′, A4′, V2, l'index au commit,
+selon la note du 3 octobre), puis les écritures parallèles. Relu pour le banc : son élagage
+HNSW (rien de bloquant, une garde contre l'arête vers soi demandée).
 
 **Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
 veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.
