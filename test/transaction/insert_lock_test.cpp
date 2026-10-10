@@ -451,6 +451,89 @@ TEST_F(InsertLockTest, WithoutMultiWritesAnAnnouncementTakesNothing) {
     mustRun(*conn, "COMMIT;");
 }
 
+// ── Marche I1 : le genre « index » — tout écrivain d'une table indexée tient l'index en exclusif
+// de sa première écriture à sa validation ; après l'attente, l'instantané est repris.
+class IndexedTableLockTest : public InsertLockTest {
+protected:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed";
+        }
+        createDBAndConn();
+        const auto extension = TestHelper::appendRag3dbRootPath(
+            "extension/vector/build/libvector.rag3db_extension");
+        mustRun(*conn, "LOAD EXTENSION '" + extension + "';");
+        mustRun(*conn, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
+        mustRun(*conn, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, vec: [CAST(i % 7 AS FLOAT), "
+                       "CAST(i % 11 AS FLOAT), CAST(i % 13 AS FLOAT), CAST(i AS FLOAT)]});");
+        mustRun(*conn, "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+        mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    }
+    int64_t liveRowsByIndex(Connection& connection, int64_t k) {
+        auto result = connection.query(
+            "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], " +
+            std::to_string(k) + ") RETURN count(*);");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() ? result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+    }
+};
+
+TEST_F(IndexedTableLockTest, EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUntilTheEnd) {
+    Connection other(database.get());
+    mustRun(other, "CALL lock_timeout=300;");
+    for (const auto* write : {"CREATE (:Doc {id: 1000, vec: [1.0, 2.0, 3.0, 4.0]});",
+             "MATCH (d:Doc {id: 1}) SET d.vec = [9.0, 9.0, 9.0, 9.0];",
+             "MATCH (d:Doc {id: 2}) DELETE d;"}) {
+        mustRun(*conn, "BEGIN TRANSACTION;");
+        mustRun(*conn, write);
+        EXPECT_GE(locks().getNumLocksHeld(transactionIDOf(*conn)), 2u) << write;
+        // Une autre clé, une autre ligne : l'index est à un seul écrivain.
+        const auto insert = failureOf(other, "CREATE (:Doc {id: 2000, vec: [5.0, 5.0, 5.0, 5.0]});");
+        EXPECT_NE(insert.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << insert;
+        const auto update = failureOf(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+        EXPECT_NE(update.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << update;
+        const auto remove = failureOf(other, "MATCH (d:Doc {id: 4}) DELETE d;");
+        EXPECT_NE(remove.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << remove;
+        mustRun(*conn, "ROLLBACK;");
+        EXPECT_EQ(locks().getNumResources(), 0u);
+        // Rendu : l'autre écrit.
+        mustRun(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+    }
+    EXPECT_EQ(liveRowsByIndex(*conn, 100), 100);
+}
+
+// Deux suppressions aux voisinages recouvrants (H3 du banc, dans un seul fil) : la seconde
+// attend la première, puis recoud sur le graphe validé — les deux valident, l'index rend
+// exactement les lignes vivantes.
+TEST_F(IndexedTableLockTest, TwoDeletesWithOverlappingNeighbourhoodsBothCommitInTurn) {
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "MATCH (d:Doc {id: 10}) DELETE d;");
+    std::string secondError;
+    std::atomic<bool> secondDone{false};
+    std::thread second([&] {
+        Connection other(database.get());
+        other.query("BEGIN TRANSACTION;");
+        secondError = failureOf(other, "MATCH (d:Doc {id: 11}) DELETE d;");
+        if (secondError.empty()) {
+            secondError = failureOf(other, "COMMIT;");
+        } else {
+            other.query("ROLLBACK;");
+        }
+        secondDone = true;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_FALSE(secondDone.load()) << "the second delete must wait for the index";
+    mustRun(*conn, "COMMIT;");
+    second.join();
+    EXPECT_EQ(secondError, "");
+    auto count = conn->query("MATCH (d:Doc) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess());
+    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 98);
+    EXPECT_EQ(liveRowsByIndex(*conn, 100), 98) << "the index must return exactly the live rows";
+    EXPECT_EQ(locks().getNumResources(), 0u);
+}
+
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {
     // Hors du mode, rien ne change : un seul écrivain à la fois, l'autre connexion attend
     // son tour pour écrire, et le doublon est vu comme avant.
