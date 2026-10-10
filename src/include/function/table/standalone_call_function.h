@@ -5,6 +5,13 @@
 namespace rag3db {
 namespace function {
 
+// CALL analyze('Table') : rebâtit les statistiques d'une table de nœuds.
+struct AnalyzeFunction {
+    static constexpr const char* name = "ANALYZE";
+
+    static function_set getFunctionSet();
+};
+
 struct ClearWarningsFunction {
     static constexpr const char* name = "CLEAR_WARNINGS";
 

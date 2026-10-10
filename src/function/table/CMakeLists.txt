@@ -1,5 +1,6 @@
 add_library(rag3db_table_function
         OBJECT
+        analyze.cpp
         bind_data.cpp
         bind_input.cpp
         bm_info.cpp

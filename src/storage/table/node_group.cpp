@@ -390,6 +390,18 @@ bool NodeGroup::delete_(const Transaction* transaction, row_idx_t rowIdxInGroup)
     return groupToDelete->delete_(transaction, rowIdxInChunkedGroup);
 }
 
+row_idx_t NodeGroup::getNumLiveRows() const {
+    const auto lock = chunkedGroups.lock();
+    row_idx_t numLiveRows = 0;
+    for (auto i = 0u; i < chunkedGroups.getNumGroups(lock); i++) {
+        const auto chunkedGroup = chunkedGroups.getGroup(lock, i);
+        const auto numRowsInGroup = chunkedGroup->getNumRows();
+        numLiveRows += numRowsInGroup - chunkedGroup->getNumDeletions(
+                                            &DUMMY_CHECKPOINT_TRANSACTION, 0, numRowsInGroup);
+    }
+    return numLiveRows;
+}
+
 bool NodeGroup::hasDeletions(const Transaction* transaction) const {
     const auto lock = chunkedGroups.lock();
     for (auto i = 0u; i < chunkedGroups.getNumGroups(lock); i++) {
