@@ -217,8 +217,14 @@ def main():
         t = json.dumps(r, ensure_ascii=False)
         assert "Avant d'éditer" in t, f"la section d'impact après read_file : {r}"
         # Le résumé compte les dépendants (il ne nomme que les tests) :
-        # main.rs consomme outil_commun, donc « 1 directement ».
-        assert "1 directement" in t.split("Avant d'éditer", 1)[1], f"un dépendant direct compté : {r}"
+        # DEUX unités dépendent d'outil_commun — le scope du fichier main.rs
+        # (le `use crate::util::outil_commun;` est au niveau du fichier) et
+        # `fn main` (l'appel). Bissection de la session embarquements
+        # (10 oct. 2026, même lib, quatre socles) : ce compte est stable
+        # depuis toujours avec CETTE fixture ; l'ancien « 1 directement »
+        # venait de la forme d'avant (appel qualifié, sans use).
+        assert "2 directement, 2 en tout sur 2 niveaux" in t.split("Avant d'éditer", 1)[1], \
+            f"les deux dépendants comptés (le scope du fichier par le use, fn main par l'appel) : {r}"
         # Et un fichier dont rien ne dépend garde un read_file SANS section :
         # « rien quand rien n'en dépend ».
         r = host.ask(op="call", name="read_file", arguments={"path": "lib.rs"})
