@@ -364,3 +364,76 @@ bâti à froid de 85 min lancé à 23 h) ; les « nouveaux projets émergents »
 classification pour la page mémoire ; le conteneur pgvector ; le ménage des
 branches distantes (liste au §6, plus `statistiques-3`, `-avant-rebase`,
 `memoire-longue-6/-8`, `banc-a4-temoins`).
+
+## 8. La nuit, suite (23 h 15 → 0 h 50), ajout de 0 h 50
+
+### Entré sur master (a78481462 → 167eb555f)
+
+- **A4′** (cœur, `9904fefc0..67ff3816b`, docs `ad87cf454`) : la ligne en
+  exclusif à la mise à jour et à la suppression, les extrémités d'une
+  relation (partagé pour créer, exclusif pour supprimer ou mettre à jour),
+  l'erreur de sérialisation après l'attente, la vue du dernier état validé
+  pour les relations d'un nœud supprimé ; les écritures internes de l'index
+  vectoriel ne prennent pas de verrou d'extrémités. Banc de concurrence :
+  **56 → 21 rouges connus** (15 comparés / 238 verts). Tableau des
+  sémantiques en tête de la page 07 (lignes comme PostgreSQL, détachement
+  comme Neo4j) — **pour Lucie au matin**. V2 (`CALL acquire_locks`) codée,
+  page `coeur-cpp/08`, fusion vers 1 h 15 ; puis l'index au commit.
+- **MCP** (mémoire, `69bb9f4a9`) : le serveur, la sous-commande `mcp` avec
+  ses deux modes et `--keys`, le témoin sur stdio, la recette
+  `templates/mcp/`. B7 : le mode `--demon` **ni validé ni réfuté** (trois
+  énigmes : `tables : []`, un MATCH qui pend après le départ des écrivains,
+  un écart d'adresse) → ticket pour le matin ; la recette « une base par
+  session » s'écrit et se joue cette nuit.
+- **Commande en fond** (A, `5948276eb`) : run en fond, tail, journaux en
+  anneau, groupe de processus tué ; chantier A entier.
+- **Connexion PostgreSQL épinglée** (C, `da740cbb4`) ; **transactions par la
+  connexion** (A pour F, `167eb555f`) ; F peut ouvrir `transactions: true`.
+- **Proto** : lot 3 le rechargement à chaud (`f07b6a4af` : version prise au
+  départ de chaque appel, refus nommé de ce qui est fixé à l'ouverture), le
+  rechargement en deux temps pour la mémoire, le trou du nom déclaré au
+  point de reprise fermé ; **la montre sur les fichiers vit dans l'hôte, pas
+  dans un graphe** (sinon la frontière d'exposition serait rechargeable de
+  l'intérieur) — écart à la page, bien argumenté, **pour Lucie**. Lot 4
+  (jouet, `nodes/`, route → graphe → vue, `serve`) en cours.
+- **Codeparsers → rag3weaver** : B2b (types différés résolus à la
+  matérialisation, `0d058d9eb`), B3 LOCKS (`2a29c10c6` : le mutex a une
+  identité `Classe::champ`, 169 verrous relevés sur le moteur) ; B2c (chaînes
+  de champs), « verrous sur le chemin » dans impact, borne à la source :
+  proposés, en test chez A. **Mesure réelle** (tout `rag3db/src` indexé,
+  167 s) : appelants de `NodeTable::update` 0 → 2 (tous les sites réels),
+  marqués « type ». Page de l'exemple réel pour Lucie au matin.
+- **Cœur hotfixs** : B8 fermé (non reproduit sur master, deux montages,
+  32 fils écartés) ; **contrôle de bâti des extensions** (`458ff7157`) :
+  identifiant généré à chaque bâti, vérifié à `LOAD EXTENSION`, refus nommé,
+  toute extension d'avant refusée ; libs des deux postes rebâties. Suite :
+  le lecteur affamé par les points de reprise d'un autre processus → forme
+  (2), coordination à la SQLite par un verrou `<base>.readers` (flock /
+  LockFileEx), bornes nommées des deux côtés, filet gardé — **alignement sur
+  SQLite, pour Lucie**.
+- **Banc** : la mise à jour massive — les rouges venaient de **deux vrais
+  défauts** (le contrôle de joignabilité entrait par la couche basse ; la
+  réinsertion partait du nœud qu'elle insère) ; le crochet de fin
+  d'instruction régresse le ligne à ligne ×7 à ×13 → **option C** (master +
+  les deux correctifs, 25 lignes) retenue si elle tient, le crochet gardé
+  sur branche avec ses chiffres. Export des vrais vecteurs à régénérer par A
+  (effacé par le nettoyage).
+- **npm** : fsync du dossier sans objet sous Windows (cause du rouge FTS),
+  profil `paquet` LTO (61 contre 89 Mo), **tout en 0.0.1-alpha.2** (tête et
+  trois sous-paquets, même commit, épinglage exact) ; les archives se
+  refont sur la tête avec le contrôle de bâti. Rien de publié ; quatre OTP
+  au matin.
+
+### Règles ajoutées
+
+Une session chaîne ses propres travaux lourds (le verrou partagé laisse
+passer ensemble deux lourds d'une même session). Lib et extension du même
+bâti, prouvées ensemble. Tout `src/dataflow/` relu par la recherche avant
+master. Copier un gabarit livré et en retirer, plutôt que composer un
+manifeste de zéro (mémoire, sept interfaces supposées).
+
+### Pour le matin (ajouts)
+
+Le ticket du mode `--demon` ; le lecteur qui pend sur le démon après le
+départ des écrivains (défaut possible) ; la décision sur l'export vivant
+pour le critère « 0 introuvable ».
