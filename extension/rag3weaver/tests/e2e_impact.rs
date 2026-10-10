@@ -163,6 +163,37 @@ fn l_outil_impact_rend_du_markdown_par_son_gabarit() {
     assert!(out.contains("checks_top") && out.contains("checks_base"), "{out}");
 }
 
+/// **Un nom défini deux fois** (`A::update`, `B::update`) : par le gabarit
+/// réel, `impact` montre l'appelant sûr (`sure`, receveur typé) et compte à
+/// part celui qu'il n'a trouvé que par le nom (`devine`, receveur sans
+/// type) ; `include_by_name` le montre, marqué.
+#[test]
+#[ignore]
+fn les_usages_par_le_nom_seul_sont_comptes_sauf_sur_demande() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("a.rs".to_string(), "pub struct A;\n\nimpl A {\n    pub fn update(&self) {}\n}\n".to_string()),
+        ("b.rs".to_string(), "pub struct B;\n\nimpl B {\n    pub fn update(&self) {}\n}\n".to_string()),
+        ("c.rs".to_string(), "use crate::a::A;\n\npub fn sure(a: &A) {\n    a.update();\n}\n\npub fn devine(v: impl Fn()) {\n    let w = v;\n    w.update();\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let defaut = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "update"})).unwrap();
+    eprintln!("{defaut}");
+    assert!(defaut.contains("sure — /projet/c.rs:"), "l'appelant sûr est listé : {defaut}");
+    assert!(!defaut.contains("devine"), "l'usage par le nom seul n'est pas listé : {defaut}");
+    assert!(defaut.contains("1 par le nom seul, non montrés"), "mais il est compté : {defaut}");
+    let tout = tool.execute(&registry, services, &serde_json::json!({"name": "update", "include_by_name": true})).unwrap();
+    eprintln!("{tout}");
+    assert!(tout.lines().any(|l| l.contains("devine — /projet/c.rs:") && l.ends_with("(par le nom)")), "sur demande, listé et marqué : {tout}");
+    assert!(!tout.contains("non montrés"), "{tout}");
+}
+
 /// Les sauts enchaînés en liste simple et le compte des degrés : aucun
 /// produit cartésien. Le chemin de longueur variable est imprimé pour
 /// comparaison (le nœud ne s'en sert pas : budget et plafond de degré
