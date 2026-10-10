@@ -57,9 +57,34 @@ dans `02-knowledge-dump.md`, à côté.
 
 | Lot | État |
 |---|---|
-| 1 — moteur de script générique, rhai + TypeScript/JavaScript | feu vert le 10 oct. au soir ; témoins rouges d'abord |
+| 1 — moteur de script générique, rhai + TypeScript/JavaScript | **vert**, prêt à fusionner (page `03-lot-1-le-moteur-de-script.md`) |
 | 2 — nœud entièrement scripté | — |
 | 3 — rechargement à chaud | — |
 | 4 — route → graphe → vue, `serve` | — |
 | 5 — l'outil `declare` | — |
 | 6 — la page vivante | — |
+
+## 4. Lot 1, ce qui s'est passé (10 oct., nuit)
+
+- Le code : `src/script/` (interface, rhai, QuickJS, TypeScript, témoins),
+  `harness::evaluate` qui délègue, `RhaiLimits` alias de `ScriptLimits`,
+  trois dépendances (`rquickjs` 0.14, `swc_ts_fast_strip` 59, `swc_common`
+  26 pour ses diagnostics). Page : `03-lot-1-le-moteur-de-script.md`.
+- Témoins : rouges avec des bouchons (14 rouges, rhai et `harness::` verts),
+  puis 18 sur 18. Deux corrections en route, par les témoins : QuickJS en
+  mode script lit `import fs from 'fs'` comme une erreur sur `fs` (reclassé
+  par la ligne écrite) ; `import('fs')` rend une promesse rejetée (les tâches
+  sont vidées, en nombre borné, et le rejet se dit par sa raison).
+- Suites voisines, après rebase sur `01dc4c7ce` (master n'apportait que du
+  C++ de statistiques et des docs), lib commune de luciepc à `5798567dc`
+  (aucun C++ entre elle et la tête) : `--lib` avec les features de
+  `run_e2e.sh` (`rag3db-native,burn-embedder,burn-ocr,code,daemon`) 1 278
+  verts, 0 rouge ; `--tests --no-run` avec les mêmes : tout compile. Aucun
+  e2e ne passe par rhai (les gabarits `memory`/`validated-result` sont
+  chargés par `chaque_gabarit_livre_se_charge`, dans la lib).
+- Pas joué : `scripts/test_backend_harness.py` (chemins `target/debug` et
+  `build/` en dur, pas de target par session) ; son chemin rhai est couvert
+  par les tests de `validation_nodes` et `ref_nodes`.
+- Une erreur de ma part : la première passe des voisins sans features
+  (trois rouges et des cibles non compilées, tous « feature `code` »).
+- Taille ajoutée au binaire : non mesurée.
