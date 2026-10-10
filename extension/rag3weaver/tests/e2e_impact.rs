@@ -70,6 +70,7 @@ fn code_config() -> NeighborhoodConfig {
         ],
         also_same: "name".into(),
         also_label: "Par le trait (peut-être)".into(),
+        collect: None,
     }
 }
 
