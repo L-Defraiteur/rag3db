@@ -22,6 +22,7 @@
 #include "storage/wal/local_wal.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
+#include "transaction/transaction_manager.h"
 
 using namespace rag3db::catalog;
 using namespace rag3db::common;
@@ -556,12 +557,20 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
     // ici ; puis le contrôle d'unicité, contre le dernier état validé, la refuse ou la laisse
     // passer selon ce que la première a fait.
     if (transaction->usesLocks()) {
+        // Marche I1 : sur une table indexée, l'index en exclusif (lockIndexForWrite), sinon en
+        // partagé ; la clé en exclusif dans les deux cas.
+        const auto indexed = hasLoadedSecondaryIndex();
         const auto pkPos = nodeInsertState.pkVector.state->getSelVector()[0];
         const std::array requests{
-            LockRequest{LockResource::index(tableID), LockMode::SHARED},
+            LockRequest{LockResource::index(tableID),
+                indexed ? LockMode::EXCLUSIVE : LockMode::SHARED},
             LockRequest{LockResource::row(tableID, lockKeyOf(nodeInsertState.pkVector, pkPos)),
                 LockMode::EXCLUSIVE}};
         transaction->acquireLocks(requests);
+        if (indexed && !transaction->hasWritten()) {
+            TransactionManager::Get(*transaction->getClientContext())
+                ->refreshSnapshot(transaction);
+        }
     }
     validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
     localTable->insert(transaction, insertState);
@@ -638,6 +647,7 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
     // Marche A4′ : une ligne validée se prend en exclusif avant d'être écrite (une ligne de la
     // transaction n'appartient qu'à elle).
     if (!isLocalRow && transaction->usesLocks()) {
+        lockIndexForWrite(transaction);
         lockRowForWrite(transaction, nodeOffset, lockKeyOfRow(transaction, nodeOffset));
     }
     for (auto i = 0u; i < indexes.size(); i++) {
@@ -718,6 +728,7 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     // Marche A4′ : une ligne validée se prend en exclusif avant d'être supprimée ; la clé est
     // déjà là (le planificateur la lit pour l'index).
     if (transaction->usesLocks() && !transaction->isUnCommitted(tableID, nodeOffset)) {
+        lockIndexForWrite(transaction);
         lockRowForWrite(transaction, nodeOffset,
             lockKeyOf(nodeDeleteState.pkVector,
                 nodeDeleteState.pkVector.state->getSelVector()[0]));
@@ -1055,6 +1066,22 @@ void NodeTable::lockRowForWrite(Transaction* transaction, offset_t nodeOffset,
     const std::string& key) const {
     transaction->acquireLock(LockResource::row(tableID, key), LockMode::EXCLUSIVE);
     throwIfWrittenByAnotherCommitAfterSnapshot(transaction, nodeOffset, key);
+}
+
+bool NodeTable::hasLoadedSecondaryIndex() const {
+    return std::any_of(indexes.begin(), indexes.end(), [](const IndexHolder& holder) {
+        return holder.isLoaded() && !holder.getIndexInfo().isPrimary;
+    });
+}
+
+void NodeTable::lockIndexForWrite(Transaction* transaction) const {
+    if (!transaction->usesLocks() || !hasLoadedSecondaryIndex()) {
+        return;
+    }
+    transaction->acquireLock(LockResource::index(tableID), LockMode::EXCLUSIVE);
+    if (!transaction->hasWritten()) {
+        TransactionManager::Get(*transaction->getClientContext())->refreshSnapshot(transaction);
+    }
 }
 
 bool NodeTable::isVisibleNoLock(const Transaction* transaction, offset_t offset) const {
