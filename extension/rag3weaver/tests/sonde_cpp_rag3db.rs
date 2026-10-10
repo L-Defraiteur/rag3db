@@ -33,6 +33,12 @@ fn appelants_de_node_table_update_et_verrous() {
     let mut cat = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
     cat.initialize().unwrap();
     register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    // Les fonctions de verrou applicatives, comme un manifeste les déclare
+    // (`workspace.locks_via`) : `SONDE_LOCKS_VIA=acquireLock,lockKeyOf`.
+    let locks_via: Vec<String> =
+        std::env::var("SONDE_LOCKS_VIA").unwrap_or_default().split(',').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect();
+    eprintln!("[sonde] fonctions de verrou déclarées : {locks_via:?}");
+    cat.declare_lock_calls(locks_via);
 
     let dir = std::env::var("SONDE_SOURCES").unwrap_or_else(|_| format!("{}/src", rag3db_root()));
     let sources: Vec<(String, String)> =
@@ -84,10 +90,9 @@ fn appelants_de_node_table_update_et_verrous() {
     let md = tool.execute(&registry, std::sync::Arc::new(services), &serde_json::json!({"name": "update", "path": chemin, "depth": 3})).unwrap();
     eprintln!("[sonde] ---- impact NodeTable::update ----\n{md}\n[sonde] ---- fin ----");
 
-    // Et ce qu'elle appelle, avec les verrous pris en dessous : le même nœud,
-    // dans le sens sortant (ce dont update dépend).
-    let sortant = include_str!("../templates/tools/impact.mmd").replace("direction=incoming", "direction=outgoing").replace("%% tool: impact", "%% tool: dependances");
-    let tool = GraphTool::from_mermaid(&sortant).unwrap().bind(&registry).unwrap();
+    // Et ce qu'elle appelle, avec les verrous pris en dessous : l'outil
+    // `callees` (le même nœud, dans le sens sortant).
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/callees.mmd")).unwrap().bind(&registry).unwrap();
     let mut services = ServiceRegistry::new();
     services.register("catalog", catalog.clone());
     let md = tool.execute(&registry, std::sync::Arc::new(services), &serde_json::json!({"name": "update", "path": chemin, "depth": 3})).unwrap();
