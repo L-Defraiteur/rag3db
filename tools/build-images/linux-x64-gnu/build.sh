@@ -28,7 +28,7 @@ mkdir -p "$DIST" "$CARGO_HOME"
 releve=$DIST/bati.txt
 {
   echo "rag3weaver-backend · $CIBLE · $(date -u +%Y-%m-%dT%H:%MZ)"
-  echo "dépôt : $(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  echo "dépôt : $(git -C "$SRC" -c safe.directory='*' rev-parse --short HEAD 2>/dev/null || echo '?')"
   echo "outils : $(rustc --version) · $(cmake --version | head -1) · $(gcc --version | head -1) · glibc $(ldd --version | head -1 | awk '{print $NF}')"
   echo "features : $FEATURES"
 } | tee "$releve"
