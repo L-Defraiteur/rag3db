@@ -11,9 +11,34 @@ verrous.
 
 ## rag3db `src/` (C++, 1 543 fichiers)
 
+| forme | non résolues | dont storage/transaction | coût | lot qui la ferme | exemples |
+|---|---|---|---|---|---|
+| méthode sur un receveur (x.f(), x->f()) | 20713 | 4559 | 75816 | B2 receveurs typés | `ssString.c_str` (export_db.cpp), `ss.str` (export_db.cpp), `ss.str` (export_db.cpp) |
+| nom seul | 45326 | 10280 | 27803 | paramètres et locaux | `pragma` (factorization_rewriter.h), `once` (factorization_rewriter.h), `groupsPos` (factorization_rewriter.h) |
+| import | 13120 | 1997 | 15117 | #include → fichier | `include` (factorization_rewriter.h), `logical_operator_visitor` (factorization_rewriter.h), `h` (factorization_rewriter.h) |
+| appel nu | 3320 | 448 | 11304 | B1 rendez-vous (autre fichier) / locaux | `__builtin_sub_overflow` (subtract.cpp), `BinderException` (cost_function.cpp), `ColumnPredicateSet` (map_extend.cpp) |
+| macro ou constante (MAJUSCULES) | 9861 | 2477 | 6169 | macros #define | `__GNUC__` (subtract.cpp), `FileFlags.WRITE` (export_db.cpp), `FileFlags.CREATE_IF_NOT_EXISTS` (export_db.cpp) |
+| lecture de champ (x.y, x->y) | 7564 | 1498 | 4531 | champs : ne pas relier (comme Rust) | `it.first` (export_db.cpp), `it.second` (export_db.cpp), `info.options` (export_db.cpp) |
+| appel par chemin (Ns::f, T::f) | 224 | 74 | 894 | B1 chemins / rendez-vous | `TransactionManager::Get(*clientContext).getLockManager` (transaction.cpp), `storage::StorageManager::Get(*clientContext).getWAL` (transaction.cpp), `Catalog::Get(context).getTableCatalogEntry` (transaction.cpp) |
+| membre par chemin (T::x) | 25 | 20 | 45 | membres statiques, enums | `common::Timestamp::getCurrentTimestamp().value` (transaction.cpp), `common::Timestamp::getCurrentTimestamp().value` (transaction.cpp), `common::Timestamp::getCurrentTimestamp().value` (transaction.cpp) |
+| type | 1 | 1 | 3 | B1 | `getResidencyState` (column_chunk.h) |
+| std:: (externe) | 659 | 253 | 0 | externe : à dire compris | `std.stringstream` (export_db.cpp), `std.make_pair` (map_path_property_probe.cpp), `std.wstring` (extension.cpp) |
 
 ## rag3weaver `src/` et `tests/` (Rust, 252 fichiers)
 
+| forme | non résolues | dont storage/transaction | coût | lot qui la ferme | exemples |
+|---|---|---|---|---|---|
+| méthode sur un receveur (x.f(), x->f()) | 35473 | 0 | 106419 | B2 receveurs typés | `name.to_string` (schema_nodes.rs), `"schema".into` (schema_nodes.rs), `name.to_string` (schema_nodes.rs) |
+| appel nu | 4976 | 0 | 14928 | B1 rendez-vous (autre fichier) / locaux | `into` (schema_nodes.rs), `to_string` (sonde_copy_vecteur.rs), `to_string` (sonde_copy_vecteur.rs) |
+| type | 7626 | 0 | 11439 | B1 | `_` (schema_nodes.rs), `serde_json.Value` (schema_nodes.rs), `serde_json.Value` (schema_nodes.rs) |
+| nom seul | 18433 | 0 | 9216 | paramètres et locaux | `node_name` (schema_nodes.rs), `cible` (schema_nodes.rs), `gabarit` (schema_nodes.rs) |
+| appel par chemin (Ns::f, T::f) | 2340 | 0 | 7020 | B1 chemins / rendez-vous | `Rag3dbConnection::in_memory().unwrap` (sonde_copy_vecteur.rs), `Rag3dbConnection::in_memory().unwrap` (sonde_copy_vecteur.rs), `Rag3dbConnection::in_memory().unwrap` (sonde_copy_vecteur.rs) |
+| import | 5760 | 0 | 5760 | #include → fichier | `std` (schema_nodes.rs), `sync` (schema_nodes.rs), `Arc` (schema_nodes.rs) |
+| lecture de champ (x.y, x->y) | 5381 | 0 | 2690 | champs : ne pas relier (comme Rust) | `serde_json.Value` (schema_nodes.rs), `serde_json.Value` (schema_nodes.rs), `PortType.Map` (schema_nodes.rs) |
+| membre par chemin (T::x) | 1447 | 0 | 1447 | membres statiques, enums | `super::node_registry::Choices.Targets` (schema_nodes.rs), `super::node_registry::Choices.Targets` (schema_nodes.rs), `rag3weaver_ir::Direction.Incoming` (react_nodes.rs) |
+| macro ou constante (MAJUSCULES) | 2334 | 0 | 1167 | macros #define | `CSV_NULL` (sonde_copy_vecteur.rs), `CSV_NULL` (sonde_copy_vecteur.rs), `SCOPE` (sonde_identifiants_lucivy.rs) |
+| héritage | 366 | 0 | 732 | B1 | `Default` (react_nodes.rs), `std::ops::BitOr` (disponibilite.rs), `std::ops::BitOrAssign` (disponibilite.rs) |
+| std:: (externe) | 5946 | 0 | 0 | externe : à dire compris | `std.any` (schema_nodes.rs), `std::any.Any` (schema_nodes.rs), `std.any` (schema_nodes.rs) |
 
 ## Ce que ça dit, et l'ordre qui en sort
 
