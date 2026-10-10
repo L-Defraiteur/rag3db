@@ -242,6 +242,24 @@ pub trait SchemaDialect: Send + Sync {
         Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select" })
     }
 
+    /// **Une écriture** ([`rag3weaver_ir::Write`]). Chaque variante se dit par
+    /// la méthode d'écriture que le dialecte écrit déjà (`batch_upsert`,
+    /// `batch_link_labeled`) : un dialecte la traduit dès qu'il a celles-ci,
+    /// et le texte reste celui d'avant.
+    fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+        write.validate()?;
+        Ok(match write {
+            rag3weaver_ir::Write::Upsert { table, columns } => {
+                let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+                self.batch_upsert(table, &cols)
+            }
+            rag3weaver_ir::Write::Link { relation, ends, props } => {
+                let props: Vec<&str> = props.iter().map(String::as_str).collect();
+                self.batch_link_labeled(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props)
+            }
+        })
+    }
+
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
     /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
     /// leur place cette instruction, qui échoue à l'analyse **en nommant la
@@ -2922,6 +2940,19 @@ mod tests {
         assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:Card) RETURN m");
         f.returns.push(Column::Edge("x".into()));
         assert!(Rag3dbDialect.select(&f).is_err());
+    }
+
+    /// L'écriture dit, dans chaque dialecte, le texte de sa méthode d'avant.
+    #[test]
+    fn l_ecriture_est_le_texte_d_avant() {
+        use rag3weaver_ir::Write;
+        let up = Write::Upsert { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] };
+        let lien = Write::Link { relation: "CITES".into(), ends: Some(("Doc".into(), "Doc".into())), props: vec!["ligne".into()] };
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            assert_eq!(d.write(&up).unwrap(), d.batch_upsert("Doc", &["_uuid", "titre"]));
+            assert_eq!(d.write(&lien).unwrap(), d.batch_link_labeled("CITES", Some(("Doc", "Doc")), &["ligne"]));
+        }
+        assert!(Rag3dbDialect.write(&Write::Upsert { table: "Doc".into(), columns: vec!["x y".into()] }).is_err());
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

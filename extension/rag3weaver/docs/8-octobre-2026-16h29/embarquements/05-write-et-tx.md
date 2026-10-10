@@ -105,7 +105,27 @@ change pas.
 - `CypherCheckpointStore` et `CypherBlobStore` : ce sont les implémentations
   rag3db elles-mêmes, sous le dialecte, à leur place.
 
-## Pour décider
+## Décidé (orchestration, renversable par Lucie)
+
+- Les sept variantes restent distinctes. `Mark` se distingue d'`Update` en
+  une phrase : **`Update` porte une valeur par ligne** (une carte par ligne
+  dans `$items`, que le dialecte joint à la table), **`Mark` porte une seule
+  valeur pour toute une liste d'uuids** (`$uuids` et des scalaires, un `SET`
+  sans jointure : `WHERE _uuid = ANY($uuids)` sur PostgreSQL, `UNWIND $uuids`
+  sur rag3db). Les deux dialectes les écrivent différemment aujourd'hui. Si
+  un jour aucun ne les distingue plus, `Mark` se fond dans `Update`.
+- `Load` reste dans `Write`, refusé en le nommant sans `bulk_load`.
+
+## Premier pas : Upsert et Link
+
+`Write::Upsert` et `Write::Link` se traduisent par les méthodes que chaque
+dialecte écrit déjà (`batch_upsert`, `batch_link_labeled`) : le texte reste
+celui d'avant, au caractère près, dans les deux dialectes (test
+`l_ecriture_est_le_texte_d_avant`). L'insertion par MERGE, la recréation
+d'une ligne à l'annulation et la pose des liens (`record_nodes.rs`) passent
+par elles. Les appels de `catalog.rs` (le verrou de migration) sont à A.
+
+## Pour décider (d'origine)
 
 - Les sept variantes de `Write` ci-dessus, ou moins (fondre `Mark` dans
   `Update`, `Unlink` dans `Delete`) ? Je propose de les garder distinctes :

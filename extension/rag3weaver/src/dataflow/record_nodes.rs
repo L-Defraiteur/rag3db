@@ -367,7 +367,9 @@ impl Node for InsertRecordNode {
                 Some(ids) => ids,
                 None => {
                     // Build batch upsert via dialect (idempotent MERGE/INSERT ON CONFLICT)
-                    let cypher = dialect.batch_upsert(entity_name, &col_refs);
+                    let cypher = dialect
+                        .write(&rag3weaver_ir::Write::Upsert { table: entity_name.to_string(), columns: col_refs.iter().map(|c| c.to_string()).collect() })
+                        .map_err(|e| e.to_string())?;
 
                     // Build items list param. Un vecteur porté par
                     // l'enregistrement se pose avec la ligne, ici aussi.
@@ -1137,7 +1139,9 @@ impl Node for LinkRecordNode {
                         .strip_suffix("_CHUNKED_FROM")
                         .map(|entity| (format!("{entity}_Chunk"), entity.to_string()))
                 });
-            let cypher = dialect.batch_link_labeled(rel_name, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &prop_refs);
+            let cypher = dialect
+                .write(&rag3weaver_ir::Write::Link { relation: rel_name.to_string(), ends: ends.clone(), props: prop_refs.iter().map(|p| p.to_string()).collect() })
+                .map_err(|e| e.to_string())?;
 
             // **En masse, par COPY**, quand le lot est gros, que la relation
             // a ses deux étiquettes et que le moteur sait le faire : 200 000
@@ -3203,7 +3207,9 @@ impl Node for DeleteRecordNode {
             // une colonne INT64) : la ligne recréée l'a nulle de toute façon.
             let nulles = colonnes_toutes_nulles(items);
             let columns: Vec<&str> = items[0].keys().map(|k| k.as_str()).filter(|k| !nulles.contains(*k)).collect();
-            let cypher = dialect.batch_upsert(entity_name, &columns);
+            let cypher = dialect
+                .write(&rag3weaver_ir::Write::Upsert { table: entity_name.to_string(), columns: columns.iter().map(|c| c.to_string()).collect() })
+                .map_err(|e| e.to_string())?;
 
             let items_param = CypherValue::List(
                 items.iter().map(|m| CypherValue::Map(

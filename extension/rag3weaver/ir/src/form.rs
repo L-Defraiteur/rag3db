@@ -3,7 +3,8 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`], [`Count`] et [`Select`]. Viendront `Write` et `Tx`.
+//! Aujourd'hui : [`Hop`], [`Count`], [`Select`] et les premières variantes
+//! de [`Write`]. `Tx` est un appel sur la connexion, pas une forme.
 
 use std::fmt;
 
@@ -226,6 +227,45 @@ impl Select {
         }
         match noms.iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("sélection : « {n} » n'est pas un identifiant"))),
+            None => Ok(()),
+        }
+    }
+}
+
+/// **Une écriture**, née de l'ingestion. Les lignes arrivent dans le
+/// paramètre `$items` (une carte par ligne, ses clés sont les colonnes).
+/// Les variantes suivantes (`Update`, `Mark`, `Delete`, `Unlink`, `Load`)
+/// viendront à leur tour ; voir
+/// `docs/8-octobre-2026-16h29/embarquements/05-write-et-tx.md`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Write {
+    /// Créer ou remplacer des lignes par leur `_uuid`, en rendant
+    /// `(identifiant interne, _uuid)` pour chacune.
+    Upsert { table: String, columns: Vec<String> },
+    /// Poser des arêtes entre des lignes données par leurs uuids
+    /// (`from_uuid`, `to_uuid`, puis les propriétés). Les tables des deux
+    /// bouts, quand on les connaît, évitent de chercher dans toutes.
+    Link { relation: String, ends: Option<(String, String)>, props: Vec<String> },
+}
+
+impl Write {
+    pub fn validate(&self) -> Result<(), TranslateError> {
+        let mut noms: Vec<&str> = Vec::new();
+        match self {
+            Write::Upsert { table, columns } => {
+                noms.push(table);
+                noms.extend(columns.iter().map(String::as_str));
+            }
+            Write::Link { relation, ends, props } => {
+                noms.push(relation);
+                if let Some((f, t)) = ends {
+                    noms.extend([f.as_str(), t.as_str()]);
+                }
+                noms.extend(props.iter().map(String::as_str));
+            }
+        }
+        match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+            Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
         }
     }
