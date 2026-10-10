@@ -41,6 +41,39 @@ cubecl#1804) ; `fuzzy-fst` et `extension/fts` retirés ; navigateur abandonné
 pour l'instant ; les statistiques se recalculent à la PostgreSQL
 (`CALL analyze`), tranché par l'orchestration selon la règle des moteurs établis.
 
+### Soir du 10 octobre, 19 h
+
+- **Le COPY journalisé est le défaut du moteur** (`ff9bad960`) : condition 2 de
+  la stèle fermée ; la série de confirmation (fichiers 80 contre 81 s, blobs
+  89 contre 87, 0 repli) est au message du commit. Le cœur C++ est sur A3′.
+- **Le paquet npm existe** : `rag3weaver@0.0.1-alpha.1` et
+  `rag3weaver-linux-x64-gnu@0.0.1-alpha.1` sous `next` (compte
+  `luciformresearch`, OTP de Lucie) ; la démo depuis un dossier vide marche
+  (index en 13 s avec service, 3 s sans, usages/impact, Liens en arbre).
+  Windows et macOS arm64 se lient sur les runners. Pièges notés en mémoire
+  (« staged publishing », `--prefer-online`).
+- **Chantier H** (session mémoire) : rag3weaver en serveur MCP — sous-commande
+  du backend, JSON-RPC synchrone, outils tirés des schémas ; pour une mémoire
+  partagée, le processus MCP ouvre le backend localement avec sa connexion
+  sur `rag3daemon` (un seul écrivain) ; `--keys` lu dès maintenant.
+- **Décisions de Lucie du soir** : installer = un démon sans question ; le
+  réglage = un formulaire des API disponibles (et sa CLI), pas d'agent avant
+  un modèle ; puis le magicien du chaos monte un produit par déclaration et
+  donne le lien de l'agent dédié ; **déclaré n'est pas exposé** : `exposure:
+  <expression sur des clés>` par déclaration et par cellule, tenue au
+  chargement (vision « plusieurs produits », §6-7). `extension/fts` et
+  `fuzzy-fst` retirés. PR tracel-ai en pause.
+- **Élagage HNSW** : k2 (places libres reprises par le plus lointain d'abord,
+  borne au plus près, garde « jamais soi-même ») tient le critère ; un rouge
+  nouveau au banc (vingt lignes au même vecteur) en cours d'attribution
+  (k2 ou variance) avant le push.
+- **Règles du poste du jour** : un lourd n'attend plus que 10 min à la porte ;
+  « mesure » seulement pour ce qui mesure ; `timeout` devant tout test sous
+  le verrou (un test figé a tenu le poste) ; on ne tue jamais par nom de
+  binaire (`pidof concurrence_test` a tué la mesure du banc) ; luciepc pour
+  les bâtis et batteries (un worktree par chantier, lib commune dans
+  `rag3db-lourd`, les cinq variables de `run_e2e.sh`).
+
 ## 1. Ce qui attend Lucie avant que certains chantiers partent
 
 | Décision | Chantier bloqué |
