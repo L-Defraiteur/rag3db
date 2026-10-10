@@ -685,4 +685,9 @@ lib commune rebâtie, worktree effacé. Suite : l'index au commit (page 07 §2, 
 du banc), et les tickets ouverts d'A4′ (C7 après arrêt brutal, la seconde suppression d'une
 relation), la part reprise du journal à doublon.
 
-Passe : PASSE_V2.
+Passe, sur luciepc, bâti de la branche rebasée sur master (`97acd579b`, le contrôle de bâti des
+extensions compris) : transaction_test 238, api 104, c_api 136, copy 23, stockage 81 +
+column_stats 2, vector 74 et 63, Cypher 1867 ; banc de concurrence en tenue exclusive conforme à
+`known_red.txt`, 13 rouges comparés, 240 verts (19 lignes attendues). Une course de témoin
+trouvée en route et bornée avec l'accord du banc : « l'une après l'autre » se mesure au début du
+commit du premier (le verrou est rendu pendant le COMMIT, avant sa marque).
