@@ -45,9 +45,13 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 | B2a — les receveurs C++ dans le fichier | codeparsers `876f606` | Pointeurs intelligents traversés ; fabriques et conversions (`make_unique<T>`, `cast<T>()`, `static_cast<T*>`…) rendent `T`. Témoin `tests/receveurs_cpp.rs` (8 formes). rag3db src : appels reliés entre fichiers 35,0 → 39,2 %. Appelants de `NodeTable::update` (`--appelants`) : 0 → 1 entre fichiers. |
 | Les champs C++ | codeparsers `e8e2893` | Un champ de classe en pointeur ou référence (`NodeTable* table;`) n'était pas relevé ; il l'est avec son type (champ `type` du nœud, déclarateurs déballés, `int a, b` en donne deux). rag3db src : appels reliés entre fichiers 39,2 → 40,3 %. |
 | B2b — les types différés au rendez-vous (B1) | rag3db, branche `types-differes` (`5a14bd842` pointeur e8e2893, `d9b3e1408` code.rs +175), proposée à l'arbre principal | `field_types` et `return_type` sur Scope, `deferred` sur MENTIONS, résolus à la matérialisation en `qualifier_types`. Témoin `e2e_types_differes` : les trois formes réelles des appelants de `NodeTable::update`, rouge (deux sur trois) puis vert. Pas de mode entre fichiers dans codeparsers : le graphe ne dépend pas du paquet. |
+| B3 — les verrous (codeparsers) | codeparsers `65c1c7a`, `8881d52` | Deux genres d'usage, `Lock` et `SharedLock` : une référence au champ mutex, le propriétaire en qualificatif. Gardes RAII C++ certaines (`unique_lock`, `lock_guard`, `scoped_lock`, `shared_lock`, accolades ou parenthèses — `std::lock_guard lck(mtx);` se lit comme une fonction) ; `.lock()` / `.read()` / `.write()` seulement sur un champ déclaré mutex ou RwLock dans le fichier. Un verrou est compris : hors du relevé des non-résolues. rag3db src : 140 exclusifs, 32 partagés (188 gardes dans le texte) ; rag3weaver : 75 et 1. |
+| B3 — la relation LOCKS (rag3weaver) | rag3db, branche `verrous` (`acf4f9fb7` pointeur 8881d52, `f53092caf` code.rs +72), proposée à l'arbre principal | Un symbole `Classe::champ` par champ typé, défini par sa classe ; un verrou est la relation LOCKS du scope vers ce symbole (genre, ligne), posée à l'ingestion. « Qui verrouille NodeTable::mtx » = les LOCKS entrants du symbole. Témoin `e2e_verrous`. |
 
 ## Suite
 
-B2b attend sa fusion par l'arbre principal. B3, LOCKS : une relation d'un
-scope vers le champ mutex qu'il verrouille (gardes RAII, `.lock()`),
-`Classe::champ` résolu à la matérialisation comme les types différés.
+B2b et `verrous` attendent leur fusion par l'arbre principal (rag3db-73,
+pointeur 8881d52 avec `verrous`, jamais seul : `usage_name` est exhaustif).
+Ensuite : la section « verrous sur le chemin » d'impact (code_tools et IR,
+en proposition), les remarques de relecture de B2b (mesurer la requête des
+types différés sur l'index de rag3db src, la borner à la source).
