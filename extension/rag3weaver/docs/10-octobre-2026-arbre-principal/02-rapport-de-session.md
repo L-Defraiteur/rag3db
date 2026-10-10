@@ -94,3 +94,39 @@ n'est plus lisible par l'ancienne.
 
 Chacun a le sous-module codeparsers initialisé et le lien `extension/vector/build` vers
 l'arbre principal.
+
+## Arrêt pour le nettoyage du disque (10 octobre, soir)
+
+Sur demande de Lucie, relayée par l'orchestration : tout arrêté par pid, tout le travail
+local committé et poussé. Les `target` cargo, les `build/` et les worktrees vont être
+effacés ; rien n'a été perdu de mon côté.
+
+**La batterie du basculement** (lib de 17:27, moteur `aeec6888f` avec `ff9bad960`, sans
+`d10b92306` ; depuis `wt-defauts` sur `aeec6888f` ; hors carte locale, régime doux) :
+- lib et `--tests --no-run` verts ;
+- **61 suites vertes, aucun rouge**, interrompue pendant la 62ᵉ, `e2e_sparse_dump` ;
+- à reprendre à partir de `e2e_sparse_dump`, sur une lib rebâtie : la lib de 17:27 sera
+  effacée avec `build/`. Suites jouées, dans l'ordre :
+  `e2e_agent_loop`, `e2e_arret_brutal`, `e2e_avis_du_modele`, `e2e_banc_cohesion`, `e2e_banc_etage`, `e2e_banc_hnsw`, `e2e_banc_liens`, `e2e_banc_qualite`, `e2e_banc_relations`, `e2e_banc_texte_brut`, `e2e_banc_vertex_embedding`, `e2e_batch_observe`, `e2e_catalogue_gabarits`, `e2e_charge_ingestion`, `e2e_checkpoint`, `e2e_chemin_de_masse`, `e2e_cloud_code_agent`, `e2e_cloud_schema_probe`, `e2e_code`, `e2e_code_sync`, `e2e_conversation_a_plusieurs`, `e2e_copy_liens`, `e2e_copy_refuse_rouvre`, `e2e_dataflow_observe`, `e2e_drain_unified`, `e2e_entites_derivees`, `e2e_estimate`, `e2e_generic_search`, `e2e_graph_tool`, `e2e_graphe_et_paquets`, `e2e_highlight_long_text`, `e2e_hnsw_scale`, `e2e_idempotent_registration`, `e2e_impact`, `e2e_impact_fichier`, `e2e_invariant_des_vecteurs`, `e2e_lecture_du_catalogue`, `e2e_lecture_mermaid`, `e2e_lecture_seule_apres_fermeture_sans_point_de_reprise`, `e2e_liens`, `e2e_mesure_joignabilite`, `e2e_mesure_sync_source`, `e2e_native`, `e2e_phase0b`, `e2e_plans_par_lot`, `e2e_points_de_reprise_nettoyes`, `e2e_preuve_d_existence`, `e2e_prise_atomique`, `e2e_profile_overhead`, `e2e_rag3daemon`, `e2e_reacteur`, `e2e_recherche_dense_apres_suppressions`, `e2e_repli_de_branche`, `e2e_reprise_durcie`, `e2e_rerank`, `e2e_result_mode`, `e2e_rouvrir`, `e2e_scope`, `e2e_search`, `e2e_search_queue`, `e2e_simple_entity`, `e2e_sparse_dump`.
+
+**Les branches, à l'arrêt :**
+
+| Branche | Tête | État |
+|---|---|---|
+| `embarqueur-absent` | `eaa5dbe19` | `c98d4ff9b` vert (lib de 15:36) ; `be3e9ab8d` (count_rows) et `eaa5dbe19` (`Level::NotDeclared`, accordé par l'orchestration) **non compilés**. |
+| `commande-en-fond-3` | `8c5105f7b` | lib 1264 verts, sur `execution-asynchrone` `ca757a315` ; à rebaser sur master par `git rebase --onto master ca757a315` au signe de la recherche. |
+| `temoin-fuite` | `88a1958d6` | **jamais rendu** : lancé une fois sur la lib de 15:36, arrêté avant sa fin. |
+| `commande-en-fond`, `commande-en-fond-2` | — | abandonnées (remplacées par `-3`). |
+
+**La reprise, dans l'ordre :**
+1. Rebâtir la lib commune ; finir la batterie à partir de `e2e_sparse_dump`, et dire
+   « fini » à la recherche, qui l'attend pour sa mesure.
+2. `embarqueur-absent` : lib, `--tests --no-run` (un champ public change),
+   `e2e_embarqueur_absent`, `e2e_etat_non_declare`. Puis master, et prévenir l'optimiseur
+   (rag3db-90).
+3. Le témoin de la fuite ; son vert pour le ticket du cœur C++ (rag3db-91).
+4. `getRecoveryLoadFailures()` sous `warnings` à l'ouverture (ticket
+   `2026-10-10-echecs-de-chargement-au-rejeu-que-personne-ne-lit.md`). L'accesseur n'est
+   pas exposé côté Rust : passage par `tools/rust_api`. Le refus d'ouverture est au cœur,
+   pas à moi.
+5. La commande en fond, au signe de fusion de la recherche (`execution-asynchrone-2`).
