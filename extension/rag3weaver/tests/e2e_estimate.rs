@@ -395,6 +395,13 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         eprintln!("[mots] {n} fichiers écartés : {reason}");
     }
     eprintln!("[mots] chargements en masse refusés (bulk_load_refused) : {} {:?}", report.bulk_load_refused.len(), report.bulk_load_refused);
+    // Les replis d'un COPY journalisé (`71cffbc4b`) : au-delà du seuil, la
+    // transaction vide son journal et repasse par le point de reprise. Inerte
+    // sous le COPY forcé ; un moteur plus ancien ne connaît pas le réglage.
+    match catalog.conn().execute("CALL current_setting('copy_journal_fallbacks') RETURN *") {
+        Ok(r) => eprintln!("[mots] replis du COPY journalisé (copy_journal_fallbacks) : {:?}", r.rows.first().and_then(|row| row.first())),
+        Err(e) => eprintln!("[mots] replis du COPY journalisé : illisibles ({e})"),
+    }
 
     // Le pic de mémoire résidente du processus : la borne à tenir sur un
     // poste modeste, et l'inconnue d'un chargement de bout en bout.

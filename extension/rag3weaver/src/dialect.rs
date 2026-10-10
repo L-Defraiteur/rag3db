@@ -153,6 +153,34 @@ fn par_uuid<'a>(var: &'a str, label: Option<&'a str>, champ: &'a str) -> ParCle<
     ParCle { var, label, prop: "_uuid", champ }
 }
 
+/// **Ce qu'un dialecte déclare savoir faire**, d'un seul tenant.
+///
+/// Une capacité non déclarée n'est pas un résultat vide : l'appelant qui en a
+/// besoin refuse en la nommant (`docs/8-octobre-2026-16h29/embarquements/
+/// 01-le-contrat-du-dialecte.md`, §3). Les booléens plus anciens du trait
+/// ([`SchemaDialect::speaks_cypher`], [`SchemaDialect::supports_copy_from`])
+/// se lisent ici.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DialectCapabilities {
+    /// La base parle Cypher : les corps par défaut du trait, le magasin de
+    /// blobs et celui de checkpoints en Cypher peuvent y tourner.
+    pub cypher: bool,
+    /// Une transaction explicite (`BEGIN` … `COMMIT`) tient sur une seule
+    /// session de la connexion, d'une instruction à l'autre.
+    pub transactions: bool,
+    /// Un chargement en masse ([`SchemaDialect::copy_nodes_from_csv`],
+    /// [`SchemaDialect::copy_links_from_csv`]).
+    pub bulk_load: bool,
+    /// Champs liste ou structure, et filtres imbriqués sur eux.
+    pub structured_fields: bool,
+}
+
+impl DialectCapabilities {
+    /// Ce que suppose un dialecte qui ne se prononce pas : il parle Cypher
+    /// (l'hypothèse de tout le code d'avant), et rien de plus.
+    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false };
+}
+
 pub trait SchemaDialect: Send + Sync {
     /// Backend name for diagnostics (e.g. "rag3db", "postgresql").
     fn name(&self) -> &'static str;
@@ -187,7 +215,10 @@ pub trait SchemaDialect: Send + Sync {
     ///
     /// Vrai par défaut : c'était l'hypothèse implicite de tout le code
     /// existant, et un dialecte qui ne se prononce pas ne doit rien changer.
-    fn speaks_cypher(&self) -> bool { true }
+    fn speaks_cypher(&self) -> bool { self.capabilities().cypher }
+
+    /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
+    fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
     /// Poser le nœud d'une cellule (`_Org`, `_Project`) s'il n'y est pas.
     ///
@@ -666,7 +697,7 @@ pub trait SchemaDialect: Send + Sync {
 
     /// Le moteur a-t-il un chargement en masse ([`Self::copy_nodes_from_csv`]) ?
     fn supports_copy_from(&self) -> bool {
-        false
+        self.capabilities().bulk_load
     }
 
     /// **Les identifiants internes de lignes désignées par uuid** — ce que
@@ -1177,8 +1208,8 @@ impl SchemaDialect for Rag3dbDialect {
         ))
     }
 
-    fn supports_copy_from(&self) -> bool {
-        true
+    fn capabilities(&self) -> DialectCapabilities {
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -1705,7 +1736,11 @@ impl SchemaDialect for PostgresDialect {
         ]
     }
 
-    fn speaks_cypher(&self) -> bool { false }
+    /// Pas de transaction : chaque instruction prend sa connexion du pool
+    /// (ticket `2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions`).
+    fn capabilities(&self) -> DialectCapabilities {
+        DialectCapabilities { cypher: false, transactions: false, bulk_load: false, structured_fields: false }
+    }
 
     // ── Les lots passent par JSON ────────────────────────────────────────
     //
@@ -2636,6 +2671,18 @@ mod tests {
         let ddl = d.create_rel_table("Doc_CHUNKED_FROM", "Doc_Chunk", "Doc", &[]);
         assert!(ddl.contains("CREATE REL TABLE IF NOT EXISTS"));
         assert!(ddl.contains("FROM Doc_Chunk TO Doc"));
+    }
+
+    /// Les capacités déclarées, et les booléens d'avant qui les lisent : rien
+    /// ne change pour les appelants.
+    #[test]
+    fn chaque_dialecte_declare_ses_capacites() {
+        let r = Rag3dbDialect.capabilities();
+        assert!(r.cypher && r.transactions && r.bulk_load && r.structured_fields);
+        assert!(Rag3dbDialect.speaks_cypher() && Rag3dbDialect.supports_copy_from());
+        let p = PostgresDialect.capabilities();
+        assert!(!p.cypher && !p.transactions && !p.bulk_load && !p.structured_fields);
+        assert!(!PostgresDialect.speaks_cypher() && !PostgresDialect.supports_copy_from());
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

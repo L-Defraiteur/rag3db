@@ -459,8 +459,8 @@ impl<'a> FilterParser<'a> {
         &mut self, condition: &FilterCondition, alias: &str,
         params: &mut Vec<QueryParam>, depth: usize,
     ) -> Result<String, FilterError> {
-        if self.dialect.name() != "rag3db" {
-            return Err(FilterError::Structured("native nested filters require rag3db".into()));
+        if !self.dialect.capabilities().structured_fields {
+            return Err(FilterError::Structured(format!("native nested filters: dialect {} does not declare structured fields", self.dialect.name())));
         }
         if depth > 32 { return Err(FilterError::Structured("nesting exceeds 32".into())); }
         let path_expr = |path: &[String]| -> Result<String, FilterError> {
