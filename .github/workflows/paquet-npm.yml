@@ -145,7 +145,9 @@ jobs:
           json.dump(m, open("essai/sans-bac.json", "w"))
           PY
           echo "--- tel quel (Landlock demandé : le refus attendu)"
-          ./dist/windows-x64/rag3weaver-backend.exe essai/tel-quel.json --describe 2>&1 | head -c 400; echo
+          # Le refus attendu sort en code 1 : ne pas arrêter l'étape dessus
+          # (onzième essai : l'épreuve « sandbox off » n'a jamais joué).
+          ./dist/windows-x64/rag3weaver-backend.exe essai/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
           echo "--- sandbox off"
           ./dist/windows-x64/rag3weaver-backend.exe essai/sans-bac.json --describe 2>&1 | head -c 600; echo
       - uses: actions/upload-artifact@v4
