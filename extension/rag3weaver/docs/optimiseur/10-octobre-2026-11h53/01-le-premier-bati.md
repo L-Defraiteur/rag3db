@@ -98,6 +98,23 @@ variante à essayer est `-C link-args=-Wl,-export_dynamic` seule, ou une
 liste de symboles exportés. Le cache du bâti se sauve désormais même quand
 l'épreuve est rouge (`actions/cache/restore` + `save` en `always()`).
 
+**Troisième essai** (38070177768) : les symboles tiennent, l'extension se
+charge, le backend démarre — mais le binaire passe de 65 à 119 Mo, et
+`index` refuse « tampon du moteur trop petit… ce processus en a 0,0 Gio » :
+rag3weaver lisait la mémoire vive dans `/proc/meminfo`, qui n'existe pas
+sous macOS (ni Windows). Correctif (390ea9510) : une lecture par système
+dans `connection::total_memory` (`/proc/meminfo`, `sysctl hw.memsize`,
+`GlobalMemoryStatusEx`), hors feature, sa source nommée, un test unitaire
+qui exige plus de zéro sur l'hôte, et le refus qui dit « mémoire vive lue :
+X Gio par … » ou « inconnue ».
+
+**Quatrième essai** (38072561734) : **le sous-paquet macOS arm64 est vert de
+bout en bout.** Cache du moteur restauré, 11 min 21 s ; `strip -x` ramène le
+binaire de 119 à **81 Mo** (les globaux restent) ; le backend démarre en
+178 ms, `npm test` sur le runner passe (index plein texte, dette lue,
+« not available » sur le dense, arrêt propre). `rag3weaver-darwin-arm64`
+s'emballe depuis l'artefact `bati-macos-arm64-journal` (`dist/darwin-arm64/`).
+
 ## Windows x64 : le binaire se lie
 
 **Dixième essai, 10 octobre 2026, 11 h 25 UTC** : `rag3weaver-backend.exe`
