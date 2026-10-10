@@ -66,7 +66,10 @@ struct RAG3DB_API NodeTableInsertState : TableInsertState {
 
 struct RAG3DB_API NodeTableUpdateState : TableUpdateState {
     common::ValueVector& nodeIDVector;
+    // Créés une fois et gardés le temps de l'instruction (initUpdateState ne les recrée pas) : un
+    // index y note ce que sa fin d'instruction (NodeTable::finalizeUpdate) doit reprendre.
     std::vector<std::unique_ptr<Index::UpdateState>> indexUpdateState;
+    bool indexUpdateStatesInitialized = false;
 
     NodeTableUpdateState(common::column_id_t columnID, common::ValueVector& nodeIDVector,
         common::ValueVector& propertyVector)
@@ -162,6 +165,10 @@ public:
     void insert(transaction::Transaction* transaction, TableInsertState& insertState) override;
     void initUpdateState(main::ClientContext* context, TableUpdateState& updateState) const;
     void update(transaction::Transaction* transaction, TableUpdateState& updateState) override;
+    // La fin de l'instruction : chaque index fait ce qu'il a différé (Index::finalizeUpdate). Les
+    // états viennent d'un NodeTableUpdateState, ou du rejeu, qui les garde jusqu'au COMMIT.
+    void finalizeUpdate(transaction::Transaction* transaction,
+        std::vector<std::unique_ptr<Index::UpdateState>>& indexUpdateStates);
     void initDeleteStates(const transaction::Transaction* transaction, TableDeleteState& deleteState);
     bool delete_(transaction::Transaction* transaction, TableDeleteState& deleteState) override;
     void finalizeDelete(transaction::Transaction* transaction, TableDeleteState& deleteState);

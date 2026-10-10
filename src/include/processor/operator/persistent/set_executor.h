@@ -57,6 +57,10 @@ public:
 
     virtual void set(ExecutionContext* context) = 0;
 
+    // La fin de l'instruction, une fois, à l'épuisement de l'enfant : les index reprennent ce
+    // qu'ils ont différé ligne après ligne (NodeTable::finalizeUpdate).
+    virtual void finalize(ExecutionContext* /*context*/) {}
+
     virtual std::unique_ptr<NodeSetExecutor> copy() const = 0;
 
 protected:
@@ -71,6 +75,7 @@ public:
         : NodeSetExecutor{other}, tableInfo(other.tableInfo.copy()) {}
 
     void set(ExecutionContext* context) override;
+    void finalize(ExecutionContext* context) override;
 
     std::unique_ptr<NodeSetExecutor> copy() const override {
         return std::make_unique<SingleLabelNodeSetExecutor>(*this);
@@ -78,6 +83,8 @@ public:
 
 private:
     NodeTableSetInfo tableInfo;
+    // Créé à la première ligne et gardé le temps de l'instruction (une copie n'en hérite pas).
+    std::unique_ptr<storage::NodeTableUpdateState> updateState;
 };
 
 class MultiLabelNodeSetExecutor final : public NodeSetExecutor {
@@ -88,6 +95,7 @@ public:
         : NodeSetExecutor{other}, tableInfos{copyUnorderedMap(other.tableInfos)} {}
 
     void set(ExecutionContext* context) override;
+    void finalize(ExecutionContext* context) override;
 
     std::unique_ptr<NodeSetExecutor> copy() const override {
         return std::make_unique<MultiLabelNodeSetExecutor>(*this);
@@ -95,6 +103,8 @@ public:
 
 private:
     common::table_id_map_t<NodeTableSetInfo> tableInfos;
+    // Un état par table touchée, gardé le temps de l'instruction.
+    common::table_id_map_t<std::unique_ptr<storage::NodeTableUpdateState>> updateStates;
 };
 
 struct RelSetInfo {

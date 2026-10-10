@@ -16,6 +16,10 @@ using namespace rag3db::transaction;
 namespace rag3db {
 namespace vector_extension {
 
+// Mesure de la fin d'instruction (page 04, §4) : false = ne recontrôler que les nœuds qui ont
+// perdu une arête entrante ; true = aussi les lignes mises à jour. Tranché par la mesure.
+static constexpr bool RECHECK_UPDATED_ROWS = false;
+
 InMemHNSWLayer::InMemHNSWLayer(MemoryManager* mm, InMemHNSWLayerInfo info)
     : entryPoint{common::INVALID_OFFSET}, info{info} {
     graph = std::make_unique<InMemHNSWGraph>(mm, info.numNodes, info.degreeThresholdToShrink);
@@ -943,18 +947,29 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
         return;
     }
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
-    auto entryPoint = hnswStorageInfo.lowerEntryPoint;
-    if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
-        entryPoint = findLiveNode(transaction, insertState.searchState, offset);
-    }
-    if (entryPoint == common::INVALID_OFFSET) {
-        return; // it is the only node left
-    }
     auto& searchState = insertState.searchState;
     const auto vector =
         searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState);
     if (vector.isNull()) {
         return;
+    }
+    // Enter the lower layer where a query for this vector enters it: through the upper layer.
+    // Reachable from the lower entry point is not enough. The rows of one update gather around
+    // their new vectors, and their edges point to each other: a query that lands among them
+    // stays there, and a row they do not point to is lost to it (« 9 results » for k = 30 and
+    // efs = 1000 in TwentyRowsToDistinctVectorsLineByLine, the row reachable all the same).
+    auto entryPoint = searchNNInUpperLayer(vector, searchState);
+    if (entryPoint == offset) {
+        return; // the query starts on it
+    }
+    if (entryPoint == common::INVALID_OFFSET) {
+        entryPoint = hnswStorageInfo.lowerEntryPoint;
+    }
+    if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
+        entryPoint = findLiveNode(transaction, insertState.searchState, offset);
+    }
+    if (entryPoint == common::INVALID_OFFSET) {
+        return; // it is the only node left
     }
     // The test is the one that matters: search for the node's own vector from the entry point.
     // Having an edge pointing to it would not be enough — two survivors may point to each other
@@ -1085,6 +1100,7 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
         {upperNbrs.begin(), upperNbrs.end()}, &removed);
     // 2. Re-insert with new embedding if not NULL.
+    state.insertState.lostLowerInEdges = &state.lostLowerInEdges;
     const auto valuePos = propertyVector.state->getSelVector()[0];
     if (!propertyVector.isNull(valuePos)) {
         auto scanState = std::make_unique<CommitInsertEmbeddingScanState>(&propertyVector);
@@ -1092,76 +1108,40 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
             scanState.get()};
         insertInternal(transaction, offset, handle, state.insertState);
     }
-    // 3. The nodes the old position led to have lost an incoming edge each. One of them may
-    // have been reachable through this node only: check them all, as finalizeDelete does for
-    // the neighbours of a deleted node.
-    //
-    // The full check is a search of the graph per neighbour: sixty searches per updated row,
-    // which made a bulk update sixty times slower. Most neighbours do not need it. A node that
-    // lost nothing in this update is as reachable as it was before; so is the updated row,
-    // which was just inserted anew. A former neighbour one of those points to is therefore
-    // reachable, and so is a former neighbour another reachable former neighbour points to.
-    // Who points to a node is not stored, but edges are nearly always mutual: the nodes a
-    // neighbour points to are where to look. The search is kept for the neighbours this does
-    // not settle.
-    std::unordered_map<common::offset_t, std::vector<common::offset_t>> edgesOf;
+    state.insertState.lostLowerInEdges = nullptr;
+    // 3. The nodes the old position led to have lost an incoming edge each, and so have the
+    // nodes the pruning drops on the way (shrinkForNode fills the set while it is set). Their
+    // reachability is checked once, at the end of the statement (finalizeUpdate): the rows of
+    // one statement are close to each other, and the union of what they leave behind is far
+    // smaller than the sum, row by row (page 04, §8: 16 051 against 617 989 for 10 000 rows).
     for (const auto nbr : lowerNbrs) {
-        if (nbr != offset && !edgesOf.contains(nbr)) {
-            edgesOf.emplace(nbr,
-                scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState));
+        if (nbr != offset) {
+            state.lostLowerInEdges.insert(nbr);
         }
     }
-    const auto pointsTo = [](const std::vector<common::offset_t>& edges, common::offset_t to) {
-        return std::ranges::find(edges, to) != edges.end();
-    };
-    std::unordered_set<common::offset_t> reachable;
-    // 3a. Pointed to by the updated row, or by a node outside the former neighbours.
-    const auto edgesOfUpdated =
-        scanNeighbors(transaction, offset, false /*isUpperLayer*/, state.insertState);
-    static constexpr size_t MAX_OUTSIDE_NODES_TRIED = 4;
-    for (const auto& [nbr, edges] : edgesOf) {
-        if (pointsTo(edgesOfUpdated, nbr)) {
-            reachable.insert(nbr);
+    state.updatedRows.insert(offset);
+}
+
+void OnDiskHNSWIndex::finalizeUpdate(Transaction* transaction, UpdateState& updateState) {
+    auto& state = updateState.cast<HNSWUpdateState>();
+    auto& insertState = state.insertState;
+    // The shrinks an insertion leaves for later (a node over its degree, under the threshold)
+    // stay so, as after commitInsert: shrinking them here, at every statement, cost a shrink per
+    // neighbour and per row when rows are updated one by one.
+    if (RECHECK_UPDATED_ROWS) {
+        state.lostLowerInEdges.insert(state.updatedRows.begin(), state.updatedRows.end());
+    }
+    for (const auto offset : state.lostLowerInEdges) {
+        // A row deleted since (at replay, the whole transaction is finalized at its COMMIT).
+        if (!nodeTable.isVisible(transaction, offset)) {
             continue;
         }
-        size_t numTried = 0;
-        for (const auto other : edges) {
-            if (other == offset || other == nbr || edgesOf.contains(other)) {
-                continue;
-            }
-            if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/,
-                             state.insertState),
-                    nbr)) {
-                reachable.insert(nbr);
-                break;
-            }
-            if (++numTried == MAX_OUTSIDE_NODES_TRIED) {
-                break;
-            }
-        }
+        keepNodeReachable(transaction, offset,
+            scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState),
+            false /*isUpperLayer*/, insertState);
     }
-    // 3b. Pointed to by a former neighbour already known reachable, until nothing changes.
-    for (bool changed = true; changed;) {
-        changed = false;
-        for (const auto& [nbr, edges] : edgesOf) {
-            if (reachable.contains(nbr)) {
-                continue;
-            }
-            for (const auto other : reachable) {
-                if (pointsTo(edgesOf.at(other), nbr)) {
-                    reachable.insert(nbr);
-                    changed = true;
-                    break;
-                }
-            }
-        }
-    }
-    // 3c. The rest: the search, and ties if it does not find them.
-    for (const auto& [nbr, edges] : edgesOf) {
-        if (!reachable.contains(nbr)) {
-            keepNodeReachable(transaction, nbr, edges, false /*isUpperLayer*/, state.insertState);
-        }
-    }
+    state.lostLowerInEdges.clear();
+    state.updatedRows.clear();
 }
 
 std::vector<common::offset_t> OnDiskHNSWIndex::scanNeighbors(Transaction* /*transaction*/,
@@ -1235,7 +1215,15 @@ void OnDiskHNSWIndex::insertInternal(Transaction* transaction, common::offset_t 
     insertState.pendingOffset = offset;
     insertState.pendingVector = &vector;
     // Search fow lower layer entry point.
-    const auto entryPoint = searchNNInUpperLayer(vector, insertState.searchState);
+    auto entryPoint = searchNNInUpperLayer(vector, insertState.searchState);
+    if (entryPoint == offset) {
+        // An updated row: the edges of other nodes still lead to it, and its new vector is the
+        // target, so the upper layer leads to the row itself. Its own edges were just removed:
+        // a search from it finds nothing else, and the row came back without a single edge
+        // (OneRowUpdatedManyTimes: a query that entered on it returned it alone). Start from
+        // the lower entry point instead.
+        entryPoint = common::INVALID_OFFSET;
+    }
     insertToLayer(transaction, offset, entryPoint, vector, insertState, false /*isUpperLayer*/);
     // Search the lower layer to insert new vector.
     const auto rand = randomEngine.nextRandomInteger(INSERT_TO_UPPER_LAYER_RAND_UPPER_BOUND);
@@ -1651,6 +1639,17 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
         insertState.relInsertState->dstNodeIDVector.setValue(0,
             common::nodeID_t{nbrs[i].getNodeOffset(), indexInfo.tableID});
         relTable.insert(transaction, *insertState.relInsertState);
+    }
+    if (!isUpperLayer && insertState.lostLowerInEdges) {
+        std::unordered_set<common::offset_t> keptOffsets;
+        for (const auto i : kept) {
+            keptOffsets.insert(nbrs[i].getNodeOffset());
+        }
+        for (const auto nbr : nbrOffsets) {
+            if (nbr != offset && !keptOffsets.contains(nbr)) {
+                insertState.lostLowerInEdges->insert(nbr);
+            }
+        }
     }
 }
 

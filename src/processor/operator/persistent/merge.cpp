@@ -137,6 +137,17 @@ void Merge::executeNoMatch(ExecutionContext* context) {
 
 bool Merge::getNextTuplesInternal(ExecutionContext* context) {
     if (!children[0]->getNextTuple(context)) {
+        // La fin de l'instruction pour les SET de MERGE (ON MATCH, ON CREATE), une fois, comme
+        // SetNodeProperty.
+        if (!executorsFinalized) {
+            executorsFinalized = true;
+            for (auto& executor : onMatchNodeSetExecutors) {
+                executor->finalize(context);
+            }
+            for (auto& executor : onCreateNodeSetExecutors) {
+                executor->finalize(context);
+            }
+        }
         return false;
     }
     if (localState.patternExists()) {

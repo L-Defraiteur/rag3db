@@ -416,9 +416,11 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
 void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     switch (walRecord.type) {
     case WALRecordType::BEGIN_TRANSACTION_RECORD: {
+        pendingIndexUpdates.clear();
         TransactionContext::Get(clientContext)->beginRecoveryTransaction();
     } break;
     case WALRecordType::COMMIT_RECORD: {
+        finalizeReplayedUpdates();
         TransactionContext::Get(clientContext)->commit();
     } break;
     case WALRecordType::CREATE_CATALOG_ENTRY_RECORD: {
@@ -718,8 +720,25 @@ void WALReplayer::replayNodeUpdateRecord(const WALRecord& walRecord) const {
               transaction::Transaction::Get(clientContext)->isRecovery());
     // Sans cela la mise à jour rejouée ne dit rien aux index de la colonne : un index chargé
     // garderait l'ancienne valeur, un index non chargé ne serait pas détaché.
+    // Les états des index passent d'une mise à jour rejouée à l'autre : l'index ne répare
+    // qu'à la fin (finalizeReplayedUpdates), comme l'exécution le fait à la fin de l'instruction.
+    auto& pending = pendingIndexUpdates[{tableID, updateRecord.columnID}];
+    if (!pending.empty()) {
+        updateState->indexUpdateState = std::move(pending);
+        updateState->indexUpdateStatesInitialized = true;
+    }
     table.initUpdateState(&clientContext, *updateState);
     table.update(transaction::Transaction::Get(clientContext), *updateState);
+    pending = std::move(updateState->indexUpdateState);
+}
+
+void WALReplayer::finalizeReplayedUpdates() const {
+    auto* storageManager = StorageManager::Get(clientContext);
+    for (auto& [key, states] : pendingIndexUpdates) {
+        auto& table = storageManager->getTable(key.first)->cast<NodeTable>();
+        table.finalizeUpdate(transaction::Transaction::Get(clientContext), states);
+    }
+    pendingIndexUpdates.clear();
 }
 
 void WALReplayer::replayRelDeletionRecord(const WALRecord& walRecord) const {

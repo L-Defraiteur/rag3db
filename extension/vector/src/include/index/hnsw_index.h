@@ -315,6 +315,9 @@ public:
         // Nodes to shrink at the end of insertions.
         std::unordered_set<common::offset_t> upperNodesToShrink;
         std::unordered_set<common::offset_t> lowerNodesToShrink;
+        // Quand il est posé, shrinkForNode y verse les nœuds dont il retire l'arête entrante dans
+        // la couche basse : la mise à jour les recontrôle en fin d'instruction.
+        std::unordered_set<common::offset_t>* lostLowerInEdges = nullptr;
 
         HNSWInsertState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
@@ -343,6 +346,12 @@ public:
 
     struct HNSWUpdateState final : UpdateState {
         HNSWInsertState insertState;
+        // Les nœuds qui ont perdu une arête entrante de la couche basse pendant l'instruction :
+        // les anciens voisins des lignes mises à jour, et ceux que l'élagage a écartés.
+        // finalizeUpdate recontrôle leur joignabilité une fois, sur le graphe final.
+        std::unordered_set<common::offset_t> lostLowerInEdges;
+        // Les lignes mises à jour, pour la variante qui les recontrôle aussi.
+        std::unordered_set<common::offset_t> updatedRows;
         HNSWUpdateState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
@@ -381,6 +390,8 @@ public:
         common::column_id_t columnID, storage::visible_func isVisible) override;
     void update(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
         common::ValueVector& propertyVector, UpdateState& updateState) override;
+    void finalizeUpdate(transaction::Transaction* transaction,
+        UpdateState& updateState) override;
 
     static storage::IndexType getIndexType() {
         static const storage::IndexType HNSW_INDEX_TYPE{"HNSW",

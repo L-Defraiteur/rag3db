@@ -154,6 +154,11 @@ public:
         DeleteState& /*deleteState*/) {
         // DO NOTHING. Override in extensions that need batched cleanup (e.g., HNSW).
     }
+    // La fin d'une instruction qui a mis à jour des lignes de l'index (SET, MERGE ; au rejeu, la
+    // validation de la transaction rejouée) : l'index fait une fois, sur le graphe final, ce que
+    // chaque ligne aurait fait. Rien par défaut ; l'index vectoriel y recontrôle la joignabilité.
+    virtual void finalizeUpdate(transaction::Transaction* /*transaction*/,
+        UpdateState& /*updateState*/) {}
     virtual bool needCommitInsert() const { return false; }
     virtual void commitInsert(transaction::Transaction*, const common::ValueVector&,
         const std::vector<common::ValueVector*>&, InsertState&) {

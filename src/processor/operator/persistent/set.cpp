@@ -13,6 +13,15 @@ void SetNodeProperty::initLocalStateInternal(ResultSet* resultSet, ExecutionCont
 
 bool SetNodeProperty::getNextTuplesInternal(ExecutionContext* context) {
     if (!children[0]->getNextTuple(context)) {
+        // La fin de l'instruction, une fois : ici et non dans finalizeInternal, que la requête
+        // appelle sur l'opérateur d'origine et non sur la copie qui tient les états (comme
+        // DeleteNode).
+        if (!executorsFinalized) {
+            executorsFinalized = true;
+            for (auto& executor : executors) {
+                executor->finalize(context);
+            }
+        }
         return false;
     }
     for (auto& executor : executors) {
