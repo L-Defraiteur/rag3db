@@ -176,3 +176,16 @@ VectorIndexUpdate.UpdateThenDelete vector-index-exact
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
+#
+# Un groupe de copies bien plus grand que le degré (vector_index_update_test.cpp,
+# SameVectorForEveryRow, la recette de rag3db-9c du 10 octobre) : 1 402 lignes du même vecteur
+# (FLOAT[384], cosinus), 23 fois le degré. Aucun plantage, mais des lignes injoignables par la
+# recherche exhaustive : sur master avant l'élagage classique, les huit cas (1 190 à 1 298 sur
+# 1 402) ; après, 1 083 à 1 222. Aucun corpus réel n'en approche (le plus grand groupe : 49,
+# retrouvé). Ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstCopy same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable

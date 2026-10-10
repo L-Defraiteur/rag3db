@@ -66,3 +66,8 @@ JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
 # passe complète (rows-found-after-the-sets). C'est la famille des lignes injoignables après
 # la mise à jour d'un vecteur, ci-dessus.
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Death
+#
+# Le même groupe de 1 402 copies, index posé avant un COPY de vecteurs nuls : 1 402 joignables
+# deux fois sur trois, 1 222 la troisième (10 octobre). Le cas non nul (SameIndexFirstCopy) est
+# vert trois fois sur trois. Ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstCopy
