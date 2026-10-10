@@ -110,12 +110,70 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     }
 }
 
+/// **Le serveur HTTP** : les routes du manifeste (`"routes"`), sur la boucle
+/// locale ([`rag3weaver::serve`]).
+///
+/// ```text
+/// rag3weaver-backend serve --manifest <backend.json> [--address 127.0.0.1:7777] [--threads 4]
+/// ```
+///
+/// `POST /arret` ferme l'écoute ; la base est alors fermée proprement ici.
+fn servir_http(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend serve --manifest <backend.json> \
+                         [--address 127.0.0.1:7777] [--threads 4]";
+    let mut manifeste: Option<String> = None;
+    let mut adresse = "127.0.0.1:7777".to_string();
+    let mut fils = 4usize;
+    let mut i = 0;
+    while i < args.len() {
+        let valeur = args
+            .get(i + 1)
+            .cloned()
+            .ok_or_else(|| format!("{} attend une valeur\n{USAGE}", args[i]))?;
+        match args[i].as_str() {
+            "--manifest" => manifeste = Some(valeur),
+            "--address" => adresse = valeur,
+            "--threads" => {
+                fils = valeur
+                    .parse()
+                    .map_err(|_| format!("--threads attend un nombre\n{USAGE}"))?
+            }
+            autre => return Err(format!("option inconnue : {autre}\n{USAGE}")),
+        }
+        i += 2;
+    }
+    let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
+    let prepared = PreparedBackend::load(Path::new(&manifeste))?;
+    let database = prepared.path(&prepared.manifest.database);
+    if let Some(parent) = database.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let embedder = if prepared.needs_embeddings() {
+        Some(prepared.connect_embedder()?.0)
+    } else {
+        None
+    };
+    let conn =
+        Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
+            .map_err(|e| e.to_string())?;
+    let nom = prepared.manifest.name.clone();
+    let backend = std::sync::Arc::new(prepared.open(Box::new(conn), embedder)?);
+    eprintln!("[serve] {nom} — http://{adresse}/ ; POST /arret pour arrêter");
+    rag3weaver::serve::serve(backend.clone(), &adresse, fils)?;
+    let mut backend = std::sync::Arc::try_unwrap(backend)
+        .map_err(|_| "un fil tient encore le backend après l'arrêt".to_string())?;
+    backend.shutdown()
+}
+
 fn run() -> Result<(), String> {
     // La sous-commande se reconnaît au premier mot ; la forme positionnelle
     // d'avant (`rag3weaver-backend backend.json [--describe]`) reste intacte.
     let tous: Vec<String> = std::env::args().skip(1).collect();
     if tous.first().map(String::as_str) == Some("mcp") {
         return servir_mcp(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("serve") {
+        return servir_http(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

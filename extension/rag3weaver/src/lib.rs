@@ -161,6 +161,9 @@ pub mod records;
 pub mod relation_directions;
 pub mod dataflow;
 pub mod refs;
+pub mod routes;
+#[cfg(feature = "daemon")]
+pub mod serve;
 pub mod schema;
 pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,

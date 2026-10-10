@@ -54,6 +54,11 @@ pub struct BackendManifest {
     /// (`docs/5-octobre-2026-00h00/01`), tranchée par l'orchestration.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub reactions: BTreeMap<String, ReactionAttachment>,
+    /// **Les routes** : `"GET /products/{key}": {"tool": …, "view": …}`. Une
+    /// adresse mène à un outil déclaré (le contrôleur), son résultat à une vue
+    /// du dossier `views/` ([`crate::routes`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub routes: BTreeMap<String, crate::routes::RouteDecl>,
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
@@ -464,6 +469,8 @@ pub struct PreparedBackend {
     /// fichiers, ni réseau, ni commande —, ils entrent dans toutes les
     /// politiques où entre un calcul.
     scripted_types: BTreeSet<String>,
+    /// Les routes vérifiées et les vues du dossier `views/`.
+    routes: crate::routes::Routes,
     pub manifest: BackendManifest,
     /// L'embarquement dense, résolu au chargement (`BackendManifest::embed_source`).
     embed: crate::model_source::ModelSource,
@@ -969,6 +976,10 @@ impl PreparedBackend {
                 )?;
             }
         }
+        // ── Les routes et les vues ──────────────────────────────────────
+        let routes = crate::routes::Routes::load(&manifest.routes, &directory, &|name| {
+            tools.contains_key(name)
+        })?;
         // ── Les graphes réactifs ─────────────────────────────────────────
         //
         // Lus, construits et liés ici, au même étage que les outils : un
@@ -1052,6 +1063,7 @@ impl PreparedBackend {
         Ok(Self {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             scripted_types,
+            routes,
             manifest,
             embed,
             directory,
@@ -1694,6 +1706,49 @@ impl Backend {
         Reloaded {
             version,
             removed_reactions: pending.removed_reactions,
+        }
+    }
+
+    /// **Une adresse mène à un contrôleur, son résultat à une vue.** La
+    /// requête devient les arguments de l'outil déclaré par la route (corps,
+    /// requête, chemin), l'outil s'exécute comme pour l'agent — mêmes
+    /// validateurs, même politique, une seule version des déclarations — et
+    /// son résultat va à la vue. La page et le résultat sortent du même appel.
+    pub fn route(&self, request: &crate::routes::RouteRequest) -> crate::routes::RouteResponse {
+        use crate::routes::{arguments, RouteResponse};
+        let prepared = self.prepared();
+        let (tool, view, path) = match prepared.routes.find(&request.method, &request.path) {
+            Ok((tool, view, path)) => (tool.to_string(), view.map(str::to_string), path),
+            Err(refused) => return refused,
+        };
+        let args = match arguments(request, path, prepared.tool_schemas.get(&tool)) {
+            Ok(args) => args,
+            Err(refused) => return refused,
+        };
+        let mut response = match self.call_tool_on(&prepared, &tool, Value::Object(args.clone())) {
+            Ok(response) => response,
+            Err(error) => return RouteResponse::text(422, error),
+        };
+        harness_presentation(&mut response);
+        let result = response["result"].clone();
+        let (content_type, body) = match &view {
+            Some(view) => {
+                let context = json!({"result": result, "arguments": args, "response": response});
+                match prepared.routes.render(view, &context) {
+                    Ok(page) => ("text/html; charset=utf-8", page),
+                    Err(error) => return RouteResponse::text(500, error),
+                }
+            }
+            None => (
+                "application/json",
+                serde_json::to_string_pretty(&result).unwrap_or_default(),
+            ),
+        };
+        RouteResponse {
+            status: 200,
+            content_type,
+            body,
+            result: Some(result),
         }
     }
 

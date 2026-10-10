@@ -279,7 +279,11 @@ fn an_edited_declared_node_is_reloaded() {
         "double.ts",
         &DOUBLE_TS.replace("* 2", "* 3"),
     );
-    assert_eq!(doubled(&backend, 21), json!({"n": 42}), "not before the reload");
+    assert_eq!(
+        doubled(&backend, 21),
+        json!({"n": 42}),
+        "not before the reload"
+    );
     backend.reload().unwrap();
     assert_eq!(doubled(&backend, 21), json!({"n": 63}));
 }
@@ -293,15 +297,227 @@ fn a_declared_node_named_like_a_provided_one_is_refused() {
         &DOUBLE_DECL.replace("\"Double\"", "\"RhaiNode\""),
     );
     let refused = backend.reload().unwrap_err();
-    assert!(refused.contains("RhaiNode") && refused.contains("nœud fourni"), "{refused}");
+    assert!(
+        refused.contains("RhaiNode") && refused.contains("nœud fourni"),
+        "{refused}"
+    );
     assert_eq!(doubled(&backend, 1), json!({"n": 2}));
 }
 
 #[test]
 fn a_bad_declaration_refuses_the_reload_and_names_its_file() {
     let (dir, backend) = toy_with_nodes();
-    write(&dir.path().join("nodes"), "bad.node.json", "{ \"name\": \"Bad\" }");
+    write(
+        &dir.path().join("nodes"),
+        "bad.node.json",
+        "{ \"name\": \"Bad\" }",
+    );
     let refused = backend.reload().unwrap_err();
     assert!(refused.contains("bad.node.json"), "{refused}");
     assert_eq!(doubled(&backend, 1), json!({"n": 2}));
+}
+
+// ─── Les routes et les vues (lot 4b) ────────────────────────────────────────
+
+const GREET_GRAPH: &str = "%% tool: greet
+%% description: greets someone
+%% param: name string! -- who
+%% result: hello.greeting
+graph LR
+    hello[\"Greet(name=$name)\"]
+";
+
+const GREET_DECL: &str = r#"{
+  "name": "Greet",
+  "script": "greet.ts",
+  "outputs": { "greeting": { "schema": { "type": "object", "required": ["hello"] } } },
+  "config": { "name": { "schema": { "type": "string" }, "required": true } }
+}"#;
+
+const GREET_TS: &str = "function run({ config }: { config: { name: string } }) {
+  return { greeting: { hello: config.name } };
+}";
+
+const ROUTES: &str = r#""routes": {
+    "GET /hello/{name}": { "tool": "greet", "view": "hello.html" },
+    "GET /echo": { "tool": "echo" }
+  },
+  "tools": { "greet": { "graph": "greet.mmd" }, "#;
+
+/// Le jouet, avec un outil `greet`, deux routes et une vue.
+fn toy_with_routes() -> (tempfile::TempDir, Backend) {
+    let (dir, backend) = toy();
+    std::fs::create_dir(dir.path().join("nodes")).unwrap();
+    write(&dir.path().join("nodes"), "greet.node.json", GREET_DECL);
+    write(&dir.path().join("nodes"), "greet.ts", GREET_TS);
+    write(dir.path(), "greet.mmd", GREET_GRAPH);
+    std::fs::create_dir(dir.path().join("views")).unwrap();
+    write(
+        &dir.path().join("views"),
+        "hello.html",
+        "<h1>Bonjour {{ result.hello }}</h1>",
+    );
+    write(dir.path(), "backend.json", &routes_manifest(ROUTES));
+    backend.reload().unwrap();
+    (dir, backend)
+}
+
+fn routes_manifest(routes: &str) -> String {
+    MANIFEST.replace("\"tools\": { ", routes)
+}
+
+fn get(backend: &Backend, path: &str, query: &[(&str, &str)]) -> crate::routes::RouteResponse {
+    backend.route(&crate::routes::RouteRequest {
+        method: "GET".into(),
+        path: path.into(),
+        query: query
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+        body: None,
+    })
+}
+
+#[test]
+fn a_declared_route_renders_its_view_from_the_same_call() {
+    let (_dir, backend) = toy_with_routes();
+    let page = get(&backend, "/hello/Lucie", &[]);
+    assert_eq!(page.status, 200, "{}", page.body);
+    assert!(page.content_type.starts_with("text/html"));
+    assert_eq!(page.body, "<h1>Bonjour Lucie</h1>");
+    assert_eq!(page.result, Some(json!({"hello": "Lucie"})));
+}
+
+#[test]
+fn a_view_escapes_what_it_receives() {
+    let (_dir, backend) = toy_with_routes();
+    let page = get(&backend, "/hello/<b>", &[]);
+    assert!(page.body.contains("&lt;b&gt;"), "{}", page.body);
+}
+
+#[test]
+fn a_route_without_a_view_answers_json() {
+    let (_dir, backend) = toy_with_routes();
+    let answer = get(&backend, "/echo", &[("value", "{\"n\": 1}")]);
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    assert_eq!(answer.content_type, "application/json");
+    let body: Value = serde_json::from_str(&answer.body).unwrap();
+    assert_eq!(body, json!({"version": 1, "got": {"n": 1}}));
+}
+
+#[test]
+fn an_unknown_address_or_method_is_said() {
+    let (_dir, backend) = toy_with_routes();
+    assert_eq!(get(&backend, "/nowhere", &[]).status, 404);
+    let wrong = backend.route(&crate::routes::RouteRequest {
+        method: "POST".into(),
+        path: "/hello/Lucie".into(),
+        ..Default::default()
+    });
+    assert_eq!(wrong.status, 405);
+    assert!(wrong.body.contains("GET"), "{}", wrong.body);
+}
+
+#[test]
+fn a_route_to_an_unknown_tool_is_refused_at_load() {
+    let (dir, backend) = toy_with_routes();
+    write(
+        dir.path(),
+        "backend.json",
+        &routes_manifest(&ROUTES.replace("\"tool\": \"greet\"", "\"tool\": \"nope\"")),
+    );
+    let refused = backend.reload().unwrap_err();
+    assert!(
+        refused.contains("GET /hello/{name}") && refused.contains("nope"),
+        "{refused}"
+    );
+    assert_eq!(get(&backend, "/hello/Lucie", &[]).status, 200);
+}
+
+#[test]
+fn a_missing_or_broken_view_is_refused_at_load() {
+    let (dir, backend) = toy_with_routes();
+    write(
+        dir.path(),
+        "backend.json",
+        &routes_manifest(&ROUTES.replace("hello.html", "missing.html")),
+    );
+    let refused = backend.reload().unwrap_err();
+    assert!(refused.contains("missing.html"), "{refused}");
+    write(dir.path(), "backend.json", &routes_manifest(ROUTES));
+    write(&dir.path().join("views"), "hello.html", "<h1>{% if %}</h1>");
+    let refused = backend.reload().unwrap_err();
+    assert!(refused.contains("views/hello.html"), "{refused}");
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h1>Bonjour Lucie</h1>"
+    );
+}
+
+#[test]
+fn an_edited_view_changes_the_page_after_a_reload() {
+    let (dir, backend) = toy_with_routes();
+    write(
+        &dir.path().join("views"),
+        "hello.html",
+        "<p>Salut {{ result.hello }}</p>",
+    );
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h1>Bonjour Lucie</h1>"
+    );
+    backend.reload().unwrap();
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<p>Salut Lucie</p>"
+    );
+}
+
+// ─── serve : les routes sur HTTP (lot 4c) ───────────────────────────────────
+
+#[cfg(feature = "daemon")]
+fn http(port: u16, line: &str) -> String {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    write!(
+        stream,
+        "{line}\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+    )
+    .unwrap();
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).unwrap();
+    answer
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn serve_answers_a_route_over_http_and_hands_the_backend_back_on_stop() {
+    let (_dir, backend) = toy_with_routes();
+    let backend = Arc::new(backend);
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let serving = {
+        let backend = backend.clone();
+        std::thread::spawn(move || crate::serve::serve_on(server, backend, 3))
+    };
+    let page = http(port, "GET /hello/Lucie%20D HTTP/1.1");
+    assert!(page.starts_with("HTTP/1.1 200"), "{page}");
+    assert!(
+        page.to_lowercase().contains("content-type: text/html"),
+        "{page}"
+    );
+    assert!(page.ends_with("<h1>Bonjour Lucie D</h1>"), "{page}");
+    assert!(http(port, "GET /nowhere HTTP/1.1").starts_with("HTTP/1.1 404"));
+    assert!(http(port, "POST /arret HTTP/1.1").starts_with("HTTP/1.1 200"));
+    serving.join().unwrap();
+    // Plus aucun fil ne le tient : l'appelant peut fermer la base proprement.
+    assert!(Arc::try_unwrap(backend).is_ok());
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn serve_refuses_an_address_outside_the_local_loop() {
+    let (_dir, backend) = toy_with_routes();
+    let refused = crate::serve::serve(Arc::new(backend), "0.0.0.0:0", 1).unwrap_err();
+    assert!(refused.contains("boucle locale"), "{refused}");
 }
