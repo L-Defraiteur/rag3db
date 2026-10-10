@@ -310,8 +310,23 @@ complet du moteur sans s'en apercevoir.
 
 ## 9. Deux pièges de worktree, et une recette de push qui n'était pas évidente
 
-**Dans un worktree neuf, le sous-module n'est pas initialisé — et il ment dans
-l'autre sens.** Après `git worktree add`, `extension/rag3weaver/codeparsers` est
+**Dans un worktree neuf, `git worktree add` ne peuple pas le sous-module. La
+séquence est donc en deux commandes, toujours :**
+
+```sh
+git -C <dépôt> worktree add <chemin> <branche>
+git -C <chemin> submodule update --init extension/rag3weaver/codeparsers
+```
+
+**Écrit ainsi après m'y être reprise** (10 octobre, 23 h 30) : la première
+version de cette note décrivait le *symptôme difficile* — le `rev-parse` qui
+mente, voir plus bas — et j'y suis retombée vingt minutes plus tard par le cas
+**facile**, un `Cargo.toml` introuvable qui arrête cargo net. Une note qui dit
+« vérifie en deux temps » ne sert à rien si on ne la relit pas avant d'agir ;
+une note qui donne la **séquence** rend la vérification inutile. Le relevé doit
+dire quoi faire, pas quoi reconnaître.
+
+**Et il ment dans l'autre sens si on oublie quand même.** Après `git worktree add`, `extension/rag3weaver/codeparsers` est
 un dossier **vide**, et `git -C extension/rag3weaver/codeparsers rev-parse HEAD`
 rend alors le hash du **dépôt parent** : git remonte depuis le dossier vide
 jusqu'au `.git` du superprojet. On lit donc un pointeur qui ressemble à une

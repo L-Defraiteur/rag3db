@@ -15,7 +15,22 @@
 //! un autre modèle), et un test qui le trouve périmé le remplacerait.
 //!
 //! **Ce que ce banc a cessé de couvrir (10 octobre 2026).** Il lit des
-//! FICHIERS sous `src/`, pas des réexports. La crate `rag3weaver-ir`
+//! FICHIERS sous `src/`, pas des réexports.
+//!
+//! **Second retrait du même jour, au soir** (`83207a625`) : les replis sans
+//! moteur de recherche passent par celui de rag3db, et le Cypher direct des
+//! nœuds est parti avec `search_vector`, `search_sparse`,
+//! `enrich_results_with_data`, `resolve_and_enrich`, les deux HNSW,
+//! `parse_hnsw_results` et le balayage. Deux de ces fonctions étaient des
+//! aiguilles ; elles sont remplacées par leurs **successeurs directs**,
+//! `search_vector_via_backend` et `search_sparse_via_backend` — donc le banc
+//! continue de mesurer la même chose, par le code vivant au lieu du code mort.
+//!
+//! **Mais six fonctions de recherche sont sorties du corpus en une journée**
+//! (quatre vers `ir` le matin, deux le soir), et ça pose une question que ce
+//! fichier ne tranche pas : ce banc mesure-t-il encore ce qu'il mesurait ? Elle
+//! ne se tranche pas sans rejouer toutes ses références, en une fois, hors
+//! d'une fusion. La crate `rag3weaver-ir`
 //! (`41b869ba4`) a déplacé quatre de ses aiguilles hors de `src/` : le commit
 //! dit vrai — « aucun site d'usage ne bouge » — mais un banc à corpus vivant
 //! ne lit pas les usages, il lit l'arborescence, et les réexports lui sont
@@ -83,9 +98,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("scope.rs", "pub fn scope_columns("),
     // search.rs
     ("search.rs", "pub fn embed_query("),
-    ("search.rs", "pub fn search_vector("),
+    ("search.rs", "pub fn search_vector_via_backend("),   // remplace search_vector, retirée avec le reste du Cypher direct (83207a625)
     ("search.rs", "pub fn build_bm25_query("),
-    ("search.rs", "pub fn search_sparse("),
+    ("search.rs", "pub fn search_sparse_via_backend("),   // remplace search_sparse, idem
     ("search.rs", "pub fn search_texte_natif("),
     ("search.rs", "pub fn fuse_signals("),
     // texte, hachage, identifiants
