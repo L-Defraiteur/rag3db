@@ -14,10 +14,10 @@ ARG RUST_VERSION=1.98.1
 # gcc-toolset-14 est déjà dans le PATH de l'image. cmake et ninja viennent de
 # pip (les paquets dnf d'AlmaLinux 8 sont plus vieux que ce que le moteur veut
 # pour certaines options) ; git et python3 sont là.
-RUN /opt/python/cp312-cp312/bin/pip install --no-cache-dir "cmake>=3.28,<4" ninja \
-    && ln -s /opt/python/cp312-cp312/bin/cmake /usr/local/bin/cmake \
-    && ln -s /opt/python/cp312-cp312/bin/ninja /usr/local/bin/ninja \
-    && cmake --version && ninja --version && gcc --version | head -1
+# L'image apporte déjà un cmake dans /usr/local/bin : celui de pip passe devant par le PATH.
+RUN /opt/python/cp312-cp312/bin/pip install --no-cache-dir "cmake>=3.28,<4" ninja
+ENV PATH=/opt/python/cp312-cp312/bin:$PATH
+RUN cmake --version && ninja --version && gcc --version | head -1
 
 # Rust épinglé : la version du poste de développement au 10 octobre 2026.
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH

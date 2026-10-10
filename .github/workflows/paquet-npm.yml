@@ -85,11 +85,15 @@ jobs:
       - name: Outils
         run: |
           cmake --version | head -1; ninja --version; rustc --version; cl 2>&1 | head -1 || true
+      # En PowerShell, pas en bash : le bash de Git met son propre `link.exe`
+      # (coreutils) devant celui de MSVC, et l'éditeur de liens de Rust échoue
+      # dès le premier script de bâti (vu le 10 octobre 2026).
       - name: Bâti (le journal est l'artefact, rouge ou vert)
+        shell: pwsh
         working-directory: extension/rag3weaver
         run: |
-          set -o pipefail
-          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-windows.log
+          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath ../../bati-windows.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Le binaire, s'il existe
         if: always()
         run: |
