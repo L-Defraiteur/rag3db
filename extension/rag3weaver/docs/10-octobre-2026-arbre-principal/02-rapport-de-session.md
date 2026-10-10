@@ -130,3 +130,20 @@ effacés ; rien n'a été perdu de mon côté.
    pas exposé côté Rust : passage par `tools/rust_api`. Le refus d'ouverture est au cœur,
    pas à moi.
 5. La commande en fond, au signe de fusion de la recherche (`execution-asynchrone-2`).
+
+## La batterie du basculement, rendue (10 octobre, 19 h 34)
+
+**74 suites vertes, aucun rouge** : c'est la confirmation produit de la condition 2 (le COPY
+journalisé par défaut, `ff9bad960`).
+- Conditions : lib de 17 h 27, moteur `aeec6888f` (`ff9bad960` dedans, sans `d10b92306`),
+  `RAG3WEAVER_MOTEUR_ANCIEN=1` dit ; hors carte locale, régime doux.
+- Deux parties : 61 suites avant le nettoyage du disque ; les 13 dernières après, à partir de
+  `e2e_sparse_dump`, sur la même lib (101 tests). Le journal de la première partie a été
+  effacé avec `~/.cache`, et son compte est plus haut dans ce rapport.
+- Écartées : `e2e_postgres` (pas de conteneur), les cinq suites `openai-llm`
+  (`e2e_avis_du_modele`, `e2e_cloud_code_agent`, `e2e_cloud_schema_probe`,
+  `e2e_conversation_a_plusieurs`, `e2e_lecture_mermaid`) et la carte locale (`e2e_burn_*`,
+  `e2e_demon_embeddings`, `e2e_mesure_ingestion_code`, `e2e_banc_bge_m3`).
+
+Depuis : les compilations passent par un seul target, `~/.cache/rag3weaver-build/target-A`,
+avec `CARGO_INCREMENTAL=0`.

@@ -67,6 +67,12 @@ pages compris ; la série de confirmation des embarquements (fichiers 80 → 81 
 `…/8-octobre-2026-16h29/embarquements/04-la-serie-de-confirmation.md`). Pages :
 `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04`, `05`, `06` ; la stèle §2.
 Prochain lot du cœur C++ : les verrous (page courte d'abord), puis les écritures parallèles.
+**Confirmation produit (arbre principal, 10 octobre au soir)** : la batterie rag3weaver complète
+sous ce défaut, **74 suites vertes, aucun rouge**. Conditions : lib de 17 h 27, moteur
+`aeec6888f` (`ff9bad960` dedans, sans `d10b92306`), `RAG3WEAVER_MOTEUR_ANCIEN=1` dit, hors carte
+locale, régime doux. Écartées : `e2e_postgres` (pas de conteneur), les cinq suites `openai-llm`,
+et les suites de la carte locale. Jouée en deux parties autour du nettoyage du disque ; rapport
+`extension/rag3weaver/docs/10-octobre-2026-arbre-principal/02-rapport-de-session.md`.
 
 **Livraison du cœur C++, 3 octobre 2026** : `master` a reçu en avance rapide dix commits
 (`81f8982ea..13284a0fe`), livrés par la session cœur C++ depuis son arbre
