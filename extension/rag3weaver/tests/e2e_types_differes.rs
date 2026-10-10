@@ -94,3 +94,24 @@ fn les_trois_formes_des_appelants_de_node_table_update() {
     assert_eq!(vers("go"), vec![("local_table.cpp".to_string(), "type".to_string())], "localTable : le membre de Holder, déclaré dans holder.h");
     assert_eq!(vers("set"), vec![("node_table.cpp".to_string(), "type".to_string())], "tableInfo.table : le champ table du membre tableInfo, deux pas de champ");
 }
+
+/// **Bornée à la source** : une classe homonyme d'une autre source (un
+/// instantané dans la même base), aux champs d'un autre type, ne gêne pas la
+/// résolution de la première.
+#[test]
+#[ignore]
+fn une_classe_homonyme_d_une_autre_source_ne_gene_pas() {
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = CORPUS.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
+    let autre = vec![("set_info.h".to_string(), "#pragma once\n\nclass Autre;\n\nstruct SetInfo {\n    Autre* table;\n};\n".to_string())];
+    {
+        let mut cat = catalog.lock().unwrap();
+        // Un instantané : sa propre source (`snapshot:autre`).
+        cat.ingest_code(&rag3weaver::code::analyze_with("/autre", autre, "snapshot:autre")).unwrap();
+        cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    }
+    let appels = appels_de_update(&catalog);
+    eprintln!("{appels:#?}");
+    let vers = |de: &str| appels.iter().filter(|(a, _, _)| a == de).map(|(_, f, m)| (f.clone(), m.clone())).collect::<Vec<_>>();
+    assert_eq!(vers("run"), vec![("node_table.cpp".to_string(), "type".to_string())], "le SetInfo de /autre ne compte pas pour /projet");
+}
