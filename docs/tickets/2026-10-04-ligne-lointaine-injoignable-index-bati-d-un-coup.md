@@ -1,6 +1,6 @@
 # Une ligne très loin des autres est injoignable dans un index bâti d'un coup
 
-- **État** : **corrigé** `d91e4e106` et `4fcf8a98a` (10 octobre 2026), voir « Fermé le 10 octobre » en fin de ticket. Il bloquait la stèle, provisoirement (orchestration, 5 octobre)
+- **État** : **corrigé** `2da041058` et `c841d507c` (10 octobre 2026), voir « Fermé le 10 octobre » en fin de ticket. Il bloquait la stèle, provisoirement (orchestration, 5 octobre)
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui, sans aucune mise à jour
 - **Touche rag3weaver** : non mesuré. La forme du 5 octobre (plus bas) est celle de son chargement : index posé d'avance, morceaux par `COPY` successifs. Mesure demandée à l'arbre principal sur un corpus réel (taux de morceaux introuvables par leur propre vecteur)
@@ -272,12 +272,12 @@ introuvables, et un rappel@10 de 0,992 à 0,996. Le détail et la suite sont au 
 (`extension/rag3weaver/docs/3-octobre-2026-23h31/banc-de-concurrence/01-rapport-de-session.md`,
 « En pause depuis le 5 octobre à midi »).
 
-## Fermé le 10 octobre 2026 : l'élagage redressé (`d91e4e106`, `4fcf8a98a`)
+## Fermé le 10 octobre 2026 : l'élagage redressé (`2da041058`, `c841d507c`)
 
 Deux défauts de `shrinkForNode`, présents depuis le premier commit de l'amont (`725046754`),
 dans les deux chemins : le bâti en mémoire, et le chemin disque qui est aussi celui du rejeu.
-- La boucle partait de 1 et écartait toujours le plus proche voisin (`d91e4e106`).
-- La règle était inversée par rapport à l'algorithme 4 de l'article et à hnswlib (`4fcf8a98a`,
+- La boucle partait de 1 et écartait toujours le plus proche voisin (`2da041058`).
+- La règle était inversée par rapport à l'algorithme 4 de l'article et à hnswlib (`c841d507c`,
   la comparaison est plus haut). Elle est remplacée par la règle classique, avec les places
   libres reprises par les écartés **du plus lointain au plus proche** (keepPrunedConnections),
   les copies du vecteur du nœud bornées à la moitié du degré, au plus près en décalage, et le
