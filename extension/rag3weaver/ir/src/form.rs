@@ -246,6 +246,12 @@ pub enum Write {
     /// (`from_uuid`, `to_uuid`, puis les propriétés). Les tables des deux
     /// bouts, quand on les connaît, évitent de chercher dans toutes.
     Link { relation: String, ends: Option<(String, String)>, props: Vec<String> },
+    /// Mettre à jour des champs, **une valeur par ligne** : `$items` porte
+    /// `_uuid` et les champs.
+    Update { table: String, columns: Vec<String> },
+    /// Marquer une liste d'uuids (`$uuids`) d'**une seule valeur** par champ :
+    /// `None` pour vider le champ, `Some(param)` pour le paramètre nommé.
+    Mark { table: String, set: Vec<(String, Option<String>)> },
 }
 
 impl Write {
@@ -262,6 +268,17 @@ impl Write {
                     noms.extend([f.as_str(), t.as_str()]);
                 }
                 noms.extend(props.iter().map(String::as_str));
+            }
+            Write::Update { table, columns } => {
+                noms.push(table);
+                noms.extend(columns.iter().map(String::as_str));
+            }
+            Write::Mark { table, set } => {
+                noms.push(table);
+                for (f, p) in set {
+                    noms.push(f);
+                    noms.extend(p.as_deref());
+                }
             }
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {

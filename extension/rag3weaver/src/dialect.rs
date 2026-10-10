@@ -247,17 +247,7 @@ pub trait SchemaDialect: Send + Sync {
     /// `batch_link_labeled`) : un dialecte la traduit dès qu'il a celles-ci,
     /// et le texte reste celui d'avant.
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
-        write.validate()?;
-        Ok(match write {
-            rag3weaver_ir::Write::Upsert { table, columns } => {
-                let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
-                self.batch_upsert(table, &cols)
-            }
-            rag3weaver_ir::Write::Link { relation, ends, props } => {
-                let props: Vec<&str> = props.iter().map(String::as_str).collect();
-                self.batch_link_labeled(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props)
-            }
-        })
+        write_by_methods(self, write)
     }
 
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
@@ -1082,6 +1072,41 @@ pub trait SchemaDialect: Send + Sync {
 /// Cypher DDL/DML for rag3db (Kuzu fork).
 pub struct Rag3dbDialect;
 
+/// **Une écriture dite par les méthodes d'écriture du dialecte**
+/// (`batch_upsert`, `batch_link_labeled`, `batch_update_fields`,
+/// `batch_set_null`) : la traduction par défaut, qui garde le texte d'avant.
+pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+    write.validate()?;
+    Ok(match write {
+        rag3weaver_ir::Write::Upsert { table, columns } => {
+            let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+            d.batch_upsert(table, &cols)
+        }
+        rag3weaver_ir::Write::Link { relation, ends, props } => {
+            let props: Vec<&str> = props.iter().map(String::as_str).collect();
+            d.batch_link_labeled(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props)
+        }
+        rag3weaver_ir::Write::Update { table, columns } => {
+            let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+            d.batch_update_fields(table, &cols)
+        }
+        // Vider un champ se dit par `batch_set_null` ; une marque plus
+        // large demande au dialecte de la dire lui-même.
+        rag3weaver_ir::Write::Mark { table, set } => match set.as_slice() {
+            [(field, None)] => d.batch_set_null(table, field),
+            _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Mark" }),
+        },
+    })
+}
+
+/// **Le texte d'une écriture, ou un refus nommé** : une écriture que le
+/// dialecte ne sait pas dire rend l'instruction d'un seul mot de la porte
+/// ([`SchemaDialect::untranslated`]), qui échoue à l'exécution en se nommant.
+/// Pour les appelants qui ne rendent pas d'erreur à cet endroit.
+pub fn ecriture<D: SchemaDialect + ?Sized>(dialect: &D, write: &rag3weaver_ir::Write) -> String {
+    dialect.write(write).unwrap_or_else(|_| dialect.untranslated("Write"))
+}
+
 /// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
 fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
     use rag3weaver_ir::Predicate;
@@ -1097,6 +1122,26 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
 impl SchemaDialect for Rag3dbDialect {
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
+    fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+        write.validate()?;
+        match write {
+            // Une marque quelconque : `UNWIND $uuids … SET n.f = NULL | $p`,
+            // comme `batch_set_null` quand c'est un champ vidé.
+            rag3weaver_ir::Write::Mark { table, set } if set.len() != 1 || set[0].1.is_some() => {
+                let assigns: Vec<String> = set
+                    .iter()
+                    .map(|(f, p)| match p {
+                        Some(p) => format!("n.{f} = ${p}"),
+                        None => format!("n.{f} = NULL"),
+                    })
+                    .collect();
+                Ok(format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) SET {}", assigns.join(", ")))
+            }
+            // Le reste : les méthodes d'écriture de ce dialecte.
+            _ => write_by_methods(self, write),
+        }
+    }
+
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
         use rag3weaver_ir::Column;
         select.validate()?;
@@ -2953,6 +2998,18 @@ mod tests {
             assert_eq!(d.write(&lien).unwrap(), d.batch_link_labeled("CITES", Some(("Doc", "Doc")), &["ligne"]));
         }
         assert!(Rag3dbDialect.write(&Write::Upsert { table: "Doc".into(), columns: vec!["x y".into()] }).is_err());
+        let maj = Write::Update { table: "Doc".into(), columns: vec!["_chunked_hash".into()] };
+        let vide = Write::Mark { table: "Doc".into(), set: vec![("_sparse_hash".into(), None)] };
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            assert_eq!(d.write(&maj).unwrap(), d.batch_update_fields("Doc", &["_chunked_hash"]));
+            assert_eq!(d.write(&vide).unwrap(), d.batch_set_null("Doc", "_sparse_hash"));
+        }
+        let marque = Write::Mark { table: "Doc".into(), set: vec![("_snapshot".into(), Some("session".into())), ("_absent_since".into(), None)] };
+        assert_eq!(
+            Rag3dbDialect.write(&marque).unwrap(),
+            "UNWIND $uuids AS uuid MATCH (n:Doc {_uuid: uuid}) SET n._snapshot = $session, n._absent_since = NULL"
+        );
+        assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**
