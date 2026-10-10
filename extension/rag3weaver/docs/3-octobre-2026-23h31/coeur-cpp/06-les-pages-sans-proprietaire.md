@@ -42,6 +42,21 @@ Ce qui fuit par un autre chemin, **hors de ce lot** (pages prises sans l'allocat
 d'un index FTS annulée, un `ALTER … ADD` annulé sur des groupes déjà sur disque, un point de
 reprise annulé (`FreeSpaceManager::rollbackCheckpoint`). À ticketer à part.
 
+## 1 bis. Mesuré le 10 octobre, avant de coder
+
+Les deux formes « déduites » sont mesurées (programme nu, un `COPY` de 200 000 lignes, mort
+base ouverte, réouverture, tables retirées, point de reprise, pages occupées ; 9 pour la scène
+validée avec point de reprise) : **`COPY` forcé d'aujourd'hui tué avant sa validation, 559
+pages ; `COPY` replié tué, 560** ; journalisé validé puis tué, 559 ; deux morts de suite,
+1 269 — la fuite s'additionne. Le défaut est donc **celui du moteur d'aujourd'hui**, le `COPY`
+journalisé n'y ajoute que la réouverture par le rejeu ; reclassé par l'orchestration hors de la
+condition 1 de la stèle (de l'espace, pas une perte), corrigé maintenant.
+
+**Le seuil du groupe plein** : un `COPY` n'écrit ses pages avant la validation que par groupe
+plein de nœuds (131 072 lignes) ; en deçà rien ne fuit (3 000 lignes : 4 pages occupées). Les
+témoins écrits avant la pause à 60 000 lignes étaient verts sur le moteur d'aujourd'hui — un
+faux rouge évité par la mesure ; ils sont à 200 000.
+
 ## 2. Ce que font les moteurs établis
 
 PostgreSQL ne rend rien au rejeu : les pages d'une transaction morte restent dans le fichier

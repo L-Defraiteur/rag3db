@@ -1,9 +1,9 @@
 # Les pages d'un COPY journalisé sont perdues quand la base rouvre par le rejeu
 
-- **État** : ouvert — **bloque le basculement** du `COPY` journalisé en défaut (condition posée par l'orchestration ; 5 octobre 2026). Pas de correctif encore : une page de conception d'abord
-- **Gravité** : espace perdu dans le fichier de la base, pour toujours, qui s'accumule. Aucune donnée perdue, aucune réponse fausse
-- **Atteignable en service** : aujourd'hui seulement avec `CALL force_checkpoint_on_copy=false` ; après le basculement, à chaque arrêt sans point de reprise qui suit un `COPY` journalisé (mort du processus, ou fermeture avec `force_checkpoint_on_close=false`)
-- **Touche rag3weaver** : oui après le basculement — une indexation tuée entre deux points de reprise
+- **État** : ouvert — reclassé le 10 octobre 2026 par l'orchestration : **un défaut du moteur d'aujourd'hui**, pas seulement du `COPY` journalisé ; ne perd ni ne corrompt (de l'espace, qui s'accumule), donc hors de la condition 1 de la stèle ; corrigé maintenant parce que le chargement final des relations de rag3weaver (1,1 million de lignes en une transaction) est dans la zone à chaque arrêt brutal. Correctif en cours (page 06)
+- **Gravité** : espace perdu dans le fichier de la base, pour toujours, qui s'accumule à chaque mort. Aucune donnée perdue, aucune réponse fausse
+- **Atteignable en service** : oui, aujourd'hui : toute mort du processus pendant un `COPY` d'au moins un groupe plein de nœuds (131 072 lignes), journalisé ou non ; et après un `COPY` journalisé validé, toute réouverture par le rejeu
+- **Touche rag3weaver** : oui — le chargement final des relations d'une première indexation (1,1 million de lignes) ; les paquets de 2 048 fichiers (~30 000 scopes) sont en deçà du groupe plein
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (la liste complète jouée à blanc avec le défaut basculé)
 - **Pour** : cœur C++ (reprise, gestion de l'espace)
 
@@ -23,7 +23,33 @@ La liste complète, défaut basculé dans l'arbre (non commité), moteur à `71c
 
 La forme commune : un `COPY` (dans le cas ou dans le chargement du jeu de données), pas de point de reprise, `RELOADDB`. Toutes les pages du `COPY` fuient.
 
-## Non mesuré encore
+## Mesuré le 10 octobre, sans harnais
+
+Un `COPY` de 200 000 lignes (`id INT64`, `name STRING`), le fils meurt base ouverte, la base
+est rouverte, toutes les tables retirées, un point de reprise, puis pages du fichier moins pages
+libres. La même scène validée puis fermée après un point de reprise : 9 pages occupées.
+
+| Scène | Pages occupées |
+|---|---|
+| `COPY` forcé (le défaut d'aujourd'hui), tué avant sa validation | 559 |
+| `COPY` replié (seuil 64 Ko), tué avant sa validation | 560 |
+| `COPY` journalisé validé, tué, rejoué | 559 |
+| `COPY` forcé validé, tué après son point de reprise | 9 |
+| `COPY` forcé de 300 000 lignes, tué avant sa validation | 1 129 |
+| deux morts de suite sans point de reprise (témoin, 200 000 lignes chacune) | 1 269 — la fuite s'additionne |
+
+**Le seuil du groupe plein.** Un `COPY` n'écrit ses pages avant sa validation que par groupe
+plein de nœuds (131 072 lignes) ; en deçà, tout reste en mémoire jusqu'au point de reprise, et
+rien ne fuit. Un `COPY` de 3 000 lignes, journalisé, fermé sans point de reprise puis rouvert :
+4 pages occupées, aucune fuite. Les témoins sont donc à 200 000 lignes.
+
+## Témoins
+
+`test/transaction/journaled_copy_test.cpp`, `OwnerlessPagesTest` : les trois formes de `COPY`
+tuées, et deux morts de suite — rouges avant le correctif (640, 638, 637, 1 269 pages occupées
+pour 9).
+
+## Non mesuré encore (périmé)
 
 - Le `COPY` forcé d'aujourd'hui, tué avant son point de reprise : par raisonnement il laisse les mêmes pages sans propriétaire, et le défaut actuel aurait donc déjà cette fuite sur mort. À mesurer avant de l'affirmer.
 - Le `COPY` replié (`71cffbc4b`) tué avant sa validation : même question.
