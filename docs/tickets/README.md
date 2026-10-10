@@ -25,12 +25,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (45)
+### Ouverts (44)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
-| [Le tampon de 256 Mio est plein à la première écriture d'un backend](2026-10-10-tampon-de-256-mio-plein-a-la-premiere-ecriture.md) | ouvert, cause non trouvée | blocage | oui (tampon de 256 Mio) | oui (backend) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
 | [Le journal d'une transaction reste sans borne pour les insertions ordinaires](2026-10-05-journal-d-une-transaction-sans-borne-hors-copy.md) | ouvert, suite de la borne du COPY | refus d'une très grosse transaction | oui | le mode à blobs, qui s'en garde |
@@ -76,7 +75,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
 | [« unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`](2026-10-10-unknown-entity-file-ne-dit-pas-d-indexer.md) | ouvert ; correctif en cours (arbre principal, branche `unknown-entity`) | interprétation : un modèle y lit un défaut d'outil au lieu d'une déclaration absente | seulement avec un manifeste qui ne déclare pas `workspace.index: "code"` | oui — toute la surface de code |
-### Fermés (48), dans `closed/`
+### Fermés (49), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -128,3 +127,4 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une propriété de chaîne d'une relation se lit fausse dans un sens ou l'autre après un point de reprise](closed/2026-10-04-propriete-de-chaine-faussee-dans-le-sens-direct.md) | corrigé (les bases déjà écrites se réindexent) | réponse fausse | oui | oui (`resolution`, `usage`, `kind` des arêtes) |
 | [Après un COPY annulé, refusé ou à court de mémoire, le point de reprise de l'index de clé primaire ne finit plus](closed/2026-10-05-index-de-cle-primaire-apres-un-copy-a-court-de-memoire.md) | corrigé | blocage, danger pour l'hôte | oui | oui si un COPY manque de mémoire |
 | [Sous IGNORE_ERRORS, un doublon de clé fait supprimer une ligne innocente](closed/2026-10-10-ignore-errors-supprime-une-ligne-innocente.md) | corrigé `de8fc8c0f` | perte, réponse fausse | oui (un COPY sous IGNORE_ERRORS, index de clé sur disque) | non (il n'écrit jamais IGNORE_ERRORS) |
+| [Le tampon de 256 Mio est plein à la première écriture d'un backend](closed/2026-10-10-tampon-de-256-mio-plein-a-la-premiere-ecriture.md) | fermé — non reproduit sur master, sous 256 Mio et 32 fils, sur les deux postes | blocage (annoncé) | non reproduit | oui (backend) |
