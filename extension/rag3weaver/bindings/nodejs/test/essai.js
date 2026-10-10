@@ -41,6 +41,7 @@ async function main() {
   console.log(`binaire : ${binaryPath()}`);
   const t0 = Date.now();
   const backend = await Backend.open(manifestPath);
+  backendEnCours = backend;
   console.log(`démarré en ${Date.now() - t0} ms`);
   const d = await backend.describe();
   const tools = d.tools.map((t) => t.name);
@@ -105,4 +106,11 @@ async function main() {
   console.log('OK');
 }
 
-main().catch((e) => { console.error(`ÉCHEC : ${e.message}`); process.exit(1); });
+let backendEnCours = null;
+main().catch((e) => {
+  // Ce que le backend a dit sur stderr : c'est là que vivent les causes
+  // (« plein texte … index non ouvert », dix-huitième essai Windows).
+  if (backendEnCours && backendEnCours.stderr && backendEnCours.stderr.length) {
+    console.error('--- stderr du backend (fin) ---');
+    console.error(backendEnCours.stderr.join('').split('\n').slice(-25).join('\n'));
+  } console.error(`ÉCHEC : ${e.message}`); process.exit(1); });
