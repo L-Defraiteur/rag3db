@@ -1311,10 +1311,29 @@ fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> 
     changed
 }
 
+/// Une version vérifiée, pas encore en service ([`Backend::check_reload`]).
+pub struct PendingReload {
+    next: PreparedBackend,
+    removed_reactions: Vec<String>,
+}
+
+impl PendingReload {
+    /// Les réactions de la version en service qui n'existent plus dans la
+    /// nouvelle : l'hôte oublie leur curseur sur le bus, **en le disant**
+    /// (les événements en attente sont perdus), sinon il accumule sans
+    /// lecteur.
+    pub fn removed_reactions(&self) -> &[String] {
+        &self.removed_reactions
+    }
+}
+
 /// Ce qu'un rechargement accepté a mis en service.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reloaded {
     pub version: u64,
+    /// Les réactions retirées par ce rechargement (voir
+    /// [`PendingReload::removed_reactions`]).
+    pub removed_reactions: Vec<String>,
 }
 
 fn harness_presentation(response: &mut Value) {
@@ -1558,20 +1577,31 @@ impl Backend {
         self.version.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// **Relit les déclarations et les met en service d'un coup.**
+    /// **Relit les déclarations et les met en service d'un coup** :
+    /// [`Backend::check_reload`] puis [`Backend::apply_reload`].
     ///
     /// Le manifeste et tout ce qu'il nomme (graphes, scripts, schémas,
-    /// crochets) sont relus et revérifiés comme au chargement ; si la
-    /// nouvelle version est valide et ne change rien de ce qui a été fixé à
-    /// l'ouverture, elle remplace l'ancienne d'un seul geste. Sinon l'ancienne
-    /// reste en service et l'erreur dit quoi corriger. Un appel en cours
-    /// finit sur la version qu'il a prise à son départ.
+    /// crochets, réactions) sont relus et revérifiés comme au chargement ; si
+    /// la nouvelle version est valide et ne change rien de ce qui a été fixé
+    /// à l'ouverture, elle remplace l'ancienne d'un seul geste. Sinon
+    /// l'ancienne reste en service et l'erreur dit quoi corriger. Un appel en
+    /// cours finit sur la version qu'il a prise à son départ.
+    pub fn reload(&self) -> Result<Reloaded, String> {
+        Ok(self.apply_reload(self.check_reload()?))
+    }
+
+    /// **Le premier temps : vérifier, sans rien toucher.** Un refus ici
+    /// n'arrête rien — l'ancienne version et ses réactions continuent.
     ///
     /// Ce qui a été fixé à l'ouverture (la base, les modèles, l'extension
     /// vectorielle, l'espace de travail, les entités et relations inscrites
     /// en base) ne se recharge pas : un changement de schéma est une
-    /// migration, pas un rechargement.
-    pub fn reload(&self) -> Result<Reloaded, String> {
+    /// migration, pas un rechargement. **C'est ce refus qui rend sûr l'arrêt
+    /// des réactions** entre les deux temps : une réaction de l'ancienne
+    /// version qui finit d'écrire pendant ce temps écrit dans un catalogue
+    /// que la nouvelle version ne change pas. L'assouplir demanderait de
+    /// revoir cet ordre.
+    pub fn check_reload(&self) -> Result<PendingReload, String> {
         let refused = |why: String| {
             format!("rechargement refusé, l'ancienne version reste en service : {why}")
         };
@@ -1585,14 +1615,33 @@ impl Backend {
                 changed.join(", ")
             )));
         }
+        let removed_reactions = current
+            .reactions
+            .keys()
+            .filter(|name| !next.reactions.contains_key(*name))
+            .cloned()
+            .collect();
+        Ok(PendingReload {
+            next,
+            removed_reactions,
+        })
+    }
+
+    /// **Le second temps : mettre en service**, d'un seul geste ; ne peut plus
+    /// échouer. L'hôte qui monte des réactions les arrête avant (arrêt
+    /// attendu) et les remonte après, depuis [`Backend::prepared`].
+    pub fn apply_reload(&self, pending: PendingReload) -> Reloaded {
         let mut slot = self.prepared.write().unwrap_or_else(|e| e.into_inner());
-        *slot = Arc::new(next);
+        *slot = Arc::new(pending.next);
         let version = self
             .version
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
             + 1;
         drop(slot);
-        Ok(Reloaded { version })
+        Reloaded {
+            version,
+            removed_reactions: pending.removed_reactions,
+        }
     }
 
     /// Library API shared by applications and future transports. No MCP dispatch.

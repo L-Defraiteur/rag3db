@@ -79,7 +79,7 @@ fn a_changed_script_changes_the_output_without_restarting() {
         1,
         "nothing changes before the reload"
     );
-    assert_eq!(backend.reload().unwrap(), Reloaded { version: 1 });
+    assert_eq!(backend.reload().unwrap().version, 1);
     assert_eq!(backend.declarations_version(), 1);
     assert_eq!(echo(&backend)["version"], 2);
 }
@@ -162,4 +162,62 @@ fn two_reloads_count_two_versions() {
     write(dir.path(), "answer.rhai", "#{version: 3}");
     assert_eq!(backend.reload().unwrap().version, 2);
     assert_eq!(echo(&backend)["version"], 3);
+}
+
+#[test]
+fn a_refused_check_touches_nothing() {
+    let (dir, backend) = toy();
+    write(
+        dir.path(),
+        "echo.mmd",
+        &GRAPH.replace("RhaiNode", "NoSuchNode"),
+    );
+    assert!(backend.check_reload().is_err());
+    assert_eq!(backend.declarations_version(), 0);
+    assert_eq!(echo(&backend)["version"], 1);
+}
+
+#[test]
+fn between_check_and_apply_the_old_version_still_answers() {
+    let (dir, backend) = toy();
+    write(dir.path(), "answer.rhai", "#{version: 2}");
+    let pending = backend.check_reload().unwrap();
+    assert_eq!(echo(&backend)["version"], 1, "checked, not yet in service");
+    assert_eq!(backend.apply_reload(pending).version, 1);
+    assert_eq!(echo(&backend)["version"], 2);
+}
+
+const REACTION: &str = "%% tool: watch
+%% description: transitions on catalog events
+%% on: catalog
+%% policy: debounce 500
+%% param: target string = \"Memory\" -- la cible
+%% result: react.report
+graph LR
+    events[\"EventSourceNode(topics='catalog', cursor='r', limit=1000)\"]
+    react[\"ReactTransitionNode(target=$target)\"]
+    events -->|events| react
+";
+
+#[test]
+fn a_removed_reaction_is_named_for_the_host() {
+    let (dir, backend) = toy();
+    write(dir.path(), "watch.mmd", REACTION);
+    write(
+        dir.path(),
+        "backend.json",
+        &MANIFEST.replace(
+            "\"tools\": {",
+            "\"reactions\": { \"watch\": { \"graph\": \"watch.mmd\" } },\n  \"tools\": {",
+        ),
+    );
+    let added = backend.reload().unwrap();
+    assert!(added.removed_reactions.is_empty());
+    write(dir.path(), "backend.json", MANIFEST);
+    let pending = backend.check_reload().unwrap();
+    assert_eq!(pending.removed_reactions(), ["watch".to_string()]);
+    assert_eq!(
+        backend.apply_reload(pending).removed_reactions,
+        ["watch".to_string()]
+    );
 }
