@@ -1962,10 +1962,13 @@ impl SchemaDialect for PostgresDialect {
         ]
     }
 
-    /// Pas de transaction : chaque instruction prend sa connexion du pool
-    /// (ticket `2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions`).
+    /// Des transactions : `PostgresConnection::begin` tient une session du pool
+    /// jusqu'au `commit`/`rollback` (bb7dddde5), et la synchronisation les
+    /// ouvre par la connexion (1d1e1d7de). Prouvé dans le texte ; le témoin
+    /// vivant (`tests/e2e_contrat_transactions.rs`) attend une base
+    /// PostgreSQL sur les postes.
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: false, bulk_load: false, structured_fields: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false }
     }
 
     // ── Les lots passent par JSON ────────────────────────────────────────
@@ -2907,7 +2910,7 @@ mod tests {
         assert!(r.cypher && r.transactions && r.bulk_load && r.structured_fields);
         assert!(Rag3dbDialect.speaks_cypher() && Rag3dbDialect.supports_copy_from());
         let p = PostgresDialect.capabilities();
-        assert!(!p.cypher && !p.transactions && !p.bulk_load && !p.structured_fields);
+        assert!(!p.cypher && p.transactions && !p.bulk_load && !p.structured_fields);
         assert!(!PostgresDialect.speaks_cypher() && !PostgresDialect.supports_copy_from());
     }
 

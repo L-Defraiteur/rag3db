@@ -1,6 +1,11 @@
 # Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool
 
-- **État** : ouvert — **bloque le montage PostgreSQL** avec la transaction par paquet
+- **État** : ouvert — corrigé dans le texte : la connexion tient une session
+  (`bb7dddde5`, session recherche), la synchronisation ouvre et ferme par elle
+  (`1d1e1d7de`, arbre principal), `PostgresDialect` déclare `transactions`
+  (commit « Tx »). Reste le témoin vivant (`tests/e2e_contrat_transactions.rs`,
+  et `la_transaction_epinglee_tient_sur_une_session`), faute de base PostgreSQL
+  sur les postes.
 - **Gravité** : perte (un paquet « validé » qui ne l'est pas, ou défait à moitié)
 - **Atteignable en service** : non aujourd'hui (`RAG3WEAVER_TX_PAR_PAQUET=1`
   et aucun binaire ne monte PostgreSQL) ; **oui** dès que la transaction par
