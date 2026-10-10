@@ -6211,7 +6211,7 @@ impl Catalog {
                 if voisine != entity {
                     continue;
                 }
-                let Ok(racines) = crate::dataflow::search_nodes::fetch_related(self.conn.as_ref(), uuids, &regle.relation, vers_la_racine, usize::MAX) else {
+                let Ok(racines) = crate::dataflow::search_nodes::fetch_related_in(self.dialect.as_ref(), self.conn.as_ref(), uuids, &regle.relation, vers_la_racine, usize::MAX) else {
                     continue;
                 };
                 for enfants in racines.values() {
