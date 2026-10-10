@@ -85,21 +85,26 @@ crate `rag3db` (Ninja, `/EHsc`, `MultiThreadedDLL` — la voie de
 | `clang-cl` refuse la copie implicite de `NodeTableDeleteState` (un `std::vector<std::unique_ptr<…>>`), que `cl` laissait passer tant qu'elle n'était pas appelée | `NodeTableDeleteState(const NodeTableDeleteState&) = delete;`, `src/include/storage/table/node_table.h` | cœur C++ |
 | le CMake du moteur lie `atomic` pour tout clang hors Apple ; sous `clang-cl` il n'y a pas de `atomic.lib`, `lld-link` échoue sur `rag3db_shared.dll` | `NOT WIN32` dans la condition, `src/CMakeLists.txt` | cœur C++ |
 | en statique, bâtir « tout » produit aussi `rag3db_shared.dll`, dont l'export échoue sous `clang-cl` (destructeurs de `std::variant` non émis) | `build_target("rag3db")` au lieu de tout, `tools/rust_api/build.rs` | engine tooling (arbre principal ou cœur C++) |
-| `tree-sitter-scss` (voir plus haut) : un `[patch]` vers un fork, ou la grammaire en feature | — | codeparsers |
+| `tree-sitter-scss` (voir plus haut) : copie locale `vendor/tree-sitter-scss` avec `flag_if_supported`, dépendance par chemin | fait par codeparsers (branche `scss-msvc`, 0a09f02) | codeparsers |
 
-### Le moteur C++ sous clang-cl
+### Le moteur C++ sous clang-cl : une impasse, isolée
 
-Au sixième essai, **les 1 007 objets du moteur compilent** et `rag3db.lib`
-(statique) est produite ; seule la bibliothèque partagée échouait, sur
-`atomic.lib`. Au septième, `atomic` retiré, c'est encore elle seule qui
-échoue : `lld-link` ne trouve pas des destructeurs de `std::variant`
-(`_Variant_storage_<…IndexBufferWithWarningData…>`) que `clang-cl` n'émet
-pas pour l'export de la DLL. Cette DLL est inutile en statique : au
-huitième essai, en cours au moment du redémarrage du poste
-(https://github.com/L-Defraiteur/rag3db/actions/runs/38044225912), la
-crate `rag3db` ne bâtit plus que la cible `rag3db` (quatrième changement
-de sources, `tools/rust_api/build.rs`, à relire aussi sous Linux : la
-recette native relancée pour le vérifier a été arrêtée par la pause).
+Au sixième essai, **les 1 007 objets du moteur compilent** sous clang-cl et
+`rag3db.lib` (statique) est produite ; au septième, `atomic` retiré, c'est
+`rag3db_shared.dll` seule qui échoue ; au huitième, la crate ne bâtissant
+plus que la cible statique, c'est l'édition de liens finale de
+`rag3weaver-backend.exe` (link.exe de MSVC) qui échoue : LNK2019 sur des
+destructeurs de `std::variant` (`_Variant_storage_<…InMemoryExceptionChunk<float>…>`,
+`IndexBuilderGlobalQueues::Queue<…>`) que clang-cl n'émet pas dans les objets
+du moteur. Le défaut tient à clang-cl avec la STL de MSVC, pas à nos sources :
+la même STL et le même code se lient avec cl. **Retour à MSVC (cl) pour tout,
+comme l'amont.** Les contournements clang-cl, « clang-cl pour le C++ aussi »
+et `/EHsc` sortent du workflow ; l'accroc qui y avait mené, le drapeau GCC de
+tree-sitter-scss, se règle à la source chez codeparsers (copie locale
+`vendor/tree-sitter-scss` avec `flag_if_supported` et `-utf-8`, branche
+`scss-msvc`, en dépendance par chemin — aucun `[patch]` à la racine n'est
+nécessaire). Le dixième essai, en MSVC pur sur cette base, dit si le binaire
+Windows se lie.
 
 ## Le cache du bâti entre deux versions
 
@@ -109,6 +114,25 @@ de cargo (`target/release/build/rag3db-*/out/build`) : le même cache, ou
 `actions/cache` sur ce dossier avec une clé sur l'empreinte de `src/` et
 `third_party/`, le garderait entre deux versions. Non fait ; vingt minutes
 par cible et par version restent tenables.
+
+## Le paquet JS, en cours
+
+`extension/rag3weaver/bindings/nodejs/` : `index.js` choisit le binaire
+(`RAG3WEAVER_BACKEND`, le sous-paquet de la plateforme, ou `dist/`), prépare
+un manifeste depuis les gabarits livrés (chemins de graphes rendus absolus)
+et parle au backend en lignes JSON (`Backend.open`, `describe`, `call`,
+`journal`, `journalRead`, `indexState`, `shutdown`) ; sous-paquet
+`rag3weaver-linux-x64-gnu` (`os`, `cpu`, `libc`) ; `scripts/preparer.sh` y
+copie le binaire et l'extension de `dist/` et les gabarits ; rien n'est
+publié. L'épreuve `npm test` — un dossier vide, trois fichiers, une
+recherche — démarre le backend (43 ms) et lit ses outils, puis bute sur
+une chose de fond : sans service d'embarquement, un backend de code refuse
+de s'ouvrir (« un service d'embarquement est requis »). Décision de
+l'orchestration : le service devient optionnel au démarrage — avertissement
+nommé, index en plein texte seul, vecteurs en dette rattrapée quand un
+service apparaît, « signal is not available » sur le dense. Le changement
+(la porte du démarrage dans `rag3weaver-backend.rs` et `backend.rs`)
+attend le « vas-y » et la lecture de l'arbre principal sur la dette.
 
 ## Ce qui vient ensuite
 
