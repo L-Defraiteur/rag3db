@@ -126,7 +126,11 @@ jobs:
       # rag3db y vit (release/build/rag3db-*/out), c'est lui qui coûte 45 min.
       # Pas Swatinem/rust-cache : il purge les artefacts des crates par chemin,
       # dont rag3db. Clé : les sources du moteur, le lock, l'extension vecteur.
-      - uses: actions/cache@v4
+      # restore + save (always) : le cache se sauve même quand l'épreuve est
+      # rouge — actions/cache seul ne sauve qu'un job vert (deuxième essai
+      # macOS : 18 min de moteur perdues sur une épreuve rouge).
+      - uses: actions/cache/restore@v4
+        id: cache-rs
         with:
           path: |
             C:/rs
@@ -201,6 +205,14 @@ jobs:
           bash scripts/preparer.sh
           ls -la npm/windows-x64/
           npm test
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache-rs.outputs.cache-hit != 'true'
+        with:
+          path: |
+            C:/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.cache-rs.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -225,6 +237,14 @@ jobs:
       CARGO_BUILD_JOBS: 3
       NUM_JOBS: 3
       CMAKE_GENERATOR: Ninja
+      # Les extensions (dlopen, -undefined dynamic_lookup) résolvent les
+      # symboles du moteur dans le binaire. Sous macOS, rustc passe
+      # -dead_strip à ld64, qui retire tout ce que le binaire lui-même
+      # n'appelle pas — dont TableFunction::emptyTableFunc, que l'extension
+      # vecteur demande (deuxième essai, 10 octobre 2026 : « symbol not
+      # found in flat namespace »). Sous Linux, lld garde tout ce que
+      # --export-dynamic exporte. link-dead-code : plus de -dead_strip.
+      RUSTFLAGS: -C link-dead-code
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
@@ -239,7 +259,11 @@ jobs:
           node-version: 22
       # Le cache du bâti, comme sous Windows : tout le target (le moteur cmake
       # de la crate rag3db y vit), clé sur les sources du moteur et le lock.
-      - uses: actions/cache@v4
+      # restore + save (always) : le cache se sauve même quand l'épreuve est
+      # rouge — actions/cache seul ne sauve qu'un job vert (deuxième essai
+      # macOS : 18 min de moteur perdues sur une épreuve rouge).
+      - uses: actions/cache/restore@v4
+        id: cache-rs
         with:
           path: |
             /tmp/rs
@@ -297,6 +321,14 @@ jobs:
           bash scripts/preparer.sh
           ls -la npm/darwin-arm64/
           npm test
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache-rs.outputs.cache-hit != 'true'
+        with:
+          path: |
+            /tmp/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.cache-rs.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
