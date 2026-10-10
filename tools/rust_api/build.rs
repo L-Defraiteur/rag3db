@@ -78,8 +78,16 @@ fn build_bundled_cmake() -> Vec<PathBuf> {
     };
 
     let mut build = cmake::Config::new(&rag3db_root);
+    // En statique, seule la cible `rag3db` (et ce qu'elle lie) : bâtir « tout »
+    // produisait aussi rag3db_shared, inutile ici, et sous clang-cl son édition
+    // de liens échouait (destructeurs de std::variant non émis, 10 octobre
+    // 2026) alors que la bibliothèque statique était prête.
+    if link_mode() == "static" {
+        build.build_target("rag3db");
+    } else {
+        build.no_build_target(true);
+    }
     build
-        .no_build_target(true)
         .define("BUILD_SHELL", "OFF")
         .define("BUILD_SINGLE_FILE_HEADER", "OFF")
         .define("AUTO_UPDATE_GRAMMAR", "OFF");
