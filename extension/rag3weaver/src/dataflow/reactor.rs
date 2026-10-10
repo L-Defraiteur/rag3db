@@ -93,6 +93,15 @@ struct Watch {
     name: String,
     topics: Vec<String>,
     policy: ReactPolicy,
+    /// Les liaisons d'une réaction de manifeste : les arguments
+    /// d'instanciation du graphe — une réaction est entièrement déterminée
+    /// par elles, personne ne complète à l'exécution (session mémoire,
+    /// 10 octobre). Vide pour `watch` et les fiches de trace.
+    arguments: serde_json::Value,
+    /// La politique de nœuds du graphe surveillé. `All` pour `watch`,
+    /// `Reactor::on` et la trace ; une réaction de manifeste voyage avec la
+    /// sienne.
+    nodes_policy: NodeTypePolicy,
     target: Target,
     /// Les récepteurs de sonnette, un par sujet — ouverts au `watch`.
     doorbells: Vec<(String, Receiver<Event>)>,
@@ -158,6 +167,8 @@ impl Reactor {
             name: tool.name().to_string(),
             topics: tool.on().to_vec(),
             policy: tool.policy(),
+            arguments: serde_json::json!({}),
+            nodes_policy: NodeTypePolicy::All,
             target: Target::Graph(Arc::new(tool)),
             doorbells,
             pending: None,
@@ -167,6 +178,24 @@ impl Reactor {
     }
 
     /// Surveille des sujets avec une fermeture : elle reçoit les événements
+    /// [`Self::watch`], avec les LIAISONS et la POLITIQUE DE NŒUDS d'une
+    /// réaction de manifeste : le graphe s'instancie avec ces arguments (ses
+    /// paramètres sont obligatoires, rien n'est complété à l'exécution) et
+    /// s'exécute sous cette politique. C'est la porte de la section
+    /// `"reactions"` du backend (session mémoire, premier appelant).
+    pub fn watch_bound(
+        mut self,
+        tool: GraphTool,
+        arguments: serde_json::Value,
+        nodes_policy: NodeTypePolicy,
+    ) -> Result<Self, GraphToolError> {
+        self = self.watch(tool)?;
+        let w = self.watches.last_mut().expect("watch vient d'en pousser une");
+        w.arguments = arguments;
+        w.nodes_policy = nodes_policy;
+        Ok(self)
+    }
+
     /// (en JSON) arrivés depuis le dernier appel. C'est le réacteur d'agent :
     /// une fermeture qui relance `Agent::run` par message.
     pub fn on<S: Into<String>, I: IntoIterator<Item = S>>(
@@ -182,6 +211,8 @@ impl Reactor {
             name: name.to_string(),
             topics,
             policy,
+            arguments: serde_json::json!({}),
+            nodes_policy: NodeTypePolicy::All,
             target: Target::Callback(Arc::new(f)),
             doorbells,
             pending: None,
@@ -211,7 +242,9 @@ impl Reactor {
             w.pending = None;
             let events = std::mem::take(&mut w.buffered);
             let outcome: Result<(), String> = match &w.target {
-                Target::Graph(tool) => run_tool(tool, &self.nodes, self.services.clone()),
+                Target::Graph(tool) => {
+                    run_tool(tool, &self.nodes, self.services.clone(), &w.arguments, &w.nodes_policy)
+                }
                 Target::Callback(f) => {
                     f(events);
                     Ok(())
@@ -250,19 +283,17 @@ impl Reactor {
         });
     }
 
-    /// La boucle, dans un fil : attend les sonnettes et les échéances, rien
-    /// d'autre. S'arrête sur [`ReactorHandle::stop`].
+    /// La boucle, en TÂCHE sur le runtime du crate (chantier C, 10 octobre
+    /// 2026 — le fil qui portait son propre runtime et son `block_on` a
+    /// disparu) : attend les sonnettes et les échéances, rien d'autre.
+    /// S'arrête sur [`ReactorHandle::stop`] — un arrêt ATTENDU, qui rend le
+    /// [`Reactor`] (le contrat de la session mémoire : jamais seulement
+    /// espéré par un `Drop`).
     pub fn spawn(mut self) -> ReactorHandle {
         let shared = self.shared.clone();
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
-        let thread = std::thread::Builder::new()
-            .name("rag3weaver-reactor".into())
-            .spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_time()
-                    .build()
-                    .expect("tokio runtime for the reactor");
-                rt.block_on(async {
+        let task = crate::dataflow::rt::runtime().spawn(async move {
+            {
                     // Une tâche par sonnette, toutes vers la même file.
                     let (tx, mut rings) = tokio::sync::mpsc::unbounded_channel::<(usize, String, Option<Event>, u64)>();
                     let mut tasks = Vec::new();
@@ -310,17 +341,22 @@ impl Reactor {
                     for t in tasks {
                         t.abort();
                     }
-                });
-                self
-            })
-            .expect("spawn reactor thread");
-        ReactorHandle { shared, stop: Some(stop_tx), thread: Some(thread) }
+            }
+            self
+        });
+        ReactorHandle { shared, stop: Some(stop_tx), task: Some(task) }
     }
 }
 
-fn run_tool(tool: &GraphTool, nodes: &NodeRegistry, services: Arc<ServiceRegistry>) -> Result<(), String> {
-    let def = tool.instantiate(&serde_json::json!({})).map_err(|e| e.to_string())?;
-    execute_definition(&def, nodes, services, &NodeTypePolicy::All, tool.result())
+fn run_tool(
+    tool: &GraphTool,
+    nodes: &NodeRegistry,
+    services: Arc<ServiceRegistry>,
+    arguments: &serde_json::Value,
+    nodes_policy: &NodeTypePolicy,
+) -> Result<(), String> {
+    let def = tool.instantiate(arguments).map_err(|e| e.to_string())?;
+    execute_definition(&def, nodes, services, nodes_policy, tool.result())
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -329,7 +365,7 @@ fn run_tool(tool: &GraphTool, nodes: &NodeRegistry, services: Arc<ServiceRegistr
 pub struct ReactorHandle {
     shared: Arc<Shared>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
-    thread: Option<std::thread::JoinHandle<Reactor>>,
+    task: Option<tokio::task::JoinHandle<Reactor>>,
 }
 
 impl ReactorHandle {
@@ -361,8 +397,13 @@ impl ReactorHandle {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
-        let thread = self.thread.take().expect("already stopped");
-        thread.join().expect("reactor thread panicked")
+        let task = self.task.take().expect("already stopped");
+        // L'arrêt est ATTENDU depuis le fil synchrone de l'appelant
+        // (Backend::open/close, les tests) ; le pont refuse nommément un
+        // runtime à fil unique au lieu de paniquer.
+        crate::dataflow::rt::bloquer("ReactorHandle::stop", task)
+            .expect("ReactorHandle::stop hors d'un fil bloquable")
+            .expect("reactor task panicked")
     }
 }
 
@@ -371,8 +412,11 @@ impl Drop for ReactorHandle {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
+        // Le filet seulement : l'arrêt contractuel est `stop()`, attendu.
+        // Ici on n'attend pas (un Drop ne bloque pas un fil inconnu) ; la
+        // tâche s'arrête sur le oneshot qu'on vient d'envoyer.
+        if let Some(t) = self.task.take() {
+            t.abort();
         }
     }
 }

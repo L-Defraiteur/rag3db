@@ -98,12 +98,21 @@ même lot.
 
 ### 3.3 La boucle d'agent et le réacteur
 
-- La boucle d'agent devient une tâche ; ses outils asynchrones deviennent des
-  `tokio::spawn` dont la poignée est gardée par le run (joints à sa fin,
-  comme les fils de portée aujourd'hui : aucun résultat ne survit à l'agent
-  qui l'a demandé). Le protocole ne change pas : un accusé « en cours » dans
-  le tour, le vrai résultat plus tard dans la boîte.
-- Le réacteur devient une tâche qui attend sur le bus ; son `block_on` disparaît.
+- **Corrigé le 10 octobre en codant** (la page disait « la boucle d'agent
+  devient une tâche » — le coût réel, c'est 48 sites `Agent::new` et leurs
+  appelants synchrones à migrer, pour un gain nul tant que la boucle n'a
+  rien à attendre d'asynchrone) : la boucle RESTE un fil dans ce lot ;
+  elle deviendra une tâche avec le run en fond (§4.3), où le gain existe.
+  Ce qui est pris maintenant est indépendant du véhicule et y survivra :
+  la portée du run (`RunScope`, vidée AVANT le join des fils), la poignée
+  d'outil et ses services (`ToolInvocation` — `tool_handle`, `agent_bus`,
+  `agent_inbox`, `run_scope` — par `ToolBox::call_with`), et les outils en
+  fond qui rendent tout de suite et postent leur fin par le bus. Le
+  protocole ne change pas : un accusé « en cours » dans le tour, le vrai
+  résultat plus tard dans la boîte.
+- Le réacteur devient une tâche qui attend sur le bus (fait) ; son
+  `block_on` de veille disparaît, et `stop()` est un arrêt ATTENDU par le
+  pont du crate — refus nommé depuis un fil unique, jamais une panique.
 - `Llm::generate` reste synchrone dans ce lot : appelé depuis un nœud qui
   implémente `execute` (donc sous `block_in_place`), il bloque comme
   aujourd'hui. Un `Llm::generate_async` viendra avec les ports-flux (§4).
