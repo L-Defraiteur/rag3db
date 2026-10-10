@@ -461,14 +461,30 @@ TEST_F(JournaledCopyTest, ARelationCopyThatMaySkipRowsStillForcesItsCheckpoint) 
 
 // Sans le réglage, rien ne change : un COPY force son point de reprise et laisse un journal
 // vide.
-TEST_F(JournaledCopyTest, ByDefaultACopyStillForcesItsCheckpoint) {
+// Le défaut, depuis le 10 octobre 2026 : un COPY est journalisé — rien n'est réglé dans le fils.
+TEST_F(JournaledCopyTest, ByDefaultACopyIsJournaled) {
     writeCsv(0, 1000);
     writeThenDie(
         [&](Connection& child) {
             schema(child);
             must(child, copyStatement());
         },
-        false /* journaled */);
+        false /* pas de réglage */);
+    EXPECT_GT(journalSize(), 0u) << "the copy must have gone to the journal, not to a checkpoint";
+    createDBAndConn();
+    expectRows(0, 1000);
+}
+
+// Et le réglage rend le point de reprise forcé d'avant.
+TEST_F(JournaledCopyTest, TheSettingForcesTheCheckpointAgain) {
+    writeCsv(0, 1000);
+    writeThenDie(
+        [&](Connection& child) {
+            schema(child);
+            must(child, "CALL force_checkpoint_on_copy=true;");
+            must(child, copyStatement());
+        },
+        false);
     EXPECT_EQ(journalSize(), 0u);
     createDBAndConn();
     expectRows(0, 1000);
@@ -1566,9 +1582,11 @@ TEST_F(CopyJournalThresholdTest, AFallenBackRelationCopyDiesAfterAndBeforeItsCom
 // est écrit.
 class ForcedTransactionJournalTest : public CopyJournalThresholdTest {
 protected:
-    // Comme aujourd'hui : un COPY force son point de reprise.
+    // Un COPY qui force son point de reprise : par le réglage, depuis que le COPY journalisé est
+    // le défaut.
     void openForced() {
         createDBAndConn();
+        ok("CALL force_checkpoint_on_copy=true;");
         ok("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);");
         ok("CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
         ok("UNWIND range(500000, 500199) AS i CREATE (:Doc {id: i, name: 'old', score: 0.5});");
@@ -1588,6 +1606,7 @@ protected:
     }
 
     static void childForcedSchema(Connection& child) {
+        must(child, "CALL force_checkpoint_on_copy=true;");
         must(child, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE);");
         must(child, "CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
         must(child, "UNWIND range(500000, 500199) AS i CREATE (:Doc {id: i, name: 'old', "
@@ -1958,34 +1977,21 @@ TEST_F(OwnerlessPagesTest, ADatabaseFromBeforeTheExtentOpensAndAcquiresIt) {
     EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), 502);
 }
 
-// La même preuve avec un index vectoriel et un index de plein texte, rejoués eux aussi depuis le
-// journal. Les pages orphelines viennent du gros COPY sans index (le seul à écrire avant la
-// validation) ; la petite table indexée, chargée par un COPY journalisé dans la même session
-// morte, est rejouée, et ses index rebâtis par le rejeu ; le point de reprise d'après réécrit
-// l'excédent rendu, puis la recherche par vecteur et par mot rend la bonne ligne. Une table
-// indexée de la taille d'un groupe plein prendrait vingt minutes à indexer et déborderait le
-// tampon des tests. Sauté si une des deux extensions n'est pas bâtie.
-TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithIndexes) {
+// La même preuve avec un index vectoriel, rejoué lui aussi depuis le journal. Les pages
+// orphelines viennent du gros COPY sans index (le seul à écrire avant la validation) ; la petite
+// table indexée, chargée par un COPY journalisé dans la même session morte, est rejouée, et son
+// index rebâti par le rejeu ; le point de reprise d'après réécrit l'excédent rendu, puis la
+// recherche par vecteur rend la bonne ligne. Une table indexée de la taille d'un groupe plein
+// prendrait vingt minutes à indexer et déborderait le tampon des tests. Le plein texte du produit
+// (lucivy, dans rag3weaver) est couvert par un e2e de rag3weaver. Sauté si l'extension vector
+// n'est pas bâtie.
+TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithAVectorIndex) {
     const auto vectorExtension =
         TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
-    const auto ftsExtension =
-        TestHelper::appendRag3dbRootPath("extension/fts/build/libfts.rag3db_extension");
-    if (!std::filesystem::exists(vectorExtension) || !std::filesystem::exists(ftsExtension)) {
-        GTEST_SKIP() << "the vector and fts extensions must both be built";
+    if (!std::filesystem::exists(vectorExtension)) {
+        GTEST_SKIP() << "the vector extension is not built";
     }
     constexpr int64_t numTagged = 2000;
-    // Un mot propre à la ligne, en lettres seules : l'analyseur du plein texte sépare les
-    // chiffres (« word77 » devenait « word »), et le radical doit rester distinct.
-    const auto wordOf = [](int64_t id) {
-        std::string word = "zq";
-        for (auto rest = id; rest > 0 || word.size() == 2; rest /= 26) {
-            word += static_cast<char>('a' + rest % 26);
-            if (rest < 26) {
-                break;
-            }
-        }
-        return word;
-    };
     const auto vectorOf = [](int64_t id) {
         return "[" + std::to_string(id % 97) + "." + std::to_string(id % 7) + "," +
                std::to_string((id * 31) % 89) + ".25," + std::to_string((id * 7) % 13) +
@@ -1995,17 +2001,14 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithIndexes) {
     {
         std::ofstream csv(relCsvPath);
         for (int64_t id = 0; id < numTagged; id++) {
-            csv << id << ",row " << id << " says " << wordOf(id) << " and common,\"" << vectorOf(id)
-                << "\"\n";
+            csv << id << ",row " << id << ",\"" << vectorOf(id) << "\"\n";
         }
     }
     writeThenDie([&](Connection& child) {
         must(child, "LOAD EXTENSION '" + vectorExtension + "';");
-        must(child, "LOAD EXTENSION '" + ftsExtension + "';");
         childSchema(child);
         must(child, "CREATE NODE TABLE Tagged(id INT64 PRIMARY KEY, body STRING, vec FLOAT[4]);");
         must(child, "CALL CREATE_VECTOR_INDEX('Tagged', 'tagged_vec', 'vec', metric := 'l2');");
-        must(child, "CALL CREATE_FTS_INDEX('Tagged', 'tagged_fts', ['body']);");
         must(child, "CHECKPOINT;");
         must(child, "CALL copy_journal_threshold=1073741824;");
         must(child, copyFrom(csvPath));
@@ -2015,7 +2018,6 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithIndexes) {
     createDBAndConn();
     ok("CHECKPOINT;");
     ok("LOAD EXTENSION '" + vectorExtension + "';");
-    ok("LOAD EXTENSION '" + ftsExtension + "';");
     EXPECT_EQ(single("MATCH (d:Doc) RETURN count(*);"), NUM_ROWS);
     EXPECT_EQ(single("MATCH (t:Tagged) RETURN count(*);"), numTagged);
     for (const auto id : {0, 77, 1234, 1999}) {
@@ -2028,13 +2030,9 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithIndexes) {
             found |= nearest->getNext()->getValue(0)->getValue<int64_t>() == id;
         }
         EXPECT_TRUE(found) << "vector of " << id;
-        EXPECT_EQ(single("CALL QUERY_FTS_INDEX('Tagged', 'tagged_fts', '" + wordOf(id) +
-                         "') RETURN node.id;"),
-            id)
-            << "word of " << id << " : " << wordOf(id);
+        EXPECT_EQ(text("MATCH (t:Tagged {id: " + std::to_string(id) + "}) RETURN t.body;"),
+            "row " + std::to_string(id));
     }
-    EXPECT_EQ(single("CALL QUERY_FTS_INDEX('Tagged', 'tagged_fts', 'common') RETURN count(*);"),
-        numTagged);
     FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 

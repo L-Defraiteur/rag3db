@@ -34,10 +34,18 @@ poser la version.
 
 - **1, les verrous** : conçus (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`),
   témoins écrits au banc ; V1 pas commencée.
-- **2, le chargement journalisé** : la demi-page est écrite
-  (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/03-le-point-de-reprise-de-copy.md`) ;
-  trois voies — alléger le point de reprise (en cours), une fenêtre de
-  chargement initial, journaliser pour de bon (la voie que la stèle demande).
+- **2, le chargement journalisé : fait, `ff9bad960` (10 octobre 2026).** Le `COPY`
+  journalisé est le défaut du moteur : plus de point de reprise forcé par `COPY`, plus
+  d'attente du départ des autres à sa validation, ses lignes durables par le journal ; au-delà
+  de 256 Mio de journal par transaction, repli sur le point de reprise forcé ; l'indexation
+  avec le plein texte en base demande elle-même le réglage forcé. Les étapes :
+  `0f4a54b2c` (nœuds), `1cfba2d6a` (relations), `1177f5794` (statistiques dans la
+  transaction), `1c232f318` (tableaux au journal en octets bruts), `71cffbc4b` (le repli),
+  `fb98852e1` (transaction forcée sans journal en mémoire), `0aed3c4b5` (l'étendue du fichier :
+  les pages d'un `COPY` tué ne sont plus perdues ; version de stockage 40). Preuves : la liste
+  complète verte sous ce défaut, contrôle de fuite de pages compris ; la série de confirmation
+  des embarquements (fichiers +1 %, blobs −2 %, 12 passes au calme). Pages :
+  `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04`, `05`, `06`.
 - **3, les écritures parallèles** : T0, A2, A5, A5 bis livrées ; le mode
   reste éteint hors du banc ; la suite attend les verrous.
 - **4, les défauts** : la corruption de mémoire d'`e2e_code` a sa cause et son correctif
@@ -106,7 +114,7 @@ Le chargement journalisé passe donc avant le câblage des verrous.
 1. l'annulation d'un `COPY` (clés de l'index, point de reprise) — fait ;
 2. la corruption d'`e2e_code` — fait : c'était une double ouverture de la base ;
 3. le cœur du gestionnaire de verrous (V1), sans câblage — il ne dépend pas du reste ;
-4. **le chargement en masse journalisé** : la validation d'un `COPY` durable par le journal,
+4. **le chargement en masse journalisé — fait, `ff9bad960` (10 octobre)** : la validation d'un `COPY` durable par le journal,
    plus de point de reprise forcé, plus d'attente du départ des autres (le remède 2a se
    retire alors, avec ses témoins adaptés). Une page de conception d'abord
    (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md`) ;

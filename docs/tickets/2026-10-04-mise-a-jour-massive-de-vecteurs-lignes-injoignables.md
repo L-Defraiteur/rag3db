@@ -34,7 +34,40 @@ chaque cas répété sur des tables neuves :
 - `SetToAnotherVectorInBatchesOf512`, `TwentyRowsToDistinctVectorsLineByLine`,
   `OneRowUpdatedManyTimes`, `UpdateThenDelete` : rouges connus, cas longs
   (`CONCURRENCE_LONG=1`) ;
-- `SetToAnotherVectorLineByLine`, `TenThousandRowsInBatchesOf512` : probabilistes.
+- `SetToAnotherVectorLineByLine`, `TenThousandRowsInBatchesOf512` : probabilistes ;
+- `TwentyRowsToTheSameVectorInOneStatement` : probabiliste depuis l'élagage classique
+  (10 octobre) : 1 perte sur 400 essais, contre 0 sur 400 avant lui (non significatif). Vingt
+  lignes posées sur le même vecteur : des copies, que la borne de l'élagage garde au plus près
+  en décalage. La référence de coût de la mise à jour massive se prend sur cet élagage.
+
+### TwentyRowsToTheSameVectorInOneStatement sous l'élagage classique : ce qui est établi ou non (10 octobre)
+
+Le scénario : 1 000 lignes indexées (l2, dimension 4), puis vingt d'entre elles posées sur le même
+vecteur `[7, 7, 7, 7]` en une instruction, par le chemin des mises à jour. Le contrôle compte en
+défaut un essai où une ligne n'est pas atteinte par la recherche exhaustive, ou n'est pas rendue par
+la recherche de son propre vecteur (à égalité près, parmi trente, assez pour les vingt copies), ou
+une ligne supprimée revient.
+
+- **Ligne présente dans la table mais pas dans le graphe ? Non établi.** La perte unique (1 essai
+  sur 5, pendant la liste complète) n'a laissé que l'étiquette `vector-index-exact`, qui couvre les
+  deux cas : la comparaison du banc ne garde pas la sortie détaillée de l'essai. Je ne sais donc pas
+  si une ligne a été hors du graphe (un îlot) ou seulement hors de la recherche de son vecteur.
+- **Ce qui est établi par la lecture** : vingt copies, c'est sous la borne de l'élagage (la moitié
+  du degré, 30). Toutes sont gardées dans la liste de chacune, en premier, et ni la borne ni l'ordre
+  du remplissage (par le plus lointain) ne jouent entre elles. Si l'élagage y est pour quelque chose,
+  c'est par les listes des autres nœuds, réélaguées par la mise à jour : pour un nœud voisin, les
+  vingt copies sont à **distance exactement égale**, et l'ordre entre elles tient au tri, qui n'est
+  pas stable, sur des candidats que l'insertion parallèle livre dans un ordre variable.
+- **Le compte** : 1 perte sur 400 sous l'élagage classique, 0 sur 400 avant lui. Non significatif.
+  La perte est tombée sur un poste très chargé, ce qui va avec une course sur l'ordre, sans le
+  prouver.
+
+**Suites possibles, non demandées** :
+- garder la sortie détaillée des essais rouges dans la comparaison du banc (`compare_known_red.cmake`),
+  pour que la prochaine perte dise si c'est un îlot ;
+- un bris d'égalité déterministe sur les distances égales (par décalage, après la distance) dans le
+  tri des candidats, qui rendrait l'élagage de ces vingt copies reproductible ; à mesurer comme les
+  autres variantes (extension prouvée, vrais vecteurs, ce témoin rejoué un grand nombre de fois).
 
 ## Cause
 

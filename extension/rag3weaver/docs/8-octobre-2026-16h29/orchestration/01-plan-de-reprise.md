@@ -10,33 +10,74 @@ Règles communes, inchangées : tout lourd sous `~/.cache/rag3weaver-build/poste
 jamais de force ; tests du changement pendant le travail, la batterie complète
 une fois à la fusion ; rapport de session dans le dossier du jour.
 
-## 0. Pause du 10 octobre 2026, 12 h 40 — redémarrage du poste
+## 0. État au 10 octobre 2026, 16 h (après le redémarrage et le plantage de Codium)
 
-Le noyau a été mis à jour par le `pacman -Syu` qui installait Docker ; sans
-redémarrage, Docker ne démarre pas. Toutes les sessions ont commité et poussé
-leur état, rien ne tourne. Où chacune reprend (sa branche, son rapport) :
+Les noms des sessions changent à chaque relance : redemander « qui es-tu ? »,
+puis redistribuer la table. Une seconde session cœur C++ (« hotfixs/tickets »)
+existe depuis 13 h 30 pour les correctifs et tickets, afin que la première
+reste sur la stèle ; elle tient le reste, la première tient `src/transaction/`
+et `src/storage/`. Le poste `luciepc` accueille les bâtis et batteries (un
+worktree par chantier, lib commune dans `rag3db-lourd`, son propre `poste`) ;
+les mesures restent sur le poste principal.
 
-| Chantier | Branche | Tête | Reprise |
-|---|---|---|---|
-| A arbre principal | `defauts-bascules-2` (non fusionnée) ; `commande-en-fond` (WIP non compilé) | `ac492c0dc` ; `5080aeb06` | rebase sur master, règle des dialectes, batterie complète une fois, fusion, README ; Lucie a dit **oui** à la bascule |
-| B cœur C++ | `etendue-du-fichier` | `dcc9cd476` | correctif codé (4 pages au lieu de 559), témoins écrits non joués ; `build/moteur` à reconfigurer |
-| C recherche | `execution-asynchrone` (= master, rien codé) | `27eeb6a7f` | rejouer les mesures d'avant, puis coder ; rapport `docs/10-octobre-2026-recherche/` |
-| D banc | `banc-elagage-en-cours` | `9c030091d` | bâtir les deux extensions, une tenue de mesure pour les deux colonnes |
-| E Claude en agent | `anthropic-llm` | `af456a6c5` | compiler le dernier commit, pousser, passe d'agent ; clé dans `.vault/anthropic.env` |
-| F embarquements | master | `4c708ace6` | série faite (19/20, +5 % en fichiers sous COPY journalisé, fuite non corrigée) ; contrat du dialecte, porte unique, inventaire rendu ; attend les réponses de Lucie (§ questions de `embarquements/02-…`) |
-| G paquet npm | `paquet-npm` | `f99a58ec5` | lire le 8ᵉ essai Windows, vérifier le changement de `tools/rust_api/build.rs` sous Linux, premier bâti Docker ici |
-| codeparsers | `scss-msvc` (dépôt codeparsers) | `0a09f02` | suite complète, puis master en avance rapide, pointeur dans rag3db |
+| Chantier | Sur master | En cours |
+|---|---|---|
+| A arbre principal | **les nouveaux défauts** (`21a1d67c5` : plein texte en fichiers, transaction par paquet, 2 048 × 1, règle des dialectes) ; filets 1 et 2 ; lecture seule témoignée | README et page des défauts au présent ; pointeur codeparsers ; landlock Linux seul ; le témoin produit de la fuite (COPY journalisé ≥ 131 072 lignes) ; l'embarqueur absent ; la commande en fond (attend les trois pièces de C) |
+| B cœur C++ | clé perdue, annulation, DROP B, statistiques dans la transaction, forme compacte, repli au seuil, saut du journal des forcées, **fuite de pages** (`0aed3c4b5`, version de stockage 40) | le **basculement** du COPY journalisé par défaut : codé, liste finale en cours, push après la série de F et la relecture du banc |
+| B-bis cœur C++ tickets | RelCopyBMException réglé par le calibrage du test (`33c3d42de`) ; HNSW sur vecteurs identiques dissipé | `CALL analyze('Table')` à la PostgreSQL (page écrite, confort), un défaut de sélection dans ColumnStats à rougir |
+| C recherche | — (branche `execution-asynchrone`, étape 1 : `d19eb903d`) | étape 2 : les trois pièces pour la commande en fond, le réacteur en tâche, les six block_on postgres, chat.rs ; la boucle d'agent reste un fil dans ce lot (décidé) |
+| D banc | fenêtre B du DROP ; ticket de la clé perdue | **l'élagage** : règle classique + places libres reprises + copies au plus près — critère atteint (rappel 1, 0 introuvable, temps par requête inchangé, +2 % de fichier) ; commits, relecture de B, liste, push |
+| F embarquements | porte unique ; `rag3weaver-ir` (`Value`, filtres, portée) ; `Hop` + `graph_walk` | la série de confirmation sur la lib 15 h 36 (dernière pièce avant le basculement de B) ; puis les sites Hop un par un, `Count` |
+| G optimiseur | workflow manuel ; `build_target` statique | le 12ᵉ essai Windows (MSVC pur, copie scss de codeparsers) ; le paquet JS ; `paquet-npm` ne fusionne pas avant l'embarqueur absent de A |
+| codeparsers | `tree-sitter-scss` en copie locale (`4c7897c`), 23 suites | lot fini |
+| mémoire | — (`memoire-longue-3` : filet des gabarits, section `reactions`) | rebase sur `21a1d67c5`, batterie, avance rapide ; puis le montage de `Reactor::watch` avec la politique portée par la montre, après C |
+| E Claude en agent | — (`anthropic-llm`, `af456a6c5`, client compilé et vert) | session non relancée |
 
-Règle du poste changée ce jour : un lourd n'attend plus à la porte que 10 min ;
-« mesure » seulement pour ce qui mesure. Les PR tracel-ai sont en pause
-(B fusionnée, A ouverte : cubecl#1804). Après le redémarrage : relancer les
-tunnels vers luciepc (procédure du 3 octobre), `sudo systemctl start docker`.
+Décisions de Lucie du jour : oui à la bascule et ses deux recommandations ;
++5 % en fichiers sous COPY journalisé accepté (le bénéfice est la stèle) ;
+oui à l'IR en cinq formes, retirer `query.rs`, garder `record.rs`, l'ordre
+porte → Hop/Count → Select ; les PR tracel-ai en pause (B fusionnée, A ouverte :
+cubecl#1804) ; `fuzzy-fst` et `extension/fts` retirés ; navigateur abandonné
+pour l'instant ; les statistiques se recalculent à la PostgreSQL
+(`CALL analyze`), tranché par l'orchestration selon la règle des moteurs établis.
+
+### Soir du 10 octobre, 19 h
+
+- **Le COPY journalisé est le défaut du moteur** (`ff9bad960`) : condition 2 de
+  la stèle fermée ; la série de confirmation (fichiers 80 contre 81 s, blobs
+  89 contre 87, 0 repli) est au message du commit. Le cœur C++ est sur A3′.
+- **Le paquet npm existe** : `rag3weaver@0.0.1-alpha.1` et
+  `rag3weaver-linux-x64-gnu@0.0.1-alpha.1` sous `next` (compte
+  `luciformresearch`, OTP de Lucie) ; la démo depuis un dossier vide marche
+  (index en 13 s avec service, 3 s sans, usages/impact, Liens en arbre).
+  Windows et macOS arm64 se lient sur les runners. Pièges notés en mémoire
+  (« staged publishing », `--prefer-online`).
+- **Chantier H** (session mémoire) : rag3weaver en serveur MCP — sous-commande
+  du backend, JSON-RPC synchrone, outils tirés des schémas ; pour une mémoire
+  partagée, le processus MCP ouvre le backend localement avec sa connexion
+  sur `rag3daemon` (un seul écrivain) ; `--keys` lu dès maintenant.
+- **Décisions de Lucie du soir** : installer = un démon sans question ; le
+  réglage = un formulaire des API disponibles (et sa CLI), pas d'agent avant
+  un modèle ; puis le magicien du chaos monte un produit par déclaration et
+  donne le lien de l'agent dédié ; **déclaré n'est pas exposé** : `exposure:
+  <expression sur des clés>` par déclaration et par cellule, tenue au
+  chargement (vision « plusieurs produits », §6-7). `extension/fts` et
+  `fuzzy-fst` retirés. PR tracel-ai en pause.
+- **Élagage HNSW** : k2 (places libres reprises par le plus lointain d'abord,
+  borne au plus près, garde « jamais soi-même ») tient le critère ; un rouge
+  nouveau au banc (vingt lignes au même vecteur) en cours d'attribution
+  (k2 ou variance) avant le push.
+- **Règles du poste du jour** : un lourd n'attend plus que 10 min à la porte ;
+  « mesure » seulement pour ce qui mesure ; `timeout` devant tout test sous
+  le verrou (un test figé a tenu le poste) ; on ne tue jamais par nom de
+  binaire (`pidof concurrence_test` a tué la mesure du banc) ; luciepc pour
+  les bâtis et batteries (un worktree par chantier, lib commune dans
+  `rag3db-lourd`, les cinq variables de `run_e2e.sh`).
 
 ## 1. Ce qui attend Lucie avant que certains chantiers partent
 
 | Décision | Chantier bloqué |
 |---|---|
-| la branche `defauts-bascules` (`7b82c761f`) : oui / non ; coexistence des bases en blobs ; les 8-10 s avant la première chose cherchable | A |
 | le modèle pour l'essai Claude en agent (`claude-opus-5` recommandé d'abord, `claude-fable-5-1` ensuite) et la clé d'API dans `.vault` | E |
 | « envoie » pour les envois A, C, D, E vers tracel-ai (B est partie : tracel-ai/cubek#776) | aucun — se fait par l'orchestration |
 | `cargo login` du compte personnel, pour réserver le nom `rag3weaver` sur crates.io | aucun |
@@ -171,6 +212,25 @@ la fois sous le verrou, comme avant la pause.
 - **Fichiers** : `tools/build-images/`, `.github/workflows/`,
   `extension/rag3weaver/bindings/nodejs/` (nouveau). Aucun fichier de A à F.
 - **Place dans l'ordre** : à dire par Lucie.
+
+### H — Session mémoire : rag3weaver en serveur MCP sur un dépôt (10 octobre, soir)
+
+- **Lucie** : « un cas très simple : donne-moi des outils MCP sur ce projet de
+  code pour chercher dedans via rag3weaver ». Utile à nous d'abord : nos
+  sessions Claude Code cherchent dans ce dépôt par `grep`, rag3weaver a le
+  graphe de code, la recherche hybride, `usages`, `impact`.
+- **Forme** : `rag3weaver-backend mcp --manifest …` (ou un bin à part), MCP
+  sur stdio (JSON-RPC 2.0 : initialize, tools/list, tools/call) ; les outils
+  et leurs schémas viennent de `NodeSchema` comme pour OpenAI et Anthropic
+  (`tools.rs`), jamais d'une liste à la main ; `tools/call` passe par
+  `run_tool`, le bac à sable et le rapport ; refus nommés.
+- **Ordre** : page courte (correspondance schéma → outil, ce qu'on expose,
+  session, ce qu'on ne fait pas) → code + test qui parle le protocole sur le
+  backend de code de ce dépôt → épreuve réelle : `.mcp.json` pour Claude Code
+  et une session qui cherche `usages` d'une fonction du dépôt.
+- **Fichiers** : nouveau `src/mcp.rs` + le bin ; `backend.rs` (à elle).
+- **Rend** : la commande, son test, la configuration à coller, et ce que le
+  magicien dira plus tard d'une phrase (vision du 9 octobre, §6).
 
 ## 4. Ce que l'orchestration fait pendant ce temps
 

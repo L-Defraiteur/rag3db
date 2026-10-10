@@ -228,6 +228,13 @@ pub trait SchemaDialect: Send + Sync {
         Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Hop" })
     }
 
+    /// **Un compte** ([`rag3weaver_ir::Count`]) dans la langue de ce dialecte ;
+    /// refusé par défaut en le nommant.
+    fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
+        let _ = count;
+        Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Count" })
+    }
+
     /// **La porte des corps par défaut.** Ils sont écrits en Cypher ; un
     /// dialecte qui ne déclare pas `cypher` et ne les redéfinit pas reçoit à
     /// leur place cette instruction, qui échoue à l'analyse **en nommant la
@@ -1051,14 +1058,29 @@ pub trait SchemaDialect: Send + Sync {
 pub struct Rag3dbDialect;
 
 impl SchemaDialect for Rag3dbDialect {
+    /// Le degré : `UNWIND $uuids AS u MATCH (d:Départ {_uuid: u})<-[r:REL]-()
+    /// RETURN u, count(r)` — la forme exacte que `graph_walk` écrivait.
+    fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
+        count.validate()?;
+        Ok(match count {
+            rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
+            rag3weaver_ir::Count::Edges { start, relation, direction } => match direction {
+                rag3weaver_ir::Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})<-[r:{relation}]-() RETURN u, count(r)"),
+                rag3weaver_ir::Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})-[r:{relation}]->() RETURN u, count(r)"),
+            },
+        })
+    }
+
     /// `UNWIND $uuids AS u MATCH (d:Départ {_uuid: u})-[r:REL]->(m:Arrivée)`
     /// : une liste de valeurs simples jointe par hachage, jamais `item.champ`
     /// (journal, §6). La forme exacte que `graph_walk` écrivait à la main.
     fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
         hop.validate()?;
+        let table = |t: &Option<String>| t.as_deref().map(|t| format!(":{t}")).unwrap_or_default();
+        let (d, m) = (table(&hop.start), table(&hop.end));
         let pattern = match hop.direction {
-            rag3weaver_ir::Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", hop.start, hop.relation, hop.end),
-            rag3weaver_ir::Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", hop.start, hop.relation, hop.end),
+            rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{}]->(m{m})", hop.relation),
+            rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{}]-(m{m})", hop.relation),
         };
         let filtre = match &hop.exclude {
             Some(x) => {
@@ -1068,10 +1090,16 @@ impl SchemaDialect for Rag3dbDialect {
             None => String::new(),
         };
         let colonnes: Vec<String> = std::iter::once("u".to_string())
-            .chain(hop.fields.iter().map(|f| format!("m.{f}")))
-            .chain(hop.edge_fields.iter().map(|f| format!("r.{f}")))
+            .chain(hop.returns.iter().map(|c| match c {
+                rag3weaver_ir::Column::Node(f) => format!("m.{f}"),
+                rag3weaver_ir::Column::Edge(f) => format!("r.{f}"),
+                rag3weaver_ir::Column::Null => "NULL".to_string(),
+                rag3weaver_ir::Column::Label => "label(m)".to_string(),
+                rag3weaver_ir::Column::Whole => "m".to_string(),
+            }))
             .collect();
-        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}", colonnes.join(", ")))
+        let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{borne}", colonnes.join(", ")))
     }
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
@@ -2775,15 +2803,31 @@ mod tests {
         assert_eq!(Rag3dbDialect.hop(&h).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-(m:Scope) RETURN u, m._uuid");
         h.exclude = Some(EdgeExclusion { field: "resolution".into(), values: vec!["nom".into(), "import".into()] });
         h.direction = Direction::Outgoing;
-        h.fields.push("name".into());
-        h.edge_fields.push("resolution".into());
+        h.returns.push(rag3weaver_ir::Column::Node("name".into()));
+        h.returns.push(rag3weaver_ir::Column::Null);
+        h.returns.push(rag3weaver_ir::Column::Edge("resolution".into()));
         assert_eq!(
             Rag3dbDialect.hop(&h).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, r.resolution"
+            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, NULL, r.resolution"
         );
         assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
+        let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
+        libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
+        assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
+        libre.limit = Some(5);
+        assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m._uuid, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
+    }
+
+    /// Le compte : rag3db le traduit, PostgreSQL le refuse en le nommant.
+    #[test]
+    fn le_compte_se_traduit_ou_se_refuse() {
+        use rag3weaver_ir::{Count, Direction};
+        assert_eq!(Rag3dbDialect.count(&Count::Rows { table: "Doc".into() }).unwrap(), Rag3dbDialect.count_rows("Doc"));
+        let c = Count::Edges { start: "Scope".into(), relation: "CONSUMES".into(), direction: Direction::Incoming };
+        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-() RETURN u, count(r)");
+        assert_eq!(PostgresDialect.count(&c).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Count");
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**

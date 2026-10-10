@@ -126,6 +126,12 @@ copy and back it up with it) or **in the database as blobs** (an existing databa
 that has them keeps them, and `RAG3WEAVER_FTS=blobs` asks for them). A database in
 memory keeps its full text in itself.
 
+The dense index prunes its HNSW graph with the classic heuristic since 10 October
+2026 (engine `9a2818df9`): no row is left unreachable by its own vector, at +3 to 5 %
+per query. **An existing index keeps its old graph** (the format does not change, only
+the neighbour lists a write touches are rewritten); to get the new pruning, recreate it
+(`DROP_VECTOR_INDEX`, then `CREATE_VECTOR_INDEX`).
+
 ## The code graph
 
 With the `code` feature, a repository becomes a graph: files, scopes, symbols,

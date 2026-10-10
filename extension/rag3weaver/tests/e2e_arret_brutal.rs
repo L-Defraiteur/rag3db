@@ -621,7 +621,18 @@ fn jouer_l_ecrivain() -> Option<()> {
 /// Rendu séparément du jugement : chaque cas décide lui-même de ce qu'il
 /// attend, et un cas qui attend un plantage est aussi légitime qu'un cas qui
 /// attend un succès — tant qu'il le dit.
-fn jouer(cas: &str, scenario: &str) -> (Verdict, String) {
+/// La séquence entière — écrivain, « PRET », journal non vide, SIGKILL,
+/// relecteur — avec une main posée **entre la mort et la réouverture**.
+///
+/// Ce crochet existe pour une seule raison : la variante de la garde 2 doit
+/// retirer `<base>.extensions` à ce moment précis, et à aucun autre. Le faire
+/// avant, c'est empêcher l'écrivain de le poser ; après, c'est trop tard, la
+/// reprise a déjà eu lieu.
+fn jouer_avec(
+    cas: &str,
+    scenario: &str,
+    entre_la_mort_et_la_relecture: impl FnOnce(&Path),
+) -> (Verdict, String) {
     age_du_moteur();
     let dossier = dossier_sur_disque(cas);
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
@@ -679,9 +690,16 @@ fn jouer(cas: &str, scenario: &str) -> (Verdict, String) {
             .collect::<Vec<_>>()
     );
 
+    entre_la_mort_et_la_relecture(&dossier);
+
     let verdict = relire(&dossier, cas, 6);
     println!("▸ [{scenario}] verdict : {verdict:?}   (base conservée : {})", dossier.display());
     (verdict, lu)
+}
+
+/// La séquence sans rien toucher entre la mort et la réouverture.
+fn jouer(cas: &str, scenario: &str) -> (Verdict, String) {
+    jouer_avec(cas, scenario, |_| {})
 }
 
 /// **Le témoin : sans point de reprise entre le chargement de l'extension et
@@ -812,9 +830,10 @@ fn une_mort_apres_insertion_vectorielle() {
     // journal, et l'index suit la table sans rien rebâtir. Branche inversée
     // par la session cœur C++ dans le commit de la garde 2, avec l'accord de
     // la session mémoire. La réparation d'ouverture (index détaché puis rebâti,
-    // la garde 1) ne joue plus ici ; son témoin est le cas où la reprise n'a
-    // pas l'extension — `<base>.extensions` supprimé avant la réouverture —,
-    // à écrire par la session mémoire.
+    // la garde 1) ne joue plus ici ; son témoin est
+    // `sans_la_liste_notee_la_garde_1_reprend_la_main`, écrit le 10 octobre
+    // 2026 : il retire `<base>.extensions` entre la mort et la réouverture,
+    // et c'est lui qui dit ce que la garde 2 achète ici.
     match verdict {
         Verdict::OuvreEtJuste { lignes } => {
             assert_eq!(lignes, 6, "les six lignes doivent être là");
@@ -826,8 +845,8 @@ fn une_mort_apres_insertion_vectorielle() {
         // si le chargement échoue — un déploiement qui oublie le fichier
         // d'extension, un chemin qui bouge, `<base>.extensions` perdu —, le
         // rejeu continue sans elle et c'est la garde 1 qui joue (index détaché
-        // puis rebâti). Cette seconde variante **manque** ici ; elle est à
-        // écrire par la session mémoire (note d'origine du 4 octobre 2026).
+        // puis rebâti). Cette seconde variante est désormais écrite :
+        // `sans_la_liste_notee_la_garde_1_reprend_la_main`.
         Verdict::OuvreIndexRebati { lignes } => panic!(
             "la garde 2 du moteur n'a pas joué : l'index était détaché et a été rebâti \
              ({lignes} lignes) alors que la reprise devait charger l'extension notée dans \
@@ -847,6 +866,78 @@ fn une_mort_apres_insertion_vectorielle() {
             "attendu : une base qui s'ouvre, six lignes, et un index juste d'emblée ; \
              reçu : {autre:?}\ndossier conservé pour examen : {}",
             dossier.display()
+        ),
+    }
+}
+
+/// **La contre-épreuve de la garde 2 : sans la liste notée, c'est la garde 1
+/// qui joue.**
+///
+/// Le cas vectoriel voisin attend un index juste d'emblée, et c'est ce que la
+/// garde 2 du moteur achète : chaque extension chargée est notée dans
+/// `<base>.extensions`, et la reprise la charge **avant** de rejouer le
+/// journal (`wal_replayer.cpp`, `loadExtensionsNotedBesideTheDatabase`).
+///
+/// Mais un attendu vert ne dit pas **ce qui** l'a rendu vert. Ce témoin-ci
+/// retire la seule entrée de la garde 2 — le fichier noté — et rien d'autre :
+/// une variable, un cas. Si l'index revient alors détaché puis rebâti, on sait
+/// deux choses au lieu d'une : que la garde 2 est bien ce qui tient l'index à
+/// jour, et que son absence **dégrade** au lieu de casser, parce que la
+/// garde 1 reste derrière elle.
+///
+/// Ce n'est pas un cas d'école. `ExtensionManager::loadExtensionsNotedBesideTheDatabase`
+/// range chaque échec de chargement dans `recoveryLoadFailures` et **continue**
+/// — un déploiement qui oublie le fichier d'extension, un chemin qui bouge,
+/// un `<base>.extensions` perdu à la copie, et on est exactement ici sans
+/// qu'aucune erreur ne remonte.
+///
+/// **Attendu : `OuvreIndexRebati`**, c'est-à-dire la garde 1 plus
+/// `Catalog::ensure_vector_index`. Un `OuvreEtJuste` sur ce cas voudrait dire
+/// que le fichier n'était pas ce qu'on croit, ou qu'il n'a pas été retiré —
+/// d'où la vérification de sa présence avant suppression : un témoin qui
+/// supprime un fichier absent ne prouve rien et le dit vert.
+#[test]
+#[ignore]
+fn sans_la_liste_notee_la_garde_1_reprend_la_main() {
+    if jouer_le_relecteur().is_some() || jouer_l_ecrivain().is_some() {
+        return;
+    }
+    let cas = "sans_la_liste_notee_la_garde_1_reprend_la_main";
+    let mut retire = None;
+    let (verdict, _) = jouer_avec(cas, "insertion", |dossier| {
+        let liste = PathBuf::from(format!("{}.extensions", base_dans(dossier).display()));
+        let taille = std::fs::metadata(&liste).map(|m| m.len()).ok();
+        match taille {
+            Some(n) => {
+                std::fs::remove_file(&liste).expect("retirer la liste notée");
+                println!("▸ liste notée retirée : {} ({n} octets)", liste.display());
+            }
+            None => println!("▸ liste notée ABSENTE : {}", liste.display()),
+        }
+        retire = taille;
+    });
+
+    // **Le test ne prouverait rien sans ce fichier**, exactement comme il ne
+    // prouverait rien avec un journal vide — c'est la même discipline, posée
+    // deux fois dans la même séquence.
+    let n = retire.expect(
+        "`<base>.extensions` n'existait pas au moment de la mort : il n'y avait donc rien à          retirer, et ce témoin ne dit rien de la garde 2. L'écrivain charge-t-il encore          l'extension vectorielle par `LOAD EXTENSION` ?",
+    );
+    assert!(n > 0, "la liste notée était vide ({n} octets) : rien à retirer");
+
+    match verdict {
+        Verdict::OuvreIndexRebati { lignes } => {
+            assert_eq!(lignes, 6, "les six lignes doivent être là après le rebâti");
+        }
+        Verdict::OuvreEtJuste { lignes } => panic!(
+            "l'index est juste alors que la liste notée a été retirée ({lignes} lignes,              {n} octets retirés) : ce n'est donc pas `<base>.extensions` qui le tenait à              jour, et l'attendu du cas voisin repose sur autre chose que ce qu'il dit"
+        ),
+        Verdict::OuvreIndexEnRetard { lignes } => panic!(
+            "l'index est resté détaché après le chemin du produit ({lignes} lignes) : la              garde 1 a bien joué, mais `Catalog::ensure_vector_index` ne l'a pas rebâti"
+        ),
+        autre => panic!(
+            "attendu : une base qui s'ouvre, six lignes, et un index détaché puis rebâti ; \
+             reçu : {autre:?}"
         ),
     }
 }

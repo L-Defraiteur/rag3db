@@ -51,6 +51,25 @@
 %% Il n'y a donc, à cette date, aucun chemin par lequel un backend déclare ses
 %% graphes réactifs. Le nœud et son témoin de bout en bout
 %% (`tests/e2e_reacteur.rs`) sont vrais ; le branchement attend ce chemin.
+%%
+%% **Depuis le 10 octobre 2026, la moitié de ce chemin existe.** Le manifeste a
+%% une section `"reactions"`, à côté de `"tools"` : lue, construite, liée et
+%% validée au chargement, avec sa propre liste blanche
+%% (`backend_code::reaction_nodes` — la base plus `EventSourceNode` et
+%% `ReactTransitionNode`, et aucune capacité de fichier ni de commande). Une
+%% fiche comme celle-ci s'y déclare donc **sans rien changer ici**, avec ses
+%% liaisons (`target`, `relation`, `transition`, `source`).
+%%
+%% **Ce qui manque encore, et pourquoi elle n'y est pas déjà** : personne
+%% n'appelle `Reactor::watch`, et `run_tool` instancie avec `json!({})` — les
+%% liaisons d'un manifeste ne l'atteignent pas. Déclarée aujourd'hui, cette
+%% fiche chargerait sans broncher — à condition de lier ses trois paramètres
+%% obligatoires (`target`, `relation`, `transition` ; `source` a un défaut), car
+%% une réaction doit être **entièrement déterminée par ses liaisons** : personne
+%% n'est là pour compléter un argument à l'exécution. Mais elle ne serait
+%% **montée par rien**, et une déclaration inerte dans un gabarit livré est
+%% exactement le défaut qu'on écrit en boucle ici. Elle entre le jour où
+%% `Reactor::watch` a un appelant qui porte ses liaisons.
 %% ────────────────────────────────────────────────────────────────────────────
 graph LR
     events["EventSourceNode(topics='catalog', cursor='review_anchored', limit=1000)"]

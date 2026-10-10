@@ -47,14 +47,21 @@ True
 ---- ok
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
 ---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire avant de les regarder.
+-STATEMENT CHECKPOINT;
+---- ok
 # second copy should trigger recompression + free some pages
 -STATEMENT COPY person FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson2.csv";
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT CALL fsm_info() return sum(num_pages) > 0
 ---- 1
 True
 # copy for new table should reuse most of the old pages
 -STATEMENT COPY person1 FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/vPerson.csv";
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 # since the copy should reuse pages use start_page_idx to see if person1 has older pages than some pages in person
 -STATEMENT call storage_info('person1') with min(start_page_idx) as oldest_newly_allocated_page
@@ -98,14 +105,21 @@ True
 ---- 0
 -STATEMENT COPY knows FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/eKnows.csv";
 ---- ok
+# Journalisé, un COPY n'écrit ses pages qu'au point de reprise : le faire avant de les regarder.
+-STATEMENT CHECKPOINT;
+---- ok
 # second copy should trigger space reclaiming
 -STATEMENT COPY knows FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/eKnows_2.csv";
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 -STATEMENT call fsm_info() return sum(num_pages) >= 10
 ---- 1
 True
 # copying the same initial data to a new table should reuse most of the pages so the db should not grow by much
 -STATEMENT COPY knows1 FROM "${RAG3DB_ROOT_DIRECTORY}/dataset/tinysnb/eKnows.csv";
+---- ok
+-STATEMENT CHECKPOINT;
 ---- ok
 # allow margin equal to the largest page range for a column chunk in the table
 -STATEMENT CALL fsm_info() with sum(num_pages) as num_free_pages call storage_info('knows1') with num_free_pages, max(num_pages) as largest_range

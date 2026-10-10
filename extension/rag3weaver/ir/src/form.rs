@@ -3,7 +3,7 @@
 //! de plus s'ajoute quand un nœud en a besoin, et l'optimisation (fondre une
 //! suite de sauts en une requête) reste sous le dialecte.
 //!
-//! Aujourd'hui : [`Hop`]. Viendront `Count`, `Select`, `Write` et `Tx`.
+//! Aujourd'hui : [`Hop`] et [`Count`]. Viendront `Select`, `Write` et `Tx`.
 
 use std::fmt;
 
@@ -24,51 +24,102 @@ pub struct EdgeExclusion {
     pub values: Vec<String>,
 }
 
+/// Une colonne rendue par un saut.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Column {
+    /// Un champ du nœud atteint.
+    Node(String),
+    /// Un champ de l'arête suivie.
+    Edge(String),
+    /// Une colonne vide, pour garder les positions quand un champ n'est pas
+    /// déclaré (ou qu'une relation ne le porte pas).
+    Null,
+    /// La table du nœud atteint (utile quand le saut ne la fixe pas).
+    Label,
+    /// Le nœud atteint entier, tous ses champs.
+    Whole,
+}
+
 /// **Un saut** : depuis une liste d'uuids (le paramètre `$uuids`), suivre une
 /// relation dans un sens, et rendre une ligne par arête suivie.
 ///
-/// Les colonnes rendues, dans cet ordre : l'uuid de départ, puis les champs
-/// du nœud atteint ([`Hop::fields`]), puis ceux de l'arête
-/// ([`Hop::edge_fields`]).
+/// Les colonnes rendues : l'uuid de départ, puis [`Hop::returns`] dans
+/// l'ordre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hop {
-    /// La table du nœud de départ (celle des uuids donnés).
-    pub start: String,
+    /// La table du nœud de départ (celle des uuids donnés) ; `None` : un
+    /// nœud de n'importe quelle table, retrouvé par son seul uuid.
+    pub start: Option<String>,
     pub relation: String,
-    /// La table du nœud atteint.
-    pub end: String,
+    /// La table du nœud atteint ; `None` : n'importe laquelle.
+    pub end: Option<String>,
     pub direction: Direction,
-    pub fields: Vec<String>,
-    pub edge_fields: Vec<String>,
+    pub returns: Vec<Column>,
     pub exclude: Option<EdgeExclusion>,
+    /// Au plus tant de lignes en tout (pour un départ unique : par départ).
+    pub limit: Option<usize>,
 }
 
 impl Hop {
     /// Un saut qui ne rend que l'uuid du nœud atteint.
     pub fn new(start: impl Into<String>, relation: impl Into<String>, end: impl Into<String>, direction: Direction) -> Self {
         Self {
-            start: start.into(),
+            start: Some(start.into()),
             relation: relation.into(),
-            end: end.into(),
+            end: Some(end.into()),
             direction,
-            fields: vec!["_uuid".into()],
-            edge_fields: Vec::new(),
+            returns: vec![Column::Node("_uuid".into())],
             exclude: None,
+            limit: None,
         }
+    }
+
+    /// Un saut dont le départ et l'arrivée peuvent être de n'importe quelle
+    /// table : les uuids suffisent à les retrouver.
+    pub fn untyped(relation: impl Into<String>, direction: Direction) -> Self {
+        Self { start: None, end: None, ..Self::new("", relation, "", direction) }
     }
 
     /// Tout ce qui entre dans le texte d'une requête est un identifiant :
     /// tables, relation, champs, et les valeurs écartées.
     pub fn validate(&self) -> Result<(), TranslateError> {
-        let mut noms: Vec<&str> = vec![&self.start, &self.relation, &self.end];
-        noms.extend(self.fields.iter().map(String::as_str));
-        noms.extend(self.edge_fields.iter().map(String::as_str));
+        let mut noms: Vec<&str> = vec![&self.relation];
+        noms.extend(self.start.as_deref());
+        noms.extend(self.end.as_deref());
+        noms.extend(self.returns.iter().filter_map(|c| match c {
+            Column::Node(f) | Column::Edge(f) => Some(f.as_str()),
+            Column::Null | Column::Label | Column::Whole => None,
+        }));
         if let Some(x) = &self.exclude {
             noms.push(&x.field);
             noms.extend(x.values.iter().map(String::as_str));
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
             Some(n) => Err(TranslateError::Invalid(format!("saut : « {n} » n'est pas un identifiant"))),
+            None => Ok(()),
+        }
+    }
+}
+
+/// **Un compte.**
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Count {
+    /// Les lignes d'une table, en une colonne.
+    Rows { table: String },
+    /// Le degré : pour chaque uuid de départ (le paramètre `$uuids`), le
+    /// nombre d'arêtes d'une relation dans un sens. Deux colonnes : l'uuid,
+    /// le compte ; un départ sans arête n'a pas de ligne.
+    Edges { start: String, relation: String, direction: Direction },
+}
+
+impl Count {
+    pub fn validate(&self) -> Result<(), TranslateError> {
+        let noms: Vec<&str> = match self {
+            Count::Rows { table } => vec![table],
+            Count::Edges { start, relation, .. } => vec![start, relation],
+        };
+        match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+            Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),
             None => Ok(()),
         }
     }

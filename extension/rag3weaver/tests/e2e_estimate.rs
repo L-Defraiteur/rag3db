@@ -211,6 +211,12 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         boxed.execute("CALL force_checkpoint_on_copy=false").expect("COPY journalisé");
         eprintln!("[mots] COPY journalisé (force_checkpoint_on_copy=false)");
     }
+    // Depuis `ff9bad960` le COPY journalisé est le défaut du moteur :
+    // `RAG3WEAVER_ESTIMATE_COPY_JOURNALISE=0` rend le COPY forcé d'avant.
+    if std::env::var("RAG3WEAVER_ESTIMATE_COPY_JOURNALISE").as_deref() == Ok("0") {
+        boxed.execute("CALL force_checkpoint_on_copy=true").expect("COPY forcé");
+        eprintln!("[mots] COPY forcé (force_checkpoint_on_copy=true)");
+    }
     eprintln!("[mots] point de reprise automatique : {auto_checkpoint} ; seuil : {:?}", std::env::var("RAG3WEAVER_ESTIMATE_CHECKPOINT_THRESHOLD").ok());
     // Les points de reprise réellement posés, comptés par la taille du
     // journal : elle ne retombe que quand le moteur le replie (le guetteur de
@@ -581,15 +587,16 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let progress = catalog.lock().unwrap().index_progress().expect("avancement");
     assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
     // Par entité : `Scope` est prêt des deux côtés ; `Symbol`, plein texte
-    // seul, est cherchable par mots et jamais par vecteurs ; une entité
-    // inconnue est une erreur, pas un « jamais ».
+    // seul, est cherchable par mots, et ses vecteurs sont « non déclarés »
+    // (`NotDeclared` depuis le 10 octobre 2026 : « jamais » se lisait comme une
+    // panne) ; une entité inconnue est une erreur, pas un « jamais ».
     {
         use rag3weaver::code::SYMBOL;
         let guard = catalog.lock().unwrap();
         let scope = guard.index_state_for(SCOPE).expect("état de Scope");
         assert_eq!((scope.text, scope.vectors, scope.vectors_percent), (Level::Ready, Level::Ready, 100), "{scope:?}");
         let symbol = guard.index_state_for(SYMBOL).expect("état de Symbol");
-        assert_eq!((symbol.text, symbol.vectors), (Level::Ready, Level::Never), "{symbol:?}");
+        assert_eq!((symbol.text, symbol.vectors), (Level::Ready, Level::NotDeclared), "{symbol:?}");
         assert!(guard.index_state_for("Inconnue").is_err());
     }
     let after = catalog.lock().unwrap().index_state().expect("état");

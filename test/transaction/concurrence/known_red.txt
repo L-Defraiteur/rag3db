@@ -42,11 +42,12 @@ Launchers/ConcurrencyBench.C1_SnapshotPredatesCommit/Thread_Crash database-reope
 # Marche A3′ — les deux limites écrites le 4 octobre (stèle, étape 5), sous le mode
 # multi-écrivains. L'annulation d'un COPY copié le premier efface les lignes et les clés
 # d'un COPY copié après lui dans le même bloc, que l'autre écrivain valide ensuite (dans
-# l'autre ordre, vert). Deux validations qui veulent chacune leur point de reprise : la
-# première va jusqu'au délai (5 s) et échoue ; son annulation efface alors les lignes de
-# la seconde, validée (committed-rows à 0).
+# l'autre ordre, vert). La seconde limite — deux validations qui voulaient chacune leur point
+# de reprise, la première jusqu'au délai, son annulation effaçant les lignes de la seconde
+# (LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout) — a verdi avec le COPY
+# journalisé en défaut (10 octobre 2026) : un COPY ne veut plus de point de reprise à sa
+# validation, les deux passent.
 Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst committed-rows,other-writer-key-unique,other-writer-keys-kept,primary-key-index-agrees
-LockBench.TwoCommitsThatEachWantACheckpointDoNotWaitForTheTimeout both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
 # Marche A4′ (verrou exclusif de ligne, partagé sur les extrémités) — C2 : relation vers un
 # nœud supprimé par une transaction concurrente (source, destination, DETACH DELETE, deux
@@ -120,12 +121,6 @@ LockBench.LockTimeoutGivesNamedErrorAndRollsBack waited-the-delay,waiter-gets-lo
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
 #
-# Correctif de la construction HNSW — un index construit sur les 100 premières lignes
-# d'embeddings-8-1k.csv laisse le nœud 13 injoignable, sans aucune concurrence. Un cas limite
-# des petits index : à 98 et à 100 lignes, pas à 90, 95, 99, 101, 102, 105, 110, 128, 200, ni
-# à mille.
-MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete
-#
 # Marche V1, genre « index » — tout écrivain d'une table indexée prend l'index de la table en
 # exclusif : l'écrivain en auto-commit attend puis valide ; en bloc, il attend puis valide ou
 # reçoit « could not serialize ». Aujourd'hui, sans verrou : waited.
@@ -161,13 +156,6 @@ VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine vector-index-exact
 VectorIndexUpdate.OneRowUpdatedManyTimes vector-index-exact
 VectorIndexUpdate.UpdateThenDelete vector-index-exact
 #
-# Marche « index vectoriel juste en service », construction : une ligne très éloignée d'un
-# nuage serré (500 lignes, une à [9000, 2, 3, 4], toutes les autres coordonnées sous 31),
-# index bâti d'un coup après le remplissage, sans aucune mise à jour : la ligne, ou d'autres,
-# manquent un essai sur trois environ. Vert avec les vecteurs de la recette du cœur C++,
-# dont la dernière coordonnée va jusqu'à 499. Parent de HnswBuiltOnTheFirstHundredRows.
-VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
-#
 # Marche « correctifs de l'amont à reprendre » (upstream_fixes_test.cpp, revue du 4 octobre) :
 # des défauts hérités de Kuzu que Ladybug (tag ladybug-main-2026-08-31) ou Vela (tag
 # vela-master-2026-09-03) ont corrigés. Le commit de l'amont est nommé dans chaque cas ; on le
@@ -188,3 +176,16 @@ VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
+#
+# Un groupe de copies bien plus grand que le degré (vector_index_update_test.cpp,
+# SameVectorForEveryRow, la recette de rag3db-9c du 10 octobre) : 1 402 lignes du même vecteur
+# (FLOAT[384], cosinus), 23 fois le degré. Aucun plantage, mais des lignes injoignables par la
+# recherche exhaustive : sur master avant l'élagage classique, les huit cas (1 190 à 1 298 sur
+# 1 402) ; après, 1 083 à 1 222. Aucun corpus réel n'en approche (le plus grand groupe : 49,
+# retrouvé). Ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstCopy same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable

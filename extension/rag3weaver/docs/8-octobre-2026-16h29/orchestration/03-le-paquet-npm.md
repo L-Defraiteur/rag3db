@@ -78,6 +78,47 @@ binding. » Et, le 9 octobre :
 - Le choix se fait à l'installation, par l'assistant du CLI prévu dans la
   vision générale (§3) : « quel modèle, comment le brancher ».
 
+## 5 bis. Installer, puis régler : deux objets (Lucie, 10 octobre, le soir)
+
+Lucie a tranché en deux phrases : « installer rag3weaver, c'est installer un
+démon ; ce qu'on en fait après n'a rien à voir » ; puis : « avant d'avoir
+réglé quoi que ce soit, tu as juste un formulaire où tu entres les API que tu
+veux, ou par CLI c'est pareil, et la page te dit aussi comment le faire par
+CLI ; pas tout de suite un agent, mais une fois que tu as réglé un LLM, là oui,
+tu as un vrai magicien ».
+
+1. **Le démon.** `npm install rag3weaver` et il tourne : il lit un manifeste et
+   un `.env` s'ils existent ; sans rien, il fait ce qu'il peut (plein texte,
+   pas de vecteurs, pas de modèle) et dit ce qui lui manque. Aucune question
+   à l'installation. `rag3weaver doctor` montre ce qui est branché.
+2. **Le réglage, un formulaire — pas un agent, et pas encore de produit.**
+   La première page servie par le démon, quand rien n'est réglé, ne demande
+   **que ce qui est disponible** : les embarquements (*servis par nous* /
+   *un service existant* / *local sur votre carte* / *pas maintenant*) ; le
+   modèle de langage (*aucun* / *API compatible OpenAI* / *Anthropic* /
+   *serveur local*) et sa clé ; rien d'autre — pas de « code à indexer »,
+   pas de produit. Le formulaire écrit le manifeste et le `.env` (jamais une
+   clé dans le manifeste). **Chaque champ montre son équivalent en ligne de
+   commande** (`rag3weaver init --embed service=… --llm anthropic`), et la
+   CLI fait exactement la même chose. Pas d'agent à ce stade : il n'y a pas
+   encore de modèle pour le faire parler.
+3. **Le magicien du chaos.** Dès qu'un modèle est déclaré, la page devient un
+   agent dont le domaine est **le système lui-même** : il sait ce que tu as
+   de disponible (quels services, quel modèle, quelle carte) et il te
+   *monte un produit* si tu veux — le code, les decks, le dessin, un autre —
+   comme un outil de *boilerplate*, sauf que le boilerplate est ici une
+   déclaration (un backend, son gabarit, ses graphes) écrite dans le même
+   système : la boucle étrange en boilerplate. Puis il te donne **le lien de
+   l'agent dédié** de ce produit, qui a ses propres outils et sa propre page.
+   Lucie, 10 octobre : « le magicien du chaos te fait ce premier boilerplate,
+   te donne le lien pour parler à l'agent dédié ensuite ».
+
+Ce que ça fixe pour le chantier G : le paquet livre le démon et `doctor` ;
+`init` en CLI est petit et peut venir avec lui ; la page du réglage attend la
+marche 3 (vues déclarées), et c'est la première page de l'interface, pas un
+écran à part. Le magicien est un backend comme les autres, dont les outils
+sont « créer un backend depuis un gabarit » : il vient avec la marche 2.
+
 ## 6. Le bâti : des Docker par plateforme, la CI ne fait que publier
 
 Ce que Docker peut et ne peut pas faire, dit franchement :

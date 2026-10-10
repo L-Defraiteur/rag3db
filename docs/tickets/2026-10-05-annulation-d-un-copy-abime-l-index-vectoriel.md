@@ -1,6 +1,6 @@
 # (Requalifié) L'annulation d'un COPY dans une table indexée rend des lignes validées introuvables par leur vecteur
 
-- **État** : **requalifié le 5 octobre 2026 — ce n'est pas l'annulation.** La ligne manque
+- **État** : **corrigé avec la ligne lointaine** (`2da041058`, `c841d507c`, 10 octobre 2026) : `Ends/ProductReloadRecovery` passe de 83 rouges sur 120 à 3. **Requalifié le 5 octobre 2026 — ce n'est pas l'annulation.** La ligne manque
   déjà avant le premier `COPY` annulé, une passe sur deux, et l'annulation rend exactement
   l'état d'avant (huit passes dans un seul processus, session cœur C++). C'est une ligne
   injoignable dès la construction par des `COPY` successifs : suivi dans

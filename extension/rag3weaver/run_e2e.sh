@@ -93,6 +93,20 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # `BUILD_SHARED_LIBS`, les mêmes extensions. `RAG3DB_BUILD` permet de revenir
 # sur l'ancienne en une variable — utile pour vérifier qu'un test dit vrai des
 # deux côtés, ce que plusieurs des nôtres font maintenant exprès.
+#
+# **Et pour un `cargo` joué à la main, c'est le couple
+# `RAG3DB_LIBRARY_DIR` + `RAG3DB_INCLUDE_DIR` qui évite le bâti cmake**, pas
+# `RAG3DB_BUILD` ni `RAG3DB_SHARED`. Lu dans `tools/rust_api/build.rs` : si les
+# deux sont posées, build.rs ajoute un `rustc-link-search` et un `rpath` et
+# s'arrête là ; si l'une manque, il tombe dans `build_bundled_cmake()` et
+# rebâtit **tout le moteur**. `RAG3DB_SHARED` ne décide que du mode de liaison
+# (`dylib` au lieu de `static`) — seul, il ne protège de rien.
+#
+# Écrit ici parce que la nuance coûte vingt minutes à qui ne pose qu'une des
+# trois, et qu'on ne la voit pas : cargo ne dit pas qu'il part en cmake.
+# Vérifié le 10 octobre 2026 sur un worktree neuf de luciepc — la seule
+# occurrence de « cmake » dans la trace était la **crate** `cmake`, compilée
+# comme dépendance de build ; zéro `Building CXX`.
 BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"
 WEAVER="$ROOT/extension/rag3weaver"
 

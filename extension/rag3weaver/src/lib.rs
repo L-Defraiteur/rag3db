@@ -273,4 +273,6 @@ pub mod backend;
 /// La surface de code du backend déclaratif : la clé `workspace` (source de
 /// fichiers, racine, porte de commandes) — et sa politique par outil.
 pub mod backend_code;
+/// Le filet des gabarits livrés : chacun doit se charger, sinon la lib rougit.
+mod gabarits;
 mod backend_nodes;

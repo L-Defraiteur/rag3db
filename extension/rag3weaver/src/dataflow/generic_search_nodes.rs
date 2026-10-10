@@ -233,8 +233,10 @@ pub fn adaptive_search_decision(
                     crate::search::INDEX_STATUS_PREFIX
                 )),
             ),
-            (Level::Ready, Level::Ready)
-                if s.sparse.as_ref().is_none_or(|sp| sp.level == Level::Ready) =>
+            // Un signal non déclaré ne manque pas : « prêt pour ce qui est
+            // déclaré ».
+            (Level::Ready, Level::Ready | Level::NotDeclared)
+                if s.sparse.as_ref().is_none_or(|sp| matches!(sp.level, Level::Ready | Level::NotDeclared)) =>
             {
                 (false, None)
             }
@@ -254,7 +256,7 @@ pub fn adaptive_search_decision(
                         .unwrap_or_default(),
                     s.sparse
                         .as_ref()
-                        .filter(|sp| sp.level != Level::Ready)
+                        .filter(|sp| !matches!(sp.level, Level::Ready | Level::NotDeclared))
                         .map(|sp| format!(", creux {} %", sp.percent))
                         .unwrap_or_default()
                 )),
@@ -2636,6 +2638,8 @@ mod tests {
                 updated_ms: 0,
             })
         };
+        // Sans vecteurs déclarés, le plein texte prêt suffit : rien à dire.
+        assert_eq!(adaptive_search_decision(etat(Level::Ready, Level::NotDeclared, 0), true), (false, None));
         // Jamais indexé, une source : balayage, et la ligne dit quoi faire.
         let (scan, ligne) = adaptive_search_decision(etat(Level::Never, Level::Never, 0), true);
         assert!(scan);

@@ -19,3 +19,12 @@ VectorIndexUpdate.ReplaceThroughNullEveryOtherRow
 VectorIndexUpdate.ReplaceThroughNullEveryThirdRow
 VectorIndexUpdate.SecondIndexOnASecondColumnFilledFromNull
 VectorIndexUpdate.DropThenCreateTheIndexOnAFullTable
+#
+# L'élagage de l'index vectoriel (10 octobre) : les 1 402 copies insérées une à une dans un index
+# déjà posé (15 à 39 s chacun), le témoin des amas de copies (30 à 40 s), et la sonde des vrais
+# vecteurs (plusieurs minutes, sautée sans l'export de joignabilité).
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstLineByLine
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine
+VectorIndexUpdate.NearCopiesAndExactCopiesAreAllFound
+Paths/RealVectorsReachability.RowsNotFoundByTheirOwnVector/Masse
+Paths/RealVectorsReachability.RowsNotFoundByTheirOwnVector/Fond

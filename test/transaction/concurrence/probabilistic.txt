@@ -28,6 +28,13 @@ VectorIndexUpdate.SetToAnotherVectorLineByLine
 # pour l'écarter d'une passe complète.
 VectorIndexUpdate.TenThousandRowsInBatchesOf512
 #
+# Vingt lignes posées sur le même vecteur en une instruction (des copies, par le chemin des
+# mises à jour) : une perte sur 5 essais dans la liste complète de l'élagage classique
+# (10 octobre), puis plus aucune. Comptes, essais interrompus compris : avec l'élagage
+# classique, 1 perte sur 400 ; sur master avant lui, 0 sur 400 ; non significatif, sous un
+# poste chargé (charge de 36 à 522). La famille des mises à jour massives, ci-dessus.
+VectorIndexUpdate.TwentyRowsToTheSameVectorInOneStatement
+#
 # Le lecteur qui insiste (4 octobre au soir, relevé par la session de l'arbre principal sur
 # e2e_prise_atomique) : un écrivain fait environ 470 points de reprise par seconde, un
 # lecteur ouvre 80 fois en lecture seule avec la patience de rag3weaver (250 ms). Refusé
@@ -48,6 +55,9 @@ ReadOnlyReader.InsistingReaderIsNotStarvedByCheckpoints
 # RolledBackCheckpointThenDeath et RolledBackThenClose rouges 29 fois sur 30 chacune, Close
 # 10 sur 10. Avec les fils par défaut, environ une fois sur deux. Le hasard qui reste est la
 # graine de l'index. Ticket 2026-10-04-ligne-lointaine-injoignable-index-bati-d-un-coup.
+# Après le i = 0 et la règle d'élagage classique (10 octobre, 30 passes chacune) : 3 rouges
+# sur 120 (Death 1, RolledBackThenClose 1, Close 1), contre 83 sur 120 avant. Rares, pas nuls :
+# ils restent ici.
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackCheckpointThenDeath
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackThenClose
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Close
@@ -63,3 +73,8 @@ JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
 # passe complète (rows-found-after-the-sets). C'est la famille des lignes injoignables après
 # la mise à jour d'un vecteur, ci-dessus.
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Death
+#
+# Le même groupe de 1 402 copies, index posé avant un COPY de vecteurs nuls : 1 402 joignables
+# deux fois sur trois, 1 222 la troisième (10 octobre). Le cas non nul (SameIndexFirstCopy) est
+# vert trois fois sur trois. Ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstCopy

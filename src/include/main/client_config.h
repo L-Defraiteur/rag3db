@@ -46,7 +46,9 @@ struct ClientConfig {
     // Un COPY FROM force-t-il un point de reprise à sa validation ? Vrai tant que le chargement
     // en masse journalisé n'est pas complet : à faux, un COPY de nœuds écrit ses lignes au
     // journal et ne force plus rien ; un COPY de relations force encore le sien.
-    bool forceCheckpointOnCopy = true;
+    // Depuis le 10 octobre 2026 un COPY est journalisé : ses lignes vont au journal de sa
+    // transaction, sans point de reprise forcé (au-delà de copyJournalThreshold, le repli).
+    bool forceCheckpointOnCopy = false;
     // Le seuil du journal d'un COPY journalisé, en octets ; 0 : le défaut, tiré du tampon
     // (Transaction::copyJournalThreshold).
     uint64_t copyJournalThreshold = 0;

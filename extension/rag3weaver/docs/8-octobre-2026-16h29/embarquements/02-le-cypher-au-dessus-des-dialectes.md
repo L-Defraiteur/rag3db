@@ -143,3 +143,18 @@ rendre les **mêmes lignes** que le Cypher qu'elle remplace (comparaison champ
 |---|---|---|
 | `Hop` dans la crate, traduit par rag3db, refusé en le nommant ailleurs | `ba11e003b` | tests unitaires de la traduction |
 | `graph_walk::neighbors` passe par `Hop` | `389f5a9dd` | requête identique au caractère près (test) ; e2e_code 27/27, e2e_usages 7/7, usages_rendu 6/6 (luciepc, lib d’avant 0aed3c4b5, sans effet sur ce changement) |
+| Le saut du voisinage et le pas « aussi » (`neighborhood_nodes`) ; `Hop` rend des colonnes ordonnées (nœud, arête, vide) | `1990769aa`, `fdb43e804` | caractère près (tests) ; e2e_code, e2e_usages, usages_rendu, e2e_impact (plan sans produit cartésien), impact_rendu, e2e_working_tree verts |
+| Les usages directs des définitions (`usage_nodes`) | `26bc4207f` | caractère près (test) ; e2e_usages, usages_rendu, e2e_code, e2e_impact verts ; lib 1 256 après rebase |
+
+Ce qui reste en forme de saut, et ce qu'il faut à `Hop` pour le prendre :
+
+- les définitions et les usages par le rendez-vous (`definitions_query`,
+  `pivot_usages_query`) partent d'**un** uuid (`$u`) : un saut depuis une
+  liste d'un élément, l'appelant change de paramètre ;
+- `declarations_of` nomme ses nœuds `x` et `p`, sans nommer l'arête : même
+  forme, la parité se prouve par les lignes (e2e_usages), pas au caractère ;
+- `fetch_related` et la transition de `react_nodes` partent d'un nœud
+  **sans table** (`(n {_uuid: u})`) et rendent le nœud entier ou son
+  étiquette : il faut à `Hop` un départ sans table et une colonne
+  « étiquette ». Ce sont deux ajouts, à faire quand on y passera ;
+- les voisins de `code_tools` et `code.rs` : un uuid, une limite.

@@ -527,9 +527,13 @@ public:
         }
         runChild([&](rag3db::main::Database&, rag3db::main::Connection& connection) {
             mustQuery(connection, "CALL auto_checkpoint=false;");
-            if (form != Form::DefaultMixed) {
-                mustQuery(connection, "CALL force_checkpoint_on_copy=false;");
-            }
+            // Le COPY journalisé est le défaut depuis le 10 octobre 2026 ; ces formes éprouvent
+            // le chemin journalisé, pas « le défaut quel qu'il soit » : le réglage reste
+            // explicite. Le COPY ordinaire de DefaultMixed ne garde son point de reprise forcé
+            // que par le réglage.
+            mustQuery(connection, form == Form::DefaultMixed ?
+                                      "CALL force_checkpoint_on_copy=true;" :
+                                      "CALL force_checkpoint_on_copy=false;");
             mustQuery(connection, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, vec "
                                   "FLOAT[2]);");
             mustQuery(connection, "CREATE REL TABLE Link(FROM Doc TO Doc);");
@@ -631,8 +635,9 @@ TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionSurvivesWholeOrNotAtAll) {
     run(Form::IgnoredMixed);
 }
 
-// La transaction par paquet de rag3weaver d'aujourd'hui (MERGE puis COPY), au réglage par
-// défaut : le COPY ordinaire y garde son point de reprise forcé.
+// La transaction par paquet de rag3weaver avec le plein texte en base (MERGE puis COPY), qui
+// demande le point de reprise forcé par le réglage : le COPY ordinaire y garde son point de
+// reprise.
 TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithAnOrdinaryForcedCopySurvivesWhole) {
     run(Form::DefaultMixed);
 }
@@ -1043,6 +1048,9 @@ TEST_F(SingleWriterCrash, CopyThatReturnedAnErrorThenDeath) {
 // 2026-10-04-copy-refuse-gonfle-la-cardinalite.md) : ce cas ne la regarde pas.
 TEST_F(SingleWriterCrash, CopyCancelledByAnOpenTransactionLeavesNothing) {
     mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    // L'attente et l'annulation ne valent que pour un COPY forcé : par le réglage, depuis que le
+    // COPY journalisé est le défaut (10 octobre 2026).
+    mustRun("CALL force_checkpoint_on_copy=true;");
     const auto csv = writeCsv(databasePath + ".cancelled.csv", 0, 1000);
     {
         rag3db::main::Connection other(database.get());
@@ -1142,32 +1150,73 @@ TEST_F(SingleWriterCrash, BurstOfWritesUnderAnOpenReaderDoesNotWait) {
 }
 
 // La forme explicite, celle de la transaction par paquet de rag3weaver : BEGIN ; COPY ;
-// COMMIT, avec une autre transaction ouverte. Le COMMIT rend l'erreur de délai (un COMMIT qui
-// échoue ferme le bloc), et rien ne reste : ni ligne, ni clé, puis point de reprise,
-// réouverture, intégrité.
+// COMMIT, avec une autre transaction ouverte. Journalisé (le défaut depuis le 10 octobre 2026),
+// le COMMIT n'attend personne et passe ; les lignes sont là, puis point de reprise, réouverture,
+// intégrité. Les résultats de requête meurent avant reopen() : ils tiennent de la mémoire de
+// la base qui les a rendus.
 TEST_F(SingleWriterCrash, ExplicitCopyCommitWhileATransactionIsOpen) {
     mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
     const auto csv = writeCsv(databasePath + ".explicit.csv", 0, 1000);
-    rag3db::main::Connection other(database.get());
-    other.query("BEGIN TRANSACTION READ ONLY;");
-    other.query("MATCH (c:C) RETURN count(*);");
-    mustRun("BEGIN TRANSACTION;");
-    auto copy = conn->query("COPY C FROM '" + csv + "' (header=false);");
-    if (!copy->isSuccess()) {
-        // Le COPY n'est pas permis dans un bloc explicite : rien à éprouver par cette forme.
-        std::cerr << "  COPY in a block: " << copy->getErrorMessage() << "\n";
+    {
+        // L'autre connexion meurt avec le bloc, avant reopen() : rien de l'ancienne base ne
+        // doit lui survivre.
+        rag3db::main::Connection other(database.get());
+        other.query("BEGIN TRANSACTION READ ONLY;");
+        other.query("MATCH (c:C) RETURN count(*);");
+        mustRun("BEGIN TRANSACTION;");
+        {
+            auto copy = conn->query("COPY C FROM '" + csv + "' (header=false);");
+            ASSERT_TRUE(copy->isSuccess())
+                << "[check: copy-in-a-block] " << copy->getErrorMessage();
+            auto commit = conn->query("COMMIT;");
+            EXPECT_TRUE(commit->isSuccess())
+                << "[check: journaled-commit-does-not-wait] " << commit->getErrorMessage();
+        }
+        EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 1000) << "[check: rows-visible] ";
+        EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 1) << "[check: key-found] ";
+        other.query("COMMIT;");
+    }
+    mustRun("CHECKPOINT;");
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 1000) << "[check: rows-after-reopen] ";
+    expectIntegrity();
+}
+
+// La même forme, forcée par le réglage : le COMMIT attend le départ de l'autre transaction pour
+// son point de reprise, rend l'erreur de délai (un COMMIT qui échoue ferme le bloc), et rien ne
+// reste : ni ligne, ni clé, puis point de reprise, réouverture, intégrité.
+TEST_F(SingleWriterCrash, ExplicitForcedCopyCommitWhileATransactionIsOpen) {
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY);");
+    mustRun("CALL force_checkpoint_on_copy=true;");
+    const auto csv = writeCsv(databasePath + ".explicit.csv", 0, 1000);
+    {
+        // L'autre connexion meurt avec le bloc, avant reopen().
+        rag3db::main::Connection other(database.get());
+        other.query("BEGIN TRANSACTION READ ONLY;");
+        other.query("MATCH (c:C) RETURN count(*);");
+        mustRun("BEGIN TRANSACTION;");
+        {
+            auto copy = conn->query("COPY C FROM '" + csv + "' (header=false);");
+            if (!copy->isSuccess()) {
+                // Le COPY n'est pas permis dans un bloc explicite : rien à éprouver par cette
+                // forme.
+                std::cerr << "  COPY in a block: " << copy->getErrorMessage() << "\n";
+                conn->query("ROLLBACK;");
+                other.query("COMMIT;");
+                GTEST_SKIP() << "COPY is not allowed in an explicit transaction";
+            }
+            auto commit = conn->query("COMMIT;");
+            std::cerr << "  COMMIT: " << (commit->isSuccess() ? "ok" : commit->getErrorMessage())
+                      << "\n";
+            EXPECT_FALSE(commit->isSuccess()) << "[check: commit-waits-and-fails] ";
+        }
         conn->query("ROLLBACK;");
         other.query("COMMIT;");
-        GTEST_SKIP() << "COPY is not allowed in an explicit transaction";
+        EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-visible] ";
+        EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 0) << "[check: no-ghost-key] ";
     }
-    auto commit = conn->query("COMMIT;");
-    std::cerr << "  COMMIT: " << (commit->isSuccess() ? "ok" : commit->getErrorMessage())
-              << "\n";
-    EXPECT_FALSE(commit->isSuccess()) << "[check: commit-waits-and-fails] ";
-    conn->query("ROLLBACK;");
-    other.query("COMMIT;");
-    EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 0) << "[check: nothing-visible] ";
-    EXPECT_EQ(queryInt("MATCH (c:C {id: 5}) RETURN count(*);"), 0) << "[check: no-ghost-key] ";
     mustRun("CHECKPOINT;");
     if (!reopen()) {
         return;

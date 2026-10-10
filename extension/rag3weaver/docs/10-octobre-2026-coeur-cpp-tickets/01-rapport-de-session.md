@@ -4,7 +4,7 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 10 octobre 2026, lot (a) commité (`90882b6d0`, branche `relcopy-sous-refus`).**
+**Dernière mise à jour : 10 octobre 2026, soir — lot (a) dans master, lot (c) en cours (le défaut de sélection corrigé, `CALL analyze` à coder).**
 
 ## L'arbre
 
@@ -22,7 +22,7 @@ Les noms des sessions depuis le plantage de Codium (10 oct.) : orchestration rag
 
 ## Les lots, dans l'ordre de l'orchestration
 
-1. (a) `CopyTest.RelCopyBMExceptionRecoverySameConnection` — **fait** (`90882b6d0`) : le test réglé sur la taille du COPY, joué aussi journalisé, et un témoin neuf ; `copy_tests` entier vert (23), les 17 tests de `transaction_test` qui utilisent la doublure verts.
+1. (a) `CopyTest.RelCopyBMExceptionRecoverySameConnection` — **fait**, dans master (`33c3d42de`, puis `fe7f95fdd` qui pose les deux chemins explicitement après le basculement `ff9bad960`) : le test réglé sur la taille du COPY, joué aussi journalisé, et un témoin neuf ; `copy_tests` entier vert (23), les 17 tests de `transaction_test` qui utilisent la doublure verts.
 2. (b) Le plantage HNSW sur des centaines de vecteurs identiques : une lecture de rag3db-9c
    (« risque de plantage »), jamais vu. Le lot commence par la recette nue : le ticket ne
    s'écrit que si elle rougit. Accord du banc (rag3db-77) pour `extension/vector/`.
@@ -136,6 +136,20 @@ et des refus par essai (en patch).
   (coût : hacher toutes les colonnes) ; ou dire l'estimation et s'en tenir là. Les relations
   n'ont aucune statistique tenue (`nextRelOffset` seul, qui est aussi l'allocateur
   d'identités) : la cause du ticket des relations est autre.
+
+## Lot (c) — l'avancement (10 octobre, soir)
+
+- Décision de l'orchestration : (A), `CALL analyze('Table')` explicite, un balayage, sans
+  déclenchement automatique dans ce lot ; page `03-le-recalcul-des-statistiques.md`, acceptée.
+- **Un défaut trouvé en chemin, corrigé** (`b180185c9`) : `ColumnStats::update` relisait les
+  hachages aux premières cases sous une sélection filtrée — rouge « estimation 1 pour 1000 »,
+  vert après ; relu par la session cœur C++. Les nulles comptées comme une valeur : noté au
+  ticket, sans correctif.
+- Accords de la session cœur C++ pour `src/storage` : le commentaire périmé et le recalage de la
+  cardinalité sur les lignes vivantes, à deux conditions (ne jamais toucher `numTotalRows`, ne pas
+  rebalayer au point de reprise).
+- Reste : les témoins rouges de `STATS_INFO` après `IGNORE_ERRORS`, `DELETE`, `SET` ; `analyze` ;
+  la réouverture ; la mesure de 100 000 lignes sous `poste mesure`.
 
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 

@@ -53,6 +53,27 @@ Branches encore en cours, toutes poussées (les noms
 | `modeles-declares` (fusionnée) | `../rag3db-embarquements` | embarquements | **3 octobre au soir, demandé par Lucie** : « un modèle, en service ou en local » — une déclaration commune à toute capacité, pour que l'OCR ou la voix se servent comme l'embarquement sans refaire la tuyauterie. Proposition : `extension/rag3weaver/docs/3-octobre-2026-21h22/01-un-modele-en-service-ou-en-local.md`. Décidé par défaut (page § 6) : clé `models` au manifeste, variables `RAG3WEAVER_SERVICE_<CAPACITÉ>` (`RAG3WEAVER_EMBED_SERVICE` gardée comme alias), repli `refuse` sauf si `fallback: local` est écrit. **Lot 1 sur master** : `src/model_source.rs` (déclaration, résolution, origine du calcul), embarquement dense migré (`models.embed` ou `embeddings`, l'une ou l'autre), fournisseur `local` pour le backend. **Lot 2 sur master** : la décision — `src/decider.rs` (`Decider` : un texte déjà composé, des options d'un seul jeton, une probabilité par option ; fournisseur `llama_server`), déclarée par `models.decide`, donnée aux nœuds sous la clé de service `decider`. Elle ne sait rien de la formulation, qui reste au graphe. Vérifié sur le service de luciepc : 117 ms. **Lots 3 et 4 sur master** : `models.sparse` (creux et dual branchés dans le backend, signal refusé s'il n'est pas déclaré), `models.rerank` et `models.ocr` en local. **Lot 5 sur master** : le démon d'embarquement porte aussi un relecteur et un OCR (`RAG3WEAVER_RERANK_MODEL`, `RAG3WEAVER_OCR_MODEL` à son lancement ; routes `/rerank` et `/ocr` ; son identité les déclare) — un seul démon à relancer sur le poste qui sert. | Les lancer sur luciepc avec le démon bge-m3. Lot 6 (LLM) avec la session qui tient le chat. |
 | `codeparsers-genre-d-usage` (sous-module `codeparsers`, dépôt `L-Defraiteur/codeparsers`) | `../rag3db-codeparsers` | codeparsers | **3 octobre** : pointé par rag3db jusqu'à `9a1fae3` ; transport du genre en base sur master (`adccf8d62`). **Pile en attente chez la session de l'arbre principal, à prendre dans l'ordre** : `codeparsers-pointeur-4` (`1f9d653`, fonctions de `mod` Rust en scopes : +415 scopes sur `src/dataflow`, sans texte en double ; livré seul pour que son effet soit attribuable) → `codeparsers-pointeur-5` (`137b9d2`, `ScopeInfo.test`) → `codeparsers-champs-test` (`b6e7db858`, `test_role`/`test_certainty`/`test_name` sur `Scope`, vides et non nuls) → `codeparsers-pointeur-6` (`594fc61`, scopes TS/JS pour `describe`/`it`/`test`, séparé puisqu'il crée des scopes) → `codeparsers-pointeur-7` (`a569417`, imports Rust/Python/C++ et `USES_LIBRARY` : 698 sur `src/dataflow`, `CONSUMES` quasi inchangés). Sur master de codeparsers, **hors pointeur** (consigne : un seul pointeur de plus, quand la pile sera vidée) : `56d039f`, appels typés par un champ ou un retour déclaré (`CONSUMES` +51/−3 sur `src/dataflow`, 25 relus sans faux). Propositions code.rs chez l'arbre principal : `codeparsers-champs-test`, `codeparsers-mentions-type` (une mention typée choisit sa méthode parmi les homonymes). La pile est bloquée par l'assertion « merge_port_values en tête » : les tests de `mod` devenus scopes passent devant la définition en plein texte ; déblocage par le poids de `test_role` (session recherche), la règle « nom exact en tête » attend Lucie. Limite à garder : « local » dépend du corpus analysé (porte de la vision des dépôts reliés). Docs `extension/rag3weaver/docs/3-octobre-2026-20h30/` 01 à 07. **Outil `usages` sur master (`551ed2d1f`)** : nœud générique `UsagesNode` (pivot déclaré par le gabarit), gabarit `templates/tools/usages.mmd` ; pour le code, union du rendez-vous (`MENTIONS`, usages entre fichiers et noms ambigus) et des arêtes directes (`CONSUMES`…, usages du même fichier) — ni l'un ni l'autre seul ne suffit ; un nom ambigu montre tout et range à part les usages non attribués ; requêtes en liste simple étiquetée, `EXPLAIN` sans produit cartésien testé. Attachement aux manifestes et politique : session recherche (fait). **Outil `impact` sur master (`c6065b35e`)** : nœud générique `NeighborhoodNode` (niveaux, budget, plafond de degré, regroupement par champ, départ supplémentaire par un chemin déclaré) et gabarit `impact.mmd` (tests qui traversent, groupés par `test_role`). Un carrefour n'est pas traversé vers le code, mais ses tests sont relevés — c'est ce qui retrouve les tests cassés par trois changements réels de ce dépôt (row_to_map, mark_snapshot, split_unchanged). Règle commune `catalog_read.rs` : un outil de lecture ne rend jamais un vide sans dire d'où il vient (occupé, jamais indexé, partiel). Trouvé en route, corrigé dans codeparsers `ace6fd8` (sans pointeur, après le 8) : le parent d'une méthode Rust était la struct homonyme, pas son impl (520 enfants sur `src/dataflow`). | 1) Reprise de la pile. 2) Imports Go et C# ; chemin complet des imports locaux. 3) `qualifier_type` sur la voie MENTIONS de code.rs. Hors cadrage : le type des liaisons de motif et des paramètres de fermeture (inférence). |
 
+**Livraison du cœur C++, 10 octobre 2026 — la condition 2 de la stèle est fermée.** `master`
+a reçu en avance rapide, depuis `../rag3db-moteur` : `0aed3c4b5` (le fichier de la base a une
+étendue connue : les pages d'un `COPY` tué ou rejoué ne sont plus perdues ; **version de
+stockage 40** — une base touchée n'est plus lisible par un moteur d'avant, une base d'avant
+s'ouvre et acquiert son étendue au premier point de reprise) et `ff9bad960` (**le `COPY`
+journalisé est le défaut du moteur** : `force_checkpoint_on_copy=false` ; plus de point de
+reprise forcé par `COPY`, plus d'attente du départ des autres à sa validation ; au-delà de
+256 Mio de journal par transaction, repli sur le point de reprise forcé ; l'indexation avec le
+plein texte en base demande elle-même `CALL force_checkpoint_on_copy=true`). Toute lib se
+rebâtit sur ce master. Preuves : la liste complète verte sous ce défaut, contrôle de fuite de
+pages compris ; la série de confirmation des embarquements (fichiers 80 → 81 s, blobs 89 → 87 s,
+`…/8-octobre-2026-16h29/embarquements/04-la-serie-de-confirmation.md`). Pages :
+`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04`, `05`, `06` ; la stèle §2.
+Prochain lot du cœur C++ : les verrous (page courte d'abord), puis les écritures parallèles.
+**Confirmation produit (arbre principal, 10 octobre au soir)** : la batterie rag3weaver complète
+sous ce défaut, **74 suites vertes, aucun rouge**. Conditions : lib de 17 h 27, moteur
+`aeec6888f` (`ff9bad960` dedans, sans `d10b92306`), `RAG3WEAVER_MOTEUR_ANCIEN=1` dit, hors carte
+locale, régime doux. Écartées : `e2e_postgres` (pas de conteneur), les cinq suites `openai-llm`,
+et les suites de la carte locale. Jouée en deux parties autour du nettoyage du disque ; rapport
+`extension/rag3weaver/docs/10-octobre-2026-arbre-principal/02-rapport-de-session.md`.
+
 **Livraison du cœur C++, 3 octobre 2026** : `master` a reçu en avance rapide dix commits
 (`81f8982ea..13284a0fe`), livrés par la session cœur C++ depuis son arbre
 (`../rag3db-moteur`), à la demande de l'orchestration.
@@ -504,10 +525,11 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : six façons de prendre son harnais pour un résultat
+## Méthode : huit façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
-la cinquième est tombée la nuit suivante. Elles se sont présentées à la suite,
+la cinquième est tombée la nuit suivante, la sixième le 4 octobre
+(quatre fois le même jour), la septième et la huitième le 10. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -547,6 +569,27 @@ git checkout -q <sha du pointeur>
 Le `<sha>` se lit par `git ls-tree HEAD extension/rag3weaver/codeparsers`, et
 `git -C … rev-parse HEAD` dit où l'on est : **les deux doivent coïncider**,
 c'est la seule vérification qui attrape ce piège.
+
+**Et cette recette échoue à son tour quand l'arbre principal est lui-même en
+retard** — le 10 octobre 2026, le cas s'est présenté : le pointeur était passé
+sur master par le push d'une autre session, sans transiter par l'arbre
+principal, dont le clone de sous-module ne connaissait pas le commit. Un
+`fetch origin <sha>` ne peut pas donner ce qu'il n'a pas, et l'erreur ressemble
+à la précédente.
+
+La sortie de secours est la **source déclarée**, qui ne dépend de personne :
+
+```sh
+cd extension/rag3weaver/codeparsers
+git fetch git@github.com:L-Defraiteur/codeparsers.git <sha du pointeur>
+git checkout -q --detach <sha du pointeur>
+```
+
+L'URL se lit dans `.gitmodules` — c'est elle qui est vraie, pas l'`origin` du
+clone local, recâblé sur un chemin de fichier. Et cela **sans** desserrer
+`protocol.file.allow` : affaiblir un garde-fou global pour contourner un remote
+mal câblé est le mauvais échange, et c'est le genre de concession qu'on ne
+reprend jamais.
 
 **2. `git stash` est partagé entre les worktrees.** C'est une pile **par
 dépôt**, pas par arbre de travail. Un `stash` qui n'empile rien suivi d'un
@@ -643,10 +686,82 @@ suffisait pas : un `grep` sur `extension/vector/build` dans `tests/` — par le
 chaque rebase** : un second site du même motif est arrivé sur master le jour
 même, et un grep joué avant le rebase ne pouvait pas le voir.
 
-**Et la forme commune aux six**, qui est aussi celle des défauts qu'on
+**7. Le binaire de test plus vieux que le moteur qu'il charge.** 10 octobre
+2026 : trois rouges d'un coup, `undefined symbol: setForceCheckpoint`, dans une
+suite qui passait la veille. Le symbole existe bien dans la bibliothèque du
+moteur du jour — le binaire de test, lui, datait du **4 octobre**, et cargo ne
+l'avait pas rebâti parce qu'aucune de **ses** sources n'avait changé. J'ai failli
+l'imputer au moteur.
+
+C'est le sixième piège d'un cran plus loin. **Correction du même jour, 18 h**,
+parce que la première version de cette note accusait un trou qui n'existe pas :
+j'avais écrit que « personne ne surveille l'âge de la bibliothèque » autrement
+qu'à l'horloge. C'est faux, et `run_e2e.sh` me l'a prouvé en me **refusant** une
+passe :
+
+```
+✗ librag3db.so est plus vieux que le dernier commit de ses sources
+  (src : d10b92306 du 10/10 17:53)
+✗ Rebâtir : cmake --build … , ou RAG3WEAVER_MOTEUR_ANCIEN=1 en le sachant.
+```
+
+La garde compare l'artefact au dernier commit de **ses sources**, ce qui est le
+bon critère, et elle nomme son remède et sa dérogation. Je ne l'avais jamais vue
+parce que je ne l'avais jamais déclenchée — et annoncer un garde-fou manquant
+qui existe coûte autant que d'en manquer un : un journal auquel on ne peut pas
+se fier ne sert plus à rien.
+
+**Ce qui reste vrai, et c'est le piège** : cette garde protège la
+**bibliothèque**, pas le **binaire de test** qui la charge. Rien ne compare
+l'âge de `deps/e2e_…` à celui du `.so`, et c'est le seul maillon que les deux
+gardes laissent sans surveillance.
+
+Ce qui le rend vicieux : rien n'est périmé au sens de cargo. Le binaire est à
+jour par rapport à ses sources, la bibliothèque est à jour par rapport aux
+siennes, et les deux sont pourtant incompatibles parce qu'elles ne se lient
+qu'au **chargement**. Un `cargo test` qui ne recompile rien n'est donc pas une
+bonne nouvelle quand le moteur a bougé sous lui : c'est exactement le cas où il
+faut forcer. `touch` sur une source du crate, ou `--tests --no-run` après tout
+rebâti du moteur.
+
+Et la leçon de forme, la même que les six autres : la condition de validité
+manquante n'était ni la bibliothèque ni les sources, mais **la date du binaire
+mesuré lui-même**. Une mesure commence par prouver que l'artefact chargé vient
+du code qu'on croit mesurer — pas seulement que ses sources sont à jour.
+
+**8. Le diff qui montre vos propres fichiers comme supprimés.** 10 octobre
+2026, avant une fusion : `git diff --stat HEAD..origin/master` pour savoir ce
+qu'un rebase allait apporter, et la sortie annonce `src/gabarits.rs | 163 -----`
+— mon fichier, celui que je venais d'écrire, en voie de disparition. J'ai
+failli chercher qui le retirait.
+
+Il ne manquait rien : `HEAD..origin/master` compare **deux têtes**, donc tout
+ce que ma branche a et que master n'a pas encore paraît comme une suppression.
+La question « qu'est-ce que master apporte ? » se pose depuis la base de
+fusion, jamais depuis ma tête :
+
+```sh
+base=$(git merge-base HEAD origin/master)
+git log  --oneline $base..origin/master
+git diff --stat      $base..origin/master
+```
+
+Ce qui le rend dangereux n'est pas la subtilité, c'est la **crédibilité** : la
+sortie est bien formée, le chiffre est juste, le fichier existe, et la seule
+chose fausse est la question qu'on croyait poser. Un rouge franc se corrige ;
+une réponse exacte à une autre question se croit.
+
+Et le détail qui achève de convaincre : la **même** sortie m'était passée sous
+les yeux deux heures plus tôt, sur un rebase précédent, et je l'avais
+reconnue — « c'est attendu, master n'a pas encore mes commits ». Savoir
+pourquoi une sortie trompe ne protège pas de s'y laisser prendre la fois
+suivante, quand elle nomme un fichier auquel on tient. C'est la commande qu'il
+faut changer, pas la vigilance.
+
+**Et la forme commune aux huit**, qui est aussi celle des défauts qu'on
 corrige dans le produit : une information existe, et rien ne la consulte. Le
 pointeur du sous-module, la pile de stash, la provenance d'un rouge, l'âge
-d'une bibliothèque — et, pour la cinquième, son âge **à la fin**. Un banc, un
+d'une bibliothèque, la date du binaire qui la charge — et, pour la cinquième, son âge **à la fin**. Un banc, un
 test ou un rapport doivent **porter leur condition de validité à côté de leur
 verdict**, sinon le verdict se lit tout seul et on le croit.
 

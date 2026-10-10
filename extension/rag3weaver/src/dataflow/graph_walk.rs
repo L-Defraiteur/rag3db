@@ -106,6 +106,11 @@ impl EdgeMark {
         if self.applies(rel) { format!("r.{}", self.field) } else { "NULL".into() }
     }
 
+    /// [`Self::column`] dans le langage intermédiaire.
+    pub fn column_ir(&self, rel: &RelInfo) -> rag3weaver_ir::Column {
+        if self.applies(rel) { rag3weaver_ir::Column::Edge(self.field.clone()) } else { rag3weaver_ir::Column::Null }
+    }
+
     pub fn is_guessed(&self, valeur: &str) -> bool {
         self.guessed.iter().any(|g| g == valeur)
     }
@@ -120,12 +125,11 @@ pub fn text(v: Option<&CypherValue>) -> String {
     v.and_then(|v| v.as_str()).unwrap_or("").to_string()
 }
 
-/// Le degré, dans un sens, d'une liste de nœuds.
-pub fn degree_query(rel: &RelInfo, direction: Direction) -> String {
-    match direction {
-        Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{} {{_uuid: u}})<-[r:{}]-() RETURN u, count(r)", rel.to, rel.name),
-        Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{} {{_uuid: u}})-[r:{}]->() RETURN u, count(r)", rel.from, rel.name),
-    }
+/// Le degré, dans un sens, d'une liste de nœuds, en forme du langage
+/// intermédiaire.
+pub fn degree_count(rel: &RelInfo, direction: Direction) -> rag3weaver_ir::Count {
+    let (start, _) = direction.tables(rel);
+    rag3weaver_ir::Count::Edges { start: start.into(), relation: rel.name.clone(), direction: direction.ir() }
 }
 
 /// La somme des degrés de chaque nœud, par ces relations, dans ces sens.
@@ -137,7 +141,8 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
     let liste = uuid_param(uuids);
     for rel in rels {
         for &direction in directions {
-            let rows = catalog.execute_raw_with_params(&degree_query(rel, direction), std::slice::from_ref(&liste)).map_err(|e| e.to_string())?;
+            let q = catalog.dialect_arc().count(&degree_count(rel, direction)).map_err(|e| e.to_string())?;
+            let rows = catalog.execute_raw_with_params(&q, std::slice::from_ref(&liste)).map_err(|e| e.to_string())?;
             for r in &rows.rows {
                 *out.entry(text(r.first())).or_default() += r.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
             }
@@ -200,6 +205,21 @@ mod tests {
                 assert_eq!(Rag3dbDialect.hop(&hop_of(&r, d, &m)).unwrap(), avant);
             }
         }
+    }
+
+    /// Parité : le degré traduit par rag3db est la requête d'avant.
+    #[test]
+    fn le_degre_du_dialecte_est_la_requete_d_avant() {
+        use crate::dialect::{Rag3dbDialect, SchemaDialect};
+        let r = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Symbol".into(), props: vec![] };
+        assert_eq!(
+            Rag3dbDialect.count(&degree_count(&r, Direction::Incoming)).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:Symbol {_uuid: u})<-[r:DEFINES]-() RETURN u, count(r)"
+        );
+        assert_eq!(
+            Rag3dbDialect.count(&degree_count(&r, Direction::Outgoing)).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:File {_uuid: u})-[r:DEFINES]->() RETURN u, count(r)"
+        );
     }
 
     #[test]

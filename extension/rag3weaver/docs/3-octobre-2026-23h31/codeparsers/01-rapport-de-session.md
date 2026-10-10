@@ -153,6 +153,14 @@ reste, par forme : nom seul 28 % (ticket, pas maintenant), chemins de
 module 20 % (réexportations — décision à prendre), receveurs variables et
 chaînes 33 % (palier 2, à ouvrir), dont 2 285 visent un nom de méthode std.
 
+**tree-sitter-scss pour le bâti Windows** (10 octobre, chantier G) : la
+seule version publiée imposait à `cl` un drapeau GCC (D8021). Copie locale
+dans codeparsers (`vendor/tree-sitter-scss`, MIT, VENDOR.md), build.rs en
+`flag_if_supported` et `-utf-8` pour une cible MSVC, comme tree-sitter-css ;
+dépendance par chemin, aucun `[patch]` chez rag3weaver. codeparsers 4c7897c,
+pointé sur master de rag3db en f9aa29a28 ; compilé sans un refus sous MSVC
+14.51 par l'essai Windows de l'optimiseur.
+
 ## Ce qui attend quelqu'un
 
 - **Orchestration ou Lucie** : un chemin de module désigne-t-il aussi son

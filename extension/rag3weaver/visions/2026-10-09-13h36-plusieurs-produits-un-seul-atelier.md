@@ -84,3 +84,60 @@ la première épreuve du backend déclaré), le DXF quand le paquet npm et le
 bâti Windows existent (chantier G), Blender quand un service `bpy` vaut la
 peine d'être écrit. Un domaine à la fois ; chacun doit tenir les trois
 conditions du §4 avant le suivant.
+
+## 6. Le magicien du chaos (Lucie, 10 octobre au soir)
+
+Entre « rien » et « un produit », il y a un agent dont le domaine est le
+système lui-même. Une fois les services et le modèle déclarés (par un
+formulaire ou la CLI : rien d'autre à ce stade, pas de code à indexer), le
+**magicien du chaos** sait ce qui est disponible et te monte un produit à la
+demande — le code, les decks, le dessin, un autre — comme un outil de
+*boilerplate*, sauf que le boilerplate est une déclaration (un backend, son
+gabarit, ses graphes) écrite dans le même système : la boucle étrange en
+boilerplate. Puis il te donne le lien de l'**agent dédié** de ce produit, qui
+a ses propres outils et sa propre page. Le magicien n'est pas une pièce à
+part : c'est un backend comme les autres, dont les outils sont « créer un
+backend depuis un gabarit » — il vient avec la marche 2.
+
+Deux ajouts de Lucie, le même soir :
+
+- **Le premier cas, très simple** : « donne-moi des outils MCP sur ce projet
+  de code pour chercher dedans via rag3weaver » — et, dans la foulée, « l'agent
+  demande aussi si tu veux une mémoire long terme accessible à Claude ». Les
+  deux sont le même mécanisme : un backend déclaré (code, mémoire) exposé en
+  serveur MCP, ses outils tirés de ses schémas. C'est le chantier H du plan de
+  reprise ; le magicien le fera d'une phrase.
+- **Les noms sont des thèmes.** « Le magicien du chaos », « le classeur de
+  Dawson du chaos » : c'est fun, et on pourra le vendre avec un thème plus
+  sérieux sans rien changer dessous — les noms sont des déclarations comme le
+  reste, pas du code.
+
+## 7. Déclaré n'est pas exposé (Lucie, 10 octobre au soir)
+
+Lucie : « un backend boucle étrange développé par quelqu'un peut avoir des
+agents, mais il ne les veut pas forcément tous disponibles après publication ;
+il y en a peut-être de mode debug ; et la mémoire pareil : pas la peine, sur
+un site où il y a du RAG, d'avoir dedans la mémoire de comment le projet s'est
+construit. » Puis : « rendons ça générique : `exposure: clé… | clé… & clé…` ».
+
+- **Chaque déclaration porte une exposition** — outil, agent, réaction,
+  graphe, cellule de données — sous la forme d'une **expression sur des
+  clés**, pas d'une paire fixe dev/publié : `exposure: published`,
+  `exposure: dev | admin`, `exposure: published & premium`, `exposure: dev &
+  (alice | bob)`. Les clés sont des mots libres, déclarés comme le reste.
+- **Un contexte présente ses clés** : un déploiement (« published »), une
+  session (« dev », « admin »), une personne, un abonnement, un serveur MCP
+  lancé avec `--keys dev,admin`. Une déclaration est **chargée** si son
+  expression est vraie pour les clés présentées ; sinon elle n'existe pas pour
+  ce contexte.
+- **Les cellules de données suivent la même règle** : la mémoire de la
+  construction vit dans une cellule dont l'exposition est `dev` ; le RAG du
+  site publié dans une cellule `published`. Déployer, c'est présenter des
+  clés, et ce qui ne les satisfait pas ne part pas. Même isolation
+  structurelle que pour les locataires : pas un `WHERE` à se rappeler.
+
+Le point dur : la frontière se tient **au chargement** (ce qui n'est pas
+exposé n'est pas chargé), pas par la politesse des outils — sinon un outil
+`dev` lit une cellule publiée et la fuite par une réponse d'agent. Un serveur
+MCP n'expose que ce que ses clés rendent vrai, rien par défaut.
+

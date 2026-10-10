@@ -2150,7 +2150,7 @@ impl Catalog {
         // pas vrai, et c'est la ligne qui préviendra.
         let lignes = self
             .conn
-            .execute(&format!("MATCH (n:{table}) RETURN count(n)"))
+            .execute(&self.dialect.count_rows(table))
             .ok()
             .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
             .unwrap_or(-1);
@@ -6211,7 +6211,7 @@ impl Catalog {
                 if voisine != entity {
                     continue;
                 }
-                let Ok(racines) = crate::dataflow::search_nodes::fetch_related(self.conn.as_ref(), uuids, &regle.relation, vers_la_racine, usize::MAX) else {
+                let Ok(racines) = crate::dataflow::search_nodes::fetch_related_in(self.dialect.as_ref(), self.conn.as_ref(), uuids, &regle.relation, vers_la_racine, usize::MAX) else {
                     continue;
                 };
                 for enfants in racines.values() {

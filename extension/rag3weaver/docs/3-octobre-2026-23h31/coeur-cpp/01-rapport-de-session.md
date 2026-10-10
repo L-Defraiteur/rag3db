@@ -45,6 +45,7 @@ ne dit pas : comment reprendre, et pourquoi les choses sont dans cet ordre.
 | Sonde du poids du journal | `c1c2f9dfc` | `RAG3DB_PROFILE_JOURNAL=1` : à chaque validation, les octets du journal de la transaction par type d'enregistrement et par table, sur la sortie d'erreur |
 | Repli d'un `COPY` journalisé (étape 4, lot 2) | `71cffbc4b` | au-delà de `copy_journal_threshold` (défaut : un huitième du tampon, plafonné à 256 Mio), la transaction vide son journal et redevient durable par son point de reprise ; compteur `copy_journal_fallbacks`. Inerte tant que `force_checkpoint_on_copy` vaut `true` |
 | Le fichier de la base a une étendue connue | `0aed3c4b5` | les pages d'un `COPY` tué ou rejoué ne sont plus perdues : l'étendue du fichier dans l'en-tête au point de reprise (version de stockage 40), l'excédent rendu à l'espace libre à l'ouverture en écriture ; 559 pages perdues par COPY de 200 000 lignes tué, avant |
+| **Le COPY journalisé devient le défaut** (condition 2 de la stèle) | `ff9bad960` | `force_checkpoint_on_copy=false` par défaut ; huit tests adaptés (un `CHECKPOINT` après le COPY qu'ils regardent ; l'attente du délai ne vaut que pour un COPY forcé par le réglage ; un jumeau journalisé qui n'attend pas un lecteur ouvert) ; au banc, `ExplicitCopyCommitWhileATransactionIsOpen` en deux formes, `LockBench.TwoCommits…` verdi |
 | Transaction forcée sans journal en mémoire | `fb98852e1` | une transaction à point de reprise forcé (tout `COPY` d'aujourd'hui) ne sérialise plus son journal en mémoire pour le jeter : 411 Ko puis 823 Ko gardés avant, 0 après |
 
 A5, A5 bis et la garde 1 corrigent des défauts **atteignables en service avec un seul
@@ -90,13 +91,22 @@ toucher ; le reste est à l'autre.
    plantage HNSW sur vecteurs identiques (recette de l'arbre principal, avec le banc), la voie
    (a) des statistiques, les tickets confort. Les tickets ouverts sont listés plus bas.
 
-**Où j'en suis (10 octobre 2026, après-midi).** La fuite de pages est corrigée et sur
-`master` : `0aed3c4b5` (liste complète verte, relecture du banc close, ticket fermé). Chantier B,
-la suite dans l'ordre : la liste « défaut basculé » avec le contrôle de fuite de la suite
-Cypher (exigence c), les huit tests qui supposaient le point de reprise d'un `COPY`, le reste du
-banc sous ce défaut, la série des embarquements (rag3db-6f, sur cette lib), puis le basculement
-de `force_checkpoint_on_copy` ; ensuite les verrous. La seconde session cœur C++ tient les
-correctifs et tickets ; je tiens `src/transaction/` et `src/storage/`.
+**Où j'en suis (10 octobre 2026, soir).** **La condition 2 de la stèle est fermée** : le
+COPY journalisé est le défaut du moteur, `ff9bad960` sur `master` (liste complète finale verte
+sous ce défaut, contrôle de fuite de pages compris ; série de confirmation des embarquements :
+fichiers 80 → 81 s, blobs 89 → 87 s ; relecture du banc). La fuite de pages est fermée
+(`0aed3c4b5`). Toutes les sessions sont prévenues : leur lib se rebâtit sur ce master, et le
+défaut a changé. Mon arbre `rag3db-moteur` est propre sur `copy-journalise-par-defaut`, égale à
+`master`. **La suite** : la page courte des verrous — ce que V2, A3′, A4′ et l'index au commit
+changent réellement, dans l'ordre que je propose — avant de coder (note de conception du 3
+octobre : `docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`) ; puis les écritures
+parallèles. La seconde session (hotfixs/tickets) tient les correctifs ; elle m'a demandé et obtenu
+trois retouches dans `src/storage` (un commentaire, le recalage sur les lignes vivantes avec deux
+gardes, et `ColumnStats::update` qui lisait les hachages à la mauvaise position sous une
+sélection filtrée). Piège du jour, deux fois : sous la porte `poste`, `cmake --build` a répondu
+« rien à faire » après un changement d'en-tête, et une liste a tourné sur l'ancien binaire —
+vérifier le nombre d'étapes du bâti avant de croire une liste ; en direct, `ninja -n` voyait le
+travail.
 
 **Pause du 10 octobre 2026 (redémarrage du poste, noyau mis à jour).** Reprise de la
 veille : chantier B du plan `../../8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`.

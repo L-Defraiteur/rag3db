@@ -20,8 +20,11 @@ void ColumnStats::update(const common::ValueVector* vector) {
         function::VectorHashFunction::computeHash(*vector, vector->state->getSelVector(), *hashes,
             hashes->state->getSelVector());
         KU_ASSERT(hashes->hasNoNullsGuarantee());
-        for (auto i = 0u; i < hashes->state->getSelVector().getSelSize(); i++) {
-            hll->insertElement(hashes->getValue<common::hash_t>(i));
+        // computeHash range chaque hachage à sa position sélectionnée : sous une sélection
+        // filtrée, les premières cases du vecteur ne sont pas les siennes.
+        const auto& selVector = hashes->state->getSelVector();
+        for (auto i = 0u; i < selVector.getSelSize(); i++) {
+            hll->insertElement(hashes->getValue<common::hash_t>(selVector[i]));
         }
         hashes->state = nullptr;
         hashes->setAllNonNull();

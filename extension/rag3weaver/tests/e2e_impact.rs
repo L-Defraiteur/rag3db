@@ -11,7 +11,7 @@ use std::time::Instant;
 use rag3weaver::code::{analyze, default_scope_chunking, read_sources, register_code_schema};
 use rag3weaver::connection::{CypherValue, QueryParam};
 use rag3weaver::dataflow::graph_tool::GraphTool;
-use rag3weaver::dataflow::neighborhood_nodes::{degree_query, hop_query, neighborhood_of, Direction, NeighborhoodConfig, NeighborhoodReport, Step};
+use rag3weaver::dataflow::neighborhood_nodes::{degree_count, hop_of, neighborhood_of, Direction, NeighborhoodConfig, NeighborhoodReport, Step};
 use rag3weaver::dataflow::node_factories::register_builtins;
 use rag3weaver::dataflow::node_registry::NodeRegistry;
 use rag3weaver::dataflow::usage_nodes::{rel_info, UsagesConfig};
@@ -179,7 +179,7 @@ fn les_requetes_d_impact_passent_par_l_index() {
     };
     for rel in ["CONSUMES", "INHERITS_FROM", "IMPLEMENTS"] {
         let info = rel_info(&cat, rel).unwrap();
-        for q in [hop_query(&cfg, &info, Direction::Incoming), degree_query(&info, Direction::Incoming)] {
+        for q in [cat.dialect_arc().hop(&hop_of(&cfg, &info, Direction::Incoming)).unwrap(), cat.dialect_arc().count(&degree_count(&info, Direction::Incoming)).unwrap()] {
             let p = plan(&q, &liste);
             eprintln!("[plan] {q}\n{p}");
             assert!(!p.is_empty() && !p.contains("CROSS_PRODUCT"), "produit cartésien dans {q} :\n{p}");
