@@ -228,6 +228,36 @@ const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "Scan
 const WRITE_NODES: &[&str] = &["EditFileNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 
+/// **Les deux nœuds réservés aux graphes réactifs.** Un outil est appelé par
+/// l'agent, une réaction par un événement, et ces deux nœuds n'ont de sens
+/// que du second côté : `EventSourceNode` draine un sujet du bus depuis un
+/// curseur nommé, `ReactTransitionNode` lit les uuid de ces événements par un
+/// **port** — qu'aucun paramètre d'outil ne peut alimenter. C'est le moteur
+/// qui a tranché avant moi : déclarer une fiche réactive dans `tools` faisait
+/// refuser le manifeste entier.
+const REACTION_NODES: &[&str] = &["EventSourceNode", "ReactTransitionNode"];
+
+/// **Les nœuds d'un graphe réactif** : la base, plus les deux ci-dessus.
+///
+/// Et rien d'autre — **une réaction n'a aucune capacité de fichier ni de
+/// commande**, par construction et non par défaut : il n'y a pas de
+/// `policy` sur une réaction. Personne n'est devant l'écran quand elle part,
+/// donc une réaction qui lirait l'arbre ou lancerait un processus le ferait
+/// sans témoin. Le jour où un cas honnête se présente, il s'ajoute avec son
+/// intention écrite ; une liste de sécurité ne s'élargit pas « au cas où ».
+pub fn reaction_nodes() -> Vec<&'static str> {
+    let mut nodes: Vec<&'static str> = BASE_NODES.to_vec();
+    nodes.extend_from_slice(REACTION_NODES);
+    nodes
+}
+
+/// Ce type de nœud est-il réservé aux graphes réactifs ? Sert à ce qu'un
+/// refus d'outil puisse dire « déclare-le dans `reactions` » au lieu de la
+/// seule règle violée.
+pub fn est_un_noeud_reactif(node_type: &str) -> bool {
+    REACTION_NODES.contains(&node_type)
+}
+
 /// **Les nœuds d'un crochet après outil** : la base MOINS tout ce qui
 /// écrit, bloque ou lance — un crochet enrichit un rendu, il ne peut ni
 /// écrire ni retarder l'outil qu'il suit. `read_files` s'ouvre par
@@ -291,7 +321,7 @@ pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
 
 /// La capacité qui couvrirait un type de nœud — pour qu'un refus dise quoi
 /// faire, pas seulement la règle violée (la leçon du deck builder).
-fn capacite_pour(node_type: &str) -> Option<&'static str> {
+pub fn capacite_pour(node_type: &str) -> Option<&'static str> {
     if READ_NODES.contains(&node_type) {
         Some("read_files")
     } else if WRITE_NODES.contains(&node_type) {
@@ -320,6 +350,14 @@ pub fn validate_tool_policy(
             Some(capacite) => format!(
                 "l'outil « {tool_name} » contient {node_type} mais sa politique ne déclare pas \
                  {capacite} : ajoutez \"policy\": {{\"{capacite}\": true}} à son attachement, ou retirez le nœud"
+            ),
+            // Le refus le plus fréquent de cette famille, et celui que j'ai
+            // déclenché moi-même : une fiche réactive déclarée parmi les
+            // outils. Il dit maintenant où elle va.
+            None if est_un_noeud_reactif(&node_type) => format!(
+                "l'outil « {tool_name} » contient {node_type}, qui est un nœud de graphe \
+                 réactif : déclarez cette fiche dans \"reactions\", pas dans \"tools\" — un \
+                 outil est appelé par l'agent, une réaction par un événement"
             ),
             None => format!(
                 "l'outil « {tool_name} » contient {node_type}, qui n'est pas un nœud d'outil de backend"
