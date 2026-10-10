@@ -78,6 +78,38 @@ binding. » Et, le 9 octobre :
 - Le choix se fait à l'installation, par l'assistant du CLI prévu dans la
   vision générale (§3) : « quel modèle, comment le brancher ».
 
+## 5 bis. La première ouverture : un assistant, contournable (Lucie, 10 octobre)
+
+Lucie : « peut-être un wizard CLI au début qui te demande tout ce que tu
+veux, ou bien contournable par paramètres ; un truc à la première ouverture
+qui te pointe un fichier JSON où tu règles une config, ou qui te propose de
+répondre étape par étape : choisir le service d'embarquement, créer
+automatiquement votre service, ou un existant… ; ça te pointe le `.env` où
+mettre la clé du LLM si tu en veux un. »
+
+La forme retenue par l'orchestration, à concevoir en page après la démo du
+paquet :
+
+- une commande `rag3weaver init` (et la même chose au premier lancement sans
+  manifeste) qui pose les questions **dans l'ordre où on en a besoin** :
+  où est le code à indexer ; les embarquements — *servis par nous*, *un
+  service existant* (adresse), *local sur votre carte* (le binaire GPU), ou
+  *aucun pour l'instant* (plein texte seul, vecteurs en dette, dit tel quel) ;
+  le modèle de langage — *aucun*, *une API compatible OpenAI*, *Anthropic*,
+  *un serveur local* — et où va la clé ;
+- **chaque réponse existe aussi en paramètre** (`--embed service=…`,
+  `--llm anthropic`, `--non-interactive`), pour les scripts et la CI ;
+- l'assistant **n'écrit que des déclarations** que le produit lit déjà : le
+  manifeste de backend (`models.<capacité>`, le `workspace`) et un `.env`
+  pour les secrets, jamais une clé dans le manifeste ; il dit où il les a
+  écrits et se relance sans casser ce qui existe ;
+- « créer automatiquement votre service » = lancer `rag3weaver-embeddings`
+  sur la carte locale si le paquet GPU est là, ou dire ce qu'il faut
+  installer sinon.
+
+C'est l'« assistant dans le CLI » de la vision générale (§3 : « fait choisir
+le modèle et la façon de le brancher »), rendu concret.
+
 ## 6. Le bâti : des Docker par plateforme, la CI ne fait que publier
 
 Ce que Docker peut et ne peut pas faire, dit franchement :
