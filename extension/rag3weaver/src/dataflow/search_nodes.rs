@@ -194,18 +194,6 @@ impl Node for FetchRelatedNode {
     }
 }
 
-/// [`fetch_related_in`] dans le dialecte rag3db : le chemin du catalogue
-/// (`catalog.rs`), le temps qu'il passe le sien.
-pub fn fetch_related(
-    conn: &dyn crate::connection::DbConnection,
-    source_uuids: &[String],
-    relation: &str,
-    direction: ExpansionDirection,
-    limit: usize,
-) -> Result<HashMap<String, Vec<ChildSummary>>, String> {
-    fetch_related_in(&crate::dialect::Rag3dbDialect, conn, source_uuids, relation, direction, limit)
-}
-
 /// Le saut de [`fetch_related_in`] : depuis des nœuds de n'importe quelle
 /// table, vers n'importe quelle table, l'uuid, l'étiquette et le nœud entier.
 pub fn related_hop(relation: &str, direction: ExpansionDirection) -> rag3weaver_ir::Hop {
