@@ -9927,10 +9927,15 @@ mod tests {
     #[test]
     fn sans_magasin_de_blobs_un_catalogue_postgres_ne_s_ouvre_pas() {
         let ouvrir = |avec_magasin: bool| {
+            // La relation de make_test_config porte un mot réservé de
+            // PostgreSQL (REFERENCES), refusé à la création du schéma ; ce
+            // test éprouve le magasin de blobs, pas les relations.
+            let mut config = make_test_config();
+            config.relations.clear();
             let mut catalog = Catalog::new(
                 Box::new(MockConnection::new()),
                 Box::new(MockEmbedder::new(384)),
-                make_test_config(),
+                config,
             );
             catalog.set_dialect(Arc::new(crate::dialect::PostgresDialect));
             if avec_magasin {
