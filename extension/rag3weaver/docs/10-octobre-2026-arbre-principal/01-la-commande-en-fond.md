@@ -2,7 +2,9 @@
 
 *Arbre principal, 10 octobre 2026. Chantier A du plan de reprise
 (`8-octobre-2026-16h29/orchestration/01-plan-de-reprise.md`), vision du produit code §0.
-Rien n'est codé : la page attend l'accord de l'orchestration.*
+**Accord de l'orchestration le 10 octobre**, avec les précisions intégrées ci-dessous.
+Les témoins viennent avant le code, liés à la branche de la session recherche (boucle en
+tâche, chantier C).*
 
 ## Ce que l'agent doit pouvoir faire
 
@@ -67,12 +69,17 @@ fichier temporaire par commande en fond.
   « tuée à la fin du run ». Le run ne l'attend plus.
 - **Les journaux** :
   - ils restent bornés en accès (`journal_borne`) ;
-  - ils sortent de la mémoire vive, vers `$XDG_CACHE_HOME/rag3weaver/commandes/<run>/`,
-    comme les points de reprise ;
-  - chaque flux est plafonné (64 Mio, puis on garde la fin en anneau, et l'aperçu le
-    dit) ;
-  - les dossiers de run de plus de 7 jours sont effacés au démarrage.
-  Les chiffres sont à confirmer.
+  - ils sortent de la mémoire vive, vers `<cache>/rag3weaver/commandes/<run>/`, où
+    `<cache>` est le dossier de cache **de la plateforme** (`dirs::cache_dir`, pas
+    `$XDG_CACHE_HOME` en dur), comme les points de reprise ;
+  - chaque flux est plafonné à **64 Mio** en anneau, et on garde la fin. Quand l'anneau a
+    tourné, le journal le dit en tête (« … N octets perdus en tête »), pour que l'agent ne
+    croie pas lire le début ;
+  - les dossiers de run de plus de **7 jours** sont effacés au démarrage.
+  Ces deux chiffres sont les défauts, confirmés le 10 octobre, et ils restent réglables.
+- **La portabilité** : le groupe de processus et SIGTERM/SIGKILL sont propres à Unix. La
+  mort du groupe vit derrière une fonction par plateforme. Sous Windows (chantier G, le
+  paquet npm), il faudra un *job object*, qui n'est pas codé maintenant.
 
 ## Ce qu'il me faut de la boucle (session recherche, `agent.rs`)
 
@@ -99,4 +106,7 @@ fond n'existe pas pour l'utilisateur.
   laisse zéro processus derrière lui.
 - Deux lancements du même programme ont deux journaux.
 - `tail` refuse un chemin hors du dossier des journaux.
-- Un flux de plus de 64 Mio est plafonné, et l'aperçu le dit.
+- Un flux de plus de 64 Mio est plafonné, et l'aperçu comme le journal le disent
+  (« … octets perdus en tête »).
+- Deux commandes en fond du même programme dans le même run : deux journaux distincts,
+  et les deux fins livrées.
