@@ -112,3 +112,32 @@ Deux ajouts de Lucie, le même soir :
   sérieux sans rien changer dessous — les noms sont des déclarations comme le
   reste, pas du code.
 
+## 7. Déclaré n'est pas exposé (Lucie, 10 octobre au soir)
+
+Lucie : « un backend boucle étrange développé par quelqu'un peut avoir des
+agents, mais il ne les veut pas forcément tous disponibles après publication ;
+il y en a peut-être de mode debug ; et la mémoire pareil : pas la peine, sur
+un site où il y a du RAG, d'avoir dedans la mémoire de comment le projet s'est
+construit. » Puis : « rendons ça générique : `exposure: clé… | clé… & clé…` ».
+
+- **Chaque déclaration porte une exposition** — outil, agent, réaction,
+  graphe, cellule de données — sous la forme d'une **expression sur des
+  clés**, pas d'une paire fixe dev/publié : `exposure: published`,
+  `exposure: dev | admin`, `exposure: published & premium`, `exposure: dev &
+  (alice | bob)`. Les clés sont des mots libres, déclarés comme le reste.
+- **Un contexte présente ses clés** : un déploiement (« published »), une
+  session (« dev », « admin »), une personne, un abonnement, un serveur MCP
+  lancé avec `--keys dev,admin`. Une déclaration est **chargée** si son
+  expression est vraie pour les clés présentées ; sinon elle n'existe pas pour
+  ce contexte.
+- **Les cellules de données suivent la même règle** : la mémoire de la
+  construction vit dans une cellule dont l'exposition est `dev` ; le RAG du
+  site publié dans une cellule `published`. Déployer, c'est présenter des
+  clés, et ce qui ne les satisfait pas ne part pas. Même isolation
+  structurelle que pour les locataires : pas un `WHERE` à se rappeler.
+
+Le point dur : la frontière se tient **au chargement** (ce qui n'est pas
+exposé n'est pas chargé), pas par la politesse des outils — sinon un outil
+`dev` lit une cellule publiée et la fuite par une réponse d'agent. Un serveur
+MCP n'expose que ce que ses clés rendent vrai, rien par défaut.
+
