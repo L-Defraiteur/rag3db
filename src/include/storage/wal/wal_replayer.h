@@ -3,6 +3,7 @@
 #include <functional>
 #include <string>
 
+#include "storage/readers_lock.h"
 #include "storage/wal/wal_record.h"
 
 namespace rag3db {
@@ -126,6 +127,9 @@ private:
     std::unique_ptr<common::FileInfo> openWALFile() const;
     void syncWALFile(const common::FileInfo& fileInfo) const;
     void truncateWALFile(common::FileInfo& fileInfo, uint64_t size) const;
+    // La reprise d'un écrivain qui change le fichier pour un lecteur (le rejeu des pages
+    // fantômes, la troncature du journal) attend d'abord les ouvertures en lecture seule.
+    ReadersLock holdReadersLock() const;
 
 private:
     main::ClientContext& clientContext;

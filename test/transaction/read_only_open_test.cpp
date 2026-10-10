@@ -20,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "api_test/private_api_test.h"
 #include "common/checksum.h"
@@ -29,6 +30,7 @@
 #include "flaky_checkpointer.h"
 #include "gmock/gmock.h"
 #include "storage/checkpointer.h"
+#include "storage/readers_lock.h"
 #include "storage/shadow_file.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/wal.h"
@@ -401,4 +403,80 @@ TEST_F(ReadOnlyOpenTest, DISABLED_MeasureCostOfRevalidationOnABigJournal) {
                          std::to_string(bestChecksum))
                   << std::endl;
     }
+}
+
+// Le verrou des lecteurs (ReadersLock), ses deux bornes. Le test tient lui-même le verrou, comme
+// le ferait un autre processus : flock sépare deux descriptions de fichier d'un même processus.
+
+// Un point de reprise tient le verrou : l'ouverture en lecture seule attend sa fin au lieu d'être
+// refusée, et s'ouvre dès qu'il est rendu.
+TEST_F(ReadOnlyOpenTest, ReadOnlyOpenWaitsForACheckpointInProgress) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    run("CREATE NODE TABLE Pair(id INT64 PRIMARY KEY, twice INT64)");
+    run("CREATE (:Pair {id: 1, twice: 2})");
+    auto checkpoint =
+        ReadersLock::acquire(databasePath, ReadersLock::Mode::EXCLUSIVE, std::chrono::seconds(1));
+    ASSERT_TRUE(checkpoint.isHeld());
+    std::thread releaser([&checkpoint]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        checkpoint.release();
+    });
+    const auto start = std::chrono::steady_clock::now();
+    openReader();
+    const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start)
+                            .count();
+    releaser.join();
+    ASSERT_TRUE(reader.opened()) << reader.error;
+    EXPECT_GE(waited, 300) << "l'ouverture n'a pas attendu le point de reprise";
+    EXPECT_EQ(single(*reader.conn, "MATCH (p:Pair) RETURN count(*)"), 1);
+}
+
+// Un point de reprise qui ne rend jamais le verrou : l'attente est bornée, et le refus dit
+// combien de temps et pourquoi.
+TEST_F(ReadOnlyOpenTest, ReadOnlyOpenWaitIsBoundedAndNamed) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    run("CREATE NODE TABLE Pair(id INT64 PRIMARY KEY, twice INT64)");
+    auto checkpoint =
+        ReadersLock::acquire(databasePath, ReadersLock::Mode::EXCLUSIVE, std::chrono::seconds(1));
+    ASSERT_TRUE(checkpoint.isHeld());
+    const auto start = std::chrono::steady_clock::now();
+    openReader();
+    const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start)
+                            .count();
+    ASSERT_FALSE(reader.opened());
+    EXPECT_THAT(reader.error, HasSubstr("for a checkpoint of another process"));
+    EXPECT_THAT(reader.error, HasSubstr("waited"));
+    EXPECT_GE(waited, ReadersLock::READ_ONLY_OPEN_WAIT.count());
+    checkpoint.release();
+    openReader();
+    EXPECT_TRUE(reader.opened()) << reader.error;
+}
+
+// Une ouverture en lecture seule qui tient le verrou au-delà de la borne de l'écrivain (un
+// lecteur bloqué) : le point de reprise attend la borne, puis passe.
+TEST_F(ReadOnlyOpenTest, CheckpointWaitsForAReadOnlyOpenThenGoesAhead) {
+    if (notApplicable()) {
+        GTEST_SKIP();
+    }
+    run("CREATE NODE TABLE Pair(id INT64 PRIMARY KEY, twice INT64)");
+    run("CREATE (:Pair {id: 1, twice: 2})");
+    auto opening =
+        ReadersLock::acquire(databasePath, ReadersLock::Mode::SHARED, std::chrono::seconds(1));
+    ASSERT_TRUE(opening.isHeld());
+    const auto start = std::chrono::steady_clock::now();
+    run("CHECKPOINT");
+    const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start)
+                            .count();
+    EXPECT_GE(waited, ReadersLock::CHECKPOINT_WAIT.count());
+    EXPECT_LT(waited, ReadersLock::READ_ONLY_OPEN_WAIT.count());
+    opening.release();
+    EXPECT_EQ(std::filesystem::exists(StorageUtils::getWALFilePath(databasePath)), false)
+        << "le point de reprise n'est pas allé au bout";
 }

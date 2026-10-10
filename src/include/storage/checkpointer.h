@@ -2,6 +2,7 @@
 
 #include "storage/database_header.h"
 #include "storage/page_range.h"
+#include "storage/readers_lock.h"
 
 namespace rag3db {
 namespace transaction {
@@ -45,6 +46,10 @@ protected:
         bool hasStorageChanges);
     virtual void writeDatabaseHeader(const DatabaseHeader& header);
     virtual void logCheckpointAndApplyShadowPages();
+    // Attend, borné, les ouvertures en lecture seule d'autres processus, puis tient le verrou des
+    // lecteurs jusqu'à la fin de writeCheckpoint : voir ReadersLock. À appeler juste avant la
+    // marque CHECKPOINT, premier changement qu'un lecteur verrait.
+    void holdReadersLock();
 
 private:
     static void readCheckpoint(main::ClientContext* context, catalog::Catalog* catalog,
@@ -57,6 +62,7 @@ private:
 protected:
     main::ClientContext& clientContext;
     bool isInMemory;
+    ReadersLock readersLock;
 };
 
 } // namespace storage
