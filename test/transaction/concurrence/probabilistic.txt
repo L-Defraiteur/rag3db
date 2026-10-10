@@ -28,6 +28,13 @@ VectorIndexUpdate.SetToAnotherVectorLineByLine
 # pour l'écarter d'une passe complète.
 VectorIndexUpdate.TenThousandRowsInBatchesOf512
 #
+# Vingt lignes posées sur le même vecteur en une instruction (des copies, par le chemin des
+# mises à jour) : une perte sur 5 essais dans la liste complète de l'élagage classique
+# (10 octobre), puis plus aucune. Comptes, essais interrompus compris : avec l'élagage
+# classique, 1 perte sur 400 ; sur master avant lui, 0 sur 400 ; non significatif, sous un
+# poste chargé (charge de 36 à 522). La famille des mises à jour massives, ci-dessus.
+VectorIndexUpdate.TwentyRowsToTheSameVectorInOneStatement
+#
 # Le lecteur qui insiste (4 octobre au soir, relevé par la session de l'arbre principal sur
 # e2e_prise_atomique) : un écrivain fait environ 470 points de reprise par seconde, un
 # lecteur ouvre 80 fois en lecture seule avec la patience de rag3weaver (250 ms). Refusé
