@@ -1,0 +1,104 @@
+name: paquet npm
+
+# Le paquet npm de rag3weaver : bâtir le binaire rag3weaver-backend par
+# plateforme. Manuel seulement, et il ne publie rien : la publication viendra
+# derrière une porte (variable PUBLISH_ENABLED et environnement `release`,
+# comme lucivy), quand Lucie aura dit « publie ».
+#
+# Linux : l'image Docker commitée sous tools/build-images/linux-x64-gnu, la
+# même recette qu'un poste. Windows : un essai sur le runner, pour la liste
+# réelle des accrocs du moteur hors Linux — le job peut être rouge, son journal
+# est gardé en artefact.
+#
+# Le sous-module third_party/fuzzy-fst est privé et ne sert qu'à l'extension
+# fts : on ne l'initialise pas. codeparsers (public) est nécessaire à la
+# feature `code`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: "essayer aussi le bâti Windows (liste des accrocs)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 5
+
+jobs:
+  linux-x64-gnu:
+    name: linux-x64-gnu (image Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sous-module codeparsers (par https, sans clé)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
+      - name: Image
+        run: docker build -t rag3weaver-build-linux-x64-gnu tools/build-images/linux-x64-gnu
+      - name: Bâti
+        run: |
+          mkdir -p "$HOME/cache"
+          docker run --rm -v "$PWD:/src" -v "$HOME/cache:/cache" -e JOBS=4 \
+            rag3weaver-build-linux-x64-gnu /src/tools/build-images/linux-x64-gnu/build.sh
+          cat dist/linux-x64-gnu/bati.txt
+      - name: Le binaire démarre-t-il hors de l'image ?
+        run: |
+          ./dist/linux-x64-gnu/rag3weaver-backend --help | head -20 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rag3weaver-backend-linux-x64-gnu
+          path: dist/linux-x64-gnu/
+          if-no-files-found: error
+
+  windows-x64:
+    name: windows-x64 (essai, liste des accrocs)
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Chemins courts : le bâti cmake du moteur par cargo est profond.
+      CARGO_TARGET_DIR: C:/rs
+      CARGO_BUILD_JOBS: 4
+      NUM_JOBS: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sous-module codeparsers (par https, sans clé)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - name: Outils
+        run: |
+          cmake --version | head -1; ninja --version; rustc --version; cl 2>&1 | head -1 || true
+      - name: Bâti (le journal est l'artefact, rouge ou vert)
+        working-directory: extension/rag3weaver
+        run: |
+          set -o pipefail
+          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-windows.log
+      - name: Le binaire, s'il existe
+        if: always()
+        run: |
+          ls -la C:/rs/release/rag3weaver-backend.exe 2>/dev/null && C:/rs/release/rag3weaver-backend.exe --help | head -20 || echo "pas de binaire"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bati-windows-x64-journal
+          path: |
+            bati-windows.log
+            C:/rs/release/rag3weaver-backend.exe
+          if-no-files-found: warn
