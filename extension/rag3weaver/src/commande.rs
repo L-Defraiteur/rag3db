@@ -795,9 +795,34 @@ pub struct Atelier {
     /// l'état d'avant, gardé pour les postes de confiance et dit par
     /// `describe`.
     pub bac_a_sable: Option<BacASable>,
+    /// Le nom des journaux (`<nom>.out`, `<nom>.err`) : la poignée d'une
+    /// commande en fond. `None` : `<programme>-<pid>-<n>`, unique dans le
+    /// processus — deux lancements du même programme ne s'écrasent plus.
+    pub nom_journaux: Option<String>,
+    /// Octets gardés par flux dans le journal : au-delà, on garde **la fin**,
+    /// en anneau, et le journal le dit en tête. [`PLAFOND_JOURNAL_DEFAUT`],
+    /// réglable par `RAG3WEAVER_JOURNAL_PLAFOND` (octets).
+    pub plafond_journal: u64,
 }
 
+/// 64 Mio par flux (défaut confirmé par l'orchestration, 10 octobre 2026).
+pub const PLAFOND_JOURNAL_DEFAUT: u64 = 64 << 20;
+
 impl Atelier {
+    /// Pour les témoins : le même atelier, des journaux nommés autrement.
+    #[cfg(test)]
+    fn clone_pour_test(&self, nom: &str) -> Self {
+        Self {
+            cwd: self.cwd.clone(),
+            delai: self.delai,
+            max_sortie: self.max_sortie,
+            journaux: self.journaux.clone(),
+            bac_a_sable: None,
+            nom_journaux: Some(nom.to_string()),
+            plafond_journal: self.plafond_journal,
+        }
+    }
+
     pub fn dans(cwd: impl Into<std::path::PathBuf>) -> Self {
         Self {
             cwd: cwd.into(),
@@ -805,7 +830,23 @@ impl Atelier {
             max_sortie: 100_000,
             journaux: None,
             bac_a_sable: None,
+            nom_journaux: None,
+            plafond_journal: std::env::var("RAG3WEAVER_JOURNAL_PLAFOND")
+                .ok()
+                .and_then(|v| v.trim().parse().ok())
+                .filter(|&n: &u64| n >= 1024)
+                .unwrap_or(PLAFOND_JOURNAL_DEFAUT),
         }
+    }
+
+    /// Nommer les journaux (la poignée d'une commande en fond).
+    pub fn avec_nom_journaux(mut self, nom: impl Into<String>) -> Self {
+        self.nom_journaux = Some(nom.into());
+        self
+    }
+    pub fn avec_plafond_journal(mut self, octets: u64) -> Self {
+        self.plafond_journal = octets.max(1024);
+        self
     }
 
     pub fn avec_bac_a_sable(mut self, b: BacASable) -> Self {
@@ -850,6 +891,9 @@ pub struct Sortie {
     /// de laisser croire que c'était tout.
     pub octets_stdout: usize,
     pub octets_stderr: usize,
+    /// Octets **perdus en tête** du journal, quand l'anneau a tourné.
+    pub perdus_stdout: u64,
+    pub perdus_stderr: u64,
 }
 
 impl Sortie {
@@ -892,22 +936,117 @@ impl Garde {
     }
 }
 
-/// **Exécuter par argv, jamais par un shell.**
-///
-/// Les flux sont lus par deux fils pendant que le processus tourne. Ce n'est
-/// pas une élégance : un tube qu'on ne lit qu'après `wait` se remplit, et le
-/// processus se fige à son premier gros message — un blocage qui ressemble à
-/// une commande lente, ce qui est la pire forme de panne. Même leçon que
-/// `crate::serveur`, tirée le 29 août.
-pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
+/// **Le dossier de cache de la plateforme** : `$XDG_CACHE_HOME` ou
+/// `~/.cache` sous Linux, `~/Library/Caches` sous macOS, `%LOCALAPPDATA%`
+/// sous Windows. `None` si rien ne le dit.
+pub fn dossier_de_cache() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    if cfg!(target_os = "windows") {
+        return std::env::var_os("LOCALAPPDATA").map(PathBuf::from).filter(|p| p.is_absolute());
+    }
+    if cfg!(target_os = "macos") {
+        return std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library").join("Caches"));
+    }
+    std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+}
+
+/// **Un journal qui garde la fin.** Au-delà du plafond, la première moitié
+/// part, et l'en-tête dit combien d'octets sont perdus — pour qu'on ne croie
+/// pas lire le début d'une sortie qui en a perdu.
+struct JournalEnAnneau {
+    chemin: std::path::PathBuf,
+    fichier: std::fs::File,
+    plafond: u64,
+    /// Octets de sortie dans le fichier, en-tête exclu.
+    dans_le_fichier: u64,
+    entete: u64,
+    perdus: u64,
+}
+
+impl JournalEnAnneau {
+    fn creer(chemin: std::path::PathBuf, plafond: u64) -> Option<Self> {
+        let fichier = std::fs::File::create(&chemin).ok()?;
+        Some(Self { chemin, fichier, plafond, dans_le_fichier: 0, entete: 0, perdus: 0 })
+    }
+
+    fn ecrire(&mut self, octets: &[u8]) {
+        use std::io::Write;
+        if self.fichier.write_all(octets).is_err() {
+            return;
+        }
+        self.dans_le_fichier += octets.len() as u64;
+        if self.dans_le_fichier > self.plafond {
+            self.tourner();
+        }
+    }
+
+    /// Garder la seconde moitié du plafond, sous un en-tête qui compte ce
+    /// qui est parti.
+    fn tourner(&mut self) {
+        use std::io::{Read, Seek, SeekFrom, Write};
+        let garde = self.plafond / 2;
+        let a_perdre = self.dans_le_fichier - garde;
+        let mut lu = Vec::with_capacity(garde as usize);
+        let mut f = match std::fs::File::open(&self.chemin) {
+            Ok(f) => f,
+            Err(_) => return,
+        };
+        if f.seek(SeekFrom::Start(self.entete + a_perdre)).is_err() || f.read_to_end(&mut lu).is_err() {
+            return;
+        }
+        self.perdus += a_perdre;
+        let tete = format!(
+            "… {} octets perdus en tête (journal en anneau de {} Mio : on garde la fin)\n",
+            self.perdus,
+            self.plafond >> 20
+        );
+        let Ok(mut neuf) = std::fs::File::create(&self.chemin) else { return };
+        if neuf.write_all(tete.as_bytes()).and_then(|_| neuf.write_all(&lu)).is_ok() {
+            self.entete = tete.len() as u64;
+            self.dans_le_fichier = lu.len() as u64;
+            self.fichier = neuf;
+        }
+    }
+}
+
+/// **Signaler tout le groupe de processus** d'une commande : ses
+/// petits-enfants (`cargo` → `rustc`, un serveur) avec elle. Unix seulement ;
+/// sous Windows, ce sera un *job object* (chantier G), pas encore codé.
+#[cfg(unix)]
+fn signaler_le_groupe(groupe: u32, signal: &str) {
+    let _ = std::process::Command::new("kill")
+        .args(["-s", signal, "--", &format!("-{groupe}")])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(not(unix))]
+fn signaler_le_groupe(_groupe: u32, _signal: &str) {}
+
+/// Un processus lancé, ses deux lecteurs, et où vont ses journaux.
+struct Lance {
+    enfant: std::process::Child,
+    out: std::thread::JoinHandle<(Vec<u8>, usize, u64)>,
+    err: std::thread::JoinHandle<(Vec<u8>, usize, u64)>,
+    chemin_out: Option<std::path::PathBuf>,
+    chemin_err: Option<std::path::PathBuf>,
+}
+
+/// **Lancer par argv, dans son propre groupe de processus, flux lus par deux
+/// fils.** Les flux sont lus pendant que le processus tourne : un tube qu'on
+/// ne lit qu'après `wait` se remplit, et le processus se fige à son premier
+/// gros message — même leçon que `crate::serveur`, tirée le 29 août.
+fn lancer(a: &Autorisee, atelier: &Atelier) -> Result<Lance, ExecErreur> {
     use std::io::Read;
     use std::process::{Command, Stdio};
 
     if !atelier.cwd.is_dir() {
         return Err(ExecErreur::Atelier(format!("{} n'est pas un dossier", atelier.cwd.display())));
     }
-
-    let debut = std::time::Instant::now();
     let mut commande = Command::new(&a.0.programme);
     commande
         .args(&a.0.args)
@@ -915,6 +1054,12 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // Son propre groupe : la tuer, c'est tuer aussi ce qu'elle a lancé.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        commande.process_group(0);
+    }
     // **Le bac à sable se pose entre fork et exec** : le ruleset est
     // construit ICI (avant le fork — le descripteur hérite), et le fils
     // n'exécute que la restriction : deux syscalls, sûrs à cet endroit.
@@ -944,6 +1089,25 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
             "le bac à sable demande Linux et la feature code".into(),
         ));
     }
+
+    let (chemin_out, chemin_err) = match &atelier.journaux {
+        Some(dir) => {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| ExecErreur::Atelier(format!("{} : {e}", dir.display())))?;
+            static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let base = atelier.nom_journaux.clone().unwrap_or_else(|| {
+                format!(
+                    "{}-{}-{}",
+                    a.0.programme.replace('/', "_"),
+                    std::process::id(),
+                    N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                )
+            });
+            (Some(dir.join(format!("{base}.out"))), Some(dir.join(format!("{base}.err"))))
+        }
+        None => (None, None),
+    };
+
     let mut enfant = commande
         .spawn()
         .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
@@ -951,12 +1115,14 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     // **Chaque flux est lu en entier, dérivé vers son journal, et seuls les
     // premiers octets sont gardés en mémoire.** Lire *tout* est ce qui évite
     // le tube plein ; n'en garder qu'un aperçu est ce qui évite de noyer
-    // l'appelant ; le journal est ce qui fait que rien n'est perdu.
+    // l'appelant ; le journal est ce qui fait que rien n'est perdu — ou, au-delà
+    // du plafond, que ce qui l'est est dit.
+    let plafond = atelier.plafond_journal;
     let lire = |mut flux: Option<Box<dyn Read + Send>>, max: usize, journal: Option<std::path::PathBuf>| {
-        std::thread::spawn(move || -> (Vec<u8>, usize) {
+        std::thread::spawn(move || -> (Vec<u8>, usize, u64) {
             let mut apercu = Vec::new();
             let mut total = 0usize;
-            let mut fichier = journal.and_then(|p| std::fs::File::create(p).ok());
+            let mut fichier = journal.and_then(|p| JournalEnAnneau::creer(p, plafond));
             if let Some(f) = flux.as_mut() {
                 let mut tampon = [0u8; 8192];
                 loop {
@@ -965,7 +1131,7 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
                         Ok(n) => {
                             total += n;
                             if let Some(j) = fichier.as_mut() {
-                                let _ = std::io::Write::write_all(j, &tampon[..n]);
+                                j.ecrire(&tampon[..n]);
                             }
                             if apercu.len() < max {
                                 let reste = max - apercu.len();
@@ -975,30 +1141,36 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
                     }
                 }
             }
-            (apercu, total)
+            (apercu, total, fichier.map(|j| j.perdus).unwrap_or(0))
         })
     };
+    let out = lire(enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, chemin_out.clone());
+    let err = lire(enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, chemin_err.clone());
+    Ok(Lance { enfant, out, err, chemin_out, chemin_err })
+}
 
-    let (chemin_out, chemin_err) = match &atelier.journaux {
-        Some(dir) => {
-            std::fs::create_dir_all(dir)
-                .map_err(|e| ExecErreur::Atelier(format!("{} : {e}", dir.display())))?;
-            let base = format!("{}-{}", a.0.programme.replace('/', "_"), std::process::id());
-            (Some(dir.join(format!("{base}.out"))), Some(dir.join(format!("{base}.err"))))
-        }
-        None => (None, None),
-    };
+/// **L'aperçu dit ce qu'il ne montre pas.** Une sortie coupée en silence
+/// laisse croire qu'elle était complète.
+fn apercu(v: Vec<u8>, total: usize, perdus: u64, journal: &Option<std::path::PathBuf>) -> String {
+    let mut s = String::from_utf8_lossy(&v).to_string();
+    if total > v.len() {
+        s.push_str(&match journal {
+            Some(p) if perdus > 0 => format!(
+                "\n… ({} octets vus sur {total} ; le journal {} garde la fin, {perdus} octets perdus en tête)",
+                v.len(),
+                p.display()
+            ),
+            Some(p) => format!("\n… ({} octets vus sur {total} — la suite est dans {})", v.len(), p.display()),
+            None => format!("\n… ({} octets vus sur {total}, le reste est perdu)", v.len()),
+        });
+    }
+    s
+}
 
-    let out = lire(
-        enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>),
-        atelier.max_sortie,
-        chemin_out.clone(),
-    );
-    let err = lire(
-        enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>),
-        atelier.max_sortie,
-        chemin_err.clone(),
-    );
+/// **Exécuter par argv, jamais par un shell**, et attendre la fin.
+pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
+    let debut = std::time::Instant::now();
+    let Lance { mut enfant, out, err, chemin_out, chemin_err } = lancer(&a, atelier)?;
 
     let mut expiree = false;
     let code = loop {
@@ -1008,6 +1180,9 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
             Err(e) => return Err(ExecErreur::Lancement(e.to_string())),
         }
         if debut.elapsed() >= atelier.delai {
+            // Le groupe entier, pas seulement l'enfant direct : ses
+            // petits-enfants tiendraient sinon les tubes ouverts.
+            signaler_le_groupe(enfant.id(), "KILL");
             let _ = enfant.kill();
             let _ = enfant.wait();
             expiree = true;
@@ -1016,31 +1191,12 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
 
-    let brut = |j: std::thread::JoinHandle<(Vec<u8>, usize)>| j.join().unwrap_or_default();
-    let ((o, n_out), (e, n_err)) = (brut(out), brut(err));
+    let brut = |j: std::thread::JoinHandle<(Vec<u8>, usize, u64)>| j.join().unwrap_or_default();
+    let ((o, n_out, p_out), (e, n_err, p_err)) = (brut(out), brut(err));
     let tronquee = n_out > o.len() || n_err > e.len();
-
-    // **L'aperçu dit ce qu'il ne montre pas.** Une sortie coupée en silence
-    // laisse croire qu'elle était complète — la famille de défauts qu'on
-    // débusque depuis deux jours.
-    let apercu = |v: Vec<u8>, total: usize, journal: &Option<std::path::PathBuf>| {
-        let mut s = String::from_utf8_lossy(&v).to_string();
-        if total > v.len() {
-            s.push_str(&match journal {
-                Some(p) => format!(
-                    "\n… ({} octets vus sur {total} — la suite est dans {})",
-                    v.len(),
-                    p.display()
-                ),
-                None => format!("\n… ({} octets vus sur {total}, le reste est perdu)", v.len()),
-            });
-        }
-        s
-    };
-
     Ok(Sortie {
-        stdout: apercu(o, n_out, &chemin_out),
-        stderr: apercu(e, n_err, &chemin_err),
+        stdout: apercu(o, n_out, p_out, &chemin_out),
+        stderr: apercu(e, n_err, p_err, &chemin_err),
         code,
         duree: debut.elapsed(),
         expiree,
@@ -1049,7 +1205,130 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         journal_stderr: chemin_err,
         octets_stdout: n_out,
         octets_stderr: n_err,
+        perdus_stdout: p_out,
+        perdus_stderr: p_err,
     })
+}
+
+/// La fin d'une commande en fond.
+#[derive(Debug, Clone)]
+pub struct Fin {
+    /// `None` si tuée par un signal.
+    pub code: Option<i32>,
+    /// Le signal qui l'a tuée, sous Unix.
+    pub signal: Option<i32>,
+    pub duree: std::time::Duration,
+    /// Tuée par nous : à la fin du run, ou au délai qu'on lui avait donné.
+    pub tuee: bool,
+    pub octets_stdout: usize,
+    pub octets_stderr: usize,
+    /// Les dernières lignes de chaque flux, telles que l'aperçu les a gardées.
+    pub fin_stdout: String,
+    pub fin_stderr: String,
+}
+
+/// **Une commande en fond** : lancée, rendue tout de suite ; un surveillant
+/// attend sa fin, la range, et appelle `a_la_fin` (la livraison dans la
+/// boîte de l'agent).
+pub struct EnFond {
+    pub pid: u32,
+    pub journal_stdout: Option<std::path::PathBuf>,
+    pub journal_stderr: Option<std::path::PathBuf>,
+    fin: std::sync::Arc<std::sync::Mutex<Option<Fin>>>,
+    tuee: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// Les dernières lignes d'un texte, bornées.
+fn dernieres_lignes(texte: &str, n: usize) -> String {
+    let lignes: Vec<&str> = texte.lines().collect();
+    lignes[lignes.len().saturating_sub(n)..].join("\n")
+}
+
+/// **Lancer en fond** : rend dès que le processus est parti. Pas de plafond
+/// de durée, sauf `delai` s'il est donné ; la vie de la commande est bornée
+/// par celui qui la tient (la fin du run, par [`EnFond::tuer`]).
+pub fn lancer_en_fond(
+    a: Autorisee,
+    atelier: &Atelier,
+    delai: Option<std::time::Duration>,
+    a_la_fin: Box<dyn FnOnce(&Fin) + Send>,
+) -> Result<EnFond, ExecErreur> {
+    let debut = std::time::Instant::now();
+    // L'aperçu d'une commande en fond garde la fin, pas le début : on lit la
+    // fin dans le journal quand elle meurt.
+    let Lance { mut enfant, out, err, chemin_out, chemin_err } = lancer(&a, atelier)?;
+    let pid = enfant.id();
+    let fin = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let tuee = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (fin_s, tuee_s) = (fin.clone(), tuee.clone());
+    let (j_out, j_err) = (chemin_out.clone(), chemin_err.clone());
+    std::thread::spawn(move || {
+        let statut = loop {
+            match enfant.try_wait() {
+                Ok(Some(s)) => break Some(s),
+                Ok(None) => {}
+                Err(_) => break None,
+            }
+            if delai.is_some_and(|d| debut.elapsed() >= d) {
+                tuee_s.store(true, std::sync::atomic::Ordering::SeqCst);
+                signaler_le_groupe(pid, "KILL");
+                let _ = enfant.kill();
+                break enfant.wait().ok();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        let brut = |j: std::thread::JoinHandle<(Vec<u8>, usize, u64)>| j.join().unwrap_or_default();
+        let ((_, n_out, _), (_, n_err, _)) = (brut(out), brut(err));
+        let queue = |p: &Option<std::path::PathBuf>| {
+            p.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).map(|t| dernieres_lignes(&t, 20)).unwrap_or_default()
+        };
+        #[cfg(unix)]
+        let signal = statut.and_then(|s| std::os::unix::process::ExitStatusExt::signal(&s));
+        #[cfg(not(unix))]
+        let signal = None;
+        let f = Fin {
+            code: statut.and_then(|s| s.code()),
+            signal,
+            duree: debut.elapsed(),
+            tuee: tuee_s.load(std::sync::atomic::Ordering::SeqCst),
+            octets_stdout: n_out,
+            octets_stderr: n_err,
+            fin_stdout: queue(&j_out),
+            fin_stderr: queue(&j_err),
+        };
+        *fin_s.lock().unwrap_or_else(|p| p.into_inner()) = Some(f.clone());
+        a_la_fin(&f);
+    });
+    Ok(EnFond { pid, journal_stdout: chemin_out, journal_stderr: chemin_err, fin, tuee })
+}
+
+impl EnFond {
+    /// La fin, si la commande est finie.
+    pub fn fin(&self) -> Option<Fin> {
+        self.fin.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// **Tuer la commande et tout son groupe** : SIGTERM, puis SIGKILL après
+    /// `grace` si elle tient encore. Rend quand le surveillant a rangé la fin
+    /// (au plus `grace` + 2 s).
+    pub fn tuer(&self, grace: std::time::Duration) {
+        if self.fin().is_some() {
+            return;
+        }
+        self.tuee.store(true, std::sync::atomic::Ordering::SeqCst);
+        signaler_le_groupe(self.pid, "TERM");
+        let debut = std::time::Instant::now();
+        while self.fin().is_none() && debut.elapsed() < grace {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        if self.fin().is_none() {
+            signaler_le_groupe(self.pid, "KILL");
+        }
+        let debut = std::time::Instant::now();
+        while self.fin().is_none() && debut.elapsed() < std::time::Duration::from_secs(2) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1058,6 +1337,115 @@ mod tests {
 
     fn cmd(p: &str, a: &[&str]) -> Commande {
         Commande::new(p, a.iter().copied())
+    }
+
+    // ── La commande en fond (10 octobre 2026) ───────────────────────────
+
+    fn atelier_temp() -> (tempfile::TempDir, Atelier) {
+        let d = tempfile::tempdir().expect("tempdir");
+        let a = Atelier::dans(d.path()).avec_journaux(d.path().join("journaux"));
+        (d, a)
+    }
+
+    fn sh(script: &str) -> Autorisee {
+        Autorisee(cmd("sh", &["-c", script]))
+    }
+
+    /// **Deux lancements du même programme ont deux journaux.** Nommés par
+    /// le pid du parent, le second écrasait le premier.
+    #[test]
+    fn deux_lancements_du_meme_programme_ont_deux_journaux() {
+        let (_d, atelier) = atelier_temp();
+        let s1 = executer(sh("echo un"), &atelier).unwrap();
+        let s2 = executer(sh("echo deux"), &atelier).unwrap();
+        assert_ne!(s1.journal_stdout, s2.journal_stdout);
+        assert_eq!(std::fs::read_to_string(s1.journal_stdout.unwrap()).unwrap(), "un\n");
+        assert_eq!(std::fs::read_to_string(s2.journal_stdout.unwrap()).unwrap(), "deux\n");
+    }
+
+    /// **Un journal plus gros que son plafond garde sa fin, et le dit.**
+    #[test]
+    fn un_journal_au_dela_du_plafond_garde_la_fin_et_dit_ce_qu_il_a_perdu() {
+        let (_d, atelier) = atelier_temp();
+        let atelier = atelier.avec_plafond_journal(100_000).avec_max_sortie(1_000);
+        // 330 000 octets de lignes numérotées : la dernière doit rester.
+        let s = executer(sh("i=0; while [ $i -lt 30000 ]; do printf 'ligne%05d\\n' $i; i=$((i+1)); done"), &atelier).unwrap();
+        assert_eq!(s.octets_stdout, 330_000);
+        assert!(s.perdus_stdout > 0, "l'anneau a tourné");
+        let j = std::fs::read_to_string(s.journal_stdout.as_ref().unwrap()).unwrap();
+        assert!(j.starts_with("… ") && j.lines().next().unwrap().contains("octets perdus en tête"), "l'en-tête dit la perte : {}", j.lines().next().unwrap());
+        assert!(j.trim_end().ends_with("ligne29999"), "la fin est gardée");
+        assert!((j.len() as u64) <= 100_000 + 200, "le journal reste sous son plafond : {}", j.len());
+        assert!(s.stdout.contains("perdus en tête"), "l'aperçu le dit aussi : {}", s.stdout.lines().last().unwrap());
+    }
+
+    /// **En fond, on a la main tout de suite**, et la fin est rangée avec son
+    /// code quand la commande meurt.
+    #[test]
+    fn en_fond_on_a_la_main_tout_de_suite_et_la_fin_avec_son_code() {
+        let (_d, atelier) = atelier_temp();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let t = std::time::Instant::now();
+        let f = lancer_en_fond(sh("sleep 1; echo fini; exit 3"), &atelier.clone_pour_test("a"), None, Box::new(move |f| {
+            let _ = tx.send(f.clone());
+        }))
+        .unwrap();
+        assert!(t.elapsed() < std::time::Duration::from_millis(500), "rendu en {:?}", t.elapsed());
+        assert!(f.fin().is_none(), "elle tourne encore");
+        let fin = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("la fin est livrée");
+        assert_eq!(fin.code, Some(3));
+        assert!(!fin.tuee);
+        assert!(fin.fin_stdout.contains("fini"), "{fin:?}");
+        assert_eq!(f.fin().unwrap().code, Some(3));
+    }
+
+    /// **Deux commandes en fond du même programme** : deux journaux, deux
+    /// fins livrées.
+    #[test]
+    fn deux_commandes_en_fond_du_meme_programme_deux_journaux_deux_fins() {
+        let (_d, atelier) = atelier_temp();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let tx2 = tx.clone();
+        let a = lancer_en_fond(sh("echo a"), &atelier.clone_pour_test("cmd-a"), None, Box::new(move |f| { let _ = tx.send(("a", f.code)); })).unwrap();
+        let b = lancer_en_fond(sh("echo b"), &atelier.clone_pour_test("cmd-b"), None, Box::new(move |f| { let _ = tx2.send(("b", f.code)); })).unwrap();
+        assert_ne!(a.journal_stdout, b.journal_stdout);
+        let mut fins: Vec<_> = (0..2).map(|_| rx.recv_timeout(std::time::Duration::from_secs(10)).expect("deux fins")).collect();
+        fins.sort();
+        assert_eq!(fins, vec![("a", Some(0)), ("b", Some(0))]);
+        assert_eq!(std::fs::read_to_string(a.journal_stdout.unwrap()).unwrap(), "a\n");
+        assert_eq!(std::fs::read_to_string(b.journal_stdout.unwrap()).unwrap(), "b\n");
+    }
+
+    /// **Tuer une commande en fond tue tout son groupe**, petits-enfants
+    /// compris : `sh` lance un `sleep` et l'attend ; après `tuer`, plus aucun
+    /// des deux ne vit.
+    #[cfg(unix)]
+    #[test]
+    fn tuer_une_commande_en_fond_tue_ses_petits_enfants() {
+        let (_d, atelier) = atelier_temp();
+        let f = lancer_en_fond(sh("sleep 600 & echo $!; wait"), &atelier.clone_pour_test("groupe"), None, Box::new(|_| {})).unwrap();
+        // Le pid du petit-enfant, écrit par sh.
+        let journal = f.journal_stdout.clone().unwrap();
+        let debut = std::time::Instant::now();
+        let petit: u32 = loop {
+            if let Some(p) = std::fs::read_to_string(&journal).ok().and_then(|t| t.trim().parse().ok()) {
+                break p;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(5), "le petit-enfant n'a pas dit son pid");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        let vivant = |pid: u32| std::path::Path::new(&format!("/proc/{pid}")).exists()
+            && !std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default().contains(") Z ");
+        assert!(vivant(petit), "le sleep tourne");
+        f.tuer(std::time::Duration::from_secs(2));
+        let fin = f.fin().expect("la fin est rangée");
+        assert!(fin.tuee, "{fin:?}");
+        let debut = std::time::Instant::now();
+        while vivant(petit) && debut.elapsed() < std::time::Duration::from_secs(3) {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(!vivant(petit), "le petit-enfant {petit} est mort avec son groupe");
+        assert!(!vivant(f.pid), "le sh est mort");
     }
 
     // ── La famille ──────────────────────────────────────────────────────
