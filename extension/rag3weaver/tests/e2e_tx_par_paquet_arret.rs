@@ -1210,7 +1210,12 @@ fn mort_pendant_un_copy_journalise(fichiers: bool) {
     assert_eq!(statut.signal(), Some(9), "l'écrivain meurt au paquet 1 :\n{}", sortie.chars().take(3000).collect::<String>());
     let wal = journal(&dossier);
     println!("▸ {cas} : écrivain mort en {:.0?}, journal {wal:?}", t.elapsed());
-    assert!(wal.iter().any(|(_, t)| *t > 0), "journal vide : le premier paquet n'est pas journalisé, le test ne prouverait rien");
+    // Le premier paquet (150 000 lignes) doit être au journal pour que la
+    // réouverture le rejoue : des dizaines de Mio. Un journal de quelques
+    // centaines d'octets veut dire qu'un point de reprise l'a replié, et le
+    // test ne prouverait rien (151 octets au premier essai, le 10 octobre).
+    let octets: u64 = wal.iter().map(|(_, t)| *t).sum();
+    assert!(octets >= 10 << 20, "journal de {octets} octets : le premier paquet n'y est pas, le test ne prouverait rien ({wal:?})");
 
     let (statut, sortie) = lancer_avec("repreneur", &base, None, true, 1);
     assert!(statut.success(), "la base rouvre et la reprise va au bout :\n{}", sortie.chars().take(3000).collect::<String>());
