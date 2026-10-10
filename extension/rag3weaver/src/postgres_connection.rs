@@ -15,25 +15,56 @@ use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryRes
 /// PostgreSQL connection backed by a connection pool.
 pub struct PostgresConnection {
     pool: Pool,
-    /// **Le runtime, tenu et non deviné.**
+    /// **Le runtime, possédé et non emprunté.**
     ///
     /// `execute` est synchrone et doit pourtant piloter du code async. La
-    /// version précédente demandait `Handle::current()` *au moment de
-    /// l'appel* — c'est-à-dire qu'elle exigeait de l'appelant qu'il soit dans
-    /// un contexte tokio. Or les appelants ne le sont pas tous : lucivy écrit
-    /// ses segments depuis **ses propres fils d'ordonnancement**, qui ne
-    /// savent rien de tokio. Résultat : « there is no reactor running », au
-    /// milieu d'un commit d'index, avec des verrous laissés empoisonnés.
+    /// première version demandait `Handle::current()` *au moment de l'appel*
+    /// — elle exigeait de l'appelant un contexte tokio, que les fils
+    /// d'ordonnancement de lucivy n'ont pas (« there is no reactor
+    /// running », au milieu d'un commit d'index). La deuxième capturait le
+    /// handle à la construction — mais un handle est une adresse empruntée :
+    /// il meurt avec le runtime de celui qui a construit la connexion, et il
+    /// oblige chaque appelant de `new` à en tenir un.
     ///
-    /// La connexion capture donc le handle à sa construction — elle est née
-    /// dans le runtime, elle en garde l'adresse — et n'impose plus rien à qui
-    /// l'appelle.
-    handle: tokio::runtime::Handle,
+    /// La connexion possède donc SON runtime (fil courant : il ne vit que
+    /// pendant les appels, aucun fil de plus) ; les tâches de liaison
+    /// tokio-postgres naissent dessus et ne survivent à personne d'autre.
+    /// Elle n'impose plus rien à qui l'appelle — et depuis une tâche tokio,
+    /// le pont [`bloquer`] refuse NOMMÉMENT sur un fil unique au lieu de
+    /// paniquer. (Chantier C, 10 octobre 2026.)
+    rt: tokio::runtime::Runtime,
+}
+
+/// **Le pont synchrone de la connexion** : joue un futur sur SON runtime.
+///
+/// Les trois bras du pont du crate (`dataflow/rt.rs`), pour les mêmes
+/// raisons : depuis un fil ordinaire, bloquer ; depuis un runtime multi-fil
+/// (un nœud `execute` sous `block_in_place`), la réentrance est permise ;
+/// depuis un fil unique, un refus qui se lit — jamais la panique « cannot
+/// block the current thread from within a runtime ».
+fn bloquer<F: std::future::Future>(
+    rt: &tokio::runtime::Runtime,
+    quoi: &str,
+    futur: F,
+) -> Result<F::Output, DbError> {
+    match tokio::runtime::Handle::try_current() {
+        Err(_) => Ok(rt.block_on(futur)),
+        Ok(h) if h.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            Ok(tokio::task::block_in_place(|| rt.block_on(futur)))
+        }
+        Ok(_) => Err(DbError::QueryError(format!(
+            "{quoi} : impossible de bloquer un runtime tokio à fil unique — \
+             prenez un fil ordinaire, ou un runtime multi-fil"
+        ))),
+    }
 }
 
 impl PostgresConnection {
     /// Create from a connection string (e.g. "host=localhost port=5433 user=rag3weaver password=rag3weaver dbname=rag3weaver_test").
-    pub async fn new(conn_str: &str) -> Result<Self, DbError> {
+    ///
+    /// Synchrone depuis le chantier C : la connexion possède son runtime, la
+    /// construction n'a plus besoin d'un contexte tokio ambiant.
+    pub fn new(conn_str: &str) -> Result<Self, DbError> {
         let config: tokio_postgres::Config = conn_str
             .parse()
             .map_err(|e| DbError::ConnectionError(format!("invalid connection string: {e}")))?;
@@ -58,20 +89,25 @@ impl PostgresConnection {
             .create_pool(Some(Runtime::Tokio1), NoTls)
             .map_err(|e| DbError::ConnectionError(format!("pool creation failed: {e}")))?;
 
-        // Verify connection
-        let _conn = pool
-            .get()
-            .await
-            .map_err(|e| DbError::ConnectionError(format!("connection failed: {e}")))?;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| DbError::ConnectionError(format!("runtime de la connexion: {e}")))?;
 
-        Ok(Self {
-            pool,
-            handle: tokio::runtime::Handle::current(),
-        })
+        // Vérification — et la tâche de liaison de cette première connexion
+        // naît sur LE runtime de la connexion, pas sur celui d'un appelant.
+        let _conn = bloquer(&rt, "PostgresConnection::new", async {
+            pool.get()
+                .await
+                .map_err(|e| DbError::ConnectionError(format!("connection failed: {e}")))
+        })??;
+        drop(_conn);
+
+        Ok(Self { pool, rt })
     }
 
     /// Create from explicit parameters.
-    pub async fn connect(
+    pub fn connect(
         host: &str,
         port: u16,
         user: &str,
@@ -81,7 +117,7 @@ impl PostgresConnection {
         let conn_str = format!(
             "host={host} port={port} user={user} password={password} dbname={dbname}"
         );
-        Self::new(&conn_str).await
+        Self::new(&conn_str)
     }
 }
 
@@ -132,6 +168,19 @@ fn cypher_to_json(value: &CypherValue) -> serde_json::Value {
         CypherValue::Map(m) => {
             J::Object(m.iter().map(|(k, v)| (k.clone(), cypher_to_json(v))).collect())
         }
+        CypherValue::Typed { value, .. } => cypher_to_json(value),
+    }
+}
+
+/// L'annotation de type (`Typed`) ne concerne que la frontière FFI native ;
+/// pour PostgreSQL, seule la valeur portée compte. La dénuder AVANT d'inspecter
+/// une forme, sinon une liste de lignes annotées passerait pour des
+/// identifiants — et le `filter_map` du tableau de texte la perdrait en
+/// silence.
+fn denuder(value: &CypherValue) -> &CypherValue {
+    match value {
+        CypherValue::Typed { value, .. } => denuder(value),
+        autre => autre,
     }
 }
 
@@ -147,7 +196,7 @@ fn cypher_to_json(value: &CypherValue) -> serde_json::Value {
 fn est_liste_de_lignes(items: &[CypherValue]) -> bool {
     items
         .iter()
-        .any(|v| matches!(v, CypherValue::Map(_) | CypherValue::List(_)))
+        .any(|v| matches!(denuder(v), CypherValue::Map(_) | CypherValue::List(_)))
 }
 
 /// Convert CypherValue to a tokio-postgres parameter.
@@ -167,7 +216,7 @@ fn cypher_to_pg_param(value: &CypherValue) -> Box<dyn tokio_postgres::types::ToS
                 // Des identifiants. Tableau de texte, pour `= ANY($1)`.
                 let strings: Vec<String> = items
                     .iter()
-                    .filter_map(|v| match v {
+                    .filter_map(|v| match denuder(v) {
                         CypherValue::String(s) => Some(s.clone()),
                         CypherValue::Int(i) => Some(i.to_string()),
                         _ => None,
@@ -178,6 +227,7 @@ fn cypher_to_pg_param(value: &CypherValue) -> Box<dyn tokio_postgres::types::ToS
         }
         // Une map isolée est une ligne unique : même traitement, en JSON.
         CypherValue::Map(_) => Box::new(cypher_to_json(value).to_string()),
+        CypherValue::Typed { value, .. } => cypher_to_pg_param(value),
     }
 }
 
@@ -331,14 +381,11 @@ impl PostgresConnection {
         })
     }
 
-    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.handle.block_on(future)
-    }
 }
 
 impl DbConnection for PostgresConnection {
     fn execute(&self, sql: &str) -> Result<QueryResult, DbError> {
-        self.block_on(self.execute_async(sql))
+        bloquer(&self.rt, "PostgresConnection::execute", self.execute_async(sql))?
     }
 
     fn execute_with_params(
@@ -346,6 +393,10 @@ impl DbConnection for PostgresConnection {
         sql: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
-        self.block_on(self.execute_with_params_async(sql, params))
+        bloquer(
+            &self.rt,
+            "PostgresConnection::execute_with_params",
+            self.execute_with_params_async(sql, params),
+        )?
     }
 }
