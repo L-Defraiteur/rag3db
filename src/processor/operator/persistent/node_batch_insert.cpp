@@ -14,6 +14,7 @@
 #include "storage/storage_manager.h"
 #include "storage/table/chunked_node_group.h"
 #include "storage/table/node_table.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::catalog;
@@ -39,6 +40,24 @@ void NodeBatchInsertSharedState::initPKIndex(const ExecutionContext* context) {
     nodeTable->getPKIndex()->bulkReserve(numRows);
     globalIndexBuilder = IndexBuilder(std::make_shared<IndexBuilderSharedState>(
         Transaction::Get(*context->clientContext), nodeTable));
+}
+
+// Marche A3′ : sous le mode multi-écrivains, un COPY tient l'index de la table en exclusif
+// jusqu'à la fin de sa transaction. Il écrit ses clés dans l'index et ses lignes dans les
+// blocs de la table avant de valider : ni un autre COPY, ni une insertion ordinaire de la même
+// table (index en partagé) ne doivent s'y croiser. Pris avant l'ordonnancement, sur le fil du
+// client : dans initGlobalState, sous le mutex de la tâche, l'attente gelait l'ordonnanceur.
+void NodeBatchInsert::acquireLocksBeforeExecution(ExecutionContext* context) {
+    auto clientContext = context->clientContext;
+    auto transaction = Transaction::Get(*clientContext);
+    if (!transaction->usesLocks()) {
+        return;
+    }
+    const auto nodeTableEntry = Catalog::Get(*clientContext)
+                                    ->getTableCatalogEntry(transaction, info->tableName)
+                                    ->ptrCast<NodeTableCatalogEntry>();
+    transaction->acquireLock(transaction::LockResource::index(nodeTableEntry->getTableID()),
+        transaction::LockMode::EXCLUSIVE);
 }
 
 void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {

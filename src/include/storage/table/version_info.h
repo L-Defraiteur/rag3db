@@ -38,6 +38,12 @@ public:
     bool isDeleted(const transaction::Transaction* transaction, common::row_idx_t rowInChunk) const;
     bool isInserted(const transaction::Transaction* transaction,
         common::row_idx_t rowInChunk) const;
+    // La même visibilité depuis un instantané choisi (Transaction::LATEST_COMMITTED_TS : le
+    // dernier état validé, plus les lignes de la transaction donnée).
+    bool isDeleted(common::transaction_t startTS, common::transaction_t transactionID,
+        common::row_idx_t rowInChunk) const;
+    bool isInserted(common::transaction_t startTS, common::transaction_t transactionID,
+        common::row_idx_t rowInChunk) const;
 
     bool hasDeletions(const transaction::Transaction* transaction) const;
 

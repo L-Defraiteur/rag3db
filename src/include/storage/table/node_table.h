@@ -169,8 +169,17 @@ public:
     void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState,
         PageAllocator& pageAllocator) override;
     bool isVisible(const transaction::Transaction* transaction, common::offset_t offset) const;
+    bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
+        common::offset_t offset) const;
+    // La ligne vue depuis le dernier état validé : toute ligne validée, quel que soit
+    // l'instantané de la transaction, plus les siennes. C'est ce que regarde le contrôle
+    // d'unicité d'une clé primaire sous les verrous (marche A3′).
+    bool isVisibleToLatestCommit(const transaction::Transaction* transaction,
+        common::offset_t offset) const;
     bool isVisibleNoLock(const transaction::Transaction* transaction,
         common::offset_t offset) const;
+    // La clé d'une ligne sous la forme que le gestionnaire de verrous reçoit (marches A3′, A4′).
+    static std::string lockKeyOf(const common::ValueVector& pkVector, common::sel_t pos);
 
     bool lookupPK(const transaction::Transaction* transaction, common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t& result) const;
@@ -264,6 +273,9 @@ private:
         common::ValueVector* pkVector) const;
 
     visible_func getVisibleFunc(const transaction::Transaction* transaction) const;
+    // La visibilité du contrôle d'unicité de la clé primaire (marche A3′) : sous les verrous,
+    // le dernier état validé ; sinon l'instantané. La même à l'insertion et à la validation.
+    visible_func getUniquenessVisibleFunc(const transaction::Transaction* transaction) const;
     common::DataChunk constructDataChunkForColumns(
         const std::vector<common::column_id_t>& columnIDs) const;
     void scanIndexColumns(main::ClientContext* context, IndexScanHelper& scanHelper,

@@ -28,6 +28,7 @@ private:
     void decomposePlanIntoTask(PhysicalOperator* op, common::Task* task, ExecutionContext* context);
 
     void initTask(common::Task* task);
+    void acquireLocksBeforeExecution(common::Task* task, ExecutionContext* context);
 
 private:
     std::unique_ptr<common::TaskScheduler> taskScheduler;

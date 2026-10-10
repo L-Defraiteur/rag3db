@@ -59,9 +59,31 @@ public:
 
     static TaskScheduler* Get(const main::ClientContext& context);
 
+    // Dit si le fil courant est un fil ouvrier de cet ordonnanceur (ou un remplaçant).
+    static bool onWorkerThread();
+
+    // Un fil ouvrier qui va attendre longtemps hors de l'ordonnanceur — un verrou d'écriture
+    // tenu par une autre transaction (marche A3′) — le dit par cette portée : pendant son
+    // attente, un fil de remplacement sert la file. Sans lui, N attentes occupent les N fils
+    // ouvriers, et la transaction qui doit valider pour les libérer ne trouve plus de fil :
+    // tout gèle jusqu'au délai des verrous (banc, 10 octobre 2026). Le remplaçant finit la
+    // tâche qu'il a prise, puis s'arrête à la fin de la portée (ou de la suivante : les
+    // remplaçants se comptent, ils ne se nomment pas). Sans effet hors d'un fil ouvrier.
+    class RAG3DB_API BlockingWait {
+    public:
+        explicit BlockingWait(TaskScheduler* scheduler);
+        ~BlockingWait();
+        BlockingWait(const BlockingWait&) = delete;
+        BlockingWait& operator=(const BlockingWait&) = delete;
+
+    private:
+        TaskScheduler* scheduler;
+    };
+
 private:
     // Functions to launch worker threads and for the worker threads to use to grab task from queue.
     void runWorkerThread();
+    void runReplacementThread();
 
     std::shared_ptr<ScheduledTask> pushTaskIntoQueue(const std::shared_ptr<Task>& task);
 
@@ -77,6 +99,11 @@ private:
     std::mutex taskSchedulerMtx;
     std::condition_variable cv;
     uint64_t nextScheduledTaskID;
+    // Les fils de remplacement vivants, et combien doivent s'arrêter ; le destructeur attend
+    // qu'il n'en reste aucun.
+    uint64_t numReplacementThreads = 0;
+    uint64_t numReplacementsToStop = 0;
+    std::condition_variable replacementsGone;
 #if defined(__APPLE__)
     uint32_t threadQos; // Thread quality of service for worker threads.
 #endif
@@ -92,6 +119,11 @@ public:
         processor::ExecutionContext* context, bool launchNewWorkerThread = false);
 
     static TaskScheduler* Get(const main::ClientContext& context);
+    static bool onWorkerThread() { return false; }
+    class BlockingWait {
+    public:
+        explicit BlockingWait(TaskScheduler*) {}
+    };
 
 private:
     std::shared_ptr<ScheduledTask> pushTaskIntoQueue(const std::shared_ptr<Task>& task);

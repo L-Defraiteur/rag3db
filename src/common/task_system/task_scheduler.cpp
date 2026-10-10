@@ -15,6 +15,35 @@ namespace common {
 
 #ifndef __SINGLE_THREADED__
 
+static thread_local bool isWorkerThread = false;
+
+bool TaskScheduler::onWorkerThread() {
+    return isWorkerThread;
+}
+
+TaskScheduler::BlockingWait::BlockingWait(TaskScheduler* scheduler_) : scheduler{scheduler_} {
+    if (scheduler == nullptr || !isWorkerThread) {
+        scheduler = nullptr;
+        return;
+    }
+    {
+        lock_t lck{scheduler->taskSchedulerMtx};
+        scheduler->numReplacementThreads++;
+    }
+    std::thread([s = scheduler] { s->runReplacementThread(); }).detach();
+}
+
+TaskScheduler::BlockingWait::~BlockingWait() {
+    if (scheduler == nullptr) {
+        return;
+    }
+    {
+        lock_t lck{scheduler->taskSchedulerMtx};
+        scheduler->numReplacementsToStop++;
+    }
+    scheduler->cv.notify_all();
+}
+
 #if defined(__APPLE__)
 TaskScheduler::TaskScheduler(uint64_t numWorkerThreads, uint32_t threadQos)
 #else
@@ -36,6 +65,51 @@ TaskScheduler::~TaskScheduler() {
     cv.notify_all();
     for (auto& thread : workerThreads) {
         thread.join();
+    }
+    // Les remplaçants sont détachés : attendre qu'ils soient tous sortis.
+    lck.lock();
+    replacementsGone.wait(lck, [&] { return numReplacementThreads == 0; });
+}
+
+void TaskScheduler::runReplacementThread() {
+    isWorkerThread = true;
+    std::unique_lock<std::mutex> lck{taskSchedulerMtx, std::defer_lock};
+    std::exception_ptr exceptionPtr = nullptr;
+    std::shared_ptr<ScheduledTask> scheduledTask = nullptr;
+    while (true) {
+        lck.lock();
+        if (scheduledTask != nullptr) {
+            if (exceptionPtr != nullptr) {
+                scheduledTask->task->setException(exceptionPtr);
+                exceptionPtr = nullptr;
+            }
+            scheduledTask->task->deRegisterThreadAndFinalizeTask();
+            scheduledTask = nullptr;
+        }
+        bool stop = false;
+        cv.wait(lck, [&] {
+            if (stopWorkerThreads || numReplacementsToStop > 0) {
+                stop = true;
+                return true;
+            }
+            scheduledTask = getTaskAndRegister();
+            return scheduledTask != nullptr;
+        });
+        if (stop) {
+            if (numReplacementsToStop > 0) {
+                numReplacementsToStop--;
+            }
+            numReplacementThreads--;
+            lck.unlock();
+            replacementsGone.notify_all();
+            return;
+        }
+        lck.unlock();
+        try {
+            scheduledTask->task->run();
+        } catch (std::exception& e) {
+            exceptionPtr = std::current_exception();
+        }
     }
 }
 
@@ -99,6 +173,7 @@ void TaskScheduler::scheduleTaskAndWaitOrError(const std::shared_ptr<Task>& task
 }
 
 void TaskScheduler::runWorkerThread() {
+    isWorkerThread = true;
 #if defined(__APPLE__)
     qos_class_t qosClass = (qos_class_t)threadQos;
     if (qosClass != QOS_CLASS_DEFAULT && qosClass != QOS_CLASS_UNSPECIFIED) {
