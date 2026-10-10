@@ -1,3 +1,9 @@
+# Les huit cas WWConflict* : depuis la marche A4′ (10 octobre 2026), sous le mode multi-écrivains la
+# seconde transaction ATTEND le verrou de la ligne (la clé) tenu par la première au lieu de recevoir
+# tout de suite « Write-write conflict » ; dans ce fichier à un seul fil, la première ne finit jamais
+# pendant l'attente : la seconde reçoit l'erreur nommée du délai (CALL lock_timeout=300 pour ne pas
+# attendre 30 s). Pour une relation, ce sont ses deux extrémités qui sont tenues (la ligne '0' de
+# person d'abord). Le refus immédiat d'avant reste celui du mode éteint.
 -DATASET CSV empty
 --
 
@@ -24,6 +30,8 @@
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -32,7 +40,7 @@
 ---- ok
 -STATEMENT [conn2] MATCH (p:person) WHERE p.ID = 0 SET p.fName = 'Alphabet' RETURN p.*;
 ---- error
-Runtime exception: Write-write conflict of updating the same row.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE NodeUpdateOverlappedRows
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -150,6 +158,8 @@ Runtime exception: Write-write conflict of updating the same row.
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -158,7 +168,7 @@ Runtime exception: Write-write conflict of updating the same row.
 ---- ok
 -STATEMENT [conn2] MATCH (p:person) WHERE p.ID = 0 DELETE p RETURN p.*;
 ---- error
-Runtime exception: Write-write conflict: deleting a row that is already deleted by another transaction.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelCopyUpdate
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -166,6 +176,8 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_KNOWS
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -174,7 +186,7 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 ---- ok
 -STATEMENT [conn2] MATCH (p1:person)-[k:knows]->(p2:person) WHERE p1.ID = 0 AND p2.ID = 2 SET k.date = Date('2026-01-01');
 ---- error
-Runtime exception: Write-write conflict of updating the same row.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelCopyDelete
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -182,6 +194,8 @@ Runtime exception: Write-write conflict of updating the same row.
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_KNOWS
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -190,7 +204,7 @@ Runtime exception: Write-write conflict of updating the same row.
 ---- ok
 -STATEMENT [conn2] MATCH (p1:person)-[k:knows]->(p2:person) WHERE p1.ID = 0 AND p2.ID = 2 DELETE k;
 ---- error
-Runtime exception: Write-write conflict: deleting a row that is already deleted by another transaction.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictNodeInsertUpdate
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -198,6 +212,8 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -206,7 +222,7 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 ---- ok
 -STATEMENT [conn2] MATCH (p:person) WHERE p.ID = 0 SET p.fName = 'Alphabet' RETURN p.*;
 ---- error
-Runtime exception: Write-write conflict of updating the same row.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictNodeInsertDelete
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -214,6 +230,8 @@ Runtime exception: Write-write conflict of updating the same row.
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -222,7 +240,7 @@ Runtime exception: Write-write conflict of updating the same row.
 ---- ok
 -STATEMENT [conn2] MATCH (p:person) WHERE p.ID = 0 DELETE p RETURN p.*;
 ---- error
-Runtime exception: Write-write conflict: deleting a row that is already deleted by another transaction.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelInsertUpdate
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -230,6 +248,8 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -238,7 +258,7 @@ Runtime exception: Write-write conflict: deleting a row that is already deleted 
 ---- ok
 -STATEMENT [conn2] MATCH (p1:person)-[k:knows]->(p2:person) WHERE p1.ID = 0 AND p2.ID = 2 SET k.date = Date('2026-01-01');
 ---- error
-Runtime exception: Write-write conflict of updating the same row.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelInsertDelete
 -STATEMENT CALL debug_enable_multi_writes=true;
@@ -246,6 +266,8 @@ Runtime exception: Write-write conflict of updating the same row.
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
 -CREATE_CONNECTION conn2
+-STATEMENT [conn2] CALL lock_timeout=300;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -254,7 +276,7 @@ Runtime exception: Write-write conflict of updating the same row.
 ---- ok
 -STATEMENT [conn2] MATCH (p1:person)-[k:knows]->(p2:person) WHERE p1.ID = 0 AND p2.ID = 2 DELETE k;
 ---- error
-Runtime exception: Write-write conflict: deleting a row that is already deleted by another transaction.
+Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE MultiTransactionNodeInsert
 -STATEMENT CALL debug_enable_multi_writes=true;
