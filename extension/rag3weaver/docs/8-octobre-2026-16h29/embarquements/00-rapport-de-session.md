@@ -19,31 +19,35 @@ d'avant est dans
 | La série de confirmation du basculement : fichiers +1 % sous COPY journalisé, blobs ramenés par le forçage de rag3weaver | [04-la-serie-de-confirmation.md](04-la-serie-de-confirmation.md) | `38e4b1758` |
 | La forme `Count` (lignes, degré par uuid), les degrés de `graph_walk` par elle | `ir/src/form.rs`, `dataflow/graph_walk.rs` | `27c541207` |
 
-## En cours, sur la branche `ir-hop-libre` (`d885a6833`, non fusionnée)
+## Fait ensuite, le 10 octobre au soir
 
-`Hop` à départ et arrivée sans table (`Hop::untyped`), et deux colonnes :
-l'étiquette et le nœud entier. `fetch_related` (FetchRelatedNode,
-GroupFrameNode) et la transition de `react_nodes` passent par lui ; le chemin
-du catalogue (`catalog.rs`, à A) garde `fetch_related` dans le dialecte rag3db
-le temps qu'A passe le sien. Les tests unitaires sont verts (100). **Les
-suites ne sont pas jouées** : e2e_code, e2e_scope, e2e_catalogue_gabarits,
-structured_payloads (les gabarits de recherche qui chargent les voisins) et
-e2e_reacteur. Ici la parité n'est plus au caractère près (les alias changent
-dans le texte) : elle se prouve par les lignes rendues.
+| Quoi | Commit | Vérifié contre |
+|---|---|---|
+| `Hop` sans table au départ ni à l'arrivée, colonnes étiquette et nœud entier ; `fetch_related` (FetchRelatedNode, GroupFrameNode) et la transition réactive par lui | `2bef57c6d` | luciepc, lib de 14 h 20 (`41b869ba4`, **d'avant** `ff9bad960`) : e2e_reacteur, e2e_scope, e2e_catalogue_gabarits, e2e_code, e2e_usages, e2e_impact verts |
+| Les définitions et les usages par le rendez-vous par `Hop`, un pivot à la fois | `f1b5e7407` | luciepc, même lib d'avant : lib 1 259, e2e_usages, usages_rendu, e2e_code, e2e_impact verts |
+| `Hop` borné ; les déclarations, les voisins de `code_tools`, les liens de `code.rs` par lui | `e1f490e3e` | **ici**, lib de 17 h 27 (le seul écart est `d10b92306`, statistiques) : lib 1 259, e2e_code, e2e_usages, e2e_impact verts |
+
+**Écart à savoir** : les deux premiers lots ont été vérifiés contre une lib
+du moteur d'avant la bascule du COPY journalisé. Ils ne touchent que le
+dialecte et les requêtes de lecture, pas le chargement, et l'orchestration
+n'a pas demandé de les rejouer. Depuis, la date de la lib est prouvée contre
+la tête de master avant chaque suite.
+
+`structured_payloads` n'a jamais été jouée : elle exige un démon jetable, de
+vrais embarquements et le corpus MTGA.
 
 ## Ce qui reste, dans l'ordre
 
-1. Jouer les suites de `ir-hop-libre`, puis la fusionner.
-2. Les sites de `Hop` à un seul uuid (`definitions_query`,
-   `pivot_usages_query`, les voisins de `code_tools` et `code.rs`), puis
-   `declarations_of` (parité par les lignes).
-3. `Select`, avec le compte filtré de `composable_results`. Ensuite `Write`,
+1. `Hop` couvre tous les sites en forme de saut de l'inventaire. Reste à
+   retirer `fetch_related` sans dialecte quand A aura passé `catalog.rs` sur
+   `fetch_related_in`.
+2. `Select`, avec le compte filtré de `composable_results`. Ensuite `Write`,
    qui doit naître de l'ingestion (le vrai client), pas d'une table système
    (note de la session mémoire).
-4. Le contournement du pool PostgreSQL (une connexion tenue le temps d'une
+3. Le contournement du pool PostgreSQL (une connexion tenue le temps d'une
    transaction), après la fusion de `execution-asynchrone` par la session
    recherche.
-5. La preuve vivante sur PostgreSQL (`e2e_postgres`, puis la batterie du
+4. La preuve vivante sur PostgreSQL (`e2e_postgres`, puis la batterie du
    contrat) attend que Lucie lance le conteneur `pgvector/pgvector:pg17` sur
    le port 5433. Ni la session recherche ni moi n'avons accès à docker.
 
