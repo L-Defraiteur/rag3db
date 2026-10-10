@@ -69,7 +69,7 @@ Dans la branche disque, s'arrêter au premier refus local comme la branche mémo
 l'insertion : le refus nomme la bonne. Le test probabiliste reste rouge 13 fois sur 40 après le
 correctif, mais pour une autre raison — laquelle des deux lignes 17 survit suit l'ordre des fils :
 il tolère maintenant l'une ou l'autre (`9bd9087cc`), 40 vertes sur 40. Ticket de confort à part :
-`2026-10-10-copy-garde-un-doublon-selon-les-fils.md`.
+`../2026-10-10-copy-garde-un-doublon-selon-les-fils.md`.
 
 ## À part (confort)
 

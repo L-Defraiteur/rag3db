@@ -1,7 +1,7 @@
 # Un refus d'ouverture en lecture sur quelques centaines n'est pas le refus nommé
 
 - **État** : corrigé `f5de0a3f0` — doublon, voir le ticket
-  [lecteur affamé par les points de reprise](2026-10-04-lecteur-affame-par-les-points-de-reprise.md),
+  [lecteur affamé par les points de reprise](../2026-10-04-lecteur-affame-par-les-points-de-reprise.md),
   section « Deux messages pour le même croisement » (f2fdc8bab).
 
 Le refus non nommé était « Couldn't replay shadow pages under read-only

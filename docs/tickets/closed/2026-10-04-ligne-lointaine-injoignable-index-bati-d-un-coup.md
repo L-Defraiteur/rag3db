@@ -329,6 +329,6 @@ ce que les deux règles tiennent ; ce qui les sépare, c'est la sonde sur le vra
 
 **Reste ouvert, à part** :
 - un groupe de copies bien plus grand que le degré
-  (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`) ;
+  (`../2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`) ;
 - les lignes injoignables après une mise à jour massive de vecteurs
-  (`2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`, le lot suivant du banc).
+  (`../2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`, le lot suivant du banc).
