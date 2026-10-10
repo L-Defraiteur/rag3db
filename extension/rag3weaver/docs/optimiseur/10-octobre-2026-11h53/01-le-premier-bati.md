@@ -68,8 +68,20 @@ backend livré par le paquet qui, sous Windows, posera `"sandbox": {"mode":
 Job `macos-arm64` sur `macos-latest` (même recette que Windows : moteur en
 statique par la crate rag3db avec le clang d'Apple, Ninja par brew,
 `--describe` tel quel puis avec le bac à sable fermé, journal et binaire en
-artefact `bati-macos-arm64-journal`). Premier essai : 38064174599. x64
-ensuite si arm64 passe.
+artefact `bati-macos-arm64-journal`). **Premier essai, lié et vert, sans un
+accroc** (38064174599) :
+
+| | valeur |
+|---|---|
+| runner | macOS 26.6.2 arm64, Apple clang 21, cmake 4.4.3, Ninja par brew |
+| durée du bâti | 15 min 34 s (3 tâches) |
+| binaire | Mach-O arm64, 65 Mo (67 699 600 octets), non strippé |
+| bibliothèques liées | libc++, libiconv, libSystem — rien d'autre |
+| tel quel | le refus Landlock nommé, comme sous Windows |
+| `"sandbox": {"mode": "off"}` | `--describe` entier du gabarit de code |
+
+x64 ensuite (job `macos-15-large` ou `macos-13`, même recette) ; l'extension
+vecteur reste à bâtir dans le job, comme sous Windows.
 
 ## Windows x64 : le binaire se lie
 
@@ -298,6 +310,48 @@ patch de la porte attend sur disque
 sur `paquet-npm` au rebase, quand l'embarqueur est sur master (après la
 batterie complète demandée par l'orchestration), et la porte « rouge
 attendu » de `npm test` tombe alors.
+
+## L'alpha à publier, et la démo
+
+Lucie (par l'orchestration, 10 octobre en soirée) : « le but maintenant,
+tester l'installation depuis npm et vérifier qu'on sait faire des choses
+cool avec ». Le nom `rag3weaver` est réservé sur npm (compte
+luciformresearch, étiquette `next`) ; c'est l'orchestration qui publie, avec
+les OTP de Lucie.
+
+- **Branche** : `paquet-npm` fond master et `embarqueur-absent` (c98d4ff9b)
+  ; la porte de `PreparedBackend::open` pose `AbsentEmbedder` pour tout
+  démarrage sans service, plus aucun mock dans le produit ; `npm test` sort
+  de son rouge attendu et passe (dette lue, « not available » sur le dense).
+- **Les deux paquets en `0.0.1-alpha.1`**, emballés sous
+  `~/.cache/rag3weaver-build/paquet-npm/publier/` : `rag3weaver` (25 ko,
+  README honnête : alpha, Linux x64 seulement, ce qui marche et ce qui
+  manque) et `rag3weaver-linux-x64-gnu` (28 Mo compressés : le binaire
+  Docker de luciepc, dépôt 6788935a7, 79 Mo strippé, glibc 2.28, et
+  `libvector` à côté). Ordre de publication : le sous-paquet d'abord.
+- **La démo** : `bindings/nodejs/demo/demo.sh [dépôt]` — depuis un dossier
+  vide, `npm install rag3weaver@next` (ou `DEMO_SOURCE=<archive>` pour
+  répéter avant publication), puis `demo.js` deux fois sur
+  `codeparsers/src` (80 fichiers Rust, 26 700 lignes) : avec le service par
+  les tunnels (`RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,…`) et sans. Chaque
+  passe montre `describe` (les outils en une ligne chacun, l'avertissement
+  s'il y en a), `search_code` avant l'index (balayage), l'index et son état
+  (texte, vecteurs, dette), une question en langue naturelle, `usages` et
+  `impact` sur un symbole, avec la section Liens que le backend rend ; tout
+  par le `presentation` des réponses et la section `after` (les Liens, en
+  arbre), lisible. **Répétée trois fois depuis un dossier vide avec les
+  archives** (`DEMO_SOURCE`) : avec le service, index de `codeparsers/src`
+  en 21 s (vecteurs à 100 % sur File, Library, Scope), la question « comment
+  les relations entre symboles sont-elles résolues ? » rend
+  `RelationshipResolver::resolve_relationships` en tête (vector+bm25), les
+  Liens en arbre (Consumes / Consumed by), `usages` et `impact` nomment
+  `parse_project` ; sans service, index en 4 s, l'avertissement dans
+  `describe` et `index_state`, la même question rend ses résultats BM25 avec
+  « dense signal is not available: no embedding service (embarqueur absent…) ».
+  Deux accrocs de la démo corrigés en passant : l'attente des vecteurs
+  guettait `vectors_seconds_left` que `Symbol` (BM25) laisse non nul (dix
+  minutes perdues au premier essai) ; et la section Liens n'est pas dans
+  `presentation` mais sous `after` — le client doit la rendre lui-même.
 
 ## Ce qui vient ensuite
 

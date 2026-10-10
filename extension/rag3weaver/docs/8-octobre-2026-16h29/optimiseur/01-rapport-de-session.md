@@ -1,29 +1,23 @@
 # Optimiseur — rapport de session
 
-**Mis à jour le 10 octobre 2026 en fin d'après-midi.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
+**Mis à jour le 10 octobre 2026 en soirée.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
 `../orchestration/03-le-paquet-npm.md`. Le rapport précédent (envois à
 tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseur/`.
 
 ## État
 
-- Branche `paquet-npm`, worktree `../rag3db-paquet-npm` ; tête f86a225fe
-  plus les deux portes du service optionnel (en bâti natif, à commiter).
-  Rien n'est publié, rien dans l'arbre principal.
-- **La branche ne fusionne pas avant le lot « embarqueur absent » de l'arbre
-  principal** ; il est écrit (branche `embarqueur-absent`, c98d4ff9b) et le
-  témoin est vert dessus, sur une branche d'essai locale (`paquet-npm-absent`,
-  non poussée) — patch de la porte sous
-  `~/.cache/rag3weaver-build/paquet-npm/porte-absent.patch`, à poser sur
-  `paquet-npm` au rebase quand c'est sur master. `npm test` reste rouge
-  attendu derrière `RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1` jusque-là.
-- **Windows est tranché** : le binaire se lie (dixième essai, MSVC pur,
-  60 Mo) et `--describe` passe avec le bac à sable fermé (quinzième,
-  https://github.com/L-Defraiteur/rag3db/actions/runs/38060705890) ; entre
-  les deux, trois accrocs d'épreuve et un vrai (le chemin verbatim de
-  `canonicalize` sous Windows, corrigé). Reste pour le sous-paquet Windows :
-  l'extension vecteur, le cache de bâti, l'épreuve JS sur le runner.
-- L'épreuve JS passe de bout en bout sur le binaire natif porteur des
-  portes ; elle reste derrière sa porte (voir le relevé).
+- Branche `paquet-npm` (worktree `../rag3db-paquet-npm`) : elle fond master
+  et `embarqueur-absent` (c98d4ff9b) ; la porte pose `AbsentEmbedder`, plus
+  aucun mock dans le produit ; `npm test` passe. Rien n'est publié ; c'est
+  l'orchestration qui publie `0.0.1-alpha.1` sous `next` avec les OTP de
+  Lucie, depuis `~/.cache/rag3weaver-build/paquet-npm/publier/`
+  (sous-paquet d'abord).
+- La démo `bindings/nodejs/demo/demo.sh` est répétée et verte (voir le
+  relevé) ; les tunnels 7979-7981 vers luciepc (services 7878-7880) sont
+  tenus par une autre session, ne pas les rouvrir.
+- Linux x64 publié, Windows et macOS arm64 bâtis et éprouvés (`--describe`)
+  mais sans sous-paquet ; x64 macOS et l'extension vecteur hors Linux
+  restent à faire.
 
 ## Ce qui est fait
 
@@ -74,20 +68,19 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. Windows, la suite (quand l'orchestration le demande) : l'extension
-   vecteur dans le job Windows, `Swatinem/rust-cache`, l'épreuve JS sur le
-   runner, le sous-paquet `rag3weaver-win32-x64-msvc`. macOS peut maintenant
-   se décider (règle de Lucie : pas avant que Windows soit tranché).
-2. Quand l'embarqueur absent est sur master : rebase de `paquet-npm`
-   (conflits connus : node_table.h → prendre master, paquet-npm.yml → garder
-   la branche), `git apply` du patch de la porte, rebâti, `RAG3WEAVER_BACKEND=<binaire> RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test`
-   dans `bindings/nodejs`, retirer la porte du rouge attendu, puis fusion.
-   La branche locale `paquet-npm-absent` (c88b812ec) garde le tout déjà joué.
-3. Premier bâti dans Docker, ici : `tools/build-images/build.sh linux-x64-gnu`
-   (il passe par `poste lourd` ; `lucied` doit être dans le groupe docker),
-   comparer `dist/linux-x64-gnu/bati.txt` au relevé du runner et de luciepc.
-4. Puis le vecteur en statique ; macOS après Windows ; release.yml copié de
-   lucivy, porte fermée.
+1. Si l'alpha est publiée : jouer `demo.sh` sans `DEMO_SOURCE` (vraie
+   installation depuis npm) et lire ce que Lucie en dit ; sinon, la
+   répétition par `DEMO_SOURCE=<archive>`.
+2. Après la fusion de `embarqueur-absent` dans master : rebase de
+   `paquet-npm` (la fusion est déjà faite dans la branche, le rebase doit
+   être vide ou presque), puis fusion de `paquet-npm` dans master quand
+   l'orchestration le dit.
+3. Windows : l'extension vecteur dans le job, `Swatinem/rust-cache` (47 min
+   → moins), l'épreuve JS sur le runner, le sous-paquet
+   `rag3weaver-win32-x64-msvc`. macOS : x64 (`macos-15-large` ou
+   `macos-13`), puis les sous-paquets `darwin-arm64` / `darwin-x64`.
+4. Le vecteur en statique (dire à l'arbre principal avant de toucher au
+   manifeste) ; `release.yml` copié de lucivy, porte fermée.
 
 ## Pièges
 
