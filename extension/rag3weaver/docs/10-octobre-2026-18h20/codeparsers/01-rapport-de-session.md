@@ -40,8 +40,13 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 |---|---|---|
 | B4 — le relevé des non-résolues | codeparsers `eb41801` | Chaque nom d'un scope qui ne produit aucune relation (locaux et builtins exceptés) est relevé avec sa raison : aucun scope de ce nom ; défini dans un autre fichier (fichier seul) ; plusieurs candidats ; un candidat écarté. Témoin `tests/non_resolues.rs`, rouge puis vert ; 24 suites vertes. |
 | B5 — le banc de couverture | codeparsers `573c1e3` | `examples/banc_couverture` (`--ecrire`, `--verifier` qui échoue sur un recul), quatre références dans `banc/` (rag3db src et test, rag3weaver, codeparsers), notice `banc/README.md`. Appels reliés, fichier seul / entre fichiers : rag3db src 11,3 / 35,0 %, test 13,7 / 23,4 %, rag3weaver 14,5 / 27,0 %, codeparsers 15,6 / 21,3 %. Une erreur de mon banc corrigée avant le commit : les noms résolus dans leur fichier (`LocalScope`) étaient retirés du dénominateur. L'IR : chemin demandé. |
+| Le rapport des trous | codeparsers `9b1460d`, page `02-les-trous-classes-par-cout.md` | `--trous` : chaque non-résolue rangée par forme, pondérée par son coût pour les outils (storage/transaction pèse double). Premier coût partout : la méthode sur un receveur non typé. L'IR en cinquième référence. |
+| Le préprocesseur | codeparsers `75edad9` | Une ligne de directive (`#pragma`, `#include`, `#define`, `#if`, suite `\`) ne nomme rien en C/C++ ; le `#include` reste un import. rag3db src : non-résolues 100 813 → 86 796, imports reliés 10,1 → 34,4 % (entre fichiers 24,9 → 99,3 %). `banc/comparer.sh` : la vérification se fait avant / après sur le même corpus (une ligne fixe faisait « reculer » un dépôt qui grossit). |
+| B2a — les receveurs C++ dans le fichier | codeparsers `876f606` | Pointeurs intelligents traversés ; fabriques et conversions (`make_unique<T>`, `cast<T>()`, `static_cast<T*>`…) rendent `T`. Témoin `tests/receveurs_cpp.rs` (8 formes). rag3db src : appels reliés entre fichiers 35,0 → 39,2 %. Appelants de `NodeTable::update` (`--appelants`) : 0 → 1 entre fichiers. |
 
 ## Suite
 
-Le rapport des trous classés par coût, puis B2 (receveurs C++ typés, et la
-réponse sur B1).
+B2b — les types différés au rendez-vous (réponse à B1, validée : pas de mode
+entre fichiers dans codeparsers, le graphe ne dépendrait plus seulement du
+dépôt mais du paquet) : `FieldOf` / `ReturnOf` portés par MENTIONS, résolus
+à la matérialisation (code.rs, proposé à l'arbre principal). Puis B3, LOCKS.
