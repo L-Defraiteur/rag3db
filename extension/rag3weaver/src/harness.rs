@@ -1,4 +1,5 @@
-//! Transport-independent validation reports and bounded JSON-to-JSON Rhai.
+//! Transport-independent validation reports and bounded JSON-to-JSON Rhai
+//! (the Rhai branch of `crate::script`).
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -92,81 +93,14 @@ impl ValidationReport {
 }
 
 /// Host-owned limits. A script or a caller-supplied graph cannot increase them.
-#[derive(Clone)]
-pub struct RhaiLimits {
-    pub operations: u64,
-    pub source_bytes: usize,
-    pub json_bytes: usize,
-    pub collection_items: usize,
-    pub timeout_ms: u64,
-}
-impl Default for RhaiLimits {
-    fn default() -> Self {
-        Self {
-            operations: 1_000_000,
-            source_bytes: 65536,
-            json_bytes: 16 * 1024 * 1024,
-            collection_items: 131072,
-            timeout_ms: 1000,
-        }
-    }
-}
+/// Les bornes du moteur de script générique (`crate::script`), sous leur nom
+/// d'origine.
+pub type RhaiLimits = crate::script::ScriptLimits;
+
+/// Une expression rhai bornée, JSON vers JSON : le branchement rhai du moteur
+/// de script générique.
 pub fn evaluate(script: &str, input: &Value, limits: &RhaiLimits) -> Result<Value, String> {
-    if limits.operations == 0
-        || limits.timeout_ms == 0
-        || limits.collection_items == 0
-        || script.len() > limits.source_bytes
-        || input.to_string().len() > limits.json_bytes
-    {
-        return Err("Rhai input or host limit invalid/exceeded".into());
-    }
-    let mut engine = rhai::Engine::new();
-    engine.register_fn(
-        "json_string",
-        |value: rhai::Dynamic| -> Result<String, Box<rhai::EvalAltResult>> {
-            let value: Value = rhai::serde::from_dynamic(&value)?;
-            Ok(value.to_string())
-        },
-    );
-    engine.register_fn(
-        "content_hash",
-        |value: rhai::Dynamic| -> Result<String, Box<rhai::EvalAltResult>> {
-            let value: Value = rhai::serde::from_dynamic(&value)?;
-            Ok(blake3::hash(value.to_string().as_bytes())
-                .to_hex()
-                .to_string())
-        },
-    );
-    // no_module is also enabled at build time. No host I/O APIs are registered.
-    for keyword in ["eval", "import", "export"] {
-        engine.disable_symbol(keyword);
-    }
-    engine.set_max_operations(limits.operations);
-    engine.set_max_call_levels(32);
-    engine.set_max_expr_depths(32, 32);
-    engine.set_max_string_size(limits.json_bytes);
-    engine.set_max_array_size(limits.collection_items);
-    engine.set_max_map_size(limits.collection_items);
-    engine.on_print(|_| {});
-    engine.on_debug(|_, _, _| {});
-    let start = std::time::Instant::now();
-    let timeout = limits.timeout_ms;
-    engine.on_progress(move |_| {
-        (start.elapsed().as_millis() >= timeout as u128).then(|| "deadline exceeded".into())
-    });
-    let mut scope = rhai::Scope::new();
-    scope.push_constant(
-        "input",
-        rhai::serde::to_dynamic(input).map_err(|e| e.to_string())?,
-    );
-    let value = engine
-        .eval_with_scope::<rhai::Dynamic>(&mut scope, script)
-        .map_err(|e| e.to_string())?;
-    let result: Value = rhai::serde::from_dynamic(&value).map_err(|e| e.to_string())?;
-    if result.to_string().len() > limits.json_bytes {
-        return Err("Rhai output too large".into());
-    }
-    Ok(result)
+    crate::script::evaluate("rhai", script, input, limits).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

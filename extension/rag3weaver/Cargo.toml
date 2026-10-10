@@ -36,6 +36,19 @@ minijinja = { version = "2", default-features = false, features = ["builtins", "
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
 tokio = { version = "1", features = ["sync", "rt", "macros", "time"] }
+# **Le moteur de script générique** (`src/script/`) : rhai, et TypeScript —
+# le langage du produit. TypeScript n'est jamais compilé : `swc_ts_fast_strip`
+# (le retrait de types de Node) efface les annotations en blancs, lignes et
+# colonnes gardées, et refuse en le nommant ce qui n'est pas effaçable (enum,
+# namespace) ; le JavaScript obtenu tourne dans QuickJS (`rquickjs`, qui
+# embarque quickjs-ng et ne compile jamais `quickjs-libc` : ni fichiers ni
+# système). **Pas de feature `rust-alloc` ni `allocator`** : elles rendent
+# `set_memory_limit` sans effet.
+rquickjs = "0.14"
+swc_ts_fast_strip = "59"
+# Ses diagnostics (ligne et colonne de ce qui ne s'efface pas) : la même
+# version que celle que tire swc_ts_fast_strip.
+swc_common = "26"
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }
