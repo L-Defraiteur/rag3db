@@ -212,6 +212,44 @@ fn run_level(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<Do
     })
 }
 
+/// **La voie asynchrone d'un niveau** : prise dès qu'un nœud du niveau est
+/// déclaré async. Les nœuds s'exécutent dans l'ordre, `await` sur chacun —
+/// un nœud synchrone y passe par son défaut (`block_in_place`), donc les
+/// synchrones d'un niveau mixte se SÉQUENTIALISENT (dit, et vu par le
+/// témoin « niveau mixte » ; le parallélisme des nœuds asynchrones entre
+/// eux est l'étape d'après, les ports-flux). Un niveau tout-synchrone ne
+/// passe jamais ici : il garde `run_level` et ses fils de portée, au fil
+/// près. (Chantier C, 10 octobre 2026.)
+async fn run_level_async(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<DoneNode> {
+    let mut done = Vec::with_capacity(prepared.len());
+    for p in prepared {
+        let PreparedNode { name, idx, node_type, mut ctx } = p;
+        let started = Instant::now();
+        let result = nodes[idx].execute_async(&mut ctx).await;
+        done.push(DoneNode {
+            name,
+            idx,
+            node_type,
+            ctx,
+            result,
+            duration_ms: started.elapsed().as_millis() as u64,
+        });
+    }
+    done
+}
+
+/// Le niveau, par la voie que ses nœuds demandent — appelé depuis les
+/// exécutions asynchrones du runtime : la voie synchrone y est annoncée à
+/// tokio par UN `block_in_place` pour tout le niveau (ses fils de portée
+/// bloquent ce fil le temps du niveau, comme avant le chantier C).
+async fn run_level_auto(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<DoneNode> {
+    if prepared.iter().any(|p| nodes[p.idx].is_async()) {
+        run_level_async(nodes, prepared).await
+    } else {
+        tokio::task::block_in_place(|| run_level(nodes, prepared))
+    }
+}
+
 impl DataflowRuntime {
     pub fn new(max_iterations: usize) -> Self {
         let (mut tx, rx) = async_broadcast::broadcast(128);
@@ -293,8 +331,19 @@ impl DataflowRuntime {
         &self,
         graph: &mut DataflowGraph,
     ) -> Result<(DataflowOutput, ExecutionReport), String> {
+        crate::dataflow::rt::bloquer(
+            "DataflowRuntime::execute_with_report",
+            self.execute_with_report_async(graph),
+        )?
+    }
+
+    /// La variante asynchrone d'[`Self::execute_with_report`].
+    pub async fn execute_with_report_async(
+        &self,
+        graph: &mut DataflowGraph,
+    ) -> Result<(DataflowOutput, ExecutionReport), String> {
         let mut rx = self.subscribe();
-        let output = self.execute(graph)?;
+        let output = self.execute_async(graph).await?;
 
         // Collect all events
         let mut events = Vec::new();
@@ -322,10 +371,35 @@ impl DataflowRuntime {
         self.execute_with_checkpoint_mode(graph, store, execution_id, crate::config::CheckpointMode::Full)
     }
 
+    /// La variante asynchrone d'[`Self::execute_with_checkpoint`].
+    pub async fn execute_with_checkpoint_async(
+        &self,
+        graph: &mut DataflowGraph,
+        store: &dyn CheckpointStore,
+        execution_id: &str,
+    ) -> Result<DataflowOutput, String> {
+        self.execute_with_checkpoint_mode_async(graph, store, execution_id, crate::config::CheckpointMode::Full)
+            .await
+    }
+
     /// Le même, en disant ce que le checkpoint garde. `Operations` : les
     /// entrées seulement, aucun état de nœud — une reprise rejoue tout.
     /// `Off` : l'appelant n'a pas de magasin à donner, il appelle `execute`.
     pub fn execute_with_checkpoint_mode(
+        &self,
+        graph: &mut DataflowGraph,
+        store: &dyn CheckpointStore,
+        execution_id: &str,
+        mode: crate::config::CheckpointMode,
+    ) -> Result<DataflowOutput, String> {
+        crate::dataflow::rt::bloquer(
+            "DataflowRuntime::execute_with_checkpoint_mode",
+            self.execute_with_checkpoint_mode_async(graph, store, execution_id, mode),
+        )?
+    }
+
+    /// La variante asynchrone d'[`Self::execute_with_checkpoint_mode`].
+    pub async fn execute_with_checkpoint_mode_async(
         &self,
         graph: &mut DataflowGraph,
         store: &dyn CheckpointStore,
@@ -428,7 +502,8 @@ impl DataflowRuntime {
         let run_started = Instant::now();
         self.emit_run_started(&run_id, graph);
         let result = self
-            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint, mode);
+            .execute_inner_with_checkpoint(graph, store, execution_id, &checkpoint, mode)
+            .await;
         self.emit_run_finished(&run_id, run_started.elapsed().as_millis() as u64, result.is_ok());
 
         match &result {
@@ -444,7 +519,7 @@ impl DataflowRuntime {
     }
 
     /// Inner execution loop with checkpoint skip/save logic.
-    fn execute_inner_with_checkpoint(
+    async fn execute_inner_with_checkpoint(
         &self,
         graph: &mut DataflowGraph,
         store: &dyn CheckpointStore,
@@ -659,7 +734,7 @@ impl DataflowRuntime {
             }
 
             // ── Phase 2 : exécuter le niveau (parallèle si plusieurs) ─────
-            let results = run_level(&mut graph.nodes, prepared);
+            let results = run_level_auto(&mut graph.nodes, prepared).await;
 
             // ── Phase 3 : persister et ranger, dans l'ordre (séquentiel) ──
             for done in injected.into_iter().chain(results) {
@@ -812,12 +887,25 @@ impl DataflowRuntime {
     }
 
     /// Execute the graph. Returns all output values.
+    ///
+    /// **Le pont synchrone** (chantier C) : le nom et les appelants ne
+    /// bougent pas — « une variante async plutôt que forcé, pour les nœuds
+    /// comme pour execute » (Lucie, 8 octobre). Joue [`Self::execute_async`]
+    /// sur le runtime du crate ; depuis une tâche tokio, un refus nommé.
     pub fn execute(
         &self,
         graph: &mut DataflowGraph,
     ) -> Result<DataflowOutput, String> {
+        crate::dataflow::rt::bloquer("DataflowRuntime::execute", self.execute_async(graph))?
+    }
+
+    /// La variante asynchrone d'[`Self::execute`] — le cœur.
+    pub async fn execute_async(
+        &self,
+        graph: &mut DataflowGraph,
+    ) -> Result<DataflowOutput, String> {
         let run_id = crate::events::new_run_id("graph");
-        self.execute_as(graph, &run_id)
+        self.execute_as_async(graph, &run_id).await
     }
 
     /// La même, sous un identifiant de run choisi — l'adresse du graphe sur
@@ -829,10 +917,19 @@ impl DataflowRuntime {
         graph: &mut DataflowGraph,
         run_id: &str,
     ) -> Result<DataflowOutput, String> {
+        crate::dataflow::rt::bloquer("DataflowRuntime::execute_as", self.execute_as_async(graph, run_id))?
+    }
+
+    /// La variante asynchrone d'[`Self::execute_as`].
+    pub async fn execute_as_async(
+        &self,
+        graph: &mut DataflowGraph,
+        run_id: &str,
+    ) -> Result<DataflowOutput, String> {
         let run_id = run_id.to_string();
         let started = Instant::now();
         self.emit_run_started(&run_id, graph);
-        let result = self.execute_inner(graph, &run_id);
+        let result = self.execute_inner(graph, &run_id).await;
         self.emit_run_finished(&run_id, started.elapsed().as_millis() as u64, result.is_ok());
         result
     }
@@ -881,7 +978,7 @@ impl DataflowRuntime {
         });
     }
 
-    fn execute_inner(
+    async fn execute_inner(
         &self,
         graph: &mut DataflowGraph,
         run_id: &str,
@@ -1055,7 +1152,7 @@ impl DataflowRuntime {
             // ── Phase 2 : exécuter le niveau — en parallèle s'il a plusieurs
             // nœuds (un fil par nœud, portée bornée), en place sinon. ──────
             phase("runtime/préparation", &mut horloge, &ready);
-            let results = run_level(&mut graph.nodes, prepared);
+            let results = run_level_auto(&mut graph.nodes, prepared).await;
             phase("runtime/exécution du niveau", &mut horloge, &ready);
 
             // ── Phase 3 : ranger, dans l'ordre (séquentiel) ──────────────
@@ -1217,6 +1314,101 @@ mod tests {
             ctx.set_output("out", PortValue::new(self.name.clone()));
             Ok(())
         }
+    }
+
+    /// **Le témoin asynchrone** (chantier C) : il n'implémente QUE
+    /// `execute_async` — un sleep tokio — et déclare `is_async`.
+    struct TemoinAsync {
+        name: String,
+        ms: u64,
+    }
+
+    impl Node for TemoinAsync {
+        fn node_type(&self) -> &'static str {
+            "TemoinAsync"
+        }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef { name: "out", port_type: PortType::Any, required: false }]
+        }
+        fn is_async(&self) -> bool {
+            true
+        }
+        fn execute_async<'a>(
+            &'a mut self,
+            ctx: &'a mut NodeContext,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                tokio::time::sleep(Duration::from_millis(self.ms)).await;
+                ctx.set_output("out", PortValue::new(self.name.clone()));
+                Ok(())
+            })
+        }
+    }
+
+    /// Un nœud asynchrone traverse le PONT synchrone (`execute`) comme les
+    /// autres : l'appelant d'aujourd'hui ne voit pas la différence.
+    #[test]
+    fn un_noeud_asynchrone_traverse_le_pont_synchrone() {
+        let mut graph = DataflowGraph::new();
+        graph.add_node(Box::new(TemoinAsync { name: "t".into(), ms: 30 })).unwrap();
+        let runtime = DataflowRuntime::new(10);
+        let output = runtime.execute(&mut graph).unwrap();
+        assert!(output.get("t", "out").is_some());
+    }
+
+    /// **Le témoin du niveau mixte** : un nœud async et deux synchrones au
+    /// même niveau — la voie async du niveau les SÉQUENTIALISE (assumé,
+    /// documenté sur `run_level_async`) : trois nœuds de 100 ms durent au
+    /// moins 300 ms, là où le niveau tout-synchrone du test voisin fait
+    /// quatre nœuds de 120 ms en moins de 400 ms. La séquentialisation se
+    /// VOIT ici ; le parallélisme async est l'étape d'après.
+    #[test]
+    fn un_niveau_mixte_sequentialise_et_ca_se_voit() {
+        let mut graph = DataflowGraph::new();
+        graph.add_node(Box::new(TemoinAsync { name: "t".into(), ms: 100 })).unwrap();
+        graph.add_node(Box::new(SleepNode { name: "a".into(), ms: 100 })).unwrap();
+        graph.add_node(Box::new(SleepNode { name: "b".into(), ms: 100 })).unwrap();
+        let runtime = DataflowRuntime::new(10);
+        let started = Instant::now();
+        let output = runtime.execute(&mut graph).unwrap();
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(295),
+            "niveau mixte en {elapsed:?} : la séquentialisation attendue ne s'est pas vue"
+        );
+        for n in ["t", "a", "b"] {
+            assert!(output.get(n, "out").is_some());
+        }
+    }
+
+    /// Le pont depuis une tâche : la RÉENTRANCE est permise sur un runtime
+    /// multi-fil (le « graphe dans le graphe » de l'ingestion, sous
+    /// `block_in_place`) ; sur un runtime à fil unique, c'est un refus
+    /// NOMMÉ — jamais la panique « cannot block the current thread ».
+    #[test]
+    fn le_pont_reentre_en_multifil_et_refuse_nomme_en_fil_unique() {
+        let multi = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .unwrap();
+        let output = multi.block_on(async {
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(SleepNode { name: "a".into(), ms: 1 })).unwrap();
+            DataflowRuntime::new(10).execute(&mut graph).unwrap()
+        });
+        assert!(output.get("a", "out").is_some());
+
+        let seul = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        let erreur = seul.block_on(async {
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(SleepNode { name: "a".into(), ms: 1 })).unwrap();
+            DataflowRuntime::new(10).execute(&mut graph).unwrap_err()
+        });
+        assert!(erreur.contains("fil unique"), "{erreur}");
     }
 
     #[test]

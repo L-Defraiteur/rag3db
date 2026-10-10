@@ -38,7 +38,13 @@ def prepare(tmp, manifest_name, patch=None):
     shutil.copytree(CRATE / "templates/tools", Path(tmp) / "tools", dirs_exist_ok=True)
     ws = d / "workspace"
     ws.mkdir()
-    (ws / "main.rs").write_text("fn main() { depart(); outil_commun(); }\n")
+    # L'import puis l'appel NU : la forme courante du vrai code. Depuis le
+    # filtre des arêtes devinées (4351d4567), un appel résolu par le nom seul
+    # (resolution = nom) n'entre plus dans l'impact ; l'appel d'une fonction
+    # importée est résolu par l'import (resolution = import), gardée — c'est
+    # elle que le témoin éprouve (vérifié par l'arbre principal, 10 octobre :
+    # e2e_usages, une_arete_devinee_se_dit_et_ne_se_suit_pas).
+    (ws / "main.rs").write_text("use crate::util::outil_commun;\nmod util;\nfn main() { depart(); outil_commun(); }\n")
     (ws / "lib.rs").write_text("pub fn depart() {}\n")
     # util.rs : une dépendance qui SURVIT aux éditions du scénario (main.rs
     # perd depart() en route) — c'est elle que le crochet « avant d'éditer »

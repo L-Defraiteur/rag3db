@@ -77,13 +77,23 @@ même lot.
 
 ### 3.2 Le runtime
 
-- `DataflowRuntime::execute` devient `async` (et ses variantes
-  `execute_with_report`, `execute_with_checkpoint`). Un `execute_blocking`
-  reste pour les appelants synchrones et les tests, par `block_on` sur un
-  runtime dédié — jamais depuis une tâche tokio.
-- L'ordre topologique ne change pas dans ce lot : un nœud à la fois,
-  `await` sur chacun. Le parallélisme des nœuds indépendants est une étape
-  d'après, pas celle-ci.
+- **Corrigé le 10 octobre en codant** (la page disait « `execute` devient
+  async, un `execute_blocking` reste » — le code a pris l'inverse, fidèle à
+  la décision-mère « une variante async plutôt que forcé, pour les nœuds
+  comme pour `execute` ») : `execute` GARDE son nom et reste le pont
+  synchrone (`block_on` sur le runtime du crate, `dataflow/rt.rs` —
+  paresseux, multi-fil, 2 fils ; refus nommé depuis une tâche tokio), et
+  `execute_async` est le cœur, avec ses variantes `execute_as_async`,
+  `execute_with_report_async`, `execute_with_checkpoint(_mode)_async`.
+  Aucun des douze appelants de production ni des tests n'a bougé.
+- **Corrigé le 10 octobre en codant** (la page disait « un nœud à la fois,
+  `await` sur chacun » — le code parallélisait DÉJÀ les niveaux par fils de
+  portée, `run_level`) : un niveau tout-synchrone garde `run_level` au fil
+  près, sous un seul `block_in_place` ; un niveau qui contient un nœud
+  asynchrone passe par `run_level_async` — dans l'ordre, `await` sur
+  chacun, les synchrones séquentialisés sous leur défaut (dit, et VU par le
+  témoin « niveau mixte »). Le parallélisme des nœuds asynchrones entre eux
+  est une étape d'après, pas celle-ci.
 - Les rapports, les points de reprise et `undo` ne changent pas.
 
 ### 3.3 La boucle d'agent et le réacteur
