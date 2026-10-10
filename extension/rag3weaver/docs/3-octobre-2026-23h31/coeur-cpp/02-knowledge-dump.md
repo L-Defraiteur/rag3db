@@ -361,6 +361,11 @@ Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), 
   instantané » = `startTS < version < START_TRANSACTION_ID` dans les chaînes d'`UpdateInfo` et
   les `VersionInfo` (`ChunkedNodeGroup::wasWrittenByCommitAfter`). Le tableau des sémantiques :
   page 07 §0.
+- **V2 (11 octobre)** : `CALL acquire_locks('Table', [clés])`, `src/function/table/acquire_locks.cpp`
+  (enregistrée `STANDALONE_TABLE_FUNCTION` dans function_collection.cpp) ; `Transaction::hasWritten`,
+  `hasAnnouncedLocks`/`markLocksAnnounced` ; `TransactionManager::refreshSnapshot`. Un paramètre
+  de fonction de table de type liste se déclare `LogicalTypeID::ANY` (un `LIST` nu ne se lie
+  pas). `TransactionContext::Get(context)->isAutoTransaction()` dit l'auto-commit.
 - **Fabriquer un état que le moteur ne produit plus** : programme nu contre la bibliothèque
   d'AVANT, gardé au dépôt avec sa base et son journal (`journal_with_duplicate_key/`), comme
   `journal_before_raw_arrays/`. Le faire **avant** de rebâtir.

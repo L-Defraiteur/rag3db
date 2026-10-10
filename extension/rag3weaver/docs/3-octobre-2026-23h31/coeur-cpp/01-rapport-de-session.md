@@ -672,3 +672,17 @@ dont 6 mises de côté par `long.txt` et `probabilistic.txt`) — 56 lignes avan
 Les deux premières comparaisons, jouées pendant qu'un autre banc tournait là-bas, avaient
 montré des « waited » de charge : c'est ce qui a donné la règle du soir (le banc entier en tenue
 exclusive, annoncée). Le message complet du lot : `~/.cache/rag3db-moteur-notes/a4/message.txt`.
+
+## V2 (11 octobre 2026, 0 h 15) — l'annonce en tête, faite
+
+Branche `verrous-v2` (page 08 ; `CALL acquire_locks('Table', [clés])` en tête d'une transaction
+explicite : une prise groupée, index partagé et clés exclusives, puis l'instantané repris après
+l'attente ; refus nommés en auto-commit, après une écriture, deux fois ; rien hors du mode
+multi-écrivains). Témoins : trois d'un fil verts, `AnnouncedLocksNeverDeadlockAndBothCommitInTurn`
+du banc vert (39 ms), sa ligne sortie de `known_red.txt` (20 attendus). La liste de fusion joue
+sur luciepc (suites en lourd, banc en tenue exclusive annoncée) ; push en avance rapide ensuite,
+lib commune rebâtie, worktree effacé. Suite : l'index au commit (page 07 §2, dépend de la page 04
+du banc), et les tickets ouverts d'A4′ (C7 après arrêt brutal, la seconde suppression d'une
+relation), la part reprise du journal à doublon.
+
+Passe : PASSE_V2.

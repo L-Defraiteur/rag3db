@@ -94,3 +94,26 @@ reprennent leurs verrous en O(1) par ressource. L'annonce ne couvre pas ce qu'el
 nommé : une écriture hors annonce suit A3′/A4′ (attente, puis erreur de sérialisation
 possible). Elle ne change rien au `COPY`, à l'index vectoriel, ni au rejeu (une transaction de
 reprise n'annonce pas).
+
+## 7. Fait (11 octobre 2026, 0 h 15) — ce que le code a tranché
+
+- **Un appel par transaction, une table** : la forme à plusieurs tables n'est pas prise ; une
+  seconde annonce est refusée (« already called »).
+- **« Rien écrit »** se lit sans compteur nouveau : `Transaction::hasWritten` = stockage local non
+  vide ou tampon d'annulation non vide (une ligne, une version, le catalogue) ; le journal local
+  ne compte pas (il porte toujours le `BEGIN`). Le moteur ne compte pas les lectures : la règle
+  « en tête » est dite à l'appelant.
+- **Le rafraîchissement** : `TransactionManager::refreshSnapshot` pose `startTS = lastTimestamp`
+  sous le mutex du gestionnaire.
+- **Le second argument est déclaré `ANY`** et vérifié liste au liage : un type `LIST` sans type
+  d'élément ne se construit pas (« Trying to create nested type LIST without child
+  information ») ; `project_graph` fait pareil.
+- **Une table indexée** (index vectoriel) : l'annonce prend l'index en **exclusif**, sans que
+  l'appelant le sache — deux annonces de clés différentes s'attendent, puis valident toutes les
+  deux (`IndexLockBench.AnnouncedWritersOfOneIndexedTableWaitThenBothCommit`, le genre « index »
+  de V1). C'est la règle tant que la maintenance de l'index n'est pas tenue au commit (la marche
+  suivante) ; l'annonce le sait par le catalogue (`getIndexEntries` non vide au liage).
+- **Témoins** : les trois d'un fil (l'attente dans un fil, puis la lecture de ce que le détenteur
+  a validé et l'écriture sans erreur de sérialisation ; les refus ; rien hors du mode) et celui du
+  banc, `AnnouncedLocksNeverDeadlockAndBothCommitInTurn`, vert en 39 ms — sa ligne sort de
+  `known_red.txt`.
