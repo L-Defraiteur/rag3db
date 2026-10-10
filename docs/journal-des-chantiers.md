@@ -733,6 +733,37 @@ manquante n'était ni la bibliothèque ni les sources, mais **la date du binaire
 mesuré lui-même**. Une mesure commence par prouver que l'artefact chargé vient
 du code qu'on croit mesurer — pas seulement que ses sources sont à jour.
 
+**7 bis. L'extension et la bibliothèque d'âges différents, et rien ne le voit.**
+10 octobre 2026, 23 h. L'extension vectorielle de l'arbre principal portait la
+date de **21 h 26** et la bibliothèque du moteur celle de **17 h 27** : quatre
+heures d'écart entre deux artefacts qui se chargent ensemble, et **aucune passe
+ne s'en est plainte**. Plusieurs d'entre elles ont tourné sur ce mélange sans le
+savoir.
+
+Le garde-fou existant ne pouvait pas le voir, et c'est ce qui en fait un piège
+distinct du septième : **la ligne d'âge dit l'âge de chacun, jamais leur
+cohérence entre eux.** Elle compare chaque artefact au dernier commit de *ses*
+sources — deux contrôles justes, côte à côte, dont aucun ne regarde l'autre.
+
+Et **le remède n'est pas dans le harnais** : comparer deux dates ne prouverait
+rien (un bâti incrémental peut laisser deux horodatages très écartés pour un
+même bâti, et deux bâtis successifs en donner de très proches). La seule
+vérification qui vaille est **au chargement, par un identifiant de bâti embarqué
+dans les deux** : le moteur refuse à `LOAD EXTENSION` une extension qui ne vient
+pas de son propre bâti. C'est le ticket ouvert
+`docs/tickets/2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md`.
+
+Comment il a été trouvé mérite d'être dit, parce que ce n'est pas par une
+mesure : l'orchestration a relevé l'horodatage et l'empreinte de l'artefact,
+puis **demandé à chaque session si elle l'avait écrit**. Personne. Un fait que
+personne n'a produit et que personne ne surveille est exactement ce qu'un
+contrôle au chargement attraperait.
+
+Et une leçon d'enquête, pour la prochaine fois : **la taille d'un artefact n'est
+pas son empreinte.** La première hypothèse désignait un bâti précis « à la
+taille exacte » — mais 912 048 octets était aussi la taille d'un autre bâti du
+même jour. Un md5 tranche, une taille accuse.
+
 **8. Le diff qui montre vos propres fichiers comme supprimés.** 10 octobre
 2026, avant une fusion : `git diff --stat HEAD..origin/master` pour savoir ce
 qu'un rebase allait apporter, et la sortie annonce `src/gabarits.rs | 163 -----`
