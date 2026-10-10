@@ -532,12 +532,18 @@ impl NeighborhoodReport {
     /// n'est atteint — une section qui accompagne un autre rendu se tait.
     /// `only` : la seule valeur du groupe à compter et nommer (pour le code,
     /// `case` — les tests qu'on relance, pas leurs aides) ; vide, toutes.
-    pub fn summary(&self, group_title: &str, rest_title: &str, limit: usize, only: &str) -> String {
+    /// `include_by_name` : les usages par le nom seul nommés et comptés comme
+    /// les autres ; sinon, un compte à part.
+    pub fn summary(&self, group_title: &str, rest_title: &str, limit: usize, only: &str, include_by_name: bool) -> String {
         if self.reached.is_empty() {
             return String::new();
         }
-        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|m| only.is_empty() || m.group == only).collect();
-        let reste: Vec<&Reached> = self.reached.iter().filter(|m| m.group.is_empty()).collect();
+        // Comme le rendu complet : un usage par le nom seul n'est ni nommé ni
+        // compté parmi les touchés, il a son compte à part.
+        let cache = |m: &Reached| m.by_name && !include_by_name;
+        let par_nom = self.reached.iter().filter(|m| cache(m) && !m.by_also).count();
+        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|m| !cache(m) && (only.is_empty() || m.group == only)).collect();
+        let reste: Vec<&Reached> = self.reached.iter().filter(|m| m.group.is_empty() && !cache(m)).collect();
         let directs = reste.iter().filter(|m| m.level == 1).count();
         let mut out = format!(
             "{rest_title} : {directs} directement, {} en tout sur {} niveau{}",
@@ -547,6 +553,9 @@ impl NeighborhoodReport {
         );
         if self.cut > 0 {
             out.push_str(&format!(" (et {} au-delà du budget)", self.cut));
+        }
+        if par_nom > 0 {
+            out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
         }
         out.push_str(".\n");
         if groupes.is_empty() {
@@ -566,11 +575,12 @@ impl NeighborhoodReport {
     }
 
     pub fn markdown(&self, group_title: &str, rest_title: &str, also_label: &str, limit: usize) -> String {
-        self.markdown_avec(group_title, rest_title, also_label, None, limit)
+        self.markdown_avec(group_title, rest_title, also_label, None, limit, false)
     }
 
-    /// [`Self::markdown`], avec la section du relevé sur le chemin, sous ce titre.
-    pub fn markdown_avec(&self, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize) -> String {
+    /// [`Self::markdown`], avec la section du relevé sur le chemin, sous ce
+    /// titre ; `include_by_name` : les usages par le nom seul listés, marqués.
+    pub fn markdown_avec(&self, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize, include_by_name: bool) -> String {
         let mut out = format!("# impact: {}\n\n", self.name);
         out.push_str(&format!("## Départ ({})\n", self.starts.len()));
         if self.starts.is_empty() {
@@ -580,19 +590,24 @@ impl NeighborhoodReport {
             out.push_str(&format!("- {} {} — {}\n", s.kind, s.title, lieu(&s.path, s.line)));
         }
         if self.ambiguous {
-            out.push_str("\nNom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont comptés à part, non montrés.\n");
+            out.push_str(if include_by_name {
+                "\nNom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont marqués « par le nom ».\n"
+            } else {
+                "\nNom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont comptés à part, non montrés.\n"
+            });
         }
         // Un usage par le nom seul n'est attribué à aucune définition : il
         // noierait les sûrs (trente lignes pour deux appelants). Ni listé ni
         // compté parmi les touchés, il a sa ligne de compte.
-        let par_nom = self.reached.iter().filter(|r| r.by_name && !r.by_also).count();
-        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|r| !r.by_name).collect();
+        let cache = |r: &Reached| r.by_name && !include_by_name;
+        let par_nom = self.reached.iter().filter(|r| cache(r) && !r.by_also).count();
+        let groupes: Vec<&Reached> = self.grouped().into_iter().filter(|r| !cache(r)).collect();
         let resume_niveaux: Vec<String> = (1..=self.depth)
-            .map(|l| format!("{} à {} saut{}", self.reached.iter().filter(|r| r.level == l && !r.by_also && !r.by_name).count(), l, if l > 1 { "s" } else { "" }))
+            .map(|l| format!("{} à {} saut{}", self.reached.iter().filter(|r| r.level == l && !r.by_also && !cache(r)).count(), l, if l > 1 { "s" } else { "" }))
             .collect();
         out.push_str(&format!(
             "\n**{} touchés** ({}) — dont **{} {}**",
-            self.reached.iter().filter(|r| !r.by_also && !r.by_name).count(),
+            self.reached.iter().filter(|r| !r.by_also && !cache(r)).count(),
             resume_niveaux.join(", "),
             groupes.iter().filter(|r| !r.by_also).count(),
             group_title
@@ -607,13 +622,16 @@ impl NeighborhoodReport {
 
         let ligne = |r: &Reached, out: &mut String| {
             let mut extra = String::new();
+            if r.by_name {
+                extra.push_str(" (par le nom)");
+            }
             if let Some(d) = r.hub {
                 extra.push_str(&format!(" — carrefour, {d} usages, non suivi"));
             }
             out.push_str(&format!("- {} {} — {}{extra}\n", r.kind, r.title, lieu(&r.path, r.line)));
         };
         for l in 1..=self.depth {
-            let tous: Vec<&Reached> = self.reached.iter().filter(|r| r.level == l && !r.by_also && !r.by_name && r.group.is_empty()).collect();
+            let tous: Vec<&Reached> = self.reached.iter().filter(|r| r.level == l && !r.by_also && !cache(r) && r.group.is_empty()).collect();
             if tous.is_empty() {
                 continue;
             }
@@ -630,9 +648,10 @@ impl NeighborhoodReport {
             out.push_str(&format!("\n## {} ({})\n", group_title, surs.len()));
             for r in surs.iter().take(limit) {
                 let note = if r.note.is_empty() { String::new() } else { format!(", {}", r.note) };
-                let par = match &r.through_hub {
-                    Some(h) => format!(", par le carrefour {h}"),
-                    None => String::new(),
+                let par = match (&r.through_hub, r.by_name) {
+                    (Some(h), _) => format!(", par le carrefour {h}"),
+                    (None, true) => ", par le nom".to_string(),
+                    _ => String::new(),
                 };
                 out.push_str(&format!("- `{}` — {} ({} saut{}{note}{par})\n", r.label, lieu(&r.path, r.line), r.level, if r.level > 1 { "s" } else { "" }));
             }
@@ -699,6 +718,8 @@ pub struct NeighborhoodNode {
     limit: usize,
     group_title: String,
     rest_title: String,
+    /// Les usages par le nom seul listés au lieu d'être comptés à part.
+    include_by_name: bool,
     json: bool,
 }
 
@@ -737,7 +758,7 @@ impl Node for NeighborhoodNode {
         let value = if self.json {
             serde_json::to_value(&report).map_err(|e| e.to_string())?
         } else if self.summary {
-            serde_json::Value::String(report.summary(&self.group_title, &self.rest_title, self.limit, &self.summary_group))
+            serde_json::Value::String(report.summary(&self.group_title, &self.rest_title, self.limit, &self.summary_group, self.include_by_name))
         } else {
             serde_json::Value::String(report.markdown_avec(
                 &self.group_title,
@@ -745,6 +766,7 @@ impl Node for NeighborhoodNode {
                 &self.cfg.also_label,
                 self.cfg.collect.as_ref().map(|c| c.title.as_str()),
                 self.limit,
+                self.include_by_name,
             ))
         };
         ctx.set_output("result", PortValue::new(with_status(status.as_deref(), value, self.json)));
@@ -866,6 +888,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             limit: entier("limit", 30).clamp(1, 500) as usize,
             group_title: s("group_title").unwrap_or_else(|| "Groupés".into()),
             rest_title: s("rest_title").unwrap_or_else(|| "Touchés".into()),
+            include_by_name: config.get("include_by_name").and_then(|v| v.as_bool()).unwrap_or(false),
             json,
         }))
     }
@@ -882,7 +905,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             choices: None,
             json_schema: None,
         };
-        use ConfigParamType::{Int, String as S};
+        use ConfigParamType::{Bool, Int, String as S};
         let mut direction = p("direction", S, false, Some(serde_json::json!("incoming")), "incoming (ce qui en dépend) | outgoing (ce dont il dépend)");
         direction.choices = Some(Choices::fixed(["incoming", "outgoing"]));
         let mut format = p("format", S, false, Some(serde_json::json!("markdown")), "markdown | json | summary (les comptes, puis les premiers du groupe)");
@@ -918,6 +941,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("line_field", S, false, Some(serde_json::json!("start_line")), "Champ de ligne"),
                 p("group_title", S, false, Some(serde_json::json!("Groupés")), "Titre de la section des nœuds groupés"),
                 p("rest_title", S, false, Some(serde_json::json!("Touchés")), "Titre des sections par niveau"),
+                p("include_by_name", Bool, false, Some(serde_json::json!(false)), "Lister les usages trouvés par le nom seul (non attribués), au lieu de les compter à part"),
                 p("name", S, false, Some(serde_json::json!("")), "Le nom de départ (ou `file`)"),
                 p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),
                 p("file", S, false, Some(serde_json::json!("")), "Mode par fichier : départ de toutes les lignes dont un champ de chemin vaut ce chemin ; ce qui est dans le fichier ne compte pas"),

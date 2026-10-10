@@ -88,6 +88,21 @@ fn les_appelants_par_le_nom_seul_sont_comptes_pas_montres() {
     assert!(!md.contains("bruit"), "aucun usage par le nom seul n'est listé : {md}");
     assert!(md.contains("3 par le nom seul, non montrés"), "mais ils sont comptés : {md}");
     assert!(md.contains("**3 touchés** (2 à 1 saut, 1 à 2 sauts)"), "le compte des touchés ne les mêle pas : {md}");
+    // Le résumé (la section d'impact jointe à un autre outil) compte pareil.
+    let mut r = r;
+    let mut test_par_nom = atteint("tn", "test_bruit", "rel_table_test.cpp", 1, "case");
+    test_par_nom.by_name = true;
+    r.reached.push(test_par_nom);
+    r.reached.push(atteint("ts", "test_set", "set_test.cpp", 2, "case"));
+    let resume = r.summary("Tests à relancer", "Code qui en dépend", 10, "case", false);
+    assert!(resume.contains("Code qui en dépend : 2 directement, 3 en tout sur 2 niveaux ; 4 par le nom seul, non montrés."), "{resume}");
+    assert!(resume.contains("Tests à relancer : 1 — `tests::test_set`") && !resume.contains("test_bruit"), "{resume}");
+    // Sur demande (`include_by_name`), ils sont listés, marqués, et comptés.
+    let tout = r.markdown_avec("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", None, 30, true);
+    assert!(tout.contains("## Code qui en dépend, à 1 saut (5)") && tout.contains("bruit — column.cpp:10 (par le nom)"), "{tout}");
+    assert!(!tout.contains("non montrés"), "{tout}");
+    let resume = r.summary("Tests à relancer", "Code qui en dépend", 10, "case", true);
+    assert!(resume.contains("Code qui en dépend : 5 directement, 6 en tout") && resume.contains("Tests à relancer : 2"), "{resume}");
 }
 
 #[test]
