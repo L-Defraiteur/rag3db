@@ -121,12 +121,6 @@ LockBench.LockTimeoutGivesNamedErrorAndRollsBack waited-the-delay,waiter-gets-lo
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Hot all-commit,row-count
 Launchers/ConcurrencyBench.H3_IndexedDeletesWithOverlappingNeighbourhoods/Thread_Crash all-commit,row-count
 #
-# Correctif de la construction HNSW — un index construit sur les 100 premières lignes
-# d'embeddings-8-1k.csv laisse le nœud 13 injoignable, sans aucune concurrence. Un cas limite
-# des petits index : à 98 et à 100 lignes, pas à 90, 95, 99, 101, 102, 105, 110, 128, 200, ni
-# à mille.
-MinimalReproduction.HnswBuiltOnTheFirstHundredRowsLosesANode vector-index-complete
-#
 # Marche V1, genre « index » — tout écrivain d'une table indexée prend l'index de la table en
 # exclusif : l'écrivain en auto-commit attend puis valide ; en bloc, il attend puis valide ou
 # reçoit « could not serialize ». Aujourd'hui, sans verrou : waited.
@@ -161,13 +155,6 @@ VectorIndexUpdate.SetToAnotherVectorInBatchesOf512 vector-index-exact
 VectorIndexUpdate.TwentyRowsToDistinctVectorsLineByLine vector-index-exact
 VectorIndexUpdate.OneRowUpdatedManyTimes vector-index-exact
 VectorIndexUpdate.UpdateThenDelete vector-index-exact
-#
-# Marche « index vectoriel juste en service », construction : une ligne très éloignée d'un
-# nuage serré (500 lignes, une à [9000, 2, 3, 4], toutes les autres coordonnées sous 31),
-# index bâti d'un coup après le remplissage, sans aucune mise à jour : la ligne, ou d'autres,
-# manquent un essai sur trois environ. Vert avec les vecteurs de la recette du cœur C++,
-# dont la dernière coordonnée va jusqu'à 499. Parent de HnswBuiltOnTheFirstHundredRows.
-VectorIndexUpdate.FarRowFromATightCloudInAnIndexBuiltAtOnce vector-index-exact
 #
 # Marche « correctifs de l'amont à reprendre » (upstream_fixes_test.cpp, revue du 4 octobre) :
 # des défauts hérités de Kuzu que Ladybug (tag ladybug-main-2026-08-31) ou Vela (tag
