@@ -978,7 +978,19 @@ fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     // rend durables sans journal. En fichiers, le défaut du moteur. Sans effet
     // tant que le défaut du moteur est encore « forcé » ; un moteur qui ne
     // connaît pas le réglage l'ignore.
-    if catalog.plein_texte_en_base() {
+    //
+    // **Crochet de test** (`RAG3WEAVER_TEST_COPY_JOURNALISE=1`) : le COPY
+    // journalisé, quel que soit le stockage — le témoin de la fuite de pages
+    // (`e2e_tx_par_paquet_arret`). En blobs, il éprouve le moteur hors du
+    // chemin du produit. En fichiers, le COPY journalisé est le défaut du
+    // moteur depuis ff9bad960 : le crochet n'y fait plus que lever le seuil.
+    // Le seuil du journal est levé à 4 Gio : au défaut (un huitième du
+    // tampon, au plus 256 Mio), un gros paquet se replierait sur le point de
+    // reprise forcé, et rien ne serait journalisé.
+    if std::env::var("RAG3WEAVER_TEST_COPY_JOURNALISE").as_deref() == Ok("1") {
+        let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=false");
+        let _ = catalog.conn().execute("CALL copy_journal_threshold=4294967296");
+    } else if catalog.plein_texte_en_base() {
         let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=true");
     }
     catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
