@@ -56,9 +56,8 @@ Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,c
 # C6 sont réécrits aussi (celui qui valide le premier écrit le premier, l'attente prouvée), et
 # les trois MinimalReproduction à un seul fil reçoivent un délai de verrou court.
 #
-# Marche V2 — l'annonce en tête. ROUGE : LA FONCTION N'EXISTE PAS (acquire-locks-exists), en
-# plus du comportement.
-LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn acquire-locks-exists,all-updates,both-commit,in-turn,no-error
+# Marche V2 — l'annonce en tête (CALL acquire_locks) : FAITE le 11 octobre 2026 ;
+# LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn est vert.
 #
 # Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
 LockBench.FailedTransactionReleasesItsLocksAtRollback waited
