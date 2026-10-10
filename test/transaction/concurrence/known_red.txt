@@ -48,7 +48,9 @@ Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,c
 # l'attente, le détachement sur le dernier état validé) : FAITE le 10 octobre 2026 au soir.
 # Verts depuis : C2 ×18, C6 ×6 et les deux MinimalReproduction.C6, SameRowTwoColumnsSingleThread,
 # LockBench.SameRowUpdate/OtherColumn/DeleteThenUpdate/DeleteThenNewRelation…, et
-# LockTimeoutGivesNamedErrorAndRollsBack.
+# LockTimeoutGivesNamedErrorAndRollsBack, DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits et
+# InterruptedWaitGivesInterruptedAndRollsBack (la mise à jour attend : l'interblocage se détecte,
+# l'interruption réveille).
 # C5_DoubleDelete : rouge d'un nouveau nom — il attend exactement un refus « Write-write
 # conflict » ; sous A4′ le second DELETE attend le premier puis reçoit l'erreur de sérialisation
 # (option A). Le banc réécrit le témoin (Refusal::SerializationFailure) ; d'ici là :
@@ -56,19 +58,12 @@ Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Hot ww-refusal
 Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Reopen ww-refusal
 Launchers/ConcurrencyBench.C5_DoubleDelete/Thread_Crash ww-refusal
 #
-# Marche V1 — l'interblocage : exactement une erreur « deadlock », l'autre valide.
-LockBench.DeadlockGivesExactlyOneNamedErrorAndTheOtherCommits no-immediate-conflict,one-deadlock-error
-#
 # Marche V2 — l'annonce en tête. ROUGE : LA FONCTION N'EXISTE PAS (acquire-locks-exists), en
 # plus du comportement.
 LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn acquire-locks-exists,all-updates,both-commit,in-turn,no-error
 #
 # Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
 LockBench.FailedTransactionReleasesItsLocksAtRollback waited
-#
-# Marche V1 — l'interruption pendant une attente : « Interrupted » après le délai, transaction
-# annulée.
-LockBench.InterruptedWaitGivesInterruptedAndRollsBack waited-the-delay,waiter-gets-interrupted
 #
 # Marche V1, genre « index » (et maintenance de l'index HNSW au commit, étude HNSW §4) — H3 :
 # deux suppressions sans rapport dont les voisinages se recouvrent ; le second reçoit un
