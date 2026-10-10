@@ -111,8 +111,14 @@ Sous Windows, `canonicalize` rend un chemin **verbatim** (`\\?\D:\…`), que
 le noyau prend à la lettre : les `..` d'un graphe relatif au gabarit
 (`../../tools/edit.mmd`) n'y sont plus résolus — le fichier cherché n'est
 pas celui qu'on croit. Le dossier du manifeste reprend sa forme ordinaire
-(`sans_prefixe_verbatim`, `D:\…`) ; sous Linux rien ne change. Le
-quatorzième essai le joue.
+(`sans_prefixe_verbatim`, `D:\…`) ; sous Linux rien ne change.
+
+Le quatorzième essai (38057374360, 48 min 24 s) a rendu le chemin ordinaire,
+`D:\a\rag3db\rag3db\essai\../../tools/edit.mmd`, et montré ma faute : le
+correctif « manifeste à côté du gabarit » annoncé au douzième n'avait pas
+été écrit (un script arrêté avant la ligne, et un « yaml ok » sur le
+fichier inchangé). Les deux causes étaient réelles, l'une masquait l'autre.
+Le quinzième essai (38060705890) joue les deux correctifs.
 L'extension vecteur n'est pas encore bâtie sous Windows (le job ne lance
 que cargo) : c'est le même geste que sous Linux, à ajouter.
 
