@@ -62,6 +62,15 @@ Décision de l'orchestration : ce comportement reste ; c'est le gabarit de
 backend livré par le paquet qui, sous Windows, posera `"sandbox": {"mode":
 "off"}` avec un commentaire qui dit pourquoi.
 
+## macOS arm64 : premier essai
+
+« Go, on peut essayer macOS aussi » (Lucie, 10 octobre, par l'orchestration).
+Job `macos-arm64` sur `macos-latest` (même recette que Windows : moteur en
+statique par la crate rag3db avec le clang d'Apple, Ninja par brew,
+`--describe` tel quel puis avec le bac à sable fermé, journal et binaire en
+artefact `bati-macos-arm64-journal`). Premier essai : 38064174599. x64
+ensuite si arm64 passe.
+
 ## Windows x64 : le binaire se lie
 
 **Dixième essai, 10 octobre 2026, 11 h 25 UTC** : `rag3weaver-backend.exe`
@@ -206,10 +215,19 @@ README, 33 gabarits) et `rag3weaver-linux-x64-gnu-0.1.0.tgz` (29 Mo
 compressés, 85 Mo déballés : le binaire et l'extension vecteur). Dans un
 dossier vide, `npm install` des deux archives, puis `require('rag3weaver')`
 trouve le binaire et l'extension dans `node_modules/rag3weaver-linux-x64-gnu/`
-et les gabarits dans `node_modules/rag3weaver/templates/`. Le binaire de ce
-`dist/` est encore celui du troisième run (avant les portes) : le bâti
-Docker de la branche est relancé sur luciepc pour le remplacer, et
-l'épreuve entière se rejouera depuis le dossier vide.
+et les gabarits dans `node_modules/rag3weaver/templates/`.
+
+**De bout en bout depuis le dossier vide** (17 h 48) : le binaire Linux
+rebâti dans l'image Docker sur luciepc depuis la branche (dépôt ebbe6a8cc,
+39 s grâce au cache de cargo monté sous `/cache`, 79 Mo strippé, glibc 2.28,
+extension vecteur 684 Ko), rapatrié dans `dist/`, réemballé, installé dans
+le dossier vide ; l'épreuve jouée depuis ce dossier avec
+`require('rag3weaver')` : démarrage en 58 ms, avertissement dans `describe`,
+trois fichiers, grep, balayage, index en fond, `File.text = ready`,
+`vectors = never`, le mot trouvé par l'index, arrêt propre. C'est le geste
+3 du cadrage (« installer dans un dossier vide, indexer trois fichiers,
+chercher ») — vert sur la branche, encore derrière la porte du rouge attendu
+pour la raison dite plus haut (le mock dans le catalogue jusqu'au rebase).
 
 ### Le service d'embarquement devient optionnel au démarrage
 
