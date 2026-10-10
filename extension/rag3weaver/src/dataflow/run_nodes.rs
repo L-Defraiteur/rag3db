@@ -392,13 +392,6 @@ impl RunCommandNode {
             _ => Box::new(|_| {}),
         };
         let en_fond = lancer_en_fond(laissez, &atelier, delai, a_la_fin).map_err(|e| format!("run: {e}"))?;
-        if let Some(portee) = ctx.service::<Arc<crate::agent::RunScope>>("run_scope").cloned() {
-            let nom = poignee.clone();
-            portee.defer(Box::new(move || {
-                par_la_portee.store(true, std::sync::atomic::Ordering::SeqCst);
-                tuer_en_fond(&nom, GRACE_EN_FIN_DE_RUN);
-            }));
-        }
         let chemin = |p: &Option<std::path::PathBuf>| p.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
         let texte = format!(
             "**En fond** : `#{poignee}` · `{}` (pid {}).\n\n- sortie : `{}`\n- erreurs : `{}`\n\n\
@@ -409,15 +402,18 @@ impl RunCommandNode {
             chemin(&en_fond.journal_stdout),
             chemin(&en_fond.journal_stderr),
         );
-        suivies().lock().unwrap_or_else(|p| p.into_inner()).insert(
-            poignee,
-            Arc::new(Suivie {
-                en_fond,
-                ligne: c.lisible(),
-                regard_out: Default::default(),
-                regard_err: Default::default(),
-            }),
-        );
+        let suivie = Arc::new(Suivie { en_fond, ligne: c.lisible(), regard_out: Default::default(), regard_err: Default::default() });
+        suivies().lock().unwrap_or_else(|p| p.into_inner()).insert(poignee, suivie.clone());
+        // La mort, confiée à la portée du run. **Après** le registre, et en
+        // tenant la commande elle-même : une portée déjà vidée (le run a fini
+        // pendant que la commande démarrait) joue la fermeture ici, tout de
+        // suite, et elle doit trouver de quoi tuer.
+        if let Some(portee) = ctx.service::<Arc<crate::agent::RunScope>>("run_scope").cloned() {
+            portee.defer(Box::new(move || {
+                par_la_portee.store(true, std::sync::atomic::Ordering::SeqCst);
+                suivie.en_fond.tuer(GRACE_EN_FIN_DE_RUN);
+            }));
+        }
         rendre(ctx, texte)
     }
 }
@@ -1169,6 +1165,30 @@ mod tests {
         assert!(!vivant, "le processus {pid} est mort");
         portee.vider();
         assert!(messages(&mut rx, 1).is_empty(), "une seconde vidange ne redit rien");
+    }
+
+    /// **Un run qui finit pendant que la commande démarre** : la portée est
+    /// déjà vidée quand la commande y enregistre sa mort ; la fermeture joue
+    /// aussitôt (portée scellée, session recherche), le processus ne survit
+    /// pas au run, et la boîte reçoit quand même « tuée à la fin du run ».
+    #[test]
+    fn une_commande_lancee_apres_la_fin_du_run_est_tuee_aussitot() {
+        let dossier = tempfile::tempdir().expect("tempdir");
+        let suivi = dossier.path().join("suivi.log");
+        std::fs::write(&suivi, "l1\n").unwrap();
+        let bus = crate::events::EventBus::new(64);
+        let boite = "run-tard";
+        let mut rx = bus.subscribe(&crate::events::inbox_topic(boite));
+        let portee = Arc::new(crate::agent::RunScope::default());
+        portee.vider();
+        let mut ctx = contexte_de_boucle(dossier.path(), &bus, boite, &portee, "#essai-tard-1");
+        RunCommandNode::new("run", format!("tail -f {}", suivi.display())).en_fond(true).execute(&mut ctx).unwrap();
+        let t = texte(&mut ctx);
+        let pid: u32 = t.split("(pid ").nth(1).and_then(|r| r.split(')').next()).and_then(|p| p.parse().ok()).expect("le pid");
+        let dits = messages(&mut rx, 1);
+        assert!(dits.len() == 1 && dits[0].1.contains("tuée à la fin du run"), "{dits:?}");
+        let vivant = std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().unwrap().success();
+        assert!(!vivant, "le processus {pid} n'a pas survécu au run");
     }
 
     /// **Deux commandes du même programme dans le même run** : deux poignées,
