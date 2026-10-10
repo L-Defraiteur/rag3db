@@ -23,9 +23,18 @@ fn run() -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    // Un backend en mots seuls n'exige pas de service d'embarquement.
+    // Un backend en mots seuls n'exige pas de service d'embarquement ; un
+    // backend qui déclare du vecteur démarre sans lui en le disant (plein
+    // texte seul, vecteurs en dette — `PreparedBackend::open` redit la phrase
+    // dans le reçu). Une identité de modèle différente reste un refus.
     let embedder = if prepared.needs_embeddings() {
-        Some(prepared.connect_embedder()?.0)
+        match prepared.connect_embedder() {
+            Ok((embedder, _)) => Some(embedder),
+            Err(raison) => {
+                eprintln!("[rag3weaver] pas de service d'embarquement : index en plein texte seul, vecteurs en dette ({raison})");
+                None
+            }
+        }
     } else {
         None
     };
@@ -58,7 +67,7 @@ fn run() -> Result<(), String> {
         }
         let result = request.and_then(|v| -> Result<Value, String> {
             match v["op"].as_str() {
-                Some("describe") => Ok(backend.prepared.describe()),
+                Some("describe") => Ok(backend.describe()),
                 Some("call") => {
                     calls += 1;
                     if fail_at_call == Some(calls) {

@@ -62,6 +62,27 @@ Décision de l'orchestration : ce comportement reste ; c'est le gabarit de
 backend livré par le paquet qui, sous Windows, posera `"sandbox": {"mode":
 "off"}` avec un commentaire qui dit pourquoi.
 
+## Windows x64 : le binaire se lie
+
+**Dixième essai, 10 octobre 2026, 11 h 25 UTC** : `rag3weaver-backend.exe`
+est lié, en MSVC pur (cl 14.51, cmake 4.4, Ninja, Rust 1.98.1 sur
+`windows-latest`), tree-sitter-scss accepté par `cl` avec la copie de
+codeparsers.
+
+| | valeur |
+|---|---|
+| durée du bâti | 31 min 50 s (4 cœurs, à froid) |
+| binaire | 60 Mo (62 950 912 octets), non strippé |
+| essais pour y arriver | dix (sept en clang-cl, trois en cl) |
+
+Ce que le dixième essai n'a pas donné : l'artefact (le binaire était hors de
+l'espace de travail du runner, `C:/rs`, et `upload-artifact` le refuse), et
+l'épreuve `--describe`. Le onzième (38048487047) copie le binaire sous
+`dist/windows-x64/` et l'éprouve deux fois, tel quel (le refus Landlock
+attendu, nommé) et avec `"sandbox": {"mode": "off"}`. L'extension vecteur
+n'est pas encore bâtie sous Windows (le job ne lance que cargo) : c'est le
+même geste que sous Linux, à ajouter.
+
 ## Windows x64 : la liste des accrocs
 
 Sept essais sur `windows-latest` (MSVC 14.51, cmake 4.4, Rust 1.98.1), par la
@@ -124,18 +145,65 @@ et parle au backend en lignes JSON (`Backend.open`, `describe`, `call`,
 `journal`, `journalRead`, `indexState`, `shutdown`) ; sous-paquet
 `rag3weaver-linux-x64-gnu` (`os`, `cpu`, `libc`) ; `scripts/preparer.sh` y
 copie le binaire et l'extension de `dist/` et les gabarits ; rien n'est
-publié. L'épreuve `npm test` — un dossier vide, trois fichiers, une
-recherche — démarre le backend (43 ms) et lit ses outils, puis bute sur
-une chose de fond : sans service d'embarquement, un backend de code refuse
-de s'ouvrir (« un service d'embarquement est requis »). Décision de
-l'orchestration : le service devient optionnel au démarrage — avertissement
-nommé, index en plein texte seul, vecteurs en dette rattrapée quand un
-service apparaît, « signal is not available » sur le dense. Le changement
-(la porte du démarrage dans `rag3weaver-backend.rs` et `backend.rs`)
-attend le « vas-y » et la lecture de l'arbre principal sur la dette.
+publié.
+
+### Le service d'embarquement devient optionnel au démarrage
+
+L'épreuve `npm test` — un dossier vide, trois fichiers, une recherche — a
+buté sur une chose de fond : sans service d'embarquement, un backend de code
+refusait de s'ouvrir (« un service d'embarquement est requis »). Décision de
+l'orchestration (10 octobre) : le service est optionnel au démarrage, et
+**jamais de vecteur factice dans le produit** — un vecteur factice est un
+résultat faux en silence.
+
+Ce qui est écrit sur la branche, les deux portes :
+
+- `src/bin/rag3weaver-backend.rs` : si `connect_embedder()` échoue, stderr
+  « pas de service d'embarquement : index en plein texte seul, vecteurs en
+  dette (<raison>) », et le backend s'ouvre sans embarqueur. Une identité
+  modèle/dimension différente reste un refus. `rag3daemon` lance ce binaire :
+  même règle.
+- `PreparedBackend::open` : le refus devient la même phrase
+  (`AVERTISSEMENT_SANS_SERVICE`), dite sur stderr **et gardée dans le
+  backend** : `describe` et `index_state` la rendent sous `warnings`, parce
+  que stderr n'est lu par personne quand le backend tourne en service
+  (leçon de la session mémoire : 26 avertissements du catalogue que rien ne
+  lit en production).
+
+Ce qui n'y est pas, et pourquoi la branche ne fusionne pas encore : le
+catalogue exige un `Embedder` ; sans service, `open` pose aujourd'hui le
+`MockEmbedder` des tests, et l'arbre principal a lu que ses vecteurs nuls
+**seraient écrits** (phase 2 de l'outil `index`, écriture en ligne, débit
+rangé ; `Library` reste HYBRID même avec `index_signals` sur File et Scope ;
+risque de plantage HNSW sur des vecteurs identiques). Le cœur est à l'arbre
+principal, après `defauts-bascules-2` : un embarqueur **absent**, type
+dédié (`is_absent()`), dont `embed` refuse en le nommant, que le catalogue
+reconnaît — aucun vecteur écrit, la dette posée et lisible, le plein texte
+en ligne, pas de débit rangé, « signal is not available » porté par le repli
+de la branche dense. Ma porte posera cet embarqueur à la place du mock quand
+son lot sera là. D'ici là, **`npm test` est rouge attendu** : l'épreuve
+s'ignore en le disant, et ne joue que sous
+`RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1` ; elle attend `warnings` dans `describe`
+et dans `index_state`.
+
+Jouée quand même sur le binaire natif porteur des deux portes (13 h 56) :
+**elle passe de bout en bout** — démarrage en 226 ms, `describe` avec
+l'avertissement, les trois fichiers listés, `grep_files` et le balayage de
+`search_code` trouvent le mot, `index` lance l'indexation en fond,
+`index_state` rend `busy` puis `File.text = ready` et
+`File.vectors = never`, `search_code` trouve le mot par l'index, arrêt
+propre. Elle reste derrière sa porte parce que le vert ne prouve pas le bon
+chemin : sur trois fichiers sans bibliothèque, le mock n'a rien eu à
+embarquer ; avec une `Library`, il écrirait. Deux accrocs de l'épreuve
+elle-même en passant : `search_code` exige `options` (vide, c'est
+`SearchOptions`) ; et pendant l'indexation, `index_state` rend
+`{"busy": true}` — il porte maintenant les `warnings` aussi dans ce cas.
 
 ## Ce qui vient ensuite
 
+0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
+   l'arbre principal ; la porte de `PreparedBackend::open` le pose alors à
+   la place du mock, et `npm test` sort de son rouge attendu.
 1. Le paquet JS qui lance le binaire et lui parle en lignes JSON :
    `rag3weaver` + `rag3weaver-linux-x64-gnu` (les noms de lucivy), un test
    « installer dans un dossier vide, indexer trois fichiers, chercher »,

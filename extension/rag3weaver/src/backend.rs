@@ -899,22 +899,36 @@ impl PreparedBackend {
     pub fn connect_embedder(&self) -> Result<(Box<dyn Embedder>, crate::model_source::Origin), String> {
         crate::model_source::connect_embedder(&self.embed)
     }
+    /// Ce que le backend dit quand il déclare du vecteur et démarre sans
+    /// service d'embarquement — la même phrase sur stderr et dans le reçu.
+    pub const AVERTISSEMENT_SANS_SERVICE: &str = "pas de service d'embarquement : index en \
+        plein texte seul, vecteurs en dette (ce backend déclare des signaux vecteur ou sparse, \
+        ou un workspace indexé) — pour les calculer, donnez models.embed.address (ou \
+        embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)";
+
     pub fn open(
         self,
         conn: Box<dyn DbConnection>,
         embedder: Option<Box<dyn Embedder>>,
     ) -> Result<Backend, String> {
-        // Un backend en mots seuls démarre sans service d'embarquement ;
-        // un backend qui déclare du vecteur le refuse en le nommant.
+        // Un backend en mots seuls démarre sans service d'embarquement. Un
+        // backend qui déclare du vecteur démarre aussi (décision du
+        // 10 octobre 2026, pour le paquet npm) : il le dit en le nommant —
+        // sur stderr, et dans son reçu (`describe`, `index_state`), parce
+        // que stderr n'est lu par personne quand il tourne en service. Le
+        // plein texte indexe, les vecteurs restent en dette, rattrapée quand
+        // un service apparaît. Jusqu'au lot de l'arbre principal qui rend
+        // l'embarqueur « sans service » inerte (il ne pose aucun vecteur),
+        // cette porte reste derrière le refus de la fusion : voir le relevé
+        // docs/optimiseur/10-octobre-2026-11h53/01-le-premier-bati.md.
         let sans_service = embedder.is_none();
-        if sans_service && self.needs_embeddings() {
-            return Err(
-                "ce backend déclare des signaux vecteur ou sparse (ou un workspace indexé) : \
-                 un service d'embarquement est requis — donnez models.embed.address \
-                 (ou embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)"
-                    .into(),
-            );
-        }
+        let avertissement_sans_service = if sans_service && self.needs_embeddings() {
+            let texte = Self::AVERTISSEMENT_SANS_SERVICE.to_string();
+            eprintln!("[backend] {texte}");
+            Some(texte)
+        } else {
+            None
+        };
         let embedder = match embedder {
             Some(e) => {
                 if e.is_mock()
@@ -1068,6 +1082,7 @@ impl PreparedBackend {
         };
         Ok(Backend {
             decider,
+            avertissement_sans_service,
             prepared: self,
             catalog: Arc::new(Mutex::new(cat)),
             #[cfg(feature = "code")]
@@ -1303,8 +1318,26 @@ pub struct Backend {
     /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
     /// la clé `crate::decider::DECIDER_SERVICE`.
     decider: Option<Arc<dyn crate::decider::Decider>>,
+    /// Le backend déclare du vecteur et a démarré sans service : la phrase
+    /// dite à l'ouverture, redite dans `describe` et `index_state`.
+    avertissement_sans_service: Option<String>,
 }
 impl Backend {
+    /// Les avertissements d'ouverture, pour le reçu du backend ; vide quand
+    /// tout ce qui est déclaré est servi.
+    pub fn avertissements(&self) -> Vec<String> {
+        self.avertissement_sans_service.iter().cloned().collect()
+    }
+    /// `describe()` du manifeste, plus les avertissements d'ouverture sous
+    /// `warnings` — c'est le reçu que lit qui lance le backend en service.
+    pub fn describe(&self) -> Value {
+        let mut description = self.prepared.describe();
+        let avertissements = self.avertissements();
+        if !avertissements.is_empty() {
+            description["warnings"] = json!(avertissements);
+        }
+        description
+    }
     /// Library API shared by applications and future transports. No MCP dispatch.
     pub fn run_search_program(
         &self,
@@ -1810,8 +1843,15 @@ impl Backend {
             ],
             _ => return Ok(json!({})),
         };
+        // Occupé (une indexation tient le verrou) : le reçu le dit, et porte
+        // quand même les avertissements d'ouverture.
         let Ok(cat) = self.catalog.try_lock() else {
-            return Ok(json!({"busy": true}));
+            let mut occupe = json!({"busy": true});
+            let avertissements = self.avertissements();
+            if !avertissements.is_empty() {
+                occupe["warnings"] = json!(avertissements);
+            }
+            return Ok(occupe);
         };
         let mut etats = serde_json::Map::new();
         for entite in entites {
@@ -1821,6 +1861,13 @@ impl Backend {
                     serde_json::to_value(state).map_err(|e| e.to_string())?,
                 );
             }
+        }
+        // Sans service, l'état de l'index le dit à côté des entités (leurs
+        // noms commencent par une majuscule, `warnings` ne peut pas en être
+        // une).
+        let avertissements = self.avertissements();
+        if !avertissements.is_empty() {
+            etats.insert("warnings".into(), json!(avertissements));
         }
         Ok(Value::Object(etats))
         }
@@ -2041,6 +2088,7 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
+            avertissement_sans_service: None,
             prepared,
             catalog: Arc::new(Mutex::new(catalog)),
             #[cfg(feature = "code")]
@@ -2248,6 +2296,7 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
+            avertissement_sans_service: None,
             prepared,
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
@@ -2368,19 +2417,24 @@ mod tests {
             .unwrap();
         assert!(r.get("ok").map(|v| v != false).unwrap_or(true), "{r}");
 
-        // L'inverse : le notebook d'origine (vecteur déclaré) refuse en nommant.
+        // Le notebook d'origine (vecteur déclaré) démarre aussi sans service
+        // (10 octobre 2026), mais le dit dans son reçu, en nommant quoi
+        // faire : `describe` et `index_state` portent l'avertissement, parce
+        // que stderr n'est lu par personne quand le backend tourne en service.
         let prepared = PreparedBackend::load(
             &Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook/backend.json"),
         )
         .unwrap();
         assert!(prepared.needs_embeddings());
         let conn = crate::Rag3dbConnection::in_memory().unwrap();
-        let erreur = match prepared.open(Box::new(conn), None) {
-            Err(e) => e,
-            Ok(_) => panic!("du vecteur déclaré sans service doit se refuser"),
-        };
-        assert!(erreur.contains("embarquement"), "{erreur}");
-        assert!(erreur.contains("RAG3WEAVER_EMBED_SERVICE"), "le refus dit quoi faire : {erreur}");
+        let backend = prepared
+            .open(Box::new(conn), None)
+            .expect("du vecteur déclaré sans service démarre en le disant");
+        let avertissements = backend.avertissements();
+        assert_eq!(avertissements.len(), 1, "{avertissements:?}");
+        assert!(avertissements[0].contains("pas de service d'embarquement"), "{avertissements:?}");
+        assert!(avertissements[0].contains("RAG3WEAVER_EMBED_SERVICE"), "l'avertissement dit quoi faire : {avertissements:?}");
+        assert_eq!(backend.describe()["warnings"], json!(avertissements), "le reçu de describe porte l'avertissement");
     }
 
     /// **Le crochet après outil** : la section s'ajoute au rendu, une

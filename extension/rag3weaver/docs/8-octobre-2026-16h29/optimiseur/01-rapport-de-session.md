@@ -1,18 +1,24 @@
 # Optimiseur — rapport de session
 
-**Mis à jour le 10 octobre 2026 à 12 h 30, à la pause pour le redémarrage du
-poste.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
+**Mis à jour le 10 octobre 2026 en fin d'après-midi.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
 `../orchestration/03-le-paquet-npm.md`. Le rapport précédent (envois à
 tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseur/`.
 
-## État à la pause
+## État
 
-- Branche `paquet-npm`, worktree `../rag3db-paquet-npm` ; tout est commité
-  et poussé. Rien n'est publié, rien dans l'arbre principal.
-- Aucun bâti local en cours (celui qui tournait a été arrêté, le target de
-  cargo sur disque reprend là où il en était).
-- Un essai Windows continue seul sur les runners GitHub :
-  https://github.com/L-Defraiteur/rag3db/actions/runs/38044225912 (huitième).
+- Branche `paquet-npm`, worktree `../rag3db-paquet-npm` ; tête f86a225fe
+  plus les deux portes du service optionnel (en bâti natif, à commiter).
+  Rien n'est publié, rien dans l'arbre principal.
+- **La branche ne fusionne pas avant le lot « embarqueur absent » de l'arbre
+  principal** (voir le relevé, « Le service d'embarquement devient
+  optionnel ») ; `npm test` est rouge attendu derrière
+  `RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1`.
+- **Le binaire Windows se lie** (dixième essai, MSVC pur, 31 min 50 s,
+  60 Mo) ; le onzième
+  (https://github.com/L-Defraiteur/rag3db/actions/runs/38048487047) donne
+  l'artefact et l'épreuve `--describe` avec le bac à sable fermé.
+- L'épreuve JS passe de bout en bout sur le binaire natif porteur des
+  portes ; elle reste derrière sa porte (voir le relevé).
 
 ## Ce qui est fait
 
@@ -25,15 +31,25 @@ en une phrase chacun :
   10 min en natif ici. Il démarre, charge un backend de code avec Landlock,
   **y compris dans un conteneur Docker**, et refuse en le disant sans service
   d'embarquement.
-- **Windows x64 sur `windows-latest`** : sept essais, la liste des accrocs
-  est faite. Quatre contournés dans le workflow (link.exe de Git, drapeau GCC
-  de tree-sitter-scss → clang-cl, C et C++ tous deux en clang-cl, /EHsc) ;
-  quatre qui touchent nos sources, appliqués sur la branche pour l'essai et
-  relayés par l'orchestration à leurs propriétaires (landlock pour Linux
-  seulement ; NodeTableDeleteState sans copie ; pas de -latomic pour clang
-  sous Windows ; la crate rag3db ne bâtit que la cible statique). Le moteur
-  C++ compile entièrement sous clang-cl ; le huitième essai dit si le binaire
-  se lie.
+- **Windows x64 sur `windows-latest`** : dix essais, la liste des accrocs
+  est faite. clang-cl a été une impasse isolée (le moteur compile, mais
+  l'exécutable ne se lie pas : destructeurs de `std::variant` non émis avec
+  la STL MSVC) → retour à `cl` pur, comme l'amont ; l'accroc qui y avait mené
+  (drapeau GCC de tree-sitter-scss) est réglé chez codeparsers (copie
+  locale `vendor/tree-sitter-scss`, master 4c7897c, sous-module pointé).
+  Quatre changements de sources restent appliqués sur la branche pour
+  l'essai (landlock Linux seulement ; NodeTableDeleteState sans copie ; pas
+  de -latomic sous Windows ; la crate rag3db ne bâtit que la cible statique,
+  déjà sur master 7ab374aba). **Le dixième essai a lié le binaire.**
+- **Le paquet JS** (`bindings/nodejs/`, commité 2f8ce0602) : chargeur par
+  plateforme, manifeste préparé depuis les gabarits, classe `Backend` en
+  lignes JSON, sous-paquet `rag3weaver-linux-x64-gnu`, `scripts/preparer.sh`,
+  épreuve « dossier vide, trois fichiers, une recherche ».
+- **Le service d'embarquement optionnel au démarrage** (décision de
+  l'orchestration) : les deux portes sont écrites (binaire et
+  `PreparedBackend::open` : avertissement nommé, rendu aussi sous `warnings`
+  par `describe` et `index_state`) ; le cœur (embarqueur absent, aucun
+  vecteur factice dans le produit) est le lot de l'arbre principal.
 - Le workflow manuel `.github/workflows/paquet-npm.yml` (Linux par l'image,
   Windows en essai, jobs choisissables, rien de publié) ; posé aussi sur
   master pour être dispatchable (9782b26a6).
@@ -53,24 +69,21 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. Lire le résultat du huitième essai Windows (`gh run view 38044225912`,
-   compte `L-Defraiteur` par `GH_TOKEN`) : si le binaire existe, l'artefact
+1. Lire le dixième essai Windows (`gh run view 38046471828`, compte
+   `L-Defraiteur` par `GH_TOKEN`) : si le binaire se lie, l'artefact
    `bati-windows-x64-journal` le porte ; essayer `--describe` sur un gabarit
-   avec `"sandbox": {"mode": "off"}` ; sinon, lire l'erreur d'édition de
-   liens de l'exécutable.
-2. Vérifier sous Linux que `build_target("rag3db")` n'a rien changé :
-   `poste lourd tools/build-images/linux-x64-gnu/build.sh` depuis le
-   worktree (target sous `~/.cache/rag3weaver-build/paquet-npm/`).
+   avec `"sandbox": {"mode": "off"}` ; dire à codeparsers ce que `cl`
+   refuse dans parser.c/scanner.c, s'il refuse.
+2. Quand l'arbre principal livre l'embarqueur absent (il donne le nom et le
+   constructeur au commit) : le poser dans `PreparedBackend::open` à la
+   place du mock, jouer `RAG3WEAVER_BACKEND=<binaire> RAG3WEAVER_ESSAI_ROUGE_ATTENDU=1 npm test`
+   dans `bindings/nodejs`, retirer la porte du rouge attendu, puis rebase et
+   fusion de `paquet-npm`.
 3. Premier bâti dans Docker, ici : `tools/build-images/build.sh linux-x64-gnu`
-   (il passe par `poste lourd`), comparer `dist/linux-x64-gnu/bati.txt` au
-   relevé du runner.
-4. Puis le paquet JS (`rag3weaver` + `rag3weaver-linux-x64-gnu`, sur le
-   modèle de `lucivy/bindings/nodejs` : un `index.js` qui choisit le paquet
-   de la plateforme, un sous-paquet par cible avec `os`/`cpu`/`libc`) : il
-   lance `rag3weaver-backend backend.json` et lui parle en lignes JSON sur
-   stdin/stdout (`describe`, `call`, `journal`, `journal_read`,
-   `index_state`, `shutdown`) ; test « dossier vide, trois fichiers, une
-   recherche » ; publication fermée.
+   (il passe par `poste lourd` ; `lucied` doit être dans le groupe docker),
+   comparer `dist/linux-x64-gnu/bati.txt` au relevé du runner et de luciepc.
+4. Puis le vecteur en statique ; macOS après Windows ; release.yml copié de
+   lucivy, porte fermée.
 
 ## Pièges
 
