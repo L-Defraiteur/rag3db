@@ -56,6 +56,26 @@ poser la version.
   trois refus nommés à la place d'écritures hors bloc et l'index vectoriel dimensionné par
   le nombre de lignes (`1ea49837f`), et deux défauts d'origine de l'annulation d'un `COPY`
   (`05788a868`, `5c8507577`). Les tickets du moteur sont triés au §3.1.
+- **4, l'index vectoriel (11 octobre)** : la mise à jour massive de vecteurs est fermée. Deux
+  défauts en étaient la cause : un contrôle qui n'entrait pas dans le graphe comme une requête,
+  et une réinsertion qui partait de la ligne elle-même (ticket fermé
+  `closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`). Deux témoins
+  restent probabilistes : `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et
+  `TwentyRowsToTheSameVectorInOneStatement`, qui relève des groupes de copies.
+  **La condition 4 n'est pas fermée.** Côté moteur, six tickets restent ouverts avec la gravité
+  « perte » ou « réponse fausse » :
+  - la recherche ne rend plus qu'une ligne après des annulations et des mises à jour
+    (`2026-10-11-recherche-vectorielle-une-seule-ligne-apres-annulations-et-mises-a-jour.md`) ;
+  - le CALL de la recherche rend des nœuds supprimés
+    (`2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md`) ;
+  - la validation à moitié appliquée
+    (`2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md`) ;
+  - C7 après un arrêt brutal (`2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md`) ;
+  - le COPY refusé pour mémoire, avec un filet côté rag3weaver
+    (`2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md`) ;
+  - les grands groupes de copies (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`).
+  Les 21 autres tickets de même gravité sont côté produit (rendez-vous, codeparsers). Lucie dira
+  s'ils comptent pour la stèle du moteur ou pour celle du produit.
 
 ## 3. Ce qui reste à faire pour que la stèle soit utilisable
 

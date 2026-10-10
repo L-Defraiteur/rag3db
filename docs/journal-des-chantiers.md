@@ -241,7 +241,14 @@ vector ne voit pas les défauts du rejeu sans extension — rouvrir dans un proc
    seule et une huitaine de tests. Dans le même lot : un journal qui porte un
    `LOAD EXTENSION` dont le fichier a disparu empêche aujourd'hui d'ouvrir la base. Ses cinq
    témoins sont rouges au banc.
-2. **La mise à jour massive de vecteurs** (§6) : un contrôle en fin d'instruction sur tout
+2. **La mise à jour massive de vecteurs — fermée le 11 octobre 2026** (banc). La cause était
+   double : un contrôle qui n'entrait pas comme une requête, et une réinsertion qui partait de la
+   ligne elle-même. Le contrôle en fin d'instruction a été mesuré, puis écarté : il fait régresser
+   le ligne à ligne de ×7 à ×13 (branche `essai-fin-d-instruction-maj`). Restent probabilistes
+   `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et `TwentyRowsToTheSameVectorInOneStatement`,
+   qui relève des groupes de copies. La condition 4 de la stèle n'est pas fermée : la stèle §2
+   nomme les six tickets du moteur encore ouverts. Le texte d'origine :
+   un contrôle en fin d'instruction sur tout
    ce qu'elle a touché, la dimension 768, les dix mille lignes ; et la ligne lointaine
    injoignable à la construction. Avant V1 seulement si l'invariant « toute ligne à vecteur
    est joignable » rougit en usage réel côté produit ; sinon après. Ladybug n'a ni mise à
