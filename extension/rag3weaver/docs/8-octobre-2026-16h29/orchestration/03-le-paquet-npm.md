@@ -78,37 +78,37 @@ binding. » Et, le 9 octobre :
 - Le choix se fait à l'installation, par l'assistant du CLI prévu dans la
   vision générale (§3) : « quel modèle, comment le brancher ».
 
-## 5 bis. La première ouverture : un assistant, contournable (Lucie, 10 octobre)
+## 5 bis. Installer, puis régler : deux objets (Lucie, 10 octobre, le soir)
 
-Lucie : « peut-être un wizard CLI au début qui te demande tout ce que tu
-veux, ou bien contournable par paramètres ; un truc à la première ouverture
-qui te pointe un fichier JSON où tu règles une config, ou qui te propose de
-répondre étape par étape : choisir le service d'embarquement, créer
-automatiquement votre service, ou un existant… ; ça te pointe le `.env` où
-mettre la clé du LLM si tu en veux un. »
+Lucie a tranché en deux phrases : « installer rag3weaver, c'est installer un
+démon ; ce qu'on en fait après n'a rien à voir » ; puis : « avant d'avoir
+réglé quoi que ce soit, tu as juste un formulaire où tu entres les API que tu
+veux, ou par CLI c'est pareil, et la page te dit aussi comment le faire par
+CLI ; pas tout de suite un agent, mais une fois que tu as réglé un LLM, là oui,
+tu as un vrai magicien ».
 
-La forme retenue par l'orchestration, à concevoir en page après la démo du
-paquet :
+1. **Le démon.** `npm install rag3weaver` et il tourne : il lit un manifeste et
+   un `.env` s'ils existent ; sans rien, il fait ce qu'il peut (plein texte,
+   pas de vecteurs, pas de modèle) et dit ce qui lui manque. Aucune question
+   à l'installation. `rag3weaver doctor` montre ce qui est branché.
+2. **Le réglage, un formulaire — pas un agent.** La première page servie par
+   le démon, quand rien n'est réglé : le code à indexer ; les embarquements
+   (*servis par nous* / *un service existant* / *local sur votre carte* /
+   *pas maintenant*) ; le modèle de langage (*aucun* / *API compatible
+   OpenAI* / *Anthropic* / *serveur local*) et sa clé. Le formulaire écrit le
+   manifeste et le `.env` (jamais une clé dans le manifeste). **Chaque champ
+   montre son équivalent en ligne de commande** (`rag3weaver init --embed
+   service=… --llm anthropic`), et la CLI fait exactement la même chose, pour
+   les scripts, la CI et qui n'ouvre pas de page. Pas d'agent à ce stade :
+   il n'y a pas encore de modèle pour le faire parler.
+3. **Le magicien.** Dès qu'un modèle est déclaré, la même page devient l'atelier
+   : l'agent est là, et c'est lui qui aide pour la suite (brancher un service
+   de plus, indexer un autre dépôt, …), par les mêmes déclarations.
 
-- une commande `rag3weaver init` (et la même chose au premier lancement sans
-  manifeste) qui pose les questions **dans l'ordre où on en a besoin** :
-  où est le code à indexer ; les embarquements — *servis par nous*, *un
-  service existant* (adresse), *local sur votre carte* (le binaire GPU), ou
-  *aucun pour l'instant* (plein texte seul, vecteurs en dette, dit tel quel) ;
-  le modèle de langage — *aucun*, *une API compatible OpenAI*, *Anthropic*,
-  *un serveur local* — et où va la clé ;
-- **chaque réponse existe aussi en paramètre** (`--embed service=…`,
-  `--llm anthropic`, `--non-interactive`), pour les scripts et la CI ;
-- l'assistant **n'écrit que des déclarations** que le produit lit déjà : le
-  manifeste de backend (`models.<capacité>`, le `workspace`) et un `.env`
-  pour les secrets, jamais une clé dans le manifeste ; il dit où il les a
-  écrits et se relance sans casser ce qui existe ;
-- « créer automatiquement votre service » = lancer `rag3weaver-embeddings`
-  sur la carte locale si le paquet GPU est là, ou dire ce qu'il faut
-  installer sinon.
-
-C'est l'« assistant dans le CLI » de la vision générale (§3 : « fait choisir
-le modèle et la façon de le brancher »), rendu concret.
+Ce que ça fixe pour le chantier G : le paquet livre le démon et `doctor` ;
+`init` en CLI est petit et peut venir avec lui ; la page du réglage attend la
+marche 3 (vues déclarées), et c'est la première page de l'interface, pas un
+écran à part.
 
 ## 6. Le bâti : des Docker par plateforme, la CI ne fait que publier
 
