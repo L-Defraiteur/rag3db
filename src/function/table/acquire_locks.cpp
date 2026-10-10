@@ -30,13 +30,17 @@ namespace function {
 // annoncé. Hors du mode, l'annonce vérifie ses arguments et ne fait rien.
 struct AcquireLocksBindData final : TableFuncBindData {
     table_id_t tableID;
+    // La table porte un index secondaire (vectoriel) : son annonce prend l'index en EXCLUSIF,
+    // sans que l'appelant le sache — la maintenance de l'index n'admet qu'un écrivain à la fois
+    // tant que l'index n'est pas tenu au commit (note des verrous, V1 genre « index »).
+    bool indexed;
     std::vector<std::string> keys;
 
-    AcquireLocksBindData(table_id_t tableID, std::vector<std::string> keys)
-        : TableFuncBindData{0}, tableID{tableID}, keys{std::move(keys)} {}
+    AcquireLocksBindData(table_id_t tableID, bool indexed, std::vector<std::string> keys)
+        : TableFuncBindData{0}, tableID{tableID}, indexed{indexed}, keys{std::move(keys)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
-        return std::make_unique<AcquireLocksBindData>(tableID, keys);
+        return std::make_unique<AcquireLocksBindData>(tableID, indexed, keys);
     }
 };
 
@@ -69,7 +73,9 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
         }
         keys.push_back(child->toString());
     }
-    return std::make_unique<AcquireLocksBindData>(tableEntry->getTableID(), std::move(keys));
+    const auto indexed = !catalog->getIndexEntries(transaction, tableEntry->getTableID()).empty();
+    return std::make_unique<AcquireLocksBindData>(tableEntry->getTableID(), indexed,
+        std::move(keys));
 }
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
@@ -96,7 +102,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     }
     std::vector<LockRequest> requests;
     requests.reserve(bindData->keys.size() + 1);
-    requests.push_back(LockRequest{LockResource::index(bindData->tableID), LockMode::SHARED});
+    requests.push_back(LockRequest{LockResource::index(bindData->tableID),
+        bindData->indexed ? LockMode::EXCLUSIVE : LockMode::SHARED});
     for (const auto& key : bindData->keys) {
         requests.push_back(
             LockRequest{LockResource::row(bindData->tableID, key), LockMode::EXCLUSIVE});
