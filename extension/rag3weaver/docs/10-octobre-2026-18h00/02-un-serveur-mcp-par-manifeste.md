@@ -169,8 +169,16 @@ Tranché par l'orchestration le 10 octobre au soir.
 
 **1. `must_reopen` devient un refus MCP nommé.** Un client ne doit jamais voir
 son serveur disparaître sans explication : le refus dit ce qui s'est passé, puis
-le serveur **rouvre et continue** si c'est possible, et sort après l'avoir dit
-sinon.
+le serveur s'arrête.
+
+**Et il s'arrête sans rouvrir en place** — tranché le 10 octobre au soir, après
+que j'aie livré cette seule branche : sur `MustReopen`, le serveur envoie un
+`notifications/message` lisible, puis **sort avec le code 75**
+(`connection::EXIT_MUST_REOPEN`). Rouvrir sous le même processus demanderait de
+lâcher le catalogue et de tout remonter ; un client MCP sait relancer un
+serveur, et c'est cohérent avec « installer rag3weaver, c'est installer un
+démon » — un démon qui meurt proprement se redémarre. La réouverture en place
+n'est pas un lot prévu.
 
 **2. Un serveur par base, jamais par session** — et c'est la bonne réponse,
 parce qu'on ne contrôle pas le client : Claude Code lance **un processus MCP par

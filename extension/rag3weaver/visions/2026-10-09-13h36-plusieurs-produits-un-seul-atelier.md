@@ -141,3 +141,9 @@ exposé n'est pas chargé), pas par la politesse des outils — sinon un outil
 `dev` lit une cellule publiée et la fuite par une réponse d'agent. Un serveur
 MCP n'expose que ce que ses clés rendent vrai, rien par défaut.
 
+**Présentées n'est pas prouvées** (session mémoire, 10 octobre) : `--keys`
+suffit pour un atelier local, où c'est la personne qui lance le serveur et qui
+se donne ses propres clés ; un abonnement ou une personne distante demandent une
+**preuve**, pas une déclaration. Aucun produit publié ne doit dépendre d'une clé
+déclarée.
+
