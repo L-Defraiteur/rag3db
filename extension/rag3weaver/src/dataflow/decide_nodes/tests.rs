@@ -307,7 +307,7 @@ fn empty_lists_and_unbranchable_routes_are_refused() {
 /// reprise sur point de reprise.
 #[test]
 fn decide_keeps_its_whole_configuration_through_a_definition() {
-    let config = json!({"labels": ["a", "b"], "instruction": "dis", "field": "content", "as": "kind", "via": "llm"});
+    let config = json!({"labels": ["a", "b"], "instruction": "dis", "prompt": "{text} ?", "field": "content", "as": "kind", "via": "llm"});
     let def = GraphDefinition {
         nodes: vec![NodeDef { name: "d".into(), node_type: "Decide".into(), config: config.clone() }],
         edges: vec![],
@@ -335,4 +335,84 @@ fn the_probability_key_follows_as() {
         json_at(&out, "node", "element"),
         Some(json!({"probability": "à garder", "label": "b", "label_probability": 0.6}))
     );
+}
+
+
+// ── Le gabarit (pour le banc de la mémoire) ────────────────────────────
+
+/// Un `Decider` qui garde le texte reçu.
+struct Seen(Arc<Mutex<Vec<String>>>);
+
+impl Decider for Seen {
+    fn decide_at(&self, prompt: &str, options: &[String], _: f64) -> Result<Vec<f64>, crate::decider::DecideError> {
+        self.0.lock().unwrap().push(prompt.to_string());
+        Ok(options.iter().enumerate().map(|(i, _)| if i == 0 { 0.8 } else { 0.2 }).collect())
+    }
+}
+
+const CHATML: &str = "<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\nRéponds {labels}.\n{text}<|im_end|>\n<|im_start|>assistant\n";
+
+/// **Le decider reçoit exactement le gabarit rendu** : les trois trous
+/// remplis, aucune ligne ajoutée devant ni derrière.
+#[test]
+fn the_decider_receives_exactly_the_rendered_template() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(Seen(seen.clone())) as Arc<dyn Decider>);
+    let def = graph(
+        json!({"fiche": "le WAL casse sur arrêt brutal", "sujet": "rag3db"}),
+        "Decide",
+        json!({"labels": "yes|no", "field": "fiche", "instruction": "La fiche parle-t-elle du sujet ?", "prompt": CHATML}),
+        &[],
+    );
+    let (out, _) = run(&def, s).unwrap();
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        ["<|im_start|>system\nLa fiche parle-t-elle du sujet ?<|im_end|>\n<|im_start|>user\nRéponds yes, no.\nle WAL casse sur arrêt brutal<|im_end|>\n<|im_start|>assistant\n"]
+    );
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "yes");
+}
+
+/// Sur la voie du llm, le gabarit rendu **est** le tour `user`.
+#[test]
+fn on_the_llm_way_the_template_is_the_user_turn() {
+    let read = Arc::new(Mutex::new(String::new()));
+    let r = read.clone();
+    let llm = CallbackLlm::new("l", 4096, move |turns, opts, sink| {
+        *r.lock().unwrap() = turns.last().unwrap().content.clone();
+        MockLlm::new(r#"{"label": "no"}"#).generate(turns, opts, sink)
+    });
+    let def = graph(json!("x"), "Decide", json!({"labels": "yes|no", "prompt": "Q: {text} ({labels})"}), &[]);
+    let (out, _) = run(&def, with_llm(llm)).unwrap();
+    assert_eq!(*read.lock().unwrap(), "Q: x (yes, no)");
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "no");
+}
+
+
+/// **Une seule passe** : une instruction qui contient « {text} » ou
+/// « {labels} » littéralement n'est pas réécrite ; une accolade de JSON n'est
+/// pas un trou.
+#[test]
+fn the_template_is_filled_in_one_pass() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(Seen(seen.clone())) as Arc<dyn Decider>);
+    let def = graph(
+        json!("la fiche"),
+        "Decide",
+        json!({"labels": "yes|no", "instruction": "réponds sur {text} et {labels}", "prompt": "{instruction} | {\"label\": x} | {text}"}),
+        &[],
+    );
+    run(&def, s).unwrap();
+    assert_eq!(seen.lock().unwrap().as_slice(), ["réponds sur {text} et {labels} | {\"label\": x} | la fiche"]);
+}
+
+/// Un gabarit sans `{text}`, ou avec un trou inconnu, est refusé à la
+/// construction, en le nommant.
+#[test]
+fn a_template_without_text_or_with_an_unknown_hole_is_refused() {
+    let err = DecideNodeFactory.create("d", &json!({"labels": "a|b", "prompt": "toujours pareil"})).err().unwrap();
+    assert!(err.contains("{text}"), "{err}");
+    let err = DecideNodeFactory.create("d", &json!({"labels": "a|b", "prompt": "{texte}"})).err().unwrap();
+    assert!(err.contains("{texte}"), "{err}");
 }

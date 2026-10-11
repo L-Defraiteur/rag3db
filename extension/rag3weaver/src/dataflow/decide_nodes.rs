@@ -200,6 +200,58 @@ impl NodeFactory for RouteNodeFactory {
 
 // ─── Decide ─────────────────────────────────────────────────────────────────
 
+/// Les trous d'un gabarit : `{nom}`, où `nom` est fait de lettres ASCII, de
+/// chiffres et de `_`. Une accolade qui n'ouvre pas un tel nom (du JSON, un
+/// `{"label": …}`) n'est pas un trou.
+fn holes(template: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(open) = template[i..].find('{').map(|o| i + o) {
+        match template[open + 1..].find('}') {
+            Some(len) => {
+                let name = &template[open + 1..open + 1 + len];
+                if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    out.push((open, open + 2 + len));
+                    i = open + 2 + len;
+                } else {
+                    i = open + 1;
+                }
+            }
+            None => break,
+        }
+    }
+    out
+}
+
+/// **Une seule passe** : chaque trou du gabarit est remplacé par sa valeur, et
+/// ce qui est inséré n'est jamais relu — une instruction qui contient
+/// « {text} » reste telle quelle.
+fn fill<'a>(template: &'a str, value: impl Fn(&str) -> Option<&'a str>) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut last = 0;
+    for (start, end) in holes(template) {
+        out.push_str(&template[last..start]);
+        let name = &template[start + 1..end - 1];
+        out.push_str(value(name).unwrap_or(&template[start..end]));
+        last = end;
+    }
+    out.push_str(&template[last..]);
+    out
+}
+
+/// Un gabarit doit avoir `{text}` (sinon tous les éléments recevraient le même
+/// texte), et aucun trou inconnu (il passerait tel quel).
+fn check_template(template: &str) -> Result<(), String> {
+    let names: Vec<&str> = holes(template).iter().map(|&(s, e)| &template[s + 1..e - 1]).collect();
+    if let Some(unknown) = names.iter().find(|n| !["instruction", "labels", "text"].contains(n)) {
+        return Err(format!("'prompt' : trou inconnu « {{{unknown}}} » ; admis : {{instruction}}, {{labels}}, {{text}}"));
+    }
+    if !names.contains(&"text") {
+        return Err("'prompt' : le gabarit n'a pas de {text} — chaque élément recevrait le même texte".to_string());
+    }
+    Ok(())
+}
+
 /// Par où passe la décision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Via {
@@ -213,6 +265,10 @@ pub struct DecideNode {
     name: String,
     labels: Vec<String>,
     instruction: String,
+    /// Le gabarit du texte envoyé, à trous `{instruction}`, `{labels}`,
+    /// `{text}` : tout le texte du decider, ou le tour `user` du llm. Absent :
+    /// le texte composé par défaut.
+    template: Option<String>,
     field: Option<String>,
     target: String,
     via: Via,
@@ -232,6 +288,20 @@ impl DecideNode {
         }
     }
 
+    /// Le gabarit rendu, s'il y en a un : les trois trous remplis, rien
+    /// d'autre ajouté ni retiré.
+    fn rendered(&self, text: &str) -> Option<String> {
+        let labels = self.labels.join(", ");
+        self.template.as_ref().map(|t| {
+            fill(t, |hole| match hole {
+                "instruction" => Some(self.instruction.as_str()),
+                "labels" => Some(labels.as_str()),
+                "text" => Some(text),
+                _ => None,
+            })
+        })
+    }
+
     fn prompt(&self) -> String {
         let list = self.labels.join(", ");
         if self.instruction.is_empty() {
@@ -242,7 +312,11 @@ impl DecideNode {
     }
 
     fn by_decider(&self, decider: &dyn Decider, text: &str) -> Result<(String, Option<f64>), String> {
-        let prompt = format!("{}\n\n{text}\n\nÉtiquette :", self.prompt());
+        // Un gabarit est envoyé **tel quel** : le decider complète un texte
+        // brut, c'est au gabarit de porter celui de la conversation du modèle.
+        let prompt = self
+            .rendered(text)
+            .unwrap_or_else(|| format!("{}\n\n{text}\n\nÉtiquette :", self.prompt()));
         let probs = decider
             .decide(&prompt, &self.labels)
             .map_err(|e| format!("Decide ({}) : {e:?}", decider.name()))?;
@@ -275,8 +349,12 @@ impl DecideNode {
             .with_response_format(ResponseFormat::strict_schema("decision", schema))
             .with_temperature(0.0);
         let turns = vec![
-            Turn::system(format!("{}\nRéponds en JSON : {{\"label\": \"<étiquette>\"}}.", self.prompt())),
-            Turn::user(text.to_string()),
+            Turn::system(match &self.template {
+                // Le gabarit dit déjà la tâche : le système ne dit que la forme.
+                Some(_) => "Réponds en JSON : {\"label\": \"<étiquette>\"}.".to_string(),
+                None => format!("{}\nRéponds en JSON : {{\"label\": \"<étiquette>\"}}.", self.prompt()),
+            }),
+            Turn::user(self.rendered(text).unwrap_or_else(|| text.to_string())),
         ];
         let mut sink = StringSink::default();
         llm.generate(&turns, &opts, &mut sink)
@@ -321,6 +399,7 @@ impl Node for DecideNode {
         Some(Box::new(json!({
             "labels": self.labels,
             "instruction": self.instruction,
+            "prompt": self.template.clone().unwrap_or_default(),
             "field": self.field.clone().unwrap_or_default(),
             "as": self.target,
             "via": via,
@@ -368,6 +447,13 @@ impl NodeFactory for DecideNodeFactory {
             name: name.to_string(),
             labels: labels(config, "labels", &[], false)?,
             instruction: str_param(config, "instruction", "")?,
+            template: {
+                let t = str_param(config, "prompt", "")?;
+                if !t.is_empty() {
+                    check_template(&t)?;
+                }
+                (!t.is_empty()).then_some(t)
+            },
             field: (!field.is_empty()).then_some(field),
             target: str_param(config, "as", "label")?,
             via,
@@ -388,6 +474,7 @@ impl NodeFactory for DecideNodeFactory {
             config_params: vec![
                 param("labels", ConfigParamType::Json, true, None, "les étiquettes : un tableau, ou « a|b|c »"),
                 param("instruction", ConfigParamType::String, false, Some(json!("")), "ce que l'étiquette veut dire, pour le modèle"),
+                param("prompt", ConfigParamType::String, false, Some(json!("")), "un gabarit à trous {instruction}, {labels}, {text} : tout le texte envoyé au decider (avec le gabarit de conversation du modèle), ou le tour user du llm ; vide : le texte composé. Le texte de l'élément y est collé tel quel : une fiche qui contient un marqueur du gabarit (<|im_end|>) en casse la structure, l'échappement dépend du modèle"),
                 param("field", ConfigParamType::String, false, Some(json!("")), "le champ de l'élément à classer ; vide : l'élément entier"),
                 param("as", ConfigParamType::String, false, Some(json!("label")), "le champ où poser l'étiquette ; sa probabilité, quand le decider la donne, va sous <as>_probability"),
                 param("via", ConfigParamType::String, false, Some(json!("auto")), "auto, decider ou llm"),
