@@ -776,3 +776,72 @@ où elle vit.
   avec le magasin, le RUNPATH visera le dossier d'un identifiant (page 07
   corrigée). Sur master : visited set (hotfixs `3e0f98f08`, H4 stable après
   trois semaines, 40/40 au banc), code-tree au soir (`f5018ed4b`).
+- **22 h 35 – 23 h 05, nuit : 20 % des morceaux de code sont sans texte**.
+  F a compté sur sa copie saine de code-rag3db-depot (20 h 24, aucun arrêt
+  brutal) : **26 092 Scope_Chunk à `_text` vide sur 128 732**, des centaines
+  par gros fichier (lucivy sharded_handle.rs 301, tree-sitter-scss parser.c
+  211, catalog.rs 141, dialect.rs 94…). C'est le point exact où luciepc se
+  fige à chaque fois (18-20 % : les pleins finis, restent les vides, repris
+  sans fin) : la boucle est générale, pas un accident de base abîmée. Et
+  codeparsers n'en produit aucun en mémoire (130 228 morceaux, 0 vide) : la
+  perte est à l'écriture. **Ticket P1** `6cdef9585`, pris par l'arbre
+  principal : piste le chargement CSV en masse (`cellule_csv`,
+  record_nodes.rs:695, un `\` non protégé sous escaped_newlines ; les
+  fichiers touchés en sont pleins), témoin rouge (un fichier à `\` passé en
+  masse), correctif, puis un chemin « réécrire les morceaux sans texte » que
+  l'index lance de lui-même (la montre ne les reverra pas, le fichier n'a pas
+  changé). En attendant, les défenses (`fa652a320`, en push depuis 22 h 57)
+  disent le compte partout : journal de fin d'index, index_states, et
+  l'en-tête « index : racine @ commit » du MCP (« N morceaux sans texte »),
+  pour que l'agent sache que son IDE est borgne ; une ligne à la page des
+  manques (04) : des faux négatifs de search_code et usages jusqu'au
+  correctif. **Question pour Lucie**, pas tranchée cette nuit : un morceau
+  sans texte doit-il exister (un scope sans embarquement mais avec ses
+  relations) ou ne jamais naître.
+  **luciepc bloqué jusqu'au réveil** : codeparsers ne peut pas terminer son
+  propre client d'index (pid 132918, place partagée de luciepc tenue depuis
+  22 h, adressé à l'hôte figé), son refus de 22 h 12 le couvrait ; personne
+  ne le fait à sa place. En premier au réveil : terminer ce client libère la
+  place, avant même l'hôte ; code-principal n'a pas été réindexé (sa demande
+  n'a jamais été envoyée) ; section « Pour Lucie » à jour (`1f2771d5d`).
+  **La nuit se réorganise ici** : la place d'ici était tenue pour rien de
+  21 h 54 à 22 h 45 par F (son script lançait un `poste` sous un `poste`,
+  qui a attendu son propre verrou 40 min ; faute dite et corrigée) ; le
+  proto a rendu le verrou de push tenu 30 min en attendant la place de
+  luciepc et a proposé la **forme optimiste** (rejeu sur une base notée hors
+  du verrou ; sous le verrou seulement fetch, comparaison égale ou docs
+  seules, push ; sinon rendre et rejouer), acceptée et écrite dans la page
+  du poste push (`fdef26450`) ; son lot attend le matin et luciepc, rien ne
+  bâtit ici devant l'écran de Lucie sauf le cœur. Trois défauts du poste
+  pour G après B4 : le rejeu distant qui n'a pas besoin de `--lourd` local
+  (le cœur refusé vingt fois, code 75) ; le poste sous un poste ; `--qui` qui
+  n'a pas montré un tenant du push vivant (le cœur). **Ordre des pushes de
+  code** : l'arbre principal (défenses), puis G (lot A, quatre courses
+  perdues contre le moteur : fenêtre accordée, rejeu sous le verrou ~20 min,
+  les docs passent), puis le cœur (lot ABI, bâti ici, tour de 23 h 00
+  interrompu avant tout push). **Redémarrage de l'hôte de Lucie décalé** :
+  la mémoire guette `fa652a320` jusqu'à minuit, bâti prouvé (md5,
+  --describe, hôte d'essai 7990, client de boutique), installation,
+  redémarrage, cinq minutes de surveillance, aucun arrêt en cas de gel ;
+  sinon à minuit le binaire déjà prouvé (6d4f4f5e0039, sur c89f24285 avec
+  la montre). Le binaire prêt de luciepc sera rebâti une fois par G sur
+  code-tree + défenses, sans l'installer.
+  **Sur master** : code-tree (codeparsers, `a601b8308` : add et remove, une
+  base ne se copie que fermée, témoin par un vrai hôte ; troisième brique
+  de la priorité) ; le témoin du balayage sous petit masque (banc,
+  `b808a3bee`, known_red : 69 632 lignes lues pour 117 sur 72 000, le
+  contrôle du plan contre un faux rouge sur petite base) ; le client mince
+  qui se rétablit seul (mémoire, `1266adef0` : coupure dite et non rejouée,
+  démarrage ≤ 4 s, rebranchement toutes les 10 s, list_changed) ; les
+  rerun-if du pont cxx (recherche, `b8facf434`, lot 1 du magasin) ; ticket
+  du témoin de réconciliation qui rougit une fois sur cinq (`5a1b1df11`,
+  correctif avec le lot du matin du proto : le reçu occupé porte `watches`).
+  **Décisions** : le refus nommé binaire ↔ lib (recherche, lot 2) prend la
+  forme (b) + (a) : nos binaires sont liés en BIND_NOW, un contrôle dans le
+  processus arrive après le « undefined symbol » ; donc l'identifiant de
+  bâti dans une section ELF nommée des deux côtés, lu avant tout chargement
+  par une sous-commande du backend et par l'ExecStartPre de l'unité (le
+  PG_MODULE_MAGIC de PostgreSQL), la ligne dans src/ relue par le cœur, le
+  filet dans le processus en plus, le RUNPATH par identifiant au lot du
+  magasin ; la trace des fils du cœur ici en `poste mesure` (« mesure prise »
+  23 h 00), la mesure 1/32 fils du banc derrière avec le même instrument.

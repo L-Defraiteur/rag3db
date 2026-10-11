@@ -118,6 +118,9 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
   section « Pour Lucie ») : arrêt propre, comptage des morceaux vides base
   fermée, montre remise, binaire prêt de G installé, redémarrage.
 - Brancher le cœur sur `code-lourd` ensuite : commande dans `01-les-decisions…`.
+- **Une question** : 20 % des morceaux de code sont écrits sans texte (ticket
+  P1 `6cdef9585`, cause en cours chez l'arbre principal) ; un morceau sans
+  texte doit-il exister ou ne jamais naître ? (fil de nuit, 23 h 05).
 - La séance npm (quatre OTP) quand elle le voudra ; le ménage des branches
   distantes (liste à produire).
 - Rien d'autre : les décisions renversables sont toutes dans
