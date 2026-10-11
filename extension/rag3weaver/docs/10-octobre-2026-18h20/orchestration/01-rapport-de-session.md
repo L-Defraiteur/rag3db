@@ -651,9 +651,16 @@ trois lignes dont la troisième, `claude mcp add`, **prête et non jouée** (ell
 écrit dans sa configuration). Mesuré : un processus écrit sujet + mémoire +
 genre + référence, un autre les retrouve. Deux défauts du lot précédent
 trouvés en jouant (l'arrêt n'arrêtait pas les réactions ; le serveur ne disait
-pas ses réactions montées) et corrigés. Un troisième réglé dans la foulée :
-aucun outil n'écrivait `ANCHORED_TO`, la réaction tournait à vide — un outil
-d'ancrage déclaré en six lignes sur une pièce existante. **La question de
+pas ses réactions montées) et corrigés. Un troisième **non réglé, et dit** :
+aucun outil n'écrit `ANCHORED_TO`, la réaction `review_anchored` tourne à
+vide ; l'outil d'ancrage « en six lignes » que j'avais accepté sur parole ne
+tient pas — `RelationBatchNode` refuse de lier deux entités gérées (cycle de
+vie, dates), et aucun nœud ne relie aujourd'hui deux entités gérées par leur
+identité. La mémoire l'a mesuré avant d'écrire, l'a retiré, et le gabarit a
+sept outils. Deux tickets pour le matin, avec leur coût : un `LinkRecordsNode`
+générique (une signature nouvelle : à Lucie), puis le huitième refus de la
+section `reactions` (une réaction qui remonte une relation qu'aucun outil
+n'écrit), après le nœud, sinon il refuserait le gabarit `memory` livré. **La question de
 l'ordre A — Claude range-t-il spontanément ? — se tranche au matin par une
 session vierge, chez Lucie, après son `claude mcp add`** ; la session qui a
 écrit l'outil ne peut pas y répondre.
