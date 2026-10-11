@@ -18,6 +18,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
   - la cause, si elle est connue ;
   - le correctif de l'amont s'il existe (à lire, ne pas copier) ;
   - ce qu'il faut pour le fermer.
+- **Moteur ou produit** : un ticket ouvert va dans la table « moteur » si son correctif vit dans
+  `src/`, dans une extension C++ du moteur (`extension/vector`, `extension/geo`) ou dans le
+  harnais de test du moteur ; dans la table « produit » s'il vit dans `extension/rag3weaver`,
+  codeparsers, lucivy ou les outils. En cas de doute, moteur. La table des fermés reste une
+  seule (décision de Lucie, 11 octobre 2026).
 - **Fermeture** : le commit qui corrige passe le ticket à « corrigé `<commit>` », retire le
   témoin de `test/transaction/concurrence/known_red.txt`, **déplace le fichier dans `closed/`**
   (`git mv`) et met à jour la ligne de l'index (table des fermés), dans le même commit. Les
@@ -25,37 +30,59 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (55)
+### Ouverts — moteur (25)
+
+Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
+ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | ouvert (relevé par « e2e et disque ») | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |
+| [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
+| [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
+| [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
+| [Le journal d'une transaction reste sans borne pour les insertions ordinaires](2026-10-05-journal-d-une-transaction-sans-borne-hors-copy.md) | ouvert, suite de la borne du COPY | refus d'une très grosse transaction | oui | le mode à blobs, qui s'en garde |
+| [Au journal, chaque cellule réécrit son type](2026-10-05-cout-par-cellule-au-journal.md) | ouvert, confort | volume et temps | toujours | en volume |
+| [Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait](2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md) | ouvert côté moteur ; filet rag3weaver `99e6f0ee0` | réponse fausse | oui | oui (repli REPLI_EN_MASSE) |
+| [Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée](2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md) | ouvert (relevé par le banc, 10 oct.) | réponse fausse, puis plantage | en principe oui ; le seul chemin vu est fermé par A3′ | pas de cas connu |
+| [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | ouvert (A4′ faite, chemin non trouvé) | réponse fausse après reprise | non (mode multi-écrivains) | non |
+| [Sous des écritures de BLOB, la mémoire résidente dépasse nettement le tampon du moteur](2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md) | ouvert | mémoire | oui | oui (magasin de blobs, index creux) |
+| [Le COPY de blobs en point de reprise forcé fait échouer la validation sous un petit tampon](2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md) | ouvert — lot suivant de la seconde session cœur C++ | blocage | oui | oui (poussée des blobs du plein texte, bases d'avant la bascule) |
+| [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert, confort (hors condition 1) | réponse fausse | oui | non |
+| [Deux défauts de chaînes annoncés par Ladybug, non reproduits chez nous](2026-10-04-recettes-de-l-amont-non-reproduites.md) | ouvert — non reproduit | perte (annoncée) / réponse fausse (annoncée) | incertain | non vérifié |
+| [Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant](2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md) | ouvert | perte (pour la plupart) | non au banc sans crochet dans src/ | oui en cas d'incident (disque plein, coupure) |
+| [Un COPY de relations annulé laisse gonflée l'estimation du nombre de relations](2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md) | ouvert, confort | estimation fausse | oui | non |
+| [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert — devrait tomber avec `47a283e6c`, non éprouvé | lenteur | oui | oui (`_index_blobs`, contourné) |
+| [Un COPY de relations vers des nœuds locaux garde leurs décalages provisoires](2026-10-05-copy-de-relations-vers-des-noeuds-locaux-sans-remappage.md) | ouvert (témoin attendu d'A3′) | réponse fausse | non (multi-écrivains seulement) | non aujourd'hui |
+| [L'index RTree de l'extension geo reçoit des décalages provisoires](2026-10-05-rtree-recoit-des-decalages-provisoires.md) | ouvert (confort ; lecture seule, non exécuté) | réponse fausse (annoncée) | incertain | non |
+| [Au journal, un vecteur coûte trois fois sa taille](2026-10-04-un-flottant-coute-douze-octets-au-journal.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (l'embarquement en fond) |
+| [Les échecs de chargement d'extension au rejeu, que personne ne lit](2026-10-10-echecs-de-chargement-au-rejeu-que-personne-ne-lit.md) | ouvert | coût silencieux (index entier à rebâtir), réponse fausse possible | oui, dès qu'un fichier d'extension noté a bougé | oui — il paie le rebâti et il pourrait le dire |
+| [Sous IGNORE_ERRORS, laquelle de deux lignes de même clé un COPY garde dépend des fils](2026-10-10-copy-garde-un-doublon-selon-les-fils.md) | ouvert, confort | réponse non déterministe | oui | non |
+| [CALL analyze n'est pas transactionnel](2026-10-10-analyze-non-transactionnel.md) | ouvert, accepté tel quel | estimation périmée | oui | non |
+| [Pas d'analyze automatique : les distincts restent gonflés jusqu'à un CALL analyze](2026-10-10-analyze-au-seuil.md) | ouvert, à ouvrir sur un mauvais plan | estimation fausse | oui | au plus des plans moins bons |
+| [Les comptes de valeurs distinctes se trompent d'environ 13 % : 64 registres](2026-10-10-hyperloglog-a-64-registres.md) | ouvert, confort | estimation imprécise | toujours | non |
+| [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
+
+### Ouverts — produit (30)
+
+Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
+Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
+
+| ticket | état | gravité | atteignable en service | touche rag3weaver |
+|---|---|---|---|---|
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | ouvert | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
-| [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | ouvert — décision de Lucie (signature nouvelle) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
 | [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | ouvert — à faire APRÈS le nœud de lien | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
 | [Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir](2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md) | ouvert | déclaration inatteignable (la réaction ne transitionne jamais rien) | oui | oui (un gabarit) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | ouvert | réponse incomplète (faible) | oui | oui (impact, usages) |
-| [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
-| [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
-| [Le journal d'une transaction reste sans borne pour les insertions ordinaires](2026-10-05-journal-d-une-transaction-sans-borne-hors-copy.md) | ouvert, suite de la borne du COPY | refus d'une très grosse transaction | oui | le mode à blobs, qui s'en garde |
-| [Au journal, chaque cellule réécrit son type](2026-10-05-cout-par-cellule-au-journal.md) | ouvert, confort | volume et temps | toujours | en volume |
-| [Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait](2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md) | ouvert côté moteur ; filet rag3weaver `99e6f0ee0` | réponse fausse | oui | oui (repli REPLI_EN_MASSE) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
-| [Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée](2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md) | ouvert (relevé par le banc, 10 oct.) | réponse fausse, puis plantage | en principe oui ; le seul chemin vu est fermé par A3′ | pas de cas connu |
-| [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | ouvert (A4′ faite, chemin non trouvé) | réponse fausse après reprise | non (mode multi-écrivains) | non |
-| [Sous des écritures de BLOB, la mémoire résidente dépasse nettement le tampon du moteur](2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md) | ouvert | mémoire | oui | oui (magasin de blobs, index creux) |
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | ouvert — confirmation pour l'arbre principal | blocage (s'il revenait) | oui | oui (premier index) |
-| [Le COPY de blobs en point de reprise forcé fait échouer la validation sous un petit tampon](2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md) | ouvert — lot suivant de la seconde session cœur C++ | blocage | oui | oui (poussée des blobs du plein texte, bases d'avant la bascule) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
-| [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert, confort (hors condition 1) | réponse fausse | oui | non |
-| [Deux défauts de chaînes annoncés par Ladybug, non reproduits chez nous](2026-10-04-recettes-de-l-amont-non-reproduites.md) | ouvert — non reproduit | perte (annoncée) / réponse fausse (annoncée) | incertain | non vérifié |
-| [Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant](2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md) | ouvert | perte (pour la plupart) | non au banc sans crochet dans src/ | oui en cas d'incident (disque plein, coupure) |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
 | [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
@@ -65,24 +92,12 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [La portée `person` d'une mémoire est écrite, et jamais rappelée](2026-10-04-portee-person-ecrite-jamais-rappelee.md) | ouvert — dette nommée, condition de sortie écrite | réponse fausse | oui, dès que le gabarit `memory` sert | oui (crochet de rappel, protocole d'outil) |
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens et impact (master) ; réexportations à faire | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
-| [Un COPY de relations annulé laisse gonflée l'estimation du nombre de relations](2026-10-05-copy-de-relations-annule-gonfle-l-estimation.md) | ouvert, confort | estimation fausse | oui | non |
-| [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert — devrait tomber avec `47a283e6c`, non éprouvé | lenteur | oui | oui (`_index_blobs`, contourné) |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | en cours (B2d, 11 oct.) | réponse fausse | oui | oui (usages, Liens, impact) |
-| [Un COPY de relations vers des nœuds locaux garde leurs décalages provisoires](2026-10-05-copy-de-relations-vers-des-noeuds-locaux-sans-remappage.md) | ouvert (témoin attendu d'A3′) | réponse fausse | non (multi-écrivains seulement) | non aujourd'hui |
-| [L'index RTree de l'extension geo reçoit des décalages provisoires](2026-10-05-rtree-recoit-des-decalages-provisoires.md) | ouvert (confort ; lecture seule, non exécuté) | réponse fausse (annoncée) | incertain | non |
-| [Au journal, un vecteur coûte trois fois sa taille](2026-10-04-un-flottant-coute-douze-octets-au-journal.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (l'embarquement en fond) |
 | [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, le rebâti du plein texte en fond envoie du Cypher](2026-10-10-postgresql-rebati-du-plein-texte-en-cypher.md) | ouvert | blocage | avec un montage PostgreSQL et lucivy | oui |
-| [Les échecs de chargement d'extension au rejeu, que personne ne lit](2026-10-10-echecs-de-chargement-au-rejeu-que-personne-ne-lit.md) | ouvert | coût silencieux (index entier à rebâtir), réponse fausse possible | oui, dès qu'un fichier d'extension noté a bougé | oui — il paie le rebâti et il pourrait le dire |
-| [Sous IGNORE_ERRORS, laquelle de deux lignes de même clé un COPY garde dépend des fils](2026-10-10-copy-garde-un-doublon-selon-les-fils.md) | ouvert, confort | réponse non déterministe | oui | non |
-| [CALL analyze n'est pas transactionnel](2026-10-10-analyze-non-transactionnel.md) | ouvert, accepté tel quel | estimation périmée | oui | non |
-| [Pas d'analyze automatique : les distincts restent gonflés jusqu'à un CALL analyze](2026-10-10-analyze-au-seuil.md) | ouvert, à ouvrir sur un mauvais plan | estimation fausse | oui | au plus des plans moins bons |
-| [Les comptes de valeurs distinctes se trompent d'environ 13 % : 64 registres](2026-10-10-hyperloglog-a-64-registres.md) | ouvert, confort | estimation imprécise | toujours | non |
-| [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
-
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 

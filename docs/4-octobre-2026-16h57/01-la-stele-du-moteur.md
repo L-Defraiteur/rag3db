@@ -79,8 +79,14 @@ poser la version.
   - le COPY refusé pour mémoire, avec un filet côté rag3weaver
     (`2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md`) ;
   - les grands groupes de copies (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`).
-  Les 21 autres tickets de même gravité sont côté produit (rendez-vous, codeparsers). Lucie dira
-  s'ils comptent pour la stèle du moteur ou pour celle du produit.
+  Les 21 autres tickets de même gravité sont côté produit (rendez-vous, codeparsers). **Décision
+  de Lucie (11 octobre)** : ils vont à une stèle du produit, distincte, que l'arbre principal
+  écrit avec codeparsers.
+
+**Les tickets sur lesquels se juge cette stèle** : la table « Ouverts — moteur » de
+`docs/tickets/README.md`. Un ticket y entre si son correctif vit dans `src/`, dans une extension
+C++ du moteur ou dans son harnais de test ; ceux du produit sont dans la table « Ouverts —
+produit » (11 octobre 2026).
 
 ## 3. Ce qui reste à faire pour que la stèle soit utilisable
 
