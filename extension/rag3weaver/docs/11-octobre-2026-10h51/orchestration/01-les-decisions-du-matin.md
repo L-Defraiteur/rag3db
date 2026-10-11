@@ -408,3 +408,36 @@ où elle vit.
   réel : les sessions du code posent leurs vraies questions par le MCP et
   tiennent une page « ce qui manque à un agent dans cet IDE », chaque retour à
   grep dit avec sa raison.
+- **Vers 16 h, sur master** : la migration (a) (`cc1254ac9`, marche 1 bis
+  complète en quatre pas) ; impact sur run_plan avec la capacité `fanout`
+  fausse par défaut (F, `0f62e1d60`) ; le recompte de l'index des tickets par
+  script (`check_tickets.py`, appelé par check_features, prouvé rouge sur une
+  copie faussée) ; la page de `poste push` (G, `6c6a12d82`, quatre règles :
+  la commande se protège elle-même, un essai ne prend jamais le verrou réel,
+  une avance de .md seuls ne demande pas de rejeu, on rejoue dans le
+  worktree et le sous-target chauds) ; luciepc passe par le verrou d'ici par
+  ssh ; la page de la surveillance des fichiers (proto, `00618a043` :
+  réindexer et retirer un fichier existent déjà, il manque qui les appelle ;
+  montres au manifeste, balayage date+taille puis hachage, réaction par lots
+  de 300, retard dit par l'état ; 2,6 ms pour 1 653 fichiers).
+- **Le premier index réel de rag3db par l'hôte** (codeparsers, `5e944b791`,
+  `c41e53986`) : 12 min 27 s, 135 592 morceaux, base 1,2 Go + 728 Mo de plein
+  texte, pic de l'hôte 9,8 Go, aucun mur ; la question du cœur par le client
+  MCP : 2 appelants sur 3, le verrou de l'index pris par `update` lui-même et
+  non montré par impact (locks_via sans lockIndexForWrite, ajouté
+  `87cb11f95`), 101 usages par le nom venus de tout le dépôt ; quatre grep et
+  dix lectures à côté. Page des manques
+  `10-octobre-2026-18h20/codeparsers/04-ce-qui-manque-a-un-agent-dans-cet-ide.md` ;
+  cinq manques répartis (nom de la classe et appelant manqué : codeparsers ;
+  portée par dossier ou langage, verrous du départ dans l'ordre, verrous des
+  appelants : arbre principal après A9). Quatre tickets : l'hôte ne relit pas
+  un manifeste modifié et rien ne ferme un backend ; le workspace en lecture
+  seule ; on ne peut pas dire ce qu'on indexe (liens symboliques, generated) ;
+  on ne peut pas arrêter un index. Recette `claude mcp add code-rag3db …`
+  donnée à Lucie. Instantané reflink de la mémoire longue avant l'index.
+- **Surveillance des fichiers** (Lucie : « Claude Code ne nous dira pas quand
+  il fait un edit, donc il faut surveiller ») : chantier confié au proto après
+  son lot 3, l'arbre principal relit l'état d'index ; le crochet Claude Code
+  en recette seulement.
+- **G, suite** : l'unité systemd utilisateur de l'hôte, en option du paquet
+  (page C), jamais par défaut, SIGTERM, refus d'un second hôte.
