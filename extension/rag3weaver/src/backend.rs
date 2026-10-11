@@ -3037,10 +3037,22 @@ impl Backend {
             }
             v
         }).filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
+        // Ce que coûtent les montres, par phase : où passe le temps au repos.
+        // Lu sur le backend, pas dans le catalogue : rendu même occupé.
+        let montres: serde_json::Map<String, Value> = self
+            .watches
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|h| (h.name().to_string(), serde_json::to_value(h.stats()).unwrap_or_default()))
+            .collect();
         let Ok(cat) = self.catalog.try_lock() else {
             let mut occupe = json!({"busy": true});
             if let Some(e) = embarquement {
                 occupe["embedding"] = e;
+            }
+            if !montres.is_empty() {
+                occupe["watches"] = Value::Object(montres);
             }
             return Ok(occupe);
         };
@@ -3065,14 +3077,6 @@ impl Backend {
         if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
             etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
-        // Ce que coûtent les montres, par phase : où passe le temps au repos.
-        let montres: serde_json::Map<String, Value> = self
-            .watches
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .iter()
-            .map(|h| (h.name().to_string(), serde_json::to_value(h.stats()).unwrap_or_default()))
-            .collect();
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
         }
