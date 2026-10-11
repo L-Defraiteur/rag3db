@@ -1855,7 +1855,7 @@ TEST_F(JournaledCopyReadBackTest, TwoThreadsAndAnArrayColumnReadEveryScoreBack) 
 class PendingRelAfterReplayTest : public JournaledCopyTest {
 protected:
     void prepare(Connection& child, bool multiWrites) {
-        must(child, "CALL debug_enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
+        must(child, "CALL enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
         must(child, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
         must(child, "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
         for (auto id = 0; id < 12; id++) {

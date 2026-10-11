@@ -136,8 +136,12 @@ struct RecursivePatternFactorSetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
+// Plusieurs transactions d'écriture à la fois dans le processus, sous verrous par ligne et par
+// index (condition 3 de la stèle) : vrai par défaut depuis le 11 octobre 2026, le coût mesuré nul
+// (page 11 §5 du cœur C++). `CALL enable_multi_writes=false` rend l'ancienne sémantique : une
+// seule transaction d'écriture, la seconde refusée. Non persistant : il se repose à l'ouverture.
 struct EnableMVCCSetting {
-    static constexpr auto name = "debug_enable_multi_writes";
+    static constexpr auto name = "enable_multi_writes";
     static constexpr auto inputType = common::LogicalTypeID::BOOL;
     static void setContext(ClientContext* context, const common::Value& parameter);
     static common::Value getSetting(const ClientContext* context);

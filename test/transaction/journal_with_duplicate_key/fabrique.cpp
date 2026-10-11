@@ -1,6 +1,6 @@
 // Fabrique une base et son journal non vide où DEUX transactions ont validé la même clé
 // primaire, puis meurt base ouverte. Écrite par le moteur d'AVANT le verrou de clé (marche A3′,
-// bibliothèque à ff9bad960), sous le mode multi-écrivains (debug_enable_multi_writes), qui
+// bibliothèque à ff9bad960), sous le mode multi-écrivains (enable_multi_writes), qui
 // laissait naître ce doublon : deux connexions, chacune sa transaction, chacune CREATE
 // (:Item {id: 7}), chacune COMMIT. Depuis A3′ le second CREATE attend le premier et reçoit
 // l'erreur de clé en double : ce journal ne peut plus se fabriquer, il est gardé ici pour le
@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
         auto r = conn->query(q);
         if (!r->isSuccess()) { std::cout << "ERREUR " << q << " : " << r->getErrorMessage() << "\n"; _exit(3); }
     };
-    run(first, "CALL debug_enable_multi_writes=true;");
+    run(first, "CALL enable_multi_writes=true;");
     run(first, "CALL auto_checkpoint=false;");
     run(first, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
     run(first, "CHECKPOINT;");

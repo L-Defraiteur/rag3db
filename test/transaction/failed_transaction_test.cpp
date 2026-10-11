@@ -150,8 +150,9 @@ TEST_F(FailedTransactionTest, AutoCommitAndOtherConnectionsAreNotAffected) {
     ok("CREATE (:Item {id: 2, v: 0});");
     // Un bloc en échec sur une connexion ne refuse rien sur une autre — mais il reste une
     // transaction d'écriture OUVERTE jusqu'à sa fermeture (marche T0 : ses verrous sont tenus) :
-    // en mode un seul écrivain, l'autre connexion lit, et son écriture est refusée comme
-    // derrière tout bloc ouvert, jusqu'au ROLLBACK.
+    // en mode un seul écrivain (l'ancien défaut, rendu par le réglage), l'autre connexion lit,
+    // et son écriture est refusée comme derrière tout bloc ouvert, jusqu'au ROLLBACK.
+    ok("CALL enable_multi_writes=false;");
     ok("BEGIN TRANSACTION;");
     fails("CREATE (:Item {id: 1, v: 9});");
     rag3db::main::Connection other(database.get());
@@ -165,8 +166,9 @@ TEST_F(FailedTransactionTest, AutoCommitAndOtherConnectionsAreNotAffected) {
     ok("ROLLBACK;");
     ok(other, "CREATE (:Item {id: 3, v: 0});");
     EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 3);
-    // Sous le mode multi-écrivains, l'autre connexion écrit une autre clé sans attendre.
-    ok("CALL debug_enable_multi_writes=true;");
+    // Sous le mode multi-écrivains (le défaut depuis le 11 octobre 2026), l'autre connexion
+    // écrit une autre clé sans attendre.
+    ok("CALL enable_multi_writes=true;");
     ok("BEGIN TRANSACTION;");
     fails("CREATE (:Item {id: 1, v: 9});");
     ok(other, "CREATE (:Item {id: 4, v: 0});");

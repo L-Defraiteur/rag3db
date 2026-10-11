@@ -146,9 +146,9 @@ fn deux_travailleurs_ne_prennent_pas_le_meme_travail() {
 ///
 /// Ce qu'on lit dans le moteur, et qu'on vérifie ici plutôt que de le croire :
 /// `LocalFileSystem::openFile` pose un `F_WRLCK` en `F_SETLK` — non bloquant,
-/// donc échec immédiat. Et `TransactionManager::beginTransaction` **refuse**
-/// une seconde transaction d'écriture (`enableMultiWrites` est faux, et le seul
-/// réglage qui le relâche s'appelle `debug_enable_multi_writes`).
+/// donc échec immédiat. (Dans un même processus, les écritures parallèles se
+/// font sous verrous depuis le 11 octobre 2026, `enable_multi_writes` à vrai par
+/// défaut ; ce témoin parle de deux processus, que le verrou de fichier sépare.)
 #[test]
 #[ignore]
 fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
