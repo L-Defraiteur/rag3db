@@ -114,6 +114,30 @@ fn ids(catalog: &Catalog, table: &str) -> Vec<String> {
 
 // ─── A/B : stamp, nœuds, migration ──────────────────────────────────────────
 
+/// **La même fiche dans deux cellules : deux lignes** (marche 1 bis de la
+/// forme C, page `04-la-marche-1-bis.md`, point 1). L'`_uuid` se calcule sur
+/// les champs de la fiche, pas sur sa cellule : la même fiche écrite dans
+/// deux cellules aurait le même `_uuid`, donc une seule ligne, que la
+/// seconde écriture déplacerait d'une cellule à l'autre.
+#[test]
+#[ignore]
+fn la_meme_fiche_dans_deux_cellules_fait_deux_lignes() {
+    let mut catalog = catalog_in_memory();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
+    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
+    let mut rows = scope_pairs(&catalog, "Product");
+    rows.sort();
+    assert_eq!(
+        rows,
+        vec![("acme".to_string(), "alpha".to_string()), ("acme".to_string(), "beta".to_string())],
+        "une ligne par cellule ; uuids : {:?}",
+        ids(&catalog, "Product")
+    );
+}
+
 #[test]
 #[ignore]
 fn scope_default_is_stamped_without_ceremony() {
