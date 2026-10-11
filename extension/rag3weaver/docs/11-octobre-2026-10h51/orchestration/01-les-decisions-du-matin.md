@@ -372,3 +372,32 @@ où elle vit.
 - **La bascule du défaut moteur** : permission levée par Lucie dans la session
   du cœur ; branche `verrous-a9b`, liste complète et banc chez le cœur, e2e du
   produit chez l'arbre principal sur son propre bâti de la branche.
+- **15 h 30, après la limite de session de Lucie** (l'orchestration bloquée
+  un moment) : les dix sessions pingées, toutes actives, rien n'attend Lucie.
+  Recherche : canal et détecteur d'interblocage (12 témoins), puis
+  l'exécuteur concurrent (`fd10b8c27` poussé). Banc : protocole de la bascule
+  sur luciepc, partie lourde verte. Mémoire : review_anchored 40 drains → 1
+  (1 318 → 94 instructions ; une transition d'état ne change plus l'empreinte
+  du contenu), ticket « la réaction n'applique pas reviewed_at / revision /
+  updated_at ». G : relais de luciepc vers le verrou d'ici. Proto : lot 3
+  (send + annuaire) et le `prompt` de Decide verts, en push. Hotfixs : A8
+  relu, plafond mesuré (master 210-358 Kio, correctif 74-91). Cœur : la
+  bascule a fait sortir un vrai défaut (`CREATE TABLE … AS` sous le mode : le
+  verrou d'index pris avant que la table existe), correctif + témoin, tête
+  finale à confirmer ; banc et arbre principal rejouent sur la tête finale.
+  Codeparsers : anonymes C++ 287 → 0, appels reliés entre fichiers 41,5 →
+  50,7 %, sa part de la stèle faite ; **suite : le premier index réel de
+  rag3db par l'hôte sur ce poste** (pas 4 de la page 04), la question du cœur
+  par le client MCP, puis une recette `claude mcp add code-rag3db` pour Lucie.
+  Arbre principal : migration (a) commitée (`34c8ad67b`), push par poste push ;
+  file : codeparsers, relecture d'impact, rendu stable, A9 dès la tête finale,
+  extension vector.
+- **Les éventails, tranchés sur mesure** (F) : en local la fusion ne gagne
+  sur aucun moteur (rag3db dans le processus ; PostgreSQL sur la boucle locale
+  à 0,1 ms l'aller-retour) et coûte 1 à 20 % ; le gain n'existe qu'avec un
+  aller-retour cher (projection, pas mesure). Capacité déclarée `fanout`,
+  fausse par défaut sur les deux dialectes, levée par la configuration d'un
+  montage distant ou une mesure réelle ; les traductions restent testées ;
+  impact reste sur run_plan (−35 à −42 % d'allers-retours sur rag3db, rendu
+  identique, temps égal). Les sauts directs de usages_of ne sont pas une
+  redondance (arêtes devinées, scope le plus étroit) : gardés.
