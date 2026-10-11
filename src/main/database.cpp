@@ -40,6 +40,25 @@ using namespace rag3db::transaction;
 namespace rag3db {
 namespace main {
 
+// La signature d'avant B2 : délègue à la complète avec l'attente au fichier par défaut.
+SystemConfig::SystemConfig(uint64_t bufferPoolSize_, uint64_t maxNumThreads, bool enableCompression,
+    bool readOnly, uint64_t maxDBSize, bool autoCheckpoint, uint64_t checkpointThreshold,
+    bool forceCheckpointOnClose, bool throwOnWalReplayFailure, bool enableChecksums
+#if defined(__APPLE__)
+    ,
+    uint32_t threadQos
+#endif
+    )
+    : SystemConfig(bufferPoolSize_, maxNumThreads, enableCompression, readOnly, maxDBSize,
+          autoCheckpoint, checkpointThreshold, forceCheckpointOnClose, throwOnWalReplayFailure,
+          enableChecksums, DEFAULT_FILE_LOCK_WAIT_MS
+#if defined(__APPLE__)
+          ,
+          threadQos
+#endif
+      ) {
+}
+
 SystemConfig::SystemConfig(uint64_t bufferPoolSize_, uint64_t maxNumThreads, bool enableCompression,
     bool readOnly, uint64_t maxDBSize, bool autoCheckpoint, uint64_t checkpointThreshold,
     bool forceCheckpointOnClose, bool throwOnWalReplayFailure, bool enableChecksums,

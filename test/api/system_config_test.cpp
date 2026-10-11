@@ -1,3 +1,7 @@
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+
 #include "api_test/api_test.h"
 #include "common/exception/buffer_manager.h"
 #include "common/system_config.h"
@@ -104,4 +108,22 @@ TEST_F(SystemConfigTest, testBufferPoolSize) {
     }
     systemConfig->bufferPoolSize = TestHelper::DEFAULT_BUFFER_POOL_SIZE_FOR_TESTING;
     EXPECT_NO_THROW(auto db = std::make_unique<Database>(databasePath, *systemConfig));
+}
+
+// La signature d'avant B2 du constructeur de SystemConfig reste, en surcharge : un binaire lié à la
+// lib d'avant (l'hôte de luciepc a bouclé sur « undefined symbol …SystemConfigC1Emmbbmbmbbb » le
+// 11 octobre 2026) continue de se lier, et reçoit l'attente au fichier par défaut.
+TEST_F(SystemConfigTest, TheOldConstructorStillLinksAndGivesTheDefaultFileLockWait) {
+    const SystemConfig old(1024ull * 1024 * 1024, 0, true, false, uint64_t(-1), true, 16777216,
+        true, true, true);
+    EXPECT_EQ(old.fileLockWaitMs, SystemConfig::DEFAULT_FILE_LOCK_WAIT_MS)
+        << "[check: old-signature-default-wait] ";
+    const SystemConfig fresh(1024ull * 1024 * 1024, 0, true, false, uint64_t(-1), true, 16777216,
+        true, true, true, 0);
+    EXPECT_EQ(fresh.fileLockWaitMs, 0u) << "[check: full-signature-wait] ";
+#ifndef _WIN32
+    // Le symbole exporté d'avant, tel que le binaire d'avant le cherche (Itanium).
+    EXPECT_NE(dlsym(RTLD_DEFAULT, "_ZN6rag3db4main12SystemConfigC1Emmbbmbmbbb"), nullptr)
+        << "[check: old-symbol-exported] ";
+#endif
 }
