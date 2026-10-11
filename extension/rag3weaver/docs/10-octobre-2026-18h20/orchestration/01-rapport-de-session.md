@@ -608,3 +608,22 @@ entité avec un FLOAT[4] et un DOUBLE qui vérifie les valeurs écrites,
 remballe, et rend les quatre commandes. Les archives de 786dfec13 sont
 gardées à part, étiquetées « ne pas publier ». Quatre OTP au matin, sur les
 archives refaites.
+
+## 13. Ajout de 3 h 35 : le proto « tout déclaratif » est entier
+
+Les six lots sont sur master (`0d8482f70`, relevé `8f0180049`), en une nuit,
+chacun avec ses témoins : le moteur de script (TypeScript/JavaScript/rhai), le
+nœud 100 % scripté, le rechargement à chaud, route → graphe → vue avec la
+boutique jouet, `declare` (un commit par chemin avec la raison de l'agent), et
+**la page vivante `/_atelier`** (chat à gauche, la page produite, le graphe
+mermaid de l'outil, le journal des rechargements, un flux d'événements
+serveur), essayée sur luciepc avec le binaire réel. **La recette pour Lucie
+est en trois commandes** : `docs/10-octobre-2026-18h20/everything-declarative/08-lot-6-la-page-vivante.md`
+§1 (bâtir avec `openai-llm` sous `poste lourd` ; copier le jouet dans
+`~/boutique` et lui déclarer Gemini/Vertex ; servir avec les identifiants dans
+l'environnement seulement ; ouvrir `/_atelier` ; dire « ajoute une colonne
+prix à la liste »). Le tour avec un vrai modèle n'a pas été joué cette nuit
+(pas d'accès à `.vault`, et c'est son témoin) ; le chemin modèle → declare →
+page est prouvé avec un modèle enregistré. Reste ouvert : la montre branchée
+sur la porte de la mémoire à sa fusion, le retour en arrière d'une
+déclaration, mermaid embarqué, plusieurs sessions.
