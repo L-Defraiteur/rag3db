@@ -401,3 +401,37 @@ fn un_appel_par_chemin_vers_un_type_externe_ne_prend_pas_rendez_vous() {
     let r = cat.execute_raw("MATCH (a:Scope {name: 'charge'})-[:CONSUMES]->(b:Scope {name: 'from_file'}) RETURN count(*)").unwrap();
     assert_eq!(r.rows[0][0].as_i64(), Some(0), "aucune arête charge → from_file");
 }
+
+/// **Un appel sur une locale qui reste non typée est visible, non
+/// attribué — jamais une arête** (décision de Lucie, 11 octobre 2026) :
+/// `let t = f(); t.update()` avec `f` inconnue et un seul `update` dans le
+/// projet. Avant : relié par le seul définisseur (arête « nom »). Après :
+/// aucune arête ; `usages` le montre « par le nom », et `impact` ne le suit
+/// pas.
+#[test]
+#[ignore]
+fn un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("table.rs".to_string(), "pub struct Table;\nimpl Table {\n    pub fn update(&self) {}\n}\n".to_string()),
+        ("run.rs".to_string(), "pub fn run() {\n    let t = f();\n    t.update();\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    {
+        let cat = catalog.lock().unwrap();
+        let r = cat.execute_raw("MATCH (a:Scope {name: 'run'})-[:CONSUMES]->(b:Scope {name: 'update'}) RETURN count(*)").unwrap();
+        assert_eq!(r.rows[0][0].as_i64(), Some(0), "jamais une arête");
+        let m = cat.execute_raw("MATCH (a:Scope {name: 'run'})-[m:MENTIONS]->(s:Symbol {name: 'update'}) RETURN m.untyped_receiver").unwrap();
+        assert_eq!(m.rows.len(), 1, "le rendez-vous est posé");
+        assert_eq!(m.rows[0][0].as_str(), Some("oui"));
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "update"})).unwrap();
+    eprintln!("{md}");
+    let ligne = md.lines().find(|l| l.contains(" run —")).unwrap_or_else(|| panic!("run absent : {md}")).to_string();
+    assert!(ligne.ends_with("(par le nom)"), "visible, par le nom seul : {md}");
+}
