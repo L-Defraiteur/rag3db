@@ -88,7 +88,8 @@ gestionnaire de verrous applicatif, lui, ne verrouille aucun champ : il
 
 ```json
 "workspace": { "source": "working_tree", "root": "…", "index": "code",
-               "locks_via": ["acquireLock", "acquireLocks", "lockRowForWrite"] }
+               "locks_via": ["acquireLock", "acquireLocks", "lockRowForWrite",
+                             "lockIndexForWrite"] }
 ```
 
 Un scope qui appelle l'une d'elles reçoit LOCKS vers le symbole de la
@@ -101,10 +102,19 @@ lit la marque nulle. `impact` et `callees` les rendent dans la même
 section, « Verrous pris sur le chemin ».
 
 **L'exemple de rag3db** (le gestionnaire de verrous de la transaction) :
-`acquireLock`, `acquireLocks`, `lockRowForWrite`. Ne pas y mettre
+`acquireLock`, `acquireLocks`, `lockRowForWrite`, `lockIndexForWrite`. Ne pas y mettre
 `lockKeyOf` ni `lockKeyOfRow` : elles **calculent la clé** d'un verrou
 (`pkVector.getAsValue(pos)->toString()`), elles ne le prennent pas — les
 déclarer ferait dire à `impact` que `NodeTable::update` « prend »
 `lockKeyOfRow`. Sur `rag3db/src`, ces trois déclarations ajoutent 9 LOCKS
 aux 169 relevés sur des mutex ; `callees` de `NodeTable::update` rend
 `lockRowForWrite` (au départ) → `acquireLock` → `acquireLocks`.
+
+**`lockIndexForWrite`** (ajouté le 11 octobre 2026, au premier index réel
+de rag3db par l'hôte) : `NodeTable::update` et `NodeTable::delete_` prennent
+l'index de la table en exclusif **avant** la ligne. Sans lui dans la liste,
+`impact` de `NodeTable::update` ne nommait que `lockRowForWrite`, et la
+question « qui tient le verrou de l'index ? » n'avait pas de réponse ; il
+fallait `callees`, où le verrou paraissait sous le nom générique
+`acquireLock`. Deux sites de plus (`update`, `delete_`) ; le compte des
+LOCKS sur `rag3db/src` n'est pas remesuré avec lui.

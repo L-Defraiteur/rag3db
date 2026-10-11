@@ -18,6 +18,15 @@ Changer de chemin de manifeste (`backend.json` puis `rag3db.json`), **et** de ba
 l'hôte aurait ouvert deux backends sur la même base dans un même processus. L'ancien backend
 reste ouvert, avec sa base vide, jusqu'au prochain redémarrage de l'hôte.
 
+## Le backend abandonné reste ouvert
+
+Conséquence directe, constatée le 11 octobre : le backend du premier manifeste
+(`~/.config/rag3weaver/code-rag3db/templates/backends/code/backend.json`, base vide
+`~/.local/share/rag3weaver/code-rag3db.rag3db`) reste chargé dans l'hôte, base ouverte, alors
+que plus personne ne s'en sert. Il ne part qu'au redémarrage de l'hôte, qui tient aussi la
+mémoire longue de Lucie. Une même correction (`locks_via` complété de `lockIndexForWrite` dans
+`rag3db.json`) attend elle aussi ce redémarrage. La route `close` ci-dessous fermerait les deux.
+
 ## Témoin
 
 Aucun. Il faudrait un e2e qui ouvre un manifeste par l'hôte, le modifie, et vérifie que l'appel
