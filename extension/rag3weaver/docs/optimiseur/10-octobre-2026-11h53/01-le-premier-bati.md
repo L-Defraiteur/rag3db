@@ -560,6 +560,33 @@ n'est pas un nœud d'outil de backend (le compte se fait côté Node, pas par
 le moteur). 50 000 lignes sur le runner Windows, 200 000 ailleurs. À ticket :
 le refus « has more than 512 items » recopie les 2 Mo d'entrée.
 
+### La tête de la séance : 634c52249, avec le filet
+
+Le filet de l'arbre principal (master 6d7f2a811 : `Rag3dbConnection::connect`
+pose `force_checkpoint_on_copy=true` tant que le ticket est ouvert) est
+fondu dans la branche à **634c52249**, sans conflit. Les trois bâtis
+refaits dessus, le même jour entre 3 h 30 et 4 h 30 :
+
+| plateforme | run / bâti | identifiant (moteur = extension) | binaire | épreuve + sonde |
+|---|---|---|---|---|
+| Linux x64 | Docker luciepc, 4 min 50 s | `rag3db-build-274ce4fc5…` (dernier commit du moteur, historique complet) | 67 Mo strippé | ici : 95 tests dont le témoin du filet, sonde 200 000 lignes (88 s), démo verte |
+| macOS arm64 | 38102024430, 16 min | `rag3db-build-634c52249…` (checkout superficiel) | 60 Mo après `strip -x` | vertes, sonde 200 000 lignes (99 s) |
+| Windows x64 | 38102024430, 55 min | `rag3db-build-634c52249…` | 68 Mo + extension 12,7 Mo | vertes, sonde 50 000 lignes (146 s) |
+
+Les quatre archives `0.0.1-alpha.2` de 634c52249 sont sous
+`paquet-npm-garde/publier/` (linux 24,8 Mo, windows 27,1 Mo, darwin 21,8 Mo,
+tête 29 ko), les commandes rendues à l'orchestration (linux, windows,
+darwin, tête). Rien ne part sans Lucie. Le correctif du cœur (60d74a4e2, une
+lecture ALP d'un second segment) est sur master : on ne rebâtit pas une
+troisième fois cette nuit, l'alpha suivante l'aura, et l'arbre principal
+retire alors le filet. Le ticket « has more than 512 items » qui recopiait
+2 Mo est corrigé sur master (fc636f7e6), à prendre à la prochaine fusion.
+Note du cœur C++ sur les identifiants : sur un checkout superficiel
+(runners), le seul commit présent « touche » tout, l'identifiant vaut donc
+la tête ; sous Docker, l'historique complet remonte au dernier commit du
+moteur ; `fetch-depth: 0` les alignerait, à essayer quand on saura ce que
+coûte l'historique complet sur un runner.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de

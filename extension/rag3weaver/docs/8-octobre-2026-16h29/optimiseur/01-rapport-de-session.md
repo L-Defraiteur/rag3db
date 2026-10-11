@@ -1,26 +1,30 @@
 # Optimiseur — rapport de session
 
-**Mis à jour le 11 octobre 2026 à 3 h 20.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
+**Mis à jour le 11 octobre 2026 à 4 h 50.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
 `../orchestration/03-le-paquet-npm.md`. Le rapport précédent (envois à
 tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseur/`.
 
 ## État
 
 - Branche `paquet-npm` (worktree `~/git_workspaces/rag3db-paquet-npm`,
-  target `~/.cache/rag3weaver-build/target-G`) : elle fond master
-  97acd579b (contrôle de bâti des extensions, lot 1 du chantier I, rechargement
-  des déclarations) ; tête de la séance **786dfec13**. Reste à fondre après
-  la séance : master 274ce4fc5 (`RAG3DB_BUILD_ID_GIT_DIR`, dont build.rs
-  pose déjà la variable sur la branche).
-- **Les quatre archives `0.0.1-alpha.2` sont prêtes**, toutes de 786dfec13,
-  sous `~/.cache/rag3weaver-build/paquet-npm-garde/publier/`, épreuve verte
-  sur les trois plateformes, identifiant de bâti vérifié ; la démo rejouée
-  dessus est verte. L'orchestration a les quatre commandes (linux, windows,
-  darwin, tête) ; **rien n'est publié**, l'OTP est à Lucie.
-- Les règles du chantier : `[profile.paquet]` (LTO complète, 61 Mo au lieu
-  de 89), les trois correctifs Windows (chemin cité pour Cypher, fsync de
-  dossier, fsync de fichier), journaux et copies de cache hors du checkout,
-  identifiant de bâti vérifié dans les recettes.
+  target `~/.cache/rag3weaver-build/target-G`), tête 9888509f6 ; la tête de
+  la séance est **634c52249** (master 6d7f2a811 fondu : le filet
+  `force_checkpoint_on_copy=true`, le contrôle de bâti des extensions, le
+  lot 1 du chantier I, le rechargement des déclarations). Reste à fondre :
+  master 60d74a4e2 (le correctif du cœur ; A retire le filet après) et
+  fc636f7e6 (le refus de schéma qui ne recopie plus la donnée).
+- **Les quatre archives `0.0.1-alpha.2` de 634c52249 sont prêtes** sous
+  `~/.cache/rag3weaver-build/paquet-npm-garde/publier/`, épreuve et sonde
+  vertes sur les trois plateformes, identifiants de bâti égaux moteur /
+  extension partout, démo verte ; l'orchestration a les quatre commandes
+  (linux, windows, darwin, tête). **Rien n'est publié**, l'OTP est à Lucie.
+  Les archives de 786dfec13 (COPY journalisé défectueux) et d'avant restent
+  à côté, étiquetées.
+- Le chantier a appris cette nuit : `[profile.paquet]` (LTO complète), les
+  trois correctifs Windows (chemin cité pour Cypher, fsync de dossier, fsync
+  de fichier ouvert en écriture), les journaux hors du checkout,
+  l'identifiant de bâti vérifié dans les recettes, la sonde du COPY (qui ne
+  reproduit pas le défaut : COPY de 512 lignes, un seul groupe).
 - À la fusion de `paquet-npm` dans master (règle de Lucie) : effacer
   `target-G` et le worktree ici, le clone sur luciepc ; dire « effacé ».
 
@@ -73,17 +77,18 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. La séance de publication (quatre `npm publish` dans l'ordre linux,
-   windows, darwin, tête, depuis `paquet-npm-garde/publier/`), puis
+1. La séance de publication avec Lucie (quatre `npm publish` dans l'ordre
+   linux, windows, darwin, tête, depuis `paquet-npm-garde/publier/`), puis
    `npm view rag3weaver@next version optionalDependencies` et la démo sans
    `DEMO_SOURCE`.
-2. Fondre master 274ce4fc5 dans `paquet-npm`, rejouer les trois bâtis (le
-   cache Windows et macOS change de clé : cmake/ et CMakeLists.txt sont
-   dans la clé), vérifier les identifiants.
+2. Fondre master (60d74a4e2 et la suite, fc636f7e6), rejouer les trois bâtis
+   (Windows et macOS changent de clé de cache dès que cmake/ ou src/ bougent),
+   vérifier les identifiants ; l'alpha suivante avec le correctif du cœur.
 3. Fusion de `paquet-npm` dans master quand l'orchestration le dit ; puis
    effacer target-G, le worktree, le clone luciepc.
-4. Ensuite : macOS x64 (à Lucie), le vecteur en statique (amélioration
-   commune), `release.yml` copié de lucivy avec porte fermée.
+4. Ensuite : `fetch-depth: 0` sur les runners (identifiants alignés),
+   macOS x64 (à Lucie), le vecteur en statique, `release.yml` copié de
+   lucivy avec porte fermée.
 
 ## Pièges
 
