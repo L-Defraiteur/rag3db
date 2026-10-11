@@ -89,7 +89,7 @@ cd "$W/extension/rag3weaver"
 while :; do
   git -C "$W" fetch -q origin master
   if [ "$(git -C "$W" rev-parse origin/master)" != "$base" ]; then
-    if [ -n "$(git -C "$W" diff --name-only "$base" origin/master -- $BATI)" ]; then
+    if [ -n "$(git -C "$W" diff --name-only "$base" origin/master -- $BATI ':!*.md')" ]; then
       echo "master a reçu du code du bâti depuis la base rejouée, rien poussé"; exit 9
     fi
     rebaser
@@ -104,6 +104,12 @@ while :; do
   fi
 done
 ```
+
+`check_features.sh` vérifie **cinq jeux** de features depuis `eb389901c` : le natif seul,
+`rag3db-native`, s'est ajouté aux quatre autres. Depuis `b92d809ae`, il appelle aussi
+`scripts/check_tickets.py`, qui recompte l'index des tickets. Le pathspec `':!*.md'` du
+contrôle est nécessaire : `BATI` contient `extension/rag3weaver`, et sans lui, un rapport
+`.md` poussé là arrêterait la boucle comme du code. Vu le 11 octobre au premier essai de G.
 
 La boucle n'a pas de plafond de tours : chaque tour demande un push de docs
 arrivé pendant le précédent, qui ne dure que le temps d'un fetch et d'un
