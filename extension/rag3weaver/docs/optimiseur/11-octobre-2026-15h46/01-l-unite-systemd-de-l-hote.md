@@ -79,6 +79,15 @@ fixe sa forme avant le code.
 - Aucun double hôte : le refus existe déjà, l'unité ne le contourne pas
   (jamais `--address` dans son `ExecStart`).
 
+## Redémarrer l'hôte : l'annoncer avant
+
+**Un redémarrage de l'hôte s'annonce avant, avec l'heure, à chaque session qui
+l'interroge par MCP** (orchestration, 11 octobre au soir, à la demande du cœur,
+après un « connection reset by peer » reçu en pleine mesure sur l'hôte de
+luciepc). Sur ce poste-ci, ce sont Lucie et les sessions du code. La liste à
+prévenir se lit par `daemon_status`, qui dit les sessions ouvertes. L'ordre
+complet est dans la page de l'hôte sur luciepc (`11-octobre-2026-16h40`).
+
 ## La commande du paquet
 
 `rag3weaver-unit install | uninstall | status` (un script du paquet, `bin`

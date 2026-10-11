@@ -65,6 +65,30 @@ qui voit un hôte manuel échoue en code 1 sans boucler.
 restart rag3weaver-daemon`, pour que l'hôte charge la nouvelle lib ; si le
 moteur a changé d'interface (`tools/rust_api`), rebâtir aussi le binaire.
 
+## Redémarrer l'hôte : l'annoncer avant
+
+**Un redémarrage de l'hôte s'annonce avant, avec l'heure, à chaque session qui
+l'interroge par MCP** (orchestration, 11 octobre au soir, à la demande du cœur).
+Le rebâti de la lib commune s'annonce déjà à codeparsers ; c'est la même règle.
+Pour l'hôte de luciepc, ce sont le cœur et hotfixs. La liste à prévenir se lit
+par `daemon_status`, qui dit les sessions ouvertes.
+
+Vu le 11 octobre à 20 h 11 : G a rebâti le binaire sur faa00f279, puis a arrêté
+l'unité avec le seul accord de codeparsers. L'appel du cœur en cours a reçu
+« connection reset by peer » au milieu d'une mesure. L'arrêt lui-même était
+propre : inactif en moins de 30 s, l'indexation arrêtée au prochain paquet. La
+reconnexion automatique du client est vérifiée par la session mémoire.
+
+L'ordre :
+1. `daemon_status`, pour savoir qui a une session ouverte.
+2. Un message à chacune, avec l'heure prévue. Codeparsers en plus si une
+   indexation tourne.
+3. `systemctl --user stop`, surveillé cinq minutes. Un `deactivating` qui
+   dure veut dire que l'arrêt pend : le dire, ne rien tuer.
+4. `start`, puis `/sante` (même pid que `daemon.json`), le build et la lib
+   chargée (`/proc/<pid>/maps`).
+5. Dire « relancé » aux mêmes sessions.
+
 ## Le tunnel, d'ici
 
 ```bash
