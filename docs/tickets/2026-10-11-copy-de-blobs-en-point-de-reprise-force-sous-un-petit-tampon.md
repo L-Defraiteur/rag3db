@@ -1,6 +1,10 @@
 # Le COPY de blobs en point de reprise forcé fait échouer la validation sous un petit tampon
 
-- **État** : ouvert (11 octobre 2026) — lot suivant de la seconde session cœur C++ (orchestration)
+- **État** : ouvert — **forme retenue, non engagée ; filet produit en place ; reprise après la
+  condition 3** (orchestration, 11 octobre 2026). La forme est dans
+  `extension/rag3weaver/docs/10-octobre-2026-coeur-cpp-tickets/04-le-copy-de-blobs-borne-en-octets.md`.
+  Le témoin rouge (`BlobCopyCheckpointTest`) attend sur la branche `copy-de-blobs`, hors de master.
+  Le filet côté produit (arbre principal) borne en octets les COPY de blobs du paquet.
 - **Gravité** : blocage (la validation du paquet échoue, la base est à rouvrir)
 - **Atteignable en service** : oui. C'est le stockage en blobs du plein texte de rag3weaver : il
   n'est plus le défaut d'une base neuve, mais toutes les bases d'avant la bascule du 10 octobre y
