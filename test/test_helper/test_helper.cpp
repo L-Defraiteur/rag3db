@@ -1,9 +1,18 @@
 #include "test_helper/test_helper.h"
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <signal.h>
+#include <unistd.h>
+#endif
+
+#include <cerrno>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 
+#include "gtest/gtest.h"
 #include "spdlog/spdlog.h"
 
 using namespace rag3db::common;
@@ -122,6 +131,78 @@ std::string TestHelper::getTempSuffix() {
     uint64_t val = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     return std::to_string(val);
 }
+
+namespace {
+// Pris à l'initialisation statique, donc avant main et avant tout fork.
+#ifdef _WIN32
+const int LAUNCHER_PID = _getpid();
+#else
+const int LAUNCHER_PID = static_cast<int>(getpid());
+#endif
+
+bool processExists(int pid) {
+#ifdef _WIN32
+    // Pas de lecture des processus sous Windows : on ne touche pas aux autres parents.
+    (void)pid;
+    return true;
+#else
+    return kill(static_cast<pid_t>(pid), 0) == 0 || errno != ESRCH;
+#endif
+}
+} // namespace
+
+int TestHelper::launcherPid() {
+    return LAUNCHER_PID;
+}
+
+void TestHelper::removeDeadRunTempDirs() {
+    std::error_code ec;
+    const auto shared = getSharedTempRoot();
+    if (!std::filesystem::is_directory(shared, ec)) {
+        return;
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(shared, ec)) {
+        if (!entry.is_directory(ec)) {
+            continue;
+        }
+        const auto name = entry.path().filename().string();
+        if (name.empty() || name.size() > 9 ||
+            name.find_first_not_of("0123456789") != std::string::npos) {
+            continue; // un dossier d'avant le parent par passe, ou d'un autre outil
+        }
+        const int pid = std::stoi(name);
+        if (pid == LAUNCHER_PID || processExists(pid)) {
+            continue;
+        }
+        std::filesystem::remove_all(entry.path(), ec);
+    }
+}
+
+namespace {
+// Le parent de la passe : effacé au début (une passe tuée au même pid, rare) avec ceux des
+// passes mortes, et à la fin par le lanceur seul — un enfant fork ne passe pas par là.
+class TempDirPerRun : public ::testing::Environment {
+public:
+    void SetUp() override {
+        std::error_code ec;
+        std::filesystem::remove_all(TestHelper::getRootTempDir(), ec);
+        TestHelper::removeDeadRunTempDirs();
+    }
+
+    void TearDown() override {
+#ifndef _WIN32
+        if (static_cast<int>(getpid()) != LAUNCHER_PID) {
+            return;
+        }
+#endif
+        std::error_code ec;
+        std::filesystem::remove_all(TestHelper::getRootTempDir(), ec);
+    }
+};
+
+[[maybe_unused]] const auto* const TEMP_DIR_PER_RUN =
+    ::testing::AddGlobalTestEnvironment(new TempDirPerRun());
+} // namespace
 
 } // namespace testing
 } // namespace rag3db

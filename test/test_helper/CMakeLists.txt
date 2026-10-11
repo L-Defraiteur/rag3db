@@ -8,7 +8,7 @@ target_include_directories(
         PUBLIC
         ../include/
 )
-target_link_libraries(test_helper PUBLIC rag3db)
+target_link_libraries(test_helper PUBLIC rag3db GTEST_LIB)
 
 add_library(
         api_test_helper
@@ -20,4 +20,4 @@ target_include_directories(
         PUBLIC
         ../include/
 )
-target_link_libraries(api_test_helper PUBLIC rag3db_shared)
+target_link_libraries(api_test_helper PUBLIC rag3db_shared GTEST_LIB)
