@@ -20,9 +20,10 @@ use serde_json::{json, Value};
 
 use super::node::{Node, NodeContext};
 use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
-use super::port::{PortDef, PortType, PortValue};
+use super::port::{PortDef, PortType, PortValue, Posture};
 use crate::decider::{Decider, DECIDER_SERVICE};
-use crate::llm::{GenOptions, Llm, ResponseFormat, StringSink, Turn};
+use crate::llm::{Flow, GenOptions, Llm, ResponseFormat, RetryEvent, TokenSink, Turn};
+use super::node::{CancelToken, Stopped};
 
 /// Le port de `Route` qui reçoit ce qu'aucune route ne nomme.
 pub const OTHER: &str = "other";
@@ -90,13 +91,39 @@ fn str_param(config: &Value, key: &str, default: &str) -> Result<String, String>
     }
 }
 
-/// L'élément d'entrée, en JSON.
-fn take_element(ctx: &mut NodeContext, kind: &str) -> Result<Value, String> {
-    let value = ctx.take_input("element").ok_or_else(|| format!("{kind} : rien sur 'element'"))?;
+/// **L'entrée `element`, lue élément par élément** : un flux d'éléments, ou
+/// une valeur (un flux d'un). Les sorties la suivent : une valeur reçue en
+/// donne une, un flux en donne un.
+fn element_input() -> PortDef {
+    element_port("element", true).posture(Posture::PerElement)
+}
+
+/// Un élément reçu, en JSON.
+fn json_of(value: PortValue, kind: &str) -> Result<Value, String> {
     value
         .downcast::<Value>()
         .map(|v| (*v).clone())
         .ok_or_else(|| format!("{kind} : 'element' ne porte pas du JSON"))
+}
+
+/// Le texte d'un appel au modèle, qui rend [`Flow::Stop`] dès que le run est
+/// annulé — au jeton suivant, ou pendant l'attente d'un réessai.
+struct CancellableSink {
+    text: String,
+    cancel: CancelToken,
+}
+
+impl TokenSink for CancellableSink {
+    fn on_token(&mut self, delta: &str) -> Flow {
+        if self.cancel.is_cancelled() {
+            return Flow::Stop;
+        }
+        self.text.push_str(delta);
+        Flow::Continue
+    }
+    fn on_retry(&mut self, _event: &RetryEvent<'_>) -> Flow {
+        if self.cancel.is_cancelled() { Flow::Stop } else { Flow::Continue }
+    }
 }
 
 // ─── Route ──────────────────────────────────────────────────────────────────
@@ -113,8 +140,8 @@ impl RouteNode {
         // du moteur, une optionnelle vide est une branche non prise.
         routes
             .iter()
-            .map(|r| element_port(r.clone(), false))
-            .chain(std::iter::once(element_port(OTHER, false)))
+            .map(|r| element_port(r.clone(), false).follows("element"))
+            .chain(std::iter::once(element_port(OTHER, false).follows("element")))
             .collect()
     }
 
@@ -137,7 +164,7 @@ impl Node for RouteNode {
         &self.name
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![element_port("element", true)]
+        vec![element_input()]
     }
     fn outputs(&self) -> Vec<PortDef> {
         Self::outputs_for(&self.routes)
@@ -146,10 +173,21 @@ impl Node for RouteNode {
         Some(Box::new(json!({"key": self.key, "routes": self.routes})))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let element = take_element(ctx, "Route")?;
-        let port = self.route_of(&element).to_string();
-        ctx.info(&format!("Route : « {} » → {port}", self.key));
-        ctx.set_output(&port, PortValue::new(element));
+        // Chaque élément sur le port de sa clé, à son arrivée.
+        // Un port que plus personne ne lit perd ses éléments sans faute : les
+        // autres routes ont peut-être encore leurs lecteurs (page 05, §3.5).
+        let mut counts: std::collections::BTreeMap<String, usize> = Default::default();
+        while let Some(value) = ctx.next("element")? {
+            let element = json_of(value, "Route")?;
+            let port = self.route_of(&element).to_string();
+            match ctx.emit(&port, PortValue::new(element)) {
+                Ok(()) => *counts.entry(port).or_default() += 1,
+                Err(Stopped::NoReader) => *counts.entry(format!("{port} (sans lecteur)")).or_default() += 1,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        let dit: Vec<String> = counts.iter().map(|(p, n)| format!("{p} × {n}")).collect();
+        ctx.info(&format!("Route : « {} » → {}", self.key, dit.join(", ")));
         Ok(())
     }
 }
@@ -164,7 +202,7 @@ impl RouteNodeFactory {
                           les autres ports ne sont pas posés, leur aval est sauté. Une clé hors liste \
                           part sur 'other'."
                 .into(),
-            inputs: vec![element_port("element", true)],
+            inputs: vec![element_input()],
             outputs,
             config_params: vec![
                 param("routes", ConfigParamType::Json, true, None, "les routes : un tableau, ou « a|b|c » ; chacune est un port de sortie"),
@@ -338,7 +376,7 @@ impl DecideNode {
         Ok((self.labels[i].clone(), Some(*p)))
     }
 
-    fn by_llm(&self, llm: &dyn Llm, text: &str) -> Result<(String, Option<f64>), String> {
+    fn by_llm(&self, llm: &dyn Llm, text: &str, cancel: CancelToken) -> Result<(String, Option<f64>), String> {
         let schema = json!({
             "type": "object",
             "properties": {"label": {"type": "string", "enum": self.labels}},
@@ -356,9 +394,14 @@ impl DecideNode {
             }),
             Turn::user(self.rendered(text).unwrap_or_else(|| text.to_string())),
         ];
-        let mut sink = StringSink::default();
+        // Un puits qui s'arrête au jeton suivant si le run est annulé : l'hôte
+        // qui arrête le graphe n'attend pas la fin de l'appel.
+        let mut sink = CancellableSink { text: String::new(), cancel };
         llm.generate(&turns, &opts, &mut sink)
             .map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
+        if let Some(cause) = sink.cancel.cause() {
+            return Err(format!("Decide : run annulé ({cause:?})"));
+        }
         // La sortie structurée, ou l'étiquette nue d'un modèle qui l'ignore.
         let reply = sink.text.trim();
         let label = serde_json::from_str::<Value>(reply)
@@ -383,10 +426,10 @@ impl Node for DecideNode {
         &self.name
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![element_port("element", true)]
+        vec![element_input()]
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![element_port("element", true)]
+        vec![element_port("element", true).follows("element")]
     }
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
         // **Les cinq paramètres** : la reprise rebâtit le nœud depuis cette
@@ -406,14 +449,31 @@ impl Node for DecideNode {
         })))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        let element = take_element(ctx, "Decide")?;
-        let text = self.text_of(&element);
         let decider = ctx.service::<Arc<dyn Decider>>(DECIDER_SERVICE).cloned();
         let llm = ctx.service::<Arc<dyn Llm>>(super::llm_nodes::LLM_SERVICE).cloned();
+        // Chaque élément étiqueté à son arrivée.
+        while let Some(value) = ctx.next("element")? {
+            let element = json_of(value, "Decide")?;
+            let out = self.label(ctx, element, decider.as_deref(), llm.as_deref())?;
+            match ctx.emit("element", PortValue::new(out)) {
+                Ok(()) => {}
+                // Plus personne ne lit : plus rien à étiqueter, sans faute.
+                Err(Stopped::NoReader) => break,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
+    }
+}
+
+impl DecideNode {
+    /// Un élément étiqueté.
+    fn label(&self, ctx: &mut NodeContext, element: Value, decider: Option<&dyn Decider>, llm: Option<&dyn Llm>) -> Result<Value, String> {
+        let text = self.text_of(&element);
         let (label, probability) = match (self.via, decider, llm) {
-            (Via::Auto | Via::Decider, Some(d), _) => self.by_decider(d.as_ref(), &text)?,
+            (Via::Auto | Via::Decider, Some(d), _) => self.by_decider(d, &text)?,
             (Via::Decider, None, _) => return Err("Decide : via='decider' mais aucun 'decider' n'est servi".into()),
-            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l.as_ref(), &text)?,
+            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, ctx.cancellation())?,
             (_, _, None) => return Err("Decide : ni 'decider' ni 'llm' servi".into()),
         };
         ctx.info(&format!("Decide : « {label} »{}", probability.map(|p| format!(" ({p:.3})")).unwrap_or_default()));
@@ -427,8 +487,7 @@ impl Node for DecideNode {
         if let Some(p) = probability {
             out[format!("{}_probability", self.target).as_str()] = json!(p);
         }
-        ctx.set_output("element", PortValue::new(out));
-        Ok(())
+        Ok(out)
     }
 }
 
@@ -469,8 +528,8 @@ impl NodeFactory for DecideNodeFactory {
                           modèle (le 'decider' s'il est servi, une probabilité par étiquette ; sinon le \
                           'llm' sous un schéma à enum). Une étiquette hors liste est refusée."
                 .into(),
-            inputs: vec![element_port("element", true)],
-            outputs: vec![element_port("element", true)],
+            inputs: vec![element_input()],
+            outputs: vec![element_port("element", true).follows("element")],
             config_params: vec![
                 param("labels", ConfigParamType::Json, true, None, "les étiquettes : un tableau, ou « a|b|c »"),
                 param("instruction", ConfigParamType::String, false, Some(json!("")), "ce que l'étiquette veut dire, pour le modèle"),

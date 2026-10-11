@@ -416,3 +416,217 @@ fn a_template_without_text_or_with_an_unknown_hole_is_refused() {
     let err = DecideNodeFactory.create("d", &json!({"labels": "a|b", "prompt": "{texte}"})).err().unwrap();
     assert!(err.contains("{texte}"), "{err}");
 }
+
+// ── Les flux : les sorties suivent l'entrée ────────────────────────────
+
+/// Trois nœuds de banc : une source `Open` (les messages d'un pair), un puits
+/// qui lit le tout (`Complete`), un puits qui lit élément par élément.
+struct Bench(&'static str, String, Vec<PortDef>, Vec<PortDef>);
+
+impl Node for Bench {
+    fn node_type(&self) -> &str {
+        self.0
+    }
+    fn name(&self) -> &str {
+        &self.1
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        self.2.clone()
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        self.3.clone()
+    }
+    fn execute(&mut self, _: &mut NodeContext) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+struct BenchFactory(&'static str);
+
+impl BenchFactory {
+    fn ports(&self) -> (Vec<PortDef>, Vec<PortDef>) {
+        use crate::dataflow::port::PortKind;
+        match self.0 {
+            "OpenSource" => (vec![], vec![PortDef::value("out", PortType::Map, false).stream(PortKind::Open)]),
+            "WholeSink" => (vec![PortDef::value("in", PortType::Map, true)], vec![]),
+            _ => (vec![PortDef::value("in", PortType::Map, true).posture(Posture::PerElement)], vec![]),
+        }
+    }
+}
+
+impl NodeFactory for BenchFactory {
+    fn create(&self, name: &str, _: &Value) -> Result<Box<dyn Node>, String> {
+        let (i, o) = self.ports();
+        Ok(Box::new(Bench(self.0, name.to_string(), i, o)))
+    }
+    fn node_type(&self) -> &str {
+        self.0
+    }
+    fn schema(&self) -> NodeSchema {
+        let (inputs, outputs) = self.ports();
+        NodeSchema { node_type: self.0.into(), description: "banc".into(), inputs, outputs, config_params: vec![] }
+    }
+}
+
+fn bench_graph(sink: &str) -> GraphDefinition {
+    let node = |name: &str, t: &str, config: Value| NodeDef { name: name.into(), node_type: t.into(), config };
+    let edge = |f: &str, fp: &str, t: &str, tp: &str| EdgeDef {
+        from_node: f.into(),
+        from_port: fp.into(),
+        to_node: t.into(),
+        to_port: tp.into(),
+    };
+    GraphDefinition {
+        nodes: vec![
+            node("peers", "OpenSource", json!({})),
+            node("route", "Route", json!({"routes": "question"})),
+            node("sink", sink, json!({})),
+        ],
+        edges: vec![edge("peers", "out", "route", "element"), edge("route", "question", "sink", "in")],
+    }
+}
+
+/// **Un `Route` posé sur un flux ouvert aiguille un flux** : ses sorties
+/// suivent son entrée. Un puits qui lit le tout derrière lui est refusé au
+/// montage (il attendrait pour toujours) ; un puits élément par élément passe.
+/// Sur une valeur, le même `Route` reste un nœud de valeurs (les témoins
+/// d'au-dessus).
+#[test]
+fn route_follows_an_open_stream() {
+    let mut r = registry();
+    for t in ["OpenSource", "WholeSink", "EachSink"] {
+        r.register(Box::new(BenchFactory(t)));
+    }
+    let refused = DataflowGraph::from_definition(&bench_graph("WholeSink"), &r).err().expect("Complete ← Open refusé");
+    assert!(refused.contains("route.question") && refused.contains("PerElement"), "{refused}");
+    DataflowGraph::from_definition(&bench_graph("EachSink"), &r).expect("PerElement ← Open passe");
+}
+
+/// L'entrée `element` se lit élément par élément, et chaque sortie la suit.
+#[test]
+fn decide_and_route_read_per_element_and_their_outputs_follow() {
+    use crate::dataflow::port::Posture;
+    for schema in [RouteNodeFactory.schema_for(&json!({"routes": "a"})), DecideNodeFactory.schema()] {
+        assert_eq!(schema.inputs[0].posture, Posture::PerElement, "{}", schema.node_type);
+        assert!(schema.outputs.iter().all(|o| o.follows.as_deref() == Some("element")), "{}", schema.node_type);
+    }
+}
+
+/// Une source qui émet ses éléments un par un, sur une sortie `Finite`.
+struct Emits(Vec<Value>);
+
+impl Node for Emits {
+    fn node_type(&self) -> &str {
+        "Emits"
+    }
+    fn name(&self) -> &str {
+        "source"
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("out", PortType::Map, false).stream(crate::dataflow::port::PortKind::Finite)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        for v in self.0.drain(..) {
+            ctx.emit("out", PortValue::new(v))?;
+        }
+        Ok(())
+    }
+}
+
+/// Un puits qui lit élément par élément et garde ce qu'il a lu.
+struct Collects(String, Arc<Mutex<Vec<Value>>>);
+
+impl Node for Collects {
+    fn node_type(&self) -> &str {
+        "Collects"
+    }
+    fn name(&self) -> &str {
+        &self.0
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("in", PortType::Map, true).posture(Posture::PerElement)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        while let Some(v) = ctx.next("in")? {
+            self.1.lock().unwrap().push(json_of(v, "Collects")?);
+        }
+        Ok(())
+    }
+}
+
+/// **`Route` aiguille un flux, élément par élément** (sous l'exécuteur
+/// concurrent) : trois messages d'une source finie, chacun sur le port de son
+/// étiquette, dans l'ordre d'arrivée.
+#[test]
+fn route_routes_a_stream_element_by_element() {
+    let questions = Arc::new(Mutex::new(Vec::new()));
+    let autres = Arc::new(Mutex::new(Vec::new()));
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(Emits(vec![
+        json!({"n": 1, "label": "question"}),
+        json!({"n": 2, "label": "bavardage"}),
+        json!({"n": 3, "label": "question"}),
+    ])))
+    .unwrap();
+    g.add_node(RouteNodeFactory.create("route", &json!({"routes": "question"})).unwrap()).unwrap();
+    g.add_node(Box::new(Collects("q".into(), questions.clone()))).unwrap();
+    g.add_node(Box::new(Collects("o".into(), autres.clone()))).unwrap();
+    g.connect("source", "out", "route", "element").unwrap();
+    g.connect("route", "question", "q", "in").unwrap();
+    g.connect("route", OTHER, "o", "in").unwrap();
+    DataflowRuntime::new(100).execute(&mut g).expect("le flux passe");
+    let n = |v: &Arc<Mutex<Vec<Value>>>| v.lock().unwrap().iter().map(|e| e["n"].as_i64().unwrap()).collect::<Vec<_>>();
+    assert_eq!(n(&questions), [1, 3]);
+    assert_eq!(n(&autres), [2]);
+}
+
+/// Un puits qui lit **un** élément puis lâche (`close_input`).
+struct ReadsOneThenQuits(Arc<Mutex<Vec<Value>>>);
+
+impl Node for ReadsOneThenQuits {
+    fn node_type(&self) -> &str {
+        "ReadsOneThenQuits"
+    }
+    fn name(&self) -> &str {
+        "q"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("in", PortType::Map, true).posture(Posture::PerElement)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        if let Some(v) = ctx.next("in")? {
+            self.0.lock().unwrap().push(json_of(v, "ReadsOneThenQuits")?);
+        }
+        ctx.close_input("in");
+        Ok(())
+    }
+}
+
+/// **Un lecteur qui lâche n'annule rien** (page 05, §3.5) : le lecteur de
+/// `question` lit un élément puis ferme ; `Route` jette les questions
+/// suivantes sans faute, finit, et `other` reçoit toujours le sien — émis
+/// après la fermeture (un canal d'un élément force le reflux).
+#[test]
+fn a_reader_that_quits_does_not_fail_route() {
+    let questions = Arc::new(Mutex::new(Vec::new()));
+    let autres = Arc::new(Mutex::new(Vec::new()));
+    let mut elements: Vec<Value> = (1..=8).map(|n| json!({"n": n, "label": "question"})).collect();
+    elements.push(json!({"n": 9, "label": "bavardage"}));
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(Emits(elements))).unwrap();
+    g.add_node(RouteNodeFactory.create("route", &json!({"routes": "question"})).unwrap()).unwrap();
+    g.add_node(Box::new(ReadsOneThenQuits(questions.clone()))).unwrap();
+    g.add_node(Box::new(Collects("o".into(), autres.clone()))).unwrap();
+    g.connect("source", "out", "route", "element").unwrap();
+    g.connect("route", "question", "q", "in").unwrap();
+    g.connect("route", OTHER, "o", "in").unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("stream_capacity", 1usize);
+    let (_, report) = DataflowRuntime::with_services_arc(100, Arc::new(services))
+        .execute_with_report(&mut g)
+        .expect("un lecteur qui lâche n'annule pas le run");
+    assert!(matches!(status(&report, "route"), NodeStatus::Completed), "{:?}", status(&report, "route"));
+    let n = |v: &Arc<Mutex<Vec<Value>>>| v.lock().unwrap().iter().map(|e| e["n"].as_i64().unwrap()).collect::<Vec<_>>();
+    assert_eq!(n(&questions), [1]);
+    assert_eq!(n(&autres), [9]);
+}
