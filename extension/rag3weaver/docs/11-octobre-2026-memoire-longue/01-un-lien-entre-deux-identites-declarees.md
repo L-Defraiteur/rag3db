@@ -248,6 +248,24 @@ la base ne connaît pas encore. Et le filet que l'arbre principal pose d'abord
 (`IdentityInAnotherCell`, une identité qui vit déjà dans une autre cellule se refuse)
 protège la mémoire de la perte d'ici là.
 
+**Fait le 11 octobre 2026 au soir, sur la migration (a)** (`cellule-des-bouts`) :
+
+- `RelationBatchNode` résout chaque bout dans **sa** cellule : `from_cell` / `to_cell`
+  sur le lien (`{org, project}`, validés par `Scope::validate`), sinon la cellule de
+  l'appel ; un bout introuvable se refuse en nommant son identité **et** la cellule où
+  il a été cherché (`missing endpoint(s): Sujet {"titre":"…"} (cellule acme/beta)`) ;
+- `AddRefNode` écrit la référence et cherche la fiche dans la cellule de l'appel (il
+  calculait dans celle du catalogue : une session d'une autre cellule ne trouvait pas
+  sa propre fiche — témoin rouge prouvé sur l'ancien code) ;
+- l'outil `anchor` du gabarit dit `to_cell` dans sa description ;
+- **pas encore** : les droits d'une session sur une autre cellule — il n'en existe pas
+  à ce jour, `to_cell` est permis à toute session ; c'est dit dans le code.
+
+Témoins : `e2e_cellule_des_bouts` (un lien d'alpha vers un sujet global, refusé sans
+`to_cell`, posé avec, vérifié en base `alpha → global` ; un bout hors de la cellule
+visée refusé en la nommant ; une cellule mal formée refusée en nommant `to_cell`) et
+`e2e_outils_disent_ce_qui_reste::add_ref_cherche_la_fiche_et_ecrit_la_reference_dans_la_cellule_de_l_appel`.
+
 ## 4. Ce que le gabarit `memory` en reçoit
 
 Deux outils, déclarés, sans une ligne de code de plus que le §2 :

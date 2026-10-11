@@ -729,7 +729,7 @@ impl NodeFactory for RelationBatchFactory {
             "Up to 512 pairs of endpoint identity objects, each with optional declared properties",
         );
         links.json_schema = Some(
-            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"}}}}),
+            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"},"from_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"properties":{"org":{"type":"string"},"project":{"type":"string"}}},"to_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"properties":{"org":{"type":"string"},"project":{"type":"string"}}}}}}),
         );
         NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef::value("report", PortType::Map, false)],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
     }
@@ -794,7 +794,9 @@ impl Node for RelationBatchNode {
         // **La cellule du lien** (migration (a) de la marche 1 bis) : l'identité
         // d'un bout est (cellule, identité déclarée), et par défaut ses deux
         // bouts sont dans la cellule de l'appel. Un lien entre deux cellules se
-        // déclarera (`from_cell` / `to_cell`, page du lien de la mémoire longue).
+        // **déclare** : `from_cell` / `to_cell` sur le lien (§3 bis de la page du
+        // lien). Aucun droit d'une session sur une autre cellule n'est encore
+        // vérifié : il n'existe pas de droits par cellule à ce jour.
         let cellule = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
         // L'identité de chaque bout, gardée pour nommer un absent par ce que
         // l'appelant a écrit, pas par un uuid qu'il n'a jamais vu.
@@ -825,9 +827,26 @@ impl Node for RelationBatchNode {
                         "{side}: provide exactly the hashsafe identity of {entity}"
                     ));
                 }
+                // La cellule de ce bout : déclarée sur le lien, sinon celle de l'appel.
+                let champ = format!("{side}_cell");
+                let cellule_du_bout = match link.get(&champ) {
+                    Some(c) => {
+                        let c: crate::scope::Scope =
+                            serde_json::from_value(c.clone()).map_err(|e| format!("{champ}: {e}"))?;
+                        c.validate().map_err(|e| format!("{champ}: {e}"))?;
+                        c
+                    }
+                    None => cellule.clone(),
+                };
                 let data = serde_json::from_value(link[side].clone()).map_err(|e| e.to_string())?;
-                let id = cat.entity_uuid_in(&cellule, entity, &data).map_err(|e| e.to_string())?;
-                identites.insert((entity.clone(), id.clone()), link[side].to_string());
+                let id = cat.entity_uuid_in(&cellule_du_bout, entity, &data).map_err(|e| e.to_string())?;
+                // Nommé par ce que l'appelant a écrit, et par la cellule où le bout
+                // a été cherché : un absent dans une cellule n'est pas un absent
+                // partout.
+                identites.insert(
+                    (entity.clone(), id.clone()),
+                    format!("{} (cellule {}/{})", link[side], cellule_du_bout.org, cellule_du_bout.project),
+                );
                 ids.push(id);
             }
             // Les propriétés : permises quand la relation les déclare, chacune

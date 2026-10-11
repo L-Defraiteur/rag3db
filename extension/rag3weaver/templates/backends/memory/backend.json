@@ -352,7 +352,7 @@
       "bindings": {
         "relation": "ANCHORED_TO"
       },
-      "description": "Ancre des mémoires à des sujets : chaque lien donne la mémoire par {claim, reach} et le sujet par {name}. Une mémoire ancrée repasse « à revoir » quand son sujet change. Seule une mémoire courante ou à revoir s'ancre."
+      "description": "Ancre des mémoires à des sujets : chaque lien donne la mémoire par {claim, reach} et le sujet par {name}. Une mémoire ancrée repasse « à revoir » quand son sujet change. Seule une mémoire courante ou à revoir s'ancre. Les deux bouts se cherchent dans la cellule de la session ; pour un sujet d'une autre cellule (un sujet global), ajoute au lien \"to_cell\": {\"org\": …, \"project\": …}."
     },
     "supersede_link": {
       "graph": "../../tools/link.mmd",

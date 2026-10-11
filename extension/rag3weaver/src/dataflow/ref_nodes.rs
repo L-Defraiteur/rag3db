@@ -257,8 +257,15 @@ impl Node for AddRefNode {
             CypherValue::String(verdict.empreinte.unwrap_or_default()),
         );
 
+        // **La cellule de l'appel** (marche 1 bis, migration (a)) : la référence
+        // s'écrit et se nomme dans la cellule de la session, et la fiche s'y
+        // cherche — comme `EntityRecordNode` et le nœud de lien. Sans elle, une
+        // session d'une autre cellule écrivait la référence dans celle du
+        // catalogue et ne trouvait pas sa propre fiche.
+        let cellule = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
+        cellule.stamp(&mut record);
         let uuid_ref = cat
-            .entity_uuid(&refs_entity, &record)
+            .entity_uuid_in(&cellule, &refs_entity, &record)
             .map_err(|e| format!("AddRefNode: l'identité de la référence : {e}"))?;
         // **Le rapport d'ingestion se lit** (ticket « add_ref et create_ref_type
         // jettent le rapport de leur ingestion ») : un échec compté n'est pas
@@ -303,7 +310,7 @@ impl Node for AddRefNode {
             return Ok(());
         }
         let uuid_fiche = cat
-            .entity_uuid(&from_entity, &fiche)
+            .entity_uuid_in(&cellule, &from_entity, &fiche)
             .map_err(|e| format!("AddRefNode: l'identité de la fiche : {e}"))?;
         // **La fiche doit exister** (11 octobre 2026). `entity_uuid` recompose
         // un uuid à partir de champs, il ne prouve rien sur l'existence ; et le
