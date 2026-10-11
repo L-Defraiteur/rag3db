@@ -688,3 +688,36 @@ où elle vit.
   réindexation de luciepc partira après 22 h 30, « au plus tard 1 h » tient.
   Question de forme à proposer à G si ça se reproduit : la porte prise
   avant la place fait attendre tout le monde derrière un bâti.
+- **21 h 40 – 22 h 05, nuit**. **La montre est sur master** (proto,
+  `94354595c`, quatre commits depuis `5c44db6a0`) : réconciliation au
+  démarrage, balayage par dates avec ses compteurs dans index_state, fichier
+  créé indexé, racine disparue qui met la montre en pause, lecture qui attend
+  un catalogue tenu brièvement, arrêt qui coupe une réaction longue, registre
+  d'indexation par racine, Route et Decide en flux ; sept tickets fermés.
+  Correction de la mémoire : la montre au repos coûtait **7 %** d'un cœur, pas
+  69 % (facteur dix), et le lot ramène un tour au repos à 9-22 ms. Pour que
+  les hôtes la portent : binaire de Lucie rebâti sur master ≥ 94354595c par
+  la mémoire (bâti vers 22 h 15, md5, nm, hôte d'essai sur 7990, installation
+  par renommage, redémarrage annoncé à 23 h, décalage dit si non prouvé à
+  22 h 50, remesure du coût ensuite) ; hôte de luciepc rebâti et relancé par
+  G après la réindexation de codeparsers, avec les annonces.
+  **Le poste a perdu une heure au cœur** : sa mesure des fils a expiré à
+  21 h 45 sans courir, la porte prise mais la place partagée tenue par des
+  lourds qui « entraient quand même » après 600 s. Petit lot donné à G,
+  **sur master en moins d'une demi-heure** (`74f760801` ticket, `e70a78a72`
+  correctif, déployé sur les deux postes, md5 00406a82, `scripts/poste` entre
+  dans le dépôt avec `test_poste.sh`, six cas, trois rouges avant) : dès
+  qu'une mesure attend, aucun lourd n'entre ; le délai d'une mesure ne court
+  qu'une fois la place prise (`POSTE_MESURE_MAX=<s> poste mesure …`, 124 au
+  dépassement, plus jamais `timeout N poste mesure`) ; `poste --qui` dit qui
+  tient et qui attend depuis quand ; le script garde ses verrous pour lui.
+  Le cœur relance sa trace après son push ABI. **Le lot 0 de la recherche est
+  clos** : 596 passés, 1 échoué hors du lot (le banc des fiches classées
+  refuse sans ses services, à raison) ; choix : une liste « bancs à
+  services » de `run_e2e.sh`, la suite nommée au départ, au résumé et à la
+  dernière ligne (« complète hors bancs à services »), pas une feature, pour
+  qu'elle reste visible (mémoire, `edfe2aa9d`, §8 bis de la page des e2e).
+  La recherche est sur le magasin de libs (rerun-if du pont d'abord). G :
+  conflit de son lot A avec master dans backend.rs, résolu et repoussé, puis
+  B4. Codeparsers : page code-tree du soir (`f5018ed4b`), réindexation de
+  luciepc en cours après le « fini » du cœur.
