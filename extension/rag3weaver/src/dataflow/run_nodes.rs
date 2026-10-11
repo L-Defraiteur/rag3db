@@ -675,7 +675,7 @@ impl NodeFactory for RunCommandNodeFactory {
             node_type: "RunCommandNode".into(),
             description: "Exécute une ligne de commande dans la racine du projet, si la porte le permet.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "command".into(),
@@ -749,7 +749,7 @@ impl NodeFactory for TailNodeFactory {
             node_type: "TailNode".into(),
             description: "La fin du journal d'une commande, ou ce qui s'y est ajouté depuis le dernier regard, et son état.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "handle".into(),
@@ -821,7 +821,7 @@ impl NodeFactory for WaitOutputNodeFactory {
             node_type: "WaitOutputNode".into(),
             description: "Attend qu'un motif apparaisse dans le journal d'une commande, ou que le délai passe.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "journal".into(),

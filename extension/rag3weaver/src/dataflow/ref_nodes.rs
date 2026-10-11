@@ -415,7 +415,7 @@ impl NodeFactory for AddRefNodeFactory {
             node_type: "AddRefNode".into(),
             description: "Cites a thing from a record: validates the value against its genre's optional rhai harness, writes the reference (identity = genre + normal form, so citing twice does not duplicate), and links it. An unknown genre is not an error: it returns the current list and the exact create_ref_type call to make, and loses nothing".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 p("genre", true, None, "Genre of the thing cited; the list is read from the catalogue at each call, so a genre created a moment ago is already there",
                   Some(Choices::Values { entity: "RefType".into(), field: "name".into() })),
@@ -644,7 +644,7 @@ impl NodeFactory for CreateRefTypeNodeFactory {
             node_type: "CreateRefTypeNode".into(),
             description: "Declares a new genre of reference, for every use to come. Shows the current genres and asks which one is meant before creating (nothing is written on the first call); the description is mandatory, a rhai harness is optional and is tested on the example that gave birth to it — and refused if an existing genre already recognises it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 p("name", true, None, "Name of the genre, as it will appear in the list the caller sees"),
                 p("description", true, None, "What this genre designates, with two or three examples. Mandatory: it is the only harness a genre must have"),

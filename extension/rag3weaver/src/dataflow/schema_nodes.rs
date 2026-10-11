@@ -176,7 +176,7 @@ impl NodeFactory for SchemaNodeFactory {
             node_type: "SchemaNode".into(),
             description: "La carte du graphe : les cibles cherchables et les relations valides entre elles.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "target".into(),

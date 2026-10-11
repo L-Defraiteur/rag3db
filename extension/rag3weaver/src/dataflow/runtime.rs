@@ -825,6 +825,15 @@ impl DataflowRuntime {
             for done in injected.into_iter().chain(results) {
                 let DoneNode { name: node_name, idx: node_idx, node_type, mut ctx, result: exec_result, duration_ms } = done;
                 let node_name = &node_name;
+                // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
+                // finit sans la poser est en faute, dit comme tel — pas un saut.
+                // Seule une sortie optionnelle vide fait sauter l'aval.
+                let exec_result = exec_result.and_then(|()| {
+                    match required_output_missing(graph, &node_name, &ctx) {
+                        Some(error) => Err(error),
+                        None => Ok(()),
+                    }
+                });
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
@@ -1044,13 +1053,21 @@ impl DataflowRuntime {
             parent: self.services.get::<String>("parent_run").cloned(),
             kind: "graph".to_string(),
             name: graph.nodes.iter().map(|n| n.name().to_string()).collect::<Vec<_>>().join(","),
-            // La cellule du bus qui reçoit : c'est celle où ce run tourne.
+            // La cellule où ce run tourne : celle de SA requête (le service
+            // `scope`, que l'hôte pose par session — marche 1 bis), sinon celle
+            // du bus qui reçoit. Sous un hôte à plusieurs cellules, le bus peut
+            // être partagé : sa cellule ne dit pas où le run a tourné.
             // Un graphe n'a pas de domaine de travail : il fait ce qu'on lui demande.
             domain: String::new(),
             scope: self
                 .services
-                .get::<Arc<crate::events::EventBus>>("event_bus")
-                .map(|b| b.scope().clone()),
+                .get::<crate::scope::Scope>("scope")
+                .cloned()
+                .or_else(|| {
+                    self.services
+                        .get::<Arc<crate::events::EventBus>>("event_bus")
+                        .map(|b| b.scope().clone())
+                }),
         });
     }
 
@@ -1251,6 +1268,15 @@ impl DataflowRuntime {
             // ── Phase 3 : ranger, dans l'ordre (séquentiel) ──────────────
             for done in results {
                 let DoneNode { name: node_name, node_type, mut ctx, result: exec_result, duration_ms, .. } = done;
+                // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
+                // finit sans la poser est en faute, dit comme tel — pas un saut.
+                // Seule une sortie optionnelle vide fait sauter l'aval.
+                let exec_result = exec_result.and_then(|()| {
+                    match required_output_missing(graph, &node_name, &ctx) {
+                        Some(error) => Err(error),
+                        None => Ok(()),
+                    }
+                });
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
@@ -1376,6 +1402,28 @@ impl NodeEventFilter {
     }
 }
 
+/// **Les sorties requises qu'un nœud n'a pas posées**, nommées : une erreur du
+/// nœud, pas une branche non prise. Le drapeau `required` d'une sortie était
+/// déclaré partout et vérifié nulle part (sauf par les nœuds scriptés) ;
+/// avec le saut, il devient ce qui sépare « vide parce que non prise »
+/// (optionnelle) de « vide parce qu'oubliée » (requise).
+fn required_output_missing(graph: &DataflowGraph, name: &str, ctx: &NodeContext) -> Option<String> {
+    let node = graph.nodes.iter().find(|n| n.name() == name)?;
+    let missing: Vec<String> = node
+        .outputs()
+        .into_iter()
+        .filter(|p| p.required && !ctx.has_output(&p.name))
+        .map(|p| p.name.to_string())
+        .collect();
+    (!missing.is_empty()).then(|| {
+        format!(
+            "{name} : sortie requise non posée ({}) — une sortie requise doit émettre ; \
+             seule une sortie optionnelle peut finir vide",
+            missing.join(", ")
+        )
+    })
+}
+
 /// **Faut-il sauter ce nœud, et pourquoi ?** Oui quand chaque entrée branchée
 /// est résolue (tous ses producteurs ont fini — un nœud sauté compte comme
 /// fini sans donnée) et qu'une entrée **requise** branchée n'a reçu ni donnée
@@ -1447,7 +1495,7 @@ mod tests {
             vec![]
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out".into(), port_type: PortType::Any, required: false }]
+            vec![PortDef::value("out", PortType::Any, false)]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             std::thread::sleep(Duration::from_millis(self.ms));
@@ -1471,7 +1519,7 @@ mod tests {
             &self.name
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out".into(), port_type: PortType::Any, required: false }]
+            vec![PortDef::value("out", PortType::Any, false)]
         }
         fn is_async(&self) -> bool {
             true
@@ -1595,18 +1643,10 @@ mod tests {
             &self.name
         }
         fn inputs(&self) -> Vec<PortDef> {
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: true,
-            }]
+            vec![PortDef::value("in", PortType::Results, true)]
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }]
+            vec![PortDef::value("out", PortType::Results, false)]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             if let Some(v) = ctx.take_input("in") {
@@ -1634,11 +1674,7 @@ mod tests {
             vec![]
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }]
+            vec![PortDef::value("out", PortType::Results, false)]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::new(self.results.clone()));
@@ -1660,11 +1696,7 @@ mod tests {
             &self.name
         }
         fn inputs(&self) -> Vec<PortDef> {
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: true,
-            }]
+            vec![PortDef::value("in", PortType::Results, true)]
         }
         fn outputs(&self) -> Vec<PortDef> {
             vec![]
@@ -1699,8 +1731,8 @@ mod tests {
         impl Node for SilentSource {
             fn name(&self)->&str {"delay"}
             fn node_type(&self)->&'static str {"SilentSource"}
-            fn inputs(&self)->Vec<PortDef>{vec![PortDef{name:"in".into(),port_type:PortType::Results,required:true}]}
-            fn outputs(&self)->Vec<PortDef>{vec![PortDef{name:"out".into(),port_type:PortType::Results,required:false}]}
+            fn inputs(&self)->Vec<PortDef>{vec![PortDef::value("in", PortType::Results, true)]}
+            fn outputs(&self)->Vec<PortDef>{vec![PortDef::value("out", PortType::Results, false)]}
             fn execute(&mut self,_:&mut NodeContext)->Result<(),String>{Ok(())}
         }
         for checkpoint in [false, true] {
@@ -1744,12 +1776,12 @@ mod tests {
             fn name(&self) -> &str { "aiguillage" }
             fn node_type(&self) -> &'static str { "Aiguillage" }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef { name: "in".into(), port_type: PortType::Results, required: true }]
+                vec![PortDef::value("in", PortType::Results, true)]
             }
             fn outputs(&self) -> Vec<PortDef> {
                 vec![
-                    PortDef { name: "a".into(), port_type: PortType::Results, required: false },
-                    PortDef { name: "b".into(), port_type: PortType::Results, required: false },
+                    PortDef::value("a", PortType::Results, false),
+                    PortDef::value("b", PortType::Results, false),
                 ]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -1812,6 +1844,62 @@ mod tests {
             .expect("avec points de reprise aussi");
         let fusion = output.get("fuse", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
         assert_eq!(fusion.len(), 1);
+    }
+
+    /// **Une sortie requise doit émettre** (11 octobre 2026). Un nœud qui
+    /// déclare une sortie requise et finit sans la poser est en faute — dit
+    /// comme tel, avec le nom du port. Avant : il finissait « Completed » et
+    /// l'aval s'interbloquait (ou, avec le saut, aurait été sauté comme une
+    /// branche non prise). Seule une sortie OPTIONNELLE vide fait sauter.
+    #[test]
+    fn une_sortie_requise_non_posee_est_une_faute_du_noeud() {
+        struct Oublieux;
+        impl Node for Oublieux {
+            fn name(&self) -> &str { "oublieux" }
+            fn node_type(&self) -> &'static str { "Oublieux" }
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![PortDef::value("out", PortType::Results, true)]
+            }
+            fn execute(&mut self, _: &mut NodeContext) -> Result<(), String> { Ok(()) }
+        }
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(Oublieux)).unwrap();
+        g.add_node(Box::new(PassthroughNode { name: "aval".into() })).unwrap();
+        g.connect("oublieux", "out", "aval", "in").unwrap();
+        let erreur = DataflowRuntime::new(20)
+            .execute(&mut g)
+            .err()
+            .expect("une sortie requise non posée est une faute, pas un saut");
+        assert!(
+            erreur.contains("oublieux") && erreur.contains("sortie requise non posée (out)"),
+            "{erreur}"
+        );
+    }
+
+    /// **`RunStarted` dit la cellule de SA requête** (11 octobre 2026, pour la
+    /// marche 1 bis de l'arbre principal) : sous un hôte à plusieurs cellules,
+    /// le bus peut être partagé, et sa cellule ne dit pas où le run a tourné.
+    /// Le service `scope`, quand il est là, passe avant la cellule du bus.
+    #[test]
+    fn run_started_dit_la_cellule_de_sa_requete() {
+        use crate::scope::Scope;
+        let cellule_du_bus = Scope { org: "bus".into(), project: "p".into() };
+        let cellule_de_la_requete = Scope { org: "requete".into(), project: "p".into() };
+        let bus = Arc::new(crate::events::EventBus::new(16).in_scope(&cellule_du_bus));
+        let mut rx = bus.subscribe(crate::events::topic::DATAFLOW);
+        let mut services = crate::dataflow::services::ServiceRegistry::new();
+        services.register("event_bus", bus.clone());
+        services.register("scope", cellule_de_la_requete.clone());
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(SourceNode { name: "src".into(), results: vec![test_result("x")] })).unwrap();
+        DataflowRuntime::with_services_arc(20, Arc::new(services)).execute(&mut g).unwrap();
+        let cellule = std::iter::from_fn(|| rx.try_recv().ok())
+            .find_map(|e| match e {
+                crate::events::Event::RunStarted { scope, .. } => Some(scope),
+                _ => None,
+            })
+            .expect("un RunStarted publié");
+        assert_eq!(cellule, Some(cellule_de_la_requete), "la cellule de la requête, pas celle du bus");
     }
 
     #[test]
@@ -1897,18 +1985,10 @@ mod tests {
                 "merge_sink"
             }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "in".into(),
-                    port_type: PortType::Results,
-                    required: true,
-                }]
+                vec![PortDef::value("in", PortType::Results, true)]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "out".into(),
-                    port_type: PortType::Results,
-                    required: false,
-                }]
+                vec![PortDef::value("out", PortType::Results, false)]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if let Some(v) = ctx.take_input("in") {
@@ -2064,11 +2144,7 @@ mod tests {
                 vec![]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "done".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                }]
+                vec![PortDef::value("done", PortType::Empty, false)]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 ctx.set_output("done", PortValue::Trigger);
@@ -2090,18 +2166,10 @@ mod tests {
                 "ReceiverNode"
             }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "trigger".into(),
-                    port_type: PortType::Empty,
-                    required: true,
-                }]
+                vec![PortDef::value("trigger", PortType::Empty, true)]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "done".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                }]
+                vec![PortDef::value("done", PortType::Empty, false)]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 let _ = ctx.take_input("trigger");
@@ -2125,18 +2193,10 @@ mod tests {
                 "FailOnceNode"
             }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "trigger".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                }]
+                vec![PortDef::value("trigger", PortType::Empty, false)]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef {
-                    name: "done".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                }]
+                vec![PortDef::value("done", PortType::Empty, false)]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if self.fail {
@@ -2315,10 +2375,10 @@ mod tests {
                 "PassBatchNode"
             }
             fn inputs(&self) -> Vec<PortDef> {
-                vec![PortDef { name: "entities".into(), port_type: PortType::Entities, required: true }]
+                vec![PortDef::value("entities", PortType::Entities, true)]
             }
             fn outputs(&self) -> Vec<PortDef> {
-                vec![PortDef { name: "out".into(), port_type: PortType::Entities, required: false }]
+                vec![PortDef::value("out", PortType::Entities, false)]
             }
             fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
                 if self.fail_once {

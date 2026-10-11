@@ -929,7 +929,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             node_type: "NeighborhoodNode".into(),
             description: "The neighbourhood of a thing by levels: what depends on it directly, then at two and three hops, along declared relations, with a node budget, a degree cap that shows hubs without traversing them, a grouping field, and an optional extra start reached by a declared path (rendered apart).".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 p("pivot", S, true, None, "Entité de rendez-vous du départ (ex. Symbol)"),
                 p("key", S, true, None, "Champ d'identité du pivot"),

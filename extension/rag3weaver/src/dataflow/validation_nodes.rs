@@ -22,11 +22,7 @@ pub fn register(registry: &mut NodeRegistry) {
     }
 }
 fn port(name: &'static str, required: bool) -> PortDef {
-    PortDef {
-        name: name.into(),
-        port_type: PortType::Map,
-        required,
-    }
+    PortDef::value(name, PortType::Map, required)
 }
 impl NodeFactory for ValidationFactory {
     fn node_type(&self) -> &'static str {

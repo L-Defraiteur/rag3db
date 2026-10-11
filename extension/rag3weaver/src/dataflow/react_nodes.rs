@@ -385,12 +385,12 @@ impl NodeFactory for ReactTransitionNodeFactory {
             node_type: "ReactTransitionNode".into(),
             description: "Applies a declared transition to the rows of 'target' reached from the uuids of EntitiesChanged events (port 'events') or of the 'uuids' port, by walking 'relation'; outputs the transitioned uuids and a report {seen, concerned, transitioned, refused}".into(),
             inputs: vec![
-                PortDef { name: "events".into(), port_type: PortType::Map, required: false },
-                PortDef { name: "uuids".into(), port_type: PortType::Map, required: false },
+                PortDef::value("events", PortType::Map, false),
+                PortDef::value("uuids", PortType::Map, false),
             ],
             outputs: vec![
-                PortDef { name: "changed".into(), port_type: PortType::Map, required: false },
-                PortDef { name: "report".into(), port_type: PortType::Map, required: false },
+                PortDef::value("changed", PortType::Map, false),
+                PortDef::value("report", PortType::Map, false),
             ],
             config_params: vec![
                 ConfigParam {

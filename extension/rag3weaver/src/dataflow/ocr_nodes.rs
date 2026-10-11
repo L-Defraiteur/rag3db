@@ -126,10 +126,10 @@ impl NodeFactory for OcrNodeFactory {
         NodeSchema {
             node_type: "OcrNode".into(),
             description: "Recognizes text in an image via the 'ocr' service (text + lines with boxes)".into(),
-            inputs: vec![PortDef { name: "image".into(), port_type: PortType::Image, required: true }],
+            inputs: vec![PortDef::value("image", PortType::Image, true)],
             outputs: vec![
-                PortDef { name: "text".into(), port_type: PortType::Text, required: false },
-                PortDef { name: "ocr".into(), port_type: PortType::Ocr, required: false },
+                PortDef::value("text", PortType::Text, false),
+                PortDef::value("ocr", PortType::Ocr, false),
             ],
             config_params: vec![ConfigParam {
                 name: "min_confidence".into(),

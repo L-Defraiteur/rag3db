@@ -890,7 +890,7 @@ impl NodeFactory for EventSourceNodeFactory {
             node_type: "EventSourceNode".into(),
             description: "Drains (non-blocking) the named cursor of each topic on the 'events' bus into a JSON array; an EventsMissed entry precedes a topic that overflowed".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "events".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("events", PortType::Map, false)],
             config_params: vec![ConfigParam {
                 name: "topics".into(),
                 param_type: ConfigParamType::String,
@@ -988,8 +988,8 @@ impl NodeFactory for TraceSinkNodeFactory {
         NodeSchema {
             node_type: "TraceSinkNode".into(),
             description: "Writes each event of the 'events' port into the Trace entity, and runs/messages into Run and Message linked by CHILD_OF / SENT_BY / SENT_TO; outputs {recorded, runs, messages}".into(),
-            inputs: vec![PortDef { name: "events".into(), port_type: PortType::Map, required: true }],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            inputs: vec![PortDef::value("events", PortType::Map, true)],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![],
         }
     }
@@ -1073,7 +1073,7 @@ impl NodeFactory for SendMessageNodeFactory {
             node_type: "SendMessageNode".into(),
             description: "Sends a Message to another run's inbox (run.<to>.inbox) and on the messages topic; fire and forget".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 p("to", true, None, "The run id to talk to"),
                 p("content", true, None, "The message"),

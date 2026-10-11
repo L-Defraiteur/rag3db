@@ -28,16 +28,8 @@ impl NodeFactory for RhaiNodeFactory {
         NodeSchema {
             node_type: "RhaiNode".into(),
             description: "Bounded JSON-to-JSON computation; scripts have no host I/O".into(),
-            inputs: vec![PortDef {
-                name: "value".into(),
-                port_type: PortType::Map,
-                required: false,
-            }],
-            outputs: vec![PortDef {
-                name: "result".into(),
-                port_type: PortType::Map,
-                required: false,
-            }],
+            inputs: vec![PortDef::value("value", PortType::Map, false)],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 param("script", ConfigParamType::String, "Inline source"),
                 param(
