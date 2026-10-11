@@ -158,3 +158,14 @@ où elle vit.
   réponse / trace, politique et bornes), à faire quand un gabarit en a
   besoin ; avec le démon, « appelle l'agent du backend X » est un appel sur le
   fil.
+- **Un DAG est un outil, les agents se parlent : chantier ouvert chez
+  « everything declarative »** (Lucie, midi). Contrainte : « un agent est un
+  DAG, un DAG est potentiellement un outil quand on a besoin qu'il le soit
+  (dont les agents) ; ce que ça veut dire n'est pas forcément d'attendre son
+  retour : peut-être juste le lancer en fond avec un message initial et la
+  référence de qui je suis, qu'il puisse me parler ». Le relevé de ce qui
+  existe (plomberie du 26 août) et de ce qui manque (aucun outil exposé au
+  modèle, aucun lancement d'agent par un agent) est au §3 de
+  `02-rapport-de-session.md`, avec la forme en cinq points ; page de
+  conception courte d'abord, témoins rouges à faux modèle, lots bornés ; le
+  côté démon / serveur MCP reste à l'arbre principal.
