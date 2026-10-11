@@ -252,3 +252,20 @@ Les vérifications de ce jour, ma batterie de fusion comprise, n'étaient pas
 exposées : mes deux worktrees partageaient `target-dossiers`, mais l'un n'y a
 fait que des `cargo check` (unités de métadonnées) et l'autre des bâtis (unités
 de bâti), qui ne se reprennent pas l'une l'autre.
+
+## 10. Ce que run_e2e.sh pose, un fils en hérite
+
+`run_e2e.sh` pose pour chaque suite `TMPDIR`, `RAG3WEAVER_E2E_DOSSIER` et
+`RAG3WEAVER_CHECKPOINT_DIR`. Un test qui se relance (`current_exe()`, un rôle
+d'enfant) transmet ces variables à son fils, et elles **passent avant** ce que
+le test lui donne par ailleurs. La batterie de fusion du 11 octobre l'a montré :
+`e2e_points_de_reprise_nettoyes` donne au fils son propre `XDG_CACHE_HOME`
+et y cherche les points de reprise, mais le fils écrivait sous
+`RAG3WEAVER_CHECKPOINT_DIR`. Le test rendait donc « aucun point de reprise
+écrit ». Corrigé par `.env_remove("RAG3WEAVER_CHECKPOINT_DIR")` sur le fils.
+
+La règle pour tout test qui lance un fils et règle lui-même un emplacement :
+retirer (`env_remove`) la variable de `run_e2e.sh` qui le remplacerait. Pour
+les points de reprise, c'est `RAG3WEAVER_CHECKPOINT_DIR` ; `TMPDIR` et
+`RAG3WEAVER_E2E_DOSSIER` sont à retirer de même si le test règle le dossier
+temporaire ou celui des bases.
