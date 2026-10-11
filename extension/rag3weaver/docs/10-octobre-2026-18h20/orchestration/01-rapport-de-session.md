@@ -552,3 +552,23 @@ Fait cette nuit : la ligne de vérité dans la réponse d'`index`, les journaux
 de la commande en fond en fichiers. Recommandation portée à Lucie : A puis C
 comme cible (c'est « installer = un démon » jusqu'au bout, et ça va avec le
 paquet npm) ; B ne vaut pas son coût. Rien de plus sans son mot.
+
+## 11. Ajout de 2 h 55
+
+- **I1 est sur master** (`3ad09c8cc`) : la condition 1 n'a plus devant elle
+  que I2 (la maintenance de l'index au commit), après la mesure du banc
+  (en cours). Banc de concurrence : 9 rouges comparés sur 255.
+- **Un rouge de rejeu probabiliste, perte possible** (ticket `584452d9b` et
+  suite) : après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des
+  dernières lignes lit zéro, un cas sur deux passes complètes. Hors d'I1.
+  Bissection par hotfixs (×30 / ×10+×30) ; lecture de A : une page de la
+  colonne rendue au-delà de l'étendue puis réécrite — l'étendue relue après
+  le rejeu ou figée à l'ouverture ? Ce qui désigne plutôt l'étendue du
+  fichier (`0aed3c4b5`, A) que le lecteur affamé. À suivre au réveil si ce
+  n'est pas fermé d'ici là.
+- **Le proto** : lot 5 `declare` sur master (`b460e9ac8`) ; lot 6 (la page
+  vivante `/_atelier`) en cours, avec trois choix pris pour toi : modèle du
+  chat déclaré par `models.llm` (sans modèle la page dit pourquoi le chat
+  est éteint), mermaid chargé du réseau pour le proto seulement, session de
+  chat persistante hors de git. La page 08 portera les trois commandes pour
+  jouer la recette au réveil.
