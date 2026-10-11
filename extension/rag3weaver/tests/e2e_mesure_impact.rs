@@ -337,3 +337,40 @@ fn la_porte_de_grep_admet_une_relation_declaree_hors_du_gabarit() {
     let injection = admit_relation(&cat, "CONSUMES]->() DETACH DELETE m //").unwrap_err();
     assert!(injection.contains("n'est pas un identifiant") && injection.contains("CONSUMES]"), "{injection}");
 }
+
+/// **Où va le temps d'un aller-retour sur rag3db** (base dans le processus) :
+/// impact sur `src/daemon`, cinquante appels, le relevé des phases de chaque
+/// instruction à paramètres (`rag3db_connection::phases`). Une ligne `[phases]`
+/// par phase : son total, sa part, et sa moyenne par instruction.
+#[test]
+#[ignore]
+fn ou_va_le_temps_d_un_aller_retour_sur_rag3db() {
+    use rag3weaver::rag3db_connection::phases;
+    let catalog = rag3db_indexe(Arc::new(AtomicUsize::new(0)));
+    // Un tour pour chauffer (caches du moteur), puis la mesure.
+    for nom in NOMS {
+        neighborhood_of(&catalog, &impact_config(), nom, "", 3, 200, 50).unwrap();
+    }
+    phases::demarrer();
+    let t = Instant::now();
+    for _ in 0..50 {
+        for nom in NOMS {
+            neighborhood_of(&catalog, &impact_config(), nom, "", 3, 200, 50).unwrap();
+        }
+    }
+    let total = t.elapsed();
+    let r = phases::arreter();
+    let n = r.appels.max(1) as f64;
+    let ms = |ns: u64| ns as f64 / 1e6;
+    let somme = r.prepare_ns + r.params_ns + r.execute_ns + r.lignes_ns;
+    eprintln!("[phases] {} instructions à paramètres, {:.1} ms au total des appels d'impact ({:.1} ms dans les instructions)", r.appels, total.as_secs_f64() * 1e3, ms(somme));
+    for (nom, ns) in [("prepare (analyse, liaison, plan)", r.prepare_ns), ("conversion des paramètres", r.params_ns), ("execute", r.execute_ns), ("conversion des lignes", r.lignes_ns)] {
+        eprintln!("[phases] {nom:<34} {:>9.1} ms  {:>5.1} %  {:>7.3} ms par instruction", ms(ns), 100.0 * ns as f64 / somme.max(1) as f64, ms(ns) / n);
+    }
+    eprintln!(
+        "[phases] le moteur dit : compilation {:.3} ms, exécution {:.3} ms par instruction",
+        r.moteur_compile_us as f64 / 1000.0 / n,
+        r.moteur_execute_us as f64 / 1000.0 / n
+    );
+    assert!(r.appels > 0);
+}

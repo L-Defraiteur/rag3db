@@ -374,8 +374,13 @@ impl Rag3dbConnection {
         let db_ptr = &*db as *const rag3db::Database;
         let conn = unsafe {
             let db_ref = &*db_ptr;
-            let conn = rag3db::Connection::new(db_ref)
+            let mut conn = rag3db::Connection::new(db_ref)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
+            // Réglage de mesure (`RAG3WEAVER_EXEC_THREADS`) : les fils d'une
+            // exécution, au lieu du défaut du moteur (tous les cœurs).
+            if let Some(n) = std::env::var("RAG3WEAVER_EXEC_THREADS").ok().and_then(|v| v.parse::<u64>().ok()) {
+                conn.set_max_num_threads_for_exec(n);
+            }
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
         Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None), path: None })
@@ -513,10 +518,13 @@ impl Rag3dbConnection {
     ) -> Result<QueryResult, DbError> {
         self.before_engine()?;
         trace_cypher(cypher, params);
+        let releve = phases::actif();
+        let t0 = releve.then(std::time::Instant::now);
         let mut stmt = self
             .conn
             .prepare(cypher)
             .map_err(|e| self.engine_error(e))?;
+        let t1 = releve.then(std::time::Instant::now);
 
         for p in params { p.value.validate_parameter_types().map_err(DbError::TypeError)?; }
 
@@ -524,17 +532,22 @@ impl Rag3dbConnection {
             .iter()
             .map(|p| (p.name.as_str(), cypher_to_rag3db_value(&p.value)))
             .collect();
+        let t2 = releve.then(std::time::Instant::now);
 
         let mut result = self
             .conn
             .execute(&mut stmt, rag3db_params)
             .map_err(|e| self.engine_error(e))?;
         self.engine_succeeded();
+        let t3 = releve.then(std::time::Instant::now);
 
         let columns = noms_de_colonnes(result.get_column_names());
         let mut rows = Vec::new();
         for row in &mut result {
             rows.push(row.into_iter().map(rag3db_value_to_cypher).collect());
+        }
+        if let (Some(t0), Some(t1), Some(t2), Some(t3)) = (t0, t1, t2, t3) {
+            phases::noter(t1 - t0, t2 - t1, t3 - t2, t3.elapsed(), result.get_compiling_time(), result.get_execution_time());
         }
 
         Ok(QueryResult { columns, rows })
@@ -1349,5 +1362,73 @@ mod tests {
         let conn = Rag3dbConnection::in_memory().unwrap();
         let result = conn.execute("INVALID CYPHER SYNTAX!!!");
         assert!(result.is_err());
+    }
+}
+
+/// **Le relevé des phases d'une instruction à paramètres**, pour mesurer où va
+/// le temps d'un aller-retour (coupé par défaut ; une lecture atomique par
+/// appel). Cumule, en nanosecondes : `prepare` (analyse, liaison,
+/// planification), la conversion des paramètres, `execute`, la conversion des
+/// lignes vers nos valeurs ; et ce que le moteur dit de lui-même (compilation,
+/// exécution, en millisecondes × 1000).
+pub mod phases {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::time::Duration;
+
+    static ACTIF: AtomicBool = AtomicBool::new(false);
+    static APPELS: AtomicU64 = AtomicU64::new(0);
+    static PREPARE: AtomicU64 = AtomicU64::new(0);
+    static PARAMS: AtomicU64 = AtomicU64::new(0);
+    static EXECUTE: AtomicU64 = AtomicU64::new(0);
+    static LIGNES: AtomicU64 = AtomicU64::new(0);
+    static MOTEUR_COMPILE_US: AtomicU64 = AtomicU64::new(0);
+    static MOTEUR_EXECUTE_US: AtomicU64 = AtomicU64::new(0);
+
+    /// Les cumuls depuis le dernier [`demarrer`].
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct Releve {
+        pub appels: u64,
+        pub prepare_ns: u64,
+        pub params_ns: u64,
+        pub execute_ns: u64,
+        pub lignes_ns: u64,
+        pub moteur_compile_us: u64,
+        pub moteur_execute_us: u64,
+    }
+
+    pub(super) fn actif() -> bool {
+        ACTIF.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn noter(prepare: Duration, params: Duration, execute: Duration, lignes: Duration, compile_ms: f64, execute_ms: f64) {
+        APPELS.fetch_add(1, Ordering::Relaxed);
+        PREPARE.fetch_add(prepare.as_nanos() as u64, Ordering::Relaxed);
+        PARAMS.fetch_add(params.as_nanos() as u64, Ordering::Relaxed);
+        EXECUTE.fetch_add(execute.as_nanos() as u64, Ordering::Relaxed);
+        LIGNES.fetch_add(lignes.as_nanos() as u64, Ordering::Relaxed);
+        MOTEUR_COMPILE_US.fetch_add((compile_ms * 1000.0) as u64, Ordering::Relaxed);
+        MOTEUR_EXECUTE_US.fetch_add((execute_ms * 1000.0) as u64, Ordering::Relaxed);
+    }
+
+    /// Remettre les cumuls à zéro et commencer à relever.
+    pub fn demarrer() {
+        for c in [&APPELS, &PREPARE, &PARAMS, &EXECUTE, &LIGNES, &MOTEUR_COMPILE_US, &MOTEUR_EXECUTE_US] {
+            c.store(0, Ordering::Relaxed);
+        }
+        ACTIF.store(true, Ordering::Relaxed);
+    }
+
+    /// Arrêter de relever et rendre les cumuls.
+    pub fn arreter() -> Releve {
+        ACTIF.store(false, Ordering::Relaxed);
+        Releve {
+            appels: APPELS.load(Ordering::Relaxed),
+            prepare_ns: PREPARE.load(Ordering::Relaxed),
+            params_ns: PARAMS.load(Ordering::Relaxed),
+            execute_ns: EXECUTE.load(Ordering::Relaxed),
+            lignes_ns: LIGNES.load(Ordering::Relaxed),
+            moteur_compile_us: MOTEUR_COMPILE_US.load(Ordering::Relaxed),
+            moteur_execute_us: MOTEUR_EXECUTE_US.load(Ordering::Relaxed),
+        }
     }
 }
