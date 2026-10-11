@@ -198,11 +198,7 @@ fn canonical_numbers(value: Value) -> Value {
 fn port_defs(ports: &[Checked]) -> Vec<PortDef> {
     ports
         .iter()
-        .map(|p| PortDef {
-            name: p.name.clone().into(),
-            port_type: PortType::Map,
-            required: p.required,
-        })
+        .map(|p| PortDef::value(p.name.clone(), PortType::Map, p.required))
         .collect()
 }
 

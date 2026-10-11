@@ -281,22 +281,14 @@ mod tests {
         Box::new(TestNode::new(
             name,
             vec![],
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
+            vec![PortDef::value("out", PortType::Results, false)],
         ))
     }
 
     fn sink_node(name: &str) -> Box<dyn Node> {
         Box::new(TestNode::new(
             name,
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: true,
-            }],
+            vec![PortDef::value("in", PortType::Results, true)],
             vec![],
         ))
     }
@@ -304,16 +296,8 @@ mod tests {
     fn passthrough_node(name: &str) -> Box<dyn Node> {
         Box::new(TestNode::new(
             name,
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: true,
-            }],
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
+            vec![PortDef::value("in", PortType::Results, true)],
+            vec![PortDef::value("out", PortType::Results, false)],
         ))
     }
 
@@ -334,11 +318,7 @@ mod tests {
         g.add_node(source_node("a")).unwrap(); // out: Results
         g.add_node(Box::new(TestNode::new(
             "b",
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Children,
-                required: true,
-            }],
+            vec![PortDef::value("in", PortType::Children, true)],
             vec![],
         )))
         .unwrap();
@@ -367,30 +347,14 @@ mod tests {
         // Create two nodes that can form a cycle
         g.add_node(Box::new(TestNode::new(
             "a",
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
+            vec![PortDef::value("in", PortType::Results, false)],
+            vec![PortDef::value("out", PortType::Results, false)],
         )))
         .unwrap();
         g.add_node(Box::new(TestNode::new(
             "b",
-            vec![PortDef {
-                name: "in".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
-            vec![PortDef {
-                name: "out".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
+            vec![PortDef::value("in", PortType::Results, false)],
+            vec![PortDef::value("out", PortType::Results, false)],
         )))
         .unwrap();
 

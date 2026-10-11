@@ -146,3 +146,26 @@ tait les résultats déjà rendus du même niveau.
 
 Chacun relit l'autre avant master ; `graph.rs` (la validation) est partagé :
 le genre et la posture y entrent par moi, le refus par elle.
+
+## 5. Fait, dans l'ordre
+
+- **Le saut** (master `522fa6780`) : une branche non prise est sautée et dite
+  (`NodeStatus::Skipped`, `NodeSkipped`, `DataflowOutput::skip_reason`,
+  `GraphToolError::NotTaken`), propagé au point fixe, en direct et avec points
+  de reprise. Ticket fermé.
+- **Les déclarations et les sorties requises** (branche `flux-declarations`) :
+  - `PortKind::{Value, Finite, Open}` et `Posture::{Complete, PerElement}` sur
+    `PortDef`, avec les constructeurs `PortDef::value(..)`, `.stream(..)`,
+    `.posture(..)`. Les 187 littéraux du dépôt sont passés au constructeur
+    (défauts `Value` / `Complete` : rien ne change à l'exécution).
+  - **Le prix du saut, réglé par construction** (orchestration) : le drapeau
+    `required` d'une sortie, déclaré partout et vérifié nulle part, est
+    RESPECTÉ. Un nœud qui finit sans poser une sortie requise est une faute
+    nommée, pas un saut ; seule une sortie optionnelle vide fait sauter l'aval.
+    Le saut n'est donc jamais ambigu. Mesuré : toute la lib reste verte, aucun
+    nœud exercé ne déclare une sortie requise sans la poser.
+  - `RunStarted` dit la cellule de **sa requête** (le service `scope`) avant
+    celle du bus, pour la marche 1 bis de l'arbre principal.
+  - Témoins, rouges d'abord : `une_sortie_requise_non_posee_est_une_faute_du_noeud`,
+    `run_started_dit_la_cellule_de_sa_requete`.
+- **Ensuite** : l'exécuteur concurrent, pour les seuls graphes à port de flux.

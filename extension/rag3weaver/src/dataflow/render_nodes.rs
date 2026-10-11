@@ -1083,15 +1083,15 @@ impl NodeFactory for RenderResultsNodeFactory {
             node_type: "RenderResultsNode".into(),
             description: "Renders results as markdown on 'text' through a template (nulls, internal fields and embeddings dropped) and passes them through on 'results'".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
-                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
+                PortDef::value("results", PortType::Results, false),
+                PortDef::value("query", PortType::Query, false),
+                PortDef::value("meta", PortType::Meta, false),
             ],
             outputs: vec![
-                PortDef { name: "text".into(), port_type: PortType::Text, required: false },
-                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
-                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
+                PortDef::value("text", PortType::Text, false),
+                PortDef::value("results", PortType::Results, false),
+                PortDef::value("query", PortType::Query, false),
+                PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![
                 ConfigParam {

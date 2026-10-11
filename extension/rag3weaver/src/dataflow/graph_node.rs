@@ -119,22 +119,14 @@ impl GraphNode {
         let inputs: Vec<PortDef> = input_defs
             .iter()
             .map(|(name, pt, req)| {
-                PortDef {
-                    name: name.clone().into(),
-                    port_type: *pt,
-                    required: *req,
-                }
+                PortDef::value(name.clone(), *pt, *req)
             })
             .collect();
 
         let outputs: Vec<PortDef> = output_defs
             .iter()
             .map(|(name, pt, req)| {
-                PortDef {
-                    name: name.clone().into(),
-                    port_type: *pt,
-                    required: *req,
-                }
+                PortDef::value(name.clone(), *pt, *req)
             })
             .collect();
 

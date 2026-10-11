@@ -317,9 +317,9 @@ impl NodeRegistry {
 /// ```ignore
 /// simple_factory!(ComposeNodeFactory, ComposeNode, "ComposeNode",
 ///     "Attaches fetched children to root results",
-///     &[PortDef { name: "results".into(), port_type: PortType::Results, required: true },
-///       PortDef { name: "children".into(), port_type: PortType::Children, required: false }],
-///     &[PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+///     &[PortDef::value("results", PortType::Results, true),
+///       PortDef::value("children", PortType::Children, false)],
+///     &[PortDef::value("results", PortType::Results, false)],
 /// );
 /// ```
 #[macro_export]
@@ -412,7 +412,7 @@ mod tests {
         fn name(&self) -> &str { &self.node_name }
         fn inputs(&self) -> Vec<PortDef> { vec![] }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out".into(), port_type: PortType::Empty, required: false }]
+            vec![PortDef::value("out", PortType::Empty, false)]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::Trigger);
@@ -436,7 +436,7 @@ mod tests {
                 node_type: "FakeNode".into(),
                 description: "A fake node for testing".into(),
                 inputs: vec![],
-                outputs: vec![PortDef { name: "out".into(), port_type: PortType::Empty, required: false }],
+                outputs: vec![PortDef::value("out", PortType::Empty, false)],
                 config_params: vec![ConfigParam {
                     name: "value".into(),
                     param_type: ConfigParamType::Int,
@@ -509,7 +509,7 @@ mod tests {
         "SimpleFake",
         "Simple fake node",
         &[],
-        &[PortDef { name: "out".into(), port_type: PortType::Empty, required: false }],
+        &[PortDef::value("out", PortType::Empty, false)],
     );
 
     #[test]

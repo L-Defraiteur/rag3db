@@ -1880,7 +1880,7 @@ mod tests {
         struct Pass(String);
         struct Muet(String);
         fn port(n: &'static str, requis: bool) -> PortDef {
-            PortDef { name: n.into(), port_type: PortType::Any, required: requis }
+            PortDef::value(n, PortType::Any, requis)
         }
         impl Node for Aig {
             fn name(&self) -> &str { &self.0 }

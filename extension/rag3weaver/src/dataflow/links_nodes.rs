@@ -536,8 +536,8 @@ impl NodeFactory for LinksNodeFactory {
         NodeSchema {
             node_type: "LinksNode".into(),
             description: "How search results connect: the shortest graph paths between them (up to four hops, both directions, along declared relations), hubs neither traversed nor used as meeting points. Renders one line per link, or nothing — an empty text when the results do not connect.".into(),
-            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            inputs: vec![PortDef::value("results", PortType::Results, false)],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 p("entity", S, true, None, "Entité des résultats (ex. Scope)"),
                 p("relations", S, true, None, "Relations suivies dans les deux sens, séparées par |"),
@@ -691,8 +691,8 @@ impl NodeFactory for CohesionNodeFactory {
         NodeSchema {
             node_type: "CohesionNode".into(),
             description: "How cohesive each search candidate is: the sum of 1/hops to the other candidates it reaches within max_hops along declared relations (hubs excluded). Emits a labelled result signal to plug into FuseResultsNode as a boost (weight declared there, 0 = off).".into(),
-            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
-            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+            inputs: vec![PortDef::value("results", PortType::Results, false)],
+            outputs: vec![PortDef::value("results", PortType::Results, false)],
             config_params: vec![
                 p("entity", S, true, None, "Entité des candidats (ex. Scope)"),
                 p("relations", S, true, None, "Relations suivies dans les deux sens, séparées par |"),
@@ -791,10 +791,10 @@ impl NodeFactory for CohesionBoostNodeFactory {
             node_type: "CohesionBoostNode".into(),
             description: "After fusion: when SearchOptions.cohesion is set (weight, relations), multiplies each fused score by 1 + weight × normalised cohesion (how many other candidates it reaches within max_hops along the declared relations, hubs excluded) and re-sorts. Without the option, results pass through at no cost.".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
+                PortDef::value("results", PortType::Results, false),
+                PortDef::value("query", PortType::Query, false),
             ],
-            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+            outputs: vec![PortDef::value("results", PortType::Results, false)],
             config_params: vec![],
         }
     }

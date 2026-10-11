@@ -22,11 +22,7 @@ struct SetNode {
     config: Value,
 }
 fn port(name: &'static str, ty: PortType) -> PortDef {
-    PortDef {
-        name: name.into(),
-        port_type: ty,
-        required: true,
-    }
+    PortDef::value(name, ty, true)
 }
 fn param(name: &'static str, ty: ConfigParamType) -> ConfigParam {
     ConfigParam {
@@ -93,10 +89,10 @@ impl NodeFactory for SetFactory {
             description: "Composable entity sets; selection and intersection never paginate".into(),
             inputs,
             outputs: {
-                let mut out = vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }];
+                let mut out = vec![PortDef::value("results", PortType::Results, false)];
                 if self.0 == "SelectRecordsNode" {
                     // Ce que la sélection n'a pas montré, pour le rendu.
-                    out.push(PortDef { name: "meta".into(), port_type: PortType::Meta, required: false });
+                    out.push(PortDef::value("meta", PortType::Meta, false));
                 }
                 out
             },

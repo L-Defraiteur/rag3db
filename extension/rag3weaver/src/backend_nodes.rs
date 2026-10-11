@@ -47,7 +47,7 @@ impl NodeFactory for EntityRecordFactory {
             "Read or put one record",
         );
         action.choices = Some(Choices::fixed(["get", "put"]));
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],outputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         for key in ["entity", "action"] {
@@ -258,7 +258,7 @@ impl NodeFactory for EntityBatchFactory {
         );
         records.json_schema =
             Some(json!({"type":"array","maxItems":512,"items":{"type":"object"}}));
-        NodeSchema { node_type:self.node_type().to_owned().into(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies".into(), inputs:vec![], outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
+        NodeSchema { node_type:self.node_type().to_owned().into(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies".into(), inputs:vec![], outputs:vec![PortDef::value("report", PortType::Map, false)], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -459,7 +459,7 @@ impl NodeFactory for SnapshotSessionFactory {
             node_type: self.node_type().to_owned().into(),
             description: "Open (begin) or abandon (abort) a synchronisation session on a scope; one open session per scope".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "session".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("session", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -540,7 +540,7 @@ impl NodeFactory for SnapshotFinishFactory {
             node_type: self.node_type().to_owned().into(),
             description: "End a synchronisation session: missing rows of the scope are removed or follow the declared transition; refuses an empty session or too many missing rows unless told otherwise".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -625,7 +625,7 @@ impl NodeFactory for SnapshotUndoFactory {
             node_type: self.node_type().to_owned().into(),
             description: "Undo an applied synchronisation finish: removed rows come back from their set-aside copies, transitioned rows get their previous state back".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -714,7 +714,7 @@ impl NodeFactory for RelationBatchFactory {
         links.json_schema = Some(
             json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"}}}}),
         );
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef::value("report", PortType::Map, false)],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(

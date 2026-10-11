@@ -127,8 +127,8 @@ impl NodeFactory for FilterResultsNodeFactory {
             description: "Garde les résultats au-dessus d'un seuil de score, et \
                           écarte ceux dont un champ vaut une valeur donnée — un \
                           filtre, rien n'est relu ni recalculé.".into(),
-            inputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: true }],
-            outputs: vec![PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+            inputs: vec![PortDef::value("results", PortType::Results, true)],
+            outputs: vec![PortDef::value("results", PortType::Results, false)],
             config_params: vec![
                 ConfigParam {
                     name: "min_score".into(),
