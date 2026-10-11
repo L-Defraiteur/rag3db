@@ -713,4 +713,23 @@ conflit ; `known_red` : 11 attendus, les quatre VectorIndexUpdate sortis par le 
 lecteur affamé (du C++ dans `src/storage`) avant ma fusion, et un rebase qui apporte du C++ se
 rejoue — une seule passe, après son « poussé ».
 
-Passe : PASSE_I1.
+Passe, sur luciepc, bâti de `verrous-i1-4` (`27b90442c`, rebasée sur master `5c5feb527` : le lecteur
+affamé d'hotfixs dedans, 67 étapes, lib et extension datées après le checkout) : banc de
+concurrence en tenue exclusive conforme à `known_red.txt`, 9 rouges comparés, 246 verts (11 lignes
+attendues) ; api 104, c_api 136, copy 23, stockage 83 + column_stats 2, vector 74 et 63, Cypher
+1867 ; transaction_test 246 verts et **un rouge** : `OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent`
+(après la mort d'un COPY journalisé, rejeu + point de reprise : la colonne DOUBLE des dernières lignes
+lit zéro). Seul ×2 vert, vert dans la liste précédente ; probabiliste (l'instant de la mort) ; pas
+I1 (hors du mode, rien ne change) ; ticket ouvert
+(`docs/tickets/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md`),
+hotfixs bissecte entre son `e4198f862` et son parent. **Fusionnée** sur ordre de l'orchestration :
+master `3ad09c8cc` (avance rapide, `83fdf22f3`…`3ad09c8cc`, sur `8b098eb3b` ; le dernier rebase
+n'apportait que du rag3weaver et des docs). Lib commune de luciepc rebâtie dessus, worktree
+`rag3db-i1` effacé.
+
+## La suite : I2 (la maintenance de l'index au commit)
+
+Page 09 §0 et §3 : I2 n'ouvre qu'avec la mesure du banc sur l'état par instruction (ce que coûte la
+fin d'instruction, et pourquoi) ; une page avant le code, comme pour les autres marches. Tickets du
+moteur encore à moi : C7 après un arrêt brutal, la seconde suppression d'une relation, la part
+reprise du journal à doublon.
