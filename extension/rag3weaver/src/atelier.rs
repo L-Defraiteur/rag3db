@@ -58,6 +58,10 @@ impl Hub {
     /// Ouvre un flux d'événements serveur sur `writer` (la réponse HTTP est
     /// écrite ici : tiny_http retiendrait de petits événements).
     pub fn subscribe(&self, mut writer: Box<dyn Write + Send>) {
+        // Sous le verrou : l'abonné est inscrit avant qu'une publication ou un
+        // comptage ne passe — aucun événement ne tombe entre l'en-tête et
+        // l'inscription.
+        let mut subscribers = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
         let opened = writer
             .write_all(
                 b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
@@ -65,10 +69,7 @@ impl Hub {
             )
             .and_then(|_| writer.flush());
         if opened.is_ok() {
-            self.subscribers
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(writer);
+            subscribers.push(writer);
         }
     }
 
