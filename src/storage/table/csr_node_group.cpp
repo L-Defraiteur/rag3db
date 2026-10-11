@@ -449,6 +449,28 @@ bool CSRNodeGroup::delete_(const Transaction* transaction, CSRNodeGroupScanSourc
     }
 }
 
+bool CSRNodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t transactionID,
+    CSRNodeGroupScanSource source, row_idx_t rowIdxInGroup) const {
+    switch (source) {
+    case CSRNodeGroupScanSource::COMMITTED_PERSISTENT: {
+        KU_ASSERT(persistentChunkGroup);
+        return persistentChunkGroup->wasWrittenByCommitAfter(startTS, transactionID,
+            rowIdxInGroup);
+    }
+    case CSRNodeGroupScanSource::COMMITTED_IN_MEMORY: {
+        KU_ASSERT(csrIndex);
+        auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(rowIdxInGroup,
+            StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+        const auto lock = chunkedGroups.lock();
+        const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+        return chunkedGroup->wasWrittenByCommitAfter(startTS, transactionID, rowInChunk);
+    }
+    default: {
+        return false;
+    }
+    }
+}
+
 void CSRNodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pageAllocator,
     ColumnStats* newColumnStats) {
     if (persistentChunkGroup) {

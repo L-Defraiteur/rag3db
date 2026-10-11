@@ -205,6 +205,13 @@ public:
         const common::ValueVector& propertyVector);
     bool delete_(const transaction::Transaction* transaction, CSRNodeGroupScanSource source,
         common::row_idx_t rowIdxInGroup);
+    // La relation (trouvée par findMatchingRow : sa source et sa ligne) a été supprimée, ou
+    // l'une de ses colonnes mise à jour, par une validation postérieure à l'instantané startTS
+    // (marche A4′, sur le modèle de ChunkedNodeGroup) ; ce que la transaction a fait elle-même
+    // ne compte pas.
+    bool wasWrittenByCommitAfter(common::transaction_t startTS,
+        common::transaction_t transactionID, CSRNodeGroupScanSource source,
+        common::row_idx_t rowIdxInGroup) const;
 
     void addColumn(TableAddColumnState& addColumnState, PageAllocator* pageAllocator,
         ColumnStats* newColumnStats) override;
