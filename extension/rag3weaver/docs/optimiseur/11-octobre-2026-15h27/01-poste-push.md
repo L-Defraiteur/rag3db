@@ -88,6 +88,14 @@ vide. Le délai de la mesure, posé par `timeout … poste mesure`, s'est consum
 - Le script tient lui-même ses verrous (descripteurs 8 et 9) et ne les transmet jamais à la
   commande : un orphelin de la commande ne tient pas la place.
 
+**Un poste sous un poste passe** (12 octobre, ticket
+`2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place`). Une commande lancée par `poste
+mesure` ou `poste lourd` qui appelle elle-même `poste` attendait sa propre place sans fin. C'est
+le cas de `run_e2e.sh`, qui bâtit par `poste lourd`. La trace du cœur a tenu l'exclusif
+30 minutes à 23 h 32 sans courir. Désormais, le poste remonte la chaîne de ses parents. Si l'un
+d'eux a une fiche « tient », il passe sans verrou ni nouvelle portée, et le dit sur stderr. Cela
+vaut pour la mesure comme pour le lourd, sans variable à poser.
+
 Le prix : sept mesures en file affament les compilations le temps de leur passage. C'est voulu.
 La mesure est le travail exclusif, et elle est courte ; une mesure longue se dit.
 

@@ -67,14 +67,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Un `poste` appelé par la commande d'un autre `poste` attend sa propre place, sans fin](2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place.md) | ouvert — optimiseur | blocage (mesures perdues) | oui, sur le poste | oui (`poste`) |
 | [Des morceaux de code sont écrits sans texte : 20 % de code-rag3db](2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md) | ouvert — l'arbre principal | réponse fausse, et blocage (le gel de code-lourd) | oui | oui |
 | [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | ouvert — pour l'auteur de la montre | test instable ; le reçu occupé ne dit pas les montres | non (le test) | oui (`backend.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
@@ -109,10 +108,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (107), dans `closed/`
+### Fermés (108), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un `poste` appelé par la commande d'un autre `poste` attend sa propre place, sans fin](closed/2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place.md) | corrigé : un ancêtre tenant reconnu, le poste passe (12 oct.) | blocage | oui, sur le poste | oui (`poste`) |
 | [Le client mince ne revient pas seul quand l'hôte revient](closed/2026-10-11-le-client-mince-ne-revient-pas-seul-quand-l-hote-revient.md) | corrigé (reprise en fond, list_changed, coupure non rejouée) | blocage | oui | oui (et seulement) |
 | [Un index se fige sur un appel d'embarquement sans délai](closed/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | corrigé | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
 | [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](closed/2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | corrigé (voir le ticket) ; H4 au vert | refus d'une instruction valide | oui, depuis la bascule | oui en principe |

@@ -264,6 +264,28 @@ fi
 # Les verrous sont tenus par ce script (descripteurs 8 et 9), jamais transmis
 # à la commande (`8>&- 9>&-`) : un orphelin de la commande ne tient pas la
 # place (le `tail -f` du 11 octobre, 2 h 35), et la place tombe à notre fin.
+# ── Un poste sous un poste (12 octobre 2026) ──────────────────────────────
+# Une commande lancée par `poste mesure|lourd` qui appelle elle-même `poste`
+# (run_e2e.sh bâtit par `poste lourd`) attendait sa propre place sans fin : la
+# porte ou l'exclusif que son ancêtre tient (ticket
+# 2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place). Le poste reconnaît
+# lui-même un ancêtre tenant — un pid de la chaîne de ses parents dont la fiche
+# dit « tient » — et passe sans verrou ni nouvelle portée, mesure ou lourd :
+# la place est déjà prise pour lui. Aucune variable à poser.
+ancetre_tenant() {
+  p=$PPID
+  while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+    if [ -f "$F/$p" ]; then
+      case "$(cat "$F/$p" 2>/dev/null)" in tient*) echo "$p"; return 0 ;; esac
+    fi
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+  done
+  return 1
+}
+if tenant=$(ancetre_tenant); then
+  echo "poste: un ancêtre tient déjà la place ($(cut -d' ' -f1-2 "$F/$tenant" 2>/dev/null), pid $tenant) : ce $mode passe sans verrou" >&2
+  exec "$@"
+fi
 mkdir -p "$F"
 fiche="$F/$$"
 resume=$(printf '%s ' "$@" | cut -c1-90)

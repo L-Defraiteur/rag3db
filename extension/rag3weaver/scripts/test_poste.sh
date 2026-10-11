@@ -71,4 +71,22 @@ cas $? "poste --qui dit le lourd qui tient et la mesure qui attend, depuis quand
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ne reste"
 
+# ── 4. Un poste sous un poste passe : il reconnaît son ancêtre tenant ─────
+# (ticket 2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place) : une
+# mesure dont la commande appelle poste lourd (run_e2e.sh le fait) attendait
+# sa propre place sans fin.
+sous() { # <mode extérieur> <mode intérieur>
+  timeout 20 "$POSTE" "$1" bash -c "\"$POSTE\" $2 bash -c 'echo dedans'" 2>/dev/null
+}
+[ "$(sous mesure lourd)" = dedans ]
+cas $? "une mesure dont la commande appelle poste lourd finit"
+[ "$(sous lourd lourd)" = dedans ]
+cas $? "un lourd sous un lourd finit"
+[ "$(sous lourd mesure)" = dedans ]
+cas $? "une mesure sous un lourd finit (sans prendre l'exclusif qu'un ancêtre tient en partagé)"
+[ "$(sous mesure mesure)" = dedans ]
+cas $? "une mesure sous une mesure finit"
+[ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ]
+cas $? "à la fin, aucune fiche ne reste"
+
 exit $echec

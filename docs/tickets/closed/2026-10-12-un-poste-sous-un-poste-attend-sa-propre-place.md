@@ -1,6 +1,6 @@
 # Un `poste` appelé par la commande d'un autre `poste` attend sa propre place, sans fin
 
-- **État** : ouvert (12 octobre 2026, optimiseur, à la demande de l'orchestration)
+- **État** : corrigé (12 octobre 2026, optimiseur, branche `poste-sous-poste`) : le poste reconnaît un ancêtre tenant et passe ; `test_poste.sh` vert, onze cas ; déployé sur les deux postes (md5 aef06aae)
 - **Gravité** : blocage. La trace des fils du cœur a tenu la place exclusive 30 minutes à 23 h 32
   sans courir : deuxième mesure perdue de la soirée. Avant cela, F a tenu la place d'ici pour
   rien de 21 h 54 à 22 h 45.
