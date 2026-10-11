@@ -1886,6 +1886,11 @@ impl PreparedBackend {
     }
 }
 
+thread_local! {
+    /// La cellule de l'appel en cours dans ce fil (`Backend::call_in`).
+    static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
+}
+
 pub struct Backend {
     /// **Les réactions en service** — le réacteur qui les exécute, ou rien si
     /// le manifeste n'en déclare aucune. Montées à l'ouverture, arrêtées par
@@ -2249,6 +2254,24 @@ impl Backend {
         response["candidate_bounded"] = json!(plan.candidate_bounded);
         response["diagnostics"] = json!(plan.diagnostics);
         Ok(response)
+    }
+
+    /// **Un appel dans une cellule** (marche 1 bis de la forme C) : la cellule
+    /// de la session qui appelle, portée par les services de l'appel (`scope`)
+    /// jusqu'aux nœuds, au lieu de la cellule du catalogue. `call` reste
+    /// l'appel dans la cellule par défaut du catalogue.
+    pub fn call_in(&self, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
+        // La cellule vit le temps de cet appel, dans ce fil : les services se
+        // construisent ici, avant que le graphe ne parte sur d'autres fils.
+        struct Remettre(Option<crate::scope::Scope>);
+        impl Drop for Remettre {
+            fn drop(&mut self) {
+                CELL_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+            }
+        }
+        let avant = CELL_OF_CALL.with(|c| c.replace(Some(cell.clone())));
+        let _remettre = Remettre(avant);
+        self.call(name, args)
     }
 
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
@@ -2627,6 +2650,11 @@ impl Backend {
             .lock()
             .unwrap()
             .register_search_services(&mut services);
+        // La cellule de l'appel, si `call_in` l'a posée : elle remplace celle du
+        // catalogue pour les nœuds de cet appel.
+        if let Some(cell) = CELL_OF_CALL.with(|c| c.borrow().clone()) {
+            services.register("scope", cell);
+        }
         services.register("catalog", self.catalog.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());

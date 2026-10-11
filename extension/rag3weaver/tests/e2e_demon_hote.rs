@@ -330,3 +330,40 @@ fn par_le_fil_http_jusqu_a_l_arret() {
     servi.join().expect("le démon s'arrête et ferme ses backends");
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// **Marche 1 bis, pas a : chaque session écrit et lit dans sa cellule.**
+/// Deux sessions sur deux cellules d'un même backend : chacune relit sa
+/// fiche et ne voit pas celle de l'autre ; la même identité dans l'autre
+/// cellule est refusée en le nommant (une identité ne vit que dans une
+/// cellule jusqu'à la migration) ; et en base, chaque ligne porte la cellule
+/// de la session qui l'a écrite.
+#[test]
+#[ignore]
+fn chaque_session_ecrit_et_lit_dans_sa_cellule() {
+    let d = dossier("cellules");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![]);
+    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![]);
+    ok(&host.open(Some(&sa), &m));
+    ok(&put(&host, &sa, &m, "put_fiche", "fa"));
+    ok(&put(&host, &sb, &m, "put_fiche", "fb"));
+    assert!(fiche(&host, &sa, &m, "fa").is_some(), "A relit sa fiche");
+    assert!(fiche(&host, &sb, &m, "fb").is_some(), "B relit la sienne");
+    assert!(fiche(&host, &sa, &m, "fb").is_none(), "A ne voit pas la fiche de B");
+    assert!(fiche(&host, &sb, &m, "fa").is_none(), "B ne voit pas celle de A");
+    let refus = put(&host, &sb, &m, "put_fiche", "fa");
+    assert_eq!(refus["ok"], json!(false), "{refus}");
+    assert!(refus["error"].as_str().unwrap().contains("vit déjà dans la cellule acme/alpha"), "{refus}");
+    assert!(fiche(&host, &sa, &m, "fa").is_some(), "la fiche de A est intacte après le refus");
+    host.shutdown();
+
+    // En base : chaque ligne porte la cellule de sa session.
+    let conn = Rag3dbConnection::new(d.join("base.rag3db")).unwrap();
+    use rag3weaver::connection::DbConnection;
+    let r = conn.execute("MATCH (n:Fiche) RETURN n.titre, n._org, n._project ORDER BY n.titre").unwrap();
+    let lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| v.as_str().unwrap_or("?").to_string()).collect::<Vec<_>>().join("/")).collect();
+    assert_eq!(lignes, vec!["fa/acme/alpha", "fb/acme/beta"], "les cellules en base");
+    drop(conn);
+    let _ = std::fs::remove_dir_all(d);
+}

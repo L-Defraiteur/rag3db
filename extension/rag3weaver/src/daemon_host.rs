@@ -186,11 +186,17 @@ impl DaemonHost {
     /// **`call`** : un outil du backend, sérialisé avec les autres appels de
     /// ce backend.
     pub fn call(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
-        let result = self
-            .check_session(session)
-            .and_then(|_| self.hosted(manifest))
-            .and_then(|hosted| self.with_backend(&hosted, |b| b.call(name, arguments)))
-            .and_then(|r| r);
+        let result = self.check_session(session).and_then(|s| {
+            let cell = cell_of(&s)?;
+            let hosted = self.hosted(manifest)?;
+            self.with_backend(&hosted, |b| match &cell {
+                // La cellule de la session (marche 1 bis) : elle passe par la
+                // requête, jamais par le catalogue.
+                Some(cell) => b.call_in(cell, name, arguments),
+                None => b.call(name, arguments),
+            })
+            .and_then(|r| r)
+        });
         op_response(result)
     }
 
@@ -293,6 +299,16 @@ impl Default for DaemonHost {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// La cellule d'une session : `{org, project}`, validée. Sans cellule, la
+/// cellule par défaut du catalogue.
+fn cell_of(session: &Session) -> Result<Option<crate::scope::Scope>, String> {
+    let Some(v) = &session.cell else { return Ok(None) };
+    let cell: crate::scope::Scope =
+        serde_json::from_value(v.clone()).map_err(|e| format!("la cellule de la session « {} » : {e} (attendu {{org, project}})", session.id))?;
+    cell.validate()?;
+    Ok(Some(cell))
 }
 
 /// La réponse d'un message `op` : `{ok, result}` ou `{ok: false, error}`. Une

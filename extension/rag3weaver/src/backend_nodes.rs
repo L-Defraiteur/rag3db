@@ -127,7 +127,20 @@ impl Node for EntityRecordNode {
         let uuid = cat
             .entity_uuid(entity, &identity)
             .map_err(|e| e.to_string())?;
-        let old = cat.get(entity, &uuid).map_err(|e| e.to_string())?;
+        // **La cellule de l'appel** (marche 1 bis) : la ligne d'une autre cellule
+        // n'est pas celle de cet appel. La lire comme absente ; l'écrire sera
+        // refusé par le catalogue en le nommant (une identité ne vit que dans
+        // une cellule jusqu'à la migration).
+        let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
+        let dans_la_cellule = |row: &std::collections::BTreeMap<String, CypherValue>| {
+            let lire = |c: &str| row.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            match (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                (Some(org), Some(project)) => org == cell.org && project == cell.project,
+                // Une ligne sans cellule (une base d'avant les cellules) est de la cellule par défaut.
+                _ => cell.is_default(),
+            }
+        };
+        let old = cat.get(entity, &uuid).map_err(|e| e.to_string())?.filter(|row| dans_la_cellule(row));
         if self.config["action"] == "get" {
             ctx.set_output("record", PortValue::new(json!({"uuid":uuid,"data":old})));
             return Ok(());
@@ -209,7 +222,8 @@ impl Node for EntityRecordNode {
                 };
         }
         validator.validate(&input).map_err(|e| e.to_string())?;
-        let data = mapping.record(&input)?;
+        let mut data = mapping.record(&input)?;
+        cell.stamp(&mut data);
         let report = cat
             .ingest_entities(entity, vec![data])
             .map_err(|e| e.to_string())?;

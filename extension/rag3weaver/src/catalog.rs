@@ -4357,9 +4357,14 @@ impl Catalog {
 
     /// MERGE des nœuds `_Org {_uuid: org}` et `_Project {_uuid: project}`.
     fn ensure_scope_nodes(&self) -> Result<(), CatalogError> {
+        self.ensure_scope_nodes_for(&self.scope.clone())
+    }
+
+    /// Les nœuds `_Org` / `_Project` d'une cellule donnée.
+    fn ensure_scope_nodes_for(&self, cell: &crate::scope::Scope) -> Result<(), CatalogError> {
         for (table, id) in [
-            (crate::scope::ORG_TABLE, &self.scope.org),
-            (crate::scope::PROJECT_TABLE, &self.scope.project),
+            (crate::scope::ORG_TABLE, &cell.org),
+            (crate::scope::PROJECT_TABLE, &cell.project),
         ] {
             let stmt = self.dialect.upsert_scope_node(table, "id");
             self.conn.execute_with_params(
@@ -5590,6 +5595,10 @@ impl Catalog {
             });
         }
 
+        // **Une écriture dans la cellule de sa requête** (marche 1 bis, pas a) :
+        // un nœud a pu poser une autre cellule que celle du catalogue sur ses
+        // lignes. La base devient alors à plusieurs cellules, avec leurs nœuds.
+        self.reconnaitre_les_cellules_ecrites(&entity_records)?;
         // **Une identité ne vit que dans une cellule** : une base à plusieurs
         // cellules vérifie, avant d'écrire, qu'aucune ligne du lot n'existe
         // déjà dans une autre cellule. Une base à une seule cellule (presque
@@ -6436,6 +6445,7 @@ impl Catalog {
         let record = EntityRecord::new(entity_name.to_string(), full_data, resolver, entity_ref.clone());
         // Comme l'ingestion : une identité qui vit dans une autre cellule est
         // refusée avant d'entrer en file.
+        self.reconnaitre_les_cellules_ecrites(std::slice::from_ref(&record))?;
         if self.multi_cell {
             self.refuser_une_identite_d_une_autre_cellule(entity_name, std::slice::from_ref(&record))?;
         }
@@ -8168,6 +8178,27 @@ impl Catalog {
 
     pub fn has_pending(&self) -> bool {
         !self.pending.is_empty()
+    }
+
+    /// Les cellules que portent des lignes à écrire, autres que celle du
+    /// catalogue : la base devient à plusieurs cellules, et chacune a ses
+    /// nœuds `_Org` / `_Project`.
+    fn reconnaitre_les_cellules_ecrites(&mut self, records: &[EntityRecord]) -> Result<(), CatalogError> {
+        let mut autres: Vec<crate::scope::Scope> = Vec::new();
+        for r in records {
+            let lire = |c: &str| r.data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            if let (Some(org), Some(project)) = (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                let cell = crate::scope::Scope::new(org, project);
+                if cell != self.scope && !autres.contains(&cell) {
+                    autres.push(cell);
+                }
+            }
+        }
+        for cell in &autres {
+            self.ensure_scope_nodes_for(cell)?;
+            self.multi_cell = true;
+        }
+        Ok(())
     }
 
     /// Refuse un lot dont une ligne existe déjà, par son `_uuid`, dans une
