@@ -137,3 +137,30 @@ code et mêmes données) : le découpage du balayage par blocs, sans effet sur l
 sur luciepc, une heure à attendre derrière les lourds (poste corrigé depuis) ; ici, bloquée par le
 `poste lourd` intérieur de `run_e2e.sh` sous `poste mesure` (défaut à G) ; relancée à 0 h 02 sous le
 seul lourd de `run_e2e.sh` : résultats ci-dessous dès qu'ils sortent.
+
+**La trace des fils, lue (12 octobre, 0 h 10 ; ici, sous le lourd de `run_e2e.sh`, lib
+rag3db-build-a3e5e5dd7, mesure d'impact de F : 150 appels, 3 620 tâches, 3 038 ms de moteur).**
+
+| tâches (source → puits, fils donnés) | n | durée | part | fils venus |
+|---|---|---|---|---|
+| SCAN_NODE_TABLE → HASH_JOIN_BUILD, 32 | 1 250 | 852 ms | 28 % | ~11 |
+| TABLE_FUNCTION_CALL → RESULT_COLLECTOR, 32 (card. inconnue) | 477 | 578 ms | 19 % | ~9 |
+| TABLE_FUNCTION_CALL → BATCH_INSERT, 32 (l'ingestion) | 7 | 443 ms | 15 % | ~31 |
+| AGGREGATE_FINALIZE, 32 | 223 | 278 ms | 9 % | ~21 |
+| AGGREGATE_SCAN → RESULT_COLLECTOR, 32 | 211 | 273 ms | 9 % | ~7 |
+| TABLE_FUNCTION_CALL → AGGREGATE, 32 (card. inconnue) | 207 | 231 ms | 8 % | ~10 |
+| TABLE_FUNCTION_CALL → RESULT_COLLECTOR, 1 | 593 | 213 ms | 7 % | 1 |
+| PRIMARY_KEY_SCAN → RESULT_COLLECTOR, 1 | 469 | 26 ms | 1 % | 1 |
+
+- **91 % du temps dans les tâches dotées de 32 fils** (2 501 tâches ; ~11 fils viennent vraiment ;
+  1,1 ms par tâche contre 0,24 ms pour une tâche à 1 fil) ; 9 % dans les tâches à 1 fil.
+- Parmi les tâches à 32 fils : **63 % ont une cardinalité estimée ≤ 2 048** (1 588 : les balayages
+  de construction des jointures, les agrégats), **37 % n'en ont pas** (913, source
+  `TABLE_FUNCTION_CALL` : le planificateur ne pose rien sur un CALL).
+- Le lecture : **« moins de tâches » n'est pas le levier** (24 tâches par appel sont la forme du
+  plan) ; **les fils proportionnés** couvrent tout de suite ≈ 55 % du temps (les tâches à
+  estimation connue) ; le second pas est que **les fonctions de table déclarent leur estimation**
+  (`QUERY_VECTOR_INDEX` connaît son k, un CALL simple rend une ligne), pour que la règle les
+  voie — sans quoi elles gardent le plafond, par construction.
+- Référence `[mesure]` avant la règle, sur ce poste, fils par défaut : joindre p2 55,2 ms, p3
+  67,5 ms ; est_local p2 54,7 ms, p3 80,4 ms ; servir_lie p2 57,5 ms, p3 68,7 ms (médianes de 5).
