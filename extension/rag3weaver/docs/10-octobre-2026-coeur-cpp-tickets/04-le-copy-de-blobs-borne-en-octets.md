@@ -114,3 +114,35 @@ vidage par environ deux.
 2. **À l'orchestration** : (iii), un COPY dans un groupe déjà commencé, reste une limite écrite,
    d'accord ? Le filet du produit (des COPY de blobs bornés en octets, chez A) le couvre en
    attendant.
+
+## 8. La relecture du cœur (11 octobre 2026, avant la reprise)
+
+La forme (ii) est **acceptée** par la session cœur C++, sous cinq conditions, à tenir à la reprise.
+Le lot est reporté après la condition 3 (orchestration) ; rien n'est codé.
+
+1. **Les décalages sont positionnels.** Un groupe en mémoire commence là où finit ce qui le
+   précède. Sous le mode multi-écrivains, une autre transaction peut valider des lignes dans la
+   même table entre deux allongements : elles arrivent en mémoire derrière la tête, et allonger la
+   tête attribuerait ensuite deux fois les mêmes décalages. **Garde** : n'allonger que si, sous
+   `nodeGroups.lock()` et `chunkedGroups.lock()`, la tête est encore le dernier groupe du dernier
+   groupe de nœuds, avec `head->getNumRows() == nodeGroup->getNumRows()` (rien en mémoire
+   derrière). Sinon, la suite va en mémoire, comme aujourd'hui. La décision se prend là où
+   `moveNextRowToAppend` réserve déjà les décalages. Sous un seul écrivain (le produit), cette
+   garde ne mord jamais.
+2. **Un lecteur en cours sur la tête.** Le tableau des segments d'un `ColumnChunk` grandit par
+   `push_back`. À vérifier : la construction des `segmentStates` d'un balayage se fait sous
+   `chunkedGroups.lock()`, et rien ne parcourt à nouveau `data` pendant le balayage (`lookup`,
+   `scanInMemSegments`) ; sinon, la réallocation du tableau sous un lecteur est une course. Les
+   segments eux-mêmes (`unique_ptr`) ne bougent pas.
+3. **`versionInfo->append(txn, ancien n, m)`** rend la sélection filtrée sur la tête, donc la
+   lecture à plusieurs segments sous sélection filtrée, le chemin corrigé en `eae3863ab`.
+   `JournaledCopyReadBackTest` et `OwnerlessPages*` doivent rester verts. Il faut **un témoin de
+   plus** : une tête allongée lue **avant** le point de reprise, avec une colonne DOUBLE à côté des
+   blobs.
+4. **Mort et annulation.** Les pages des segments ajoutés viennent de l'allocateur optimiste : elles
+   sont rendues à l'annulation et à la mort (l'étendue), comme pour un groupe plein. La tête reste
+   référencée avec des pages rendues jusqu'au point de reprise, mais ses lignes sont invisibles.
+   À vérifier : `rollbackInsert` de la tête allongée marque bien `[ancien n, n + m)`.
+5. **`serialize`** exige un seul groupe, ce qui ne change pas : la tête reste le seul groupe
+   persistant, et `checkpointInMemAndOnDisk` ne recopie que ce qui est en mémoire.
+
