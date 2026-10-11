@@ -110,11 +110,50 @@ propage par les canaux, sans point fixe à calculer.
   la fin du nœud, et c'est la dernière qui gagne, comme aujourd'hui. Sur un port
   de flux, `set_output` est refusé, nommément : on émet.
 
-Un adaptateur `ctx.token_sink(port)` donne un `TokenSink` qui émet chaque jeton
-et rend `Flow::Stop` sur `Stopped` ou sur annulation. C'est le branchement de
-`LlmNode` (côté proto) et le premier point où l'annulation atteint un modèle.
+Un adaptateur `ctx.token_sink(port)` donne un `TokenSink` qui émet chaque
+jeton et rend `Flow::Stop` **sur annulation seulement** : un lecteur des jetons
+qui lâche ne doit pas tronquer une réponse que lit un autre port (`text`). La
+variante `ctx.token_sink_stop_when_unread(port)` rend aussi `Stop` quand plus
+personne ne lit `port` ; c'est au nœud de la choisir, quand les jetons sont sa
+seule sortie lue (relecture du proto). C'est le branchement de `LlmNode` (côté
+proto) et le premier point où l'annulation atteint un modèle.
+
+**Un même code pour une valeur et pour un flux** (relecture du proto). `Route`,
+`Decide`, un nœud scripté doivent traiter chaque élément quand l'amont est un
+flux, et rester des nœuds de valeur sinon, sans deux types par nœud :
+
+- `next(port)` sur une entrée de valeur rend la valeur, puis `None` ; sous
+  l'exécuteur par niveaux aussi. `emit(port, v)` sur une sortie `Value`
+  équivaut à `set_output` (la dernière gagne). Un nœud écrit
+  `while let Some(e) = ctx.next("element")? { … ctx.emit(port, e)? }` et tourne
+  sous les deux exécuteurs.
+- `PortKind::Follows(entrée)` : le genre d'une sortie **suit** celui de
+  l'entrée nommée, et cette entrée se lit `PerElement`. Le genre se résout au
+  montage complet du graphe, d'après les producteurs (s'ils sont plusieurs, le
+  plus ouvert l'emporte : `Open` puis `Finite` puis `Value`), dans l'ordre
+  topologique, puisqu'une sortie qui suit peut nourrir une autre sortie qui
+  suit. `schema_for` ne voit pas les producteurs : la résolution vit dans
+  `graph.rs`, chez moi.
+- **Le refus `Complete ← Open` change de moment** : `connect` le garde pour les
+  genres fixes, et une vérification du graphe entier le refait après la
+  résolution (`from_definition` et le début du run). Sans elle, un
+  `Route` posé sur `peer_in` puis lu en entier passerait.
+- Le choix de l'exécuteur (§2) se fait sur les genres **résolus**.
 
 ### 3.5 Échec et annulation
+
+- **Un arrêt de l'extérieur** (relecture du proto) : un graphe dont une source
+  est `Open` (`peer_in`, lu sur le bus) ne finit jamais seul. L'hôte prend
+  `DataflowRuntime::cancel_handle()` avant le run et le déclenche quand la durée
+  de l'agent se ferme (« sa durée ferme ses flux », page 03 du proto). La cause
+  est `CancelCause::External`. Ce n'est pas un échec : le run rend `Ok`, les
+  nœuds en cours finissent `Cancelled`, et `DataflowOutput` dit que le run a été
+  arrêté.
+- **Le jeton côté nœud** : `ctx.cancellation()` rend un `CancelToken` clonable,
+  avec `is_cancelled()`, `wait_timeout(durée) -> bool`, et `on_cancel(rappel)`.
+  Le rappel est appelé une fois, à l'annulation. Une source bloquée hors de nos
+  canaux (sur `bus.recv`) s'y réveille sans sonder : son rappel lui écrit un
+  message de réveil, ou ferme son récepteur.
 
 - **Un nœud échoue** : il est `Failed`. Le run passe à « annulé », ses flux
   ouverts passent à `Aborted`, toutes les attentes se réveillent. Les autres
@@ -137,7 +176,10 @@ canal, A se bloque sur C, B n'avance plus. Deux réponses :
 - **`next_any`** est la lecture qui ne s'interbloque pas, et la page des nœuds
   la recommande dès qu'il y a deux entrées en flux ;
 - **un détecteur** : chaque attente (lecture, écriture, attente de départ)
-  s'inscrit avec ce qu'elle attend. Quand **tous** les fils vivants attendent,
+  s'inscrit avec ce qu'elle attend. Un fil bloqué **hors** de nos canaux (une
+  requête HTTP, le bus d'événements) n'est pas inscrit : il compte comme
+  vivant, et donc rien n'est déclaré tant qu'il n'est pas revenu. Quand **tous**
+  les fils vivants attendent dans nos canaux,
   le run est annulé avec une erreur qui nomme le cycle (« D attend B.out, B
   attend A.out, A attend l'écriture sur C.in, plein »). Pas de délai arbitraire :
   la condition est exacte, puisque tout passe par nos canaux.
@@ -211,19 +253,39 @@ façon de ne pas rejouer le producteur.
    éléments, dans l'ordre.
 10. **Le sous-graphe** : un `Finite` traverse la frontière dans l'ordre ; un
     `Open` libre est refusé au montage en le nommant.
-11. **Le puits de jetons** : `ctx.token_sink(port)` sous un `CallbackLlm` qui
-    émet cinq jetons ; un lecteur qui lâche au deuxième fait rendre `Flow::Stop`
-    au puits.
+11. **Le puits de jetons** : `ctx.token_sink_stop_when_unread(port)` sous un
+    `CallbackLlm` qui émet cinq jetons ; un lecteur qui lâche au deuxième fait
+    rendre `Flow::Stop` au puits. Avec `ctx.token_sink(port)`, le même lâcher
+    ne l'arrête pas.
+12. **Un même code** : un nœud écrit en `next`/`emit` rend le même résultat sous
+    les niveaux (entrée de valeur) et sous le concurrent (entrée en flux de
+    trois éléments, trois sorties) ; `Follows` résout `Open` derrière une source
+    ouverte, et un lecteur `Complete` derrière est refusé au montage.
+13. **L'arrêt de l'extérieur** : une source `Open` bloquée sur une attente
+    extérieure, réveillée par `on_cancel` ; `cancel_handle` arrête le run, qui
+    rend `Ok`, avec les nœuds `Cancelled`.
 
 ## 7. Le découpage en commits
 
-1. `NodeContext` (emit, next, next_any, close_input, is_cancelled,
-   token_sink), le canal maison et son détecteur, avec des témoins unitaires
-   sur le canal (fin, abandon, réveil, détecteur).
-2. L'exécuteur concurrent et son choix, avec les témoins 1 à 8.
+1. **Fait** (branche `flux-executeur`) : `PortDef::follows` et la résolution
+   des genres (`dataflow::kinds`), sur le graphe plat (`resolved_kinds`,
+   `validate_streams`, `has_streams`, appelés par `from_definition` et au début
+   du run) et à la frontière d'un sous-graphe (une sortie qui suit une entrée
+   libre la suit sous son nom externe, et sous son alias). Puis `NodeContext` :
+   `next`, `next_any`, `emit`, `close_input`, les types `Cancelled`, `Stopped`
+   et `CancelCause`, et `set_output` refusé sur un port de flux. Sous les
+   niveaux, les éléments émis se fusionnent à la fin du nœud. Témoins :
+   `dataflow::kinds::tests`, `graph_node_resolves_following_outputs`,
+   `a_complete_input_behind_a_following_open_output_is_refused`,
+   `dataflow::flux_tests` (le témoin 12, côté niveaux). Le canal maison est
+   écrit avec ses douze témoins, mais il part avec l'exécuteur qui l'emploie :
+   le lib refuse le code mort.
+2. Le canal maison et son détecteur, l'exécuteur concurrent et son choix,
+   `cancel_handle`, `ctx.cancellation()` et `token_sink` dans ses deux
+   variantes, avec les témoins du canal, 1 à 8, 11 et 13.
 3. Le point de reprise des flux, avec le témoin 9.
 4. Le sous-graphe 3a, avec le témoin 10.
-5. Le témoin 11 vit chez moi ; `LlmNode` qui émet vient chez le proto.
+5. `LlmNode` qui émet vient chez le proto.
 
 Chaque commit passe toute la lib et `scripts/check_features.sh`, et la batterie
 complète passe une fois avant la fusion.
@@ -232,6 +294,9 @@ complète passe une fois avant la fusion.
 
 - **La capacité par défaut** (64) est un choix sans mesure. La première
   mesure viendra avec `LlmNode` qui émet.
+- **La reprise d'un `Open` fini** garde la liste entière de ses éléments, qui
+  peut être longue (une conversation entière). Une limite, ou la persistance par
+  rang plutôt qu'en une fois, attendra un cas réel (relecture du proto).
 - **Un fil par nœud** coûte un fil système par nœud du graphe, ce qui est bien
   pour les graphes d'agent (dizaines de nœuds). Pour un graphe de centaines de
   nœuds en flux, un ordonnanceur à pool serait la suite. Rien ne l'exige

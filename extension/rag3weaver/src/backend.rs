@@ -71,6 +71,11 @@ pub struct BackendManifest {
     /// de code ne peut lire ni écrire — le défaut sûr.
     #[serde(default)]
     pub workspace: Option<crate::backend_code::WorkspaceConfig>,
+    /// **Les montres de fichiers** : chacune balaie la source du workspace et
+    /// publie un `FileChanged` par fichier créé, modifié ou supprimé, sur le
+    /// sujet `files` — de quoi réagir à une édition faite hors de nos outils.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub watches: BTreeMap<String, crate::watch::WatchConfig>,
     /// **Le tampon du moteur**, en octets. Absent : la règle du produit
     /// (`rag3db_connection::buffer_pool_choice`), que la variable
     /// `RAG3DB_BUFFER_POOL_SIZE` surpasse toujours.
@@ -1624,6 +1629,7 @@ impl PreparedBackend {
             garde,
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            watches: Mutex::new(Vec::new()),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -1965,6 +1971,9 @@ pub struct Backend {
     /// l'arrêt sans l'attendre — passe avant que l'`Arc` du catalogue ne soit
     /// lâché ici. Le contrat reste `stop_reactions`.
     reactions: Mutex<Option<ReactorHandle>>,
+    /// Les montres de fichiers en service ; arrêtées **avant** les réactions
+    /// qu'elles nourrissent.
+    watches: Mutex<Vec<crate::watch::WatchHandle>>,
     /// **Les réacteurs des autres cellules** (marche 1 bis, pas c) : un par
     /// cellule qu'une requête a nommée, monté à sa première requête, sur le bus
     /// et les services de cette cellule. Le bus préfixe ses sujets par la
@@ -2043,6 +2052,8 @@ impl Backend {
     /// Rend les noms montés. Sans réaction déclarée, aucun réacteur ne
     /// démarre et le résultat est vide.
     pub fn mount_reactions(&self) -> Result<Vec<String>, String> {
+        // Les montres d'abord : ce sont les sources des réactions.
+        self.mount_watches()?;
         let prepared = self.prepared();
         if prepared.reactions.is_empty() {
             return Ok(Vec::new());
@@ -2062,6 +2073,68 @@ impl Backend {
         let (handle, mounted) = self.monter_un_reacteur(&prepared, bus)?;
         *slot = Some(handle);
         Ok(mounted)
+    }
+
+    /// **Monte les montres déclarées** (`watches`), sur le bus du catalogue.
+    /// Déjà en service : rien. Une montre ne surveille qu'une copie de travail —
+    /// une source chargée en mémoire ne change pas ; refusée en le disant.
+    pub fn mount_watches(&self) -> Result<Vec<String>, String> {
+        let prepared = self.prepared();
+        if prepared.manifest.watches.is_empty() {
+            return Ok(Vec::new());
+        }
+        #[cfg(not(feature = "code"))]
+        {
+            Err("watches : la montre de fichiers demande la feature `code`".to_string())
+        }
+        #[cfg(feature = "code")]
+        {
+            let mut slot = self.watches.lock().unwrap_or_else(|e| e.into_inner());
+            if !slot.is_empty() {
+                return Ok(Vec::new());
+            }
+            let workspace = prepared.manifest.workspace.as_ref().ok_or(
+                "watches : il faut un workspace (la source surveillée)",
+            )?;
+            if !matches!(workspace.source, crate::backend_code::WorkspaceSource::WorkingTree) {
+                return Err("watches : seule une copie de travail (`working_tree`) se surveille ; \
+                            une source chargée en mémoire ne change pas"
+                    .to_string());
+            }
+            let source = self.file_source.clone().ok_or("watches : pas de source de fichiers")?;
+            let root = if workspace.root.is_absolute() {
+                workspace.root.clone()
+            } else {
+                prepared.directory.join(&workspace.root)
+            };
+            // Le bus, le registre du retard et la cellule : la montre et sa
+            // réaction travaillent dans la cellule du catalogue.
+            let (bus, lag, cell) = {
+                let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+                (cat.event_bus(), cat.file_lag(), cat.scope().clone())
+            };
+            let mut mounted = Vec::new();
+            for (name, config) in &prepared.manifest.watches {
+                if config.source != "workspace" {
+                    return Err(format!(
+                        "watches.{name} : source « {} » inconnue ; connue : workspace",
+                        config.source
+                    ));
+                }
+                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone())?);
+                mounted.push(name.clone());
+            }
+            Ok(mounted)
+        }
+    }
+
+    /// Arrête les montres et attend leurs fils (réveillés : pas d'attente de
+    /// la période).
+    pub fn stop_watches(&self) {
+        let handles: Vec<_> = self.watches.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect();
+        for h in handles {
+            h.stop();
+        }
     }
 
     /// **Les réactions d'une cellule**, montées à la première requête qui la
@@ -2126,6 +2199,8 @@ impl Backend {
     ///
     /// À appeler avant de lâcher le backend. Rien en service : rend vide.
     pub fn stop_reactions(&self) -> Vec<String> {
+        // Les montres d'abord : plus rien n'arrive aux réactions qu'on arrête.
+        self.stop_watches();
         let mut errors = Vec::new();
         // Les réacteurs des autres cellules d'abord, puis celui du catalogue.
         let cellules: Vec<ReactorHandle> =
@@ -2925,7 +3000,8 @@ impl Backend {
                 crate::code::LIBRARY,
                 crate::code::SYMBOL,
             ],
-            _ => return Ok(json!({})),
+            // Pas d'index de code déclaré : rien à rapporter, sauf un retard.
+            _ => &[],
         };
         // Occupé (une indexation tient le verrou) : le reçu le dit, et porte
         // quand même les avertissements d'ouverture.
@@ -2945,6 +3021,11 @@ impl Backend {
                     serde_json::to_value(state).map_err(|e| e.to_string())?,
                 );
             }
+        }
+        // Le retard de l'index sur le disque : des fichiers changés pas encore
+        // réindexés (la montre de fichiers).
+        if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
+            etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
         // Sans service, l'état de l'index le dit à côté des entités (leurs
         // noms commencent par une majuscule, `warnings` ne peut pas en être
@@ -3262,9 +3343,10 @@ mod tests {
         );
         assert_eq!(
             reactif.len(),
-            outil.len() + 2,
-            "la liste réactive est la base plus EventSourceNode et ReactTransitionNode, \
-             soit deux entrées — elle en a {}",
+            outil.len() + 3,
+            "la liste réactive est la base plus EventSourceNode, ReactTransitionNode et \
+             ReindexFileNode (écrire l'index d'un fichier changé sous une montre, W2), \
+             soit trois entrées — elle en a {}",
             reactif.len() - outil.len()
         );
     }
@@ -3377,6 +3459,7 @@ mod tests {
             garde: None,
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            watches: Mutex::new(Vec::new()),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -3582,7 +3665,171 @@ mod tests {
             garde: crate::backend_code::build_garde(&workspace),
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            watches: Mutex::new(Vec::new()),
         }
+    }
+
+
+    /// Un backend de code qui **surveille son workspace** : la montre `code`
+    /// (période courte), la réaction `reindex_on_change` du gabarit code et
+    /// l'outil `usages`. `sources/outils.rs` définit `depart`, `main.rs`
+    /// l'appelle.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn backend_qui_surveille() -> (tempfile::TempDir, Backend) {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["watches"] = json!({"code": {"source": "workspace", "every_ms": 20, "settle_ms": 0}});
+            m["reactions"] = json!({"reindex_on_change": {"graph": "reindex_on_change.mmd"}});
+            m["tools"]["usages"] = json!({"graph": "usages.mmd"});
+        });
+        drop(p);
+        std::fs::copy(tools.join("backends/code/graphs/reindex_on_change.mmd"), dir.path().join("reindex_on_change.mmd")).unwrap();
+        std::fs::copy(tools.join("tools/usages.mmd"), dir.path().join("usages.mmd")).unwrap();
+        std::fs::write(dir.path().join("sources/outils.rs"), "pub fn depart() {}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste qui surveille se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index de départ");
+        }
+        (dir, backend)
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn usages_de(backend: &Backend, name: &str) -> String {
+        backend.call("usages", json!({"name": name})).map(|v| v.to_string()).unwrap_or_else(|e| e)
+    }
+
+    /// Attend (10 s au plus) que `ok` tienne sur ce que rend `usages`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn attendre_les_usages(backend: &Backend, name: &str, ok: impl Fn(&str) -> bool) -> String {
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let u = usages_de(backend, name);
+            if ok(&u) || std::time::Instant::now() > fin {
+                return u;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// **L'index suit le disque** (W2) : un fichier édité à la main — hors de
+    /// nos outils — et `usages` voit le nouvel appel sans `index` manuel ; un
+    /// fichier supprimé, et ses usages disparaissent. La montre et la
+    /// réaction sont montées par le backend, comme à l'ouverture.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_index_follows_files_edited_by_hand() {
+        let (dir, backend) = backend_qui_surveille();
+        let montees = backend.mount_reactions().expect("montre et réaction se montent");
+        assert_eq!(montees, ["reindex_on_change"]);
+        let avant = usages_de(&backend, "depart");
+        assert!(avant.contains("main") && !avant.contains("ailleurs"), "{avant}");
+
+        // Une édition à la main : un second appelant.
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\n").unwrap();
+        let apres = attendre_les_usages(&backend, "depart", |u| u.contains("ailleurs"));
+        assert!(apres.contains("ailleurs"), "l'édition n'a pas été réindexée : {apres}");
+
+        // **Le disque décide, pas l'événement** : un « removed » forgé pour
+        // `outils.rs`, qui existe, ne le retire pas. Une édition qui le suit
+        // prouve que le lot qui le portait est passé.
+        backend.catalog.lock().unwrap().event_bus().emit(crate::events::Event::FileChanged {
+            watch: "code".into(),
+            path: "outils.rs".into(),
+            change: "removed".into(),
+            hash: String::new(),
+            at_ms: 0,
+        });
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\nfn encore() { depart(); }\n").unwrap();
+        let suivi = attendre_les_usages(&backend, "depart", |u| u.contains("encore"));
+        assert!(suivi.contains("encore") && suivi.contains("outils.rs"), "un removed forgé a retiré un fichier présent : {suivi}");
+
+        // Le fichier supprimé : ses usages partent.
+        std::fs::remove_file(dir.path().join("sources/main.rs")).unwrap();
+        let sans = attendre_les_usages(&backend, "depart", |u| !u.contains("ailleurs") && !u.contains("main.rs"));
+        assert!(!sans.contains("ailleurs") && !sans.contains("main.rs"), "le fichier supprimé est resté : {sans}");
+
+        let erreurs = backend.stop_reactions();
+        assert!(erreurs.is_empty(), "{erreurs:?}");
+    }
+
+
+    /// **Le retard se dit** (W3) : la montre en service, sans sa réaction —
+    /// une édition à la main n'est pas réindexée. L'état de l'index dit le
+    /// retard, et `usages` le dit en tête de sa réponse au lieu de rendre
+    /// l'index d'avant comme sûr. La réaction montée, une nouvelle édition
+    /// est réindexée et le retard tombe.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_lag_is_said_between_an_edit_and_its_reindexing() {
+        let (dir, backend) = backend_qui_surveille();
+        assert_eq!(backend.mount_watches().unwrap(), ["code"]);
+        assert!(!usages_de(&backend, "depart").contains("pas encore réindexé"));
+
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\n").unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let etat = loop {
+            let e = backend.index_states().unwrap();
+            if e["lag"]["files"] == 1 || std::time::Instant::now() > fin {
+                break e;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        assert_eq!(etat["lag"]["files"], 1, "l'état ne dit pas le retard : {etat}");
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("1 fichier changé") && u.contains("pas encore réindexé"), "{u}");
+        assert!(!u.contains("ailleurs"), "rien n'est réindexé sans la réaction : {u}");
+
+        // Une cellule voisine n'a pas ce retard, et le sien ne déborde pas ici.
+        let voisine = crate::scope::Scope { org: "voisine".into(), project: "p".into() };
+        let lag = backend.catalog.lock().unwrap().file_lag();
+        assert_eq!(lag.summary_in(&voisine), None);
+        lag.note(&voisine, "autre.rs", 0);
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("1 fichier changé"), "seul le retard de la cellule de l'appel compte : {u}");
+        lag.done(&voisine, "autre.rs", u64::MAX);
+
+        // La réaction montée : l'édition suivante est réindexée, le retard tombe.
+        backend.mount_reactions().unwrap();
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\nfn encore() { depart(); }\n").unwrap();
+        let apres = attendre_les_usages(&backend, "depart", |u| u.contains("encore") && !u.contains("pas encore réindexé"));
+        assert!(apres.contains("encore") && !apres.contains("pas encore réindexé"), "{apres}");
+        assert!(backend.index_states().unwrap().get("lag").is_none());
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **La synchronisation efface le retard en relisant** : un retard noté
+    /// avant une synchronisation de la source tombe quand elle relit le
+    /// fichier — c'est elle qui reprend ce qu'une réaction a mis en reprise.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_sync_clears_the_lag_of_the_files_it_reads() {
+        let (_dir, backend) = backend_qui_surveille();
+        let (lag, cell) = {
+            let cat = backend.catalog.lock().unwrap();
+            (cat.file_lag(), cat.scope().clone())
+        };
+        lag.note(&cell, "outils.rs", crate::catalog::retard::now_ms());
+        assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        assert_eq!(lag.summary_in(&cell), None, "relu par la synchronisation, le retard tombe");
+    }
+
+    /// Une montre ne surveille qu'une copie de travail : sur un `snapshot`
+    /// (une source chargée en mémoire), elle est refusée en le disant.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_watch_on_a_snapshot_is_refused() {
+        let (dir, p) = fixture_code_avec("snapshot", false, json!({}), &|m| {
+            m["watches"] = json!({"code": {}});
+        });
+        let backend = backend_de_code(dir.path(), p.unwrap());
+        let err = backend.mount_watches().unwrap_err();
+        assert!(err.contains("working_tree"), "{err}");
     }
 
     /// **La politique refuse au chargement, en disant quoi faire** — la

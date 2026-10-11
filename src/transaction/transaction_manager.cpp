@@ -30,7 +30,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
     // ensures calls to other public functions are not restricted.
     std::unique_lock publicFunctionLck{mtxForSerializingPublicFunctionCalls};
     // Pas de nouvelle transaction pendant qu'un point de reprise attend ou s'écrit.
-    transactionsChanged.wait(publicFunctionLck, [this] { return !checkpointPending; });
+    waitWhileCheckpointPendingNoLock(publicFunctionLck);
     throwIfCheckpointFailedNoLock();
     switch (type) {
     case TransactionType::READ_ONLY: {
@@ -74,10 +74,19 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
     switch (transaction->getType()) {
     case TransactionType::READ_ONLY: {
         clearTransactionNoLock(transaction->getID());
+        writeRequestedCheckpointIfLastNoLock(clientContext, lck);
     } break;
     case TransactionType::RECOVERY:
     case TransactionType::WRITE: {
         const auto forced = transaction->shouldForceCheckpoint();
+        if (forced && autoCheckpointRequested) {
+            // Une demande automatique attend le départ des autres : le point de reprise forcé de
+            // cette validation la remplit, par le chemin ordinaire (il attend les autres, borné).
+            // Entre ce rouvrir et la reprise du blocage par stopNewTransactions…, quelques BEGIN
+            // peuvent entrer : sans danger, le point de reprise forcé les attend comme les autres.
+            autoCheckpointRequested = false;
+            allowNewTransactionsNoLock();
+        }
         if (forced && checkpointPending &&
             commitInCheckpointQueueNoLock(clientContext, lck, transaction)) {
             // A7 : validée dans la file, et contenue dans un point de reprise écrit après elle.
@@ -108,15 +117,30 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         if (forced) {
             checkpointNoLock(clientContext, lck, true /* newTransactionsAlreadyStopped */);
         } else if (shouldCheckpoint) {
-            if (!activeTransactions.empty() || checkpointPending) {
-                // L'écriture est validée et au journal. Comme PostgreSQL, un point de reprise
-                // ne retarde ni ne fait échouer une validation : si une autre transaction est
-                // ouverte, il est reporté à une validation suivante, sans attendre.
+            if (checkpointPending) {
+                // Un point de reprise est déjà demandé ou en attente : il contiendra celle-ci.
+                postponeCheckpointNoLock();
+            } else if (activeTransactions.empty()) {
+                checkpointNoLock(clientContext, lck);
+            } else if (std::ranges::any_of(activeTransactions,
+                           [this](const auto& active) {
+                               return active->getID() <= lastBlockingTransactionID;
+                           })) {
+                // Une transaction qui a déjà fait abandonner une demande est encore ouverte (un
+                // lecteur long) : reporté, sans retenir de nouveau les écrivains.
                 postponeCheckpointNoLock();
             } else {
-                checkpointNoLock(clientContext, lck);
+                // A8 : d'autres transactions sont ouvertes. La validation est faite et au
+                // journal ; elle pose la demande et rend la main, sans attendre (attendre ici
+                // tiendrait un fil du planificateur dont les autres ont besoin pour partir). Les
+                // nouvelles transactions sont retenues ; le dernier à partir écrit.
+                checkpointPending = true;
+                autoCheckpointRequested = true;
+                autoCheckpointRequestedAt = std::chrono::steady_clock::now();
             }
         }
+        // Une demande posée par une autre validation : si celle-ci part la dernière, elle écrit.
+        writeRequestedCheckpointIfLastNoLock(clientContext, lck);
         if (storage::CheckpointProfile::enabled() && (shouldCheckpoint || commitMs >= 50.0)) {
             const auto checkpointMs = profile.lap();
             fprintf(stderr,
@@ -166,6 +190,12 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
         throw TransactionManagerException("Invalid transaction type to rollback.");
     }
     }
+    // A8 : une annulation peut venir de la fermeture d'une connexion ou de la base ; elle n'écrit
+    // pas de point de reprise. Partie la dernière, elle renonce à la demande, et le point de
+    // reprise est reporté à une validation suivante.
+    if (autoCheckpointRequested && activeTransactions.empty()) {
+        cancelAutoCheckpointRequestNoLock();
+    }
 }
 
 void TransactionManager::checkpoint(main::ClientContext& clientContext) {
@@ -196,8 +226,13 @@ TransactionManager* TransactionManager::Get(const main::ClientContext& context) 
 void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
     std::unique_lock<std::mutex>& publicLock, const Transaction* staying) {
     // Un seul point de reprise attend à la fois ; une validation qui en veut un pendant ce temps
-    // se range dans la file (commitInCheckpointQueueNoLock) au lieu d'attendre ici.
-    transactionsChanged.wait(publicLock, [this] { return !checkpointPending; });
+    // se range dans la file (commitInCheckpointQueueNoLock) au lieu d'attendre ici. Une demande
+    // automatique en attente (A8) est reprise par ce point de reprise, qui la remplit.
+    if (autoCheckpointRequested) {
+        autoCheckpointRequested = false;
+    } else {
+        transactionsChanged.wait(publicLock, [this] { return !checkpointPending; });
+    }
     checkpointPending = true;
     const auto othersLeftOrQueued = [this, staying] {
         return std::ranges::all_of(activeTransactions, [this, staying](const auto& transaction) {
@@ -288,6 +323,55 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
         }
     }
     return true;
+}
+
+void TransactionManager::waitWhileCheckpointPendingNoLock(std::unique_lock<std::mutex>& publicLock) {
+    // Une demande automatique (A8) ne retient pas plus de AUTO_CHECKPOINT_WAIT : au-delà, elle est
+    // abandonnée, et le point de reprise reporté (un écrivain long la tient).
+    while (checkpointPending) {
+        if (autoCheckpointRequested) {
+            const auto deadline = autoCheckpointRequestedAt + AUTO_CHECKPOINT_WAIT;
+            if (transactionsChanged.wait_until(publicLock, deadline) == std::cv_status::timeout &&
+                autoCheckpointRequested && std::chrono::steady_clock::now() >= deadline) {
+                cancelAutoCheckpointRequestNoLock();
+            }
+        } else {
+            transactionsChanged.wait(publicLock);
+        }
+    }
+}
+
+void TransactionManager::waitUntilNewTransactionsAreAllowed() {
+    std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
+    waitWhileCheckpointPendingNoLock(lck);
+}
+
+void TransactionManager::writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
+    std::unique_lock<std::mutex>& publicLock) {
+    if (!autoCheckpointRequested || !activeTransactions.empty()) {
+        return;
+    }
+    autoCheckpointRequested = false;
+    try {
+        checkpointNoLock(clientContext, publicLock, true /* newTransactionsAlreadyStopped */);
+    } catch (const CheckpointException& e) {
+        // La validation de cette transaction est faite et au journal : c'est le point de reprise
+        // d'après, qu'elle écrivait en partant la dernière, qui a échoué. Le dire, sinon le
+        // client croit sa validation perdue.
+        throw TransactionManagerException(common::stringFormat(
+            "This transaction is committed (it is in the journal); the automatic checkpoint that "
+            "followed it, written by the last transaction to leave, failed: {}",
+            e.what()));
+    }
+}
+
+void TransactionManager::cancelAutoCheckpointRequestNoLock() {
+    autoCheckpointRequested = false;
+    for (const auto& active : activeTransactions) {
+        lastBlockingTransactionID = std::max(lastBlockingTransactionID, active->getID());
+    }
+    allowNewTransactionsNoLock();
+    postponeCheckpointNoLock();
 }
 
 void TransactionManager::postponeCheckpointNoLock() {

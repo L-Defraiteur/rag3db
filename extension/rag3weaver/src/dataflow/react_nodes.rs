@@ -35,7 +35,7 @@
 //! le moteur joint par hachage — jamais `item.champ`, qui le fait balayer la
 //! table par produit cartésien.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use super::node::{Node, NodeContext};
@@ -222,6 +222,13 @@ impl Node for ReactTransitionNode {
                     "out_of_state": hors_etat,
                     "transitioned": changees.len(),
                     "refused": refus,
+                    // Les transitions retenues partent ensemble : une seule
+                    // forme de mise à jour (le champ d'état), donc un seul
+                    // `SET` groupé dans un seul drain ; une ligne refusée par
+                    // la garde est écartée avant lui, sans défaire les autres.
+                    "atomic": true,
+                    "atomic_reason": "the retained transitions are written by one grouped SET in a single drain; \
+                                      a row refused by the lifecycle guard is left out before it",
                 })),
             );
         };
@@ -315,26 +322,53 @@ impl Node for ReactTransitionNode {
         }
         let concernees: Vec<String> = concernees.into_iter().take(self.cfg.limit).collect();
 
+        // **Les C transitions en un drain** (relevé des appelants, 11 octobre
+        // 2026) : un `update` par fiche faisait C drains en série ; en file
+        // toutes, puis une seule exigence d'écriture — `UpdateRecordNode` les
+        // écrit en une lecture et un `SET`. La cellule de la réaction (ses
+        // services, marche 1 bis) : la transition s'écrit là où l'événement est
+        // né, pas dans la cellule du catalogue.
         let mut changees = Vec::new();
         let mut refus = Vec::new();
-        for uuid in &concernees {
-            let mut data: BTreeMap<String, CypherValue> = BTreeMap::new();
-            data.insert(champ.clone(), CypherValue::String(vers.clone()));
+        if !concernees.is_empty() {
+            let lignes: Vec<(String, BTreeMap<String, CypherValue>)> = concernees
+                .iter()
+                .map(|uuid| {
+                    let mut data = BTreeMap::new();
+                    data.insert(champ.clone(), CypherValue::String(vers.clone()));
+                    (uuid.clone(), data)
+                })
+                .collect();
             let mut cat = catalog.lock().map_err(|_| "ReactTransitionNode: catalog poisoned".to_string())?;
-            // La cellule de la réaction (ses services, marche 1 bis) : la
-            // transition s'écrit là où l'événement est né, pas dans la cellule
-            // du catalogue.
-            let ecrite = match &cellule {
-                Some(cell) => cat.dans_la_cellule(cell, |c| c.update(&target, uuid, data)),
-                None => cat.update(&target, uuid, data),
+            let ecrites = match &cellule {
+                Some(cell) => cat.dans_la_cellule(cell, |c| c.update_many(&target, lignes)),
+                None => cat.update_many(&target, lignes),
             };
-            match ecrite {
-                Ok(()) => changees.push(uuid.clone()),
-                // **Un refus par ligne ne fait pas tomber le lot.** La garde de
-                // cycle de vie a pu changer d'avis entre la lecture et
-                // l'écriture — une autre session est passée — et la cause
-                // qu'elle rend est plus précise que tout ce qu'on dirait ici.
-                Err(e) => refus.push(format!("{uuid} : {e}")),
+            match ecrites {
+                Ok(res) => {
+                    let par_uuid: HashMap<&str, &crate::records::UpdateStatus> = res
+                        .update_results
+                        .iter()
+                        .filter(|r| r.entity == target)
+                        .map(|r| (r.uuid.as_str(), &r.status))
+                        .collect();
+                    for uuid in &concernees {
+                        match par_uuid.get(uuid.as_str()) {
+                            // `Unchanged` dit que le **contenu** n'a pas bougé
+                            // (une transition ne touche que l'état) : le champ
+                            // est posé dans les deux cas.
+                            Some(crate::records::UpdateStatus::Updated | crate::records::UpdateStatus::Unchanged) => {
+                                changees.push(uuid.clone())
+                            }
+                            // **Un refus par ligne ne fait pas tomber le lot** :
+                            // la garde de cycle de vie a pu changer d'avis entre la
+                            // lecture et l'écriture, et sa cause est la plus précise.
+                            Some(crate::records::UpdateStatus::Failed(cause)) => refus.push(format!("{uuid} : {cause}")),
+                            None => refus.push(format!("{uuid} : le drain n'a rien dit de cette ligne")),
+                        }
+                    }
+                }
+                Err(e) => refus.extend(concernees.iter().map(|uuid| format!("{uuid} : {e}"))),
             }
         }
 

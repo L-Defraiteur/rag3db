@@ -17,6 +17,8 @@
 #include "main/db_config.h"
 #include "optimizer/optimizer.h"
 #include "parser/parser.h"
+#include "parser/transaction_statement.h"
+#include "transaction/transaction_manager.h"
 #include "parser/visitor/standalone_call_rewriter.h"
 #include "parser/visitor/statement_read_write_analyzer.h"
 #include "planner/planner.h"
@@ -511,6 +513,18 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
     try {
         bool isTransactionStatement =
             preparedStatement->getStatementType() == StatementType::TRANSACTION;
+        if (isTransactionStatement) {
+            const auto action = cachedStatement->parsedStatement
+                                    ->constCast<parser::TransactionStatement>()
+                                    .getTransactionAction();
+            if (action == transaction::TransactionAction::BEGIN_READ ||
+                action == transaction::TransactionAction::BEGIN_WRITE) {
+                // Le BEGIN s'exécute sur un fil du planificateur ; s'il y attendait la fin d'un
+                // point de reprise, il tiendrait un fil dont les transactions ouvertes ont besoin
+                // pour valider et partir. Il attend donc ici, dans le fil de l'appelant (A8).
+                localDatabase->getTransactionManager()->waitUntilNewTransactionsAreAllowed();
+            }
+        }
         // A statement prepared before the failure must be refused like any other.
         if (!isTransactionStatement) {
             transactionContext->throwIfManualTransactionFailed();

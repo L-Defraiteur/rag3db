@@ -109,5 +109,18 @@
       "graph": "../../tools/callees.mmd",
       "description": "Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas."
     }
+  },
+  "watches": {
+    "code": {
+      "source": "workspace",
+      "every_ms": 1000,
+      "settle_ms": 300
+    }
+  },
+  "reactions": {
+    "reindex_on_change": {
+      "graph": "graphs/reindex_on_change.mmd",
+      "description": "Un fichier changé hors de nos outils est réindexé ; un fichier supprimé est retiré."
+    }
   }
 }

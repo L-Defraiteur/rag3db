@@ -50,8 +50,21 @@ pub fn partial_status(text: Level, relations: Level) -> Option<String> {
     }
 }
 
-/// Prendre le catalogue pour lire `entity`, ou dire pourquoi pas.
+/// Prendre le catalogue pour lire `entity`, ou dire pourquoi pas. La
+/// cellule du catalogue : voir [`read_catalog_in`].
 pub fn read_catalog<'a>(catalog: &'a Arc<Mutex<Catalog>>, entity: &str) -> CatalogRead<'a> {
+    read_catalog_in(catalog, entity, None)
+}
+
+/// La même, pour la cellule de l'appel (le service `scope`, que le backend
+/// pose par requête ; `None` : celle du catalogue). **Le retard de l'index
+/// sur le disque** de cette cellule s'ajoute à la ligne d'état : des
+/// fichiers changés, pas encore réindexés, et le résultat peut dater.
+pub fn read_catalog_in<'a>(
+    catalog: &'a Arc<Mutex<Catalog>>,
+    entity: &str,
+    cell: Option<&crate::scope::Scope>,
+) -> CatalogRead<'a> {
     let Ok(cat) = catalog.try_lock() else {
         return CatalogRead::Refused(BUSY.into());
     };
@@ -61,6 +74,15 @@ pub fn read_catalog<'a>(catalog: &'a Arc<Mutex<Catalog>>, entity: &str) -> Catal
         // L'état ne se lit pas (entité inconnue du catalogue, méta
         // illisible) : on lit quand même, sans rien promettre.
         Err(_) => None,
+    };
+    let cell = cell.cloned().unwrap_or_else(|| cat.scope().clone());
+    let lag = cat
+        .file_lag()
+        .summary_in(&cell)
+        .map(|s| s.status_line(crate::catalog::retard::now_ms()));
+    let status = match (status, lag) {
+        (Some(partial), Some(lag)) => Some(format!("{partial} {lag}")),
+        (partial, lag) => partial.or(lag),
     };
     CatalogRead::Ready { catalog: cat, status }
 }

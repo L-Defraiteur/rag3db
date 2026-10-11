@@ -233,6 +233,8 @@ pub mod agent;
 pub mod agent_ports;
 /// L'annuaire de la session : à qui un agent peut écrire (`send`).
 pub mod directory;
+/// La montre de fichiers : l'index suit les éditions faites ailleurs.
+pub mod watch;
 pub use agent::{
     Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
 };

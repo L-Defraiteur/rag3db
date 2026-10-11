@@ -22,6 +22,32 @@ fois, même courte. Ne pas corriger les entrées des autres : en ajouter une.
 - **Ce qui manquait** : l'outil, le paramètre ou la réponse qui m'aurait évité ça.
 ```
 
+## En tête : l'index ne suit pas l'arbre que l'agent édite
+
+*Ajouté le 11 octobre 2026 au soir, à la demande de l'orchestration, après les premiers retours
+du cœur. Les retours ne le disent pas, mais il les touche tous. Ticket :
+`docs/tickets/2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md`.*
+
+**Le fait** : la base `code-rag3db` indexe l'arbre principal de ce poste tel qu'il était sur
+master à 15 h 22. Le cœur édite sa branche dans un worktree sur luciepc. Ses questions portent
+donc sur un code qui n'est pas le sien, et ses propres changements n'entrent jamais dans l'index,
+montre ou pas. Un IDE indexe l'arbre que l'agent édite.
+
+**Les formes possibles**, à cadrer avec l'arbre principal :
+1. **Une base par arbre de travail**, déclarée au manifeste (ou dérivée du chemin de l'arbre),
+   montée par l'hôte à la demande, avec la montre dessus. Simple et juste, mais un premier index
+   par worktree (ici 12 min 27 s et 1,9 Go pour le dépôt entier), à moins de partir d'un
+   instantané reflink de la base de master.
+2. **Un index qui suit la branche de l'arbre** : la base sait de quel commit elle part, et
+   réindexe le delta (`git diff` du commit indexé à l'arbre courant) à chaque changement de
+   branche ou d'arbre. Moins de disque, mais une base ne sert qu'un arbre à la fois.
+3. **Pour luciepc** : la montre d'ici ne peut pas monter un arbre distant. L'index doit tourner
+   sur le poste de l'arbre, donc un hôte par poste et un client qui sait lequel interroger
+   (l'arbre est sur luciepc, l'hôte de luciepc répond).
+
+Les formes 1 et 2 se combinent : une base par arbre, née d'un instantané de la base de master,
+puis tenue à jour par le delta.
+
 ## Les entrées
 
 ### 11 oct., 15 h 30 — codeparsers — monter le MCP du code pour rag3db (avant toute question)
@@ -174,3 +200,45 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
   5. **« Qui tient le verrou avant ? »** n'est pas une question que l'outil sait poser : il
      faudrait les verrous pris **par les appelants** avant l'appel (ici aucun), pas seulement
      ceux pris sur le chemin descendant.
+
+### 11 oct., 17 h 20 — cœur C++ — « qui appelle `acquireLocksBeforeExecution`, que je viens de changer, et quels tests traversent `lockIndexForWrite` ? »
+
+- **La question posée** : après le correctif du `CREATE TABLE … AS` sous le mode multi-écrivains
+  (`NodeBatchInsert::acquireLocksBeforeExecution`), je voulais la liste des appelants de cette
+  méthode virtuelle, et les tests qui traversent `NodeTable::lockIndexForWrite`, pour savoir quoi
+  rejouer. Session relancée pour charger le serveur ; `daemon_status` : en marche, trois backends
+  ouverts, huit sessions MCP.
+- **L'outil essayé** : `usages {name: acquireLocksBeforeExecution, usage: call}` ;
+  `impact {name: lockIndexForWrite, path: src/storage/table/node_table}` ;
+  `usages {name: update, path: src/storage/table/node_table, usage: call}`.
+- **Ce qu'il a rendu** : `usages` — trois définitions (la virtuelle de `PhysicalOperator`, la
+  surcharge de `NodeBatchInsert`, celle de `QueryProcessor`), **un seul appel** :
+  `QueryProcessor::execute` (processor.cpp:38 → :67). `impact lockIndexForWrite` — 8 touchés
+  (`delete_`, `update` à un saut ; le rejeu, `set_executor`, l'aide du banc à deux sauts), « **0
+  tests qui la traversent** », et une section « Verrous pris sur le chemin » (`acquireLock` au
+  départ, `lockRowForWrite` à un saut) : celle-ci est neuve et utile. `usages update` dans
+  node_table — la bonne définition retenue, 2 appels attribués (`set_executor.cpp:57`,
+  `replayNodeUpdateRecord`), 88 « non attribués (nom ambigu) » de tout le dépôt.
+- **Ce que j'ai dû faire à côté** : `grep -rn acquireLocksBeforeExecution src` — qui montre
+  **trois** sites dans processor.cpp : l'appel de :38, **l'appel récursif de :69 sur les enfants
+  de la tâche, et l'envoi virtuel de :71** (`sink->acquireLocksBeforeExecution(context)`), le seul
+  qui atteigne la surcharge de `NodeBatchInsert`, celle que je venais de changer. Et pour les
+  tests : je les connais (InsertLockTest, IndexLockBench), ils traversent `lockIndexForWrite` par
+  des requêtes Cypher — `MATCH … SET`, `COPY` — que le graphe d'appels ne voit pas.
+- **Ce qui manquait** :
+  1. **L'envoi virtuel n'est pas un usage** : `sink->acquireLocksBeforeExecution(…)` n'est ni
+     attribué à la surcharge de `NodeBatchInsert`, ni compté comme manqué, et l'appel récursif
+     (:69) manque aussi. Une méthode virtuelle changée dans une classe fille rend « aucun appelant »
+     — c'est l'inverse de la vérité. Il faudrait : un appel sur une référence à la classe mère
+     attribué à toutes les surcharges (ou dit « virtuel, N surcharges »), et la récursion comptée.
+  2. **« 0 tests qui la traversent » est faux et dangereux** : les tests du moteur traversent le
+     C++ par des chaînes Cypher dans des fichiers `.test` ou des `conn->query("…")` ; le graphe
+     d'appels s'arrête au binder. Il faudrait au moins que `impact` dise « les tests par requêtes
+     (`.test`, `query(`) ne sont pas suivis » plutôt que « 0 », et à terme relier un opérateur
+     physique aux mots-clés Cypher qui y mènent (`COPY` → `NodeBatchInsert`, `SET` → `set_executor`).
+  3. **88 non attribués de tout le dépôt** pour un `update` C++ : la même remarque que l'entrée
+     de 15 h 40 — borner au langage ou au dossier (`scope: src/`) ; le `path` ne borne que les
+     définitions.
+  4. **Ce qui va bien** : la section « Verrous pris sur le chemin » d'`impact` est exactement la
+     lecture dont j'avais besoin pour le mode multi-écrivains ; `usages` avec `path` lève
+     l'ambiguïté sur la définition ; les réponses sont instantanées.

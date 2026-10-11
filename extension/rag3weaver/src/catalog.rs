@@ -19,6 +19,8 @@ use crate::search;
 
 mod aside;
 mod progress;
+/// Le retard de l'index sur le disque, par cellule (la montre de fichiers).
+pub mod retard;
 mod synchronisation;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
@@ -252,6 +254,10 @@ pub struct Catalog {
     /// LLM décodeur (étape 1) : exposé aux graphes comme service `"llm"`.
     llm: Option<Arc<dyn crate::llm::Llm>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
+    /// **Le retard de l'index sur le disque**, par cellule : noté par la
+    /// montre de fichiers, effacé par la réindexation, dit par les lectures.
+    /// Sous son propre verrou : la montre n'attend jamais le catalogue.
+    file_lag: Arc<retard::Lag>,
     config: CatalogConfig,
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
@@ -518,6 +524,7 @@ impl Catalog {
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
+            file_lag: Arc::new(retard::Lag::new()),
             parked_fts: HashMap::new(),
             parked_sparse: HashMap::new(),
             multi_cell: false,
@@ -838,9 +845,14 @@ impl Catalog {
             self.fts_storage = fichiers;
             return;
         }
+        // Une ligne suffit : une sélection bornée à 1, par le dialecte.
+        let mut une = rag3weaver_ir::Select::all(self.dialect.internal_table("_index_blobs"), vec![rag3weaver_ir::Column::Node("_key".into())]);
+        une.limit = Some(1);
         let des_blobs = self
-            .conn
-            .execute("MATCH (b:_index_blobs) RETURN b._key LIMIT 1")
+            .dialect
+            .select(&une)
+            .ok()
+            .and_then(|q| self.conn.execute(&q).ok())
             .map(|r| !r.rows.is_empty())
             .unwrap_or(false);
         if !des_blobs {
@@ -4300,6 +4312,12 @@ impl Catalog {
         &self.scope
     }
 
+    /// Le registre du retard de l'index sur le disque (la montre y note, la
+    /// réindexation y efface, les lectures le disent).
+    pub fn file_lag(&self) -> Arc<retard::Lag> {
+        self.file_lag.clone()
+    }
+
     /// Change la cellule courante : les ingestions suivantes sont estampillées
     /// avec, les recherches y sont limitées par défaut. Les nœuds `_Org` /
     /// `_Project` sont créés s'ils manquent.
@@ -7138,6 +7156,35 @@ impl Catalog {
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
         self.mettre_en_file_la_mise_a_jour(entity_name, uuid, data)?;
+        Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
+    }
+
+    /// **Mettre à jour plusieurs lignes d'une entité en un drain** : chacune
+    /// passe en file, puis l'exigence d'écriture est tenue **une** fois. Le
+    /// drain les écrit par `UpdateRecordNode` — une lecture groupée, un `SET`
+    /// par forme de mise à jour — au lieu d'un drain par ligne. Le
+    /// `FlushResult` dit chaque ligne (`update_results`), refus compris.
+    pub fn update_many(
+        &mut self,
+        entity_name: &str,
+        rows: Vec<(String, BTreeMap<String, CypherValue>)>,
+    ) -> Result<FlushResult, CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let res = self.update_many_jusqu_a(entity_name, rows, exige)?;
+        self.dire_les_avertissements("update", &res);
+        Ok(res)
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn update_many_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        rows: Vec<(String, BTreeMap<String, CypherValue>)>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        for (uuid, data) in rows {
+            self.mettre_en_file_la_mise_a_jour(entity_name, &uuid, data)?;
+        }
         Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
     }
 

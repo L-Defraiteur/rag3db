@@ -1054,6 +1054,25 @@ impl EntityConfig {
     }
 
     /// Get content field names (fields with is_content=true or content_for containing "self"), sorted.
+    /// **Les champs dont le texte de contenu est fait** — ceux que
+    /// `Catalog::build_content_text` lit : les champs de contenu s'il y en a,
+    /// sinon ceux qui portent `title_for` ou `content_for`. Une mise à jour qui
+    /// n'en touche aucun ne change pas le contenu.
+    pub fn content_source_fields(&self) -> Vec<&str> {
+        let simples = self.content_fields();
+        if !simples.is_empty() {
+            return simples;
+        }
+        let mut champs: Vec<&str> = self
+            .fields
+            .iter()
+            .filter(|(_, f)| f.title_for.is_some() || f.content_for.is_some())
+            .map(|(name, _)| name.as_str())
+            .collect();
+        champs.sort();
+        champs
+    }
+
     pub fn content_fields(&self) -> Vec<&str> {
         let mut fields: Vec<&str> = self.fields.iter()
             .filter(|(_, f)| f.is_content || f.content_for.as_ref().map_or(false, |v| v.iter().any(|s| s == "self")))

@@ -850,6 +850,72 @@ INSTANTIATE_TEST_SUITE_P(Copies, TwoCommitsThatWantACheckpoint, ::testing::Bool(
         return info.param ? "Forced" : "Journaled";
     });
 
+// A8, le point de reprise sous écrivains permanents (page coeur-cpp/11 §1) : sous le mode
+// multi-écrivains, des écrivains qui enchaînent BEGIN, écriture, COMMIT sans pause laissent presque
+// toujours une transaction ouverte. Le point de reprise automatique, au seuil, n'avait lieu que si
+// aucune autre n'était active ; sinon il était reporté, à chaque fois, et le journal grossissait
+// sans fin. Attendu : le journal reste sous un plafond, et aucun écrivain ne reçoit le délai d'un
+// point de reprise. Chaque transaction finit d'elle-même : une forme qui retient les nouvelles
+// transactions trouve un point calme en quelques millisecondes. (Un premier jet qui faisait valider
+// un écrivain seulement si un autre avait sa transaction ouverte était insatisfiable par
+// construction : le point calme y est impossible, relecture du cœur.)
+TEST_F(LockBench, AutoCheckpointIsNotPostponedForeverUnderWritersWithoutAGap) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, s STRING);");
+    constexpr uint32_t numWriters = 8;
+    constexpr int transactionsPerWriter = 300;
+    constexpr uint64_t threshold = 64 * 1024;
+    // Mesuré le 11 octobre 2026 sur luciepc, six passes de chaque côté : sur master, le journal
+    // montait de 210 à 358 Kio ; avec le correctif, de 78 à 91 Kio. Deux fois le seuil les sépare.
+    constexpr uint64_t ceiling = 2 * threshold;
+    const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+    std::atomic<bool> stop{false};
+    std::atomic<uint64_t> largestJournal{0};
+    std::thread watcher([&]() {
+        while (!stop.load()) {
+            std::error_code ec;
+            const auto size = std::filesystem::file_size(walPath, ec);
+            if (!ec && size > largestJournal.load()) {
+                largestJournal.store(size);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    });
+    SharedMapping mapping(numWriters);
+    auto& area = mapping.get();
+    const std::string payload(1000, 'x');
+    launchCase(area, [&payload](Worker& worker) {
+        const auto self = worker.index();
+        // Le banc coupe le point de reprise automatique à l'ouverture de chaque connexion ;
+        // ce cas le veut, au seuil.
+        worker.run("CALL auto_checkpoint=true;");
+        worker.run("CALL checkpoint_threshold=" + std::to_string(threshold) + ";");
+        for (int i = 0; i < transactionsPerWriter; i++) {
+            worker.begin();
+            worker.run(stringFormat("CREATE (:Item {id: {}, s: '{}'});",
+                static_cast<int64_t>(self) * 1'000'000 + i, payload));
+            worker.commit();
+        }
+    });
+    stop.store(true);
+    watcher.join();
+    std::cerr << "  largest journal: " << largestJournal.load() << " bytes (threshold "
+              << threshold << ")\n";
+    for (uint32_t worker = 0; worker < numWriters; worker++) {
+        EXPECT_EQ(refusals(area, worker, Refusal::CheckpointTimeout), 0u)
+            << "[check: no-checkpoint-timeout] writer " << worker;
+        EXPECT_EQ(area.workers[worker].commitsSucceeded.load(),
+            static_cast<uint32_t>(transactionsPerWriter))
+            << "[check: every-commit] writer " << worker;
+    }
+    EXPECT_LT(largestJournal.load(), ceiling)
+        << "[check: journal-under-a-ceiling] the journal reached " << largestJournal.load()
+        << " bytes for a threshold of " << threshold;
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"),
+        static_cast<int64_t>(numWriters) * transactionsPerWriter)
+        << "[check: committed-rows] ";
+    expectIntegrity();
+}
+
 // A3′ : un COPY et une insertion de la même table ne se croisent pas — l'insertion tient
 // l'index en partagé, le COPY le veut en exclusif. Dans les deux sens, l'attente est prouvée
 // par l'ordre des événements, puis le second passe et valide.

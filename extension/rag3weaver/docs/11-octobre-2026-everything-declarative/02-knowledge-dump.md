@@ -127,3 +127,19 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
   d'options : un témoin du compte passe par un `Decider` à soi.
 - Après un `git reset`/rebase du worktree, `git submodule update` : sinon
   `codeparsers` reste à l'ancien pointeur et la feature `code` ne compile plus.
+
+## Ce que la montre de fichiers a appris (W1-W2)
+
+- Réindexer un fichier et le retirer existaient (`code_sync::reingest_file`,
+  `remove_file`, la reprise par `note_change` pendant une indexation entière) :
+  il ne manquait que qui les appelle.
+- `Event::to_json` a un bras par variante : une variante neuve sans bras arrive
+  aux graphes en `{"kind", "detail": "<Debug>"}` — l'ajouter.
+- Les nœuds tournent dans les fils du runtime : un `thread_local` posé par
+  l'appelant (`CELL_OF_CALL`) n'y est pas visible ; la cellule de l'appel leur
+  arrive par le service `"scope"` que pose `build_services`.
+- `poste lourd` ne transmet pas forcément l'environnement : les filtres du
+  rejeu court se lisent dans un fichier (`I/court-filtres`).
+- Sous le verrou de push, un rebase réécrit les fichiers du lot, donc
+  rag3weaver recompile une fois par jeu de `check_features` : ~10 min même
+  worktree chaud. La passe complète se fait avant le verrou.

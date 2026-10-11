@@ -616,6 +616,7 @@ impl DataflowRuntime {
         let mut completed: HashSet<String> = HashSet::new();
         let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
+        let stream_ports = stream_ports_of(graph)?;
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
@@ -743,6 +744,9 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
+                if let Some((per_element, stream_outputs)) = stream_ports.get(node_name.as_str()) {
+                    ctx.set_stream_ports(per_element.clone(), stream_outputs.clone());
+                }
                 let edges_for_node: Vec<_> = graph
                     .edges
                     .iter()
@@ -828,7 +832,7 @@ impl DataflowRuntime {
                 // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
                 // finit sans la poser est en faute, dit comme tel — pas un saut.
                 // Seule une sortie optionnelle vide fait sauter l'aval.
-                let exec_result = exec_result.and_then(|()| {
+                let exec_result = exec_result.and_then(|()| ctx.settle_streams()).and_then(|()| {
                     match required_output_missing(graph, &node_name, &ctx) {
                         Some(error) => Err(error),
                         None => Ok(()),
@@ -1101,6 +1105,7 @@ impl DataflowRuntime {
         let mut completed: HashSet<String> = HashSet::new();
         let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
+        let stream_ports = stream_ports_of(graph)?;
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         // Each edge that reads from a port is one consumer. When the last consumer
@@ -1194,6 +1199,9 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
+                if let Some((per_element, stream_outputs)) = stream_ports.get(node_name.as_str()) {
+                    ctx.set_stream_ports(per_element.clone(), stream_outputs.clone());
+                }
                 let edges_for_node: Vec<_> = graph
                     .edges
                     .iter()
@@ -1271,7 +1279,7 @@ impl DataflowRuntime {
                 // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
                 // finit sans la poser est en faute, dit comme tel — pas un saut.
                 // Seule une sortie optionnelle vide fait sauter l'aval.
-                let exec_result = exec_result.and_then(|()| {
+                let exec_result = exec_result.and_then(|()| ctx.settle_streams()).and_then(|()| {
                     match required_output_missing(graph, &node_name, &ctx) {
                         Some(error) => Err(error),
                         None => Ok(()),
@@ -1407,6 +1415,35 @@ impl NodeEventFilter {
 /// déclaré partout et vérifié nulle part (sauf par les nœuds scriptés) ;
 /// avec le saut, il devient ce qui sépare « vide parce que non prise »
 /// (optionnelle) de « vide parce qu'oubliée » (requise).
+/// Par nœud : ses entrées lues élément par élément et ses sorties en flux,
+/// d'après les genres **résolus** (une sortie qui suit un flux est un flux).
+/// Refuse d'abord `Complete ← Open` sur ces genres : un graphe monté à la
+/// main (`connect`) n'est pas passé par `from_definition`.
+fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, (HashSet<String>, HashSet<String>)>, String> {
+    graph.validate_streams()?;
+    let kinds = graph.resolved_kinds()?;
+    let mut out = HashMap::new();
+    for node in &graph.nodes {
+        let name = node.name().to_string();
+        let per_element: HashSet<String> = node
+            .inputs()
+            .into_iter()
+            .filter(|p| p.posture == super::port::Posture::PerElement)
+            .map(|p| p.name.to_string())
+            .collect();
+        let stream_outputs: HashSet<String> = node
+            .outputs()
+            .into_iter()
+            .filter(|p| kinds.get(&(name.clone(), p.name.to_string())).is_some_and(|k| k.is_stream()))
+            .map(|p| p.name.to_string())
+            .collect();
+        if !per_element.is_empty() || !stream_outputs.is_empty() {
+            out.insert(name, (per_element, stream_outputs));
+        }
+    }
+    Ok(out)
+}
+
 fn required_output_missing(graph: &DataflowGraph, name: &str, ctx: &NodeContext) -> Option<String> {
     let node = graph.nodes.iter().find(|n| n.name() == name)?;
     let missing: Vec<String> = node

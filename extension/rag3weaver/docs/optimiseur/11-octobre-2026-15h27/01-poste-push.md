@@ -102,6 +102,34 @@ propre, aucun rebase en cours, `git log -1 origin/master` au hash annoncé).
    compiler un worktree neuf, puis s'est arrêtée sans pousser — et tout le
    monde attendait derrière elle.
 
+## Ce qu'une avance de master change pour chaque sorte de lot
+
+La règle 3 dite exactement (orchestration, 11 octobre, 16 h) : **une avance de master qui ne
+change pas l'artefact rejoué ne demande pas de rejeu**. Ce qui le prouve, c'est la liste des
+chemins qui entrent dans le bâti de cet artefact, pas l'extension des fichiers.
+
+- **Un lot du moteur** (l'artefact : les binaires de test C++ et les extensions) rejoue si
+  l'avance touche
+  `src cmake CMakeLists.txt test extension/vector extension/geo third_party scripts tools/rust_api`.
+  Sinon (des docs, `extension/rag3weaver`, codeparsers), il rebase et pousse sans rejouer. Le
+  contrôle dans la commande :
+
+  ```bash
+  ENGINE='src cmake CMakeLists.txt test extension/vector extension/geo third_party scripts tools/rust_api'
+  if [ -n "$(git -C "$W" diff --name-only "$BASE" origin/master -- $ENGINE)" ]; then
+    echo "master a reçu du code du moteur depuis la base rejouée, rien poussé"; exit 9
+  fi
+  ```
+- **Un lot rag3weaver** (l'artefact : les binaires cargo, liés à la lib du moteur) rejoue si
+  l'avance touche `extension/rag3weaver` (Cargo.lock compris), codeparsers, l'IR, **ou tout chemin
+  du moteur ci-dessus**, parce que sa lib change le résultat. Il n'y a pas de symétrique : une
+  avance du moteur n'est jamais neutre pour un lot rag3weaver.
+- **Une avance de `.md` seuls** est neutre pour les deux.
+
+Vu sur A8 (seconde session cœur C++) : au premier tour, la commande a refusé de pousser parce que
+master avait reçu du code rag3weaver depuis sa base. C'était juste selon la forme « `.md` seuls »,
+mais sans objet pour un lot du moteur.
+
 ## Les témoins
 
 Sur un dépôt jouet (dépôt nu, deux clones ; commande : fetch, rebase, rejeu de

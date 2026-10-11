@@ -17,7 +17,7 @@ acceptée par l'orchestration. Ce qu'on sait du code est dans `02-knowledge-dump
 | 5 | `spawn`, rester à l'écoute, les bornes | — |
 | 6 | la boîte de session dans l'atelier ; l'interface proposée au chat et au MCP | — |
 | 7 | l'expérience à vrai modèle | — |
-| W | surveiller les fichiers (demande de Lucie, entre les lots 3 et 4) | page `04-surveiller-les-fichiers.md` sur master (`00618a043`) ; W1 (la montre) en cours |
+| W | surveiller les fichiers (demande de Lucie, entre les lots 3 et 4) | page `04-surveiller-les-fichiers.md` (`00618a043`) ; **W1 et W2 sur master** (`a73a7941d`, correction du natif seul `dd45c9d50`) ; **W3 sur master** (`c1b6ceca1`) ; W4 (crochet Claude Code, recette) à faire |
 
 ## Lot 1 — les ports d'agent
 
@@ -117,6 +117,47 @@ retient.
 passe : tout le texte envoyé au decider (le banc de la mémoire y met le ChatML
 de Qwen3), ou le tour `user` du llm. Vide : le texte composé d'avant. Refusé
 sans `{text}` ou avec un trou inconnu. Sur master `a6bfb9b9a`.
+
+## W1-W2 — l'index suit le disque
+
+- **La montre** (`src/watch.rs`) : `watches` au manifeste ; balaie la source de
+  l'index (`FileSource::list`), compare date et taille, attend `settle_ms` de
+  stabilité, hache le contenu (blake3 : un `touch` ne dit rien), publie un
+  `FileChanged` par fichier sur le sujet `files`. Un fil par montre, réveillé à
+  l'arrêt ; montée au début de `mount_reactions` et arrêtée au début de
+  `stop_reactions` — les mêmes chemins (ouverture, rechargement, réouverture
+  par l'hôte, arrêt). Une source `snapshot` est refusée.
+- **La réaction** `reindex_on_change` du gabarit code (`%% on: files`, `batch
+  300`) et `ReindexFileNode`, capacité réactive nommée (la liste blanche
+  réactive passe à base + 3, garde-fou mis à jour avec sa raison) : **le disque
+  décide**, l'événement ne désigne que le chemin ; reprise pendant une
+  indexation entière.
+- **Témoin de bout en bout**, vraie base : une édition à la main puis `usages`
+  voit le nouvel appelant sans `index` ; un `removed` forgé pour un fichier
+  présent ne le retire pas ; un fichier supprimé perd ses usages. Vus rouges
+  (montre débranchée ; ancien nœud).
+- **Conséquence** : tout backend ouvert du gabarit code — le MCP du code compris
+  — surveille son workspace, période 1 s.
+- **Mesure du balayage** (Python, cache chaud) : 2,6 ms pour les 1 653 fichiers
+  de `src/` ; 13 ms pour 6 605 fichiers.
+
+## W3 — le retard se dit
+
+- `src/catalog/retard.rs` (sans feature, son propre verrou) : par cellule,
+  le premier et le dernier changement de chaque chemin. La montre note ; ce
+  qui **relit vraiment** le fichier efface — la réaction (réindexé, retiré),
+  la synchronisation (après l'écriture réussie de chaque paquet, et à la
+  reprise) — et seulement si rien n'a changé après l'instant de la lecture.
+  Une mise en reprise n'efface rien.
+- `index_states` porte `lag` ; `usages` et le voisinage (par
+  `read_catalog_in`, la cellule de l'appel) disent « N fichier(s) changé(s)
+  depuis N s, pas encore réindexé(s) : ce résultat peut dater ».
+- Relu par l'arbre principal (catalog.rs, code_sync : deux courses fermées) et
+  par la recherche (dataflow : trois points).
+- **Un rouge de master à ma charge**, corrigé (`dd45c9d50`) : W1 laissait des
+  imports et un `mut` qui ne servent qu'avec la feature `code`, refusés sous
+  `rag3db-native` seul avec `-D warnings`. Ce jeu est désormais dans mes
+  contrôles avant tout hash (et devient le cinquième de `check_features.sh`).
 
 ## Relectures faites pour la recherche
 

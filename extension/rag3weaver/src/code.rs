@@ -2343,12 +2343,15 @@ impl Catalog {
             return Ok((parents, fichiers, genres));
         }
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+        // Par le dialecte : l'uuid donné en tête, puis les trois champs.
+        let lire = rag3weaver_ir::Select::by_uuids(
+            SCOPE,
+            ["parent_name", "file_path", "scope_type"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
+        );
+        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
-            .execute_with_params(
-                &format!("UNWIND $uuids AS uid MATCH (s:{SCOPE} {{_uuid: uid}}) RETURN uid, s.parent_name, s.file_path, s.scope_type"),
-                &[crate::connection::QueryParam::new("uuids", param)],
-            )
+            .execute_with_params(&requete, &[crate::connection::QueryParam::new("uuids", param)])
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
             let Some(CypherValue::String(u)) = row.first() else { continue };
@@ -2390,12 +2393,12 @@ impl Catalog {
             return Ok(());
         }
         let param = CypherValue::List(froms.iter().map(|u| CypherValue::String(u.clone())).collect());
+        // Par le dialecte : l'uuid donné en tête, puis la source et le dépôt.
+        let lire = rag3weaver_ir::Select::by_uuids(SCOPE, ["source", "repo"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec());
+        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
-            .execute_with_params(
-                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) RETURN u, s.source, s.repo"),
-                &[crate::connection::QueryParam::new("uuids", param)],
-            )
+            .execute_with_params(&requete, &[crate::connection::QueryParam::new("uuids", param)])
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         let texte = |r: &[CypherValue], i: usize| r.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let source_de: std::collections::HashMap<String, (String, String)> =
