@@ -717,3 +717,31 @@ COPY journalisé, corrigé ». En cours : lib de luciepc (cœur), lib d'ici puis
 **retrait du filet** avec témoin sans filet et mesure de la durée de la lib
 (A), rebase du point de reprise interrompu (hotfixs). Les archives npm avec
 le filet restent bonnes ; l'alpha suivante portera le correctif.
+
+## 16. Ajout de 4 h 50 : la séance npm est prête (quatre OTP)
+
+Les quatre archives `0.0.1-alpha.2` de la tête `634c52249` (master avec le
+filet du COPY journalisé ; le contrôle de bâti, le lot 1 du proto, le profil
+`paquet`, les trois correctifs Windows) sont sous
+`~/.cache/rag3weaver-build/paquet-npm-garde/publier/` : Linux 24,8 Mo
+(binaire 67 Mo strippé, glibc 2.28), Windows 27,1 Mo (binaire 68 Mo +
+extension 12,7 Mo), macOS arm64 21,8 Mo (60 Mo), tête 29 ko (README anglais,
+épinglage exact). Identifiants de bâti moteur = extension sur chaque
+plateforme ; épreuve et sonde (200 000 lignes, 50 000 sous Windows) vertes
+sur les trois runners ; démo verte depuis les archives. Les commandes, dans
+l'ordre, un OTP chacune :
+
+```
+cd ~/.cache/rag3weaver-build/paquet-npm-garde/publier
+npm publish rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-windows-x64-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-0.0.1-alpha.2.tgz --tag next --access public
+```
+
+Puis `npm view rag3weaver@next version optionalDependencies`,
+`npm view rag3weaver-windows-x64@next version`, et la démo
+`bash ~/git_workspaces/rag3db-paquet-npm/extension/rag3weaver/bindings/nodejs/demo/demo.sh`.
+Les archives de `786dfec13` (COPY journalisé sans filet) restent étiquetées
+« ne pas publier ». L'alpha suivante portera le correctif du moteur
+(`60d74a4e2`) et la fin du filet.
