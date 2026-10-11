@@ -190,3 +190,25 @@ fn add_ref_ne_lie_pas_une_reference_qui_n_est_pas_ecrite() {
     assert_eq!(compter(&backend, "MATCH ()-[r:CITE]->() RETURN count(r)"), 1);
 }
 
+
+/// **`add_ref` dans la cellule de l'appel** (la cellule des bouts, migration (a)) :
+/// une session d'une autre cellule que celle du catalogue écrit sa fiche dans sa
+/// cellule ; `add_ref` doit l'y trouver, et y écrire la référence. Avant, il
+/// calculait dans la cellule du catalogue : la fiche n'était « pas là ».
+#[test]
+#[ignore]
+fn add_ref_cherche_la_fiche_et_ecrit_la_reference_dans_la_cellule_de_l_appel() {
+    let _verrou = FAUTES.lock().unwrap_or_else(|p| p.into_inner());
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    let alpha = rag3weaver::scope::Scope::new("acme", "alpha");
+    backend
+        .call("create_ref_type", json!({"name": "fichier", "description": "un chemin", "forme": "relatif", "confirm": true}))
+        .expect("le genre");
+    backend.call_in(&alpha, "put_fiche", json!({"record": {"titre": "une", "corps": "x"}})).expect("la fiche d'alpha");
+    let r = backend
+        .call_in(&alpha, "add_ref", json!({"genre": "fichier", "valeur": "src/a.rs", "fiche": {"titre": "une"}}))
+        .expect("une réponse");
+    assert_eq!(r["result"]["executed"], true, "la fiche d'alpha est trouvée dans alpha : {r}");
+    assert_eq!(compter(&backend, "MATCH (f:Fiche)-[r:CITE]->(x:Ref) WHERE f._project = 'alpha' AND x._project = 'alpha' RETURN count(r)"), 1);
+}
