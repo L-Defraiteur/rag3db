@@ -20,6 +20,9 @@ public:
 #endif
 
     common::TaskScheduler* getTaskScheduler() { return taskScheduler.get(); }
+    // La trace par tâche (RAG3DB_TRACE_TASKS, lue à l'ouverture de la base) : voir
+    // ProcessorTask::finalize.
+    bool tracesTasks() const { return traceTasks; }
 
     std::unique_ptr<main::QueryResult> execute(PhysicalPlan* physicalPlan,
         ExecutionContext* context);
@@ -32,6 +35,7 @@ private:
 
 private:
     std::unique_ptr<common::TaskScheduler> taskScheduler;
+    bool traceTasks;
 };
 
 } // namespace processor

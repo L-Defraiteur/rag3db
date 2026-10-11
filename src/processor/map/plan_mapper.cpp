@@ -1,5 +1,8 @@
 #include "processor/plan_mapper.h"
 
+#include <functional>
+#include <unordered_set>
+
 #include "main/client_context.h"
 #include "main/database.h"
 #include "planner/operator/logical_plan.h"
@@ -200,10 +203,41 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOperator(const LogicalOperator*
     if (logicalOperator->hasCardinalityEstimate()) {
         physicalOperator->setEstimatedCardinality(logicalOperator->getCardinality());
     }
+    inheritEstimates(physicalOperator.get(), *logicalOperator);
     if (!logicalOpToPhysicalOpMap.contains(logicalOperator)) {
         logicalOpToPhysicalOpMap.insert({logicalOperator, physicalOperator.get()});
     }
     return physicalOperator;
+}
+
+// Les opérateurs physiques nés ici sans contrepartie logique — le puits d'un agrégat, la
+// construction d'une jointure, un collecteur, un aplatissement — prennent l'estimation de ce
+// qu'ils lisent (leur premier enfant), pour que le pipeline qu'ils ferment la connaisse
+// (QueryProcessor::initTask). On descend depuis l'opérateur mappé jusqu'aux opérateurs physiques
+// des enfants logiques, qui gardent la leur ; l'opérateur mappé lui-même garde ce que le
+// planificateur a dit, estimation ou non.
+void PlanMapper::inheritEstimates(PhysicalOperator* mapped, const LogicalOperator& logicalOp) {
+    std::unordered_set<const PhysicalOperator*> stops;
+    for (auto& child : logicalOp.getChildren()) {
+        if (const auto it = logicalOpToPhysicalOpMap.find(child.get());
+            it != logicalOpToPhysicalOpMap.end()) {
+            stops.insert(it->second);
+        }
+    }
+    std::function<void(PhysicalOperator*, bool)> visit = [&](PhysicalOperator* op, bool root) {
+        if (!root && stops.contains(op)) {
+            return;
+        }
+        for (auto i = 0u; i < op->getNumChildren(); ++i) {
+            visit(op->getChild(i), false);
+        }
+        if (!root && !op->getEstimatedCardinality().has_value() && op->getNumChildren() > 0) {
+            if (const auto fromChild = op->getChild(0)->getEstimatedCardinality()) {
+                op->setEstimatedCardinality(*fromChild);
+            }
+        }
+    };
+    visit(mapped, true);
 }
 
 std::vector<DataPos> PlanMapper::getDataPos(const expression_vector& expressions,

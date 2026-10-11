@@ -7,7 +7,12 @@ namespace planner {
 
 class LogicalDummyScan final : public LogicalOperator {
 public:
-    explicit LogicalDummyScan() : LogicalOperator{LogicalOperatorType::DUMMY_SCAN} {}
+    // Une ligne, connue : la source des plans sans lecture (UNWIND d'un paramètre, CREATE…), que
+    // le processeur mappe en appel de fonction de table — sans estimation, ses tâches gardaient
+    // tous les fils (page coeur-cpp/12 §8).
+    explicit LogicalDummyScan() : LogicalOperator{LogicalOperatorType::DUMMY_SCAN} {
+        setCardinality(1);
+    }
 
     void computeFactorizedSchema() override;
     void computeFlatSchema() override;

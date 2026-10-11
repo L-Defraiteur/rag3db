@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "planner/operator/logical_operator.h"
 
 namespace rag3db {
@@ -24,6 +26,10 @@ public:
     std::shared_ptr<binder::Expression> getIDExpr() const { return idExpr; }
 
     std::string getExpressionsForPrinting() const override { return inExpr->toString(); }
+
+    // La longueur de la liste quand elle est connue à la liaison : un littéral, une liste écrite
+    // dans la requête, un paramètre (`UNWIND $uuids`). Une liste calculée ne dit rien.
+    std::optional<uint64_t> knownListSize() const;
 
     std::unique_ptr<LogicalOperator> copy() override {
         return make_unique<LogicalUnwind>(inExpr, outExpr, idExpr, children[0]->copy());

@@ -13,6 +13,7 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         vector_update_in_one_transaction_test.cpp rel_checkpoint_untouched_regions_test.cpp
         rel_string_property_checkpoint_test.cpp vector_index_rollback_test.cpp
         table_analyze_test.cpp ignore_errors_duplicate_key_test.cpp extension_build_id_test.cpp
-        blob_checkpoint_test.cpp duplicate_key_journal_test.cpp wal_reader_test.cpp second_writer_process_test.cpp)
+        blob_checkpoint_test.cpp duplicate_key_journal_test.cpp wal_reader_test.cpp second_writer_process_test.cpp
+        threads_by_cardinality_test.cpp)
 
 add_subdirectory(concurrence)

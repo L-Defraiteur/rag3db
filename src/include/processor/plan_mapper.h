@@ -243,6 +243,7 @@ public:
         KU_ASSERT(logicalOpToPhysicalOpMap.contains(logicalOp));
         logicalOpToPhysicalOpMap.erase(logicalOp);
     }
+    void inheritEstimates(PhysicalOperator* mapped, const planner::LogicalOperator& logicalOp);
 
 public:
     ExecutionContext* executionContext;
