@@ -121,3 +121,18 @@ où elle vit.
   reporté après la condition 3** (plusieurs jours sur des invariants du
   stockage pour un chemin de secours couvert par le filet produit) ; hotfixs
   rejoint le cœur sur la condition 3 (A7 + A8).
+- **La marche 0 du démon est sur master** (`75de6618f`) : un serveur qui se
+  ferme arrête ses indexations au prochain paquet validé et la relance
+  reprend sans reprise forcée ; deux défauts attrapés par le témoin
+  (une passe en masse interrompue repartait par paquet ; les liens en file
+  oubliés à la suspension).
+- **Le COPY de blobs : la prémisse ne tenait pas** (A) — le produit n'écrit
+  pas ses blobs par COPY ; le point commun des rouges sous petit tampon est
+  **le point de reprise forcé des COPY en mode blobs**, imposé par
+  rag3weaver depuis le 5 octobre, sur un gros volume. Tranché d'avance par
+  l'orchestration, renversable : si la sonde sans forçage est verte,
+  rag3weaver ne force plus (le COPY journalisé est le défaut partout, corrigé
+  cette nuit, et la raison du 5 octobre est fermée) ; le prix est dit (les
+  lignes d'un paquet passent au journal) ; le ticket moteur se recentre sur
+  « un COPY forcé de plus d'un quart du tampon échoue », forme (a) reportée.
+- **T0 est sur master** (`82a5f4851`) : condition 3, première marche.
