@@ -98,3 +98,46 @@ branche `locks-via`. Les trois reprises par l'arbre principal. Ensuite :
 B2d, les 8 720 arêtes par le nom (receveurs non typés) ; B9 côté Rust
 partagé avec rag3db-97 (à rag3db-97 l’indexation de rag3weaver et les cas
 minimaux par catégorie, à moi la lecture et les correctifs codeparsers).
+## État en fin de nuit (11 octobre, vers 3 h 30)
+
+**Sur master rag3db** : impact les sûrs d'abord, `callees`, `locks_via`
+(fusionnés par l'arbre principal, `6044723a5`) ; codeparsers `f91fc58`
+(`80054b530`).
+
+**En attente chez l'arbre principal** : branche `impl-pas-definisseur-2`
+(tête `5626429a7`) — T1 (`code.rs` : un bloc impl ne définit pas son nom),
+pointeur codeparsers `06d6e92` (T4 macro_rules!, boucles C++), témoin et
+fermeture du ticket « appel par chemin vers un type externe », tickets.
+Vérifiée sur la lib de 02:18. La branche `impl-pas-definisseur` (sans -2)
+est à ignorer : rebasée, poussée sous un nom neuf.
+
+**Ouvert** :
+- T5 (ticket `2026-10-11-appel-a-une-fermeture-locale-ecarte`).
+- Une décision : un appel sur une locale qui reste non typée est écarté en
+  silence (règle d'origine du crate, `base_scope_extraction_parser.rs`,
+  `exclude.contains(q) && !typed_binding(q)`). Le rendre visible, non
+  attribué, changerait ce qu'affiche `usages` et le banc (recul de
+  visibilité) : à proposer, pas à trancher seule.
+- B2d suite, par `banc_couverture --receveurs` : retours d'appel (le premier
+  poste en Rust, 12 066), paramètres de fermeture, indexation, C++ `auto x =
+  f()` sur une fonction du projet.
+- La mesure des marques CONSUMES sur rag3weaver (Rust) avant/après : deux
+  passes de la sonde avec `SONDE_SOURCES`.
+
+**Ce qu'il faut savoir pour reprendre** :
+- Un recul du banc peut être de la **visibilité** (des appels écartés
+  reviennent, typés mais non résolus) ou de la **précision** (de faux liens
+  par le seul nom écartés par le type) : le prouver chaque fois — références
+  comptées avant/après, et un échantillon relevé un par un (exemple jetable
+  sur `unresolved_references`, raison « un candidat, écarté »).
+- `typed_bindings` (C++, autres langages) lie un nom à un type pour tout le
+  scope, sans région ; `receveur::Bindings` (Rust) a des régions. Une
+  variable de boucle C++ homonyme d'une autre variable de type différent
+  perd son type (conflit → aucun).
+- `choose_target` ne relie un receveur typé que par son type : un type
+  externe ne crée jamais d'arête « nom ». Les arêtes « nom » viennent du
+  repli « un seul définisseur » sur un receveur sans type.
+- Worktree `~/git_workspaces/rag3db-cp` (branche `impl-pas-definisseur-2`)
+  et `target-impact` (17 Go) : à effacer à la fusion de la branche. Clone
+  `~/.cache/rag3weaver-build/cp-b2d` et `target-cp` : le chantier codeparsers,
+  à garder tant que B2d continue.
