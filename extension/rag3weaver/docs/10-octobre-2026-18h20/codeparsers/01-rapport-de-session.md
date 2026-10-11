@@ -62,6 +62,8 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 
 | T1 — un bloc impl ne redéfinit pas son type (B9 Rust, cas de rag3db-97) | codeparsers `02a526a` (modificateur `impl`, banc inchangé) ; branche rag3db `impl-pas-definisseur` (`b310e847e`), proposée | Le bloc `impl` était un second scope `Class Marteau` : `Marteau` ambigu partout où un impl existe. Il porte désormais le modificateur `impl`, et le rendez-vous ne lui fait plus définir le nom. Témoin `e2e_usages` par le gabarit réel : une définition de `Marteau` ; `frappe` (`let m = Marteau`) et `tous` (`for o in &outils`) attribués à `jouer` de l'impl — T2 et T3 fermés avec. |
 
+| T4 — un macro_rules! est un scope (B9 Rust) | codeparsers `93e82b8` ; pointeur dans la branche rag3db `impl-pas-definisseur-2` (rebasée, proposée) | La macro devient un scope `Function` (modificateur `macro`), ses références lues dans le corps de ses règles : `par_macro → disons → aide`, le corps ne pollue plus le scope du fichier. Banc Rust en gain net (non-résolues en baisse ; appels reliés de codeparsers entre fichiers 20,9 → 21,8 %). Tickets dans la même branche : « appel par chemin vers un type externe » fermé (témoin de sa recette, rouge avant f91fc58) ; « receveurs sans type » en cours ; T5 (fermeture locale, `map(aide)`) ouvert. |
+
 | La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
