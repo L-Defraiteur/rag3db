@@ -255,6 +255,18 @@ pub trait SchemaDialect: Send + Sync {
     /// pour se dire atomique.
     fn snapshot_read(&self) -> Option<&'static str> { None }
 
+    /// **Fondre deux nœuds d'un graphe de formes en une instruction** : le
+    /// texte d'amont (déjà fondu ou non, et dont `upstream` est la dernière
+    /// forme), la colonne qui nourrit l'aval, et le texte de l'aval. `None` :
+    /// ce dialecte ne sait pas les fondre, et le graphe les exécute l'un après
+    /// l'autre (le repli découpé, `crate::plan`). Une fusion rend les mêmes
+    /// lignes que le repli : l'aval reçoit les valeurs **distinctes et non
+    /// nulles** de la colonne.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        let _ = (upstream_text, upstream, column, downstream_text);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1213,6 +1225,36 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
     }
 }
 
+impl Rag3dbDialect {
+    /// Les colonnes rendues par une sélection, dans l'ordre : l'uuid donné
+    /// en tête quand elle est par uuids, puis ses champs.
+    fn select_columns(&self, select: &rag3weaver_ir::Select) -> Vec<String> {
+        use rag3weaver_ir::Column;
+        let tete = select.by_uuids.then(|| "u".to_string());
+        tete.into_iter()
+            .chain(select.returns.iter().map(|c| match c {
+                Column::Node(f) => format!("m.{}", self.quote(f)),
+                Column::Whole => "m".to_string(),
+                _ => "NULL".to_string(),
+            }))
+            .collect()
+    }
+
+    /// Les colonnes rendues par un saut : l'uuid de départ, puis ses
+    /// colonnes.
+    fn hop_columns(&self, hop: &rag3weaver_ir::Hop) -> Vec<String> {
+        std::iter::once("u".to_string())
+            .chain(hop.returns.iter().map(|c| match c {
+                rag3weaver_ir::Column::Node(f) => format!("m.{}", self.quote(f)),
+                rag3weaver_ir::Column::Edge(f) => format!("r.{}", self.quote(f)),
+                rag3weaver_ir::Column::Null => "NULL".to_string(),
+                rag3weaver_ir::Column::Label => "label(m)".to_string(),
+                rag3weaver_ir::Column::Whole => "m".to_string(),
+            }))
+            .collect()
+    }
+}
+
 impl SchemaDialect for Rag3dbDialect {
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
@@ -1237,18 +1279,9 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
-        use rag3weaver_ir::Column;
         select.validate()?;
         let condition = rag3db_condition;
-        let colonnes: Vec<String> = select
-            .returns
-            .iter()
-            .map(|c| match c {
-                Column::Node(f) => format!("m.{}", self.quote(f)),
-                Column::Whole => "m".to_string(),
-                _ => "NULL".to_string(),
-            })
-            .collect();
+        let colonnes = self.select_columns(select);
         let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", condition(p))).unwrap_or_default();
         let ordre = if select.order_by.is_empty() {
             String::new()
@@ -1257,7 +1290,7 @@ impl SchemaDialect for Rag3dbDialect {
         };
         let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
         Ok(if select.by_uuids {
-            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN u, {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
+            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
         } else {
             format!("MATCH (m:{}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
         })
@@ -1311,17 +1344,40 @@ impl SchemaDialect for Rag3dbDialect {
         } else {
             format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
         };
-        let colonnes: Vec<String> = std::iter::once("u".to_string())
-            .chain(hop.returns.iter().map(|c| match c {
-                rag3weaver_ir::Column::Node(f) => format!("m.{}", self.quote(f)),
-                rag3weaver_ir::Column::Edge(f) => format!("r.{}", self.quote(f)),
-                rag3weaver_ir::Column::Null => "NULL".to_string(),
-                rag3weaver_ir::Column::Label => "label(m)".to_string(),
-                rag3weaver_ir::Column::Whole => "m".to_string(),
-            }))
-            .collect();
+        let colonnes = self.hop_columns(hop);
         let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
         Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{ordre}{borne}", colonnes.join(", ")))
+    }
+
+    /// **Une lecture d'amont, puis une forme nourrie par `$uuids`.** Le
+    /// `RETURN` d'amont devient `WITH DISTINCT <colonne> AS __chain WHERE
+    /// __chain IS NOT NULL WITH __chain AS <alias>`, et l'aval reprend après
+    /// son `UNWIND $uuids AS <alias>`. Le second `WITH` ne garde que l'alias :
+    /// les variables d'amont (`m`, `d`, `r`, `u`) sortent de portée, et l'aval
+    /// les redéclare comme s'il était seul. Seule une sélection ou un saut
+    /// sans ordre ni limite se fond en amont ; toute forme qui commence par
+    /// `UNWIND $uuids AS …` (saut, sélection par uuids, degré, marque,
+    /// suppression) se fond en aval.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        let colonnes = match upstream {
+            rag3weaver_ir::Form::Select(s) if s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+            rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
+            _ => return None,
+        };
+        let expression = colonnes.get(column)?;
+        let coupe = upstream_text.rfind(" RETURN ")?;
+        if upstream_text[coupe + " RETURN ".len()..] != colonnes.join(", ") {
+            return None;
+        }
+        let reste = downstream_text.strip_prefix("UNWIND $uuids AS ")?;
+        let (alias, reste) = reste.split_once(' ')?;
+        if !rag3weaver_ir::is_valid_identifier(alias) {
+            return None;
+        }
+        Some(format!(
+            "{} WITH DISTINCT {expression} AS __chain WHERE __chain IS NOT NULL WITH __chain AS {alias} {reste}",
+            &upstream_text[..coupe]
+        ))
     }
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {

@@ -224,5 +224,40 @@ où l'instruction est atomique. Seuls les points suivants diffèrent.
   étant la même suite de formes exécutée à la main ; les refus et l'atomicité
   par des tests unitaires qui prouvent que rien n'est parti.
 
-La fusion rag3db puis la fusion PostgreSQL suivent, chacune son lot, chacune
-prouvée contre ce même scénario.
+Poussé : `76cf86cbc`.
+
+## La fusion rag3db (deuxième lot)
+
+- `SchemaDialect::fuse(texte d'amont, forme d'amont, colonne, texte d'aval)` :
+  `None` par défaut, et le graphe découpe. rag3db fond une sélection ou un saut
+  **sans ordre ni limite** en amont, et toute forme qui commence par
+  `UNWIND $uuids AS <alias>` en aval (saut, sélection par uuids, degré, marque,
+  suppression). Le `RETURN` d'amont devient
+  `WITH DISTINCT <colonne> AS __chain WHERE __chain IS NOT NULL WITH __chain AS <alias>`,
+  puis l'aval reprend après son `UNWIND`. Le second `WITH` ne garde que l'alias :
+  les variables d'amont sortent de portée et l'aval les redéclare comme s'il
+  était seul. C'est la règle du repli (valeurs distinctes, non nulles), dite en
+  Cypher.
+- L'exécuteur fait des **groupes** : un nœud rejoint le groupe de son amont quand
+  l'amont en est le dernier nœud, n'a que lui pour suivant, n'est pas une sortie,
+  que leurs paramètres ne se recouvrent pas, et que le dialecte sait les fondre.
+  Une instruction par groupe ; l'atomicité se décide sur le nombre de groupes
+  (un seul : atomique par le moteur, sans transaction autour).
+  `PlanOptions::split` force le repli.
+- Exemple, la chaîne `Select` → `Hop` → `Count` du témoin, en une instruction :
+
+```
+UNWIND $uuids AS u MATCH (m:`File` {_uuid: u})
+WITH DISTINCT u AS __chain WHERE __chain IS NOT NULL WITH __chain AS u
+MATCH (d:`File` {_uuid: u})-[r:`defines`]->(m:`Symbol`)
+WITH DISTINCT m.`_uuid` AS __chain WHERE __chain IS NOT NULL WITH __chain AS u
+MATCH (d:`Symbol` {_uuid: u})<-[r:`uses`]-() RETURN u, count(r)
+```
+
+- Témoins : chaque scénario d'`e2e_chainage` joue fondu puis découpé, et chaque
+  sortie a les mêmes lignes ; l'écriture défaite par l'échec du nœud suivant
+  tient dans les deux modes (fondu : `[sel, marquer]` puis `[fautif]`, deux
+  instructions dans une transaction, défaite). Rouges sous un bouchon qui coupait
+  la fusion, verts sans.
+- PostgreSQL ne fond rien encore, et refuse `Hop` (P3, nœud nommé) : la fusion
+  PostgreSQL (son lot) commence par traduire le saut.

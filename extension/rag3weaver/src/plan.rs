@@ -2,16 +2,19 @@
 //! au dialecte ; voir
 //! `docs/11-octobre-2026-embarquements/01-chainage-des-formes.md`.
 //!
-//! Ici, le **repli découpé**, commun à tous les dialectes : un nœud, une
+//! Le **repli découpé** est commun à tous les dialectes : un nœud, une
 //! instruction, dans l'ordre topologique ; une arête passe en `$uuids` les
-//! valeurs distinctes de sa colonne, dans l'ordre où elles paraissent. La
-//! fusion de plusieurs nœuds en une instruction viendra dialecte par
-//! dialecte, prouvée équivalente à ce repli sur le même scénario.
+//! valeurs distinctes et non nulles de sa colonne, dans l'ordre où elles
+//! paraissent. La **fusion** vient du dialecte
+//! ([`SchemaDialect::fuse`]) : un nœud rejoint l'instruction de son amont
+//! quand l'amont n'a que lui pour suivant, n'est pas une sortie, et que le
+//! dialecte sait les dire ensemble. Elle doit rendre les lignes du repli ;
+//! `PlanOptions::split` force le repli, pour le prouver.
 //!
 //! L'ordre des étapes ne change pas : la vérification commune
 //! ([`Plan::check`](rag3weaver_ir::Plan::check)), puis la traduction de
 //! **tous** les nœuds (un refus part avant toute exécution, rien n'est lu ni
-//! écrit), puis la décision d'atomicité, puis l'exécution.
+//! écrit), puis les groupes et la décision d'atomicité, puis l'exécution.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -28,6 +31,9 @@ pub struct PlanOptions {
     /// atomique. Par défaut il s'exécute et le dit (`atomic: false` et sa
     /// raison) ; décision de Lucie, 11 octobre 2026.
     pub require_atomic: bool,
+    /// Ne rien fondre : un nœud, une instruction. Pour comparer une fusion au
+    /// repli sur le même graphe.
+    pub split: bool,
 }
 
 /// **Le rapport** : les lignes des sorties, et ce que le dialecte a fait du
@@ -101,7 +107,16 @@ fn distinct_column(rows: &QueryResult, column: usize) -> Vec<CypherValue> {
         .collect()
 }
 
-/// **Exécuter un graphe** par le repli découpé : un nœud, une instruction.
+/// Des nœuds partis ensemble : une instruction.
+struct Group {
+    /// Leurs positions dans l'ordre topologique.
+    members: Vec<usize>,
+    text: String,
+    params: Vec<QueryParam>,
+}
+
+/// **Exécuter un graphe** : les groupes que le dialecte sait fondre, une
+/// instruction chacun.
 pub fn run_plan(
     dialect: &dyn SchemaDialect,
     conn: &dyn DbConnection,
@@ -122,10 +137,55 @@ pub fn run_plan(
         }
     }
 
-    // L'atomicité se décide avant d'exécuter : un nœud est une instruction.
+    // Les groupes. Un nœud rejoint celui de son amont quand l'amont en est le
+    // dernier, n'a que lui pour suivant, n'est pas une sortie, que leurs
+    // paramètres ne se recouvrent pas, et que le dialecte sait les fondre.
+    // Un groupe s'exécute à la place de son premier nœud : ses autres nœuds
+    // ne dépendent que de lui, et personne d'autre ne dépend de ses nœuds
+    // intermédiaires.
+    let position: BTreeMap<&str, usize> = ordre.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+    let suivants = |id: &str| plan.edges.iter().filter(|e| e.from == id).count();
+    let mut groupes: Vec<Group> = Vec::new();
+    let mut groupe_de = vec![0usize; ordre.len()];
+    for (i, n) in ordre.iter().enumerate() {
+        let entree = plan.input_of(&n.id);
+        let mut params: Vec<QueryParam> = n.params.clone();
+        if entree.is_some() {
+            params.retain(|p| p.name != "uuids");
+        }
+        let fondu = entree.and_then(|e| {
+            let p = position[e.from.as_str()];
+            let g = groupe_de[p];
+            let groupe = &groupes[g];
+            let libre = !options.split
+                && groupe.members.last() == Some(&p)
+                && suivants(&e.from) == 1
+                && !plan.outputs.contains(&e.from)
+                && !params.iter().any(|q| groupe.params.iter().any(|r| r.name == q.name));
+            if !libre {
+                return None;
+            }
+            dialect.fuse(&groupe.text, &ordre[p].form, e.columns[0], &textes[i]).map(|t| (g, t))
+        });
+        match fondu {
+            Some((g, texte)) => {
+                groupes[g].members.push(i);
+                groupes[g].text = texte;
+                groupes[g].params.extend(params);
+                groupe_de[i] = g;
+            }
+            None => {
+                groupe_de[i] = groupes.len();
+                groupes.push(Group { members: vec![i], text: textes[i].clone(), params });
+            }
+        }
+    }
+    let noms = |g: &Group| g.members.iter().map(|&i| ordre[i].id.clone()).collect::<Vec<_>>();
+
+    // L'atomicité se décide avant d'exécuter : un groupe est une instruction.
     let capacites = dialect.capabilities();
     let charge = ordre.iter().any(|n| matches!(n.form, Form::Write(rag3weaver_ir::Write::Load { .. })));
-    let (atomic, atomic_reason, envelopper) = if ordre.len() <= 1 {
+    let (atomic, atomic_reason, envelopper) = if groupes.len() <= 1 {
         (true, None, false)
     } else if !capacites.transactions {
         (false, Some("several statements, and this dialect declares no transactions"), false)
@@ -149,29 +209,30 @@ pub fn run_plan(
         }
     }
 
+    // Les lignes de chaque groupe sont celles de son dernier nœud.
     let mut lignes: BTreeMap<&str, QueryResult> = BTreeMap::new();
-    for (n, texte) in ordre.iter().zip(&textes) {
-        let mut params = n.params.clone();
-        if let Some(arete) = plan.input_of(&n.id) {
-            let amont = &lignes[arete.from.as_str()];
-            let uuids = distinct_column(amont, arete.columns[0]);
+    for g in &groupes {
+        let premier = ordre[g.members[0]];
+        let dernier = ordre[*g.members.last().expect("un groupe a un nœud")];
+        let mut params = g.params.clone();
+        if let Some(arete) = plan.input_of(&premier.id) {
+            let uuids = distinct_column(&lignes[arete.from.as_str()], arete.columns[0]);
             if uuids.is_empty() {
                 // Rien à lire ni à écrire : pas d'instruction, aucune ligne.
-                lignes.insert(&n.id, QueryResult::default());
+                lignes.insert(&dernier.id, QueryResult::default());
                 continue;
             }
-            params.retain(|p| p.name != "uuids");
             params.push(QueryParam::new("uuids", CypherValue::List(uuids)));
         }
-        match conn.execute_with_params(texte, &params) {
+        match conn.execute_with_params(&g.text, &params) {
             Ok(r) => {
                 report.instructions += 1;
-                report.fused.push(vec![n.id.clone()]);
-                lignes.insert(&n.id, r);
+                report.fused.push(noms(g));
+                lignes.insert(&dernier.id, r);
             }
             Err(e) => {
                 let rolled_back = envelopper && conn.rollback().is_ok();
-                return Err(PlanError::Failed { node: n.id.clone(), error: e.to_string(), rolled_back });
+                return Err(PlanError::Failed { node: noms(g).join(" + "), error: e.to_string(), rolled_back });
             }
         }
     }
@@ -231,7 +292,7 @@ mod tests {
     fn exiger_l_atomicite_refuse_avant_d_executer_un_graphe_qui_ne_l_aurait_pas() {
         let (conn, recu) = espion();
         let plan = Plan::new().node("lire", lire(), vec![]).node("charger", charger(), vec![]);
-        let e = run_plan(&Rag3dbDialect, &conn, &plan, PlanOptions { require_atomic: true }).unwrap_err();
+        let e = run_plan(&Rag3dbDialect, &conn, &plan, PlanOptions { require_atomic: true, ..Default::default() }).unwrap_err();
         assert!(matches!(&e, PlanError::NotAtomic { reason } if reason.contains("bulk load")), "{e:?}");
         assert!(recu.lock().unwrap().is_empty());
 
@@ -249,7 +310,7 @@ mod tests {
     fn plusieurs_instructions_partent_dans_une_transaction_et_postgres_y_fixe_l_instantane() {
         let (conn, recu) = espion();
         let plan = Plan::new().node("a", lire(), vec![]).node("b", lire(), vec![]).output("b");
-        let r = run_plan(&PostgresDialect, &conn, &plan, PlanOptions { require_atomic: true }).unwrap();
+        let r = run_plan(&PostgresDialect, &conn, &plan, PlanOptions { require_atomic: true, ..Default::default() }).unwrap();
         assert!(r.atomic && r.atomic_reason.is_none(), "{r:?}");
         let recu = recu.lock().unwrap();
         let lecture = PostgresDialect.select(&Select::all("Order", vec![Column::Node("_uuid".into())])).unwrap();
@@ -265,6 +326,80 @@ mod tests {
         let (conn, recu) = espion();
         let plan = Plan::new().node("a", lire(), vec![]).output("z");
         assert!(matches!(run_plan(&Rag3dbDialect, &conn, &plan, PlanOptions::default()), Err(PlanError::Invalid(_))));
+        assert!(recu.lock().unwrap().is_empty());
+    }
+
+    fn chaine() -> Plan {
+        use rag3weaver_ir::{Count, Direction, Hop};
+        Plan::new()
+            .node("sel", Form::Select(Select::by_uuids("File", vec![Column::Node("_uuid".into())])), vec![QueryParam::new("uuids", CypherValue::List(vec![]))])
+            .node("hop", Form::Hop(Hop::new("File", "defines", "Symbol", Direction::Outgoing)), vec![])
+            .node("deg", Form::Count(Count::Edges { start: "Symbol".into(), relation: "uses".into(), direction: Direction::Incoming }), vec![])
+            .edge("sel", 0, "hop")
+            .edge("hop", 1, "deg")
+            .output("deg")
+    }
+
+    #[test]
+    fn rag3db_fond_une_chaine_en_une_instruction_et_le_dit() {
+        let (conn, recu) = espion();
+        let r = run_plan(&Rag3dbDialect, &conn, &chaine(), PlanOptions { require_atomic: true, ..Default::default() }).unwrap();
+        assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string(), "deg".to_string()]]);
+        assert_eq!(r.instructions, 1);
+        assert!(r.atomic && r.atomic_reason.is_none());
+        let recu = recu.lock().unwrap();
+        assert_eq!(
+            *recu,
+            ["UNWIND $uuids AS u MATCH (m:`File` {_uuid: u}) \
+              WITH DISTINCT u AS __chain WHERE __chain IS NOT NULL WITH __chain AS u \
+              MATCH (d:`File` {_uuid: u})-[r:`defines`]->(m:`Symbol`) \
+              WITH DISTINCT m.`_uuid` AS __chain WHERE __chain IS NOT NULL WITH __chain AS u \
+              MATCH (d:`Symbol` {_uuid: u})<-[r:`uses`]-() RETURN u, count(r)"],
+            "une instruction, sans transaction autour"
+        );
+    }
+
+    #[test]
+    fn split_force_le_repli_decoupe() {
+        let (conn, recu) = espion();
+        let r = run_plan(&Rag3dbDialect, &conn, &chaine(), PlanOptions { split: true, ..Default::default() }).unwrap();
+        assert_eq!(r.fused.len(), 1, "l'espion ne rend aucune ligne : la sélection part seule, le reste n'a pas d'entrée");
+        assert_eq!(recu.lock().unwrap().iter().filter(|q| q.starts_with("UNWIND")).count(), 1);
+    }
+
+    #[test]
+    fn un_amont_qui_est_une_sortie_ou_nourrit_deux_noeuds_ne_se_fond_pas() {
+        let (conn, _) = espion();
+        let r = run_plan(&Rag3dbDialect, &conn, &chaine().output("hop"), PlanOptions::default()).unwrap();
+        assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string()]], "hop est une sortie : deg ne s'y fond pas, et n'a pas d'entrée ici");
+
+        let deux = chaine().node("deg2", Form::Count(rag3weaver_ir::Count::Edges {
+            start: "File".into(), relation: "defines".into(), direction: rag3weaver_ir::Direction::Outgoing,
+        }), vec![]).edge("sel", 0, "deg2");
+        let r = run_plan(&Rag3dbDialect, &conn, &deux, PlanOptions::default()).unwrap();
+        assert_eq!(r.fused, vec![vec!["sel".to_string()]], "sel nourrit deux nœuds : il part seul, {r:?}");
+    }
+
+    #[test]
+    fn postgresql_ne_fond_rien_pour_l_instant() {
+        let (conn, recu) = espion();
+        let plan = Plan::new()
+            .node("sel", Form::Select(Select::by_uuids("File", vec![Column::Node("_uuid".into())])), vec![])
+            .node("deg", Form::Count(rag3weaver_ir::Count::Edges {
+                start: "File".into(), relation: "defines".into(), direction: rag3weaver_ir::Direction::Outgoing,
+            }), vec![])
+            .edge("sel", 0, "deg")
+            .output("deg");
+        let r = run_plan(&PostgresDialect, &conn, &plan, PlanOptions::default()).unwrap();
+        assert_eq!(r.fused, vec![vec!["sel".to_string()]], "la sélection part seule, et l'espion ne rend rien");
+        assert!(recu.lock().unwrap().iter().any(|q| q == "BEGIN TRANSACTION"), "deux groupes prévus : une transaction");
+    }
+
+    #[test]
+    fn postgresql_refuse_un_saut_en_nommant_le_noeud() {
+        let (conn, recu) = espion();
+        let e = run_plan(&PostgresDialect, &conn, &chaine(), PlanOptions::default()).unwrap_err();
+        assert_eq!(e.to_string(), "RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Hop (nœud « hop »)");
         assert!(recu.lock().unwrap().is_empty());
     }
 }

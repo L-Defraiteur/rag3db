@@ -41,3 +41,9 @@ Même cause : le délai de 2 s de `fn demon`, pas le démon.
 Et `daemon::db::tests::un_blob_traverse_le_demon` (`src/daemon/db.rs:416`), même panique, une fois
 sur quatre lib complètes de l'arbre principal (11 octobre, 4 h 35, retrait du filet du COPY) ;
 vert à la passe suivante.
+
+Et deux à la fois dans une lib complète de la session embarquements (11 octobre, vers 13 h,
+lot 1 du chaînage, après un rebase, sous `poste lourd`) : `daemon::db::tests::plusieurs_clients_sur_la_meme_base`
+(`src/daemon/db.rs:416`) et `daemon::embeddings::tests::le_factice_traverse_le_fil`
+(`src/daemon/embeddings.rs:843`), même panique ; rejoués seuls (`daemon::`), 27 sur 27 verts,
+puis verts aux trois lib complètes suivantes.

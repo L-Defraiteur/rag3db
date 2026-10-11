@@ -1,11 +1,10 @@
 //! E2E : **un graphe de formes confié entier au dialecte**, sur une base
-//! rag3db vivante, par le repli découpé (un nœud, une instruction).
+//! rag3db vivante, fondu par le dialecte puis découpé (un nœud, une
+//! instruction) : les deux rendent les mêmes lignes.
 //!
 //! Page de conception : `docs/11-octobre-2026-embarquements/01-chainage-des-formes.md`.
 //! L'oracle de chaque graphe est la même suite de formes exécutée à la main,
-//! une par une, comme le code au-dessus le faisait avant : le graphe doit
-//! rendre les mêmes lignes. La fusion de chaque dialecte se prouvera plus
-//! tard contre ce même scénario.
+//! une par une, comme le code au-dessus le faisait avant.
 //!
 //! Run with: ./run_e2e.sh --test e2e_chainage
 
@@ -16,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use rag3weaver::config::{EntityConfig, FieldType, SimpleFieldDef};
 use rag3weaver::connection::{CypherValue, QueryParam, QueryResult};
 use rag3weaver::embedder::HashEmbedder;
-use rag3weaver::plan::{PlanError, PlanOptions};
+use rag3weaver::plan::{PlanError, PlanOptions, PlanReport};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 use rag3weaver_ir::{Column, Count, Direction, Form, Hop, Plan, Predicate, Select, Write};
 
@@ -101,6 +100,16 @@ fn ensemble(r: &QueryResult) -> BTreeSet<String> {
     r.rows.iter().map(|l| format!("{l:?}")).collect()
 }
 
+/// Le graphe fondu, puis découpé : chaque sortie a les mêmes lignes.
+fn deux_fois(cat: &Catalog, plan: &Plan, options: PlanOptions) -> (PlanReport, PlanReport) {
+    let fondu = cat.run_plan(plan, options).unwrap_or_else(|e| panic!("fondu : {e}"));
+    let decoupe = cat.run_plan(plan, PlanOptions { split: true, ..options }).unwrap_or_else(|e| panic!("découpé : {e}"));
+    for (nom, lignes) in &fondu.outputs {
+        assert_eq!(ensemble(lignes), ensemble(&decoupe.outputs[nom]), "sortie « {nom} » : la fusion rend les lignes du repli");
+    }
+    (fondu, decoupe)
+}
+
 /// L'oracle : la même suite exécutée à la main, forme par forme.
 fn a_la_main(cat: &Catalog, f: &str) -> QueryResult {
     let d = cat.dialect_arc();
@@ -125,15 +134,18 @@ fn une_chaine_rend_les_lignes_de_l_oracle_et_dit_sa_decoupe() {
         .edge("sel", 0, "hop")
         .edge("hop", 1, "deg")
         .output("deg");
-    let r = s.cat.run_plan(&plan, PlanOptions { require_atomic: true }).unwrap_or_else(|e| panic!("le graphe s'exécute : {e}"));
+    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions { require_atomic: true, ..Default::default() });
     let attendu = a_la_main(&s.cat, &s.f1);
     assert_eq!(ensemble(&r.outputs["deg"]), ensemble(&attendu), "les lignes du graphe sont celles de l'oracle");
     let degres: BTreeMap<String, i64> =
         r.outputs["deg"].rows.iter().map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_i64().unwrap())).collect();
     assert_eq!(degres, BTreeMap::from([(s.a.clone(), 2), (s.b.clone(), 1)]), "a est utilisé deux fois, b une fois");
-    assert_eq!(r.instructions, 3);
-    assert_eq!(r.fused, vec![vec!["sel".to_string()], vec!["hop".to_string()], vec!["deg".to_string()]]);
+    assert_eq!(r.instructions, 1, "fondu en une instruction : {r:?}");
+    assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string(), "deg".to_string()]]);
     assert!(r.atomic && r.atomic_reason.is_none(), "{r:?}");
+    assert_eq!(decoupe.instructions, 3);
+    assert_eq!(decoupe.fused, vec![vec!["sel".to_string()], vec!["hop".to_string()], vec!["deg".to_string()]]);
+    assert!(decoupe.atomic, "trois instructions dans une transaction");
 }
 
 /// **Un nœud qui en nourrit deux** : le saut et le degré de `File` lisent
@@ -151,14 +163,14 @@ fn un_noeud_qui_en_nourrit_deux_rend_deux_sorties() {
         .edge("sel", 0, "deg")
         .output("hop")
         .output("deg");
-    let r = s.cat.run_plan(&plan, PlanOptions::default()).unwrap();
+    let (r, _) = deux_fois(&s.cat, &plan, PlanOptions::default());
     let d = s.cat.dialect_arc();
     let hop = s.cat.execute_raw_with_params(&d.hop(&hop_defines()).unwrap(), &[uuids(&[&s.f1])]).unwrap();
     let deg = s.cat.execute_raw_with_params(&d.count(&deg_defines).unwrap(), &[uuids(&[&s.f1])]).unwrap();
     assert_eq!(ensemble(&r.outputs["hop"]), ensemble(&hop));
     assert_eq!(ensemble(&r.outputs["deg"]), ensemble(&deg));
     assert_eq!(r.outputs["deg"].rows[0][1].as_i64(), Some(2), "f1 définit deux symboles");
-    assert_eq!(r.instructions, 3);
+    assert_eq!(r.instructions, 3, "sel nourrit deux nœuds : rien ne se fond");
 }
 
 fn note_de(cat: &Catalog, u: &str) -> CypherValue {
@@ -181,22 +193,25 @@ fn un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
         .node("marquer", Form::Write(marquer.clone()), vec![])
         .node("fautif", Form::Select(fautif), vec![])
         .edge("sel", 0, "marquer");
-    match s.cat.run_plan(&plan, PlanOptions::default()) {
-        Err(PlanError::Failed { node, rolled_back, .. }) => {
-            assert_eq!(node, "fautif");
-            assert!(rolled_back, "la transaction est défaite");
+    for split in [false, true] {
+        match s.cat.run_plan(&plan, PlanOptions { split, ..Default::default() }) {
+            Err(PlanError::Failed { node, rolled_back, .. }) => {
+                assert_eq!(node, "fautif", "split = {split}");
+                assert!(rolled_back, "la transaction est défaite (split = {split})");
+            }
+            autre => panic!("échec attendu sur « fautif » (split = {split}), rendu {autre:?}"),
         }
-        autre => panic!("échec attendu sur « fautif », rendu {autre:?}"),
+        assert_eq!(note_de(&s.cat, &s.a), CypherValue::String("x".into()), "la marque n'est pas restée (split = {split})");
     }
-    assert_eq!(note_de(&s.cat, &s.a), CypherValue::String("x".into()), "la marque n'est pas restée");
 
     // Le même graphe sans le nœud fautif écrit, et le dit atomique.
     let plan = Plan::new()
         .node("sel", Form::Select(sel), vec![uuids(&[&s.a])])
         .node("marquer", Form::Write(marquer), vec![])
         .edge("sel", 0, "marquer");
-    let r = s.cat.run_plan(&plan, PlanOptions { require_atomic: true }).unwrap();
+    let r = s.cat.run_plan(&plan, PlanOptions { require_atomic: true, ..Default::default() }).unwrap();
     assert!(r.atomic);
+    assert_eq!(r.fused, vec![vec!["sel".to_string(), "marquer".to_string()]], "la lecture et la marque en une instruction");
     assert!(note_de(&s.cat, &s.a).is_null(), "la marque a vidé le champ");
     assert_eq!(note_de(&s.cat, &s.b), CypherValue::String("x".into()), "et seulement pour a");
 }
@@ -214,7 +229,8 @@ fn une_entree_vide_n_envoie_rien() {
         .edge("sel", 0, "hop")
         .edge("hop", 1, "deg")
         .output("deg");
-    let r = s.cat.run_plan(&plan, PlanOptions::default()).unwrap();
+    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions::default());
     assert!(r.outputs["deg"].rows.is_empty());
-    assert_eq!(r.instructions, 1, "seule la sélection est partie : {r:?}");
+    assert_eq!(r.instructions, 1, "fondu : une instruction, qui ne trouve rien : {r:?}");
+    assert_eq!(decoupe.instructions, 1, "découpé : seule la sélection est partie : {decoupe:?}");
 }
