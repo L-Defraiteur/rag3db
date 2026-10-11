@@ -3,5 +3,6 @@
 # run_e2e.sh). run_e2e.sh compare chaque bâti à ces lignes et PRÉVIENT au-delà
 # de 1,5 fois : la prochaine dérive se voit à la passe qui la crée.
 # Remesurer : scripts/mesure_e2e.sh <étiquette> <worktree>, puis mettre à jour.
+# Remesuré après le retrait de la staticlib (f4e306e3a) : 5,5 -> 4,4 Go.
 binaire_e2e_mo=358
-target_go=5.5
+target_go=4.4
