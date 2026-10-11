@@ -22,6 +22,8 @@ mod common;
 mod e2e_agent_loop;
 #[path = "../e2e_arret_brutal.rs"]
 mod e2e_arret_brutal;
+#[path = "../e2e_arret_propre.rs"]
+mod e2e_arret_propre;
 #[path = "../e2e_avis_du_modele.rs"]
 mod e2e_avis_du_modele;
 #[path = "../e2e_banc_bge_m3.rs"]
@@ -130,6 +132,8 @@ mod e2e_lecture_mermaid;
 mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
 #[path = "../e2e_liens.rs"]
 mod e2e_liens;
+#[path = "../e2e_mcp_sigterm.rs"]
+mod e2e_mcp_sigterm;
 #[path = "../e2e_mcp_stdio.rs"]
 mod e2e_mcp_stdio;
 #[path = "../e2e_mesure_ingestion_code.rs"]

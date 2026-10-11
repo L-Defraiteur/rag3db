@@ -647,7 +647,16 @@ for ligne in open(sys.argv[1]):
     fi
   fi
 
-  # 2. Chaque suite e2e : son processus, son dossier.
+  # 2. Les filets du binaire lui-même (une suite montée, aucune relance par un
+  # nom court) : à sa racine, hors de tout `<suite>::`, aucun filtre de suite
+  # ne les désigne — ils jouent donc ici, en tête, à chaque passe.
+  if [ ${#e2e[@]} -gt 0 ]; then
+    echo "     Running tests/e2e_filets.rs (binaire e2e unique, ses propres filets)"
+    CARGO_MANIFEST_DIR="$WEAVER" "$bin" --exact chaque_suite_est_montee \
+      aucune_suite_ne_se_relance_par_son_nom_court --include-ignored || code=101
+  fi
+
+  # 3. Chaque suite e2e : son processus, son dossier.
   for nom in "${e2e[@]}"; do
     mkdir -p "$E2E_TMP_PARENT/$nom"
     echo "     Running tests/$nom.rs (binaire e2e unique, filtre $nom::)"
@@ -674,7 +683,7 @@ for ligne in open(sys.argv[1]):
     fi
   done
 
-  # 3. Les autres tests nommés (sondes, rendus) : par cargo, comme avant.
+  # 4. Les autres tests nommés (sondes, rendus) : par cargo, comme avant.
   if [ ${#autres[@]} -gt 0 ]; then
     local args=(--features "$FEATURES" --no-fail-fast)
     for nom in "${autres[@]}"; do args+=(--test "$nom"); done
