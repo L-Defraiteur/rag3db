@@ -341,6 +341,64 @@ impl DataflowRuntime {
         self.taps.subscribe()
     }
 
+    /// **Les sauts d'une itération, jusqu'au point fixe** — une seule copie
+    /// pour les deux chemins (direct et avec points de reprise), pour qu'ils
+    /// ne divergent pas (relecture de la session du proto). Voir
+    /// `skip_reason` pour ce qui fait sauter un nœud.
+    #[allow(clippy::too_many_arguments)]
+    fn skip_until_fixpoint(
+        &self,
+        graph: &DataflowGraph,
+        order: &[String],
+        completed: &mut HashSet<String>,
+        skipped: &mut HashMap<String, String>,
+        port_data: &mut HashMap<(String, String), PortValue>,
+        port_data_available: &HashSet<(String, String)>,
+        remaining_consumers: &mut HashMap<(String, String), usize>,
+        initial_inputs: &HashMap<String, HashMap<String, PortValue>>,
+    ) {
+        // **Les sauts d'abord, jusqu'au point fixe** (11 octobre 2026) :
+        // une branche non prise ne tue plus le run. Un nœud dont une
+        // entrée requise et branchée n'a rien reçu — tous ses producteurs
+        // ayant fini ou été sautés — est sauté ; le saut se propage dans
+        // la même itération, sans consommer le plafond d'itérations.
+        loop {
+            let to_skip: Vec<(String, String)> = order
+                .iter()
+                .filter(|n| !completed.contains(*n))
+                .filter_map(|n| {
+                    skip_reason(graph, n, completed, port_data_available, initial_inputs)
+                        .map(|reason| (n.clone(), reason))
+                })
+                .collect();
+            if to_skip.is_empty() {
+                break;
+            }
+            for (skipped_name, reason) in to_skip {
+                // Ce qui l'attendait n'a plus de lecteur : libéré, pas
+                // laissé dans la sortie finale.
+                for e in graph.edges.iter().filter(|e| e.to_node == skipped_name) {
+                    let key = (e.from_node.clone(), e.from_port.clone());
+                    if let Some(left) = remaining_consumers.get_mut(&key) {
+                        *left = left.saturating_sub(1);
+                        if *left == 0 {
+                            port_data.remove(&key);
+                        }
+                    }
+                }
+                let node_type = graph
+                    .nodes
+                    .iter()
+                    .find(|n| n.name() == skipped_name)
+                    .map(|n| n.node_type().to_string())
+                    .unwrap_or_default();
+                completed.insert(skipped_name.clone());
+                skipped.insert(skipped_name.clone(), reason.clone());
+                self.emit(DataflowEvent::NodeSkipped { node: skipped_name, node_type, reason });
+            }
+        }
+    }
+
     fn emit(&self, event: DataflowEvent) {
         let _ = self.event_tx.try_broadcast(event);
     }
@@ -620,46 +678,12 @@ impl DataflowRuntime {
 
         // Main execution loop (same structure as execute(), with checkpoint saves)
         for _iteration in 0..self.max_iterations {
-            // **Les sauts d'abord, jusqu'au point fixe** (11 octobre 2026) :
-            // une branche non prise ne tue plus le run. Un nœud dont une
-            // entrée requise et branchée n'a rien reçu — tous ses producteurs
-            // ayant fini ou été sautés — est sauté ; le saut se propage dans
-            // la même itération, sans consommer le plafond d'itérations.
-            loop {
-                let to_skip: Vec<(String, String)> = order
-                    .iter()
-                    .filter(|n| !completed.contains(*n))
-                    .filter_map(|n| {
-                        skip_reason(graph, n, &completed, &port_data_available, &initial_inputs)
-                            .map(|reason| (n.clone(), reason))
-                    })
-                    .collect();
-                if to_skip.is_empty() {
-                    break;
-                }
-                for (skipped_name, reason) in to_skip {
-                    // Ce qui l'attendait n'a plus de lecteur : libéré, pas
-                    // laissé dans la sortie finale.
-                    for e in graph.edges.iter().filter(|e| e.to_node == skipped_name) {
-                        let key = (e.from_node.clone(), e.from_port.clone());
-                        if let Some(left) = remaining_consumers.get_mut(&key) {
-                            *left = left.saturating_sub(1);
-                            if *left == 0 {
-                                port_data.remove(&key);
-                            }
-                        }
-                    }
-                    let node_type = graph
-                        .nodes
-                        .iter()
-                        .find(|n| n.name() == skipped_name)
-                        .map(|n| n.node_type().to_string())
-                        .unwrap_or_default();
-                    completed.insert(skipped_name.clone());
-                    skipped.insert(skipped_name.clone(), reason.clone());
-                    self.emit(DataflowEvent::NodeSkipped { node: skipped_name, node_type, reason });
-                }
-            }
+            // Les sauts d'abord, jusqu'au point fixe : une branche non prise ne
+            // tue plus le run (voir `skip_until_fixpoint`).
+            self.skip_until_fixpoint(
+                graph, &order, &mut completed, &mut skipped, &mut port_data,
+                &port_data_available, &mut remaining_consumers, &initial_inputs,
+            );
 
             let ready: Vec<String> = order
                 .iter()
@@ -1074,46 +1098,12 @@ impl DataflowRuntime {
 
         for _iteration in 0..self.max_iterations {
             // Find ready nodes: not completed, all required inputs available
-            // **Les sauts d'abord, jusqu'au point fixe** (11 octobre 2026) :
-            // une branche non prise ne tue plus le run. Un nœud dont une
-            // entrée requise et branchée n'a rien reçu — tous ses producteurs
-            // ayant fini ou été sautés — est sauté ; le saut se propage dans
-            // la même itération, sans consommer le plafond d'itérations.
-            loop {
-                let to_skip: Vec<(String, String)> = order
-                    .iter()
-                    .filter(|n| !completed.contains(*n))
-                    .filter_map(|n| {
-                        skip_reason(graph, n, &completed, &port_data_available, &initial_inputs)
-                            .map(|reason| (n.clone(), reason))
-                    })
-                    .collect();
-                if to_skip.is_empty() {
-                    break;
-                }
-                for (skipped_name, reason) in to_skip {
-                    // Ce qui l'attendait n'a plus de lecteur : libéré, pas
-                    // laissé dans la sortie finale.
-                    for e in graph.edges.iter().filter(|e| e.to_node == skipped_name) {
-                        let key = (e.from_node.clone(), e.from_port.clone());
-                        if let Some(left) = remaining_consumers.get_mut(&key) {
-                            *left = left.saturating_sub(1);
-                            if *left == 0 {
-                                port_data.remove(&key);
-                            }
-                        }
-                    }
-                    let node_type = graph
-                        .nodes
-                        .iter()
-                        .find(|n| n.name() == skipped_name)
-                        .map(|n| n.node_type().to_string())
-                        .unwrap_or_default();
-                    completed.insert(skipped_name.clone());
-                    skipped.insert(skipped_name.clone(), reason.clone());
-                    self.emit(DataflowEvent::NodeSkipped { node: skipped_name, node_type, reason });
-                }
-            }
+            // Les sauts d'abord, jusqu'au point fixe : une branche non prise ne
+            // tue plus le run (voir `skip_until_fixpoint`).
+            self.skip_until_fixpoint(
+                graph, &order, &mut completed, &mut skipped, &mut port_data,
+                &port_data_available, &mut remaining_consumers, &initial_inputs,
+            );
 
             let ready: Vec<String> = order
                 .iter()

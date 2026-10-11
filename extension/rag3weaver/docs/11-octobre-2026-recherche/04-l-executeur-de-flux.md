@@ -71,6 +71,19 @@ Dans **l'exécuteur par niveaux d'aujourd'hui**, sans concurrence :
   de la session du proto, dont les ports d'agent lisent les deux comme « retenu » ;
 - un flux vide n'est pas un échec : `Skipped` et `Failed` restent deux états.
 
+**Le prix, dit** (relecture de la session du proto) : une entrée requise jamais
+servie était une erreur **bruyante** (le run mourait) ; elle devient un saut
+qu'on ne voit que si on le lit. Pour un graphe-outil, c'est dit : le résultat
+sauté rend `NotTaken`. Pour un `execute()` nu, seuls l'événement `NodeSkipped`,
+le rapport et `DataflowOutput::skip_reason` le disent. C'est ce qu'on veut —
+une branche non prise n'est pas une faute — mais un **défaut** qui ressemble à
+une branche non prise (un nœud qui oublie d'émettre une sortie que l'aval
+requiert) se tait désormais de la même façon. D'où le défaut signalé au §3 :
+le drapeau `required` d'une sortie n'est vérifié nulle part ; le vérifier
+séparerait « non prise » (sortie optionnelle non posée) de « oubliée »
+(sortie requise non posée). À décider après mesure : combien de nœuds
+déclarent une sortie requise qu'ils ne posent pas toujours.
+
 **La parité est vraie par construction** : seul change le chemin qui, aujourd'hui,
 tue le run ; tout graphe qui réussit aujourd'hui ne le prend jamais.
 

@@ -1865,6 +1865,110 @@ mod tests {
     use crate::dataflow::checkpoint::{EdgeDef, NodeDef};
     use serde_json::json;
 
+    /// **Résultat sauté contre résultat oublié** (11 octobre 2026, relecture
+    /// de la session du proto). Un nœud de résultat SAUTÉ (sa branche n'a pas
+    /// été prise) rend `NotTaken`, avec la raison ; un nœud qui a TOURNÉ sans
+    /// poser son résultat rend `NoResult`. Les ports d'agent lisent les deux
+    /// comme « retenu », mais un diagnostic doit les séparer : l'un est voulu,
+    /// l'autre une faute.
+    #[test]
+    fn un_resultat_saute_rend_not_taken_et_un_resultat_oublie_no_result() {
+        use crate::dataflow::node::{Node, NodeContext};
+        use crate::dataflow::node_registry::{NodeFactory, NodeSchema};
+        use crate::dataflow::port::PortDef;
+        struct Aig(String);
+        struct Pass(String);
+        struct Muet(String);
+        fn port(n: &'static str, requis: bool) -> PortDef {
+            PortDef { name: n.into(), port_type: PortType::Any, required: requis }
+        }
+        impl Node for Aig {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Aig" }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("a", false), port("b", false)] }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                ctx.set_output("a", PortValue::new(json!(1))); // `b` n'est pas prise
+                Ok(())
+            }
+        }
+        impl Node for Pass {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Pass" }
+            fn inputs(&self) -> Vec<PortDef> { vec![port("in", true)] }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("out", false)] }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                let v = ctx.take_input("in").ok_or("in")?;
+                ctx.set_output("out", v);
+                Ok(())
+            }
+        }
+        impl Node for Muet {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Muet" }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("out", false)] }
+            fn execute(&mut self, _: &mut NodeContext) -> Result<(), String> { Ok(()) }
+        }
+        struct Fabrique(&'static str);
+        impl NodeFactory for Fabrique {
+            fn create(&self, name: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+                Ok(match self.0 {
+                    "Aig" => Box::new(Aig(name.into())),
+                    "Pass" => Box::new(Pass(name.into())),
+                    _ => Box::new(Muet(name.into())),
+                })
+            }
+            fn node_type(&self) -> &str { self.0 }
+            fn schema(&self) -> NodeSchema {
+                let n = self.create("x", &json!({})).unwrap();
+                NodeSchema {
+                    node_type: self.0.into(),
+                    description: "témoin".into(),
+                    inputs: n.inputs(),
+                    outputs: n.outputs(),
+                    config_params: vec![],
+                }
+            }
+        }
+        let mut registre = NodeRegistry::new();
+        for t in ["Aig", "Pass", "Muet"] {
+            registre.register(Box::new(Fabrique(t)));
+        }
+        let noeud = |name: &str, t: &str| NodeDef { name: name.into(), node_type: t.into(), config: json!({}) };
+        let arete = |de: &str, dp: &str, vers: &str, vp: &str| EdgeDef {
+            from_node: de.into(), from_port: dp.into(), to_node: vers.into(), to_port: vp.into(),
+        };
+        let jouer = |def: &GraphDefinition, resultat: (&str, &str)| {
+            execute_definition(def, &registre, Arc::new(ServiceRegistry::new()), &NodeTypePolicy::all(), resultat)
+        };
+
+        // La branche prise : le résultat arrive.
+        let prise = GraphDefinition {
+            nodes: vec![noeud("aig", "Aig"), noeud("pass", "Pass")],
+            edges: vec![arete("aig", "a", "pass", "in")],
+        };
+        assert_eq!(jouer(&prise, ("pass", "out")).unwrap(), "1");
+
+        // La branche NON prise : le nœud de résultat est sauté -> NotTaken.
+        let non_prise = GraphDefinition {
+            nodes: vec![noeud("aig", "Aig"), noeud("pass", "Pass")],
+            edges: vec![arete("aig", "b", "pass", "in")],
+        };
+        match jouer(&non_prise, ("pass", "out")) {
+            Err(GraphToolError::NotTaken { node, reason, .. }) => {
+                assert_eq!(node, "pass");
+                assert!(reason.contains("aig.b"), "la raison nomme le producteur : {reason}");
+            }
+            autre => panic!("un résultat sauté rend NotTaken, rendu : {autre:?}"),
+        }
+
+        // Un nœud qui a TOURNÉ sans poser son résultat -> NoResult.
+        let muet = GraphDefinition { nodes: vec![noeud("muet", "Muet")], edges: vec![] };
+        assert!(
+            matches!(jouer(&muet, ("muet", "out")), Err(GraphToolError::NoResult { .. })),
+            "un résultat oublié reste NoResult"
+        );
+    }
+
     /// `Result::unwrap_err` demande `T: Debug`, que ni `DataflowGraph` ni
     /// `Box<dyn Node>` n'implémentent.
     fn only_err<T>(r: Result<T, GraphToolError>) -> GraphToolError {
