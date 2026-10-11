@@ -231,6 +231,8 @@ pub use llm::{
 pub mod agent;
 /// Les ports de la boucle d'agent : un sous-graphe sur n'importe lequel.
 pub mod agent_ports;
+/// L'annuaire de la session : à qui un agent peut écrire (`send`).
+pub mod directory;
 pub use agent::{
     Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
 };

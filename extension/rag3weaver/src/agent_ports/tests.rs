@@ -234,7 +234,7 @@ fn peer_in_drops_and_rewrites_messages() {
     let run = agent.run(&mut turns, &mut StringSink::default()).unwrap();
     assert_eq!(run.messages, 1);
     let users: Vec<_> = turns.iter().filter(|t| t.role == "user").map(|t| t.content.as_str()).collect();
-    assert_eq!(users, ["cherche", "[message de ami] SALUT"]);
+    assert_eq!(users, ["cherche", "[message de ami, fil fil-1] SALUT"]);
 }
 
 /// `model_out` retenu : le run s'arrête, la sortie n'entre pas dans

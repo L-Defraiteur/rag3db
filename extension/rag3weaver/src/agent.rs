@@ -603,6 +603,11 @@ impl PauseKind {
 pub const PAUSE_DIALOGUE: &str = "pause_dialogue";
 /// Le nom réservé par lequel un pair confirme une pause.
 pub const CONFIRM_PAUSE: &str = "confirm_pause";
+/// Le nom réservé par lequel un agent **écrit à un autre participant**
+/// (`send(to, content, conversation?)`), annoncé par [`Agent::with_messaging`].
+/// Intercepté par la boucle : le destinataire se résout dans l'annuaire de la
+/// session, pas dans l'outillage.
+pub const SEND: &str = "send";
 
 /// Ce qu'une exécution a coûté et comment elle s'est terminée.
 ///
@@ -717,6 +722,12 @@ pub struct Agent<'a> {
     /// Ce qui est branché sur les ports de la boucle. Absent : la boucle
     /// d'hier, à la lettre.
     ports: Option<&'a dyn AgentPorts>,
+    /// L'annuaire de la session : à qui `send` peut écrire. Absent, `send`
+    /// n'est ni annoncé ni intercepté.
+    directory: Option<Arc<crate::directory::Directory>>,
+    /// Ce qui identifie cet agent dans l'annuaire : deux agents ne tiennent
+    /// pas le même nom.
+    owner: crate::directory::Owner,
 }
 
 /// Ce qu'un port a fait d'un élément.
@@ -773,6 +784,8 @@ impl<'a> Agent<'a> {
             resource: None,
             provider: "unknown".to_string(),
             ports: None,
+            directory: None,
+            owner: 0,
         }
     }
 
@@ -829,6 +842,87 @@ impl<'a> Agent<'a> {
             }
         }
         self
+    }
+
+    /// **Écrire aux autres participants** : `send` est annoncé, et ses
+    /// destinataires se résolvent dans `directory` (un nom, un run, ou tout un
+    /// fil). L'agent s'y inscrit au début de chaque run, sa boîte ouverte.
+    /// Recevoir n'a pas d'outil : un message reçu est un tour `user`
+    /// ([`Self::with_inbox`]).
+    ///
+    /// Refusé, en le nommant, si l'outillage déclare déjà un outil `send` :
+    /// la boucle le masquerait en silence.
+    pub fn with_messaging(mut self, directory: Arc<crate::directory::Directory>) -> Result<Self, String> {
+        if self.tools.tool_defs().iter().any(|d| d.name == SEND) {
+            return Err(format!(
+                "with_messaging : l'outillage déclare déjà un outil « {SEND} », que la messagerie masquerait"
+            ));
+        }
+        self.directory = Some(directory);
+        self.owner = crate::directory::new_owner();
+        let def = Self::send_tool();
+        if !self.opts.tools.iter().any(|d| d.name == def.name) {
+            self.opts.tools.push(def);
+        }
+        Ok(self)
+    }
+
+    fn send_tool() -> crate::tools::ToolDef {
+        crate::tools::ToolDef {
+            name: SEND.to_string(),
+            description: "Écrire à un autre participant de la session : par son nom (ou son run), ou à \
+                          tous les participants d'un fil nommé. Le message arrive dans sa boîte ; s'il \
+                          répond, sa réponse arrivera dans la vôtre, comme un message."
+                .to_string(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "to": { "type": "string", "description": "Le destinataire : un nom de participant, ou un run. Vide avec 'conversation' : tous les participants du fil." },
+                    "content": { "type": "string", "description": "Le message." },
+                    "conversation": { "type": "string", "description": "Le fil, s'il est nommé. Facultatif." }
+                },
+                "required": ["content"],
+            }),
+        }
+    }
+
+    /// Traite `send` : résout les destinataires, écrit dans leurs boîtes, et
+    /// rend le résultat d'outil. Un refus est une erreur lisible — le modèle
+    /// corrige au tour suivant.
+    fn handle_send(&self, call: &ToolCall, run_id: &str) -> Turn {
+        let reply = |content: String| Turn::tool_result(call.id.clone(), call.name.clone(), content);
+        let error = |kind: &str, detail: &str| {
+            reply(serde_json::json!({"error": kind, "detail": detail}).to_string())
+        };
+        let (Some(directory), Some(bus)) = (&self.directory, &self.events) else {
+            return error("unavailable", "pas d'annuaire ou pas de bus : personne à qui écrire");
+        };
+        // On n'écrit que sous son propre nom : s'il est tenu par un autre
+        // agent, l'inscription a été refusée au début du run.
+        if directory.resolve(&self.name).is_none_or(|r| r.run != run_id) {
+            return error(
+                "unavailable",
+                &format!("le nom « {} » est tenu par un autre agent : cet agent ne peut pas écrire sous ce nom", self.name),
+            );
+        }
+        let args: serde_json::Value = match serde_json::from_str(&call.arguments) {
+            Ok(v) => v,
+            Err(e) => return error("bad_argument", &format!("les arguments de send ne se lisent pas en JSON : {e}")),
+        };
+        let field = |k: &str| args.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let (to, content, conversation) = (field("to"), field("content"), field("conversation"));
+        if content.trim().is_empty() {
+            return error("bad_argument", "send exige un 'content' non vide");
+        }
+        let recipients = match directory.recipients(&self.name, &to, &conversation) {
+            Ok(r) => r,
+            Err(detail) => return error("unknown_recipient", &detail),
+        };
+        for r in &recipients {
+            bus.send_in(run_id, &self.name, &r.run, &content, conversation.trim());
+        }
+        let names: Vec<&str> = recipients.iter().map(|r| r.name.as_str()).collect();
+        reply(serde_json::json!({"envoyé": names, "fil": conversation.trim()}).to_string())
     }
 
     /// Les deux outils de dialogue, **annoncés au modèle**.
@@ -1171,7 +1265,13 @@ impl<'a> Agent<'a> {
                             (text_field(&v, "from", &from), text_field(&v, "content", &content))
                         }
                     };
-                    turns.push(Turn::user(format!("[message de {from}] {content}")));
+                    // Le tour dit le fil, quand il est nommé : c'est ce qui
+                    // permet de répondre dans le même.
+                    turns.push(Turn::user(if conversation.is_empty() {
+                        format!("[message de {from}] {content}")
+                    } else {
+                        format!("[message de {from}, fil {conversation}] {content}")
+                    }));
                     n += 1;
                 }
                 Ok(_) => {}
@@ -1236,6 +1336,17 @@ impl<'a> Agent<'a> {
                 // Ouvert avant tout le reste : ce qui arrive pendant le run
                 // est vu, même pendant un appel d'outil.
                 bus.cursor(&crate::events::inbox_topic(&run_id), AGENT_INBOX_CURSOR);
+            }
+        }
+        // Inscrit à l'annuaire sous ce run : on peut lui écrire par son nom.
+        if let Some(directory) = &self.directory {
+            let claimed = match &self.events {
+                Some(bus) => directory.claim_and_open(bus, &self.name, &run_id, self.owner),
+                None => directory.claim(&self.name, &run_id, self.owner),
+            };
+            // Refusé : dit, et `send` le redira au modèle.
+            if let Err(message) = claimed {
+                self.emit(crate::events::CatalogEvent::Warning { context: format!("agent:{}", self.name), message });
             }
         }
         self.emit(crate::events::CatalogEvent::RunStarted {
@@ -1758,6 +1869,11 @@ impl<'a> Agent<'a> {
                 // réponse », mais « une réponse qui dit que ça travaille ».
                 let result = if held_call {
                     Turn::tool_result(call.id.clone(), call.name.clone(), held_content(AgentPort::ToolCallOut))
+                } else if call.name == SEND && self.directory.is_some() {
+                    // **Écrire est une décision de la boucle**, comme se taire :
+                    // le destinataire est dans l'annuaire, pas dans l'outillage.
+                    // Le résultat suit le chemin commun (trace, erreurs, ports).
+                    self.handle_send(call, run_id)
                 } else if self.tools.is_async(&call.name) && self.events.is_some() {
                     let handle = format!("#{}-{}", call.name, run.tool_calls + 1);
                     self.spawn_async_tool(call, run_id, &handle, scope, portee_du_run.clone());
