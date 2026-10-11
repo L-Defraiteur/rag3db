@@ -21,6 +21,11 @@ paquet demande le point de reprise forcé de ses COPY (`force_checkpoint_on_copy
 Ses blobs ne passent donc pas par le journal, où ils seraient écrits deux fois (+30 à
 40 s). En fichiers, c'est le défaut du moteur qui s'applique.
 
+**Limite connue en blobs** (11 octobre 2026) : en mode blobs sous un petit tampon (2 Gio), la
+première indexation d'un dépôt de plus de ~3 000 fichiers échoue à la validation d'un paquet, et
+la base est à rouvrir. Le mode fichiers passe. Le correctif est dans le moteur, reporté après la
+condition 3 ; le ticket est `docs/tickets/2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md`.
+
 ## Ce qui change pour un utilisateur
 
 **Où vit le plein texte sur le disque.** Pour une base neuve sur disque, un dossier

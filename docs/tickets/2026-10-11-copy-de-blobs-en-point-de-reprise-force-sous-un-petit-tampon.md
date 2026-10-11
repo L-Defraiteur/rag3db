@@ -87,3 +87,36 @@ rejouée en blobs.
 Un correctif générique : un groupe de blobs qui se vide par morceaux bornés, pas une rustine sur
 `_index_blobs` (orchestration). Relecture de la session cœur C++, témoin rouge puis vert, et la
 passe en blobs de la confirmation, verte sous 2 Gio.
+
+## Par le produit : quatre variantes, toutes rouges en blobs (arbre principal, 11 octobre, midi)
+
+Sur luciepc, avec la même recette : dépôt entier, tampon de 2 Gio, paquets de 512 fichiers, lib
+à `4820e9154`. Les journaux sont dans `~/.cache/rag3weaver-notes-A/confirmation/e2e-blobs*.log`,
+les recettes à côté (`jouer-blobs-*.sh`).
+
+| variante | mots (fichiers) | relations (~860 000 liens) | où ça casse | RSS au plus haut |
+|---|---|---|---|---|
+| fichiers (le défaut d'une base neuve) | 7 160, 74 s | posées | — **vert** | 7,24 Go |
+| blobs, défaut (COPY forcés ; blobs dans la transaction du paquet) | casse après 3 072 | — | validation d'un paquet | 7,54 Go |
+| blobs, sans forçage (sonde, code retiré) | casse après 3 072 | — | validation d'un paquet | 6,42 Go |
+| blobs, poussée des blobs à la fin (`RAG3WEAVER_TX_POUSSEE_A_LA_FIN=1`) | 7 160 | casse | validation de la transaction des relations | 8,15 Go |
+| blobs, poussée à la fin et sans forçage | 7 173, 94 s | casse | validation de la transaction des relations | 8,51 Go |
+
+- **Le forçage n'y est pour rien** : avec ou sans lui, l'échec tombe au même endroit. Cela colle
+  avec la pile : l'échec est à l'assemblage, avant tout point de reprise.
+- Le produit n'écrit pas `_index_blobs` par COPY, mais par `UNWIND … MERGE` en lots de 32 Mo,
+  dans la transaction du paquet. Sortir ces lots de la transaction fait passer tous les mots.
+- **Le second rouge est un COPY de relations**, environ 860 000 liens, en mode blobs seulement
+  (vert en fichiers). Ce COPY assemble par le partitionneur (`InMemChunkedNodeGroupCollection`),
+  dont le Spiller peut déverser les groupes : la forme (a) de la page ne le couvre pas telle quelle
+  (relecture d'hotfixs). Sa piste, pas encore éprouvée : en blobs, le tampon tient déjà autre chose
+  quand le COPY des liens arrive (les pages de `_index_blobs`, ou le magasin de blobs, peut-être
+  non évinçables par `mallocBuffer`). Le partitionneur part avec moins de place, et le Spiller ne se
+  déclenche que sous la moitié du tampon en mémoire évinçable. Pour trancher : relever
+  `BufferManager::getUsedMemory`, ou la RSS, juste avant le COPY des liens, en fichiers puis en
+  blobs.
+
+**La limite, pour le produit** : en mode blobs sous un petit tampon, l'indexation d'un dépôt de plus
+de ~3 000 fichiers échoue à la validation d'un paquet. Le mode fichiers passe. La forme moteur, un
+COPY borné en octets à l'assemblage, est reportée après la condition 3. Rien n'est changé dans le
+produit : la ligne est dans la page des défauts.
