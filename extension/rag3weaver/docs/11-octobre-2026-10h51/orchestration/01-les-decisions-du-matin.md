@@ -333,3 +333,26 @@ où elle vit.
   rouges d'abord, recette jouée de zéro sans rien lancer à la main) ; côté
   hôte relu par l'arbre principal. Le banc des fiches classées passe après
   (branche `banc-fiches-classees` poussée sous son nom).
+- **Vers 14 h 45** : **A9 mesuré, coût du mode nul** (cœur, `87137a766` :
+  COPY 200 000 lignes, 100 000 insertions ligne à ligne, mille SET de vecteur
+  sous HNSW, trois répétitions sur luciepc, artefact prouvé par l'identifiant
+  de bâti ; écarts sous le bruit). La bascule du défaut est donc décidée par la
+  règle du matin (« A9 mesure puis bascule du défaut sur son coût dit ») :
+  lot à part chez le cœur, `enable_multi_writes=true` par défaut, l'ancienne
+  sémantique par `CALL enable_multi_writes=false`, renversable par le même
+  réglage ; e2e du produit rejoués par l'arbre principal sur la lib neuve
+  avant le hash. Puis B2.
+- **Le chaînage est au complet** (F : saut PostgreSQL `d0aacfcf7`, fusion en
+  CTE `e5a93a913`, scénario commun aux deux moteurs, « jamais une écriture en
+  amont » prouvé sur les deux ; témoin des transactions corrigé `b10b49300`,
+  trois tickets fermés). Suite : le relevé des vrais appelants (allers-retours
+  par outil : code, mémoire, rechercher, réactions), puis le premier appelant
+  réel mesuré avant/après avec le propriétaire du fichier en relecture.
+- **La garde du target** (recherche, `2306d30f9`, `.arbre-du-target`, refus
+  nommé d'un autre arbre) et **son remède de reprise pris en défaut par G**
+  (vert vide : `cargo clean -p` n'a rien effacé, un `touch` non recompilé).
+  `RAG3WEAVER_TARGET_REPRENDRE=1` retiré de l'usage jusqu'à preuve ; seul
+  remède le sous-dossier par arbre ; contrôle avant tout hash : après un
+  `touch` d'un fichier modifié, la ligne Checking/Compiling doit apparaître.
+- **Marche 4** : côté hôte relu par l'arbre principal, deux corrections
+  prises par la mémoire, passe sur la lib C7 en cours, push ensuite.
