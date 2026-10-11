@@ -202,3 +202,100 @@ fn un_noeud_hors_liste_est_refuse_a_l_execution() {
         "le refus doit nommer le nœud — erreurs : {erreurs:?}"
     );
 }
+
+// ─── Le huitième refus (marche 4 du lien générique) ─────────────────────────
+
+const LIEN: &str = include_str!("../templates/tools/link.mmd");
+
+/// Une réaction qui remonte `ANCRE`, nommée en littéral.
+const REMONTE_ANCRE: &str = r#"%% tool: remonte
+%% description: fait revoir ce qui ancre une ligne changée
+%% on: catalog
+%% policy: each
+%% result: react.report
+graph LR
+    events["EventSourceNode(topics='catalog', cursor='remonte', limit=100)"]
+    react["ReactTransitionNode(source='Sujet', relation='ANCRE', target='Fiche', transition='revoir')"]
+    events -->|events| react
+"#;
+
+fn manifeste_a_reaction(dir: &Path, outils: &str) -> PathBuf {
+    let manifeste = format!(
+        r#"{{
+  "version": 1,
+  "name": "huitieme",
+  "database": "data/huitieme.rag3db",
+  "embeddings": {{ "address": "127.0.0.1:1", "model": "toy", "dimensions": 8 }},
+  "vector_extension": "vector.rag3db_extension",
+  "entities": {{}},
+  "tools": {outils},
+  "reactions": {{ "remonte": {{ "graph": "remonte.mmd" }} }}
+}}"#
+    );
+    ecrire(dir, "backend.json", &manifeste);
+    ecrire(dir, "remonte.mmd", REMONTE_ANCRE);
+    ecrire(dir, "link.mmd", LIEN);
+    dir.join("backend.json")
+}
+
+#[test]
+fn une_reaction_qui_remonte_une_relation_sans_ecrivain_se_refuse_au_chargement() {
+    let dir = tempfile::tempdir().unwrap();
+    let chemin = manifeste_a_reaction(dir.path(), "{}");
+    let refus = PreparedBackend::load(&chemin).err().expect("aucun outil n'écrit ANCRE");
+    assert!(
+        refus.contains("« remonte »") && refus.contains("« ANCRE »") && refus.contains("link.mmd"),
+        "le refus nomme la réaction, la relation et le remède : {refus}"
+    );
+}
+
+/// Un outil dont la relation reste ouverte (l'appelant la nomme à l'appel)
+/// peut écrire n'importe quelle relation : le refus ne s'applique pas.
+#[test]
+fn un_outil_a_relation_ouverte_ecrit_toutes_les_relations() {
+    let dir = tempfile::tempdir().unwrap();
+    let chemin = manifeste_a_reaction(dir.path(), r#"{ "lier": { "graph": "link.mmd" } }"#);
+    PreparedBackend::load(&chemin).expect("la relation ouverte couvre ANCRE");
+}
+
+/// **Le piège du sous-graphe** (relecture de rag3db-97) : une fiche qui
+/// contient la fiche du lien comme **nœud** doit hériter de la marque
+/// d'écriture du `RelationBatchNode` intérieur, comme elle hérite déjà de son
+/// type. Sans cela, un outil composé écrirait une relation sans le dire, et le
+/// huitième refus condamnerait à tort la réaction qu'il nourrit.
+#[test]
+fn un_sous_graphe_herite_de_la_marque_d_ecriture() {
+    use crate::dataflow::node_registry::{Choices, RelationAccess};
+    // Les nœuds de backend ne sont pas dans le registre de base : le
+    // chargement d'un backend les inscrit, le témoin aussi.
+    let registre = || {
+        let (mut r, _) = builtin_graph_tools().expect("les nœuds");
+        r.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        r
+    };
+    let mut nodes = registre();
+    let interieur = GraphTool::from_mermaid(LIEN).unwrap().bind(&nodes).expect("la fiche du lien");
+    let fabrique = interieur
+        .as_node_factory("LierNode", Arc::new(registre()))
+        .expect("la fiche comme nœud");
+    nodes.register(Box::new(fabrique));
+    let compose = GraphTool::from_mermaid(
+        "%% tool: compose\n%% description: lie par un sous-graphe\n%% param: rel -- la relation\n\
+         %% param: liens -- les paires\n%% result: lier.report\ngraph LR\n    \
+         lier[\"LierNode(relation=$rel, links=$liens)\"]\n",
+    )
+    .unwrap()
+    .bind(&nodes)
+    .expect("la fiche composée");
+    let rel = compose.params().iter().find(|p| p.name == "rel").expect("le paramètre");
+    assert_eq!(
+        rel.choices,
+        Some(Choices::Relations { access: RelationAccess::WRITE }),
+        "le paramètre de l'outil composé hérite de la marque d'écriture"
+    );
+    let mut liaisons = serde_json::Map::new();
+    liaisons.insert("rel".into(), json!("ANCRE"));
+    let (ecrites, toute) = super::relations_nommees(&compose, &liaisons, &nodes, |a| a.write);
+    assert!(!toute);
+    assert!(ecrites.contains("ANCRE"), "la relation liée est écrite, à travers le sous-graphe : {ecrites:?}");
+}

@@ -758,7 +758,7 @@ fn parse_choices(line: &str) -> Result<(String, Choices), GraphToolError> {
     let rest = rest.trim();
     let choices = match rest {
         "@targets" => Choices::Targets,
-        "@relations" => Choices::Relations,
+        "@relations" => Choices::Relations { access: Default::default() },
         // `@values:Entité.champ` — la liste close qui vit dans une table.
         autre if autre.starts_with("@values:") => {
             let reste = &autre["@values:".len()..];
@@ -976,9 +976,28 @@ impl GraphTool {
                 }
             }
             if p.choices.is_none() {
-                let mut found: Vec<(&String, &Choices)> =
-                    wired.iter().filter_map(|(at, w)| w.choices.as_ref().map(|c| (at, c))).collect();
-                found.dedup_by(|a, b| a.1 == b.1);
+                // Deux nœuds qui nomment des relations s'accordent quel que
+                // soit ce qu'ils en font : l'accès hérité est leur union (un
+                // outil qui lit et écrit la même relation par le même
+                // paramètre fait les deux). Les autres choix doivent être égaux.
+                let mut found: Vec<(&String, Choices)> = Vec::new();
+                for (at, w) in &wired {
+                    let Some(c) = w.choices.as_ref() else { continue };
+                    let deja = found.iter().position(|(_, f)| {
+                        matches!((f, c), (Choices::Relations { .. }, Choices::Relations { .. })) || f == c
+                    });
+                    match deja {
+                        Some(i) => {
+                            if let (Choices::Relations { access }, Choices::Relations { access: autre }) =
+                                (&mut found[i].1, c)
+                            {
+                                *access = access.union(*autre);
+                            }
+                        }
+                        None => found.push((at, c.clone())),
+                    }
+                }
+                let found: Vec<(&String, &Choices)> = found.iter().map(|(at, c)| (*at, c)).collect();
                 match found.as_slice() {
                     [] => {}
                     [(_, c)] => {
@@ -2167,7 +2186,7 @@ mod tests {
                    %% result: f.children\n\ngraph LR\n    f[\"FetchRelatedNode(relation=$relation, direction=$direction)\"]\n";
         let t = GraphTool::from_mermaid(src).unwrap();
         let choices = |t: &GraphTool, n: &str| t.params().iter().find(|p| p.name == n).unwrap().choices.clone();
-        assert_eq!(choices(&t, "relation"), Some(Choices::Relations));
+        assert_eq!(choices(&t, "relation"), Some(Choices::Relations { access: Default::default() }));
         assert_eq!(choices(&t, "direction"), Some(Choices::fixed(["Outgoing", "Incoming"])));
         let emitted = t.to_mermaid();
         assert!(emitted.contains("%% choices: direction = Outgoing | Incoming\n"), "{emitted}");
@@ -2271,7 +2290,7 @@ mod tests {
         // sa liste.
         let expand = tools.get("search").unwrap();
         assert_eq!(find(expand, "target").choices, Some(Choices::Targets));
-        assert_eq!(find(expand, "relation").choices, Some(Choices::Relations));
+        assert_eq!(find(expand, "relation").choices, Some(Choices::relations_read()));
         let direction = find(expand, "direction");
         assert_eq!(direction.param_type, ConfigParamType::String);
         assert_eq!(direction.default, Some(json!("Outgoing")));

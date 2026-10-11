@@ -528,7 +528,7 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: true,
                     default: None,
                     description: "Relationship type (e.g. HAS_FILE)".into(),
-                    choices: Some(Choices::Relations),
+                    choices: Some(Choices::relations_read()),
                     json_schema: None,
                 },
                 ConfigParam {

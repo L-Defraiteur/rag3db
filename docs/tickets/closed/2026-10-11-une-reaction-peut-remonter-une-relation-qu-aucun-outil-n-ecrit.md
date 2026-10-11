@@ -1,6 +1,6 @@
 # Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte
 
-- **état** : ouvert — **à faire APRÈS** `2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md` (voir « l'ordre »)
+- **état** : corrigé par la marche 4 du lien générique (le commit qui déplace ce fichier dans `closed/`, 11 octobre 2026), après le nœud comme prévu — le refus se lit sur la marque `Choices::Relations { access }` des paramètres des nœuds, sans type en dur ; témoins dans `src/backend_reactions_tests.rs`
 - **gravité** : déclaration inatteignable acceptée en silence ; aucune perte de donnée
 - **atteignable en service** : oui — c'est l'état du gabarit `memory` livré aujourd'hui
 - **touche rag3weaver** : oui, et seulement rag3weaver

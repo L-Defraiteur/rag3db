@@ -400,7 +400,7 @@ impl NodeFactory for AddRefNodeFactory {
                 p("refs_entity", false, Some(serde_json::json!("Ref")), "Entity that holds references", None),
                 p("types_entity", false, Some(serde_json::json!("RefType")), "Entity that holds the genres", None),
                 p("from_entity", false, Some(serde_json::json!("Memory")), "Entity of the record that cites", None),
-                p("relation", false, Some(serde_json::json!("CITE")), "Relation from the record to the reference", None),
+                p("relation", false, Some(serde_json::json!("CITE")), "Relation from the record to the reference", Some(Choices::relations_written())),
                 ConfigParam {
                     name: "fiche".into(),
                     param_type: ConfigParamType::Json,

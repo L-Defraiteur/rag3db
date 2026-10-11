@@ -536,7 +536,7 @@ impl NodeFactory for GrepNodeFactory {
                 ConfigParam { name: "context_lines".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)".into(), choices: None, json_schema: None },
                 // **Le graphe se greffe là où les agents vont.** Mesuré le
                 // 28 août 2026 : `grep` 10 appels, l'outil de graphe séparé 0.
-                ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::Relations), json_schema: None },
+                ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::relations_read()), json_schema: None },
                 ConfigParam { name: "relation_limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_RELATION_LIMIT)), description: "Voisins rendus par scope (plafond 20)".into(), choices: None, json_schema: None },
                 format_param(),
             ],

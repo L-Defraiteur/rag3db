@@ -245,8 +245,10 @@ droits par clés.
 ## 6. Les marches et leur coût
 
 *État au 11 octobre, après midi : marches 1 (`6d212551e`, `cde65dc9d`), 2
-(`13c6d950f`) et 3 faites ; 1 bis attend la traduction PostgreSQL du `Select`
-(rag3db-6f) ; 4 à faire.*
+(`13c6d950f`), 3 (`a6c2a61dd`) et 4 faites ; seule 1 bis reste, et elle attend
+la traduction PostgreSQL du `Select` (rag3db-6f). La marque de la marche 4 est
+`Choices::Relations { access: RelationAccess }` ; un sous-graphe déclaré en
+hérite par `bind`, et c'est épinglé.*
 
 *En passes, ordre de grandeur relatif.*
 

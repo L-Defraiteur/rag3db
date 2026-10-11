@@ -299,6 +299,67 @@ fn valider_noeuds_de_reaction(
     Ok(())
 }
 
+/// **Les relations qu'un graphe nomme**, pour un accès donné (lu ou écrit),
+/// d'après la marque que chaque nœud pose sur ses paramètres
+/// (`Choices::Relations { access }`) — jamais d'après un nom de type de nœud.
+///
+/// Une valeur de paramètre est un littéral, ou `$p` résolu par les liaisons du
+/// manifeste puis par le défaut de la fiche. Rend `(noms, toute)` : `toute` est
+/// vrai quand un paramètre reste ouvert (l'appelant choisira la relation à
+/// l'appel) — un tel outil peut écrire n'importe quelle relation déclarée. Un
+/// littéral vide ne nomme rien (« pas d'expansion » de la recherche de code).
+fn relations_nommees(
+    graphe: &crate::dataflow::GraphTool,
+    bindings: &serde_json::Map<String, Value>,
+    nodes: &NodeRegistry,
+    garder: impl Fn(crate::dataflow::node_registry::RelationAccess) -> bool,
+) -> (BTreeSet<String>, bool) {
+    use crate::dataflow::node_registry::Choices;
+    let mut noms = BTreeSet::new();
+    let mut toute = false;
+    for noeud in &graphe.template().nodes {
+        let Some(schema) = nodes.schema(&noeud.node_type) else { continue };
+        for cp in &schema.config_params {
+            let Some(Choices::Relations { access }) = &cp.choices else { continue };
+            if !garder(*access) {
+                continue;
+            }
+            let brute = noeud
+                .config
+                .get(cp.name.as_ref())
+                .cloned()
+                .or_else(|| cp.default.clone());
+            let Some(brute) = brute.as_ref().and_then(Value::as_str).map(str::to_string) else {
+                continue;
+            };
+            let valeur = match brute.strip_prefix('$') {
+                None => Some(brute),
+                Some(p) => bindings
+                    .get(p)
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| {
+                        graphe
+                            .params()
+                            .iter()
+                            .find(|q| q.name == p)
+                            .and_then(|q| q.default.as_ref())
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    }),
+            };
+            match valeur {
+                Some(v) if v.is_empty() => {}
+                Some(v) => {
+                    noms.insert(v);
+                }
+                None => toute = true,
+            }
+        }
+    }
+    (noms, toute)
+}
+
 /// **Tout ce qu'une réaction doit satisfaire pour être montée**, en une
 /// fonction pure : la fiche est déjà lue et liée, il ne reste que les règles.
 ///
@@ -1165,6 +1226,33 @@ impl PreparedBackend {
                 &scripted_types,
             )?;
             reactions.insert(name.clone(), graphe);
+        }
+        // 8. **Une réaction qui remonte une relation qu'aucun outil n'écrit**
+        //    tournerait à chaque événement sans jamais rien trouver — c'est
+        //    ainsi que `review_anchored` a vécu dans le gabarit `memory` jusqu'au
+        //    11 octobre, sans un mot. Lu sur le manifeste seul : les relations
+        //    que les réactions lisent contre celles que les outils écrivent,
+        //    d'après la marque des paramètres des nœuds. Un outil dont la
+        //    relation reste ouverte (l'appelant la nomme) les écrit toutes.
+        let mut ecrites: BTreeSet<String> = BTreeSet::new();
+        let mut toutes_ecrites = false;
+        for (nom, outil) in &tools {
+            let (noms, toute) = relations_nommees(outil, &manifest.tools[nom].bindings, &nodes, |a| a.write);
+            ecrites.extend(noms);
+            toutes_ecrites |= toute;
+        }
+        if !toutes_ecrites {
+            for (nom, graphe) in &reactions {
+                let (lues, _) =
+                    relations_nommees(graphe, &manifest.reactions[nom].bindings, &nodes, |a| a.read);
+                if let Some(r) = lues.iter().find(|r| !ecrites.contains(*r)) {
+                    return Err(format!(
+                        "la réaction « {nom} » remonte la relation « {r} », qu'aucun outil du \
+                         manifeste n'écrit : elle tournerait sans jamais rien trouver — déclarez un \
+                         outil qui la pose (`templates/tools/link.mmd`, `relation` liée à « {r} »)"
+                    ));
+                }
+            }
         }
         // Les entités décrites que chaque outil vise : par ses payloads, par
         // un binding qui nomme une entité, ou par ses nœuds de sélection et

@@ -38,8 +38,18 @@ pub enum Choices {
     /// Les cibles qu'accepte `Catalog::resolve_search_target` (`@targets`) —
     /// résolues contre le catalogue au moment où la fiche est rendue.
     Targets,
-    /// Les relations déclarées dans le schéma du catalogue (`@relations`).
-    Relations,
+    /// Les relations déclarées dans le schéma du catalogue (`@relations`), et
+    /// **ce que le nœud en fait** : la lire, l'écrire, ou les deux.
+    ///
+    /// Le sens n'a pas d'effet sur les valeurs admises ; il dit au chargement
+    /// d'un manifeste quelles relations ses outils **écrivent** et ses
+    /// réactions **lisent** — le huitième refus de `"reactions"` (une réaction
+    /// qui remonte une relation qu'aucun outil n'écrit) se lit dessus, sans
+    /// nommer un type de nœud en dur (relecture de rag3db-97, 11 octobre 2026).
+    /// Une fiche qui déclare `%% choices: p = @relations` ne dit que les
+    /// valeurs admises : son accès est vide, et c'est par câblage qu'un
+    /// paramètre d'outil hérite de celui des nœuds qu'il alimente.
+    Relations { access: RelationAccess },
     /// **Les valeurs distinctes d'un champ d'une entité** (`@values:Entité.champ`),
     /// relues contre le catalogue chaque fois que la fiche est rendue.
     ///
@@ -52,7 +62,35 @@ pub enum Choices {
     Values { entity: String, field: String },
 }
 
+/// **Ce qu'un nœud fait d'une relation qu'il nomme.** Un ensemble, pas un
+/// choix : un paramètre d'outil câblé sur un nœud qui lit et sur un autre qui
+/// écrit la même relation fait les deux, et l'union le dit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RelationAccess {
+    pub read: bool,
+    pub write: bool,
+}
+
+impl RelationAccess {
+    pub const READ: Self = Self { read: true, write: false };
+    pub const WRITE: Self = Self { read: false, write: true };
+
+    pub fn union(self, other: Self) -> Self {
+        Self { read: self.read || other.read, write: self.write || other.write }
+    }
+}
+
 impl Choices {
+    /// Les relations déclarées, lues par le nœud.
+    pub fn relations_read() -> Self {
+        Self::Relations { access: RelationAccess::READ }
+    }
+
+    /// Les relations déclarées, écrites par le nœud.
+    pub fn relations_written() -> Self {
+        Self::Relations { access: RelationAccess::WRITE }
+    }
+
     pub fn fixed<S: Into<String>, I: IntoIterator<Item = S>>(values: I) -> Self {
         Self::Fixed(values.into_iter().map(Into::into).collect())
     }
@@ -62,7 +100,7 @@ impl Choices {
         match self {
             Self::Fixed(values) => values.join(" | "),
             Self::Targets => "@targets".to_string(),
-            Self::Relations => "@relations".to_string(),
+            Self::Relations { .. } => "@relations".to_string(),
             Self::Values { entity, field } => format!("@values:{entity}.{field}"),
         }
     }
@@ -110,7 +148,7 @@ impl Choices {
                 let values: Vec<String> = vues.into_iter().collect();
                 (!values.is_empty()).then_some((values, None))
             }
-            Self::Relations => {
+            Self::Relations { .. } => {
                 let rels = catalog?.relation_summaries();
                 if rels.is_empty() {
                     return None;

@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use super::node::{Node, NodeContext};
-use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
+use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{take_or_clone, PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::connection::{CypherValue, QueryParam};
@@ -393,7 +393,7 @@ impl NodeFactory for ReactTransitionNodeFactory {
                     required: true,
                     default: None,
                     description: "Relation walked from the target to the changed rows".into(),
-                    choices: None,
+                    choices: Some(Choices::relations_read()),
                     json_schema: None,
                 },
                 ConfigParam {

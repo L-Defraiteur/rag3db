@@ -64,7 +64,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (27)
+### Ouverts — produit (26)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -73,7 +73,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 |---|---|---|---|---|
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | ouvert | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
-| [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | ouvert — à faire APRÈS le nœud de lien | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | ouvert | réponse incomplète (faible) | oui | oui (impact, usages) |
@@ -99,10 +98,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (64), dans `closed/`
+### Fermés (65), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](closed/2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | corrigé par la marche 4 du lien générique (la marque lue / écrite sur le paramètre) | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
 | [Aucun nœud ne relie deux entités gérées par leur identité](closed/2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | corrigé `6d212551e` (marche 1 du lien générique) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
 | [Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir](closed/2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md) | corrigé par la marche 3 du lien générique (`anchor`, `supersede_link`) | déclaration inatteignable (la réaction ne transitionne jamais rien) | oui | oui (un gabarit) |
 | [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](closed/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | corrigé, `eae3863ab` (cœur C++, 11 oct.) ; filet retiré | perte | oui | oui |

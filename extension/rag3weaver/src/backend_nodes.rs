@@ -700,7 +700,7 @@ impl NodeFactory for RelationBatchFactory {
         links.json_schema = Some(
             json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"}}}}),
         );
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared relation"),links]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
