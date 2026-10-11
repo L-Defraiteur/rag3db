@@ -587,6 +587,21 @@ la tête ; sous Docker, l'historique complet remonte au dernier commit du
 moteur ; `fetch-depth: 0` les alignerait, à essayer quand on saura ce que
 coûte l'historique complet sur un runner.
 
+### Un piège à ne pas poser : le binaire lié à une lib partagée
+
+Les binaires du paquet portent le moteur **en statique** (la crate `rag3db`
+bâtit et lie `librag3db.a`) : ils ne dépendent d'aucune `librag3db.so`, et
+`ldd` n'y montre que des bibliothèques du système. Le piège ne les touche donc
+pas — mais il attend quiconque bâtirait un binaire du paquet **contre une lib
+partagée** (`RAG3DB_SHARED=1`, `RAG3DB_LIBRARY_DIR`), comme l'hôte de luciepc
+le 11 octobre (`docs/optimiseur/11-octobre-2026-16h40/`) : le `rpath` que
+pose `tools/rust_api/build.rs` (`cargo:rustc-link-arg`) ne passe pas d'une
+crate de bibliothèque au binaire final, et le binaire installé hors du target
+ne démarre pas (« librag3db.so => not found »). Le remède :
+`RUSTFLAGS="-C link-args=-Wl,-rpath,<dossier de la lib>"` au bâti, vérifié par
+`readelf -d <binaire> | grep RUNPATH` et `ldd`. Pour une archive à publier, la
+règle reste le statique : une lib partagée n'a rien à faire dans un paquet npm.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
