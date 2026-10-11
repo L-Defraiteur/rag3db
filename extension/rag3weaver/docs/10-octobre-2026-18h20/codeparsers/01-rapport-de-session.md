@@ -141,3 +141,8 @@ est à ignorer : rebasée, poussée sous un nom neuf.
   et `target-impact` (17 Go) : à effacer à la fusion de la branche. Clone
   `~/.cache/rag3weaver-build/cp-b2d` et `target-cp` : le chantier codeparsers,
   à garder tant que B2d continue.
+
+**Mise à jour (vers 4 h)** : `impl-pas-definisseur-2` fusionnée par l'arbre
+principal (`17cca6e17` … `a514e66ed`, pointeur codeparsers `06d6e92`) ;
+worktree `rag3db-cp` et `target-impact` effacés. Reste sur le poste : le
+clone `cp-b2d` et `target-cp` (chantier codeparsers, B2d), `wt-docs`.
