@@ -7,6 +7,22 @@
 using namespace rag3db::common;
 using namespace rag3db::main;
 
+// **L'identifiant, lisible sans charger la lib** : une section ELF nommée, que l'outil
+// `rag3db-check-lib` de rag3weaver lit dans la lib et dans le binaire avant tout chargement
+// (le PG_MODULE_MAGIC de PostgreSQL ; le principe de checkBuildId pour les extensions). Les
+// binaires sont liés en BIND_NOW : un contrôle dans le processus viendrait après le symbole
+// manquant. `retain` la garde sous --gc-sections, quand le moteur est lié en statique.
+#if defined(__ELF__)
+#if defined(__has_attribute) && __has_attribute(retain)
+#define RAG3DB_BUILD_ID_RETAIN __attribute__((retain))
+#else
+#define RAG3DB_BUILD_ID_RETAIN
+#endif
+__attribute__((used, section(".rag3db_build_id"))) RAG3DB_BUILD_ID_RETAIN static const char
+    buildIdSection[] = RAG3DB_BUILD_ID;
+#undef RAG3DB_BUILD_ID_RETAIN
+#endif
+
 namespace rag3db {
 namespace function {
 
