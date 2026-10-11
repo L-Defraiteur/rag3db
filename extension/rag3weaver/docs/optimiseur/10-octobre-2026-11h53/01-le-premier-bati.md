@@ -443,13 +443,25 @@ de publication : windows, darwin, puis la tête.
   Windows (NTFS journalise ses métadonnées), le même geste ailleurs
   (e52091ea0). Le lot 1 côté MSVC compile et se lie (binaire 67,6 Mo contre
   60 non strippé).
-- **Vingtième** (38086904081) : le premier au profil `paquet`, source cmake
-  lue dans le cache, fsync corrigé — en cours, avec macOS 6 et le Docker
-  Linux sur la même tête e52091ea0, pour que les trois archives de la
-  séance viennent du même commit.
+- **Vingtième** (38086904081, e52091ea0, profil `paquet`) : l'étape de
+  l'extension passe de 37 min à 45 s (la source cmake lue dans le cache),
+  l'index plein texte s'ouvre ; rouge au `search_code` d'après l'index,
+  « plein texte en cours » — l'épreuve n'attendait que le verrou rendu, pas
+  le texte prêt (corrigé : elle attend `text = ready`).
+- **Vingt-et-unième** (dbeccbd24) : le plein texte reste « en cours » deux
+  minutes sur trois fichiers, stderr muet — l'épreuve imprime désormais le
+  journal de l'indexation en fond.
+- **Vingt-deuxième** (e177310af, contrôle de bâti fondu) : le journal dit
+  « plein texte (préparation du schéma) : Access is denied » — le fsync des
+  fichiers écrits : `File::open` en lecture puis `sync_data`, or
+  `FlushFileBuffers` exige sous Windows un handle en écriture. Correctif
+  `fsync_file` (ouverture en écriture là-bas ; un fichier tenu par un autre
+  handle est laissé à NTFS, dit une fois) — 786dfec13.
+- **Vingt-troisième** (38097939930, 786dfec13) : en cours.
 
-**L'identifiant de bâti** (cœur C++, lot à venir) : le moteur et chaque
-extension porteront commit + empreinte du diff suivi + options d'ABI
+**L'identifiant de bâti** (cœur C++, sur master depuis 458ff7157, fondu
+dans la branche à c65db36da) : le moteur et chaque extension portent
+commit + empreinte du diff suivi + options d'ABI
 (CMAKE_BUILD_TYPE, taille de page, capacité des vecteurs, RAG3DB_RUNTIME_CHECKS),
 et LOAD EXTENSION refusera une extension d'un autre bâti. Mes recettes
 bâtissent moteur et extension dans le même dossier cmake, en deux passes
@@ -458,7 +470,17 @@ suivis ne comptent pas, mais journaux et copies de cache sortent du
 checkout (RUNNER_TEMP). Sous Windows, la copie `rag3db-src` sans `.git` rend
 une marque « nogit » des deux côtés : pas de refus à tort, et la règle de
 tout rebâtir ensemble reste la garantie. À vérifier au premier run après
-le hash, sur les trois plateformes.
+le hash, sur les trois plateformes. **Vérifié** : Linux (Docker) et macOS
+donnent le même identifiant au moteur et à l'extension et chargent
+l'extension ; le premier témoin ici a été un refus net d'une extension
+copiée d'avant (« built from an engine without build ids »). Dans Docker,
+git refusait le dépôt monté (« dubious ownership ») et l'identifiant disait
+« nogit » : `safe.directory` dans la recette, et les recettes refusent
+désormais « nogit » sur Linux et macOS ; sous Windows il reste « nogit »
+(copie `rag3db-src` sans `.git`) jusqu'au lot `build-id-git-dir` du cœur C++
+(un chemin vers le vrai dépôt, `RAG3DB_BUILD_ID_GIT_DIR`, que build.rs pose
+déjà sur la branche). Le commit nommé n'est pas HEAD mais le dernier commit
+des chemins du moteur (Linux : 458ff7157 pour la tête 786dfec13).
 
 ### Le lot 1 du chantier I (rquickjs, swc) sur les trois plateformes
 
@@ -487,23 +509,25 @@ séance se bâtissent avec ce profil.
 ### La séance du 11 octobre : quatre archives du même commit
 
 Décision de l'orchestration : une seule version pour la tête et ses trois
-sous-paquets, `0.0.1-alpha.2`, tous du commit e52091ea0 (fsync corrigé,
-profil `paquet`, lot 1 dedans), la tête épinglant en version exacte —
-convention des paquets natifs, et ce que l'identifiant de bâti exigera ;
-Linux est republié avec les autres. Quatre `npm publish` avec les OTP de
-Lucie : linux, windows, darwin, puis la tête. Prêt sous
+sous-paquets, `0.0.1-alpha.2`, du même commit, la tête épinglant en version
+exacte — convention des paquets natifs, et ce que l'identifiant de bâti
+exige ; Linux est republié avec les autres. Quatre `npm publish` avec les
+OTP de Lucie : linux, windows, darwin, puis la tête. La tête retenue est
+**786dfec13** (master 97acd579b fondu — contrôle de bâti, lot 1, profil
+`paquet` —, fsync de dossier et de fichier corrigés pour Windows). Sous
 `~/.cache/rag3weaver-build/paquet-npm-garde/publier/` (les alpha.1 publiées
-rangées sous `alpha-1-publiee/`) :
+sous `alpha-1-publiee/`, les essais d'avant sous `e52091ea0/` et
+`e177310af/`) :
 
-| archive | source | binaire |
-|---|---|---|
-| `rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz` (22 Mo) | Docker luciepc, 11 min | **61 Mo** strippé (79 avant le profil), glibc 2.28 |
-| `rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz` (19 Mo) | run 6 (26 min, cache à refaire) | **52 Mo** après `strip -x` (81 avant le profil) |
-| `rag3weaver-windows-x64-0.0.1-alpha.2.tgz` | run 20, en cours | |
-| `rag3weaver-0.0.1-alpha.2.tgz` (27 ko) | la tête, README anglais | |
+| archive | source | binaire | identifiant |
+|---|---|---|---|
+| `rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz` (22 Mo) | Docker luciepc, 4 min | **61 Mo** strippé, glibc 2.28 | `rag3db-build-458ff7157…` |
+| `rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz` (19 Mo) | run 7, 17 min | **52,5 Mo** après `strip -x` | `rag3db-build-786dfec13…` |
+| `rag3weaver-windows-x64-0.0.1-alpha.2.tgz` | run 23, en cours | ~60 Mo | « nogit » |
+| `rag3weaver-0.0.1-alpha.2.tgz` (27 ko) | la tête, README anglais | | |
 
-La démo rejouée contre la tête et le sous-paquet Linux locaux : verte,
-index en 18 s avec le service et 2,6 s sans (le profil `paquet` se sent).
+La démo rejouée contre la tête et le sous-paquet Linux locaux : verte
+(index 22 s avec le service, 3,7 s sans).
 
 ## Ce qui vient ensuite
 
