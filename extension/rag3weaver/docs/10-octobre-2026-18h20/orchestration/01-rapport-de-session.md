@@ -787,3 +787,28 @@ fuite, comme reste ; un témoin produit demande un corpus long. À regarder de
 jour (une indexation en mode blobs qui stagne 13 min est un fait de produit,
 même si le mode n'est plus le défaut). Le lot « reprise sur croisement » de A
 est prêt, au signal du matin. La durée de la lib : au knowledge dump de A.
+
+## 18. Fin de nuit, 5 h 40 : toutes les sessions au repos
+
+- **Derniers lots sur master** : rel2 (`69f3ff53e`, la seconde écriture après
+  une relation vue puis supprimée refuse par « could not serialize ») ; **les
+  segments de chaînes bornés** (`4820e9154`) : une table de blobs de 3 Go
+  passe son point de reprise sous 2 Gio en 65 s là où master échouait à
+  544 Mo, le point de reprise ne réécrit plus toute la colonne ; restreint aux
+  chaînes (les FLOAT[960] gardent leur découpage). Banc de concurrence
+  **56 → 10 rouges connus** sur la nuit. Lib de luciepc à `4820e9154`
+  (05 h 36), lib d'ici à `1bf29930d` (04 h 33, correctif ALP compris ;
+  rel2 et les segments y manquent : à rebâtir au premier lot du jour).
+- **Tickets** : 51 ouverts, 60 fermés à 5 h ; ouverts cette nuit pour le
+  jour : la confirmation produit du premier index sous 2 Gio (A), la mémoire
+  résidente au-delà du tampon, le mode `--demon`, l'indexation qui meurt avec
+  le tube, le pont coupé par l'élagage, le CALL qui rend des supprimés, le
+  nœud qui relie deux entités gérées puis le huitième refus des réactions,
+  C7 après arrêt brutal, la part reprise du journal à doublon, T5.
+- **Les onze sessions** ont rendu un rapport et sont au repos, aucun worktree
+  ni target de la nuit ne reste ; disque à 50 % ici, 78 % sur luciepc. Le
+  relevé d'orchestration s'arrête ici.
+- **Reprendre** : ce rapport, §9 puis §12 à §17 ; la séance npm (§16, quatre
+  OTP) ; la recette du proto (`everything-declarative/08` §1) ; la mémoire
+  longue (`10-octobre-2026-18h00/07`, `claude mcp add`) ; les décisions
+  renversables (§9) ; I2 au mot de Lucie.
