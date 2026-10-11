@@ -1,7 +1,7 @@
 # Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro
 
-- **État** : ouvert (11 octobre 2026, 2 h 40, vu par la liste de fusion d'I1 sur luciepc ; hotfixs
-  bissecte cette nuit).
+- **État** : ouvert (11 octobre 2026, 2 h 40, vu par la liste de fusion d'I1 sur luciepc). Bissecté
+  par hotfixs : le défaut existe sans le lecteur affamé ; à l'arbre principal, avec l'étendue.
 - **Gravité** : perte (une colonne à 0 sur les dernières lignes après rejeu + point de reprise,
   encore après réouverture).
 - **Atteignable en service** : oui — c'est le chemin de reprise après un arrêt brutal pendant un
@@ -60,6 +60,31 @@ Le cas lui-même ; en boucle : `transaction_test --gtest_filter='OwnerlessPagesT
 Bissection d'hotfixs sur luciepc (en lourd, chaînée) : le parent `61bacdd05` (sans `e4198f862`) ×30 ;
 master `80054b530` ×10 puis ×30 — entre les deux, seul `e4198f862` touche `src/`. Il écrit lui-même
 les comptes et l'imputation ici.
+
+## La bissection (hotfixs, 11 octobre, 2 h 46 à 3 h 25, luciepc, Release, en lourd, chaînée)
+
+`--gtest_filter=OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent`, un bâti par côté
+(`rag3db-bisect` à `61bacdd05`, `rag3db-tickets` à `80054b530`) :
+
+| côté | `e4198f862` | passes | rouges |
+|---|---|---|---|
+| `61bacdd05`, le parent du lecteur affamé | non | 30 | **1** |
+| `80054b530`, master | oui | 10 + 30 | **3** (0 sur les 10, 3 sur les 30) |
+
+- **Imputation : pas le lecteur affamé.** Le rouge existe sans `e4198f862` (1 sur 30 au parent),
+  et entre les deux côtés seul `e4198f862` touche `src/`. L'écart 1/30 contre 3/40 n'est pas
+  significatif. Le lot n'est pas défait.
+- **Le test est né avec `0aed3c4b5`** (`git log -S`) : aucune bissection ne remonte avant lui. Le
+  défaut peut être plus ancien que l'étendue, ou venir d'elle. C'est la lecture de l'étendue qui
+  reste en tête, à l'arbre principal (orchestration).
+- **Les formes du rouge** (journaux luciepc `~/git_workspaces/bisect-parent.log`,
+  `bisect-master.log`) : toujours la seule colonne `score`, et toujours sur les dernières lignes ;
+  `count`, `sum(id)`, les noms et les vecteurs sont justes. `sum(score)` vaut 19 988 006 066 au
+  parent ; 19 974 232 959,5, 19 986 208 068,5 et 19 999 800 033,5 sur master, au lieu de
+  20 000 000 000. Le manque varie d'une passe à l'autre : de 1 à environ 130 lignes à 0, au prix d'une ligne de fin (environ 200 000 chacune). Les
+  rouges tombent tous à « after the replay and a checkpoint » (ligne 1936), puis à la réouverture
+  (ligne 1941), et la ligne 199999 n'est fausse que dans une partie des cas.
+- **Le taux** : environ 1 sur 20 sur ce bâti (4 rouges sur 70 passes).
 
 ## Pour le fermer
 
