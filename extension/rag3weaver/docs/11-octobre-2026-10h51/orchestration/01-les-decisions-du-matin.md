@@ -656,3 +656,35 @@ où elle vit.
   checkout de rag3db-lourd, surtout pendant un index ; code-principal saine,
   code-lourd à réindexer, chemin
   `/home/lucied/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`.
+- **21 h – 21 h 40, nuit** (Lucie dort depuis 21 h 05 ; le fil continue ici
+  toutes les 30 minutes). Le binaire de Lucie (`~/.local/bin`, md5
+  69adbfe94735) est **réparé** par la mémoire et vérifié à l'écart du réel :
+  ses sessions neuves démarrent de nouveau ; son hôte d'ici sera redémarré
+  à 23 h, annoncé aux sessions MCP, puis code-rag3db réindexé par
+  codeparsers. Orchestration compactée à 21 h 10 (sa mémoire pleine) :
+  les dix sessions pinguées, dix réponses, aucune n'attendait quelque chose
+  d'elle. État des files : hotfixs, visited set en rejeu court sur B2 puis
+  le rebâti unique de la lib commune ; G, lot A en push, B4 derrière ;
+  banc, file vide, plus aucun worktree ; proto, un push de quatre commits
+  (fichier créé indexé, Route et Decide en flux, réconciliation et balayage
+  par dates, les trois défauts de luciepc) puis la mesure par phase des 6 s ;
+  recherche, batterie de clôture du lot 0 ; F, saut MENTIONS de 122 ms à
+  13-22 ms selon la forme, ticket du semi-masque `edb7e8738` ; cœur, lot ABI
+  en bâti, mesure des fils avec la trace ; arbre principal, délai
+  d'embarquement écrit et en compilation (60 s au manifeste, lot expiré
+  rejoué morceau par morceau, muet nommé et exclu, état visible même
+  occupé) ; mémoire, client qui se rétablit seul en test ; codeparsers,
+  réindexation de luciepc lancée à 21 h 07 derrière le verrou, code-tree
+  avec son squelette. **Décision (renversable)** : le magasin de libs par
+  identifiant de bâti (page de la recherche `2a41f171c` : aucun binaire n'a
+  de rpath, le pont cxx ne surveille ni la lib ni l'en-tête, l'identifiant
+  existe sans être comparé au binaire) est **porté par la recherche**, pas
+  par G dont la file est pleine ; d'abord deux petits correctifs (rerun-if
+  du pont, refus nommé binaire ↔ lib qui ferme le ticket du cœur), puis le
+  magasin, G consulté avant ; aucun rpath sans passer par l'orchestration.
+  Observation sur le `poste` : la mesure du cœur tient la porte exclusive de
+  luciepc depuis 20 h 44 en attendant la place partagée, occupée par son
+  propre bâti ; codeparsers puis hotfixs attendent derrière ; la
+  réindexation de luciepc partira après 22 h 30, « au plus tard 1 h » tient.
+  Question de forme à proposer à G si ça se reproduit : la porte prise
+  avant la place fait attendre tout le monde derrière un bâti.

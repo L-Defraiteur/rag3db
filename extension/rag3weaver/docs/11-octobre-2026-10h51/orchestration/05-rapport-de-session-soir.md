@@ -108,8 +108,8 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 
 ## 6. Ce qui attend Lucie au réveil
 
-- Ouvrir ses sessions seulement quand son binaire est rebâti (la mémoire le
-  dit dans le fil de nuit, section « nuit » de `01-les-decisions-du-matin.md`).
+- Ses sessions s'ouvrent de nouveau : son binaire a été rebâti contre la lib
+  B2 à 21 h (mémoire, md5 69adbfe94735) ; son hôte d'ici redémarré à 23 h.
 - Brancher le cœur sur `code-lourd` (l'arbre de luciepc qui suit master)
   quand sa réindexation est faite : commande dans `01-les-decisions…`.
 - La séance npm (quatre OTP) quand elle le voudra ; le ménage des branches
