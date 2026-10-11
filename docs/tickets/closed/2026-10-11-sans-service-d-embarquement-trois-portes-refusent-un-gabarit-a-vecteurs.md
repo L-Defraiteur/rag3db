@@ -1,6 +1,6 @@
 # Sans service d'embarquement, l'hôte, `mcp` autonome et `serve` refusent un gabarit à vecteurs
 
-- **État** : ouvert (11 octobre 2026, optimiseur)
+- **État** : corrigé (11 octobre 2026, optimiseur, branche `embarqueur-absent-portes`) : la porte de l'embarqueur absent portée sur master, `embedder_or_absent` pour les quatre portes, le reçu de l'hôte avec ses avertissements ; cas 8 de `e2e_mcp_cycle_de_vie` vert
 - **Gravité** : blocage (le backend ne s'ouvre pas)
 - **Atteignable en service** : oui, dès qu'un gabarit déclare du vecteur et qu'aucun service
   d'embarquement n'est donné, ce qui est le cas du gabarit de code du paquet npm

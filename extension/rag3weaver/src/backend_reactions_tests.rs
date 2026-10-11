@@ -95,6 +95,7 @@ fn reactif() -> (tempfile::TempDir, Backend) {
     );
     catalog.initialize().unwrap();
     let backend = Backend {
+        avertissement_sans_service: None,
         reactions: Mutex::new(None),
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
         watches: Mutex::new(Vec::new()),

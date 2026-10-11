@@ -47,6 +47,46 @@ fn boutique(dir: &Path) -> PathBuf {
     chemin
 }
 
+/// **Le gabarit de code livré**, copié avec ses outils (les graphes s'y
+/// lisent par `../../tools`) sur un dossier d'une ligne : il déclare
+/// `granite-278m`, donc du vecteur. Commandes fermées, comme le paquet npm.
+fn code(dir: &Path) -> PathBuf {
+    fn copier(src: &Path, dst: &Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap() {
+            let e = e.unwrap();
+            let cible = dst.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copier(&e.path(), &cible);
+            } else {
+                std::fs::copy(e.path(), &cible).unwrap();
+            }
+        }
+    }
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let t = dir.join("templates");
+    copier(&gabarits.join("tools"), &t.join("tools"));
+    copier(&gabarits.join("backends/code"), &t.join("backends/code"));
+    let ws = dir.join("ws");
+    std::fs::create_dir_all(&ws).unwrap();
+    std::fs::write(ws.join("main.rs"), "fn main() {\n    println!(\"bonjour\");\n}\n").unwrap();
+    let chemin = t.join("backends/code/backend.json");
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    let racine = std::env::var("RAG3DB_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    m["name"] = json!("code-sans-service");
+    m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
+    m["vector_extension"] =
+        json!(racine.join("extension/vector/build/libvector.rag3db_extension").to_string_lossy());
+    m["workspace"]["root"] = json!(ws.to_string_lossy());
+    m["workspace"]["commands"] = json!("off");
+    m["tools"].as_object_mut().unwrap().remove("run_command");
+    m["tools"].as_object_mut().unwrap().remove("wait_output");
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    chemin
+}
+
 /// Le dossier du démon d'un témoin, et ce qu'on y lit.
 struct Demon {
     dir: PathBuf,
@@ -140,6 +180,11 @@ impl Client {
             .args(["mcp", "--manifest", &manifeste.to_string_lossy()])
             .env("RAG3WEAVER_DAEMON_DIR", &demon.dir)
             .env("RAG3WEAVER_DAEMON_ADDRESS", adresse)
+            // L'hôte hérite de l'environnement du client qui le lance : sans
+            // ces deux variables, aucun témoin ne dépend du service
+            // d'embarquement de la personne qui joue la suite.
+            .env_remove("RAG3WEAVER_EMBED_SERVICE")
+            .env_remove("RAG3WEAVER_SERVICE_EMBED")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -456,4 +501,35 @@ fn les_outils_reviennent_seuls_quand_l_hote_devient_joignable() {
     let (erreur, texte) = c.appeler("put_category", json!({"record": {"key": "outils", "name": "Les outils"}}));
     assert!(!erreur, "{texte}");
     c.fermer();
+}
+
+/// **(9) Un backend de code sans service d'embarquement s'ouvre dans
+/// l'hôte** : le gabarit livré déclare du vecteur, et sans service l'hôte
+/// l'ouvre en plein texte seul, vecteurs en dette, comme la porte des
+/// lignes JSON. Le 11 octobre 2026, l'hôte refusait (« n'ouvre pas ce
+/// backend : models.embed (granite-278m) : ni `address`… ») et le client ne
+/// montrait que `daemon_status` — vu par le témoin de l'archive alpha.3.
+#[test]
+#[ignore = "e2e : le gabarit de code, sans service, dans l'hôte lancé par le client"]
+fn un_backend_de_code_sans_service_s_ouvre_dans_l_hote() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = code(tmp.path());
+    let demon = Demon::new(tmp.path());
+
+    let mut c = Client::lancer(&manifeste, &demon, LIBRE);
+    assert!(c.initialiser().get("result").is_some());
+    let outils = c.outils();
+    assert!(outils.iter().any(|o| o == "list_files"), "les outils du gabarit, pas seulement l'état : {outils:?}");
+    let (erreur, texte) = c.appeler("list_files", json!({}));
+    assert!(!erreur && texte.contains("main.rs"), "{texte}");
+    let (erreur, texte) = c.appeler("search_code", json!({"query": "bonjour", "options": {}}));
+    assert!(!erreur, "la recherche répond par les mots : {texte}");
+    let (erreur, texte) = c.appeler("daemon_status", json!({}));
+    assert!(!erreur && texte.contains("\"running\""), "{texte}");
+    c.fermer();
+    let journal = std::fs::read_to_string(demon.dir.join("daemon.log")).unwrap_or_default();
+    assert!(
+        journal.contains("pas de service d'embarquement"),
+        "l'hôte dit qu'il ouvre sans service, dans son journal : {journal}"
+    );
 }

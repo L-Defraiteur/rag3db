@@ -329,7 +329,7 @@ impl DaemonHost {
                     "id": hosted.id,
                     "manifest": hosted.manifest,
                     "reread": relu,
-                    "describe": b.prepared().describe(),
+                    "describe": b.describe(),
                     "reactions": b.prepared().reaction_graphs().keys().cloned().collect::<Vec<_>>(),
                 })
             })
@@ -358,7 +358,7 @@ impl DaemonHost {
         let result = self
             .check_session(session)
             .and_then(|_| self.hosted(manifest))
-            .and_then(|hosted| self.with_backend(&hosted, |b| b.prepared().describe()));
+            .and_then(|hosted| self.with_backend(&hosted, |b| b.describe()));
         op_response(result)
     }
 
@@ -537,7 +537,7 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = if prepared.needs_embeddings() { Some(prepared.connect_embedder()?.0) } else { None };
+    let embedder = prepared.embedder_or_absent();
     let conn = crate::Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     prepared.open(Box::new(conn), embedder)
 }
