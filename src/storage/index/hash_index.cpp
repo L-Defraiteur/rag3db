@@ -4,6 +4,7 @@
 #include <deque>
 
 #include "common/assert.h"
+#include "common/exception/duplicated_primary_key.h"
 #include "common/exception/message.h"
 #include "common/serializer/deserializer.h"
 #include "common/types/int128_t.h"
@@ -588,8 +589,7 @@ void PrimaryKeyIndex::commitInsert(Transaction* transaction, const ValueVector& 
             throw RuntimeException(ExceptionMessage::nullPKException());
         }
         if (!insert(transaction, &pkVector, pkPos, offset, pkInsertState.isVisible)) {
-            throw RuntimeException(
-                ExceptionMessage::duplicatePKException(pkVector.getAsValue(pkPos)->toString()));
+            throw DuplicatedPrimaryKeyException(pkVector.getAsValue(pkPos)->toString());
         }
     }
 }

@@ -15,6 +15,7 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_entry/type_catalog_entry.h"
 #include "common/checksum.h"
+#include "common/exception/duplicated_primary_key.h"
 #include "common/exception/end_of_file.h"
 #include "common/exception/io.h"
 #include "common/exception/runtime.h"
@@ -352,10 +353,42 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
                 deserializer.getReader()->onObjectEnd();
             }
 
+            // Marche A3′, la part reprise : une transaction validée dont une insertion heurte un
+            // doublon de clé (un journal du moteur d'avant le verrou de clé, sous le mode
+            // multi-écrivains) est annulée et sautée jusqu'à son COMMIT, en nommant la clé ; le
+            // reste du journal se rejoue, la base s'ouvre. Ses octets sont copiés à côté. Toute
+            // autre erreur de rejeu reste ce qu'elle était : la base ne s'ouvre pas.
+            uint64_t transactionStart = 0;
+            std::vector<std::pair<uint64_t, uint64_t>> skipped;
             while (getReadOffset(deserializer, enableChecksums) < offsetDeserialized) {
                 KU_ASSERT(!deserializer.finished());
+                const auto recordStart = getReadOffset(deserializer, enableChecksums);
                 auto walRecord = WALRecord::deserialize(deserializer, clientContext);
-                replayWALRecord(*walRecord);
+                if (walRecord->type == WALRecordType::BEGIN_TRANSACTION_RECORD) {
+                    transactionStart = recordStart;
+                }
+                try {
+                    replayWALRecord(*walRecord);
+                } catch (const DuplicatedPrimaryKeyException& e) {
+                    auto transactionContext = TransactionContext::Get(clientContext);
+                    if (transactionContext->hasActiveTransaction()) {
+                        transactionContext->rollback();
+                    }
+                    while (walRecord->type != WALRecordType::COMMIT_RECORD &&
+                           getReadOffset(deserializer, enableChecksums) < offsetDeserialized) {
+                        walRecord = WALRecord::deserialize(deserializer, clientContext);
+                    }
+                    const auto transactionEnd = getReadOffset(deserializer, enableChecksums);
+                    skipped.emplace_back(transactionStart, transactionEnd);
+                    std::cerr << stringFormat(
+                        "rag3db: WAL {}: a committed transaction (bytes {} to {}) was skipped "
+                        "during replay: it inserted primary key {} a second time ({}). Nothing "
+                        "else of the journal is lost; its bytes are copied aside.\n",
+                        walPath, transactionStart, transactionEnd, e.getKey(), e.what());
+                }
+            }
+            if (!skipped.empty()) {
+                setAsideSkippedTransactions(*fileInfo, skipped);
             }
             // After replaying all the records, we should truncate the WAL file to the last
             // COMMIT/CHECKPOINT record.
@@ -892,6 +925,35 @@ void WALReplayer::setAsideCutBytes(FileInfo& fileInfo, uint64_t offsetDeserializ
                               "({}) and copied to {}. They may hold committed transactions if the "
                               "journal was corrupted rather than cut; nothing was deleted.\n",
         walPath, cut, offsetDeserialized, why, asidePath);
+}
+
+void WALReplayer::setAsideSkippedTransactions(FileInfo& fileInfo,
+    const std::vector<std::pair<uint64_t, uint64_t>>& ranges) const {
+    if (StorageManager::Get(clientContext)->isReadOnly()) {
+        return;
+    }
+    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+    const auto asidePath = stringFormat("{}.ecarte-{}", walPath, millis);
+    auto aside = VirtualFileSystem::GetUnsafe(clientContext)
+                     ->openFile(asidePath, FileOpenFlags(FileFlags::WRITE |
+                                                         FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
+    uint64_t written = 0;
+    std::vector<uint8_t> block;
+    for (const auto& [start, end] : ranges) {
+        if (end <= start) {
+            continue;
+        }
+        block.resize(end - start);
+        fileInfo.readFromFile(block.data(), block.size(), start);
+        aside->writeFile(block.data(), block.size(), written);
+        written += block.size();
+    }
+    aside->syncFile();
+    std::cerr << stringFormat("rag3db: WAL {}: {} committed transaction(s) skipped during replay "
+                              "({} bytes) were copied to {}; nothing was deleted.\n",
+        walPath, ranges.size(), written, asidePath);
 }
 
 void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {

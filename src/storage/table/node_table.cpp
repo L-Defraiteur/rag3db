@@ -9,6 +9,7 @@
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
 #include "common/data_chunk/data_chunk_state.h"
+#include "common/exception/duplicated_primary_key.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
@@ -487,8 +488,7 @@ void NodeTable::validatePkNotExists(const Transaction* transaction, ValueVector*
     }
     if (getPKIndex()->lookup(transaction, pkVector, selVector[0], dummyOffset,
             getUniquenessVisibleFunc(transaction))) {
-        throw RuntimeException(
-            ExceptionMessage::duplicatePKException(pkVector->getAsValue(selVector[0])->toString()));
+        throw DuplicatedPrimaryKeyException(pkVector->getAsValue(selVector[0])->toString());
     }
 }
 

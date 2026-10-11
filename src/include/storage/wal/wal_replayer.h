@@ -1,5 +1,8 @@
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include <functional>
 #include <string>
 
@@ -67,6 +70,10 @@ private:
 
     void setAsideCutBytes(common::FileInfo& fileInfo, uint64_t offsetDeserialized,
         bool tornEnd) const;
+    // Les transactions validées sautées au rejeu (un doublon de clé, marche A3′ reprise) : leurs
+    // octets [début, fin) sont copiés à côté du journal, rien n'est supprimé.
+    void setAsideSkippedTransactions(common::FileInfo& fileInfo,
+        const std::vector<std::pair<uint64_t, uint64_t>>& ranges) const;
 
     void replayWALRecord(WALRecord& walRecord) const;
     void replayCreateCatalogEntryRecord(WALRecord& walRecord) const;
