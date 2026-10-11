@@ -148,13 +148,30 @@ TEST_F(FailedTransactionTest, AutoCommitAndOtherConnectionsAreNotAffected) {
     // Hors de tout bloc, une erreur ne laisse aucun état.
     fails("CREATE (:Item {id: 1, v: 9});");
     ok("CREATE (:Item {id: 2, v: 0});");
-    // Un bloc en échec sur une connexion ne refuse rien sur une autre.
+    // Un bloc en échec sur une connexion ne refuse rien sur une autre — mais il reste une
+    // transaction d'écriture OUVERTE jusqu'à sa fermeture (marche T0 : ses verrous sont tenus) :
+    // en mode un seul écrivain, l'autre connexion lit, et son écriture est refusée comme
+    // derrière tout bloc ouvert, jusqu'au ROLLBACK.
     ok("BEGIN TRANSACTION;");
     fails("CREATE (:Item {id: 1, v: 9});");
     rag3db::main::Connection other(database.get());
-    ok(other, "CREATE (:Item {id: 3, v: 0});");
+    auto read = other.query("MATCH (n:Item) RETURN count(n);");
+    ASSERT_TRUE(read->isSuccess()) << read->getErrorMessage();
+    EXPECT_EQ(read->getNext()->getValue(0)->getValue<int64_t>(), 2);
+    auto write = other.query("CREATE (:Item {id: 3, v: 0});");
+    ASSERT_FALSE(write->isSuccess());
+    EXPECT_NE(write->getErrorMessage().find("Only one write transaction"), std::string::npos)
+        << write->getErrorMessage();
     ok("ROLLBACK;");
+    ok(other, "CREATE (:Item {id: 3, v: 0});");
     EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 3);
+    // Sous le mode multi-écrivains, l'autre connexion écrit une autre clé sans attendre.
+    ok("CALL debug_enable_multi_writes=true;");
+    ok("BEGIN TRANSACTION;");
+    fails("CREATE (:Item {id: 1, v: 9});");
+    ok(other, "CREATE (:Item {id: 4, v: 0});");
+    ok("ROLLBACK;");
+    EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 4);
 }
 
 } // namespace
