@@ -173,7 +173,7 @@ aux autres ?)*
 | MCP (Claude Code) | possède sa base, ou `--demon` | `impl Hote` qui parle au démon |
 | chat | lance le backend en enfant, `op` sur stdio | les mêmes messages, au démon |
 | atelier | une page de `serve` | une page du démon, inchangée |
-| CLI positionnelle | possède sa base, `op` sur stdio | **reste telle quelle** — §4, la seule exception |
+| CLI positionnelle | possède sa base, `op` sur stdio | l'ouverture directe reste pour les tests, la CLI et le démon lui-même, **sans exception nommée** ; le constructeur de decks se refera après (décision 7) |
 
 **Le client MCP.** Ce qui reste dans le processus que Claude Code lance : le
 protocole MCP entier (stdio, JSON-RPC par lignes, `initialize`,
@@ -189,12 +189,20 @@ réactions, `shutdown` — part au démon.
 rag3weaver-backend mcp --manifest <backend.json> [--keys dev] [--daemon <adresse>]
 ```
 
-`--manifest` ne dit plus « ouvre ceci » mais « parle-moi de ceci ». Et **le
-client ne lie plus le moteur** : la recette perd `LD_LIBRARY_PATH` et
-`RAG3DB_ROOT`, et la mise en garde n° 5 de la mémoire branchée de Lucie
-(`10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`) tombe avec eux.
-*(À trancher : un binaire `rag3weaver-mcp` à part, petit, ou un rôle du même
-binaire, une seule chose à installer.)*
+`--manifest` ne dit plus « ouvre ceci » mais « parle-moi de ceci ». **C'est un
+rôle du même binaire** (décision 8) : la sous-commande `mcp` devient le client
+mince, une seule chose à installer.
+
+*Correction de la mémoire longue, après la décision 8.* J'avais écrit que le
+client ne liait plus le moteur et que la recette perdait `LD_LIBRARY_PATH`. Avec
+un seul binaire, le rôle `mcp` lie le moteur comme les autres. Et la variable ne
+vient pas de C : elle vient de **notre liaison partagée** (`RAG3DB_SHARED`, posée
+sur nos postes pour ne pas bâtir des e2e de 1,35 Go) ; le bâti par défaut porte
+le moteur en statique et n'en a pas besoin. Donc : sous C, le client perd
+`RAG3DB_ROOT` (il n'ouvre ni base ni extension) ; il ne perd `LD_LIBRARY_PATH`
+qu'avec un binaire statique — celui qu'un paquet livre. La mise en garde n° 5 de
+la mémoire branchée de Lucie (`10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`)
+tombe avec le binaire statique, pas avec C.
 
 **Ce que devient `--demon`.** Aujourd'hui le backend reste dans le processus MCP
 et seule sa connexion passe par `rag3daemon`. **Il est faux par construction
@@ -237,9 +245,10 @@ la même mémoire sont deux clients qui nomment le même manifeste ; le démon n
 qu'un catalogue, qu'un bus, qu'un réacteur. Ce qui reste n'est pas le démon :
 
 - **la portée** — « ce projet » et « global » sont deux cellules
-  (`Scope { org, project }`, branché). Proposition : le client l'envoie avec
-  `open`, pour que deux sessions de deux projets partagent la base sans partager
-  la cellule ;
+  (`Scope { org, project }`, branché). C'est la cellule **de la session** (ajout
+  0 ci-dessus, décision 12) : deux sessions de deux projets partagent la base sans
+  partager la cellule, et le fan-out « les deux d'un coup » est une requête qui
+  demande une seconde cellule dans les droits de sa session ;
 - **les deux lots de l'ancre**, acceptés par Lucie ce matin — sans eux, la
   réaction de la mémoire tourne à vide, démon ou pas.
 
@@ -269,14 +278,19 @@ lancement.** Claude Code montre mal un serveur mort au démarrage ; la recette d
 d'utile »). Donc le client démarre toujours, et :
 
 - `initialize` réussit, avec la raison dans `instructions` ;
-- `tools/list` rend **un seul outil**, `etat_du_demon`, dont la description dit
-  pourquoi le démon manque et quoi faire — une liste vide sans explication serait
-  un défaut, pas une sécurité ;
+- `tools/list` rend **l'outil « état du démon »**, seul, dont la description dit
+  pourquoi le démon manque, quoi faire, et propose de le lancer — une liste vide
+  sans explication serait un défaut, pas une sécurité ;
 - tout autre `tools/call` rend `isError` avec la même raison ;
 - la ligne sur stderr le dit.
 
-*(L'autre forme, à trancher : refuser `initialize` par une erreur JSON-RPC
-nommée. Plus juste pour le protocole, invisible pour le modèle.)*
+**Quand le démon répond, les outils du manifeste apparaissent, et « état du
+démon » reste** (décision 6) : il dit alors les backends ouverts, les travaux en
+cours et les sessions connectées. Un seul outil pour les deux cas, donc un modèle
+qui l'a appris une fois sait toujours où regarder. Son apparition et sa
+disparition des autres outils passent par `notifications/tools/list_changed` —
+la première raison pour laquelle le client MCP a besoin du flux `events` (§3,
+point 3), et `listChanged` devient `true`.
 
 **Quand le démon meurt entre deux appels**, l'appel suivant passe par `assurer` :
 le démon renaît, rouvre le backend, et l'appel en cours rend une erreur
@@ -286,11 +300,11 @@ transitoire nommée — jamais un tube cassé, jamais un rejeu silencieux.
 silencieux vers « je possède ma base » recréerait le cas que C supprime — deux
 écrivains possibles dès que le démon revient — et le cacherait.
 
-**La seule exception, à décider par Lucie** : le mode positionnel
-`rag3weaver-backend <backend.json>` reste un hôte qui possède sa base, **parce que
-le constructeur de decks s'en sert**. Il parle déjà les messages de C sur stdio :
-le jour où le constructeur passe au démon, il change de transport, pas de
-messages.
+**Pas d'exception** (décision 7) : le constructeur de decks est mis de côté
+pour l'instant et se refera après ; l'ouverture directe d'une base reste pour les
+tests, la CLI et le démon lui-même, sans être nommée comme exception. Le jour où
+le constructeur revient, il parle déjà les messages de C sur stdio : il changera
+de transport, pas de messages.
 
 ## 5. Le cycle de vie du démon
 
@@ -383,9 +397,9 @@ reste.
 **une fois** et partagé par tous ses clients ; `open` est idempotent. Donc **les clés et la cellule
 ne peuvent pas se lier au backend chargé** : le second client qui ouvre `memory` avec d'autres clés
 hériterait de l'exposition du premier, et deux sessions de deux projets travailleraient dans la
-cellule de celui qui a ouvert en dernier. Elles se lient **à la requête** : chaque `describe` et
-chaque `call` porte ses clés et sa cellule — ou un identifiant de session rendu par `open`, qui les
-porte. `open` charge ; il n'accorde rien.
+cellule de celui qui a ouvert en dernier. Elles se lient **à la session** que le client a ouverte
+(`POST /session`, ajout 0 du §3, décision 12), et chaque requête porte sa session. `open` charge ;
+il n'accorde rien.
 
 **Et la cellule par requête devient une condition de C, pas un confort.** Aujourd'hui, la bascule
 de cellule (`options.scope`, le fan-out `options.scopes`) se fait **autour** du graphe, en changeant
@@ -394,14 +408,12 @@ limite y est déjà nommée : « ce n'est pas plus sûr qu'avant face à une rec
 verrou du catalogue est relâché entre la bascule et la recherche. Un processus MCP n'avait qu'un
 client, donc la course était hors d'atteinte ; **un démon à N clients sur un backend la rend
 atteignable** : la recherche de la session 2 tombe dans la cellule que la session 1 vient de poser.
-Deux réponses, à choisir à la marche 1 :
+Deux réponses, **et Lucie a pris les deux, dans cet ordre** (décision 12) :
 
-- **sérialiser les appels par backend**, le temps de l'appel entier — sûr tout de suite, et le débit
-  d'un backend est celui d'un client, ce qui est le cas d'aujourd'hui ;
-- **des cellules par requête**, sans état global — le chantier que `catalog.rs` nomme déjà, plus
-  long, et le seul qui laisse deux clients chercher en même temps.
-
-La première d'abord, la seconde quand un usage le demande.
+- **sérialiser les appels par backend**, le temps de l'appel entier, à la marche 1 — le filet ;
+- **plus de cellule courante dans le catalogue**, à la marche 1 bis : la cellule vient de la
+  session et passe par la requête jusqu'au graphe. Le filet saute alors pour les lectures et reste
+  pour les écritures. Une marche nommée de C, pas « quand un usage le demandera ».
 
 **Le même défaut existe déjà, en petit, depuis le montage des réactions** (`0387fe401`) : le
 réacteur tourne en même temps que les appels d'outil du même processus, et `ReactTransitionNode`
