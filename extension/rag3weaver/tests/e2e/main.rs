@@ -32,6 +32,8 @@ mod e2e_banc_bge_m3;
 mod e2e_banc_cohesion;
 #[path = "../e2e_banc_etage.rs"]
 mod e2e_banc_etage;
+#[path = "../e2e_banc_fiches_classees.rs"]
+mod e2e_banc_fiches_classees;
 #[path = "../e2e_banc_hnsw.rs"]
 mod e2e_banc_hnsw;
 #[path = "../e2e_banc_liens.rs"]
