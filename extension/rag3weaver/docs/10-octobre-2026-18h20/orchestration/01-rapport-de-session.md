@@ -664,3 +664,22 @@ n'écrit), après le nœud, sinon il refuserait le gabarit `memory` livré. **La
 l'ordre A — Claude range-t-il spontanément ? — se tranche au matin par une
 session vierge, chez Lucie, après son `claude mcp add`** ; la session qui a
 écrit l'outil ne peut pas y répondre.
+
+**Ajout de 4 h 05 : la cause de la corruption est trouvée.** Ce n'est pas le
+COPY journalisé qui corrompt : il révèle un défaut de lecture de l'amont (mai
+2025, `patchFloatExceptions`) — les exceptions ALP d'une colonne DOUBLE sont
+rapiécées avec un index absolu dans le vecteur de sortie là où le lecteur de
+pages donne un index relatif au balayage ; pour tout segment après le premier
+d'un bloc, aucune exception n'est rapiécée et les valeurs restent à leur
+encodage, 0. Le COPY journalisé le révèle parce que son groupe non encore
+passé par un point de reprise est lu avec une sélection filtrée (versions de
+l'insertion) et découpé en deux segments ; un fil, une colonne STRING ou le
+point de reprise forcé n'ont pas cette forme. Preuve : la relecture par la clé
+est juste là où le balayage lit 0, et le nombre d'exceptions du second segment
+est exactement le nombre de lignes fausses. **Correctif d'une ligne** (l'index
+relatif), témoin gtest déterministe (la sonde de A, trois COPY), en chaîne de
+fusion sur luciepc. Le rouge de rejeu a la même cause et se ferme avec. La
+condition 2 reste fermée. Le filet de rag3weaver reste en place jusqu'à ce que
+A l'ait retiré sur la lib rebâtie, témoin vert sans filet ; les archives npm
+avec le filet restent bonnes, l'alpha suivante portera le correctif. Rien
+vers l'amont (règle de Lucie).
