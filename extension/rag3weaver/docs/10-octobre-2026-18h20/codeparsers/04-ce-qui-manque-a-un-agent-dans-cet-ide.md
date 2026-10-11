@@ -48,6 +48,24 @@ montre ou pas. Un IDE indexe l'arbre que l'agent édite.
 Les formes 1 et 2 se combinent : une base par arbre, née d'un instantané de la base de master,
 puis tenue à jour par le delta.
 
+### La règle de 20 h 25 : aucune réindexation entière d'un backend pendant qu'on l'interroge
+
+*11 octobre 2026, décision de l'orchestration, après deux minutes de blocage du cœur : la
+réindexation de `code-principal`, lancée pour le binaire neuf de luciepc, a tenu le catalogue
+(plein texte rebâti, index vectoriel tombé puis reconstruit, la montre qui faisait rattraper les
+fichiers d'essai sans fin) pendant que le cœur interrogeait ce même backend. Ticket « un appel
+d'outil attend derrière un index sans le dire ».*
+
+- **Une réindexation entière s'annonce aux sessions du backend** (`daemon_status` les liste), et se
+  fait à une heure convenue, quand elles ne travaillent pas.
+- **Un backend dont le binaire a changé sert son index tel quel** : le binaire neuf profite tout de
+  suite à ce qui ne dépend pas de la réingestion ; seule la qualité C++ de l'envoi virtuel (les
+  gabarits explicites, la récursion) la demande, et elle attend le soir.
+- **Les mesures à chaud de la soirée** (luciepc, `code-principal`, la montre) : 11,2 s au plus
+  (18 h 42, mesure codeparsers, borne haute) ; moins de 6 s (20 h 10, mesure du cœur, définition
+  et appel). Lucie trouve 6 s long pour un seul fichier : le détail par étape (montre, extraction,
+  écriture, catalogue) manque — dans le ticket.
+
 ### La règle d'aujourd'hui : un worktree et sa base vivent et meurent ensemble
 
 *11 octobre 2026, 18 h, décision de l'orchestration, en attendant « une base par arbre née d'un
