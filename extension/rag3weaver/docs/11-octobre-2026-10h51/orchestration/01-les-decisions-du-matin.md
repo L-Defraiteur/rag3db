@@ -582,3 +582,36 @@ où elle vit.
   par phase avant tout code de cache ; la recherche clôt le pas 3 du lot 0 par
   la batterie complète ; les sessions du cœur et d'hotfixs ont été relancées
   (« coeur c++ », `rag3db-cc`).
+- **18 h 40, l'hôte de luciepc arrêté de force par Lucie** après 42 min
+  d'arrêt propre qui n'en finissait pas (la réaction retirait les 6 000
+  fichiers de l'arbre effacé) : preuve avant (les deux bases gardées fermées
+  sans journal, seule code-bascule, à jeter, encore ouverte), codeparsers
+  refusé par sa permission et sans contournement, les quatre pas faits par
+  Lucie, l'unité a relevé l'hôte, code-principal saine, le fichier d'essai vu
+  par la montre (définition et appelant), édition à chaud ≤ 11,2 s. Ligne au
+  ticket de l'arrêt (`9895c7254`). L'arbre principal de luciepc est sur
+  mtg-experiments du 20 sept. : `code-lourd` (l'arbre de la lib commune, qui
+  suit master) indexé tel quel, réponse « @ a0a79016e + modifications non
+  commitées » ; son sous-module était extrait hors du pointeur (piège n° 1),
+  le cœur et hotfixs le remettent au prochain rebâti, l'arbre n'est jamais
+  effacé.
+- **La priorité de Lucie, 19 h : « que le cœur ait son worktree, n'importe
+  lequel, indexé, et à jour quand il édite »**. Forme et ordre : la
+  réconciliation de la montre (proto, en cours) = le delta d'une branche ; une
+  base par arbre née d'un instantané reflink de celle de code-lourd ; deux
+  routes de l'hôte, ouvrir et fermer un backend par manifeste (arbre
+  principal, après les lots de codeparsers, ferme trois tickets) ; une
+  commande `code-tree add|remove` et un manifeste stable `code-coeur`
+  repointé sur l'arbre courant (codeparsers, page puis code, arbre principal
+  en relecture) ; condition : l'identité relative des fichiers, lot B4 de G,
+  qui passe avant B1-B3. Résultat visé : un seul serveur MCP pour le cœur,
+  jamais recréé, qui suit son worktree.
+- **Autres** : `poste push --lourd` (ordre fixe des verrous, G) après un
+  verrou de push tenu 28 min derrière une mesure ; check_tickets avant tout
+  push de docs qui touche l'index (un push de docs du cœur l'avait cassé) ; le
+  pas 3 du lot 0 clos (recherche, 586 verts) ; les témoins de B2 ont attrapé
+  une vraie perte dans la première forme du cœur (journal lu avant l'attente
+  du verrou), corrigée ; le témoin du visited set donné à hotfixs ; retrait
+  par ensemble demandé par Lucie (« repérer un îlot et le retirer d'un coup »)
+  : au proto par les formes de l'IR (Select In, Detach par relation, Delete),
+  F en relecture.
