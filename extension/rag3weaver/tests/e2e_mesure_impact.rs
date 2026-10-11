@@ -375,3 +375,41 @@ fn ou_va_le_temps_d_un_aller_retour_sur_rag3db() {
     );
     assert!(r.appels > 0);
 }
+
+/// **L'ingestion selon les fils d'exécution** (page 06) : `src` entier indexé
+/// dans un catalogue rag3db neuf, le temps de l'ingestion puis celui d'impact
+/// (trois noms, profondeur 3, dix tours). Les fils se fixent par
+/// `RAG3WEAVER_EXEC_THREADS`, lu à la création de la connexion : un processus
+/// par valeur.
+#[test]
+#[ignore]
+fn l_ingestion_selon_les_fils_d_execution() {
+    let fils = std::env::var("RAG3WEAVER_EXEC_THREADS").unwrap_or_else(|_| "défaut".into());
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn DbConnection> = Box::new(conn);
+    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let config = CatalogConfig { name: Some("mesure-ingestion".into()), embedding_dim: 64, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let dir = format!("{}/src", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let sources = read_sources(&dir).unwrap();
+    let fichiers = sources.len();
+    let analyse = analyze(&dir, sources);
+    let t = Instant::now();
+    catalog.ingest_code(&analyse).unwrap();
+    let ingestion = t.elapsed();
+    let t = Instant::now();
+    for _ in 0..10 {
+        for nom in ["neighborhood_of", "run_plan", "ingest_code"] {
+            neighborhood_of(&catalog, &impact_config(), nom, "", 3, 200, 50).unwrap();
+        }
+    }
+    let impact = t.elapsed();
+    eprintln!(
+        "[fils] {fils} : ingestion de {fichiers} fichiers en {:.0} ms ; impact, 30 appels, {:.0} ms",
+        ingestion.as_secs_f64() * 1e3,
+        impact.as_secs_f64() * 1e3
+    );
+}

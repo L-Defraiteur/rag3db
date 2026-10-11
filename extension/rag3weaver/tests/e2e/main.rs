@@ -152,6 +152,8 @@ mod e2e_mcp_sigterm;
 mod e2e_mcp_stdio;
 #[path = "../e2e_mesure_impact.rs"]
 mod e2e_mesure_impact;
+#[path = "../e2e_mesure_index_entier.rs"]
+mod e2e_mesure_index_entier;
 #[path = "../e2e_mesure_ingestion_code.rs"]
 mod e2e_mesure_ingestion_code;
 #[path = "../e2e_mesure_joignabilite.rs"]

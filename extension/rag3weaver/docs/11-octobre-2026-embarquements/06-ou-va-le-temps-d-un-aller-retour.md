@@ -81,3 +81,55 @@ sont des outils de mesure, inertes s'ils ne sont pas posés. La suite proposée 
 mesurer l'ingestion (`e2e_code`, le chemin de masse) à 1, 4 et 32 fils, puis choisir
 entre la connexion de lecture et les fils par appel. Ensuite seulement, l'instruction
 préparée.
+
+## L'ingestion selon les fils
+
+Mesuré ensuite (`e2e_mesure_impact::l_ingestion_selon_les_fils_d_execution`, `src`
+entier, 176 fichiers, en mémoire, lib `ae3d781aa49f`, deux tours par valeur) :
+l'ingestion prend 83,3 à 84,4 s à 1 fil, 82,8 à 82,9 s à 4, 82,8 s à 32 — **un fil seul
+ne lui coûte pas plus de 2 %** ; impact, sur ce corpus plus gros, gagne 20 % à 1 fil
+(3,44 à 3,49 s contre 4,30 à 4,35 s). Réserve : un COPY de masse sur disque, un très gros
+corpus et la construction d'un index HNSW ne sont pas mesurés. Le cœur C++ prend la
+forme moteur (les fils proportionnés à la cardinalité estimée), ticket
+`2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur`.
+
+## `usages` sur l'index entier : un balayage, pas des allers-retours
+
+Lucie : « les usages c'est juste des relations, ça ne devrait pas prendre 6 secondes ».
+Mesuré sur une copie de l'index de l'agent de code (7 310 fichiers,
+`e2e_mesure_index_entier`, `poste mesure`) : un appel d'`usages` fait **six
+instructions** et prend 360 à 370 ms en médiane (de 400 ms à 1,5 s le matin, sur une
+lib plus ancienne). Chaque instruction est un saut simple sur 1 à 46 uuids, qui rend au
+plus 142 lignes, et prend pourtant 24 à 470 ms, même celle qui ne rend rien.
+
+Le plan du saut le plus coûteux (le rendez-vous `MENTIONS` de `update`, 117 lignes) le
+dit : le symbole par sa clé (1 ligne), l'extension (117 arêtes), puis **un balayage de
+toute la table `Scope` sous semi-masque, 71 657 lignes lues pour 117 retenues**, joint
+par hachage. Le masque est petit et éparpillé : presque chaque bloc en contient une
+ligne. Ticket moteur au cœur C++ :
+`2026-10-11-un-saut-par-semi-masque-lit-toute-la-table`.
+
+Les formes du même saut, mesurées sur la copie (médiane de 7) :
+
+| forme | temps | lignes |
+|---|---|---|
+| le saut tel quel (6 colonnes du voisin) | 118 à 122 ms | 117 |
+| le saut sans propriété du voisin (identifiant interne) | 12,6 à 12,9 ms | 117 |
+| le saut qui ne rend que `m._uuid` | 34,5 ms | 117 |
+| les champs par `_uuid` (clé primaire), seuls | 22,1 ms | 117 (balaie aussi : 81 407 lignes) |
+| **en deux temps** : `m._uuid` seul, puis les champs par clé | **55,9 ms** | **les mêmes que le saut tel quel** |
+
+Une instruction préparée ne servirait à rien ici : la préparation pèse 5 ms sur
+360 ms par appel.
+
+**Ce que ça dit.** La forme en deux temps divise le saut par deux, avec les mêmes
+lignes ; sur `usages` entier, on irait vers 170 ms, pas vers quelques dizaines. Le reste
+est le balayage, que seul le moteur supprime (une recherche par offset quand le masque
+est petit). Deux voies :
+- **attendre le correctif moteur**, qui rend le saut en un temps à toutes les lectures
+  sans rien changer au produit ;
+- **ou, d'ici là, le saut en deux temps pour les seuls sauts qui rendent beaucoup de
+  champs** (le rendez-vous d'`usages`), comme une chaîne `Hop` → `Select` de `run_plan`,
+  avec le témoin des mêmes lignes et du temps.
+
+La décision est à l'orchestration ; rien n'est changé dans le produit.

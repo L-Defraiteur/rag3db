@@ -550,6 +550,7 @@ impl Rag3dbConnection {
         }
         if let (Some(t0), Some(t1), Some(t2), Some(t3)) = (t0, t1, t2, t3) {
             phases::noter(t1 - t0, t2 - t1, t3 - t2, t3.elapsed(), result.get_compiling_time(), result.get_execution_time());
+            phases::noter_texte(cypher, t0.elapsed(), rows.len());
         }
 
         Ok(QueryResult { columns, rows })
@@ -1412,8 +1413,31 @@ pub mod phases {
         MOTEUR_EXECUTE_US.fetch_add((execute_ms * 1000.0) as u64, Ordering::Relaxed);
     }
 
+    /// Par texte d'instruction : (appels, temps total en ns, lignes rendues).
+    static PAR_TEXTE: std::sync::Mutex<Option<std::collections::HashMap<String, (u64, u64, u64)>>> = std::sync::Mutex::new(None);
+
+    pub(super) fn noter_texte(texte: &str, duree: Duration, lignes: usize) {
+        let mut garde = PAR_TEXTE.lock().unwrap_or_else(|e| e.into_inner());
+        let e = garde.get_or_insert_with(Default::default).entry(texte.to_string()).or_default();
+        e.0 += 1;
+        e.1 += duree.as_nanos() as u64;
+        e.2 += lignes as u64;
+    }
+
+    /// Les instructions qui ont pris le plus de temps depuis [`demarrer`] :
+    /// (texte, appels, temps total en ns, lignes rendues), les `n` premières.
+    pub fn par_texte(n: usize) -> Vec<(String, u64, u64, u64)> {
+        let garde = PAR_TEXTE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut v: Vec<(String, u64, u64, u64)> =
+            garde.iter().flat_map(|m| m.iter()).map(|(t, (a, ns, l))| (t.clone(), *a, *ns, *l)).collect();
+        v.sort_by(|a, b| b.2.cmp(&a.2));
+        v.truncate(n);
+        v
+    }
+
     /// Remettre les cumuls à zéro et commencer à relever.
     pub fn demarrer() {
+        *PAR_TEXTE.lock().unwrap_or_else(|e| e.into_inner()) = None;
         for c in [&APPELS, &PREPARE, &PARAMS, &EXECUTE, &LIGNES, &MOTEUR_COMPILE_US, &MOTEUR_EXECUTE_US] {
             c.store(0, Ordering::Relaxed);
         }
