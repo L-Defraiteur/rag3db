@@ -378,6 +378,66 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
     EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 10}, {3, 3}}));
 }
 
+// Une relation qu'un autre a supprimée ou mise à jour et validée après l'instantané : la
+// seconde écriture (DELETE ou SET) reçoit l'erreur de sérialisation d'A4′, et non le refus
+// immédiat « Write-write conflict » (ticket du 10 octobre, la seconde suppression d'une
+// relation après attente) ; si l'autre a annulé, l'écriture passe.
+TEST_F(InsertLockTest, ASecondWriteOfARelationCommittedAfterTheSnapshotIsASerializationError) {
+    Connection other(database.get());
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
+    mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);");
+    const auto* theLink = "MATCH (a:Item {id: 1})-[r:Link]->(b:Item {id: 2}) ";
+    // Supprimée et validée après l'instantané : DELETE puis SET refusés en le nommant.
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, std::string(theLink) + "DELETE r;");
+    const auto deleted = failureOf(other, std::string(theLink) + "DELETE r;");
+    EXPECT_NE(deleted.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << deleted;
+    mustRun(other, "ROLLBACK;");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 8}]->(b);");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, std::string(theLink) + "DELETE r;");
+    mustRun(*conn, "COMMIT;");
+    const auto updatedAfterDelete = failureOf(other, std::string(theLink) + "SET r.w = 1;");
+    // La relation w: 8 est née après l'instantané : l'autre ne la voit pas, rien à écrire —
+    // et rien à refuser. Le refus vaut pour une relation vue puis supprimée.
+    EXPECT_EQ(updatedAfterDelete, "") << updatedAfterDelete;
+    mustRun(other, "ROLLBACK;");
+    // Mise à jour et validée après l'instantané : SET puis DELETE refusés en le nommant.
+    mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 9}]->(b);");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, std::string(theLink) + "SET r.w = 10;");
+    const auto updated = failureOf(other, std::string(theLink) + "SET r.w = 11;");
+    EXPECT_NE(updated.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos) << updated;
+    mustRun(other, "ROLLBACK;");
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, std::string(theLink) + "SET r.w = 12;");
+    const auto deletedAfterUpdate = failureOf(other, std::string(theLink) + "DELETE r;");
+    EXPECT_NE(deletedAfterUpdate.find(LockManager::COULD_NOT_SERIALIZE), std::string::npos)
+        << deletedAfterUpdate;
+    mustRun(other, "ROLLBACK;");
+    // Une écriture annulée par l'autre ne refuse rien.
+    mustRun(other, "BEGIN TRANSACTION;");
+    mustRun(other, "MATCH (n:Item) RETURN count(n);");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, std::string(theLink) + "SET r.w = 13;");
+    mustRun(*conn, "ROLLBACK;");
+    mustRun(other, std::string(theLink) + "SET r.w = 14;");
+    mustRun(other, "COMMIT;");
+    EXPECT_EQ(locks().getNumResources(), 0u);
+    auto result = conn->query(std::string(theLink) + "RETURN r.w;");
+    ASSERT_TRUE(result->isSuccess());
+    ASSERT_TRUE(result->hasNext());
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 14);
+    EXPECT_FALSE(result->hasNext());
+}
+
 // ── Marche V2 : l'annonce des verrous en tête de transaction (CALL acquire_locks) ─────────
 // Le banc prouve que deux annonces dans l'ordre inverse ne s'interbloquent pas ; ici, dans un
 // seul fil : l'instantané repris après l'attente, et les refus nommés.
