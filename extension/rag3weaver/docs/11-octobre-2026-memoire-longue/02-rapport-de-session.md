@@ -143,3 +143,10 @@ basculée ; le banc `pg_trgm` (cause trouvée, à F).
 - **Un binaire installé dépend d'une lib qu'on rebâtit sous lui.** Un changement d'ABI casse
   les clients au prochain démarrage, pas l'hôte qui tourne : après tout rebâti de la lib,
   vérifier que le binaire installé démarre encore.
+- **« Au repos » = le journal soldé, pas le CPU nul** (minuit) : un rattrapage de vecteurs
+  qui attend le service d'embarquement ne prend aucun top ; mon redémarrage de minuit l'a
+  interrompu, l'index `Scope_Chunk` s'est reconstruit. Puis, à 0 h 26, le remède à ce qui
+  avait l'air de la boucle (25 min pour 2 096 morceaux, alors que tout le dépôt se vectorise
+  en 12) l'a coupé de nouveau. Écrit dans la page C, §5. L'hôte de Lucie tourne depuis 0 h 26
+  sur `3e95f0302023` (eabc53e86 : les défenses de l'arbre principal et le client qui revient
+  seul) et reconstruit.

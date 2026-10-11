@@ -367,6 +367,25 @@ de transport, pas de messages.
   Un client qui voit deux pids différents sait qu'il ne parle pas au démon annoncé, et le dit.
   Le témoin vient à la marche 4.
 
+
+### Redémarrer un hôte « au repos » : le journal soldé, pas le CPU nul (12 octobre, minuit)
+
+Leçon de la mémoire longue, en redémarrant l'hôte de Lucie. Le contrôle de repos lisait
+le CPU des fils hors de la montre : 0 top en 5 s, donc « au repos ». Mais l'hôte était au
+milieu d'un **rattrapage de vecteurs** (« 2 046 chunks à embarquer sur Scope_Chunk »), qui
+attendait le service d'embarquement sans consommer de CPU. Le `kill -TERM` a interrompu le
+chargement en masse ; l'hôte suivant a trouvé l'index vectoriel « laissé détruit » et l'a
+reconstruit (un cœur, `usages` jusqu'à 135 s) — puis le redémarrage de 0 h 26 (le remède
+à la boucle, voulu) l'a coupé une seconde fois.
+
+**« Au repos » = le journal soldé** : aucun rattrapage annoncé (« N chunks à embarquer »,
+« reconstruction ») sans sa fin (« retard soldé ») derrière, **et** le CPU hors de la
+montre au repos. Un hôte qui rattrape s'attend, sauf la boucle (un compte qui ne bouge
+plus, des fils d'index à un cœur, un `.wal` qui grossit sans fin), où le redémarrage sur un
+binaire qui a les défenses est le remède. Et ce qui manque pour juger sans deviner :
+`index_state` (et les compteurs `watches.code` de la montre) exposés **par l'hôte**, dans
+`/etat` ou `daemon_status` — aujourd'hui seul le binaire autonome les rend.
+
 ## 6. Sur le fil : transport, format, clés
 
 *Arbre principal, à relire par la mémoire longue.*
