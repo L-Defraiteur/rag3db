@@ -197,6 +197,15 @@ session 2. **Il est retiré**, le nom passe à `--daemon <adresse>` (« je suis 
 client de ce démon »), et le témoin `e2e_demon_backends_concurrents.rs` (branche
 `memoire-temoin-demon-2`, jamais fusionnée) est abandonné avec lui.
 
+**Le nom, tranché** (l'arbre principal l'a relevé) : deux drapeaux à une lettre
+près, `--demon` et `--daemon`, qui veulent dire deux choses opposées, c'est un
+piège. Donc : **`--daemon`**, en anglais comme tout identifiant du code depuis
+le 6 septembre, est le seul nom de C ; **`--demon` est refusé** dès la marche 3,
+avec un message qui nomme le remplaçant et le changement de sens (« `--demon`
+déportait la connexion seule ; sous C, le client passe tout au démon :
+`--daemon <adresse>`, ou rien et l'adresse se découvre ») — pas accepté en
+silence comme un synonyme. Son code part à la marche 7.
+
 Les trois énigmes du ticket `2026-10-11-mode-demon-ni-valide-ni-refute.md` :
 
 1. **N `initialize` concurrents reposent les DDL** — tombe : un seul catalogue par
@@ -355,6 +364,38 @@ empreinte du chemin), utilisable dans les chemins d'URL.
 Sortir de la boucle locale (`--exposer`) exige le jeton et des clés. C'est la marche 6, après le
 reste.
 
+**Relecture de la mémoire longue — un point qui change la forme de `open`.** Un backend est chargé
+**une fois** et partagé par tous ses clients ; `open` est idempotent. Donc **les clés et la cellule
+ne peuvent pas se lier au backend chargé** : le second client qui ouvre `memory` avec d'autres clés
+hériterait de l'exposition du premier, et deux sessions de deux projets travailleraient dans la
+cellule de celui qui a ouvert en dernier. Elles se lient **à la requête** : chaque `describe` et
+chaque `call` porte ses clés et sa cellule — ou un identifiant de session rendu par `open`, qui les
+porte. `open` charge ; il n'accorde rien.
+
+**Et la cellule par requête devient une condition de C, pas un confort.** Aujourd'hui, la bascule
+de cellule (`options.scope`, le fan-out `options.scopes`) se fait **autour** du graphe, en changeant
+la cellule du catalogue entier le temps de l'appel (`Catalog::rechercher`, `catalog.rs:8086` — la
+limite y est déjà nommée : « ce n'est pas plus sûr qu'avant face à une recherche concurrente »). Le
+verrou du catalogue est relâché entre la bascule et la recherche. Un processus MCP n'avait qu'un
+client, donc la course était hors d'atteinte ; **un démon à N clients sur un backend la rend
+atteignable** : la recherche de la session 2 tombe dans la cellule que la session 1 vient de poser.
+Deux réponses, à choisir à la marche 1 :
+
+- **sérialiser les appels par backend**, le temps de l'appel entier — sûr tout de suite, et le débit
+  d'un backend est celui d'un client, ce qui est le cas d'aujourd'hui ;
+- **des cellules par requête**, sans état global — le chantier que `catalog.rs` nomme déjà, plus
+  long, et le seul qui laisse deux clients chercher en même temps.
+
+La première d'abord, la seconde quand un usage le demande.
+
+**Le même défaut existe déjà, en petit, depuis le montage des réactions** (`0387fe401`) : le
+réacteur tourne en même temps que les appels d'outil du même processus, et `ReactTransitionNode`
+écrit dans la cellule **courante** du catalogue. Un `recall` à `options.scopes` qui bascule la
+cellule pendant qu'une réaction part la fait écrire dans la mauvaise cellule. Atteignable seulement
+si un outil bascule de cellule pendant qu'une réaction s'exécute, donc rare ; mais la sérialisation
+par backend de C doit **inclure le réacteur**, pas seulement les appels des clients. Ticket ouvert
+par la mémoire longue.
+
 ## 7. Les marches, testables une à une, et leur coût
 
 *Les deux sessions.*
@@ -416,3 +457,12 @@ puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
 7. **Le mode positionnel reste propriétaire de sa base** pour le constructeur de decks (§4).
 8. **Le client MCP** : un binaire à part, ou un rôle du même binaire (§3).
 9. **L'ordre** : la marche 0 d'abord, puis 1, 2, 3 ; le paquet npm après la marche 4 (§7).
+10. **Le nom du drapeau** : `--daemon` seul ; `--demon` refusé en le disant dès la marche 3 (§3).
+11. **Les clés et la cellule se lient à la requête**, pas au backend chargé — `open` charge, il
+    n'accorde rien (§6).
+12. **Plusieurs clients sur un backend** : sérialiser les appels par backend, réacteur compris,
+    d'abord ; les cellules par requête plus tard, quand un usage demande que deux clients cherchent
+    en même temps (§6). C'est le seul point où C rend atteignable un défaut qui ne l'était pas.
+13. **La mémoire partagée devient le cas par défaut** (§3) : deux sessions sur la mémoire de Lucie
+    ne coûtent plus qu'un témoin — mais sa réaction tourne à vide tant que les deux lots de l'ancre
+    (acceptés ce matin) ne sont pas faits ; ils sont indépendants de C et peuvent passer avant.
