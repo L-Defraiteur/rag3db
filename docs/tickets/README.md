@@ -62,7 +62,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (21)
+### Ouverts — produit (25)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -90,6 +90,10 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Sur PostgreSQL, le rebâti du plein texte en fond envoie du Cypher](2026-10-10-postgresql-rebati-du-plein-texte-en-cypher.md) | ouvert | blocage | avec un montage PostgreSQL et lucivy | oui |
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
+| [On ne peut pas arrêter un index : aucun outil, aucune route de l'hôte](2026-10-11-on-ne-peut-pas-arreter-un-index.md) | ouvert | blocage (seul recours : arrêter l'hôte entier) | oui, sur un hôte partagé | oui (gabarit `code`, `daemon_host.rs`) |
+| [L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend](2026-10-11-l-hote-ne-relit-pas-un-manifeste-modifie.md) | ouvert | réponse trompeuse | oui, à chaque correction d'un manifeste servi | oui (`daemon_host.rs`) |
+| [Pas de gabarit `code` en lecture seule](2026-10-11-pas-de-gabarit-code-en-lecture-seule.md) | ouvert | friction | oui | oui (gabarit `code`) |
+| [On ne peut pas dire ce qu'on indexe : ni racines multiples, ni chemins inclus](2026-10-11-on-ne-peut-pas-dire-ce-qu-on-indexe.md) | ouvert | friction et coût | oui | oui (`workspace`, source de fichiers) |
 
 ### Fermés (85), dans `closed/`
 
