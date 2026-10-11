@@ -60,6 +60,8 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 
 | B2d — les appels par chemin sur un type | codeparsers `f91fc58`, vérifié côté rag3weaver (e2e usages, types différés, verrous, banc des relations, liens, impact, impact par fichier, code), pointeur donné | `Catalog::Get(…)`, `Outil::fabrique()`, `IntegerBitpacking<T>::f()` : le chemin nomme le type du receveur. rag3db/src : appels reliés entre fichiers 40,3 → 41,4 %, en fichier seul 11,7 → 12,3 %. rag3weaver : 330 faux liens par le seul nom écartés (types externes, variantes d'enum), relevés un par un sur les 40 premiers. Sonde rag3db/src : CONSUMES « nom » 8 720 → 7 215, « type » 3 377 → 5 517. Les sorties réelles d'`impact` et de `callees` : page 03, section du 11 au matin. |
 
+| T1 — un bloc impl ne redéfinit pas son type (B9 Rust, cas de rag3db-97) | codeparsers `02a526a` (modificateur `impl`, banc inchangé) ; branche rag3db `impl-pas-definisseur` (`b310e847e`), proposée | Le bloc `impl` était un second scope `Class Marteau` : `Marteau` ambigu partout où un impl existe. Il porte désormais le modificateur `impl`, et le rendez-vous ne lui fait plus définir le nom. Témoin `e2e_usages` par le gabarit réel : une définition de `Marteau` ; `frappe` (`let m = Marteau`) et `tous` (`for o in &outils`) attribués à `jouer` de l'impl — T2 et T3 fermés avec. |
+
 | La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
