@@ -47,3 +47,15 @@ morceau (« embarquement sans réponse en N s : <fichier>:<rang> »), le morceau
 l'index qui continue. Le morceau en cours écrit dans l'état de l'index. Témoin : un faux service
 qui ne répond jamais à un morceau donné ; l'index finit, le morceau est nommé, et l'hôte s'arrête
 en quelques secondes.
+
+## Un fait qui affaiblit la piste (11 octobre, 20 h 30)
+
+Deux arrêts suivants de l'hôte de luciepc, chacun pendant un index figé, ont été **propres en
+moins de 30 s** (« 1 indexation(s) arrêtée(s) ; relancer index reprend là ») : celui de G à
+20 h 11 (index de `code-lourd` figé à 18 %), et celui de 20 h 27 (index de `code-principal` figé à
+99 %, 119 506 sur 120 317, le total bougeant sous la montre). Le fil d'indexation lisait donc son
+drapeau d'arrêt : il n'était pas bloqué dans un appel d'embarquement sans fin. Restent ouvertes :
+une boucle de rattrapage qui ne converge pas (la montre réinvalide des morceaux pendant que l'index
+les rattrape ; vu à 99 % sur `code-principal`, où des fichiers d'essai étaient déposés puis retirés),
+et, pour le figement à 18 % sans changement de l'arbre, une cause à trouver avec l'état de l'index
+(le morceau en cours, toujours absent). Le délai sur les appels d'embarquement reste à poser.
