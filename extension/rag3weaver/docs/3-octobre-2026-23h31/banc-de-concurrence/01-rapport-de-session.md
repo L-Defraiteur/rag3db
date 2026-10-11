@@ -39,10 +39,29 @@ Session « banc » (rag3db-10).
   produit (rendez-vous, codeparsers). Comptent-ils pour la stèle du moteur, ou pour celle du
   produit ?
 
-**Ensuite**, dans l'ordre :
-1. la cause du rouge grave de la variante union, cherchée jusqu'à 5 h ;
-2. l'angle mort du vérificateur : k = vivantes + marge, avec la clé projetée ;
-3. le témoin minimal de C7.
+**Fait ensuite, avant 4 h 10 :**
+- **La cause du rouge grave de l'union** (page 04, §10.1). Un élagage a coupé dans un sens le
+  dernier pont vers une région de la couche basse : 0 arête de la région atteinte vers 2 033
+  lignes perdues. Le filtre local ne peut pas le voir. Un ticket est ouvert pour master, où la
+  coupure est possible en principe, sans avoir été vue en 13 essais :
+  `2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md`.
+  La contrainte qui en découle pour I2 : une maintenance filtrée doit garder une recherche pour au
+  moins un nœud de chaque région détachée.
+- **L'angle mort du vérificateur.** La marge sur k ne suffisait pas : la projection du nœud écarte
+  les lignes supprimées. Le témoin `DeletedRowsAreNotReturnedByTheCall` compare le `count(*)` du CALL
+  aux clés projetées. Il est rouge connu : 100 lignes pour 98 vivantes, dans la transaction comme
+  après le commit (`5c8f4b79e`). Le vérificateur d'intégrité garde son contrôle actuel. Y ajouter le
+  compte du CALL ferait rougir le banc entier tant que le ticket n'est pas corrigé.
+- **Une borne laissée au cœur C++** : `AnnouncedWritersOfOneIndexedTableWaitThenBothCommit` passe à
+  `commit:start`, dans son lot rel2.
+
+**Le témoin minimal de C7, pas commencé.** Il demande trois pièces :
+1. la garde de la base et du journal quand `C7_RandomMix/Thread_Crash` rougit (le banc n'en a pas) ;
+2. un lecteur des enregistrements du journal, écrit sur `WALRecord::deserialize` (il n'y en a pas) ;
+3. des passes jusqu'au rouge.
+Ensuite viendront les enregistrements de la relation pendante et du détachement de son extrémité,
+contre l'ordre des événements du banc (le ticket C7). C'est plus d'une heure et demie ; c'est le
+premier lot de la prochaine session.
 
 ## Le 10 octobre, tard : l'élagage HNSW est sur master (`9a2818df9`)
 
