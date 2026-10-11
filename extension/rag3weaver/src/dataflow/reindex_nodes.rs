@@ -147,8 +147,10 @@ impl Node for ReindexFileNode {
         // ceux de maintenant.
         if !reindexed.is_empty() || !removed.is_empty() {
             if let Some(root) = source.cursor().strip_prefix("worktree:") {
+                // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
+                let v = crate::catalog::indexed_tree_of(root);
                 if let Ok(cat) = catalog.lock() {
-                    if let Err(e) = cat.note_indexed_tree(root) {
+                    if let Err(e) = cat.note_indexed_tree(&cell, &v) {
                         ctx.warn(&format!("ReindexFileNode : l'arbre indexé n'a pas pu être noté : {e}"));
                     }
                 }

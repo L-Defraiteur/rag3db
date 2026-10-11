@@ -661,7 +661,13 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     let catalog = setup();
     catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("a.rs".into(), "pub fn f() {}\npub fn g() { f(); }\n".into())])).unwrap();
     let racine_s = racine.to_string_lossy().to_string();
-    catalog.lock().unwrap().note_indexed_tree(&racine_s).unwrap();
+    let noter = |c: &Arc<Mutex<Catalog>>| {
+        let v = rag3weaver::catalog::indexed_tree_of(&racine_s);
+        let cat = c.lock().unwrap();
+        let cellule = cat.scope().clone();
+        cat.note_indexed_tree(&cellule, &v).unwrap();
+    };
+    noter(&catalog);
     let mut registry = NodeRegistry::new();
     register_builtins(&mut registry);
     let mut services = ServiceRegistry::new();
@@ -671,9 +677,12 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     let out = usages.execute(&registry, services.clone(), &serde_json::json!({"name": "f"})).unwrap();
     eprintln!("{out}");
     assert!(out.starts_with(&format!("> index : {racine_s} @ {commit}, indexé à l'instant")), "{out}");
+    // Par cellule : une autre cellule n'a pas d'arbre noté.
+    let autre = rag3weaver::scope::Scope::new("autre", "projet");
+    assert!(catalog.lock().unwrap().indexed_tree_line(&autre, 0).is_none(), "l'arbre noté est celui de la cellule par défaut");
     // Une modification non commitée, notée par un index suivant.
     std::fs::write(racine.join("a.rs"), "pub fn f() {}\npub fn h() {}\n").unwrap();
-    catalog.lock().unwrap().note_indexed_tree(&racine_s).unwrap();
+    noter(&catalog);
     let out = usages.execute(&registry, services, &serde_json::json!({"name": "f"})).unwrap();
     assert!(out.contains(&format!("@ {commit} + modifications non commitées")), "{out}");
     let _ = std::fs::remove_dir_all(&racine);
