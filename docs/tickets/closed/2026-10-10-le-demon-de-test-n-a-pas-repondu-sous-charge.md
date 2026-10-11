@@ -1,6 +1,6 @@
 # Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste
 
-- **État** : ouvert
+- **État** : fermé le 11 octobre 2026 (optimiseur, branche `demon-port-zero`)
 - **Gravité** : test instable (un rouge sans défaut du produit)
 - **Atteignable en service** : non (le délai est celui du test, pas du démon)
 - **Touche rag3weaver** : oui (`src/daemon/embeddings.rs`, tests)
@@ -47,3 +47,40 @@ lot 1 du chaînage, après un rebase, sous `poste lourd`) : `daemon::db::tests::
 (`src/daemon/db.rs:416`) et `daemon::embeddings::tests::le_factice_traverse_le_fil`
 (`src/daemon/embeddings.rs:843`), même panique ; rejoués seuls (`daemon::`), 27 sur 27 verts,
 puis verts aux trois lib complètes suivantes.
+
+## Fermé (11 octobre 2026)
+
+**La cause était la course au port, pas le délai.** `port_libre()` liait un
+écouteur au port 0, lisait le port, le **relâchait**, puis le démon se liait à
+ce numéro : entre les deux, un autre test (ou un autre processus) pouvait le
+prendre. Les trois visages de la même course, vus au témoin :
+- « le démon n'a pas répondu » (le démon n'a jamais pu se lier) ;
+- le port « mort » d'un test tenu par le démon d'un autre test
+  (« 127.0.0.1:43985 sert regle » dans `le_service_se_choisit_par_le_modele…`) ;
+- un test qui parle au démon d'un autre test (« un démon ne doit pas blanchir
+  ce qu'il transporte » dans `le_factice_traverse_le_fil`).
+
+**Le correctif** : `daemon::servir_lie(service, TcpListener, fils, expose)`
+sert un écouteur **déjà lié** (`tiny_http::Server::from_listener`), et
+`EmbedDaemon::servir_lie` / `DbDaemon::servir_lie` le relaient. Les tests se
+lient au port 0, gardent l'écouteur et le donnent au démon : le port n'est
+jamais relâché. Les tests qui veulent une adresse où personne n'écoute
+prennent `127.0.0.1:1` (rien ne s'y lie sans privilège) au lieu d'un port
+pris puis relâché. `servir(adresse)` est inchangé pour les binaires de
+service. L'attente du premier « répond » passe de 2 s à 10 s ; elle ne
+couvre plus que le démarrage des fils, le port étant tenu depuis le `bind`.
+
+**Le témoin** (`~/.cache/rag3weaver-build/demon/temoin.sh`) : dix tours de
+huit processus du binaire de tests de la lib (`daemon::`, 27 tests,
+16 fils chacun) en parallèle, sous `poste lourd`.
+
+| | tours rouges sur 10 | processus rouges sur 80 |
+|---|---|---|
+| avant (origin/master 56a680169) | 3 | 4 |
+| après | **0** | **0** |
+
+**Reste hors de ce lot** : `tests/e2e_rag3daemon.rs` et
+`tests/e2e_demon_embeddings.rs` lancent les binaires de service sur un
+`port_libre()` ; les corriger demande que le binaire dise le port qu'il a pris
+(lié au port 0), donc toucher aux binaires de service — à faire avec leur
+propriétaire si ces e2e rougissent sous charge.

@@ -292,6 +292,13 @@ impl EmbedDaemon {
         let (fils, expose) = (self.fils, self.expose);
         super::servir(Arc::new(self), adresse, fils, expose)
     }
+
+    /// Sert un écouteur déjà lié (voir [`super::servir_lie`]) : les tests se
+    /// lient au port 0 et ne relâchent jamais le port.
+    pub fn servir_lie(self, ecoute: std::net::TcpListener) -> Result<(), DaemonError> {
+        let (fils, expose) = (self.fils, self.expose);
+        super::servir_lie(Arc::new(self), ecoute, fils, expose)
+    }
 }
 
 #[derive(Deserialize)]
@@ -820,21 +827,28 @@ mod tests {
         }
     }
 
-    fn port_libre() -> String {
+    /// **Une adresse où personne n'écoute**, pour les tests du refus. Le port 1
+    /// (tcpmux) n'est servi par rien sur un poste ordinaire et ne s'ouvre pas
+    /// sans privilège : pas de port pris puis relâché, donc pas de course.
+    const ADRESSE_MORTE: &str = "127.0.0.1:1";
+
+    /// Un écouteur lié au port 0, et le port qu'il tient : on le donne au
+    /// démon tel quel, il n'est jamais relâché.
+    fn ecoute_libre() -> (TcpListener, String) {
         let e = TcpListener::bind("127.0.0.1:0").unwrap();
         let a = e.local_addr().unwrap().to_string();
-        drop(e);
-        a
+        (e, a)
     }
 
     /// Lance un démon dans un fil et rend son adresse, une fois qu'il répond.
+    /// Le port est tenu depuis le `bind` : l'attente ne couvre que le démarrage
+    /// des fils, jusqu'à 10 s sous la charge d'une batterie voisine.
     fn demon(d: EmbedDaemon) -> String {
-        let adresse = port_libre();
-        let a = adresse.clone();
+        let (ecoute, adresse) = ecoute_libre();
         std::thread::spawn(move || {
-            let _ = d.servir(&a);
+            let _ = d.servir_lie(ecoute);
         });
-        for _ in 0..200 {
+        for _ in 0..1000 {
             if DaemonEmbedder::joindre(&adresse).is_ok() {
                 return adresse;
             }
@@ -916,7 +930,7 @@ mod tests {
 
     #[test]
     fn personne_au_bout_du_fil_se_dit() {
-        match DaemonEmbedder::joindre(&port_libre()) {
+        match DaemonEmbedder::joindre(ADRESSE_MORTE) {
             Err(DaemonError::Injoignable { .. }) => {}
             autre => panic!("attendu Injoignable, obtenu {autre:?}"),
         }
@@ -926,17 +940,16 @@ mod tests {
     /// route, avec une autre identité : le client doit le refuser franchement.
     #[test]
     fn s_attacher_au_mauvais_demon_se_dit() {
-        let adresse = port_libre();
-        let a = adresse.clone();
+        let (ecoute, adresse) = ecoute_libre();
         std::thread::spawn(move || {
             let _ = super::super::db::DbDaemon::new(Arc::new(
                 crate::connection::CallbackConnection::new(|_, _| {
                     Ok(crate::connection::QueryResult::default())
                 }),
             ))
-            .servir(&a);
+            .servir_lie(ecoute);
         });
-        for _ in 0..200 {
+        for _ in 0..1000 {
             match DaemonEmbedder::joindre(&adresse) {
                 Err(DaemonError::Etranger { trouve, .. }) => {
                     assert_eq!(trouve, super::super::db::SERVICE);
@@ -957,7 +970,7 @@ mod tests {
     /// est justement le cas normal sur un poste de développement.
     #[test]
     fn la_description_porte_la_sonde() {
-        let adresse = port_libre();
+        let adresse = ADRESSE_MORTE.to_string();
         let s = DaemonEmbedder::serveur(&adresse, "/bin/true");
         assert_eq!(s.adresse(), adresse);
         assert_eq!(s.etat(), crate::serveur::Etat::Absent);
@@ -1075,7 +1088,7 @@ mod tests {
         }
         let a = demon(EmbedDaemon::new(Arc::new(Nomme("modele-a", 4))));
         let b = demon(EmbedDaemon::new(Arc::new(Nomme("modele-b", 8))));
-        let mort = port_libre();
+        let mort = ADRESSE_MORTE;
         let adresses = format!("{mort}, {a},{b}");
 
         let c = DaemonEmbedder::from_addresses(&adresses, "modele-b").expect("le second sert modele-b");

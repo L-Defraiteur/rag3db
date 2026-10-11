@@ -180,6 +180,42 @@ pub fn servir(
         adresse: adresse.to_string(),
         cause: e.to_string(),
     })?;
+    servir_serveur(service, ecoute, adresse, fils, expose)
+}
+
+/// **Sert un écouteur déjà lié** : qui l'appelle s'est lié lui-même
+/// (`127.0.0.1:0` dans les tests), a lu le port réellement pris, et le tient
+/// sans interruption jusqu'ici. Avec [`servir`] et une adresse choisie par
+/// avance, le port était relâché puis repris, et un autre pouvait le prendre
+/// entre les deux — la course qui faisait dire « le démon n'a pas répondu »
+/// aux tests sous charge (ticket du 10 octobre 2026).
+pub fn servir_lie(
+    service: Arc<dyn Service>,
+    ecoute: std::net::TcpListener,
+    fils: usize,
+    expose: bool,
+) -> Result<(), DaemonError> {
+    let adresse = ecoute
+        .local_addr()
+        .map(|a| a.to_string())
+        .map_err(|e| DaemonError::Ecoute { adresse: "?".into(), cause: e.to_string() })?;
+    if !expose && !est_local(&adresse) {
+        return Err(DaemonError::Exposition { adresse });
+    }
+    let ecoute = tiny_http::Server::from_listener(ecoute, None).map_err(|e| DaemonError::Ecoute {
+        adresse: adresse.clone(),
+        cause: e.to_string(),
+    })?;
+    servir_serveur(service, ecoute, &adresse, fils, expose)
+}
+
+fn servir_serveur(
+    service: Arc<dyn Service>,
+    ecoute: tiny_http::Server,
+    adresse: &str,
+    fils: usize,
+    expose: bool,
+) -> Result<(), DaemonError> {
     let ecoute = Arc::new(ecoute);
 
     let mut identite = service.identite();

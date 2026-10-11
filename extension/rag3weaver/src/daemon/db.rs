@@ -197,6 +197,13 @@ impl DbDaemon {
         super::servir(Arc::new(self), adresse, fils, expose)
     }
 
+    /// Sert un écouteur déjà lié (voir [`super::servir_lie`]) : les tests se
+    /// lient au port 0 et ne relâchent jamais le port.
+    pub fn servir_lie(self, ecoute: std::net::TcpListener) -> Result<(), DaemonError> {
+        let (fils, expose) = (self.fils, self.expose);
+        super::servir_lie(Arc::new(self), ecoute, fils, expose)
+    }
+
     fn cypher(&self, r: RequeteFil) -> Result<ResultatFil, String> {
         let params = r
             .params
@@ -394,20 +401,27 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::Mutex;
 
-    fn port_libre() -> String {
+    /// **Une adresse où personne n'écoute**, pour les tests du refus. Le port 1
+    /// (tcpmux) n'est servi par rien sur un poste ordinaire et ne s'ouvre pas
+    /// sans privilège : pas de port pris puis relâché, donc pas de course.
+    const ADRESSE_MORTE: &str = "127.0.0.1:1";
+
+    /// Un écouteur lié au port 0, et le port qu'il tient : on le donne au
+    /// démon tel quel, il n'est jamais relâché.
+    fn ecoute_libre() -> (TcpListener, String) {
         let e = TcpListener::bind("127.0.0.1:0").unwrap();
         let a = e.local_addr().unwrap().to_string();
-        drop(e);
-        a
+        (e, a)
     }
 
+    /// Le port est tenu depuis le `bind` : l'attente ne couvre que le démarrage
+    /// des fils, jusqu'à 10 s sous la charge d'une batterie voisine.
     fn demon(d: DbDaemon) -> String {
-        let adresse = port_libre();
-        let a = adresse.clone();
+        let (ecoute, adresse) = ecoute_libre();
         std::thread::spawn(move || {
-            let _ = d.servir(&a);
+            let _ = d.servir_lie(ecoute);
         });
-        for _ in 0..200 {
+        for _ in 0..1000 {
             if DaemonConnection::joindre(&adresse).is_ok() {
                 return adresse;
             }
@@ -500,7 +514,7 @@ mod tests {
 
     #[test]
     fn personne_au_bout_du_fil_se_dit() {
-        match DaemonConnection::joindre(&port_libre()) {
+        match DaemonConnection::joindre(ADRESSE_MORTE) {
             Err(DaemonError::Injoignable { .. }) => {}
             autre => panic!("attendu Injoignable, obtenu {autre:?}"),
         }
