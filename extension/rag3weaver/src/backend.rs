@@ -683,6 +683,42 @@ pub struct PreparedBackend {
     /// nœuds de sélection/recherche) : ce que `describe()` reprend.
     tool_entities: BTreeMap<String, BTreeSet<String>>,
 }
+/// Lire un fichier du manifeste en nommant le chemin dans l'erreur : un
+/// « The system cannot find the path specified. (os error 3) » sans chemin
+/// ne dit pas lequel des graphes ou des schémas manque (vu au premier
+/// `--describe` sous Windows, 10 octobre 2026).
+/// Sous Windows, `canonicalize` rend un chemin verbatim (`\\?\D:\…`), que le
+/// noyau prend à la lettre : les `..` des graphes relatifs au gabarit
+/// (`../../tools/edit.mmd`) n'y sont plus résolus, et le fichier « manque »
+/// (treizième essai du paquet npm, 10 octobre 2026). On rend au dossier du
+/// manifeste sa forme ordinaire (`D:\…`) ; ailleurs, rien ne change.
+fn sans_prefixe_verbatim(chemin: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        let mut composants = chemin.components();
+        if let Some(Component::Prefix(prefixe)) = composants.next() {
+            if let Prefix::VerbatimDisk(lettre) = prefixe.kind() {
+                let mut ordinaire = PathBuf::from(format!("{}:\\", lettre as char));
+                for c in composants {
+                    match c {
+                        Component::RootDir => {}
+                        autre => ordinaire.push(autre.as_os_str()),
+                    }
+                }
+                return ordinaire;
+            }
+        }
+    }
+    chemin
+}
+fn lire_octets(chemin: &Path) -> Result<Vec<u8>, String> {
+    std::fs::read(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+}
+fn lire_texte(chemin: &Path) -> Result<String, String> {
+    std::fs::read_to_string(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+}
+
 impl PreparedBackend {
     /// Compile transport-independent search verbs without opening or querying a DB.
     pub fn compile_search_program(
@@ -711,7 +747,7 @@ impl PreparedBackend {
     /// Pure preparation: read and validate descriptors before opening a database.
     pub fn load(path: &Path) -> Result<Self, String> {
         let manifest: BackendManifest =
-            serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
+            serde_json::from_slice(&lire_octets(path)?)
                 .map_err(|e| e.to_string())?;
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
@@ -722,12 +758,13 @@ impl PreparedBackend {
         {
             return Err("backend requires a persistent database path".into());
         }
-        let directory = path
-            .canonicalize()
-            .map_err(|e| e.to_string())?
-            .parent()
-            .unwrap()
-            .to_path_buf();
+        let directory = sans_prefixe_verbatim(
+            path.canonicalize()
+                .map_err(|e| format!("{} : {e}", path.display()))?
+                .parent()
+                .unwrap()
+                .to_path_buf(),
+        );
         if let Some(w) = &manifest.workspace {
             if let Some(nom) = &w.index {
                 if !crate::backend_code::KNOWN_INDEX_SCHEMAS.contains(&nom.as_str()) {
@@ -863,7 +900,7 @@ impl PreparedBackend {
         for (name, entity) in &manifest.entities {
             crate::schema::validate_identifier(name, "entity").map_err(|e| e.to_string())?;
             let schema: Value = serde_json::from_slice(
-                &std::fs::read(directory.join(&entity.schema)).map_err(|e| e.to_string())?,
+                &lire_octets(&directory.join(&entity.schema))?,
             )
             .map_err(|e| e.to_string())?;
             validators.insert(
@@ -987,7 +1024,7 @@ impl PreparedBackend {
             .iter()
             .map(|(name, path)| {
                 let text =
-                    std::fs::read_to_string(directory.join(path)).map_err(|e| e.to_string())?;
+                    lire_texte(&directory.join(path))?;
                 if text.len() > 65536 {
                     return Err(format!("script {name} too large"));
                 }
@@ -998,8 +1035,7 @@ impl PreparedBackend {
             hooks
                 .iter()
                 .map(|hook| {
-                    let source = std::fs::read_to_string(directory.join(&hook.graph))
-                        .map_err(|e| e.to_string())?;
+                    let source = lire_texte(&directory.join(&hook.graph))?;
                     let tool = GraphTool::from_mermaid(&source)
                         .and_then(|t| t.bind(&nodes))
                         .map_err(|e| e.to_string())?;
@@ -1011,7 +1047,7 @@ impl PreparedBackend {
                         .iter()
                         .map(|(key, path)| {
                             let bytes =
-                                std::fs::read(directory.join(path)).map_err(|e| e.to_string())?;
+                                lire_octets(&directory.join(path))?;
                             Ok((
                                 key.clone(),
                                 serde_json::from_slice::<Value>(&bytes)
@@ -1036,8 +1072,7 @@ impl PreparedBackend {
             if manifest.search_graphs && SEARCH_TOOLS.contains(&name.as_str()) {
                 return Err(format!("reserved search tool {name}"));
             }
-            let source = std::fs::read_to_string(directory.join(&attachment.graph))
-                .map_err(|e| e.to_string())?;
+            let source = lire_texte(&directory.join(&attachment.graph))?;
             let tool = GraphTool::from_mermaid(&source)
                 .and_then(|t| t.bind(&nodes))
                 .map_err(|e| e.to_string())?;
@@ -1053,7 +1088,7 @@ impl PreparedBackend {
                 // Le graphe du crochet se charge et se valide ICI : un
                 // crochet mal déclaré est une erreur de manifeste, pas un
                 // silence — le silence couvre l'exécution, jamais le montage.
-                let source = std::fs::read_to_string(directory.join(&hook.graph))
+                let source = lire_texte(&directory.join(&hook.graph))
                     .map_err(|e| format!("{name}: crochet after : {e}"))?;
                 let hook_tool = GraphTool::from_mermaid(&source)
                     .and_then(|t| t.bind(&nodes))
@@ -1162,7 +1197,7 @@ impl PreparedBackend {
             }
             if let Some(path) = &attachment.harness.input_schema {
                 input = serde_json::from_slice(
-                    &std::fs::read(directory.join(path)).map_err(|e| e.to_string())?,
+                    &lire_octets(&directory.join(path))?,
                 )
                 .map_err(|e| e.to_string())?;
                 let declared = tool.tool_def().parameters;
@@ -1613,10 +1648,12 @@ impl PreparedBackend {
             }
             (None, _) => {}
         }
+        // Le chemin cité pour Cypher (barres obliques inverses et apostrophes
+        // échappées) : un `D:\a\…` nu cassait la requête sous Windows.
         let ext = self.vector_extension_path()?;
         cat.execute_raw(&format!(
-            "LOAD EXTENSION '{}'",
-            ext.to_string_lossy().replace('\'', "''")
+            "LOAD EXTENSION {}",
+            crate::connection::cypher_path_literal(&ext)
         ))
         .map_err(|e| e.to_string())?;
         cat.initialize().map_err(|e| e.to_string())?;

@@ -58,6 +58,53 @@ use ld_lucivy::directory::{
 use lucivy_core::handle::LucivyHandle;
 use lucivy_core::sharded_handle::ShardStorage;
 
+/// **`fsync` d'un fichier écrit** (`sync_data`). Sous Windows, `FlushFileBuffers`
+/// exige un handle ouvert en écriture : `File::open` (lecture seule) puis
+/// `sync_data` rend « Access is denied » (os error 5) — c'était la chute de
+/// la « préparation du schéma » au premier bâti Windows avec le plein texte
+/// en fichiers (11 octobre 2026). On ouvre donc en écriture là-bas ; un
+/// fichier qu'un autre handle tient (partage refusé, os error 32) est laissé
+/// à NTFS, qui journalise, en le disant une fois.
+fn fsync_file(path: &Path) -> io::Result<()> {
+    #[cfg(not(windows))]
+    {
+        File::open(path)?.sync_data()
+    }
+    #[cfg(windows)]
+    {
+        match OpenOptions::new().read(true).write(true).open(path) {
+            Ok(f) => f.sync_data(),
+            Err(e) if e.raw_os_error() == Some(32) || e.kind() == io::ErrorKind::PermissionDenied => {
+                static DIT: std::sync::Once = std::sync::Once::new();
+                DIT.call_once(|| {
+                    eprintln!("[rag3weaver] plein texte : {} tenu par un autre handle, fsync impossible sous Windows ({e}) — durabilité laissée à NTFS", path.display());
+                });
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// **`fsync` d'un dossier**, pour rendre durable un fichier qu'on vient d'y
+/// renommer. Sous Windows, `File::open` sur un dossier est refusé (« Access
+/// is denied », os error 5 : il faudrait FILE_FLAG_BACKUP_SEMANTICS) et le
+/// système de fichiers journalise lui-même ses métadonnées : rien à faire.
+/// C'était la cause du « création de l'index FTS … échouée » du dix-neuvième
+/// essai Windows du paquet npm (10 octobre 2026) : le fichier était écrit,
+/// seul le fsync du dossier tombait.
+fn fsync_dir(path: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let _ = path;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        File::open(path)?.sync_all()
+    }
+}
+
 /// Les chemins écrits depuis la dernière génération synchronisée.
 type Pending = Arc<Mutex<HashSet<PathBuf>>>;
 
@@ -88,14 +135,14 @@ impl FtsDirectory {
     pub fn sync_generation(&self) -> io::Result<usize> {
         let paths: Vec<PathBuf> = self.pending.lock().unwrap().drain().collect();
         for path in &paths {
-            match File::open(path) {
-                Ok(f) => f.sync_data()?,
+            match fsync_file(path) {
+                Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e),
             }
         }
         if !paths.is_empty() {
-            File::open(&self.root)?.sync_all()?;
+            fsync_dir(&self.root)?;
         }
         Ok(paths.len())
     }
@@ -234,7 +281,7 @@ impl FtsShardStorage {
         f.write_all(g.to_string().as_bytes())?;
         f.sync_data()?;
         std::fs::rename(&tmp, &path)?;
-        File::open(&self.base_path)?.sync_all()?;
+        fsync_dir(&self.base_path)?;
         Ok(g)
     }
 
@@ -254,7 +301,7 @@ impl FtsShardStorage {
             n += dir.sync_generation()?;
         }
         if n > 0 {
-            File::open(&self.base_path)?.sync_all()?;
+            fsync_dir(&self.base_path)?;
         }
         Ok(n)
     }
@@ -280,7 +327,7 @@ impl ShardStorage for SharedFtsStorage {
         let mut f = File::create(&tmp).map_err(|e| format!("écrire {name} : {e}"))?;
         f.write_all(data).and_then(|_| f.sync_data()).map_err(|e| format!("écrire {name} : {e}"))?;
         std::fs::rename(&tmp, &path).map_err(|e| format!("écrire {name} : {e}"))?;
-        File::open(&self.0.base_path).and_then(|d| d.sync_all()).map_err(|e| format!("écrire {name} : {e}"))
+        fsync_dir(&self.0.base_path).map_err(|e| format!("écrire {name} : {e}"))
     }
 
     fn read_root_file(&self, name: &str) -> Result<Vec<u8>, String> {
