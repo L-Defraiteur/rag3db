@@ -138,6 +138,8 @@ mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
 mod e2e_liens;
 #[path = "../e2e_mcp_cycle_de_vie.rs"]
 mod e2e_mcp_cycle_de_vie;
+#[path = "../e2e_mcp_hote_designe.rs"]
+mod e2e_mcp_hote_designe;
 #[path = "../e2e_mcp_sigterm.rs"]
 mod e2e_mcp_sigterm;
 #[path = "../e2e_mcp_stdio.rs"]
