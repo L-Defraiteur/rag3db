@@ -367,7 +367,8 @@ fenêtre étroite par la session cœur C++.
   - le rebâti unique de la lib commune de luciepc (pour le cœur et pour moi), après le « fini »
     de codeparsers et le hash de `systemconfig-abi` ; pas d'ABI changée par le visited set ;
   - **pour Lucie, la lib commune et l'hôte figé** (pid 132823, code-lourd, quatrième gel). La
-    lib de luciepc reste sur `b4655da39`, sans le visited set ni B2. L'orchestration autorisait un
+    lib de luciepc est celle que le cœur a rebâtie à 20 h 39 sur `a72acfeef` (identifiant
+    `rag3db-build-6df47a543`) : sans le visited set (`3e0f98f08`, poussé après). L'orchestration autorisait un
     rebâti sous l'hôte figé ; ma session l'a refusé (classifieur), je n'ai pas insisté. La forme
     proposée garde la pile intacte : déplacer par `mv` les deux fichiers mappés (`librag3db.so`,
     inode 35665439 ; `libvector.rag3db_extension`, inode 35665435) en `.fige-132823`, même inode,
