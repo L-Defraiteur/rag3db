@@ -138,8 +138,17 @@ entre les backends est le budget de tampon partagé.
 
 **Une seule forme sur le fil : les messages du protocole `op`, portés par le
 démon.** On n'invente pas de protocole ; on étend celui qui a déjà deux clients,
-et le transport est celui du démon (§6, HTTP). Trois ajouts :
+et le transport est celui du démon (§6, HTTP). Quatre ajouts :
 
+0. **`session`, la première chose qu'un client fait** (décision 12 de Lucie, sur le modèle de
+   connexion de PostgreSQL). Le client s'enregistre auprès du démon : « je suis tel client, je
+   prends telle cellule, avec telles clés ». Il reçoit un identifiant de session. Ensuite, chaque
+   requête porte sa session, et la cellule est celle de la session ; une requête peut en demander
+   une autre, dans les droits de la session. Le catalogue n'a plus de « cellule courante » : deux
+   sessions sur deux cellules ne partagent plus rien de mutable. Le démon sait qui est connecté et
+   sur quoi, et l'outil « état du démon » le dit. Une session meurt quand son client le dit, ou
+   faute de nouvelles au bout d'un délai. Elle ne meurt pas avec un appel, et un travail lancé par
+   elle lui survit ;
 1. **le backend est nommé** dans chaque échange, par le chemin canonique de son
    manifeste (§2) ;
 2. **`open`** — charger le manifeste s'il ne l'est pas : base ouverte,
@@ -335,6 +344,8 @@ empreinte du chemin), utilisable dans les chemins d'URL.
 
 | route | message | notes |
 |---|---|---|
+| `POST /session` | `{client, cell, keys}` | rend `{session}` ; toute autre requête porte `session` (en-tête), sauf `/sante` |
+| `DELETE /session` | | le client part ; ses travaux lui survivent |
 | `POST /open` | `{manifest}` | idempotent ; charge, n'accorde rien ; rend `describe` + réactions montées + `id` |
 | `POST /describe` | `{manifest}` | |
 | `POST /call` | `{manifest, name, arguments}` | `{ok, result}`, `{ok:false, error}`, erreur transitoire nommée |
@@ -362,8 +373,8 @@ empreinte du chemin), utilisable dans les chemins d'URL.
   rien gagner. **Les clés et la cellule se lient à la requête, pas au backend chargé** (relecture
   de la mémoire longue). Un backend est chargé une fois et partagé, et `open` est idempotent : si
   les clés se liaient au chargement, le second client hériterait de l'exposition et de la cellule
-  du premier. Elles voyagent donc avec chaque `describe` et chaque `call`, ou avec un identifiant
-  de session rendu par `open`.
+  du premier. **Elles appartiennent à la session** (§3, ajout 0) : le client les déclare en
+  s'enregistrant, et chaque requête porte sa session.
 
 Sortir de la boucle locale (`--exposer`) exige le jeton et des clés. C'est la marche 6, après le
 reste.
@@ -412,6 +423,7 @@ de grandeur relatif, pas un délai.
 |---|---|---|---|
 | **0. L'arrêt propre entre deux paquets** (forme A, dans le serveur d'aujourd'hui) | un drapeau lu à la frontière du paquet ; `abort_snapshot` ; le travail « arrêté au paquet N » ; `index` relancé reprend | tube fermé au paquet 2, puis reprise aux comptes d'une passe sans arrêt (sur le modèle d'`e2e_tx_par_paquet_arret`) | 1 à 2 |
 | **1. `serve` hôte de plusieurs backends** | registre par chemin canonique, `open`/`describe`/`call`/`events`, réouverture d'un seul backend, budget de tampon partagé ; **les appels sérialisés par backend, réacteur compris** (la bascule de cellule de `Catalog::rechercher` ne tient qu'à un appel à la fois ; les cellules par requête viendront plus tard) | deux backends dans un processus ; la réouverture de l'un sans l'autre ; parité avec le mode positionnel ; deux clients sur un backend, chacun dans sa cellule | 2 à 3 |
+| **1 bis. Les sessions** (décision 12) | `POST /session` ; plus de cellule courante dans le catalogue : la cellule passe par la requête jusqu'au graphe (`Catalog::rechercher` et son fan-out, `ReactTransitionNode`, les écritures) ; l'état du démon dit les sessions ; le filet de la marche 1 saute pour les lectures et reste pour les écritures | deux sessions sur deux cellules lisent en même temps, sans se voir ; une réaction écrit dans la cellule de l'écriture qui l'a déclenchée, pas dans celle d'une autre session (le ticket `2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md` se ferme) | 2 à 3 |
 | **2. Les travaux du démon** | registre ; `index` et la commande en fond ; lancer, suivre, arrêter ; reprise au redémarrage par `takeover` du propriétaire | le client part, l'index finit ; démon arrêté au paquet N puis relancé, la reprise rend les mêmes comptes ; démon tué, il redémarre sans refus | 2 |
 | **3. Le client MCP** (mémoire longue) | `impl Hote` par le fil | ceux du côté client, ci-dessus | 1 à 2 |
 | **4. Le cycle de vie** | `daemon.json` (adresse, pid, jeton, bâti) ; `assurer` qui vérifie le pid ; démon périmé avec ou sans travaux | l'énigme 3 retournée ; remplacement refusé pendant un travail | 1 |
@@ -419,7 +431,7 @@ de grandeur relatif, pas un délai.
 | **6. Jeton et clés à la frontière** | le jeton sur chaque requête ; `exposure` filtrée dans le démon | une requête sans jeton est refusée ; une clé ne voit que ce qu'elle expose | 1 à 2 |
 | **7. Le retrait** | `--demon` (l'ancien sens), le binaire `rag3daemon`, `DaemonConnection` sauf pour l'outillage | la batterie, sans eux | ½ |
 
-En tout, 10 à 14 jours d'agent pour l'arbre principal et la mémoire longue. C'est la fourchette de
+En tout, 12 à 17 jours d'agent pour l'arbre principal et la mémoire longue. C'est la fourchette de
 la page du 10 (« une à deux semaines »). Le paquet npm qui installe et lance le démon est le travail
 de l'optimiseur : il vient après la marche 4.
 
