@@ -67,13 +67,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (32)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | ouvert — pour l'auteur de la montre | test instable ; le reçu occupé ne dit pas les montres | non (le test) | oui (`backend.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
