@@ -731,6 +731,9 @@ n'apportait que du rag3weaver et des docs). Lib commune de luciepc rebâtie dess
 ## La suite : I2 (la maintenance de l'index au commit)
 
 Page 09 §0 et §3 : I2 n'ouvre qu'avec la mesure du banc sur l'état par instruction (ce que coûte la
-fin d'instruction, et pourquoi) ; une page avant le code, comme pour les autres marches. Tickets du
+fin d'instruction, et pourquoi) ; **la page avant le code est écrite** (3 h 30, page 10 :
+`10-i2-la-maintenance-de-l-index-au-commit.md` — un état par transaction appliqué au commit sous
+`INDEX` pris là ; l'index est l'état validé, comme pour les insertions ; ce que la mesure du banc
+tranche : son essai `essai-fin-d-instruction-filtre`, `53c742c0b`, en cours sur luciepc). Tickets du
 moteur encore à moi : C7 après un arrêt brutal, la seconde suppression d'une relation, la part
 reprise du journal à doublon.
