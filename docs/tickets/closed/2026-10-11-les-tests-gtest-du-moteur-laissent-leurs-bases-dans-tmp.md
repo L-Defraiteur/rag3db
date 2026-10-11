@@ -1,6 +1,16 @@
 # Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive
 
-- **État** : ouvert (11 octobre 2026, matin ; relevé par la session « e2e et disque », rag3db-97).
+- **État** : corrigé par le commit qui déplace ce ticket (11 octobre 2026, 15 h ; ouvert le matin,
+  relevé par la session « e2e et disque », rag3db-97). Forme : le parent par passe décrit plus bas
+  — `TestHelper::getRootTempDir()` rend `<commun>/<pid du lanceur>` (pid pris à l'initialisation
+  statique, avant tout fork), un `::testing::Environment` (`TempDirPerRun`, `test_helper.cpp`)
+  efface ce parent au début et à la fin du lanceur, et les parents des passes dont le lanceur
+  n'existe plus (`removeDeadRunTempDirs`, `kill(pid, 0)`). Témoin
+  `HarnessMechanics.WhatAKilledChildLeavesLivesUnderTheRunsParent` (banc). **Ce qui reste à la
+  main, une fois** : les dossiers d'avant (`<Groupe.Nom><suffixe>` à la racine de `/tmp/rag3db`)
+  ne sont pas effacés par le moteur — un binaire d'avant la correction, dans un autre arbre, y
+  écrit encore ; les effacer quand tous les arbres sont rebâtis. Côté Rust (les e2e de
+  rag3weaver), rien ici.
 - **Gravité** : confort, mais sur ce poste `/tmp` est un tmpfs : 6 500 entrées, 8,6 Go de RAM sur
   le poste principal et 10,9 Go sur luciepc, effacés à la main (seulement ce qu'aucun processus
   vivant n'ouvrait). Le dossier se remplit de nouveau à chaque passe.
