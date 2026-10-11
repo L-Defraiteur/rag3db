@@ -95,3 +95,105 @@ Le relevé des non-résolues de codeparsers rendait 0 au départ : la colonne
   nom. Le premier trou du banc est la méthode sur un receveur sans type
   (variables de boucle, paramètres de fermeture, liaisons de motif).
 - Les réexportations et le « nom seul » : en tickets.
+
+## Le 11 octobre au matin, après les lots de la nuit
+
+Même sonde, sur master `6044723a5` (impact, les sûrs d'abord ; l'outil
+`callees` ; les verrous déclarés), avec codeparsers `f91fc58` (les boucles
+Rust ; les appels par chemin sur un type). Les fonctions de verrou de la
+transaction déclarées comme un manifeste le ferait
+(`workspace.locks_via: ["acquireLock", "acquireLocks", "lockRowForWrite"]`).
+
+### `impact` (`name = update`, `path = src/storage/table/node_table.cpp`, `depth = 3`)
+
+```
+# impact: update
+
+## Départ (1)
+- function update — src/storage/table/node_table.cpp:619
+
+Nom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont comptés à part, non montrés.
+
+**4 touchés** (2 à 1 saut, 1 à 2 sauts, 1 à 3 sauts) — dont **0 Tests qui la traversent** ; 28 par le nom seul, non montrés.
+
+## Code qui en dépend, à 1 saut (2)
+- function set — src/processor/operator/persistent/set_executor.cpp:57
+- function replayNodeUpdateRecord — src/storage/wal/wal_replayer.cpp:722
+
+## Code qui en dépend, à 2 sauts (1)
+- function replayWALRecord — src/storage/wal/wal_replayer.cpp:440
+
+## Code qui en dépend, à 3 sauts (1)
+- function replay — src/storage/wal/wal_replayer.cpp:336
+
+## Verrous pris sur le chemin (1)
+- `lockRowForWrite` — update (départ, lock)
+
+```
+
+Les deux appelants réels seuls ; les 28 homonymes en une ligne de compte
+(`include_by_name = true` les montre) ; le verrou que `update` prend
+lui-même, au départ.
+
+### `callees`, le même nœud dans l'autre sens
+
+```
+# callees: update
+
+## Départ (1)
+- function update — src/storage/table/node_table.cpp:619
+
+Nom ambigu : toutes les définitions sont des départs ; les usages trouvés par le nom seul sont comptés à part, non montrés.
+
+**21 touchés** (7 à 1 saut, 8 à 2 sauts, 6 à 3 sauts).
+
+## Ce qu’il appelle, à 1 saut (7)
+- function usesLocks — src/transaction/transaction.cpp:59
+- function shouldLogToWAL — src/transaction/transaction.cpp:99
+- function isUnCommitted — src/transaction/transaction.cpp:217
+- function lockKeyOfRow — src/storage/table/node_table.cpp:1012
+- function lockRowForWrite — src/storage/table/node_table.cpp:1054
+- method getStartOffsetOfNodeGroup — src/include/storage/storage_utils.h:56
+- method getNodeGroupIdx — src/include/storage/storage_utils.h:59
+
+## Ce qu’il appelle, à 2 sauts (8)
+- function getMinUncommittedNodeOffset — src/transaction/transaction.cpp:334
+- function lookup — src/storage/table/node_table.cpp:395
+- function lockKeyOf — src/storage/table/node_table.cpp:1008
+- function setToTable — src/storage/table/node_table.cpp:263
+- function initScanState — src/storage/table/node_table.cpp:136
+- function getSingleValueDataChunkState — src/common/data_chunk/data_chunk_state.cpp:10
+- function acquireLock — src/transaction/transaction.cpp:94
+- function throwIfWrittenByAnotherCommitAfterSnapshot — src/storage/table/node_table.cpp:1037
+
+## Ce qu’il appelle, à 3 sauts (6)
+- method getNumTotalRows — src/include/storage/local_storage/local_node_table.h:31
+- method getStartOffset — src/include/storage/local_storage/local_node_table.h:46
+- function getAsValue — src/common/vector/value_vector.cpp:244
+- function acquireLocks — src/transaction/transaction.cpp:64
+- function throwCouldNotSerialize — src/storage/table/node_table.cpp:1029
+- method getNodeGroupIdxAndOffsetInChunk — src/include/storage/storage_utils.h:62
+
+## Verrous pris sur le chemin (3)
+- `acquireLock` — lockRowForWrite (1 saut, lock)
+- `acquireLocks` — acquireLock (2 sauts, lock)
+- `lockRowForWrite` — update (départ, lock)
+
+```
+
+Le chemin du verrou se lit d'un trait : `update` → `lockRowForWrite` →
+`acquireLock` → `acquireLocks`. `lockKeyOf` et `lockKeyOfRow` n'y sont pas
+comme verrous : elles calculent la clé, elles ne verrouillent pas.
+
+### Les arêtes d'appel, par marque
+
+| Marque | Début de nuit | Ce matin |
+|---|---|---|
+| type (receveur typé) | 3 377 | **5 517** |
+| fichier | 5 088 | 5 308 |
+| nom (deviné, non suivi par impact) | 8 720 | **7 215** |
+| LOCKS | 169 | 178 (dont 9 par appel déclaré) |
+
+Les 1 505 arêtes « nom » de moins sont devenues sûres, pour l'essentiel
+par les appels par chemin sur un type (`StorageUtils::getNodeGroupIdx`,
+`Catalog::Get`).
