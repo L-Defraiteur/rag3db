@@ -534,6 +534,236 @@ fn the_shipped_toy_shop_loads() {
     assert_eq!(tools, 7);
 }
 
+// ─── declare : l'agent écrit les déclarations (lot 5) ───────────────────────
+
+fn git_in(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?} : {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// Le jouet des routes dans un dépôt git à lui, identité locale, tout commité.
+fn toy_in_a_repository() -> (tempfile::TempDir, Backend) {
+    let (dir, backend) = toy_with_routes();
+    git_in(dir.path(), &["init", "-q"]);
+    git_in(dir.path(), &["config", "user.name", "Personne Test"]);
+    git_in(
+        dir.path(),
+        &["config", "user.email", "personne@example.org"],
+    );
+    git_in(dir.path(), &["add", "-A"]);
+    git_in(dir.path(), &["commit", "-q", "-m", "le jouet"]);
+    (dir, backend)
+}
+
+#[test]
+fn declare_refuses_what_is_not_a_declaration_of_this_backend() {
+    let (_dir, backend) = toy_in_a_repository();
+    for path in [
+        "../outside.mmd",
+        "/etc/passwd",
+        ".git/config",
+        "src/main.rs",
+        "data/toy.json",
+        "",
+    ] {
+        let refused = backend.declare(path, "x", "essai").unwrap_err();
+        assert!(
+            refused.contains("n'est pas une déclaration"),
+            "{path} : {refused}"
+        );
+    }
+    let refused = backend
+        .declare("views/hello.html", "<p>x</p>", "  ")
+        .unwrap_err();
+    assert!(refused.contains("raison"), "{refused}");
+}
+
+#[test]
+fn an_invalid_declaration_is_refused_with_its_line_and_nothing_is_written() {
+    let (dir, backend) = toy_in_a_repository();
+    let head = git_in(dir.path(), &["rev-parse", "HEAD"]);
+    let refused = backend
+        .declare("views/hello.html", "<h1>\n{% if %}\n</h1>", "casser la vue")
+        .unwrap_err();
+    assert!(
+        refused.contains("views/hello.html") && refused.contains("ligne 2"),
+        "{refused}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap(),
+        "<h1>Bonjour {{ result.hello }}</h1>"
+    );
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h1>Bonjour Lucie</h1>"
+    );
+    assert_eq!(
+        git_in(dir.path(), &["rev-parse", "HEAD"]),
+        head,
+        "no commit"
+    );
+    assert_eq!(
+        backend.declarations_version(),
+        1,
+        "the toy's own reload only"
+    );
+}
+
+#[test]
+fn a_valid_declaration_is_in_service_and_committed_with_its_reason() {
+    let (dir, backend) = toy_in_a_repository();
+    let declared = backend
+        .declare(
+            "views/hello.html",
+            "<h1>Bonjour <em>{{ result.hello }}</em></h1>",
+            "Mettre le prénom en italique",
+        )
+        .unwrap();
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h1>Bonjour <em>Lucie</em></h1>"
+    );
+    let commit = declared.commit.expect("a commit");
+    assert_eq!(git_in(dir.path(), &["rev-parse", "HEAD"]), commit);
+    let message = git_in(dir.path(), &["log", "-1", "--format=%B"]);
+    assert!(
+        message.starts_with("Mettre le prénom en italique"),
+        "{message}"
+    );
+    assert!(message.contains("declare: views/hello.html"), "{message}");
+    assert_eq!(
+        git_in(dir.path(), &["log", "-1", "--format=%an <%ae>"]),
+        "Personne Test <personne@example.org>"
+    );
+    assert_eq!(
+        git_in(dir.path(), &["show", "--name-only", "--format=", "HEAD"]),
+        "views/hello.html"
+    );
+    // Le même contenu une seconde fois : rien à commiter.
+    let again = backend
+        .declare(
+            "views/hello.html",
+            "<h1>Bonjour <em>{{ result.hello }}</em></h1>",
+            "encore",
+        )
+        .unwrap();
+    assert_eq!(again.commit, None);
+}
+
+#[test]
+fn a_declaration_commits_its_path_only() {
+    let (dir, backend) = toy_in_a_repository();
+    write(dir.path(), "notes.txt", "à moi");
+    git_in(dir.path(), &["add", "notes.txt"]);
+    git_in(dir.path(), &["commit", "-q", "-m", "des notes"]);
+    write(dir.path(), "notes.txt", "modifiées, pas pour declare");
+    write(dir.path(), "brouillon.md", "pas suivi");
+    backend
+        .declare(
+            "views/hello.html",
+            "<p>{{ result.hello }}</p>",
+            "Une vue plus sobre",
+        )
+        .unwrap();
+    assert_eq!(
+        git_in(dir.path(), &["show", "--name-only", "--format=", "HEAD"]),
+        "views/hello.html"
+    );
+    let status = git_in(dir.path(), &["status", "--porcelain"]);
+    assert!(
+        status.contains("M notes.txt") && status.contains("?? brouillon.md"),
+        "{status}"
+    );
+}
+
+#[test]
+fn a_new_declaration_in_a_new_folder_is_written_and_listed() {
+    let (dir, backend) = toy_in_a_repository();
+    assert!(backend
+        .list_declarations()
+        .contains(&"views/hello.html".to_string()));
+    backend
+        .declare(
+            "views/parts/footer.html",
+            "<footer>boutique</footer>",
+            "Un pied de page",
+        )
+        .unwrap();
+    assert!(dir.path().join("views/parts/footer.html").exists());
+    assert!(backend
+        .list_declarations()
+        .contains(&"views/parts/footer.html".to_string()));
+    assert_eq!(
+        backend.read_declaration("views/parts/footer.html").unwrap(),
+        "<footer>boutique</footer>"
+    );
+}
+
+/// Un modèle enregistré : il pose une vue invalide, lit le refus, corrige.
+#[test]
+fn an_agent_corrects_a_refused_declaration_on_the_next_turn() {
+    use crate::agent::{Agent, AgentLimits, ToolBox};
+    use crate::llm::{CallbackLlm, Llm, MockLlm, StringSink, ToolCall, Turn};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Nothing;
+    impl ToolBox for Nothing {
+        fn call(&self, call: &ToolCall) -> Turn {
+            Turn::tool_result(&call.id, &call.name, "{\"ok\":false}")
+        }
+    }
+    let (dir, backend) = toy_in_a_repository();
+    let broken =
+        json!({"path": "views/hello.html", "content": "<h1>{% if %}</h1>", "reason": "Titre"})
+            .to_string();
+    let fixed = json!({"path": "views/hello.html", "content": "<h2>Salut {{ result.hello }}</h2>", "reason": "Un titre plus discret"}).to_string();
+    let calls = AtomicUsize::new(0);
+    let llm = CallbackLlm::new("declare-test", 8192, move |turns, opts, sink| {
+        let model = match calls.fetch_add(1, Ordering::SeqCst) {
+            0 => MockLlm::new("").with_tool_calls(vec![("declare", broken.as_str())]),
+            1 => MockLlm::new("").with_tool_calls(vec![("declare", fixed.as_str())]),
+            _ => MockLlm::new("C'est fait."),
+        };
+        model.generate(turns, opts, sink)
+    });
+    let tools = crate::declare::DeclarationTools {
+        backend: &backend,
+        inner: &Nothing,
+    };
+    assert!(tools.tool_defs().iter().any(|d| d.name == "declare"));
+    let mut turns = vec![Turn::user("mets un titre plus discret")];
+    Agent::new(&llm, &tools)
+        .with_limits(AgentLimits {
+            max_iterations: 5,
+            ..Default::default()
+        })
+        .run(&mut turns, &mut StringSink::default())
+        .unwrap();
+    let refusal = turns
+        .iter()
+        .find(|t| t.content.contains("déclaration refusée"))
+        .expect("the refusal came back to the model");
+    assert!(
+        refusal.content.contains("views/hello.html"),
+        "{}",
+        refusal.content
+    );
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h2>Salut Lucie</h2>"
+    );
+    assert!(git_in(dir.path(), &["log", "-1", "--format=%B"]).starts_with("Un titre plus discret"));
+}
+
 // ─── serve : les routes sur HTTP (lot 4c) ───────────────────────────────────
 
 #[cfg(feature = "daemon")]
