@@ -147,6 +147,14 @@ while :; do
 done
 ```
 
+**Vert veut dire** (orchestration, 11 octobre au soir, après un master rouge passé pour vert) :
+aucune ligne `ROUGE` dans la sortie de `check_features.sh` écrite dans un fichier, **et** son vrai
+code de sortie 0, lu sans tube. Jamais un compte de lignes `VERT` : le cinquième jeu est arrivé
+dans l'après-midi, et « 4 lignes VERT » laissait passer quatre verts et un rouge. Jamais `$?`
+derrière un `|` : c'est le code du dernier filtre, toujours 0. La commande type lit le code par
+`… check_features.sh || exit 4`, sans tube. Si elle garde la sortie, elle l'écrit d'abord dans un
+fichier, puis la lit.
+
 `check_features.sh` vérifie **cinq jeux** de features depuis `eb389901c` : le natif seul,
 `rag3db-native`, s'est ajouté aux quatre autres. Depuis `b92d809ae`, il appelle aussi
 `scripts/check_tickets.py`, qui recompte l'index des tickets. Le pathspec `':!*.md'` du
