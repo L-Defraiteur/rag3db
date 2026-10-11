@@ -313,6 +313,20 @@ Trois règles pour tenir ce cap :
 - **Rien qui ne sert qu'à faire beau** : une démonstration se bâtit sur une
   pièce posée, jamais à côté.
 
+### Le démon, et après (Lucie, 11 octobre 2026)
+
+Décidé : **le serveur MCP n'est qu'une interface vers un démon** ; le démon
+possède le catalogue, les travaux longs (indexation, commande en fond) et le
+réacteur ; le chat, l'atelier, la CLI et MCP sont des clients minces qui lui
+parlent par une seule forme (page `docs/11-octobre-2026-arbre-principal/01-…`).
+Un seul démon pour toutes les bases pour le moment. **À moyen terme, après ce
+chantier** : un démon routeur et des démons spécialisés derrière lui — un par
+base, ou portant plusieurs bases — pour qu'un démon qui tombe n'emporte pas
+tout et que le tampon du moteur ne se partage plus entre tous les backends.
+C'est aussi la voie Neo4j pour plusieurs processus : un processus tient une
+base, les autres lui parlent ; le multi-processus simultané sur un même
+fichier (mémoire partagée, PostgreSQL) reste une refonte non engagée.
+
 ## 8. Ce qui n'est pas décidé
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;

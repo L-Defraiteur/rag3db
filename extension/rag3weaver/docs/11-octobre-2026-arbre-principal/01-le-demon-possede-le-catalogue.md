@@ -453,6 +453,9 @@ puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
    referait dans `rag3daemon` tout ce que `serve` a déjà.
 2. **Un démon pour toutes les bases** (§2). Le prix : un démon qui tombe emporte tout, et le tampon
    du moteur se partage entre les backends.
+   **Décidé par Lucie (11 octobre, matin)** : un seul démon pour le moment. **À moyen terme, après
+   ce chantier** : un démon routeur et des démons spécialisés — un par base, ou portant plusieurs
+   bases — derrière lui ; noté en vision, pas dans ces marches.
 3. **Lancé par le premier client**, sans service système par défaut (§5). Ou bien une unité
    installée par le paquet.
 4. **L'adresse par défaut `127.0.0.1:7970`**, avec `daemon.json` (§4, §5).
