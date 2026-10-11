@@ -1,6 +1,10 @@
 # L'indexation est un enfant du serveur MCP et meurt avec lui
 
-- **État** : ouvert, à trancher au matin
+- **État** : partiel (11 octobre 2026). La fermeture propre et SIGTERM sont réglés : la marche 0 de la
+  forme C (`75de6618f`) arrête l'indexation au prochain paquet validé et l'attend, et la mémoire
+  longue traite SIGTERM comme la fermeture du tube (`59718e806`) ; relancer `index` reprend là. Reste
+  le serveur tué (SIGKILL, plantage), que règle le démon de la forme C
+  (`extension/rag3weaver/docs/11-octobre-2026-arbre-principal/01-le-demon-possede-le-catalogue.md`).
 - **Gravité** : travail long perdu sans rien dire — et la base reste à moitié indexée
 - **Atteignable en service** : oui, **dès le premier usage** : c'est le premier geste d'une nouvelle installation
 - **Touche rag3weaver** : oui — l'outil `index` du gabarit `code`, et tout travail long lancé en fond par un outil

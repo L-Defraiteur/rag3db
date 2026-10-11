@@ -1,6 +1,9 @@
 # Une synchronisation reprise après un arrêt brutal exige `takeover`
 
-- **État** : ouvert (accepté aujourd'hui ; décision de l'orchestration : ticket, pas maintenant).
+- **État** : levé après un arrêt propre (11 octobre 2026, `75de6618f`). Une synchronisation arrêtée
+  entre deux paquets suspend sa session (`suspend_snapshot`), et la suivante la reprend sans
+  `takeover`. Reste la mort brutale : la session reste ouverte et la relance la refuse. Sous la forme
+  C, le démon, seul propriétaire possible, la reprendra lui-même à son redémarrage (marche 2).
 - **Gravité** : blocage (la reprise refuse tant qu'on ne dit pas `takeover`).
 - **Atteignable en service** : oui, après tout arrêt brutal d'une synchronisation.
 - **Touche rag3weaver** : oui (`code_sync::sync_source`, sessions de snapshot).
