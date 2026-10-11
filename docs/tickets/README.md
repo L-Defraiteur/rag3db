@@ -25,10 +25,12 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (50)
+### Ouverts (52)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | ouvert — décision de Lucie (signature nouvelle) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
+| [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | ouvert — à faire APRÈS le nœud de lien | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
 | [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | ouvert, filet côté rag3weaver (point de reprise forcé) ; correctif au cœur | perte | oui sans le filet (COPY de plus d'un groupe, grand tampon) | oui |
 | [Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir](2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md) | ouvert | déclaration inatteignable (la réaction ne transitionne jamais rien) | oui | oui (un gabarit) |
 | [Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro](2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md) | ouvert (vu par la liste d'I1 ; hotfixs bissecte) | perte | oui (reprise après arrêt brutal pendant un COPY) | oui |

@@ -83,9 +83,24 @@ Trois chemins, et aucun ne tient en six lignes :
    de risque — il faudrait d'abord établir ce que la garde protégeait, puisque
    rien ne l'épingle. À ne pas faire sans cette preuve.
 
-Préférence de qui l'a relevé : la 1. Et à décider dans le même geste : exposer
-aussi `REPLACES` (une mémoire qui remplace une autre), que la vision de la
-mémoire longue emploie et qu'aucun outil n'écrit non plus.
+**La garde de `RelationBatchNode` n'est éprouvée par aucun témoin : ce qu'elle
+protège n'est pas établi.** Qu'on la relâche ou non, quelqu'un devrait
+l'épingler — un test qui dit *pourquoi* un bout géré est écarté, et non
+seulement qu'il l'est. Tant que ce test n'existe pas, le chemin 3 est à écarter
+par principe et non par mesure, ce qui est une faiblesse de ce ticket.
+
+La suite est découpée en deux tickets, dans cet ordre :
+
+1. [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md)
+   — la cause générale, le `LinkRecordsNode` et les deux déclarations du gabarit
+   (`ANCHORED_TO` et `REPLACES`). Une à deux passes, et c'est une signature
+   nouvelle : décision de Lucie ;
+2. [Une réaction peut remonter une relation qu'aucun outil n'écrit](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md)
+   — le huitième refus de la section `"reactions"`, qui aurait attrapé ce
+   défaut-ci au chargement. Une demi-passe, **après** le premier : écrit avant,
+   il rendrait le gabarit `memory` livré inchargeable.
+
+Ce ticket-ci se ferme avec le premier.
 
 **Et une règle à écrire si elle est retenue** : le chargement pourrait refuser
 un manifeste dont une réaction remonte une relation qu'aucun outil n'écrit. Ce
