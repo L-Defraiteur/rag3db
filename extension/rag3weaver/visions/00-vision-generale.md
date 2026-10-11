@@ -430,6 +430,20 @@ vrai, et c'est ce qui décide des outils suivants.
 
 ## 8. Ce qui n'est pas décidé
 
+- **S'intégrer à l'usage, une graine** (Lucie, 11 octobre 2026, à propos
+  de agent-bridge, https://github.com/raysonmeng/agent-bridge, qui interface
+  différents logiciels d'agents de code : « on pourrait s'inspirer après pour
+  que Claude puisse parler à des agents du moteur, ou l'inverse, ou Codex ;
+  l'adoption sera plus grande si on commence par s'intégrer à l'usage des
+  gens, ils ne quitteront pas Claude en claquant des doigts »). Le serveur
+  MCP est déjà cette entrée pour Claude Code (le cœur a eu son IDE sans
+  changer d'outil). Ce qu'elle ajoute : le même serveur pour les autres
+  agents de code (Codex, Cursor, tout client MCP) et un pont pour ceux qui
+  n'en parlent pas ; dans l'autre sens, nos agents (des graphes) appelant
+  Claude Code ou Codex comme un outil, lancé en fond avec la référence de
+  l'appelant, comme un agent à nous. Le principe : entrer dans l'usage
+  existant, et le moteur, les fiches et l'index deviennent ce que ces agents
+  partagent entre eux. Pas de chantier.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
