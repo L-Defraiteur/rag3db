@@ -630,7 +630,17 @@ for ligne in open(sys.argv[1]):
     echo "✗ le bâti a échoué (code $statut)"
     return 101
   fi
-  [ -n "$bin" ] && echo "▸ binaire e2e : $bin ($(( $(stat -c %s "$bin") / 1024 / 1024 )) Mo)"
+  if [ -n "$bin" ]; then
+    local mo ref
+    mo=$(( $(stat -c %s "$bin") / 1024 / 1024 ))
+    echo "▸ binaire e2e : $bin (${mo} Mo)"
+    # La référence commitée : une dérive se voit à la passe qui la crée.
+    ref=$(sed -n 's/^binaire_e2e_mo=//p' "$WEAVER/tests/e2e/poids-reference.txt" 2>/dev/null)
+    if [ -n "$ref" ] && [ "$mo" -gt $(( ref * 3 / 2 )) ]; then
+      echo "▸ ⚠ le binaire e2e pèse ${mo} Mo, plus de 1,5 fois sa référence (${ref} Mo,"
+      echo "    tests/e2e/poids-reference.txt) : une dérive à expliquer, ou une référence à remesurer"
+    fi
+  fi
 
   # 2. Chaque suite e2e : son processus, son dossier.
   for nom in "${e2e[@]}"; do
@@ -699,9 +709,12 @@ mkdir -p "$E2E_TMP_PARENT"
 
 # **Le target a un plafond.** Au-delà, la passe refuse de partir en le
 # disant : un target qui grossit sans fin est ce qui a rempli le disque le
-# 10 octobre (307 Go). `RAG3WEAVER_TARGET_MAX_GO` change le plafond.
+# 10 octobre (307 Go). Un bâti propre pèse 5,5 Go (mesuré le 11 octobre,
+# tests/e2e/poids-reference.txt) : 20 Go laissent deux jeux de features et
+# les autres tests, et au-delà c'est de l'accumulation. Proposé, à trancher
+# par Lucie ; `RAG3WEAVER_TARGET_MAX_GO` le change.
 TARGET_DE_LA_PASSE="${CARGO_TARGET_DIR:-$WEAVER/target}"
-PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-60}"
+PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-20}"
 if [ -d "$TARGET_DE_LA_PASSE" ]; then
   POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
   if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
@@ -832,6 +845,10 @@ if [ "$SUMMARY" = true ]; then
 
     if [ "${failed:-0}" -ne 0 ]; then
       say "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
+    elif [ "${passed:-0}" -eq 0 ] && [ -n "$TEST_FILTER" ]; then
+      # Sous un filtre, une suite sans test correspondant n'est pas une suite
+      # compilée hors du lot : elle n'a simplement rien que le filtre désigne.
+      say "  %-30s aucun test ne correspond au filtre « %s »\n" "$suite" "$TEST_FILTER"
     elif [ "${passed:-0}" -eq 0 ]; then
       # **Zéro test n'est pas une réussite.** Une suite entièrement compilée
       # hors du lot — un `#![cfg(feature = ...)]` que le lot de features

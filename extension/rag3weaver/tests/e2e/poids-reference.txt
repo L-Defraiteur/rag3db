@@ -1,0 +1,7 @@
+# Le poids de référence des e2e — mesuré, pas estimé (11 octobre 2026, luciepc,
+# master 48250887b puis a3710687c, target vide, moteur partagé, features de
+# run_e2e.sh). run_e2e.sh compare chaque bâti à ces lignes et PRÉVIENT au-delà
+# de 1,5 fois : la prochaine dérive se voit à la passe qui la crée.
+# Remesurer : scripts/mesure_e2e.sh <étiquette> <worktree>, puis mettre à jour.
+binaire_e2e_mo=358
+target_go=5.5
