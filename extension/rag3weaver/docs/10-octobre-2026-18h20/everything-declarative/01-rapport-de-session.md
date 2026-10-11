@@ -184,3 +184,19 @@ Un push de docs refusé que j'ai d'abord pris pour une course perdue : c'était
 modificateur qui mange le début de la référence. Le piège était dans la
 mémoire (« accolades avant deux-points ») ; la forme juste est
 `"${C}:refs/heads/master"`.
+
+## 8. Après la porte de la session mémoire (11 octobre, 4 h)
+
+- `f7a20bc57` : `declare` et la montre de l'atelier passent par
+  `apply_reload_with_reactions` ; `Declared` et le journal de la page disent
+  les réactions remontées, les curseurs oubliés et les erreurs des réactions
+  arrêtées.
+- **Une erreur à moi** : ce commit est parti sur master avec deux rouges dans
+  la passe complète, parce que ma commande enchaînait le push après les
+  tests sans le conditionner au vert. L'un était à moi — une vraie course
+  dans `Hub::subscribe` (l'en-tête du flux écrit avant l'inscription de
+  l'abonné, hors du verrou) —, corrigée en avant par `eae74a106` (rejouée
+  quinze fois sous charge). L'autre, `daemon::db::tests::il_se_nomme_et_dit_sa_base`,
+  est la course de `port_libre()` du même genre que le ticket du démon de test
+  sous charge (vert seul et quatre passes complètes de suite). Depuis, le
+  push n'est lancé que si la passe a écrit « VERT ».
