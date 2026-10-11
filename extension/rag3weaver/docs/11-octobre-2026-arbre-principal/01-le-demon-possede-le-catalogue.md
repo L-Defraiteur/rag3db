@@ -545,6 +545,19 @@ démarrage).
 - **La cellule et les clés de la session sont gardées et dites** (`GET /etat`), pas appliquées :
   la cellule l'est à la marche 1 bis, les clés à la marche 6.
 
+### Qui tient quels fichiers (11 octobre 2026, relecture de la marche 4)
+
+- **L'arbre principal** : `src/daemon_host.rs` (l'hôte, ses routes, son jeton, sa poignée d'arrêt) et la
+  sous-commande `rag3weaver-backend daemon`. Les marches 1, 1 bis et 2 y vivent.
+- **La mémoire longue** : `src/mcp.rs`, le client mince (`daemon_client`) et la recette MCP. Les marches 3 et
+  4 côté client y vivent.
+- **Partagé** : `src/daemon_lifecycle.rs`. Le côté hôte (`write`, `remove_if_mine`, `build_id`) est à
+  l'arbre principal ; le côté client (`ensure`, `answers`, la découverte) est à la mémoire longue. **Toute
+  modification du format de `DaemonFile`** (adresse, pid, jeton, bâti, départ) se relit à deux, puisque
+  l'un l'écrit et l'autre le lit.
+- L'identifiant de bâti du moteur n'est pas exposé ; `build` dit la version du crate et l'empreinte de
+  l'exécutable, en attendant un `CALL build_id()` du moteur, à placer par l'orchestration.
+
 ## 8. Ce qui reste à Lucie
 
 *Premier jet de l'arbre principal, à compléter par la mémoire longue.*
