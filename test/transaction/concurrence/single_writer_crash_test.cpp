@@ -1189,13 +1189,17 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
     EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
                                     << write->getErrorMessage();
     write.reset();
-    other.query("COMMIT;");
+    // Le journal tel que la transaction ouverte l'a laissé grossir. Depuis A8 (11 octobre 2026),
+    // c'est son départ (le dernier à partir) qui écrit le point de reprise demandé ; avant, c'était
+    // la validation suivante. L'attendu ne change pas : une fois la transaction fermée, le journal
+    // est replié, au plus tard à la validation suivante.
     const auto walBefore = walSize();
+    other.query("COMMIT;");
     auto next = conn->query("CREATE (:P {id: 1000000});");
     EXPECT_TRUE(next->isSuccess()) << "[check: next-write-succeeds] " << next->getErrorMessage();
     next.reset();
     EXPECT_LT(walSize(), walBefore) << "[check: postponed-checkpoint-done] the journal should "
-                                       "have been folded by the next commit";
+                                       "have been folded once the open transaction closed";
     EXPECT_EQ(queryInt("MATCH (p:P) WHERE p.id + 0 >= 999999 RETURN count(*);"), 2)
         << "[check: rows-present] ";
 }

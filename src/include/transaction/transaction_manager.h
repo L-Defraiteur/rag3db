@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -44,6 +45,10 @@ public:
     Transaction* beginTransaction(main::ClientContext& clientContext, TransactionType type);
 
     void commit(main::ClientContext& clientContext, Transaction* transaction);
+    // Attend qu'aucun point de reprise ne retienne les nouvelles transactions, dans le fil de
+    // l'appelant : un BEGIN explicite s'exécute sur un fil du planificateur, et y attendre
+    // tiendrait un fil dont les transactions ouvertes ont besoin pour valider et partir (A8).
+    void waitUntilNewTransactionsAreAllowed();
     void rollback(main::ClientContext& clientContext, Transaction* transaction);
     // Marche T0 : une instruction a échoué dans une transaction explicite. Ses effets sont
     // annulés, elle reste active, ses verrous tenus ; rollback() la ferme ensuite.
@@ -92,6 +97,13 @@ private:
     // a renoncé avant qu'elle valide (rien n'est validé : elle prend alors sa place en tête).
     bool commitInCheckpointQueueNoLock(main::ClientContext& clientContext,
         std::unique_lock<std::mutex>& publicLock, Transaction* transaction);
+    // A8 : le dernier à partir écrit le point de reprise automatique demandé. Appelé après le
+    // départ d'une transaction validée ; une annulation n'écrit pas (elle peut venir de la
+    // fermeture d'une connexion), elle renonce à la demande (cancelAutoCheckpointRequestNoLock).
+    void writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
+        std::unique_lock<std::mutex>& publicLock);
+    void cancelAutoCheckpointRequestNoLock();
+    void waitWhileCheckpointPendingNoLock(std::unique_lock<std::mutex>& publicLock);
     void allowNewTransactionsNoLock();
     // Un point de reprise automatique reporté, parce qu'une autre transaction est ouverte.
     void postponeCheckpointNoLock();
@@ -125,6 +137,20 @@ private:
     // `lastCompletedCheckpoint`). Gardé par le verrou public.
     std::vector<const Transaction*> queuedCheckpointCommits;
     bool commitQueuedNow = false;
+    // A8, le point de reprise automatique sous des écrivains qui se succèdent : la validation qui
+    // atteint le seuil, s'il reste d'autres transactions ouvertes, pose la demande
+    // (`checkpointPending` retient les nouvelles transactions) et rend la main ; le dernier à
+    // partir écrit. Un BEGIN retenu plus de AUTO_CHECKPOINT_WAIT renonce à la demande, et le
+    // point de reprise est reporté comme avant. Gardé par le verrou public.
+    bool autoCheckpointRequested = false;
+    std::chrono::steady_clock::time_point autoCheckpointRequestedAt;
+    static constexpr std::chrono::milliseconds AUTO_CHECKPOINT_WAIT{250};
+    // Une demande abandonnée (une transaction est restée au-delà de la borne, un lecteur long) :
+    // le plus grand identifiant des transactions qui l'ont tenue. Aucune nouvelle demande tant
+    // qu'une transaction d'identifiant inférieur ou égal reste ouverte : sous un lecteur long,
+    // les écrivains n'attendent qu'une fois, puis le point de reprise est reporté comme avant,
+    // jusqu'à son départ.
+    common::transaction_t lastBlockingTransactionID = 0;
     uint64_t checkpointsStarted = 0;
     uint64_t lastCompletedCheckpoint = 0;
     // La taille du journal au dernier avertissement de report ; 0 après un point de reprise.
