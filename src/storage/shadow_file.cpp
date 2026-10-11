@@ -90,8 +90,15 @@ static ku_uuid_t getOldDatabaseID(FileInfo& dataFileInfo) {
 
 void ShadowFile::replayShadowPageRecords(ClientContext& context) {
     if (context.getDBConfig()->readOnly) {
-        throw RuntimeException("Couldn't replay shadow pages under read-only mode. Please re-open "
-                               "the database with read-write mode to replay shadow pages.");
+        // Le journal se termine par CHECKPOINT et personne ne tient le verrou des lecteurs : un
+        // point de reprise interrompu (son écrivain est mort avant de recopier les pages
+        // fantômes), pas un point de reprise vivant, qu'une ouverture en lecture seule attend
+        // (ReadersLock). Seule une ouverture en écriture l'achève. Le cas rare d'un écrivain
+        // vivant passé sans le verrou (sa borne d'une seconde) rend le même message.
+        throw RuntimeException(
+            "Couldn't replay shadow pages under read-only mode: a checkpoint of this database was "
+            "interrupted (its journal ends with CHECKPOINT and its shadow pages are not applied "
+            "yet). Open the database read-write once to complete it; retrying read-only will not.");
     }
     auto vfs = VirtualFileSystem::GetUnsafe(context);
     auto shadowFilePath = StorageUtils::getShadowFilePath(context.getDatabasePath());

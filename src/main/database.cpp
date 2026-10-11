@@ -4,6 +4,7 @@
 #include <mutex>
 #include <set>
 
+#include "common/test_hooks.h"
 #include "extension/binder_extension.h"
 #include "extension/extension_manager.h"
 #include "extension/mapper_extension.h"
@@ -95,6 +96,7 @@ Database::Database(std::string_view databasePath, SystemConfig systemConfig)
 Database::Database(std::string_view databasePath, SystemConfig systemConfig,
     construct_bm_func_t constructBMFunc)
     : dbConfig(systemConfig) {
+    dbConfig.testDiePoint = TestHooks::readFromEnvironment();
     initMembers(databasePath, constructBMFunc);
 }
 
