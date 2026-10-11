@@ -3,8 +3,9 @@
 // toute la table. Sur l'index réel de rag3db, SCAN_NODE_TABLE Scope sortait 71 657 lignes pour 117
 // retenues par le SEMI_MASKER (le saut d'`usages`).
 //
-// - MaskedScan.ReadsAboutTheMaskNotTheTable : le témoin. N = 72 000 Scope, un Symbol désigné par
-//   k = 117 Scope éparpillés ; la requête du saut ; PROFILE donne les lignes sorties du
+// - MaskedScan.ReadsAboutTheMaskNotTheTable : le témoin. N = 72 000 Scope et 10 000 Symbols, trois
+//   MENTIONS par Scope (216 000), et le Symbol 's' désigné par k = 117 Scope éparpillés ; la
+//   requête du saut ; PROFILE donne les lignes sorties du
 //   SCAN_NODE_TABLE sous le masque, qui doivent rester sous 10·k. Rouge aujourd'hui (on attend
 //   environ N), avec le chiffre au message.
 // - MaskedScan.MeasureAtOneAndThirtyTwoThreads : la mesure de référence pour le lot des fils du
@@ -14,6 +15,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -31,6 +34,7 @@ namespace {
 
 constexpr int64_t NUM_SCOPES = 72000;
 constexpr int64_t NUM_MASKED = 117;
+constexpr int64_t NUM_SYMBOLS = 10000;
 constexpr int64_t READ_FACTOR = 10;
 constexpr auto HOP = "MATCH (d:Symbol {_uuid: 's'})<-[r:MENTIONS]-(m:Scope) RETURN m._uuid, m.name;";
 
@@ -43,15 +47,47 @@ protected:
         ok("CREATE NODE TABLE Scope(_uuid STRING PRIMARY KEY, name STRING, idx INT64);");
         ok("CREATE NODE TABLE Symbol(_uuid STRING PRIMARY KEY);");
         ok("CREATE REL TABLE MENTIONS(FROM Scope TO Symbol);");
-        ok(stringFormat("UNWIND range(0, {}) AS i CREATE (:Scope {_uuid: 'scope-' + CAST(i AS "
-                        "STRING), name: 'name ' + CAST(i AS STRING), idx: i});",
-            NUM_SCOPES - 1));
-        ok("CREATE (:Symbol {_uuid: 's'});");
-        // k Scope éparpillés dans toute la table, un tous les N / k.
-        ok(stringFormat("MATCH (m:Scope), (d:Symbol {_uuid: 's'}) WHERE m.idx % {} = 0 AND m.idx < {} "
-                        "CREATE (m)-[:MENTIONS]->(d);",
-            NUM_SCOPES / NUM_MASKED, NUM_MASKED * (NUM_SCOPES / NUM_MASKED)));
+        // À l'échelle du cas réel, pour que le planificateur parte du Symbol et masque Scope :
+        // MENTIONS compte des centaines de milliers de relations (trois par Scope, vers des
+        // Symbols ordinaires), et seuls k Scope éparpillés mentionnent le Symbol 's'. Avec 117
+        // relations en tout, il balayait Scope puis remontait les relations, sans masque.
+        const auto scopes = databasePath + ".scopes.csv";
+        const auto symbols = databasePath + ".symbols.csv";
+        const auto mentions = databasePath + ".mentions.csv";
+        {
+            std::ofstream out(scopes);
+            for (int64_t i = 0; i < NUM_SCOPES; ++i) {
+                out << "scope-" << i << ",name " << i << "," << i << "\n";
+            }
+        }
+        {
+            std::ofstream out(symbols);
+            out << "s\n";
+            for (int64_t i = 0; i < NUM_SYMBOLS; ++i) {
+                out << "sym-" << i << "\n";
+            }
+        }
+        {
+            std::ofstream out(mentions);
+            const auto step = NUM_SCOPES / NUM_MASKED;
+            int64_t masked = 0;
+            for (int64_t i = 0; i < NUM_SCOPES; ++i) {
+                for (const auto factor : {1, 7, 13}) {
+                    out << "scope-" << i << ",sym-" << (i * factor) % NUM_SYMBOLS << "\n";
+                }
+                if (i % step == 0 && masked < NUM_MASKED) {
+                    out << "scope-" << i << ",s\n";
+                    ++masked;
+                }
+            }
+        }
+        ok("COPY Scope FROM '" + scopes + "' (header=false);");
+        ok("COPY Symbol FROM '" + symbols + "' (header=false);");
+        ok("COPY MENTIONS FROM '" + mentions + "' (header=false);");
         ok("CHECKPOINT;");
+        std::filesystem::remove(scopes);
+        std::filesystem::remove(symbols);
+        std::filesystem::remove(mentions);
     }
 
     void ok(const std::string& query) {
