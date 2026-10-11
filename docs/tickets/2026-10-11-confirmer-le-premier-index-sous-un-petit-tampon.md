@@ -28,3 +28,36 @@ De jour, sur luciepc, en régime doux (orchestration, 11 octobre) : c'est une pa
 
 La passe va au bout sous 2 Gio. Relever aussi sa mémoire résidente au plus haut, pour le ticket
 `2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md`.
+
+## Joué (arbre principal, 11 octobre 2026, 10 h 28 à 10 h 34, luciepc)
+
+Lib commune de luciepc à `4820e9154` (bâtie à 05:36 ; elle porte `47a283e6c`), worktree
+`rag3db-arbre` à `c9362d9e8`, la recette ci-dessus sous `poste lourd`, en régime doux, avec les
+services d'embarquement locaux. La mémoire résidente a été relevée toutes les 5 s sur le processus
+du test.
+
+| plein texte | résultat | durée | mémoire résidente au plus haut |
+|---|---|---|---|
+| **en fichiers** (le défaut d'une base neuve depuis la bascule du 10 octobre) | **vert** : 7 160 fichiers, 80 911 scopes, tampon de 2,0 Gio | 74 s | 7,24 Go |
+| **en blobs** (`RAG3WEAVER_FTS=blobs` : une base d'avant la bascule, le chemin du 4 octobre) | **rouge** : « valider le paquet : must reopen … The buffer pool is full and no memory could be freed! A checkpoint of this database failed » | 41 s | 7,54 Go |
+
+- **La passe en fichiers ne prouve pas le correctif.** Sans blobs en base, elle ne passe pas par le
+  chemin qui échouait le 4 octobre. Seule la passe en blobs le joue.
+- **En blobs, le défaut est toujours là**, plus loin : la passe avait fait 3 072 fichiers au dernier
+  relevé (le 4 octobre, elle mourait vers le 2 000ᵉ). Il échoue à la validation d'un paquet, dont
+  le COPY passe par le point de reprise forcé en blobs. Base : 584 Mo sur disque à la mort.
+- **La mémoire résidente** pour un tampon de 2 Gio, relevée par le test lui-même (lignes
+  `[mémoire]`), fichiers puis blobs :
+
+  | fichiers faits | 1 024 | 2 048 | 3 072 | 7 160 |
+  |---|---|---|---|---|
+  | en fichiers (Mo) | 2 574 | 3 584 | 4 432 | 6 941 |
+  | en blobs (Mo) | 2 721 | 4 160 | 5 313 | — |
+
+  Presque tout est anonyme, et ça croît d'environ 1 Go par millier de fichiers, bien au-delà du
+  tampon. C'est pour le ticket `2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md`,
+  et ça vaut **aussi en fichiers**.
+
+**État** : la confirmation est faite pour le défaut d'une base neuve (en fichiers). Le défaut reste
+rouge en blobs, donc pour une base d'avant la bascule. Le ticket reste ouvert pour ce cas. Journaux
+sur luciepc : `~/.cache/rag3weaver-notes-A/confirmation/e2e.log` et `e2e-blobs.log`.
