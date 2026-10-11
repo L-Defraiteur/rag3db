@@ -73,6 +73,7 @@ protected:
 };
 
 TEST_F(InsertLockTest, WithoutMultiWritesNothingIsLocked) {
+    mustRun(*conn, "CALL enable_multi_writes=false;"); // l'ancien défaut, posé
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
     mustRun(*conn, copyOfKeys(100, 10));
@@ -556,6 +557,7 @@ TEST_F(InsertLockTest, AnAnnouncementIsRefusedAfterAWriteOrTwiceOrInAutoCommit) 
 }
 
 TEST_F(InsertLockTest, WithoutMultiWritesAnAnnouncementTakesNothing) {
+    mustRun(*conn, "CALL enable_multi_writes=false;"); // l'ancien défaut, posé
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "CALL acquire_locks('Item', [1, 2]);");
     EXPECT_EQ(locks().getNumResources(), 0u);
@@ -701,6 +703,7 @@ TEST_F(IndexedTableLockTest, TwoDeletesWithOverlappingNeighbourhoodsBothCommitIn
 }
 
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {
+    mustRun(*conn, "CALL enable_multi_writes=false;"); // l'ancien défaut, posé
     // Hors du mode, rien ne change : un seul écrivain à la fois, l'autre connexion attend
     // son tour pour écrire, et le doublon est vu comme avant.
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
