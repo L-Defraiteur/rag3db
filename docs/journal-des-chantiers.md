@@ -1332,6 +1332,13 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Le point de reprise échoue quand le tampon est petit~~ — **corrigé le 11 octobre 2026**
+  (`47a283e6c`, seconde session cœur C++) : une colonne de chaînes tenait en un seul segment, parce
+  que l'estimation de taille ne voyait pas les octets des chaînes, et chaque point de reprise le
+  réécrivait par doublements. Il échouait dès qu'une table de BLOB dépassait le quart du tampon.
+  Les segments de chaînes sont maintenant bornés en octets. Ticket
+  `docs/tickets/closed/2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md` ; la mémoire résidente au-delà du tampon reste ouverte
+  (`docs/tickets/2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md`).
 - ~~Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus
   se suivent~~ — **corrigé le 11 octobre 2026** (`e4198f862`, seconde session cœur C++) : un
   verrou des lecteurs à côté de la base (`<base>.readers`), comme SQLite en mode WAL.

@@ -1,6 +1,6 @@
 # Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit
 
-- **État** : ouvert
+- **État** : corrigé `47a283e6c` (11 octobre 2026, seconde session cœur C++) — des segments de chaînes bornés en octets ; témoins `StringSplitTest` et `BlobCheckpointTest` (`33792e69d`), rouges avant, verts après
 - **Gravité** : blocage (l'indexation s'arrête, la base doit être rouverte)
 - **Atteignable en service** : oui — tout poste dont le tampon du moteur est
   plus petit que ce qu'un point de reprise veut tenir en mémoire
@@ -169,3 +169,47 @@ ni la plus petite taille de tampon qui passe.
   tampon, réouverture) au lieu d'un échec d'ingestion nu ; `estimate`
   pourrait prévenir quand le dépôt dépasse ce que le tampon permet.
 - Une première indexation de ce dépôt qui passe avec un tampon de 2 Gio.
+
+## Corrigé (`47a283e6c`, `dd4fd0a35`)
+
+- **La cause** : pour découper une colonne en segments, `ColumnChunkData::split()` estime la
+  taille d'un segment par `getSizeOnDiskInMemoryStats()`. Pour les chaînes, cette estimation
+  lisait les statistiques en mémoire du bloc d'octets, que `DictionaryChunk::appendString` ne tient
+  pas à jour (il copie par `memcpy`) : elle disait le bloc constant, donc vide. `split()` gardait
+  alors toute la colonne dans un seul segment, et chaque point de reprise le relisait et le
+  réécrivait hors place, dans un tampon agrandi par doublements (`bit_ceil`), l'ancien tampon et le
+  nouveau coexistant. D'où le seuil : un quart du tampon, en puissance de 2.
+- **Le correctif** :
+  - l'estimation compte les octets réels des chaînes. Le dictionnaire est brut sur le disque, donc
+    c'est leur taille exacte, à la page près ;
+  - `split()`, pour les chaînes, retire un lot qui fait déborder le segment et le retente deux fois
+    plus petit, jusqu'à une valeur, et `finalize()` rend les octets des valeurs retirées. Un segment
+    reste sous la taille visée, sauf un segment d'une seule valeur plus grande qu'elle ;
+  - les autres types gardent le découpage d'origine (`dd4fd0a35`). Pour une liste, `truncate()`
+    laisse les valeurs retirées dans le bloc fils, et reculer y entassait des valeurs mortes : la
+    première version faisait manquer de tampon le point de reprise des FLOAT[960] (trois cas vector,
+    vus par la liste complète).
+- **Les témoins** :
+  - `StringSplitTest` (`test/storage/string_split_test.cpp`) : rouge avant, avec 16 blobs d'1 Mio
+    dans un seul segment de 16 Mio ; vert après, avec un segment par blob, aucun segment de
+    plusieurs valeurs au-dessus de 256 Kio, et aucun octet perdu ;
+  - `BlobCheckpointTest.ATableLargerThanAQuarterOfTheBufferPoolCheckpoints` (112 Mio de BLOB sous
+    256 Mio de tampon, un CHECKPOINT après chaque validation) : rouge avant, à 72 Mio ; vert après,
+    avec relecture exacte après réouverture.
+- **La sonde Rust du ticket**, sur une lib de la branche, 3 Go sous 2 Gio : en `ajoute`, elle
+  passe en 65 s (sur master, échec à 544 Mo) ; en `remplace`, elle passe en 70 s (sur master,
+  195 s).
+- **Pour le produit** : la limite « une table de BLOB d'au plus un quart du tampon » tombe. Le mode
+  blobs du plein texte n'est plus le défaut de rag3weaver, mais l'index creux vit encore dans des
+  blobs : c'est lui qui en profite d'abord.
+- **Ce qui reste** :
+  - la première indexation de ce dépôt sous 2 Gio, avec embarquements : une passe de
+    confirmation pour l'arbre principal, de jour, en régime doux (orchestration), ticket
+    `2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md` ;
+  - la mémoire résidente au-delà du tampon (3,2 à 3,7 Go de RSS pour 2 Gio de tampon) : ticket à
+    part, `2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md` ;
+  - une colonne LIST ou STRUCT qui contient des chaînes (une liste de BLOB) : `split()` ne voit que
+    le type de tête, donc elle garde l'ancien découpage par lots de 64, sans recul. Son estimation
+    passe par celle de ses chaînes, qui compte maintenant les vrais octets, mais un segment peut
+    dépasser la cible de jusqu'à un lot de 64 valeurs (remarque de la relecture du cœur). Ce n'est
+    pas corrigé.
