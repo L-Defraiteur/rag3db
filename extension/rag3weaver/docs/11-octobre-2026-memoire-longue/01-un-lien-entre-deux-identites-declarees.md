@@ -166,7 +166,22 @@ qu'une liste de gardes « au cas où » est une liste que personne ne relira :
 ```
 
 **`from_states` / `to_states`** : le bout doit être dans l'un de ces états de son
-cycle de vie pour qu'un lien **s'y pose**. Vérifié au chargement (les états
+cycle de vie pour qu'un lien **s'y pose**.
+
+**La couche, choisie en codant et relue par rag3db-97** : c'est une **politique
+d'écriture du backend**, comme `writes` pour une entité — une enveloppe
+`BackendRelation` autour de la `RelationDef` du catalogue, qui reste intacte.
+Deux raisons : une garde d'états **se recharge** (ce n'est pas une migration du
+schéma, et la comparaison d'ouverture ne regarde que les définitions nues) ; et
+les 24 constructions de `RelationDef` du dépôt n'ont pas à changer. **Le prix,
+écrit là où l'on déclare** : un appel nu à `Catalog::link` ne voit pas la garde —
+un verbe brut, comme du SQL. Elle tient pour **les deux nœuds qui posent des
+liens** (`RelationBatchNode` et `AddRefNode`), par la même fonction que
+l'existence (`Catalog::verifier_les_bouts`), et c'est épinglé par un témoin.
+
+L'état d'un bout est lu **tel qu'il sera après la file** : en base, recouvert par
+une création en file (son état, ou l'initial du cycle), puis par une mise à jour
+en file qui change l'état. Vérifié au chargement (les états
 existent dans le cycle de vie du bout ; un bout sans cycle de vie ne peut pas en
 déclarer) et à l'écriture (le lot est refusé en nommant le bout et son état).
 Pour la mémoire : on n'ancre pas une mémoire `superseded`.

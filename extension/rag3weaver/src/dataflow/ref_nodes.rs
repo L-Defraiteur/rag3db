@@ -296,9 +296,40 @@ impl Node for AddRefNode {
         // lien pour une fiche qui n'existait pas (une faute dans `claim`, un
         // autre `reach`). La référence, elle, est écrite : `add_ref` est
         // idempotent, le rappel avec la bonne fiche ne la doublera pas.
-        let absents = cat
-            .bouts_absents(&relation, &[(uuid_fiche.clone(), uuid_ref.clone())])
+        // La même vérification que tout nœud qui pose un lien : existence, et
+        // états permis quand le backend en déclare pour cette relation — sans
+        // quoi un `add_ref` citerait depuis une fiche que le manifeste interdit.
+        let politique = ctx
+            .service::<std::collections::HashMap<String, crate::backend::BackendRelation>>(
+                crate::backend::RELATION_POLICIES_SERVICE,
+            )
+            .and_then(|m| m.get(&relation))
+            .cloned();
+        let bouts = cat
+            .verifier_les_bouts(
+                &relation,
+                &[(uuid_fiche.clone(), uuid_ref.clone())],
+                politique.as_ref().and_then(|p| p.from_states.as_deref()),
+                politique.as_ref().and_then(|p| p.to_states.as_deref()),
+            )
             .map_err(|e| format!("AddRefNode: vérifier la fiche : {e}"))?;
+        if let Some((_, _, etat)) = bouts.hors_etat.iter().find(|(_, u, _)| *u == uuid_fiche) {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "cette {from_entity} est « {etat} », et la relation {relation} ne permet de citer \
+                     que depuis : {} — la référence est écrite seule, sans lien",
+                    politique
+                        .as_ref()
+                        .and_then(|p| p.from_states.as_ref())
+                        .map(|v| v.join(", "))
+                        .unwrap_or_default()
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref, "ecrite_seule": true},
+            }));
+            return Ok(());
+        }
+        let absents = bouts.absents;
         if absents.iter().any(|(_, u)| *u == uuid_fiche) {
             rendre(ctx, serde_json::json!({
                 "executed": false,

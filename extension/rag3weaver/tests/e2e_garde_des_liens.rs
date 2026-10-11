@@ -174,12 +174,14 @@ fn manifeste(dir: &Path) -> PathBuf {
             "RefType": recopier("RefType")
         },
         "relations": {
-            "ANCRE": {"from": "Fiche", "to": "Sujet"},
+            // Une garde d'états déclarée : on n'ancre ni ne cite depuis une fiche
+            // « à revoir » (marche 2).
+            "ANCRE": {"from": "Fiche", "to": "Sujet", "from_states": ["courant"]},
             "PREUVE": {"from": "Fiche", "to": "Piece"},
             // Une relation qui déclare une propriété.
             "NOTE": {"from": "Fiche", "to": "Sujet",
                      "properties": {"poids": {"type": "string"}, "rang": {"type": "integer"}}},
-            "CITE": {"from": "Fiche", "to": "Ref"}
+            "CITE": {"from": "Fiche", "to": "Ref", "from_states": ["courant"]}
         },
         "tools": {
             "put_fiche": {"graph": put, "bindings": {"entity": "Fiche"},
@@ -537,6 +539,103 @@ fn add_ref_vers_une_fiche_absente_ne_pretend_plus_avoir_lie() {
         .expect("avec la bonne fiche");
     assert_eq!(r["result"]["executed"], true, "{r}");
     assert_eq!(compter(&backend, "CITE"), 1, "le lien est posé, la référence n'est pas doublée");
+}
+
+/// Passer la fiche « à revoir » par sa transition déclarée.
+fn faire_revoir(backend: &Backend) {
+    let fiche = lire(backend, "get_fiche", json!({"titre": "duty cycle"}));
+    backend
+        .call(
+            "put_fiche",
+            json!({"record": {"titre": "duty cycle", "corps": "70 %", "etat": "a_revoir"},
+                   "expected_revision": fiche["revision"]}),
+        )
+        .expect("la transition déclarée");
+}
+
+/// **La garde d'états déclarée** (marche 2) : un lien ne se pose que depuis un
+/// bout dans les états que la relation permet — et **seuls les outils du
+/// backend la voient** : un appel nu au catalogue passe outre, c'est voulu et
+/// c'est épinglé ici (relecture de rag3db-97).
+#[test]
+#[ignore]
+fn un_bout_hors_des_etats_permis_refuse_le_lien_et_le_catalogue_nu_passe_outre() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    faire_revoir(&backend);
+
+    let refus = backend
+        .call("ancrer", json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}}]}))
+        .expect_err("une fiche « à revoir » ne s'ancre pas");
+    assert!(
+        refus.contains("a_revoir") && refus.contains("from_states: [courant]") && refus.contains("no links"),
+        "le refus nomme l'état du bout et les états permis : {refus}"
+    );
+    assert_eq!(compter(&backend, "ANCRE"), 0);
+
+    // Le prix, épinglé : le verbe brut du catalogue ne voit pas la politique.
+    {
+        let f = uuid(&backend, "Fiche", "titre", "duty cycle");
+        let s = uuid(&backend, "Sujet", "titre", "régime GPU");
+        backend.catalog.lock().unwrap().link("ANCRE", f, s, BTreeMap::new()).expect("le verbe brut");
+    }
+    assert_eq!(compter(&backend, "ANCRE"), 1, "Catalog::link passe outre la garde du backend — voulu");
+}
+
+#[test]
+#[ignore]
+fn add_ref_depuis_une_fiche_hors_etat_ne_lie_pas() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    backend
+        .call("create_ref_type", json!({"name": "fichier", "description": "un chemin", "forme": "relatif", "confirm": true}))
+        .expect("le genre");
+    faire_revoir(&backend);
+    let r = backend
+        .call("add_ref", json!({"genre": "fichier", "valeur": "src/a.rs", "fiche": {"titre": "duty cycle"}}))
+        .expect("l'appel rend une réponse");
+    assert_eq!(r["result"]["executed"], false, "{r}");
+    assert!(r["result"]["why"].as_str().unwrap_or("").contains("a_revoir"), "l'état est nommé : {r}");
+    assert_eq!(compter(&backend, "CITE"), 0);
+}
+
+/// Au chargement : une garde sur un bout sans cycle de vie, ou qui nomme un
+/// état inconnu, se refuse en le nommant. Et une garde **se recharge** : ce
+/// n'est pas une migration du schéma.
+#[test]
+#[ignore]
+fn la_garde_d_etats_se_verifie_au_chargement_et_se_recharge() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let chemin = manifeste(dir.path());
+    let original: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    let ecrire = |m: &Value| std::fs::write(&chemin, serde_json::to_vec_pretty(m).unwrap()).unwrap();
+
+    let mut sans_cycle = original.clone();
+    sans_cycle["relations"]["ANCRE"]["to_states"] = json!(["courant"]);
+    ecrire(&sans_cycle);
+    let e = PreparedBackend::load(&chemin).err().expect("Sujet n'a pas de cycle de vie");
+    assert!(e.contains("to_states") && e.contains("Sujet") && e.contains("cycle de vie"), "{e}");
+
+    let mut inconnu = original.clone();
+    inconnu["relations"]["ANCRE"]["from_states"] = json!(["perdu"]);
+    ecrire(&inconnu);
+    let e = PreparedBackend::load(&chemin).err().expect("état inconnu");
+    assert!(e.contains("perdu") && e.contains("a_revoir") && e.contains("courant"), "{e}");
+
+    ecrire(&original);
+    let backend = ouvrir(&chemin);
+    let mut elargi = original.clone();
+    elargi["relations"]["ANCRE"]["from_states"] = json!(["courant", "a_revoir"]);
+    ecrire(&elargi);
+    backend.reload().expect("une garde d'états se recharge, ce n'est pas une migration");
+    ecrire_les_trois(&backend);
+    faire_revoir(&backend);
+    backend
+        .call("ancrer", json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}}]}))
+        .expect("la garde rechargée permet maintenant « à revoir »");
+    assert_eq!(compter(&backend, "ANCRE"), 1);
 }
 
 /// **Un lien vers un bout absent rend `Ok` et n'écrit rien** — mesuré le

@@ -62,6 +62,20 @@ use crate::dataflow::services::ServiceRegistry;
 /// pas à la phrase entière, qui porte des noms de table.
 pub const INDEX_BEHIND_ITS_TABLE: &str = "is behind its table";
 
+/// Ce que [`Catalog::verifier_les_bouts`] a trouvé : les bouts absents
+/// `(entité, uuid)`, et ceux hors des états permis `(entité, uuid, état)`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BoutsVerifies {
+    pub absents: Vec<(String, String)>,
+    pub hors_etat: Vec<(String, String, String)>,
+}
+
+impl BoutsVerifies {
+    pub fn est_bon(&self) -> bool {
+        self.absents.is_empty() && self.hors_etat.is_empty()
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
     #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
@@ -6606,6 +6620,137 @@ impl Catalog {
             }
         }
         Ok(absents)
+    }
+
+    /// **L'état de cycle de vie de chaque bout**, tel qu'il sera après la file :
+    /// en base, recouvert par une création en file (son état, ou l'initial du
+    /// cycle s'il n'en donne pas) puis par une mise à jour en file qui change
+    /// l'état — la dernière l'emporte. `None` pour un bout introuvable.
+    ///
+    /// La lecture passe par l'IR (`Select::by_uuids`, une colonne) : le dialecte
+    /// rend l'uuid demandé en première colonne, puis l'état.
+    pub fn etats_des_bouts(
+        &self,
+        entite: &str,
+        uuids: &[String],
+    ) -> Result<HashMap<String, Option<String>>, CatalogError> {
+        let cycle = self
+            .entity_configs()
+            .get(entite)
+            .ok_or_else(|| CatalogError::UnknownEntity(entite.to_string()))?
+            .lifecycle
+            .as_ref()
+            .ok_or_else(|| {
+                CatalogError::SchemaError(format!("« {entite} » n'a pas de cycle de vie : pas d'état à lire"))
+            })?;
+        let champ = cycle.field.as_str();
+        let mut etats: HashMap<String, Option<String>> =
+            uuids.iter().map(|u| (u.clone(), None)).collect();
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entite,
+                vec![rag3weaver_ir::Column::Node(champ.to_string())],
+            ))
+            .map_err(|e| {
+                CatalogError::SchemaError(format!(
+                    "lire l'état des bouts de « {entite} » : ce dialecte ne traduit pas la lecture \
+                     par uuids ({e})"
+                ))
+            })?;
+        for tranche in uuids.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.clone())).collect());
+            let lignes = self.execute_raw_with_params(
+                &requete,
+                &[crate::connection::QueryParam::new("uuids", liste)],
+            )?;
+            for ligne in &lignes.rows {
+                if let (Some(u), Some(e)) = (
+                    ligne.first().and_then(CypherValue::as_str),
+                    ligne.get(1).and_then(CypherValue::as_str),
+                ) {
+                    etats.insert(u.to_string(), Some(e.to_string()));
+                }
+            }
+        }
+        for e in &self.pending.entities {
+            if e.entity_name != entite {
+                continue;
+            }
+            let Some(u) = e.data.get("_uuid").and_then(CypherValue::as_str) else { continue };
+            if let Some(etat) = etats.get_mut(u) {
+                *etat = Some(
+                    e.data
+                        .get(champ)
+                        .and_then(CypherValue::as_str)
+                        .unwrap_or(cycle.initial.as_str())
+                        .to_string(),
+                );
+            }
+        }
+        for m in &self.pending.updates {
+            if m.entity_name != entite {
+                continue;
+            }
+            if let (Some(etat), Some(nouveau)) =
+                (etats.get_mut(&m.uuid), m.data.get(champ).and_then(CypherValue::as_str))
+            {
+                *etat = Some(nouveau.to_string());
+            }
+        }
+        Ok(etats)
+    }
+
+    /// **Vérifier les bouts d'un lot de liens, en une fois** : les absents
+    /// ([`Self::bouts_absents`]) et ceux qui ne sont pas dans les états permis
+    /// de leur côté. Une seule fonction pour tous les nœuds qui écrivent un
+    /// lien, pour qu'une garde déclarée tienne quel que soit l'outil qui lie
+    /// (relecture de rag3db-97).
+    ///
+    /// Les états permis sont une **politique du backend** (`from_states` /
+    /// `to_states` d'une relation du manifeste), comme `writes` pour une entité :
+    /// le catalogue les reçoit en paramètre et ne les garde pas. **Un appel nu à
+    /// [`Self::link`] ne les voit pas** — c'est un verbe brut, comme du SQL, et
+    /// c'est voulu.
+    pub fn verifier_les_bouts(
+        &self,
+        rel_name: &str,
+        paires: &[(String, String)],
+        from_states: Option<&[String]>,
+        to_states: Option<&[String]>,
+    ) -> Result<BoutsVerifies, CatalogError> {
+        let absents = self.bouts_absents(rel_name, paires)?;
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let mut hors_etat = Vec::new();
+        for (cote, entite, permis) in [
+            (0usize, rel_def.from.as_str(), from_states),
+            (1usize, rel_def.to.as_str(), to_states),
+        ] {
+            let Some(permis) = permis else { continue };
+            let mut uuids: Vec<String> = Vec::new();
+            for paire in paires {
+                let u = if cote == 0 { &paire.0 } else { &paire.1 };
+                let absent = absents.iter().any(|(e, a)| e == entite && a == u);
+                if !absent && !uuids.contains(u) {
+                    uuids.push(u.clone());
+                }
+            }
+            if uuids.is_empty() {
+                continue;
+            }
+            let etats = self.etats_des_bouts(entite, &uuids)?;
+            for u in uuids {
+                let etat = etats.get(&u).cloned().flatten().unwrap_or_default();
+                if !permis.iter().any(|p| *p == etat) {
+                    hors_etat.push((entite.to_string(), u, etat));
+                }
+            }
+        }
+        Ok(BoutsVerifies { absents, hors_etat })
     }
 
     fn mettre_en_file_le_lien(

@@ -42,7 +42,7 @@ pub struct BackendManifest {
     pub vector_extension: PathBuf,
     pub entities: BTreeMap<String, BackendEntity>,
     #[serde(default)]
-    pub relations: HashMap<String, RelationDef>,
+    pub relations: HashMap<String, BackendRelation>,
     /// Only these attachments become tools. Bindings cannot be overridden by callers.
     pub tools: BTreeMap<String, ToolAttachment>,
     /// **Les graphes réactifs, à côté des outils et jamais parmi eux.** Un
@@ -201,6 +201,40 @@ pub struct ToolAttachment {
     /// 3 octobre 2026 (docs/3-octobre-2026-23h05/01), validée.
     #[serde(default)]
     pub after: Option<AfterToolHook>,
+}
+
+/// **Une relation du manifeste** : sa définition au catalogue, à plat, et la
+/// politique d'écriture que le backend lui ajoute — comme `writes` pour une
+/// entité.
+///
+/// `from_states` / `to_states` : le bout doit être dans l'un de ces états de son
+/// cycle de vie pour qu'un lien **s'y pose** (on n'ancre pas une mémoire
+/// `superseded`). Vérifiés au chargement (le bout a un cycle de vie, les états y
+/// existent) et à l'écriture par **les nœuds du backend qui posent des liens**.
+///
+/// **Le prix, dit ici parce que c'est ici qu'on déclare** : un appel nu à
+/// `Catalog::link` ne les voit pas. C'est un verbe brut, comme du SQL ; la
+/// garde tient pour les outils du backend, pas pour qui écrit au catalogue
+/// directement (relecture de rag3db-97, 11 octobre 2026).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendRelation {
+    #[serde(flatten)]
+    pub def: RelationDef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_states: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_states: Option<Vec<String>>,
+}
+
+/// La clé du service qui porte les politiques d'écriture des relations
+/// (`HashMap<String, BackendRelation>`), pour les nœuds qui posent des liens.
+pub const RELATION_POLICIES_SERVICE: &str = "backend_relation_policies";
+
+impl std::ops::Deref for BackendRelation {
+    type Target = RelationDef;
+    fn deref(&self) -> &RelationDef {
+        &self.def
+    }
 }
 
 /// **Une réaction** : un graphe monté au chargement du backend et déclenché
@@ -538,6 +572,10 @@ pub struct PreparedBackend {
     embed: crate::model_source::ModelSource,
     pub directory: PathBuf,
     entities: HashMap<String, EntityConfig>,
+    /// Les définitions nues des relations, sans leur politique d'écriture :
+    /// ce que voient la recherche, le catalogue et la comparaison
+    /// d'ouverture — une garde d'états se recharge, une relation non.
+    relation_defs: HashMap<String, RelationDef>,
     mappings: HashMap<String, JsonSchemaMapping>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
     tools: BTreeMap<String, GraphTool>,
@@ -571,7 +609,7 @@ impl PreparedBackend {
         program.compile(
             &crate::dataflow::search_chain::SearchSchema {
                 entities: &self.entities,
-                relations: &self.manifest.relations,
+                relations: &self.relation_defs,
             },
             &self.nodes,
         )
@@ -831,6 +869,34 @@ impl PreparedBackend {
             crate::schema::validate_identifier(name, "relation").map_err(|e| e.to_string())?;
             if !entities.contains_key(&relation.from) || !entities.contains_key(&relation.to) {
                 return Err(format!("{name}: unknown relation endpoint"));
+            }
+            // Les états permis d'un bout : il faut un cycle de vie, et des
+            // états qui y existent — sinon la garde ne pourrait jamais passer,
+            // ou jamais refuser.
+            for (cle, entite, permis) in [
+                ("from_states", &relation.from, &relation.from_states),
+                ("to_states", &relation.to, &relation.to_states),
+            ] {
+                let Some(permis) = permis else { continue };
+                let Some(cycle) = entities[entite].lifecycle.as_ref() else {
+                    return Err(format!(
+                        "relation « {name} » : {cle} sur « {entite} », qui n'a pas de cycle de vie — \
+                         retirez {cle}, ou déclarez un lifecycle sur l'entité"
+                    ));
+                };
+                let connus = cycle.states();
+                if permis.is_empty() {
+                    return Err(format!("relation « {name} » : {cle} est vide — aucun lien ne pourrait se poser"));
+                }
+                for etat in permis {
+                    if !connus.contains(&etat.as_str()) {
+                        return Err(format!(
+                            "relation « {name} » : {cle} nomme « {etat} », qui n'est pas un état de \
+                             « {entite} » (états : {})",
+                            connus.join(", ")
+                        ));
+                    }
+                }
             }
         }
         let scripts = manifest
@@ -1147,6 +1213,11 @@ impl PreparedBackend {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             scripted_types,
             routes,
+            relation_defs: manifest
+                .relations
+                .iter()
+                .map(|(k, v)| (k.clone(), v.def.clone()))
+                .collect(),
             manifest,
             embed,
             directory,
@@ -1466,7 +1537,7 @@ fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> 
         ("workspace", value(&a.workspace), value(&b.workspace)),
         ("fts_positions", value(&a.fts_positions), value(&b.fts_positions)),
         ("buffer_pool", value(&a.buffer_pool), value(&b.buffer_pool)),
-        ("relations", value(&a.relations), value(&b.relations)),
+        ("relations", value(&old.relation_defs), value(&new.relation_defs)),
         ("entities", entities(old), entities(new)),
     ] {
         if before != after {
@@ -2509,6 +2580,12 @@ impl Backend {
         services.register("rhai_scripts", prepared.scripts.clone());
         services.register(
             "backend_relations",
+            prepared.relation_defs.clone(),
+        );
+        // La politique d'écriture des relations (états permis), lue par les
+        // nœuds qui posent des liens.
+        services.register(
+            crate::backend::RELATION_POLICIES_SERVICE,
             prepared.manifest.relations.clone(),
         );
         services.register("backend_mappings", prepared.mappings.clone());

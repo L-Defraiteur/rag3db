@@ -842,21 +842,55 @@ impl Node for RelationBatchNode {
         // erreur (`MATCH … MERGE`).
         let paires: Vec<(String, String)> =
             links.iter().map(|(a, b, _)| (a.clone(), b.clone())).collect();
-        let absents = cat.bouts_absents(relation, &paires).map_err(|e| e.to_string())?;
-        if !absents.is_empty() {
-            let noms: Vec<String> = absents
+        // La politique d'écriture de la relation (états permis), quand le
+        // backend en déclare une : la même vérification que l'existence, d'un
+        // seul appel, pour tous les nœuds qui posent un lien.
+        let politique = ctx
+            .service::<HashMap<String, crate::backend::BackendRelation>>(
+                crate::backend::RELATION_POLICIES_SERVICE,
+            )
+            .and_then(|m| m.get(relation))
+            .cloned();
+        let verdict = cat
+            .verifier_les_bouts(
+                relation,
+                &paires,
+                politique.as_ref().and_then(|p| p.from_states.as_deref()),
+                politique.as_ref().and_then(|p| p.to_states.as_deref()),
+            )
+            .map_err(|e| e.to_string())?;
+        let nommer = |entite: &String, uuid: &String| {
+            identites
+                .get(&(entite.clone(), uuid.clone()))
+                .cloned()
+                .unwrap_or_else(|| uuid.clone())
+        };
+        if !verdict.absents.is_empty() {
+            let noms: Vec<String> = verdict
+                .absents
                 .iter()
-                .map(|(entite, uuid)| {
-                    let qui = identites
-                        .get(&(entite.clone(), uuid.clone()))
-                        .cloned()
-                        .unwrap_or_else(|| uuid.clone());
-                    format!("{entite} {qui}")
-                })
+                .map(|(entite, uuid)| format!("{entite} {}", nommer(entite, uuid)))
                 .collect();
             return Err(format!(
                 "missing endpoint(s): {}; no links in this batch written",
                 noms.join(", ")
+            ));
+        }
+        if !verdict.hors_etat.is_empty() {
+            let noms: Vec<String> = verdict
+                .hors_etat
+                .iter()
+                .map(|(entite, uuid, etat)| {
+                    format!("{entite} {} is « {etat} »", nommer(entite, uuid))
+                })
+                .collect();
+            let permis = |cote: Option<&Vec<String>>| cote.map(|v| v.join(", ")).unwrap_or_default();
+            return Err(format!(
+                "endpoint(s) outside the states {relation} allows: {} (from_states: [{}], to_states: [{}]); \
+                 no links in this batch written",
+                noms.join("; "),
+                permis(politique.as_ref().and_then(|p| p.from_states.as_ref())),
+                permis(politique.as_ref().and_then(|p| p.to_states.as_ref())),
             ));
         }
         let verified = paires.len();
