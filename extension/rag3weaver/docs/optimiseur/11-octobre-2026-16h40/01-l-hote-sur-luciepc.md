@@ -62,8 +62,30 @@ Les deux ensemble, non : le second refuse de démarrer (un seul hôte) ; l'unit�
 qui voit un hôte manuel échoue en code 1 sans boucler.
 
 **Après un rebâti de la lib commune** (`rag3db-lourd`) : `systemctl --user
-restart rag3weaver-daemon`, pour que l'hôte charge la nouvelle lib ; si le
-moteur a changé d'interface (`tools/rust_api`), rebâtir aussi le binaire.
+restart rag3weaver-daemon`, pour que l'hôte charge la nouvelle lib.
+
+**Un rebâti de la lib qui change une signature exportée demande un rebâti des
+binaires installés AVANT de relancer leurs hôtes** (orchestration, 11 octobre
+au soir). Cela vaut pour `tools/rust_api`, ou pour un constructeur comme
+`SystemConfig`. Le 11 octobre à 20 h 39, B2 a changé le constructeur de
+`SystemConfig`, et la lib commune a été rebâtie sur a72acfeef. Le binaire
+installé ne démarrait plus (`undefined symbol:
+_ZN6rag3db4main12SystemConfigC1Emmbbmbmbbb`). L'unité bouclait (`Restart=on-failure`),
+jusqu'à ce que codeparsers l'arrête : l'hôte est resté éteint, et le cœur sans
+MCP là-bas. La reprise :
+
+```bash
+L=$HOME/git_workspaces/rag3db-lourd/build/lecteurs-csv/src
+cargo clean --release -p rag3db -p rag3weaver      # les liaisons du moteur se refont
+# … le cargo build de la recette ci-dessus …
+B=$CARGO_TARGET_DIR/release/rag3weaver-backend
+for s in $(nm -D --undefined-only $B | awk '{print $2}' | grep '^_ZN6rag3db'); do
+  nm -D --defined-only $L/librag3db.so | grep -q " $s$" || echo "MANQUE $s"
+done                                                # rien : on installe
+```
+
+Le magasin de libs par identifiant de bâti rendra cette règle caduque : chaque
+binaire chargerait la lib de son identifiant. C'est un argument de plus pour lui.
 
 ## Redémarrer l'hôte : l'annoncer avant
 
