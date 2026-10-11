@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (30)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -42,7 +42,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | ouvert (cœur C++, né de la mesure de F) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
 | [Un plan de quelques lignes prend un fil par cœur](2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | ouvert — au cœur C++, pas pour maintenant | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
-| [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | ouvert (10 sur 10 sur master, hors bascule) | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
@@ -108,10 +107,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (103), dans `closed/`
+### Fermés (104), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](closed/2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | corrigé (voir le ticket) ; H4 au vert | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
 | [Une mesure attend sans fin derrière des lourds qui « entrent quand même »](closed/2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme.md) | corrigé : priorité à la mesure, délai dans la place, `poste --qui` (11 oct.) | blocage | oui, sur le poste | oui (`poste`) |
 | [« Catalogue occupé » pour un changement localisé](closed/2026-10-11-catalogue-occupe-pour-un-changement-localise.md) | corrigé (la lecture attend un verrou court) | blocage | oui | oui (et seulement) |
 | [L'arrêt de l'hôte attendait la fin d'une longue réaction](closed/2026-10-11-l-arret-attendait-une-longue-reaction.md) | corrigé (un drapeau d'arrêt entre deux fichiers) | blocage | oui | oui (et seulement) |

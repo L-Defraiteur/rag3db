@@ -117,24 +117,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstCopy same-ve
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
-#
-# Sortis de probabilistic.txt le 11 octobre 2026 (banc, preuve de la bascule) : 10 fois sur 10 sur
-# master fd10b8c27 et 481afb550, hors bascule, et autant sur la bascule 4ee70e386.
-# H4, le mélange de C7 sur une table indexée : des refus inattendus de deux sortes. L'index
-# vectoriel dit « node offset N is beyond the visited set » (ticket
-# 2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite) ; les
-# verrous disaient « no primary key to lock: it is not visible » au lieu de l'erreur de
-# sérialisation, corrigé par le cœur C++ (branche verrous-pk-lock, son ticket fermé). Le premier
-# suffit à garder H4 rouge. L'intégrité reste juste.
-Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Hot no-unexpected-error
-Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash no-unexpected-error
 # La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
 # 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure) : 1,8 à 4,3 Mo en trois morts.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt data-file-bounded
-#
-# L'index vectoriel sous deux écrivains (ticket
-# 2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite) : un SET de
-# vecteur qui attend derrière une insertion non validée refuse son instruction après la validation
-# de l'autre (« node offset N is beyond the visited set of 300 nodes »), trois fois sur trois. Le
-# témoin minimal de ce que H4 montrait.
-VectorIndexUpdate.AnUpdateWaitingBehindAnInsertSeesItsNewRows no-visited-set-refusal

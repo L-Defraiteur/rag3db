@@ -53,6 +53,19 @@ struct VisitedState {
 
     // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
     void reset() { memset(visited.get(), 0, size); }
+    // Agrandit l'ensemble à numNodes nœuds, en gardant les marques posées ; ne le rétrécit jamais.
+    // Un état créé avant l'attente du verrou de l'index sert après : l'instantané, repris après
+    // l'attente, voit les lignes posées entre-temps par l'autre écrivain.
+    void ensureSize(common::offset_t numNodes) {
+        if (numNodes <= size) {
+            return;
+        }
+        auto grown = std::make_unique<uint8_t[]>(numNodes);
+        memcpy(grown.get(), visited.get(), size);
+        memset(grown.get() + size, 0, numNodes - size);
+        visited = std::move(grown);
+        size = numNodes;
+    }
     // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
     void add(common::offset_t offset) {
         checkBound(offset);
@@ -401,6 +414,8 @@ private:
     std::vector<NodeWithDistance> searchFromCheckpointed(transaction::Transaction* transaction,
         const EmbeddingHandle& queryVector, HNSWSearchState& searchState) const;
     void throwIfCountsMoreRowsThanItsTable(const transaction::Transaction* transaction) const;
+    void fitVisitedToTable(const transaction::Transaction* transaction,
+        HNSWSearchState& searchState) const;
     void searchFromUnCheckpointed(transaction::Transaction* transaction,
         const EmbeddingHandle& queryVector, HNSWSearchState& searchState,
         std::vector<NodeWithDistance>& result) const;

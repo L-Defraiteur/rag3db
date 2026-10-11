@@ -593,6 +593,7 @@ std::unique_ptr<Index> OnDiskHNSWIndex::load(main::ClientContext* context, Stora
 std::vector<NodeWithDistance> OnDiskHNSWIndex::search(Transaction* transaction,
     const EmbeddingHandle& queryVector, HNSWSearchState& searchState) const {
     throwIfCountsMoreRowsThanItsTable(transaction);
+    fitVisitedToTable(transaction, searchState);
     auto result = searchFromCheckpointed(transaction, queryVector, searchState);
     searchFromUnCheckpointed(transaction, queryVector, searchState, result);
     result.resize(searchState.k);
@@ -610,6 +611,20 @@ void OnDiskHNSWIndex::throwIfCountsMoreRowsThanItsTable(const Transaction* trans
         HNSWIndexUtils::throwCountsMoreRowsThanItsTable(indexInfo.name, nodeTable.getTableName(),
             numIndexedRows, numTotalRows);
     }
+}
+
+// L'état d'une écriture sur le graphe est créé avant que la table prenne le verrou de l'index
+// (initInsertState, initUpdateState) ; sous le mode multi-écrivains, l'attente de ce verrou reprend
+// l'instantané, qui voit alors les lignes qu'un autre écrivain a validées entre-temps, et leurs
+// arêtes. L'ensemble visité, dimensionné à la création, les refusait (« node offset N is beyond the
+// visited set of N nodes »). L'ensemble prend donc la taille de la table au début de chaque
+// opération ; le contrôle de borne reste, pour un graphe qui désignerait une ligne hors de la table.
+// La recherche s'y plie aussi, par précaution : son état est créé à l'initialisation de l'opérateur.
+// Aucun cas n'y a été reproduit (un SET qui attend en amont d'un QUERY_VECTOR_INDEX, dans la même
+// instruction, laisse la recherche passer sur master).
+void OnDiskHNSWIndex::fitVisitedToTable(const Transaction* transaction,
+    HNSWSearchState& searchState) const {
+    searchState.visited.ensureSize(nodeTable.getNumTotalRows(transaction));
 }
 
 std::vector<NodeWithDistance> OnDiskHNSWIndex::searchFromCheckpointed(Transaction* transaction,
@@ -727,6 +742,7 @@ void OnDiskHNSWIndex::commitInsert(Transaction* transaction,
     KU_ASSERT(nodeIDVector.state->getSelSize() == dataVectors[0]->state->getSelSize());
     throwIfCountsMoreRowsThanItsTable(transaction);
     auto& hnswInsertState = insertState.cast<HNSWInsertState>();
+    fitVisitedToTable(transaction, hnswInsertState.searchState);
     auto commitInsertScanState = std::make_unique<CommitInsertEmbeddingScanState>(dataVectors[0]);
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
         auto pos = nodeIDVector.state->getSelVector()[i];
@@ -815,6 +831,7 @@ std::unique_ptr<Index::DeleteState> OnDiskHNSWIndex::initDeleteState(
 void OnDiskHNSWIndex::delete_(Transaction* transaction, const common::ValueVector& nodeIDVector,
     DeleteState& deleteState) {
     auto& state = deleteState.cast<HNSWDeleteState>();
+    fitVisitedToTable(transaction, state.insertState.searchState);
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
         const auto pos = nodeIDVector.state->getSelVector()[i];
         const auto offset = nodeIDVector.readNodeOffset(pos);
@@ -842,6 +859,7 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
         return;
     }
     throwIfCountsMoreRowsThanItsTable(transaction);
+    fitVisitedToTable(transaction, state.insertState.searchState);
     // First every surviving neighbour gets its edges rewritten, then the entry points are
     // repaired, and only then is each of them made reachable again: that last step may insert a
     // node anew, which searches the graph from the entry point.
@@ -1086,6 +1104,7 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     common::ValueVector& propertyVector, UpdateState& updateState) {
     throwIfCountsMoreRowsThanItsTable(transaction);
     auto& state = updateState.cast<HNSWUpdateState>();
+    fitVisitedToTable(transaction, state.insertState.searchState);
     const auto pos = nodeIDVector.state->getSelVector()[0];
     const auto offset = nodeIDVector.readNodeOffset(pos);
     // 1. Remove old node from graph (forward edges + lazy cleanup of neighbors' back-edges).
