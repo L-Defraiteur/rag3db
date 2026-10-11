@@ -31,12 +31,35 @@ Sans harnais : **à écrire**, d'abord. Un COPY d'un CSV de BLOB dans une table
 avec une taille de blobs et un nombre de lignes qui dépassent un quart du tampon. Puis vérifier que
 ce cas sans harnais échoue comme le produit avant d'accuser le moteur.
 
+## Reproduit sans harnais (11 octobre, 10 h 40, luciepc, master `daed7a4da`)
+
+Dans `test/transaction/blob_checkpoint_test.cpp`, sous 256 Mio de tampon,
+`force_checkpoint_on_copy=true`, avec des blobs d'1 Mio lus d'un CSV :
+
+- `BlobCopyCheckpointTest.SuccessiveForcedCopiesBeyondAQuarterOfTheBufferPool` : sept COPY de 16
+  blobs, jusqu'à 112 Mio, **passent** ;
+- `BlobCopyCheckpointTest.OneForcedCopyBeyondAQuarterOfTheBufferPool` : **un seul COPY de 112
+  blobs échoue**, sur « Buffer manager exception: Unable to allocate memory! The buffer pool is
+  full », en 50 s.
+
+Ce n'est donc pas le point de reprise : c'est **le COPY lui-même**, quand une seule instruction
+porte plus d'environ un quart du tampon en blobs. Le paquet du produit pousse ses blobs en un seul
+COPY.
+
+La pile (gdb, `catch throw` sur l'exception du tampon) :
+`NodeBatchInsert::executeInternal` → `NodeBatchInsert::appendIncompleteNodeGroup` →
+`InMemChunkedNodeGroup::append` → `StringChunkData::appendStringColumnChunk` →
+`DictionaryChunk::appendString` → `ColumnChunkData::resize` → `MemoryManager::allocateBuffer`.
+
 ## La cause
 
-Pas établie. Lecture (seconde session cœur C++, à éprouver par sonde) : un COPY construit ses
-groupes de lignes entiers en mémoire avant de les écrire. Le vidage d'un groupe
-(`InMemChunkedNodeGroup::flush` → `finalize()` → `split(true)`, `chunked_node_group.cpp`) tient
-tout le groupe plus sa copie découpée. Pour des blobs de quelques Mio, un groupe de quelques
+Localisée par la pile, pas encore corrigée. Les fils du COPY versent leurs groupes incomplets dans
+un groupe en mémoire partagé, qui tient tout un groupe de lignes (jusqu'à 2^17 lignes) avant son
+écriture. Pour des blobs, ce groupe pèse toute la donnée de l'instruction. Son bloc de chaînes
+grandit par doublements (`bit_ceil`, dans `appendString`), l'ancien et le nouveau tampon
+coexistant pendant la copie. Le vidage d'après (`InMemChunkedNodeGroup::flush` → `finalize()` →
+`split(true)`) tiendrait en plus sa copie découpée. La lecture de la nuit est donc confirmée sur
+le principe, mais l'échec tombe plus tôt, à l'assemblage. Pour des blobs de quelques Mio, un groupe de quelques
 centaines de lignes pèse déjà des centaines de Mo, et le double au vidage. Le correctif du ticket
 fermé borne les segments, mais pas la mémoire d'un groupe que le COPY tient entier.
 
