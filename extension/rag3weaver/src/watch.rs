@@ -14,9 +14,12 @@
 //! notifications du noyau viendront derrière la même interface si une mesure
 //! le demande.
 
+#[cfg(feature = "code")]
 use std::collections::BTreeMap;
+#[cfg(feature = "code")]
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
+#[cfg(feature = "code")]
 use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};

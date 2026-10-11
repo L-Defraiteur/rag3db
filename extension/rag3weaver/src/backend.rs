@@ -2004,17 +2004,16 @@ impl Backend {
         if prepared.manifest.watches.is_empty() {
             return Ok(Vec::new());
         }
-        let mut slot = self.watches.lock().unwrap_or_else(|e| e.into_inner());
-        if !slot.is_empty() {
-            return Ok(Vec::new());
-        }
         #[cfg(not(feature = "code"))]
         {
-            drop(slot);
             Err("watches : la montre de fichiers demande la feature `code`".to_string())
         }
         #[cfg(feature = "code")]
         {
+            let mut slot = self.watches.lock().unwrap_or_else(|e| e.into_inner());
+            if !slot.is_empty() {
+                return Ok(Vec::new());
+            }
             let workspace = prepared.manifest.workspace.as_ref().ok_or(
                 "watches : il faut un workspace (la source surveillée)",
             )?;
