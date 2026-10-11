@@ -615,3 +615,12 @@ où elle vit.
   par ensemble demandé par Lucie (« repérer un îlot et le retirer d'un coup »)
   : au proto par les formes de l'IR (Select In, Detach par relation, Delete),
   F en relecture.
+- **Plusieurs worktrees sans faire attendre les autres** (Lucie, 19 h 15,
+  « pour après ») : ce qui couple les sessions aujourd'hui et son remède :
+  l'index (une base par arbre, en cours) ; master (séquentiel par nature, le
+  verrou tenu quelques minutes si le rejeu court est court) ; le poste (le
+  partagé, les mesures sur luciepc, la limite est le matériel) ; **la lib
+  commune du moteur**, dernière chose qui couple tout le monde : un magasin de
+  libs par identifiant de bâti (une lib par commit du moteur, rangée une fois,
+  jamais réécrite, chaque arbre charge celle de son commit, le contrôle de
+  bâti fait le reste). Noté pour G après ses lots, pas avant.
