@@ -27,18 +27,21 @@ d'usage.
 
 Ce sont les tickets ouverts du produit dont la gravité est « perte », « réponse fausse »,
 « réponse incomplète » ou « inconnue » (table « Ouverts — produit », 11 octobre, midi). On en
-compte **20**, et non 21 comme annoncé : la différence est à vérifier quand la table est relue.
+compte **20**, et non 21 comme annoncé. Le 21ᵉ est « Une réaction peut remonter une relation
+qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence, donc P3), fermé à
+11 h 28 par la marche 4 du lien générique (`ad51a6630`), une demi-heure avant que la page ne soit
+écrite.
 
 ### P1 — rien n'est rendu comme sûr qui ne l'est pas
 
 | ticket | ce qui le ferme |
 |---|---|
 | `2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` | les marques de résolution, en cours (filtre dans Liens et impact sur master ; « nom » sur les liens par le nom seul, `718cfbe1d`) ; reste : les réexportations |
-| `2026-10-04-des-receveurs-restent-sans-type.md` | codeparsers (B2d) ; les appels sur une locale non typée sont visibles et jamais reliés (`6afc2976a`) |
-| `2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md` | décidé, attend `code.rs` |
+| `2026-10-04-des-receveurs-restent-sans-type.md` | **P1 tenue** : un receveur sans type est soit marqué « nom » (par le seul définisseur, ou par l'analyseur dans le fichier, `718cfbe1d`), soit visible et jamais relié (`6afc2976a`). Ce qui reste (typer davantage : retours d'appel, paramètres de fermeture) est du rappel, hors de la stèle. À fermer pour la stèle avec ces deux témoins |
+| `2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md` | décidé, attend `code.rs`. La sonde B9 de la session recherche voit pourtant traverser `pub use interne::secrete` (appel attribué) : rejouer la recette du ticket avant d'écrire du code |
 | `2026-10-04-nom-seul-et-segments-de-module.md` | codeparsers, « pas pour maintenant » à revoir |
 | `2026-10-04-prototypes-c-au-niveau-du-fichier.md` | codeparsers |
-| `2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md` | le rendez-vous des types entre fichiers (codeparsers et `code.rs`) |
+| `2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md` | probablement déjà fermé par B2b (les types différés résolus au rendez-vous, `6002c3ccd`, témoin `e2e_types_differes`) : rejouer la recette du ticket, puis le fermer |
 
 ### P2 — aucune perte à l'indexation ni à la synchronisation
 
@@ -67,7 +70,7 @@ compte **20**, et non 21 comme annoncé : la différence est à vérifier quand 
 | ticket | ce qui le ferme |
 |---|---|
 | `2026-10-04-fonctions-anonymes-cpp-restantes.md` | codeparsers |
-| `2026-10-11-appel-a-une-fermeture-locale-ecarte.md` | codeparsers, T5 (`d90a1f6`, branche `t5-fermetures`, en vérification) |
+| `2026-10-11-appel-a-une-fermeture-locale-ecarte.md` | codeparsers, T5 (`d90a1f6`, branche `t5-fermetures`, en vérification) ; le ticket est fermé dans la branche |
 
 **Hors de la stèle**, parce qu'ils se disent ou ne perdent rien :
 - la reprise qui exige `takeover`, un blocage qui se dit. La marche 0 l'a déjà levée pour l'arrêt propre, et la forme C la règle pour le reste ;
@@ -79,8 +82,33 @@ compte **20**, et non 21 comme annoncé : la différence est à vérifier quand 
 
 ## 3. Ce qui la ferme, dans l'ordre
 
-1. **Codeparsers « au maximum »** : P1 et P4 sont presque tous à lui (`code.rs` compris). *À écrire
-   par codeparsers : l'ordre de ses lots et ce qui reste après chacun.*
+1. **Codeparsers « au maximum »** : P1 et P4 sont presque tous à lui (`code.rs` compris). Dans
+   l'ordre, chaque lot avec son témoin rouge, le banc sans recul réel (arêtes comparées une à une
+   quand des liens bougent), et le pointeur à l'arbre principal :
+   1. **T5** (fermeture locale, `map(aide)`) : fait, branche `t5-fermetures` en vérification.
+      Reste ensuite en P4 : les C++ anonymes.
+   2. **Rejouer deux recettes probablement déjà fermées** : le type d'un champ déclaré dans un
+      autre fichier (B2b) et le chemin vers une réexportation (la sonde B9 le voit traverser).
+      Chacun en témoin ; fermé s'il est vert, corrigé sinon. Reste ensuite en P1 : le nom seul et
+      les segments de module, et les prototypes C.
+   3. **`analyze` en racine relative** (P3) : refuser une racine relative avec une erreur
+      nommée, ou la résoudre en le disant ; et un fichier analysé qui ne rend rien entre dans
+      `skipped` avec sa raison. Petit lot. Reste ensuite : rien en P3 côté codeparsers.
+   4. **Les prototypes C au niveau du fichier** (P1) : les `declaration` à déclarateur de
+      fonction deviennent des membres du scope de fichier, leurs noms sortent des références.
+   5. **Les C++ anonymes** (P4) : tirer cinquante cas parmi les 738, classer, nommer ce qui se
+      nomme. Ce qui ne se nomme pas (une lambda passée en argument) est compté et dit tel, pas
+      rendu `AnonymousFunction`. Reste ensuite en P4 : rien.
+   6. **Le nom seul et les segments de module** (P1) : un paramètre nommé dans une signature et un
+      segment de chemin qui nomme un module ne sont plus des références par le nom. C'est le lot
+      le plus large. Reste ensuite en P1 : la passe de contrôle.
+   7. **Fermer « une arête ne dit pas comment elle a été résolue » et « des receveurs restent sans
+      type »** sur la passe de contrôle : `e2e_banc_relations` compte les liens par marque. Plus
+      aucun lien deviné n'y passe pour un lien lu, et ce qui reste « par le nom » est compté
+      (banc codeparsers : `relations.consumes.par_le_nom`).
+
+   Hors de la stèle, après elle : typer davantage de receveurs (le rappel, pas la vérité du
+   rendu : retours d'appel, paramètres de fermeture, éléments d'itérateurs).
 2. **La forme C** ferme trois tickets de P2 par ses marches 1 bis, 3 et 7.
 3. **La mémoire longue** ferme quatre tickets (le lien vers un bout absent, les échecs de réaction,
    le `put` sans état, la portée `person`).
