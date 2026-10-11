@@ -109,37 +109,39 @@ export CARGO_TARGET_DIR=<le sous-target du lot, déjà chaud>
 # Les chemins du bâti de l'artefact rejoué, selon la sorte du lot (plus bas) ;
 # ici, un lot rag3weaver.
 BATI='extension/rag3weaver tools/rust_api src cmake CMakeLists.txt test extension/vector extension/geo third_party scripts'
-# Rebaser sur l'origin/master déjà lu : jamais de fetch ici, pour que
-# l'avance examinée soit celle sur laquelle on rebase.
+# Les worktrees partagent leurs références : le fetch d'une autre session avance
+# origin/master sous nos pieds. On ne lit donc master qu'après NOTRE fetch, par
+# FETCH_HEAD (propre au worktree), dans $cible, et tout se fait contre ce hash.
+lire() { git -C "$W" fetch -q origin master && cible=$(git -C "$W" rev-parse FETCH_HEAD); }
 rebaser() {
-  git -C "$W" rebase -q origin/master
+  git -C "$W" rebase -q "$cible"
   gd=$(git -C "$W" rev-parse --absolute-git-dir)
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]; then
     echo "rebase arrêté sur un conflit, rien poussé"; git -C "$W" rebase --abort; exit 8
   fi
 }
-git -C "$W" fetch -q origin master
+lire
 rebaser
-base=$(git -C "$W" rev-parse origin/master)
+base=$cible
 cd "$W/extension/rag3weaver"
 ~/.cache/rag3weaver-build/poste lourd bash scripts/check_features.sh || exit 4
 # … les suites du lot, courtes …
 # Pousser en boucle, verrou tenu : une avance hors du bâti se rebase et se
 # repousse dans le même tour ; une avance du bâti arrête tout.
 while :; do
-  git -C "$W" fetch -q origin master
-  if [ "$(git -C "$W" rev-parse origin/master)" != "$base" ]; then
-    if [ -n "$(git -C "$W" diff --name-only "$base" origin/master -- $BATI ':!*.md')" ]; then
+  lire
+  if [ "$cible" != "$base" ]; then
+    if [ -n "$(git -C "$W" diff --name-only "$base" "$cible" -- $BATI ':!*.md')" ]; then
       echo "master a reçu du code du bâti depuis la base rejouée, rien poussé"; exit 9
     fi
     rebaser
-    base=$(git -C "$W" rev-parse origin/master)
+    base=$cible
   fi
   git -C "$W" push -q origin HEAD:master && break
   # Refusé : soit un push de docs est passé entre le fetch et le push (on
   # relit et on reboucle), soit le refus vient d'ailleurs (on s'arrête).
-  git -C "$W" fetch -q origin master
-  if [ "$(git -C "$W" rev-parse origin/master)" = "$base" ]; then
+  lire
+  if [ "$cible" = "$base" ]; then
     echo "push refusé sans avance de master, rien poussé"; exit 10
   fi
 done
@@ -168,6 +170,12 @@ Sur tout autre fichier en conflit, ou si elle ne sait pas quelle ligne poser, el
 
 La commande de G du 11 octobre faisait ±1, puis `check_tickets.py` contrôlait le résultat. Ce
 contrôle seul est juste, mais la forme à suivre est celle des deux exemples.
+
+**Lire master par `FETCH_HEAD`, jamais par `origin/master` après coup.** Les worktrees d'un
+même dépôt partagent `refs/remotes/origin/master`. Le 11 octobre, pendant le rejeu court de G,
+le fetch d'une autre session l'a avancé. La commande a pris ce hash pour base alors qu'elle avait
+rebasé sur l'ancien, le push a été refusé en non-avance rapide, et la boucle s'est arrêtée en
+code 10, rien poussé. `FETCH_HEAD` est propre au worktree, et personne d'autre ne l'écrit.
 
 La boucle n'a pas de plafond de tours : chaque tour demande un push de docs
 arrivé pendant le précédent, qui ne dure que le temps d'un fetch et d'un
