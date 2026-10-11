@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (27)
+### Ouverts — moteur (28)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | ouvert (cœur C++, né de la mesure de F) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
 | [Un plan de quelques lignes prend un fil par cœur](2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | ouvert — au cœur C++, pas pour maintenant | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
 | [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | ouvert (10 sur 10 sur master, hors bascule) | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
