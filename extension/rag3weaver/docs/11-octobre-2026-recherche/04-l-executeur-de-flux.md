@@ -153,7 +153,7 @@ le genre et la posture y entrent par moi, le refus par elle.
   (`NodeStatus::Skipped`, `NodeSkipped`, `DataflowOutput::skip_reason`,
   `GraphToolError::NotTaken`), propagé au point fixe, en direct et avec points
   de reprise. Ticket fermé.
-- **Les déclarations et les sorties requises** (branche `flux-declarations`) :
+- **Les déclarations et les sorties requises** (master `feeb1932b`) :
   - `PortKind::{Value, Finite, Open}` et `Posture::{Complete, PerElement}` sur
     `PortDef`, avec les constructeurs `PortDef::value(..)`, `.stream(..)`,
     `.posture(..)`. Les 187 littéraux du dépôt sont passés au constructeur
@@ -174,4 +174,19 @@ le genre et la posture y entrent par moi, le refus par elle.
     celle du bus, pour la marche 1 bis de l'arbre principal.
   - Témoins, rouges d'abord : `une_sortie_requise_non_posee_est_une_faute_du_noeud`,
     `run_started_dit_la_cellule_de_sa_requete`.
+- **La frontière d'un sous-graphe garde le genre et la posture** (branche
+  `flux-executeur`) : `GraphNode` republiait ses ports libres par
+  `PortDef::value(nom, type, required)`, si bien que le genre (`Open`,
+  `Finite`) et la posture s'y perdaient. Un flux ouvert enveloppé dans un
+  sous-graphe échappait alors au refus `Complete ← Open` du lot 2 (relevé à
+  la relecture de ce lot). Le port intérieur est désormais republié entier
+  sous son nom externe. Témoin, rouge d'abord (`Value` au lieu d'`Open`) :
+  `graph_node_keeps_kind_and_posture_of_free_ports`.
+- **Un piège pour qui aiguille** (relevé par la session du proto au lot 2) :
+  l'aval d'une branche non prise n'est sauté que si son entrée est
+  **requise**. Un nœud dont l'entrée est optionnelle tourne sans valeur.
+  `RhaiNode`, dont l'entrée `value` est optionnelle, posé derrière un `Route`,
+  rend donc une erreur (« requires JSON value ») au lieu d'un saut. Derrière
+  un `Route`, il faut un nœud à entrée requise, par exemple un nœud scripté
+  qui déclare son entrée `required`.
 - **Ensuite** : l'exécuteur concurrent, pour les seuls graphes à port de flux.
