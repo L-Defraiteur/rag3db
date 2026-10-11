@@ -80,7 +80,7 @@ fn generated_policy(ctx: &NodeContext) -> GeneratedPolicy {
 /// exclusions comprises ; une autre source se lit — elle ne sait pas dire une
 /// taille autrement.
 fn files_of(source: &dyn FileSource) -> Result<(Vec<(String, u64)>, Vec<(String, &'static str)>), String> {
-    match source.cursor().strip_prefix("worktree:") {
+    match crate::workspace_path::worktree_root(&source.cursor()) {
         Some(root) => working_tree_files(&WorkingTree::new(root)),
         None => Ok((source_files(source)?, Vec::new())),
     }
@@ -355,7 +355,7 @@ fn spawn_index_with_stop(
     std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &watch) {
         Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
-            if let Some(root) = source.cursor().strip_prefix("worktree:") {
+            if let Some(root) = crate::workspace_path::worktree_root(&source.cursor()) {
                 // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
                 let v = crate::catalog::indexed_tree_of(root);
                 if let Ok(cat) = catalog.lock() {

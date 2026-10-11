@@ -321,7 +321,7 @@ pub fn mount_agent_services_on(
     source: Arc<dyn crate::code_tools::FileSource>,
 ) -> Result<crate::dataflow::ServiceRegistry, crate::catalog::CatalogError> {
     let cursor = source.cursor();
-    let project = cursor.strip_prefix("worktree:").map(std::path::PathBuf::from);
+    let project = crate::workspace_path::worktree_root(&cursor).map(std::path::PathBuf::from);
     let mut services = mount_agent_services(catalog, project.as_deref())?;
     services.register::<Arc<dyn crate::code_tools::FileSource>>(crate::code_tools::FILE_SOURCE_SERVICE, source);
     services.register(

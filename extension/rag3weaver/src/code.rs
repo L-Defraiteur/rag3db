@@ -279,8 +279,8 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         ),
     );
     fields.insert("file_path".into(), field(FieldType::String));
-    // La source du fichier qui le contient — le même nom absolu peut exister
-    // dans deux sources, ce sont deux fichiers.
+    // La source du fichier qui le contient — le même chemin relatif peut
+    // exister dans deux sources, ce sont deux fichiers.
     fields.insert("source".into(), field(FieldType::String));
     // Les coordonnées portables, dénormalisées depuis `File` : `repo` est ce
     // qu'un domaine d'agent filtrera, `repo_path` ce que le rendu affiche.
@@ -826,14 +826,23 @@ pub fn analyze(root: &str, sources: Vec<(String, String)>) -> CodeAnalysis {
     analyze_with(root, sources, "")
 }
 
-/// La source des octets d'un poste : **le système de fichiers**, pas la
-/// racine de l'arbre de travail. C'est ce qui fait qu'ouvrir une source sur
-/// `/projet` ou sur `/projet/src` donne la même identité — il n'y a rien à
-/// faire converger, c'est la même chose.
+/// La source des octets d'un poste : **la racine locale de la base**. Une base
+/// n'a qu'une racine locale (décision du 11 octobre 2026, « une base par
+/// arbre ») ; l'identité d'un fichier y est relative, en « / »
+/// ([`crate::workspace_path`]) — deux copies du même dépôt ont donc les mêmes
+/// identités. Une seconde racine dans la même base se déclare sous un nom de
+/// source (`WorkingTree::named`, curseur `worktree@<nom>:<racine>`).
 pub const LOCAL_SOURCE: &str = "file";
 
 /// D'où viennent les octets, à partir du curseur d'une [`crate::code_tools::FileSource`].
+///
+/// Une racine déclarée sous un nom (`worktree@<nom>:<racine>`) a ce nom pour
+/// source : c'est ainsi qu'une base porte une seconde racine locale, dont les
+/// chemins relatifs se confondraient sinon avec ceux de la première.
 pub fn source_id(cursor: &str) -> String {
+    if let Some(nom) = crate::workspace_path::worktree_name(cursor) {
+        return nom.to_string();
+    }
     if cursor.is_empty() || cursor.starts_with("worktree:") {
         LOCAL_SOURCE.to_string()
     } else {
@@ -872,8 +881,11 @@ pub fn analyze_in_project(
     let mut skipped = Vec::new();
     let mut sizes: HashMap<String, usize> = HashMap::new();
     // L'identité de chaque fichier : `chemin d'analyse → (source, chemin
-    // absolu dans cette source, coordonnées)`. Aucune découverte, aucune
+    // relatif à la racine en « / », coordonnées)`. Aucune découverte, aucune
     // heuristique — la source est **connue** à l'ingestion (doc 04 v3).
+    // Relative depuis le 11 octobre 2026 (décision (a), `workspace_path`) :
+    // deux copies d'un même dépôt ont les mêmes identités, et sous Windows ce
+    // que la synchro range et ce que l'agent tape désignent la même ligne.
     let source = source_id(cursor);
     let virtual_source = source != LOCAL_SOURCE;
     // **Une racine relative d'une source locale se résout, et se dit**
@@ -895,20 +907,18 @@ pub fn analyze_in_project(
     // l'index. `(chemin relatif, chemin absolu, contenu)`.
     let mut textes: Vec<(String, String, String)> = Vec::new();
     for (rel, content) in sources {
+        let rel = crate::workspace_path::slash(&rel);
         let genre = verdict(&rel, content.len());
         if let Verdict::Ecarte(raison) = genre {
             skipped.push((rel, raison.to_string()));
             continue;
         }
         let abs = Path::new(root).join(&rel).to_string_lossy().to_string();
-        // Une source sans disque n'a pas de chemin absolu : son nom dans la
-        // source *est* son identité, et personne ne peut la coordonner.
-        let (name, coords) = if virtual_source {
-            (rel.clone(), BTreeMap::new())
-        } else {
-            (abs.clone(), registry.of(Path::new(&abs)))
-        };
-        named.insert(rel.clone(), (name, coords));
+        // Le nom dans la source *est* l'identité : relatif à la racine, en
+        // « / ». Seule une source sur disque a des coordonnées (dépôt,
+        // chemin dans le dépôt), tirées du chemin absolu.
+        let coords = if virtual_source { BTreeMap::new() } else { registry.of(Path::new(&abs)) };
+        named.insert(rel.clone(), (rel.clone(), coords));
         sizes.insert(abs.clone(), content.len());
         match genre {
             Verdict::Code => {
@@ -920,7 +930,8 @@ pub fn analyze_in_project(
         }
     }
     let identity_of = |rel: &str| -> (String, BTreeMap<String, String>) {
-        named.get(rel).cloned().unwrap_or_else(|| (rel.to_string(), BTreeMap::new()))
+        let rel = crate::workspace_path::slash(rel);
+        named.get(&rel).cloned().unwrap_or_else(|| (rel, BTreeMap::new()))
     };
 
     // Le texte brut de chaque fichier, gardé pour le texte propre des scopes
@@ -1325,7 +1336,7 @@ pub fn analyze_in_project(
                 let module = module.or_else(|| {
                     let q = r.qualifier.as_deref()?;
                     let chemin = r.context.as_deref().is_some_and(|ctx| ctx.contains(&format!("{q}::{id}")));
-                    if chemin { module_d_un_chemin(q, abs) } else { None }
+                    if chemin { module_d_un_chemin(q, &rel) } else { None }
                 });
                 let modules = modules_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 match (modules.as_mut(), module) {
@@ -1562,7 +1573,7 @@ fn stable_scope_keys(
         .iter()
         .filter_map(|(uuid, e)| {
             cle_par_position
-                .get(&(e.file.clone(), e.name.clone(), e.r#type.clone(), e.start_line, e.end_line))
+                .get(&(crate::workspace_path::slash(&e.file), e.name.clone(), e.r#type.clone(), e.start_line, e.end_line))
                 .map(|k| (uuid.clone(), k.clone()))
         })
         .collect();
@@ -1687,18 +1698,16 @@ fn relation_name(t: &RelationshipType) -> &'static str {
     }
 }
 
+/// Le chemin d'analyse relatif à la racine, en « / » ([`crate::workspace_path`]).
 fn relative(root: &str, abs: &str) -> String {
-    Path::new(abs)
-        .strip_prefix(root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| abs.to_string())
+    crate::workspace_path::relative_or_slash(Path::new(root), Path::new(abs))
 }
 
 /// [`analyze`] sur tout ce qu'une [`crate::code_tools::FileSource`] contient
 /// de parsable, avec `File.cursor` = l'identité de la source et
 /// `absolute_path` vide pour une source virtuelle.
 pub fn analyze_source(source: &dyn crate::code_tools::FileSource) -> Result<CodeAnalysis, String> {
-    let (root, virtual_source) = match source.cursor().strip_prefix("worktree:") {
+    let (root, virtual_source) = match crate::workspace_path::worktree_root(&source.cursor()) {
         Some(root) => (root.to_string(), false),
         None => ("/".to_string(), true),
     };
@@ -1763,7 +1772,7 @@ pub fn read_sources_report(root: &str) -> std::io::Result<(Vec<(String, String)>
                 walk(&path, root, out, skipped)?;
                 continue;
             }
-            let rel = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
+            let rel = crate::workspace_path::relative_or_slash(root, &path);
             let taille = entry.metadata().map(|m| m.len() as usize).unwrap_or(0);
             match verdict(&rel, taille) {
                 Verdict::Ecarte(raison) => skipped.push((rel, raison.to_string())),
@@ -1976,6 +1985,16 @@ impl Catalog {
         exige: crate::disponibilite::Disponibilites,
         mut differes: Option<&mut std::collections::BTreeSet<String>>,
     ) -> Result<CodeIngestReport, CatalogError> {
+        // **La règle des chemins relatifs** : tout ce qui range une identité de
+        // fichier passe ici (synchro, réédition, ingestion directe). Une base
+        // d'avant la règle refuse ; une base neuve reçoit le marqueur.
+        use crate::workspace_path::{CODE_IDENTITY_KEY, CODE_IDENTITY_RELATIVE};
+        if self.read_meta_key(CODE_IDENTITY_KEY)?.as_deref() != Some(CODE_IDENTITY_RELATIVE) {
+            if crate::code_sync::avant_la_regle(self).unwrap_or(false) {
+                return Err(CatalogError::CodeIdentityBeforeRule);
+            }
+            self.persist_meta_key(CODE_IDENTITY_KEY, CODE_IDENTITY_RELATIVE)?;
+        }
         let mut report = CodeIngestReport::default();
         let phase = std::time::Instant::now();
 
@@ -2974,12 +2993,13 @@ fn module_d_un_chemin(qualifier: &str, fichier: &str) -> Option<String> {
     if !matches!(segments.peek(), Some(&"self") | Some(&"super")) {
         return Some(qualifier.to_string());
     }
-    let chemin = Path::new(fichier);
-    let mut module: Vec<String> = chemin
-        .parent()
-        .map(|d| d.components().filter_map(|c| c.as_os_str().to_str().map(String::from)).filter(|c| c != "/").collect())
-        .unwrap_or_default();
-    let tige = chemin.file_stem().and_then(|t| t.to_str()).unwrap_or("");
+    // `fichier` est le chemin rangé : relatif à la racine, en « / » ; on le
+    // découpe en texte, jamais par les composants du système.
+    let fichier = crate::workspace_path::slash(fichier);
+    let mut module: Vec<String> = fichier.split('/').map(String::from).collect();
+    let nom = module.pop().unwrap_or_default();
+    let tige = nom.rsplit_once('.').map(|(t, _)| t).unwrap_or(&nom).to_string();
+    let tige = tige.as_str();
     if !matches!(tige, "mod" | "lib" | "main") {
         module.push(tige.to_string());
     }
@@ -3254,8 +3274,11 @@ mod tests {
         let imp = a.scopes.iter().find(|s| s.content.starts_with("impl Compteur")).expect("l'impl");
         assert_eq!(imp.start_line, 4);
         assert_eq!(imp.folds, "1:5-7,3:9-12");
-        for (fichier, texte) in [("/virtual/c.rs", src), ("/virtual/a.rs", RUST_SRC)] {
+        for (fichier, texte) in [("c.rs", src), ("a.rs", RUST_SRC)] {
             let lignes: Vec<&str> = texte.lines().collect();
+            // Le chemin rangé est relatif à la racine : sans scope trouvé, la
+            // boucle ne vérifierait rien (elle cherchait « /virtual/… »).
+            assert!(a.scopes.iter().any(|s| s.file_path == fichier), "des scopes de {fichier}");
             for s in a.scopes.iter().filter(|s| s.file_path == fichier && s.folds != "?") {
                 let replis: Vec<(usize, usize, usize)> = s.folds.split(',').filter(|m| !m.is_empty()).map(|m| {
                     let (l, e) = m.split_once(':').unwrap();
@@ -3289,9 +3312,11 @@ mod tests {
         );
         assert_eq!(a.files.len(), 2, "le code et le texte entrent, l'artefact non");
         let rs = a.files.iter().find(|f| f.path.ends_with("a.rs")).expect("a.rs");
-        // L'identité d'un fichier est son chemin **absolu dans sa source**,
-        // pas son chemin relatif à la racine d'analyse (doc 04 v3).
-        assert_eq!(rs.path, "/virtual/a.rs");
+        // L'identité d'un fichier est son chemin **relatif à la racine de sa
+        // source, en « / »** (11 octobre 2026, `workspace_path`) ; l'absolu
+        // ne reste que dans `absolute_path`.
+        assert_eq!(rs.path, "a.rs");
+        assert_eq!(rs.absolute_path, "/virtual/a.rs");
         assert_eq!(rs.source, LOCAL_SOURCE);
         assert_eq!(rs.language, "rust");
         assert!(!rs.content_hash.is_empty());
@@ -3301,13 +3326,13 @@ mod tests {
         // Le même vocabulaire que le code : `markdown`, pas `md`.
         assert_eq!(md.language, "markdown");
         let texte = a.scopes.iter().find(|s| s.scope_type == "texte_brut").expect("un scope texte_brut");
-        assert_eq!(texte.file_path, "/virtual/README.md");
+        assert_eq!(texte.file_path, "README.md");
         assert_eq!(texte.language, "markdown");
         assert_eq!(texte.start_byte, 0);
         assert_eq!(texte.end_byte, "# un titre\n".len(), "le scope couvre tout le fichier");
         assert!(texte.signature.is_empty(), "pas de signature inventée");
         assert!(
-            a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == texte.key && r.to_key == "/virtual/README.md"),
+            a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == texte.key && r.to_key == "README.md"),
             "le scope texte est relié à son fichier"
         );
         // Rien d'autre : pas de rendez-vous, il n'y a aucun nom à résoudre.
@@ -3329,7 +3354,7 @@ mod tests {
         assert_eq!(norm.scope_type, "method");
         assert!(norm.end_byte > norm.start_byte);
         assert!(RUST_SRC[norm.start_byte..norm.end_byte].contains("fn norm"));
-        assert!(a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == norm.key && r.to_entity == FILE && r.to_key == "/virtual/a.rs"),
+        assert!(a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == norm.key && r.to_entity == FILE && r.to_key == "a.rs"),
             "{:?}", a.relations.iter().map(|r| (&r.rel, &r.from_entity, &r.to_entity)).collect::<Vec<_>>());
         let twice = a.scopes.iter().find(|s| s.name == "twice").expect("twice");
         let named = |k: &str| a.scopes.iter().find(|s| s.key == k).map(|s| s.name.clone()).unwrap_or_else(|| k.to_string());

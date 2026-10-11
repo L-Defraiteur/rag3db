@@ -58,7 +58,8 @@ pub trait FileSource: Send + Sync {
 }
 
 fn check_relative(path: &str) -> Result<(), String> {
-    if path.is_empty() || Path::new(path).is_absolute() || path.split('/').any(|c| c == "..") {
+    // Les deux séparateurs : `..\x` ne doit pas passer le contrôle du texte.
+    if path.is_empty() || Path::new(path).is_absolute() || path.split(['/', '\\']).any(|c| c == "..") {
         return Err(format!("path must be relative to the source and without '..': {path}"));
     }
     Ok(())
@@ -146,11 +147,25 @@ pub fn probable_secret(path: &str) -> Option<&'static str> {
 pub struct WorkingTree {
     root: PathBuf,
     all_files: bool,
+    /// Le nom de source d'une racine déclarée à côté d'une autre dans la même
+    /// base ([`crate::workspace_path::worktree_name`]). `None` : la source
+    /// locale, `file`.
+    source_name: Option<String>,
 }
 
 impl WorkingTree {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into(), all_files: false }
+        Self { root: root.into(), all_files: false, source_name: None }
+    }
+    /// **Une racine sous un nom de source** : une base n'a qu'une racine
+    /// locale (`file`), et l'identité d'un fichier est relative à sa racine ;
+    /// une seconde racine dans la même base se déclare donc sous un nom, qui
+    /// devient son `source` (décision du 11 octobre 2026). Curseur :
+    /// `worktree@<nom>:<racine>`.
+    pub fn named(mut self, source_name: impl Into<String>) -> Self {
+        let nom = source_name.into();
+        self.source_name = (!nom.is_empty()).then_some(nom);
+        self
     }
     /// Tout prendre, sans les règles d'exclusion ni le filtre du caché —
     /// seulement les dossiers de `SKIPPED_DIRS` et les dossiers cachés, comme
@@ -191,7 +206,7 @@ impl WorkingTree {
         for entry in walker {
             let entry = entry.map_err(|e| format!("{}: {e}", self.root.display()))?;
             let path = entry.path();
-            let rel = path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().to_string();
+            let rel = crate::workspace_path::relative_or_slash(&self.root, path);
             // La marche ne suit pas les liens : ils arrivent ici comme liens,
             // et c'est leur cible canonisée qui décide. Sous la racine, un
             // lien-fichier est un fichier du projet ; dehors, il est écarté
@@ -233,7 +248,10 @@ impl WorkingTree {
 
 impl FileSource for WorkingTree {
     fn cursor(&self) -> String {
-        format!("worktree:{}", self.root.display())
+        match &self.source_name {
+            Some(nom) => format!("worktree@{nom}:{}", self.root.display()),
+            None => format!("worktree:{}", self.root.display()),
+        }
     }
     fn list(&self) -> Result<Vec<String>, String> {
         if !self.root.is_dir() {
@@ -256,7 +274,7 @@ impl FileSource for WorkingTree {
                 if entry.file_type()?.is_symlink() {
                     if let Ok(canon) = path.canonicalize() {
                         if canon.starts_with(root_canon) && canon.is_file() {
-                            out.push(path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string());
+                            out.push(crate::workspace_path::relative_or_slash(root, &path));
                         }
                     }
                     continue;
@@ -267,7 +285,7 @@ impl FileSource for WorkingTree {
                     }
                     walk(&path, root, root_canon, out)?;
                 } else if path.is_file() {
-                    out.push(path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string());
+                    out.push(crate::workspace_path::relative_or_slash(root, &path));
                 }
             }
             Ok(())
@@ -381,22 +399,17 @@ fn col<'a>(row: &'a BTreeMap<String, CypherValue>, name: &str) -> Option<&'a Cyp
 }
 
 /// L'identité d'un fichier que l'agent nomme relativement à sa source :
-/// `(source, chemin absolu dans cette source)` (doc 04 v3).
+/// `(source, chemin relatif à la racine, en « / »)` — la même que la synchro
+/// range (`code::analyze_in_project`), par la même normalisation
+/// ([`crate::workspace_path::slash`]). Ce que l'agent tape (`src\a.rs`,
+/// `./src/a.rs`) désigne donc la même ligne que ce que la marche a listé.
 ///
-/// Une jointure, pas une découverte : l'agent tape `port.rs`, sa source est
-/// ouverte sur un répertoire, le reste est une concaténation. C'est
-/// précisément parce que l'identité ne dépend d'aucune heuristique que deux
-/// sources ouvertes à deux profondeurs donnent le même nom.
-///
-/// Une source sans disque n'a pas de chemin absolu : son nom dans la source
-/// *est* son identité.
+/// Avant le 11 octobre 2026, l'identité était `racine.join(chemin)` : sous
+/// Windows, `C:\r\src/a.rs` ne retrouvait pas la ligne `C:\r\src\a.rs` de la
+/// synchro (doublons, lignes périmées), et deux copies du dépôt ne
+/// partageaient rien.
 pub fn indexed_name(source: &dyn FileSource, path: &str) -> (String, String) {
-    let cursor = source.cursor();
-    let id = crate::code::source_id(&cursor);
-    match cursor.strip_prefix("worktree:") {
-        Some(root) => (id, Path::new(root).join(path).to_string_lossy().to_string()),
-        None => (id, path.to_string()),
-    }
+    (crate::code::source_id(&source.cursor()), crate::workspace_path::slash(path))
 }
 
 /// **Une base sans le schéma du code** : le catalogue dit « unknown entity:
@@ -666,11 +679,14 @@ pub fn read_file_with(
             // « Vouliez-vous dire » : même nom de fichier ailleurs, ou un
             // chemin qui finit par ce qu'on a demandé — le cas classique d'un
             // préfixe de répertoire deviné (`src/dataflow/x.rs` pour `x.rs`).
-            let wanted = Path::new(path).file_name().and_then(|f| f.to_str()).unwrap_or(path).to_string();
+            let wanted = crate::workspace_path::slash(path).rsplit('/').next().unwrap_or(path).to_string();
             let mut candidates: Vec<String> = source
                 .list()?
                 .into_iter()
-                .filter(|p| p.ends_with(&format!("/{wanted}")) || *p == wanted || path.ends_with(&format!("/{p}")))
+                .filter(|p| {
+                    let tape = crate::workspace_path::slash(path);
+                    p.ends_with(&format!("/{wanted}")) || *p == wanted || tape.ends_with(&format!("/{p}"))
+                })
                 .take(5)
                 .collect();
             candidates.sort();
@@ -929,7 +945,7 @@ pub fn grep_files(
 
     for path in source.list()? {
         if let Some(p) = &opts.path_prefix {
-            if !path.starts_with(p.as_str()) {
+            if !path.starts_with(crate::workspace_path::slash_prefix(p).as_str()) {
                 continue;
             }
         }
@@ -1169,7 +1185,7 @@ pub fn list_files(
     let all: Vec<String> = source
         .list()?
         .into_iter()
-        .filter(|p| path_prefix.map_or(true, |pre| p.starts_with(pre)))
+        .filter(|p| path_prefix.map_or(true, |pre| p.starts_with(crate::workspace_path::slash_prefix(pre).as_str())))
         .collect();
     let total = all.len();
     let mut entries = Vec::new();

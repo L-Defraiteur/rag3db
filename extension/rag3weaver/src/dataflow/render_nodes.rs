@@ -76,19 +76,22 @@ const CONSUMED: [&str; 15] = [
 
 /// **Par rapport à quoi on écrit un chemin.**
 ///
-/// Le stockage est absolu (doc 04 v3) ; l'affichage, lui, est un point de
+/// Le stockage est relatif à la racine de la source, en « / » (depuis le
+/// 11 octobre 2026, `workspace_path`) ; l'affichage, lui, est un point de
 /// vue, et il change à chaque tour de boucle sans que rien ne soit
 /// réindexé. C'est la quatrième des quatre notions qui s'appelaient toutes
 /// « racine », et la seule qui ait le droit de bouger si souvent.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum PathLens {
     /// Le chemin **dans son dépôt** quand on le connaît — `repo_path` est
-    /// déjà stocké, donc c'est gratuit — et l'absolu sinon.
+    /// déjà stocké, donc c'est gratuit — et le chemin rangé sinon.
     #[default]
     Origin,
-    /// Depuis un préfixe donné : « montre-moi les chemins d'ici ».
+    /// Depuis un préfixe **relatif à la racine** (le répertoire courant de
+    /// l'agent, ramené à la racine) : « montre-moi les chemins d'ici ». Le
+    /// préfixe vide : le chemin rangé.
     From(String),
-    /// Tel qu'il est stocké.
+    /// Tel qu'il est rangé : relatif à la racine de la source.
     Absolute,
 }
 
@@ -100,15 +103,16 @@ impl PathLens {
             Self::Absolute => stored,
             Self::Origin => text_field(data, "repo_path").unwrap_or(stored),
             Self::From(prefix) => {
-                let p = prefix.trim_end_matches('/');
-                match stored.strip_prefix(p) {
-                    // Hors du préfixe : on rend l'absolu plutôt qu'un chemin
-                    // faux. Un `../../..` serait juste et illisible.
+                let p = crate::workspace_path::slash(prefix);
+                if p.is_empty() {
+                    return Some(stored);
+                }
+                match stored.strip_prefix(&format!("{p}/")) {
+                    // Hors du préfixe : on rend le chemin rangé plutôt qu'un
+                    // chemin faux. Un `../../..` serait juste et illisible.
                     None => stored,
-                    Some(rest) => {
-                        let rest = rest.trim_start_matches('/');
-                        if rest.is_empty() { stored } else { rest.to_string() }
-                    }
+                    Some(rest) if rest.is_empty() => stored,
+                    Some(rest) => rest.to_string(),
                 }
             }
         })
@@ -925,15 +929,16 @@ impl RenderResultsNode {
         };
         // `worktree:<racine>` — une source virtuelle (instantané) n'a pas de
         // racine sur le disque, donc rien à retrancher.
-        let Some(racine) = source.cursor().strip_prefix("worktree:").map(str::to_string) else {
+        let Some(racine) = crate::workspace_path::worktree_root(&source.cursor()).map(str::to_string) else {
             return PathLens::Origin;
         };
-        // Le répertoire courant est déjà absolu : c'est la lentille, telle
-        // quelle. Sans lui, la racine de la source.
+        // Le répertoire courant est absolu ; les chemins rangés sont relatifs
+        // à la racine : la lentille est le répertoire courant **ramené à la
+        // racine**. Sans lui, ou hors de la racine, le chemin rangé.
         let prefixe = ctx
             .service::<std::sync::Arc<crate::code_tools::Cwd>>(crate::code_tools::CWD_SERVICE)
-            .map(|c| c.get().to_string_lossy().to_string())
-            .unwrap_or(racine);
+            .and_then(|c| crate::workspace_path::relative_to(std::path::Path::new(&racine), &c.get()))
+            .unwrap_or_default();
         PathLens::From(prefixe)
     }
 
@@ -1064,8 +1069,9 @@ impl NodeFactory for RenderResultsNodeFactory {
             resolve_template(t).map_err(|e| format!("RenderResultsNode: {e}"))?;
             node = node.with_template(t);
         }
-        // `relative_to` : vide = le chemin dans son dépôt ; `/` = l'absolu
-        // tel qu'il est stocké ; un chemin = depuis là.
+        // `relative_to` : vide = le chemin dans son dépôt ; `/` = le chemin
+        // tel qu'il est rangé (relatif à la racine) ; un chemin relatif à la
+        // racine = depuis là.
         if let Some(p) = config.get("relative_to").and_then(|v| v.as_str()) {
             node = node.with_lens(match p {
                 "" => PathLens::Origin,
@@ -1213,8 +1219,10 @@ mod tests {
     #[test]
     fn the_same_result_is_written_three_ways_without_reindexing_anything() {
         let data = std::collections::BTreeMap::from([
-            ("file_path".to_string(), CypherValue::String("/home/x/dépôt/src/dataflow/port.rs".into())),
-            ("repo_path".to_string(), CypherValue::String("src/dataflow/port.rs".into())),
+            // Rangé relatif à la racine de la source, en « / » (11 octobre
+            // 2026) ; la source est ouverte sur un sous-dossier du dépôt.
+            ("file_path".to_string(), CypherValue::String("src/dataflow/port.rs".into())),
+            ("repo_path".to_string(), CypherValue::String("extension/x/src/dataflow/port.rs".into())),
             ("repo".to_string(), CypherValue::String("github.com/o/dépôt".into())),
             ("name".to_string(), CypherValue::String("merge_port_values".into())),
             ("start_line".to_string(), CypherValue::Int(101)),
@@ -1237,19 +1245,25 @@ mod tests {
         let through = |lens: PathLens| render_results_through(std::slice::from_ref(&r), 200, false, &lens);
 
         let origin = through(PathLens::Origin);
-        assert!(origin.contains("📍 `src/dataflow/port.rs:101-140`"), "{origin}");
-        assert!(!origin.contains("/home/x/"), "la lentille par défaut ne montre pas le disque : {origin}");
+        assert!(origin.contains("📍 `extension/x/src/dataflow/port.rs:101-140`"), "le chemin dans le dépôt : {origin}");
 
         let absolute = through(PathLens::Absolute);
-        assert!(absolute.contains("/home/x/dépôt/src/dataflow/port.rs:101-140"), "{absolute}");
+        assert!(absolute.contains("📍 `src/dataflow/port.rs:101-140`"), "tel qu'il est rangé : {absolute}");
 
-        let from = through(PathLens::From("/home/x/dépôt/src".into()));
-        assert!(from.contains("merge_port_values") && from.contains("dataflow/port.rs:101-140"), "{from}");
-        assert!(!from.contains("/home/x/"), "{from}");
+        // Le répertoire courant, ramené à la racine : `src`.
+        let from = through(PathLens::From("src".into()));
+        assert!(from.contains("merge_port_values") && from.contains("📍 `dataflow/port.rs:101-140`"), "{from}");
+        // Tapé à la Windows, le même préfixe.
+        let from_w = through(PathLens::From("src\\".into()));
+        assert!(from_w.contains("📍 `dataflow/port.rs:101-140`"), "{from_w}");
+        // Le préfixe vide (le répertoire courant est la racine) : le rangé.
+        assert!(through(PathLens::From(String::new())).contains("📍 `src/dataflow/port.rs:101-140`"));
 
-        // Hors du préfixe : l'absolu, jamais un `../..` juste et illisible.
-        let ailleurs = through(PathLens::From("/autre/projet".into()));
-        assert!(ailleurs.contains("/home/x/dépôt/src/dataflow/port.rs"), "{ailleurs}");
+        // Hors du préfixe : le chemin rangé, jamais un `../..` juste et illisible.
+        let ailleurs = through(PathLens::From("autre/projet".into()));
+        assert!(ailleurs.contains("📍 `src/dataflow/port.rs:101-140`"), "{ailleurs}");
+        // Un préfixe qui n'est qu'un début de nom de dossier ne coupe pas.
+        assert!(through(PathLens::From("sr".into())).contains("📍 `src/dataflow/port.rs:101-140`"));
 
         // Et les coordonnées ne sont jamais récitées à côté du chemin :
         // elles servent à l'écrire, pas à occuper la place qu'on a passé la

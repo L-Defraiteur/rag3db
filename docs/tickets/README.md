@@ -66,7 +66,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -78,7 +78,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
-| [Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »](2026-10-11-les-chemins-ranges-sont-absolus-et-dans-la-forme-du-systeme.md) | ouvert — lot B4 de G, décision (a) : relatif en « / » | blocage sous Windows, sécurité (`probable_secret`) | oui, sous Windows | oui (et codeparsers) |
 | [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | ouvert — vu par le bâti Windows de l'alpha.3 ; macOS par lecture | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
 | [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
 | [L'hôte du démon hérite de l'environnement du premier client qui le lance](2026-10-11-l-hote-herite-de-l-environnement-du-premier-client.md) | ouvert — côté hôte, arbre principal | réponse fausse ou blocage (un service d'embarquement manque) | oui, dès qu'un hôte sert des backends aux services différents | oui (et seulement) |
@@ -107,10 +106,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (110), dans `closed/`
+### Fermés (111), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »](closed/2026-10-11-les-chemins-ranges-sont-absolus-et-dans-la-forme-du-systeme.md) | corrigé : identité relative en « / », une racine locale par base, base d'avant la règle dite (12 oct.) | blocage sous Windows, sécurité | oui, sous Windows | oui (et codeparsers) |
 | [Sans service d'embarquement, l'hôte, `mcp` autonome et `serve` refusent un gabarit à vecteurs](closed/2026-10-11-sans-service-d-embarquement-trois-portes-refusent-un-gabarit-a-vecteurs.md) | corrigé : l'embarqueur absent dans les quatre portes par `embedder_or_absent`, la raison dans les reçus (11 oct.) | blocage | oui, gabarit de code sans service | oui (et seulement) |
 | [Un binaire lié à une autre lib échoue sur un symbole manquant au lieu d'un refus nommé](closed/2026-10-11-un-binaire-lie-a-une-autre-lib-echoue-sur-un-symbole-manquant-au-lieu-d-un-refus-nomme.md) | corrigé : section `.rag3db_build_id` dans la lib, `.rag3db_compiled_against` dans le binaire, `rag3db-check-lib` avant le chargeur (BIND_NOW) et le filet dans le processus (12 oct.) | exploitation — l'hôte de luciepc a bouclé après B2 | oui (tout lot qui change une signature exportée) | oui |
 | [Un `poste` appelé par la commande d'un autre `poste` attend sa propre place, sans fin](closed/2026-10-12-un-poste-sous-un-poste-attend-sa-propre-place.md) | corrigé : un ancêtre tenant reconnu, le poste passe (12 oct.) | blocage | oui, sur le poste | oui (`poste`) |

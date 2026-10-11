@@ -46,7 +46,7 @@ fn impact_fichier(catalog: &Arc<Mutex<Catalog>>, path: &str) -> String {
 }
 
 /// Le chemin tel que l'index le garde (`repo_path` d'abord, sinon le chemin
-/// absolu), pour un fichier de la source analysée.
+/// rangé, relatif à la racine en « / »), pour un fichier de la source analysée.
 fn chemin_indexe(catalog: &Arc<Mutex<Catalog>>, fin: &str) -> String {
     let cat = catalog.lock().unwrap();
     let rows = cat.execute_raw("MATCH (s:Scope) RETURN DISTINCT s.repo_path, s.file_path").unwrap();
@@ -55,7 +55,8 @@ fn chemin_indexe(catalog: &Arc<Mutex<Catalog>>, fin: &str) -> String {
         .find_map(|r| {
             let repo = r.first().and_then(|v| v.as_str()).unwrap_or("");
             let abs = r.get(1).and_then(|v| v.as_str()).unwrap_or("");
-            abs.ends_with(fin).then(|| if repo.is_empty() { abs.to_string() } else { repo.to_string() })
+            (abs == fin || abs.ends_with(&format!("/{fin}")))
+                .then(|| if repo.is_empty() { abs.to_string() } else { repo.to_string() })
         })
         .unwrap_or_else(|| panic!("{fin} n'est pas indexé"))
 }
@@ -88,7 +89,7 @@ fn latence_sur_ce_depot() {
     let racine = format!("{}/src", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     catalog.lock().unwrap().ingest_code(&analyze(&racine, read_sources(&racine).unwrap())).unwrap();
     for f in ["catalog.rs", "dataflow/catalog_read.rs", "chunker.rs"] {
-        let chemin = chemin_indexe(&catalog, &format!("/{f}"));
+        let chemin = chemin_indexe(&catalog, f);
         let t = std::time::Instant::now();
         let rendu = impact_fichier(&catalog, &chemin);
         eprintln!("[{f}] {} ms\n{rendu}", t.elapsed().as_millis());

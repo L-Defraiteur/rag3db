@@ -246,7 +246,7 @@ fn project_root(ctx: &mut NodeContext) -> Option<std::path::PathBuf> {
     let source = ctx.service::<Arc<dyn crate::code_tools::FileSource>>(
         crate::code_tools::FILE_SOURCE_SERVICE,
     )?;
-    source.cursor().strip_prefix("worktree:").map(std::path::PathBuf::from)
+    crate::workspace_path::worktree_root(&source.cursor()).map(std::path::PathBuf::from)
 }
 
 // ─── AdoptTemplateNode ───────────────────────────────────────────────────────

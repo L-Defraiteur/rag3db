@@ -46,6 +46,8 @@ mod e2e_banc_relations;
 mod e2e_banc_texte_brut;
 #[path = "../e2e_banc_vertex_embedding.rs"]
 mod e2e_banc_vertex_embedding;
+#[path = "../e2e_base_par_arbre.rs"]
+mod e2e_base_par_arbre;
 #[path = "../e2e_batch_observe.rs"]
 mod e2e_batch_observe;
 #[path = "../e2e_burn_attention.rs"]

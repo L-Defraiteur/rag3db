@@ -1,7 +1,6 @@
 # Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »
 
-- **État** : ouvert (11 octobre 2026, optimiseur, lot B4 ; décision (a) de l'orchestration,
-  rendue à Lucie, renversable)
+- **État** : corrigé (12 octobre 2026, optimiseur, lot B4, branche `chemins-relatifs`) : identité relative en « / » par `workspace_path`, une racine locale par base (source nommée pour une seconde), comparaisons normalisées, base d'avant la règle refusée et dite ; témoins `workspace_path`, `e2e_base_par_arbre` (reflink, delta seul) et les e2e du code passés au relatif
 - **Gravité** : blocage sous Windows (doublons et lignes périmées, filtres qui ne trouvent
   rien), **sécurité** (`probable_secret` n'exclut plus `config\.env` ni `keys\id_rsa`)
 - **Atteignable en service** : oui, sur tout poste Windows. Sous Linux, l'identité absolue

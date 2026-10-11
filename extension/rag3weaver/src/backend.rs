@@ -2761,32 +2761,17 @@ impl Backend {
                 hargs.entry("threshold".to_string()).or_insert(json!(t));
             }
         }
-        // Le chemin TEL QUE LA BASE L'INDEXE : l'argument `path` d'un outil
-        // de fichiers est relatif à la racine du workspace, mais `file_path`
-        // en base est absolu (mesuré le 4 octobre : index et réédition,
-        // mêmes formes). Un crochet qui matche l'égalité — l'impact d'un
-        // fichier — déclare `path_in_source` et reçoit le chemin TEL QUE LA
-        // BASE LE GARDE : racine + chemin pour un arbre de travail (les
-        // file_path y sont absolus), le chemin NU pour un instantané — une
-        // source sans disque est sa propre identité, ses chemins en base
-        // sont ceux de la source (le silence du crochet sur snapshot.json,
-        // 4 octobre, venait de là).
+        // Le chemin TEL QUE LA BASE L'INDEXE. Un crochet qui matche
+        // l'égalité — l'impact d'un fichier — déclare `path_in_source`. Depuis
+        // le 11 octobre 2026, `file_path` en base est relatif à la racine et
+        // en « / » pour toute source (`workspace_path`) : c'est l'argument
+        // `path` de l'outil, normalisé de la même façon. (Avant : racine +
+        // chemin pour un arbre de travail, le chemin nu pour un instantané.)
         if declares.contains("path_in_source") {
-            if let (Some(w), Some(Value::String(chemin))) =
+            if let (Some(_), Some(Value::String(chemin))) =
                 (prepared.manifest.workspace.as_ref(), args.get("path"))
             {
-                let valeur = match w.source {
-                    crate::backend_code::WorkspaceSource::Snapshot => chemin.clone(),
-                    _ => {
-                        let racine = if w.root.is_absolute() {
-                            w.root.clone()
-                        } else {
-                            prepared.directory.join(&w.root)
-                        };
-                        racine.join(chemin).to_string_lossy().to_string()
-                    }
-                };
-                hargs.insert("path_in_source".to_string(), json!(valeur));
+                hargs.insert("path_in_source".to_string(), json!(crate::workspace_path::slash(chemin)));
             }
         }
         if declares.contains("result_uuids") {
@@ -3174,10 +3159,14 @@ impl Backend {
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
         }
-        // Sans service, l'état de l'index le dit à côté des entités (leurs
-        // noms commencent par une majuscule, `warnings` ne peut pas en être
-        // une).
-        let avertissements = self.avertissements();
+        // Les avertissements, à côté des entités (leurs noms commencent par
+        // une majuscule, `warnings` ne peut pas en être une) : sans service
+        // d'embarquement, et une base d'avant la règle des chemins relatifs
+        // (au lieu de doublons silencieux à la prochaine synchro, qui refuse).
+        let mut avertissements = self.avertissements();
+        if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
+            avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
+        }
         if !avertissements.is_empty() {
             etats.insert("warnings".into(), json!(avertissements));
         }

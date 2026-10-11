@@ -200,7 +200,7 @@ pub fn generated_among(
         return generated;
     }
     let cursor = source.cursor();
-    let root = cursor.strip_prefix("worktree:").map(std::path::PathBuf::from);
+    let root = crate::workspace_path::worktree_root(&cursor).map(std::path::PathBuf::from);
     for (path, bytes) in files {
         if !matches!(keep(path, *bytes), Kept::Yes(_)) {
             continue;

@@ -93,6 +93,11 @@ pub enum CatalogError {
     IdentityInAnotherCell { entity: String, uuid: String, lives_in: String, written_in: String },
     #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
     IndexPersistence(String),
+    /// **Une base de code d'avant la règle des chemins relatifs** (11 octobre
+    /// 2026) : y ranger une identité relative à côté des absolues ferait des
+    /// doublons en silence. Rien n'est écrit.
+    #[error("{}", crate::workspace_path::AVANT_LA_REGLE)]
+    CodeIdentityBeforeRule,
     #[error("not initialized")]
     NotInitialized,
     /// **Un catalogue qui ne peut rien rendre durable ne s'ouvre pas.** Sans

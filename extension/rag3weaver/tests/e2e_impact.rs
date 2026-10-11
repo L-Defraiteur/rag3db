@@ -186,12 +186,12 @@ fn les_usages_par_le_nom_seul_sont_comptes_sauf_sur_demande() {
     let services = Arc::new(services);
     let defaut = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "update"})).unwrap();
     eprintln!("{defaut}");
-    assert!(defaut.contains("sure — /projet/c.rs:"), "l'appelant sûr est listé : {defaut}");
+    assert!(defaut.contains("sure — c.rs:"), "l'appelant sûr est listé : {defaut}");
     assert!(!defaut.contains("devine"), "l'usage par le nom seul n'est pas listé : {defaut}");
     assert!(defaut.contains("1 par le nom seul, non montrés"), "mais il est compté : {defaut}");
     let tout = tool.execute(&registry, services, &serde_json::json!({"name": "update", "include_by_name": true})).unwrap();
     eprintln!("{tout}");
-    assert!(tout.lines().any(|l| l.contains("devine — /projet/c.rs:") && l.ends_with("(par le nom)")), "sur demande, listé et marqué : {tout}");
+    assert!(tout.lines().any(|l| l.contains("devine — c.rs:") && l.ends_with("(par le nom)")), "sur demande, listé et marqué : {tout}");
     assert!(!tout.contains("non montrés"), "{tout}");
 }
 

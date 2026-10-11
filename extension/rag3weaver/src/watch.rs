@@ -296,7 +296,11 @@ impl Scanner {
         Ok(if self.paths.is_empty() {
             all
         } else {
-            all.into_iter().filter(|p| self.paths.iter().any(|pre| p.starts_with(pre.as_str()))).collect()
+            // Les `paths` du manifeste, normalisés comme ce que la source
+            // liste (relatif, en « / ») : `src\\` trouve `src/a.rs`.
+            all.into_iter()
+                .filter(|p| self.paths.iter().any(|pre| p.starts_with(crate::workspace_path::slash_prefix(pre).as_str())))
+                .collect()
         })
     }
 
@@ -433,15 +437,17 @@ impl Scanner {
 #[cfg(feature = "code")]
 pub type Indexed = BTreeMap<String, String>;
 
-/// L'empreinte que l'index garde de chaque fichier de `source`. Un chemin
-/// indexé hors de la racine de la source est ignoré.
+/// L'empreinte que l'index garde de chaque fichier de `source`. Les chemins
+/// rangés sont relatifs à la racine, en « / » (11 octobre 2026,
+/// `workspace_path`) : la même forme que ce que la source liste, donc rien à
+/// retrancher. Une ligne d'avant la règle (chemin absolu) est ignorée : la
+/// base se dit « à réindexer » par ailleurs.
 #[cfg(feature = "code")]
 pub fn indexed_files(catalog: &crate::catalog::Catalog, source: &dyn FileSource) -> Result<Indexed, String> {
     use crate::connection::QueryParam;
     use crate::connection::CypherValue;
     let cursor = source.cursor();
     let source_id = crate::code::source_id(&cursor);
-    let root = cursor.strip_prefix("worktree:").map(|r| format!("{}/", r.trim_end_matches('/')));
     let rows = catalog
         .execute_raw_with_params(
             &format!("MATCH (f:{}) WHERE f.source = $source RETURN f.path, f.content_hash", crate::code::FILE),
@@ -456,14 +462,10 @@ pub fn indexed_files(catalog: &crate::catalog::Catalog, source: &dyn FileSource)
     for row in &rows.rows {
         let (Some(path), Some(hash)) = (row.first(), row.get(1)) else { continue };
         let path = text(path);
-        let rel = match &root {
-            Some(root) => match path.strip_prefix(root.as_str()) {
-                Some(rel) => rel.to_string(),
-                None => continue,
-            },
-            None => path,
-        };
-        out.insert(rel, text(hash));
+        if crate::workspace_path::looks_absolute(&path) {
+            continue;
+        }
+        out.insert(crate::workspace_path::slash(&path), text(hash));
     }
     Ok(out)
 }

@@ -559,12 +559,14 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     })
 }
 
-/// Le chemin d'un scope commence par `prefixe`, au début ou après un `/` :
-/// l'agent donne un chemin relatif (`src/dataflow`), l'index peut garder un
-/// chemin absolu (`/projet/src/dataflow/port.rs`).
+/// Le chemin d'un scope commence par `prefixe`. Les deux sont relatifs à la
+/// racine et en « / » depuis le 11 octobre 2026 (`workspace_path`) : le
+/// préfixe tapé est normalisé comme le chemin rangé. L'appartenance « après
+/// un `/` » reste, pour une base d'avant la règle (chemins absolus), le temps
+/// qu'elle se réindexe.
 fn sous_le_chemin(chemin: &str, prefixe: &str) -> bool {
-    let p = prefixe.trim_start_matches("./");
-    chemin.starts_with(p) || chemin.contains(&format!("/{p}"))
+    let p = crate::workspace_path::slash_prefix(prefixe);
+    chemin.starts_with(&p) || chemin.contains(&format!("/{p}"))
 }
 
 fn ajouter(usages: &mut Vec<Usage>, vus: &mut HashMap<(String, Option<String>), usize>, u: Usage) {

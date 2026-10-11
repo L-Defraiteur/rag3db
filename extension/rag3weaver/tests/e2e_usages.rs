@@ -381,7 +381,7 @@ fn un_bloc_impl_ne_redefinit_pas_son_type_et_ses_appels_s_attribuent() {
     eprintln!("{marteau}");
     assert!(!marteau.contains("Nom ambigu"), "le bloc impl n'est pas une seconde définition : {marteau}");
     assert!(marteau.contains("traits.rs:2"), "{marteau}");
-    let jouer = tool.execute(&registry, services, &serde_json::json!({"name": "jouer", "path": "/projet/traits.rs"})).unwrap();
+    let jouer = tool.execute(&registry, services, &serde_json::json!({"name": "jouer", "path": "traits.rs"})).unwrap();
     eprintln!("{jouer}");
     let ligne = |nom: &str| jouer.lines().find(|l| l.contains(&format!(" {nom} —"))).unwrap_or_else(|| panic!("{nom} absent : {jouer}")).to_string();
     assert!(!ligne("frappe").contains("par le nom"), "receveur concret typé : {jouer}");
@@ -621,14 +621,14 @@ fn la_question_du_coeur_l_envoi_virtuel_et_la_recursion() {
         .unwrap();
     eprintln!("{du_processeur}");
     assert!(du_processeur.contains("execute — "), "l'entrée : {du_processeur}");
-    assert!(du_processeur.contains("acquireLocksBeforeExecution — /projet/src/processor/processor.cpp:"), "la récursion : {du_processeur}");
+    assert!(du_processeur.contains("acquireLocksBeforeExecution — src/processor/processor.cpp:"), "la récursion : {du_processeur}");
     let de_la_surcharge = usages
         .execute(&registry, services.clone(), &serde_json::json!({"name": "acquireLocksBeforeExecution", "path": "src/processor/node_batch_insert.cpp"}))
         .unwrap();
     eprintln!("{de_la_surcharge}");
     let virtuel = de_la_surcharge.split("## Par envoi virtuel").nth(1).unwrap_or_else(|| panic!("pas de section par envoi virtuel : {de_la_surcharge}"));
     assert!(virtuel.contains("physical_operator.h"), "par la méthode de base : {de_la_surcharge}");
-    assert!(virtuel.contains("acquireLocksBeforeExecution — /projet/src/processor/processor.cpp:"), "l'appelant de la base : {de_la_surcharge}");
+    assert!(virtuel.contains("acquireLocksBeforeExecution — src/processor/processor.cpp:"), "l'appelant de la base : {de_la_surcharge}");
     let impact = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).unwrap().bind(&registry).unwrap();
     let out = impact
         .execute(&registry, services, &serde_json::json!({"name": "acquireLocksBeforeExecution", "path": "src/processor/node_batch_insert.cpp", "depth": 2}))

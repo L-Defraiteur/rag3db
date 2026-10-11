@@ -108,12 +108,9 @@ fn ingest_our_own_dataflow_module_and_navigate_it() {
     eprintln!("[File] {names:?}");
     // Le fichier se nomme **dans son dépôt**, pas dans la racine
     // d'analyse qu'on a passée — c'est tout l'objet du doc 04.
-    // Le fichier se nomme par son chemin **absolu dans sa source** — la
-    // racine d'analyse n'est qu'un point de vue (doc 04 v3).
-    assert_eq!(
-        names.first().map(String::as_str),
-        Some(format!("{}/generic_search_nodes.rs", dataflow_dir()).as_str())
-    );
+    // Le fichier se nomme par son chemin **relatif à la racine de sa source**,
+    // en « / » (11 octobre 2026, `workspace_path`).
+    assert_eq!(names.first().map(String::as_str), Some("generic_search_nodes.rs"));
 
     // ── Un scope par sa signature ───────────────────────────────────────
     let scopes = Catalog::rechercher(&catalog, SCOPE, "fn take_results", bm25("fn take_results")).unwrap();
@@ -1282,16 +1279,17 @@ fn a_project_converges_however_it_was_ingested() {
         analysis.files.len(), analysis.scopes.len(), analysis.skipped);
 }
 
-/// Le même fichier ingéré depuis deux racines différentes — le projet, puis
-/// un sous-dossier — est **un seul fichier**. Ce test était un constat
-/// d'échec jusqu'au 27 août : la clé portait le chemin relatif à la racine
-/// d'analyse, donc le point de vue devenait l'identité. Depuis
-/// [`Origin`](../src/origin.rs), l'ancre se découvre et la racine passée à
-/// `analyze` redevient ce qu'elle aurait dû rester — ce qu'on demande de
-/// lire, pas ce qui décide des noms (doc 04).
+/// Le même fichier ingéré depuis **deux copies du dépôt** — deux racines
+/// différentes, le même chemin sous chacune — est **un seul fichier**.
+/// Depuis le 11 octobre 2026 (décision (a), `workspace_path`), l'identité est
+/// relative à la racine déclarée, en « / » : c'est ce qui permet à une base
+/// née d'un reflink d'être ouverte sur un autre arbre du même dépôt sans
+/// rien réindexer que le delta. (Avant : l'absolu dans l'ancre, et deux
+/// copies ne partageaient rien.) Une même base n'a qu'une racine locale ; un
+/// sous-dossier n'est pas une seconde racine, c'est un préfixe.
 #[test]
 #[ignore]
-fn the_same_file_seen_from_two_roots_is_one_identity() {
+fn the_same_file_seen_from_two_copies_is_one_identity() {
     use rag3weaver::code::analyze;
 
     const SRC: &str = "pub fn boot() -> i32 {\n    7\n}\n";
@@ -1300,14 +1298,14 @@ fn the_same_file_seen_from_two_roots_is_one_identity() {
     let mut cat = catalog.lock().unwrap();
     cat.ingest_code(&analyze("/projet", vec![("src/core.rs".to_string(), SRC.to_string())])).unwrap();
     let after_first = (cat.count(FILE).unwrap(), cat.count(SCOPE).unwrap());
-    cat.ingest_code(&analyze("/projet/src", vec![("core.rs".to_string(), SRC.to_string())])).unwrap();
+    // La copie, ailleurs sur le disque ; et son chemin donné à la Windows.
+    cat.ingest_code(&analyze("/copie/projet", vec![("src\\core.rs".to_string(), SRC.to_string())])).unwrap();
     let after_second = (cat.count(FILE).unwrap(), cat.count(SCOPE).unwrap());
 
-    eprintln!("[deux racines] après la première {after_first:?} | après la seconde {after_second:?}");
-    assert_eq!(after_second, after_first, "deux points de vue, une seule identité");
+    eprintln!("[deux copies] après la première {after_first:?} | après la seconde {after_second:?}");
+    assert_eq!(after_second, after_first, "deux copies, une seule identité");
 
-    // Et le nom stocké est celui du fichier dans son ancre, identique des
-    // deux côtés.
+    // Et le nom rangé est relatif à la racine, identique des deux côtés.
     let rows = cat.execute_raw("MATCH (f:File) RETURN f.path, f.source").unwrap();
     let named: Vec<(String, String)> = rows
         .rows
@@ -1316,9 +1314,7 @@ fn the_same_file_seen_from_two_roots_is_one_identity() {
         .collect();
     eprintln!("[fichier] {named:?}");
     assert_eq!(named.len(), 1, "{named:?}");
-    // Le chemin absolu dans sa source : rien à faire converger, c'est la
-    // même chose des deux côtés.
-    assert_eq!(named[0].0, "/projet/src/core.rs", "absolu, pas relatif à l'appel");
+    assert_eq!(named[0].0, "src/core.rs", "relatif à la racine, en « / »");
     assert_eq!(named[0].1, "file", "le système de fichiers est la source");
 }
 
@@ -1342,9 +1338,11 @@ fn a_work_domain_narrows_what_a_search_can_see() {
         let mut cat = catalog.lock().unwrap();
         // Trois endroits, aucun n'étant un dépôt : le domaine travaillera sur des
         // préfixes de chemin, ce qui est le cas le plus général.
-        cat.ingest_code(&analyze("/projets/alpha", vec![("src/a.rs".to_string(), boot("alpha"))])).unwrap();
-        cat.ingest_code(&analyze("/projets/beta", vec![("src/b.rs".to_string(), boot("beta"))])).unwrap();
-        cat.ingest_code(&analyze("/ailleurs", vec![("notes.rs".to_string(), boot("ailleurs"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("alpha/src/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("beta/src/b.rs".to_string(), boot("beta"))])).unwrap();
+        // Une seconde racine dans la même base se déclare sous un nom de source
+        // (11 octobre 2026) : ses chemins relatifs ne se confondent pas.
+        cat.ingest_code(&rag3weaver::code::analyze_with("/ailleurs", vec![("notes.rs".to_string(), boot("ailleurs"))], "worktree@ailleurs:/ailleurs")).unwrap();
     }
 
     let found = |catalog: &Arc<Mutex<Catalog>>, domain: &WorkDomain| -> Vec<String> {
@@ -1367,7 +1365,7 @@ fn a_work_domain_narrows_what_a_search_can_see() {
     assert!(tout.iter().any(|n| n == "boot_alpha") && tout.iter().any(|n| n == "boot_ailleurs"), "{tout:?}");
 
     // « Je travaille dans alpha » — beta et le reste sortent du champ.
-    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["alpha/".into()], ..Default::default() });
     let vus = found(&catalog, &alpha);
     eprintln!("[alpha] {} → {vus:?}", alpha.describe());
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
@@ -1375,16 +1373,16 @@ fn a_work_domain_narrows_what_a_search_can_see() {
     // Un domaine dispersé est une **union** : deux endroits qui n'ont rien à
     // voir, et rien d'autre.
     let deux = WorkDomain::new("les deux")
-        .including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })
-        .including(Selector { under: vec!["/ailleurs".into()], ..Default::default() });
+        .including(Selector { under: vec!["alpha/".into()], ..Default::default() })
+        .including(Selector { sources: vec!["ailleurs".into()], ..Default::default() });
     let vus = found(&catalog, &deux);
     eprintln!("[dispersé] {} → {vus:?}", deux.describe());
     assert_eq!(vus, vec!["boot_ailleurs".to_string(), "boot_alpha".to_string()], "{vus:?}");
 
     // Et une exclusion l'emporte sur l'inclusion qui la contient.
     let sauf = WorkDomain::new("les projets sauf beta")
-        .including(Selector { under: vec!["/projets".into()], ..Default::default() })
-        .excluding(Selector { under: vec!["/projets/beta".into()], ..Default::default() });
+        .including(Selector { sources: vec!["file".into()], ..Default::default() })
+        .excluding(Selector { under: vec!["beta/".into()], ..Default::default() });
     let vus = found(&catalog, &sauf);
     eprintln!("[exclusion] {} → {vus:?}", sauf.describe());
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
@@ -1404,8 +1402,8 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
     let catalog = setup();
     {
         let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
     }
 
     let render = |domain: Option<WorkDomain>| -> String {
@@ -1453,13 +1451,13 @@ fn a_domain_in_the_registry_narrows_the_graph_and_says_so() {
     assert!(tout.contains("boot_alpha") && tout.contains("boot_beta"), "{tout}");
     assert!(!tout.contains("vision :"), "sans domaine, pas de ligne de vision : {tout}");
 
-    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let alpha = WorkDomain::new("alpha").including(Selector { under: vec!["alpha/".into()], ..Default::default() });
     let vu = render(Some(alpha));
     eprintln!("--- domaine alpha ---\n{vu}");
     assert!(vu.contains("boot_alpha"), "{vu}");
     assert!(!vu.contains("boot_beta"), "beta est hors du champ : {vu}");
     // La règle n° 3 : il dit ce qu'il ne montre pas.
-    assert!(vu.contains("vision : /projets/alpha"), "{vu}");
+    assert!(vu.contains("vision : alpha/"), "{vu}");
 }
 
 /// Le chemin **par signal** honore maintenant le filtre porté par la
@@ -1485,8 +1483,8 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     let catalog = setup();
     {
         let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
     }
 
     let opts = SearchOptions {
@@ -1511,7 +1509,7 @@ fn the_per_signal_path_honours_the_filter_carried_by_the_query() {
     services.register("catalog", catalog.clone());
     services.register(
         WORK_DOMAIN_SERVICE,
-        std::sync::Arc::new(WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })),
+        std::sync::Arc::new(WorkDomain::new("alpha").including(Selector { under: vec!["alpha/".into()], ..Default::default() })),
     );
 
     let out = DataflowRuntime::with_services(8, services).execute(&mut graph).unwrap();
@@ -1541,8 +1539,8 @@ fn the_vector_path_honours_the_filter_too() {
     let catalog = setup();
     {
         let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
     }
 
     let run = |domain: Option<WorkDomain>| -> Vec<String> {
@@ -1584,7 +1582,7 @@ fn the_vector_path_honours_the_filter_too() {
     eprintln!("[vecteur, sans domaine] {tout:?}");
     assert!(tout.contains(&"boot_alpha".to_string()) && tout.contains(&"boot_beta".to_string()), "{tout:?}");
 
-    let vus = run(Some(WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() })));
+    let vus = run(Some(WorkDomain::new("alpha").including(Selector { under: vec!["alpha/".into()], ..Default::default() })));
     eprintln!("[vecteur, domaine alpha] {vus:?}");
     assert_eq!(vus, vec!["boot_alpha".to_string()], "{vus:?}");
 }
@@ -1607,11 +1605,11 @@ fn catalog_search_with_a_vector_filter_on_a_parent_field() {
     let catalog = setup();
     {
         let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-        cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+        cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
     }
 
-    let domain = WorkDomain::new("alpha").including(Selector { under: vec!["/projets/alpha".into()], ..Default::default() });
+    let domain = WorkDomain::new("alpha").including(Selector { under: vec!["alpha/".into()], ..Default::default() });
     let opts = SearchOptions {
         consistency: Consistency::Immediate,
         signals: Some(SearchSignals::SEMANTIC),
@@ -1646,11 +1644,11 @@ fn does_the_projected_graph_actually_mask_the_vector_index() {
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
     let catalog = setup();
     let mut cat = catalog.lock().unwrap();
-    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
 
     let _ = cat.execute_raw("CALL DROP_PROJECTED_GRAPH('_probe', skip_if_not_exists := true)");
-    let filter = "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN n";
+    let filter = "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH 'alpha/' RETURN n";
     // Mêmes échappements que `search_vector_hnsw_filtered`.
     let escaped = filter.replace('\'', "\\'");
     cat.execute_raw(&format!("CALL PROJECT_GRAPH_CYPHER('_probe', '{escaped}')")).expect("projection");
@@ -1709,12 +1707,12 @@ fn where_the_vector_pre_filter_stands_today() {
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
     let catalog = setup();
     let mut cat = catalog.lock().unwrap();
-    cat.ingest_code(&analyze("/projets/alpha", vec![("a.rs".to_string(), boot("alpha"))])).unwrap();
-    cat.ingest_code(&analyze("/projets/beta", vec![("b.rs".to_string(), boot("beta"))])).unwrap();
+    cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
+    cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
 
     // Les uuid des scopes d'alpha — ce que la résolution du filtre produirait.
     let rows = cat
-        .execute_raw("MATCH (p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN p._uuid")
+        .execute_raw("MATCH (p:Scope) WHERE p.file_path STARTS WITH 'alpha/' RETURN p._uuid")
         .unwrap();
     let uuids: Vec<String> = rows.rows.iter().filter_map(|r| r.first()?.as_str().map(String::from)).collect();
     assert!(!uuids.is_empty());
@@ -1751,7 +1749,7 @@ fn where_the_vector_pre_filter_stands_today() {
     // Deux MATCH, la condition portée par le parent — ce qu'on fait aujourd'hui.
     let joined = probe(
         "_probe_join",
-        "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH '/projets/alpha' RETURN n",
+        "MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE p.file_path STARTS WITH 'alpha/' RETURN n",
     );
     eprintln!("[avec jointure] {joined:?}");
 

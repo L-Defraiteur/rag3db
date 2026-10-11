@@ -155,7 +155,7 @@ impl Node for ReindexFileNode {
         // L'arbre indexé a avancé : son commit (et ses modifications) sont
         // ceux de maintenant.
         if !reindexed.is_empty() || !removed.is_empty() {
-            if let Some(root) = source.cursor().strip_prefix("worktree:") {
+            if let Some(root) = crate::workspace_path::worktree_root(&source.cursor()) {
                 // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
                 let v = crate::catalog::indexed_tree_of(root);
                 if let Ok(cat) = catalog.lock() {

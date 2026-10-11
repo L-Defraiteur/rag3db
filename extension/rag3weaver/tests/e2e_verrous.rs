@@ -139,8 +139,8 @@ fn callees_dit_ce_qui_est_appele_et_les_verrous_pris() {
     assert_eq!(tout, md);
     // La ligne de l'appelé est celle de sa définition, pas celle du site
     // d'appel (qui est chez l'appelant, dans un autre fichier).
-    assert!(md.contains("## Ce qu’il appelle, à 1 saut (1)") && md.contains("bulk — /projet/service.cpp:3"), "{md}");
-    assert!(md.contains("## Ce qu’il appelle, à 2 sauts") && md.contains("insert — /projet/index.cpp:3"), "{md}");
+    assert!(md.contains("## Ce qu’il appelle, à 1 saut (1)") && md.contains("bulk — service.cpp:3"), "{md}");
+    assert!(md.contains("## Ce qu’il appelle, à 2 sauts") && md.contains("insert — index.cpp:3"), "{md}");
     assert!(!md.contains("Groupés"), "pas de groupe déclaré, rien n'en est dit : {md}");
     assert!(md.contains("- `Index::autre` — bulk (1 saut, lock)"), "{md}");
     assert!(md.contains("- `Index::mtx` — insert (2 sauts, lock)"), "{md}");

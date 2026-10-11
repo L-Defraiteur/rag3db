@@ -197,8 +197,11 @@ pub fn reingest_file(
     content: &str,
     exige: Disponibilites,
 ) -> Result<ReingestReport, String> {
+    // Une réédition range une identité relative : dans une base d'avant la
+    // règle, ce serait un doublon de la ligne absolue.
+    garder_la_regle(catalog)?;
     let cursor = source.cursor();
-    let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
+    let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
         Some(root) => (root.to_string(), false),
         None => ("/".to_string(), true),
     };
@@ -495,6 +498,7 @@ pub fn sync_source(
 ) -> Result<SourceSyncReport, String> {
     let cursor = source.cursor();
     let source_id = crate::code::source_id(&cursor);
+    garder_la_regle(catalog)?;
     let cle = registry_key(source);
     let mut inscription = Inscription::new(&cle);
     // Les replis comptés sont ceux de cette synchronisation.
@@ -670,7 +674,7 @@ fn synchroniser(
     }
     catalog.verify_fts_files();
     let cursor = source.cursor();
-    let (root, virtual_source) = match cursor.strip_prefix("worktree:") {
+    let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
         Some(root) => (root.to_string(), false),
         None => ("/".to_string(), true),
     };
@@ -982,6 +986,35 @@ fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, S
     noms.sort();
     noms.dedup();
     Ok(noms)
+}
+
+// ── La règle des chemins relatifs (11 octobre 2026) ─────────────────────────
+
+pub use crate::workspace_path::{AVANT_LA_REGLE, CODE_IDENTITY_KEY, CODE_IDENTITY_RELATIVE};
+
+/// **Une base de code sans le marqueur, qui a déjà des fichiers** : d'avant la
+/// règle. Sans fichier, rien à dire (une base neuve).
+pub fn avant_la_regle(catalog: &Catalog) -> Result<bool, String> {
+    if catalog.read_meta_key(CODE_IDENTITY_KEY).map_err(|e| e.to_string())?.as_deref() == Some(CODE_IDENTITY_RELATIVE) {
+        return Ok(false);
+    }
+    let mut select = rag3weaver_ir::Select::all(crate::code::FILE, vec![rag3weaver_ir::Column::Node("_uuid".into())]);
+    select.limit = Some(1);
+    let q = catalog.dialect_arc().select(&select).map_err(|e| e.to_string())?;
+    match catalog.execute_raw_with_params(&q, &[]) {
+        Ok(res) => Ok(!res.rows.is_empty()),
+        // Pas de table File : pas de base de code.
+        Err(_) => Ok(false),
+    }
+}
+
+/// **Avant d'écrire une identité** : une base d'avant la règle refuse ; une
+/// base neuve reçoit le marqueur.
+fn garder_la_regle(catalog: &Catalog) -> Result<(), String> {
+    if avant_la_regle(catalog)? {
+        return Err(AVANT_LA_REGLE.to_string());
+    }
+    catalog.persist_meta_key(CODE_IDENTITY_KEY, CODE_IDENTITY_RELATIVE).map_err(|e| e.to_string())
 }
 
 /// La source a-t-elle déjà des scopes en base ? Sinon, c'est une première

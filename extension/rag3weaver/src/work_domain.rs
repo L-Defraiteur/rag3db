@@ -135,16 +135,28 @@ impl WorkDomain {
     /// lâche sans rien déclarer ne voit pas le disque : il voit l'origine de
     /// ce qu'il touche. Si le fichier n'est dans aucun dépôt, on retombe sur
     /// son répertoire — étroit, donc juste.
-    pub fn around(absolute_path: &std::path::Path) -> Self {
-        let origin = crate::origin::Origin::discover(absolute_path, "");
+    ///
+    /// `root` est la racine de la source : les chemins rangés y sont
+    /// relatifs, en « / » (depuis le 11 octobre 2026, `workspace_path`), et
+    /// le répertoire retenu l'est donc aussi. Un répertoire hors de la racine
+    /// ne peut rien désigner dans la base : le domaine est alors celui de
+    /// tout l'arbre, et son nom le dit.
+    pub fn around(root: &std::path::Path, absolute_path: &std::path::Path) -> Self {
         let name = format!("autour de {}", absolute_path.display());
         let coords = crate::origin::CoordinateRegistry::default().of(absolute_path);
         match coords.get("repo") {
             Some(repo) => Self::new(&name).including(Selector { repos: vec![repo.clone()], ..Default::default() }),
-            None => {
-                let dir = origin.anchor.to_string_lossy().to_string();
-                Self::new(&name).including(Selector { under: vec![dir], ..Default::default() })
-            }
+            // Son répertoire, pas l'ancre de l'origine : sans dépôt ni
+            // manifeste, l'ancre est la racine du système de fichiers.
+            None => match crate::workspace_path::relative_to(
+                root,
+                if absolute_path.is_dir() { absolute_path } else { absolute_path.parent().unwrap_or(absolute_path) },
+            ) {
+                Some(dir) if !dir.is_empty() => {
+                    Self::new(&name).including(Selector { under: vec![format!("{dir}/")], ..Default::default() })
+                }
+                _ => Self::new(&format!("{name} (l'arbre entier : son répertoire est la racine ou hors d'elle)")),
+            },
         }
     }
 
@@ -309,7 +321,8 @@ mod tests {
     #[test]
     fn the_default_domain_is_the_repo_of_the_file_being_worked_on() {
         let here = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("src/work_domain.rs");
-        let d = WorkDomain::around(&here);
+        let racine = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let d = WorkDomain::around(&racine, &here);
         assert!(!d.is_everything(), "un agent lâché sans rien ne voit pas le disque");
         let repos: Vec<&String> = d.include.iter().flat_map(|s| s.repos.iter()).collect();
         assert!(repos.iter().any(|r| r.contains("rag3db")), "{:?}", d.include);
@@ -321,9 +334,12 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let orphan = dir.join("seul.rs");
         std::fs::write(&orphan, "\n").unwrap();
-        let d = WorkDomain::around(&orphan);
+        let d = WorkDomain::around(&std::env::temp_dir(), &orphan);
         assert!(!d.is_everything(), "{d:?}");
         assert!(d.to_filter("path").is_some(), "{d:?}");
+        // Relatif à la racine, en « / » : ce que la base range.
+        let under: Vec<&String> = d.include.iter().flat_map(|s| s.under.iter()).collect();
+        assert_eq!(under, vec![&format!("rag3weaver-domaine-{}/", std::process::id())], "{d:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
