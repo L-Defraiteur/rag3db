@@ -26,6 +26,114 @@ use std::{
 /// N serveurs, un écrivain, et aucun protocole à relayer — `DaemonConnection`
 /// est une `DbConnection` comme une autre. C'est la forme produit : installer
 /// rag3weaver, c'est installer un démon.
+/// **L'entrée du serveur MCP, qui finit sur EOF ou sur SIGTERM** (11 octobre
+/// 2026, marche à part de la page C, §4).
+///
+/// Le cycle de vie MCP sur stdio prévoit que le client ferme l'entrée, attend la
+/// sortie, **puis envoie SIGTERM** s'il juge l'attente trop longue, puis SIGKILL.
+/// Depuis l'arrêt propre des indexations (marche 0), fermer le tube les arrête
+/// au prochain paquet validé et les attend : quelques secondes, davantage sur
+/// un paquet de blobs. Un SIGTERM par défaut tuait le serveur au milieu, et
+/// laissait la session de synchronisation ouverte.
+///
+/// Ici, SIGTERM **vaut la fermeture du tube** : la boucle MCP voit une fin
+/// d'entrée ordinaire, finit l'appel en cours s'il y en a un, et l'arrêt reste
+/// celui de toujours — réactions, indexations au prochain paquet, catalogue,
+/// puis la base détruite proprement à la sortie de la portée. `mcp.rs` n'en sait
+/// rien. Un second SIGTERM ne fait plus rien : seul SIGKILL laisse alors la
+/// session en plan, et c'est le contrat.
+///
+/// La lecture de stdin vit dans son propre fil, parce qu'une lecture bloquée ne
+/// s'interrompt pas proprement ; les lignes passent par un canal où le fil du
+/// signal peut glisser la fin.
+struct EntreeInterruptible {
+    lignes: std::sync::mpsc::Receiver<Option<Vec<u8>>>,
+    tampon: Vec<u8>,
+    position: usize,
+    finie: bool,
+}
+
+impl EntreeInterruptible {
+    fn sur_stdin() -> Self {
+        let (envoi, lignes) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+        let lecteur = envoi.clone();
+        std::thread::spawn(move || {
+            let mut stdin = io::stdin().lock();
+            loop {
+                let mut ligne = Vec::new();
+                match stdin.read_until(b'\n', &mut ligne) {
+                    Ok(0) | Err(_) => {
+                        let _ = lecteur.send(None);
+                        return;
+                    }
+                    Ok(_) => {
+                        if lecteur.send(Some(ligne)).is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+        #[cfg(unix)]
+        std::thread::spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_io().build() else {
+                eprintln!("[mcp] SIGTERM ne sera pas intercepté : runtime du signal indisponible");
+                return;
+            };
+            rt.block_on(async {
+                use tokio::signal::unix::{signal, SignalKind};
+                let Ok(mut terme) = signal(SignalKind::terminate()) else {
+                    eprintln!("[mcp] SIGTERM ne sera pas intercepté : gestionnaire refusé");
+                    return;
+                };
+                if terme.recv().await.is_some() {
+                    eprintln!(
+                        "[mcp] SIGTERM : arrêt propre, comme une fermeture du tube — l'appel en \
+                         cours finit, les indexations s'arrêtent au prochain paquet"
+                    );
+                    let _ = envoi.send(None);
+                }
+                // Le gestionnaire reste en place : un second SIGTERM ne tue
+                // pas un arrêt propre en cours ; SIGKILL, si.
+                std::future::pending::<()>().await;
+            });
+        });
+        Self { lignes, tampon: Vec::new(), position: 0, finie: false }
+    }
+}
+
+impl io::Read for EntreeInterruptible {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let disponible = io::BufRead::fill_buf(self)?;
+        let n = disponible.len().min(buf.len());
+        buf[..n].copy_from_slice(&disponible[..n]);
+        io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl io::BufRead for EntreeInterruptible {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.position >= self.tampon.len() && !self.finie {
+            match self.lignes.recv() {
+                Ok(Some(ligne)) => {
+                    self.tampon = ligne;
+                    self.position = 0;
+                }
+                Ok(None) | Err(_) => self.finie = true,
+            }
+        }
+        if self.finie && self.position >= self.tampon.len() {
+            return Ok(&[]);
+        }
+        Ok(&self.tampon[self.position..])
+    }
+
+    fn consume(&mut self, n: usize) {
+        self.position = (self.position + n).min(self.tampon.len());
+    }
+}
+
 fn servir_mcp(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
                          [--keys dev,admin] [--demon <adresse>]";
@@ -107,7 +215,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
             reactions.join(", ")
         );
     }
-    let mut entree = io::BufReader::new(io::stdin());
+    let mut entree = EntreeInterruptible::sur_stdin();
     let mut sortie = io::stdout();
     match rag3weaver::mcp::servir(&backend, &cles, &mut entree, &mut sortie)? {
         rag3weaver::mcp::Suite::Fini => backend.shutdown(),

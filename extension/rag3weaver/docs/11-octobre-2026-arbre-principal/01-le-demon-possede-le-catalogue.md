@@ -310,6 +310,12 @@ rien à attendre, puisqu'il ne porte aucun travail. Cette marche vaut donc
 **surtout pour la forme d'aujourd'hui**, d'ici que le client soit mince — et
 c'est la raison de la faire petite.
 
+*Faite le 11 octobre à midi* : `servir_mcp` lit son entrée par un fil, et un fil
+à part attend SIGTERM (tokio, fonctionnalité `signal`, Unix seulement) ; le signal
+glisse une fin d'entrée dans le même canal, et la boucle MCP s'arrête comme sur
+une fermeture du tube. Témoin `tests/e2e_mcp_sigterm.rs` : sortie en code 0, la
+ligne sur stderr, et la base rouverte par un second serveur.
+
 **Quand le démon meurt entre deux appels**, l'appel suivant passe par `assurer` :
 le démon renaît, rouvre le backend, et l'appel en cours rend une erreur
 transitoire nommée — jamais un tube cassé, jamais un rejeu silencieux.
