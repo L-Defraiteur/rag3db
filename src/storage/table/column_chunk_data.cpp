@@ -1080,8 +1080,11 @@ std::vector<std::unique_ptr<ColumnChunkData>> ColumnChunkData::split(bool target
                 pos += 1;
                 break;
             }
-            // Le lot fait déborder : il est retiré. finalize() rend les octets des valeurs
-            // retirées (chaînes, listes), qu'aucun segment ne doit emporter sur le disque.
+            // Le lot fait déborder : il est retiré. Pour les chaînes, truncate() pose needFinalize
+            // et finalize() rend les octets des valeurs retirées, que l'estimation compterait
+            // encore. Pour les listes, finalize() revient tôt sur des décalages consécutifs : les
+            // octets du fils des valeurs retirées restent en queue, morts, sans effet sur le
+            // découpage (l'estimation des listes ne les compte pas).
             newSegment->truncate(newSegment->getNumValues() - numValuesToAppend);
             newSegment->finalize();
             if (numValuesToAppend == 1) {
