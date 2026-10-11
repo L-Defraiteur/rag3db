@@ -177,6 +177,7 @@ impl DataflowRecorder {
                     format!("failed: {}", error)
                 }
                 super::report::NodeStatus::Resumed => "resumed".to_string(),
+                super::report::NodeStatus::Skipped { reason } => format!("skipped: {reason}"),
             };
             let node_uuid = format!("{}__node_{}", exec_uuid, i);
             let cypher = "MATCH (e:_DataflowExecution {_uuid: $exec_uuid}) \

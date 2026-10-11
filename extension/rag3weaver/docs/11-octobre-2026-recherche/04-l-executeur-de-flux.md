@@ -54,11 +54,21 @@ Dans **l'exécuteur par niveaux d'aujourd'hui**, sans concurrence :
   (`NodeStatus::Skipped { reason }`, la raison nommant l'entrée et ses
   producteurs) ;
 - le saut **se propage** : un producteur sauté compte comme fini sans donnée ;
-- il est **écrit au rapport et au point de reprise** (`NodeCheckpointStatus::Skipped`) —
-  sans quoi une reprise le rejouerait ;
-- un graphe-outil dont le nœud de résultat est sauté rend une **erreur nommée**
-  (« le résultat n'a pas été produit : la branche qui y mène n'a pas été prise »),
-  jamais un résultat vide silencieux ;
+- il est **écrit au rapport** (`NodeStatus::Skipped { reason }`, l'événement
+  `NodeSkipped`) et **dans la sortie** (`DataflowOutput::skip_reason`) ;
+- **Corrigé en codant** (la page disait « écrit au point de reprise, sans quoi
+  une reprise le rejouerait ») : au point de reprise, il ne s'écrit pas — il se
+  **recalcule à l'identique**. Un nœud n'est sauté qu'une fois tous ses
+  producteurs finis ; à la reprise, ces producteurs sont restaurés avec les
+  mêmes sorties (celles qui ont encore un lecteur), donc la même décision
+  tombe, et « rejouer » un saut ne joue rien. L'écrire au store n'ajouterait
+  qu'un état de plus à garder cohérent : si un producteur est rejoué (il avait
+  échoué), la décision doit justement être reprise ;
+- un graphe-outil dont le nœud de résultat est sauté rend une **erreur nommée**,
+  `GraphToolError::NotTaken { node, port, reason }` (« le port de résultat n'a
+  pas été produit : la branche qui y mène n'a pas été prise »), distincte de
+  `NoResult` (le nœud a tourné sans poser son résultat : une faute) — demande
+  de la session du proto, dont les ports d'agent lisent les deux comme « retenu » ;
 - un flux vide n'est pas un échec : `Skipped` et `Failed` restent deux états.
 
 **La parité est vraie par construction** : seul change le chemin qui, aujourd'hui,

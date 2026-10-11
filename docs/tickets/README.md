@@ -98,10 +98,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (67), dans `closed/`
+### Fermés (69), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une branche non prise tue le run entier, sans rapport](closed/2026-10-11-une-branche-non-prise-tue-le-run-sans-rapport.md) | corrigé (le saut, lot 0 des flux) | blocage : le run meurt sur ce qui n'est pas une faute (P3, refus muet) | oui, dès qu'un graphe aiguille | oui — `runtime.rs`, `report.rs` |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](closed/2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | corrigé par B2b (`6002c3ccd`), témoin du 11 oct. | réponse fausse | oui | oui (rendez-vous) |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](closed/2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | corrigé, codeparsers `d90a1f6` (11 oct.) | réponse incomplète (faible) | oui | oui (impact, usages) |
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](closed/2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | corrigé par la marche 1 bis du lien générique (le verbe refuse un bout absent quand le lien se pose) | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |

@@ -1,6 +1,6 @@
 # Une branche non prise tue le run entier, sans rapport
 
-- **État** : ouvert
+- **État** : corrigé (le commit qui pose le saut, branche flux-executeur)
 - **Gravité** : blocage — le run entier meurt sur ce qui n'est pas une faute (P3, refus muet)
 - **Atteignable en service** : oui, dès qu'un graphe aiguille (un producteur qui
   finit sans poser une sortie optionnelle, branchée sur une entrée requise) ;

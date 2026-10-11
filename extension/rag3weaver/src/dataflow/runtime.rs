@@ -98,6 +98,14 @@ pub enum DataflowEvent {
     },
     /// A node failed.
     NodeFailed { node: String, error: String },
+    /// **Un nœud sauté** : une entrée requise n'a rien reçu, ses producteurs
+    /// ayant fini (ou été sautés) sans l'émettre — une branche non prise. Le
+    /// run continue ; la raison nomme l'entrée et ses producteurs.
+    NodeSkipped {
+        node: String,
+        node_type: String,
+        reason: String,
+    },
     /// Checkpoint resume: a node was skipped (already completed in a prior run).
     CheckpointResumed {
         node: String,
@@ -118,6 +126,11 @@ pub enum DataflowEvent {
 #[derive(Debug)]
 pub struct DataflowOutput {
     data: HashMap<String, HashMap<String, PortValue>>,
+    /// Les nœuds sautés (branche non prise), avec leur raison : ce qui
+    /// distingue un résultat absent PARCE QUE sa branche n'a pas été prise
+    /// d'un nœud qui a oublié de le poser (`GraphToolError::NotTaken` contre
+    /// `NoResult`), sans payer le rapport et ses instantanés.
+    skipped: HashMap<String, String>,
 }
 
 impl DataflowOutput {
@@ -130,7 +143,13 @@ impl DataflowOutput {
     pub fn empty() -> Self {
         Self {
             data: HashMap::new(),
+            skipped: HashMap::new(),
         }
+    }
+
+    /// La raison du saut de ce nœud, s'il a été sauté (branche non prise).
+    pub fn skip_reason(&self, node: &str) -> Option<&str> {
+        self.skipped.get(node).map(String::as_str)
     }
 
 }
@@ -537,6 +556,7 @@ impl DataflowRuntime {
         let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
+        let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
@@ -600,6 +620,47 @@ impl DataflowRuntime {
 
         // Main execution loop (same structure as execute(), with checkpoint saves)
         for _iteration in 0..self.max_iterations {
+            // **Les sauts d'abord, jusqu'au point fixe** (11 octobre 2026) :
+            // une branche non prise ne tue plus le run. Un nœud dont une
+            // entrée requise et branchée n'a rien reçu — tous ses producteurs
+            // ayant fini ou été sautés — est sauté ; le saut se propage dans
+            // la même itération, sans consommer le plafond d'itérations.
+            loop {
+                let to_skip: Vec<(String, String)> = order
+                    .iter()
+                    .filter(|n| !completed.contains(*n))
+                    .filter_map(|n| {
+                        skip_reason(graph, n, &completed, &port_data_available, &initial_inputs)
+                            .map(|reason| (n.clone(), reason))
+                    })
+                    .collect();
+                if to_skip.is_empty() {
+                    break;
+                }
+                for (skipped_name, reason) in to_skip {
+                    // Ce qui l'attendait n'a plus de lecteur : libéré, pas
+                    // laissé dans la sortie finale.
+                    for e in graph.edges.iter().filter(|e| e.to_node == skipped_name) {
+                        let key = (e.from_node.clone(), e.from_port.clone());
+                        if let Some(left) = remaining_consumers.get_mut(&key) {
+                            *left = left.saturating_sub(1);
+                            if *left == 0 {
+                                port_data.remove(&key);
+                            }
+                        }
+                    }
+                    let node_type = graph
+                        .nodes
+                        .iter()
+                        .find(|n| n.name() == skipped_name)
+                        .map(|n| n.node_type().to_string())
+                        .unwrap_or_default();
+                    completed.insert(skipped_name.clone());
+                    skipped.insert(skipped_name.clone(), reason.clone());
+                    self.emit(DataflowEvent::NodeSkipped { node: skipped_name, node_type, reason });
+                }
+            }
+
             let ready: Vec<String> = order
                 .iter()
                 .filter(|name| !completed.contains(*name))
@@ -883,7 +944,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data })
+        Ok(DataflowOutput { data, skipped })
     }
 
     /// Execute the graph. Returns all output values.
@@ -997,6 +1058,7 @@ impl DataflowRuntime {
         let mut initial_inputs: HashMap<String, HashMap<String, PortValue>> =
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
+        let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
@@ -1012,6 +1074,47 @@ impl DataflowRuntime {
 
         for _iteration in 0..self.max_iterations {
             // Find ready nodes: not completed, all required inputs available
+            // **Les sauts d'abord, jusqu'au point fixe** (11 octobre 2026) :
+            // une branche non prise ne tue plus le run. Un nœud dont une
+            // entrée requise et branchée n'a rien reçu — tous ses producteurs
+            // ayant fini ou été sautés — est sauté ; le saut se propage dans
+            // la même itération, sans consommer le plafond d'itérations.
+            loop {
+                let to_skip: Vec<(String, String)> = order
+                    .iter()
+                    .filter(|n| !completed.contains(*n))
+                    .filter_map(|n| {
+                        skip_reason(graph, n, &completed, &port_data_available, &initial_inputs)
+                            .map(|reason| (n.clone(), reason))
+                    })
+                    .collect();
+                if to_skip.is_empty() {
+                    break;
+                }
+                for (skipped_name, reason) in to_skip {
+                    // Ce qui l'attendait n'a plus de lecteur : libéré, pas
+                    // laissé dans la sortie finale.
+                    for e in graph.edges.iter().filter(|e| e.to_node == skipped_name) {
+                        let key = (e.from_node.clone(), e.from_port.clone());
+                        if let Some(left) = remaining_consumers.get_mut(&key) {
+                            *left = left.saturating_sub(1);
+                            if *left == 0 {
+                                port_data.remove(&key);
+                            }
+                        }
+                    }
+                    let node_type = graph
+                        .nodes
+                        .iter()
+                        .find(|n| n.name() == skipped_name)
+                        .map(|n| n.node_type().to_string())
+                        .unwrap_or_default();
+                    completed.insert(skipped_name.clone());
+                    skipped.insert(skipped_name.clone(), reason.clone());
+                    self.emit(DataflowEvent::NodeSkipped { node: skipped_name, node_type, reason });
+                }
+            }
+
             let ready: Vec<String> = order
                 .iter()
                 .filter(|name| !completed.contains(*name))
@@ -1246,7 +1349,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data })
+        Ok(DataflowOutput { data, skipped })
     }
 }
 
@@ -1276,10 +1379,57 @@ impl NodeEventFilter {
             DataflowEvent::NodeCompleted { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeLog { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
+            DataflowEvent::NodeSkipped { node, .. } => self.nodes.contains(node),
             DataflowEvent::CheckpointResumed { node, .. } => self.nodes.contains(node),
             DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,
         }
     }
+}
+
+/// **Faut-il sauter ce nœud, et pourquoi ?** Oui quand chaque entrée branchée
+/// est résolue (tous ses producteurs ont fini — un nœud sauté compte comme
+/// fini sans donnée) et qu'une entrée **requise** branchée n'a reçu ni donnée
+/// ni valeur initiale : c'est une branche non prise. Une entrée optionnelle
+/// sans donnée ne fait rien sauter (le nœud tourne, port absent, comme
+/// avant). Rend la raison, qui nomme l'entrée et ses producteurs.
+fn skip_reason(
+    graph: &DataflowGraph,
+    name: &str,
+    completed: &HashSet<String>,
+    port_data_available: &HashSet<(String, String)>,
+    initial_inputs: &HashMap<String, HashMap<String, PortValue>>,
+) -> Option<String> {
+    let node = graph.nodes.iter().find(|n| n.name() == name)?;
+    let mut missing: Option<String> = None;
+    for input in node.inputs() {
+        let edges: Vec<_> = graph
+            .edges
+            .iter()
+            .filter(|e| e.to_node == name && e.to_port == input.name)
+            .collect();
+        if edges.is_empty() {
+            continue;
+        }
+        if !edges.iter().all(|e| completed.contains(&e.from_node)) {
+            return None; // un producteur tourne encore : attendre
+        }
+        let has_data = edges
+            .iter()
+            .any(|e| port_data_available.contains(&(e.from_node.clone(), e.from_port.clone())));
+        let has_initial = initial_inputs
+            .get(name)
+            .map_or(false, |p| p.contains_key(&*input.name));
+        if input.required && !has_data && !has_initial && missing.is_none() {
+            let producers: Vec<String> =
+                edges.iter().map(|e| format!("{}.{}", e.from_node, e.from_port)).collect();
+            missing = Some(format!(
+                "entrée requise « {} » sans donnée : {} n'a rien émis (branche non prise)",
+                input.name,
+                producers.join(", ")
+            ));
+        }
+    }
+    missing
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -1585,6 +1735,93 @@ mod tests {
                 assert_eq!(results.iter().any(|r|r.uuid=="late"),!empty_late_branch);
             }
         }
+    }
+
+    /// **Une branche non prise est sautée et dite** (lot 0 des agents qui se
+    /// parlent, 11 octobre 2026). Un aiguillage ne pose que sa sortie `a` :
+    /// la branche `b` (deux nœuds en chaîne, entrées requises) ne reçoit rien.
+    /// Avant : « deadlock », le run entier mort, aucun rapport. Après : la
+    /// branche est sautée, le saut se propage le long de la chaîne, le
+    /// rapport le dit avec sa raison, et la fusion finit avec la seule
+    /// branche prise — en direct comme avec points de reprise.
+    #[test]
+    fn une_branche_non_prise_est_sautee_et_dite() {
+        use crate::dataflow::checkpoint_store::MockCheckpointStore;
+        use crate::dataflow::generic_search_nodes::FuseResultsNode;
+        use crate::dataflow::report::{ExecutionReport, NodeStatus};
+        struct Aiguillage;
+        impl Node for Aiguillage {
+            fn name(&self) -> &str { "aiguillage" }
+            fn node_type(&self) -> &'static str { "Aiguillage" }
+            fn inputs(&self) -> Vec<PortDef> {
+                vec![PortDef { name: "in".into(), port_type: PortType::Results, required: true }]
+            }
+            fn outputs(&self) -> Vec<PortDef> {
+                vec![
+                    PortDef { name: "a".into(), port_type: PortType::Results, required: false },
+                    PortDef { name: "b".into(), port_type: PortType::Results, required: false },
+                ]
+            }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                let v = ctx.take_input("in").ok_or("in")?;
+                ctx.set_output("a", v); // la branche `b` n'est pas prise
+                Ok(())
+            }
+        }
+        let monter = || {
+            let mut g = DataflowGraph::new();
+            g.add_node(Box::new(SourceNode { name: "src".into(), results: vec![test_result("pris")] })).unwrap();
+            g.add_node(Box::new(Aiguillage)).unwrap();
+            g.add_node(Box::new(PassthroughNode { name: "pa".into() })).unwrap();
+            g.add_node(Box::new(PassthroughNode { name: "pb".into() })).unwrap();
+            g.add_node(Box::new(PassthroughNode { name: "pb2".into() })).unwrap();
+            g.add_node(Box::new(FuseResultsNode::new("fuse"))).unwrap();
+            g.connect("src", "out", "aiguillage", "in").unwrap();
+            g.connect("aiguillage", "a", "pa", "in").unwrap();
+            g.connect("aiguillage", "b", "pb", "in").unwrap();
+            g.connect("pb", "out", "pb2", "in").unwrap();
+            g.connect("pa", "out", "fuse", "signals").unwrap();
+            g.connect("pb2", "out", "fuse", "signals").unwrap();
+            g
+        };
+
+        // En direct, avec le rapport.
+        let mut g = monter();
+        let (output, report): (_, ExecutionReport) = DataflowRuntime::new(20)
+            .execute_with_report(&mut g)
+            .expect("une branche non prise ne tue plus le run");
+        let fusion = output.get("fuse", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
+        assert_eq!(fusion.len(), 1, "la seule branche prise arrive à la fusion");
+        let statut = |n: &str| report.nodes.iter().find(|r| r.name == n).map(|r| r.status.clone());
+        for saute in ["pb", "pb2"] {
+            match statut(saute) {
+                Some(NodeStatus::Skipped { reason }) => assert!(
+                    reason.contains("in"),
+                    "la raison nomme l'entrée sans donnée : {reason}"
+                ),
+                autre => panic!("{saute} doit être sauté et dit, rendu : {autre:?}"),
+            }
+        }
+        assert!(matches!(statut("pa"), Some(NodeStatus::Completed)));
+        assert!(matches!(statut("fuse"), Some(NodeStatus::Completed)));
+        // La sortie le dit aussi, sans le rapport : c'est ce que lit
+        // `GraphToolError::NotTaken` pour un résultat dont la branche n'a pas
+        // été prise.
+        assert!(
+            output.skip_reason("pb2").is_some_and(|r| r.contains("pb.out")),
+            "{:?}",
+            output.skip_reason("pb2")
+        );
+        assert!(output.skip_reason("pa").is_none());
+
+        // Avec points de reprise : le run finit aussi.
+        let mut g = monter();
+        let store = MockCheckpointStore::new();
+        let output = DataflowRuntime::new(20)
+            .execute_with_checkpoint(&mut g, &store, "branche")
+            .expect("avec points de reprise aussi");
+        let fusion = output.get("fuse", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
+        assert_eq!(fusion.len(), 1);
     }
 
     #[test]

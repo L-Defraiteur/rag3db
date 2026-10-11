@@ -129,6 +129,12 @@ pub enum GraphToolError {
     Cycle { nodes: Vec<String> },
     Execution(String),
     NoResult { node: String, port: String },
+    /// **Le nœud de résultat a été sauté** : la branche qui y mène n'a pas
+    /// été prise (une entrée requise sans donnée). Distinct de `NoResult`,
+    /// où le nœud a tourné sans poser son résultat : l'un est voulu, l'autre
+    /// une faute. `reason` est la raison du saut, qui nomme l'entrée et les
+    /// producteurs qui n'ont rien émis.
+    NotTaken { node: String, port: String, reason: String },
     Unserializable { node: String, port: String, detail: String },
     Panic(String),
 }
@@ -150,6 +156,7 @@ impl GraphToolError {
             Self::Cycle { .. } => "cycle",
             Self::Execution(_) => "execution",
             Self::NoResult { .. } => "no_result",
+            Self::NotTaken { .. } => "not_taken",
             Self::Unserializable { .. } => "unserializable",
             Self::Panic(_) => "panic",
         }
@@ -205,6 +212,11 @@ impl fmt::Display for GraphToolError {
             Self::NoResult { node, port } => {
                 write!(f, "aucune valeur sur le port de résultat '{node}.{port}'")
             }
+            Self::NotTaken { node, port, reason } => write!(
+                f,
+                "le port de résultat '{node}.{port}' n'a pas été produit : la branche qui y \
+                 mène n'a pas été prise ({reason})"
+            ),
             Self::Unserializable { node, port, detail } => write!(
                 f,
                 "le port de résultat '{node}.{port}' ne se sérialise pas : {detail}"
@@ -619,12 +631,19 @@ pub fn execute_definition_as(
         None => runtime.execute(&mut graph),
     }
     .map_err(GraphToolError::Execution)?;
-    let value = output
-        .get(result_node, result_port)
-        .ok_or_else(|| GraphToolError::NoResult {
-            node: result_node.to_string(),
-            port: result_port.to_string(),
-        })?;
+    let value = output.get(result_node, result_port).ok_or_else(|| {
+        match output.skip_reason(result_node) {
+            Some(reason) => GraphToolError::NotTaken {
+                node: result_node.to_string(),
+                port: result_port.to_string(),
+                reason: reason.to_string(),
+            },
+            None => GraphToolError::NoResult {
+                node: result_node.to_string(),
+                port: result_port.to_string(),
+            },
+        }
+    })?;
     render_port_value(value).map_err(|detail| GraphToolError::Unserializable {
         node: result_node.to_string(),
         port: result_port.to_string(),
