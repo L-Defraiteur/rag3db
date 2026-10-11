@@ -204,7 +204,7 @@ où elle vit.
   `26216e3be`) : deux questions à Lucie, arête d'ordre seul (recommandé non,
   avec une arête à zéro ou plusieurs colonnes) et graphe non atomique
   (recommandé : exécuté et dit, refus seulement si l'appelant exige
-  l'atomicité). **Tranché par Lucie en fin d'après-midi : oui aux deux**,
+  l'atomicité). **Tranché par Lucie vers 13 h : oui aux deux**,
   l'arête portant zéro ou plusieurs colonnes ; premier lot lancé chez F.
 - **Conteneur PostgreSQL** (Lucie : « mettons un docker postgres ») : recette
   d'`e2e_postgres` (`pgvector/pgvector:pg17`, port 5433) ; l'utilisateur
@@ -253,7 +253,7 @@ où elle vit.
   valeurs, exécuteur concurrent seulement quand un port de flux existe,
   parité prouvée d'abord) ; le proto fait le lot 1 (points d'accroche +
   parité) en parallèle et relit.
-- **L'identité par cellule, variante (a)** (Lucie, fin d'après-midi) : le
+- **L'identité par cellule, variante (a)** (Lucie, vers 13 h) : le
   témoin de l'arbre principal est rouge et c'est une perte (la même fiche
   écrite dans une seconde cellule déplace la ligne de la première ; ticket
   `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md`). Filet
@@ -264,7 +264,7 @@ où elle vit.
   ne bouge ; raison : une base sans cellules ne change pas d'identité à une
   mise à jour. Le lien générique de la mémoire dit sa cellule, un lien entre
   cellules devient explicite.
-- **Soirée, sur master** : A7 (hotfixs, `c0f50f453`, la file des points de
+- **Début d'après-midi, sur master** : A7 (hotfixs, `c0f50f453`, la file des points de
   reprise ; banc 7 rouges attendus, 251 verts) ; le filet contre la perte des
   cellules (`06980485f`) et le pas a de la marche 1 bis (`9dd4baedd`, la
   cellule par la requête, deux sessions sur deux cellules ; ticket court pour
@@ -289,7 +289,7 @@ où elle vit.
   Lucie le plus ; `decide` du proto, pplx-decider candidat à évaluer, Gemini
   pour juger), aucun code avant son mot. Les quatre points de la §6 de
   l'enveloppe sont rendus à Lucie (recommandation : oui aux quatre).
-- **Les fiches mémoire classées : un régime d'expérimentation** (Lucie, soir,
+- **Les fiches mémoire classées : un régime d'expérimentation** (Lucie, vers 13 h,
   « je parle des fiches mémoire hein ») : « on essaie, on ne fige pas, on tente
   avec ce qu'on a dans les visions, au mieux et rentable en temps / mémoire GPU
   / efficience, ensuite on regarde les briques posées, l'assemblage, les
@@ -297,7 +297,7 @@ où elle vit.
   cinq réponses proposées par la mémoire sont prises ; chaque tentative vit
   dans un dossier daté avec son gabarit, son graphe, sa note de retours et ses
   mesures. Ce régime ne s'étend pas aux autres chantiers.
-- **Sur master, fin de soirée** : le pas b de la marche 1 bis (`bac552c22`,
+- **Sur master, vers 13 h 15** : le pas b de la marche 1 bis (`bac552c22`,
   index et recherche par cellule, ticket fermé) ; le lot 1 des agents qui se
   parlent (proto, `d3aa6f281`, les sept ports de la boucle, parité à ports
   transparents) ; le chaînage lot 1 (F, `76cf86cbc`, le type du graphe dans
@@ -307,7 +307,7 @@ où elle vit.
   `aeddf002a`). La course de `port_libre` des tests du démon (ticket du 10,
   trois sessions touchées) confiée à G. Règle de forme diffusée : « poussé »
   après `git status` propre, aucun rebase en cours, hash lu sur origin/master.
-- **Nuit, sur master** : C7 après arrêt brutal (cœur, `2c7704b27`, ticket
+- **Vers 13 h 40, sur master** : C7 après arrêt brutal (cœur, `2c7704b27`, ticket
   fermé dans le commit, stèle du moteur à quatre tickets ; condition 3 :
   T0, A3′ reprise, A7, C7 faits, restent A8 chez hotfixs, A9 mesure puis
   bascule, B2) ; le pas c de la marche 1 bis (arbre principal, `8bb2af2d7`,
