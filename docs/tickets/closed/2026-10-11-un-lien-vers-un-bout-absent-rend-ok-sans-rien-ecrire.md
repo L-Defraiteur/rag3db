@@ -1,6 +1,6 @@
 # Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé
 
-- **état** : ouvert (mesuré le 11 octobre 2026)
+- **état** : corrigé par la marche 1 bis du lien générique (le commit qui déplace ce fichier dans `closed/`, 11 octobre 2026) — `Catalog::link_jusqu_a` vérifie ses bouts quand le lien se pose maintenant (exigence non vide), par `Select::by_uuids` (rag3db et PostgreSQL), et refuse un bout absent en le nommant ; les liens différés (régime par lot, indexation du code) se comptent au drain comme avant, et un témoin tient cette borne
 - **gravité** : réponse fausse — un outil annonce un lien qui n'existe pas
 - **atteignable en service** : oui, par `add_ref` du gabarit `memory` avec une `fiche` qui ne désigne aucune mémoire
 - **touche rag3weaver** : oui, et seulement rag3weaver

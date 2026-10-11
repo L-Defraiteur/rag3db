@@ -6455,6 +6455,39 @@ impl Catalog {
         properties: BTreeMap<String, CypherValue>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<(RelationRef, FlushResult), CatalogError> {
+        let (from, to): (RefOrUuid, RefOrUuid) = (from.into(), to.into());
+        // **Un bout absent se refuse, en le nommant** (11 octobre 2026, ticket
+        // « un lien vers un bout absent rend Ok sans rien écrire »). Le lien se
+        // pose par `MATCH … MERGE`, qui ne dit rien quand un bout manque : le
+        // verbe rendait `Ok` pour un lien qui n'existait pas.
+        //
+        // Deux bornes, dites :
+        // - seulement quand le lien **se pose maintenant** (une exigence non
+        //   vide) : sous le régime par lot, un bout peut arriver plus tard dans
+        //   le même lot, et le refuser à la mise en file serait faux ;
+        // - un bout encore désigné par une **référence non résolue** est en file
+        //   par construction (c'est un `create` de ce catalogue) : il n'est pas
+        //   lu.
+        // Une lecture par bout résolu (`Select::by_uuids`), pas plus : ce verbe
+        // pose un lien. Le chemin de masse (`mettre_en_file_les_liens`) ne passe
+        // pas par ici.
+        if !exige.est_vide() {
+            let rel_def = self
+                .config
+                .relations
+                .get(rel_name)
+                .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+            let (de_entite, vers_entite) = (rel_def.from.clone(), rel_def.to.clone());
+            for (entite, bout) in [(de_entite, &from), (vers_entite, &to)] {
+                let Ok(uuid) = bout.try_resolve() else { continue };
+                if !self.bouts_absents_de(&entite, std::slice::from_ref(&uuid))?.is_empty() {
+                    return Err(CatalogError::ValidationFailed(format!(
+                        "le lien « {rel_name} » vise un bout absent : {entite} {uuid}, ni en base ni \
+                         en file — rien n'est posé"
+                    )));
+                }
+            }
+        }
         let r = self.mettre_en_file_le_lien(rel_name, from, to, properties)?;
         let graine = self
             .config
@@ -6547,77 +6580,65 @@ impl Catalog {
             .relations
             .get(rel_name)
             .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
-        let supprimes: HashSet<(&str, &str)> = self
-            .pending
-            .deletes
-            .iter()
-            .map(|d| (d.entity_name.as_str(), d.uuid.as_str()))
-            .collect();
-        let en_file: HashSet<(&str, &str)> = self
-            .pending
-            .entities
-            .iter()
-            .filter_map(|e| {
-                e.data
-                    .get("_uuid")
-                    .and_then(CypherValue::as_str)
-                    .map(|u| (e.entity_name.as_str(), u))
-            })
-            .collect();
-        let mut absents: Vec<(String, String)> = Vec::new();
-        let mut vus: HashSet<(&str, &str)> = HashSet::new();
-        let mut a_lire: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        // Les bouts distincts de chaque côté, dans l'ordre où ils viennent.
+        let mut par_entite: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         for (de, vers) in paires {
-            for bout in [(rel_def.from.as_str(), de.as_str()), (rel_def.to.as_str(), vers.as_str())] {
-                if !vus.insert(bout) {
-                    continue;
-                }
-                if supprimes.contains(&bout) {
-                    absents.push((bout.0.to_string(), bout.1.to_string()));
-                } else if !en_file.contains(&bout) {
-                    a_lire.entry(bout.0).or_default().push(bout.1);
+            for (entite, u) in [(rel_def.from.as_str(), de), (rel_def.to.as_str(), vers)] {
+                let liste = par_entite.entry(entite).or_default();
+                if !liste.contains(u) {
+                    liste.push(u.clone());
                 }
             }
         }
-        for (entite, uuids) in a_lire {
-            let requete = self
-                .dialect_arc()
-                .select(&rag3weaver_ir::Select::by_uuids(
-                    entite,
-                    vec![rag3weaver_ir::Column::Node("_uuid".into())],
-                ))
-                .map_err(|e| {
-                    CatalogError::SchemaError(format!(
-                        "vérifier les bouts de « {rel_name} » : ce dialecte ne traduit pas la \
-                         lecture par uuids ({e}) — le lien n'est pas posé plutôt que posé sans \
-                         savoir"
-                    ))
-                })?;
-            for tranche in uuids.chunks(512) {
-                let liste = CypherValue::List(
-                    tranche.iter().map(|u| CypherValue::String((*u).to_string())).collect(),
-                );
-                let lignes = self.execute_raw_with_params(
-                    &requete,
-                    &[crate::connection::QueryParam::new("uuids", liste)],
-                )?;
-                // Une ligne par uuid présent ; on retient toute chaîne de la
-                // ligne, pour ne dépendre ni de l'ordre ni du nombre de
-                // colonnes que le dialecte rend (rag3db rend l'uuid demandé
-                // en tête, puis la colonne lue).
-                let trouves: HashSet<&str> = lignes
-                    .rows
-                    .iter()
-                    .flatten()
-                    .filter_map(CypherValue::as_str)
-                    .collect();
-                absents.extend(
-                    tranche
-                        .iter()
-                        .filter(|u| !trouves.contains(**u))
-                        .map(|u| (entite.to_string(), (*u).to_string())),
-                );
+        let mut absents = Vec::new();
+        for (entite, uuids) in par_entite {
+            absents.extend(self.bouts_absents_de(entite, &uuids)?.into_iter().map(|u| (entite.to_string(), u)));
+        }
+        Ok(absents)
+    }
+
+    /// Les uuids d'**une** entité qui ne sont ni en base ni en file — les règles
+    /// de [`Self::bouts_absents`], pour un côté.
+    pub(crate) fn bouts_absents_de(&self, entite: &str, uuids: &[String]) -> Result<Vec<String>, CatalogError> {
+        let supprime = |u: &str| self.pending.deletes.iter().any(|d| d.entity_name == entite && d.uuid == u);
+        let en_file = |u: &str| {
+            self.pending.entities.iter().any(|e| {
+                e.entity_name == entite && e.data.get("_uuid").and_then(CypherValue::as_str) == Some(u)
+            })
+        };
+        let mut absents = Vec::new();
+        let mut a_lire: Vec<&str> = Vec::new();
+        for u in uuids {
+            if supprime(u) {
+                absents.push(u.clone());
+            } else if !en_file(u) {
+                a_lire.push(u);
             }
+        }
+        if a_lire.is_empty() {
+            return Ok(absents);
+        }
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entite,
+                vec![rag3weaver_ir::Column::Node("_uuid".into())],
+            ))
+            .map_err(|e| {
+                CatalogError::SchemaError(format!(
+                    "vérifier les bouts de « {entite} » : ce dialecte ne traduit pas la lecture par \
+                     uuids ({e}) — le lien n'est pas posé plutôt que posé sans savoir"
+                ))
+            })?;
+        for tranche in a_lire.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String((*u).to_string())).collect());
+            let lignes =
+                self.execute_raw_with_params(&requete, &[crate::connection::QueryParam::new("uuids", liste)])?;
+            // Une ligne par uuid présent ; on retient toute chaîne de la ligne,
+            // pour ne dépendre ni de l'ordre ni du nombre de colonnes que le
+            // dialecte rend.
+            let trouves: HashSet<&str> = lignes.rows.iter().flatten().filter_map(CypherValue::as_str).collect();
+            absents.extend(tranche.iter().filter(|u| !trouves.contains(**u)).map(|u| (*u).to_string()));
         }
         Ok(absents)
     }
@@ -9930,6 +9951,50 @@ mod tests {
 
         assert_eq!(rel_ref.relation(), "REFERENCES");
         assert!(!rel_ref.is_ready());
+    }
+
+    /// **Un lien différé ne vérifie pas ses bouts** (marche 1 bis du lien
+    /// générique, 11 octobre 2026). C'est la forme que prend l'indexation du
+    /// code : `link_jusqu_a(…, AUCUNE)` dans sa boucle de mentions, et
+    /// `mettre_en_file_les_liens` pour la masse — leurs paires sans bout se
+    /// comptent au drain. Sous une exigence vide, un bout peut arriver plus tard
+    /// dans le même lot, et le refuser à la mise en file serait faux. **Ce
+    /// témoin tient la borne** : si quelqu'un fait vérifier les liens différés,
+    /// il rougit, et le coût de l'indexation n'est plus nul par construction.
+    #[test]
+    fn un_lien_differe_ne_verifie_pas_ses_bouts() {
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog
+            .link_jusqu_a(
+                "REFERENCES",
+                RefOrUuid::Uuid("fantome-a".into()),
+                RefOrUuid::Uuid("fantome-b".into()),
+                BTreeMap::new(),
+                crate::disponibilite::Disponibilites::AUCUNE,
+            )
+            .expect("un lien différé se met en file sans lecture");
+        assert_eq!(catalog.pending_work().relations.len(), 1, "il attend le drain");
+    }
+
+    /// **Un lien posé maintenant refuse un bout absent, en le nommant** : la
+    /// relation et le bout, et rien en file. Le verbe rendait `Ok` pour un lien
+    /// que `MATCH … MERGE` ne posait pas.
+    #[test]
+    fn un_lien_pose_maintenant_refuse_un_bout_absent() {
+        let mut catalog = au_tick(make_catalog());
+        catalog.initialize().unwrap();
+        let e = catalog
+            .link("REFERENCES", "fantome-a", "fantome-b", BTreeMap::new())
+            .expect_err("ni en base ni en file");
+        let texte = e.to_string();
+        assert!(
+            matches!(e, CatalogError::ValidationFailed(_))
+                && texte.contains("« REFERENCES »")
+                && texte.contains("fantome-a"),
+            "le refus nomme la relation et le bout : {texte}"
+        );
+        assert!(catalog.pending_work().relations.is_empty(), "rien en file");
     }
 
     #[test]

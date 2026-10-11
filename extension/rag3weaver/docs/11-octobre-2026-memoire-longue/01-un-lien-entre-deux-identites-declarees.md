@@ -255,8 +255,14 @@ droits par clés.
 ## 6. Les marches et leur coût
 
 *État au 11 octobre, après midi : marches 1 (`6d212551e`, `cde65dc9d`), 2
-(`13c6d950f`), 3 (`a6c2a61dd`) et 4 faites ; seule 1 bis reste, et elle attend
-la traduction PostgreSQL du `Select` (rag3db-6f). La marque de la marche 4 est
+(`13c6d950f`), 3 (`a6c2a61dd`) et 4 faites ; et 1 bis, après la
+traduction PostgreSQL du `Select` de rag3db-6f : toutes faites. La 1 bis a une borne,
+écrite dans le code et tenue par un témoin : le verbe ne vérifie ses bouts que quand
+le lien **se pose maintenant** (exigence non vide). Sous une exigence vide — le régime
+par lot, l'indexation du code —, un bout peut arriver plus tard dans le même lot ;
+leurs paires sans bout se comptent au drain, comme avant. Le coût de l'indexation du
+code est donc nul par construction, et c'est le témoin qui rougira le jour où cela
+change. La marque de la marche 4 est
 `Choices::Relations { access: RelationAccess }` ; un sous-graphe déclaré en
 hérite par `bind`, et c'est épinglé.*
 

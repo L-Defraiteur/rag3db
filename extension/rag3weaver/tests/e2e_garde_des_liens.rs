@@ -727,23 +727,18 @@ fn une_fermeture_avec_une_creation_se_dit_non_atomique() {
     );
 }
 
-/// **Un lien vers un bout absent rend `Ok` et n'écrit rien** — mesuré le
-/// 11 octobre 2026 par ce test, qui était d'abord une sonde.
+/// **Un lien vers un bout absent se refuse, en le nommant** — retourné le
+/// 11 octobre 2026 (marche 1 bis du lien générique).
 ///
-/// `Catalog::link` met le lien en file et le draine ; la relation se pose par
-/// `MATCH (a), (b) MERGE (a)-[r]->(b)`, et un `MATCH` qui ne trouve pas un bout ne
-/// produit rien — sans erreur. Le verbe rend donc `Ok` pour un lien qui n'existe
-/// pas. `RelationBatchNode` s'en garde en vérifiant l'existence des bouts
-/// (`get_many`) ; **`AddRefNode` ne s'en garde pas** et annonce
-/// `executed: true, lien: {…}` pour une fiche qui n'existe pas (ticket
-/// `2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md`).
-///
-/// Ce test épingle le comportement **tel qu'il est**, pour que le nœud de lien
-/// générique sache qu'il doit vérifier l'existence lui-même. Le jour où le verbe
-/// refuse un bout absent, il rougit : le retourner, et fermer le ticket.
+/// Ce test a d'abord épinglé le défaut : `Catalog::link` mettait le lien en file
+/// et le drainait, la relation se posait par `MATCH … MERGE`, et un bout absent
+/// n'y était pas une erreur — le verbe rendait `Ok` pour un lien qui n'existait
+/// pas, et `AddRefNode` l'annonçait comme posé. Le verbe vérifie maintenant ses
+/// bouts quand le lien se pose (exigence non vide) : ni en base ni en file, c'est
+/// un refus qui nomme la relation et le bout, et rien n'est écrit.
 #[test]
 #[ignore]
-fn un_lien_vers_un_bout_absent_rend_ok_et_n_ecrit_rien() {
+fn un_lien_vers_un_bout_absent_se_refuse_en_le_nommant() {
     let dir = tempfile::tempdir().expect("dossier");
     let backend = ouvrir(&manifeste(dir.path()));
     backend
@@ -753,13 +748,12 @@ fn un_lien_vers_un_bout_absent_rend_ok_et_n_ecrit_rien() {
     let absent = uuid(&backend, "Sujet", "titre", "jamais écrit");
     let rendu = {
         let mut cat = backend.catalog.lock().unwrap();
-        cat.link("ANCRE", f, absent, BTreeMap::new())
+        cat.link("ANCRE", f, absent.clone(), BTreeMap::new())
     };
+    let refus = rendu.err().map(|e| e.to_string()).expect("le verbe refuse un bout absent");
     assert!(
-        rendu.is_ok(),
-        "le verbe refuse maintenant un bout absent — c'est le correctif attendu : retourner ce \
-         test et fermer le ticket ({:?})",
-        rendu.err()
+        refus.contains("« ANCRE »") && refus.contains("Sujet") && refus.contains(&absent),
+        "le refus nomme la relation et le bout : {refus}"
     );
     assert_eq!(compter(&backend, "ANCRE"), 0, "et rien n'est écrit en base");
 }
