@@ -25,7 +25,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (51)
+### Ouverts (50)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -45,7 +45,6 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait](2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md) | ouvert côté moteur ; filet rag3weaver `99e6f0ee0` | réponse fausse | oui | oui (repli REPLI_EN_MASSE) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
 | [Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée](2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md) | ouvert (relevé par le banc, 10 oct.) | réponse fausse, puis plantage | en principe oui ; le seul chemin vu est fermé par A3′ | pas de cas connu |
-| [Sous les verrous, une seconde suppression ou mise à jour de la même relation, après attente, reçoit « Write-write conflict » et non l'erreur de sérialisation](2026-10-10-seconde-suppression-d-une-relation-apres-attente-sans-erreur-de-serialisation.md) | ouvert (A4′) | nom de l'erreur | non (mode multi-écrivains) | non |
 | [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | ouvert (A4′ faite, chemin non trouvé) | réponse fausse après reprise | non (mode multi-écrivains) | non |
 | [Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit](2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md) | ouvert | blocage | oui | oui (première indexation, poussée des blobs du plein texte) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
@@ -82,12 +81,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (60), dans `closed/`
+### Fermés (61), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](closed/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | corrigé, `eae3863ab` (cœur C++, 11 oct.) ; filet retiré | perte | oui | oui |
 | [Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro](closed/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md) | corrigé `eae3863ab` (un défaut de lecture de l'amont révélé par le COPY journalisé) | perte | oui (reprise après arrêt brutal pendant un COPY) | oui |
+| [Sous les verrous, une seconde suppression ou mise à jour de la même relation, après attente, reçoit « Write-write conflict » et non l'erreur de sérialisation](closed/2026-10-10-seconde-suppression-d-une-relation-apres-attente-sans-erreur-de-serialisation.md) | corrigé `69f3ff53e` (A4′) | nom de l'erreur | non (mode multi-écrivains) | non |
 | [Après des écritures annulées et des mises à jour de vecteur validées, la recherche ne rend plus qu'une ligne](closed/2026-10-11-recherche-vectorielle-une-seule-ligne-apres-annulations-et-mises-a-jour.md) | corrigé — fermé par les correctifs de `bfc1434e1`, témoin vert (11 oct.) | réponse fausse | à établir (vu sous le mode multi-écrivains) | si atteignable à un écrivain |
 | [Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet](closed/2026-10-04-appel-par-chemin-vers-un-type-externe.md) | corrigé, codeparsers `f91fc58` (11 oct.) | réponse fausse | oui | oui (rendez-vous) |
 | [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | corrigé (11 oct.) | réponse fausse | oui | peu |

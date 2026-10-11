@@ -776,3 +776,19 @@ rejoués ×20 avant l'avance rapide.
 Leçons : un `KU_ASSERT` muet en Release ne prouve rien, la sonde doit imprimer ; un bâti de cible
 (`--target rag3db`) ne relie pas la lib partagée : prouver par la date et par `strings` ; relire par un
 autre chemin (la clé) départage « pages fausses » et « lecture fausse » en une requête.
+## La seconde écriture d'une relation (11 octobre 2026, 3 h 20) — le petit ticket d'A4′, fermé
+
+Branche `verrous-rel2`, en attendant la mesure d'I2 (ordre de l'orchestration). A4′ contrôlait les
+extrémités d'une relation, pas la relation : une relation vue par l'instantané puis supprimée ou mise
+à jour et validée par une autre transaction recevait « Write-write conflict » à la place de l'erreur
+de sérialisation nommée. `CSRNodeGroup::wasWrittenByCommitAfter` (la source et la ligne de
+`findMatchingRow`), contrôlé par `RelTableData::update` et `delete_`, sous le mode seulement. Témoin
+d'un fil rouge d'abord (trois refus mal nommés), puis vert ; une relation née après l'instantané
+n'est ni vue ni refusée ; une écriture annulée ne refuse rien. Le cas à deux fils (l'attente puis
+l'erreur) reste au banc dans sa forme `holderAndWaiter`, s'il le veut. Passe, sur luciepc
+(`rag3db-rel2`), rejouée deux fois parce que master apportait du C++ entre-temps (le COPY corrigé,
+puis le point de reprise interrompu d'hotfixs) : transaction_test 249, api 104, c_api 136, copy 23 ;
+banc en tenue exclusive conforme (10 rouges / 248 verts, 5 h 09) — le premier banc avait montré la
+course de témoin `AnnouncedWritersOfOneIndexedTable` (bornée à `commit:start` par le banc, prise
+dans le lot du COPY). Sur master en avance rapide : `81f74f86c` témoin, `69f3ff53e` correctif
+(5 h 10). Lib commune de luciepc rebâtie dessus, worktree effacé.

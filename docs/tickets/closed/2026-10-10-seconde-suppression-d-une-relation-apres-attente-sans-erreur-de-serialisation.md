@@ -1,6 +1,7 @@
 # Sous les verrous, une seconde suppression ou mise à jour de la même relation, après attente, reçoit « Write-write conflict » et non l'erreur de sérialisation
 
-- **État** : ouvert (marche A4′, 10 octobre 2026 ; relevé à la relecture du banc).
+- **État** : corrigé `69f3ff53e` (11 octobre 2026, 3 h 20 ; ouvert le 10 octobre à la marche A4′,
+  relevé à la relecture du banc).
 - **Gravité** : réponse fausse de nom seulement (le refus est juste, son nom n'est pas celui de
   l'option A ; un appelant qui rejoue sur « could not serialize » ne rejouera pas sur celui-ci).
 - **Atteignable en service** : non (mode multi-écrivains, éteint hors du banc).
@@ -34,3 +35,17 @@ Aucun au banc (aucun cas de relation contre relation) ; à écrire avec la forme
 Un `CSRNodeGroup::wasWrittenByCommitAfter(startTS, transactionID, source, rowIdx)` sur le modèle
 de `ChunkedNodeGroup::wasWrittenByCommitAfter`, appelé par `RelTableData::update` et `delete_`
 après `findMatchingRow`, qui lève l'erreur de sérialisation avant d'écrire la version.
+
+## Fermeture (11 octobre 2026)
+
+`CSRNodeGroup::wasWrittenByCommitAfter(startTS, transactionID, source, rowIdx)` sur le modèle de
+`ChunkedNodeGroup` (la source et la ligne que `findMatchingRow` rend : groupe persistant ou groupe en
+mémoire), appelé par `RelTableData::update` et `delete_` après `findMatchingRow`, sous le mode
+multi-écrivains seulement : « Transaction aborted: could not serialize access due to concurrent
+update — relationship N of table T was written by another transaction after this one started. »
+Témoin d'un fil (`InsertLockTest.ASecondWriteOfARelationCommittedAfterTheSnapshotIsASerializationError`) :
+DELETE après DELETE validé, SET après SET validé, DELETE après SET validé, refusés en le nommant (rouge
+d'abord : les trois recevaient « Write-write conflict ») ; une relation née après l'instantané n'est
+ni vue ni refusée ; une écriture annulée ne refuse rien ; l'état final est celui du dernier validé.
+Le cas à deux fils (le second **attend** les extrémités puis reçoit l'erreur) reste à écrire au banc
+dans la forme `holderAndWaiter`, s'il le veut.
