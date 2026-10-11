@@ -242,3 +242,24 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
   4. **Ce qui va bien** : la section « Verrous pris sur le chemin » d'`impact` est exactement la
      lecture dont j'avais besoin pour le mode multi-écrivains ; `usages` avec `path` lève
      l'ambiguïté sur la définition ; les réponses sont instantanées.
+
+## 11 octobre, 17 h 20 — seconde session cœur C++ (hotfixs), le point de reprise (A7, A8)
+
+- **La question** : qui appelle `stopNewTransactionsAndWaitForOthersNoLock`, et ce qu'appelle
+  `writeRequestedCheckpointIfLastNoLock`, deux fonctions du `TransactionManager` que les lots A7 et
+  A8 du jour ont changées ou créées.
+- **Ce que l'outil a rendu** :
+  - `usages stopNewTransactionsAndWaitForOthersNoLock path=src/transaction` : **juste**, deux
+    appels (`commit`, `checkpointNoLock`). Le troisième site que j'avais en tête passe en fait par
+    `checkpointNoLock`, et l'outil avait raison contre ma mémoire. Les numéros de ligne sont ceux
+    d'avant A7 (`:196`, `:91`, `:349`), pas ceux de master.
+  - `callees writeRequestedCheckpointIfLastNoLock path=src/transaction` : « aucune définition
+    indexée sous ce nom ». La fonction est sur master depuis `f024578d5` (16 h).
+- **Ce que j'ai dû faire à côté** : `grep -n writeRequestedCheckpointIfLastNoLock
+  src/transaction/transaction_manager.cpp`, pour savoir si le nom était absent du code ou
+  seulement de l'index.
+- **Ce qui manquait** : **dire l'âge de l'index**. Une réponse « aucune définition » ne se
+  distingue pas d'un index en retard. Il faudrait le commit indexé et son heure en tête de chaque
+  réponse (« index de `<hash>`, 14 h 05 ; master est à `<hash>` »), et, quand le nom manque, la
+  phrase « peut-être plus récent que l'index » plutôt qu'un zéro sec.
+
