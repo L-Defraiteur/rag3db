@@ -15,6 +15,9 @@
 
 namespace rag3db {
 namespace common {
+struct FileInfo;
+} // namespace common
+namespace common {
 class FileSystem;
 } // namespace common
 
@@ -200,6 +203,11 @@ private:
     // La marque « ouverte en écriture par ce processus ». Premier membre : il part le dernier,
     // après le point de reprise de fermeture et la fermeture des fichiers.
     std::shared_ptr<void> openForWritingMark;
+    // B2 : la garde du fichier de données, prise avant toute lecture (journal compris) par une
+    // ouverture en écriture, avec l'attente bornée au verrou tenu par un autre processus ; gardée
+    // jusqu'à la fin (un verrou fcntl tombe à la fermeture de n'importe quel descripteur du
+    // fichier dans le processus : celui-ci se ferme après le gestionnaire de tampons).
+    std::unique_ptr<common::FileInfo> writerGate;
     std::string databasePath;
     DBConfig dbConfig;
     std::unique_ptr<common::VirtualFileSystem> vfs;
