@@ -218,11 +218,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = if prepared.needs_embeddings() {
-        Some(prepared.connect_embedder()?.0)
-    } else {
-        None
-    };
+    let embedder = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
     // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
     // aucun gabarit livré n'en porte encore, donc rien n'est écarté
@@ -449,11 +445,7 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = if prepared.needs_embeddings() {
-        Some(prepared.connect_embedder()?.0)
-    } else {
-        None
-    };
+    let embedder = prepared.embedder_or_absent();
     let conn =
         Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
             .map_err(|e| e.to_string())?;
@@ -514,12 +506,11 @@ fn run() -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    // Un backend en mots seuls n'exige pas de service d'embarquement.
-    let embedder = if prepared.needs_embeddings() {
-        Some(prepared.connect_embedder()?.0)
-    } else {
-        None
-    };
+    // Un backend en mots seuls n'exige pas de service d'embarquement ; un
+    // backend qui déclare du vecteur démarre sans lui en le disant (plein
+    // texte seul, vecteurs en dette — `PreparedBackend::open` redit la phrase
+    // dans le reçu). Une identité de modèle différente reste un refus.
+    let embedder = prepared.embedder_or_absent();
     let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(prepared.manifest.buffer_pool);
     eprintln!("[rag3weaver] tampon du moteur : {}", rag3weaver::rag3db_connection::describe_buffer_pool(tampon));
     let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
@@ -549,7 +540,7 @@ fn run() -> Result<(), String> {
         }
         let result = request.and_then(|v| -> Result<Value, String> {
             match v["op"].as_str() {
-                Some("describe") => Ok(backend.prepared().describe()),
+                Some("describe") => Ok(backend.describe()),
                 Some("call") => {
                     calls += 1;
                     if fail_at_call == Some(calls) {

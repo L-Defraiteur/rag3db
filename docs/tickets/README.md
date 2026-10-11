@@ -62,14 +62,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Sans service d'embarquement, l'hôte, `mcp` autonome et `serve` refusent un gabarit à vecteurs](2026-10-11-sans-service-d-embarquement-trois-portes-refusent-un-gabarit-a-vecteurs.md) | ouvert — optimiseur, PreparedBackend en relecture par l'arbre principal | blocage (le backend ne s'ouvre pas) | oui, gabarit de code sans service | oui (et seulement) |
 | [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | ouvert — vu par le bâti Windows de l'alpha.3 ; macOS par lecture | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
 | [La montre de fichiers coûte sept dixièmes d'un cœur en continu](2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | ouvert — chez le proto | coût (un cœur en permanence) | oui, dès qu'un manifeste déclare watches | oui (et seulement) |
 | [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
@@ -103,10 +102,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 
-### Fermés (88), dans `closed/`
+### Fermés (89), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Sans service d'embarquement, l'hôte, `mcp` autonome et `serve` refusent un gabarit à vecteurs](closed/2026-10-11-sans-service-d-embarquement-trois-portes-refusent-un-gabarit-a-vecteurs.md) | corrigé : l'embarqueur absent dans les quatre portes par `embedder_or_absent`, l'avertissement dans les reçus (11 oct.) | blocage | oui, gabarit de code sans service | oui (et seulement) |
 | [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](closed/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | corrigé en quatre lots, témoin vert sur le conteneur (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`, `code_sync.rs`) |
 | [La session d'un client mort reste listée par l'hôte du démon](closed/2026-10-11-la-session-d-un-client-mort-reste-listee.md) | corrigé (le pid du client, le relevé de l'hôte) | P4, réponse fausse | oui | oui (et seulement) |
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
