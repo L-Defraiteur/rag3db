@@ -42,40 +42,72 @@ se ferme à sa fin, et le verrou tombe. Le tenant s'y voit comme
   commande n'est pas tuée (elle peut être à mi-push), et un succès est rendu
   comme 70 pour qu'on vérifie master avant de le croire.
 
+## Les docs seules, sans verrou
+
+**Un push de docs seules (`.md`) est dispensé du verrou.** Il ne rejoue rien
+et ne change aucun artefact : il rebase et pousse quand il veut. C'est au
+tenant du verrou de rattraper ces pushes, par la boucle de la commande type
+ci-dessous.
+
 ## La commande type d'une session
 
 La passe complète se fait **avant**, hors verrou, dans le worktree du lot et
 son sous-target. Sous le verrou, la commande ne fait que le rejeu court,
-**dans ce même worktree et ce même sous-target, déjà chauds** :
+**dans ce même worktree et ce même sous-target, déjà chauds**. Puis elle
+pousse **en boucle** : quand master a reçu une avance qui ne touche pas les
+chemins du bâti de son artefact (des `.md`, poussés sans verrou), elle
+rebase et repousse dans le même tour, sans rendre le verrou ni se remettre en
+file. Elle ne s'arrête que sur une avance de code, selon la liste des chemins
+du bâti de sa sorte de lot (section « Ce qu'une avance de master change »
+plus bas) :
 
 ```bash
 #!/bin/bash
 set -u
 W=<worktree du lot>            # celui de la passe complète, jamais un neuf
 export CARGO_TARGET_DIR=<le sous-target du lot, déjà chaud>
+# Les chemins du bâti de l'artefact rejoué, selon la sorte du lot (plus bas) ;
+# ici, un lot rag3weaver.
+BATI='extension/rag3weaver tools/rust_api src cmake CMakeLists.txt test extension/vector extension/geo third_party scripts'
+# Rebaser sur l'origin/master déjà lu : jamais de fetch ici, pour que
+# l'avance examinée soit celle sur laquelle on rebase.
 rebaser() {
-  git -C "$W" fetch -q origin master
   git -C "$W" rebase -q origin/master
   gd=$(git -C "$W" rev-parse --absolute-git-dir)
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]; then
     echo "rebase arrêté sur un conflit, rien poussé"; git -C "$W" rebase --abort; exit 8
   fi
 }
+git -C "$W" fetch -q origin master
 rebaser
 base=$(git -C "$W" rev-parse origin/master)
 cd "$W/extension/rag3weaver"
 ~/.cache/rag3weaver-build/poste lourd bash scripts/check_features.sh || exit 4
 # … les suites du lot, courtes …
-git -C "$W" fetch -q origin master
-if [ "$(git -C "$W" rev-parse origin/master)" != "$base" ]; then
-  # Une avance faite de .md seuls ne demande pas de rejeu : on rebase et on pousse.
-  if git -C "$W" diff --name-only "$base" origin/master | grep -qv '\.md$'; then
-    echo "master a bougé (pas que des .md), rien poussé"; exit 9
+# Pousser en boucle, verrou tenu : une avance hors du bâti se rebase et se
+# repousse dans le même tour ; une avance du bâti arrête tout.
+while :; do
+  git -C "$W" fetch -q origin master
+  if [ "$(git -C "$W" rev-parse origin/master)" != "$base" ]; then
+    if [ -n "$(git -C "$W" diff --name-only "$base" origin/master -- $BATI)" ]; then
+      echo "master a reçu du code du bâti depuis la base rejouée, rien poussé"; exit 9
+    fi
+    rebaser
+    base=$(git -C "$W" rev-parse origin/master)
   fi
-  rebaser
-fi
-git -C "$W" push -q origin HEAD:master
+  git -C "$W" push -q origin HEAD:master && break
+  # Refusé : soit un push de docs est passé entre le fetch et le push (on
+  # relit et on reboucle), soit le refus vient d'ailleurs (on s'arrête).
+  git -C "$W" fetch -q origin master
+  if [ "$(git -C "$W" rev-parse origin/master)" = "$base" ]; then
+    echo "push refusé sans avance de master, rien poussé"; exit 10
+  fi
+done
 ```
+
+La boucle n'a pas de plafond de tours : chaque tour demande un push de docs
+arrivé pendant le précédent, qui ne dure que le temps d'un fetch et d'un
+rebase. Un refus qui ne vient pas d'une avance de master l'arrête (code 10).
 
 puis, hors du verrou, les trois contrôles avant d'écrire « poussé » (status
 propre, aucun rebase en cours, `git log -1 origin/master` au hash annoncé).
@@ -93,7 +125,7 @@ propre, aucun rebase en cours, `git log -1 origin/master` au hash annoncé).
    arrêté à temps, il n'a rien pris.
 3. **Une avance de master faite de `.md` seuls ne demande pas de rejeu.** Le
    contrôle « master n'a pas bougé depuis le rebase » l'ignore : on rebase et
-   on pousse sans rejouer. Les docs de l'orchestration et des sessions
+   on pousse sans rejouer, en boucle sous le verrou (la commande type). Les docs de l'orchestration et des sessions
    arrivent bien plus souvent que le code ; sans cela, une session rejoue pour
    un rapport et perd sa course.
 4. **Sous le verrou, on rejoue dans le worktree et le sous-target déjà chauds
