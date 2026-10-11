@@ -204,7 +204,17 @@ où elle vit.
   `26216e3be`) : deux questions à Lucie, arête d'ordre seul (recommandé non,
   avec une arête à zéro ou plusieurs colonnes) et graphe non atomique
   (recommandé : exécuté et dit, refus seulement si l'appelant exige
-  l'atomicité). En attente.
+  l'atomicité). **Tranché par Lucie en fin d'après-midi : oui aux deux**,
+  l'arête portant zéro ou plusieurs colonnes ; premier lot lancé chez F.
+- **Conteneur PostgreSQL** (Lucie : « mettons un docker postgres ») : recette
+  d'`e2e_postgres` (`pgvector/pgvector:pg17`, port 5433) ; l'utilisateur
+  n'étant pas dans le groupe `docker`, Lucie le lance elle-même ; la mémoire
+  rejoue `e2e_postgres` dès qu'il tourne.
+- **L'enveloppe d'un outil d'écriture** : la mémoire a posé ses sections
+  (`d03fbfe31`) ; forme A (dire `atomic` et ce qui est resté sur tout outil
+  d'écriture) lancée sans décision à attendre ; B (envelopper un `put`,
+  invalidation des seuls caches de la ligne) attend deux vérifications de
+  l'arbre principal et les quatre points de sa §6 pour Lucie.
 - **Les ports portent des flux** (Lucie, après-midi) : un seul mécanisme,
   tout port porte un flux (éléments dans le temps, et une fin), une valeur
   est un flux de un ; le nœud dit sa posture (élément par élément ou flux
