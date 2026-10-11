@@ -117,4 +117,24 @@ TEST_F(DuplicateKeyJournalTest, TheSurvivingDuplicateIsKeptWhenTheFirstRowWasDel
     EXPECT_EQ(count("MATCH (n:Item) RETURN count(n);"), 4);
 }
 
+// Fixture 4 (relecture d'hotfixs) : la clé en doublon porte deux relations dans chaque sens avant
+// la pierre tombale. Le détachement de la pierre tombale doit les retirer toutes, des deux côtés —
+// avec un seul état partagé entre le nœud, le voisin et la relation, la seconde relation d'un lot
+// se lisait à une position nulle et survivait d'un seul côté (la cause de C7 après arrêt brutal).
+TEST_F(DuplicateKeyJournalTest, TheTombstoneDetachesEveryRelationshipOfTheDuplicateRow) {
+    useFixture("base4.rag3db");
+    ASSERT_EQ(reopenError(), "");
+    EXPECT_EQ(count("MATCH (n:Item) RETURN count(n);"), 3);
+    EXPECT_EQ(count("MATCH (n:Item) WHERE n.id = 7 RETURN count(n);"), 1);
+    EXPECT_EQ(count("MATCH (n:Item {id: 7}) RETURN n.v;"), 0);
+    EXPECT_EQ(count("MATCH ()-[l:Link]->() RETURN count(l);"), 0) << "forward";
+    EXPECT_EQ(count("MATCH ()<-[l:Link]-() RETURN count(l);"), 0) << "backward";
+    EXPECT_EQ(count("MATCH (n:Item {id: 1})-[l:Link]-() RETURN count(l);"), 0);
+    EXPECT_EQ(count("MATCH (n:Item {id: 2})-[l:Link]-() RETURN count(l);"), 0);
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    createDBAndConn();
+    EXPECT_EQ(count("MATCH ()-[l:Link]->() RETURN count(l);"), 0);
+    EXPECT_EQ(count("MATCH (n:Item) RETURN count(n);"), 3);
+}
+
 } // namespace
