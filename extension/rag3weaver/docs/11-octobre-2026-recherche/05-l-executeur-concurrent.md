@@ -219,6 +219,56 @@ façon de ne pas rejouer le producteur.
 - **3b, à part** : le pont vivant, où le runtime imbriqué reçoit les émetteurs
   du parent. Il lève le refus de l'`Open`.
 
+### 4.1 Le pont vivant (3b), la forme proposée
+
+**Le sous-graphe s'exécute sur les canaux du parent, pas sur les siens.**
+Sous l'exécuteur concurrent, `GraphNode` ne monte pas un second monde de
+canaux relié au premier par des fils de relais. Il **délègue** au runtime
+imbriqué son propre lien aux canaux, et le runtime imbriqué tourne sur le
+**même hub** que le parent :
+
+- le nœud intérieur qui lit une entrée libre du sous-graphe lit **directement**
+  les canaux de l'arête extérieure ; le nœud intérieur qui pose une sortie libre
+  écrit **directement** sur les canaux de l'arête extérieure. Une entrée libre
+  n'a qu'un lecteur intérieur, une sortie libre qu'un émetteur intérieur :
+  les comptes des canaux restent justes ;
+- les ouvriers intérieurs s'inscrivent au hub du parent. Le détecteur
+  d'interblocage voit donc tout le graphe, à travers la frontière, et nomme un
+  cycle qui la traverse ;
+- l'annulation est celle du parent : un nœud intérieur qui échoue annule le
+  run entier (comme aujourd'hui, où le sous-graphe échoue avec lui), et l'arrêt
+  de l'hôte arrête les nœuds intérieurs ;
+- **le fil de `GraphNode` lui-même** quitte le registre des ouvriers en
+  déléguant : il ne fait plus qu'attendre la fin de la portée imbriquée, et le
+  compter comme un ouvrier vivant qui n'attend rien empêcherait le détecteur
+  de jamais conclure. Le reste de sa fin (événements, sorties de valeur) ne
+  touche plus aux canaux ;
+- ce que le runtime du parent a déjà lu avant de lancer `GraphNode` (le
+  premier élément d'une entrée `PerElement` requise, les valeurs `Complete`)
+  passe au sous-graphe comme valeurs et flux posés d'avance ;
+- un graphe imbriqué délégué passe toujours par l'exécuteur concurrent, même
+  s'il n'a lui-même que des valeurs : ses entrées sont des canaux.
+
+**Ce que cela change** : le refus d'un `Open` sur l'entrée d'un sous-graphe
+tombe, puisque l'élément arrive au nœud intérieur à son émission ; une sortie
+libre en flux coule pendant que le sous-graphe tourne. Sous l'exécuteur par
+niveaux (un parent sans flux), rien ne change : la voie 3a reste.
+
+**Ce qui ne change pas** : les événements et le rapport du sous-graphe restent
+ceux de son runtime imbriqué (comme aujourd'hui) ; le point de reprise ne
+descend pas dans un sous-graphe (comme aujourd'hui). Le rejouer entier, à la
+reprise, reste la règle.
+
+**Témoins, rouges d'abord** :
+
+- un `Open` entre dans un sous-graphe et ses éléments en ressortent pendant
+  que la source émet encore (une poignée de main, comme le témoin 1) ;
+- un interblocage qui traverse la frontière est nommé, avec les noms
+  intérieurs ;
+- l'arrêt de l'hôte arrête un sous-graphe qui lit un `Open` ;
+- un nœud intérieur qui échoue fait échouer le run avec son erreur, et le
+  sous-graphe est `Failed` au rapport du parent.
+
 ## 5. Ce qui ne change pas
 
 - Un graphe de valeurs ne passe jamais par ici.

@@ -308,3 +308,16 @@ retirer (`env_remove`) la variable de `run_e2e.sh` qui le remplacerait. Pour
 les points de reprise, c'est `RAG3WEAVER_CHECKPOINT_DIR` ; `TMPDIR` et
 `RAG3WEAVER_E2E_DOSSIER` sont à retirer de même si le test règle le dossier
 temporaire ou celui des bases.
+
+## 11. Les pics de la batterie du pas 3
+
+La batterie de clôture du pas 3 du lot 0 (`eb49aba8d`, 586 passés, hors carte
+locale) a vu un **pic d'échange à 17 Go** (17 h 57), une carte à 83 % et
+3,5 Go de VRAM (18 h 09-18 h 13). **Non attribué** : le pic d'échange tombe
+cinq minutes et demie après le départ (17 h 51), pendant le bâti ou les
+premières suites, alors que d'autres sessions bâtissaient (l'arbre principal
+venait de rebâtir la lib, le proto jouait sa passe complète). Le journal ne
+datait pas les suites une à une. `run_e2e.sh` écrit désormais
+`[départ HH:MM:SS] <suite>` avant chacune : le prochain pic s'attribuera par
+l'heure du journal de charge.
+

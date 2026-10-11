@@ -663,6 +663,9 @@ for ligne in open(sys.argv[1]):
     mkdir -p "$E2E_TMP_PARENT/$nom" "$E2E_DISQUE_PARENT/$nom/checkpoints"
     export RAG3WEAVER_E2E_DOSSIER="$E2E_DISQUE_PARENT/$nom"
     export RAG3WEAVER_CHECKPOINT_DIR="$E2E_DISQUE_PARENT/$nom/checkpoints"
+    # L'heure de départ de chaque suite : un pic du journal de charge
+    # (échange, carte) s'attribue à la suite qui tournait.
+    echo "     [départ $(date +%H:%M:%S)] $nom"
     echo "     Running tests/$nom.rs (binaire e2e unique, filtre $nom::)"
     if [ -n "$TEST_FILTER" ]; then
       local noms=()
