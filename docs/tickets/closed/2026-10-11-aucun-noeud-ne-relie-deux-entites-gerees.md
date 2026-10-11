@@ -1,6 +1,6 @@
 # Aucun nœud ne relie deux entités gérées par leur identité
 
-- **état** : ouvert — **décision de Lucie** (c'est une signature nouvelle)
+- **état** : corrigé `6d212551e` (marche 1 du lien générique, 11 octobre 2026) — il n'y avait pas de nœud manquant, il y avait une garde de trop : `RelationBatchNode` relie désormais toute paire d'entités déclarées, gérées ou non, et sa garde d'états est déclarée (`13c6d950f`)
 - **gravité** : capacité absente — une relation déclarée entre deux entités versionnées n'a aucun verbe
 - **atteignable en service** : oui ; c'est le cas du gabarit `memory` (`ANCHORED_TO`, `REPLACES`)
 - **touche rag3weaver** : oui, et seulement rag3weaver

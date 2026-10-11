@@ -244,6 +244,10 @@ droits par clés.
 
 ## 6. Les marches et leur coût
 
+*État au 11 octobre, après midi : marches 1 (`6d212551e`, `cde65dc9d`), 2
+(`13c6d950f`) et 3 faites ; 1 bis attend la traduction PostgreSQL du `Select`
+(rag3db-6f) ; 4 à faire.*
+
 *En passes, ordre de grandeur relatif.*
 
 | marche | ce qu'elle fait | témoin | coût |

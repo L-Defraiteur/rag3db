@@ -30,7 +30,6 @@
 
 #![cfg(feature = "rag3db-native")]
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -121,6 +120,7 @@ fn extension_vecteur() -> String {
 fn manifeste(dir: &Path) -> PathBuf {
     let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
     let put = gabarits.join("backends/notebook/graphs/put.mmd");
+    let lien = gabarits.join("tools/link.mmd");
     let reaction = gabarits.join("backends/memory/graphs/review_anchored.mmd");
     assert!(put.is_file(), "le graphe put du gabarit notebook : {}", put.display());
     assert!(
@@ -173,7 +173,13 @@ fn manifeste(dir: &Path) -> PathBuf {
                 "graph": put,
                 "bindings": {"entity": "Sujet"},
                 "input_payloads": {"record": {"entity": "Sujet", "view": "editable"}}
-            }
+            },
+            // L'ancre se pose **par un outil**, comme un agent la poserait
+            // (11 octobre 2026) : jusque-là ce témoin l'écrivait par
+            // `Catalog::link`, et il éprouvait le réacteur sans éprouver la
+            // surface exposée — c'est ainsi que le gabarit `memory` a vécu sans
+            // aucun outil pour poser son ancre.
+            "ancrer": {"graph": lien, "bindings": {"relation": "ANCRE"}}
         },
         // **La seule déclaration qui compte.** Rien d'autre dans ce manifeste
         // ne parle de réagir, et aucun appel plus bas ne nomme
@@ -244,13 +250,6 @@ fn attendre_l_etat(backend: &Backend, titre: &str, vise: &str, limite: Duration)
     }
 }
 
-fn uuid(backend: &Backend, entite: &str, titre: &str) -> String {
-    let cat = backend.catalog.lock().unwrap();
-    let mut ligne = BTreeMap::new();
-    ligne.insert("titre".to_string(), CypherValue::String(titre.to_string()));
-    cat.entity_uuid(entite, &ligne).expect("l'uuid recomposé")
-}
-
 #[test]
 #[ignore]
 fn une_reaction_du_manifeste_transitionne_sans_que_personne_l_appelle() {
@@ -305,13 +304,12 @@ fn une_reaction_du_manifeste_transitionne_sans_que_personne_l_appelle() {
     );
 
     // ── 3. L'ancre, puis le sujet change ─────────────────────────────────
-    {
-        let fiche_ref = uuid(&backend, "Fiche", "duty cycle à 70");
-        let sujet_ref = uuid(&backend, "Sujet", "régime GPU");
-        let mut cat = backend.catalog.lock().unwrap();
-        cat.link("ANCRE", fiche_ref, sujet_ref, BTreeMap::new())
-            .expect("l'ancre");
-    }
+    backend
+        .call(
+            "ancrer",
+            json!({"links": [{"from": {"titre": "duty cycle à 70"}, "to": {"titre": "régime GPU"}}]}),
+        )
+        .expect("l'ancre, par l'outil");
 
     let r = backend
         .call(

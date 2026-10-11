@@ -1,6 +1,6 @@
 # Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir en service
 
-- **état** : ouvert (mesuré le 11 octobre 2026, passe MCP de l'ordre A)
+- **état** : corrigé par la marche 3 du lien générique (le commit qui déplace ce fichier dans `closed/`, 11 octobre 2026) — le gabarit `memory` déclare `anchor` (`ANCHORED_TO`) et `supersede_link` (`REPLACES`) sur `templates/tools/link.mmd`, avec leurs gardes d'états ; `e2e_reaction_montee` pose son ancre par l'outil
 - **gravité** : déclaration inatteignable — la réaction `review_anchored` est montée et ne peut rien transitionner
 - **atteignable en service** : oui, c'est précisément le cas en service
 - **touche rag3weaver** : oui, et seulement rag3weaver (un gabarit, pas le moteur)

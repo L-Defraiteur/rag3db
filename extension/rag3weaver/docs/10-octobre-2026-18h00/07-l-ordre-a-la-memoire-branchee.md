@@ -70,7 +70,17 @@ tube.
 
 ## Ce qui ne marche pas, et qu'il faut savoir avant d'essayer
 
-**1. La réaction est montée mais elle ne peut rien transitionner.** Aucun des
+**Mise à jour du 11 octobre, après midi — le point 1 est réglé.** Le gabarit a
+maintenant **neuf outils**, dont `anchor` (ancrer des mémoires à des sujets) et
+`supersede_link` (dire qu'une mémoire en remplace une autre), sur la fiche
+générique `templates/tools/link.mmd`. Il n'y avait pas de nœud manquant : il y
+avait une garde de trop sur `RelationBatchNode`, retirée après qu'un témoin a
+établi qu'elle ne protégeait rien (page
+`11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`).
+Ta copie de `~/.config/rag3weaver/memoire-longue/` et le binaire de `~/.local/bin`
+sont à rafraîchir pour les avoir : voir la fin de cette page.
+
+**1. (réglé) La réaction est montée mais elle ne peut rien transitionner.** Aucun des
 sept outils ne pose `ANCHORED_TO` : `add_ref` pose `CITE`, et rien n'écrit
 `ANCHORED_TO` ni `REPLACES`. Donc `review_anchored` part à chaque écriture de
 sujet et trouve toujours zéro ligne concernée. J'ai cru que la pièce existait déjà

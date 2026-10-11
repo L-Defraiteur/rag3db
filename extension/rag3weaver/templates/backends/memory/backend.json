@@ -288,11 +288,22 @@
   "relations": {
     "ANCHORED_TO": {
       "from": "Memory",
-      "to": "Subject"
+      "to": "Subject",
+      "from_states": [
+        "current",
+        "to_review"
+      ]
     },
     "REPLACES": {
       "from": "Memory",
-      "to": "Memory"
+      "to": "Memory",
+      "from_states": [
+        "current"
+      ],
+      "to_states": [
+        "current",
+        "to_review"
+      ]
     },
     "CITE": {
       "from": "Memory",
@@ -335,6 +346,20 @@
           "view": "editable"
         }
       }
+    },
+    "anchor": {
+      "graph": "../../tools/link.mmd",
+      "bindings": {
+        "relation": "ANCHORED_TO"
+      },
+      "description": "Ancre des mémoires à des sujets : chaque lien donne la mémoire par {claim, reach} et le sujet par {name}. Une mémoire ancrée repasse « à revoir » quand son sujet change. Seule une mémoire courante ou à revoir s'ancre."
+    },
+    "supersede_link": {
+      "graph": "../../tools/link.mmd",
+      "bindings": {
+        "relation": "REPLACES"
+      },
+      "description": "Dit qu'une mémoire en remplace une autre : from est la nouvelle, to l'ancienne, chacune par {claim, reach}. La nouvelle doit être courante, l'ancienne courante ou à revoir. Le lien ne change pas l'état de l'ancienne : passe-la ensuite à « superseded » par put_memory."
     },
     "recall": {
       "graph": "../../tools/search_structured.mmd",

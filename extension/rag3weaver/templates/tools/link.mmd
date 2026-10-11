@@ -1,0 +1,18 @@
+%% tool: link
+%% description: Relie des choses déclarées, en nommant chaque bout par ses champs d'identité exacts. Le lot entier est vérifié avant d'écrire : un bout qui n'existe pas, ou qui n'est pas dans un état que la relation permet, refuse tout le lot en le nommant. Reposer un lien ne le double pas.
+%% param: relation string! -- Relation déclarée, fixée par le manifeste.
+%% param: links -- Liste de {from, to, props?} : les champs d'identité de chaque bout, et les propriétés que la relation déclare (aucune sinon).
+%% result: link.report
+%%
+%% **La fiche générique de la face dataflow de `Write::Link`** (11 octobre
+%% 2026, page `docs/11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`).
+%% Une ligne, et c'est voulu : tout le geste est dans `RelationBatchNode` —
+%% identités → uuids, existence (en base ou en file), états permis, propriétés
+%% typées, drain de la fermeture. Un gabarit la déclare une fois par relation
+%% qu'un agent doit pouvoir poser, avec `relation` liée et une description qui
+%% parle de son domaine.
+%%
+%% Le rapport dit `atomic: false` : le lot n'est pas encore enveloppé d'une
+%% transaction (une marche à part).
+graph LR
+    link["RelationBatchNode(relation=$relation, links=$links)"]

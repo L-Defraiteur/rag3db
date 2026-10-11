@@ -3,6 +3,11 @@
 %% param: relation string! -- Relation déclarée sans propriétés.
 %% param: links -- Paires from/to contenant les champs d'identité hashsafe.
 %% result: link.report
+%%
+%% **Remplacée par `link.mmd`** (11 octobre 2026) : `RelationBatchNode` n'a jamais
+%% rien eu d'un instantané, et il relie maintenant toute paire d'entités
+%% déclarées. Cette fiche reste tant que les outils de `experiments/mtga` la
+%% nomment ; un gabarit neuf déclare `link.mmd`.
 
 graph LR
     link["RelationBatchNode(relation=$relation, links=$links)"]
