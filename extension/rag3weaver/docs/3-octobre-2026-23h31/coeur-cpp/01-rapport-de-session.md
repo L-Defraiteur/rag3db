@@ -702,4 +702,15 @@ ouverts en route : la recherche qui ne rend plus qu'une ligne après annulations
 (au banc), le CALL nu qui rend des nœuds supprimés (ticket du banc). I2 (la maintenance au
 commit) attend la mesure du banc.
 
+Le cas Cypher `insert.TwoOpenTransactionsInsertVectors` de l'extension vector (un seul fil, deux
+transactions ouvertes qui insèrent dans une table indexée) supposait deux écrivains simultanés :
+adapté à la règle (délai nommé de 300 ms, annulation, insertion une fois la première validée),
+vert dans les deux modes. Rebasée sur master `6044723a5` (`bfc1434e1` du banc dedans, sans
+conflit ; `known_red` : 11 attendus, les quatre VectorIndexUpdate sortis par le banc) et poussée
+`verrous-i1-3` (`b549e607f`). Sur ce bâti, le témoin composé de la recherche à une seule ligne
+(`liveRowsByIndex == 100`) est **vert** : le ticket est fermé par les correctifs du banc
+(`6b13c6610`, stèle §2 à cinq). Le banc en mesure, lancé puis **retiré** : hotfixs pousse le
+lecteur affamé (du C++ dans `src/storage`) avant ma fusion, et un rebase qui apporte du C++ se
+rejoue — une seule passe, après son « poussé ».
+
 Passe : PASSE_I1.
