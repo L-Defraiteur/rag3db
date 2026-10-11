@@ -741,7 +741,20 @@ impl PreparedBackend {
                     return Err(format!("generated field {field} must be an integer"));
                 }
             }
-            config.validate()?;
+            // L'erreur dit de quelle entité elle vient : sans le nom, « Field 'x' »
+            // ne se retrouvait pas dans un manifeste de plusieurs entités.
+            config.validate().map_err(|e| format!("{name}: {e}"))?;
+            // **Une entité sans champ de contenu se refuse ici, au chargement**,
+            // et non plus à l'ouverture (`register_entity`), où le refus ne
+            // disait ni le manifeste ni quoi écrire. Tout ce que le chargement
+            // peut vérifier se refuse au chargement (10-11 octobre 2026).
+            if !config.has_simple_pipeline() && !config.has_kb_participation() {
+                return Err(format!(
+                    "{name}: aucun champ de contenu — marquez au moins un champ `isContent: true` \
+                     (ou `contentFor` / `titleFor` vers une base de connaissances) ; sans contenu, \
+                     l'entité n'est ni cherchable ni découpée"
+                ));
+            }
             if config.hashsafe.as_ref().is_none_or(|v| v.is_empty()) {
                 return Err(format!("{name}: stable hashsafe identity required"));
             }
@@ -3120,6 +3133,57 @@ mod tests {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
         let e = p.err().unwrap();
         assert!(e.contains("fuzzy"), "{e}");
+    }
+
+    /// **Une entité sans champ de contenu est refusée au chargement**, en la
+    /// nommant, et plus seulement à l'ouverture (relevé du lot 4 d'everything
+    /// declarative). Et une erreur de la configuration d'une entité dit de
+    /// quelle entité elle vient.
+    #[test]
+    fn une_entite_sans_contenu_est_refusee_au_chargement_en_la_nommant() {
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        let charger = |patch: &dyn Fn(&mut Value)| {
+            let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+            let dir = tempfile::tempdir().unwrap();
+            copier(&src, dir.path());
+            std::fs::copy(src.join("../../tools/search_structured.mmd"), dir.path().join("search_structured.mmd")).unwrap();
+            let chemin = dir.path().join("backend.json");
+            let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+            manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+            patch(&mut manifest);
+            std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+            let p = PreparedBackend::load(&chemin);
+            (dir, p)
+        };
+        // Plein texte seul, aucun champ de contenu : refusée au chargement.
+        let (_d, p) = charger(&|m: &mut Value| {
+            m["entities"]["Note"]["config"]["fields"]["text"]["isContent"] = json!(false);
+            m["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
+        });
+        let e = p.err().expect("refusée au chargement");
+        assert!(e.starts_with("Note: aucun champ de contenu"), "{e}");
+        assert!(e.contains("isContent"), "le refus dit quoi écrire : {e}");
+        // Avec un signal vecteur, c'est `validate()` qui refuse : son erreur
+        // porte maintenant le nom de l'entité.
+        let (_d, p) = charger(&|m: &mut Value| {
+            m["entities"]["Note"]["config"]["fields"]["text"]["isContent"] = json!(false);
+        });
+        let e = p.err().expect("refusée au chargement");
+        assert!(e.starts_with("Note: "), "l'erreur nomme l'entité : {e}");
+        // Le gabarit tel quel se charge.
+        let (_d, p) = charger(&|_m: &mut Value| {});
+        p.expect("le carnet tel quel se charge");
     }
 
     /// **Les fonctions de verrou déclarées** (`workspace.locks_via`) se
