@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <condition_variable>
 #include <mutex>
 #include <vector>
@@ -57,6 +58,12 @@ public:
     }
 
     void setSingleThreadedTask() { maxNumThreads = 1; }
+    // Abaisse le plafond de fils de la tâche (jamais au-dessus de ce qu'il était : le réglage
+    // `threads` de la connexion reste un plafond, un `CALL threads=1` explicite reste 1).
+    void limitNumThreads(uint64_t numThreads) {
+        maxNumThreads = std::max<uint64_t>(1, std::min(maxNumThreads, numThreads));
+    }
+    uint64_t getMaxNumThreads() const { return maxNumThreads; }
 
     bool registerThread();
 

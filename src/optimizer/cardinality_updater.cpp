@@ -1,5 +1,7 @@
 #include "optimizer/cardinality_updater.h"
 
+#include <algorithm>
+
 #include "binder/expression/expression_util.h"
 #include "planner/join_order/cardinality_estimator.h"
 #include "planner/operator/extend/logical_extend.h"
@@ -10,6 +12,7 @@
 #include "planner/operator/logical_intersect.h"
 #include "planner/operator/logical_limit.h"
 #include "planner/operator/logical_plan.h"
+#include "planner/operator/logical_unwind.h"
 
 namespace rag3db::optimizer {
 void CardinalityUpdater::rewrite(planner::LogicalPlan* plan) {
@@ -21,6 +24,14 @@ void CardinalityUpdater::visitOperator(planner::LogicalOperator* op) {
         visitOperator(op->getChild(i).get());
     }
     visitOperatorSwitchWithDefault(op);
+    // Un enfant sans estimation (un CALL, une liste calculée) ne donne rien à estimer au-dessus :
+    // le processeur garde alors tous les fils de la tâche (QueryProcessor::initTask).
+    for (auto i = 0u; i < op->getNumChildren(); ++i) {
+        if (!op->getChild(i)->hasCardinalityEstimate()) {
+            op->clearCardinalityEstimate();
+            return;
+        }
+    }
 }
 
 void CardinalityUpdater::visitOperatorSwitchWithDefault(planner::LogicalOperator* op) {
@@ -61,6 +72,10 @@ void CardinalityUpdater::visitOperatorSwitchWithDefault(planner::LogicalOperator
         visitAggregate(op);
         break;
     }
+    case planner::LogicalOperatorType::UNWIND: {
+        visitUnwind(op);
+        break;
+    }
     default: {
         visitOperatorDefault(op);
         break;
@@ -72,6 +87,17 @@ void CardinalityUpdater::visitOperatorDefault(planner::LogicalOperator* op) {
     if (op->getNumChildren() == 1) {
         op->setCardinality(op->getChild(0)->getCardinality());
     }
+}
+
+// Le même calcul que Planner::appendUnwind : l'enfant fois la longueur connue de la liste.
+void CardinalityUpdater::visitUnwind(planner::LogicalOperator* op) {
+    const auto listSize = op->cast<planner::LogicalUnwind&>().knownListSize();
+    if (!listSize.has_value()) {
+        op->clearCardinalityEstimate();
+        return;
+    }
+    op->setCardinality(std::max<common::cardinality_t>(1, op->getChild(0)->getCardinality()) *
+                       std::max<uint64_t>(1, *listSize));
 }
 
 void CardinalityUpdater::visitScanNodeTable(planner::LogicalOperator* op) {

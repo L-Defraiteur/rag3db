@@ -31,6 +31,11 @@ std::unique_ptr<ResultCollector> PlanMapper::createResultCollector(AccumulateTyp
     auto op = std::make_unique<ResultCollector>(std::move(opInfo), std::move(sharedState),
         std::move(prevOperator), getOperatorID(), std::move(printInfo));
     op->setDescriptor(std::make_unique<ResultSetDescriptor>(schema));
+    // Le collecteur de la racine du plan ne passe pas par mapOperator : il prend ici l'estimation
+    // de ce qu'il lit, pour que le dernier pipeline la connaisse (QueryProcessor::initTask).
+    if (const auto fromChild = op->getChild(0)->getEstimatedCardinality()) {
+        op->setEstimatedCardinality(*fromChild);
+    }
     return op;
 }
 

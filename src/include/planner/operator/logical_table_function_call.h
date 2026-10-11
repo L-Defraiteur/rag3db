@@ -15,7 +15,12 @@ public:
         std::unique_ptr<function::TableFuncBindData> bindData)
         : LogicalOperator{operatorType_}, tableFunc{std::move(tableFunc)},
           bindData{std::move(bindData)} {
-        setCardinality(this->bindData->numRows);
+        // numRows vaut 0 quand la fonction ne sait pas (un lecteur, un CALL) : pas d'estimation,
+        // ses tâches gardent le plafond de fils ; une fonction qui sait (une ligne, k résultats)
+        // le dit et la règle la voit.
+        if (this->bindData->numRows > 0) {
+            setCardinality(this->bindData->numRows);
+        }
     }
 
     const function::TableFunction& getTableFunc() const { return tableFunc; }

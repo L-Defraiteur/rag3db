@@ -13,7 +13,6 @@
 #include "optimizer/remove_unnecessary_join_optimizer.h"
 #include "optimizer/schema_populator.h"
 #include "optimizer/top_k_optimizer.h"
-#include "planner/operator/logical_explain.h"
 #include "transaction/transaction.h"
 
 namespace rag3db {
@@ -59,16 +58,13 @@ void Optimizer::optimize(planner::LogicalPlan* plan, main::ClientContext* contex
         auto aggKeyDependencyOptimizer = AggKeyDependencyOptimizer();
         aggKeyDependencyOptimizer.rewrite(plan);
 
-        // for EXPLAIN LOGICAL we need to update the cardinalities for the optimized plan
-        // we don't need to do this otherwise as we don't use the cardinalities after planning
-        if (plan->getLastOperatorRef().getOperatorType() == planner::LogicalOperatorType::EXPLAIN) {
-            const auto& explain = plan->getLastOperatorRef().cast<planner::LogicalExplain>();
-            if (explain.getExplainType() == common::ExplainType::LOGICAL_PLAN) {
-                auto cardinalityUpdater = CardinalityUpdater(cardinalityEstimator,
-                    transaction::Transaction::Get(*context));
-                cardinalityUpdater.rewrite(plan);
-            }
-        }
+        // Les cardinalités du plan optimisé : les réécritures ci-dessus créent des opérateurs sans
+        // estimation (la jointure que pose la descente des filtres, les aplatissements) et changent
+        // celles de leurs voisins. Le processeur s'en sert pour proportionner les fils d'une tâche
+        // (QueryProcessor::initTask), et EXPLAIN LOGICAL les montre : on les remet à jour toujours.
+        auto cardinalityUpdater =
+            CardinalityUpdater(cardinalityEstimator, transaction::Transaction::Get(*context));
+        cardinalityUpdater.rewrite(plan);
     } else {
         // we still need to compute the schema for each operator even if we have optimizations
         // disabled

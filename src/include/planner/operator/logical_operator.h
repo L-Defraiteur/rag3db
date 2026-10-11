@@ -99,6 +99,8 @@ public:
     // Vrai quand la cardinalité vient d'une estimation du planificateur (posée ici ou héritée
     // d'un enfant qui en avait une) ; faux pour le 1 par défaut, qui ne dit rien.
     bool hasCardinalityEstimate() const { return cardinalityEstimated; }
+    // Oublie l'estimation (un multiplicateur inconnu, comme un UNWIND d'une liste calculée).
+    void clearCardinalityEstimate() { cardinalityEstimated = false; }
 
     // Operator type.
     LogicalOperatorType getOperatorType() const { return operatorType; }

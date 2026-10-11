@@ -1,5 +1,11 @@
 #include "processor/processor.h"
 
+#include <cstdlib>
+
+#include <algorithm>
+#include <optional>
+
+#include "common/system_config.h"
 #include "common/task_system/progress_bar.h"
 #include "main/query_result.h"
 #include "processor/operator/sink.h"
@@ -13,11 +19,13 @@ namespace rag3db {
 namespace processor {
 
 #if defined(__APPLE__)
-QueryProcessor::QueryProcessor(uint64_t numThreads, uint32_t threadQos) {
+QueryProcessor::QueryProcessor(uint64_t numThreads, uint32_t threadQos)
+    : traceTasks{std::getenv("RAG3DB_TRACE_TASKS") != nullptr} {
     taskScheduler = std::make_unique<TaskScheduler>(numThreads, threadQos);
 }
 #else
-QueryProcessor::QueryProcessor(uint64_t numThreads) {
+QueryProcessor::QueryProcessor(uint64_t numThreads)
+    : traceTasks{std::getenv("RAG3DB_TRACE_TASKS") != nullptr} {
     taskScheduler = std::make_unique<TaskScheduler>(numThreads);
 }
 #endif
@@ -71,6 +79,32 @@ void QueryProcessor::acquireLocksBeforeExecution(Task* task, ExecutionContext* c
     ku_dynamic_cast<ProcessorTask*>(task)->sink->acquireLocksBeforeExecution(context);
 }
 
+// Les fils d'une tâche proportionnés à la cardinalité estimée par le planificateur (page
+// coeur-cpp/12) : un pipeline qui lit trois lignes n'a pas besoin de trente-deux fils, et leur mise
+// en route coûte plus que le travail (impact : -47 % à un fil, mesure de F). La plus grande
+// cardinalité estimée le long du pipeline (la source, ou une extension qui multiplie) donne le
+// nombre de fils, un par tranche de ROWS_PER_THREAD lignes, sous le plafond `threads` de la
+// connexion. Un opérateur sans estimation (un CALL, le lecteur d'un COPY) garde le plafond : jamais
+// moins de fils qu'aujourd'hui sur ce qu'on ne sait pas estimer. Comme PostgreSQL, qui décide
+// le nombre d'ouvriers au plan sur la taille estimée ; Neo4j n'en donne aucun à une petite requête.
+static std::optional<uint64_t> threadsForEstimatedRows(PhysicalOperator* sink) {
+    constexpr uint64_t ROWS_PER_THREAD = common::DEFAULT_VECTOR_CAPACITY;
+    uint64_t rows = 0;
+    PhysicalOperator* op = sink;
+    while (true) {
+        const auto estimate = op->getEstimatedCardinality();
+        if (!estimate.has_value()) {
+            return std::nullopt;
+        }
+        rows = std::max(rows, *estimate);
+        if (op->isSource()) {
+            break;
+        }
+        op = op->getChild(0);
+    }
+    return std::max<uint64_t>(1, (rows + ROWS_PER_THREAD - 1) / ROWS_PER_THREAD);
+}
+
 void QueryProcessor::initTask(Task* task) {
     auto processorTask = ku_dynamic_cast<ProcessorTask*>(task);
     PhysicalOperator* op = processorTask->sink;
@@ -82,6 +116,9 @@ void QueryProcessor::initTask(Task* task) {
     }
     if (!op->isParallel()) {
         task->setSingleThreadedTask();
+    }
+    if (const auto threads = threadsForEstimatedRows(processorTask->sink)) {
+        task->limitNumThreads(*threads);
     }
     for (auto& child : task->children) {
         initTask(child.get());
