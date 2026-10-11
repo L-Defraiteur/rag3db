@@ -264,3 +264,28 @@ où elle vit.
   ne bouge ; raison : une base sans cellules ne change pas d'identité à une
   mise à jour. Le lien générique de la mémoire dit sa cellule, un lien entre
   cellules devient explicite.
+- **Soirée, sur master** : A7 (hotfixs, `c0f50f453`, la file des points de
+  reprise ; banc 7 rouges attendus, 251 verts) ; le filet contre la perte des
+  cellules (`06980485f`) et le pas a de la marche 1 bis (`9dd4baedd`, la
+  cellule par la requête, deux sessions sur deux cellules ; ticket court pour
+  le plein texte qui tombe encore dans l'index de la cellule du catalogue,
+  fermé par le pas b) ; le pas 1 du lot 0 (recherche, `522fa6780`, une branche
+  non prise est sautée et dite au lieu de tuer le run ; `required` des sorties
+  respecté au pas suivant, le saut jamais ambigu) ; la forme A de l'enveloppe
+  (mémoire, `cd919b053`). En cours : C7 chez le cœur (cause : vecteurs du
+  détachement sur l'état du nœud, même défaut dans la pierre tombale corrigé
+  avec ; ticket fermé dans le commit du code) ; A8 chez hotfixs dans la forme
+  relue (le dernier à partir écrit, plafond par mesure).
+- **PostgreSQL pour de vrai** : conteneur lancé par Lucie, `e2e_postgres` 19
+  verts, 1 rouge antérieur à l'échappement ; cause trouvée par la mémoire : le
+  plancher pg_trgm posé une fois sur une seule session du pool (ticket
+  `2026-10-11-postgres-une-requete-a-deux-fautes…`). Forme demandée à F :
+  `SET LOCAL` du plancher dans la transaction de la requête sur la connexion
+  épinglée, opérateur indexé gardé, le banc par le même chemin ; petit lot
+  avant le chaînage.
+- **La mémoire en attente de B** : la recette MCP mise à jour de la marche 3
+  (pour le `claude mcp add` de Lucie), puis une page de conception « les
+  fiches mémoire classées par sortie structurée » (le sujet qui intéresse
+  Lucie le plus ; `decide` du proto, pplx-decider candidat à évaluer, Gemini
+  pour juger), aucun code avant son mot. Les quatre points de la §6 de
+  l'enveloppe sont rendus à Lucie (recommandation : oui aux quatre).
