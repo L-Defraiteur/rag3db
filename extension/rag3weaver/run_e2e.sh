@@ -630,6 +630,11 @@ for ligne in open(sys.argv[1]):
     echo "✗ le bâti a échoué (code $statut)"
     return 101
   fi
+  if [ ${#e2e[@]} -gt 0 ] && [ ! -x "$bin" ]; then
+    # Sans ce refus, chaque suite échouerait sur une commande vide.
+    echo "✗ binaire e2e introuvable dans la sortie de cargo (cible « e2e », tests/e2e/main.rs)"
+    return 101
+  fi
   if [ -n "$bin" ]; then
     local mo ref
     mo=$(( $(stat -c %s "$bin") / 1024 / 1024 ))

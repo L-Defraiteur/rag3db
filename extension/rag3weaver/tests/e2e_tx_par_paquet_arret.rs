@@ -419,7 +419,7 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
     } else {
         cmd.env_remove("TX_ARRET_FTS");
     }
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())

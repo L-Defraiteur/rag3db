@@ -405,3 +405,25 @@ pub mod burn_ocr {
         Arc::new(ocr)
     });
 }
+
+/// **Le nom complet d'un test de la suite qui appelle**, pour qu'un processus
+/// fils se désigne par `--exact` (11 octobre 2026, relecture de rag3db-73).
+///
+/// Quatorze suites se relancent elles-mêmes par `current_exe()` et
+/// `--exact <test>` (arrêts brutaux, deux processus, rôles d'enfant). Dans le
+/// binaire unique des e2e, le test s'appelle `<suite>::<test>` : le nom court
+/// ne désigne plus rien, le fils joue 0 test, sort avec 0 — et le parent
+/// conclut sur un fils qui n'a rien fait, un vert vide sur les suites qui
+/// éprouvent justement les arrêts. `module_path!()` est évalué au point
+/// d'appel : `e2e::<suite>` dans le binaire unique, d'où `<suite>::<test>` ;
+/// le nom court seul quand la suite est son propre binaire.
+macro_rules! test_de_cette_suite {
+    ($nom:expr) => {{
+        match module_path!().split_once("::") {
+            Some((_, suite)) => format!("{}::{}", suite, $nom),
+            None => ($nom).to_string(),
+        }
+    }};
+}
+#[allow(unused_imports)]
+pub(crate) use test_de_cette_suite;

@@ -60,7 +60,7 @@ fn une_synchronisation_ne_laisse_pas_ses_points_de_reprise() {
     ));
     std::fs::create_dir_all(&cache).unwrap();
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "une_synchronisation_ne_laisse_pas_ses_points_de_reprise", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("une_synchronisation_ne_laisse_pas_ses_points_de_reprise"), "--nocapture", "--ignored"])
         .env(ENFANT, "1")
         .env("XDG_CACHE_HOME", &cache)
         // Hors transaction par paquet : depuis la bascule (10 octobre 2026),

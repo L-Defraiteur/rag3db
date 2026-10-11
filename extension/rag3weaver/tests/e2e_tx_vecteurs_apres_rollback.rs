@@ -158,7 +158,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &Path, piege: bool) -> String {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
@@ -196,7 +196,7 @@ fn une_base_defaite_par_l_ancien_moteur_se_reprend_ou_se_refuse_par_son_nom() {
         std::fs::copy(f.path(), base.parent().unwrap().join(f.file_name())).unwrap();
     }
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, "repreneur")
         .env(BASE, &base)
         .env("RAG3WEAVER_TX_PAR_PAQUET", "1")

@@ -151,7 +151,7 @@ fn la_marque_des_relations_s_efface_par_une_passe_par_paquet_complete() {
     let d = dossier("marque");
     let base = d.join("base.rag3db");
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, "masse")
         .env(BASE, &base)
         .env("RAG3WEAVER_TEST_KILL_IN_BATCH", "2")

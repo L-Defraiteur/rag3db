@@ -235,3 +235,32 @@ fn chaque_suite_est_montee() {
          rejouer `python3 tests/e2e/generer.py`"
     );
 }
+
+/// **Aucune suite ne se relance par le nom court d'un de ses tests.** Dans ce
+/// binaire, un test s'appelle `<suite>::<test>` : un fils lancé par
+/// `current_exe()` avec `--exact <test>` ne jouerait rien, sortirait avec 0,
+/// et le parent conclurait sur un fils vide — un vert vide sur les suites
+/// d'arrêt brutal (relecture de rag3db-73, 11 octobre 2026). La forme juste :
+/// `&crate::common::test_de_cette_suite!("role_enfant")`.
+#[test]
+fn aucune_suite_ne_se_relance_par_son_nom_court() {
+    let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let mut fautes = Vec::new();
+    for e in std::fs::read_dir(&dossier).expect("tests/ lisible").flatten() {
+        let nom = e.file_name().to_string_lossy().to_string();
+        if !(nom.starts_with("e2e_") && nom.ends_with(".rs")) {
+            continue;
+        }
+        let texte = std::fs::read_to_string(e.path()).unwrap_or_default();
+        let compact: String = texte.split_whitespace().collect::<Vec<_>>().join(" ");
+        if compact.contains("\"--exact\", \"") {
+            fautes.push(nom);
+        }
+    }
+    assert!(
+        fautes.is_empty(),
+        "suites qui se relancent par un nom court (`--exact \"test\"`), qui ne désigne \
+         rien dans le binaire unique : {fautes:?} — employer \
+         `crate::common::test_de_cette_suite!(\"test\")`"
+    );
+}

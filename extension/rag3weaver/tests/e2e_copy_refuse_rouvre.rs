@@ -98,7 +98,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &PathBuf) -> String {
     let s = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .output()

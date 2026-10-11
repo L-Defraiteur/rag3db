@@ -129,7 +129,7 @@ fn deux_processus_partagent_la_base_par_le_demon() {
         // `--ignored` : l'enfant relance ce test, qui porte désormais l'attribut.
         // Sans ça il ne joue rien, et le parent lit son silence comme « il n'a
         // rien pris » — un échec qui accuserait le partage au lieu du montage.
-        .args(["--exact", "deux_processus_partagent_la_base_par_le_demon", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("deux_processus_partagent_la_base_par_le_demon"), "--nocapture", "--ignored"])
         .env(ADRESSE_ENFANT, &adresse)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

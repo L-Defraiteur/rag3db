@@ -115,7 +115,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &Path, fts: Option<&str>) -> String {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
     match fts {
         Some(v) => cmd.env("RAG3WEAVER_FTS", v),
         None => cmd.env_remove("RAG3WEAVER_FTS"),

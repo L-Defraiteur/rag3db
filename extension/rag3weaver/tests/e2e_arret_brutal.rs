@@ -272,7 +272,7 @@ enum Verdict {
 
 fn relire(dossier: &Path, cas: &str, attendu: usize) -> Verdict {
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(RELECTEUR, dossier.display().to_string())
         .env("RAG3WEAVER_ARRET_ATTENDU", attendu.to_string())
         .output()
@@ -636,7 +636,7 @@ fn jouer_avec(
     age_du_moteur();
     let dossier = dossier_sur_disque(cas);
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(ECRIVAIN, dossier.display().to_string())
         .env(SCENARIO, scenario)
         .stdout(std::process::Stdio::piped())
@@ -773,7 +773,7 @@ fn une_mort_apres_insertion_vectorielle() {
     let dossier = dossier_sur_disque(cas);
 
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(ECRIVAIN, dossier.display().to_string())
         .env(SCENARIO, "insertion")
         .stdout(std::process::Stdio::piped())
