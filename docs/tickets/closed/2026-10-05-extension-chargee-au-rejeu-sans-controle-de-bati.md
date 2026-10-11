@@ -65,3 +65,20 @@ Le contrôle, et un témoin : une extension d'une autre empreinte notée à côt
   commit ont des identifiants différents seulement si leurs diffs diffèrent dans les chemins du
   moteur ; pour prouver quelle extension a tourné, l'empreinte du fichier et sa date restent la
   preuve.
+
+## Suite : une copie de l'arbre sans `.git` (11 octobre 2026)
+
+Sous Windows, la crate Rust copie les sources dans `tools/rust_api/rag3db-src`, sans `.git`. Son
+identifiant disait donc toujours « nogit », la même marque pour deux commits différents, et un
+bâti sans git acceptait l'extension d'un autre bâti sans git. Constat de la session du paquet
+npm, qui refuse désormais une archive « nogit » sous Linux et macOS.
+
+`-DRAG3DB_BUILD_ID_GIT_DIR=<dépôt>` désigne le dépôt d'où vient la copie. `cmake/build_id.cmake`
+y lit git, avec les mêmes chemins, le même diff et la même empreinte, mais seulement si git ne
+voit aucun commit depuis les sources elles-mêmes : jamais à la place d'un git présent. C'est
+relu à chaque bâti, comme le reste. La crate le pose sous Windows (côté `build.rs`, session du
+paquet npm). Sans la variable, rien ne change.
+
+Vérifié par `cmake -P` sur quatre cas : le dépôt ; une copie sans git, qui donne « nogit » ; la
+même copie avec `GIT_DIR`, qui donne l'identifiant du dépôt, « dirty » compris ; une copie non
+suivie à l'intérieur du dépôt, avec `GIT_DIR`, qui donne aussi l'identifiant du dépôt.
