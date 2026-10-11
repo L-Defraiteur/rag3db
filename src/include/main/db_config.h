@@ -67,6 +67,9 @@ struct DBConfig {
     bool throwOnWalReplayFailure;
     bool enableChecksums;
     bool enableSpillingToDisk;
+    // B2 : l'attente au verrou du fichier de la base, à l'ouverture en écriture (ms ; 0 = refus
+    // immédiat).
+    uint64_t fileLockWaitMs;
     // Le crochet de test armé par l'environnement (common/test_hooks.h), lu par Database à
     // l'ouverture ; NONE hors des témoins.
     common::TestDiePoint testDiePoint = common::TestDiePoint::NONE;

@@ -106,8 +106,9 @@ void ShadowFile::replayShadowPageRecords(ClientContext& context) {
 
     std::unique_ptr<FileInfo> dataFileInfo;
     try {
-        dataFileInfo = vfs->openFile(context.getDatabasePath(),
-            FileOpenFlags{FileFlags::WRITE | FileFlags::READ_ONLY, FileLockType::WRITE_LOCK});
+        FileOpenFlags dataFlags{FileFlags::WRITE | FileFlags::READ_ONLY, FileLockType::WRITE_LOCK};
+        dataFlags.lockWaitMs = context.getDBConfig()->fileLockWaitMs; // B2
+        dataFileInfo = vfs->openFile(context.getDatabasePath(), dataFlags);
     } catch (IOException& e) {
         throw RuntimeException(stringFormat(
             "Found shadow file {} but no corresponding database file. This file "

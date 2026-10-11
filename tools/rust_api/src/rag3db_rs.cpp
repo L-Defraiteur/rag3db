@@ -68,8 +68,9 @@ std::unique_ptr<std::vector<rag3db::common::LogicalType>> logical_type_get_struc
 std::unique_ptr<Database> new_database(std::string_view databasePath, uint64_t bufferPoolSize,
     uint64_t maxNumThreads, bool enableCompression, bool readOnly, uint64_t maxDBSize,
     bool autoCheckpoint, int64_t checkpointThreshold, bool throwOnWalReplayFailure,
-    bool enableChecksums) {
+    bool enableChecksums, uint64_t fileLockWaitMs) {
     auto systemConfig = SystemConfig();
+    systemConfig.fileLockWaitMs = fileLockWaitMs;
     if (bufferPoolSize > 0) {
         systemConfig.bufferPoolSize = bufferPoolSize;
     }

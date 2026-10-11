@@ -62,12 +62,16 @@ struct RAG3DB_API SystemConfig {
      * the error occured.
      * @param enableChecksums If true, the database will use checksums to detect corruption in the
      * WAL file.
+     * @param fileLockWaitMs Combien de temps une ouverture en écriture attend que le verrou du
+     * fichier de la base, tenu par un autre processus écrivain, se libère (marche B2 : le
+     * relais, pas la simultanéité). 0 : le refus immédiat d'avant. Au-delà de la borne, une
+     * IOException nommée (« waited <N> ms for the database file held by another writer process »).
      */
     explicit SystemConfig(uint64_t bufferPoolSize = -1u, uint64_t maxNumThreads = 0,
         bool enableCompression = true, bool readOnly = false, uint64_t maxDBSize = -1u,
         bool autoCheckpoint = true, uint64_t checkpointThreshold = 16777216 /* 16MB */,
         bool forceCheckpointOnClose = true, bool throwOnWalReplayFailure = true,
-        bool enableChecksums = true
+        bool enableChecksums = true, uint64_t fileLockWaitMs = DEFAULT_FILE_LOCK_WAIT_MS
 #if defined(__APPLE__)
         ,
         uint32_t threadQos = QOS_CLASS_DEFAULT
@@ -84,9 +88,14 @@ struct RAG3DB_API SystemConfig {
     bool forceCheckpointOnClose;
     bool throwOnWalReplayFailure;
     bool enableChecksums;
+    uint64_t fileLockWaitMs;
 #if defined(__APPLE__)
     uint32_t threadQos;
 #endif
+
+    // L'attente par défaut au verrou du fichier : assez pour le relais d'une session à l'autre ;
+    // au-delà, c'est le démon qui tient la base pour tous.
+    static constexpr uint64_t DEFAULT_FILE_LOCK_WAIT_MS = 5000;
 };
 
 /**

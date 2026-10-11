@@ -37,6 +37,9 @@ struct FileFlags {
 struct FileOpenFlags {
     int flags;
     FileLockType lockType = FileLockType::NO_LOCK;
+    // B2 : si le verrou est tenu par un autre processus, réessayer jusqu'à cette borne (ms) avant
+    // de refuser ; 0 = refus immédiat.
+    uint64_t lockWaitMs = 0;
     FileCompressionType compressionType = FileCompressionType::AUTO_DETECT;
 
     explicit FileOpenFlags(int flags) : flags{flags} {}
