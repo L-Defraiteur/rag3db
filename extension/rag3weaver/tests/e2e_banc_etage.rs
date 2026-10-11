@@ -851,6 +851,18 @@ fn banc_etage_qui_perd() {
     // au banc, jouée seulement si RAG3WEAVER_BANC_UTILITE donne l'adresse du
     // serveur (http://127.0.0.1:7982). La grille est à nous, pas un copié de
     // jevbox (dépôt sans licence).
+    // **Le cfg est sur CE bloc, pas sur le fichier** (relevé par F, corrigé le
+    // 11 octobre 2026) : `rag3weaver::decider` vit derrière la feature
+    // `daemon`, donc `cargo check --tests` sans elle échouait ici. Le jeu de
+    // `run_e2e.sh` la contient, d'où une batterie verte et un `check` rouge —
+    // et un test doit déclarer ce qu'il utilise.
+    //
+    // Mettre `#![cfg(…, feature = "daemon")]` en tête aurait écarté **tout le
+    // banc**, alors que seule cette voie-ci en dépend : les six autres lignes
+    // de mesure n'ont besoin de rien de plus. Et l'écarter revient exactement
+    // au comportement d'aujourd'hui quand `RAG3WEAVER_BANC_UTILITE` est absente
+    // — la liste des lignes a une entrée de moins, le banc rend le reste.
+    #[cfg(feature = "daemon")]
     if let Ok(adresse) = std::env::var("RAG3WEAVER_BANC_UTILITE") {
         use rag3weaver::decider::{score, LlamaServerDecider};
         let decider = LlamaServerDecider::new(&adresse, "JevK5-4B").expect("adresse du décideur");

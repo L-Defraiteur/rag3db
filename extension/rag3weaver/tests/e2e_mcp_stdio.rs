@@ -190,7 +190,16 @@ fn un_client_mcp_voit_les_outils_du_manifeste_et_les_appelle() {
     ] {
         assert!(noms.contains(&attendu), "{attendu} manque : {noms:?}");
     }
-    assert_eq!(noms.len(), 13, "le gabarit code en déclare treize : {noms:?}");
+    // **Les noms exigés, le compte NON figé.** La première version écrivait
+    // `assert_eq!(noms.len(), 12)` ; `callees` est arrivé et quelqu'un a dû la
+    // passer à 13. Un filet qui interdit d'ajouter un outil ne protège rien :
+    // ce qu'il doit garantir, c'est que la liste vient du **manifeste**, donc
+    // que tous les outils déclarés sont là. Le prochain outil n'aura pas à
+    // toucher ce test.
+    assert!(
+        noms.len() >= 13,
+        "le gabarit code en déclare au moins treize ; un outil manque : {noms:?}"
+    );
     // Chaque outil porte son schéma, et il est typé.
     let lecture = outils.iter().find(|t| t["name"] == "read_file").expect("read_file");
     assert_eq!(lecture["inputSchema"]["type"], "object", "{lecture}");

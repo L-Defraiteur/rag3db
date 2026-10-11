@@ -74,6 +74,9 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 
+| [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
+| [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
+
 ### Fermés (56), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
