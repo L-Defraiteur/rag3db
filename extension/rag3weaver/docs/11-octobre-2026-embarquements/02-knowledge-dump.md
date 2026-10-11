@@ -92,3 +92,17 @@
   table quelconque.
 - `poste push` : `pousser.sh` rebase sans rejouer quand seuls des `.md` sont arrivés,
   et rejoue sur le moteur ancien quand on le lui dit (`MOTEUR_ANCIEN=1`), en l'écrivant.
+
+## Le voisinage et la porte (soir)
+
+- Vérifier une affirmation de régression à la source avant d'y céder ou de la
+  contester : la porte de `grep` refusait déjà toute relation hors de la liste.
+  Le dire avec la ligne, puis prendre la correction qui rend le code plus juste.
+- Une porte contre l'injection garde ses deux étages : un identifiant valide **et**
+  une relation que le catalogue déclare ; la citation du dialecte vient en plus.
+- Le README des tickets change sur master toutes les quelques minutes : un lot qui
+  ferme un ticket y entre presque toujours en conflit. Garder le côté master,
+  réappliquer sa propre fermeture, et recompter chaque section sur ses lignes
+  réelles (jamais en ajoutant ou retirant 1 à un compte qui a pu bouger).
+- Un relevé ou une passe en cours lit les sources : une passe lancée avant une
+  édition ne témoigne pas pour le code d'après. La jeter et rejouer.
