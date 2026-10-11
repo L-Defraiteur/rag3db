@@ -77,8 +77,23 @@ générique `templates/tools/link.mmd`. Il n'y avait pas de nœud manquant : il 
 avait une garde de trop sur `RelationBatchNode`, retirée après qu'un témoin a
 établi qu'elle ne protégeait rien (page
 `11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`).
-Ta copie de `~/.config/rag3weaver/memoire-longue/` et le binaire de `~/.local/bin`
-sont à rafraîchir pour les avoir : voir la fin de cette page.
+**Ta copie est rafraîchie** (11 octobre, vers midi) : `~/.config/rag3weaver/memoire-longue/`
+recopiée depuis master avec les deux mêmes chemins absolus, et
+`~/.local/bin/rag3weaver-backend` rebâti en release (md5 `c11a02d85a96`). Ta base
+n'a pas été touchée. Ce qui était là avant est gardé, pour revenir en arrière :
+`~/.config/rag3weaver/memoire-longue.avant-11-octobre-midi/`,
+`~/.cache/rag3weaver-build/rag3weaver-backend.avant-11-octobre-midi`, et une copie de
+la base `~/.cache/rag3weaver-build/memoire-longue.rag3db.avant-11-octobre-midi`.
+
+**Éprouvé par MCP, sur une copie de ta base** : `anchor` ancre la mémoire « duty
+cycle » au sujet « régime GPU », un `put_subject` change le sujet, et la mémoire
+passe d'elle-même `to_review` — `review_anchored` a fait son travail sans qu'aucun
+appel la nomme. Le serveur dit maintenant :
+
+```
+[mcp] memory — 9 outils, clés présentées : dev
+[mcp] 1 réaction(s) montée(s) : review_anchored
+```
 
 **1. (réglé) La réaction est montée mais elle ne peut rien transitionner.** Aucun des
 sept outils ne pose `ANCHORED_TO` : `add_ref` pose `CITE`, et rien n'écrit
