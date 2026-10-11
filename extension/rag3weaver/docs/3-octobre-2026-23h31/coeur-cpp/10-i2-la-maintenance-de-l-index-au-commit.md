@@ -50,6 +50,9 @@ même temps et ne se sérialisent qu'à leur validation — comme deux inséreur
   rejoué ») ;
 - le conflit nommé d'A4′ (« could not serialize ») ne peut plus naître des arêtes internes (elles
   ne sont réécrites que par un détenteur exclusif, au commit, sur le graphe validé).
+- **limite nommée** : un lecteur pendant la maintenance d'un gros commit voit un graphe en
+  recouture — c'est aujourd'hui aussi (le lecteur ne prend aucun verrou) ; « l'index = l'état
+  validé » se lit avec cette réserve, pas sans.
 
 ## 2. La forme **[déduit]**
 
@@ -57,7 +60,12 @@ même temps et ne se sérialisent qu'à leur validation — comme deux inséreur
    `HNSWDeleteState` par instruction) : les lignes mises à jour (offset, ancien vecteur lu avant
    l'écriture — il est perdu après), les lignes supprimées. `Index::update` et `Index::delete_` ne
    font plus que **noter** ; `finalizeDelete` ne fait plus rien ; `NodeTable::update/delete_` ne
-   prennent plus `INDEX` (la clé seulement, A4′).
+   prennent plus `INDEX` (la clé seulement, A4′). **C'est là que l'union se définit** : une ligne
+   mise à jour deux fois garde comme « ancien vecteur » le **premier** (celui qui est dans le
+   graphe), jamais l'intermédiaire, et sera réinsérée au dernier ; une ligne mise à jour puis
+   supprimée compte comme supprimée seulement ; une ligne insérée puis mise à jour ou supprimée
+   dans la même transaction n'est pas dans le graphe : rien à retirer, elle entre (ou non) par
+   `commitInsert` avec son vecteur final.
 2. **Au commit**, dans `NodeTable::commit`, une étape avant l'étape 3 actuelle : prise de
    `INDEX{table}` en exclusif (prise groupée avec ce que la transaction tient déjà ; elle peut
    **attendre** là — c'est le seul endroit où deux écrivains d'une table indexée s'attendent), puis,
