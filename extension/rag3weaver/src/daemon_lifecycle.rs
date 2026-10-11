@@ -79,9 +79,33 @@ pub fn launch_address() -> String {
         .unwrap_or_else(|| DEFAULT_ADDRESS.to_string())
 }
 
-/// L'identifiant de bâti de ce processus.
+/// L'identifiant de bâti de ce processus : la version du crate, l'empreinte
+/// de l'exécutable, et l'identifiant du moteur (`CALL build_id()`, celui que
+/// `LOAD EXTENSION` compare) quand le moteur le donne. Un moteur d'avant
+/// 48b74ead1 ne le donne pas : c'est dit, le démarrage ne tombe pas.
+///
+/// Personne ne compare cette chaîne pour reconnaître un hôte ([`answers`] ne
+/// lit que le service et le pid) : elle peut grandir sans qu'un client ancien
+/// refuse un hôte neuf.
 pub fn build_id() -> String {
-    format!("rag3weaver {} — {}", env!("CARGO_PKG_VERSION"), crate::daemon::mon_empreinte())
+    let moteur = engine_build_id().as_deref().unwrap_or("moteur sans identifiant de bâti");
+    format!("rag3weaver {} — {} — {moteur}", env!("CARGO_PKG_VERSION"), crate::daemon::mon_empreinte())
+}
+
+/// L'identifiant du moteur, lu **une fois** (une connexion en mémoire) puis
+/// gardé : `/sante` est appelé à chaque garde de client.
+pub fn engine_build_id() -> &'static Option<String> {
+    static MOTEUR: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    MOTEUR.get_or_init(|| {
+        crate::Rag3dbConnection::in_memory().ok().and_then(|c| engine_build_from(&c))
+    })
+}
+
+/// `CALL build_id()` sur une connexion ; `None` si le moteur ne le connaît pas.
+pub fn engine_build_from(conn: &dyn crate::connection::DbConnection) -> Option<String> {
+    let r = conn.execute("CALL build_id() RETURN *;").ok()?;
+    let col = r.columns.iter().position(|c| c == "build_id").unwrap_or(0);
+    r.rows.first()?.get(col)?.as_str().map(str::to_string)
 }
 
 /// **Un jeton local** : 32 octets de `/dev/urandom`, en hexadécimal.
@@ -321,6 +345,27 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
+    }
+
+    /// **L'identifiant du moteur, et son absence** : un moteur qui le donne,
+    /// un moteur d'avant `build_id()` (la requête échoue) — le second ne fait
+    /// rien tomber.
+    #[test]
+    fn l_identifiant_du_moteur_et_son_absence() {
+        use crate::connection::{CallbackConnection, CypherValue, DbError, QueryResult};
+        let avec = CallbackConnection::new(|cypher, _| {
+            assert!(cypher.contains("build_id()"));
+            Ok(QueryResult {
+                columns: vec!["build_id".into()],
+                rows: vec![vec![CypherValue::String("rag3db-build-48b74ead1-Release".into())]],
+            })
+        });
+        assert_eq!(engine_build_from(&avec).as_deref(), Some("rag3db-build-48b74ead1-Release"));
+        let sans = CallbackConnection::new(|_, _| Err(DbError::QueryError("function BUILD_ID does not exist".into())));
+        assert_eq!(engine_build_from(&sans), None);
+        // Et la chaîne entière se forme dans les deux cas : le moteur de ce poste
+        // décide lequel.
+        assert!(build_id().starts_with("rag3weaver "), "{}", build_id());
     }
 
     #[test]
