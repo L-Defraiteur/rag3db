@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "planner/operator/operator_print_info.h"
 #include "processor/result/result_set.h"
 
@@ -114,6 +116,16 @@ public:
 
     PhysicalOperatorType getOperatorType() const { return operatorType; }
 
+    // La cardinalité estimée par le planificateur pour cet opérateur, descendue du plan logique
+    // (PlanMapper) quand le planificateur l'a posée ; vide sinon (un CALL, une source sans
+    // estimation). Lue pour proportionner les fils d'une tâche (page coeur-cpp/12).
+    void setEstimatedCardinality(common::cardinality_t cardinality) {
+        estimatedCardinality = cardinality;
+    }
+    std::optional<common::cardinality_t> getEstimatedCardinality() const {
+        return estimatedCardinality;
+    }
+
     virtual bool isSource() const { return false; }
     virtual bool isSink() const { return false; }
     virtual bool isParallel() const { return true; }
@@ -179,6 +191,7 @@ protected:
     physical_op_vector_t children;
     ResultSet* resultSet;
     std::unique_ptr<OPPrintInfo> printInfo;
+    std::optional<common::cardinality_t> estimatedCardinality;
 };
 
 } // namespace processor

@@ -75,7 +75,7 @@ struct LogicalOperatorUtils {
 class RAG3DB_API LogicalOperator {
 public:
     explicit LogicalOperator(LogicalOperatorType operatorType)
-        : operatorType{operatorType}, cardinality{1} {}
+        : operatorType{operatorType}, cardinality{1}, cardinalityEstimated{false} {}
     explicit LogicalOperator(LogicalOperatorType operatorType,
         std::shared_ptr<LogicalOperator> child,
         std::optional<common::cardinality_t> cardinality = {});
@@ -92,7 +92,13 @@ public:
         children[idx] = std::move(child);
     }
     void addChild(std::shared_ptr<LogicalOperator> child) { children.push_back(std::move(child)); }
-    void setCardinality(common::cardinality_t cardinality_) { this->cardinality = cardinality_; }
+    void setCardinality(common::cardinality_t cardinality_) {
+        this->cardinality = cardinality_;
+        cardinalityEstimated = true;
+    }
+    // Vrai quand la cardinalité vient d'une estimation du planificateur (posée ici ou héritée
+    // d'un enfant qui en avait une) ; faux pour le 1 par défaut, qui ne dit rien.
+    bool hasCardinalityEstimate() const { return cardinalityEstimated; }
 
     // Operator type.
     LogicalOperatorType getOperatorType() const { return operatorType; }
@@ -143,6 +149,7 @@ protected:
     std::unique_ptr<Schema> schema;
     logical_op_vector_t children;
     common::cardinality_t cardinality;
+    bool cardinalityEstimated;
 };
 
 } // namespace planner
