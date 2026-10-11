@@ -755,3 +755,22 @@ défauts. Mesuré : le filet coûtait ~4 s sur la lib complète (25,3 → 21,4 s
 le reste du passage de 10 à 21 s (~11 s) n'est pas imputé — suspects : les
 tests ajoutés cette nuit ; au knowledge dump, pas d'enquête. La condition 2
 est entière de nouveau, et le COPY journalisé est le défaut sans réserve.
+
+## 17. État à 4 h 50
+
+- **Sur master depuis 4 h 35** : le correctif de la corruption (`60d74a4e2`),
+  le filet retiré (`f9bf4574d`), le point de reprise interrompu avec le
+  refus nommé et le crochet de test `RAG3DB_TEST_HOOKS=1` +
+  `RAG3DB_TEST_DIE_AT=checkpoint-logged` (`9f3725ade`), les rapports de nuit
+  de la recherche, du banc, de la mémoire, du proto, de codeparsers.
+- **Encore au travail** : A (la sonde de la fuite à taille réelle, puis son
+  rapport), hotfixs (lib de luciepc, puis le point de reprise sous petit
+  tampon : segment borné), le cœur (le petit ticket d'A4′, la seconde
+  suppression d'une relation, puis repos ; I2 attend Lucie).
+- **Au repos, tout rangé** : F, codeparsers, mémoire, proto, banc, G,
+  recherche. Aucun worktree ni target de la nuit ne reste hors des lots en
+  cours ; disque à 50 % ici, 78 % sur luciepc.
+- **Pour A au matin** : le témoin de la reprise sur croisement est possible
+  maintenant que le crochet existe (son correctif rag3weaver : le refus
+  immédiat avec la vraie cause).
+- **Le relevé d'orchestration passe à l'heure** à partir de 4 h 50.
