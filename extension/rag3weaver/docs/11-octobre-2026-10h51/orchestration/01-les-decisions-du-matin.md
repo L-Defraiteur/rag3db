@@ -213,3 +213,33 @@ où elle vit.
   jamais un argument, l'important c'est que ce soit au top ». Noté en vision
   (`visions/00-vision-generale.md`, section « L'agent est un graphe à
   ports ») et transmis à « everything declarative » comme règle de sa page.
+- **Après-midi, sur master** : la marche 3 du démon (mémoire, `d25cad18b`,
+  client MCP mince par HTTP, `src/daemon_client.rs`, deux sessions MCP sur un
+  même backend vertes, `--demon` refusé en nommant son remplaçant) ; T5 de
+  codeparsers (`48ae8e4b5`) ; la §3 de la page de l'enveloppe (arbre
+  principal, `9f07e4575` : un outil n'empoisonne que sur ce que le moteur
+  impose, un échec qu'il sait défaire invalide ses caches, pas le catalogue) ;
+  la page C complétée (`c24328dd8` : réacteur, budget de tampon, cellule et
+  clés non appliquées restent hors de la marche 1).
+- **La marche 1 bis a sa page courte** (arbre principal, `7900577ad`,
+  `11-octobre-2026-arbre-principal/04-la-marche-1-bis.md`) : la cellule passe
+  par la requête, les index sont par cellule, le réacteur prend la cellule de
+  l'événement ; coût 3 à 3,5 jours d'agent. Trois points : `_uuid` ne dépend
+  pas de la cellule (témoin d'abord ; si collision confirmée, défaut P1,
+  ticket et mot de Lucie avant migration) ; marques de progression préfixées
+  par cellule (oui) ; `set_scope` cellule par défaut pour la ligne de commande
+  et les tests seulement, refusé en service (oui). Pas a lancé.
+- **La page des agents relue** (proto, `3b1a03f49`) : trois écarts pris
+  parce que meilleurs : le branchement conditionnel vient des flux (un flux
+  qui finit vide saute le nœud aval, `Skipped` dit au rapport ; le moteur n'a
+  aucun branchement aujourd'hui) ; deux nœuds neufs au lieu de quatre
+  (`decide` sur le Decider à un jeton ou la sortie structurée, `route` ;
+  `filter` est un `route` dont une sortie ne mène nulle part, `act` est
+  l'appel d'outil existant) ; pas de cycle, le tour est le graphe et la
+  boucle sa répétition à la frontière ; d'abord des points d'accroche dans
+  `agent.rs`, puis le tour comme exécution du graphe quand la parité tient.
+  **Le lot 0, l'exécuteur de flux dans `src/dataflow/runtime.rs`, est porté
+  par la recherche** (exécuteur par niveaux inchangé pour les graphes de
+  valeurs, exécuteur concurrent seulement quand un port de flux existe,
+  parité prouvée d'abord) ; le proto fait le lot 1 (points d'accroche +
+  parité) en parallèle et relit.
