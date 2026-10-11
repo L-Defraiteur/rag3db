@@ -118,3 +118,29 @@ question « qui tient le verrou de l'index ? » n'avait pas de réponse ; il
 fallait `callees`, où le verrou paraissait sous le nom générique
 `acquireLock`. Deux sites de plus (`update`, `delete_`) ; le compte des
 LOCKS sur `rag3db/src` n'est pas remesuré avec lui.
+
+## La montre de fichiers — l'index suit le disque (11 octobre 2026)
+
+`backend.json` déclare une montre (`watches.code`) et sa réaction
+(`reindex_on_change`, `graphs/reindex_on_change.mmd`). Un fichier du workspace
+modifié, créé ou supprimé **hors de nos outils** (un éditeur, git, Claude Code
+et ses propres `Edit`/`Write`, un autre agent) est réindexé, ou retiré, sans
+`index` manuel. La montre balaie toutes les `every_ms` (1 000), attend
+`settle_ms` (300) qu'un fichier se pose, et ne dit rien d'un `touch` sans
+changement de contenu.
+
+**Le retard se dit** : entre l'édition et sa réindexation, l'état de l'index
+porte `lag`, et `usages` ou le voisinage commencent leur réponse par « N
+fichier(s) changé(s) depuis N s, pas encore réindexé(s) : ce résultat peut
+dater ». Une réponse sans cette ligne est à jour du disque.
+
+**Si vous voulez l'immédiat** : baissez la période dans le manifeste, par
+exemple `"watches": {"code": {"every_ms": 200, "settle_ms": 100}}`. Le
+balayage coûte peu (2,6 ms pour les 1 653 fichiers du `src/` du moteur, cache
+chaud) ; la réindexation d'un fichier coûte ce qu'elle coûte, une fois par
+sauvegarde. Un crochet Claude Code (`PostToolUse` sur `Edit`/`Write`) qui
+ouvrirait le backend dans un second processus serait **un second écrivain sur
+la base**, ce qu'on ne sait pas faire : pas de crochet, la montre suffit.
+
+`snapshot.json` (le cloud) ne déclare pas de montre : un instantané en mémoire
+ne change pas, et une montre y serait refusée en le disant.
