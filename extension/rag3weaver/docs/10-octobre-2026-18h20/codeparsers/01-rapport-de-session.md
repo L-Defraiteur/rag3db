@@ -141,3 +141,135 @@ est à ignorer : rebasée, poussée sous un nom neuf.
   et `target-impact` (17 Go) : à effacer à la fusion de la branche. Clone
   `~/.cache/rag3weaver-build/cp-b2d` et `target-cp` : le chantier codeparsers,
   à garder tant que B2d continue.
+
+**Mise à jour (vers 4 h)** : `impl-pas-definisseur-2` fusionnée par l'arbre
+principal (`17cca6e17` … `a514e66ed`, pointeur codeparsers `06d6e92`) ;
+worktree `rag3db-cp` et `target-impact` effacés. Reste sur le poste : le
+clone `cp-b2d` et `target-cp` (chantier codeparsers, B2d), `wt-docs`.
+
+## 11 octobre, matin — les appels sur une locale non typée, visibles (décision de Lucie)
+
+**Codeparsers `d0c0e46`** (master). Un appel sur une locale qui reste non
+typée était écarté en silence. La référence est désormais gardée, marquée
+`untyped_receiver` ; le résolveur ne la relie jamais par le nom et la range
+sous la raison « receveur non typé ». Une locale liée à une expression
+différée (`let t = f()`, `auto t = f()`) porte la même marque : le type
+différé reste lu s'il se trouve.
+
+**Un écart corrigé avant le commit** : ma première version marquait aussi
+les appels déjà visibles que le résolveur reliait par le nom dans le
+fichier — 1 492 sur rag3weaver, à moitié justes sur un échantillon de 40
+(`agent.run()`, `conn.execute()` justes ; `uuid.as_str()` vers
+`Resolution::as_str`, `r.get(0)` vers `Catalog::get` faux). Ce n'était pas
+la décision (« écarté en silence ») : la marque est resserrée aux appels
+qui étaient écartés et aux locales à type différé. **Question ouverte pour
+Lucie** : retirer aussi ces liens par le nom dans le fichier (marqués
+« fichier », donc suivis par `impact` comme sûrs) ?
+
+**Banc, corpus égal** : références d'appel rag3weaver 53 199 → 56 811
+(+3 612 visibles, 7 044 « receveur non typé » entre fichiers) ; liens
+d'appel comparés arête par arête avant/après : rag3weaver et codeparsers
+identiques, IR identique, rag3db/src 0 perdue et 1 paire gagnée (juste :
+`~MiniZStreamWrapper() → MiniZStreamWrapper::close()`). Un lien faux
+trouvé en chemin et fermé : la classe agrégeait l'appel marqué d'une de ses
+méthodes comme référence de type (`GraphTool → spec`, vers une fermeture
+homonyme).
+
+**Côté rag3weaver** (branche `receveurs-non-types`, vérifiée, proposée) : la
+marque voyage jusqu'au rendez-vous (`MENTIONS.untyped_receiver`), et
+`choose_target` ne fait plus de repli par le seul nom sans type lu ;
+`usages` dit « (par le nom) » des usages venus du seul rendez-vous (défaut
+antérieur : un rendez-vous non relié s'affichait comme un usage sûr).
+Témoin `e2e_usages::un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie`,
+rouge avant (une arête `run → update` par le nom), vert après.
+
+**Suite (décision de l'orchestration pour Lucie, renversable)** : les
+liens posés par le nom seul sur un receveur non typé ne sont ni retirés ni
+laissés « fichier » ; ils prennent la marque « nom ». codeparsers `a83ba74`
+(`metadata.by_name`, et au banc le compte neutre
+`relations.consumes.par_le_nom`) ; second commit de la branche
+`receveurs-non-types` (`718cfbe1d`, `CodeRelation.by_name` → résolution
+« nom »). Témoin `e2e_usages::un_lien_par_le_nom_dans_le_fichier_se_marque_nom`,
+rouge (« fichier ») puis vert.
+
+**Correction d'un chiffre que j'avais donné** : les « 1 492 liens marqués
+fichier » venaient du mode entre fichiers de codeparsers. En fichier seul
+— le mode de rag3weaver — un receveur non typé passe au rendez-vous, déjà
+marqué « nom » par le repli d'un seul définisseur. Les liens « fichier » par
+le nom y sont **45 sur rag3weaver, 0 sur le C++ de rag3db** ; ce sont eux
+que la marque corrige. Entre fichiers : 1 997 sur rag3weaver, 583 sur
+rag3db/src.
+
+## 11 octobre, après-midi — la stèle du produit, ma part
+
+La stèle du produit (page de l'arbre principal, `docs/11-octobre-2026-arbre-principal/02-la-stele-du-produit.md`) :
+j'y ai écrit l'ordre de mes lots, corrigé les colonnes de mes tickets et retrouvé le 21ᵉ ticket
+(fermé à 11 h 28, avant la page).
+- **T5** (fermeture locale, `map(aide)`) : codeparsers `d90a1f6`, sur master (`48ae8e4b5`).
+- **Lot 2, deux recettes rejouées** (`e7950860a`, sur master) : le type d'un champ déclaré dans
+  un autre fichier est fermé (B2b) ; la réexportation est rouge — avec un homonyme, aucune arête.
+- **Lot 2 bis, la réexportation** : codeparsers `77c8ea6` (`ImportReference.reexport`) ; branche
+  `reexportations-2` (`code.rs` : `MENTIONS.reexport_from`, `par_reexportation`), vérifiée,
+  proposée. Témoin rouge (aucune arête) puis vert (« import »).
+- **Les targets** : un seul pour la session, `target-codeparsers` (règle de midi) ; le banc sous
+  lui.
+- **Les e2e** sont un binaire unique depuis midi : `cargo test --test e2e -- --ignored
+  e2e_usages::…` ; un rejeu après rebase doit le savoir (les cibles `--test e2e_usages`
+  n'existent plus).
+Suite : `analyze` en racine relative (P3), puis les prototypes C, les C++ anonymes, le nom seul.
+
+**Suite de l'après-midi (stèle du produit)** :
+- **Lot 3, `analyze` en racine relative** (branche `analyze-racine`) : la racine se résout et se
+  dit ; le défaut avait changé de forme (chemins « absolus » relatifs et doublés).
+- **Lot 4, les prototypes C** (codeparsers `9531860`, branche `prototypes-c`) : membres du scope
+  de fichier ; un `struct` sans corps n'est plus une seconde définition. Arêtes de rag3db/src
+  identiques.
+- **Lot 5, les C++ anonymes** (codeparsers `35faa0f`, branche `cpp-anonymes`, en attente de la
+  lib) : 287 → 0 sur rag3db. Les classes exportées (`class RAG3DB_API Foo`) se lisaient comme des
+  fonctions ; masquées avant l'analyse, elles redeviennent des classes avec leurs méthodes, et les
+  méthodes gabarits ont leur scope. **Appels reliés entre fichiers sur rag3db/src : 41,5 →
+  50,7 %**, +1 362 méthodes. Le message du commit dit « 2 restants » : compté trop tôt, c'est 0.
+- **Le target** : un sous-dossier par worktree (règle de l'orchestration, à partir du piège des
+  artefacts partagés) ; `check_features.sh` avant tout hash.
+Reste de ma part de la stèle : le nom seul et les segments de module (P1).
+- **Lot 6, le nom seul et les segments de module** (codeparsers `a6111cc`, branche `nom-seul`,
+  vérifiée, proposée) : un paramètre n'est plus une référence du bloc `impl` (96 faux liens
+  retirés sur rag3weaver, arête par arête) ; un préfixe de chemin en minuscules n'est plus une
+  référence (~7 000 non-résolues de moins sur rag3weaver). **Toute ma part de la stèle (P1, P4)
+  est faite** ; restent les lots 5 et 6 à reprendre par l'arbre principal, puis la passe de
+  contrôle (`e2e_banc_relations`, marques par résolution).
+- **Pousser** : désormais par `poste push <session> -- <commande>` (verrou de master, par poste).
+
+**Le premier index réel de rag3db par l'hôte** (demande de l'orchestration, 11 oct. après-midi) :
+- **Le montage** : le gabarit `code` copié sous `~/.config/rag3weaver/code-rag3db/templates/`,
+  manifeste actif `backends/code/rag3db.json` (nom `code-rag3db`) : racine l'arbre principal en
+  lecture seule, commandes coupées, `edit_file` et `run_command` retirés, granite-278m sur
+  127.0.0.1:7979, `locks_via` = `acquireLock`, `acquireLocks`, `lockRowForWrite` (à compléter de
+  `lockIndexForWrite`). Base `~/.local/share/rag3weaver/code-rag3db-depot.rag3db`.
+- **La mesure** : `estimate` : 7 310 fichiers (62,3 Mo), ~11 min de vecteurs, tampon ~8 Gio sur
+  8. `index` par l'hôte : **12 min 27 s** (15 h 22 → 15 h 34 ; plein texte en ~30 s, 135 592
+  morceaux), base **1,2 Go + 728 Mo** de plein texte, l'hôte à **9,8 Go résidents au pic**.
+  Aucun mur. Instantané reflink de la mémoire longue avant l'index
+  (`sauvegardes/2026-10-11-15h26/`).
+- **La question du cœur** posée par le client, réponse recopiée et confrontée au source dans
+  `04-ce-qui-manque-a-un-agent-dans-cet-ide.md` : un appelant manqué sur trois, le verrou de
+  l'index absent d'`impact` (présent dans `callees`), 101 usages par le nom hors du C++.
+- **Quatre tickets produit** (`c41e53986`) : on ne peut pas arrêter un index ; l'hôte ne relit
+  pas un manifeste modifié ; pas de gabarit `code` en lecture seule ; on ne peut pas dire ce
+  qu'on indexe.
+- **La recette pour les sessions du cœur et d'hotfixs** (donnée à l'orchestration, non
+  appliquée : la configuration de Lucie n'est pas à moi), sur le modèle de
+  `templates/mcp/README.md` §6 :
+
+  ```
+  claude mcp add code-rag3db \
+    --env LD_LIBRARY_PATH=/home/lucied/git_workspaces/rag3db/build/lecteurs-csv/src \
+    --env RAG3DB_ROOT=/home/lucied/git_workspaces/rag3db \
+    --env RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979 \
+    -- /home/lucied/.local/bin/rag3weaver-backend mcp \
+       --manifest /home/lucied/.config/rag3weaver/code-rag3db/templates/backends/code/rag3db.json \
+       --keys dev
+  ```
+
+  Le client est mince : il parle à l'hôte déjà lancé (127.0.0.1:7970). L'index est fait. La base suit l'arbre principal tel qu'il était
+  à 15 h 22 : à réindexer après le rebâti de l'hôte avec les lots 5 et 6 (qualité C++).

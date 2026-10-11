@@ -34,7 +34,11 @@ poser la version.
 
 - **1, les verrous** : conçus (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`),
   témoins écrits au banc ; V1 pas commencée.
-- **2, le chargement journalisé : fait, `ff9bad960` (10 octobre 2026).** Le `COPY`
+- **2, le chargement journalisé : fait, `ff9bad960` (10 octobre 2026) ; reste fermée.** Un défaut
+  de lecture de l'amont révélé par le COPY journalisé (les exceptions ALP d'un second segment non
+  rapiécées sous une sélection filtrée : la colonne `DOUBLE` des dernières lignes d'un groupe plein
+  lue 0, et journalisée telle quelle), corrigé `eae3863ab` le 11 octobre, ticket
+  `closed/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md`. Le `COPY`
   journalisé est le défaut du moteur : plus de point de reprise forcé par `COPY`, plus
   d'attente du départ des autres à sa validation, ses lignes durables par le journal ; au-delà
   de 256 Mio de journal par transaction, repli sur le point de reprise forcé ; l'indexation
@@ -62,7 +66,7 @@ poser la version.
   `closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`). Deux témoins
   restent probabilistes : `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et
   `TwentyRowsToTheSameVectorInOneStatement`, qui relève des groupes de copies.
-  **La condition 4 n'est pas fermée.** Côté moteur, cinq tickets restent ouverts avec la gravité
+  **La condition 4 n'est pas fermée.** Côté moteur, quatre tickets restent ouverts avec la gravité
   « perte » ou « réponse fausse » (la recherche qui ne rendait plus qu'une ligne après des
   annulations et des mises à jour est fermée le 11 octobre par les correctifs de `bfc1434e1`,
   témoin vert sur I1 rebasée :
@@ -71,12 +75,19 @@ poser la version.
     (`2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md`) ;
   - la validation à moitié appliquée
     (`2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md`) ;
-  - C7 après un arrêt brutal (`2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md`) ;
+  - ~~C7 après un arrêt brutal~~ — fermé le 11 octobre (`HASH_C7`, le `DETACH DELETE` rejoué perdait la
+    seconde relation d'un lot ; atteignable à un seul écrivain, corrigé) ;
   - le COPY refusé pour mémoire, avec un filet côté rag3weaver
     (`2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md`) ;
   - les grands groupes de copies (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`).
-  Les 21 autres tickets de même gravité sont côté produit (rendez-vous, codeparsers). Lucie dira
-  s'ils comptent pour la stèle du moteur ou pour celle du produit.
+  Les 21 autres tickets de même gravité sont côté produit (rendez-vous, codeparsers). **Décision
+  de Lucie (11 octobre)** : ils vont à une stèle du produit, distincte, que l'arbre principal
+  écrit avec codeparsers.
+
+**Les tickets sur lesquels se juge cette stèle** : la table « Ouverts — moteur » de
+`docs/tickets/README.md`. Un ticket y entre si son correctif vit dans `src/`, dans une extension
+C++ du moteur ou dans son harnais de test ; ceux du produit sont dans la table « Ouverts —
+produit » (11 octobre 2026).
 
 ## 3. Ce qui reste à faire pour que la stèle soit utilisable
 

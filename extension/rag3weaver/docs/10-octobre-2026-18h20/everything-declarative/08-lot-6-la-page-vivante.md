@@ -105,10 +105,10 @@ jouée par Lucie.
 
 ## 4. Ce qui reste
 
-- `declare` et la montre passeront par la porte de la session mémoire
-  (`apply_reload_with_reactions`) dès sa fusion : sur un manifeste à réactions,
-  les réactions de l'ancienne version doivent s'arrêter et remonter. Le jouet
-  n'en déclare pas.
+- ~~`declare` et la montre par la porte de la session mémoire~~ fait le
+  11 octobre (`apply_reload_with_reactions`) : les réactions de l'ancienne
+  version s'arrêtent et remontent ; le journal dit les curseurs oubliés et les
+  erreurs des réactions arrêtées.
 - Le retour en arrière d'une déclaration ; plusieurs sessions de chat ;
   mermaid embarqué ; la surbrillance d'un nœud scripté touché (aujourd'hui :
   le graphe de la route montrée).

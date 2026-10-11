@@ -608,7 +608,12 @@ void ClientContext::TransactionHelper::runFuncInTransaction(TransactionContext& 
     } catch (std::exception&) {
         if (isTransactionStatement) {
             // A COMMIT or ROLLBACK that fails ends the block: there is nothing left to close.
-            context.rollback();
+            // But a BEGIN or CHECKPOINT refused inside a failed block (marche T0: the
+            // transaction is still active, holding its locks) must not close it: only
+            // ROLLBACK or COMMIT do.
+            if (!context.isManualTransactionFailed()) {
+                context.rollback();
+            }
         } else {
             // In a BEGIN ... COMMIT block this leaves the connection refusing statements until
             // ROLLBACK, instead of silently back in auto-commit.

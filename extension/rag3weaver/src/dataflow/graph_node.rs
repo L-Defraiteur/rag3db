@@ -12,7 +12,7 @@ use super::checkpoint::GraphDefinition;
 use super::graph::DataflowGraph;
 use super::node::{Node, NodeContext};
 use super::node_registry::{NodeFactory, NodeRegistry, NodeSchema};
-use super::port::{PortDef, PortType};
+use super::port::PortDef;
 
 // ─── GraphNode ──────────────────────────────────────────────────────────────
 
@@ -78,11 +78,14 @@ impl GraphNode {
 
         let mut input_map = HashMap::new();
         let mut output_map = HashMap::new();
-        let mut input_defs: Vec<(String, PortType, bool)> = Vec::new();
-        let mut output_defs: Vec<(String, PortType, bool)> = Vec::new();
+        // Un port libre est republié **entier** sous son nom externe : son
+        // genre (Open, Finite) et sa posture traversent la frontière, sinon un
+        // flux ouvert enveloppé échapperait au refus Complete ← Open.
+        let mut inputs: Vec<PortDef> = Vec::new();
+        let mut outputs: Vec<PortDef> = Vec::new();
 
         for node_def in &definition.nodes {
-            let schema = registry.schema(&node_def.node_type).ok_or_else(|| {
+            let schema = registry.schema_for(&node_def.node_type, &node_def.config).ok_or_else(|| {
                 format!(
                     "unknown node type '{}' for inner node '{}'",
                     node_def.node_type, node_def.name
@@ -97,7 +100,7 @@ impl GraphNode {
                         ext_name.clone(),
                         (node_def.name.clone(), port.name.to_string()),
                     );
-                    input_defs.push((ext_name, port.port_type, port.required));
+                    inputs.push(PortDef { name: ext_name.into(), ..port.clone() });
                 }
             }
 
@@ -109,34 +112,10 @@ impl GraphNode {
                         ext_name.clone(),
                         (node_def.name.clone(), port.name.to_string()),
                     );
-                    output_defs.push((ext_name, port.port_type, port.required));
+                    outputs.push(PortDef { name: ext_name.into(), ..port.clone() });
                 }
             }
         }
-
-        // Les noms des ports libres sont possédés par le nœud : rien ne fuit
-        // quand il est jeté (une fabrique rebâtie, un graphe rechargé).
-        let inputs: Vec<PortDef> = input_defs
-            .iter()
-            .map(|(name, pt, req)| {
-                PortDef {
-                    name: name.clone().into(),
-                    port_type: *pt,
-                    required: *req,
-                }
-            })
-            .collect();
-
-        let outputs: Vec<PortDef> = output_defs
-            .iter()
-            .map(|(name, pt, req)| {
-                PortDef {
-                    name: name.clone().into(),
-                    port_type: *pt,
-                    required: *req,
-                }
-            })
-            .collect();
 
         Ok(Self {
             name: name.to_string(),
@@ -447,6 +426,43 @@ mod tests {
         let output_names: Vec<&str> = gn.outputs.iter().map(|p| &*p.name).collect();
         assert!(output_names.contains(&"ps.query"), "outputs: {:?}", output_names);
         assert!(output_names.contains(&"ps.meta"), "outputs: {:?}", output_names);
+    }
+
+    /// **Le genre et la posture traversent la frontière d'un sous-graphe** :
+    /// un flux ouvert enveloppé reste ouvert, et le refus Complete ← Open
+    /// s'applique encore au graphe qui l'emploie.
+    #[test]
+    fn graph_node_keeps_kind_and_posture_of_free_ports() {
+        use crate::dataflow::port::{PortKind, PortType, Posture};
+        struct StreamFactory;
+        impl NodeFactory for StreamFactory {
+            fn create(&self, _: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+                Err("le schéma suffit à ce témoin".into())
+            }
+            fn node_type(&self) -> &str {
+                "Stream"
+            }
+            fn schema(&self) -> NodeSchema {
+                NodeSchema {
+                    node_type: "Stream".into(),
+                    description: "".into(),
+                    inputs: vec![PortDef::value("in", PortType::Results, true).posture(Posture::PerElement)],
+                    outputs: vec![PortDef::value("out", PortType::Results, false).stream(PortKind::Open)],
+                    config_params: vec![],
+                }
+            }
+        }
+        let mut registry = NodeRegistry::new();
+        registry.register(Box::new(StreamFactory));
+        let def = GraphDefinition {
+            nodes: vec![NodeDef { name: "s".into(), node_type: "Stream".into(), config: serde_json::json!({}) }],
+            edges: vec![],
+        };
+        let gn = GraphNode::from_definition("wrapped", def, Arc::new(registry)).unwrap();
+        let out = gn.outputs.iter().find(|p| p.name == "s.out").expect("s.out libre");
+        assert_eq!((out.kind, out.required), (PortKind::Open, false));
+        let inp = gn.inputs.iter().find(|p| p.name == "s.in").expect("s.in libre");
+        assert_eq!((inp.posture, inp.required), (Posture::PerElement, true));
     }
 
     // ── Test 3: empty definition errors ──────────────────────────────

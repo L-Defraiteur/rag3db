@@ -28,6 +28,7 @@ add_library(rag3db_common
         sha256.cpp
         string_utils.cpp
         system_message.cpp
+        test_hooks.cpp
         type_utils.cpp
         utils.cpp
         windows_utils.cpp)

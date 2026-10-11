@@ -711,10 +711,12 @@ impl Node for VectorSearchNode {
         let (filter_where, filter_params, filter_match) =
             match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
                 Some(catalog) => {
-                    let compiled = catalog
-                        .lock()
-                        .unwrap()
-                        .compile_filter_for_vector(&target.parent_table, options.filter_condition.as_ref());
+                    // La cellule de la requête (ses services), pas celle du
+                    // catalogue : marche 1 bis, pas b.
+                    let guard = catalog.lock().unwrap();
+                    let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| guard.scope().clone());
+                    let compiled = guard.compile_filter_for_vector_in(&cell, &target.parent_table, options.filter_condition.as_ref());
+                    drop(guard);
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {

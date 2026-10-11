@@ -66,6 +66,15 @@ et rien n'établit qu'il y soit pour quelque chose ; le compte détaillé de l'e
 été gardé. Il rejoint `ZeroIndexFirstCopy` dans `probabilistic.txt` : un probabiliste de plus
 est un aveu, pas une solution — la cause reste celle de ce ticket.
 
+**Une troisième occurrence, le 11 octobre à 13 h 30** : `ZeroRowsFirstLineByLine` (le vecteur
+nul, lignes avant l'index, une à une ; 1 222 attendues sur 1 402, rouge connu) **passe au vert une
+fois**, dans la comparaison du banc jouée seule sur luciepc (tenue exclusive) sur la branche de C7
+rebasée sur A7 — « known red turned green ». La comparaison rejouée aussitôt, même bâti, le
+retrouve rouge (6 rouges comparés / 252 verts, conforme). C7 ne touche que le rejeu du journal
+(aucun rejeu dans ce cas) : non attribué, comme le précédent. Un rouge connu qui verdit une fois
+sur deux passes est la même information que les deux instables : le compte des joignables dépend
+du tirage des niveaux, et ce cas-ci est près de sa borne. Il garde sa ligne dans `known_red.txt`.
+
 ## Cause
 
 L'élagage retenu (`selectNeighbours`, `hnsw_index.cpp`) garde au plus la moitié du degré en

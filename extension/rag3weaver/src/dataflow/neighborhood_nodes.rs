@@ -141,15 +141,17 @@ pub struct NeighborhoodReport {
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
-/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+/// Le texte d'avant le dialecte, gardé pour la parité des tests — les noms
+/// cités comme le dialecte rag3db les cite.
 #[cfg(test)]
 fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
+    let q = crate::dialect::cypher_quote;
     let s = &cfg.start;
-    let mut c = vec![format!("{alias}._uuid"), format!("{alias}.{}", s.title), format!("{alias}.{}", s.kind_field)];
-    c.extend(s.path_fields.iter().map(|p| format!("{alias}.{p}")));
-    c.push(format!("{alias}.{}", s.line_field));
+    let mut c = vec![format!("{alias}.{}", q("_uuid")), format!("{alias}.{}", q(&s.title)), format!("{alias}.{}", q(&s.kind_field))];
+    c.extend(s.path_fields.iter().map(|p| format!("{alias}.{}", q(p))));
+    c.push(format!("{alias}.{}", q(&s.line_field)));
     for f in [&cfg.group_by, &cfg.label_field, &cfg.note_field] {
-        c.push(if f.is_empty() { "NULL".into() } else { format!("{alias}.{f}") });
+        c.push(if f.is_empty() { "NULL".into() } else { format!("{alias}.{}", q(f)) });
     }
     c.join(", ")
 }
@@ -230,10 +232,20 @@ impl Moteur<'_> {
             return Ok(Vec::new());
         }
         let liste = CypherValue::List(depuis.iter().map(|u| CypherValue::String(u.clone())).collect());
+        // Un saut par relation, sur la même liste : un éventail, une
+        // instruction quand le dialecte sait le fondre (`crate::plan`).
+        let mut plan = rag3weaver_ir::Plan::new();
+        for (k, rel) in self.rels.iter().enumerate() {
+            let id = format!("r{k}");
+            plan = plan
+                .node(&id, rag3weaver_ir::Form::Hop(hop_of(self.cfg, rel, self.cfg.direction)), vec![QueryParam::new("uuids", liste.clone())])
+                .output(&id);
+        }
+        let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
+        let mut rapport = self.catalog.run_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
         let mut out = Vec::new();
-        for rel in &self.rels {
-            let q = self.catalog.dialect_arc().hop(&hop_of(self.cfg, rel, self.cfg.direction)).map_err(|e| format!("NeighborhoodNode: {e}"))?;
-            let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(Self::err)?;
+        for (k, rel) in self.rels.iter().enumerate() {
+            let rows = rapport.outputs.remove(&format!("r{k}")).unwrap_or_default();
             for r in &rows.rows {
                 let de = texte(r.first());
                 let mut m = reached_from(r, 1, self.cfg);
@@ -346,7 +358,16 @@ pub fn neighborhood_of(
 
     // Le départ et le premier saut : comme `usages`, en union avec le
     // rendez-vous (dans le sens entrant seulement : c'est un usage).
-    let usages = usages_of(catalog, &cfg.start, name, path_prefix)?;
+    // En sortant, seules les définitions servent : les usages (arêtes
+    // directes entrantes, rendez-vous) ne sont lus que dans le sens entrant.
+    // Les lignes rendues avant et après sont les mêmes (empreintes des
+    // lignes triées, `tests/e2e_mesure_impact.rs`, 11 octobre 2026).
+    let depart = if cfg.direction == Direction::Incoming {
+        std::borrow::Cow::Borrowed(&cfg.start)
+    } else {
+        std::borrow::Cow::Owned(UsagesConfig { direct: Vec::new(), used_by: None, ..cfg.start.clone() })
+    };
+    let usages = usages_of(catalog, &depart, name, path_prefix)?;
     let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
@@ -927,7 +948,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             node_type: "NeighborhoodNode".into(),
             description: "The neighbourhood of a thing by levels: what depends on it directly, then at two and three hops, along declared relations, with a node budget, a degree cap that shows hubs without traversing them, a grouping field, and an optional extra start reached by a declared path (rendered apart).".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 p("pivot", S, true, None, "Entité de rendez-vous du départ (ex. Symbol)"),
                 p("key", S, true, None, "Champ d'identité du pivot"),
@@ -1009,7 +1030,7 @@ mod tests_saut {
 
     /// La requête que `hop_query` écrivait avant de passer par le dialecte.
     fn requete_d_avant(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
-        let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
+        let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", crate::dialect::cypher_quote(&cfg.start.line)) } else { "NULL".into() };
         format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
     }
 
@@ -1037,9 +1058,9 @@ mod tests_saut {
         let r = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Scope".into(), props: vec![] };
         for d in [Direction::Incoming, Direction::Outgoing] {
             let mut h = super::super::graph_walk::hop_of(&r, d, &EdgeMark::default());
-            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid", d.pattern(&r)));
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m.`_uuid`", d.pattern(&r)));
             h.returns.push(Column::Node("name".into()));
-            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid, m.name", d.pattern(&r)));
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m.`_uuid`, m.`name`", d.pattern(&r)));
         }
     }
 }

@@ -24,12 +24,11 @@ use rag3weaver::Rag3dbConnection;
 const TRAVAUX: i64 = 40;
 const ADRESSE_ENFANT: &str = "RAG3WEAVER_ENFANT_ADRESSE";
 
-fn port_libre() -> String {
-    let e = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-    let a = e.local_addr().unwrap().to_string();
-    drop(e);
-    a
-}
+/// **Le port nul** : le démon se lie lui-même et dit l'adresse qu'il a prise
+/// (`serveur::LIGNE_ADRESSE`), le lanceur la lit et la rend dans l'attache.
+/// Plus de port « libre » choisi d'avance, que quelqu'un d'autre pouvait prendre
+/// avant le démon (ticket du 11 octobre 2026).
+const PORT_NUL: &str = "127.0.0.1:0";
 
 /// La requête de prise : le premier travail libre, marqué au nom du preneur.
 fn prise(qui: &str) -> String {
@@ -73,7 +72,6 @@ fn deux_processus_partagent_la_base_par_le_demon() {
         std::process::exit(0);
     }
 
-    let adresse = port_libre();
     let dossier = std::env::temp_dir().join(format!(
         "rag3weaver-rag3daemon-{}-{}",
         std::process::id(),
@@ -85,7 +83,7 @@ fn deux_processus_partagent_la_base_par_le_demon() {
     let journal = std::env::temp_dir().join("rag3weaver-e2e-rag3daemon");
 
     let serveur = DaemonConnection::serveur(
-        &adresse,
+        PORT_NUL,
         env!("CARGO_BIN_EXE_rag3daemon"),
         dossier.to_string_lossy(),
     )
@@ -99,6 +97,7 @@ fn deux_processus_partagent_la_base_par_le_demon() {
             journal.join("rag3daemon.log").display()
         )
     });
+    let adresse = parent.adresse().to_string();
     assert_eq!(parent.identite().base, dossier.to_string_lossy());
 
     // ── Le mur est toujours là ────────────────────────────────────────────
@@ -129,7 +128,7 @@ fn deux_processus_partagent_la_base_par_le_demon() {
         // `--ignored` : l'enfant relance ce test, qui porte désormais l'attribut.
         // Sans ça il ne joue rien, et le parent lit son silence comme « il n'a
         // rien pris » — un échec qui accuserait le partage au lieu du montage.
-        .args(["--exact", "deux_processus_partagent_la_base_par_le_demon", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("deux_processus_partagent_la_base_par_le_demon"), "--nocapture", "--ignored"])
         .env(ADRESSE_ENFANT, &adresse)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -200,7 +199,6 @@ fn deux_processus_partagent_la_base_par_le_demon() {
 fn un_lecteur_choisit_son_chemin_et_le_dit() {
     use rag3weaver::acces::{ouvrir_lecteur, Acces, Chemin};
 
-    let adresse = port_libre();
     let dossier = std::env::temp_dir().join(format!(
         "rag3weaver-acces-{}-{}",
         std::process::id(),
@@ -212,7 +210,7 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
     let journal = std::env::temp_dir().join("rag3weaver-e2e-acces");
 
     let serveur = DaemonConnection::serveur(
-        &adresse,
+        PORT_NUL,
         env!("CARGO_BIN_EXE_rag3daemon"),
         dossier.to_string_lossy(),
     )
@@ -222,6 +220,15 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
     // Le démon tient la base et y écrit : c'est la scène qui compte.
     let ecrivain = DaemonConnection::assurer(&serveur)
         .unwrap_or_else(|e| panic!("assurer : {e}\n  journal : {}", journal.join("rag3daemon.log").display()));
+    // Un port nul lance toujours un nouveau démon : pour s'attacher ensuite à
+    // celui-ci, on le décrit par l'adresse qu'il a prise.
+    let serveur = DaemonConnection::serveur(
+        ecrivain.adresse(),
+        env!("CARGO_BIN_EXE_rag3daemon"),
+        dossier.to_string_lossy(),
+    )
+    .journal_dans(&journal)
+    .fin(Fin::Arreter);
     ecrivain
         .execute("CREATE NODE TABLE Note(id INT64, texte STRING, PRIMARY KEY(id))")
         .expect("table");
@@ -295,13 +302,13 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
 #[ignore]
 fn le_demon_dont_la_base_doit_etre_rouverte_repond_puis_s_arrete() {
     use rag3weaver::connection::REOPEN_AFTER_FAILED_CHECKPOINT;
-    let adresse = port_libre();
     let journal = std::env::temp_dir().join(format!("rag3weaver-e2e-rag3daemon-rouvrir-{}", std::process::id()));
-    let serveur = DaemonConnection::serveur(&adresse, env!("CARGO_BIN_EXE_rag3daemon"), ":memoire:")
+    let serveur = DaemonConnection::serveur(PORT_NUL, env!("CARGO_BIN_EXE_rag3daemon"), ":memoire:")
         .journal_dans(&journal)
         .env("RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_REQUEST", "2")
         .fin(Fin::Arreter);
     let client = DaemonConnection::assurer(&serveur).expect("assurer");
+    let adresse = client.adresse().to_string();
     assert!(client.execute("RETURN 1").is_ok(), "la première requête est servie");
     let err = client.execute("RETURN 2").unwrap_err().to_string();
     assert!(err.contains(REOPEN_AFTER_FAILED_CHECKPOINT), "le nom traverse le fil : {err}");

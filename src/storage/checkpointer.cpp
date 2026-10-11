@@ -5,6 +5,7 @@
 #include "storage/checkpoint_profile.h"
 
 #include "catalog/catalog.h"
+#include "common/test_hooks.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
@@ -228,6 +229,8 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     // system crashes before this point, the WAL can still be used to recover the system to a
     // state where the checkpoint can be redone.
     wal->logAndFlushCheckpoint(&clientContext);
+    common::TestHooks::dieIfAt(clientContext.getDBConfig()->testDiePoint,
+        common::TestDiePoint::CHECKPOINT_LOGGED);
     const auto walMs = profile.lap();
     shadowFile.applyShadowPages(clientContext);
     const auto applyMs = profile.lap();

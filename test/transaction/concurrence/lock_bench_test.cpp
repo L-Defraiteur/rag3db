@@ -982,7 +982,9 @@ TEST_F(IndexLockBench, AnnouncedWritersOfOneIndexedTableWaitThenBothCommit) {
     }
     EXPECT_EQ(errors, 0u) << "[check: no-error] ";
     EXPECT_EQ(totalCommits(area), 2u) << "[check: both-commit] ";
-    EXPECT_GT(eventIndex(area, 1, "announce:done"), eventIndex(area, 0, "commit:done"))
+    // Le verrou est rendu pendant le COMMIT du premier (clearTransactionNoLock → releaseAll) ;
+    // l'attente se prouve contre le début de sa validation, comme expectWaited (end:start).
+    EXPECT_GT(eventIndex(area, 1, "announce:done"), eventIndex(area, 0, "commit:start"))
         << "[check: in-turn] the second announcement must wait for the first commit";
     expectIntegrity();
 }

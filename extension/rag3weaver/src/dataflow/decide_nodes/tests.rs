@@ -1,0 +1,418 @@
+//! Les témoins de `Decide` et `Route` (lot 2 des agents qui se parlent).
+use super::*;
+use crate::dataflow::checkpoint::{EdgeDef, GraphDefinition, NodeDef};
+use crate::dataflow::graph::DataflowGraph;
+use crate::dataflow::node_factories::register_builtins;
+use crate::dataflow::report::NodeStatus;
+use crate::dataflow::runtime::{DataflowOutput, DataflowRuntime};
+use crate::dataflow::{ExecutionReport, NodeRegistry, ServiceRegistry};
+use crate::decider::MockDecider;
+use crate::llm::{CallbackLlm, MockLlm};
+use std::sync::Mutex;
+
+/// Les intégrés, et `Pass` : un nœud scripté à entrée **requise** — l'aval
+/// d'une branche non prise est sauté, pas lancé sans valeur (l'entrée de
+/// `RhaiNode` est optionnelle, il tournerait).
+fn registry() -> NodeRegistry {
+    use crate::dataflow::scripted_node::{DeclaredPort, ScriptedNodeDecl, ScriptedNodeFactory};
+    let mut r = NodeRegistry::new();
+    register_builtins(&mut r);
+    let port = |name: &str| DeclaredPort { name: name.into(), schema: json!({}), required: true };
+    let pass = ScriptedNodeDecl {
+        name: "Pass".into(),
+        description: "rend son entrée".into(),
+        language: "rhai".into(),
+        source: "#{out: input.inputs.msg}".into(),
+        inputs: vec![port("msg")],
+        outputs: vec![port("out")],
+        config: vec![],
+    };
+    r.register(Box::new(ScriptedNodeFactory::new(pass, Default::default()).unwrap()));
+    r
+}
+
+/// `source` (rhai, rend `element`) → `node` (le nœud essayé) → un `Pass`
+/// derrière chaque sortie nommée dans `after`.
+fn graph(element: Value, node_type: &str, config: Value, after: &[&str]) -> GraphDefinition {
+    let mut nodes = vec![
+        NodeDef {
+            name: "source".into(),
+            node_type: "RhaiNode".into(),
+            config: json!({"script": "input", "value": element}),
+        },
+        NodeDef { name: "node".into(), node_type: node_type.into(), config },
+    ];
+    let mut edges = vec![EdgeDef {
+        from_node: "source".into(),
+        from_port: "result".into(),
+        to_node: "node".into(),
+        to_port: "element".into(),
+    }];
+    for port in after {
+        nodes.push(NodeDef { name: format!("after_{port}"), node_type: "Pass".into(), config: json!({}) });
+        edges.push(EdgeDef {
+            from_node: "node".into(),
+            from_port: (*port).into(),
+            to_node: format!("after_{port}"),
+            to_port: "msg".into(),
+        });
+    }
+    GraphDefinition { nodes, edges }
+}
+
+fn run(def: &GraphDefinition, services: ServiceRegistry) -> Result<(DataflowOutput, ExecutionReport), String> {
+    let registry = registry();
+    let mut g = DataflowGraph::from_definition(def, &registry)?;
+    DataflowRuntime::with_services_arc(100, Arc::new(services)).execute_with_report(&mut g)
+}
+
+fn json_at(out: &DataflowOutput, node: &str, port: &str) -> Option<Value> {
+    out.get(node, port).and_then(|v| v.downcast::<Value>()).cloned()
+}
+
+fn status(report: &ExecutionReport, node: &str) -> NodeStatus {
+    report.nodes.iter().find(|n| n.name == node).map(|n| n.status.clone()).expect(node)
+}
+
+// ── Route ──────────────────────────────────────────────────────────────
+
+/// **Chaque élément part sur le port de sa clé** ; l'aval des autres ports
+/// est sauté et dit, pas en échec.
+#[test]
+fn route_sends_the_element_to_its_port_and_skips_the_others() {
+    let def = graph(
+        json!({"content": "comment indexer ?", "label": "question"}),
+        "Route",
+        json!({"routes": "question|bavardage"}),
+        &["question", "bavardage", OTHER],
+    );
+    let (out, report) = run(&def, ServiceRegistry::new()).unwrap();
+    assert!(matches!(status(&report, "after_question"), NodeStatus::Completed));
+    for skipped in ["after_bavardage", "after_other"] {
+        assert!(matches!(status(&report, skipped), NodeStatus::Skipped { .. }), "{skipped}");
+    }
+    assert_eq!(
+        json_at(&out, "after_question", "out"),
+        Some(json!({"content": "comment indexer ?", "label": "question"}))
+    );
+}
+
+/// Une clé hors liste, ou absente, part sur `other` ; `key` choisit le champ.
+#[test]
+fn route_sends_an_unknown_key_to_other() {
+    for (element, config) in [
+        (json!({"label": "insulte"}), json!({"routes": ["question"]})),
+        (json!({"content": "x"}), json!({"routes": ["question"]})),
+        (json!({"kind": "question", "label": "autre"}), json!({"routes": ["autre"], "key": "kind"})),
+    ] {
+        let def = graph(element.clone(), "Route", config, &[OTHER]);
+        let (out, _) = run(&def, ServiceRegistry::new()).unwrap();
+        assert_eq!(json_at(&out, "after_other", "out"), Some(element));
+    }
+}
+
+/// **Les sorties sont les routes** : le schéma les lit dans la
+/// configuration, toutes optionnelles ; une route vide, en double ou
+/// réservée est refusée à la construction.
+#[test]
+fn route_ports_come_from_its_configuration() {
+    let factory = RouteNodeFactory;
+    let names = |s: NodeSchema| -> Vec<(String, bool)> {
+        s.outputs.iter().map(|p| (p.name.to_string(), p.required)).collect()
+    };
+    assert_eq!(
+        names(factory.schema_for(&json!({"routes": "a|b"}))),
+        [("a".to_string(), false), ("b".to_string(), false), ("other".to_string(), false)]
+    );
+    assert_eq!(names(factory.schema()), [("other".to_string(), false)]);
+    let node = factory.create("r", &json!({"routes": ["a", "b"]})).unwrap();
+    assert_eq!(
+        node.outputs().iter().map(|p| p.name.to_string()).collect::<Vec<_>>(),
+        ["a", "b", "other"]
+    );
+    for bad in [json!({}), json!({"routes": "a||b"}), json!({"routes": "a|a"}), json!({"routes": "other"})] {
+        assert!(factory.create("r", &bad).is_err(), "{bad}");
+    }
+    // Le registre aussi.
+    let r = registry();
+    assert_eq!(r.schema_for("Route", &json!({"routes": "x"})).unwrap().outputs.len(), 2);
+}
+
+/// `Route` dans un graphe mermaid, une route pour résultat.
+#[test]
+fn route_reads_its_routes_from_mermaid() {
+    let def = crate::dataflow::parse_mermaid(
+        "graph LR\n    src[\"RhaiNode(script='input')\"]\n    r[\"Route(routes='question|bavardage')\"]\n    src -->|result:element| r\n",
+    )
+    .unwrap();
+    let route = def.nodes.iter().find(|n| n.name == "r").unwrap();
+    assert_eq!(route.config["routes"], "question|bavardage");
+}
+
+// ── Decide ─────────────────────────────────────────────────────────────
+
+fn with_llm(llm: CallbackLlm) -> ServiceRegistry {
+    let mut s = ServiceRegistry::new();
+    s.register(crate::dataflow::LLM_SERVICE, Arc::new(llm) as Arc<dyn Llm>);
+    s
+}
+
+/// **Par le modèle de génération** : un schéma à `enum` est demandé, le texte
+/// à classer est le champ dit, et l'étiquette est posée sur l'élément.
+#[test]
+fn decide_by_llm_asks_a_schema_and_labels_the_element() {
+    let asked = Arc::new(Mutex::new(None));
+    let a = asked.clone();
+    let llm = CallbackLlm::new("classe", 4096, move |turns, opts, sink| {
+        *a.lock().unwrap() = Some((turns.last().unwrap().content.clone(), opts.response_format.clone()));
+        MockLlm::new(r#"{"label": "question"}"#).generate(turns, opts, sink)
+    });
+    let def = graph(
+        json!({"from": "ami", "content": "comment indexer ?"}),
+        "Decide",
+        json!({"labels": "question|bavardage", "field": "content"}),
+        &[],
+    );
+    let (out, _) = run(&def, with_llm(llm)).unwrap();
+    assert_eq!(
+        json_at(&out, "node", "element"),
+        Some(json!({"from": "ami", "content": "comment indexer ?", "label": "question"}))
+    );
+    let (text, format) = asked.lock().unwrap().clone().unwrap();
+    assert_eq!(text, "comment indexer ?");
+    match format {
+        Some(ResponseFormat::JsonSchema { schema, .. }) => {
+            assert_eq!(schema["properties"]["label"]["enum"], json!(["question", "bavardage"]));
+        }
+        other => panic!("une sortie structurée attendue : {other:?}"),
+    }
+}
+
+/// Un modèle qui ignore la sortie structurée et rend l'étiquette nue est lu ;
+/// une étiquette hors liste fait échouer le nœud en la nommant.
+#[test]
+fn decide_by_llm_reads_a_bare_label_and_refuses_one_off_the_list() {
+    let def = graph(json!("lol"), "Decide", json!({"labels": ["question", "bavardage"]}), &[]);
+    let bare = CallbackLlm::new("nu", 4096, |t, o, s| MockLlm::new("bavardage").generate(t, o, s));
+    let (out, _) = run(&def, with_llm(bare)).unwrap();
+    assert_eq!(json_at(&out, "node", "element"), Some(json!({"value": "lol", "label": "bavardage"})));
+
+    let off = CallbackLlm::new("hors", 4096, |t, o, s| MockLlm::new(r#"{"label": "insulte"}"#).generate(t, o, s));
+    let err = run(&def, with_llm(off)).unwrap_err();
+    assert!(err.contains("insulte") && err.contains("question, bavardage"), "{err}");
+}
+
+/// **Par le `Decider`** quand il est servi : l'étiquette la plus probable,
+/// et sa probabilité, posées sous `as`.
+#[test]
+fn decide_by_decider_takes_the_most_likely_label() {
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(MockDecider(vec![0.2, 0.7, 0.1])) as Arc<dyn Decider>);
+    let def = graph(
+        json!({"content": "x"}),
+        "Decide",
+        json!({"labels": "a|b|c", "as": "kind"}),
+        &[],
+    );
+    let (out, _) = run(&def, s).unwrap();
+    assert_eq!(json_at(&out, "node", "element"), Some(json!({"content": "x", "kind": "b", "kind_probability": 0.7})));
+}
+
+/// `via` force une voie ; sans service, le nœud le dit.
+#[test]
+fn decide_says_what_is_missing() {
+    let def = graph(json!("x"), "Decide", json!({"labels": "a|b", "via": "decider"}), &[]);
+    let llm = CallbackLlm::new("l", 4096, |t, o, s| MockLlm::new("a").generate(t, o, s));
+    assert!(run(&def, with_llm(llm)).unwrap_err().contains("decider"));
+    let def = graph(json!("x"), "Decide", json!({"labels": "a|b"}), &[]);
+    assert!(run(&def, ServiceRegistry::new()).unwrap_err().contains("ni 'decider' ni 'llm'"));
+    assert!(DecideNodeFactory.create("d", &json!({"labels": "a", "via": "oracle"})).is_err());
+}
+
+/// **Décider puis aiguiller** : l'exemple de Lucie en graphe — le message
+/// classé, la question vers son aval, le bavardage vers rien (sauté).
+#[test]
+fn decide_then_route_classifies_and_routes() {
+    for (content, taken, skipped) in [
+        ("comment indexer ?", "after_question", "after_other"),
+        ("lol", "after_other", "after_question"),
+    ] {
+        let llm = CallbackLlm::new("classe", 4096, |turns, opts, sink| {
+            let label = if turns.last().unwrap().content.contains('?') { "question" } else { "bavardage" };
+            MockLlm::new(&format!(r#"{{"label": "{label}"}}"#)).generate(turns, opts, sink)
+        });
+        let mut def = graph(
+            json!({"from": "ami", "content": content}),
+            "Decide",
+            json!({"labels": "question|bavardage", "field": "content"}),
+            &[],
+        );
+        def.nodes.push(NodeDef { name: "route".into(), node_type: "Route".into(), config: json!({"routes": "question"}) });
+        def.edges.push(EdgeDef { from_node: "node".into(), from_port: "element".into(), to_node: "route".into(), to_port: "element".into() });
+        for port in ["question", OTHER] {
+            def.nodes.push(NodeDef { name: format!("after_{port}"), node_type: "Pass".into(), config: json!({}) });
+            def.edges.push(EdgeDef { from_node: "route".into(), from_port: port.into(), to_node: format!("after_{port}"), to_port: "msg".into() });
+        }
+        let (out, report) = run(&def, with_llm(llm)).unwrap();
+        assert!(matches!(status(&report, taken), NodeStatus::Completed), "{content}");
+        assert!(matches!(status(&report, skipped), NodeStatus::Skipped { .. }), "{content}");
+        assert_eq!(json_at(&out, taken, "out").unwrap()["content"], content);
+    }
+}
+
+// ── Relecture de la recherche ──────────────────────────────────────────
+
+/// Un `Decider` qui rend ce qu'on lui dit, quel que soit le nombre d'options.
+struct Fixed(Vec<f64>);
+
+impl Decider for Fixed {
+    fn decide_at(&self, _: &str, _: &[String], _: f64) -> Result<Vec<f64>, crate::decider::DecideError> {
+        Ok(self.0.clone())
+    }
+}
+
+/// **Autant de probabilités que d'étiquettes**, sinon une erreur qui donne
+/// les deux nombres : plus, l'index sortait des bornes (panique) ; moins,
+/// des étiquettes étaient ignorées en silence.
+#[test]
+fn decide_refuses_a_decider_that_miscounts() {
+    for probs in [vec![0.1, 0.2, 0.7], vec![0.9]] {
+        let n = probs.len();
+        let mut s = ServiceRegistry::new();
+        s.register(DECIDER_SERVICE, Arc::new(Fixed(probs)) as Arc<dyn Decider>);
+        let def = graph(json!("x"), "Decide", json!({"labels": "a|b"}), &[]);
+        let err = run(&def, s).unwrap_err();
+        assert!(err.contains(&format!("{n} probabilité")) && err.contains("2 étiquettes"), "{err}");
+    }
+}
+
+/// **Une liste vide est refusée** à la construction, pour `Decide` comme pour
+/// `Route` ; une route qui n'est pas un nom de port (« : », espace, « | »)
+/// ne se brancherait pas depuis le mermaid : refusée en la nommant.
+#[test]
+fn empty_lists_and_unbranchable_routes_are_refused() {
+    let decide = DecideNodeFactory.create("d", &json!({"labels": []}));
+    assert!(decide.as_ref().err().is_some_and(|e| e.contains("vide")), "{:?}", decide.err());
+    let route = RouteNodeFactory.create("r", &json!({"routes": []}));
+    assert!(route.as_ref().err().is_some_and(|e| e.contains("vide")), "{:?}", route.err());
+    for bad in ["a b", "a:b", "é-t"] {
+        let err = RouteNodeFactory.create("r", &json!({"routes": [bad]})).err().unwrap_or_default();
+        assert!(err.contains(bad), "« {bad} » doit être refusée en la nommant : {err:?}");
+    }
+    assert!(RouteNodeFactory.create("r", &json!({"routes": ["question_2"]})).is_ok());
+}
+
+/// **Un `Decide` repris classe comme l'original** : sa configuration
+/// entière (les cinq paramètres) passe par `to_definition`, dont se sert la
+/// reprise sur point de reprise.
+#[test]
+fn decide_keeps_its_whole_configuration_through_a_definition() {
+    let config = json!({"labels": ["a", "b"], "instruction": "dis", "prompt": "{text} ?", "field": "content", "as": "kind", "via": "llm"});
+    let def = GraphDefinition {
+        nodes: vec![NodeDef { name: "d".into(), node_type: "Decide".into(), config: config.clone() }],
+        edges: vec![],
+    };
+    let g = DataflowGraph::from_definition(&def, &registry()).unwrap();
+    assert_eq!(g.to_definition().nodes[0].config, config);
+    let route = json!({"routes": ["a"], "key": "kind"});
+    let def = GraphDefinition {
+        nodes: vec![NodeDef { name: "r".into(), node_type: "Route".into(), config: route.clone() }],
+        edges: vec![],
+    };
+    let g = DataflowGraph::from_definition(&def, &registry()).unwrap();
+    assert_eq!(g.to_definition().nodes[0].config, route);
+}
+
+/// La probabilité se range **à côté de l'étiquette**, sous `<as>_probability` :
+/// un champ `probability` de l'élément n'est pas écrasé.
+#[test]
+fn the_probability_key_follows_as() {
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(MockDecider(vec![0.4, 0.6])) as Arc<dyn Decider>);
+    let def = graph(json!({"probability": "à garder"}), "Decide", json!({"labels": "a|b"}), &[]);
+    let (out, _) = run(&def, s).unwrap();
+    assert_eq!(
+        json_at(&out, "node", "element"),
+        Some(json!({"probability": "à garder", "label": "b", "label_probability": 0.6}))
+    );
+}
+
+
+// ── Le gabarit (pour le banc de la mémoire) ────────────────────────────
+
+/// Un `Decider` qui garde le texte reçu.
+struct Seen(Arc<Mutex<Vec<String>>>);
+
+impl Decider for Seen {
+    fn decide_at(&self, prompt: &str, options: &[String], _: f64) -> Result<Vec<f64>, crate::decider::DecideError> {
+        self.0.lock().unwrap().push(prompt.to_string());
+        Ok(options.iter().enumerate().map(|(i, _)| if i == 0 { 0.8 } else { 0.2 }).collect())
+    }
+}
+
+const CHATML: &str = "<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\nRéponds {labels}.\n{text}<|im_end|>\n<|im_start|>assistant\n";
+
+/// **Le decider reçoit exactement le gabarit rendu** : les trois trous
+/// remplis, aucune ligne ajoutée devant ni derrière.
+#[test]
+fn the_decider_receives_exactly_the_rendered_template() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(Seen(seen.clone())) as Arc<dyn Decider>);
+    let def = graph(
+        json!({"fiche": "le WAL casse sur arrêt brutal", "sujet": "rag3db"}),
+        "Decide",
+        json!({"labels": "yes|no", "field": "fiche", "instruction": "La fiche parle-t-elle du sujet ?", "prompt": CHATML}),
+        &[],
+    );
+    let (out, _) = run(&def, s).unwrap();
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        ["<|im_start|>system\nLa fiche parle-t-elle du sujet ?<|im_end|>\n<|im_start|>user\nRéponds yes, no.\nle WAL casse sur arrêt brutal<|im_end|>\n<|im_start|>assistant\n"]
+    );
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "yes");
+}
+
+/// Sur la voie du llm, le gabarit rendu **est** le tour `user`.
+#[test]
+fn on_the_llm_way_the_template_is_the_user_turn() {
+    let read = Arc::new(Mutex::new(String::new()));
+    let r = read.clone();
+    let llm = CallbackLlm::new("l", 4096, move |turns, opts, sink| {
+        *r.lock().unwrap() = turns.last().unwrap().content.clone();
+        MockLlm::new(r#"{"label": "no"}"#).generate(turns, opts, sink)
+    });
+    let def = graph(json!("x"), "Decide", json!({"labels": "yes|no", "prompt": "Q: {text} ({labels})"}), &[]);
+    let (out, _) = run(&def, with_llm(llm)).unwrap();
+    assert_eq!(*read.lock().unwrap(), "Q: x (yes, no)");
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "no");
+}
+
+
+/// **Une seule passe** : une instruction qui contient « {text} » ou
+/// « {labels} » littéralement n'est pas réécrite ; une accolade de JSON n'est
+/// pas un trou.
+#[test]
+fn the_template_is_filled_in_one_pass() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(Seen(seen.clone())) as Arc<dyn Decider>);
+    let def = graph(
+        json!("la fiche"),
+        "Decide",
+        json!({"labels": "yes|no", "instruction": "réponds sur {text} et {labels}", "prompt": "{instruction} | {\"label\": x} | {text}"}),
+        &[],
+    );
+    run(&def, s).unwrap();
+    assert_eq!(seen.lock().unwrap().as_slice(), ["réponds sur {text} et {labels} | {\"label\": x} | la fiche"]);
+}
+
+/// Un gabarit sans `{text}`, ou avec un trou inconnu, est refusé à la
+/// construction, en le nommant.
+#[test]
+fn a_template_without_text_or_with_an_unknown_hole_is_refused() {
+    let err = DecideNodeFactory.create("d", &json!({"labels": "a|b", "prompt": "toujours pareil"})).err().unwrap();
+    assert!(err.contains("{text}"), "{err}");
+    let err = DecideNodeFactory.create("d", &json!({"labels": "a|b", "prompt": "{texte}"})).err().unwrap();
+    assert!(err.contains("{texte}"), "{err}");
+}

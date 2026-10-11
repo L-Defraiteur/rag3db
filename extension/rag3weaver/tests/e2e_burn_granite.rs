@@ -10,7 +10,8 @@
 //! c'est le modèle sur burn qu'elle éprouve, pas ses vecteurs vus de loin (`tests/common`, `SUITES_LOCALES`).
 #![cfg(feature = "burn-embedder")]
 
-mod common;
+#[allow(unused_imports)] // employé sous certaines features seulement
+use crate::common;
 
 use rag3weaver::embedder::Embedder;
 

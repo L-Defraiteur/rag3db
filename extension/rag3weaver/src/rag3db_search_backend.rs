@@ -24,6 +24,15 @@ impl Rag3dbSearchBackend {
 
 use crate::search::inline_params;
 
+/// **Citer un nom du schéma en Cypher** : l'accent grave, la règle de
+/// [`crate::dialect::SchemaDialect::quote`] pour rag3db. Ce moteur écrit ses
+/// requêtes lui-même, sans dialecte sous la main : la règle est reprise ici
+/// telle quelle. Les noms passés en chaîne (`QUERY_VECTOR_INDEX('{table}', …)`)
+/// sont des littéraux, ils restent nus.
+fn quote(name: &str) -> String {
+    crate::dialect::cypher_quote(name)
+}
+
 
 impl SearchBackend for Rag3dbSearchBackend {
     /// Le filtre devient un **graphe projeté** avant la descente HNSW — c'est
@@ -85,8 +94,8 @@ impl SearchBackend for Rag3dbSearchBackend {
 
         // Build filter Cypher with inlined parameters
         let match_clause = match filter_match {
-            Some(m) => format!("MATCH (n:{table}) {m}"),
-            None => format!("MATCH (n:{table})"),
+            Some(m) => format!("MATCH (n:{}) {m}", quote(table)),
+            None => format!("MATCH (n:{})", quote(table)),
         };
         let where_clause = match filter_where {
             Some(w) => format!(" WHERE {w}"),
@@ -164,12 +173,14 @@ impl SearchBackend for Rag3dbSearchBackend {
             "n._uuid AS _uuid".into(),
         ];
         for f in return_fields {
+            let f = quote(f);
             return_cols.push(format!("n.{f} AS {f}"));
         }
         let return_clause = return_cols.join(", ");
 
         let cypher = format!(
-            "MATCH (n:{table}) WHERE OFFSET(id(n)) IN [{offset_list}] RETURN {return_clause}"
+            "MATCH (n:{}) WHERE OFFSET(id(n)) IN [{offset_list}] RETURN {return_clause}",
+            quote(table)
         );
         let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
@@ -212,12 +223,16 @@ impl SearchBackend for Rag3dbSearchBackend {
             .join(", ");
 
         let return_cols: Vec<String> = std::iter::once("n._uuid AS _uuid".to_string())
-            .chain(fields.iter().map(|f| format!("n.{f} AS {f}")))
+            .chain(fields.iter().map(|f| {
+                let f = quote(f);
+                format!("n.{f} AS {f}")
+            }))
             .collect();
         let return_clause = return_cols.join(", ");
 
         let cypher = format!(
-            "MATCH (n:{table}) WHERE n._uuid IN [{uuid_list}] RETURN {return_clause}"
+            "MATCH (n:{}) WHERE n._uuid IN [{uuid_list}] RETURN {return_clause}",
+            quote(table)
         );
         let result = self.conn.execute(&cypher).map_err(|e| e.to_string())?;
 
@@ -249,6 +264,7 @@ impl SearchBackend for Rag3dbSearchBackend {
             .collect::<Vec<_>>()
             .join(", ");
 
+        let chunk_table = quote(chunk_table);
         let cypher = format!(
             "MATCH (c:{chunk_table}) WHERE c._uuid IN [{uuid_list}] \
              RETURN c._uuid, c._parent_uuid, c._text, c._index, \
@@ -293,9 +309,11 @@ impl SearchBackend for Rag3dbSearchBackend {
             "n._uuid AS _uuid".into(),
         ];
         for f in entity_fields {
+            let f = quote(f);
             return_cols.push(format!("n.{f} AS {f}"));
         }
 
+        let (rel_table, chunk_table, entity) = (quote(rel_table), quote(chunk_table), quote(entity));
         let rel_match = if rel_forward {
             format!("OPTIONAL MATCH (n)-[:{rel_table}]->(c:{chunk_table})")
         } else {

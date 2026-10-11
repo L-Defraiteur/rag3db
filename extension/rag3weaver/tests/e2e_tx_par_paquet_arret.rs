@@ -63,13 +63,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier_sur_disque(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/tx-par-paquet-arret").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("tx-par-paquet-arret", cas)
 }
 
 /// 300 fichiers : chacun définit une fonction et appelle la précédente ; un
@@ -419,7 +413,7 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
     } else {
         cmd.env_remove("TX_ARRET_FTS");
     }
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation.to_string())

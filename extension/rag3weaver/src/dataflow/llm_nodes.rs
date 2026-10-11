@@ -197,10 +197,10 @@ impl NodeFactory for LlmNodeFactory {
         NodeSchema {
             node_type: "LlmNode".into(),
             description: "Generates text from a prompt via the 'llm' service (streaming-capable)".into(),
-            inputs: vec![PortDef { name: "prompt".into(), port_type: PortType::Text, required: true }],
+            inputs: vec![PortDef::value("prompt", PortType::Text, true)],
             outputs: vec![
-                PortDef { name: "text".into(), port_type: PortType::Text, required: false },
-                PortDef { name: "llm".into(), port_type: PortType::Llm, required: false },
+                PortDef::value("text", PortType::Text, false),
+                PortDef::value("llm", PortType::Llm, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -457,7 +457,7 @@ mod tests {
             "PromptSource"
         }
         fn outputs(&self) -> Vec<PortDef> {
-            vec![PortDef { name: "out".into(), port_type: PortType::Text, required: false }]
+            vec![PortDef::value("out", PortType::Text, false)]
         }
         fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
             ctx.set_output("out", PortValue::new(self.0.clone()));

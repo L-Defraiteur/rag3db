@@ -417,15 +417,19 @@ impl PostgresConnection {
         if params.is_empty() {
             return self.execute_async(sql).await;
         }
+        let session = self.session().await?;
+        Self::sur(session.client(), sql, params).await
+    }
 
+    /// Une instruction et ses paramètres, sur CETTE session.
+    async fn sur(client: &deadpool_postgres::Object, sql: &str, params: &[QueryParam]) -> Result<QueryResult, DbError> {
         let (translated_sql, values) = translate_params(sql, params);
         let pg_params: Vec<Box<dyn tokio_postgres::types::ToSql + Sync + Send>> =
             values.iter().map(cypher_to_pg_param).collect();
         let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
             pg_params.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
 
-        let session = self.session().await?;
-        let rows = session.client().query(&translated_sql, &param_refs).await
+        let rows = client.query(&translated_sql, &param_refs).await
             .map_err(|e| Self::dire(e, &translated_sql))?;
 
         let columns = if let Some(first) = rows.first() {
@@ -440,6 +444,51 @@ impl PostgresConnection {
             columns,
             rows: result_rows,
         })
+    }
+
+    /// Poser des réglages pour la transaction en cours de cette session
+    /// (`set_config(nom, valeur, true)`, la forme fonction de `SET LOCAL`).
+    async fn regler(client: &deadpool_postgres::Object, settings: &[(&str, String)]) -> Result<(), DbError> {
+        for (nom, valeur) in settings {
+            client
+                .query("SELECT set_config($1, $2, true)", &[nom, valeur])
+                .await
+                .map_err(|e| Self::dire(e, &format!("set_config('{nom}', '{valeur}', true)")))?;
+        }
+        Ok(())
+    }
+
+    async fn execute_with_local_settings_async(
+        &self,
+        sql: &str,
+        params: &[QueryParam],
+        settings: &[(&str, String)],
+    ) -> Result<QueryResult, DbError> {
+        match self.session().await? {
+            // Dans la transaction de l'appelant : les réglages y vivent
+            // jusqu'à son `COMMIT` ou son `ROLLBACK`.
+            tenue @ SessionTenue::Epinglee(_) => {
+                Self::regler(tenue.client(), settings).await?;
+                Self::sur(tenue.client(), sql, params).await
+            }
+            // Une session du pool, et une transaction à elle : les réglages
+            // et l'instruction partent ensemble, puis la session rentre au
+            // pool sans rien garder.
+            SessionTenue::DuPool(objet) => {
+                objet.batch_execute("BEGIN").await.map_err(|e| Self::dire(e, "BEGIN"))?;
+                let r = match Self::regler(&objet, settings).await {
+                    Ok(()) => Self::sur(&objet, sql, params).await,
+                    Err(e) => Err(e),
+                };
+                let fin = if r.is_ok() { "COMMIT" } else { "ROLLBACK" };
+                if let Err(e) = objet.batch_execute(fin).await {
+                    // L'état de la session est inconnu : la retirer du pool.
+                    drop(deadpool_postgres::Object::take(objet));
+                    return Err(r.err().unwrap_or_else(|| Self::dire(e, fin)));
+                }
+                r
+            }
+        }
     }
 
 }
@@ -484,6 +533,23 @@ impl DbConnection for PostgresConnection {
             *garde = Some(session);
             Ok(())
         })?
+    }
+
+    /// Une session : celle de la transaction épinglée, sinon une du pool,
+    /// dans une transaction à elle. Jamais un `SET` de session : un réglage
+    /// posé sur une session du pool n'existe pas sur les autres (ticket
+    /// 2026-10-11-postgres-une-requete-a-deux-fautes-ne-rend-rien-meme-au-plancher-abaisse).
+    fn execute_with_local_settings(
+        &self,
+        sql: &str,
+        params: &[QueryParam],
+        settings: &[(&str, String)],
+    ) -> Result<QueryResult, DbError> {
+        bloquer(
+            &self.rt,
+            "PostgresConnection::execute_with_local_settings",
+            self.execute_with_local_settings_async(sql, params, settings),
+        )?
     }
 
     fn commit(&self) -> Result<(), DbError> {

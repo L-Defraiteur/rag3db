@@ -277,9 +277,16 @@ private:
             if (curException.posInChunk >= startOffsetInChunk + numValuesToScan) {
                 break;
             }
-            const offset_t offsetInResult =
-                startOffsetInResult + curException.posInChunk - startOffsetInChunk;
-            if (!filterFunc.has_value() || filterFunc.value()(offsetInResult, offsetInResult + 1)) {
+            // Le filtre reçoit des index relatifs au début de ce balayage, comme le lecteur de
+            // pages les lui donne (numValuesScanned) — pas la position dans le vecteur de sortie :
+            // pour un segment après le premier d'un même bloc (startOffsetInResult > 0), l'index
+            // absolu ne tombait jamais dans la sélection, et aucune exception n'était rapiécée.
+            // Les valeurs restaient à leur encodage ALP (0). Vu sur un COPY journalisé relu avant
+            // son point de reprise, dont la sélection est filtrée par les versions (11 octobre
+            // 2026, la colonne DOUBLE des dernières lignes d'un groupe plein à zéro).
+            const offset_t offsetInScan = curException.posInChunk - startOffsetInChunk;
+            const offset_t offsetInResult = startOffsetInResult + offsetInScan;
+            if (!filterFunc.has_value() || filterFunc.value()(offsetInScan, offsetInScan + 1)) {
                 if constexpr (std::is_same_v<uint8_t*, OutputType>) {
                     reinterpret_cast<T*>(result)[offsetInResult] = curException.value;
                 } else {

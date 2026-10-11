@@ -168,11 +168,76 @@ impl PortType {
 /// Le nom est **possédé** quand il est déclaré (un sous-graphe, un nœud
 /// scripté) et emprunté quand il est écrit dans le code (`"value".into()`,
 /// sans allocation) : une déclaration rechargée ne laisse rien derrière elle.
+///
+/// **Deux axes** (lot 0 des agents qui se parlent, 11 octobre 2026) :
+/// `kind` dit ce qui coule sur une sortie (une valeur, un flux qui finit, un
+/// flux ouvert) ; `required` dit si une sortie **doit** émettre — une sortie
+/// requise qui finit vide est une erreur du nœud, une sortie optionnelle qui
+/// finit vide fait sauter l'aval (une branche non prise). `posture` dit comment
+/// une entrée lit.
 #[derive(Debug, Clone)]
 pub struct PortDef {
     pub name: Cow<'static, str>,
     pub port_type: PortType,
     pub required: bool,
+    /// Ce que porte ce port, sur une **sortie**. Ignoré sur une entrée, dont
+    /// le genre est celui de son producteur.
+    pub kind: PortKind,
+    /// Comment ce port se lit, sur une **entrée**. Ignoré sur une sortie.
+    pub posture: Posture,
+}
+
+/// **Le genre d'une sortie** : « les ports portent des flux ». Une valeur est
+/// un flux d'un seul élément, marqué comme tel — pas un second mécanisme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PortKind {
+    /// Une valeur : un flux d'un élément. Le défaut, et tout ce qui existe
+    /// avant les flux.
+    #[default]
+    Value,
+    /// Un flux qui finit (des jetons, qui finissent avec le message).
+    Finite,
+    /// Un flux qui peut ne jamais finir (les messages des pairs).
+    Open,
+}
+
+/// **Comment une entrée lit son flux.** La vérification commune du graphe
+/// refuse `Complete` branché sur un flux `Open` : attendre la fin d'un flux
+/// qui peut ne jamais finir, c'est attendre pour toujours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Posture {
+    /// Voit le tout, une fois le flux fini (le message entier, jamais des
+    /// jetons). Le défaut : c'est la lecture de tout nœud d'avant les flux.
+    #[default]
+    Complete,
+    /// Voit chaque élément à son arrivée (un message d'un pair, un jeton).
+    PerElement,
+}
+
+impl PortDef {
+    /// **Un port de valeur** — la forme de tout port d'avant les flux :
+    /// genre `Value`, lecture `Complete`.
+    pub fn value(name: impl Into<Cow<'static, str>>, port_type: PortType, required: bool) -> Self {
+        Self {
+            name: name.into(),
+            port_type,
+            required,
+            kind: PortKind::Value,
+            posture: Posture::Complete,
+        }
+    }
+
+    /// Le même port, portant un flux (`Finite` ou `Open`) en sortie.
+    pub fn stream(mut self, kind: PortKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Le même port, lu élément par élément (ou le tout) en entrée.
+    pub fn posture(mut self, posture: Posture) -> Self {
+        self.posture = posture;
+        self
+    }
 }
 
 // ─── QueryPayload ───────────────────────────────────────────────────────────

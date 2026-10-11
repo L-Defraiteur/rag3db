@@ -91,7 +91,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &PathBuf, tampon: Option<&str>) -> String {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
     match tampon {
         Some(t) => cmd.env("RAG3DB_BUFFER_POOL_SIZE", t),
         None => cmd.env_remove("RAG3DB_BUFFER_POOL_SIZE"),

@@ -46,3 +46,12 @@ Qu'un point de reprise n'écrive que les blobs neufs ou changés. Lire d'abord p
 ## La poussée unique, côté rag3weaver (arbre principal, 4 octobre, 20 h 30)
 
 Pousser les 699 Mo du plein texte une seule fois à la fin a coûté 52 s, contre 25 s de COMMIT épargnés (113 → 135 s, mesure de rag3db-eb). Hypothèse, non mesurée : `CypherBlobStore::save_many` pousse en ~22 lots de 32 Mo, chacun validé seul, et chaque validation porte un point de reprise qui réécrit toute la table, de plus en plus grosse — un coût quadratique. L'option `RAG3WEAVER_TX_POUSSEE_A_LA_FIN=1` pousse désormais dans une seule transaction (un point de reprise) ; le défaut est revenu à la poussée par paquet.
+
+## Devrait tomber, non éprouvé (11 octobre 2026)
+
+Sa cause est très probablement celle du ticket fermé
+[`2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md`](closed/2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit.md), corrigée en `47a283e6c`. Une colonne de chaînes tenait en un seul segment,
+que chaque point de reprise réécrivait en entier. Les segments sont maintenant bornés en octets :
+un point de reprise ne réécrit plus que le dernier segment et les lignes neuves. Ce ticket n'a pas
+de témoin (c'est une mesure). Pour le fermer, il faut refaire la mesure du tableau ci-dessus sur
+le moteur corrigé.

@@ -99,6 +99,49 @@ TEST_F(HarnessMechanics, GuardKillsAWriterProcessThatOutlivesIt) {
     createDBAndConn();
 }
 
+// Le parent par passe (ticket « les tests gtest du moteur laissent leurs bases dans /tmp »,
+// 11 octobre) : tout ce qu'un test laisse — ici une base qu'un enfant fork a ouverte avant de
+// mourir sans fermer — vit sous <dossier commun>/<pid du lanceur>, que la fin de la passe
+// efface ; et un parent dont le lanceur n'existe plus est effacé au début de la passe suivante.
+TEST_F(HarnessMechanics, WhatAKilledChildLeavesLivesUnderTheRunsParent) {
+    const auto root = TestHelper::getRootTempDir();
+    EXPECT_EQ(root.filename().string(), std::to_string(getpid()));
+    EXPECT_EQ(root.parent_path(), TestHelper::getSharedTempRoot());
+
+    conn.reset();
+    database.reset();
+    std::filesystem::path leftBehind;
+    {
+        SharedMapping mapping(1);
+        auto& area = mapping.get();
+        const auto dbPath = TestHelper::getTempDBPathStr("TempDirPerRun.child");
+        leftBehind = std::filesystem::path(dbPath).parent_path();
+        launch(LaunchMode::Process, Opener{nullptr, dbPath, *systemConfig}, area,
+            [](Worker& worker) {
+                worker.run("CREATE NODE TABLE Left(id INT64 PRIMARY KEY);");
+                worker.run("CREATE (:Left {id: 1});");
+                _exit(0); // mort sans fermer : la base reste
+            });
+    }
+    EXPECT_TRUE(std::filesystem::is_directory(leftBehind)) << leftBehind;
+    EXPECT_EQ(leftBehind.parent_path(), root) << "[check: under-the-runs-parent] ";
+
+    // Un parent d'une passe morte : un enfant qui a fini (son pid n'existe plus), nommé comme
+    // un lanceur. Le nôtre reste.
+    const auto child = fork();
+    ASSERT_NE(child, -1);
+    if (child == 0) {
+        _exit(0);
+    }
+    waitpid(child, nullptr, 0);
+    const auto dead = TestHelper::getSharedTempRoot() / std::to_string(child);
+    std::filesystem::create_directories(dead / "a-base");
+    TestHelper::removeDeadRunTempDirs();
+    EXPECT_FALSE(std::filesystem::exists(dead)) << "[check: dead-run-removed] ";
+    EXPECT_TRUE(std::filesystem::is_directory(root)) << "[check: own-run-kept] ";
+    createDBAndConn();
+}
+
 } // namespace
 
 #endif

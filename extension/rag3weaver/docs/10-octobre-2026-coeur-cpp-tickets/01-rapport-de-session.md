@@ -256,6 +256,59 @@ fenêtre étroite par la session cœur C++.
   enchaînement se fait dans un seul script, jamais par un guetteur qui lit un journal pas encore
   vidé.
 
+## La suite de la nuit (11 octobre, 2 h à 4 h 15)
+
+- **Le lecteur affamé** est fusionné : `5c5feb527` (correctif `e4198f862`). La lib commune de
+  luciepc est rebâtie dessus, et les worktrees du lot sont effacés.
+- **`RAG3DB_BUILD_ID_GIT_DIR`** est sur master (`274ce4fc5`) : une copie de l'arbre sans `.git`
+  (la crate Rust sous Windows) lit git dans le dépôt d'origine. Le côté `build.rs` est chez la
+  session du paquet npm. Sur les runners GitHub, un checkout superficiel nomme la tête au lieu du
+  dernier commit du moteur : c'est plus strict, sans danger.
+- **Le rouge `OwnerlessPagesTest`** a été bissecté : 1 rouge sur 30 au parent, sans le lecteur
+  affamé, 3 sur 40 sur master. L'arbre principal l'a reproduit dans un processus vivant (le COPY
+  journalisé), et le cœur a trouvé la cause (les exceptions ALP d'un second segment, sous une
+  sélection filtrée). Le ticket porte les comptes.
+- **Le point de reprise interrompu** (branche `point-de-reprise-interrompu-2`) : le refus en
+  lecture seule nomme la cause, et un crochet de test lu dans l'environnement est en place
+  (`RAG3DB_TEST_HOOKS=1`, `RAG3DB_TEST_DIE_AT=checkpoint-logged`, décision de l'orchestration).
+  Les témoins étaient rouges, ils sont verts, et la liste complète est verte. Le lot attend la
+  fusion du correctif du cœur avant d'aller sur master.
+- **Le petit tampon** est reproduit sur master et localisé (ticket) : le seuil vaut un quart du
+  tampon, en puissance de 2, et la pile de l'échec est dans la réécriture hors place d'un
+  segment de chaînes. Le correctif attend l'accord du cœur, dont c'est le stockage.
+- **Faute** : la liste complète du point de reprise interrompu a d'abord échoué, parce qu'un
+  en-tête public neuf (`common/test_hooks.h`) n'était pas déclaré dans
+  `scripts/headers.txt`. Tout en-tête inclus par un en-tête public y entre.
+
+## Fin de la nuit (11 octobre, 4 h 15 à 5 h 40) — arrêt sur rapport propre
+
+- **Le point de reprise interrompu** est sur master : `b411e7f20` (correctif `9f3725ade`). Ses
+  tests ont été rejoués sur la tête rebasée sur le correctif ALP du cœur : 41/41, 121/121, 3/3.
+- **Les segments de chaînes bornés** sont sur master : `4820e9154` (correctif `47a283e6c`,
+  restriction `dd4fd0a35`).
+  - La cause : l'estimation de taille des chaînes passait par des statistiques que
+    `appendString` ne tient pas à jour. `split()` gardait toute la colonne dans un segment, que
+    chaque point de reprise réécrivait par doublements.
+  - Les témoins étaient rouges et sont verts. La sonde Rust du ticket passe 3 Go sous 2 Gio, en
+    65 et 70 s. La liste complète est verte sur la tête finale (10 rouges connus, 248 verts au
+    banc, 1 867 e2e).
+  - La première version cassait les FLOAT[960] : le recul entassait des valeurs mortes dans le
+    fils des listes. La liste complète l'a vu, et le recul est restreint aux chaînes.
+  - Le ticket est fermé. Deux tickets sont ouverts : la confirmation par le premier index sous
+    2 Gio (arbre principal, de jour) et la mémoire résidente au-delà du tampon. Le ticket voisin
+    des blobs réécrits devrait tomber, non éprouvé.
+- **La lib commune de luciepc** est rebâtie sur `4820e9154` (identifiant `dd4fd0a35` dans la lib
+  et l'extension). Les worktrees, le target `target-tickets` et les branches de travail sont
+  effacés sur les deux postes. Plus rien ne tourne de mon côté.
+- **Faute répétée** : par deux fois, un bâti par cible sans `rag3db_vector_extension` a fait
+  rougir les tests vector sur une extension d'un autre commit (le contrôle de bâti la refuse).
+  C'est en mémoire.
+- **Pour reprendre** :
+  - la limite des colonnes LIST ou STRUCT de chaînes (lots de 64 sans recul), au ticket fermé ;
+  - la mémoire hors du tampon, à répartir avec heaptrack sur la sonde C++
+    (`~/.cache/rag3db-tickets-notes/blobs_checkpoint_probe_scratch_test.cpp`) ;
+  - les deux tickets Ladybug sur les chaînes, à lire.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre

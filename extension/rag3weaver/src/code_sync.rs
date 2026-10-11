@@ -325,7 +325,17 @@ pub struct SourceSyncOptions {
     /// (`SourceSyncReport::files_set_aside`). Les défauts écartent ;
     /// `GeneratedPolicy::off()` lève la règle.
     pub generated: crate::generated::GeneratedPolicy,
+    /// **L'arrêt demandé** : lu entre deux paquets validés. La
+    /// synchronisation s'arrête alors proprement, ses sessions suspendues
+    /// (reprises par la suivante sans `takeover`), et rend
+    /// [`SYNC_SUSPENDED`].
+    #[serde(skip)]
+    pub stop: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
+
+/// Le début de l'erreur d'une synchronisation arrêtée proprement entre deux
+/// paquets : rien n'est perdu, la suivante reprend là.
+pub const SYNC_SUSPENDED: &str = "synchronisation arrêtée entre deux paquets";
 
 /// **Comment une synchronisation pose les relations.**
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -396,6 +406,7 @@ impl Default for SourceSyncOptions {
             exige: Disponibilites::TOUT,
             relations: None,
             generated: Default::default(),
+            stop: None,
         }
     }
 }
@@ -547,9 +558,16 @@ fn synchroniser_la_source(
             return Err(e.to_string());
         }
     };
+    let marque = format!("relations_pending:{}/{}:{source_id}", catalog.scope().org, catalog.scope().project);
+    // **Une passe en masse interrompue se finit en masse** : sa marque
+    // « relations en cours » est posée, ses liens ne sont pas tous là, et
+    // une reprise par paquet poserait autrement ceux des fichiers qu'elle
+    // repasse (295 arêtes CONSUMES de trop sur `src/dataflow`, témoin
+    // `e2e_arret_propre`).
+    let masse_interrompue = catalog.read_meta_key(&marque).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty());
     let mode = match options.relations {
         Some(m) => m,
-        None if source_deja_indexee(catalog, &source_id)? => RelationsMode::PerBatch,
+        None if !masse_interrompue && source_deja_indexee(catalog, &source_id)? => RelationsMode::PerBatch,
         None => RelationsMode::Bulk,
     };
     // **La marque « relations en cours »**, posée dès le début du mode de
@@ -557,7 +575,6 @@ fn synchroniser_la_source(
     // sait que les relations de cette source ne sont pas encore là, au lieu
     // de lire un graphe vide. Sa valeur porte la session, pour qu'une marque
     // laissée par un processus tué se reconnaisse.
-    let marque = format!("relations_pending:{}/{}:{source_id}", catalog.scope().org, catalog.scope().project);
     if mode == RelationsMode::Bulk {
         catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")).map_err(|e| e.to_string())?;
     }
@@ -570,7 +587,10 @@ fn synchroniser_la_source(
     }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id, tx);
     catalog.end_proving_presence();
-    if mode == RelationsMode::Bulk {
+    let suspendue = matches!(&resultat, Err(e) if e.starts_with(SYNC_SUSPENDED));
+    if suspendue {
+        // La marque reste : la reprise sait que les relations manquent.
+    } else if mode == RelationsMode::Bulk {
         let _ = catalog.persist_meta_key(&marque, "");
     } else if resultat.is_ok() && !options.plan_only {
         // **Une passe par paquet qui va au bout a posé ses relations** : la
@@ -581,11 +601,27 @@ fn synchroniser_la_source(
             let _ = catalog.persist_meta_key(&marque, "");
         }
     }
-    if resultat.is_err() || options.plan_only {
+    if suspendue {
+        // Comme une mort, en propre : les sessions restent ouvertes avec ce
+        // qu'elles ont marqué, et la marque des relations en cours avec elles ;
+        // la suivante les reprend sans `takeover`. Les liens encore en file
+        // sont oubliés comme une mort les oublierait : la reprise les refait.
+        let du_code: Vec<&str> = crate::code::RELATIONS.iter().map(|(rel, _, _)| *rel).collect();
+        catalog.forget_pending_relations_named(&du_code);
+        catalog.suspend_snapshot(SCOPE, &grain, &s_scopes).map_err(|e| e.to_string())?;
+        catalog.suspend_snapshot(FILE, &grain, &s_files).map_err(|e| e.to_string())?;
+    } else if resultat.is_err() || options.plan_only {
         let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
         let _ = catalog.abort_snapshot(FILE, &grain, &s_files);
     }
     resultat
+}
+
+/// L'arrêt est-il demandé après ce paquet ? Le drapeau des options, ou le
+/// crochet de test `RAG3WEAVER_TEST_STOP_AFTER_BATCH=<rang>`.
+fn arret_demande(options: &SourceSyncOptions, rang: usize) -> bool {
+    options.stop.as_ref().is_some_and(|s| s.load(std::sync::atomic::Ordering::SeqCst))
+        || std::env::var("RAG3WEAVER_TEST_STOP_AFTER_BATCH").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -789,6 +825,18 @@ fn synchroniser(
             let _ = catalog.persist_meta_key(marque, &format!("{s_scopes}|{}", avancement.relations_pending));
         }
         progress(avancement);
+        // **L'arrêt propre**, à la seule frontière sûre : un paquet validé
+        // (ou hors transaction), et pas le dernier.
+        if (!tx || valider) && rang_du_paquet + 1 < nombre_de_paquets && arret_demande(options, rang_du_paquet) {
+            catalog.end_fresh_ingest();
+            return Err(format!(
+                "{SYNC_SUSPENDED} : {} fichiers sur {} faits, au paquet {} sur {} ; relancer reprend là",
+                avancement.files_done,
+                retenus.len(),
+                rang_du_paquet + 1,
+                nombre_de_paquets
+            ));
+        }
     }
     catalog.end_fresh_ingest();
     if mode == RelationsMode::Bulk {

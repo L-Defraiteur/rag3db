@@ -115,7 +115,7 @@ fn profil(sortie: &str) -> (u64, u64, u64) {
 
 fn lancer(avec_preuve: bool) -> String {
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "un_bout_prouve_ne_se_verifie_plus_et_une_paire_sans_bout_se_compte", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_bout_prouve_ne_se_verifie_plus_et_une_paire_sans_bout_se_compte"), "--nocapture", "--ignored"])
         .env(ENFANT, if avec_preuve { "avec" } else { "sans" })
         .env("RAG3WEAVER_INGEST_PROFILE", "1")
         .output()

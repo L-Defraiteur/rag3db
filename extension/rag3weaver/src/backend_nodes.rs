@@ -47,7 +47,7 @@ impl NodeFactory for EntityRecordFactory {
             "Read or put one record",
         );
         action.choices = Some(Choices::fixed(["get", "put"]));
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],outputs:vec![PortDef{name:"record".into(),port_type:PortType::Map,required:false}],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         for key in ["entity", "action"] {
@@ -123,11 +123,23 @@ impl Node for EntityRecordNode {
                 return Err(format!("identity field {field} must be a non-empty string"));
             }
         }
+        // **La cellule de l'appel** (marche 1 bis) : l'identité de la ligne est
+        // (cellule, identité déclarée), et une ligne d'une autre cellule n'est
+        // pas celle de cet appel.
+        let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
         let identity = serde_json::from_value(input.clone()).map_err(|e| e.to_string())?;
         let uuid = cat
-            .entity_uuid(entity, &identity)
+            .entity_uuid_in(&cell, entity, &identity)
             .map_err(|e| e.to_string())?;
-        let old = cat.get(entity, &uuid).map_err(|e| e.to_string())?;
+        let dans_la_cellule = |row: &std::collections::BTreeMap<String, CypherValue>| {
+            let lire = |c: &str| row.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            match (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                (Some(org), Some(project)) => org == cell.org && project == cell.project,
+                // Une ligne sans cellule (une base d'avant les cellules) est de la cellule par défaut.
+                _ => cell.is_default(),
+            }
+        };
+        let old = cat.get(entity, &uuid).map_err(|e| e.to_string())?.filter(|row| dans_la_cellule(row));
         if self.config["action"] == "get" {
             ctx.set_output("record", PortValue::new(json!({"uuid":uuid,"data":old})));
             return Ok(());
@@ -209,17 +221,36 @@ impl Node for EntityRecordNode {
                 };
         }
         validator.validate(&input).map_err(|e| e.to_string())?;
-        let data = mapping.record(&input)?;
+        let mut data = mapping.record(&input)?;
+        cell.stamp(&mut data);
         let report = cat
             .ingest_entities(entity, vec![data])
             .map_err(|e| e.to_string())?;
+        // **Un échec dit ce qui est resté** (forme A de l'enveloppe d'un outil
+        // d'écriture, 11 octobre 2026), au lieu de « inspect state » : le drain
+        // sait ce qui est prêt, et l'agent doit savoir si la ligne existe sans
+        // sa recherche, ou si rien n'est resté.
+        // `rendu_pret` dit ce que les opérations *réussies* du drain ont rendu
+        // prêt : il ne vaut pour cette fiche que si sa ligne existe.
         if report.failed > 0 {
+            let existe = cat.get(entity, &uuid).ok().flatten().is_some_and(|row| dans_la_cellule(&row));
+            let pret = match report.rendu_pret {
+                Some(d) if existe => d.to_string(),
+                _ => "rien".to_string(),
+            };
             return Err(format!(
-                "write/index failure (inspect state before retry): {:?}",
+                "write/index failure: ready after the failure (ce qui est prêt) = {pret}; the record \
+                 {} — {:?}",
+                if existe { "exists" } else { "does not exist" },
                 report.warnings
             ));
         }
-        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret});
+        // `atomic: false`, dit : la ligne, ses morceaux, son plein texte et ses
+        // vecteurs partent en plusieurs instructions, sans transaction autour
+        // (la forme B de la page de l'enveloppe les envelopperait).
+        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret,
+            "atomic":false,
+            "atomic_reason":"the row, its chunks, its full text and its vectors are written by several statements without a transaction around them"});
         ctx.set_output("record", PortValue::new(result));
         Ok(())
     }
@@ -244,7 +275,7 @@ impl NodeFactory for EntityBatchFactory {
         );
         records.json_schema =
             Some(json!({"type":"array","maxItems":512,"items":{"type":"object"}}));
-        NodeSchema { node_type:self.node_type().to_owned().into(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies".into(), inputs:vec![], outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
+        NodeSchema { node_type:self.node_type().to_owned().into(), description:"Validate a complete batch before upserting snapshot records; refuses managed write policies".into(), inputs:vec![], outputs:vec![PortDef::value("report", PortType::Map, false)], config_params:vec![param("entity",ConfigParamType::String,true,"Declared snapshot entity"),records,param("snapshot",ConfigParamType::String,false,"Synchronisation session id: the rows are marked as carried by it (the entity must declare `snapshot`); empty: no session")] }
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -445,7 +476,7 @@ impl NodeFactory for SnapshotSessionFactory {
             node_type: self.node_type().to_owned().into(),
             description: "Open (begin) or abandon (abort) a synchronisation session on a scope; one open session per scope".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "session".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("session", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -526,7 +557,7 @@ impl NodeFactory for SnapshotFinishFactory {
             node_type: self.node_type().to_owned().into(),
             description: "End a synchronisation session: missing rows of the scope are removed or follow the declared transition; refuses an empty session or too many missing rows unless told otherwise".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -611,7 +642,7 @@ impl NodeFactory for SnapshotUndoFactory {
             node_type: self.node_type().to_owned().into(),
             description: "Undo an applied synchronisation finish: removed rows come back from their set-aside copies, transitioned rows get their previous state back".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 param("entity", ConfigParamType::String, true, "Entity declaring `snapshot`"),
                 scope,
@@ -670,8 +701,17 @@ impl Node for SnapshotUndoNode {
     }
 }
 
-/// Snapshot links use stable endpoint identities, never caller-supplied internal UUIDs.
-/// Intentionally supports property-free relations; payload belongs in an entry entity.
+/// **Poser des liens entre des identités déclarées** — la face dataflow de
+/// `Write::Link` (11 octobre 2026, page
+/// `docs/11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`).
+///
+/// Les bouts se désignent par leurs champs d'identité (`hashsafe`), jamais par
+/// un uuid fourni par l'appelant ; ils doivent exister — en base ou en file —,
+/// et le lot entier est vérifié avant la première écriture. Toute paire
+/// d'entités déclarées, **gérées ou non** : la garde « managed entities » qui
+/// vivait ici ne protégeait aucune garantie déclarée (établi champ à champ par
+/// `tests/e2e_garde_des_liens.rs`), et elle est retirée. Les propriétés sont
+/// permises quand la relation les déclare.
 pub struct RelationBatchFactory;
 struct RelationBatchNode {
     name: String,
@@ -686,12 +726,12 @@ impl NodeFactory for RelationBatchFactory {
             "links",
             ConfigParamType::Json,
             true,
-            "Up to 512 pairs of endpoint identity objects",
+            "Up to 512 pairs of endpoint identity objects, each with optional declared properties",
         );
         links.json_schema = Some(
-            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}}}}}),
+            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"}}}}),
         );
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent snapshot links between existing declared endpoints; validates entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared property-free relation"),links]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef::value("report", PortType::Map, false)],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -734,40 +774,35 @@ impl Node for RelationBatchNode {
         let definition = ctx
             .service::<HashMap<String, crate::config::RelationDef>>("backend_relations")
             .and_then(|r| r.get(relation))
-            .ok_or("undeclared relation")?;
-        if definition
+            .ok_or("undeclared relation")?
+            .clone();
+        let declarees: Vec<&String> = definition
             .properties
             .as_ref()
-            .is_some_and(|p| !p.is_empty())
-        {
-            return Err(
-                "snapshot links require a property-free relation; use an entry entity for payload"
-                    .into(),
-            );
-        }
-        let policies = ctx
-            .service::<HashMap<String, WritePolicy>>("backend_write_policies")
-            .ok_or("policies missing")?;
+            .map(|p| p.keys().collect())
+            .unwrap_or_default();
         let cat = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .ok_or("catalog missing")?
             .clone();
         let mut cat = cat.lock().map_err(|e| e.to_string())?;
         for entity in [&definition.from, &definition.to] {
-            let p = policies.get(entity).ok_or("undeclared endpoint")?;
-            if p.immutable
-                || p.revision.is_some()
-                || p.created_at.is_some()
-                || p.updated_at.is_some()
-                || !p.transition_dates.is_empty()
-                || cat.entity_configs()[entity].lifecycle.is_some()
-            {
-                return Err("snapshot links cannot modify relations of managed entities".into());
+            if !cat.entity_configs().contains_key(entity) {
+                return Err(format!("undeclared endpoint {entity}"));
             }
         }
-        let mut seen = std::collections::HashSet::new();
-        let mut checked = std::collections::HashSet::new();
-        let mut links = Vec::new();
+        // **La cellule du lien** (migration (a) de la marche 1 bis) : l'identité
+        // d'un bout est (cellule, identité déclarée), et par défaut ses deux
+        // bouts sont dans la cellule de l'appel. Un lien entre deux cellules se
+        // déclarera (`from_cell` / `to_cell`, page du lien de la mémoire longue).
+        let cellule = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
+        // L'identité de chaque bout, gardée pour nommer un absent par ce que
+        // l'appelant a écrit, pas par un uuid qu'il n'a jamais vu.
+        let mut identites: HashMap<(String, String), String> = HashMap::new();
+        // La paire → l'indice de son lien, pour refuser une paire donnée deux
+        // fois avec des propriétés différentes au lieu de jeter la seconde.
+        let mut seen: HashMap<(String, String), usize> = HashMap::new();
+        let mut links: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::new();
         for link in self.config["links"].as_array().unwrap() {
             let mut ids = Vec::new();
             for (side, entity) in [("from", &definition.from), ("to", &definition.to)] {
@@ -791,45 +826,208 @@ impl Node for RelationBatchNode {
                     ));
                 }
                 let data = serde_json::from_value(link[side].clone()).map_err(|e| e.to_string())?;
-                let id = cat.entity_uuid(entity, &data).map_err(|e| e.to_string())?;
-                checked.insert((entity.clone(), id.clone()));
+                let id = cat.entity_uuid_in(&cellule, entity, &data).map_err(|e| e.to_string())?;
+                identites.insert((entity.clone(), id.clone()), link[side].to_string());
                 ids.push(id);
             }
-            if seen.insert((ids[0].clone(), ids[1].clone())) {
-                links.push((ids[0].clone(), ids[1].clone(), Default::default()));
+            // Les propriétés : permises quand la relation les déclare, chacune
+            // nommée si elle ne l'est pas, et **typée** par sa déclaration
+            // (`rag3weaver_ir::normalize`) — une chaîne pour un entier déclaré
+            // se refuse ici, pas dans le moteur.
+            let mut props = BTreeMap::new();
+            if let Some(donnees) = link.get("props").and_then(Value::as_object) {
+                for (cle, valeur) in donnees {
+                    let Some(champ) = definition.properties.as_ref().and_then(|p| p.get(cle)) else {
+                        return Err(if declarees.is_empty() {
+                            format!("{relation} declares no properties; property {cle} refused")
+                        } else {
+                            format!(
+                                "{relation} does not declare property {cle} (declared: {})",
+                                declarees.iter().map(|d| d.as_str()).collect::<Vec<_>>().join(", ")
+                            )
+                        });
+                    };
+                    let v = rag3weaver_ir::normalize(&champ.field_type, valeur)
+                        .map_err(|e| format!("{relation}.{cle}: {e}"))?;
+                    props.insert(cle.clone(), v);
+                }
             }
-        }
-        // Validate every endpoint before queuing any write, using one read per
-        // entity and chunk rather than one roundtrip (and full row) per link.
-        let mut by_entity: HashMap<String, Vec<String>> = HashMap::new();
-        for (entity, id) in checked {
-            by_entity.entry(entity).or_default().push(id);
-        }
-        for (entity, ids) in by_entity {
-            for batch in ids.chunks(512) {
-                let rows = cat.get_many(&entity, batch).map_err(|e| e.to_string())?;
-                let found: std::collections::HashSet<&str> = rows
-                    .iter()
-                    .filter_map(|row| row.get("_uuid").and_then(CypherValue::as_str))
-                    .collect();
-                if let Some(id) = batch.iter().find(|id| !found.contains(id.as_str())) {
+            // **Une paire donnée deux fois** : identique, elle se fond ; avec
+            // d'autres propriétés, le lot se refuse en la nommant. Garder la
+            // première en silence aurait été la perte même que ce nœud ferme
+            // (relecture de rag3db-97).
+            let paire = (ids[0].clone(), ids[1].clone());
+            match seen.get(&paire) {
+                Some(&i) if links[i].2 == props => {}
+                Some(_) => {
                     return Err(format!(
-                        "missing endpoint {entity}:{id}; no links in this batch written"
+                        "from {}, to {} given twice with different properties; no links in this \
+                         batch written",
+                        link["from"], link["to"]
                     ));
+                }
+                None => {
+                    seen.insert(paire, links.len());
+                    links.push((ids[0].clone(), ids[1].clone(), props));
                 }
             }
         }
+        // **Tout le lot vérifié avant la première écriture** : un bout ni en
+        // base ni en file refuse le lot entier, en le nommant par l'identité
+        // que l'appelant a donnée. Le verbe de lien, lui, poserait « rien » sans
+        // erreur (`MATCH … MERGE`).
+        let paires: Vec<(String, String)> =
+            links.iter().map(|(a, b, _)| (a.clone(), b.clone())).collect();
+        // La politique d'écriture de la relation (états permis), quand le
+        // backend en déclare une : la même vérification que l'existence, d'un
+        // seul appel, pour tous les nœuds qui posent un lien.
+        let politique = ctx
+            .service::<HashMap<String, crate::backend::BackendRelation>>(
+                crate::backend::RELATION_POLICIES_SERVICE,
+            )
+            .and_then(|m| m.get(relation))
+            .cloned();
+        let verdict = cat
+            .verifier_les_bouts(
+                relation,
+                &paires,
+                politique.as_ref().and_then(|p| p.from_states.as_deref()),
+                politique.as_ref().and_then(|p| p.to_states.as_deref()),
+            )
+            .map_err(|e| e.to_string())?;
+        let nommer = |entite: &String, uuid: &String| {
+            identites
+                .get(&(entite.clone(), uuid.clone()))
+                .cloned()
+                .unwrap_or_else(|| uuid.clone())
+        };
+        if !verdict.absents.is_empty() {
+            let noms: Vec<String> = verdict
+                .absents
+                .iter()
+                .map(|(entite, uuid)| format!("{entite} {}", nommer(entite, uuid)))
+                .collect();
+            return Err(format!(
+                "missing endpoint(s): {}; no links in this batch written",
+                noms.join(", ")
+            ));
+        }
+        if !verdict.hors_etat.is_empty() {
+            let noms: Vec<String> = verdict
+                .hors_etat
+                .iter()
+                .map(|(entite, uuid, etat)| {
+                    format!("{entite} {} is « {etat} »", nommer(entite, uuid))
+                })
+                .collect();
+            let permis = |cote: Option<&Vec<String>>| cote.map(|v| v.join(", ")).unwrap_or_default();
+            return Err(format!(
+                "endpoint(s) outside the states {relation} allows: {} (from_states: [{}], to_states: [{}]); \
+                 no links in this batch written",
+                noms.join("; "),
+                permis(politique.as_ref().and_then(|p| p.from_states.as_ref())),
+                permis(politique.as_ref().and_then(|p| p.to_states.as_ref())),
+            ));
+        }
+        let verified = paires.len();
+        // Combien d'instructions d'écriture ce lot fera : le drain regroupe les
+        // liens d'une relation par ensemble de propriétés non nulles, une
+        // instruction par groupe (un `UNWIND … MERGE`, ou un `COPY`).
+        let instructions = links
+            .iter()
+            .map(|(_, _, p)| {
+                let mut cles: Vec<&String> =
+                    p.iter().filter(|(_, v)| !matches!(v, CypherValue::Null)).map(|(k, _)| k).collect();
+                cles.sort();
+                cles
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         let queued = cat
             .mettre_en_file_les_liens(relation, links)
             .map_err(|e| e.to_string())?;
-        let report = cat.drain();
+        // **La fermeture du lien, pas toute la file** (relecture de rag3db-97) :
+        // un bout encore en file est posé avec lui, le reste de la file attend
+        // son tour. `drain()` vidait tout ce qui attendait, y compris ce qui
+        // n'avait rien à voir avec ces liens.
+        // **Atomique, ou dit pourquoi pas** (11 octobre 2026, relecture de
+        // rag3db-97, décision de l'orchestration). Trois cas :
+        // - la fermeture emporte autre chose que des liens (une création, une
+        //   mise à jour, une dérivation en file) : le plein texte et les
+        //   vecteurs vivent hors de la transaction de la base, un `ROLLBACK`
+        //   ne les défait pas — non atomique, et dit ;
+        // - des liens seuls, en une instruction : atomique par le moteur ;
+        // - des liens seuls, en plusieurs instructions : enveloppés d'une
+        //   transaction quand le dialecte en déclare — un lien n'a aucun effet
+        //   hors de la base, `begin` / `commit` / `rollback` y suffisent.
+        let que_des_liens = {
+            let file = cat.pending_work();
+            file.entities.is_empty()
+                && file.updates.is_empty()
+                && file.deletes.is_empty()
+                && file.derivations.is_empty()
+        };
+        let transactions = cat.dialect_arc().capabilities().transactions;
+        let (atomic, raison, envelopper): (bool, Option<&str>, bool) = if !que_des_liens {
+            (
+                false,
+                Some(
+                    "the closure carries queued creations, updates or derivations; their full text \
+                     and vectors live outside the database transaction (le plein texte et les \
+                     vecteurs vivent hors de la transaction de la base)",
+                ),
+                false,
+            )
+        } else if instructions <= 1 {
+            (true, None, false)
+        } else if transactions {
+            (true, None, true)
+        } else {
+            (false, Some("several write statements, and this dialect declares no transactions"), false)
+        };
+        // Au moins la donnée, quel que soit le régime : un outil qui rend sans
+        // avoir posé ses liens (régime par lot, exigence vide) mentirait.
+        let exige = cat.exigence_d_ecriture_par_defaut() | crate::disponibilite::Disponibilites::DONNEE;
+        if envelopper {
+            cat.conn().begin().map_err(|e| format!("link batch: begin: {e}"))?;
+            cat.set_in_transaction(true);
+        }
+        let report = cat.tenir_l_exigence_d_ecriture(&definition.from, exige);
+        if envelopper {
+            cat.set_in_transaction(false);
+            if report.failed > 0 {
+                let defait = cat.conn().rollback();
+                return Err(format!(
+                    "link batch failed and was rolled back ({}): nothing written; {:?}",
+                    match defait {
+                        Ok(()) => "rollback ok".to_string(),
+                        Err(e) => format!("ROLLBACK REFUSED: {e}"),
+                    },
+                    report.warnings
+                ));
+            }
+            cat.conn().commit().map_err(|e| format!("link batch: commit refused, nothing written: {e}"))?;
+        }
         if report.failed > 0 {
             return Err(format!(
                 "link batch failed; writes may be partial: {:?}",
                 report.warnings
             ));
         }
-        ctx.set_output("report",PortValue::new(json!({"submitted":queued,"processed":report.processed,"unchanged":report.unchanged,"warnings":report.warnings})));
+        // Pas de `posed` : un `MERGE` ne dit pas s'il a créé — ce compte
+        // viendra de `Write::Link` (rag3db-6f).
+        ctx.set_output(
+            "report",
+            PortValue::new(json!({
+                "submitted": queued,
+                "verified": verified,
+                "processed": report.processed,
+                "unchanged": report.unchanged,
+                "atomic": atomic,
+                "atomic_reason": raison,
+                "warnings": report.warnings
+            })),
+        );
         Ok(())
     }
 }

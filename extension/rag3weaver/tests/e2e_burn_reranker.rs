@@ -26,7 +26,8 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
 
-mod common;
+#[allow(unused_imports)] // employé sous certaines features seulement
+use crate::common;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};

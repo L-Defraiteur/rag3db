@@ -534,6 +534,12 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // à peler — résolu à la matérialisation, quand les classes sont
             // en base.
             props.insert("deferred".to_string(), field_def(FieldType::String));
+            // « oui » : toutes les références du mentionneur sont des appels
+            // sur un receveur local non typé — jamais relié par le seul nom.
+            props.insert("untyped_receiver".to_string(), field_def(FieldType::String));
+            // Le module source d'une réexportation (`runtime` pour `pub use
+            // runtime::X`) ; vide pour une mention ordinaire.
+            props.insert("reexport_from".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -632,6 +638,12 @@ pub struct ScopeRecord {
     /// Le type de retour écrit d'une fonction ; vide sinon.
     #[serde(default)]
     pub return_type: String,
+    /// **Un bloc qui prolonge un type défini ailleurs** (un `impl` Rust,
+    /// modificateur `impl` de codeparsers) : il porte le nom du type sans le
+    /// définir — pas de DEFINES vers ce nom, sinon `Marteau` aurait deux
+    /// définitions partout où un `impl` existe. Pas une colonne.
+    #[serde(default)]
+    pub extends_type: bool,
     pub start_line: usize,
     pub end_line: usize,
     pub start_byte: usize,
@@ -658,6 +670,12 @@ pub struct CodeRelation {
     /// relation de structure.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sites: Vec<UsageSite>,
+    /// **Posée par le nom seul** (codeparsers `by_name`) : un appel sur un
+    /// receveur non typé relié à un scope du fichier de ce nom. Marquée
+    /// « nom », pas « fichier » : la marque dit comment le lien a été
+    /// établi, pas où (décision du 11 octobre 2026).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_name: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -713,6 +731,19 @@ pub struct CodeAnalysis {
     /// fichiers, et codeparsers reste en fichier seul.
     #[serde(default)]
     pub pending_deferred: Vec<(String, String, Vec<String>)>,
+    /// Les noms dont toutes les références sont des appels sur un receveur
+    /// local non typé (codeparsers `untyped_receiver`) : le rendez-vous ne
+    /// les relie jamais par le seul nom — visibles, non attribués (décision
+    /// de Lucie, 11 octobre 2026).
+    #[serde(default)]
+    pub pending_untyped: Vec<(String, String)>,
+    /// **Les réexportations** : `(scope du fichier, nom, module source)`
+    /// pour chaque `pub use` d'un fichier (`pub use runtime::DataflowEvent`
+    /// dans dataflow/mod.rs → `runtime`). Le rendez-vous les suit quand un
+    /// import désigne ce fichier et que le nom n'y est pas défini (ticket du
+    /// 4 octobre, lot 2 bis de la stèle du produit).
+    #[serde(default)]
+    pub pending_reexport: Vec<(String, String, String)>,
     /// Les verrous pris : (scope, symbole `Classe::champ`, sites).
     #[serde(default)]
     pub pending_locks: Vec<(String, String, Vec<UsageSite>)>,
@@ -839,6 +870,18 @@ pub fn analyze_in_project(
     // heuristique — la source est **connue** à l'ingestion (doc 04 v3).
     let source = source_id(cursor);
     let virtual_source = source != LOCAL_SOURCE;
+    // **Une racine relative d'une source locale se résout, et se dit**
+    // (ticket du 4 octobre, P3 de la stèle du produit) : laissée relative,
+    // elle donnait des chemins « absolus » relatifs et doublés
+    // (`r/r/a.rs`) — une identité fausse, en silence. Résolue depuis le
+    // répertoire courant, sans toucher au disque.
+    let racine_resolue: Option<String> = (!virtual_source && Path::new(root).is_relative())
+        .then(|| std::path::absolute(root).ok().map(|p| p.to_string_lossy().to_string()))
+        .flatten();
+    if let Some(r) = &racine_resolue {
+        eprintln!("[rag3weaver] analyze : racine relative « {root} » résolue en « {r} »");
+    }
+    let root: &str = racine_resolue.as_deref().unwrap_or(root);
     let registry = crate::origin::CoordinateRegistry::default();
     let mut named: HashMap<String, (String, BTreeMap<String, String>)> = HashMap::new();
     // Les fichiers sans grammaire, gardés de côté : ils ne passent pas par
@@ -966,6 +1009,7 @@ pub fn analyze_in_project(
             repo_path,
             name: sc.name.clone(),
             scope_type: "texte_brut".to_string(),
+            extends_type: false,
             signature: String::new(),
             content: sc.content.clone(),
             folds: String::new(),
@@ -991,6 +1035,7 @@ pub fn analyze_in_project(
             to_entity: FILE.to_string(),
             to_key: name,
             sites: Vec::new(),
+            by_name: false,
         });
     }
 
@@ -1058,6 +1103,7 @@ pub fn analyze_in_project(
                 repo: repo.clone(),
                 repo_path: repo_path.clone(),
                 name: s.name.clone(),
+                extends_type: s.modifiers.iter().any(|m| m == "impl"),
                 scope_type: type_str,
                 signature: s.signature.clone(),
                 content,
@@ -1099,6 +1145,7 @@ pub fn analyze_in_project(
             to_entity: to.0.to_string(),
             to_key: to.1.clone(),
             sites: r.metadata.as_ref().map(|m| m.sites.clone()).unwrap_or_default(),
+            by_name: r.metadata.as_ref().and_then(|m| m.by_name).unwrap_or(false),
         });
     }
     // ── Ce que le lot référence, par nom ────────────────────────────────
@@ -1128,10 +1175,35 @@ pub fn analyze_in_project(
     let aucune = std::collections::HashSet::new();
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
+        // Les noms que le fichier réexporte, et leur module source. Un
+        // renommage (`pub use a::X as Y`) n'est pas suivi : le nom cherché
+        // n'est pas celui du définisseur.
+        let reexportes: Vec<(String, String)> = fa
+            .import_references
+            .iter()
+            .filter(|imp| imp.reexport && imp.kind == codeparsers::scope_extraction::types::ImportReferenceKind::Named)
+            .filter_map(|imp| {
+                let nom = imp.alias.clone()?;
+                let dernier = imp.imported.rsplit("::").next().unwrap_or(&imp.imported);
+                (dernier == nom).then(|| (nom, imp.module_path.clone().unwrap_or_else(|| imp.source.clone())))
+            })
+            .collect();
+        let mut reexportations_posees = reexportes.is_empty();
         for (i, sc) in fa.scopes.iter().enumerate() {
             let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
                 continue;
             };
+            // Le premier scope de fichier porte les réexportations : un
+            // rendez-vous de lui vers le nom, avec le module source.
+            if !reexportations_posees && sc.name.starts_with("file_scope") {
+                reexportations_posees = true;
+                for (nom, module) in &reexportes {
+                    if !analysis.pending.iter().any(|(k, n, _)| k == key && n == nom) {
+                        analysis.pending.push((key.clone(), nom.clone(), "CONSUMES".to_string()));
+                    }
+                    analysis.pending_reexport.push((key.clone(), nom.clone(), module.clone()));
+                }
+            }
             let libraries = fichier_du_scope.get(key).and_then(|f| libraries_du_fichier.get(f)).unwrap_or(&aucune);
             let mut seen = std::collections::HashSet::new();
             let mut sites: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
@@ -1143,6 +1215,9 @@ pub fn analyze_in_project(
             let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : les types à lire ailleurs, pour les références sans type lu.
             let mut differes_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Par nom : toutes ses références sont-elles des appels sur un
+            // receveur local non typé ?
+            let mut non_types_lus: BTreeMap<String, bool> = BTreeMap::new();
             // Les verrous pris : symbole `Classe::champ` → sites.
             let mut verrous: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             for r in &sc.identifier_references {
@@ -1241,6 +1316,8 @@ pub fn analyze_in_project(
                     }
                     _ => *englobants = None,
                 }
+                let non_type = non_types_lus.entry(id.to_string()).or_insert(true);
+                *non_type &= r.untyped_receiver && r.qualifier_type.is_none();
                 let differes = differes_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 if r.qualifier_type.is_none() {
                     match (differes.as_mut(), r.qualifier_deferred.as_ref().and_then(|d| serde_json::to_string(d).ok())) {
@@ -1312,6 +1389,11 @@ pub fn analyze_in_project(
                 if let Some(mut v) = differes.filter(|v| !v.is_empty()) {
                     v.sort();
                     analysis.pending_deferred.push((key.clone(), name, v));
+                }
+            }
+            for (name, non_type) in non_types_lus {
+                if non_type {
+                    analysis.pending_untyped.push((key.clone(), name));
                 }
             }
         }
@@ -1877,7 +1959,13 @@ impl Catalog {
                 let mut p = usage_properties(&r.sites);
                 // L'analyseur résout dans le fichier ; une bibliothèque, par
                 // l'import qui la nomme.
-                let resolution = if r.rel == "USES_LIBRARY" { Resolution::Import } else { Resolution::File };
+                let resolution = if r.rel == "USES_LIBRARY" {
+                    Resolution::Import
+                } else if r.by_name {
+                    Resolution::Name
+                } else {
+                    Resolution::File
+                };
                 p.insert("resolution".to_string(), s(resolution.as_str()));
                 p
             } else {
@@ -1983,7 +2071,7 @@ impl Catalog {
         // Ce que le lot offre, et ce qu'il attend — en file par relation.
         let mut definitions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.scopes.len());
         let mut mentions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending.len());
-        for sc in &analysis.scopes {
+        for sc in analysis.scopes.iter().filter(|sc| !sc.extends_type) {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
@@ -2045,6 +2133,9 @@ impl Catalog {
             analysis.pending_self_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         let differes_of: HashMap<(&str, &str), &Vec<String>> =
             analysis.pending_deferred.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let non_types: std::collections::HashSet<(&str, &str)> = analysis.pending_untyped.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
+        let reexports_of: HashMap<(&str, &str), &str> =
+            analysis.pending_reexport.iter().map(|(k, n, m)| ((k.as_str(), n.as_str()), m.as_str())).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -2065,6 +2156,9 @@ impl Catalog {
             props.insert("self_types".to_string(), s(&englobants));
             let differes = differes_of.get(&(scope_key.as_str(), name.as_str())).map(|v| format!("[{}]", v.join(","))).unwrap_or_default();
             props.insert("deferred".to_string(), s(&differes));
+            let non_type = if non_types.contains(&(scope_key.as_str(), name.as_str())) { "oui" } else { "" };
+            props.insert("untyped_receiver".to_string(), s(non_type));
+            props.insert("reexport_from".to_string(), s(reexports_of.get(&(scope_key.as_str(), name.as_str())).copied().unwrap_or("")));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -2128,6 +2222,9 @@ impl Catalog {
                     })
             })
             .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
+            // Et les scopes qui réexportent un nom : leur fichier dit d'où
+            // part le chemin à suivre.
+            .chain(mentioners_by_symbol.values().flatten().filter(|m| !m.reexport_from.is_empty()).map(|m| m.from.clone()))
             .collect();
         let (parents, fichiers, genres) = self.parents_et_fichiers(&a_departager)?;
         for sym in uuids {
@@ -2145,8 +2242,17 @@ impl Catalog {
                 // exactement la sur-connexion que RAGForge a payée.
                 report.ambiguous += 1;
             }
+            // Les fichiers qui réexportent ce nom, et le module d'où ils le
+            // tiennent.
+            let reexports: Vec<(String, String)> = mentioners_by_symbol
+                .get(sym)
+                .unwrap_or(&empty)
+                .iter()
+                .filter(|m| !m.reexport_from.is_empty())
+                .filter_map(|m| fichiers.get(&m.from).map(|f| (f.clone(), m.reexport_from.clone())))
+                .collect();
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                let Some((target, resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres) else {
+                let Some((target, resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres, &reexports) else {
                     continue;
                 };
                 let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
@@ -2461,7 +2567,7 @@ impl Catalog {
         saut.start = Some(SYMBOL.to_string());
         if with_kind {
             saut.returns.extend(
-                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
+                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
             );
         }
         let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -2496,9 +2602,11 @@ impl Catalog {
                 let self_types = liste(8);
                 let deferred: Vec<codeparsers::scope_extraction::types::DeferredType> =
                     row.get(9).and_then(|v| v.as_str()).filter(|t| !t.is_empty()).and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
+                let untyped = row.get(10).and_then(|v| v.as_str()) == Some("oui");
+                let reexport_from = row.get(11).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 out.entry(to.clone())
                     .or_default()
-                    .push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types, deferred });
+                    .push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types, deferred, untyped, reexport_from });
             }
         }
         Ok(out)
@@ -2572,6 +2680,12 @@ struct Mention {
     /// Les types à lire ailleurs (champ, retour), résolus à la
     /// matérialisation en `qualifier_types`.
     deferred: Vec<codeparsers::scope_extraction::types::DeferredType>,
+    /// Un appel sur un receveur local non typé : sans type lu (même
+    /// différé), aucune arête — jamais le repli par le seul nom.
+    untyped: bool,
+    /// Le module source quand le mentionneur réexporte le nom (`pub use`) ;
+    /// vide sinon.
+    reexport_from: String,
 }
 
 /// **Comment une arête du rendez-vous a été résolue** : la marque qu'elle
@@ -2619,8 +2733,15 @@ fn choose_target(
     parents: &HashMap<String, String>,
     fichiers: &HashMap<String, String>,
     genres: &HashMap<String, String>,
+    reexports: &[(String, String)],
 ) -> Option<(String, Resolution)> {
-    let par_import = |d: &String| fichiers.get(d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f)));
+    // Le définisseur qu'un import atteint au travers des réexportations du
+    // fichier qu'il désigne (`crate::dataflow` → dataflow/mod.rs → `pub use
+    // runtime::X` → dataflow/runtime.rs) : il vaut un import direct.
+    let via_reexport = par_reexportation(&m.import_modules, definers, fichiers, reexports);
+    let par_import = |d: &String| {
+        fichiers.get(d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))) || via_reexport.as_ref() == Some(d)
+    };
     let seul_ou_import = |d: &String| (d.clone(), if par_import(d) { Resolution::Import } else { Resolution::Name });
     if m.kind == "HAS_PARENT" {
         let conteneurs: Vec<&String> = definers
@@ -2638,6 +2759,11 @@ fn choose_target(
             [un] => Some(seul_ou_import(un)),
             _ => None,
         };
+    }
+    // Un receveur local non typé, dont aucun type ne s'est lu : visible au
+    // rendez-vous, jamais relié par le seul nom.
+    if m.untyped && m.qualifier_types.is_empty() {
+        return None;
     }
     if !m.qualifier_types.is_empty() {
         let du_type: Vec<&String> = definers
@@ -2672,6 +2798,63 @@ fn choose_target(
         };
     }
     None
+}
+
+/// **Le définisseur qu'un import atteint par les réexportations** (décision
+/// du 4 octobre) : le module importé désigne un fichier ; si ce fichier
+/// réexporte le nom (`pub use runtime::X`), le module source, résolu depuis
+/// le module qui réexporte, désigne le fichier suivant — trois sauts au plus.
+/// `Some` seulement quand un seul définisseur est atteint.
+fn par_reexportation(modules: &[String], definers: &[String], fichiers: &HashMap<String, String>, reexports: &[(String, String)]) -> Option<String> {
+    if reexports.is_empty() {
+        return None;
+    }
+    let mut front: Vec<String> = modules.to_vec();
+    for _ in 0..3 {
+        let mut suivant: Vec<String> = Vec::new();
+        for module in &front {
+            for (_, source) in reexports.iter().filter(|(f, _)| module_designe_fichier(module, f)) {
+                let resolu = joindre_les_modules(module, source);
+                let atteints: Vec<&String> =
+                    definers.iter().filter(|d| fichiers.get(*d).is_some_and(|f| module_designe_fichier(&resolu, f))).collect();
+                match atteints.as_slice() {
+                    [un] => return Some((*un).clone()),
+                    [] => suivant.push(resolu),
+                    _ => {}
+                }
+            }
+        }
+        if suivant.is_empty() {
+            return None;
+        }
+        front = suivant;
+    }
+    None
+}
+
+/// Le module que désigne `source`, écrit dans `module` : `runtime` →
+/// `module::runtime`, `self::x` → `module::x`, `super::x` → le parent de
+/// `module` puis `x`, `crate::…` tel quel.
+fn joindre_les_modules(module: &str, source: &str) -> String {
+    if source.starts_with("crate::") || source == "crate" {
+        return source.to_string();
+    }
+    let mut base: Vec<&str> = module.split("::").filter(|s| !s.is_empty()).collect();
+    let mut segments = source.split("::").filter(|s| !s.is_empty()).peekable();
+    while let Some(&seg) = segments.peek() {
+        match seg {
+            "self" => {
+                segments.next();
+            }
+            "super" => {
+                base.pop();
+                segments.next();
+            }
+            _ => break,
+        }
+    }
+    base.extend(segments);
+    base.join("::")
 }
 
 /// **Le module d'un appel par chemin**, lu comme un import : le qualificatif
@@ -3197,6 +3380,18 @@ mod tests_vocabulaire {
 
 #[cfg(test)]
 mod tests_resolution {
+
+    /// **Une racine relative n'est pas un corpus vide** (ticket du 4
+    /// octobre, P3 de la stèle du produit) : `analyze("rel", …)` rendait zéro
+    /// scope, sans erreur ni entrée dans `skipped`.
+    #[test]
+    fn une_racine_relative_n_est_pas_un_corpus_vide() {
+        let a = super::analyze("racine/relative", vec![("a.rs".to_string(), "pub fn f() -> i32 {\n    1\n}\n".to_string())]);
+        assert!(a.scopes.iter().any(|s| s.name == "f"), "le scope f est rendu : {:?}", a.scopes.iter().map(|s| &s.name).collect::<Vec<_>>());
+        assert!(a.skipped.is_empty(), "rien d'écarté : {:?}", a.skipped);
+        assert!(a.files.iter().all(|f| std::path::Path::new(&f.absolute_path).is_absolute()), "chemins absolus : {:?}", a.files.iter().map(|f| &f.absolute_path).collect::<Vec<_>>());
+    }
+
     use super::*;
 
     fn mention(kind: &str, types: &[&str], imports: &[&str]) -> Mention {
@@ -3208,6 +3403,8 @@ mod tests_resolution {
             import_modules: imports.iter().map(|t| t.to_string()).collect(),
             self_types: Vec::new(),
             deferred: Vec::new(),
+            untyped: false,
+            reexport_from: String::new(),
         }
     }
 
@@ -3223,7 +3420,7 @@ mod tests_resolution {
     fn un_seul_definisseur_sans_rien_est_par_le_nom() {
         // La recette du ticket : `v.clear()` sans type lu, une seule `clear`.
         let m = mention("CONSUMES", &[], &[]);
-        let t = choose_target(&m, &ids(&["clear@a.rs"]), &HashMap::new(), &HashMap::new(), &HashMap::new());
+        let t = choose_target(&m, &ids(&["clear@a.rs"]), &HashMap::new(), &HashMap::new(), &HashMap::new(), &[]);
         assert_eq!(t, Some(("clear@a.rs".into(), Resolution::Name)));
         assert_eq!(Resolution::Name.as_str(), "nom");
     }
@@ -3232,11 +3429,11 @@ mod tests_resolution {
     fn un_seul_definisseur_designe_par_un_import_est_par_l_import() {
         let m = mention("CONSUMES", &[], &["crate::estimate"]);
         let fichiers = table(&[("rate", "/p/src/estimate.rs")]);
-        let t = choose_target(&m, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new());
+        let t = choose_target(&m, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &[]);
         assert_eq!(t, Some(("rate".into(), Resolution::Import)));
         // Un import qui ne désigne pas son fichier ne confirme rien.
         let ailleurs = mention("CONSUMES", &[], &["crate::autre"]);
-        let t = choose_target(&ailleurs, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new());
+        let t = choose_target(&ailleurs, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &[]);
         assert_eq!(t, Some(("rate".into(), Resolution::Name)));
     }
 
@@ -3244,10 +3441,10 @@ mod tests_resolution {
     fn le_type_lu_choisit_et_reste_seul_juge() {
         let parents = table(&[("run@node", "Node<'a>"), ("run@reactor", "Reactor")]);
         let m = mention("CONSUMES", &["Node"], &[]);
-        let t = choose_target(&m, &ids(&["run@node", "run@reactor"]), &parents, &HashMap::new(), &HashMap::new());
+        let t = choose_target(&m, &ids(&["run@node", "run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
         assert_eq!(t, Some(("run@node".into(), Resolution::Type)));
         // Seul définisseur, mais d'un autre type : l'abstention.
-        let t = choose_target(&m, &ids(&["run@reactor"]), &parents, &HashMap::new(), &HashMap::new());
+        let t = choose_target(&m, &ids(&["run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
         assert_eq!(t, None);
     }
 
@@ -3256,9 +3453,9 @@ mod tests_resolution {
         let fichiers = table(&[("get@a", "/p/src/a.rs"), ("get@b", "/p/src/b.rs")]);
         let definers = ids(&["get@a", "get@b"]);
         let m = mention("CONSUMES", &[], &["crate::b"]);
-        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new()), Some(("get@b".into(), Resolution::Import)));
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), Some(("get@b".into(), Resolution::Import)));
         let rien = mention("CONSUMES", &[], &[]);
-        assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new()), None);
+        assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), None);
     }
 
     #[test]
@@ -3280,14 +3477,14 @@ mod tests_resolution {
         let parents = table(&[("new@foo", "Foo"), ("new@bar", "Bar")]);
         let par_self = |englobant: &str| Mention { self_types: vec![englobant.to_string()], ..mention("CONSUMES", &[], &[]) };
         // `Self::new()` dans `impl Foo`, `new` défini pour Foo et Bar : Foo.
-        let t = choose_target(&par_self("Foo"), &ids(&["new@foo", "new@bar"]), &parents, &HashMap::new(), &HashMap::new());
+        let t = choose_target(&par_self("Foo"), &ids(&["new@foo", "new@bar"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
         assert_eq!(t, Some(("new@foo".into(), Resolution::Type)));
         // `self.f()` dans une méthode par défaut du trait `Outil`, `f` défini
         // par deux impls : le trait ne choisit pas au hasard.
         let parents2 = table(&[("f@a", "A"), ("f@b", "B")]);
-        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a", "f@b"]), &parents2, &HashMap::new(), &HashMap::new()), None);
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a", "f@b"]), &parents2, &HashMap::new(), &HashMap::new(), &[]), None);
         // … et s'il n'y en a qu'un : la règle d'avant, par le nom.
-        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a"]), &parents2, &HashMap::new(), &HashMap::new()), Some(("f@a".into(), Resolution::Name)));
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a"]), &parents2, &HashMap::new(), &HashMap::new(), &[]), Some(("f@a".into(), Resolution::Name)));
     }
 
     #[test]
@@ -3295,13 +3492,35 @@ mod tests_resolution {
         let genres = table(&[("Foo@class", "class"), ("Foo@ctor", "method"), ("Foo@ns", "namespace")]);
         let m = mention("HAS_PARENT", &[], &[]);
         // Le constructeur homonyme n'est pas un parent.
-        let t = choose_target(&m, &ids(&["Foo@class", "Foo@ctor"]), &HashMap::new(), &HashMap::new(), &genres);
+        let t = choose_target(&m, &ids(&["Foo@class", "Foo@ctor"]), &HashMap::new(), &HashMap::new(), &genres, &[]);
         assert_eq!(t, Some(("Foo@class".into(), Resolution::Name)));
         // Deux conteneurs sans import : l'abstention ; l'import départage.
         let deux = ids(&["Foo@class", "Foo@ns"]);
-        assert_eq!(choose_target(&m, &deux, &HashMap::new(), &HashMap::new(), &genres), None);
+        assert_eq!(choose_target(&m, &deux, &HashMap::new(), &HashMap::new(), &genres, &[]), None);
         let fichiers = table(&[("Foo@class", "/p/foo.h"), ("Foo@ns", "/p/ns.h")]);
         let par_import = mention("HAS_PARENT", &[], &["foo"]);
-        assert_eq!(choose_target(&par_import, &deux, &HashMap::new(), &fichiers, &genres), Some(("Foo@class".into(), Resolution::Import)));
+        assert_eq!(choose_target(&par_import, &deux, &HashMap::new(), &fichiers, &genres, &[]), Some(("Foo@class".into(), Resolution::Import)));
+    }
+
+    /// **Les réexportations** : le module source se résout depuis le module
+    /// qui réexporte, et un import qui désigne `dataflow/mod.rs` atteint la
+    /// définition de `dataflow/runtime.rs` par son `pub use`.
+    #[test]
+    fn un_import_suit_les_reexportations() {
+        assert_eq!(joindre_les_modules("crate::dataflow", "runtime"), "crate::dataflow::runtime");
+        assert_eq!(joindre_les_modules("crate::dataflow", "self::runtime"), "crate::dataflow::runtime");
+        assert_eq!(joindre_les_modules("crate::dataflow::noeuds", "super::runtime"), "crate::dataflow::runtime");
+        assert_eq!(joindre_les_modules("crate::dataflow", "crate::ailleurs"), "crate::ailleurs");
+        let fichiers: HashMap<String, String> = [
+            ("E@runtime".to_string(), "/p/src/dataflow/runtime.rs".to_string()),
+            ("E@autre".to_string(), "/p/src/autre.rs".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let definers = ids(&["E@runtime", "E@autre"]);
+        let reexports = vec![("/p/src/dataflow/mod.rs".to_string(), "runtime".to_string())];
+        let m = Mention { import_modules: vec!["crate::dataflow".into()], ..mention("CONSUMES", &[], &[]) };
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &reexports), Some(("E@runtime".into(), Resolution::Import)));
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), None, "sans la réexportation, rien");
     }
 }

@@ -1781,6 +1781,136 @@ TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommi
 // personne — le fichier n'a pas d'étendue connue. La mesure est celle du contrôle de fuite de
 // la suite Cypher : toutes les tables retirées, un point de reprise, puis les pages du fichier
 // moins les pages libres, comparées à celles d'une base qui a fait le même travail sans mourir.
+// Le COPY journalisé relu en mémoire, sans mort ni rejeu (11 octobre 2026, sonde de l'arbre
+// principal) : 200 000 lignes avec une colonne FLOAT[4] à côté d'une DOUBLE, deux fils, le
+// seuil du journal à 1 Gio. Sur master, 3 fois sur 3 : la DOUBLE des ~600 dernières lignes du
+// groupe partiel se lit comme des dénormaux (imprimés 0.000000) alors que les données en
+// mémoire sont justes (un CHECKPOINT dans le même processus les relit justes). Le journal
+// porte ce qui a été lu : le rejeu écrit les mêmes faux. Un fil, ou vec en STRING, ou le point
+// de reprise forcé : juste.
+class JournaledCopyReadBackTest : public JournaledCopyTest {
+protected:
+    static constexpr int64_t NUM_ROWS = 200000;
+
+    void writeRowsWithVectors() const {
+        std::ofstream csv(csvPath);
+        for (int64_t id = 0; id < NUM_ROWS; id++) {
+            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7
+                << "," << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
+        }
+    }
+
+    // La configuration de la sonde : un tampon de ~73 Mio, deux fils.
+    SystemConfig probeConfig() const {
+        auto config = *systemConfig;
+        config.bufferPoolSize = (1ull << 26) + 256ull * 4096 * 9;
+        config.maxNumThreads = 2;
+        return config;
+    }
+
+    static std::string wrongScores(Connection& connection) {
+        auto result = connection.query(
+            "MATCH (d:Doc) WHERE d.score <> d.id + 0.5 RETURN count(*), min(d.id), max(d.id);");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() ? result->getNext()->toString() : "<error>";
+    }
+};
+
+TEST_F(JournaledCopyReadBackTest, TwoThreadsAndAnArrayColumnReadEveryScoreBack) {
+    writeRowsWithVectors();
+    std::filesystem::remove_all(databasePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+    const auto config = probeConfig();
+    Database database(databasePath, config);
+    Connection connection(&database);
+    ASSERT_TRUE(connection.query("CALL auto_checkpoint=false;")->isSuccess());
+    ASSERT_TRUE(connection.query("CALL force_checkpoint_on_copy=false;")->isSuccess());
+    ASSERT_TRUE(connection
+                    .query("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE, "
+                           "vec FLOAT[4]);")
+                    ->isSuccess());
+    ASSERT_TRUE(connection.query("CHECKPOINT;")->isSuccess());
+    ASSERT_TRUE(connection.query("CALL copy_journal_threshold=1073741824;")->isSuccess());
+    auto copy = connection.query("COPY Doc FROM '" + csvPath + "';");
+    ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+    // Trois essais : la répartition des lignes entre les fils fait le hasard.
+    for (auto attempt = 0; attempt < 3; attempt++) {
+        EXPECT_EQ(wrongScores(connection), "0||\n") << "attempt " << attempt;
+        if (attempt < 2) {
+            ASSERT_TRUE(connection.query("MATCH (d:Doc) DELETE d;")->isSuccess());
+            ASSERT_TRUE(connection.query("CHECKPOINT;")->isSuccess());
+            copy = connection.query("COPY Doc FROM '" + csvPath + "';");
+            ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+        }
+    }
+}
+
+// C7 après arrêt brutal (ticket du 10 octobre) : dans la trace du rejeu d'une passe rouge, le
+// nœud détaché avait deux relations entrantes visibles dans un même lot du balayage ; la seconde
+// n'était jamais supprimée et survivait d'un seul côté. Au rejeu d'un DETACH DELETE, les vecteurs
+// voisin et relation étaient branchés sur l'état du vecteur source (une seule position) : la
+// seconde relation du lot se lisait à une position nulle et était sautée en silence. Un seul
+// écrivain suffit : atteignable en service. Ici, à un fil : deux relations vers 8, puis 8
+// détaché-supprimé, la mort, le rejeu — aucune relation ne doit survivre, d'un côté ni de l'autre.
+class PendingRelAfterReplayTest : public JournaledCopyTest {
+protected:
+    void prepare(Connection& child, bool multiWrites) {
+        must(child, "CALL debug_enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
+        must(child, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+        must(child, "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+        for (auto id = 0; id < 12; id++) {
+            must(child, "CREATE (:Item {id: " + std::to_string(id) + ", writer: 0});");
+        }
+        must(child, "CHECKPOINT;");
+    }
+    void scenario(Connection& child) {
+        // La trace du rejeu d'une passe rouge : le nœud détaché avait DEUX relations visibles
+        // dans le même lot du balayage ; la seconde survivait d'un seul côté.
+        must(child, "MATCH (a:Item {id: 4}), (b:Item {id: 8}) "
+                    "CREATE (a)-[:Link {src_id: 4, dst_id: 8}]->(b);");
+        // La transaction d'avant : une mise à jour, puis la relation 10 -> 8.
+        must(child, "BEGIN TRANSACTION;");
+        must(child, "MATCH (n:Item {id: 3}) SET n.writer = 2;");
+        must(child, "MATCH (a:Item {id: 10}), (b:Item {id: 8}) "
+                    "CREATE (a)-[:Link {src_id: 10, dst_id: 8}]->(b);");
+        must(child, "COMMIT;");
+        // La suivante : la cible détachée et supprimée.
+        must(child, "MATCH (n:Item {id: 8}) DETACH DELETE n;");
+        // Et une transaction après, pour que le journal continue.
+        must(child, "MATCH (a:Item {id: 0}), (b:Item {id: 0}) "
+                    "CREATE (a)-[:Link {src_id: 0, dst_id: 0}]->(b);");
+    }
+    void expectNoPendingRel() {
+        createDBAndConn();
+        EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 11);
+        EXPECT_EQ(single("MATCH (a:Item)-[l:Link]->(b:Item) RETURN count(l);"), 1) << "forward";
+        EXPECT_EQ(single("MATCH (b:Item)<-[l:Link]-(a:Item) RETURN count(l);"), 1) << "backward";
+        EXPECT_EQ(single("MATCH (a:Item {id: 10})-[l:Link]->() RETURN count(l);"), 0)
+            << "a relationship from 10 survives its detached target";
+        EXPECT_EQ(single("MATCH (a:Item {id: 4})-[l:Link]->() RETURN count(l);"), 0)
+            << "a relationship from 4 survives its detached target";
+        EXPECT_EQ(single("MATCH ()-[l:Link]->() WHERE l.dst_id = 8 RETURN count(l);"), 0);
+    }
+};
+
+TEST_F(PendingRelAfterReplayTest, ADetachDeleteRightAfterTheRelIsCreatedIsReplayedWhole) {
+    writeThenDie([&](Connection& child) {
+        prepare(child, false);
+        scenario(child);
+    });
+    ASSERT_GT(journalSize(), 0u);
+    expectNoPendingRel();
+}
+
+TEST_F(PendingRelAfterReplayTest, TheSameUnderMultiWrites) {
+    writeThenDie([&](Connection& child) {
+        prepare(child, true);
+        scenario(child);
+    });
+    ASSERT_GT(journalSize(), 0u);
+    expectNoPendingRel();
+}
+
 class OwnerlessPagesTest : public CopyJournalThresholdTest {
 protected:
     // Plus qu'un groupe de nœuds : un COPY n'écrit ses pages avant la validation que par groupe

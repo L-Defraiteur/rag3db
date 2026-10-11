@@ -62,8 +62,33 @@ use crate::dataflow::services::ServiceRegistry;
 /// pas à la phrase entière, qui porte des noms de table.
 pub const INDEX_BEHIND_ITS_TABLE: &str = "is behind its table";
 
+/// Ce que [`Catalog::verifier_les_bouts`] a trouvé : les bouts absents
+/// `(entité, uuid)`, et ceux hors des états permis `(entité, uuid, état)`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BoutsVerifies {
+    pub absents: Vec<(String, String)>,
+    pub hors_etat: Vec<(String, String, String)>,
+}
+
+impl BoutsVerifies {
+    pub fn est_bon(&self) -> bool {
+        self.absents.is_empty() && self.hors_etat.is_empty()
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
+    /// **Une identité ne vit que dans une cellule**, jusqu'à la migration qui
+    /// fera entrer la cellule dans l'identité (ticket
+    /// `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne`). Sans ce
+    /// refus, l'écriture dans la seconde cellule déplaçait la ligne de la
+    /// première, qui perdait sa fiche sans un mot.
+    #[error(
+        "{entity} {uuid} vit déjà dans la cellule {lives_in} : l'écrire dans la cellule {written_in} est refusé, \
+         une identité ne vit que dans une cellule jusqu'à la migration (rien n'est écrit, la fiche de {lives_in} \
+         est intacte)"
+    )]
+    IdentityInAnotherCell { entity: String, uuid: String, lives_in: String, written_in: String },
     #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
     IndexPersistence(String),
     #[error("not initialized")]
@@ -249,6 +274,9 @@ pub struct Catalog {
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
     /// annulation emporterait sinon le schéma avec les lignes.
     in_transaction: bool,
+    /// La fusion des éventails levée ou baissée pour ce montage
+    /// ([`Self::set_fanout`]) ; `None` : ce que déclare le dialecte.
+    fanout: Option<bool>,
     /// Garder les points de reprise du dataflow dans une transaction
     /// ([`set_checkpoints_in_transaction`](Self::set_checkpoints_in_transaction)) ;
     /// coupés par défaut.
@@ -469,6 +497,7 @@ impl Catalog {
             peut_devoir_un_embarquement: false,
             absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
+            fanout: None,
             checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
@@ -1759,26 +1788,69 @@ impl Catalog {
     /// calcul que `ingest_entities`, exposé pour que ceux qui relient des
     /// entités par identité (l'ingestion de code) n'aient pas à le deviner.
     pub fn entity_uuid(&self, entity_name: &str, data: &BTreeMap<String, CypherValue>) -> Result<String, CatalogError> {
-        let entity_def = self.config.entities.get(entity_name)
-            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
-        Ok(Self::uuid_for(entity_name, entity_def, data))
+        self.entity_uuid_in(&self.scope.clone(), entity_name, data)
     }
 
+    /// [`entity_uuid`](Self::entity_uuid) dans une cellule donnée : celle de la
+    /// requête (marche 1 bis), et non celle du catalogue.
+    pub fn entity_uuid_in(
+        &self,
+        cell: &crate::scope::Scope,
+        entity_name: &str,
+        data: &BTreeMap<String, CypherValue>,
+    ) -> Result<String, CatalogError> {
+        let entity_def = self.config.entities.get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
+        Ok(Self::uuid_for_in(cell, entity_name, entity_def, data))
+    }
+
+    /// L'identité dans la cellule par défaut : celle d'avant les cellules.
+    #[cfg(test)]
     fn uuid_for(entity_name: &str, entity_def: &crate::config::EntityDef, data: &BTreeMap<String, CypherValue>) -> String {
-        if let Some(ref hashsafe_fields) = entity_def.hashsafe {
-            let field_values: Vec<&str> = hashsafe_fields
+        Self::uuid_for_in(&crate::scope::Scope::default(), entity_name, entity_def, data)
+    }
+
+    /// **L'identité d'une ligne : (cellule, identité déclarée)** (migration (a)
+    /// de la marche 1 bis, tranchée par Lucie le 11 octobre 2026). La cellule
+    /// par défaut garde exactement la formule d'avant, et aucune base existante
+    /// ne change d'identité ; une autre cellule entre dans le hachage, et la
+    /// même fiche écrite dans deux cellules fait deux lignes.
+    fn uuid_for_in(
+        cell: &crate::scope::Scope,
+        entity_name: &str,
+        entity_def: &crate::config::EntityDef,
+        data: &BTreeMap<String, CypherValue>,
+    ) -> String {
+        let mut field_values: Vec<String> = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
+            hashsafe_fields
                 .iter()
-                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
-                .collect();
-            hashsafe_uuid(entity_name, &field_values)
+                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or("").to_string())
+                .collect()
         } else {
-            // Use all data fields as hashsafe input for deterministic UUIDs
-            let mut field_values: Vec<String> = data.iter()
+            // Tous les champs de la ligne, sauf sa cellule : elle n'y était pas
+            // avant les cellules (posée après le calcul), et elle n'entre dans
+            // l'identité que par la règle ci-dessous.
+            let mut v: Vec<String> = data
+                .iter()
+                .filter(|(k, _)| k.as_str() != crate::scope::ORG_COLUMN && k.as_str() != crate::scope::PROJECT_COLUMN)
                 .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
                 .collect();
-            field_values.sort();
-            let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
-            hashsafe_uuid(entity_name, &refs)
+            v.sort();
+            v
+        };
+        if !cell.is_default() {
+            field_values.insert(0, format!("_cellule={}/{}", cell.org, cell.project));
+        }
+        let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
+        hashsafe_uuid(entity_name, &refs)
+    }
+
+    /// La cellule que porte une ligne, sinon celle du catalogue.
+    fn cellule_de(&self, data: &BTreeMap<String, CypherValue>) -> crate::scope::Scope {
+        let champ = |c: &str| data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+        match (champ(crate::scope::ORG_COLUMN), champ(crate::scope::PROJECT_COLUMN)) {
+            (Some(org), Some(project)) => crate::scope::Scope::new(org, project),
+            _ => self.scope.clone(),
         }
     }
 
@@ -2311,7 +2383,7 @@ impl Catalog {
         self.check_initialized()?;
 
         // Validate identifiers
-        crate::schema::validate_identifier(rel_name, "relation")
+        crate::schema::validate_declared_name(rel_name, "relation")
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
 
         // Check that both endpoints exist
@@ -4236,26 +4308,67 @@ impl Catalog {
         if !scope.is_default() {
             self.multi_cell = true;
         }
-        if scope != self.scope {
-            // Un index par cellule : on gare ceux de la cellule qu'on quitte,
-            // on reprend ceux de la cellule qu'on rejoint (ouverts paresseusement
-            // sinon).
-            let old = std::mem::replace(&mut self.scope, scope);
-            let fts = std::mem::take(&mut self.fts_handles);
-            let sparse = std::mem::take(&mut self.sparse_handles);
-            if !fts.is_empty() {
-                self.parked_fts.insert(old.clone(), fts);
-            }
-            if !sparse.is_empty() {
-                self.parked_sparse.insert(old, sparse);
-            }
-            self.fts_handles = self.parked_fts.remove(&self.scope).unwrap_or_default();
-            self.sparse_handles = self.parked_sparse.remove(&self.scope).unwrap_or_default();
-        }
+        // Un index par cellule : on gare ceux de la cellule qu'on quitte, on
+        // reprend ceux de la cellule qu'on rejoint (ouverts paresseusement sinon).
+        self.basculer(scope);
         if self.initialized {
             self.ensure_scope_nodes()?;
         }
         Ok(())
+    }
+
+    /// **La bascule interne** : la cellule et ses index, sans rien écrire en
+    /// base (pas de nœuds `_Org` / `_Project`, donc permise en lecture seule).
+    fn basculer(&mut self, scope: crate::scope::Scope) {
+        if scope == self.scope {
+            return;
+        }
+        let old = std::mem::replace(&mut self.scope, scope);
+        let fts = std::mem::take(&mut self.fts_handles);
+        let sparse = std::mem::take(&mut self.sparse_handles);
+        if !fts.is_empty() {
+            self.parked_fts.insert(old.clone(), fts);
+        }
+        if !sparse.is_empty() {
+            self.parked_sparse.insert(old, sparse);
+        }
+        self.fts_handles = self.parked_fts.remove(&self.scope).unwrap_or_default();
+        self.sparse_handles = self.parked_sparse.remove(&self.scope).unwrap_or_default();
+    }
+
+    /// **Faire `f` dans une cellule** (marche 1 bis, pas b), puis revenir. Sous
+    /// `&mut self`, donc sous le verrou que l'appelant tient de bout en bout :
+    /// la bascule ne se voit de personne, contrairement à celle qu'on faisait
+    /// autour d'un graphe dont les nœuds relâchent le verrou.
+    pub(crate) fn dans_la_cellule<T>(
+        &mut self,
+        cell: &crate::scope::Scope,
+        f: impl FnOnce(&mut Self) -> Result<T, CatalogError>,
+    ) -> Result<T, CatalogError> {
+        if *cell == self.scope {
+            return f(self);
+        }
+        cell.validate().map_err(CatalogError::SchemaError)?;
+        let avant = self.scope.clone();
+        self.basculer(cell.clone());
+        let r = f(self);
+        self.basculer(avant);
+        r
+    }
+
+    /// **Les services de recherche d'une cellule** : ses index plein texte et
+    /// creux (ouverts s'il le faut), sa cellule, sous le verrou de l'appelant.
+    pub fn register_search_services_in(
+        &mut self,
+        cell: &crate::scope::Scope,
+        services: &mut crate::dataflow::services::ServiceRegistry,
+    ) -> Result<(), CatalogError> {
+        self.dans_la_cellule(cell, |c| {
+            let noms: Vec<String> = c.entity_configs.keys().cloned().collect();
+            c.open_fts_handles_for(&noms);
+            c.register_search_services(services);
+            Ok(())
+        })
     }
 
     /// Les handles FTS d'une cellule (courante ou garée), par table.
@@ -4332,9 +4445,14 @@ impl Catalog {
 
     /// MERGE des nœuds `_Org {_uuid: org}` et `_Project {_uuid: project}`.
     fn ensure_scope_nodes(&self) -> Result<(), CatalogError> {
+        self.ensure_scope_nodes_for(&self.scope.clone())
+    }
+
+    /// Les nœuds `_Org` / `_Project` d'une cellule donnée.
+    fn ensure_scope_nodes_for(&self, cell: &crate::scope::Scope) -> Result<(), CatalogError> {
         for (table, id) in [
-            (crate::scope::ORG_TABLE, &self.scope.org),
-            (crate::scope::PROJECT_TABLE, &self.scope.project),
+            (crate::scope::ORG_TABLE, &cell.org),
+            (crate::scope::PROJECT_TABLE, &cell.project),
         ] {
             let stmt = self.dialect.upsert_scope_node(table, "id");
             self.conn.execute_with_params(
@@ -4861,6 +4979,17 @@ impl Catalog {
         entity: &str,
         condition: Option<&FilterCondition>,
     ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
+        self.compile_filter_for_vector_in(&self.scope.clone(), entity, condition)
+    }
+
+    /// [`compile_filter_for_vector`](Self::compile_filter_for_vector) dans la
+    /// cellule de la requête (marche 1 bis, pas b), et non celle du catalogue.
+    pub fn compile_filter_for_vector_in(
+        &self,
+        cell: &crate::scope::Scope,
+        entity: &str,
+        condition: Option<&FilterCondition>,
+    ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
         // `n` est la table de **chunks** : c'est elle que le HNSW indexe. Un
         // filtre porte pourtant sur les champs du **parent** (`file_path`,
         // `repo`, `language`…), qui n'existent pas sur un chunk. On compile
@@ -4881,8 +5010,8 @@ impl Catalog {
             crate::scope::ORG_COLUMN,
             crate::scope::PROJECT_COLUMN
         );
-        params.push(QueryParam::new("_scope_org", CypherValue::String(self.scope.org.clone())));
-        params.push(QueryParam::new("_scope_project", CypherValue::String(self.scope.project.clone())));
+        params.push(QueryParam::new("_scope_org", CypherValue::String(cell.org.clone())));
+        params.push(QueryParam::new("_scope_project", CypherValue::String(cell.project.clone())));
         let combined = match where_str {
             Some(w) => format!("({w}) AND {scope_where}"),
             None => scope_where,
@@ -5498,6 +5627,42 @@ impl Catalog {
         records: Vec<BTreeMap<String, CypherValue>>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
+        // **Un lot écrit dans une autre cellule que celle du catalogue**
+        // (marche 1 bis) : ses lignes portent déjà leur cellule, posée par le
+        // nœud de l'appel. Il s'écrit dans cette cellule, ses index plein texte
+        // et creux compris, sous le verrou que `&mut self` tient.
+        let lire = |data: &BTreeMap<String, CypherValue>| -> Option<crate::scope::Scope> {
+            let champ = |c: &str| data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            Some(crate::scope::Scope::new(champ(crate::scope::ORG_COLUMN)?, champ(crate::scope::PROJECT_COLUMN)?))
+        };
+        let mut cellules: Vec<crate::scope::Scope> = Vec::new();
+        for r in &records {
+            if let Some(c) = lire(r) {
+                if !cellules.contains(&c) {
+                    cellules.push(c);
+                }
+            }
+        }
+        match cellules.as_slice() {
+            [] => {}
+            [seule] if *seule == self.scope => {}
+            [seule] => {
+                let seule = seule.clone();
+                seule.validate().map_err(CatalogError::SchemaError)?;
+                self.ensure_scope_nodes_for(&seule)?;
+                self.multi_cell = true;
+                // Une fois basculé, le lot est dans sa cellule : cet appel passe
+                // la garde ci-dessus sans y revenir. Le corps reste ici, et le
+                // graphe d'appels garde sa profondeur (`e2e_impact` le mesure).
+                return self.dans_la_cellule(&seule, |c| c.ingest_entities_jusqu_a(entity_name, records, exige));
+            }
+            plusieurs => {
+                return Err(CatalogError::SchemaError(format!(
+                    "un lot de « {entity_name} » porte {} cellules : un lot ne s'écrit que dans une cellule",
+                    plusieurs.len()
+                )))
+            }
+        }
         let avec_embarquement = self.peut_embarquer(exige.dense() || exige.sparse());
         let t_appel = std::time::Instant::now();
         let t = std::time::Instant::now();
@@ -5542,7 +5707,7 @@ impl Catalog {
         let mut uuids_du_lot: Vec<String> = Vec::with_capacity(records.len());
         for mut data in records {
             // Generate deterministic UUID from hashsafe fields or all content fields
-            let uuid = Self::uuid_for(entity_name, &entity_def, &data);
+            let uuid = Self::uuid_for_in(&self.cellule_de(&data), entity_name, &entity_def, &data);
             uuids_du_lot.push(uuid.clone());
             data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
 
@@ -5563,6 +5728,18 @@ impl Catalog {
                 resolver: Some(resolver),
                 vectors: None,
             });
+        }
+
+        // **Une écriture dans la cellule de sa requête** (marche 1 bis, pas a) :
+        // un nœud a pu poser une autre cellule que celle du catalogue sur ses
+        // lignes. La base devient alors à plusieurs cellules, avec leurs nœuds.
+        self.reconnaitre_les_cellules_ecrites(&entity_records)?;
+        // **Une identité ne vit que dans une cellule** : une base à plusieurs
+        // cellules vérifie, avant d'écrire, qu'aucune ligne du lot n'existe
+        // déjà dans une autre cellule. Une base à une seule cellule (presque
+        // toutes) ne paie rien.
+        if self.multi_cell {
+            self.refuser_une_identite_d_une_autre_cellule(entity_name, &entity_records)?;
         }
 
         // **Une première indexation en cours** : seules les naissances partent,
@@ -6102,7 +6279,7 @@ impl Catalog {
     /// Une mise à jour ou une suppression dans cette fermeture emmène le
     /// graphe sans GPU même au niveau donnée : ses conséquences sur les
     /// chunks n'ont pas encore de place en base (réconciliation, C5).
-    fn tenir_l_exigence_d_ecriture(
+    pub(crate) fn tenir_l_exigence_d_ecriture(
         &mut self,
         graine: &str,
         exige: crate::disponibilite::Disponibilites,
@@ -6382,7 +6559,7 @@ impl Catalog {
         // premier. Ce qui n'a pas de clé déclarée et doit rester distinct à
         // contenu égal — un achat sans numéro — déclare une clé ; le moteur
         // ne peut pas la deviner, et il ne l'invente plus.
-        let uuid = Self::uuid_for(entity_name, &entity_def, &data);
+        let uuid = Self::uuid_for_in(&self.cellule_de(&data), entity_name, &entity_def, &data);
 
         // Compute content hash
         let content_text = self.build_content_text(entity_name, &data);
@@ -6400,13 +6577,15 @@ impl Catalog {
         // Create entity ref pair
         let (entity_ref, resolver) = EntityRef::new(entity_name);
 
+        let record = EntityRecord::new(entity_name.to_string(), full_data, resolver, entity_ref.clone());
+        // Comme l'ingestion : une identité qui vit dans une autre cellule est
+        // refusée avant d'entrer en file.
+        self.reconnaitre_les_cellules_ecrites(std::slice::from_ref(&record))?;
+        if self.multi_cell {
+            self.refuser_une_identite_d_une_autre_cellule(entity_name, std::slice::from_ref(&record))?;
+        }
         // Push entity record with resolver into PendingWork
-        self.pending.entities.push(EntityRecord::new(
-            entity_name.to_string(),
-            full_data,
-            resolver,
-            entity_ref.clone(),
-        ));
+        self.pending.entities.push(record);
         self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
         let derivations = self.derivations_pour_racine(entity_name, std::slice::from_ref(&uuid));
@@ -6441,6 +6620,39 @@ impl Catalog {
         properties: BTreeMap<String, CypherValue>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<(RelationRef, FlushResult), CatalogError> {
+        let (from, to): (RefOrUuid, RefOrUuid) = (from.into(), to.into());
+        // **Un bout absent se refuse, en le nommant** (11 octobre 2026, ticket
+        // « un lien vers un bout absent rend Ok sans rien écrire »). Le lien se
+        // pose par `MATCH … MERGE`, qui ne dit rien quand un bout manque : le
+        // verbe rendait `Ok` pour un lien qui n'existait pas.
+        //
+        // Deux bornes, dites :
+        // - seulement quand le lien **se pose maintenant** (une exigence non
+        //   vide) : sous le régime par lot, un bout peut arriver plus tard dans
+        //   le même lot, et le refuser à la mise en file serait faux ;
+        // - un bout encore désigné par une **référence non résolue** est en file
+        //   par construction (c'est un `create` de ce catalogue) : il n'est pas
+        //   lu.
+        // Une lecture par bout résolu (`Select::by_uuids`), pas plus : ce verbe
+        // pose un lien. Le chemin de masse (`mettre_en_file_les_liens`) ne passe
+        // pas par ici.
+        if !exige.est_vide() {
+            let rel_def = self
+                .config
+                .relations
+                .get(rel_name)
+                .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+            let (de_entite, vers_entite) = (rel_def.from.clone(), rel_def.to.clone());
+            for (entite, bout) in [(de_entite, &from), (vers_entite, &to)] {
+                let Ok(uuid) = bout.try_resolve() else { continue };
+                if !self.bouts_absents_de(&entite, std::slice::from_ref(&uuid))?.is_empty() {
+                    return Err(CatalogError::ValidationFailed(format!(
+                        "le lien « {rel_name} » vise un bout absent : {entite} {uuid}, ni en base ni \
+                         en file — rien n'est posé"
+                    )));
+                }
+            }
+        }
         let r = self.mettre_en_file_le_lien(rel_name, from, to, properties)?;
         let graine = self
             .config
@@ -6494,6 +6706,237 @@ impl Catalog {
         }
         self.mettre_en_file_les_derivations_avec_dette(derivations);
         Ok(n)
+    }
+
+    /// **Les bouts absents d'un lot de liens** : ceux qui ne sont **ni en base
+    /// ni en file**. Rend `(entité, uuid)` pour chacun, une fois ; vide si tous
+    /// existent.
+    ///
+    /// Le verbe de lien pose ses arêtes par `MATCH … MERGE` : un bout absent
+    /// n'y est pas une erreur, et le lien ne s'écrit pas, sans un mot (mesuré
+    /// le 11 octobre 2026, `tests/e2e_garde_des_liens.rs`). Ceci est la
+    /// vérification qu'un appelant fait **avant** d'écrire, pour refuser en
+    /// nommant le bout manquant — ce qu'aucun compte d'arêtes après coup ne
+    /// peut faire.
+    ///
+    /// Trois règles, pour que « existe » soit juste (relecture de rag3db-97) :
+    ///
+    /// - **en file compte comme existant** : un bout créé plus tôt dans le même
+    ///   run et pas encore drainé sera posé par la fermeture du lien. On lit
+    ///   son `_uuid` dans ses données, pas dans sa référence, que le drain seul
+    ///   résout ;
+    /// - **une suppression en file l'emporte** : un bout présent en base mais
+    ///   en file de suppression est absent — sinon le lien viserait une ligne
+    ///   qui part au même drain, et selon l'ordre du drain il se perdrait ou
+    ///   resterait pendant ;
+    /// - les mises à jour en file ne comptent pas : la ligne est déjà en base.
+    ///
+    /// La lecture passe par l'IR (`Select::by_uuids`, une colonne), par
+    /// tranches de 512, une requête par entité et par tranche — jamais une
+    /// par lien. Un dialecte qui ne la traduit pas se refuse en le disant,
+    /// jamais en rendant « tout existe ».
+    pub fn bouts_absents(
+        &self,
+        rel_name: &str,
+        paires: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, CatalogError> {
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        // Les bouts distincts de chaque côté, dans l'ordre où ils viennent.
+        let mut par_entite: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        for (de, vers) in paires {
+            for (entite, u) in [(rel_def.from.as_str(), de), (rel_def.to.as_str(), vers)] {
+                let liste = par_entite.entry(entite).or_default();
+                if !liste.contains(u) {
+                    liste.push(u.clone());
+                }
+            }
+        }
+        let mut absents = Vec::new();
+        for (entite, uuids) in par_entite {
+            absents.extend(self.bouts_absents_de(entite, &uuids)?.into_iter().map(|u| (entite.to_string(), u)));
+        }
+        Ok(absents)
+    }
+
+    /// Les uuids d'**une** entité qui ne sont ni en base ni en file — les règles
+    /// de [`Self::bouts_absents`], pour un côté.
+    pub(crate) fn bouts_absents_de(&self, entite: &str, uuids: &[String]) -> Result<Vec<String>, CatalogError> {
+        let supprime = |u: &str| self.pending.deletes.iter().any(|d| d.entity_name == entite && d.uuid == u);
+        let en_file = |u: &str| {
+            self.pending.entities.iter().any(|e| {
+                e.entity_name == entite && e.data.get("_uuid").and_then(CypherValue::as_str) == Some(u)
+            })
+        };
+        let mut absents = Vec::new();
+        let mut a_lire: Vec<&str> = Vec::new();
+        for u in uuids {
+            if supprime(u) {
+                absents.push(u.clone());
+            } else if !en_file(u) {
+                a_lire.push(u);
+            }
+        }
+        if a_lire.is_empty() {
+            return Ok(absents);
+        }
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entite,
+                vec![rag3weaver_ir::Column::Node("_uuid".into())],
+            ))
+            .map_err(|e| {
+                CatalogError::SchemaError(format!(
+                    "vérifier les bouts de « {entite} » : ce dialecte ne traduit pas la lecture par \
+                     uuids ({e}) — le lien n'est pas posé plutôt que posé sans savoir"
+                ))
+            })?;
+        for tranche in a_lire.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String((*u).to_string())).collect());
+            let lignes =
+                self.execute_raw_with_params(&requete, &[crate::connection::QueryParam::new("uuids", liste)])?;
+            // Une ligne par uuid présent ; on retient toute chaîne de la ligne,
+            // pour ne dépendre ni de l'ordre ni du nombre de colonnes que le
+            // dialecte rend.
+            let trouves: HashSet<&str> = lignes.rows.iter().flatten().filter_map(CypherValue::as_str).collect();
+            absents.extend(tranche.iter().filter(|u| !trouves.contains(**u)).map(|u| (*u).to_string()));
+        }
+        Ok(absents)
+    }
+
+    /// **L'état de cycle de vie de chaque bout**, tel qu'il sera après la file :
+    /// en base, recouvert par une création en file (son état, ou l'initial du
+    /// cycle s'il n'en donne pas) puis par une mise à jour en file qui change
+    /// l'état — la dernière l'emporte. `None` pour un bout introuvable.
+    ///
+    /// La lecture passe par l'IR (`Select::by_uuids`, une colonne) : le dialecte
+    /// rend l'uuid demandé en première colonne, puis l'état.
+    pub fn etats_des_bouts(
+        &self,
+        entite: &str,
+        uuids: &[String],
+    ) -> Result<HashMap<String, Option<String>>, CatalogError> {
+        let cycle = self
+            .entity_configs()
+            .get(entite)
+            .ok_or_else(|| CatalogError::UnknownEntity(entite.to_string()))?
+            .lifecycle
+            .as_ref()
+            .ok_or_else(|| {
+                CatalogError::SchemaError(format!("« {entite} » n'a pas de cycle de vie : pas d'état à lire"))
+            })?;
+        let champ = cycle.field.as_str();
+        let mut etats: HashMap<String, Option<String>> =
+            uuids.iter().map(|u| (u.clone(), None)).collect();
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entite,
+                vec![rag3weaver_ir::Column::Node(champ.to_string())],
+            ))
+            .map_err(|e| {
+                CatalogError::SchemaError(format!(
+                    "lire l'état des bouts de « {entite} » : ce dialecte ne traduit pas la lecture \
+                     par uuids ({e})"
+                ))
+            })?;
+        for tranche in uuids.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String(u.clone())).collect());
+            let lignes = self.execute_raw_with_params(
+                &requete,
+                &[crate::connection::QueryParam::new("uuids", liste)],
+            )?;
+            for ligne in &lignes.rows {
+                if let (Some(u), Some(e)) = (
+                    ligne.first().and_then(CypherValue::as_str),
+                    ligne.get(1).and_then(CypherValue::as_str),
+                ) {
+                    etats.insert(u.to_string(), Some(e.to_string()));
+                }
+            }
+        }
+        for e in &self.pending.entities {
+            if e.entity_name != entite {
+                continue;
+            }
+            let Some(u) = e.data.get("_uuid").and_then(CypherValue::as_str) else { continue };
+            if let Some(etat) = etats.get_mut(u) {
+                *etat = Some(
+                    e.data
+                        .get(champ)
+                        .and_then(CypherValue::as_str)
+                        .unwrap_or(cycle.initial.as_str())
+                        .to_string(),
+                );
+            }
+        }
+        for m in &self.pending.updates {
+            if m.entity_name != entite {
+                continue;
+            }
+            if let (Some(etat), Some(nouveau)) =
+                (etats.get_mut(&m.uuid), m.data.get(champ).and_then(CypherValue::as_str))
+            {
+                *etat = Some(nouveau.to_string());
+            }
+        }
+        Ok(etats)
+    }
+
+    /// **Vérifier les bouts d'un lot de liens, en une fois** : les absents
+    /// ([`Self::bouts_absents`]) et ceux qui ne sont pas dans les états permis
+    /// de leur côté. Une seule fonction pour tous les nœuds qui écrivent un
+    /// lien, pour qu'une garde déclarée tienne quel que soit l'outil qui lie
+    /// (relecture de rag3db-97).
+    ///
+    /// Les états permis sont une **politique du backend** (`from_states` /
+    /// `to_states` d'une relation du manifeste), comme `writes` pour une entité :
+    /// le catalogue les reçoit en paramètre et ne les garde pas. **Un appel nu à
+    /// [`Self::link`] ne les voit pas** — c'est un verbe brut, comme du SQL, et
+    /// c'est voulu.
+    pub fn verifier_les_bouts(
+        &self,
+        rel_name: &str,
+        paires: &[(String, String)],
+        from_states: Option<&[String]>,
+        to_states: Option<&[String]>,
+    ) -> Result<BoutsVerifies, CatalogError> {
+        let absents = self.bouts_absents(rel_name, paires)?;
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let mut hors_etat = Vec::new();
+        for (cote, entite, permis) in [
+            (0usize, rel_def.from.as_str(), from_states),
+            (1usize, rel_def.to.as_str(), to_states),
+        ] {
+            let Some(permis) = permis else { continue };
+            let mut uuids: Vec<String> = Vec::new();
+            for paire in paires {
+                let u = if cote == 0 { &paire.0 } else { &paire.1 };
+                let absent = absents.iter().any(|(e, a)| e == entite && a == u);
+                if !absent && !uuids.contains(u) {
+                    uuids.push(u.clone());
+                }
+            }
+            if uuids.is_empty() {
+                continue;
+            }
+            let etats = self.etats_des_bouts(entite, &uuids)?;
+            for u in uuids {
+                let etat = etats.get(&u).cloned().flatten().unwrap_or_default();
+                if !permis.iter().any(|p| *p == etat) {
+                    hors_etat.push((entite.to_string(), u, etat));
+                }
+            }
+        }
+        Ok(BoutsVerifies { absents, hors_etat })
     }
 
     fn mettre_en_file_le_lien(
@@ -7872,9 +8315,96 @@ impl Catalog {
         !self.pending.is_empty()
     }
 
+    /// Les cellules que portent des lignes à écrire, autres que celle du
+    /// catalogue : la base devient à plusieurs cellules, et chacune a ses
+    /// nœuds `_Org` / `_Project`.
+    fn reconnaitre_les_cellules_ecrites(&mut self, records: &[EntityRecord]) -> Result<(), CatalogError> {
+        let mut autres: Vec<crate::scope::Scope> = Vec::new();
+        for r in records {
+            let lire = |c: &str| r.data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            if let (Some(org), Some(project)) = (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                let cell = crate::scope::Scope::new(org, project);
+                if cell != self.scope && !autres.contains(&cell) {
+                    autres.push(cell);
+                }
+            }
+        }
+        for cell in &autres {
+            self.ensure_scope_nodes_for(cell)?;
+            self.multi_cell = true;
+        }
+        Ok(())
+    }
+
+    /// Refuse un lot dont une ligne existe déjà, par son `_uuid`, dans une
+    /// autre cellule que celle où le lot l'écrit. Une lecture par tranche de
+    /// 512 uuids, par l'IR.
+    fn refuser_une_identite_d_une_autre_cellule(&self, entity: &str, records: &[EntityRecord]) -> Result<(), CatalogError> {
+        let cellule_de = |data: &BTreeMap<String, CypherValue>| -> (String, String) {
+            let lire = |c: &str| data.get(c).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN))
+        };
+        let ecrites: HashMap<String, (String, String)> = records
+            .iter()
+            .filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(|u| (u.to_string(), cellule_de(&r.data))))
+            .collect();
+        if ecrites.is_empty() {
+            return Ok(());
+        }
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entity,
+                vec![
+                    rag3weaver_ir::Column::Node("_uuid".into()),
+                    rag3weaver_ir::Column::Node(crate::scope::ORG_COLUMN.into()),
+                    rag3weaver_ir::Column::Node(crate::scope::PROJECT_COLUMN.into()),
+                ],
+            ))
+            .map_err(|e| CatalogError::SchemaError(format!("vérifier la cellule des lignes de « {entity} » : {e}")))?;
+        let uuids: Vec<&String> = ecrites.keys().collect();
+        for tranche in uuids.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String((*u).clone())).collect());
+            let lignes = self.execute_raw_with_params(&requete, &[QueryParam::new("uuids", liste)])?;
+            for ligne in &lignes.rows {
+                // Les trois dernières colonnes : l'uuid, l'organisation, le
+                // projet (rag3db rend l'uuid demandé en tête).
+                let n = ligne.len();
+                if n < 3 {
+                    continue;
+                }
+                let texte = |v: &CypherValue| v.as_str().unwrap_or_default().to_string();
+                let (uuid, org, project) = (texte(&ligne[n - 3]), texte(&ligne[n - 2]), texte(&ligne[n - 1]));
+                if let Some((org_ecrit, projet_ecrit)) = ecrites.get(&uuid) {
+                    if (&org, &project) != (org_ecrit, projet_ecrit) {
+                        return Err(CatalogError::IdentityInAnotherCell {
+                            entity: entity.to_string(),
+                            uuid,
+                            lives_in: format!("{org}/{project}"),
+                            written_in: format!("{org_ecrit}/{projet_ecrit}"),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Access the PendingWork queue.
     pub fn pending_work(&self) -> &PendingWork {
         &self.pending
+    }
+
+    /// **Oublier les liens en file de ces relations**, ceux d'une
+    /// synchronisation qui s'arrête avant de les poser : la reprise les
+    /// refait de ses fichiers. Sans cela, une reprise dans le même processus
+    /// les poserait deux fois (ce qu'une mort, qui vide la mémoire, ne fait
+    /// pas). Les liens des autres relations restent : un autre écrivain du
+    /// catalogue peut en avoir en file. Rend le nombre de liens oubliés.
+    pub fn forget_pending_relations_named(&mut self, names: &[&str]) -> usize {
+        let avant = self.pending.relations.len();
+        self.pending.relations.retain(|r| !names.contains(&r.rel_name.as_str()));
+        avant - self.pending.relations.len()
     }
 
     pub fn drain_stats(&self) -> DrainStats {
@@ -8083,21 +8613,18 @@ impl Catalog {
     /// verrouillent le temps d'un appel — un `&mut self` ne peut pas se
     /// donner lui-même. C'est la forme que le produit tient déjà.
     ///
-    /// Le fan-out de cellules et la bascule de cellule (`options.scopes`,
-    /// `options.scope`) se font **autour** du graphe, comme dans le
-    /// monolithe, en changeant la cellule du catalogue le temps de l'appel.
-    /// Ce n'est pas plus sûr qu'avant face à une recherche concurrente sur le
-    /// même catalogue — c'est la même limite, nommée : des cellules **par
-    /// requête**, sans bascule d'état global, sont un chantier à part.
+    /// **Les cellules passent par la requête** (marche 1 bis, pas b) : le
+    /// fan-out (`options.scopes`) et la cellule demandée (`options.scope`) ne
+    /// changent plus la cellule du catalogue autour du graphe. Chaque recherche
+    /// reçoit les index et le filtre de sa cellule dans ses services, pris sous
+    /// le verrou ; deux recherches concurrentes sur deux cellules ne se voient
+    /// pas.
     pub fn rechercher(
         catalogue: &Arc<Mutex<Catalog>>,
         cible: &str,
         requete: &str,
         options: search::SearchOptions,
     ) -> Result<search::SearchResponse, CatalogError> {
-        use crate::dataflow::graph_tool::{build_definition, GraphTool, NodeTypePolicy, SEARCH_BASE_MERMAID};
-        use crate::dataflow::{DataflowRuntime, NodeRegistry, ServiceRegistry};
-
         // ── Plusieurs cellules : une recherche par cellule, fondues par rang ──
         if !options.scopes.is_empty() {
             let mut cells: Vec<crate::scope::Scope> = Vec::new();
@@ -8106,45 +8633,36 @@ impl Catalog {
                     cells.push(c.clone());
                 }
             }
-            let saved = catalogue.lock().unwrap().scope().clone();
             let mut base = options.clone();
             base.scopes.clear();
             base.scope = None;
             base.limit = options.limit + options.offset;
             base.offset = 0;
             let mut per_cell: Vec<search::SearchResponse> = Vec::new();
-            let mut first_err: Option<CatalogError> = None;
             for cell in &cells {
-                if let Err(e) = catalogue.lock().unwrap().set_scope(cell.clone()) {
-                    first_err = Some(e);
-                    break;
-                }
-                match Self::rechercher(catalogue, cible, requete, base.clone()) {
-                    Ok(r) => per_cell.push(r),
-                    Err(e) => {
-                        first_err = Some(e);
-                        break;
-                    }
-                }
-            }
-            catalogue.lock().unwrap().set_scope(saved)?;
-            if let Some(e) = first_err {
-                return Err(e);
+                per_cell.push(Self::rechercher_dans(catalogue, cible, requete, base.clone(), Some(cell.clone()))?);
             }
             return fusionner_par_cellule(per_cell, cells.len(), options.offset, options.limit);
         }
-        // ── Une autre cellule que la courante ──────────────────────────────
+        // ── Une autre cellule que celle du catalogue ───────────────────────
         if let Some(wanted) = options.scope.clone() {
-            let courant = catalogue.lock().unwrap().scope().clone();
-            if wanted != courant {
-                catalogue.lock().unwrap().set_scope(wanted)?;
-                let mut inner = options.clone();
-                inner.scope = None;
-                let out = Self::rechercher(catalogue, cible, requete, inner);
-                catalogue.lock().unwrap().set_scope(courant)?;
-                return out;
-            }
+            let mut inner = options.clone();
+            inner.scope = None;
+            return Self::rechercher_dans(catalogue, cible, requete, inner, Some(wanted));
         }
+        Self::rechercher_dans(catalogue, cible, requete, options, None)
+    }
+
+    /// Une recherche dans une cellule (`None` : celle du catalogue).
+    fn rechercher_dans(
+        catalogue: &Arc<Mutex<Catalog>>,
+        cible: &str,
+        requete: &str,
+        options: search::SearchOptions,
+        cellule: Option<crate::scope::Scope>,
+    ) -> Result<search::SearchResponse, CatalogError> {
+        use crate::dataflow::graph_tool::{build_definition, GraphTool, NodeTypePolicy, SEARCH_BASE_MERMAID};
+        use crate::dataflow::{DataflowRuntime, NodeRegistry, ServiceRegistry};
 
         let debut = Instant::now();
 
@@ -8156,10 +8674,14 @@ impl Catalog {
         // servent plus bas à rapporter `meta.signals` comme le monolithe :
         // les signaux **demandés**, pas ceux qui ont parlé.
         let (declared_signals, chunk_table) = {
-            let cat = catalogue.lock().unwrap();
+            let mut cat = catalogue.lock().unwrap();
             cat.check_initialized()?;
             let resolved = cat.resolve_search_target(cible)?;
-            cat.register_search_services(&mut services);
+            match &cellule {
+                // Les index et la cellule de la requête, sous ce verrou.
+                Some(cell) => cat.register_search_services_in(cell, &mut services)?,
+                None => cat.register_search_services(&mut services),
+            }
             (resolved.default_signals, resolved.chunk_table.clone())
         };
         services.register("catalog", catalogue.clone());
@@ -8308,6 +8830,22 @@ impl Catalog {
         self.dialect.clone()
     }
 
+    /// **Exécuter un graphe de formes** sur cette base, par son dialecte
+    /// ([`crate::plan::run_plan`]).
+    pub fn run_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        if options.fanout.is_none() {
+            options.fanout = self.fanout;
+        }
+        crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
+    }
+
+    /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
+    /// que déclare le dialecte : un PostgreSQL distant, où chaque
+    /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
+    pub fn set_fanout(&mut self, fanout: Option<bool>) {
+        self.fanout = fanout;
+    }
+
     /// Execute raw Cypher (useful for debugging/tests).
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
@@ -8337,6 +8875,11 @@ impl Catalog {
     /// rejoignent ceux de l'ingestion.
     pub fn event_bus(&self) -> EventBus {
         self.event_bus.in_scope(&self.scope)
+    }
+
+    /// Le bus d'une cellule donnée (marche 1 bis : le réacteur d'une cellule).
+    pub fn event_bus_in(&self, cell: &crate::scope::Scope) -> EventBus {
+        self.event_bus.in_scope(cell)
     }
 
     /// Publie dans la cellule **courante** — `set_scope` déplace donc aussi
@@ -9663,6 +10206,50 @@ mod tests {
         assert!(!rel_ref.is_ready());
     }
 
+    /// **Un lien différé ne vérifie pas ses bouts** (marche 1 bis du lien
+    /// générique, 11 octobre 2026). C'est la forme que prend l'indexation du
+    /// code : `link_jusqu_a(…, AUCUNE)` dans sa boucle de mentions, et
+    /// `mettre_en_file_les_liens` pour la masse — leurs paires sans bout se
+    /// comptent au drain. Sous une exigence vide, un bout peut arriver plus tard
+    /// dans le même lot, et le refuser à la mise en file serait faux. **Ce
+    /// témoin tient la borne** : si quelqu'un fait vérifier les liens différés,
+    /// il rougit, et le coût de l'indexation n'est plus nul par construction.
+    #[test]
+    fn un_lien_differe_ne_verifie_pas_ses_bouts() {
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog
+            .link_jusqu_a(
+                "REFERENCES",
+                RefOrUuid::Uuid("fantome-a".into()),
+                RefOrUuid::Uuid("fantome-b".into()),
+                BTreeMap::new(),
+                crate::disponibilite::Disponibilites::AUCUNE,
+            )
+            .expect("un lien différé se met en file sans lecture");
+        assert_eq!(catalog.pending_work().relations.len(), 1, "il attend le drain");
+    }
+
+    /// **Un lien posé maintenant refuse un bout absent, en le nommant** : la
+    /// relation et le bout, et rien en file. Le verbe rendait `Ok` pour un lien
+    /// que `MATCH … MERGE` ne posait pas.
+    #[test]
+    fn un_lien_pose_maintenant_refuse_un_bout_absent() {
+        let mut catalog = au_tick(make_catalog());
+        catalog.initialize().unwrap();
+        let e = catalog
+            .link("REFERENCES", "fantome-a", "fantome-b", BTreeMap::new())
+            .expect_err("ni en base ni en file");
+        let texte = e.to_string();
+        assert!(
+            matches!(e, CatalogError::ValidationFailed(_))
+                && texte.contains("« REFERENCES »")
+                && texte.contains("fantome-a"),
+            "le refus nomme la relation et le bout : {texte}"
+        );
+        assert!(catalog.pending_work().relations.is_empty(), "rien en file");
+    }
+
     #[test]
     fn link_unknown_relation_errors() {
         let mut catalog = make_catalog();
@@ -10443,7 +11030,7 @@ mod tests {
     /// `failed = 1`, ne tombe pas, et le ref de la note dit son échec.
     #[test]
     fn un_groupe_d_insertion_rate_se_compte_et_les_autres_passent() {
-        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:`Note`"));
         catalog.initialize().unwrap();
         let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();
         let n = catalog.create("Note", note("N")).unwrap();
@@ -10462,7 +11049,7 @@ mod tests {
     /// n'attend pas trente secondes un ref que rien ne résoudra.
     #[test]
     fn un_lien_vers_une_ligne_ratee_echoue_tout_de_suite_et_se_compte() {
-        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:`Note`"));
         catalog.initialize().unwrap();
         let n = catalog.create("Note", note("N")).unwrap();
         let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();

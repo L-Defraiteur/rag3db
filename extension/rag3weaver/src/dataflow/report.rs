@@ -23,6 +23,11 @@ pub enum NodeStatus {
     Completed,
     Failed { error: String },
     Resumed,
+    /// **Sauté** : une entrée requise n'a rien reçu, ses producteurs ayant
+    /// fini (ou ayant été sautés) sans l'émettre — une branche non prise.
+    /// Ce n'est pas un échec : le run continue. La raison nomme l'entrée et
+    /// ses producteurs.
+    Skipped { reason: String },
 }
 
 // ─── NodeReport ─────────────────────────────────────────────────────────────
@@ -185,6 +190,18 @@ impl ExecutionReport {
                         },
                         duration_ms: 0,
                         inputs: node_inputs.remove(node).unwrap_or_default(),
+                        outputs: vec![],
+                        logs: node_logs.remove(node).unwrap_or_default(),
+                        metrics: std::collections::HashMap::new(),
+                    });
+                }
+                DataflowEvent::NodeSkipped { node, node_type, reason } => {
+                    nodes.push(NodeReport {
+                        name: node.clone(),
+                        node_type: node_type.clone(),
+                        status: NodeStatus::Skipped { reason: reason.clone() },
+                        duration_ms: 0,
+                        inputs: vec![],
                         outputs: vec![],
                         logs: node_logs.remove(node).unwrap_or_default(),
                         metrics: std::collections::HashMap::new(),

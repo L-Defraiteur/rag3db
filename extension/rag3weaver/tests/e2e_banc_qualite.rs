@@ -59,7 +59,8 @@
 //! ```
 #![cfg(feature = "burn-embedder")]
 
-mod common;
+#[allow(unused_imports)] // employé sous certaines features seulement
+use crate::common;
 
 use rag3weaver::embedder::Embedder;
 use std::path::Path;

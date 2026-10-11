@@ -446,11 +446,11 @@ mod tests {
         use crate::dialect::{Rag3dbDialect, SchemaDialect};
         assert_eq!(
             Rag3dbDialect.hop(&related_hop("HAS_CHUNK", ExpansionDirection::Outgoing)).unwrap(),
-            "UNWIND $uuids AS u MATCH (d {_uuid: u})-[r:HAS_CHUNK]->(m) RETURN u, m._uuid, label(m), m"
+            "UNWIND $uuids AS u MATCH (d {_uuid: u})-[r:`HAS_CHUNK`]->(m) RETURN u, m.`_uuid`, label(m), m"
         );
         assert_eq!(
             Rag3dbDialect.hop(&related_hop("HAS_CHUNK", ExpansionDirection::Incoming)).unwrap(),
-            "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:HAS_CHUNK]-(m) RETURN u, m._uuid, label(m), m"
+            "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:`HAS_CHUNK`]-(m) RETURN u, m.`_uuid`, label(m), m"
         );
     }
 

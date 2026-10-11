@@ -737,3 +737,247 @@ fin d'instruction, et pourquoi) ; **la page avant le code est écrite** (3 h 30,
 tranche : son essai `essai-fin-d-instruction-filtre`, `53c742c0b`, en cours sur luciepc). Tickets du
 moteur encore à moi : C7 après un arrêt brutal, la seconde suppression d'une relation, la part
 reprise du journal à doublon.
+
+## Le COPY journalisé qui lisait des zéros (11 octobre 2026, 3 h 10 à 4 h 30) — priorité de l'orchestration
+
+Relais de l'arbre principal (sa sonde `~/.cache/rag3weaver-notes-A/etendue/variantes.cpp` : un COPY
+journalisé de 200 000 lignes, deux fils, `FLOAT[4]` à côté d'une `DOUBLE`, relu **sans mort ni
+rejeu** : 134 à 285 scores à 0 en fin de table, 3 sur 3 ; juste à un fil, sans tableau, sans seuil,
+ou forcé ; juste après un `CHECKPOINT` dans le même processus). Le rouge probabiliste
+`OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent` de ma liste d'I1 en était l'ombre au rejeu.
+
+**Comment la cause a été trouvée** (worktree `rag3db-copie` sur luciepc, moteur instrumenté, sonde
+rebâtie contre lui) : (1) reproduit 3 sur 4 ; les « 0.000000 » n'étaient pas toujours 0,0 à la
+lecture par `WHERE d.score = 0.0` — c'était la carte de zones qui sautait le bloc, piège ; (2) une
+relecture **par la clé** rend la bonne valeur là où le balayage lit 0 : les pages sont bonnes, la
+lecture vectorisée est fausse ; (3) une sonde dans `ColumnChunk::scan` : les zéros sortent du **groupe
+plein** écrit sur disque pendant le COPY (ON_DISK, 131 072 valeurs, **deux segments** 99 840 +
+31 232), à la première valeur du second segment, sous une **sélection filtrée** (les versions de
+l'insertion du COPY, `CHECK_VERSION`, tant qu'aucun point de reprise ne les efface) ; le second
+segment porte des **exceptions ALP** aux positions 0..N-1, N = 69, 223, 241 = exactement le nombre de
+lignes fausses ; (4) le code : `patchFloatExceptions` passe au filtre l'index absolu dans le vecteur
+(`startOffsetInResult + position`) là où `DefaultColumnReadWriter::readCompressedValues` lui donne
+l'index relatif au balayage — pour tout segment après le premier d'un bloc, rien n'est rapiécé, les
+valeurs restent à leur encodage ALP, 0. Code de l'amont (mai 2025) ; rien vers l'amont.
+
+**Correctif** : une ligne (`src/storage/table/column_reader_writer.cpp`, l'index relatif au filtre),
+branche `copie-journalisee-double`. **Témoin** : la sonde en gtest
+(`JournaledCopyReadBackTest.TwoThreadsAndAnArrayColumnReadEveryScoreBack`, trois COPY de suite, la
+configuration de la sonde), rouge sur master (212 faux au premier essai), vert sur le correctif ; la
+sonde elle-même 0 faux ×3 sur le bâti corrigé. Passe, sur luciepc (`rag3db-copie`, bâti de 3 h 52) :
+transaction_test 248, api 104, c_api 136, copy 23, stockage 83 + column_stats 2, vector 74 et 63,
+Cypher 1867 ; banc en tenue exclusive conforme sauf la course de témoin
+`AnnouncedWritersOfOneIndexedTableWaitThenBothCommit` (`announce:done` avant `commit:done`), bornée à
+`commit:start` par la ligne du banc, prise dans ce lot (`60d74a4e2`) ; relu par hotfixs (le banc
+dormait). Rebasée sur master `fc636f7e6` (tests seulement) : `copie-journalisee-double-2`,
+`10a796166` témoin, `eae3863ab` correctif, `60d74a4e2` borne ; OwnerlessPages et le témoin neuf
+rejoués ×20 avant l'avance rapide.
+
+Leçons : un `KU_ASSERT` muet en Release ne prouve rien, la sonde doit imprimer ; un bâti de cible
+(`--target rag3db`) ne relie pas la lib partagée : prouver par la date et par `strings` ; relire par un
+autre chemin (la clé) départage « pages fausses » et « lecture fausse » en une requête.
+## La seconde écriture d'une relation (11 octobre 2026, 3 h 20) — le petit ticket d'A4′, fermé
+
+Branche `verrous-rel2`, en attendant la mesure d'I2 (ordre de l'orchestration). A4′ contrôlait les
+extrémités d'une relation, pas la relation : une relation vue par l'instantané puis supprimée ou mise
+à jour et validée par une autre transaction recevait « Write-write conflict » à la place de l'erreur
+de sérialisation nommée. `CSRNodeGroup::wasWrittenByCommitAfter` (la source et la ligne de
+`findMatchingRow`), contrôlé par `RelTableData::update` et `delete_`, sous le mode seulement. Témoin
+d'un fil rouge d'abord (trois refus mal nommés), puis vert ; une relation née après l'instantané
+n'est ni vue ni refusée ; une écriture annulée ne refuse rien. Le cas à deux fils (l'attente puis
+l'erreur) reste au banc dans sa forme `holderAndWaiter`, s'il le veut. Passe, sur luciepc
+(`rag3db-rel2`), rejouée deux fois parce que master apportait du C++ entre-temps (le COPY corrigé,
+puis le point de reprise interrompu d'hotfixs) : transaction_test 249, api 104, c_api 136, copy 23 ;
+banc en tenue exclusive conforme (10 rouges / 248 verts, 5 h 09) — le premier banc avait montré la
+course de témoin `AnnouncedWritersOfOneIndexedTable` (bornée à `commit:start` par le banc, prise
+dans le lot du COPY). Sur master en avance rapide : `81f74f86c` témoin, `69f3ff53e` correctif
+(5 h 10). Lib commune de luciepc rebâtie dessus, worktree effacé.
+
+## Arrêt sur rapport propre (11 octobre 2026, 5 h 20) — la nuit du 10 au 11, et comment reprendre
+
+Ordre de l'orchestration : I2 porte une règle visible (page 10 §1, « l'index est l'état validé »)
+que Lucie peut renverser, et pèse deux à trois I1 — elle s'ouvre au matin sur son mot.
+
+**Entré sur master cette nuit** (tout en avance rapide, listes complètes vertes, banc en tenue
+exclusive conforme, relectures croisées) :
+
+- A3′ (`21b6cb370`…`9a57a17b2`), A4′ (`9904fefc0`…`67ff3816b`), V2 (`95ced051e`…`11887dc21`),
+  **I1** (`83fdf22f3`…`3ad09c8cc`) : la condition 1 de la stèle est à une marche (I2) de sa fin ;
+- **la corruption du COPY journalisé** (`eae3863ab`, témoin `10a796166`) : un défaut de lecture
+  de l'amont révélé par le COPY journalisé, trouvé en une heure par sonde — la condition 2 reste
+  fermée ; le filet rag3weaver est retiré par l'arbre principal (`f9bf4574d`) ;
+- **rel2** (`69f3ff53e`), A4′ pour les relations ;
+- relus pour d'autres : le lecteur affamé (hotfixs, `e4198f862`), le point de reprise interrompu,
+  les segments de chaînes bornés (hotfixs, poussés derrière moi) ; le contrôle de bâti des
+  extensions (`458ff7157`) tient depuis V2.
+
+**Le banc de concurrence** : de 56 lignes attendues rouges au départ des verrous à **10** après rel2
+(248 verts). Ce qui reste rouge y est nommé ligne à ligne (`known_red.txt`).
+
+**Ce qui reste, dans l'ordre** :
+
+1. **I2**, la maintenance de l'index au commit : page 10 tranchée sur la mesure du banc (« pertes
+   seules filtrée », l'état d'instruction devient l'état de transaction, bornes `commit:start`), avec
+   la contrainte du pont coupé (§3 bis : une recherche par région détachée, à mesurer). Premier jet
+   quand Lucie dit oui ; le banc réécrit ses témoins sur une branche partie de la mienne à ce
+   moment-là — le lui dire.
+2. C7 après un arrêt brutal (relations pendantes nées au rejeu, ticket ouvert).
+3. La part reprise du journal à doublon (`LockBench.RecoveryOfAJournalWithADuplicateKey…`, fixture
+   `test/transaction/journal_with_duplicate_key`).
+
+**Les arbres** : ici, `rag3db-moteur` (branches `verrous-i1`, `verrous-rel2`, `copie-journalisee-double`,
+toutes sur master, sans bâti) et `rag3db-docs-note` (`docs-i1`, poussée) ; sur luciepc, seul
+`rag3db-lourd` reste, lib commune sur `3ed14644e` (librag3db.so 05:10:32 md5 `4598f15f67b1`,
+libvector `4c12f0d4577a`) — un worktree neuf par lot, effacé à la fusion. Notes :
+`~/.cache/rag3db-moteur-notes/{i1,rel2,copie}/` (scripts de passe détachés `passe*.sh`, journaux).
+Rien ne tourne.
+
+## La condition 3, les écritures parallèles (11 octobre 2026, matin) — la page, rien à coder
+
+Décision de Lucie au réveil : I2 n'est pas bloquante (page 10 prête, I1 reste le produit) ; le
+chantier est la condition 3, « oui jusqu'à B, et A d'abord ». Page 11
+(`11-condition-3-les-ecritures-paralleles.md`, `1151b55b1`) : ce qui est (un refus sous un mutex,
+l'état MVCC en mémoire par processus), A = allumer le mode et fermer T0, A7, A3′ reprise, C7, plus
+A8 (le point de reprise sous écrivains permanents) et A9 (la mesure du coût, puis le mode par
+défaut) ; B = le lecteur (fait), le relais au fichier (B2), le démon (B3, la voie Neo4j) ; le vrai
+multi-processus est une refonte que je ne recommande pas ; quatre écarts rendus à Lucie. Rien à
+coder avant son mot.
+
+## T0, la transaction en échec garde ses verrous (11 octobre 2026, 10 h 30) — condition 3, marche 1
+
+Branche `verrous-t0`. Ce qui existait : après l'échec d'une instruction dans `BEGIN … COMMIT`, la
+connexion refusait déjà tout jusqu'au `ROLLBACK` (`throwIfManualTransactionFailed`), mais la
+transaction était annulée **et fermée** en dessous — ses verrous rendus à l'échec ; celui qui
+attendait derrière écrivait pendant que le bloc était encore ouvert côté client (rouge `waited` du
+banc). T0 : la transaction reste active, ses effets annulés tout de suite
+(`Transaction::failAfterStatement` : rollback, tampon d'annulation vidé — il ne s'applique qu'une
+fois —, journal local vidé, drapeau `failed`), ses verrous tenus ; `ROLLBACK` la ferme ; `COMMIT` la
+ferme en annulant et lève l'erreur nommée. **Écart choisi** : PostgreSQL répond au `COMMIT` d'un
+bloc en échec par `ROLLBACK` sans erreur, Neo4j refuse le commit — Neo4j, pour qu'un client ne
+croie pas avoir validé. **Conséquence en mode un seul écrivain** (relecture d'hotfixs) : un bloc en
+échec non fermé garde la place de l'écrivain jusqu'au `ROLLBACK` — voulu, c'est ce que vaut une
+transaction ouverte ; rag3weaver ferme déjà ses blocs en échec (`code_sync.rs`), dit à l'arbre
+principal. `cleanUp()` du contexte appelé deux fois (à l'échec, à la fermeture) : il ne fait que
+nettoyer les fichiers du contexte dans chaque système de fichiers, idempotent. Témoins : d'un fil
+`AFailedTransactionKeepsItsLocksUntilItIsClosed` (rouge sur master : 0 verrou après l'échec, l'autre
+n'attend pas ; vert après — la transaction garde aussi les verrous de l'instruction qui a échoué) ;
+au banc `FailedTransactionReleasesItsLocksAtRollback` 5 sur 5, sa ligne sort de `known_red` (11
+attendus). Passe, sur luciepc (`rag3db-t0`) : transaction_test 251, api 104, c_api 136, copy 23,
+stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher 1867 ; banc en tenue
+exclusive conforme (9 rouges / 249 verts). Deux témoins existants adaptés à la règle
+(`FailedTransactionTest` : un `BEGIN`/`CHECKPOINT` refusé dans un bloc en échec ne le ferme plus ;
+en mode un seul écrivain, l'autre connexion lit et son écriture attend le `ROLLBACK`). Cas limite
+nommé par hotfixs, laissé tel quel : un `ROLLBACK` qui lèverait lui-même dans un bloc en échec
+laisse le bloc ouvert jusqu'à un second `ROLLBACK` ou la fin de la connexion — rien n'est perdu.
+Sur master en avance rapide : `e963fb220`…`82a5f4851` (11 h 40).
+
+## A3′ reprise, le journal à doublon (11 octobre 2026, 11 h 30 à 12 h 30) — condition 3, marche 3
+
+Branche `verrous-a3-reprise`. Le rejeu butait sur « Found duplicated primary key value 7 » et la base
+ne se rouvrait plus (journal fabriqué par le moteur d'avant le verrou de clé, sous le mode
+multi-écrivains : deux transactions validées sur la même clé, mort base ouverte).
+
+**Première forme, retirée** : sauter la transaction fautive jusqu'à son `COMMIT` et copier ses octets
+à côté. Relecture d'hotfixs : les enregistrements du journal désignent les lignes **par décalage**
+(mise à jour, suppression, extrémités des relations) ; sauter k insertions décale toutes les lignes
+insertées après dans la même table, et une mise à jour ou une relation journalisée après tombe sur la
+mauvaise ligne, sans erreur. Réponse fausse silencieuse — j'ai refait.
+
+**La pierre tombale** : rien n'est sauté. Au rejeu, `NodeTable::insert` ne contrôle plus l'unicité
+(le journal l'a fait quand il a été écrit) : la ligne prend son décalage ; au commit,
+`PrimaryKeyIndex::commitInsert` note le doublon (décalage, clé) au lieu de lever, en RECOVERY
+seulement — hors reprise, `DuplicatedPrimaryKeyException` (sous-classe de `RuntimeException`, même
+message). À la fin du rejeu, `WALReplayer::settleReplayedDuplicates`, dans une transaction de
+reprise (en mémoire en lecture seule, comme le reste) : si l'index mène à une **autre** ligne vivante
+de la clé, la ligne rejouée est détachée de ses relations (toutes les tables de relations dont la
+table est une extrémité, les deux sens) puis supprimée par décalage, l'index non touché (il ne la
+connaît pas) ; sinon — la première ligne supprimée après coup — elle est gardée et reçoit son entrée
+d'index (les trois cas d'hotfixs : décider à la fin, nommer ce que la pierre tombale emporte, la
+lecture seule en mémoire). Chaque cas est nommé sur stderr (clé, table, décalage, côtés détachés).
+Toute autre erreur de rejeu reste une corruption : la base ne s'ouvre pas.
+
+**Témoins** : trois fixtures fabriquées par `ff9bad960` (worktree `rag3db-vieux` sur luciepc, la cible
+`single_file_header` pour `rag3db.hpp`) dans `test/transaction/journal_with_duplicate_key/` : le
+doublon seul ; B insère 7 et 8, C insère 9, la met à jour, la relie à 1 (9 porte sa mise à jour et
+sa relation, par la clé comme par le balayage) ; comme la 2 puis D supprime la 7 de A (la 7 de B
+survit, trouvée par la clé, mise à jour, relue après point de reprise). Rouges propres sur master,
+verts après ; au banc `RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen` 3/3, sa ligne sort
+de `known_red`. Pièges : `git commit -- <chemin>` refuse un fichier neuf non ajouté ; `git reset
+--hard` vers un commit qui ne porte pas un fichier l'efface de l'arbre ; un `ASSERT` dans une aide
+ne stoppe pas le test (plantage au lieu de rouge). Passe, sur luciepc (`rag3db-a3r`, rebasée sur
+T0) : transaction_test 254, api 104, c_api 136, copy 23, stockage 83 + column_stats 2 +
+string_split 2, vector 74 et 63, Cypher 1867 ; banc en tenue exclusive : 8 rouges / 250 verts, le
+seul écart avec `known_red` étant la ligne qui verdit, sortie dans le commit final. Relu par
+hotfixs (quatre points, dont la lecture seule : une transaction de reprise ne journalise jamais).
+Sur master en avance rapide : `f8795e215` témoins, `b08396988` correctif, `b49423a49` known_red
+(12 h 35). **Le banc est à 10 lignes rouges attendues.**
+
+## C7 après arrêt brutal (11 octobre 2026, 12 h 40 à 13 h 30) — condition 3, marche 6 ; un défaut de rejeu à un seul écrivain
+
+Branche `verrous-c7`. Méthode : un patch d'enquête sur luciepc (une trace du rejeu par enregistrement
+sous `RAG3DB_TRACE_REPLAY`, le harnais gardant la base, le journal et le dump vivant avant le rejeu
+sous `C7_KEEP`), `C7_RandomMix/Thread_Crash` rouge au premier essai ; puis un petit programme qui
+rejoue la base gardée seule, et deux traces de plus (la liste CSR du nœud détaché, la visibilité
+ligne à ligne). Lecture : la relation pendante (54, 95→60) est créée par la transaction juste avant
+celle qui détache et supprime 60 ; le détachement du côté arrière de 60 voit deux relations visibles
+dans le même lot (49 et 54) et n'en supprime qu'une. **Cause** :
+`WALReplayer::replayRelDetachDeletionRecord` branchait les vecteurs voisin et relation sur l'état du
+vecteur **source** (plat) ; le balayage y écrit la sélection du lot, et `RelTableData::delete_` lit le
+source à la position de la relation — nulle au-delà de 0 — et rend faux en silence. L'exécuteur
+vivant donne à voisin et relation un état à eux (`NodeTableDeleteInfo`) : la forme reprise. **Rejeu
+seulement, un seul écrivain suffit** : un nœud à deux relations, `DETACH DELETE`, mort avant le
+point de reprise — atteignable en service, condition 4, le ticket passe d'« inatteignable » à fermé.
+Les trois pistes du ticket n'y étaient pour rien. Témoin `PendingRelAfterReplayTest` (deux relations
+vers un nœud, détaché, mort, rejeu ; sous le mode aussi), rouge sur master, déterministe — un premier
+témoin à UNE relation était vert : le motif demandait deux relations dans le même lot. Relecture
+d'hotfixs : **le même défaut était dans ma pierre tombale** d'A3′ reprise (un seul état partagé) —
+corrigé dans le même commit, avec une fixture 4 (la clé en doublon à deux relations par sens, toutes
+retirées). Le ticket C7 est déplacé dans `closed/` par le commit qui corrige (règle de
+l'orchestration), avec sa cause. Passe, sur luciepc (`rag3db-c7`, rebasée sur A7) : six témoins
+rouges sur master puis verts, `C7_RandomMix/Thread_Crash` ×10 puis ×3 verts, transaction_test 257,
+api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher
+1867 ; banc en tenue exclusive : un premier passage où une ligne vectorielle du ticket des copies
+passait au vert par hasard, un second conforme (6 rouges comparés / 252 verts, 8 lignes attendues).
+Sur master en avance rapide : `edb411858` témoins, `2c7704b27` correctif (13 h 35). **Le banc est à
+8 lignes rouges attendues** : A7 (hotfixs) et C7 sortis.
+
+## A9, la mesure du coût du mode multi-écrivains (11 octobre 2026, 13 h 40 à 14 h 10) — condition 3, marche 4, première moitié
+
+Branche `verrous-a9`, worktree `rag3db-a9` sur luciepc. Un témoin de mesure,
+`test/transaction/concurrence/lock_cost_test.cpp` (`Mode/LockCost.*`, `TEST_P` sur le mode, sauté
+sans `CONCURRENCE_MEASURE=1`), qui imprime chaque chiffre avec l'identifiant de bâti du moteur
+mesuré (`common/build_id.h`, le dossier de bâti ajouté aux inclusions de `concurrence_test`).
+Protocole et chiffres dans la page 11 §5 : sur le COPY de 200 000 lignes et les 100 000 insertions
+ligne à ligne, aucun écart mesurable (moins d'un pour cent, sous le bruit) ; sur le SET sous index
+HNSW, un bruit de ±30 % dans les deux modes, sans sens. **Le coût du mode est nul** : la condition
+« plus de quelques pour cent » n'est pas atteinte, la clé imprimée reste. Avant la fusion : les six
+cas sautés sans la variable, 18 verts avec, la comparaison du banc sur le binaire qui porte la
+mesure. Lu avant le push : banc conforme (6 rouges comparés / 252 verts, 8 lignes attendues, 13 h 57 à 14 h 10), le rebase n'apportait aucun C++. Sur master en avance rapide : `87137a766` (14 h 12) ; `rag3db-a9` effacé. Suite : la bascule du défaut en lot à part, sur le mot
+de Lucie (la page 11 dit la forme et le renversement).
+
+## A9b, la bascule du défaut — bloquée par une permission de la session (11 octobre 2026, 14 h 30)
+
+L'orchestration a rendu la règle de Lucie du matin : la bascule se fait sur le coût dit, et il est
+nul. Le lot est prêt (worktree `rag3db-a9b` bâti sur luciepc, forme : `enable_multi_writes` sans
+`debug_`, `true` par défaut dans `DBConfig`, `CALL enable_multi_writes=false` pour l'ancienne
+sémantique, 18 fichiers de tests et `.test` à renommer, deux commentaires côté Rust), mais le
+renommage en masse a été **refusé par le classifieur de permissions** de la session (« Modify
+Shared Resources »), et la consigne du refus interdit d'atteindre le même résultat par un autre
+outil. Rien n'a été modifié (arbre vérifié propre). Il faut la main de Lucie (une règle de
+permission, ou le `sed` fait par elle sur la branche). Dit à l'orchestration et à hotfixs.
+
+## Les bases gtest sous un parent par passe (11 octobre 2026, 14 h 35 à 15 h 55) — le ticket de rag3db-97
+
+Branche `tests-tmp-par-passe`, worktree `rag3db-a9b` réemployé. Forme : `TestHelper::getRootTempDir()`
+rend `<commun>/<pid du lanceur>` (pid pris à l'initialisation statique, avant tout fork, donc hérité
+par les enfants du banc) ; `getSharedTempRoot()` est l'ancien `/tmp/rag3db` ; un `::testing::Environment`
+global (`TempDirPerRun`, `test_helper.cpp`, enregistré à l'initialisation statique) efface le parent au
+début et à la fin du lanceur (jamais depuis un enfant : `getpid()` comparé), et au début les parents
+des passes dont le lanceur n'existe plus (`kill(pid, 0)`, noms numériques seulement). `cleanup_test`
+efface le dossier commun. Témoin `HarnessMechanics.WhatAKilledChildLeavesLivesUnderTheRunsParent` :
+un enfant fork ouvre une base puis `_exit` ; la base est sous le parent de la passe ; un parent nommé
+du pid d'un enfant fini est effacé, le nôtre reste (témoin et forme dans le même commit : sans l'API
+il ne compile pas). Relecture du banc (rag3db-10) : rien ne casse dans le harnais, le processus
+neuf de `probeOpenInFreshProcess` se prend pour un lanceur sans dégât. **Ce qui reste à la main,
+une fois** : les dossiers d'avant à la racine de `/tmp/rag3db`, quand tous les arbres sont rebâtis.
+Passe sur luciepc (`rag3db-a9b`) : témoin vert (HarnessMechanics ×4), transaction_test 257, api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher 1867, banc conforme (6 rouges comparés / 253 verts : le témoin neuf en plus) ; après chaque suite, aucun parent numérique laissé dans `/tmp/rag3db` (les entrées non numériques qui y sont apparues pendant la passe venaient de la liste d'A8 d'hotfixs, jouée en même temps avec un binaire d'avant). Sur master en avance rapide : `dd9413d5e` (15 h 58 ; le rebase n'apportait que du code de test, le lecteur du journal du banc). `rag3db-a9b` effacé ; la lib commune de luciepc n'a pas à être rebâtie (aucun C++ du moteur).

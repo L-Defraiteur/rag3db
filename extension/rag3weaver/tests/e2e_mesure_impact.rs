@@ -1,0 +1,268 @@
+//! Mesure : **les allers-retours et le temps d'impact**, avant et après son
+//! passage par `Catalog::run_plan` (page
+//! `docs/11-octobre-2026-embarquements/04-eventails.md`).
+//!
+//! Une connexion enveloppe compte chaque instruction envoyée (`execute`,
+//! `execute_with_params`, `execute_with_local_settings`). Le corpus est
+//! `src/daemon`, que le lot ne touche pas : le scénario reste le même avant
+//! et après. Pour chaque cas, la ligne `[mesure]` donne les allers-retours,
+//! le temps médian de cinq appels, et une empreinte des lignes rendues
+//! (triées) : elle doit être la même avant et après.
+//!
+//! Run with: ./run_e2e.sh --test e2e_mesure_impact
+
+#![cfg(all(feature = "rag3db-native", feature = "code"))]
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+
+use rag3weaver::code::{analyze, default_scope_chunking, read_sources, register_code_schema};
+use rag3weaver::connection::{DbConnection, DbError, QueryParam, QueryResult};
+use rag3weaver::dataflow::neighborhood_nodes::{neighborhood_of, Direction, NeighborhoodConfig, Step};
+use rag3weaver::dataflow::usage_nodes::UsagesConfig;
+use rag3weaver::embedder::HashEmbedder;
+use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+
+/// Une connexion qui compte les instructions qu'elle envoie.
+pub(crate) struct Compteur {
+    pub(crate) inner: Box<dyn DbConnection>,
+    pub(crate) n: Arc<AtomicUsize>,
+}
+
+impl DbConnection for Compteur {
+    fn execute(&self, q: &str) -> Result<QueryResult, DbError> {
+        self.n.fetch_add(1, Ordering::Relaxed);
+        self.inner.execute(q)
+    }
+    fn execute_with_params(&self, q: &str, p: &[QueryParam]) -> Result<QueryResult, DbError> {
+        self.n.fetch_add(1, Ordering::Relaxed);
+        self.inner.execute_with_params(q, p)
+    }
+    fn execute_with_local_settings(&self, q: &str, p: &[QueryParam], s: &[(&str, String)]) -> Result<QueryResult, DbError> {
+        self.n.fetch_add(1, Ordering::Relaxed);
+        self.inner.execute_with_local_settings(q, p, s)
+    }
+    fn must_reopen(&self) -> Option<String> {
+        self.inner.must_reopen()
+    }
+    fn buffer_pool(&self) -> Option<rag3weaver::connection::BufferPoolChoice> {
+        self.inner.buffer_pool()
+    }
+    fn poison(&self, r: &str) {
+        self.inner.poison(r)
+    }
+    fn close_without_checkpoint(&self) {
+        self.inner.close_without_checkpoint()
+    }
+    fn begin(&self) -> Result<(), DbError> {
+        self.inner.begin()
+    }
+    fn commit(&self) -> Result<(), DbError> {
+        self.inner.commit()
+    }
+    fn rollback(&self) -> Result<(), DbError> {
+        self.inner.rollback()
+    }
+    fn database_path(&self) -> Option<std::path::PathBuf> {
+        self.inner.database_path()
+    }
+}
+
+fn rag3db_root() -> String {
+    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
+        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
+    })
+}
+
+/// La configuration du gabarit `templates/tools/impact.mmd`, comme
+/// `e2e_impact::code_config`.
+pub(crate) fn impact_config() -> NeighborhoodConfig {
+    let relations: Vec<String> = vec!["CONSUMES".into(), "INHERITS_FROM".into(), "IMPLEMENTS".into()];
+    NeighborhoodConfig {
+        start: UsagesConfig {
+            pivot: "Symbol".into(),
+            key: "name".into(),
+            defined_by: Some("DEFINES".into()),
+            used_by: Some("MENTIONS".into()),
+            direct: relations.clone(),
+            group_by: "usage".into(),
+            usages_field: "usages".into(),
+            line: "line".into(),
+            title: "name".into(),
+            kind_field: "scope_type".into(),
+            path_fields: vec!["repo_path".into(), "file_path".into()],
+            line_field: "start_line".into(),
+            edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+        },
+        relations,
+        direction: Direction::Incoming,
+        group_by: "test_role".into(),
+        label_field: "test_name".into(),
+        note_field: "test_certainty".into(),
+        also_path: vec![
+            Step { relation: "HAS_PARENT".into(), direction: Direction::Outgoing },
+            Step { relation: "IMPLEMENTS".into(), direction: Direction::Outgoing },
+            Step { relation: "PARENT_OF".into(), direction: Direction::Outgoing },
+        ],
+        also_same: "name".into(),
+        also_label: "Par le trait (peut-être)".into(),
+        collect: None,
+    }
+}
+
+/// Les noms mesurés : des fonctions de `src/daemon` qui ont des appelants.
+pub(crate) const NOMS: [&str; 3] = ["joindre", "est_local", "servir_lie"];
+
+/// Mesurer impact sur un catalogue déjà indexé, et rendre les lignes
+/// `[mesure]`.
+pub(crate) fn mesurer(moteur: &str, cat: &Catalog, n: &AtomicUsize) -> Vec<String> {
+    let mut lignes = Vec::new();
+    for nom in NOMS {
+        for profondeur in [2, 3] {
+            let mut temps = Vec::new();
+            let mut allers = 0;
+            let mut empreinte = 0u64;
+            for _ in 0..5 {
+                n.store(0, Ordering::Relaxed);
+                let t = Instant::now();
+                let r = neighborhood_of(cat, &impact_config(), nom, "", profondeur, 200, 50).unwrap_or_else(|e| panic!("impact {nom} : {e}"));
+                temps.push(t.elapsed().as_micros());
+                allers = n.load(Ordering::Relaxed);
+                // Les lignes triées : l'ordre du rendu suit des tables de
+                // hachage, et change d'un processus à l'autre.
+                let rendu = r.markdown("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", 500);
+                let mut lignes_du_rendu: Vec<&str> = rendu.lines().collect();
+                lignes_du_rendu.sort();
+                let mut h = DefaultHasher::new();
+                lignes_du_rendu.hash(&mut h);
+                let e = h.finish();
+                assert!(empreinte == 0 || empreinte == e, "{nom} {profondeur} : le rendu change d'un appel à l'autre");
+                empreinte = e;
+            }
+            temps.sort();
+            let ligne = format!(
+                "[mesure] {moteur} {nom} profondeur {profondeur} : {allers} allers-retours, {:.2} ms (médiane de 5), empreinte {empreinte:016x}",
+                temps[2] as f64 / 1000.0
+            );
+            eprintln!("{ligne}");
+            lignes.push(ligne);
+        }
+    }
+    lignes
+}
+
+#[test]
+#[ignore]
+fn mesure_impact_sur_rag3db() {
+    let n = Arc::new(AtomicUsize::new(0));
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn DbConnection> = Box::new(Compteur { inner: Box::new(conn), n: n.clone() });
+    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let config = CatalogConfig { name: Some("mesure-impact".into()), embedding_dim: 64, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let dir = format!("{}/src/daemon", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    catalog.ingest_code(&analyze(&dir, read_sources(&dir).unwrap())).unwrap();
+    let lignes = mesurer("rag3db", &catalog, &n);
+    assert_eq!(lignes.len(), 6);
+}
+
+// ═══ Les éventails seuls, sur un graphe peuplé par le catalogue ══════════════
+//
+// Ce que la fusion change là où elle vit, sur les deux moteurs : un éventail
+// de six degrés (trois relations, deux sens) et un éventail de trois sauts,
+// sur les mêmes 300 uuids, découpés puis fondus. PostgreSQL le joue depuis
+// `e2e_postgres::mesure_eventails_sur_postgres` (sur le conteneur) ; ce n'est
+// pas impact de bout en bout, que le gabarit code ne permet pas encore sur
+// PostgreSQL (ticket 2026-10-11-l-indexation-du-code-envoie-du-cypher-brut).
+
+/// 300 nœuds, trois relations, chaque nœud lié aux trois suivants par
+/// chaque relation (900 × 3 arêtes au plus, sans boucle).
+pub(crate) fn peupler_le_graphe(cat: &mut Catalog) -> Vec<String> {
+    use rag3weaver::config::{EntityConfig, FieldType, SimpleFieldDef};
+    use rag3weaver::connection::CypherValue;
+    use std::collections::{BTreeMap, HashMap};
+    let mut fields = HashMap::new();
+    fields.insert("name".to_string(), SimpleFieldDef { field_type: FieldType::String, is_title: true, is_content: true, ..Default::default() });
+    cat.register_entity("Node", EntityConfig { fields, ..Default::default() }).unwrap();
+    for r in ["rel_a", "rel_b", "rel_c"] {
+        cat.register_relation(r, "Node", "Node").unwrap();
+    }
+    let lignes: Vec<BTreeMap<String, CypherValue>> =
+        (0..300).map(|i| BTreeMap::from([("name".to_string(), CypherValue::String(format!("n{i}")))])).collect();
+    let uuids: Vec<String> = lignes.iter().map(|l| cat.entity_uuid("Node", l).unwrap()).collect();
+    cat.ingest_entities("Node", lignes).unwrap();
+    for (k, r) in ["rel_a", "rel_b", "rel_c"].iter().enumerate() {
+        for i in 0..300 {
+            for d in 1..=3 {
+                let j = (i + d * (k + 1)) % 300;
+                cat.link(r, uuids[i].as_str(), uuids[j].as_str(), BTreeMap::new()).unwrap();
+            }
+        }
+    }
+    let vidage = cat.drain();
+    assert_eq!(vidage.failed, 0, "{vidage:?}");
+    uuids
+}
+
+pub(crate) fn mesurer_eventails(moteur: &str, cat: &Catalog, uuids: &[String]) -> Vec<String> {
+    use rag3weaver::connection::CypherValue;
+    use rag3weaver::plan::PlanOptions;
+    use rag3weaver_ir::{Count, Direction as D, Form, Hop, Plan};
+    let liste = || vec![QueryParam::new("uuids", CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect()))];
+    let mut degres = Plan::new();
+    let mut sauts = Plan::new();
+    for (k, r) in ["rel_a", "rel_b", "rel_c"].iter().enumerate() {
+        for (s, sens) in [D::Incoming, D::Outgoing].into_iter().enumerate() {
+            let id = format!("d{k}{s}");
+            degres = degres.node(&id, Form::Count(Count::Edges { start: "Node".into(), relation: r.to_string(), direction: sens }), liste()).output(&id);
+        }
+        let id = format!("h{k}");
+        sauts = sauts.node(&id, Form::Hop(Hop::new("Node", *r, "Node", D::Outgoing)), liste()).output(&id);
+    }
+    let mut lignes = Vec::new();
+    for (nom, plan) in [("six degrés", &degres), ("trois sauts", &sauts)] {
+        for split in [true, false] {
+            let options = PlanOptions { split, no_transaction: true, fanout: Some(true), ..Default::default() };
+            let mut temps = Vec::new();
+            let mut instructions = 0;
+            let mut lignes_rendues = 0;
+            for _ in 0..21 {
+                let t = Instant::now();
+                let r = cat.run_plan(plan, options).unwrap_or_else(|e| panic!("{nom} : {e}"));
+                temps.push(t.elapsed().as_micros());
+                instructions = r.instructions;
+                lignes_rendues = r.outputs.values().map(|q| q.rows.len()).sum::<usize>();
+            }
+            temps.sort();
+            let ligne = format!(
+                "[eventail] {moteur} {nom} {} : {instructions} instructions, {:.2} ms (médiane de 21), {lignes_rendues} lignes",
+                if split { "découpé" } else { "fondu" },
+                temps[10] as f64 / 1000.0
+            );
+            eprintln!("{ligne}");
+            lignes.push(ligne);
+        }
+    }
+    lignes
+}
+
+#[test]
+#[ignore]
+fn mesure_eventails_sur_rag3db() {
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn DbConnection> = Box::new(conn);
+    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
+    let config = CatalogConfig { name: Some("mesure-eventails".into()), embedding_dim: 64, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
+    catalog.initialize().unwrap();
+    let uuids = peupler_le_graphe(&mut catalog);
+    assert_eq!(mesurer_eventails("rag3db", &catalog, &uuids).len(), 4);
+}

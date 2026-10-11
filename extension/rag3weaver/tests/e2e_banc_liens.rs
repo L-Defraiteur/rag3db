@@ -6,7 +6,6 @@
 //! l'UNWIND par tranches, et `COPY … FROM` un CSV, le chemin de chargement en
 //! masse du moteur.
 #![cfg(feature = "rag3db-native")]
-mod common;
 
 use std::time::Instant;
 

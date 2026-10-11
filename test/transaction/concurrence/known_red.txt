@@ -20,20 +20,15 @@
 # Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst (réécrit à deux fils : c'est
 # le verrou d'index du COPY qui ferme la première limite du 4 octobre, le second COPY attend).
 #
-# A3′, la part REPRISE, pas faite — ce que la reprise fait d'un journal qui porte un doublon
-# validé sous le mode multi-écrivains, fabriqué par le moteur d'avant A3′ et gardé au dépôt
-# (test/transaction/journal_with_duplicate_key) : aujourd'hui la base ne se rouvre plus ;
-# attendu, refuser la transaction fautive en nommant la clé et ouvrir la base.
-LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen database-reopens
+# Marche A3′, la part reprise : FAITE le 11 octobre 2026 — au rejeu, une clé en double validée au
+# journal est rejouée à son décalage puis réglée à la fin du rejeu (pierre tombale s'il reste une
+# autre ligne vivante de sa clé, gardée avec son entrée d'index sinon) ; la base s'ouvre ;
+# LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen est vert.
 #
-# Marche A4′ — le mélange de C7 après un vrai arrêt brutal : depuis A3′ la base se rouvre (plus
-# de clé en double au journal) ; ce qui reste est celui de C2 (relations vers des nœuds
-# supprimés par un autre écrivain). same-answers y compris : les lignes qui n'existent qu'après
-# le rejeu sont toutes des relations à une extrémité manquante (« <missing> », 3 à 6 lignes
-# par passe, 3 passes sur 3 le 10 octobre) — le rejeu « répare » la relation pendante, comme pour
-# C2_DetachRelationCommitsFirst/Thread_Crash ; ce n'est pas la durabilité. Ses variantes à chaud
-# et après réouverture restent probabilistes.
-Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-endpoints-exist,same-answers,stored-endpoints-visible
+# C7 après un vrai arrêt brutal : FAIT le 11 octobre 2026 — ce n'était pas la concurrence mais le
+# rejeu du DETACH DELETE, qui perdait la seconde relation d'un lot (un seul écrivain suffisait) ;
+# Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash est vert (×10). Ses variantes à chaud et
+# après réouverture restent probabilistes.
 #
 # Marche A7 (l'attente d'un point de reprise forcé à la validation) — la seconde limite du
 # 4 octobre, sur son chemin d'origine : deux COPY FORCÉS (force_checkpoint_on_copy=true, le
@@ -41,7 +36,6 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-en
 # reprise ; la première attend le départ de la seconde jusqu'au délai (5 s) et échoue. Sa forme
 # journalisée (le défaut depuis ff9bad960) est verte : aucun des deux ne veut de point de
 # reprise. Mesuré sur luciepc le 10 octobre : 5 014 ms.
-Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
 # Marche A4′ (la ligne en exclusif à la mise à jour et à la suppression, les extrémités d'une
 # relation en partagé pour créer et en exclusif pour écrire, l'erreur de sérialisation après
@@ -59,8 +53,9 @@ Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,c
 # Marche V2 — l'annonce en tête (CALL acquire_locks) : FAITE le 11 octobre 2026 ;
 # LockBench.AnnouncedLocksNeverDeadlockAndBothCommitInTurn est vert.
 #
-# Marche V1 (avec T0) — la transaction en échec libère ses verrous à son ROLLBACK.
-LockBench.FailedTransactionReleasesItsLocksAtRollback waited
+# Marche T0 (la transaction explicite en échec reste ouverte et garde ses verrous jusqu'à sa
+# fermeture) : FAITE le 11 octobre 2026 ; LockBench.FailedTransactionReleasesItsLocksAtRollback
+# est vert.
 #
 # Marche I1 (le genre « index » : tout écrivain d'une table indexée tient l'index en exclusif de
 # sa première écriture à sa validation, l'instantané repris après l'attente) : FAITE le 11 octobre
@@ -104,6 +99,11 @@ LockBench.FailedTransactionReleasesItsLocksAtRollback waited
 #   plusieurs tables de relations dans une transaction (a8814a143) ; CSV (2fc419036,
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
+#
+# Le CALL de la recherche vectorielle rend des nœuds supprimés (ticket
+# 2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call) : la projection du nœud les
+# écarte, le compte du CALL les garde. Relevé par le cœur C++ sur I1.
+VectorIndexUpdate.DeletedRowsAreNotReturnedByTheCall vector-call-dead
 #
 # Un groupe de copies bien plus grand que le degré (vector_index_update_test.cpp,
 # SameVectorForEveryRow, la recette de rag3db-9c du 10 octobre) : 1 402 lignes du même vecteur

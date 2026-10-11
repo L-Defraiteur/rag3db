@@ -248,6 +248,12 @@ impl NodeContext {
         self.run_id = run_id.to_string();
     }
 
+    /// La sortie `port` a-t-elle été posée ? (L'exécuteur vérifie qu'un nœud
+    /// a posé ses sorties requises avant de les ranger.)
+    pub(crate) fn has_output(&self, port: &str) -> bool {
+        self.outputs.contains_key(port)
+    }
+
     /// Drain all output values (used by the runtime after execution).
     pub(crate) fn drain_outputs(&mut self) -> HashMap<String, PortValue> {
         std::mem::take(&mut self.outputs)

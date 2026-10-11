@@ -60,9 +60,12 @@ fn une_synchronisation_ne_laisse_pas_ses_points_de_reprise() {
     ));
     std::fs::create_dir_all(&cache).unwrap();
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "une_synchronisation_ne_laisse_pas_ses_points_de_reprise", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("une_synchronisation_ne_laisse_pas_ses_points_de_reprise"), "--nocapture", "--ignored"])
         .env(ENFANT, "1")
         .env("XDG_CACHE_HOME", &cache)
+        // run_e2e.sh pose un dossier de points de reprise par suite, qui passe
+        // avant XDG_CACHE_HOME : le fils doit écrire là où ce test regarde.
+        .env_remove("RAG3WEAVER_CHECKPOINT_DIR")
         // Hors transaction par paquet : depuis la bascule (10 octobre 2026),
         // la transaction est le défaut, et elle coupe les points de reprise
         // du dataflow. Rien ne serait écrit, et le test ne prouverait rien.

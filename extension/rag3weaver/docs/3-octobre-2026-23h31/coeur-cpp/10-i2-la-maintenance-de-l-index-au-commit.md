@@ -114,6 +114,46 @@ se fait d'un coup, sous le mutex, là où aujourd'hui elle est étalée sur les 
 commit se déplace, il ne grossit pas » (page 02 §4), mais il se déplace sous un verrou global. Le
 témoin de durée : `AThousandUpdatesInOneBlock` et `TenThousandRowsInBatchesOf512`, commit compris.
 
+### 3 bis. La mesure est rendue (banc, 11 octobre 2026, 3 h 50, page 04 §10, `23e43d966`) — tranché
+
+Sur luciepc en exclusif, deux passes :
+
+| | master `7c7682111` | pertes seules filtrée `53c742c0b` | union filtrée `bb50fb768` |
+|---|---|---|---|
+| `SetFromNullLineByLine` | 26,0 / 25,7 s | 26,7 / 26,6 s | 28,3 / 29,7 s |
+| `SetToAnotherVectorLineByLine` | 25,8 / 25,8 s | 25,4 / 25,5 s | 27,4 / 27,2 s |
+| `TenThousandRowsInBatchesOf512` | 26,4 / 25,7 s | 21,2 / 21,1 s | 26,1 / 26,4 s |
+| `TenThousand`, dix essais | 10 verts | 2 rouges légers (993 et 998 sur 1 000) | 1 rouge grave (7 982 joignables sur 10 000) |
+
+Le report coûte ce que coûte master, à condition de garder l'heuristique **en filtre** ; le ×7 à
+×13 venait seulement de la recherche complète sur chaque perte. Aucune variante n'est plus juste
+que master. **Décision (orchestration, 4 h 05)** : I2 se fait sur « pertes seules filtrée » — l'état
+d'instruction devient l'état de transaction, justesse de master visée ; l'union n'est pas le choix
+générique (son rouge grave est d'origine non trouvée, le banc cherche). Les deux essais restent sur
+`essai-fin-d-instruction-filtre`, non fusionnés.
+
+Ce que le banc ajoute pour §2.1 (d'accord, à deux conditions) : **ce qui vit jusqu'au commit** —
+`lostLowerInEdges`, `updatedRows`, l'état d'insertion (son état de recherche, ses états de relation),
+la liste des tables et colonnes touchées (le rejeu le fait déjà dans `pendingIndexUpdates`) ; **pas
+d'ancien vecteur à garder** : les anciens voisins se lisent dans le graphe (`deleteFromGraph`) — si
+la mise à jour du graphe est elle-même reportée, c'est l'ancien **graphe** qu'il faut, et le graphe
+local de la transaction le garde ; **une ligne mise à jour deux fois** : garder l'union des anciens
+voisins sur toutes les fois, pas la dernière ; **le rejeu** finalise déjà au COMMIT rejoué, même
+frontière. Pour les attentes (§4) : la borne devient « `commit:done` du second > `commit:start` du
+premier » pour IndexLockBench ×2, H2, H3, H5 ; `writeInTurn` disparaît (les deux écrivent ensemble,
+puis valident dans l'ordre) ; le banc réécrit ces témoins sur une branche partie de la mienne au
+premier jet d'I2 — le lui dire à ce moment-là.
+
+**Le défaut du filtre, nommé par le banc (page 04 §10.1, `dd1eae508`, 4 h 30)** : le filtre est
+**local** — il tient pour joignable un nœud perdu vers lequel pointe un voisin qui n'a rien perdu.
+Quand un élagage retire la dernière arête qui menait d'une région à une autre, chaque nœud de la
+région coupée reste désigné par ses propres voisins, et le filtre les laisse tous passer (sonde : 0
+arête de la région atteinte vers 2 033 lignes perdues, 219 dans l'autre sens). C'est la cause du
+rouge grave de l'union, et ça touche aussi « pertes seules filtrée ». **Pour I2** : la maintenance
+filtrée doit garder une recherche pour au moins un nœud de chaque région détachée — par exemple
+une recherche pour chaque nœud écarté par l'élagage dont le seul témoin de joignabilité vient de
+sa propre région. À mesurer avant d'être promis ; l'essai n'est pas repris cette nuit.
+
 ## 4. Les témoins (rouges d'abord)
 
 - **Le banc** : `IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits` et

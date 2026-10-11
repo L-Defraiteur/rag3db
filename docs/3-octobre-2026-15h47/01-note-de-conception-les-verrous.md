@@ -184,6 +184,12 @@ une transaction explicite, il faut annuler ses effets mais **la garder
 ouverte, marquée en échec**, et refuser toute instruction par une erreur
 nommée jusqu'au `ROLLBACK`.
 
+**Fait le 11 octobre 2026 (marche T0, `verrous-t0`)** : la transaction reste ouverte, marquée en
+échec, ses effets annulés, ses verrous tenus ; `ROLLBACK` la ferme, `COMMIT` la ferme en annulant
+et lève l'erreur nommée (Neo4j ; PostgreSQL répond `ROLLBACK` sans erreur — écart choisi). En mode
+un seul écrivain, un bloc en échec non fermé garde la place de l'écrivain jusqu'au `ROLLBACK` :
+un client doit toujours fermer son bloc (rag3weaver le fait).
+
 **C'est un préalable aux verrous, pas un à-côté** : les verrous ajoutent des
 erreurs en pleine transaction (interblocage, échec après attente). Un client
 qui continuerait après l'une d'elles écrirait le reste de sa transaction en

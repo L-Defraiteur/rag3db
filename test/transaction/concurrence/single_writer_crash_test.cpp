@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -741,6 +742,82 @@ TEST_F(RecoveryDeath, ShadowFileAlreadyReplayedAndRemoved) {
         return;
     }
     expectTheData();
+}
+
+// Un point de reprise interrompu (l'écrivain mort après sa marque CHECKPOINT), puis une ouverture
+// en LECTURE SEULE : elle ne peut pas recopier les pages fantômes. Elle doit être refusée tout de
+// suite, sans attendre la borne du verrou des lecteurs (l'écrivain mort l'a rendu), et le refus
+// doit nommer la cause : un point de reprise interrompu, à achever par une ouverture en écriture.
+// Ce n'est pas un croisement par un point de reprise vivant (rag3weaver le reprenait comme tel).
+TEST_F(RecoveryDeath, AReadOnlyOpenAfterAnInterruptedCheckpointIsRefusedAtOnceAndNamed) {
+    dieAfterTheCheckpointIsLogged();
+    if (HasFatalFailure()) {
+        return;
+    }
+    auto config = *systemConfig;
+    config.readOnly = true;
+    std::string error;
+    const auto start = std::chrono::steady_clock::now();
+    try {
+        rag3db::main::Database reader(databasePath, config);
+    } catch (const std::exception& e) {
+        error = e.what();
+    }
+    const auto waitedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start)
+                              .count();
+    ASSERT_FALSE(error.empty()) << "[check: read-only-refused] the read-only open succeeded";
+    EXPECT_NE(error.find("a checkpoint of this database was interrupted"), std::string::npos)
+        << "[check: interrupted-checkpoint-named] " << error;
+    EXPECT_NE(error.find("Couldn't replay shadow pages under read-only mode"), std::string::npos)
+        << "[check: previous-message-kept] " << error;
+    EXPECT_LT(waitedMs, 1000) << "[check: refused-at-once] " << waitedMs << " ms";
+    // Une ouverture en écriture achève le point de reprise.
+    if (!reopen()) {
+        return;
+    }
+    expectTheData();
+}
+
+// Le crochet de test du moteur (RAG3DB_TEST_HOOKS=1, RAG3DB_TEST_DIE_AT=checkpoint-logged) : le
+// processus meurt juste après la marque CHECKPOINT, au même instant que
+// DyingCheckpointer::AfterCheckpointLogged, sans doublure, pour un témoin d'un autre langage. Le
+// journal se termine alors par CHECKPOINT, et la reprise rejoue le point de reprise.
+TEST_F(RecoveryDeath, TheTestHookDiesRightAfterTheCheckpointIsLogged) {
+    conn.reset();
+    database.reset();
+    const auto pid = fork();
+    ASSERT_NE(pid, -1);
+    if (pid == 0) {
+        disableCoreDumps();
+        setenv("RAG3DB_TEST_HOOKS", "1", 1);
+        setenv("RAG3DB_TEST_DIE_AT", "checkpoint-logged", 1);
+        try {
+            rag3db::main::Database childDatabase(databasePath, *systemConfig);
+            rag3db::main::Connection connection(&childDatabase);
+            mustQuery(connection, "CALL auto_checkpoint=false;");
+            mustQuery(connection, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+            mustQuery(connection, "UNWIND range(0, 1999) AS i CREATE (:Item {id: i, v: i});");
+            connection.query("CHECKPOINT;");
+        } catch (const std::exception& e) {
+            std::cerr << "  child failed: " << e.what() << "\n";
+            _exit(3);
+        }
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFEXITED(status)) << "[check: hook-exit] the child did not exit";
+    ASSERT_EQ(WEXITSTATUS(status), 137)
+        << "[check: hook-exit] the child did not die at the hook (0: the checkpoint completed)";
+    expectJournalToReplay();
+    EXPECT_TRUE(
+        std::filesystem::exists(rag3db::storage::StorageUtils::getShadowFilePath(databasePath)))
+        << "[check: shadow-file-left] the hook did not stop before the shadow pages were applied";
+    if (!reopen()) {
+        return;
+    }
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 2000) << "[check: row-count] ";
 }
 
 // 4. Le point de reprise échoué (7072183db) : il échoue dans sa phase de stockage ; la

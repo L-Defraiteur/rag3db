@@ -115,7 +115,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &Path, fts: Option<&str>) -> String {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"]).env(ROLE, role).env(BASE, base);
     match fts {
         Some(v) => cmd.env("RAG3WEAVER_FTS", v),
         None => cmd.env_remove("RAG3WEAVER_FTS"),
@@ -131,13 +131,7 @@ fn ligne<'a>(t: &'a str, p: &str) -> &'a str {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(format!(
-        ".cache/rag3weaver-build/stockage-fts-{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("stockage-fts", cas)
 }
 
 #[test]

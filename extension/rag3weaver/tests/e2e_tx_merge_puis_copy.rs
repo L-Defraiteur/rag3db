@@ -95,7 +95,7 @@ fn une_table_repliee_sur_merge_ne_repasse_pas_par_copy_dans_la_transaction() {
         return;
     }
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "une_table_repliee_sur_merge_ne_repasse_pas_par_copy_dans_la_transaction", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("une_table_repliee_sur_merge_ne_repasse_pas_par_copy_dans_la_transaction"), "--nocapture", "--ignored"])
         .env(ENFANT, "1")
         .output()
         .expect("lancer le fils");

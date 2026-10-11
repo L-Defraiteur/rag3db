@@ -161,3 +161,13 @@ croisement (`is_checkpoint_crossing` et le compte des reprises). Le moteur ne cr
 ouvertures sous un écrivain vivant. Le seul cas qui l'atteint encore est un écrivain mort en
 plein point de reprise, qui laisse un journal terminé par CHECKPOINT (le message des pages
 fantômes, pour de bon), et aucun test ne le monte.
+
+**Suite (11 octobre 2026, nuit)** : ce cas a maintenant de quoi être monté. Le refus en lecture
+seule nomme la cause : « Couldn't replay shadow pages under read-only mode: a checkpoint of this
+database was interrupted… Open the database read-write once to complete it ». Un crochet de test
+lu dans l'environnement fait mourir l'écrivain juste après la marque CHECKPOINT
+(`RAG3DB_TEST_HOOKS=1` et `RAG3DB_TEST_DIE_AT=checkpoint-logged`, `common/test_hooks.h`,
+décision de l'orchestration). Les témoins moteur sont
+`RecoveryDeath.AReadOnlyOpenAfterAnInterruptedCheckpointIsRefusedAtOnceAndNamed` et
+`TheTestHookDiesRightAfterTheCheckpointIsLogged`. Le témoin côté rag3weaver est chez l'arbre
+principal : rag3weaver ne prend plus ce refus pour un croisement.

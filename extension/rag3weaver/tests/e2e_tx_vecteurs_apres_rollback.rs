@@ -49,13 +49,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/sonde-vecteurs").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d.join("base.rag3db")
+    crate::common::dossier_de_suite("sonde-vecteurs", cas).join("base.rag3db")
 }
 
 fn corpus() -> Vec<(String, String)> {
@@ -158,7 +152,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &Path, piege: bool) -> String {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
@@ -196,7 +190,7 @@ fn une_base_defaite_par_l_ancien_moteur_se_reprend_ou_se_refuse_par_son_nom() {
         std::fs::copy(f.path(), base.parent().unwrap().join(f.file_name())).unwrap();
     }
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, "repreneur")
         .env(BASE, &base)
         .env("RAG3WEAVER_TX_PAR_PAQUET", "1")

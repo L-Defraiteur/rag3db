@@ -487,7 +487,7 @@ impl NodeFactory for ReadFileNodeFactory {
             node_type: "ReadFileNode".into(),
             description: "Reads a file from the file source (numbered lines, paginated), annotated with the scopes of the window and an index-staleness check".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam { name: "path".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)".into(), choices: None, json_schema: None },
                 ConfigParam { name: "offset".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)".into(), choices: None, json_schema: None },
@@ -526,7 +526,7 @@ impl NodeFactory for GrepNodeFactory {
             node_type: "GrepNode".into(),
             description: "Regex search over the file source; each (file, line) is annotated with the narrowest scope containing it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam { name: "pattern".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Expression régulière".into(), choices: None, json_schema: None },
                 ConfigParam { name: "path_prefix".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que sous ce préfixe de chemin".into(), choices: None, json_schema: None },
@@ -536,7 +536,7 @@ impl NodeFactory for GrepNodeFactory {
                 ConfigParam { name: "context_lines".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)".into(), choices: None, json_schema: None },
                 // **Le graphe se greffe là où les agents vont.** Mesuré le
                 // 28 août 2026 : `grep` 10 appels, l'outil de graphe séparé 0.
-                ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::Relations), json_schema: None },
+                ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::relations_read()), json_schema: None },
                 ConfigParam { name: "relation_limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_RELATION_LIMIT)), description: "Voisins rendus par scope (plafond 20)".into(), choices: None, json_schema: None },
                 format_param(),
             ],
@@ -561,8 +561,8 @@ impl NodeFactory for ParseCodeNodeFactory {
         NodeSchema {
             node_type: "ParseCodeNode".into(),
             description: "Parses source files (tree-sitter, 12 languages) into File/Scope/Library records and resolved relations".into(),
-            inputs: vec![PortDef { name: "sources".into(), port_type: PortType::Code, required: false }],
-            outputs: vec![PortDef { name: "code".into(), port_type: PortType::Code, required: false }],
+            inputs: vec![PortDef::value("sources", PortType::Code, false)],
+            outputs: vec![PortDef::value("code", PortType::Code, false)],
             config_params: vec![ConfigParam {
                 name: "root".into(),
                 param_type: ConfigParamType::String,
@@ -590,8 +590,8 @@ impl NodeFactory for CodeIngestNodeFactory {
         NodeSchema {
             node_type: "CodeIngestNode".into(),
             description: "Persists a code analysis into the catalog (File, Scope, Library and their relations)".into(),
-            inputs: vec![PortDef { name: "code".into(), port_type: PortType::Code, required: true }],
-            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
+            inputs: vec![PortDef::value("code", PortType::Code, true)],
+            outputs: vec![PortDef::value("done", PortType::Empty, false)],
             config_params: vec![
                 ConfigParam { name: "bulk_index".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Détruire l'index vectoriel, charger, le reconstruire — 24x sur un gros lot, une perte sèche sur un petit".into(), choices: None, json_schema: None },
             ],
@@ -626,7 +626,7 @@ impl NodeFactory for ListFilesNodeFactory {
             node_type: "ListFilesNode".into(),
             description: "Lists the files of the file source under a path prefix, with line counts and index state (indexed / stale)".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam { name: "path_prefix".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne lister que sous ce préfixe".into(), choices: None, json_schema: None },
                 ConfigParam { name: "limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_LIST_LIMIT)), description: "Fichiers rendus (plafond 2000) ; tous sont comptés".into(), choices: None, json_schema: None },
@@ -662,7 +662,7 @@ impl NodeFactory for EditFileNodeFactory {
             node_type: "EditFileNode".into(),
             description: "Edits a file of the file source — replace one unique occurrence (old → new) or write the whole content — then re-indexes it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam { name: "path".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source".into(), choices: None, json_schema: None },
                 ConfigParam { name: "old".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)".into(), choices: None, json_schema: None },

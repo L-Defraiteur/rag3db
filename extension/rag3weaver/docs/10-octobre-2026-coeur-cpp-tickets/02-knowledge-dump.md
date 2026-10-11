@@ -90,3 +90,25 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
   lui-même pour simuler un autre processus.
 - `poste lourd timeout N cmd`, jamais `timeout N poste lourd cmd` : la borne ne doit compter
   que le travail.
+
+## Pièges de la nuit du 11 octobre
+
+- Un en-tête inclus par un en-tête public (`db_config.h`, `database.h`…) doit figurer dans
+  `scripts/headers.txt`. Sinon, l'en-tête unique (`rag3db.hpp`) échoue au bâti complet, alors
+  qu'un bâti de cible ne le voit pas.
+- Lire une variable d'environnement de façon statique, une fois par processus, se perd avec
+  `fork` : le fils hérite de la valeur déjà lue par le père. Les crochets de test sont donc lus
+  à chaque ouverture de base.
+- gdb sur luciepc : `gdb -batch -ex "catch throw <type>" -ex run -ex "bt 40" --args <test>`
+  donne la pile d'une exception. Les binaires de test Release ne sont pas dépouillés de leurs
+  symboles.
+- Une bissection se fait sur deux bâtis de tête, dans deux worktrees, chaînés dans un seul
+  script. On vérifie d'abord par `git log A..B -- src` que seul le commit suspect diffère.
+- `ColumnChunkData::split()` décide d'après `getSizeOnDiskInMemoryStats()`. Un bloc dont les
+  statistiques ne sont pas tenues (les octets des chaînes, copiés par `memcpy`) paraît vide, et
+  tout tient dans un segment. Pour une liste, `truncate()` ne retire rien du fils, et
+  `ListChunkData::finalize()` revient tôt sur des décalages consécutifs. Un recul n'y est donc
+  sûr que pour les chaînes.
+- Un guetteur qui attend « FIN » dans un journal où l'on recopie un autre journal finissant par
+  « FIN » s'arrête trop tôt. Prendre un marqueur unique (« TERMINÉ », « sonde remplace »).
+

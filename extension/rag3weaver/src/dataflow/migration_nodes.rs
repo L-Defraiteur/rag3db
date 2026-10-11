@@ -227,22 +227,10 @@ impl NodeFactory for CypherNodeFactory {
         NodeSchema {
             node_type: "CypherNode".into(),
             description: "Execute a Cypher query with optional undo capture".into(),
-            inputs: vec![PortDef {
-                name: "trigger".into(),
-                port_type: PortType::Empty,
-                required: false,
-            }],
+            inputs: vec![PortDef::value("trigger", PortType::Empty, false)],
             outputs: vec![
-                PortDef {
-                    name: "result".into(),
-                    port_type: PortType::Map,
-                    required: false,
-                },
-                PortDef {
-                    name: "done".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                },
+                PortDef::value("result", PortType::Map, false),
+                PortDef::value("done", PortType::Empty, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -555,16 +543,8 @@ impl NodeFactory for ValidateNodeFactory {
         NodeSchema {
             node_type: "ValidateNode".into(),
             description: "Assert a condition on Cypher query results".into(),
-            inputs: vec![PortDef {
-                name: "trigger".into(),
-                port_type: PortType::Empty,
-                required: false,
-            }],
-            outputs: vec![PortDef {
-                name: "done".into(),
-                port_type: PortType::Empty,
-                required: false,
-            }],
+            inputs: vec![PortDef::value("trigger", PortType::Empty, false)],
+            outputs: vec![PortDef::value("done", PortType::Empty, false)],
             config_params: vec![
                 ConfigParam {
                     name: "query".into(),

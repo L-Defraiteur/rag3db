@@ -278,3 +278,101 @@ Les durées du ligne à ligne restent celles de la base : `SetFromNullLineByLine
 
 Le §5 supposait que les pertes venaient du contrôle fait ligne par ligne sur un graphe qui bouge.
 C'était faux : les deux défauts seuls suffisent à les expliquer.
+
+## 10. Les mesures après la fusion, et ce qu'elles disent pour I2 (11 octobre, 3 h 45)
+
+**Le code poussé** (`bfc1434e1`) a été mesuré en exclusif sur le poste principal, avec
+l'extension prouvée (bâtie à 03:04 sur `0e71de3c0`).
+
+`TenThousandRowsInBatchesOf512` :
+
+| | référence (base) | code poussé |
+|---|---|---|
+| durées | 19,5 / 24,3 / 20,1 s | 25,8 / 23,6 / 24,3 s |
+| lignes qui se retrouvent par leur propre vecteur | 953 / 1000 / 957 | 1000 / 1000 / 995 |
+
+La durée tient sous le plafond ×2, et le rappel est meilleur. Sur luciepc, dix essais de plus sont
+tous verts, soit un seul rouge léger sur treize essais en tout. Le témoin reste dans les
+probabilistes. Les lignes perdues sont des lignes mises à jour, coupées par les lignes suivantes de
+la même instruction (1940, 1950 et 1960, derrière 1989 et les suivantes) : le contrôle par ligne
+regarde les anciens voisins, jamais la ligne elle-même une fois les suivantes posées.
+
+**Les vrais vecteurs** viennent de l'export de l'arbre principal (`Scope_Chunk`, 12 942 morceaux,
+768 dimensions, cosine), sur la sonde « RealVectorsUpdate », non commitée. Aucun morceau n'est
+introuvable par son propre vecteur (k = 10), ni dans le fond (index créé vide, vecteurs posés par
+lots de 32, joué deux fois), ni dans le remplacement (chaque ligne prend le vecteur d'une autre,
+par lots de 512).
+
+**Pour I2** (la maintenance de l'index au commit, page `coeur-cpp/10`), deux essais sur la branche
+`essai-fin-d-instruction-filtre`. Les deux portent le crochet de fin d'instruction, avec
+l'heuristique par ligne remise comme filtre sur l'union de l'instruction, sans vider les élagages
+différés :
+- `53c742c0b`, « pertes seules » : seuls les nœuds qui perdent une arête entrante sont
+  recontrôlés ;
+- `bb50fb768`, « union » : chaque ligne mise à jour reçoit aussi la recherche complète.
+
+Ils ont été mesurés en exclusif sur luciepc, master `7c7682111` en regard, en alternant les bâtis,
+avec un essai par témoin. Chaque cellule donne les deux passes.
+
+| | master | pertes seules | union |
+|---|---|---|---|
+| `SetFromNullLineByLine` | 26,0 / 25,7 s | 26,7 / 26,6 s | 28,3 / 29,7 s |
+| `SetToAnotherVectorLineByLine` | 25,8 / 25,8 s | 25,4 / 25,5 s | 27,4 / 27,2 s |
+| `TenThousandRowsInBatchesOf512` | 26,4 / 25,7 s | 21,2 / 21,1 s | 26,1 / 26,4 s |
+| `TenThousand`, dix essais | 10 sur 10 verts | 2 rouges légers (993 et 998 sur 1000) | **1 rouge grave : 7 982 lignes sur 10 000 joignables** |
+
+Ce que cela dit :
+1. **Le coût de la fin d'instruction tient au contrôle, pas au report.** Avec l'heuristique en
+   filtre, elle coûte ce que coûte master, et même moins sur les lots. Le ×7 à ×13 du §9 venait
+   seulement de la recherche complète faite sur chaque perte. Une maintenance reportée au commit
+   (I2) ne coûtera donc rien de plus, à condition de garder ce filtre.
+2. **Aucune des deux variantes n'est plus juste que master.** « Pertes seules » perd un peu plus.
+   « Union » a coupé un cinquième de l'index dans un essai sur dix : un défaut nouveau, d'origine
+   non trouvée, à comprendre avant toute adoption. La pente à surveiller : une ligne mise à jour
+   recontrôlée après coup par une recherche, et liée par `keepNodeReachable` sans élagage, change
+   les voisinages des lignes suivantes.
+3. **I2 peut reprendre la forme « pertes seules filtrée »** pour la maintenance au commit, avec
+   son coût mesuré. La justesse à atteindre reste celle de master, que ni l'une ni l'autre
+   variante ne dépasse aujourd'hui.
+
+Les deux essais restent sur leur branche, non fusionnés.
+
+### 10.1 La cause du rouge grave de la variante union (11 octobre, 4 h)
+
+Le rouge s'est reproduit sur luciepc, avec une sonde non commitée dans le contrôle du témoin : à
+la perte, elle compte les arêtes stockées de part et d'autre de la frontière. Il a fallu 30 essais
+pour le revoir une fois, au 30e.
+
+**Établi par la sonde** (lignes 0 à 2032 perdues, 7 967 sur 10 000 atteintes) :
+- dans la couche basse, **aucune** arête ne va de la région atteinte vers la région perdue (0
+  sur 537 306), alors que la région perdue en a 219 vers l'extérieur. Aucune ligne perdue n'est
+  sans arête sortante. Ce n'est pas un îlot fermé : c'est un pont coupé dans un sens ;
+- dans la couche haute, 328 arêtes mènent encore à 45 nœuds de la région perdue. La descente d'une
+  requête n'y passe pas forcément ;
+- les nœuds ont environ 67 arêtes sortantes de part et d'autre de la frontière : ils sont chargés
+  jusqu'au seuil de l'élagage, puisque les élagages différés ne sont jamais vidés.
+
+**Déduit, non prouvé :**
+1. Un élagage (`shrinkForNode`) d'un nœud de la frontière a retiré la dernière arête vers la
+   région basse.
+2. Le filtre ne pouvait pas le voir. Il tient pour joignable un nœud vers lequel pointe un nœud
+   qui n'a rien perdu. Or chaque nœud de la région coupée est désigné par des voisins de la même
+   région, qui n'ont rien perdu. Le filtre est local, alors que la perte touche une région entière :
+   seule une recherche depuis l'entrée la voit.
+3. La variante union rend ce cas plus probable. Ses liens de rattrapage (`keepNodeReachable`, posés
+   sans élagage) chargent les nœuds jusqu'au seuil et déclenchent davantage d'élagages. Ni master
+   ni « pertes seules » ne l'ont montré sur dix essais.
+
+**Ce que cela dit pour I2 et pour master :**
+- **Pour I2 :** le filtre a un défaut générique. Une maintenance au commit qui garde le filtre doit
+  aussi recontrôler par la recherche au moins un nœud de chaque région détachée. Une forme
+  possible : une recherche pour les nœuds écartés par l'élagage dont le seul témoin de joignabilité
+  vient de leur propre région. À mesurer avant d'être promis.
+- **Pour master :** master n'a pas le filtre, mais il ne recontrôle pas non plus les nœuds écartés
+  par l'élagage (le contrôle par ligne ne regarde que les anciens voisins). La même coupure y est
+  possible en principe. Elle n'a pas été vue en 13 essais de `TenThousand`. C'est à garder en tête
+  si `TenThousand` rougit un jour sur la recherche exhaustive, et non plus seulement sur « propre
+  vecteur ».
+
+La sonde est gardée dans les notes du banc (`sonde-coupure.py`). La branche des essais reste non
+fusionnée.

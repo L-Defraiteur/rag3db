@@ -62,6 +62,15 @@ const $ = (id) => document.getElementById(id);
 let state = {};
 let bulle = null;
 
+// Ce qu'un rechargement a perdu en route, dit au journal.
+function pertes(d) {
+  let t = "";
+  if ((d.removed_reactions || []).length) t += " — réactions retirées : " + d.removed_reactions.join(", ");
+  if ((d.dropped_cursors || []).length) t += " — curseurs oubliés (événements perdus) : " + d.dropped_cursors.join(", ");
+  if ((d.reaction_errors || []).length) t += " — erreurs des réactions arrêtées : " + d.reaction_errors.join(" | ");
+  return t;
+}
+
 function ligne(classe, texte) {
   const d = document.createElement("div");
   d.className = classe;
@@ -152,14 +161,13 @@ flux.addEventListener("tool_start", (e) => {
 flux.addEventListener("answer", () => { bulle = null; });
 flux.addEventListener("declared", async (e) => {
   const d = JSON.parse(e.data);
-  ligne("declared", "déclaré " + d.path + " (version " + d.version + (d.commit ? ", commit " + String(d.commit).slice(0, 9) : "") + ")");
+  ligne("declared", "déclaré " + d.path + " (version " + d.version + (d.commit ? ", commit " + String(d.commit).slice(0, 9) : "") + ")" + pertes(d));
   await charger();
   rafraichir([d.path]);
 });
 flux.addEventListener("reloaded", async (e) => {
   const d = JSON.parse(e.data);
-  ligne("reloaded", "rechargé " + (d.paths || []).join(", ") + " (version " + d.version + ")" +
-    ((d.removed_reactions || []).length ? " — réactions retirées : " + d.removed_reactions.join(", ") : ""));
+  ligne("reloaded", "rechargé " + (d.paths || []).join(", ") + " (version " + d.version + ")" + pertes(d));
   await charger();
   rafraichir(d.paths);
 });

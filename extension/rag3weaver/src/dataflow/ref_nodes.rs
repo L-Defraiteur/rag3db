@@ -260,8 +260,24 @@ impl Node for AddRefNode {
         let uuid_ref = cat
             .entity_uuid(&refs_entity, &record)
             .map_err(|e| format!("AddRefNode: l'identité de la référence : {e}"))?;
-        cat.ingest_entities(&refs_entity, vec![record])
+        // **Le rapport d'ingestion se lit** (ticket « add_ref et create_ref_type
+        // jettent le rapport de leur ingestion ») : un échec compté n'est pas
+        // une `Err`, et passait pour un succès.
+        let rapport = cat
+            .ingest_entities(&refs_entity, vec![record])
             .map_err(|e| format!("AddRefNode: {e}"))?;
+        if rapport.failed > 0 {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "la référence ne s'est pas écrite entière, rien n'est lié — prêt après l'échec : {} ; {:?}",
+                    rapport.rendu_pret.map(|d| d.to_string()).unwrap_or_else(|| "rien".into()),
+                    rapport.warnings
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref},
+            }));
+            return Ok(());
+        }
 
         // La fiche est désignée par ses champs d'identité, pas par un uuid que
         // l'appelant n'a pas : c'est le catalogue qui sait les réduire.
@@ -289,8 +305,72 @@ impl Node for AddRefNode {
         let uuid_fiche = cat
             .entity_uuid(&from_entity, &fiche)
             .map_err(|e| format!("AddRefNode: l'identité de la fiche : {e}"))?;
+        // **La fiche doit exister** (11 octobre 2026). `entity_uuid` recompose
+        // un uuid à partir de champs, il ne prouve rien sur l'existence ; et le
+        // verbe de lien pose par `MATCH … MERGE`, qui ne fait rien sans erreur
+        // quand un bout manque. Ce nœud annonçait donc `executed: true` et un
+        // lien pour une fiche qui n'existait pas (une faute dans `claim`, un
+        // autre `reach`). La référence, elle, est écrite : `add_ref` est
+        // idempotent, le rappel avec la bonne fiche ne la doublera pas.
+        // La même vérification que tout nœud qui pose un lien : existence, et
+        // états permis quand le backend en déclare pour cette relation — sans
+        // quoi un `add_ref` citerait depuis une fiche que le manifeste interdit.
+        let politique = ctx
+            .service::<std::collections::HashMap<String, crate::backend::BackendRelation>>(
+                crate::backend::RELATION_POLICIES_SERVICE,
+            )
+            .and_then(|m| m.get(&relation))
+            .cloned();
+        let bouts = cat
+            .verifier_les_bouts(
+                &relation,
+                &[(uuid_fiche.clone(), uuid_ref.clone())],
+                politique.as_ref().and_then(|p| p.from_states.as_deref()),
+                politique.as_ref().and_then(|p| p.to_states.as_deref()),
+            )
+            .map_err(|e| format!("AddRefNode: vérifier la fiche : {e}"))?;
+        if let Some((_, _, etat)) = bouts.hors_etat.iter().find(|(_, u, _)| *u == uuid_fiche) {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "cette {from_entity} est « {etat} », et la relation {relation} ne permet de citer \
+                     que depuis : {} — la référence est écrite seule, sans lien",
+                    politique
+                        .as_ref()
+                        .and_then(|p| p.from_states.as_ref())
+                        .map(|v| v.join(", "))
+                        .unwrap_or_default()
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref, "ecrite_seule": true},
+            }));
+            return Ok(());
+        }
+        let absents = bouts.absents;
+        if absents.iter().any(|(_, u)| *u == uuid_fiche) {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "aucune {from_entity} n'a cette identité ({}) : la référence est écrite \
+                     seule, sans lien",
+                    fiche
+                        .iter()
+                        .map(|(k, v)| format!("{k} = {}", v.as_str().unwrap_or("?")))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref, "ecrite_seule": true},
+                "rappel": "relis la fiche (ses champs d'identité exacts), puis rappelle add_ref \
+                           avec la même valeur : la référence ne sera pas doublée",
+            }));
+            return Ok(());
+        }
         cat.link(&relation, uuid_fiche.clone(), uuid_ref.clone(), BTreeMap::new())
-            .map_err(|e| format!("AddRefNode: le lien {relation} : {e}"))?;
+            .map_err(|e| {
+                format!(
+                    "AddRefNode: le lien {relation} : {e} — la référence est restée, écrite seule ; \
+                     rappeler add_ref avec la même valeur ne la doublera pas"
+                )
+            })?;
 
         rendre(ctx, serde_json::json!({
             "executed": true,
@@ -300,6 +380,9 @@ impl Node for AddRefNode {
             // est « citée, non vérifiée », et le rapport le porte.
             "verifiee": !script.trim().is_empty(),
             "note": verdict.pourquoi,
+            // Deux écritures : la référence, puis son lien.
+            "atomic": false,
+            "atomic_reason": "two writes: the reference, then its link; a failure between them leaves the reference alone, and says so",
         }));
         Ok(())
     }
@@ -332,7 +415,7 @@ impl NodeFactory for AddRefNodeFactory {
             node_type: "AddRefNode".into(),
             description: "Cites a thing from a record: validates the value against its genre's optional rhai harness, writes the reference (identity = genre + normal form, so citing twice does not duplicate), and links it. An unknown genre is not an error: it returns the current list and the exact create_ref_type call to make, and loses nothing".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 p("genre", true, None, "Genre of the thing cited; the list is read from the catalogue at each call, so a genre created a moment ago is already there",
                   Some(Choices::Values { entity: "RefType".into(), field: "name".into() })),
@@ -341,7 +424,7 @@ impl NodeFactory for AddRefNodeFactory {
                 p("refs_entity", false, Some(serde_json::json!("Ref")), "Entity that holds references", None),
                 p("types_entity", false, Some(serde_json::json!("RefType")), "Entity that holds the genres", None),
                 p("from_entity", false, Some(serde_json::json!("Memory")), "Entity of the record that cites", None),
-                p("relation", false, Some(serde_json::json!("CITE")), "Relation from the record to the reference", None),
+                p("relation", false, Some(serde_json::json!("CITE")), "Relation from the record to the reference", Some(Choices::relations_written())),
                 ConfigParam {
                     name: "fiche".into(),
                     param_type: ConfigParamType::Json,
@@ -509,8 +592,17 @@ impl Node for CreateRefTypeNode {
         record.insert("description".into(), CypherValue::String(description));
         record.insert("forme".into(), CypherValue::String(forme));
         record.insert("script".into(), CypherValue::String(script.clone()));
-        cat.ingest_entities(&types_entity, vec![record])
+        let rapport = cat
+            .ingest_entities(&types_entity, vec![record])
             .map_err(|e| format!("CreateRefTypeNode: {e}"))?;
+        if rapport.failed > 0 {
+            return Err(format!(
+                "CreateRefTypeNode: le genre « {nom} » ne s'est pas écrit entier — prêt après \
+                 l'échec : {} ; {:?}",
+                rapport.rendu_pret.map(|d| d.to_string()).unwrap_or_else(|| "rien".into()),
+                rapport.warnings
+            ));
+        }
 
         rendre(ctx, serde_json::json!({
             "executed": true,
@@ -520,6 +612,8 @@ impl Node for CreateRefTypeNode {
             "harnais": if script.trim().is_empty() { "description seule" } else { "script" },
             "epreuve": epreuve,
             "rappel": format!("il est dans la liste dès maintenant : add_ref(genre: {nom:?}, valeur: …)"),
+            "atomic": false,
+            "atomic_reason": "the row, its full text and its vectors are written by several statements without a transaction around them",
         }));
         Ok(())
     }
@@ -550,7 +644,7 @@ impl NodeFactory for CreateRefTypeNodeFactory {
             node_type: "CreateRefTypeNode".into(),
             description: "Declares a new genre of reference, for every use to come. Shows the current genres and asks which one is meant before creating (nothing is written on the first call); the description is mandatory, a rhai harness is optional and is tested on the example that gave birth to it — and refused if an existing genre already recognises it".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "report".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
             config_params: vec![
                 p("name", true, None, "Name of the genre, as it will appear in the list the caller sees"),
                 p("description", true, None, "What this genre designates, with two or three examples. Mandatory: it is the only harness a genre must have"),

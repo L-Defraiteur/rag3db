@@ -343,3 +343,170 @@ fn par_self_le_type_englobant_d_abord() {
     assert_eq!(vers("finish"), vec![("b.rs".to_string(), "type".to_string())], "le record de Catalog, pas celui d'Autre");
     assert_eq!(vers("bonjour"), vec![("e.rs".to_string(), "nom".to_string())], "l'héritage ne se perd pas");
 }
+
+/// **Les cas B9 de la session recherche** (11 octobre 2026), par le
+/// gabarit réel d'`usages` : un bloc `impl` ne fait pas de `Marteau` un nom
+/// ambigu (T1) ; l'appel sur un receveur concret (`let m = Marteau;`) et sur
+/// la variable d'une boucle (`for o in &outils`) est attribué à la méthode
+/// de l'impl (T2, T3).
+#[test]
+#[ignore]
+fn un_bloc_impl_ne_redefinit_pas_son_type_et_ses_appels_s_attribuent() {
+    let catalog = setup();
+    let fichiers = vec![
+        (
+            "traits.rs".to_string(),
+            "pub trait Outil { fn jouer(&self) -> i32; }\npub struct Marteau;\nimpl Outil for Marteau {\n    fn jouer(&self) -> i32 { 1 }\n}\npub fn frappe() -> i32 {\n    let m = Marteau;\n    m.jouer()\n}\n".to_string(),
+        ),
+        (
+            "boucle.rs".to_string(),
+            "use crate::traits::{Marteau, Outil};\npub fn tous() -> i32 {\n    let outils = vec![Marteau, Marteau];\n    let mut total = 0;\n    for o in &outils { total += o.jouer(); }\n    total\n}\n".to_string(),
+        ),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let marteau = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "Marteau"})).unwrap();
+    eprintln!("{marteau}");
+    assert!(!marteau.contains("Nom ambigu"), "le bloc impl n'est pas une seconde définition : {marteau}");
+    assert!(marteau.contains("traits.rs:2"), "{marteau}");
+    let jouer = tool.execute(&registry, services, &serde_json::json!({"name": "jouer", "path": "/projet/traits.rs"})).unwrap();
+    eprintln!("{jouer}");
+    let ligne = |nom: &str| jouer.lines().find(|l| l.contains(&format!(" {nom} —"))).unwrap_or_else(|| panic!("{nom} absent : {jouer}")).to_string();
+    assert!(!ligne("frappe").contains("par le nom"), "receveur concret typé : {jouer}");
+    assert!(!ligne("tous").contains("par le nom"), "variable de boucle typée : {jouer}");
+    assert!(!jouer.contains("non attribués"), "{jouer}");
+}
+
+/// **Un appel par chemin vers un type externe ne prend pas rendez-vous avec
+/// un homonyme du projet** (ticket du 4 octobre, fermé par codeparsers
+/// f91fc58) : `Tokenizer::from_file(…)` a `Tokenizer` pour type de
+/// receveur ; le rendez-vous ne le relie qu'à un `from_file` de ce type, et
+/// le projet n'en a pas — la fonction libre `from_file` de b.rs n'est pas
+/// appelée.
+#[test]
+#[ignore]
+fn un_appel_par_chemin_vers_un_type_externe_ne_prend_pas_rendez_vous() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("a.rs".to_string(), "use tokenizers::Tokenizer;\npub fn charge() {\n    let _ = Tokenizer::from_file(\"t.json\");\n}\n".to_string()),
+        ("b.rs".to_string(), "pub fn from_file(p: &str) -> u32 {\n    p.len() as u32\n}\n".to_string()),
+    ];
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat.execute_raw("MATCH (a:Scope {name: 'charge'})-[:CONSUMES]->(b:Scope {name: 'from_file'}) RETURN count(*)").unwrap();
+    assert_eq!(r.rows[0][0].as_i64(), Some(0), "aucune arête charge → from_file");
+}
+
+/// **Un appel sur une locale qui reste non typée est visible, non
+/// attribué — jamais une arête** (décision de Lucie, 11 octobre 2026) :
+/// `let t = f(); t.update()` avec `f` inconnue et un seul `update` dans le
+/// projet. Avant : relié par le seul définisseur (arête « nom »). Après :
+/// aucune arête ; `usages` le montre « par le nom », et `impact` ne le suit
+/// pas.
+#[test]
+#[ignore]
+fn un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("table.rs".to_string(), "pub struct Table;\nimpl Table {\n    pub fn update(&self) {}\n}\n".to_string()),
+        ("run.rs".to_string(), "pub fn run() {\n    let t = f();\n    t.update();\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    {
+        let cat = catalog.lock().unwrap();
+        let r = cat.execute_raw("MATCH (a:Scope {name: 'run'})-[:CONSUMES]->(b:Scope {name: 'update'}) RETURN count(*)").unwrap();
+        assert_eq!(r.rows[0][0].as_i64(), Some(0), "jamais une arête");
+        let m = cat.execute_raw("MATCH (a:Scope {name: 'run'})-[m:MENTIONS]->(s:Symbol {name: 'update'}) RETURN m.untyped_receiver").unwrap();
+        assert_eq!(m.rows.len(), 1, "le rendez-vous est posé");
+        assert_eq!(m.rows[0][0].as_str(), Some("oui"));
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "update"})).unwrap();
+    eprintln!("{md}");
+    let ligne = md.lines().find(|l| l.contains(" run —")).unwrap_or_else(|| panic!("run absent : {md}")).to_string();
+    assert!(ligne.ends_with("(par le nom)"), "visible, par le nom seul : {md}");
+}
+
+/// **Un lien posé par le nom seul dans le fichier se marque « nom »**
+/// (décision du 11 octobre 2026) : `let prepared = self.prepared();
+/// prepared.describe()` — receveur non typé, relié par l'analyseur à la
+/// seule méthode `describe` du fichier. Le lien reste ; sa marque n'est plus
+/// « fichier » (sûr pour impact) mais « nom », et `usages` le dit.
+#[test]
+#[ignore]
+fn un_lien_par_le_nom_dans_le_fichier_se_marque_nom() {
+    let catalog = setup();
+    let source = "pub struct Prepared;\nimpl Prepared {\n    pub fn describe(&self) -> u8 { 0 }\n}\npub struct Backend;\nimpl Backend {\n    fn prepared(&self) -> Prepared { Prepared }\n    pub fn cles(&self) -> u8 {\n        let prepared = self.prepared();\n        prepared.describe()\n    }\n}\n";
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("backend.rs".to_string(), source.to_string())])).unwrap();
+    {
+        let cat = catalog.lock().unwrap();
+        let r = cat.execute_raw("MATCH (a:Scope {name: 'cles'})-[c:CONSUMES]->(b:Scope {name: 'describe'}) RETURN c.resolution").unwrap();
+        assert_eq!(r.rows.len(), 1, "le lien reste");
+        assert_eq!(r.rows[0][0].as_str(), Some("nom"), "marqué par le nom, pas « fichier »");
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let md = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "describe"})).unwrap();
+    eprintln!("{md}");
+    let ligne = md.lines().find(|l| l.contains(" cles —")).unwrap_or_else(|| panic!("cles absent : {md}")).to_string();
+    assert!(ligne.ends_with("(par le nom)"), "{md}");
+}
+
+/// **Le type d'un champ déclaré dans un autre fichier se lit** (recette du
+/// ticket du 4 octobre) : `Svc` dans a.rs, son `impl` dans b.rs, deux `get`
+/// dans c.rs. `self.store.get()` vise `Store::get`, par le type.
+#[test]
+#[ignore]
+fn le_type_d_un_champ_declare_dans_un_autre_fichier_se_lit() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("a.rs".to_string(), "pub struct Svc {\n    pub store: Store,\n}\n".to_string()),
+        ("b.rs".to_string(), "impl Svc {\n    pub fn run(&self) {\n        self.store.get();\n    }\n}\n".to_string()),
+        ("c.rs".to_string(), "pub struct Store;\nimpl Store {\n    pub fn get(&self) {}\n}\npub struct Other;\nimpl Other {\n    pub fn get(&self) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let r = cat
+        .execute_raw("MATCH (a:Scope {name: 'run'})-[c:CONSUMES]->(b:Scope {name: 'get'}) RETURN b.parent_name, c.resolution")
+        .unwrap();
+    let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    assert_eq!(liens, vec![("Store".to_string(), "type".to_string())], "run → Store::get, par le type");
+}
+
+/// **Un chemin vers une réexportation** (recette du ticket du 4 octobre) :
+/// `crate::dataflow::DataflowEvent` désigne dataflow/mod.rs, qui réexporte
+/// `runtime::DataflowEvent` ; un homonyme ailleurs empêche le seul nom de
+/// conclure. Le lien va à dataflow/runtime.rs, et pas « par le nom ».
+#[test]
+#[ignore]
+fn un_chemin_vers_une_reexportation_n_est_pas_par_le_nom() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/dataflow/mod.rs".to_string(), "pub mod runtime;\npub use runtime::DataflowEvent;\n".to_string()),
+        ("src/dataflow/runtime.rs".to_string(), "pub struct DataflowEvent;\nimpl DataflowEvent {\n    pub fn neuf() -> Self { DataflowEvent }\n}\n".to_string()),
+        ("src/autre.rs".to_string(), "pub struct DataflowEvent;\n".to_string()),
+        ("src/appel.rs".to_string(), "use crate::dataflow::DataflowEvent;\npub fn emet() -> DataflowEvent {\n    DataflowEvent::neuf()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let r = cat
+        .execute_raw("MATCH (a:Scope {name: 'emet'})-[c:CONSUMES]->(b:Scope {name: 'DataflowEvent'}) RETURN b.file_path, c.resolution ORDER BY b.file_path")
+        .unwrap();
+    let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    eprintln!("{liens:?}");
+    assert_eq!(liens.len(), 1, "un seul lien : {liens:?}");
+    assert!(liens[0].0.ends_with("dataflow/runtime.rs"), "vers la définition réexportée : {liens:?}");
+    assert_ne!(liens[0].1, "nom", "pas par le nom : {liens:?}");
+}

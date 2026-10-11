@@ -25,13 +25,9 @@ use rag3weaver::daemon::DaemonEmbedder;
 use rag3weaver::embedder::{DualEmbedder, Embedder};
 use rag3weaver::serveur::{Etat, Fin};
 
-/// Un port que personne ne tient à cet instant.
-fn port_libre() -> String {
-    let e = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-    let a = e.local_addr().unwrap().to_string();
-    drop(e);
-    a
-}
+/// **Le port nul** : le démon se lie lui-même et dit l'adresse qu'il a prise,
+/// le lanceur la lit (ticket du 11 octobre 2026, la course de `port_libre`).
+const PORT_NUL: &str = "127.0.0.1:0";
 
 fn cosinus(a: &[f32], b: &[f32]) -> f32 {
     let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
@@ -43,13 +39,12 @@ fn cosinus(a: &[f32], b: &[f32]) -> f32 {
 #[test]
 #[ignore = "charge 2,2 Go de poids et lance un processus"]
 fn un_modele_charge_une_fois_sert_plusieurs_clients() {
-    let adresse = port_libre();
     let journal = std::env::temp_dir().join("rag3weaver-e2e-demon");
 
     // Le binaire tel que cargo vient de le construire — pas un `which`, pas un
     // chemin en dur : le test sert ce qu'il a compilé.
     let programme = env!("CARGO_BIN_EXE_rag3weaver-embeddings");
-    let serveur = DaemonEmbedder::serveur(&adresse, programme)
+    let serveur = DaemonEmbedder::serveur(PORT_NUL, programme)
         // Le défaut du démon est granite-278m (7 septembre 2026) ; cette suite
         // vérifie le dense + creux de BGE-M3, elle le demande.
         .env("RAG3WEAVER_EMBED_MODEL", "bge-m3")
@@ -58,13 +53,14 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
         // reste le défaut, parce qu'en vrai c'est la survie qu'on veut.
         .fin(Fin::Arreter);
 
-    assert_eq!(serveur.etat(), Etat::Absent, "le port doit être libre au départ");
+    assert_eq!(serveur.etat(), Etat::Absent, "personne ne répond sur un port nul");
 
     // ── Le premier client paie ────────────────────────────────────────────
     let t0 = Instant::now();
     let premier = DaemonEmbedder::assurer(&serveur)
         .unwrap_or_else(|e| panic!("assurer : {e}\n  journal : {}", journal.join("rag3weaver-embeddings.log").display()));
     let chargement = t0.elapsed();
+    let adresse = premier.adresse().to_string();
     println!("▸ premier client (a lancé le démon) : {chargement:.1?}");
 
     let id = premier.identite();
@@ -74,7 +70,9 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
     assert!(!id.factice, "un démon ne doit jamais blanchir un factice");
 
     // ── Le second ne paie pas ─────────────────────────────────────────────
-    assert_eq!(serveur.etat(), Etat::Repond, "il doit se reconnaître lui-même");
+    // La description à l'adresse que le démon a prise : il doit s'y reconnaître.
+    let ici = DaemonEmbedder::serveur(&adresse, programme);
+    assert_eq!(ici.etat(), Etat::Repond, "il doit se reconnaître lui-même");
     let t1 = Instant::now();
     let second = DaemonEmbedder::joindre(&adresse).expect("joindre");
     let attache = t1.elapsed();
@@ -138,12 +136,11 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
 #[test]
 #[ignore = "charge un modèle et lance un processus"]
 fn sans_variable_le_demon_sert_granite_278m() {
-    let adresse = port_libre();
     let journal = std::env::temp_dir().join("rag3weaver-e2e-demon-defaut");
     let programme = env!("CARGO_BIN_EXE_rag3weaver-embeddings");
     // Rien n'est posé : c'est le défaut du binaire qu'on lit. Si le processus
     // parent porte la variable, on la retire du démon pour lire le vrai défaut.
-    let serveur = DaemonEmbedder::serveur(&adresse, programme)
+    let serveur = DaemonEmbedder::serveur(PORT_NUL, programme)
         .env("RAG3WEAVER_EMBED_MODEL", "")
         .journal_dans(&journal)
         .fin(Fin::Arreter);

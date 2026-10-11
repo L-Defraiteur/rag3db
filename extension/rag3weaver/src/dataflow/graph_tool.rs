@@ -129,6 +129,12 @@ pub enum GraphToolError {
     Cycle { nodes: Vec<String> },
     Execution(String),
     NoResult { node: String, port: String },
+    /// **Le nœud de résultat a été sauté** : la branche qui y mène n'a pas
+    /// été prise (une entrée requise sans donnée). Distinct de `NoResult`,
+    /// où le nœud a tourné sans poser son résultat : l'un est voulu, l'autre
+    /// une faute. `reason` est la raison du saut, qui nomme l'entrée et les
+    /// producteurs qui n'ont rien émis.
+    NotTaken { node: String, port: String, reason: String },
     Unserializable { node: String, port: String, detail: String },
     Panic(String),
 }
@@ -150,6 +156,7 @@ impl GraphToolError {
             Self::Cycle { .. } => "cycle",
             Self::Execution(_) => "execution",
             Self::NoResult { .. } => "no_result",
+            Self::NotTaken { .. } => "not_taken",
             Self::Unserializable { .. } => "unserializable",
             Self::Panic(_) => "panic",
         }
@@ -205,6 +212,11 @@ impl fmt::Display for GraphToolError {
             Self::NoResult { node, port } => {
                 write!(f, "aucune valeur sur le port de résultat '{node}.{port}'")
             }
+            Self::NotTaken { node, port, reason } => write!(
+                f,
+                "le port de résultat '{node}.{port}' n'a pas été produit : la branche qui y \
+                 mène n'a pas été prise ({reason})"
+            ),
             Self::Unserializable { node, port, detail } => write!(
                 f,
                 "le port de résultat '{node}.{port}' ne se sérialise pas : {detail}"
@@ -619,12 +631,19 @@ pub fn execute_definition_as(
         None => runtime.execute(&mut graph),
     }
     .map_err(GraphToolError::Execution)?;
-    let value = output
-        .get(result_node, result_port)
-        .ok_or_else(|| GraphToolError::NoResult {
-            node: result_node.to_string(),
-            port: result_port.to_string(),
-        })?;
+    let value = output.get(result_node, result_port).ok_or_else(|| {
+        match output.skip_reason(result_node) {
+            Some(reason) => GraphToolError::NotTaken {
+                node: result_node.to_string(),
+                port: result_port.to_string(),
+                reason: reason.to_string(),
+            },
+            None => GraphToolError::NoResult {
+                node: result_node.to_string(),
+                port: result_port.to_string(),
+            },
+        }
+    })?;
     render_port_value(value).map_err(|detail| GraphToolError::Unserializable {
         node: result_node.to_string(),
         port: result_port.to_string(),
@@ -758,7 +777,7 @@ fn parse_choices(line: &str) -> Result<(String, Choices), GraphToolError> {
     let rest = rest.trim();
     let choices = match rest {
         "@targets" => Choices::Targets,
-        "@relations" => Choices::Relations,
+        "@relations" => Choices::Relations { access: Default::default() },
         // `@values:Entité.champ` — la liste close qui vit dans une table.
         autre if autre.starts_with("@values:") => {
             let reste = &autre["@values:".len()..];
@@ -976,9 +995,28 @@ impl GraphTool {
                 }
             }
             if p.choices.is_none() {
-                let mut found: Vec<(&String, &Choices)> =
-                    wired.iter().filter_map(|(at, w)| w.choices.as_ref().map(|c| (at, c))).collect();
-                found.dedup_by(|a, b| a.1 == b.1);
+                // Deux nœuds qui nomment des relations s'accordent quel que
+                // soit ce qu'ils en font : l'accès hérité est leur union (un
+                // outil qui lit et écrit la même relation par le même
+                // paramètre fait les deux). Les autres choix doivent être égaux.
+                let mut found: Vec<(&String, Choices)> = Vec::new();
+                for (at, w) in &wired {
+                    let Some(c) = w.choices.as_ref() else { continue };
+                    let deja = found.iter().position(|(_, f)| {
+                        matches!((f, c), (Choices::Relations { .. }, Choices::Relations { .. })) || f == c
+                    });
+                    match deja {
+                        Some(i) => {
+                            if let (Choices::Relations { access }, Choices::Relations { access: autre }) =
+                                (&mut found[i].1, c)
+                            {
+                                *access = access.union(*autre);
+                            }
+                        }
+                        None => found.push((at, c.clone())),
+                    }
+                }
+                let found: Vec<(&String, &Choices)> = found.iter().map(|(at, c)| (*at, c)).collect();
                 match found.as_slice() {
                     [] => {}
                     [(_, c)] => {
@@ -1827,6 +1865,110 @@ mod tests {
     use crate::dataflow::checkpoint::{EdgeDef, NodeDef};
     use serde_json::json;
 
+    /// **Résultat sauté contre résultat oublié** (11 octobre 2026, relecture
+    /// de la session du proto). Un nœud de résultat SAUTÉ (sa branche n'a pas
+    /// été prise) rend `NotTaken`, avec la raison ; un nœud qui a TOURNÉ sans
+    /// poser son résultat rend `NoResult`. Les ports d'agent lisent les deux
+    /// comme « retenu », mais un diagnostic doit les séparer : l'un est voulu,
+    /// l'autre une faute.
+    #[test]
+    fn un_resultat_saute_rend_not_taken_et_un_resultat_oublie_no_result() {
+        use crate::dataflow::node::{Node, NodeContext};
+        use crate::dataflow::node_registry::{NodeFactory, NodeSchema};
+        use crate::dataflow::port::PortDef;
+        struct Aig(String);
+        struct Pass(String);
+        struct Muet(String);
+        fn port(n: &'static str, requis: bool) -> PortDef {
+            PortDef::value(n, PortType::Any, requis)
+        }
+        impl Node for Aig {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Aig" }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("a", false), port("b", false)] }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                ctx.set_output("a", PortValue::new(json!(1))); // `b` n'est pas prise
+                Ok(())
+            }
+        }
+        impl Node for Pass {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Pass" }
+            fn inputs(&self) -> Vec<PortDef> { vec![port("in", true)] }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("out", false)] }
+            fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+                let v = ctx.take_input("in").ok_or("in")?;
+                ctx.set_output("out", v);
+                Ok(())
+            }
+        }
+        impl Node for Muet {
+            fn name(&self) -> &str { &self.0 }
+            fn node_type(&self) -> &'static str { "Muet" }
+            fn outputs(&self) -> Vec<PortDef> { vec![port("out", false)] }
+            fn execute(&mut self, _: &mut NodeContext) -> Result<(), String> { Ok(()) }
+        }
+        struct Fabrique(&'static str);
+        impl NodeFactory for Fabrique {
+            fn create(&self, name: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+                Ok(match self.0 {
+                    "Aig" => Box::new(Aig(name.into())),
+                    "Pass" => Box::new(Pass(name.into())),
+                    _ => Box::new(Muet(name.into())),
+                })
+            }
+            fn node_type(&self) -> &str { self.0 }
+            fn schema(&self) -> NodeSchema {
+                let n = self.create("x", &json!({})).unwrap();
+                NodeSchema {
+                    node_type: self.0.into(),
+                    description: "témoin".into(),
+                    inputs: n.inputs(),
+                    outputs: n.outputs(),
+                    config_params: vec![],
+                }
+            }
+        }
+        let mut registre = NodeRegistry::new();
+        for t in ["Aig", "Pass", "Muet"] {
+            registre.register(Box::new(Fabrique(t)));
+        }
+        let noeud = |name: &str, t: &str| NodeDef { name: name.into(), node_type: t.into(), config: json!({}) };
+        let arete = |de: &str, dp: &str, vers: &str, vp: &str| EdgeDef {
+            from_node: de.into(), from_port: dp.into(), to_node: vers.into(), to_port: vp.into(),
+        };
+        let jouer = |def: &GraphDefinition, resultat: (&str, &str)| {
+            execute_definition(def, &registre, Arc::new(ServiceRegistry::new()), &NodeTypePolicy::all(), resultat)
+        };
+
+        // La branche prise : le résultat arrive.
+        let prise = GraphDefinition {
+            nodes: vec![noeud("aig", "Aig"), noeud("pass", "Pass")],
+            edges: vec![arete("aig", "a", "pass", "in")],
+        };
+        assert_eq!(jouer(&prise, ("pass", "out")).unwrap(), "1");
+
+        // La branche NON prise : le nœud de résultat est sauté -> NotTaken.
+        let non_prise = GraphDefinition {
+            nodes: vec![noeud("aig", "Aig"), noeud("pass", "Pass")],
+            edges: vec![arete("aig", "b", "pass", "in")],
+        };
+        match jouer(&non_prise, ("pass", "out")) {
+            Err(GraphToolError::NotTaken { node, reason, .. }) => {
+                assert_eq!(node, "pass");
+                assert!(reason.contains("aig.b"), "la raison nomme le producteur : {reason}");
+            }
+            autre => panic!("un résultat sauté rend NotTaken, rendu : {autre:?}"),
+        }
+
+        // Un nœud qui a TOURNÉ sans poser son résultat -> NoResult.
+        let muet = GraphDefinition { nodes: vec![noeud("muet", "Muet")], edges: vec![] };
+        assert!(
+            matches!(jouer(&muet, ("muet", "out")), Err(GraphToolError::NoResult { .. })),
+            "un résultat oublié reste NoResult"
+        );
+    }
+
     /// `Result::unwrap_err` demande `T: Debug`, que ni `DataflowGraph` ni
     /// `Box<dyn Node>` n'implémentent.
     fn only_err<T>(r: Result<T, GraphToolError>) -> GraphToolError {
@@ -2167,7 +2309,7 @@ mod tests {
                    %% result: f.children\n\ngraph LR\n    f[\"FetchRelatedNode(relation=$relation, direction=$direction)\"]\n";
         let t = GraphTool::from_mermaid(src).unwrap();
         let choices = |t: &GraphTool, n: &str| t.params().iter().find(|p| p.name == n).unwrap().choices.clone();
-        assert_eq!(choices(&t, "relation"), Some(Choices::Relations));
+        assert_eq!(choices(&t, "relation"), Some(Choices::Relations { access: Default::default() }));
         assert_eq!(choices(&t, "direction"), Some(Choices::fixed(["Outgoing", "Incoming"])));
         let emitted = t.to_mermaid();
         assert!(emitted.contains("%% choices: direction = Outgoing | Incoming\n"), "{emitted}");
@@ -2271,7 +2413,7 @@ mod tests {
         // sa liste.
         let expand = tools.get("search").unwrap();
         assert_eq!(find(expand, "target").choices, Some(Choices::Targets));
-        assert_eq!(find(expand, "relation").choices, Some(Choices::Relations));
+        assert_eq!(find(expand, "relation").choices, Some(Choices::relations_read()));
         let direction = find(expand, "direction");
         assert_eq!(direction.param_type, ConfigParamType::String);
         assert_eq!(direction.default, Some(json!("Outgoing")));

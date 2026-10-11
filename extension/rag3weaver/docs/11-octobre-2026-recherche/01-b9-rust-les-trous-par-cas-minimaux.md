@@ -146,3 +146,23 @@ T5 en dernier (reclasser other→call quand l'argument est un nom de fn).
 Après correctifs : rejouer `banc/comparer.sh` de codeparsers sur
 `banc/rag3weaver.txt` (la grille d'ab), même corpus — pas cette sonde, qui
 ne mesure que la présence des relations, pas leur coût.
+
+## Épilogue — les trois états, sonde rejouée (nuit du 11 octobre)
+
+La même sonde, trois socles ; chaque correctif vérifié par trois instruments
+(le banc codeparsers d'ab, ses tests reprenant ces cas, cette sonde).
+
+| cas | avant (def6fa7cf) | T3 seul (80054b530, codeparsers f91fc58) | T1+T4 (a514e66ed, codeparsers 06d6e92) |
+|---|---|---|---|
+| T3 `tous -> jouer` (boucle) | AUCUNE arête | **call attribué** → traits.rs:4 | call attribué → :4 |
+| T2 `frappe -> jouer` (let typé) | non attribué | **call attribué** → :4 (le `let m = Marteau;` typé a suffi) | call attribué → :4 |
+| T1 `usages(Marteau)` | 2 « class » (struct + impl), ambigu | idem | **1 définition**, `tous` et `frappe` attribués |
+| T4 `aide` via macro | `file_scope_01 -> aide (par le nom)` | idem | **call `disons -> aide`**, le corps de macro est un scope Function `disons` |
+| T5 `map(aide)` / `double(x)` | other / rien | idem | idem — **au ticket** (l'appel d'une locale est écarté ; la fermeture a un scope) |
+| réexportations, inheritance, dyn | verts | verts | verts |
+
+Deux définitions de `jouer` demeurent (signature du trait :1, corps de
+l'impl :4) et c'est JUSTE — deux scopes réels ; le « Nom ambigu » de
+l'affichage n'est qu'un constat de pluralité, chaque appel étant attribué à
+la bonne. La comparaison de coût, elle, se lit au banc de codeparsers
+(`banc/comparer.sh`, `banc/rag3weaver.txt`), pas ici.

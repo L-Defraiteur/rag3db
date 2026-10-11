@@ -19,34 +19,109 @@ pub enum SchemaError {
     #[error("relation \"{rel}\" references unknown entity \"{entity}\"")]
     UnknownEntity { rel: String, entity: String },
 
-    /// Un nom que la grammaire du dialecte réserve : le moteur refuserait la
-    /// requête qui le porte. Le refus le nomme et dit quoi faire.
-    #[error("« {name} » est un mot réservé du dialecte {dialect} ({kind}) : renommez {quoi}")]
-    ReservedWord { kind: String, name: String, dialect: String, quoi: String },
+    /// Un nom déclaré qui reprend une colonne ou une table que rag3weaver pose
+    /// lui-même.
+    #[error("« {name} » est {quoi} intégré{e}, déjà présent{e} {ou} : retirez ce nom de la déclaration")]
+    BuiltIn { kind: String, name: String, quoi: String, e: String, ou: String },
+
+    /// Un nom déclaré qui commence par un souligné, préfixe des noms internes.
+    #[error("« {name} » commence par un souligné, réservé aux colonnes et tables internes de rag3weaver ({kind}) : renommez-le")]
+    InternalPrefix { kind: String, name: String },
 }
 
 // ─── Identifier validation ──────────────────────────────────────────────────
 
-/// Un identifiant valide **et** non réservé par le dialecte qui l'écrira
-/// ([`crate::dialect::SchemaDialect::reserved_words`]).
-pub fn validate_name(name: &str, kind: &str, dialect: &dyn crate::dialect::SchemaDialect) -> Result<(), SchemaError> {
+/// Validate that `name` is a safe Cypher identifier.
+///
+/// Must match `[a-zA-Z_][a-zA-Z0-9_]*`. No regex crate needed.
+/// **Les colonnes que rag3weaver pose sur chaque table d'entité** à sa
+/// création ; la DDL les tire d'ici ([`generate_node_table_ddl_with_dialect`]).
+pub fn builtin_entity_columns(derived: bool) -> Vec<crate::dialect::ColumnDef> {
+    use crate::dialect::{ColumnDef, ColumnType};
+    let mut columns = vec![
+        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
+        ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
+        // **La dette de découpage** : le hash du contenu dont les chunks
+        // actuels sont issus. `<> _content_hash` = chunks en retard. Vide =
+        // jamais découpé.
+        ColumnDef { name: "_chunked_hash".into(), col_type: ColumnType::Text },
+        // **La marque de synchronisation** : la session du dernier instantané
+        // qui a porté la ligne (`SnapshotConfig`). Vide hors synchronisation.
+        ColumnDef { name: "_snapshot".into(), col_type: ColumnType::Text },
+        // **La marque d'absence** : millisecondes de la première absence
+        // constatée par une fin qui a appliqué la transition d'absence ; vide
+        // dès que la ligne reparaît dans un lot. Elle dit qu'un état a été
+        // posé par une absence, pas par quelqu'un.
+        ColumnDef { name: "_absent_since".into(), col_type: ColumnType::Int64 },
+    ];
+    if derived {
+        // **Une entité dérivée** (doc du 7 septembre 2026) : d'où vient la
+        // ligne, et le hash de ses entrées au dernier rendu — `''` veut dire
+        // « à re-rendre », c'est la dette d'agrégat, en base.
+        use crate::config::DerivedConfig;
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_ENTITY.into(), col_type: ColumnType::Text });
+        columns.push(ColumnDef { name: DerivedConfig::SOURCE_UUID.into(), col_type: ColumnType::Text });
+        columns.push(ColumnDef { name: DerivedConfig::RENDER_HASH.into(), col_type: ColumnType::Text });
+    }
+    columns.extend(crate::scope::scope_columns());
+    columns
+}
+
+/// **Un nom de colonne que rag3weaver pose lui-même** : celles de la création
+/// ([`builtin_entity_columns`]), et celles qu'il ajoute ensuite (les vecteurs
+/// et leur marqueur, par modèle : `embedding`, `_embed_hash` et leurs formes
+/// `…__<modèle>` ; le marqueur creux ; la réclamation de rattrapage). Le test
+/// `e2e_nom_reserve::les_colonnes_intégrées_sont_toutes_connues` rougit si une
+/// colonne posée par le code n'est pas reconnue ici.
+pub fn is_builtin_column(name: &str) -> bool {
+    use crate::embedding_storage::SEPARATOR;
+    builtin_entity_columns(true).iter().any(|c| c.name == name)
+        || ["embedding", "_embed_hash", "_sparse_hash", "_embed_claim"].contains(&name)
+        || name.starts_with(&format!("embedding{SEPARATOR}"))
+        || name.starts_with(&format!("_embed_hash{SEPARATOR}"))
+}
+
+/// **Les tables que rag3weaver crée lui-même** dans chaque base. Le test
+/// `les_tables_integrees_sont_toutes_connues` relit le code et rougit si une
+/// table interne nouvelle n'est pas ici.
+pub const BUILTIN_TABLES: &[&str] = &[
+    "_catalog_meta",
+    "_index_blobs",
+    "_snapshot_aside",
+    crate::scope::ORG_TABLE,
+    crate::scope::PROJECT_TABLE,
+    "_DataflowExecution",
+    "_DataflowNodeRun",
+    "_DataflowEdgeRun",
+    "_DataflowNodeState",
+    "_NodeRunOf",
+    "_EdgeRunOf",
+];
+
+/// Une table que rag3weaver crée lui-même ([`BUILTIN_TABLES`]).
+pub fn is_builtin_table(name: &str) -> bool {
+    BUILTIN_TABLES.iter().any(|t| t.eq_ignore_ascii_case(name))
+}
+
+/// **Un nom déclaré par un gabarit** (entité, champ, relation) : un
+/// identifiant valide, qui ne commence pas par un souligné. Les noms en `_`
+/// sont réservés aux colonnes et tables internes de rag3weaver (`_uuid`,
+/// `_org`, `_catalog_meta`…) : un champ déclaré `_uuid` écraserait la clé.
+pub fn validate_declared_name(name: &str, kind: &str) -> Result<(), SchemaError> {
     validate_identifier(name, kind)?;
-    let haut = name.to_ascii_uppercase();
-    if dialect.reserved_words().iter().any(|m| *m == haut) {
-        let quoi = match kind {
-            "entity" => "l'entité",
-            "field" => "le champ",
-            "relation" => "la relation",
-            _ => "ce nom",
-        };
-        return Err(SchemaError::ReservedWord { kind: kind.into(), name: name.into(), dialect: dialect.name().into(), quoi: quoi.into() });
+    let integre = match kind {
+        "field" => is_builtin_column(name).then(|| ("un champ", "", "sur chaque entité")),
+        _ => is_builtin_table(name).then(|| ("une table", "e", "dans chaque base")),
+    };
+    if let Some((quoi, e, ou)) = integre {
+        return Err(SchemaError::BuiltIn { kind: kind.into(), name: name.into(), quoi: quoi.into(), e: e.into(), ou: ou.into() });
+    }
+    if name.starts_with('_') {
+        return Err(SchemaError::InternalPrefix { kind: kind.to_string(), name: name.to_string() });
     }
     Ok(())
 }
 
-/// Validate that `name` is a safe Cypher identifier.
-///
-/// Must match `[a-zA-Z_][a-zA-Z0-9_]*`. No regex crate needed.
 pub fn validate_identifier(name: &str, kind: &str) -> Result<(), SchemaError> {
     if is_valid_identifier(name) {
         Ok(())
@@ -190,39 +265,14 @@ pub fn generate_node_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(entity_name, "entity", dialect)?;
+    validate_declared_name(entity_name, "entity")?;
 
-    let mut columns = vec![
-        ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
-        ColumnDef { name: "_content_hash".into(), col_type: ColumnType::Text },
-        // **La dette de découpage** : le hash du contenu dont les chunks
-        // actuels sont issus. `<> _content_hash` = chunks en retard. Vide =
-        // jamais découpé.
-        ColumnDef { name: "_chunked_hash".into(), col_type: ColumnType::Text },
-        // **La marque de synchronisation** : la session du dernier instantané
-        // qui a porté la ligne (`SnapshotConfig`). Vide hors synchronisation.
-        ColumnDef { name: "_snapshot".into(), col_type: ColumnType::Text },
-        // **La marque d'absence** : millisecondes de la première absence
-        // constatée par une fin qui a appliqué la transition d'absence ; vide
-        // dès que la ligne reparaît dans un lot. Elle dit qu'un état a été
-        // posé par une absence, pas par quelqu'un.
-        ColumnDef { name: "_absent_since".into(), col_type: ColumnType::Int64 },
-    ];
-    if entity_def.derived_from.is_some() {
-        // **Une entité dérivée** (doc du 7 septembre 2026) : d'où vient la
-        // ligne, et le hash de ses entrées au dernier rendu — `''` veut dire
-        // « à re-rendre », c'est la dette d'agrégat, en base.
-        use crate::config::DerivedConfig;
-        columns.push(ColumnDef { name: DerivedConfig::SOURCE_ENTITY.into(), col_type: ColumnType::Text });
-        columns.push(ColumnDef { name: DerivedConfig::SOURCE_UUID.into(), col_type: ColumnType::Text });
-        columns.push(ColumnDef { name: DerivedConfig::RENDER_HASH.into(), col_type: ColumnType::Text });
-    }
-    columns.extend(crate::scope::scope_columns());
+    let mut columns = builtin_entity_columns(entity_def.derived_from.is_some());
 
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
     field_names.sort();
     for field_name in &field_names {
-        validate_name(field_name, "field", dialect)?;
+        validate_declared_name(field_name, "field")?;
         let field_def = &entity_def.fields[*field_name];
         columns.push(ColumnDef {
             name: field_name.to_string(),
@@ -255,7 +305,7 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(entity_name, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
     let table_name = format!("{entity_name}_Chunk");
 
     let mut columns = vec![
@@ -318,7 +368,7 @@ pub fn generate_simple_chunk_rel_ddl_with_dialect(
     entity_name: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_name(entity_name, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
     let chunk_table = format!("{entity_name}_Chunk");
     let rel_name = format!("{entity_name}_CHUNKED_FROM");
     Ok(dialect.create_rel_table(&rel_name, &chunk_table, entity_name, &[]))
@@ -337,8 +387,8 @@ pub fn generate_derived_rel_ddl_with_dialect(
     from_entity: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_name(entity_name, "entity", dialect)?;
-    validate_name(from_entity, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
+    validate_identifier(from_entity, "entity")?;
     Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
 }
 
@@ -357,9 +407,9 @@ pub fn generate_rel_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(rel_name, "relation", dialect)?;
-    validate_name(&rel_def.from, "entity", dialect)?;
-    validate_name(&rel_def.to, "entity", dialect)?;
+    validate_declared_name(rel_name, "relation")?;
+    validate_identifier(&rel_def.from, "entity")?;
+    validate_identifier(&rel_def.to, "entity")?;
 
     if !config.entities.contains_key(&rel_def.from) {
         return Err(SchemaError::UnknownEntity {
@@ -548,7 +598,7 @@ mod tests_derived {
             assert!(ddl.contains(col), "{col} manque dans {ddl}");
         }
         let rel = generate_derived_rel_ddl_with_dialect("TicketView", "Ticket", &crate::dialect::Rag3dbDialect).unwrap();
-        assert!(rel.contains("TicketView_DERIVED_FROM") && rel.contains("FROM TicketView TO Ticket"), "{rel}");
+        assert!(rel.contains("`TicketView_DERIVED_FROM`") && rel.contains("FROM `TicketView` TO `Ticket`"), "{rel}");
         let simple = EntityDef { fields: HashMap::new(), hashsafe: None, derived_from: None };
         assert!(!generate_node_table_ddl("Plain", &simple).unwrap().contains("_render_hash"));
     }
@@ -556,6 +606,34 @@ mod tests_derived {
 
 #[cfg(test)]
 mod tests {
+    /// Les tables internes que le code crée sont toutes dans `BUILTIN_TABLES` :
+    /// relues dans les sources du crate.
+    #[test]
+    fn les_tables_integrees_sont_toutes_connues() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut manquantes = Vec::new();
+        let mut pile = vec![src];
+        while let Some(dossier) = pile.pop() {
+            for e in std::fs::read_dir(&dossier).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    pile.push(p);
+                    continue;
+                }
+                let Ok(texte) = std::fs::read_to_string(&p) else { continue };
+                for motif in ["NODE TABLE IF NOT EXISTS ", "REL TABLE IF NOT EXISTS "] {
+                    for morceau in texte.split(motif).skip(1) {
+                        let nom: String = morceau.trim_start_matches('`').chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+                        if nom.starts_with('_') && !super::is_builtin_table(&nom) {
+                            manquantes.push(format!("{nom} ({})", p.display()));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(manquantes.is_empty(), "tables internes absentes de BUILTIN_TABLES : {manquantes:?}");
+    }
+
     use super::*;
     use crate::config::*;
 
@@ -725,11 +803,11 @@ mod tests {
         };
 
         let ddl = generate_node_table_ddl("Person", &entity).unwrap();
-        assert!(ddl.starts_with("CREATE NODE TABLE IF NOT EXISTS Person("));
-        assert!(ddl.contains("_uuid STRING"));
-        assert!(ddl.contains("_content_hash STRING"));
-        assert!(ddl.contains("age INT64"));
-        assert!(ddl.contains("name STRING"));
+        assert!(ddl.starts_with("CREATE NODE TABLE IF NOT EXISTS `Person`("));
+        assert!(ddl.contains("`_uuid` STRING"));
+        assert!(ddl.contains("`_content_hash` STRING"));
+        assert!(ddl.contains("`age` INT64"));
+        assert!(ddl.contains("`name` STRING"));
         assert!(ddl.contains("PRIMARY KEY(_uuid)"));
         // Entity tables have no embeddings
         assert!(!ddl.contains("embedding"));
@@ -750,8 +828,8 @@ mod tests {
         let ddl = generate_node_table_ddl("Document", &entity).unwrap();
         assert!(!ddl.contains("embedding"), "entity tables must NOT have embedding columns");
         assert!(!ddl.contains("sparse_indices"));
-        assert!(ddl.contains("title STRING"));
-        assert!(ddl.contains("body STRING"));
+        assert!(ddl.contains("`title` STRING"));
+        assert!(ddl.contains("`body` STRING"));
     }
 
     #[test]
@@ -839,7 +917,7 @@ mod tests {
         );
 
         // Entity table has no embedding
-        let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).expect("Document table");
+        let doc_ddl = schema.ddl.iter().find(|s| s.contains("`Document`(")).expect("Document table");
         assert!(!doc_ddl.contains("embedding"), "entity table must not have embeddings");
 
         assert!(schema.ddl.iter().any(|s| s.contains("REFERENCES")), "user rel");
@@ -897,13 +975,13 @@ mod tests {
         let tag_ddl = schema
             .ddl
             .iter()
-            .find(|s| s.contains("Tag("))
+            .find(|s| s.contains("`Tag`("))
             .expect("Tag table");
         assert!(!tag_ddl.contains("embedding"));
 
         // No indexes, no KB tables
         assert!(schema.indexes.is_empty());
-        assert!(!schema.ddl.iter().any(|s| s.contains("_Index(")));
+        assert!(!schema.ddl.iter().any(|s| s.contains("_Index`(")));
     }
 
     #[test]
@@ -942,9 +1020,9 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Entity tables (no embeddings)
-        let dir_ddl = schema.ddl.iter().find(|s| s.contains("Directory(")).expect("Directory table");
+        let dir_ddl = schema.ddl.iter().find(|s| s.contains("`Directory`(")).expect("Directory table");
         assert!(!dir_ddl.contains("embedding"));
-        let file_ddl = schema.ddl.iter().find(|s| s.contains(" File(") || s.starts_with("CREATE NODE TABLE IF NOT EXISTS File(")).expect("File table");
+        let file_ddl = schema.ddl.iter().find(|s| s.starts_with("CREATE NODE TABLE IF NOT EXISTS `File`(")).expect("File table");
         assert!(!file_ddl.contains("embedding"));
 
         // Plus de tables de base : la KB est une entité dérivée, posée par
@@ -998,12 +1076,12 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Document table has no embedding
-        let doc = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
+        let doc = schema.ddl.iter().find(|s| s.contains("`Document`(")).unwrap();
         assert!(!doc.contains("embedding"));
 
         // La base « main » n'a pas de table ici : entité dérivée, posée par
         // le catalogue.
-        assert!(!schema.ddl.iter().any(|s| s.contains("main_Index(")));
+        assert!(!schema.ddl.iter().any(|s| s.contains("`main_Index`(")));
     }
 
     #[test]
@@ -1033,7 +1111,7 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Document table has no embedding
-        let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
+        let doc_ddl = schema.ddl.iter().find(|s| s.contains("`Document`(")).unwrap();
         assert!(!doc_ddl.contains("embedding"));
 
         // Plus d'index de base ici : la KB est une entité dérivée.

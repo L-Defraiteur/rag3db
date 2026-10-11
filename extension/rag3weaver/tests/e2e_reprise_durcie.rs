@@ -38,13 +38,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/reprise-durcie").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("reprise-durcie", cas)
 }
 
 fn corpus(n: usize) -> Vec<(String, String)> {
@@ -151,7 +145,7 @@ fn la_marque_des_relations_s_efface_par_une_passe_par_paquet_complete() {
     let d = dossier("marque");
     let base = d.join("base.rag3db");
     let sortie = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, "masse")
         .env(BASE, &base)
         .env("RAG3WEAVER_TEST_KILL_IN_BATCH", "2")

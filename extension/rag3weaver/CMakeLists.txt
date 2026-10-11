@@ -26,7 +26,7 @@ file(GLOB_RECURSE RUST_SOURCES
 add_custom_command(
     OUTPUT ${RAG3WEAVER_STATIC_LIB}
     COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
-            cargo ${CARGO_TOOLCHAIN} build --release ${CARGO_TARGET}
+            cargo ${CARGO_TOOLCHAIN} rustc --lib --crate-type staticlib --release ${CARGO_TARGET}
                   ${CARGO_EXTRA_FLAGS}
                   --no-default-features --features wasm-emscripten,candle-wasm
     WORKING_DIRECTORY ${RUST_SRC_DIR}

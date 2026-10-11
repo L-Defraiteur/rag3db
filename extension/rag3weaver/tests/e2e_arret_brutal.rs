@@ -84,17 +84,7 @@ fn racine_moteur() -> String {
 
 /// **Sur disque.** Voir l'en-tête : `/tmp` est de la mémoire vive ici.
 fn dossier_sur_disque(cas: &str) -> PathBuf {
-    let base = std::env::var("HOME").expect("HOME");
-    let d = PathBuf::from(base).join(".cache/rag3weaver-build/arret-brutal").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&d).expect("créer le dossier");
-    d
+    crate::common::dossier_de_suite("arret-brutal", cas)
 }
 
 /// Le chemin de la base : un **fichier** dans le dossier. Le moteur refuse un
@@ -272,7 +262,7 @@ enum Verdict {
 
 fn relire(dossier: &Path, cas: &str, attendu: usize) -> Verdict {
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(RELECTEUR, dossier.display().to_string())
         .env("RAG3WEAVER_ARRET_ATTENDU", attendu.to_string())
         .output()
@@ -636,7 +626,7 @@ fn jouer_avec(
     age_du_moteur();
     let dossier = dossier_sur_disque(cas);
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(ECRIVAIN, dossier.display().to_string())
         .env(SCENARIO, scenario)
         .stdout(std::process::Stdio::piped())
@@ -773,7 +763,7 @@ fn une_mort_apres_insertion_vectorielle() {
     let dossier = dossier_sur_disque(cas);
 
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", cas, "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!(cas), "--nocapture", "--ignored"])
         .env(ECRIVAIN, dossier.display().to_string())
         .env(SCENARIO, "insertion")
         .stdout(std::process::Stdio::piped())

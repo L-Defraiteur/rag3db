@@ -125,6 +125,11 @@ pub(crate) fn cle_de_ligne(lies: &[&str], champ: &str, alias: &str) -> String {
 
 /// Un nœud à retrouver : sa variable, son étiquette (sans étiquette, toutes
 /// les tables), la propriété clé, et le champ de `item` qui la porte.
+///
+/// **L'étiquette, la propriété et le champ arrivent déjà cités** quand ils
+/// viennent d'un paramètre ([`SchemaDialect::quote`]) : ces assistants
+/// écrivent ce qu'on leur donne, et les noms fixes de notre texte (`_uuid`,
+/// `uuid`, `from_uuid`…) restent nus.
 pub(crate) struct ParCle<'a> {
     pub var: &'a str,
     pub label: Option<&'a str>,
@@ -153,6 +158,15 @@ fn par_uuid<'a>(var: &'a str, label: Option<&'a str>, champ: &'a str) -> ParCle<
     ParCle { var, label, prop: "_uuid", champ }
 }
 
+/// **La citation Cypher** : l'accent grave. Le nom physique ne change pas —
+/// le moteur retire les accents graves à l'analyse —, donc une base existante
+/// se rouvre telle quelle. C'est le corps par défaut de
+/// [`SchemaDialect::quote`], et celui des assistants Cypher qui n'ont pas de
+/// dialecte sous la main.
+pub(crate) fn cypher_quote(name: &str) -> String {
+    format!("`{name}`")
+}
+
 /// **Ce qu'un dialecte déclare savoir faire**, d'un seul tenant.
 ///
 /// Une capacité non déclarée n'est pas un résultat vide : l'appelant qui en a
@@ -173,12 +187,20 @@ pub struct DialectCapabilities {
     pub bulk_load: bool,
     /// Champs liste ou structure, et filtres imbriqués sur eux.
     pub structured_fields: bool,
+    /// **Fondre les éventails** ([`SchemaDialect::fuse_fanout`]) : des sœurs
+    /// en une instruction. Faux pour les deux dialectes : mesuré le
+    /// 11 octobre 2026, la fusion ne gagne de temps ni sur rag3db (base dans
+    /// le processus) ni sur un PostgreSQL local, et coûte 1 à 20 %. Elle ne
+    /// paie qu'avec un aller-retour cher : un montage PostgreSQL distant la
+    /// lève (`Catalog::set_fanout`), jamais sur la foi d'un calcul
+    /// (`docs/11-octobre-2026-embarquements/04-eventails.md`).
+    pub fanout: bool,
 }
 
 impl DialectCapabilities {
     /// Ce que suppose un dialecte qui ne se prononce pas : il parle Cypher
     /// (l'hypothèse de tout le code d'avant), et rien de plus.
-    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false };
+    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false, fanout: false };
 }
 
 pub trait SchemaDialect: Send + Sync {
@@ -217,15 +239,53 @@ pub trait SchemaDialect: Send + Sync {
     /// existant, et un dialecte qui ne se prononce pas ne doit rien changer.
     fn speaks_cypher(&self) -> bool { self.capabilities().cypher }
 
-    /// **Les mots que ce dialecte refuse comme nom** (de table, de relation, de
-    /// champ), en majuscules. Un nom réservé est refusé à la création du
-    /// schéma, en le nommant ([`crate::schema::validate_name`]).
-    fn reserved_words(&self) -> &'static [&'static str] {
-        &[]
+    /// **Citer un nom du schéma** (table, relation, champ) selon la règle de
+    /// ce dialecte. Tout nom qui vient d'un paramètre ou d'une forme de l'IR
+    /// passe par ici, réservé ou non : `Order` ou `order` ne cassent plus la
+    /// requête qui les porte. Les noms fixes de notre texte (`_uuid`,
+    /// `_catalog_meta`…), les alias (`n`, `m`) et les littéraux entre
+    /// apostrophes restent tels quels.
+    ///
+    /// Le défaut est la forme Cypher, l'accent grave ([`cypher_quote`]). Un
+    /// nom qui contient lui-même le caractère de citation est refusé avant
+    /// toute requête par [`crate::schema::validate_identifier`].
+    fn quote(&self, name: &str) -> String {
+        cypher_quote(name)
     }
 
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
+
+    /// **L'instruction qui fixe un même instantané** pour toutes les lectures
+    /// d'une transaction, à envoyer juste après [`DbConnection::begin`]
+    /// (`crate::connection::DbConnection::begin`) ; `None` quand le moteur le
+    /// fait déjà. Un graphe de formes lu en plusieurs instructions s'en sert
+    /// pour se dire atomique.
+    fn snapshot_read(&self) -> Option<&'static str> { None }
+
+    /// **Fondre deux nœuds d'un graphe de formes en une instruction** : le
+    /// texte d'amont (déjà fondu ou non, et dont `upstream` est la dernière
+    /// forme), la colonne qui nourrit l'aval, et le texte de l'aval. `None` :
+    /// ce dialecte ne sait pas les fondre, et le graphe les exécute l'un après
+    /// l'autre (le repli découpé, `crate::plan`). Une fusion rend les mêmes
+    /// lignes que le repli : l'aval reçoit les valeurs **distinctes et non
+    /// nulles** de la colonne.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        let _ = (upstream_text, upstream, column, downstream_text);
+        None
+    }
+
+    /// **Un éventail en une instruction** : des branches sœurs de même forme
+    /// de sortie, nourries par la même source — le texte d'un amont et sa
+    /// forme (`upstream`), chaque branche lisant sa colonne de lui ; ou, sans
+    /// amont, la même liste `$uuids` de l'appelant. Le texte rend en tête une
+    /// colonne `__branch` (le rang de la branche), puis les colonnes de la
+    /// branche ; l'exécuteur range les lignes par sortie. `None` : le dialecte
+    /// ne sait pas, et les branches partent l'une après l'autre.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let _ = (upstream, branches);
+        None
+    }
 
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
@@ -421,16 +481,16 @@ pub trait SchemaDialect: Send + Sync {
     /// Paramètre `$froms`.
     fn existing_links(&self, rel_table: &str, ends: (&str, &str)) -> String {
         if !self.capabilities().cypher { return self.untranslated("existing_links"); }
-        let (from, to) = ends;
+        let (from, to, rel) = (self.quote(ends.0), self.quote(ends.1), self.quote(rel_table));
         format!(
-            "UNWIND $froms AS f MATCH (a:{from} {{_uuid: f}})-[:{rel_table}]->(b:{to}) RETURN a._uuid, b._uuid"
+            "UNWIND $froms AS f MATCH (a:{from} {{_uuid: f}})-[:{rel}]->(b:{to}) RETURN a._uuid, b._uuid"
         )
     }
 
     /// Le nombre d'arêtes d'une relation.
     fn count_links(&self, rel_table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("count_links"); }
-        format!("MATCH ()-[r:{rel_table}]->() RETURN count(r)")
+        format!("MATCH ()-[r:{}]->() RETURN count(r)", self.quote(rel_table))
     }
 
     /// Batch update specific fields on entities matched by UUID.
@@ -533,9 +593,10 @@ pub trait SchemaDialect: Send + Sync {
     fn select_page_after_offset(&self, table: &str, fields: &[&str], limit: usize) -> String {
         if !self.capabilities().cypher { return self.untranslated("select_page_after_offset"); }
         let offset = self.node_offset_expr("n");
-        let returns: Vec<String> = fields.iter().map(|f| format!("n.{f}")).collect();
+        let returns: Vec<String> = fields.iter().map(|f| format!("n.{}", self.quote(f))).collect();
         format!(
-            "MATCH (n:{table}) WHERE {offset} > $apres RETURN {offset} AS _offset, {} ORDER BY _offset LIMIT {limit}",
+            "MATCH (n:{}) WHERE {offset} > $apres RETURN {offset} AS _offset, {} ORDER BY _offset LIMIT {limit}",
+            self.quote(table),
             returns.join(", ")
         )
     }
@@ -552,7 +613,7 @@ pub trait SchemaDialect: Send + Sync {
     /// Tous les uuids d'une table — pour re-rendre une entité dérivée entière.
     fn select_all_uuids(&self, table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("select_all_uuids"); }
-        format!("MATCH (n:{table}) RETURN n._uuid")
+        format!("MATCH (n:{}) RETURN n._uuid", self.quote(table))
     }
 
     /// **Poser la dette de rendu** sur les lignes d'une entité dérivée dont la
@@ -563,8 +624,9 @@ pub trait SchemaDialect: Send + Sync {
         if !self.capabilities().cypher { return self.untranslated("marquer_derivees_a_rendre"); }
         format!(
             "UNWIND $uuids AS u \
-             MATCH (d:{derived_table} {{_source_uuid: u}}) \
-             SET d._render_hash = ''"
+             MATCH (d:{} {{_source_uuid: u}}) \
+             SET d._render_hash = ''",
+            self.quote(derived_table)
         )
     }
 
@@ -572,7 +634,7 @@ pub trait SchemaDialect: Send + Sync {
     /// `_snapshot = $session` sur les lignes de `$uuids`.
     fn mark_snapshot_session(&self, table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("mark_snapshot_session"); }
-        format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL")
+        format!("UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) SET n._snapshot = $session, n._absent_since = NULL", self.quote(table))
     }
 
     /// **La marque d'une écriture** : `_snapshot = $mark` sur `$uuids`, sauf
@@ -582,16 +644,17 @@ pub trait SchemaDialect: Send + Sync {
     fn mark_written_session(&self, table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("mark_written_session"); }
         format!(
-            "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
+            "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) \
              WHERE n._snapshot IS NULL OR n._snapshot <> $session \
-             SET n._snapshot = $mark, n._absent_since = NULL"
+             SET n._snapshot = $mark, n._absent_since = NULL",
+            self.quote(table)
         )
     }
 
     /// Une colonne entière à NULL, sur toute la table (une migration).
     fn set_column_null(&self, table: &str, field: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("set_column_null"); }
-        format!("MATCH (n:{table}) SET n.{field} = NULL")
+        format!("MATCH (n:{}) SET n.{} = NULL", self.quote(table), self.quote(field))
     }
 
     /// **Poser la marque d'absence** sur `$uuids`, à `$since`, sauf là où elle
@@ -599,8 +662,9 @@ pub trait SchemaDialect: Send + Sync {
     fn mark_absent_since(&self, table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("mark_absent_since"); }
         format!(
-            "UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}}) \
-             WHERE n._absent_since IS NULL OR n._absent_since = 0 SET n._absent_since = $since"
+            "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) \
+             WHERE n._absent_since IS NULL OR n._absent_since = 0 SET n._absent_since = $since",
+            self.quote(table)
         )
     }
 
@@ -610,13 +674,13 @@ pub trait SchemaDialect: Send + Sync {
     fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
         if !self.capabilities().cypher { return self.untranslated("select_snapshot_scope"); }
         let filtre = scope.iter().enumerate()
-            .map(|(i, f)| format!("n.{f} = $p{i}"))
+            .map(|(i, f)| format!("n.{} = $p{i}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(" AND ");
         let ou = if filtre.is_empty() { String::new() } else { format!(" WHERE {filtre}") };
         let mut rend = vec!["n._uuid".to_string(), "n._snapshot".to_string()];
-        rend.extend(extra.iter().map(|f| format!("n.{f}")));
-        format!("MATCH (n:{table}){ou} RETURN {}", rend.join(", "))
+        rend.extend(extra.iter().map(|f| format!("n.{}", self.quote(f))));
+        format!("MATCH (n:{}){ou} RETURN {}", self.quote(table), rend.join(", "))
     }
 
     // ── La mise de côté avant purge (`_snapshot_aside`) ──────────────────
@@ -693,8 +757,11 @@ pub trait SchemaDialect: Send + Sync {
     fn select_chunk_vectors(&self, chunk_table: &str, column: &str, marker: &str) -> Option<String> {
         if !self.capabilities().cypher { return None; }
         Some(format!(
-            "MATCH (c:{chunk_table}) WHERE c._parent_uuid IN $uuids \
-             RETURN c._uuid, c._parent_uuid, c._text_hash, c.{marker}, c.{column}"
+            "MATCH (c:{}) WHERE c._parent_uuid IN $uuids \
+             RETURN c._uuid, c._parent_uuid, c._text_hash, c.{}, c.{}",
+            self.quote(chunk_table),
+            self.quote(marker),
+            self.quote(column)
         ))
     }
 
@@ -704,9 +771,11 @@ pub trait SchemaDialect: Send + Sync {
     /// annulation n'est pas une transition.
     fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("revert_lifecycle_state"); }
+        let t = self.quote(table);
         format!(
-            "{} SET n.{field} = item.state, n._absent_since = NULL",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} SET n.{} = item.state, n._absent_since = NULL",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(field)
         )
     }
 
@@ -715,7 +784,11 @@ pub trait SchemaDialect: Send + Sync {
     /// `None` quand le dialecte ne sait pas le dire.
     fn count_relations_of(&self, table: &str, rel: &str) -> Option<String> {
         if !self.capabilities().cypher { return None; }
-        Some(format!("UNWIND $uuids AS u MATCH (n:{table} {{_uuid: u}})-[r:{rel}]-() RETURN count(DISTINCT r)"))
+        Some(format!(
+            "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}})-[r:{}]-() RETURN count(DISTINCT r)",
+            self.quote(table),
+            self.quote(rel)
+        ))
     }
 
     /// **Les dérivées en dette de rendu** : `_render_hash` nul ou vide. Rend
@@ -723,9 +796,10 @@ pub trait SchemaDialect: Send + Sync {
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
         if !self.capabilities().cypher { return self.untranslated("select_derivees_a_rendre"); }
         format!(
-            "MATCH (d:{derived_table}) \
+            "MATCH (d:{}) \
              WHERE d._render_hash IS NULL OR d._render_hash = '' \
-             RETURN d._source_uuid LIMIT {limite}"
+             RETURN d._source_uuid LIMIT {limite}",
+            self.quote(derived_table)
         )
     }
 
@@ -734,9 +808,10 @@ pub trait SchemaDialect: Send + Sync {
     /// `_uuid` de la racine, borné.
     fn select_racines_sans_derivee(&self, root_table: &str, derived_table: &str, rel_table: &str, limite: usize) -> String {
         if !self.capabilities().cypher { return self.untranslated("select_racines_sans_derivee"); }
+        let (root, derived, rel) = (self.quote(root_table), self.quote(derived_table), self.quote(rel_table));
         format!(
-            "MATCH (r:{root_table}) \
-             OPTIONAL MATCH (d:{derived_table})-[:{rel_table}]->(r) \
+            "MATCH (r:{root}) \
+             OPTIONAL MATCH (d:{derived})-[:{rel}]->(r) \
              WITH r, d WHERE d._uuid IS NULL \
              RETURN r._uuid LIMIT {limite}"
         )
@@ -746,7 +821,7 @@ pub trait SchemaDialect: Send + Sync {
     /// ce qu'un schéma d'avant avait posé. Une table absente fait échouer
     /// l'instruction sur le moteur Cypher : l'appelant ignore cette erreur.
     fn drop_table(&self, table: &str) -> String {
-        format!("DROP TABLE {table}")
+        format!("DROP TABLE {}", self.quote(table))
     }
 
     /// **Charger des lignes en masse depuis un CSV** (sans en-tête, une
@@ -777,8 +852,9 @@ pub trait SchemaDialect: Send + Sync {
         let id = self.node_id_expr("n");
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (n:{table} {{_uuid: uuid}}) \
-             RETURN n._uuid, {id}"
+             MATCH (n:{} {{_uuid: uuid}}) \
+             RETURN n._uuid, {id}",
+            self.quote(table)
         )
     }
 
@@ -998,14 +1074,17 @@ pub trait SchemaDialect: Send + Sync {
             "n._uuid AS _uuid".to_string(),
         ];
         for f in return_fields {
+            let f = self.quote(f);
             cols.push(format!("n.{f} AS {f}"));
         }
         cols.extend(colonnes_de_chunk("c", has_source_refs));
+        let (chunk_rel, chunk_table) = (self.quote(chunk_rel), self.quote(chunk_table));
         let jointure = if chunk_rel_fwd {
             format!("OPTIONAL MATCH (n)-[:{chunk_rel}]->(c:{chunk_table})")
         } else {
             format!("OPTIONAL MATCH (n)<-[:{chunk_rel}]-(c:{chunk_table})")
         };
+        let entity = self.quote(entity);
         format!(
             "MATCH (n:{entity}) WHERE OFFSET(id(n)) IN [{offset_list}] \
              {jointure} \
@@ -1031,8 +1110,10 @@ pub trait SchemaDialect: Send + Sync {
     ) -> String {
         if !self.capabilities().cypher { return self.untranslated("chunk_parent_join"); }
         format!(
-            "MATCH ({chunk_alias})-[:{parent_entity}_CHUNKED_FROM]->\
-             ({parent_alias}:{parent_entity})"
+            "MATCH ({chunk_alias})-[:{}]->\
+             ({parent_alias}:{})",
+            self.quote(&format!("{parent_entity}_CHUNKED_FROM")),
+            self.quote(parent_entity)
         )
     }
 
@@ -1138,24 +1219,63 @@ pub fn ecriture<D: SchemaDialect + ?Sized>(dialect: &D, write: &rag3weaver_ir::W
     dialect.write(write).unwrap_or_else(|_| dialect.untranslated("Write"))
 }
 
+/// Une condition de [`rag3weaver_ir::Predicate`] en SQL PostgreSQL, sur l'alias `m`.
+fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> String {
+    use rag3weaver_ir::Predicate;
+    match p {
+        Predicate::Equals { field, param } => format!("m.{} = ${param}", d.quote(field)),
+        Predicate::Contains { field, param } => format!("strpos(m.{}, ${param}) > 0", d.quote(field)),
+        Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", d.quote(field)),
+        Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" OR ")),
+        Predicate::Compiled(c) => c.clone(),
+    }
+}
+
 /// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
+/// Les champs sont cités ([`cypher_quote`]) ; une condition déjà compilée
+/// passe telle quelle.
 fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
     use rag3weaver_ir::Predicate;
     match p {
-        Predicate::Equals { field, param } => format!("m.{field} = ${param}"),
-        Predicate::Contains { field, param } => format!("m.{field} CONTAINS ${param}"),
-        Predicate::AtLeast { field, param } => format!("m.{field} >= ${param}"),
+        Predicate::Equals { field, param } => format!("m.{} = ${param}", cypher_quote(field)),
+        Predicate::Contains { field, param } => format!("m.{} CONTAINS ${param}", cypher_quote(field)),
+        Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", cypher_quote(field)),
         Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
         Predicate::Compiled(c) => c.clone(),
     }
 }
 
-impl SchemaDialect for Rag3dbDialect {
-    /// Tirés de la grammaire du moteur par `scripts/mots_reserves.py`.
-    fn reserved_words(&self) -> &'static [&'static str] {
-        crate::mots_reserves_rag3db::RAG3DB_RESERVED_WORDS
+impl Rag3dbDialect {
+    /// Les colonnes rendues par une sélection, dans l'ordre : l'uuid donné
+    /// en tête quand elle est par uuids, puis ses champs.
+    fn select_columns(&self, select: &rag3weaver_ir::Select) -> Vec<String> {
+        use rag3weaver_ir::Column;
+        let tete = select.by_uuids.then(|| "u".to_string());
+        tete.into_iter()
+            .chain(select.returns.iter().map(|c| match c {
+                Column::Node(f) => format!("m.{}", self.quote(f)),
+                Column::Whole => "m".to_string(),
+                _ => "NULL".to_string(),
+            }))
+            .collect()
     }
 
+    /// Les colonnes rendues par un saut : l'uuid de départ, puis ses
+    /// colonnes.
+    fn hop_columns(&self, hop: &rag3weaver_ir::Hop) -> Vec<String> {
+        std::iter::once("u".to_string())
+            .chain(hop.returns.iter().map(|c| match c {
+                rag3weaver_ir::Column::Node(f) => format!("m.{}", self.quote(f)),
+                rag3weaver_ir::Column::Edge(f) => format!("r.{}", self.quote(f)),
+                rag3weaver_ir::Column::Null => "NULL".to_string(),
+                rag3weaver_ir::Column::Label => "label(m)".to_string(),
+                rag3weaver_ir::Column::Whole => "m".to_string(),
+            }))
+            .collect()
+    }
+}
+
+impl SchemaDialect for Rag3dbDialect {
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
@@ -1167,11 +1287,11 @@ impl SchemaDialect for Rag3dbDialect {
                 let assigns: Vec<String> = set
                     .iter()
                     .map(|(f, p)| match p {
-                        Some(p) => format!("n.{f} = ${p}"),
-                        None => format!("n.{f} = NULL"),
+                        Some(p) => format!("n.{} = ${p}", self.quote(f)),
+                        None => format!("n.{} = NULL", self.quote(f)),
                     })
                     .collect();
-                Ok(format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) SET {}", assigns.join(", ")))
+                Ok(format!("UNWIND $uuids AS uuid MATCH (n:{} {{_uuid: uuid}}) SET {}", self.quote(table), assigns.join(", ")))
             }
             // Le reste : les méthodes d'écriture de ce dialecte.
             _ => write_by_methods(self, write),
@@ -1179,29 +1299,20 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
-        use rag3weaver_ir::Column;
         select.validate()?;
         let condition = rag3db_condition;
-        let colonnes: Vec<String> = select
-            .returns
-            .iter()
-            .map(|c| match c {
-                Column::Node(f) => format!("m.{f}"),
-                Column::Whole => "m".to_string(),
-                _ => "NULL".to_string(),
-            })
-            .collect();
+        let colonnes = self.select_columns(select);
         let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", condition(p))).unwrap_or_default();
         let ordre = if select.order_by.is_empty() {
             String::new()
         } else {
-            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{f}")).collect::<Vec<_>>().join(", "))
+            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
         };
         let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
         Ok(if select.by_uuids {
-            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN u, {}{ordre}{borne}", select.table, colonnes.join(", "))
+            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
         } else {
-            format!("MATCH (m:{}){filtre} RETURN {}{ordre}{borne}", select.table, colonnes.join(", "))
+            format!("MATCH (m:{}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
         })
     }
 
@@ -1211,11 +1322,14 @@ impl SchemaDialect for Rag3dbDialect {
         count.validate()?;
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
-            rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{table}) WHERE {} RETURN count(m)", rag3db_condition(filter)),
-            rag3weaver_ir::Count::Edges { start, relation, direction } => match direction {
-                rag3weaver_ir::Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})<-[r:{relation}]-() RETURN u, count(r)"),
-                rag3weaver_ir::Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})-[r:{relation}]->() RETURN u, count(r)"),
-            },
+            rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{}) WHERE {} RETURN count(m)", self.quote(table), rag3db_condition(filter)),
+            rag3weaver_ir::Count::Edges { start, relation, direction } => {
+                let (start, relation) = (self.quote(start), self.quote(relation));
+                match direction {
+                    rag3weaver_ir::Direction::Incoming => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})<-[r:{relation}]-() RETURN u, count(r)"),
+                    rag3weaver_ir::Direction::Outgoing => format!("UNWIND $uuids AS u MATCH (d:{start} {{_uuid: u}})-[r:{relation}]->() RETURN u, count(r)"),
+                }
+            }
         })
     }
 
@@ -1224,16 +1338,17 @@ impl SchemaDialect for Rag3dbDialect {
     /// (journal, §6). La forme exacte que `graph_walk` écrivait à la main.
     fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
         hop.validate()?;
-        let table = |t: &Option<String>| t.as_deref().map(|t| format!(":{t}")).unwrap_or_default();
+        let table = |t: &Option<String>| t.as_deref().map(|t| format!(":{}", self.quote(t))).unwrap_or_default();
         let (d, m) = (table(&hop.start), table(&hop.end));
+        let relation = self.quote(&hop.relation);
         let pattern = match hop.direction {
-            rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{}]->(m{m})", hop.relation),
-            rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{}]-(m{m})", hop.relation),
+            rag3weaver_ir::Direction::Outgoing => format!("(d{d} {{_uuid: u}})-[r:{relation}]->(m{m})"),
+            rag3weaver_ir::Direction::Incoming => format!("(d{d} {{_uuid: u}})<-[r:{relation}]-(m{m})"),
         };
         let mut conditions: Vec<String> = Vec::new();
         if let Some(x) = &hop.exclude {
             let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
-            conditions.push(format!("r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = x.field));
+            conditions.push(format!("r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = self.quote(&x.field)));
         }
         if let Some(p) = &hop.filter {
             conditions.push(rag3db_condition(p));
@@ -1247,23 +1362,75 @@ impl SchemaDialect for Rag3dbDialect {
         let ordre = if hop.order_by.is_empty() {
             String::new()
         } else {
-            format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{f}")).collect::<Vec<_>>().join(", "))
+            format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
         };
-        let colonnes: Vec<String> = std::iter::once("u".to_string())
-            .chain(hop.returns.iter().map(|c| match c {
-                rag3weaver_ir::Column::Node(f) => format!("m.{f}"),
-                rag3weaver_ir::Column::Edge(f) => format!("r.{f}"),
-                rag3weaver_ir::Column::Null => "NULL".to_string(),
-                rag3weaver_ir::Column::Label => "label(m)".to_string(),
-                rag3weaver_ir::Column::Whole => "m".to_string(),
-            }))
-            .collect();
+        let colonnes = self.hop_columns(hop);
         let borne = hop.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
         Ok(format!("UNWIND $uuids AS u MATCH {pattern}{filtre} RETURN {}{ordre}{borne}", colonnes.join(", ")))
     }
 
+    /// **Une lecture d'amont, puis une forme nourrie par `$uuids`.** Le
+    /// `RETURN` d'amont devient `WITH DISTINCT <colonne> AS __chain WHERE
+    /// __chain IS NOT NULL WITH __chain AS <alias>`, et l'aval reprend après
+    /// son `UNWIND $uuids AS <alias>`. Le second `WITH` ne garde que l'alias :
+    /// les variables d'amont (`m`, `d`, `r`, `u`) sortent de portée, et l'aval
+    /// les redéclare comme s'il était seul. Seule une sélection ou un saut
+    /// sans ordre ni limite se fond en amont ; toute forme qui commence par
+    /// `UNWIND $uuids AS …` (saut, sélection par uuids, degré, marque,
+    /// suppression) se fond en aval.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        let colonnes = match upstream {
+            rag3weaver_ir::Form::Select(s) if s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+            rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
+            _ => return None,
+        };
+        let expression = colonnes.get(column)?;
+        let coupe = upstream_text.rfind(" RETURN ")?;
+        if upstream_text[coupe + " RETURN ".len()..] != colonnes.join(", ") {
+            return None;
+        }
+        let reste = downstream_text.strip_prefix("UNWIND $uuids AS ")?;
+        let (alias, reste) = reste.split_once(' ')?;
+        if !rag3weaver_ir::is_valid_identifier(alias) {
+            return None;
+        }
+        Some(format!(
+            "{} WITH DISTINCT {expression} AS __chain WHERE __chain IS NOT NULL WITH __chain AS {alias} {reste}",
+            &upstream_text[..coupe]
+        ))
+    }
+
+    /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
+    /// (une `UNION` de Cypher ne partage pas de préfixe : l'amont est relu
+    /// dans chaque branche, dans la même instruction), et son `RETURN`
+    /// réécrit en `RETURN <rang> AS __branch, <col> AS c0, …` pour que les
+    /// branches aient les mêmes noms de colonnes. Seules les branches sans
+    /// ordre ni limite : sauts, sélections par uuids, degrés.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let mut parties = Vec::with_capacity(branches.len());
+        for (rang, (colonne, texte, forme)) in branches.iter().enumerate() {
+            let colonnes = match forme {
+                rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
+                rag3weaver_ir::Form::Select(s) if s.by_uuids && s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+                rag3weaver_ir::Form::Count(rag3weaver_ir::Count::Edges { .. }) => vec!["u".to_string(), "count(r)".to_string()],
+                _ => return None,
+            };
+            let texte = match upstream {
+                Some((amont, forme_amont)) => self.fuse(amont, forme_amont, *colonne, texte)?,
+                None => texte.to_string(),
+            };
+            let coupe = texte.rfind(" RETURN ")?;
+            if texte[coupe + " RETURN ".len()..] != colonnes.join(", ") {
+                return None;
+            }
+            let nommees = colonnes.iter().enumerate().map(|(i, c)| format!("{c} AS c{i}")).collect::<Vec<_>>().join(", ");
+            parties.push(format!("{} RETURN {rang} AS __branch, {nommees}", &texte[..coupe]));
+        }
+        Some(parties.join(" UNION ALL "))
+    }
+
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
-        format!("MERGE (n:{table} {{_uuid: ${id_param}}}) ON CREATE SET n.name = ${id_param}")
+        format!("MERGE (n:{} {{_uuid: ${id_param}}}) ON CREATE SET n.name = ${id_param}", self.quote(table))
     }
 
     fn name(&self) -> &'static str {
@@ -1308,10 +1475,11 @@ impl SchemaDialect for Rag3dbDialect {
     fn create_table(&self, name: &str, columns: &[ColumnDef]) -> String {
         let col_defs: Vec<String> = columns
             .iter()
-            .map(|c| format!("{} {}", c.name, self.type_name(&c.col_type)))
+            .map(|c| format!("{} {}", self.quote(&c.name), self.type_name(&c.col_type)))
             .collect();
         format!(
-            "CREATE NODE TABLE IF NOT EXISTS {name}(\n    {},\n    PRIMARY KEY(_uuid)\n)",
+            "CREATE NODE TABLE IF NOT EXISTS {}(\n    {},\n    PRIMARY KEY(_uuid)\n)",
+            self.quote(name),
             col_defs.join(",\n    ")
         )
     }
@@ -1328,11 +1496,16 @@ impl SchemaDialect for Rag3dbDialect {
         } else {
             let defs: Vec<String> = props
                 .iter()
-                .map(|c| format!("{} {}", c.name, self.type_name(&c.col_type)))
+                .map(|c| format!("{} {}", self.quote(&c.name), self.type_name(&c.col_type)))
                 .collect();
             format!(", {}", defs.join(", "))
         };
-        format!("CREATE REL TABLE IF NOT EXISTS {name}(FROM {from_table} TO {to_table}{prop_str})")
+        format!(
+            "CREATE REL TABLE IF NOT EXISTS {}(FROM {} TO {}{prop_str})",
+            self.quote(name),
+            self.quote(from_table),
+            self.quote(to_table)
+        )
     }
 
     fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
@@ -1343,10 +1516,11 @@ impl SchemaDialect for Rag3dbDialect {
         // NULL n'y prend jamais le type de la colonne ; 3 octobre 2026). Les
         // morceaux d'une première indexation en plein texte omettent leur
         // colonne de vecteurs : leur COPY retombait sur le MERGE ligne à ligne.
+        let (table, colonne) = (self.quote(table), self.quote(&col.name));
         if default_literal.eq_ignore_ascii_case("NULL") {
-            return format!("ALTER TABLE {table} ADD {} {typ}", col.name);
+            return format!("ALTER TABLE {table} ADD {colonne} {typ}");
         }
-        format!("ALTER TABLE {table} ADD {} {typ} DEFAULT {default_literal}", col.name)
+        format!("ALTER TABLE {table} ADD {colonne} {typ} DEFAULT {default_literal}")
     }
 
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String {
@@ -1389,22 +1563,26 @@ impl SchemaDialect for Rag3dbDialect {
         let set_clause: Vec<String> = columns
             .iter()
             .filter(|c| **c != "_uuid")
-            .map(|c| format!("n.{c} = item.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("n.{c} = item.{c}")
+            })
             .collect();
         let id_expr = self.node_id_expr("n");
+        let t = self.quote(table);
         format!(
             "{} SET {} RETURN {id_expr}, item._uuid",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MERGE"),
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "_uuid")], "MERGE"),
             set_clause.join(", ")
         )
     }
 
     fn batch_delete(&self, table: &str) -> String {
-        format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) DELETE n")
+        format!("UNWIND $uuids AS uuid MATCH (n:{} {{_uuid: uuid}}) DELETE n", self.quote(table))
     }
 
     fn batch_cascade_delete(&self, table: &str) -> String {
-        format!("UNWIND $uuids AS uuid MATCH (n:{table} {{_uuid: uuid}}) DETACH DELETE n")
+        format!("UNWIND $uuids AS uuid MATCH (n:{} {{_uuid: uuid}}) DETACH DELETE n", self.quote(table))
     }
 
     fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String {
@@ -1412,13 +1590,17 @@ impl SchemaDialect for Rag3dbDialect {
             String::new()
         } else {
             let assigns: Vec<String> = prop_columns.iter()
-                .map(|c| format!("r.{c} = item.{c}"))
+                .map(|c| {
+                    let c = self.quote(c);
+                    format!("r.{c} = item.{c}")
+                })
                 .collect();
             format!(" SET {}", assigns.join(", "))
         };
         format!(
-            "{} MERGE (a)-[r:{rel_table}]->(b){prop_set}",
-            unwind_par_cle("items", &[par_uuid("a", None, "from_uuid"), par_uuid("b", None, "to_uuid")], "MATCH")
+            "{} MERGE (a)-[r:{}]->(b){prop_set}",
+            unwind_par_cle("items", &[par_uuid("a", None, "from_uuid"), par_uuid("b", None, "to_uuid")], "MATCH"),
+            self.quote(rel_table)
         )
     }
 
@@ -1429,7 +1611,12 @@ impl SchemaDialect for Rag3dbDialect {
         // celui des `ALTER` successifs —, et deux colonnes texte s'échangent
         // sans erreur (3 octobre 2026, `e2e_copy_liens`). Les deux premières
         // colonnes du fichier restent les bouts.
-        let colonnes = if prop_columns.is_empty() { String::new() } else { format!(" ({})", prop_columns.join(", ")) };
+        let colonnes = if prop_columns.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", prop_columns.iter().map(|c| self.quote(c)).collect::<Vec<_>>().join(", "))
+        };
+        let rel_table = self.quote(rel_table);
         // **Les options de lecture du COPY des nœuds** : les cellules sont
         // écrites par le même `cellule_csv`. Sans elles, le renifleur du
         // moteur décidait seul des guillemets — `"other,type"` comptait pour
@@ -1460,14 +1647,15 @@ impl SchemaDialect for Rag3dbDialect {
         // la naissance d'un chunk) — la comparer à NULL la ferait réécrire.
         let path = crate::connection::cypher_path_literal(std::path::Path::new(path));
         Some(format!(
-            "COPY {table} ({}) FROM {path} (escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
-            columns.join(", "),
+            "COPY {} ({}) FROM {path} (escaped_newlines=true, auto_detect=false, null_strings=['{}'])",
+            self.quote(table),
+            columns.iter().map(|c| self.quote(c)).collect::<Vec<_>>().join(", "),
             csv_null()
         ))
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true }
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -1475,38 +1663,51 @@ impl SchemaDialect for Rag3dbDialect {
         let prop_set = if prop_columns.is_empty() {
             String::new()
         } else {
-            let assigns: Vec<String> = prop_columns.iter().map(|c| format!("r.{c} = item.{c}")).collect();
+            let assigns: Vec<String> = prop_columns
+                .iter()
+                .map(|c| {
+                    let c = self.quote(c);
+                    format!("r.{c} = item.{c}")
+                })
+                .collect();
             format!(" SET {}", assigns.join(", "))
         };
         // Mesuré le 6 septembre 2026 sur 225 000 arêtes : CREATE au lieu de
         // MERGE ne change rien (98 s dans les deux cas) — le coût n'est pas
         // la vérification d'existence, c'est l'insertion elle-même.
+        let (from, to) = (self.quote(from), self.quote(to));
         format!(
-            "{} MERGE (a)-[r:{rel_table}]->(b){prop_set}",
-            unwind_par_cle("items", &[par_uuid("a", Some(from), "from_uuid"), par_uuid("b", Some(to), "to_uuid")], "MATCH")
+            "{} MERGE (a)-[r:{}]->(b){prop_set}",
+            unwind_par_cle("items", &[par_uuid("a", Some(&from), "from_uuid"), par_uuid("b", Some(&to), "to_uuid")], "MATCH"),
+            self.quote(rel_table)
         )
     }
 
     fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String {
         let assigns: Vec<String> = field_columns.iter()
-            .map(|c| format!("n.{c} = item.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("n.{c} = item.{c}")
+            })
             .collect();
+        let t = self.quote(table);
         format!(
             "{} SET {}",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MATCH"),
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "_uuid")], "MATCH"),
             assigns.join(", ")
         )
     }
 
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
         let return_cols = fields.iter()
-            .map(|f| format!("n.{f}"))
+            .map(|f| format!("n.{}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (n:{table} {{_uuid: uuid}}) \
-             RETURN {return_cols}"
+             MATCH (n:{} {{_uuid: uuid}}) \
+             RETURN {return_cols}",
+            self.quote(table)
         )
     }
 
@@ -1517,16 +1718,22 @@ impl SchemaDialect for Rag3dbDialect {
         return_exprs: &[(&str, &str)],
     ) -> String {
         let assigns: Vec<String> = set_columns.iter()
-            .map(|c| format!("n.{c} = item.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("n.{c} = item.{c}")
+            })
             .collect();
+        // Les expressions rendues sont du texte de l'appelant (`item.uuid`,
+        // `OFFSET(id(n))`), pas des noms : elles passent telles quelles.
         let returns: Vec<String> = return_exprs.iter()
             .map(|(expr, alias)| {
                 if expr == alias { expr.to_string() } else { format!("{expr} AS {alias}") }
             })
             .collect();
+        let t = self.quote(table);
         format!(
             "{} SET {} RETURN {}",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "_uuid")], "MATCH"),
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "_uuid")], "MATCH"),
             assigns.join(", "),
             returns.join(", "),
         )
@@ -1539,24 +1746,29 @@ impl SchemaDialect for Rag3dbDialect {
     ) -> String {
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (c:{table} {{{match_field}: uuid}}) \
-             DETACH DELETE c RETURN uuid, count(c) AS cnt"
+             MATCH (c:{} {{{}: uuid}}) \
+             DETACH DELETE c RETURN uuid, count(c) AS cnt",
+            self.quote(table),
+            self.quote(match_field)
         )
     }
 
     fn batch_delete_by_field(&self, table: &str, field: &str) -> String {
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (n:{table} {{{field}: uuid}}) \
-             DETACH DELETE n"
+             MATCH (n:{} {{{}: uuid}}) \
+             DETACH DELETE n",
+            self.quote(table),
+            self.quote(field)
         )
     }
 
     fn batch_delete_relation(&self, rel_table: &str) -> String {
         format!(
-            "{} {} MATCH (a)-[r:{rel_table}]->(b {{_uuid: __cle_1}}) DELETE r",
+            "{} {} MATCH (a)-[r:{}]->(b {{_uuid: __cle_1}}) DELETE r",
             unwind_par_cle("items", &[par_uuid("a", None, "from")], "MATCH"),
-            cle_de_ligne(&["a"], "to", "__cle_1")
+            cle_de_ligne(&["a"], "to", "__cle_1"),
+            self.quote(rel_table)
         )
     }
 
@@ -1568,12 +1780,13 @@ impl SchemaDialect for Rag3dbDialect {
         return_fields: &[&str],
     ) -> String {
         let returns = return_fields.iter()
-            .map(|f| format!("n.{f}"))
+            .map(|f| format!("n.{}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
+        let (t, prop, champ) = (self.quote(table), self.quote(table_match_col), self.quote(match_field));
         format!(
             "{} RETURN {returns}",
-            unwind_par_cle("items", &[ParCle { var: "n", label: Some(table), prop: table_match_col, champ: match_field }], "MATCH")
+            unwind_par_cle("items", &[ParCle { var: "n", label: Some(&t), prop: &prop, champ: &champ }], "MATCH")
         )
     }
 
@@ -1585,18 +1798,23 @@ impl SchemaDialect for Rag3dbDialect {
         parent_table: &str,
         return_fields: &[&str],
     ) -> String {
-        let returns = return_fields.iter().map(|f| format!("n.{f}")).collect::<Vec<_>>().join(", ");
+        let returns = return_fields.iter().map(|f| format!("n.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
+        let (t, champ) = (self.quote(chunk_table), self.quote(match_field));
         format!(
-            "{} OPTIONAL MATCH (n)-[:{rel_table}]->(__parent:{parent_table}) RETURN {returns}, __parent._uuid",
-            unwind_par_cle("items", &[ParCle { var: "n", label: Some(chunk_table), prop: "_parent_uuid", champ: match_field }], "MATCH")
+            "{} OPTIONAL MATCH (n)-[:{}]->(__parent:{}) RETURN {returns}, __parent._uuid",
+            unwind_par_cle("items", &[ParCle { var: "n", label: Some(&t), prop: "_parent_uuid", champ: &champ }], "MATCH"),
+            self.quote(rel_table),
+            self.quote(parent_table)
         )
     }
 
     fn batch_set_null(&self, table: &str, field: &str) -> String {
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (n:{table} {{_uuid: uuid}}) \
-             SET n.{field} = NULL"
+             MATCH (n:{} {{_uuid: uuid}}) \
+             SET n.{} = NULL",
+            self.quote(table),
+            self.quote(field)
         )
     }
 
@@ -1611,10 +1829,13 @@ impl SchemaDialect for Rag3dbDialect {
     ) -> String {
         let returns = return_fields.iter()
             .map(|f| {
-                if f.contains('.') { f.to_string() } else { format!("n.{f}") }
+                // Une expression déjà qualifiée (`m._title`) est du texte de
+                // l'appelant ; un nom nu est un champ de `n`, cité.
+                if f.contains('.') { f.to_string() } else { format!("n.{}", self.quote(f)) }
             })
             .collect::<Vec<_>>()
             .join(", ");
+        let (from_table, rel_table, to_table) = (self.quote(from_table), self.quote(rel_table), self.quote(to_table));
         if direction_forward {
             format!(
                 "UNWIND $uuids AS uuid \
@@ -1633,8 +1854,9 @@ impl SchemaDialect for Rag3dbDialect {
     fn select_entity_all_by_uuids(&self, table: &str) -> String {
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (n:{table} {{_uuid: uuid}}) \
-             RETURN n"
+             MATCH (n:{} {{_uuid: uuid}}) \
+             RETURN n",
+            self.quote(table)
         )
     }
 
@@ -1646,39 +1868,44 @@ impl SchemaDialect for Rag3dbDialect {
     ) -> String {
         format!(
             "UNWIND $uuids AS uuid \
-             MATCH (e:{source_table} {{_uuid: uuid}})-[:{rel_table}]->(c:{target_table}) \
-             DETACH DELETE c RETURN uuid, count(c) AS cnt"
+             MATCH (e:{} {{_uuid: uuid}})-[:{}]->(c:{}) \
+             DETACH DELETE c RETURN uuid, count(c) AS cnt",
+            self.quote(source_table),
+            self.quote(rel_table),
+            self.quote(target_table)
         )
     }
 
     fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String {
         let returns = fields.iter()
-            .map(|f| format!("n.{f}"))
+            .map(|f| format!("n.{}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
+        let table = self.quote(table);
         match order_by {
-            Some(col) => format!("MATCH (n:{table}) RETURN {returns} ORDER BY n.{col}"),
+            Some(col) => format!("MATCH (n:{table}) RETURN {returns} ORDER BY n.{}", self.quote(col)),
             None => format!("MATCH (n:{table}) RETURN {returns}"),
         }
     }
 
     fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String {
         let returns = fields.iter()
-            .map(|f| format!("n.{f}"))
+            .map(|f| format!("n.{}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("MATCH (n:{table}) WHERE n.{field} = $value RETURN {returns}")
+        format!("MATCH (n:{}) WHERE n.{} = $value RETURN {returns}", self.quote(table), self.quote(field))
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {
-        format!("MATCH (n:{table} {{_uuid: $uuid}}) RETURN count(n) AS cnt")
+        format!("MATCH (n:{} {{_uuid: $uuid}}) RETURN count(n) AS cnt", self.quote(table))
     }
 
     fn count_rows(&self, table: &str) -> String {
-        format!("MATCH (n:{table}) RETURN count(n) AS cnt")
+        format!("MATCH (n:{}) RETURN count(n) AS cnt", self.quote(table))
     }
 
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash \
              RETURN count(n) AS cnt"
@@ -1686,6 +1913,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash \
              RETURN n._uuid, n._text, n._text_hash LIMIT {limite}"
@@ -1693,10 +1921,11 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn copier_colonne(&self, table: &str, de: &str, vers: &str) -> String {
-        format!("MATCH (n:{table}) SET n.{vers} = n.{de}")
+        format!("MATCH (n:{}) SET n.{} = n.{}", self.quote(table), self.quote(vers), self.quote(de))
     }
 
     fn select_entites_a_redecouper(&self, table: &str, limite: usize) -> String {
+        let table = self.quote(table);
         format!(
             "MATCH (n:{table}) \
              WHERE n._chunked_hash IS NULL OR n._chunked_hash = '' \
@@ -1706,6 +1935,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "MATCH (n:{table}) \
              WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash) \
@@ -1744,9 +1974,11 @@ impl SchemaDialect for Rag3dbDialect {
             return_cols.push("c._parent_field AS c_source_field".to_string());
         }
         for f in parent_fields {
+            let f = self.quote(f);
             return_cols.push(format!("p.{f} AS {f}"));
         }
 
+        let (parent_table, rel_table, chunk_table) = (self.quote(parent_table), self.quote(rel_table), self.quote(chunk_table));
         let rel_match = if rel_forward {
             // rel_forward = true means parent→chunk (e.g. HAS_CHUNK)
             format!("MATCH (p:{parent_table})-[:{rel_table}]->(c)")
@@ -1764,60 +1996,77 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
+        let t = self.quote(table);
         format!(
-            "{} RETURN n._uuid, n.{marker}, n._sparse_hash",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} RETURN n._uuid, n.{}, n._sparse_hash",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(marker)
         )
     }
 
     fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
+        let t = self.quote(table);
         format!(
-            "{} SET n.{embedding_col} = item.emb, n.{marker} = item.hash",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} SET n.{} = item.emb, n.{} = item.hash",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(embedding_col),
+            self.quote(marker)
         )
     }
 
     fn embed_carrying_vector(&self, table: &str, embedding_col: &str) -> Option<String> {
+        let t = self.quote(table);
         Some(format!(
-            "{} WHERE n.{embedding_col} IS NOT NULL RETURN n._uuid",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} WHERE n.{} IS NOT NULL RETURN n._uuid",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(embedding_col)
         ))
     }
 
     fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String {
+        let t = self.quote(table);
         format!(
-            "{} SET n.{embedding_col} = NULL, n.{marker} = ''",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} SET n.{} = NULL, n.{} = ''",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(embedding_col),
+            self.quote(marker)
         )
     }
 
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr("n");
+        let t = self.quote(table);
         format!(
-            "{} SET n.{marker} = item.hash RETURN item.uuid, {offset} AS offset",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            "{} SET n.{} = item.hash RETURN item.uuid, {offset} AS offset",
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
+            self.quote(marker)
         )
     }
 
     fn embed_get_offset(&self, table: &str) -> String {
         let offset = self.node_offset_expr("n");
+        let t = self.quote(table);
         format!(
             "{} RETURN item.uuid, {offset} AS offset",
-            unwind_par_cle("items", &[par_uuid("n", Some(table), "uuid")], "MATCH")
+            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH")
         )
     }
 
     fn select_chunk_offsets(&self, chunk_table: &str) -> String {
         let offset = self.node_offset_expr("c");
-        format!("MATCH (c:{chunk_table}) WHERE c._parent_uuid IN $uuids RETURN {offset}")
+        format!("MATCH (c:{}) WHERE c._parent_uuid IN $uuids RETURN {offset}", self.quote(chunk_table))
     }
 
     fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String {
         let returns = std::iter::once("item.uuid AS _source_uuid".to_string())
-            .chain(return_entity_fields.iter().map(|f| format!("e.{f} AS {f}")))
+            .chain(return_entity_fields.iter().map(|f| {
+                let f = self.quote(f);
+                format!("e.{f} AS {f}")
+            }))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("{} RETURN {returns}", unwind_par_cle("items", &[par_uuid("e", Some(table), "uuid")], "MATCH"))
+        let t = self.quote(table);
+        format!("{} RETURN {returns}", unwind_par_cle("items", &[par_uuid("e", Some(&t), "uuid")], "MATCH"))
     }
 
     fn kb_gather_content(
@@ -1829,11 +2078,16 @@ impl SchemaDialect for Rag3dbDialect {
         return_fields: &[&str],
     ) -> String {
         let returns = std::iter::once("item.uuid AS _source_uuid".to_string())
-            .chain(return_fields.iter().map(|f| format!("c.{f} AS {f}")))
+            .chain(return_fields.iter().map(|f| {
+                let f = self.quote(f);
+                format!("c.{f} AS {f}")
+            }))
             .collect::<Vec<_>>()
             .join(", ");
         // Le titre par sa clé, puis le contenu par l'arête depuis le titre lié.
-        let titre = unwind_par_cle("items", &[par_uuid("t", Some(title_entity), "uuid")], "MATCH");
+        let title_entity = self.quote(title_entity);
+        let (rel, content_entity) = (self.quote(rel), self.quote(content_entity));
+        let titre = unwind_par_cle("items", &[par_uuid("t", Some(&title_entity), "uuid")], "MATCH");
         if direction_forward {
             format!("{titre} WITH t, item MATCH (t)-[:{rel}]->(c:{content_entity}) RETURN {returns}")
         } else {
@@ -1847,17 +2101,16 @@ impl SchemaDialect for Rag3dbDialect {
         all_fields: &[&str],
         update_fields: &[&str],
     ) -> String {
-        let create_set = all_fields.iter()
-            .map(|f| format!("idx.{f} = item.{f}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let match_set = update_fields.iter()
-            .map(|f| format!("idx.{f} = item.{f}"))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let assign = |f: &&str| {
+            let f = self.quote(f);
+            format!("idx.{f} = item.{f}")
+        };
+        let create_set = all_fields.iter().map(assign).collect::<Vec<_>>().join(", ");
+        let match_set = update_fields.iter().map(assign).collect::<Vec<_>>().join(", ");
+        let t = self.quote(index_table);
         format!(
             "{} ON CREATE SET {create_set} ON MATCH SET {match_set}",
-            unwind_par_cle("items", &[par_uuid("idx", Some(index_table), "uuid")], "MERGE")
+            unwind_par_cle("items", &[par_uuid("idx", Some(&t), "uuid")], "MERGE")
         )
     }
 
@@ -1869,6 +2122,7 @@ impl SchemaDialect for Rag3dbDialect {
         target_entity: &str,
         forward: bool,
     ) -> String {
+        let (rel_name, target_entity) = (self.quote(rel_name), self.quote(target_entity));
         if forward {
             format!("MATCH ({result_alias})-[:{rel_name}]->({target_alias}:{target_entity})")
         } else {
@@ -1913,8 +2167,10 @@ impl SchemaDialect for Rag3dbDialect {
         join_from: Option<(&str, &str, &str)>,
     ) -> String {
         let offset_expr = self.node_offset_expr(alias);
+        let table = self.quote(table);
         match join_from {
             Some((from_alias, from_table, rel)) => {
+                let (from_table, rel) = (self.quote(from_table), self.quote(rel));
                 let joins = if join_clauses.is_empty() {
                     String::new()
                 } else {
@@ -1948,6 +2204,194 @@ pub struct PostgresDialect;
 impl SchemaDialect for PostgresDialect {
     fn name(&self) -> &'static str {
         "postgresql"
+    }
+
+    /// **Le guillemet double, sur le nom replié en minuscules.** Replié exprès :
+    /// un nom non cité est replié par PostgreSQL, donc une table créée hier
+    /// sous `Document` s'appelle physiquement `document`. Citer le nom tel
+    /// quel (`"Document"`) désignerait une autre table ; citer le nom replié
+    /// garde le nom physique d'avant, et aucune base n'est migrée.
+    ///
+    /// Un nom qualifié par un schéma (`rag3weaver.x`, ce que rend
+    /// [`SchemaDialect::internal_table`]) se cite partie par partie : un
+    /// identifiant validé ne porte jamais de point.
+    fn quote(&self, name: &str) -> String {
+        name.split('.').map(|partie| format!("\"{}\"", partie.to_lowercase())).collect::<Vec<_>>().join(".")
+    }
+
+    /// Par uuids : `SELECT v.u, … FROM unnest($uuids::text[]) AS v(u) JOIN "t"
+    /// AS m ON m."_uuid" = v.u`, l'uuid donné en première colonne comme sur
+    /// rag3db ; sinon `SELECT … FROM "t" AS m WHERE …`. La ligne entière
+    /// (`Column::Whole`) ne se relit pas en colonnes ici : refusée en la
+    /// nommant.
+    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::Column;
+        select.validate()?;
+        let mut colonnes: Vec<String> = Vec::new();
+        for c in &select.returns {
+            colonnes.push(match c {
+                Column::Node(f) => format!("m.{}", self.quote(f)),
+                Column::Null => "NULL".to_string(),
+                _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select (ligne entière)" }),
+            });
+        }
+        let table = self.quote(&select.table);
+        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", postgres_condition(self, p))).unwrap_or_default();
+        let ordre = if select.order_by.is_empty() {
+            String::new()
+        } else {
+            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
+        };
+        let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        Ok(if select.by_uuids {
+            let mut toutes = vec!["v.u".to_string()];
+            toutes.extend(colonnes);
+            format!(
+                "SELECT {} FROM unnest($uuids::text[]) AS v(u) JOIN {table} AS m ON m.\"_uuid\" = v.u{filtre}{ordre}{borne}",
+                toutes.join(", ")
+            )
+        } else {
+            format!("SELECT {} FROM {table} AS m{filtre}{ordre}{borne}", colonnes.join(", "))
+        })
+    }
+
+    /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et
+    /// chaque `$uuids` de l'aval devient
+    /// `ARRAY(SELECT DISTINCT cK FROM __chain WHERE cK IS NOT NULL)` — la règle
+    /// du repli (valeurs distinctes, non nulles). Une chaîne déjà fondue
+    /// devient le corps de la CTE suivante : la `__chain` intérieure ne se voit
+    /// que dans ce corps. Une sélection, un saut ou un compte se fondent en
+    /// amont, même ordonnés ou bornés (la CTE garde ses lignes) ; **jamais une
+    /// écriture** : toutes les parties d'une instruction voient le même
+    /// instantané, et une lecture placée après ne verrait pas ce que
+    /// l'écriture vient de poser.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        if upstream.is_write() || downstream_text.starts_with("WITH") || !downstream_text.contains("$uuids") {
+            return None;
+        }
+        let n = upstream.output().len();
+        if column >= n {
+            return None;
+        }
+        let colonnes = (0..n).map(|i| format!("c{i}")).collect::<Vec<_>>().join(", ");
+        let source = format!("ARRAY(SELECT DISTINCT c{column} FROM __chain WHERE c{column} IS NOT NULL)");
+        Some(format!("WITH __chain({colonnes}) AS ({upstream_text}) {}", downstream_text.replace("$uuids", &source)))
+    }
+
+    /// `UNION ALL` de sous-requêtes, chacune préfixée de son rang
+    /// (`SELECT <rang> AS __branch, bN.* FROM (…) AS bN`) ; l'amont, s'il y en
+    /// a un, est une seule CTE partagée par toutes les branches. Jamais une
+    /// écriture, ni en amont ni en branche.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let mut parties = Vec::with_capacity(branches.len());
+        let n = match upstream {
+            Some((_, forme)) if forme.is_write() => return None,
+            Some((_, forme)) => forme.output().len(),
+            None => 0,
+        };
+        for (rang, (colonne, texte, forme)) in branches.iter().enumerate() {
+            if forme.is_write() || texte.starts_with("WITH") || !texte.contains("$uuids") {
+                return None;
+            }
+            let texte = if upstream.is_some() {
+                if *colonne >= n {
+                    return None;
+                }
+                texte.replace("$uuids", &format!("ARRAY(SELECT DISTINCT c{colonne} FROM __chain WHERE c{colonne} IS NOT NULL)"))
+            } else {
+                texte.to_string()
+            };
+            parties.push(format!("SELECT {rang} AS __branch, b{rang}.* FROM ({texte}) AS b{rang}"));
+        }
+        let union = parties.join(" UNION ALL ");
+        Some(match upstream {
+            Some((amont, _)) => {
+                let colonnes = (0..n).map(|i| format!("c{i}")).collect::<Vec<_>>().join(", ");
+                format!("WITH __chain({colonnes}) AS ({amont}) {union}")
+            }
+            None => union,
+        })
+    }
+
+    /// **Un saut** par la table de relation : `unnest($uuids)` joint aux
+    /// arêtes par le bout de départ (`from_uuid` en sortant, `to_uuid` en
+    /// entrant), puis à la table d'arrivée par l'autre bout. La table de
+    /// départ, quand elle est connue, est jointe aussi : un uuid qui n'y est
+    /// pas ne part pas, comme `(d:Départ {_uuid: u})` en Cypher. Sans table
+    /// d'arrivée, seul l'uuid atteint se lit (l'autre bout de l'arête) ; un
+    /// champ, la ligne entière, un filtre ou un ordre sur le nœud atteint s'y
+    /// refusent en le nommant.
+    fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::{Column, Direction};
+        hop.validate()?;
+        let refus = |form: &'static str| Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form });
+        let (depart, arrivee) = match hop.direction {
+            Direction::Outgoing => ("from_uuid", "to_uuid"),
+            Direction::Incoming => ("to_uuid", "from_uuid"),
+        };
+        let mut colonnes = vec!["v.u".to_string()];
+        for c in &hop.returns {
+            colonnes.push(match (c, &hop.end) {
+                (Column::Node(f), _) if f == "_uuid" => format!("r.\"{arrivee}\""),
+                (Column::Node(f), Some(_)) => format!("m.{}", self.quote(f)),
+                (Column::Edge(f), _) => format!("r.{}", self.quote(f)),
+                (Column::Null, _) => "NULL".to_string(),
+                (Column::Label, Some(t)) => format!("'{t}'"),
+                (Column::Whole, _) => return refus("Hop (ligne entière)"),
+                (Column::Node(_) | Column::Label, None) => return refus("Hop (champ sans table d'arrivée)"),
+            });
+        }
+        if hop.end.is_none() && (hop.filter.is_some() || !hop.order_by.is_empty()) {
+            return refus("Hop (condition sans table d'arrivée)");
+        }
+        let mut sql = format!("SELECT {} FROM unnest($uuids::text[]) AS v(u)", colonnes.join(", "));
+        if let Some(t) = &hop.start {
+            sql.push_str(&format!(" JOIN {} AS d ON d.\"_uuid\" = v.u", self.quote(t)));
+        }
+        sql.push_str(&format!(" JOIN {} AS r ON r.\"{depart}\" = v.u", self.quote(&hop.relation)));
+        if let Some(t) = &hop.end {
+            sql.push_str(&format!(" JOIN {} AS m ON m.\"_uuid\" = r.\"{arrivee}\"", self.quote(t)));
+        }
+        let mut conditions: Vec<String> = Vec::new();
+        if let Some(x) = &hop.exclude {
+            let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
+            conditions.push(format!("r.{f} IS NULL OR r.{f} <> ALL (ARRAY[{valeurs}])", f = self.quote(&x.field)));
+        }
+        if let Some(p) = &hop.filter {
+            conditions.push(postgres_condition(self, p));
+        }
+        if !conditions.is_empty() {
+            sql.push_str(&format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")));
+        }
+        if !hop.order_by.is_empty() {
+            sql.push_str(&format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", ")));
+        }
+        if let Some(n) = hop.limit {
+            sql.push_str(&format!(" LIMIT {n}"));
+        }
+        Ok(sql)
+    }
+
+    /// Les lignes, les lignes retenues, et le degré par départ
+    /// (`from_uuid`/`to_uuid` de la table de relation).
+    fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
+        count.validate()?;
+        Ok(match count {
+            rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
+            rag3weaver_ir::Count::Matching { table, filter } => {
+                format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(table), postgres_condition(self, filter))
+            }
+            rag3weaver_ir::Count::Edges { relation, direction, .. } => {
+                let bout = match direction {
+                    rag3weaver_ir::Direction::Outgoing => "from_uuid",
+                    rag3weaver_ir::Direction::Incoming => "to_uuid",
+                };
+                format!(
+                    "SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) JOIN {} AS r ON r.\"{bout}\" = v.u GROUP BY v.u",
+                    self.quote(relation)
+                )
+            }
+        })
     }
 
     fn node_offset_expr(&self, alias: &str) -> String {
@@ -1994,32 +2438,19 @@ impl SchemaDialect for PostgresDialect {
         ]
     }
 
-    /// Les mots réservés de PostgreSQL : catégories « reserved » et « reserved
-    /// (can be function or type) » de `src/include/parser/kwlist.h`
-    /// (PostgreSQL 17), écrits ici faute de grammaire à lire sur les postes.
-    /// À revoir contre le `kwlist.h` de la version servie.
-    fn reserved_words(&self) -> &'static [&'static str] {
-        &[
-            "ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "AUTHORIZATION", "BINARY", "BOTH",
-            "CASE", "CAST", "CHECK", "COLLATE", "COLLATION", "COLUMN", "CONCURRENTLY", "CONSTRAINT", "CREATE", "CROSS",
-            "CURRENT_CATALOG", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_SCHEMA", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-            "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DESC", "DISTINCT", "DO", "ELSE", "END", "EXCEPT", "FALSE", "FETCH",
-            "FOR", "FOREIGN", "FREEZE", "FROM", "FULL", "GRANT", "GROUP", "HAVING", "ILIKE", "IN", "INITIALLY", "INNER",
-            "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "LATERAL", "LEADING", "LEFT", "LIKE", "LIMIT", "LOCALTIME",
-            "LOCALTIMESTAMP", "NATURAL", "NOT", "NOTNULL", "NULL", "OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER",
-            "OVERLAPS", "PLACING", "PRIMARY", "REFERENCES", "RETURNING", "RIGHT", "SELECT", "SESSION_USER", "SIMILAR",
-            "SOME", "SYMMETRIC", "SYSTEM_USER", "TABLE", "TABLESAMPLE", "THEN", "TO", "TRAILING", "TRUE", "UNION",
-            "UNIQUE", "USER", "USING", "VARIADIC", "VERBOSE", "WHEN", "WHERE", "WINDOW", "WITH",
-        ]
-    }
-
     /// Des transactions : `PostgresConnection::begin` tient une session du pool
     /// jusqu'au `commit`/`rollback` (bb7dddde5), et la synchronisation les
     /// ouvre par la connexion (1d1e1d7de). Prouvé dans le texte ; le témoin
     /// vivant (`tests/e2e_contrat_transactions.rs`) attend une base
     /// PostgreSQL sur les postes.
+    /// `READ COMMITTED`, le niveau par défaut, prend un instantané par
+    /// instruction.
+    fn snapshot_read(&self) -> Option<&'static str> {
+        Some("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    }
+
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false, fanout: false }
     }
 
     // ── Les lots passent par JSON ────────────────────────────────────────
@@ -2046,8 +2477,9 @@ impl SchemaDialect for PostgresDialect {
 
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
         format!(
-            "INSERT INTO {table} (_uuid, name) VALUES (${id_param}, ${id_param}) \
-             ON CONFLICT (_uuid) DO NOTHING"
+            "INSERT INTO {} (_uuid, name) VALUES (${id_param}, ${id_param}) \
+             ON CONFLICT (_uuid) DO NOTHING",
+            self.quote(table)
         )
     }
 
@@ -2081,9 +2513,10 @@ impl SchemaDialect for PostgresDialect {
         // _row_id BIGSERIAL first — stable row offset for sparse index + NodeIdCache
         let mut col_defs = vec!["_row_id BIGSERIAL".to_string()];
         col_defs.extend(columns.iter()
-            .map(|c| format!("{} {}", c.name, self.type_name(&c.col_type))));
+            .map(|c| format!("{} {}", self.quote(&c.name), self.type_name(&c.col_type))));
         format!(
-            "CREATE TABLE IF NOT EXISTS {name} (\n    {},\n    PRIMARY KEY (_uuid)\n)",
+            "CREATE TABLE IF NOT EXISTS {} (\n    {},\n    PRIMARY KEY (_uuid)\n)",
+            self.quote(name),
             col_defs.join(",\n    ")
         )
     }
@@ -2100,44 +2533,56 @@ impl SchemaDialect for PostgresDialect {
             "to_uuid TEXT NOT NULL".to_string(),
         ];
         for c in props {
-            col_defs.push(format!("{} {}", c.name, self.type_name(&c.col_type)));
+            col_defs.push(format!("{} {}", self.quote(&c.name), self.type_name(&c.col_type)));
         }
         format!(
-            "CREATE TABLE IF NOT EXISTS {name} (\n    {},\n    PRIMARY KEY (from_uuid, to_uuid)\n)",
+            "CREATE TABLE IF NOT EXISTS {} (\n    {},\n    PRIMARY KEY (from_uuid, to_uuid)\n)",
+            self.quote(name),
             col_defs.join(",\n    ")
         )
     }
 
     fn alter_add_column_default(&self, table: &str, col: &ColumnDef, default_literal: &str) -> String {
         let typ = self.type_name(&col.col_type);
-        format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {} {typ} DEFAULT {default_literal}", col.name)
+        format!(
+            "ALTER TABLE {} ADD COLUMN IF NOT EXISTS {} {typ} DEFAULT {default_literal}",
+            self.quote(table),
+            self.quote(&col.name)
+        )
     }
 
     fn secondary_indexes(&self, table: &str) -> Vec<String> {
+        // Le nom d'index dérivé se cite entier, une fois composé : replié en
+        // minuscules, c'est le nom physique qu'il avait sans citation.
         let court = table.replace('.', "_");
+        let index = |suffixe: &str| self.quote(&format!("{court}_{suffixe}"));
+        let table = self.quote(table);
         vec![
             // Le chemin chaud : `resolve_offsets` fait
             // `WHERE _row_id = ANY(...)` à chaque résolution de recherche.
-            format!("CREATE INDEX IF NOT EXISTS {court}_row_id_idx ON {table} (_row_id)"),
+            format!("CREATE INDEX IF NOT EXISTS {} ON {table} (_row_id)", index("row_id_idx")),
             // Chunk → parent, et tout `batch_delete_by_field` sur ce champ.
             // `IF NOT EXISTS` ne suffit pas ici : la colonne n'existe que sur
             // les tables de chunks, donc l'échec est attendu et absorbé par
             // l'appelant.
-            format!("CREATE INDEX IF NOT EXISTS {court}_parent_idx ON {table} (_parent_uuid)"),
+            format!("CREATE INDEX IF NOT EXISTS {} ON {table} (_parent_uuid)", index("parent_idx")),
             // La cellule : présente sur toute table de données, filtrée dès
             // qu'un scope est posé.
-            format!("CREATE INDEX IF NOT EXISTS {court}_cellule_idx ON {table} (_org, _project)"),
+            format!("CREATE INDEX IF NOT EXISTS {} ON {table} (_org, _project)", index("cellule_idx")),
         ]
     }
 
     fn text_search_indexes(&self, table: &str, fields: &[String]) -> Vec<String> {
         let court = table.replace('.', "_");
+        let table = self.quote(table);
         fields
             .iter()
             .map(|f| {
                 format!(
-                    "CREATE INDEX IF NOT EXISTS {court}_{f}_trgm_idx \
-                     ON {table} USING gin (rag3weaver.sans_accents({f}) gin_trgm_ops)"
+                    "CREATE INDEX IF NOT EXISTS {} \
+                     ON {table} USING gin (rag3weaver.sans_accents({}) gin_trgm_ops)",
+                    self.quote(&format!("{court}_{f}_trgm_idx")),
+                    self.quote(f)
                 )
             })
             .collect()
@@ -2146,7 +2591,9 @@ impl SchemaDialect for PostgresDialect {
     fn blob_store_indexes(&self, table: &str) -> Vec<String> {
         let court = table.replace('.', "_");
         vec![format!(
-            "CREATE INDEX IF NOT EXISTS {court}_prefixe_idx ON {table} (_key text_pattern_ops)"
+            "CREATE INDEX IF NOT EXISTS {} ON {} (_key text_pattern_ops)",
+            self.quote(&format!("{court}_prefixe_idx")),
+            self.quote(table)
         )]
     }
 
@@ -2155,18 +2602,23 @@ impl SchemaDialect for PostgresDialect {
         // `from_uuid` est déjà servi par le préfixe de la clé primaire ;
         // `to_uuid` seul ne l'est pas.
         vec![format!(
-            "CREATE INDEX IF NOT EXISTS {court}_to_idx ON {rel_table} (to_uuid)"
+            "CREATE INDEX IF NOT EXISTS {} ON {} (to_uuid)",
+            self.quote(&format!("{court}_to_idx")),
+            self.quote(rel_table)
         )]
     }
 
     fn create_vector_index(&self, table: &str, column: &str, index_name: &str) -> String {
         format!(
-            "CREATE INDEX IF NOT EXISTS {index_name} ON {table} USING hnsw ({column} vector_cosine_ops)"
+            "CREATE INDEX IF NOT EXISTS {} ON {} USING hnsw ({} vector_cosine_ops)",
+            self.quote(index_name),
+            self.quote(table),
+            self.quote(column)
         )
     }
 
     fn drop_vector_index(&self, _table: &str, index_name: &str) -> String {
-        format!("DROP INDEX IF EXISTS {index_name}")
+        format!("DROP INDEX IF EXISTS {}", self.quote(index_name))
     }
 
     fn create_meta_table(&self) -> String {
@@ -2201,14 +2653,18 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn batch_upsert(&self, table: &str, columns: &[&str]) -> String {
-        let col_list = columns.join(", ");
-        let val_refs = columns.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        let col_list = columns.iter().map(|c| self.quote(c)).collect::<Vec<_>>().join(", ");
+        let val_refs = columns.iter().map(|c| format!("v.{}", self.quote(c))).collect::<Vec<_>>().join(", ");
         let update_set: Vec<String> = columns
             .iter()
             .filter(|c| **c != "_uuid")
-            .map(|c| format!("{c} = EXCLUDED.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("{c} = EXCLUDED.{c}")
+            })
             .collect();
-        let id_expr = self.node_id_expr(table);
+        let table = self.quote(table);
+        let id_expr = self.node_id_expr(&table);
         format!(
             "INSERT INTO {table} ({col_list}) \
              SELECT {val_refs} FROM jsonb_populate_recordset(NULL::{table}, $items::text::jsonb) AS v \
@@ -2219,29 +2675,33 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn batch_delete(&self, table: &str) -> String {
-        format!("DELETE FROM {table} WHERE _uuid = ANY($uuids)")
+        format!("DELETE FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn batch_cascade_delete(&self, table: &str) -> String {
         // PostgreSQL: delete from all relation tables that reference this entity, then delete entity.
         // For simplicity, rely on ON DELETE CASCADE if FKs are set up.
         // Otherwise, the caller must delete relations first.
-        format!("DELETE FROM {table} WHERE _uuid = ANY($uuids)")
+        format!("DELETE FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String {
-        let mut cols = vec!["from_uuid", "to_uuid"];
-        cols.extend(prop_columns.iter().copied());
+        let mut cols = vec!["from_uuid".to_string(), "to_uuid".to_string()];
+        cols.extend(prop_columns.iter().map(|c| self.quote(c)));
         let col_list = cols.join(", ");
         let val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
         let conflict_update = if prop_columns.is_empty() {
             "DO NOTHING".to_string()
         } else {
             let assigns: Vec<String> = prop_columns.iter()
-                .map(|c| format!("{c} = EXCLUDED.{c}"))
+                .map(|c| {
+                    let c = self.quote(c);
+                    format!("{c} = EXCLUDED.{c}")
+                })
                 .collect();
             format!("DO UPDATE SET {}", assigns.join(", "))
         };
+        let rel_table = self.quote(rel_table);
         format!(
             "INSERT INTO {rel_table} ({col_list}) \
              SELECT {val_refs} FROM jsonb_populate_recordset(NULL::{rel_table}, $items::text::jsonb) AS v \
@@ -2251,8 +2711,12 @@ impl SchemaDialect for PostgresDialect {
 
     fn batch_update_fields(&self, table: &str, field_columns: &[&str]) -> String {
         let assigns: Vec<String> = field_columns.iter()
-            .map(|c| format!("{c} = v.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("{c} = v.{c}")
+            })
             .collect();
+        let table = self.quote(table);
         // Plus de liste de colonnes à construire : le type de la table les
         // fournit toutes, avec leurs types. Ce que le JSON ne porte pas devient
         // NULL, et on ne référence que ce qu'on assigne.
@@ -2265,54 +2729,58 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
-        let col_list = fields.join(", ");
-        format!("SELECT {col_list} FROM {table} WHERE _uuid = ANY($uuids)")
+        let col_list = fields.iter().map(|f| self.quote(f)).collect::<Vec<_>>().join(", ");
+        format!("SELECT {col_list} FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn select_node_ids(&self, table: &str) -> String {
-        format!("SELECT _uuid, _row_id FROM {table} WHERE _uuid = ANY($uuids)")
+        format!("SELECT _uuid, _row_id FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn select_all_uuids(&self, table: &str) -> String {
-        format!("SELECT _uuid FROM {table}")
+        format!("SELECT _uuid FROM {}", self.quote(table))
     }
 
     fn drop_table(&self, table: &str) -> String {
-        format!("DROP TABLE IF EXISTS {table} CASCADE")
+        format!("DROP TABLE IF EXISTS {} CASCADE", self.quote(table))
     }
 
     fn marquer_derivees_a_rendre(&self, derived_table: &str) -> String {
-        format!("UPDATE {derived_table} SET _render_hash = '' WHERE _source_uuid = ANY($uuids)")
+        format!("UPDATE {} SET _render_hash = '' WHERE _source_uuid = ANY($uuids)", self.quote(derived_table))
     }
 
     fn mark_snapshot_session(&self, table: &str) -> String {
-        format!("UPDATE {table} SET _snapshot = $session, _absent_since = NULL WHERE _uuid = ANY($uuids)")
+        format!("UPDATE {} SET _snapshot = $session, _absent_since = NULL WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn mark_absent_since(&self, table: &str) -> String {
-        format!("UPDATE {table} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND (_absent_since IS NULL OR _absent_since = 0)")
+        format!(
+            "UPDATE {} SET _absent_since = $since WHERE _uuid = ANY($uuids) AND (_absent_since IS NULL OR _absent_since = 0)",
+            self.quote(table)
+        )
     }
 
     fn mark_written_session(&self, table: &str) -> String {
         format!(
-            "UPDATE {table} SET _snapshot = $mark, _absent_since = NULL \
-             WHERE _uuid = ANY($uuids) AND (_snapshot IS NULL OR _snapshot <> $session)"
+            "UPDATE {} SET _snapshot = $mark, _absent_since = NULL \
+             WHERE _uuid = ANY($uuids) AND (_snapshot IS NULL OR _snapshot <> $session)",
+            self.quote(table)
         )
     }
 
     fn set_column_null(&self, table: &str, field: &str) -> String {
-        format!("UPDATE {table} SET {field} = NULL")
+        format!("UPDATE {} SET {} = NULL", self.quote(table), self.quote(field))
     }
 
     fn select_snapshot_scope(&self, table: &str, scope: &[&str], extra: &[&str]) -> String {
         let filtre = scope.iter().enumerate()
-            .map(|(i, f)| format!("{f} = $p{i}"))
+            .map(|(i, f)| format!("{} = $p{i}", self.quote(f)))
             .collect::<Vec<_>>()
             .join(" AND ");
         let ou = if filtre.is_empty() { String::new() } else { format!(" WHERE {filtre}") };
         let mut rend = vec!["_uuid".to_string(), "_snapshot".to_string()];
-        rend.extend(extra.iter().map(|f| f.to_string()));
-        format!("SELECT {} FROM {table}{ou}", rend.join(", "))
+        rend.extend(extra.iter().map(|f| self.quote(f)));
+        format!("SELECT {} FROM {}{ou}", rend.join(", "), self.quote(table))
     }
 
     fn count_relations_of(&self, _table: &str, _rel: &str) -> Option<String> {
@@ -2382,25 +2850,30 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn revert_lifecycle_state(&self, table: &str, field: &str) -> String {
+        let table = self.quote(table);
         format!(
-            "UPDATE {table} SET {field} = v.state, _absent_since = NULL \
+            "UPDATE {table} SET {} = v.state, _absent_since = NULL \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, state TEXT) \
-             WHERE {table}._uuid = v.uuid"
+             WHERE {table}._uuid = v.uuid",
+            self.quote(field)
         )
     }
 
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
         format!(
-            "SELECT _source_uuid FROM {derived_table} \
-             WHERE _render_hash IS NULL OR _render_hash = '' LIMIT {limite}"
+            "SELECT _source_uuid FROM {} \
+             WHERE _render_hash IS NULL OR _render_hash = '' LIMIT {limite}",
+            self.quote(derived_table)
         )
     }
 
     fn select_racines_sans_derivee(&self, root_table: &str, derived_table: &str, _rel_table: &str, limite: usize) -> String {
         format!(
-            "SELECT r._uuid FROM {root_table} r \
-             LEFT JOIN {derived_table} d ON d._source_uuid = r._uuid \
-             WHERE d._uuid IS NULL LIMIT {limite}"
+            "SELECT r._uuid FROM {} r \
+             LEFT JOIN {} d ON d._source_uuid = r._uuid \
+             WHERE d._uuid IS NULL LIMIT {limite}",
+            self.quote(root_table),
+            self.quote(derived_table)
         )
     }
 
@@ -2411,8 +2884,12 @@ impl SchemaDialect for PostgresDialect {
         return_exprs: &[(&str, &str)],
     ) -> String {
         let assigns: Vec<String> = set_columns.iter()
-            .map(|c| format!("{c} = v.{c}"))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("{c} = v.{c}")
+            })
             .collect();
+        let table = self.quote(table);
         // Map rag3db expressions to PostgreSQL equivalents
         let returns: Vec<String> = return_exprs.iter()
             .map(|(expr, alias)| {
@@ -2421,7 +2898,7 @@ impl SchemaDialect for PostgresDialect {
                 // `_row_id` ici, et le nom en dur désignait une colonne qui
                 // n'existe dans aucune table qu'on crée.
                 let pg_expr = expr
-                    .replace("OFFSET(id(n))", &self.node_offset_expr(table))
+                    .replace("OFFSET(id(n))", &self.node_offset_expr(&table))
                     .replace("item.", "v.");
                 if pg_expr == *alias { pg_expr } else { format!("{pg_expr} AS {alias}") }
             })
@@ -2441,6 +2918,7 @@ impl SchemaDialect for PostgresDialect {
         table: &str,
         match_field: &str,
     ) -> String {
+        let (table, match_field) = (self.quote(table), self.quote(match_field));
         format!(
             "WITH deleted AS (\
              DELETE FROM {table} WHERE {match_field} = ANY($uuids) RETURNING {match_field}\
@@ -2449,10 +2927,11 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn batch_delete_by_field(&self, table: &str, field: &str) -> String {
-        format!("DELETE FROM {table} WHERE {field} = ANY($uuids)")
+        format!("DELETE FROM {} WHERE {} = ANY($uuids)", self.quote(table), self.quote(field))
     }
 
     fn batch_delete_relation(&self, rel_table: &str) -> String {
+        let rel_table = self.quote(rel_table);
         format!(
             "DELETE FROM {rel_table} \
              USING jsonb_to_recordset($items::text::jsonb) AS v(\"from\" TEXT, \"to\" TEXT) \
@@ -2467,7 +2946,8 @@ impl SchemaDialect for PostgresDialect {
         table_match_col: &str,
         return_fields: &[&str],
     ) -> String {
-        let cols = return_fields.join(", ");
+        let cols = return_fields.iter().map(|f| self.quote(f)).collect::<Vec<_>>().join(", ");
+        let (table, match_field, table_match_col) = (self.quote(table), self.quote(match_field), self.quote(table_match_col));
         format!(
             "SELECT {cols} FROM {table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
@@ -2483,7 +2963,8 @@ impl SchemaDialect for PostgresDialect {
         _parent_table: &str,
         return_fields: &[&str],
     ) -> String {
-        let cols = return_fields.iter().map(|f| format!("{chunk_table}.{f}")).collect::<Vec<_>>().join(", ");
+        let (chunk_table, rel_table, match_field) = (self.quote(chunk_table), self.quote(rel_table), self.quote(match_field));
+        let cols = return_fields.iter().map(|f| format!("{chunk_table}.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
         format!(
             "SELECT {cols}, {rel_table}.to_uuid FROM {chunk_table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
@@ -2493,7 +2974,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn batch_set_null(&self, table: &str, field: &str) -> String {
-        format!("UPDATE {table} SET {field} = NULL WHERE _uuid = ANY($uuids)")
+        format!("UPDATE {} SET {} = NULL WHERE _uuid = ANY($uuids)", self.quote(table), self.quote(field))
     }
 
     fn join_select(
@@ -2505,7 +2986,14 @@ impl SchemaDialect for PostgresDialect {
         _match_col: &str,
         return_fields: &[&str],
     ) -> String {
-        let cols = return_fields.join(", ");
+        // Une expression déjà qualifiée (`kb_index._title`) est du texte de
+        // l'appelant ; un nom nu est une colonne, citée.
+        let cols = return_fields
+            .iter()
+            .map(|f| if f.contains('.') { f.to_string() } else { self.quote(f) })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (from_table, rel_table, to_table) = (self.quote(from_table), self.quote(rel_table), self.quote(to_table));
         format!(
             "SELECT {cols} FROM {from_table} \
              INNER JOIN {rel_table} ON {rel_table}.from_uuid = {from_table}._uuid \
@@ -2515,7 +3003,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn select_entity_all_by_uuids(&self, table: &str) -> String {
-        format!("SELECT * FROM {table} WHERE _uuid = ANY($uuids)")
+        format!("SELECT * FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
     }
 
     fn join_delete_returning_count(
@@ -2524,6 +3012,7 @@ impl SchemaDialect for PostgresDialect {
         rel_table: &str,
         target_table: &str,
     ) -> String {
+        let (rel_table, target_table) = (self.quote(rel_table), self.quote(target_table));
         format!(
             "WITH deleted AS (\
              DELETE FROM {target_table} \
@@ -2534,27 +3023,29 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn select_all(&self, table: &str, fields: &[&str], order_by: Option<&str>) -> String {
-        let cols = fields.join(", ");
+        let cols = fields.iter().map(|f| self.quote(f)).collect::<Vec<_>>().join(", ");
+        let table = self.quote(table);
         match order_by {
-            Some(col) => format!("SELECT {cols} FROM {table} ORDER BY {col}"),
+            Some(col) => format!("SELECT {cols} FROM {table} ORDER BY {}", self.quote(col)),
             None => format!("SELECT {cols} FROM {table}"),
         }
     }
 
     fn select_by_field(&self, table: &str, field: &str, fields: &[&str]) -> String {
-        let cols = fields.join(", ");
-        format!("SELECT {cols} FROM {table} WHERE {field} = $value")
+        let cols = fields.iter().map(|f| self.quote(f)).collect::<Vec<_>>().join(", ");
+        format!("SELECT {cols} FROM {} WHERE {} = $value", self.quote(table), self.quote(field))
     }
 
     fn exists_by_uuid(&self, table: &str) -> String {
-        format!("SELECT count(*) AS cnt FROM {table} WHERE _uuid = $uuid")
+        format!("SELECT count(*) AS cnt FROM {} WHERE _uuid = $uuid", self.quote(table))
     }
 
     fn count_rows(&self, table: &str) -> String {
-        format!("SELECT count(*) AS cnt FROM {table}")
+        format!("SELECT count(*) AS cnt FROM {}", self.quote(table))
     }
 
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "SELECT count(*) AS cnt FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash"
@@ -2562,6 +3053,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "SELECT _uuid, _text, _text_hash FROM {table} \
              WHERE {marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash LIMIT {limite}"
@@ -2569,10 +3061,11 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn copier_colonne(&self, table: &str, de: &str, vers: &str) -> String {
-        format!("UPDATE {table} SET {vers} = {de}")
+        format!("UPDATE {} SET {} = {}", self.quote(table), self.quote(vers), self.quote(de))
     }
 
     fn select_entites_a_redecouper(&self, table: &str, limite: usize) -> String {
+        let table = self.quote(table);
         format!(
             "SELECT _uuid FROM {table} \
              WHERE _chunked_hash IS NULL OR _chunked_hash = '' \
@@ -2582,6 +3075,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
+        let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "UPDATE {table} SET _embed_claim = $reclamation \
              WHERE _uuid IN (SELECT _uuid FROM {table} \
@@ -2602,6 +3096,7 @@ impl SchemaDialect for PostgresDialect {
         has_source_refs: bool,
         parent_fields: &[&str],
     ) -> String {
+        let (chunk_table, parent_table, rel_table) = (self.quote(chunk_table), self.quote(parent_table), self.quote(rel_table));
         let mut select_cols = vec![
             format!("{chunk_table}._uuid AS chunk_uuid"),
             format!("{parent_table}._uuid AS parent_uuid"),
@@ -2618,7 +3113,7 @@ impl SchemaDialect for PostgresDialect {
             select_cols.push(format!("{chunk_table}._parent_field AS c_source_field"));
         }
         for f in parent_fields {
-            select_cols.push(format!("{parent_table}.{f}"));
+            select_cols.push(format!("{parent_table}.{}", self.quote(f)));
         }
 
         format!(
@@ -2631,6 +3126,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
+        let (table, marker) = (self.quote(table), self.quote(marker));
         format!(
             "SELECT _uuid, {marker}, _sparse_hash FROM {table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
@@ -2638,6 +3134,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
+        let (table, embedding_col, marker) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
         format!(
             "UPDATE {table} SET {embedding_col} = v.emb, {marker} = v.hash \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, emb vector, hash TEXT) \
@@ -2646,6 +3143,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String {
+        let (table, embedding_col, marker) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
         format!(
             "UPDATE {table} SET {embedding_col} = NULL, {marker} = '' \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) \
@@ -2654,7 +3152,8 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
-        let offset = self.node_offset_expr(table);
+        let (table, marker) = (self.quote(table), self.quote(marker));
+        let offset = self.node_offset_expr(&table);
         format!(
             "UPDATE {table} SET {marker} = v.hash \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, hash TEXT) \
@@ -2664,12 +3163,14 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn select_chunk_offsets(&self, chunk_table: &str) -> String {
-        let offset = self.node_offset_expr(chunk_table);
+        let chunk_table = self.quote(chunk_table);
+        let offset = self.node_offset_expr(&chunk_table);
         format!("SELECT {offset} FROM {chunk_table} WHERE _parent_uuid = ANY($uuids)")
     }
 
     fn embed_get_offset(&self, table: &str) -> String {
-        let offset = self.node_offset_expr(table);
+        let table = self.quote(table);
+        let offset = self.node_offset_expr(&table);
         format!(
             "SELECT v.uuid, {offset} AS offset FROM {table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) ON {table}._uuid = v.uuid"
@@ -2677,8 +3178,9 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn kb_gather_fields(&self, table: &str, return_entity_fields: &[&str]) -> String {
+        let table = self.quote(table);
         let returns = std::iter::once("v.uuid AS _source_uuid".to_string())
-            .chain(return_entity_fields.iter().map(|f| format!("{table}.{f}")))
+            .chain(return_entity_fields.iter().map(|f| format!("{table}.{}", self.quote(f))))
             .collect::<Vec<_>>()
             .join(", ");
         format!(
@@ -2695,8 +3197,9 @@ impl SchemaDialect for PostgresDialect {
         _direction_forward: bool,
         return_fields: &[&str],
     ) -> String {
+        let (rel, content_entity) = (self.quote(rel), self.quote(content_entity));
         let returns = std::iter::once("v.uuid AS _source_uuid".to_string())
-            .chain(return_fields.iter().map(|f| format!("{content_entity}.{f}")))
+            .chain(return_fields.iter().map(|f| format!("{content_entity}.{}", self.quote(f))))
             .collect::<Vec<_>>()
             .join(", ");
         format!(
@@ -2712,8 +3215,8 @@ impl SchemaDialect for PostgresDialect {
         all_fields: &[&str],
         update_fields: &[&str],
     ) -> String {
-        let col_list = std::iter::once("_uuid")
-            .chain(all_fields.iter().copied())
+        let col_list = std::iter::once("_uuid".to_string())
+            .chain(all_fields.iter().map(|f| self.quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
         // `e->>'uuid'` et non `v.uuid` : la clé de l'élément s'appelle `uuid`
@@ -2721,13 +3224,17 @@ impl SchemaDialect for PostgresDialect {
         // les types de tous les champs, mais il ne connaît pas `uuid` — on le
         // lit donc dans l'objet JSON lui-même, à côté.
         let val_refs = std::iter::once("e->>'uuid'".to_string())
-            .chain(all_fields.iter().map(|f| format!("v.{f}")))
+            .chain(all_fields.iter().map(|f| format!("v.{}", self.quote(f))))
             .collect::<Vec<_>>()
             .join(", ");
         let update_set = update_fields.iter()
-            .map(|f| format!("{f} = EXCLUDED.{f}"))
+            .map(|f| {
+                let f = self.quote(f);
+                format!("{f} = EXCLUDED.{f}")
+            })
             .collect::<Vec<_>>()
             .join(", ");
+        let index_table = self.quote(index_table);
         format!(
             "INSERT INTO {index_table} ({col_list}) \
              SELECT {val_refs} \
@@ -2747,7 +3254,8 @@ impl SchemaDialect for PostgresDialect {
     ) -> String {
         // PostgreSQL: JOIN via relation join table + entity table
         // rel_table has (from_uuid, to_uuid)
-        let rel_table = &self.internal_table(rel_name);
+        let rel_table = &self.quote(&self.internal_table(rel_name));
+        let target_entity = self.quote(target_entity);
         if forward {
             format!(
                 "JOIN {rel_table} AS _r_{target_alias} ON _r_{target_alias}.from_uuid = {result_alias}._uuid \
@@ -2794,14 +3302,17 @@ impl SchemaDialect for PostgresDialect {
             "n._uuid AS _uuid".to_string(),
         ];
         for f in return_fields {
+            let f = self.quote(f);
             cols.push(format!("n.{f} AS {f}"));
         }
         cols.extend(colonnes_de_chunk("c", has_source_refs));
         format!(
-            "SELECT {} FROM {entity} AS n \
-             LEFT JOIN {chunk_table} AS c ON c._parent_uuid = n._uuid \
+            "SELECT {} FROM {} AS n \
+             LEFT JOIN {} AS c ON c._parent_uuid = n._uuid \
              WHERE n._row_id = ANY(ARRAY[{offset_list}]::bigint[])",
-            cols.join(", ")
+            cols.join(", "),
+            self.quote(entity),
+            self.quote(chunk_table)
         )
     }
 
@@ -2817,8 +3328,9 @@ impl SchemaDialect for PostgresDialect {
         // Pas de `internal_table` ici : les tables d'entités vivent dans le
         // schéma courant, contrairement aux tables de relations.
         format!(
-            "JOIN {parent_entity} AS {parent_alias} \
-             ON {parent_alias}._uuid = {chunk_alias}._parent_uuid"
+            "JOIN {} AS {parent_alias} \
+             ON {parent_alias}._uuid = {chunk_alias}._parent_uuid",
+            self.quote(parent_entity)
         )
     }
 
@@ -2855,9 +3367,11 @@ impl SchemaDialect for PostgresDialect {
         join_from: Option<(&str, &str, &str)>,
     ) -> String {
         let offset_expr = self.node_offset_expr(alias);
+        let table = self.quote(table);
         match join_from {
             Some((from_alias, from_table, rel)) => {
-                let rel_table = self.internal_table(rel);
+                let rel_table = self.quote(&self.internal_table(rel));
+                let from_table = self.quote(from_table);
                 let joins = if join_clauses.is_empty() {
                     String::new()
                 } else {
@@ -2906,32 +3420,32 @@ mod tests {
         let d = Rag3dbDialect;
         assert_eq!(
             d.marquer_derivees_a_rendre("TicketView"),
-            "UNWIND $uuids AS u MATCH (d:TicketView {_source_uuid: u}) SET d._render_hash = ''"
+            "UNWIND $uuids AS u MATCH (d:`TicketView` {_source_uuid: u}) SET d._render_hash = ''"
         );
         assert_eq!(
             d.select_derivees_a_rendre("TicketView", 5),
-            "MATCH (d:TicketView) WHERE d._render_hash IS NULL OR d._render_hash = '' RETURN d._source_uuid LIMIT 5"
+            "MATCH (d:`TicketView`) WHERE d._render_hash IS NULL OR d._render_hash = '' RETURN d._source_uuid LIMIT 5"
         );
         assert_eq!(
             d.select_racines_sans_derivee("Ticket", "TicketView", "TicketView_DERIVED_FROM", 5),
-            "MATCH (r:Ticket) OPTIONAL MATCH (d:TicketView)-[:TicketView_DERIVED_FROM]->(r) WITH r, d WHERE d._uuid IS NULL RETURN r._uuid LIMIT 5"
+            "MATCH (r:`Ticket`) OPTIONAL MATCH (d:`TicketView`)-[:`TicketView_DERIVED_FROM`]->(r) WITH r, d WHERE d._uuid IS NULL RETURN r._uuid LIMIT 5"
         );
         let p = PostgresDialect;
         assert_eq!(
             p.marquer_derivees_a_rendre("TicketView"),
-            "UPDATE TicketView SET _render_hash = '' WHERE _source_uuid = ANY($uuids)"
+            r#"UPDATE "ticketview" SET _render_hash = '' WHERE _source_uuid = ANY($uuids)"#
         );
-        assert!(p.select_derivees_a_rendre("TicketView", 5).starts_with("SELECT _source_uuid FROM TicketView"));
-        assert!(p.select_racines_sans_derivee("Ticket", "TicketView", "x", 5).contains("LEFT JOIN TicketView d ON d._source_uuid = r._uuid"));
+        assert!(p.select_derivees_a_rendre("TicketView", 5).starts_with(r#"SELECT _source_uuid FROM "ticketview""#));
+        assert!(p.select_racines_sans_derivee("Ticket", "TicketView", "x", 5).contains(r#"LEFT JOIN "ticketview" d ON d._source_uuid = r._uuid"#));
     }
 
     #[test]
     fn rag3db_create_table() {
         let d = Rag3dbDialect;
         let ddl = d.create_table("Document", &sample_columns());
-        assert!(ddl.contains("CREATE NODE TABLE IF NOT EXISTS Document"));
-        assert!(ddl.contains("_uuid STRING"));
-        assert!(ddl.contains("year INT64"));
+        assert!(ddl.contains("CREATE NODE TABLE IF NOT EXISTS `Document`"));
+        assert!(ddl.contains("`_uuid` STRING"));
+        assert!(ddl.contains("`year` INT64"));
         assert!(ddl.contains("PRIMARY KEY(_uuid)"));
     }
 
@@ -2939,9 +3453,9 @@ mod tests {
     fn postgres_create_table() {
         let d = PostgresDialect;
         let ddl = d.create_table("Document", &sample_columns());
-        assert!(ddl.contains("CREATE TABLE IF NOT EXISTS Document"));
-        assert!(ddl.contains("_uuid TEXT"));
-        assert!(ddl.contains("year BIGINT"));
+        assert!(ddl.contains(r#"CREATE TABLE IF NOT EXISTS "document""#));
+        assert!(ddl.contains(r#""_uuid" TEXT"#));
+        assert!(ddl.contains(r#""year" BIGINT"#));
         assert!(ddl.contains("PRIMARY KEY (_uuid)"));
     }
 
@@ -2950,7 +3464,7 @@ mod tests {
         let d = Rag3dbDialect;
         let ddl = d.create_rel_table("Doc_CHUNKED_FROM", "Doc_Chunk", "Doc", &[]);
         assert!(ddl.contains("CREATE REL TABLE IF NOT EXISTS"));
-        assert!(ddl.contains("FROM Doc_Chunk TO Doc"));
+        assert!(ddl.contains("FROM `Doc_Chunk` TO `Doc`"));
     }
 
     /// Les capacités déclarées, et les booléens d'avant qui les lisent : rien
@@ -2986,7 +3500,7 @@ mod tests {
     fn le_saut_se_traduit_ou_se_refuse() {
         use rag3weaver_ir::{Direction, EdgeExclusion, Hop};
         let mut h = Hop::new("Scope", "CONSUMES", "Scope", Direction::Incoming);
-        assert_eq!(Rag3dbDialect.hop(&h).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-(m:Scope) RETURN u, m._uuid");
+        assert_eq!(Rag3dbDialect.hop(&h).unwrap(), "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})<-[r:`CONSUMES`]-(m:`Scope`) RETURN u, m.`_uuid`");
         h.exclude = Some(EdgeExclusion { field: "resolution".into(), values: vec!["nom".into(), "import".into()] });
         h.direction = Direction::Outgoing;
         h.returns.push(rag3weaver_ir::Column::Node("name".into()));
@@ -2994,22 +3508,31 @@ mod tests {
         h.returns.push(rag3weaver_ir::Column::Edge("resolution".into()));
         assert_eq!(
             Rag3dbDialect.hop(&h).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})-[r:CONSUMES]->(m:Scope) WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom', 'import'] RETURN u, m._uuid, m.name, NULL, r.resolution"
+            "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})-[r:`CONSUMES`]->(m:`Scope`) WHERE r.`resolution` IS NULL OR NOT r.`resolution` IN ['nom', 'import'] RETURN u, m.`_uuid`, m.`name`, NULL, r.`resolution`"
         );
-        assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
+        // PostgreSQL le dit par la table de relation (11 octobre 2026, lot du
+        // saut) ; la ligne entière s'y refuse en se nommant.
+        assert_eq!(
+            PostgresDialect.hop(&h).unwrap(),
+            "SELECT v.u, r.\"to_uuid\", m.\"name\", NULL, r.\"resolution\" FROM unnest($uuids::text[]) AS v(u) \
+             JOIN \"scope\" AS d ON d.\"_uuid\" = v.u JOIN \"consumes\" AS r ON r.\"from_uuid\" = v.u \
+             JOIN \"scope\" AS m ON m.\"_uuid\" = r.\"to_uuid\" \
+             WHERE (r.\"resolution\" IS NULL OR r.\"resolution\" <> ALL (ARRAY['nom', 'import']))"
+        );
         let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
-        assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:CHUNKED_FROM]-(m) RETURN u, m._uuid, label(m), m");
+        assert_eq!(PostgresDialect.hop(&libre).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (champ sans table d'arrivée)");
+        assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:`CHUNKED_FROM`]-(m) RETURN u, m.`_uuid`, label(m), m");
         let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
         journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];
         journal.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
         journal.order_by = vec!["at_ms".into(), "seq".into()];
         assert_eq!(
             Rag3dbDialect.hop(&journal).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:Conversation {_uuid: u})<-[r:IN_CONVERSATION]-(m:Message) WHERE m.at_ms >= $since RETURN u, m.at_ms ORDER BY m.at_ms, m.seq"
+            "UNWIND $uuids AS u MATCH (d:`Conversation` {_uuid: u})<-[r:`IN_CONVERSATION`]-(m:`Message`) WHERE m.`at_ms` >= $since RETURN u, m.`at_ms` ORDER BY m.`at_ms`, m.`seq`"
         );
         libre.limit = Some(5);
-        assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m._uuid, label(m), m LIMIT 5"));
+        assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m.`_uuid`, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
     }
@@ -3020,8 +3543,32 @@ mod tests {
         use rag3weaver_ir::{Count, Direction};
         assert_eq!(Rag3dbDialect.count(&Count::Rows { table: "Doc".into() }).unwrap(), Rag3dbDialect.count_rows("Doc"));
         let c = Count::Edges { start: "Scope".into(), relation: "CONSUMES".into(), direction: Direction::Incoming };
-        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "UNWIND $uuids AS u MATCH (d:Scope {_uuid: u})<-[r:CONSUMES]-() RETURN u, count(r)");
-        assert_eq!(PostgresDialect.count(&c).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Count");
+        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})<-[r:`CONSUMES`]-() RETURN u, count(r)");
+        assert!(PostgresDialect.count(&c).is_ok(), "PostgreSQL dit le degré (test postgresql_traduit_la_selection_et_le_compte)");
+    }
+
+    /// PostgreSQL traduit la sélection et le compte : par uuids (l'uuid donné en
+    /// tête), par condition, et le degré par départ ; la ligne entière se
+    /// refuse en se nommant.
+    #[test]
+    fn postgresql_traduit_la_selection_et_le_compte() {
+        use rag3weaver_ir::{Column, Count, Direction, Predicate, Select};
+        let d = PostgresDialect;
+        let s = Select::by_uuids("Order", vec![Column::Node("_uuid".into())]);
+        assert_eq!(
+            d.select(&s).unwrap(),
+            r#"SELECT v.u, m."_uuid" FROM unnest($uuids::text[]) AS v(u) JOIN "order" AS m ON m."_uuid" = v.u"#
+        );
+        let f = Select::filtered("Doc", Predicate::AnyOf(vec![
+            Predicate::Equals { field: "source".into(), param: "s".into() },
+            Predicate::Contains { field: "titre".into(), param: "t".into() },
+        ]), vec![Column::Node("titre".into()), Column::Null]);
+        assert_eq!(d.select(&f).unwrap(), r#"SELECT m."titre", NULL FROM "doc" AS m WHERE (m."source" = $s OR strpos(m."titre", $t) > 0)"#);
+        assert!(d.select(&Select::all("Doc", vec![Column::Whole])).is_err());
+        assert_eq!(
+            d.count(&Count::Edges { start: "Symbol".into(), relation: "DEFINES".into(), direction: Direction::Incoming }).unwrap(),
+            r#"SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) JOIN "defines" AS r ON r."to_uuid" = v.u GROUP BY v.u"#
+        );
     }
 
     /// La sélection : rag3db la traduit, PostgreSQL la refuse en la nommant.
@@ -3029,7 +3576,7 @@ mod tests {
     fn la_selection_se_traduit_ou_se_refuse() {
         use rag3weaver_ir::{Column, Predicate, Select};
         let s = Select::by_uuids("Scope", vec![Column::Node("name".into()), Column::Null]);
-        assert_eq!(Rag3dbDialect.select(&s).unwrap(), "UNWIND $uuids AS u MATCH (m:Scope {_uuid: u}) RETURN u, m.name, NULL");
+        assert_eq!(Rag3dbDialect.select(&s).unwrap(), "UNWIND $uuids AS u MATCH (m:`Scope` {_uuid: u}) RETURN u, m.`name`, NULL");
         let mut f = Select::filtered(
             "Scope",
             Predicate::AnyOf(vec![
@@ -3040,11 +3587,11 @@ mod tests {
         );
         f.order_by.push("_uuid".into());
         f.limit = Some(3);
-        assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:Scope) WHERE m.file_path = $file OR m.source = $file RETURN m._uuid ORDER BY m._uuid LIMIT 3");
-        assert_eq!(PostgresDialect.select(&s).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Select");
+        assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:`Scope`) WHERE m.`file_path` = $file OR m.`source` = $file RETURN m.`_uuid` ORDER BY m.`_uuid` LIMIT 3");
+        assert!(PostgresDialect.select(&s).is_ok(), "PostgreSQL dit la sélection (test postgresql_traduit_la_selection_et_le_compte)");
         let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
-        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:Card) WHERE m.cost > $filter_p0 RETURN count(m)");
-        assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:Card) RETURN m");
+        assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:`Card`) WHERE m.cost > $filter_p0 RETURN count(m)");
+        assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:`Card`) RETURN m");
         f.returns.push(Column::Edge("x".into()));
         assert!(Rag3dbDialect.select(&f).is_err());
     }
@@ -3069,7 +3616,7 @@ mod tests {
         let marque = Write::Mark { table: "Doc".into(), set: vec![("_snapshot".into(), Some("session".into())), ("_absent_since".into(), None)] };
         assert_eq!(
             Rag3dbDialect.write(&marque).unwrap(),
-            "UNWIND $uuids AS uuid MATCH (n:Doc {_uuid: uuid}) SET n._snapshot = $session, n._absent_since = NULL"
+            "UNWIND $uuids AS uuid MATCH (n:`Doc` {_uuid: uuid}) SET n.`_snapshot` = $session, n.`_absent_since` = NULL"
         );
         assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
         for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
@@ -3088,26 +3635,6 @@ mod tests {
         assert_eq!(PostgresDialect.write(&noeuds).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Write::Load");
     }
 
-    /// La liste rag3db suit la grammaire du moteur : relue ici, elle doit être
-    /// celle que le script a écrite. Sans les fichiers de grammaire (crate hors
-    /// du dépôt), le test se tait.
-    #[test]
-    fn les_mots_reserves_suivent_la_grammaire() {
-        let antlr = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/antlr4");
-        let (Ok(mots), Ok(g4)) = (std::fs::read_to_string(antlr.join("keywords.txt")), std::fs::read_to_string(antlr.join("Cypher.g4"))) else {
-            return;
-        };
-        let debut = g4.find("\nkU_NonReservedKeywords").expect("la règle kU_NonReservedKeywords");
-        let regle = &g4[debut..];
-        let regle = &regle[regle.find(':').unwrap() + 1..regle.find(';').unwrap()];
-        let libres: std::collections::BTreeSet<String> = regle.split('|').map(|m| m.trim().to_uppercase()).filter(|m| !m.is_empty()).collect();
-        let attendus: std::collections::BTreeSet<String> =
-            mots.lines().map(|l| l.trim().to_uppercase()).filter(|m| !m.is_empty() && !libres.contains(m)).collect();
-        let ecrits: std::collections::BTreeSet<String> = Rag3dbDialect.reserved_words().iter().map(|m| m.to_string()).collect();
-        assert_eq!(ecrits, attendus, "la grammaire a changé : relancer scripts/mots_reserves.py");
-        assert!(ecrits.contains("ORDER") && !ecrits.contains("MATCH"));
-    }
-
     /// **La jointure chunk→parent, dans les deux langues.**
     ///
     /// Elle était écrite en Cypher en dur dans le catalogue : sur PostgreSQL le
@@ -3119,11 +3646,11 @@ mod tests {
     fn la_jointure_chunk_parent_parle_les_deux_langues() {
         assert_eq!(
             Rag3dbDialect.chunk_parent_join("n", "p", "Product"),
-            "MATCH (n)-[:Product_CHUNKED_FROM]->(p:Product)"
+            "MATCH (n)-[:`Product_CHUNKED_FROM`]->(p:`Product`)"
         );
         assert_eq!(
             PostgresDialect.chunk_parent_join("n", "p", "Product"),
-            "JOIN Product AS p ON p._uuid = n._parent_uuid"
+            r#"JOIN "product" AS p ON p._uuid = n._parent_uuid"#
         );
     }
 
@@ -3131,7 +3658,7 @@ mod tests {
     fn postgres_rel_table() {
         let d = PostgresDialect;
         let ddl = d.create_rel_table("doc_chunked_from", "doc_chunk", "doc", &[]);
-        assert!(ddl.contains("CREATE TABLE IF NOT EXISTS doc_chunked_from"));
+        assert!(ddl.contains(r#"CREATE TABLE IF NOT EXISTS "doc_chunked_from""#));
         assert!(ddl.contains("from_uuid TEXT NOT NULL"));
         assert!(ddl.contains("to_uuid TEXT NOT NULL"));
         assert!(ddl.contains("PRIMARY KEY (from_uuid, to_uuid)"));
@@ -3144,7 +3671,7 @@ mod tests {
             ColumnDef { name: "weight".into(), col_type: ColumnType::Double },
         ];
         let ddl = d.create_rel_table("authored_by", "doc", "author", &props);
-        assert!(ddl.contains("weight DOUBLE PRECISION"));
+        assert!(ddl.contains(r#""weight" DOUBLE PRECISION"#));
     }
 
     #[test]
@@ -3159,7 +3686,7 @@ mod tests {
     fn postgres_vector_index() {
         let d = PostgresDialect;
         let ddl = d.create_vector_index("doc_chunk", "embedding", "doc_chunk_vec");
-        assert!(ddl.contains("CREATE INDEX IF NOT EXISTS doc_chunk_vec"));
+        assert!(ddl.contains(r#"CREATE INDEX IF NOT EXISTS "doc_chunk_vec" ON "doc_chunk" USING hnsw ("embedding" vector_cosine_ops)"#), "{ddl}");
         assert!(ddl.contains("USING hnsw"));
         assert!(ddl.contains("vector_cosine_ops"));
     }
@@ -3185,17 +3712,17 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_upsert("Document", &["_uuid", "title", "body"]);
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("MERGE (n:Document"));
+        assert!(stmt.contains("MERGE (n:`Document`"));
     }
 
     #[test]
     fn postgres_batch_upsert() {
         let d = PostgresDialect;
         let stmt = d.batch_upsert("document", &["_uuid", "title", "body"]);
-        assert!(stmt.contains("INSERT INTO document"));
+        assert!(stmt.contains(r#"INSERT INTO "document" ("_uuid", "title", "body")"#), "{stmt}");
         // Le type de la table fournit les types des colonnes : c'est ce qui
         // permet de déplier des lignes sans que le dialecte les connaisse.
-        assert!(stmt.contains("jsonb_populate_recordset(NULL::document, $items::text::jsonb)"));
+        assert!(stmt.contains(r#"jsonb_populate_recordset(NULL::"document", $items::text::jsonb)"#));
         assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
         assert!(stmt.contains("ON CONFLICT (_uuid)"));
     }
@@ -3204,7 +3731,7 @@ mod tests {
     fn postgres_batch_delete() {
         let d = PostgresDialect;
         let stmt = d.batch_delete("document");
-        assert!(stmt.contains("DELETE FROM document"));
+        assert!(stmt.contains(r#"DELETE FROM "document""#));
         assert!(stmt.contains("ANY($uuids)"));
     }
 
@@ -3255,15 +3782,15 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_link("AUTHORED_BY", &["weight"]);
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("MERGE (a)-[r:AUTHORED_BY]->(b)"));
-        assert!(stmt.contains("r.weight = item.weight"));
+        assert!(stmt.contains("MERGE (a)-[r:`AUTHORED_BY`]->(b)"));
+        assert!(stmt.contains("r.`weight` = item.`weight`"));
     }
 
     #[test]
     fn rag3db_batch_link_no_props() {
         let d = Rag3dbDialect;
         let stmt = d.batch_link("CHUNKED_FROM", &[]);
-        assert!(stmt.contains("MERGE (a)-[r:CHUNKED_FROM]->(b)"));
+        assert!(stmt.contains("MERGE (a)-[r:`CHUNKED_FROM`]->(b)"));
         assert!(!stmt.contains("SET"));
     }
 
@@ -3271,8 +3798,8 @@ mod tests {
     fn postgres_batch_link() {
         let d = PostgresDialect;
         let stmt = d.batch_link("authored_by", &["weight"]);
-        assert!(stmt.contains("INSERT INTO authored_by"));
-        assert!(stmt.contains("from_uuid, to_uuid, weight"));
+        assert!(stmt.contains(r#"INSERT INTO "authored_by""#));
+        assert!(stmt.contains(r#"from_uuid, to_uuid, "weight""#));
         assert!(stmt.contains("ON CONFLICT (from_uuid, to_uuid) DO UPDATE"));
     }
 
@@ -3288,20 +3815,20 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_update_fields("Document", &["title", "_embed_hash"]);
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("MATCH (n:Document"));
-        assert!(stmt.contains("n.title = item.title"));
-        assert!(stmt.contains("n._embed_hash = item._embed_hash"));
+        assert!(stmt.contains("MATCH (n:`Document`"));
+        assert!(stmt.contains("n.`title` = item.`title`"));
+        assert!(stmt.contains("n.`_embed_hash` = item.`_embed_hash`"));
     }
 
     #[test]
     fn postgres_batch_update_fields() {
         let d = PostgresDialect;
         let stmt = d.batch_update_fields("document", &["title", "_embed_hash"]);
-        assert!(stmt.contains("UPDATE document SET"));
-        assert!(stmt.contains("title = v.title"));
-        assert!(stmt.contains("FROM jsonb_populate_recordset(NULL::document, $items::text::jsonb)"));
+        assert!(stmt.contains(r#"UPDATE "document" SET"#));
+        assert!(stmt.contains(r#""title" = v."title""#));
+        assert!(stmt.contains(r#"FROM jsonb_populate_recordset(NULL::"document", $items::text::jsonb)"#));
         assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
-        assert!(stmt.contains("WHERE document._uuid = v._uuid"));
+        assert!(stmt.contains(r#"WHERE "document"._uuid = v._uuid"#));
     }
 
     #[test]
@@ -3309,15 +3836,15 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.select_by_uuids("Document", &["title", "body"]);
         assert!(stmt.contains("UNWIND $uuids"));
-        assert!(stmt.contains("MATCH (n:Document"));
-        assert!(stmt.contains("n.title, n.body"));
+        assert!(stmt.contains("MATCH (n:`Document`"));
+        assert!(stmt.contains("n.`title`, n.`body`"));
     }
 
     #[test]
     fn postgres_select_by_uuids() {
         let d = PostgresDialect;
         let stmt = d.select_by_uuids("document", &["title", "body"]);
-        assert!(stmt.contains("SELECT title, body FROM document"));
+        assert!(stmt.contains(r#"SELECT "title", "body" FROM "document""#));
         assert!(stmt.contains("ANY($uuids)"));
     }
 
@@ -3332,7 +3859,7 @@ mod tests {
     fn postgres_cascade_delete() {
         let d = PostgresDialect;
         let stmt = d.batch_cascade_delete("document");
-        assert!(stmt.contains("DELETE FROM document"));
+        assert!(stmt.contains(r#"DELETE FROM "document""#));
         assert!(!stmt.contains("DETACH"));
     }
 
@@ -3345,7 +3872,7 @@ mod tests {
             &[("item.uuid", "uuid"), ("OFFSET(id(n))", "offset")],
         );
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("SET n._embed_hash = item._embed_hash"));
+        assert!(stmt.contains("SET n.`_embed_hash` = item.`_embed_hash`"));
         assert!(stmt.contains("RETURN item.uuid AS uuid, OFFSET(id(n)) AS offset"));
     }
 
@@ -3357,13 +3884,13 @@ mod tests {
             &["_embed_hash"],
             &[("item.uuid", "uuid"), ("OFFSET(id(n))", "offset")],
         );
-        assert!(stmt.contains("UPDATE document SET"));
-        assert!(stmt.contains("_embed_hash = v._embed_hash"));
+        assert!(stmt.contains(r#"UPDATE "document" SET"#));
+        assert!(stmt.contains(r#""_embed_hash" = v."_embed_hash""#));
         assert!(stmt.contains("RETURNING"));
         // `_row_id` et pas `id` : c'est la colonne que `create_table` pose
         // réellement. L'assertion précédente épinglait un nom de colonne qui
         // n'existait dans aucune table — elle garantissait la faute.
-        assert!(stmt.contains("document._row_id AS offset"));
+        assert!(stmt.contains(r#""document"._row_id AS offset"#));
         assert!(stmt.contains("v.uuid AS uuid"));
     }
 
@@ -3372,7 +3899,7 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_cascade_delete_returning_count("Doc_Chunk", "_parent_uuid");
         assert!(stmt.contains("UNWIND $uuids"));
-        assert!(stmt.contains("MATCH (c:Doc_Chunk {_parent_uuid: uuid})"));
+        assert!(stmt.contains("MATCH (c:`Doc_Chunk` {`_parent_uuid`: uuid})"));
         assert!(stmt.contains("DETACH DELETE c RETURN uuid, count(c) AS cnt"));
     }
 
@@ -3380,7 +3907,7 @@ mod tests {
     fn postgres_cascade_delete_returning_count() {
         let d = PostgresDialect;
         let stmt = d.batch_cascade_delete_returning_count("doc_chunk", "_parent_uuid");
-        assert!(stmt.contains("DELETE FROM doc_chunk WHERE _parent_uuid = ANY($uuids)"));
+        assert!(stmt.contains(r#"DELETE FROM "doc_chunk" WHERE "_parent_uuid" = ANY($uuids)"#));
         assert!(stmt.contains("count(*) AS cnt"));
     }
 
@@ -3390,7 +3917,7 @@ mod tests {
         let stmt = d.batch_delete_relation("AUTHORED_BY");
         assert!(stmt.contains("UNWIND $items"));
         assert!(stmt.contains("WITH item, item.from AS __cle_0 MATCH (a {_uuid: __cle_0})"));
-        assert!(stmt.contains("WITH a, item, item.to AS __cle_1 MATCH (a)-[r:AUTHORED_BY]->(b {_uuid: __cle_1})"));
+        assert!(stmt.contains("WITH a, item, item.to AS __cle_1 MATCH (a)-[r:`AUTHORED_BY`]->(b {_uuid: __cle_1})"));
         assert!(stmt.contains("DELETE r"));
     }
 
@@ -3398,7 +3925,7 @@ mod tests {
     fn postgres_batch_delete_relation() {
         let d = PostgresDialect;
         let stmt = d.batch_delete_relation("authored_by");
-        assert!(stmt.contains("DELETE FROM authored_by"));
+        assert!(stmt.contains(r#"DELETE FROM "authored_by""#));
         // Types déclarés sur place : `jsonb_to_recordset` suffit. Les clés
         // sont celles que l'annulation d'un lien envoie, `from` et `to`
         // (ticket 2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien).
@@ -3411,16 +3938,17 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_select("kb_Index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
         assert!(stmt.contains("UNWIND $items"));
-        assert!(stmt.contains("WITH item, item.uuid AS __cle_0 MATCH (n:kb_Index {_uuid: __cle_0})"));
-        assert!(stmt.contains("RETURN n._uuid, n._title, n._content"));
+        assert!(stmt.contains("WITH item, item.`uuid` AS __cle_0 MATCH (n:`kb_Index` {`_uuid`: __cle_0})"));
+        assert!(stmt.contains("RETURN n.`_uuid`, n.`_title`, n.`_content`"));
     }
 
     #[test]
     fn postgres_batch_select() {
         let d = PostgresDialect;
         let stmt = d.batch_select("kb_index", "uuid", "_uuid", &["_uuid", "_title", "_content"]);
-        assert!(stmt.contains("SELECT _uuid, _title, _content FROM kb_index"));
-        assert!(stmt.contains("JOIN jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT)"));
+        assert!(stmt.contains(r#"SELECT "_uuid", "_title", "_content" FROM "kb_index""#));
+        assert!(stmt.contains(r#"JOIN jsonb_to_recordset($items::text::jsonb) AS v("uuid" TEXT)"#));
+        assert!(stmt.contains(r#"ON "kb_index"."_uuid" = v."uuid""#), "{stmt}");
         assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
     }
 
@@ -3429,14 +3957,14 @@ mod tests {
         let d = Rag3dbDialect;
         let stmt = d.batch_set_null("Document", "_embed_hash");
         assert!(stmt.contains("UNWIND $uuids"));
-        assert!(stmt.contains("SET n._embed_hash = NULL"));
+        assert!(stmt.contains("SET n.`_embed_hash` = NULL"));
     }
 
     #[test]
     fn postgres_batch_set_null() {
         let d = PostgresDialect;
         let stmt = d.batch_set_null("document", "_embed_hash");
-        assert!(stmt.contains("UPDATE document SET _embed_hash = NULL"));
+        assert!(stmt.contains(r#"UPDATE "document" SET "_embed_hash" = NULL"#));
         assert!(stmt.contains("ANY($uuids)"));
     }
 
@@ -3444,22 +3972,23 @@ mod tests {
     fn rag3db_join_select_forward() {
         let d = Rag3dbDialect;
         let stmt = d.join_select("Document", "IN_KB", "kb_Index", true, "_uuid", &["m._title"]);
-        assert!(stmt.contains("MATCH (n:Document {_uuid: uuid})-[:IN_KB]->(m:kb_Index)"));
+        assert!(stmt.contains("MATCH (n:`Document` {_uuid: uuid})-[:`IN_KB`]->(m:`kb_Index`)"));
     }
 
     #[test]
     fn rag3db_join_select_reverse() {
         let d = Rag3dbDialect;
         let stmt = d.join_select("Document", "IN_KB", "kb_Index", false, "_uuid", &["m._title"]);
-        assert!(stmt.contains("MATCH (n:Document {_uuid: uuid})<-[:IN_KB]-(m:kb_Index)"));
+        assert!(stmt.contains("MATCH (n:`Document` {_uuid: uuid})<-[:`IN_KB`]-(m:`kb_Index`)"));
     }
 
     #[test]
     fn postgres_join_select() {
         let d = PostgresDialect;
         let stmt = d.join_select("document", "in_kb", "kb_index", true, "_uuid", &["kb_index._title"]);
-        assert!(stmt.contains("INNER JOIN in_kb"));
-        assert!(stmt.contains("INNER JOIN kb_index"));
+        assert!(stmt.contains(r#"INNER JOIN "in_kb""#));
+        assert!(stmt.contains(r#"INNER JOIN "kb_index""#));
+        assert!(stmt.starts_with("SELECT kb_index._title FROM"), "une expression qualifiée passe telle quelle : {stmt}");
     }
 
     #[test]

@@ -80,13 +80,30 @@ public:
 
     static std::string getTempSuffix();
 
-    static std::filesystem::path getRootTempDir() {
+    // Le dossier temporaire commun à toutes les passes : /tmp/rag3db (ou $RUNNER_TEMP/rag3db).
+    static std::filesystem::path getSharedTempRoot() {
         auto tempDir = std::getenv("RUNNER_TEMP");
         if (tempDir != nullptr) {
             return std::filesystem::path(tempDir) / "rag3db";
         }
         return std::filesystem::temp_directory_path() / "rag3db";
     }
+
+    // Le pid du processus qui a lancé la passe, pris au chargement — avant tout fork : un
+    // écrivain enfant du banc écrit sous le même parent que son lanceur.
+    static int launcherPid();
+
+    // Le parent de la passe : <dossier commun>/<pid du lanceur>. Tout ce qu'une passe laisse
+    // (un test tué, une base ouverte à un chemin à lui, un enfant mort exprès) vit là, et la fin
+    // du processus lanceur efface le parent entier (TempDirPerRun, test_helper.cpp). Sur ce
+    // poste /tmp est de la mémoire vive : avant, des milliers de bases s'y accumulaient.
+    static std::filesystem::path getRootTempDir() {
+        return getSharedTempRoot() / std::to_string(launcherPid());
+    }
+
+    // Efface les parents des passes dont le lanceur n'existe plus (une passe tuée) — jamais
+    // celui d'un processus vivant.
+    static void removeDeadRunTempDirs();
 
     static std::string getTempDir(const std::string& name) {
         auto path = getRootTempDir() / (name + getTempSuffix());

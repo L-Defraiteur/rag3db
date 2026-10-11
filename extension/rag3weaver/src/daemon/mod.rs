@@ -180,6 +180,67 @@ pub fn servir(
         adresse: adresse.to_string(),
         cause: e.to_string(),
     })?;
+    servir_serveur(service, ecoute, adresse, fils, expose)
+}
+
+/// **Pour un binaire de service** : sur une adresse à port nul, se lier ici,
+/// écrire l'adresse réellement prise sur la sortie standard (la ligne
+/// [`crate::serveur::LIGNE_ADRESSE`], que le lanceur lit) et rendre
+/// l'écouteur, à servir par `servir_lie`. Sur un port non nul : `None`, et
+/// le binaire sert l'adresse demandée comme avant.
+pub fn ecouter_si_port_nul(adresse: &str) -> Result<Option<std::net::TcpListener>, DaemonError> {
+    use std::io::Write;
+    let nul = adresse
+        .rsplit_once(':')
+        .and_then(|(_, port)| port.parse::<u16>().ok())
+        .is_some_and(|p| p == 0);
+    if !nul {
+        return Ok(None);
+    }
+    let ecoute = std::net::TcpListener::bind(adresse)
+        .map_err(|e| DaemonError::Ecoute { adresse: adresse.to_string(), cause: e.to_string() })?;
+    let reelle = ecoute
+        .local_addr()
+        .map_err(|e| DaemonError::Ecoute { adresse: adresse.to_string(), cause: e.to_string() })?;
+    let mut sortie = std::io::stdout().lock();
+    let _ = writeln!(sortie, "{}{reelle}", crate::serveur::LIGNE_ADRESSE);
+    let _ = sortie.flush();
+    Ok(Some(ecoute))
+}
+
+/// **Sert un écouteur déjà lié** : qui l'appelle s'est lié lui-même
+/// (`127.0.0.1:0` dans les tests), a lu le port réellement pris, et le tient
+/// sans interruption jusqu'ici. Avec [`servir`] et une adresse choisie par
+/// avance, le port était relâché puis repris, et un autre pouvait le prendre
+/// entre les deux — la course qui faisait dire « le démon n'a pas répondu »
+/// aux tests sous charge (ticket du 10 octobre 2026).
+pub fn servir_lie(
+    service: Arc<dyn Service>,
+    ecoute: std::net::TcpListener,
+    fils: usize,
+    expose: bool,
+) -> Result<(), DaemonError> {
+    let adresse = ecoute
+        .local_addr()
+        .map(|a| a.to_string())
+        .map_err(|e| DaemonError::Ecoute { adresse: "?".into(), cause: e.to_string() })?;
+    if !expose && !est_local(&adresse) {
+        return Err(DaemonError::Exposition { adresse });
+    }
+    let ecoute = tiny_http::Server::from_listener(ecoute, None).map_err(|e| DaemonError::Ecoute {
+        adresse: adresse.clone(),
+        cause: e.to_string(),
+    })?;
+    servir_serveur(service, ecoute, &adresse, fils, expose)
+}
+
+fn servir_serveur(
+    service: Arc<dyn Service>,
+    ecoute: tiny_http::Server,
+    adresse: &str,
+    fils: usize,
+    expose: bool,
+) -> Result<(), DaemonError> {
     let ecoute = Arc::new(ecoute);
 
     let mut identite = service.identite();
@@ -191,6 +252,8 @@ pub fn servir(
         // avec un code que plus personne n'avait, et les mesures avec. Le
         // client compare cette empreinte à celle de son propre binaire.
         o.insert("executable".into(), serde_json::json!(mon_empreinte()));
+        // L'adresse réellement liée : celle qu'un port nul a fait choisir.
+        o.insert("adresse".into(), serde_json::json!(adresse));
     }
     let identite = Arc::new(identite.to_string());
 
@@ -348,6 +411,18 @@ pub fn poster(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Le port nul se lie ici et se dit** ; un port non nul est laissé à
+    /// `servir`, comme avant.
+    #[test]
+    fn un_port_nul_se_lie_et_rend_l_adresse_prise() {
+        assert!(ecouter_si_port_nul("127.0.0.1:7878").unwrap().is_none(), "un port non nul n'est pas pris ici");
+        let ecoute = ecouter_si_port_nul("127.0.0.1:0").unwrap().expect("un port nul se lie");
+        let prise = ecoute.local_addr().unwrap();
+        assert_ne!(prise.port(), 0, "l'écouteur tient un vrai port");
+        // Le port est tenu : un second bind sur lui échoue.
+        assert!(std::net::TcpListener::bind(prise).is_err(), "le port pris est tenu, pas relâché");
+    }
 
     /// **La boucle locale, et rien d'autre.** `0.0.0.0` n'est pas locale : elle
     /// écoute sur toutes les interfaces, y compris celle du réseau.

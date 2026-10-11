@@ -10,6 +10,7 @@
 #include "common/type_utils.h"
 #include "common/types/ku_string.h"
 #include "common/types/types.h"
+#include "common/types/value/value.h"
 #include "hash_index_header.h"
 #include "hash_index_slot.h"
 #include "index.h"
@@ -418,6 +419,15 @@ public:
     bool insert(const transaction::Transaction* transaction, const common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t value, visible_func isVisible);
     bool needCommitInsert() const override { return true; }
+    // Marche A3′ reprise : au rejeu du journal, une clé en double au commit n'est pas une erreur
+    // mais une note (le décalage de la ligne rejouée et sa clé) ; la reprise les règle à sa fin.
+    struct ReplayedDuplicate {
+        common::offset_t offset;
+        std::unique_ptr<common::Value> key;
+    };
+    std::vector<ReplayedDuplicate> takeReplayedDuplicates() {
+        return std::move(replayedDuplicates);
+    }
     void commitInsert(transaction::Transaction* transaction,
         const common::ValueVector& nodeIDVector,
         const std::vector<common::ValueVector*>& indexVectors,
@@ -507,6 +517,7 @@ private:
     ShadowFile& shadowFile;
     // Stores both primary and overflow slots
     std::unique_ptr<DiskArrayCollection> hashIndexDiskArrays;
+    std::vector<ReplayedDuplicate> replayedDuplicates;
 };
 
 } // namespace storage

@@ -182,7 +182,7 @@ impl super::node_registry::NodeFactory for PlaceTemplateNodeFactory {
             node_type: "PlaceTemplateNode".into(),
             description: "Pose un gabarit du catalogue dans le schéma vivant, motifs appliqués avant l'enregistrement.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "template".into(),
@@ -422,7 +422,7 @@ impl super::node_registry::NodeFactory for AdoptTemplateNodeFactory {
             node_type: "AdoptTemplateNode".into(),
             description: "Enregistre une entité vivante comme gabarit du projet, réutilisable par la suite.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "entity".into(),

@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "common/test_hooks.h"
 #include "common/types/value/value.h"
 
 namespace rag3db {
@@ -66,6 +67,9 @@ struct DBConfig {
     bool throwOnWalReplayFailure;
     bool enableChecksums;
     bool enableSpillingToDisk;
+    // Le crochet de test armé par l'environnement (common/test_hooks.h), lu par Database à
+    // l'ouverture ; NONE hors des témoins.
+    common::TestDiePoint testDiePoint = common::TestDiePoint::NONE;
 #if defined(__APPLE__)
     uint32_t threadQos;
 #endif

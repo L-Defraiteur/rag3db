@@ -375,6 +375,29 @@ Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), 
   d'AVANT, gardé au dépôt avec sa base et son journal (`journal_with_duplicate_key/`), comme
   `journal_before_raw_arrays/`. Le faire **avant** de rebâtir.
 
+### Le stockage lu par segments, et les exceptions ALP (11 octobre 2026)
+
+- Un bloc de colonne écrit sur disque est découpé en **segments** (`ColumnChunkData::split`,
+  `MAX_SEGMENT_SIZE`) ; le balayage d'un bloc en mémoire ou sur disque passe par
+  `rangeSegments` qui appelle la lecture de chaque segment avec un décalage `dstOffset` dans le
+  vecteur de sortie. Tout chemin de lecture doit être juste pour `dstOffset > 0` : c'est là que
+  dormait la corruption du COPY journalisé.
+- Les colonnes `DOUBLE`/`FLOAT` sont compressées **ALP** : les valeurs que l'encodage ne
+  représente pas sont des **exceptions**, stockées à part (pages d'exceptions du segment,
+  `InMemoryExceptionChunk`) et **rapiécées** après la lecture bitpackée (`patchFloatExceptions`) ;
+  une valeur en exception non rapiécée se lit à son encodage, 0.
+- Le **filtre de sélection** du lecteur de pages reçoit des index **relatifs au début du balayage**
+  (`readCompressedValues` : `numValuesScanned`) ; le `Filterer` de `Column::scanSegment` soustrait
+  `offsetInVector` aux positions sélectionnées. Une sélection est **filtrée** même quand tout est
+  sélectionné dès qu'un vecteur porte des versions (`VectorVersionInfo::getSelVectorForScan`,
+  `CHECK_VERSION`) — donc toute donnée validée mais pas encore passée par un point de reprise.
+- `WHERE col = 0.0` peut ne rien trouver alors que des 0 existent : la **carte de zones** (min/max
+  du bloc) saute le bloc. Pour départager « pages fausses » et « lecture fausse », relire par la
+  clé (`MATCH (d {id: …})`, chemin `lookup`).
+- Une sonde `fprintf` dans `ColumnChunk::scan` (résidence, segments et leurs `numValues`,
+  sélection filtrée ou non, exceptions du segment) a suffi ; `cmake --build --target rag3db` ne
+  relie pas la lib partagée — bâtir tout et prouver par la date et `strings`.
+
 ## 5. Les amonts
 
 - **Kuzu** : notre origine (renommage `c647fbb33`). Défauts d'origine trouvés : le rejeu

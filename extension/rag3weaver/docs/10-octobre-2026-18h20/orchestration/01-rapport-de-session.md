@@ -627,3 +627,222 @@ prix à la liste »). Le tour avec un vrai modèle n'a pas été joué cette nui
 page est prouvé avec un modèle enregistré. Reste ouvert : la montre branchée
 sur la porte de la mémoire à sa fusion, le retour en arrière d'une
 déclaration, mermaid embarqué, plusieurs sessions.
+
+**Ajout de 3 h 45** : le filet est sur master (`6d7f2a811`) — toute connexion
+rag3weaver pose `force_checkpoint_on_copy=true` tant que le ticket
+`2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md`
+est ouvert ; témoin rouge sans le filet (198 lignes fausses à la troisième
+passe de 200 000 lignes, 2 fils, FLOAT[4] + DOUBLE), vert avec. Fait nouveau
+pour le cœur : un CHECKPOINT dans le même processus rend les valeurs justes —
+la mémoire est saine, c'est le balayage du groupe partiel qui lit 0, et il
+faut plus d'un groupe. Les bases écrites par rag3weaver depuis hier 15 h 54
+n'ont donc pas de valeurs fausses au repos si un point de reprise a suivi
+(ce que l'indexation fait) ; à vérifier quand même sur une base qui compte.
+G refait les quatre archives alpha.2 sur ce master.
+
+## 14. Ajout de 4 h : la mémoire longue est branchée par MCP
+
+Ordre A joué par la session mémoire (`ca9806d06`) : manifeste à
+`~/.config/rag3weaver/memoire-longue/`, base à
+`~/.local/share/rag3weaver/memoire-longue.rag3db`, binaire copié hors du
+target dans `~/.local/bin/rag3weaver-backend`. **La page pour Lucie** :
+`docs/10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`, recette en
+trois lignes dont la troisième, `claude mcp add`, **prête et non jouée** (elle
+écrit dans sa configuration). Mesuré : un processus écrit sujet + mémoire +
+genre + référence, un autre les retrouve. Deux défauts du lot précédent
+trouvés en jouant (l'arrêt n'arrêtait pas les réactions ; le serveur ne disait
+pas ses réactions montées) et corrigés. Un troisième **non réglé, et dit** :
+aucun outil n'écrit `ANCHORED_TO`, la réaction `review_anchored` tourne à
+vide ; l'outil d'ancrage « en six lignes » que j'avais accepté sur parole ne
+tient pas — `RelationBatchNode` refuse de lier deux entités gérées (cycle de
+vie, dates), et aucun nœud ne relie aujourd'hui deux entités gérées par leur
+identité. La mémoire l'a mesuré avant d'écrire, l'a retiré, et le gabarit a
+sept outils. Deux tickets pour le matin, avec leur coût : un `LinkRecordsNode`
+générique (une signature nouvelle : à Lucie), puis le huitième refus de la
+section `reactions` (une réaction qui remonte une relation qu'aucun outil
+n'écrit), après le nœud, sinon il refuserait le gabarit `memory` livré. **La question de
+l'ordre A — Claude range-t-il spontanément ? — se tranche au matin par une
+session vierge, chez Lucie, après son `claude mcp add`** ; la session qui a
+écrit l'outil ne peut pas y répondre.
+
+**Ajout de 4 h 05 : la cause de la corruption est trouvée.** Ce n'est pas le
+COPY journalisé qui corrompt : il révèle un défaut de lecture de l'amont (mai
+2025, `patchFloatExceptions`) — les exceptions ALP d'une colonne DOUBLE sont
+rapiécées avec un index absolu dans le vecteur de sortie là où le lecteur de
+pages donne un index relatif au balayage ; pour tout segment après le premier
+d'un bloc, aucune exception n'est rapiécée et les valeurs restent à leur
+encodage, 0. Le COPY journalisé le révèle parce que son groupe non encore
+passé par un point de reprise est lu avec une sélection filtrée (versions de
+l'insertion) et découpé en deux segments ; un fil, une colonne STRING ou le
+point de reprise forcé n'ont pas cette forme. Preuve : la relecture par la clé
+est juste là où le balayage lit 0, et le nombre d'exceptions du second segment
+est exactement le nombre de lignes fausses. **Correctif d'une ligne** (l'index
+relatif), témoin gtest déterministe (la sonde de A, trois COPY), en chaîne de
+fusion sur luciepc. Le rouge de rejeu a la même cause et se ferme avec. La
+condition 2 reste fermée. Le filet de rag3weaver reste en place jusqu'à ce que
+A l'ait retiré sur la lib rebâtie, témoin vert sans filet ; les archives npm
+avec le filet restent bonnes, l'alpha suivante portera le correctif. Rien
+vers l'amont (règle de Lucie).
+
+**Ajout de 4 h 20 : le point de reprise sous petit tampon, localisé** (hotfixs,
+ticket `a6905239d`). Pas de fuite : une table de BLOB de plus d'environ un
+quart du tampon fait échouer son point de reprise, même avec un CHECKPOINT
+après chaque validation — la réécriture hors place d'un segment de chaînes,
+relu entier, doublé par `bit_ceil`, recopié ; le segment grandit avec toute la
+colonne au lieu d'être borné. Limite pour le produit en attendant : sous 8 Gio
+de tampon, une table `_index_blobs` de plus de ~2 Gio échoue à son point de
+reprise (le plein texte n'y vit plus par défaut ; l'index creux encore).
+Correctif générique (segment borné, scindé par morceaux) chez hotfixs sur
+relecture du cœur, après la corruption du COPY. Le crochet de test et le
+message nommé du point de reprise interrompu attendent la même fusion.
+
+**Ajout de 4 h 30 : la cause du rouge grave de l'union** (banc, page 04
+§10.1) : un pont coupé dans un sens par l'élagage d'un nœud de frontière
+(0 arête entrante vers 2 033 lignes, 219 sortantes), invisible au filtre qui
+tient pour joignable un nœud désigné par un voisin qui n'a rien perdu. C'est
+un défaut générique du filtre, et la contrainte d'I2 : une maintenance au
+commit filtrée garde une recherche pour au moins un nœud de chaque région
+détachée. La même coupure est possible en principe sur master (non vue en 13
+essais) : **ticket ouvert, condition 4 au sens du moteur**, témoin à écrire
+(0 arête entrante vers une région).
+
+## 15. Ajout de 4 h 35 : la corruption est corrigée sur master
+
+`60d74a4e2` (témoin `10a796166`, correctif `eae3863ab` : l'index relatif au
+filtre dans le rapiéçage des exceptions ALP), relu par hotfixs ; avant le
+push : le témoin neuf et OwnerlessPages ×20 verts, liste complète verte,
+banc conforme. Le ticket du rejeu se ferme avec la cause ; la stèle §2 dit
+« condition 2 : reste fermée — un défaut de lecture de l'amont révélé par le
+COPY journalisé, corrigé ». En cours : lib de luciepc (cœur), lib d'ici puis
+**retrait du filet** avec témoin sans filet et mesure de la durée de la lib
+(A), rebase du point de reprise interrompu (hotfixs). Les archives npm avec
+le filet restent bonnes ; l'alpha suivante portera le correctif.
+
+## 16. Ajout de 4 h 50 : la séance npm est prête (quatre OTP)
+
+Les quatre archives `0.0.1-alpha.2` de la tête `634c52249` (master avec le
+filet du COPY journalisé ; le contrôle de bâti, le lot 1 du proto, le profil
+`paquet`, les trois correctifs Windows) sont sous
+`~/.cache/rag3weaver-build/paquet-npm-garde/publier/` : Linux 24,8 Mo
+(binaire 67 Mo strippé, glibc 2.28), Windows 27,1 Mo (binaire 68 Mo +
+extension 12,7 Mo), macOS arm64 21,8 Mo (60 Mo), tête 29 ko (README anglais,
+épinglage exact). Identifiants de bâti moteur = extension sur chaque
+plateforme ; épreuve et sonde (200 000 lignes, 50 000 sous Windows) vertes
+sur les trois runners ; démo verte depuis les archives. Les commandes, dans
+l'ordre, un OTP chacune :
+
+```
+cd ~/.cache/rag3weaver-build/paquet-npm-garde/publier
+npm publish rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-windows-x64-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz --tag next --access public
+npm publish rag3weaver-0.0.1-alpha.2.tgz --tag next --access public
+```
+
+Puis `npm view rag3weaver@next version optionalDependencies`,
+`npm view rag3weaver-windows-x64@next version`, et la démo
+`bash ~/git_workspaces/rag3db-paquet-npm/extension/rag3weaver/bindings/nodejs/demo/demo.sh`.
+Les archives de `786dfec13` (COPY journalisé sans filet) restent étiquetées
+« ne pas publier ». L'alpha suivante portera le correctif du moteur
+(`60d74a4e2`) et la fin du filet.
+
+**Ajout de 4 h 55 : le filet est retiré** (`f9bf4574d`). La lib d'ici porte
+le correctif (04 h 33, md5 `00a1dde0…` / `5b026608…`) : la sonde d'origine
+trouve 0 ligne fausse en 5 passes ; le témoin de rag3weaver est vert sans le
+filet (6 COPY de 200 000 lignes, deux passes) ; ticket fermé dans `closed/`
+(51 ouverts, 60 fermés) ; la ligne « filet temporaire » a quitté la page des
+défauts. Mesuré : le filet coûtait ~4 s sur la lib complète (25,3 → 21,4 s) ;
+le reste du passage de 10 à 21 s (~11 s) n'est pas imputé — suspects : les
+tests ajoutés cette nuit ; au knowledge dump, pas d'enquête. La condition 2
+est entière de nouveau, et le COPY journalisé est le défaut sans réserve.
+
+## 17. État à 4 h 50
+
+- **Sur master depuis 4 h 35** : le correctif de la corruption (`60d74a4e2`),
+  le filet retiré (`f9bf4574d`), le point de reprise interrompu avec le
+  refus nommé et le crochet de test `RAG3DB_TEST_HOOKS=1` +
+  `RAG3DB_TEST_DIE_AT=checkpoint-logged` (`9f3725ade`), les rapports de nuit
+  de la recherche, du banc, de la mémoire, du proto, de codeparsers.
+- **Encore au travail** : A (la sonde de la fuite à taille réelle, puis son
+  rapport), hotfixs (lib de luciepc, puis le point de reprise sous petit
+  tampon : segment borné), le cœur (le petit ticket d'A4′, la seconde
+  suppression d'une relation, puis repos ; I2 attend Lucie).
+- **Au repos, tout rangé** : F, codeparsers, mémoire, proto, banc, G,
+  recherche. Aucun worktree ni target de la nuit ne reste hors des lots en
+  cours ; disque à 50 % ici, 78 % sur luciepc.
+- **Pour A au matin** : le témoin de la reprise sur croisement est possible
+  maintenant que le crochet existe (son correctif rag3weaver : le refus
+  immédiat avec la vraie cause).
+- **Le relevé d'orchestration passe à l'heure** à partir de 4 h 50.
+
+**Ajout de 5 h 15, A au repos** (nuit consignée, `3ed14644e`). La sonde de la
+fuite à taille réelle (600 × 250, un écrivain, trace du journal, 25 min)
+corrige la lecture d'hier : le premier paquet du mode blobs **n'évite pas le
+journal, il n'est jamais validé pendant l'essai** — la base monte à 114 Mo à
+la 8ᵉ minute puis ne bouge plus pendant 13 minutes, le journal reste à ses
+33 Ko d'ouverture. Les « 114 Mo pour 33 Ko » d'hier étaient l'état en vol
+d'un COPY qui écrit ses groupes pleins avant la validation. **Pourquoi ce
+paquet reste 13 minutes sans écrire n'est pas lu** : au ticket fermé de la
+fuite, comme reste ; un témoin produit demande un corpus long. À regarder de
+jour (une indexation en mode blobs qui stagne 13 min est un fait de produit,
+même si le mode n'est plus le défaut). Le lot « reprise sur croisement » de A
+est prêt, au signal du matin. La durée de la lib : au knowledge dump de A.
+
+## 18. Fin de nuit, 5 h 40 : toutes les sessions au repos
+
+- **Derniers lots sur master** : rel2 (`69f3ff53e`, la seconde écriture après
+  une relation vue puis supprimée refuse par « could not serialize ») ; **les
+  segments de chaînes bornés** (`4820e9154`) : une table de blobs de 3 Go
+  passe son point de reprise sous 2 Gio en 65 s là où master échouait à
+  544 Mo, le point de reprise ne réécrit plus toute la colonne ; restreint aux
+  chaînes (les FLOAT[960] gardent leur découpage). Banc de concurrence
+  **56 → 10 rouges connus** sur la nuit. Lib de luciepc à `4820e9154`
+  (05 h 36), lib d'ici à `1bf29930d` (04 h 33, correctif ALP compris ;
+  rel2 et les segments y manquent : à rebâtir au premier lot du jour).
+- **Tickets** : 51 ouverts, 60 fermés à 5 h ; ouverts cette nuit pour le
+  jour : la confirmation produit du premier index sous 2 Gio (A), la mémoire
+  résidente au-delà du tampon, le mode `--demon`, l'indexation qui meurt avec
+  le tube, le pont coupé par l'élagage, le CALL qui rend des supprimés, le
+  nœud qui relie deux entités gérées puis le huitième refus des réactions,
+  C7 après arrêt brutal, la part reprise du journal à doublon, T5.
+- **Les onze sessions** ont rendu un rapport et sont au repos, aucun worktree
+  ni target de la nuit ne reste ; disque à 50 % ici, 78 % sur luciepc. Le
+  relevé d'orchestration s'arrête ici.
+- **Reprendre** : ce rapport, §9 puis §12 à §17 ; la séance npm (§16, quatre
+  OTP) ; la recette du proto (`everything-declarative/08` §1) ; la mémoire
+  longue (`10-octobre-2026-18h00/07`, `claude mcp add`) ; les décisions
+  renversables (§9) ; I2 au mot de Lucie.
+
+## 19. Le matin du 11 octobre : les décisions de Lucie
+
+- **Une locale non typée** : son appel devient visible, non attribué, dans le
+  relevé des non-résolues (codeparsers ; les lignes du banc se réécrivent une
+  fois).
+- **I2** : plus tard, « un luxe qu'on prendra après coup » ; I1 reste le
+  produit, la page 10 reste prête.
+- **Condition 3** : A d'abord (plusieurs écrivains dans le processus, dans
+  l'ordre du cœur : T0, A7, A3′ reprise, A9 mesure puis bascule du défaut sur
+  son coût dit, A8, C7), puis B par la voie Neo4j (B2 le second processus
+  attend au fichier, B3 le démon) ; le multi-processus simultané (mémoire
+  partagée) reste écrit comme refonte, non engagée. « L'un n'empêche pas
+  l'autre. »
+- **Le serveur MCP n'est qu'une interface vers un démon** : la forme C ;
+  page `11-octobre-2026-arbre-principal/01-le-demon-possede-le-catalogue.md`
+  (treize choix au §8, rendus à Lucie avec un avis ; réponse attendue).
+- **Un nœud qui relie deux entités gérées** : oui aux deux lots dans l'ordre,
+  « toujours générique, et si le mécanisme doit être pensé plus loin dans
+  l'abstraction, à faire aussi » — la face dataflow de `Write::Link`, le
+  témoin de la garde existante d'abord.
+- **Les e2e** : « bâtis une seule fois avec le même cœur, pas un target par
+  test » — un seul binaire d'e2e, lancé une fois par suite (isolation des
+  processus gardée), un seul target d'e2e par poste ; mesure avant/après par
+  la recherche ; la règle du target se tranche après cette mesure (« 100 Go
+  pour un bâti, pas normal »).
+- **Les noms réservés** : la voie (b) par l'échappement systématique de chaque
+  identifiant dans chaque dialecte (accents graves rag3db, guillemets
+  PostgreSQL), bas niveau, invisible au concepteur de gabarits, aucune
+  migration ; le préfixe `E_`/`R_` écarté (une table de correspondance à
+  cacher partout) ; le refus (a) de la nuit tombe.
+- Reste à répondre : les treize choix de C ; les 21 tickets « perte ou
+  réponse fausse » côté produit, pour la stèle ou pour le produit ; les
+  quatre OTP de la séance npm ; `claude mcp add`.

@@ -8,7 +8,7 @@
 //! rend le chemin d'un journal, au même contrat que ceux de `run_bg`
 //! (`run_nodes::dossier_journaux`). L'avancement s'y écrit en lignes ; `wait`
 //! les attrape par son motif, et avec `timeout_s=0` les lit sans attendre. La
-//! dernière ligne est [`DONE_LINE`], ou commence par [`FAILED_PREFIX`].
+//! dernière ligne est [`DONE_LINE`], ou commence par [`FAILED_PREFIX`] ou [`STOPPED_PREFIX`].
 //!
 //! # Ce que l'avancement dit, et ce qu'il ne promet pas
 //!
@@ -198,7 +198,7 @@ impl NodeFactory for EstimateNodeFactory {
             node_type: "EstimateNode".into(),
             description: "Estimates what indexing the file source will cost: files kept and skipped (with reasons), first-index model and why, predicted vector time, and whether indexing will ask for confirmation. Writes nothing.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "probe".into(),
@@ -228,8 +228,63 @@ impl NodeFactory for EstimateNodeFactory {
 /// La dernière ligne d'un journal d'indexation qui a abouti. C'est le motif
 /// que `wait` attend ; il ne change pas.
 pub const DONE_LINE: &str = "indexation terminée";
+
+/// **Ce que vit cette indexation, dit dans la réponse** (11 octobre 2026,
+/// ticket « l'indexation est un enfant du serveur MCP et meurt avec lui »).
+/// Elle est un fil de ce processus. Un serveur qui se ferme proprement
+/// l'arrête au prochain paquet validé, et la relancer reprend là (marche 0
+/// de la forme C). Un serveur tué laisse la session ouverte, et la relance
+/// est refusée sans `takeover` (ticket « reprise après arrêt exige
+/// takeover »). Le dire, plutôt que laisser croire que le travail continue
+/// sans nous.
+pub const VIE_DE_L_INDEXATION: &str = "Elle tourne dans ce serveur : s'il se ferme (session ou tube fermés), elle s'arrête \
+     au prochain paquet validé, et relancer index reprend là. Un serveur tué (plantage, SIGKILL) la laisse en plan, \
+     et relancer index est alors refusé (la session de synchronisation laissée ouverte doit être reprise ; défaut \
+     connu, ticket « reprise après arrêt exige takeover »).";
 /// Le début de la dernière ligne d'un journal d'indexation qui a échoué.
 pub const FAILED_PREFIX: &str = "indexation échouée";
+/// Le début de la dernière ligne d'un journal d'indexation arrêtée
+/// proprement entre deux paquets : relancer `index` reprend là.
+pub const STOPPED_PREFIX: &str = "indexation arrêtée";
+
+/// **Les indexations en cours, par catalogue** : leur catalogue, leur
+/// drapeau d'arrêt et leur fil. Un backend qui se ferme arrête les siennes
+/// au prochain paquet et les attend ([`stop_indexings_of`]) avant de fermer
+/// sa base, sans toucher à celles des autres catalogues du processus (des
+/// tests en parallèle, plusieurs backends sous `serve`, le démon de C).
+struct Indexing {
+    catalog: Arc<Mutex<Catalog>>,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    handle: std::thread::JoinHandle<()>,
+}
+static INDEXINGS: std::sync::LazyLock<Mutex<Vec<Indexing>>> = std::sync::LazyLock::new(Default::default);
+
+/// **Arrêter les indexations de ce catalogue**, au prochain paquet validé
+/// (ou à la prochaine passe de vecteurs), et attendre leur fil. Rend le
+/// nombre d'indexations attendues. À appeler hors du runtime asynchrone et
+/// sans tenir le verrou du catalogue : l'attente bloque le fil appelant, et
+/// le fil d'indexation tient ce verrou pendant son plein texte.
+pub fn stop_indexings_of(catalog: &Arc<Mutex<Catalog>>) -> usize {
+    let siennes: Vec<Indexing> = {
+        let mut toutes = INDEXINGS.lock().unwrap_or_else(|p| p.into_inner());
+        let (siennes, autres): (Vec<Indexing>, Vec<Indexing>) =
+            std::mem::take(&mut *toutes).into_iter().partition(|i| Arc::ptr_eq(&i.catalog, catalog));
+        *toutes = autres;
+        siennes
+    };
+    let n = siennes.iter().filter(|i| !i.handle.is_finished()).count();
+    if n > 0 {
+        // Le client qui attend la sortie du serveur saura pourquoi.
+        eprintln!("[index] arrêt de {n} indexation(s) au prochain paquet, attente…");
+    }
+    for i in &siennes {
+        i.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    for i in siennes {
+        let _ = i.handle.join();
+    }
+    n
+}
 
 /// Un journal neuf, là où `wait` accepte d'attendre.
 pub fn new_index_journal() -> std::io::Result<std::path::PathBuf> {
@@ -257,10 +312,40 @@ pub fn spawn_index(
     kept_bytes: u64,
     generated: GeneratedPolicy,
 ) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated) {
+    spawn_index_with_stop(catalog, source, journal, kept_bytes, generated, Arc::new(std::sync::atomic::AtomicBool::new(false)))
+}
+
+/// [`spawn_index`], avec le drapeau d'arrêt de l'appelant.
+fn spawn_index_with_stop(
+    catalog: Arc<Mutex<Catalog>>,
+    source: Arc<dyn FileSource>,
+    journal: std::path::PathBuf,
+    kept_bytes: u64,
+    generated: GeneratedPolicy,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &stop) {
         Ok(()) => log(&journal, DONE_LINE),
+        Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => log(&journal, &format!("{STOPPED_PREFIX} : {e}")),
+        Err(e) if e.starts_with(STOPPED_PREFIX) => log(&journal, &e),
         Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),
     })
+}
+
+/// **Indexer en fond, arrêtable** : comme [`spawn_index`], et l'indexation
+/// est inscrite parmi celles que [`stop_indexings_of`] arrête et attend.
+pub fn spawn_stoppable_index(
+    catalog: Arc<Mutex<Catalog>>,
+    source: Arc<dyn FileSource>,
+    journal: std::path::PathBuf,
+    kept_bytes: u64,
+    generated: GeneratedPolicy,
+) {
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let handle = spawn_index_with_stop(catalog.clone(), source, journal, kept_bytes, generated, stop.clone());
+    let mut indexings = INDEXINGS.lock().unwrap_or_else(|p| p.into_inner());
+    indexings.retain(|i| !i.handle.is_finished());
+    indexings.push(Indexing { catalog, stop, handle });
 }
 
 fn run_index(
@@ -269,6 +354,7 @@ fn run_index(
     journal: &std::path::Path,
     kept_bytes: u64,
     generated: GeneratedPolicy,
+    stop: &Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<(), String> {
     use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
     use crate::disponibilite::Disponibilites;
@@ -279,7 +365,7 @@ fn run_index(
     const ENTITIES: [&str; 4] = [crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY, crate::code::SYMBOL];
 
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
-    let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, generated, ..Default::default() };
+    let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, generated, stop: Some(stop.clone()), ..Default::default() };
     let report = {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         guard.note_indexing_started(&ENTITIES).map_err(|e| e.to_string())?;
@@ -341,6 +427,13 @@ fn run_index(
     let mut embedded = 0usize;
     let mut last_percent = start.dense_percent();
     loop {
+        // Entre deux passes : un serveur qui se ferme n'attend pas la dette
+        // entière ; ce qui reste se reprend à la prochaine indexation.
+        if stop.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(format!(
+                "{STOPPED_PREFIX} entre deux passes de vecteurs : le plein texte est prêt, relancer index embarque le reste"
+            ));
+        }
         let (n, progress) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
             let n = guard.embarquer_le_retard(Disponibilites::TOUT, 512, None).map_err(|e| e.to_string())?;
@@ -433,15 +526,15 @@ impl Node for IndexNode {
         let journal = new_index_journal().map_err(|e| format!("IndexNode: journal : {e}"))?;
         log(&journal, &format!("indexation lancée : {} fichiers, {}", estimate.survey.files, estimate.model));
         // Détaché : c'est le journal qui porte la suite, pas ce tour de parole.
-        drop(spawn_index(catalog, source, journal.clone(), estimate.survey.bytes, generated));
+        spawn_stoppable_index(catalog, source, journal.clone(), estimate.survey.bytes, generated);
         ctx.metric("files", estimate.survey.files as f64);
         let path = journal.to_string_lossy().to_string();
         let value = match self.format {
             ToolFormat::Markdown => serde_json::Value::String(format!(
-                "indexation lancée en fond.\njournal : {path}\n{}\nSuivre : wait(journal, pattern='{DONE_LINE}|{FAILED_PREFIX}') — avec timeout_s=0 pour lire l'état sans attendre.",
+                "indexation lancée en fond.\njournal : {path}\n{}\nSuivre : wait(journal, pattern='{DONE_LINE}|{FAILED_PREFIX}|{STOPPED_PREFIX}') — avec timeout_s=0 pour lire l'état sans attendre.\n{VIE_DE_L_INDEXATION}",
                 estimate.text()
             )),
-            ToolFormat::Json => serde_json::json!({ "journal": path, "done": DONE_LINE, "failed": FAILED_PREFIX, "estimate": estimate }),
+            ToolFormat::Json => serde_json::json!({ "journal": path, "done": DONE_LINE, "failed": FAILED_PREFIX, "stopped": STOPPED_PREFIX, "estimate": estimate, "vie": VIE_DE_L_INDEXATION }),
         };
         ctx.set_output("result", PortValue::new(value));
         Ok(())
@@ -469,7 +562,7 @@ impl NodeFactory for IndexNodeFactory {
             node_type: "IndexNode".into(),
             description: "Indexes the file source in the background: full text first, vectors afterwards. Refuses without confirm=true when the estimate exceeds the declared threshold. Returns the path of a journal that `wait` can follow.".into(),
             inputs: vec![],
-            outputs: vec![PortDef { name: "result".into(), port_type: PortType::Map, required: false }],
+            outputs: vec![PortDef::value("result", PortType::Map, false)],
             config_params: vec![
                 ConfigParam {
                     name: "confirm".into(),
@@ -605,6 +698,36 @@ mod tests {
         assert_eq!(confirmation_refusal(&fast, false), None, "sous le seuil : rien à confirmer");
         let unknown = Estimate::new(s, choice, None, CONFIRM_ABOVE);
         assert_eq!(confirmation_refusal(&unknown, false), None, "on ne bloque pas sur une durée inconnue");
+    }
+
+    /// **La réponse d'`index` dit ce que vit l'indexation** : un fil de ce
+    /// serveur, arrêté au prochain paquet quand il se ferme et repris par la
+    /// relance ; refusée seulement après un serveur tué (ticket « l'indexation
+    /// est un enfant du serveur MCP et meurt avec lui »).
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn la_reponse_d_index_dit_que_l_indexation_meurt_avec_le_serveur() {
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", [("a.rs".to_string(), "pub fn a() {}\n".to_string())]));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("vie".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let mut services = ServiceRegistry::new();
+        services.register(FILE_SOURCE_SERVICE, source);
+        services.register("catalog", Arc::new(Mutex::new(catalog)));
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        IndexNode::new("index").execute(&mut ctx).expect("lancée");
+        let texte = ctx
+            .drain_outputs()
+            .remove("result")
+            .and_then(crate::dataflow::port::take_or_clone::<serde_json::Value>)
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        assert!(texte.contains("au prochain paquet validé"), "{texte}");
+        assert!(texte.contains("relancer index reprend là"), "ce qui est vrai après un arrêt propre : {texte}");
+        assert!(texte.contains("relancer index est alors refusé"), "ce qui est vrai après un serveur tué : {texte}");
+        assert!(!texte.contains("--demon"), "le démon ne la porterait pas : {texte}");
     }
 
     #[test]

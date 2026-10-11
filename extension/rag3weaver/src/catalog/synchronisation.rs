@@ -88,6 +88,12 @@ pub struct SnapshotSession {
     /// La session abandonnée que `takeover` a remplacée, s'il y en avait une.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaced: Option<String>,
+    /// **Suspendue par son propriétaire** (millisecondes depuis l'époque
+    /// Unix) : arrêtée proprement entre deux paquets, elle attend sa reprise.
+    /// La session suivante sur ce périmètre la reprend sans `takeover`, comme
+    /// un `takeover` : rien ne tourne plus derrière elle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suspended_at: Option<i64>,
 }
 
 /// Une durée lisible : c'est sur elle qu'un appelant décide d'un `takeover`.
@@ -284,7 +290,7 @@ impl Catalog {
         self.check_scope_declared(entity_name, scope)?;
         self.check_no_overlapping_grain(entity_name, scope)?;
         let replaced = match self.open_snapshot_session(entity_name, scope)? {
-            Some(open) if !takeover => {
+            Some(open) if !takeover && open.suspended_at.is_none() => {
                 return Err(CatalogError::SnapshotRefused(format!(
                     "{entity_name} : une session est déjà ouverte sur ce périmètre ('{}', ouverte depuis {}) ; \
                      une seule à la fois — la finir, l'abandonner, ou takeover pour la reprendre",
@@ -302,12 +308,33 @@ impl Catalog {
                 "identifiant de session « {session} » : il contient « {WRITTEN_SUFFIX} », réservé à la marque d'une écriture"
             )));
         }
-        let open = SnapshotSession { session, opened_at, replaced };
+        let open = SnapshotSession { session, opened_at, replaced, suspended_at: None };
         let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
         self.oublier_les_sessions(entity_name);
         Ok(open)
+    }
+
+    /// **Suspendre une session** : son propriétaire s'arrête proprement entre
+    /// deux paquets. Elle reste ouverte, avec ce qu'elle a marqué ; la session
+    /// suivante sur ce périmètre la reprend sans `takeover` (le refus protège
+    /// une synchronisation vivante, et celle-ci ne l'est plus).
+    pub fn suspend_snapshot(
+        &mut self,
+        entity_name: &str,
+        scope: &BTreeMap<String, CypherValue>,
+        session: &str,
+    ) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.check_ecriture("suspend_snapshot")?;
+        self.check_entity(entity_name)?;
+        let open = self.check_open_session(entity_name, scope, session)?;
+        let value = serde_json::to_string(&SnapshotSession { replaced: None, suspended_at: Some(now_ms()), ..open })
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
+        self.oublier_les_sessions(entity_name);
+        Ok(())
     }
 
     /// **Abandonner une session** : elle se ferme, rien n'est retiré.

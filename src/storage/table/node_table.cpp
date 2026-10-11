@@ -9,6 +9,7 @@
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
 #include "common/data_chunk/data_chunk_state.h"
+#include "common/exception/duplicated_primary_key.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
@@ -487,8 +488,7 @@ void NodeTable::validatePkNotExists(const Transaction* transaction, ValueVector*
     }
     if (getPKIndex()->lookup(transaction, pkVector, selVector[0], dummyOffset,
             getUniquenessVisibleFunc(transaction))) {
-        throw RuntimeException(
-            ExceptionMessage::duplicatePKException(pkVector->getAsValue(selVector[0])->toString()));
+        throw DuplicatedPrimaryKeyException(pkVector->getAsValue(selVector[0])->toString());
     }
 }
 
@@ -572,7 +572,14 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
                 ->refreshSnapshot(transaction);
         }
     }
-    validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
+    // Au rejeu du journal, l'unicité a été contrôlée quand le journal a été écrit ; un journal
+    // du moteur d'avant le verrou de clé peut pourtant porter un doublon validé : la ligne est
+    // rejouée (elle garde son décalage, dont dépendent les enregistrements qui suivent), et
+    // c'est l'index de clé, au commit, qui note le doublon ; la reprise le règle à sa fin
+    // (WALReplayer::settleReplayedDuplicates, marche A3′ reprise).
+    if (!transaction->isRecovery()) {
+        validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
+    }
     localTable->insert(transaction, insertState);
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeInsertState.indexInsertStates[i]) {

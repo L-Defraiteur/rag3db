@@ -10,28 +10,134 @@ use std::{
 /// un backend et le lui donner.
 ///
 /// ```text
-/// rag3weaver-backend mcp --manifest <backend.json> [--keys dev,admin] [--demon 127.0.0.1:7979]
+/// rag3weaver-backend mcp --manifest <backend.json> [--keys dev,admin] [--daemon <adresse> | --standalone]
 /// ```
 ///
-/// **Deux modes, et c'est la propriété de la base qui les sépare.**
+/// **Par défaut, un client mince de l'hôte du démon** (forme C, marches 3 et
+/// 4) : une base rag3db ne s'ouvre que par un processus, et Claude Code lance
+/// un processus MCP par session — l'hôte (`rag3weaver-backend daemon`) tient
+/// les bases, N sessions lui parlent. Le client trouve l'hôte par
+/// `daemon.json` et le lance s'il manque ; `--daemon <adresse>` force une
+/// adresse. Sans hôte joignable, le serveur démarre quand même et l'outil
+/// `daemon_status` dit pourquoi.
 ///
-/// Sans `--demon`, le serveur **possède** la base : bon pour un backend de code
-/// en lecture, une session. Mais une base rag3db ne s'ouvre que par un seul
-/// processus, et Claude Code lance **un processus MCP par session** — donc deux
-/// sessions sur la même mémoire seraient deux écrivains, refusés par le moteur.
+/// `--standalone` : la forme d'avant, le serveur **possède** sa base — une
+/// session à la fois.
+/// **L'entrée du serveur MCP, qui finit sur EOF ou sur SIGTERM** (11 octobre
+/// 2026, marche à part de la page C, §4).
 ///
-/// Avec `--demon`, le serveur ne possède plus rien : son backend reste local
-/// (ses outils et ses schémas ne demandent aucune base) et sa **connexion**
-/// passe par `rag3daemon`, qui est le processus unique qui tient la base.
-/// N serveurs, un écrivain, et aucun protocole à relayer — `DaemonConnection`
-/// est une `DbConnection` comme une autre. C'est la forme produit : installer
-/// rag3weaver, c'est installer un démon.
+/// Le cycle de vie MCP sur stdio prévoit que le client ferme l'entrée, attend la
+/// sortie, **puis envoie SIGTERM** s'il juge l'attente trop longue, puis SIGKILL.
+/// Depuis l'arrêt propre des indexations (marche 0), fermer le tube les arrête
+/// au prochain paquet validé et les attend : quelques secondes, davantage sur
+/// un paquet de blobs. Un SIGTERM par défaut tuait le serveur au milieu, et
+/// laissait la session de synchronisation ouverte.
+///
+/// Ici, SIGTERM **vaut la fermeture du tube** : la boucle MCP voit une fin
+/// d'entrée ordinaire, finit l'appel en cours s'il y en a un, et l'arrêt reste
+/// celui de toujours — réactions, indexations au prochain paquet, catalogue,
+/// puis la base détruite proprement à la sortie de la portée. `mcp.rs` n'en sait
+/// rien. Un second SIGTERM ne fait plus rien : seul SIGKILL laisse alors la
+/// session en plan, et c'est le contrat.
+///
+/// La lecture de stdin vit dans son propre fil, parce qu'une lecture bloquée ne
+/// s'interrompt pas proprement ; les lignes passent par un canal où le fil du
+/// signal peut glisser la fin.
+struct EntreeInterruptible {
+    lignes: std::sync::mpsc::Receiver<Option<Vec<u8>>>,
+    tampon: Vec<u8>,
+    position: usize,
+    finie: bool,
+}
+
+impl EntreeInterruptible {
+    fn sur_stdin() -> Self {
+        let (envoi, lignes) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+        let lecteur = envoi.clone();
+        std::thread::spawn(move || {
+            let mut stdin = io::stdin().lock();
+            loop {
+                let mut ligne = Vec::new();
+                match stdin.read_until(b'\n', &mut ligne) {
+                    Ok(0) | Err(_) => {
+                        let _ = lecteur.send(None);
+                        return;
+                    }
+                    Ok(_) => {
+                        if lecteur.send(Some(ligne)).is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+        #[cfg(unix)]
+        std::thread::spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_io().build() else {
+                eprintln!("[mcp] SIGTERM ne sera pas intercepté : runtime du signal indisponible");
+                return;
+            };
+            rt.block_on(async {
+                use tokio::signal::unix::{signal, SignalKind};
+                let Ok(mut terme) = signal(SignalKind::terminate()) else {
+                    eprintln!("[mcp] SIGTERM ne sera pas intercepté : gestionnaire refusé");
+                    return;
+                };
+                if terme.recv().await.is_some() {
+                    eprintln!(
+                        "[mcp] SIGTERM : arrêt propre, comme une fermeture du tube — l'appel en \
+                         cours finit, les indexations s'arrêtent au prochain paquet"
+                    );
+                    let _ = envoi.send(None);
+                }
+                // Le gestionnaire reste en place : un second SIGTERM ne tue
+                // pas un arrêt propre en cours ; SIGKILL, si.
+                std::future::pending::<()>().await;
+            });
+        });
+        Self { lignes, tampon: Vec::new(), position: 0, finie: false }
+    }
+}
+
+impl io::Read for EntreeInterruptible {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let disponible = io::BufRead::fill_buf(self)?;
+        let n = disponible.len().min(buf.len());
+        buf[..n].copy_from_slice(&disponible[..n]);
+        io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl io::BufRead for EntreeInterruptible {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.position >= self.tampon.len() && !self.finie {
+            match self.lignes.recv() {
+                Ok(Some(ligne)) => {
+                    self.tampon = ligne;
+                    self.position = 0;
+                }
+                Ok(None) | Err(_) => self.finie = true,
+            }
+        }
+        if self.finie && self.position >= self.tampon.len() {
+            return Ok(&[]);
+        }
+        Ok(&self.tampon[self.position..])
+    }
+
+    fn consume(&mut self, n: usize) {
+        self.position = (self.position + n).min(self.tampon.len());
+    }
+}
+
 fn servir_mcp(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
-                         [--keys dev,admin] [--demon <adresse>]";
+                         [--keys dev,admin] [--daemon <adresse> | --standalone]";
     let mut manifeste: Option<String> = None;
     let mut cles: Vec<String> = Vec::new();
-    let mut demon: Option<String> = None;
+    let mut hote: Option<String> = None;
+    let mut seul = false;
     let mut i = 0;
     while i < args.len() {
         let valeur = |i: usize| -> Result<String, String> {
@@ -39,7 +145,23 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         };
         match args[i].as_str() {
             "--manifest" => { manifeste = Some(valeur(i)?); i += 2; }
-            "--demon" => { demon = Some(valeur(i)?); i += 2; }
+            "--daemon" => { hote = Some(valeur(i)?); i += 2; }
+            // **La forme d'avant la forme C** : ce processus possède sa base.
+            // Une session à la fois ; gardée pour les témoins et les usages à
+            // une seule session, jusqu'à son retrait (page C, en dernier).
+            "--standalone" => { seul = true; i += 1; }
+            // **L'ancien sens, refusé en le disant** (page C, §3) : `--demon`
+            // ne déportait que la connexion, et N sessions y faisaient N
+            // réacteurs. Pas un synonyme silencieux de `--daemon`, qui veut
+            // dire l'inverse : tout passe à l'hôte.
+            "--demon" => {
+                return Err(format!(
+                    "--demon est retiré : il ne déportait que la connexion à la base, et chaque \
+                     session gardait son catalogue et son réacteur. Sous la forme C, le serveur \
+                     MCP est un client mince de l'hôte : --daemon <adresse> (l'hôte se lance par \
+                     `rag3weaver-backend daemon`)\n{USAGE}"
+                ))
+            }
             "--keys" => {
                 cles = valeur(i)?
                     .split(',')
@@ -53,6 +175,44 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         }
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
+    if seul && hote.is_some() {
+        return Err(format!("--standalone et --daemon s'excluent : l'un possède la base, l'autre la laisse à l'hôte\n{USAGE}"));
+    }
+    // **Le client mince, par défaut** (marches 3 et 4 de la forme C) : rien ne
+    // s'ouvre ici, ni base ni modèle ; tout passe à l'hôte, et ce processus ne
+    // garde que le protocole MCP. L'hôte se trouve par `daemon.json` et se
+    // lance s'il manque ; `--daemon <adresse>` force une adresse. S'il ne peut
+    // pas être joint, le serveur démarre quand même et le dit par l'outil
+    // `daemon_status`.
+    if !seul {
+        use rag3weaver::daemon_client::{Attach, McpClient};
+        let attach = match &hote {
+            Some(adresse) => Attach::Forced(adresse.clone()),
+            None => Attach::Discover(std::env::current_exe().map_err(|e| format!("l'exécutable courant : {e}"))?),
+        };
+        let client = McpClient::start(attach, Path::new(&manifeste), &format!("mcp (pid {})", std::process::id()), cles.clone());
+        eprintln!(
+            "[mcp] {} — {} outils, clés présentées : {} — client mince de l'hôte{}",
+            rag3weaver::mcp::Hote::nom(&client),
+            rag3weaver::mcp::Hote::outils(&client).len(),
+            if cles.is_empty() { "aucune".to_string() } else { cles.join(",") },
+            match client.session() {
+                Some(s) => format!(", session {s}"),
+                None => " — absent pour l'instant".to_string(),
+            }
+        );
+        let reactions = client.reactions();
+        if !reactions.is_empty() {
+            eprintln!("[mcp] {} réaction(s) montée(s) par l'hôte : {}", reactions.len(), reactions.join(", "));
+        }
+        let mut entree = EntreeInterruptible::sur_stdin();
+        let mut sortie = io::stdout();
+        let suite = rag3weaver::mcp::servir(&client, &cles, &mut entree, &mut sortie);
+        client.close();
+        // `doit_rouvrir` n'existe pas pour un client mince : c'est l'hôte qui
+        // rouvre, et l'appel concerné l'a dit (erreur transitoire).
+        return suite.map(|_| ());
+    }
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
     let database = prepared.path(&prepared.manifest.database);
     if let Some(parent) = database.parent() {
@@ -74,26 +234,26 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         prepared.manifest.name,
         if cles.is_empty() { "aucune".to_string() } else { cles.join(",") }
     );
-    let conn: Box<dyn rag3weaver::connection::DbConnection> = match &demon {
-        Some(adresse) => {
-            let serveur = rag3weaver::daemon::DaemonConnection::serveur(
-                adresse.clone(),
-                "rag3daemon",
-                database.display().to_string(),
-            );
-            eprintln!("[mcp] la base est tenue par le démon sur {adresse} — ce serveur ne la possède pas");
-            Box::new(
-                rag3weaver::daemon::DaemonConnection::assurer(&serveur)
-                    .map_err(|e| format!("le démon sur {adresse} : {e}"))?,
-            )
-        }
-        None => Box::new(
-            Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
-                .map_err(|e| e.to_string())?,
-        ),
-    };
+    let conn: Box<dyn rag3weaver::connection::DbConnection> = Box::new(
+        Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
+            .map_err(|e| e.to_string())?,
+    );
     let mut backend = prepared.open(conn, embedder)?;
-    let mut entree = io::BufReader::new(io::stdin());
+    // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
+    // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
+    // qu'un graphe tourne derrière les outils, et un opérateur ne peut pas
+    // distinguer « la réaction est montée » de « la section a été ignorée ».
+    let reactions = backend.prepared().reaction_graphs().keys().cloned().collect::<Vec<_>>();
+    if reactions.is_empty() {
+        eprintln!("[mcp] aucune réaction déclarée");
+    } else {
+        eprintln!(
+            "[mcp] {} réaction(s) montée(s) : {}",
+            reactions.len(),
+            reactions.join(", ")
+        );
+    }
+    let mut entree = EntreeInterruptible::sur_stdin();
     let mut sortie = io::stdout();
     match rag3weaver::mcp::servir(&backend, &cles, &mut entree, &mut sortie)? {
         rag3weaver::mcp::Suite::Fini => backend.shutdown(),
@@ -148,6 +308,109 @@ fn modele_du_chat(
              allumer le chat"
             .into())
     }
+}
+
+/// **Le démon de la forme C** (marche 1) : plusieurs backends, des sessions,
+/// des clients minces sur la boucle locale ([`rag3weaver::daemon_host`]).
+///
+/// ```text
+/// rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]
+/// ```
+///
+/// `POST /arret` ferme l'écoute, puis chaque backend proprement.
+fn servir_le_demon(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
+    // L'adresse par défaut : `RAG3WEAVER_DAEMON_ADDRESS`, sinon 127.0.0.1:7970
+    // (c'est ainsi qu'un client lance l'hôte) ; `--address` la donne à la main.
+    let mut adresse = rag3weaver::daemon_lifecycle::launch_address();
+    let mut explicite = false;
+    let mut fils = 8usize;
+    let mut i = 0;
+    while i < args.len() {
+        let valeur = args.get(i + 1).cloned().ok_or_else(|| format!("{} attend une valeur\n{USAGE}", args[i]))?;
+        match args[i].as_str() {
+            "--address" => {
+                adresse = valeur;
+                explicite = true;
+            }
+            "--threads" => fils = valeur.parse().map_err(|_| format!("--threads attend un nombre\n{USAGE}"))?,
+            autre => return Err(format!("option inconnue : {autre}\n{USAGE}")),
+        }
+        i += 2;
+    }
+    if !rag3weaver::daemon::est_local(&adresse) {
+        return Err(format!("le démon n'écoute que sur la boucle locale : {adresse}"));
+    }
+    use rag3weaver::daemon_lifecycle as cycle;
+    // **Un démon** : un hôte vivant qui répond déjà refuse ce démarrage, en
+    // le nommant — deux hôtes pourraient ouvrir les mêmes bases. Seul un
+    // `--address` explicite (un hôte à la main, pour un témoin) passe outre,
+    // en le disant, et sans toucher au fichier de l'autre.
+    let autre = cycle::read().filter(|f| f.pid != std::process::id() && cycle::answers(f));
+    if let (Some(autre), false) = (&autre, explicite) {
+        return Err(format!(
+            "un hôte répond déjà à {} (pid {}, {}) : un seul démon. L'arrêter : kill -TERM {} ; ou \
+             --address pour un second hôte à la main, qui n'écrira pas {}",
+            autre.address,
+            autre.pid,
+            autre.build,
+            autre.pid,
+            cycle::file_path().display()
+        ));
+    }
+    // **Le port d'abord, `daemon.json` ensuite** (marche 4, page C §5) : le
+    // fichier dit l'adresse réellement servie, un port 0 résolu.
+    let ecoute = std::net::TcpListener::bind(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
+    let servie = ecoute.local_addr().map_err(|e| e.to_string())?.to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).map_err(|e| format!("{servie} : {e}"))?;
+    let jeton = cycle::new_token()?;
+    let pid = std::process::id();
+    let fiche = cycle::DaemonFile {
+        address: servie.clone(),
+        pid,
+        token: jeton.clone(),
+        build: cycle::build_id(),
+        started_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    };
+    if let Some(autre) = &autre {
+        eprintln!(
+            "[démon] un autre hôte répond déjà ({}, pid {}) : hôte à la main par --address, {} n'est \
+             pas réécrit, les clients continueront d'aller à lui",
+            autre.address,
+            autre.pid,
+            cycle::file_path().display()
+        );
+    } else {
+        cycle::write(&fiche)?;
+    }
+    eprintln!(
+        "[démon] {} — http://{servie}/ ; POST /session, puis /open, /describe, /call ; POST /arret pour \
+         arrêter ; {} (jeton local exigé)",
+        rag3weaver::daemon_host::SERVICE,
+        cycle::file_path().display()
+    );
+    // **SIGTERM vaut `POST /arret`** : la même poignée d'arrêt, les bases
+    // fermées proprement, puis `daemon.json` retiré.
+    let serveur = rag3weaver::daemon_host::DaemonServer::new(server, fils);
+    let arret = serveur.stopper();
+    std::thread::spawn(move || {
+        let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
+        rt.block_on(async {
+            use tokio::signal::unix::{signal, SignalKind};
+            let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
+            if terme.recv().await.is_some() {
+                eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
+                arret.stop();
+            }
+        });
+    });
+    serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()), Some(jeton));
+    cycle::remove_if_mine(pid);
+    eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
+    Ok(())
 }
 
 fn servir_http(args: &[String]) -> Result<(), String> {
@@ -230,6 +493,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("serve") {
         return servir_http(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("daemon") {
+        return servir_le_demon(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

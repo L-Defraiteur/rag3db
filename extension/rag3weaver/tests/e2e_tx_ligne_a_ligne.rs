@@ -49,13 +49,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/tx-ligne-a-ligne").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("tx-ligne-a-ligne", cas)
 }
 
 /// La version 1 : 300 fichiers de 8 fonctions qui s'appellent, un fichier
@@ -179,7 +173,7 @@ fn role_enfant() {
 
 fn lancer(role: &str, base: &Path, transaction: bool) -> std::process::Output {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.args(["--exact", "role_enfant", "--nocapture", "--ignored"])
+    cmd.args(["--exact", &crate::common::test_de_cette_suite!("role_enfant"), "--nocapture", "--ignored"])
         .env(ROLE, role)
         .env(BASE, base)
         .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", "4")

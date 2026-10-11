@@ -157,6 +157,7 @@ pub mod node_id_cache;
 pub mod derived_kb;
 pub mod ocr;
 pub mod origin;
+pub mod plan;
 pub mod records;
 pub mod relation_directions;
 pub mod dataflow;
@@ -168,8 +169,18 @@ pub mod declare;
 pub mod routes;
 #[cfg(feature = "daemon")]
 pub mod serve;
+/// L'hôte du démon de la forme C : plusieurs backends, des sessions, des
+/// clients minces sur la boucle locale.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_host;
+/// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_client;
+/// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
+/// lancement par le premier client.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_lifecycle;
 pub mod schema;
-mod mots_reserves_rag3db;
 pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,
 /// rafale » qui décide si le poste reste utilisable pendant qu'on travaille.
@@ -218,6 +229,10 @@ pub use llm::{
 };
 /// La boucle d'agent : générer, exécuter les outils, réinjecter, recommencer.
 pub mod agent;
+/// Les ports de la boucle d'agent : un sous-graphe sur n'importe lequel.
+pub mod agent_ports;
+/// L'annuaire de la session : à qui un agent peut écrire (`send`).
+pub mod directory;
 pub use agent::{
     Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
 };

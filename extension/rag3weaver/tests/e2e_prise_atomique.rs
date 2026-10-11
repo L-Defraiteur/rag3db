@@ -175,7 +175,7 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
         // `--ignored` : l'enfant relance ce même test, qui porte `#[ignore]`.
         // Sans ça il ne joue rien et le parent croit à un refus silencieux.
-        .args(["--exact", "deux_processus_ne_peuvent_pas_ouvrir_la_meme_base", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("deux_processus_ne_peuvent_pas_ouvrir_la_meme_base"), "--ignored"])
         .env(MARQUE, &dossier)
         .output()
         .expect("lancer l'enfant");
@@ -255,7 +255,7 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
 
     let enfant = |marque: &str| -> Option<i32> {
         std::process::Command::new(std::env::current_exe().expect("current_exe"))
-            .args(["--exact", "plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient", "--ignored"])
+            .args(["--exact", &crate::common::test_de_cette_suite!("plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient"), "--ignored"])
             .env(marque, &dossier)
             .output()
             .expect("lancer l'enfant")
@@ -407,7 +407,7 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
         // `--nocapture` : sans lui le harnais de l'enfant avale son `println!`,
         // et le parent ne lit rien — l'enfant paraîtrait muet alors qu'il parle.
-        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_lecteur_qui_insiste_pendant_qu_on_ecrit"), "--nocapture", "--ignored"])
         .env(INSISTANT, &dossier)
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -571,7 +571,7 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
         let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
             .args([
                 "--exact",
-                "la_marque_dingestion_se_voit_depuis_un_autre_processus",
+                &crate::common::test_de_cette_suite!("la_marque_dingestion_se_voit_depuis_un_autre_processus"),
                 "--nocapture",
                 "--ignored",
             ])
@@ -749,7 +749,7 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
     }
 
     let code = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", "un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose"), "--ignored"])
         .env(ENFANT_LECTEUR, &dossier)
         .output()
         .expect("lancer l'enfant");
@@ -1108,7 +1108,7 @@ fn aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait() {
         .expect("table");
     // Le même lecteur que le test voisin, avec une borne courte.
     let mut enfant = std::process::Command::new(std::env::current_exe().expect("current_exe"))
-        .args(["--exact", "un_lecteur_qui_insiste_pendant_qu_on_ecrit", "--nocapture", "--ignored"])
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_lecteur_qui_insiste_pendant_qu_on_ecrit"), "--nocapture", "--ignored"])
         .env(INSISTANT, &dossier)
         .env("RAG3WEAVER_READ_ONLY_CROSSED_MS", "1")
         .env("RAG3WEAVER_ENFANT_CYCLES", "2000")

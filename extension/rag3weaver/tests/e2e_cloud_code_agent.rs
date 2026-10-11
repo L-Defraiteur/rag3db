@@ -9,7 +9,8 @@
 //! Run with: ./run_e2e.sh --test e2e_cloud_code_agent --features openai-llm
 #![cfg(all(feature = "rag3db-native", feature = "openai-llm", feature = "burn-embedder", feature = "code"))]
 
-mod common;
+#[allow(unused_imports)] // employé sous certaines features seulement
+use crate::common;
 
 use std::sync::{Arc, Mutex};
 use std::time::Instant;

@@ -294,6 +294,18 @@ Une réponse à débattre (proposition de l'orchestration, rien d'essayé) :
   marche 3 arrive ; d'ici là, la marche 2 doit seulement éviter de coller le
   cœur des graphes à tokio plus qu'il ne l'est.
 
+- **Le playground WASM, « luxe ultime de marketing » (Lucie, 11 octobre)** :
+  une vitrine qui tourne dans le navigateur, « regardez comme mes habits sont
+  saillants ». Pas maintenant, mais la pile est connue : rag3db compilé en
+  WASM (précédent Kuzu, emscripten, ses fils par workers) ; rag3weaver dessus
+  avec tokio à un fil **dans chaque worker** (`rt`, `sync`, `macros` compilent
+  pour wasm32 ; pas de réseau, de fichiers ni de processus) ; **luciole entre
+  les workers** comme couche d'acteurs — la seule forme de parallélisme d'un
+  navigateur sans mémoire partagée, pas un pis-aller ; embarquements et modèle
+  par le réseau vers un service ; le navigateur n'est qu'un client mince de
+  plus du démon. Ni fork de tokio, ni luciole réécrite en exécuteur : les deux
+  sont complémentaires. Un projet à part, de l'ordre de quelques semaines,
+  après ce qu'on fait.
 - **Tranché par Lucie, 8 octobre** : le navigateur (WASM) est **abandonné
   pour l'instant** — « chiant de se passer d'async partout ». Plus aucune
   restriction sur la marche 2 pour le ménager : tokio partout, la boucle
@@ -312,6 +324,109 @@ Trois règles pour tenir ce cap :
   un confort attend la marche qui en a besoin.
 - **Rien qui ne sert qu'à faire beau** : une démonstration se bâtit sur une
   pièce posée, jamais à côté.
+
+### Le démon, et après (Lucie, 11 octobre 2026)
+
+Décidé : **le serveur MCP n'est qu'une interface vers un démon** ; le démon
+possède le catalogue, les travaux longs (indexation, commande en fond) et le
+réacteur ; le chat, l'atelier, la CLI et MCP sont des clients minces qui lui
+parlent par une seule forme (page `docs/11-octobre-2026-arbre-principal/01-…`).
+Un seul démon pour toutes les bases pour le moment. **À moyen terme, après ce
+chantier** : un démon routeur et des démons spécialisés derrière lui — un par
+base, ou portant plusieurs bases — pour qu'un démon qui tombe n'emporte pas
+tout et que le tampon du moteur ne se partage plus entre tous les backends.
+C'est aussi la voie Neo4j pour plusieurs processus : un processus tient une
+base, les autres lui parlent ; le multi-processus simultané sur un même
+fichier (mémoire partagée, PostgreSQL) reste une refonte non engagée.
+
+### L'IR, et le chaînage des formes (Lucie et l'orchestration, 11 octobre 2026)
+
+L'IR (`rag3weaver-ir`) n'est pas un langage qu'on écrit : c'est une structure
+de données — des formes typées (`Hop`, `Select`, `Count`, `Write`, bientôt
+`Tx`) dont les noms d'entités, de champs et de relations sont des valeurs.
+Il n'y a pas de texte au-dessus des dialectes, donc pas d'échappement, pas
+de conflit possible entre nos verbes et les noms déclarés ; le texte (Cypher,
+SQL) naît dans le dialecte seul, qui cite chaque identifiant à sa façon. Le
+format de transport (JSON quand le client mince parlera au démon) est à
+part de la structure ; un seul suffit. Les limites de l'IR sont dans ce
+qu'il sait dire, et chaque manque se comble par une forme de plus, que
+chaque dialecte déclare savoir traduire ou refuse en la nommant.
+
+**Le chaînage des formes** : aujourd'hui, c'est le graphe de traitement qui
+compose, une forme par nœud, un aller-retour par forme. Le jour où un fil
+sépare l'outil du moteur (le démon, PostgreSQL), le chaînage utile n'est pas
+une forme « pipeline » de l'IR mais **un sous-graphe de formes confié entier
+au dialecte** : le mermaid reste le même, une frontière y marque le
+sous-graphe « au dialecte » ; un dialecte qui le sait le traduit en une seule
+requête (une chaîne de MATCH, des tables temporaires nommées), un autre
+l'exécute pas à pas comme aujourd'hui — même déclaration, deux exécutions.
+C'est une capacité déclarée de plus. Le sous-graphe confié ne contient que
+des formes de l'IR (un nœud scripté ou un nœud qui parle au système y est
+refusé au chargement), et l'exécution enregistrée dit qu'il a été poussé
+d'un bloc, avec le texte produit. À faire quand une mesure le demande.
+
+### L'agent est un graphe à ports, et les ports portent des flux (Lucie, 11 octobre 2026)
+
+« Un agent est un DAG ; un DAG est potentiellement un outil quand on a besoin
+qu'il le soit, dont les agents ; ce que ça veut dire n'est pas forcément
+d'attendre son retour : peut-être juste le lancer en fond avec un message
+initial et la référence de qui je suis, qu'il puisse me parler. » Et : « à
+tout moment pouvoir faire un appel structuré — selon ce qu'a dit
+l'utilisateur une classification, un routage vers un autre agent, une
+action ; selon ce que quelqu'un lui a envoyé, transmettre ou non ; selon un
+retour d'outil ou une réponse d'agent, faire telle chose en plus — que tout
+soit traduisible dans le graphe de l'agent, comme un flot de conversation
+mais beaucoup plus permissif, en synergie avec notre moteur. »
+
+**La boucle est un graphe déclaré, pas du code.** L'agent livré est un graphe
+par défaut à ports nommés — message utilisateur entrant, message d'un pair
+entrant, résultat d'outil entrant, réponse du modèle, appel d'outil sortant,
+réponse finale, fin de tour (le retour au début) — et il se comporte, sans
+rien de branché, comme la boucle d'aujourd'hui. Sur chaque port, n'importe
+quel sous-graphe : un petit jeu de nœuds génériques (décider par un appel
+structuré, router, filtrer, agir en plus) et le nœud scripté pour le reste.
+Les cas cités sont des exemples, pas un catalogue ; il n'y a pas d'états,
+il y a des ports et des sous-graphes. Chaque décision, message et route
+retombe en base avec la trace, rejouable et mesurable, et un nœud de routage
+peut interroger le graphe par l'IR avant de choisir. Deux verbes que le
+modèle choisit, « envoyer » et « lancer en fond », sont aussi des nœuds
+posables sur un port : le déclaré et le choisi, même mécanisme.
+
+**Les ports portent des flux.** Un seul mécanisme : tout port porte un flux —
+des éléments dans le temps, et une fin ; une valeur est un flux d'un seul
+élément, marqué comme tel à la vérification du graphe. Le nœud dit sa
+posture, élément par élément ou sur le flux complété, et la vérification
+commune refuse un nœud « complet » sur un flux sans fin. Il s'ensuit :
+interrompre, c'est fermer un flux avant sa fin ; la politique de livraison,
+c'est quand le nœud modèle lit le flux des pairs ; un agent lancé vit tant
+qu'un de ses flux d'entrée est ouvert ; la voix et le son (STT, TTS) sont
+des ports de flux ordinaires ; le playground à acteurs en est l'exécuteur
+naturel. Consigne de méthode, dite avec : « la complexité n'est jamais un
+argument, l'important c'est que ce soit au top » — la parité prouvée avec la
+boucle d'aujourd'hui en est la condition, pas la charge de l'exécuteur.
+Chantier ouvert chez la session du proto tout déclaratif le 11 octobre
+(page `docs/11-octobre-2026-everything-declarative/03-les-agents-se-parlent.md`).
+
+### Un IDE adapté aux agents (Lucie, 11 octobre 2026)
+
+« Le vrai but, c'est qu'avec ce MCP vous vous sentiez déjà comme dans un IDE
+adapté à vous. S'il y a des choses à revoir pour ça, on reverra. Comme si
+vous étiez des malvoyants qui avaient d'autres sens. »
+
+Ce qu'un IDE donne à un humain, c'est voir sans lire : la structure, qui
+appelle qui, ce qui casse si je touche, ce qui est verrouillé sur le chemin,
+où en est l'index. Un agent n'a pas d'écran ; il a des outils qui rendent du
+texte, et sa boîte. Le gabarit `code` par le serveur MCP et le démon est
+cet IDE : `usages`, `impact`, `callees`, le voisinage, les verrous sur le
+chemin, l'état de l'index, le refus qui dit quoi faire. La mesure n'est donc
+pas « l'outil rend la bonne réponse » mais « un agent qui travaille sur
+rag3db avec cet MCP ne retombe plus sur grep ni sur des lectures par
+tranches ». Ce qui compte, c'est le reste : ce que l'agent demande et qu'il
+n'a pas. D'où la règle, dès le premier index réel de nos dépôts : les
+sessions qui travaillent le code posent leurs vraies questions par le MCP et
+tiennent une page « ce qui manque à un agent dans cet IDE », avec chaque
+retour forcé à grep et sa raison ; c'est « demander son avis au modèle », en
+vrai, et c'est ce qui décide des outils suivants.
 
 ## 8. Ce qui n'est pas décidé
 

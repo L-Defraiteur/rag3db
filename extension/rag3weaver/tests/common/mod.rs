@@ -405,3 +405,58 @@ pub mod burn_ocr {
         Arc::new(ocr)
     });
 }
+
+/// **Le nom complet d'un test de la suite qui appelle**, pour qu'un processus
+/// fils se désigne par `--exact` (11 octobre 2026, relecture de rag3db-73).
+///
+/// Quatorze suites se relancent elles-mêmes par `current_exe()` et
+/// `--exact <test>` (arrêts brutaux, deux processus, rôles d'enfant). Dans le
+/// binaire unique des e2e, le test s'appelle `<suite>::<test>` : le nom court
+/// ne désigne plus rien, le fils joue 0 test, sort avec 0 — et le parent
+/// conclut sur un fils qui n'a rien fait, un vert vide sur les suites qui
+/// éprouvent justement les arrêts. `module_path!()` est évalué au point
+/// d'appel : `e2e::<suite>` dans le binaire unique, d'où `<suite>::<test>` ;
+/// le nom court seul quand la suite est son propre binaire.
+#[allow(unused_macros)] // inutilisée quand aucune suite qui se relance n'est compilée
+macro_rules! test_de_cette_suite {
+    ($nom:expr) => {{
+        match module_path!().split_once("::") {
+            Some((_, suite)) => format!("{}::{}", suite, $nom),
+            None => ($nom).to_string(),
+        }
+    }};
+}
+#[allow(unused_imports)]
+pub(crate) use test_de_cette_suite;
+
+/// **Le dossier d'un cas, sur le vrai disque** (11 octobre 2026) : pour les
+/// suites qui veulent un disque et pas la RAM de `/tmp` (arrêts brutaux,
+/// transactions, plein texte en fichiers).
+///
+/// Sous `run_e2e.sh`, la base est `RAG3WEAVER_E2E_DOSSIER` — un dossier par
+/// suite, sous un parent par passe, effacé derrière la suite (sauf
+/// `RAG3WEAVER_GARDER=1`, qui garde tout pour l'examen). Lancée à la main, la
+/// suite écrit où elle écrivait : `~/.cache/rag3weaver-build/<famille>`. Le
+/// nom du cas porte le pid et l'heure : deux cas, ou un parent et son fils, ne
+/// se marchent pas dessus.
+#[allow(dead_code)]
+pub fn dossier_de_suite(famille: &str, cas: &str) -> std::path::PathBuf {
+    let base = std::env::var_os("RAG3WEAVER_E2E_DOSSIER")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
+                .join(".cache/rag3weaver-build")
+                .join(famille)
+        });
+    let d = base.join(format!(
+        "{cas}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("horloge")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&d).expect("créer le dossier du cas");
+    d
+}

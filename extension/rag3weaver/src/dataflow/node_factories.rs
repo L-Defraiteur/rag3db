@@ -34,12 +34,12 @@ named_factory!(
     "ComposeNode",
     "Attaches fetched children to root results",
     &[
-        PortDef { name: "results".into(), port_type: PortType::Results, required: true },
-        PortDef { name: "children".into(), port_type: PortType::Children, required: false },
+        PortDef::value("results", PortType::Results, true),
+        PortDef::value("children", PortType::Children, false),
         // Le parent de chaque résultat, pour la vue par parent (`GroupFrameNode`).
-        PortDef { name: "frames".into(), port_type: PortType::Children, required: false },
+        PortDef::value("frames", PortType::Children, false),
     ],
-    &[PortDef { name: "results".into(), port_type: PortType::Results, required: false }],
+    &[PortDef::value("results", PortType::Results, false)],
 );
 
 named_factory!(
@@ -47,8 +47,8 @@ named_factory!(
     GroupFrameNode,
     "GroupFrameNode",
     "Le parent de chaque résultat, selon le group_by déclaré par son entité — pour l'encadrer au rendu",
-    &[PortDef { name: "results".into(), port_type: PortType::Results, required: true }],
-    &[PortDef { name: "frames".into(), port_type: PortType::Children, required: false }],
+    &[PortDef::value("results", PortType::Results, true)],
+    &[PortDef::value("frames", PortType::Children, false)],
 );
 
 // ─── Macro-generated factories (named_factory!) ─────────────────────────────
@@ -126,12 +126,12 @@ impl NodeFactory for FieldWeightNodeFactory {
                           'weights' is a graph CHOICE (beats the entity), 'default_weights' \
                           a template DEFAULT (only when nobody declares)".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
+                PortDef::value("results", PortType::Results, true),
+                PortDef::value("query", PortType::Query, false),
             ],
             outputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
+                PortDef::value("results", PortType::Results, false),
+                PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -181,12 +181,12 @@ named_factory!(
     "InsertRecordNode",
     "UNWIND MERGE on _uuid from Vec<EntityRecord>",
     &[
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("entities", PortType::Entities, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
-        PortDef { name: "inserted".into(), port_type: PortType::Entities, required: false },
+        PortDef::value("done", PortType::Empty, false),
+        PortDef::value("inserted", PortType::Entities, false),
     ],
 );
 
@@ -196,13 +196,13 @@ named_factory!(
     "DeriveNode",
     "Rend les lignes d'une entité dérivée depuis sa racine et ses voisines, par gabarit",
     &[
-        PortDef { name: "derivations".into(), port_type: PortType::Derivations, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("derivations", PortType::Derivations, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: false },
-        PortDef { name: "relations".into(), port_type: PortType::Relations, required: false },
+        PortDef::value("done", PortType::Empty, false),
+        PortDef::value("entities", PortType::Entities, false),
+        PortDef::value("relations", PortType::Relations, false),
     ],
 );
 
@@ -212,10 +212,10 @@ named_factory!(
     "LinkRecordNode",
     "UNWIND MATCH+MERGE from Vec<RelationRecord>",
     &[
-        PortDef { name: "relations".into(), port_type: PortType::Relations, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("relations", PortType::Relations, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
-    &[PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
+    &[PortDef::value("done", PortType::Empty, false)],
 );
 
 named_factory!(
@@ -224,15 +224,15 @@ named_factory!(
     "ChunkRecordNode",
     "Parallel chunking for simple entities, outputs chunk entities + links",
     &[
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("entities", PortType::Entities, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
-        PortDef { name: "chunks".into(), port_type: PortType::Entities, required: false },
-        PortDef { name: "chunk_links".into(), port_type: PortType::Relations, required: false },
+        PortDef::value("done", PortType::Empty, false),
+        PortDef::value("chunks", PortType::Entities, false),
+        PortDef::value("chunk_links", PortType::Relations, false),
         // Les parents, pour `MarquerDecoupeNode`.
-        PortDef { name: "parents".into(), port_type: PortType::Entities, required: false },
+        PortDef::value("parents", PortType::Entities, false),
     ],
 );
 
@@ -242,11 +242,11 @@ named_factory!(
     "MarquerDecoupeNode",
     "Pose _chunked_hash = _content_hash sur les parents dont les chunks viennent d'être posés",
     &[
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("entities", PortType::Entities, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("done", PortType::Empty, false),
     ],
 );
 
@@ -256,11 +256,11 @@ named_factory!(
     "DeleteRecordNode",
     "Batch cascade-delete entities + chunks from Vec<DeleteRecord>",
     &[
-        PortDef { name: "deletes".into(), port_type: PortType::Deletes, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("deletes", PortType::Deletes, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("done", PortType::Empty, false),
     ],
 );
 
@@ -270,12 +270,12 @@ named_factory!(
     "UpdateRecordNode",
     "Batch field update + change detection from Vec<UpdateRecord>",
     &[
-        PortDef { name: "updates".into(), port_type: PortType::Updates, required: true },
-        PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false },
+        PortDef::value("updates", PortType::Updates, true),
+        PortDef::value("trigger", PortType::Empty, false),
     ],
     &[
-        PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
-        PortDef { name: "rechunk_entities".into(), port_type: PortType::Entities, required: false },
+        PortDef::value("done", PortType::Empty, false),
+        PortDef::value("rechunk_entities", PortType::Entities, false),
     ],
 );
 
@@ -285,10 +285,10 @@ named_factory!(
     "RechunkDeleteNode",
     "Delete old chunks before re-chunking",
     &[
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: true },
+        PortDef::value("entities", PortType::Entities, true),
     ],
     &[
-        PortDef { name: "entities".into(), port_type: PortType::Entities, required: false },
+        PortDef::value("entities", PortType::Entities, false),
     ],
 );
 
@@ -332,8 +332,8 @@ impl NodeFactory for FlushNodeFactory {
                     json_schema: None,
                 },
             ],
-            inputs: vec![PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false }],
-            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
+            inputs: vec![PortDef::value("trigger", PortType::Empty, false)],
+            outputs: vec![PortDef::value("done", PortType::Empty, false)],
         }
     }
 }
@@ -378,8 +378,8 @@ impl NodeFactory for SparseCommitNodeFactory {
                     json_schema: None,
                 },
             ],
-            inputs: vec![PortDef { name: "trigger".into(), port_type: PortType::Empty, required: false }],
-            outputs: vec![PortDef { name: "done".into(), port_type: PortType::Empty, required: false }],
+            inputs: vec![PortDef::value("trigger", PortType::Empty, false)],
+            outputs: vec![PortDef::value("done", PortType::Empty, false)],
         }
     }
 }
@@ -424,11 +424,7 @@ impl NodeFactory for KBQuerySourceNodeFactory {
             node_type: "KBQuerySourceNode".into(),
             description: "Emits search query + options".into(),
             inputs: vec![],
-            outputs: vec![PortDef {
-                name: "query".into(),
-                port_type: PortType::Query,
-                required: false,
-            }],
+            outputs: vec![PortDef::value("query", PortType::Query, false)],
             config_params: vec![
                 ConfigParam {
                     name: "kb_name".into(),
@@ -511,16 +507,8 @@ impl NodeFactory for FetchRelatedNodeFactory {
         NodeSchema {
             node_type: "FetchRelatedNode".into(),
             description: "Cypher graph traversal from parent results".into(),
-            inputs: vec![PortDef {
-                name: "results".into(),
-                port_type: PortType::Results,
-                required: true,
-            }],
-            outputs: vec![PortDef {
-                name: "children".into(),
-                port_type: PortType::Children,
-                required: false,
-            }],
+            inputs: vec![PortDef::value("results", PortType::Results, true)],
+            outputs: vec![PortDef::value("children", PortType::Children, false)],
             config_params: vec![
                 ConfigParam {
                     name: "relation".into(),
@@ -528,7 +516,7 @@ impl NodeFactory for FetchRelatedNodeFactory {
                     required: true,
                     default: None,
                     description: "Relationship type (e.g. HAS_FILE)".into(),
-                    choices: Some(Choices::Relations),
+                    choices: Some(Choices::relations_read()),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -601,20 +589,12 @@ impl NodeFactory for EmbedNodeFactory {
             node_type: "EmbedNode".into(),
             description: "Embedding for simple entities (configurable columns)".into(),
             inputs: vec![
-                PortDef {
-                    name: "entities".into(),
-                    port_type: PortType::Entities,
-                    required: true,
-                },
-                PortDef {
-                    name: "trigger".into(),
-                    port_type: PortType::Empty,
-                    required: false,
-                },
+                PortDef::value("entities", PortType::Entities, true),
+                PortDef::value("trigger", PortType::Empty, false),
             ],
             outputs: vec![
-                PortDef { name: "done".into(), port_type: PortType::Empty, required: false },
-                PortDef { name: "embedded".into(), port_type: PortType::Entities, required: false },
+                PortDef::value("done", PortType::Empty, false),
+                PortDef::value("embedded", PortType::Entities, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -748,24 +728,12 @@ impl NodeFactory for SearchSourceNodeFactory {
             node_type: "SearchSourceNode".into(),
             description: "Resolves SearchTarget and emits query; an optional \
                           'query' input (QueryPayload) overrides the config".into(),
-            inputs: vec![PortDef {
-                name: "query".into(),
-                port_type: PortType::Query,
-                required: false,
-            }],
+            inputs: vec![PortDef::value("query", PortType::Query, false)],
             outputs: vec![
-                PortDef {
-                    name: "query".into(),
-                    port_type: PortType::Query,
-                    required: false,
-                },
+                PortDef::value("query", PortType::Query, false),
                 // Ce que la consigne de cohérence a trouvé : le reste en file,
                 // `partial`, et l'avertissement qui le dit à l'agent.
-                PortDef {
-                    name: "meta".into(),
-                    port_type: PortType::Meta,
-                    required: false,
-                },
+                PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -905,7 +873,7 @@ fn limit_param() -> ConfigParam {
 }
 
 fn query_in() -> PortDef {
-    PortDef { name: "query".into(), port_type: PortType::Query, required: true }
+    PortDef::value("query", PortType::Query, true)
 }
 
 /// **Le canal des avertissements d'un nœud de signal.**
@@ -914,11 +882,11 @@ fn query_in() -> PortDef {
 /// composition de graphes, et un port absent du schéma est invisible depuis
 /// l'extérieur — même quand le nœud le remplit fidèlement.
 fn meta_out() -> PortDef {
-    PortDef { name: "meta".into(), port_type: PortType::Meta, required: false }
+    PortDef::value("meta", PortType::Meta, false)
 }
 
 fn results_out() -> PortDef {
-    PortDef { name: "results".into(), port_type: PortType::Results, required: false }
+    PortDef::value("results", PortType::Results, false)
 }
 
 /// **Le statut d'une branche de signal** (repli par branche, 5 octobre
@@ -928,7 +896,7 @@ fn results_out() -> PortDef {
 /// warnings), mais un « tout tombé » rend vide sans erreur — la vérification
 /// du gabarit l'avertit au chargement.
 fn status_out() -> PortDef {
-    PortDef { name: "status".into(), port_type: PortType::Meta, required: false }
+    PortDef::value("status", PortType::Meta, false)
 }
 
 /// Factory for VectorSearchNode (config: limit, result_mode, signal).
@@ -1189,15 +1157,15 @@ impl NodeFactory for FuseResultsNodeFactory {
             node_type: "FuseResultsNode".into(),
             description: "Fusion N-aire de signaux étiquetés (RRF ou pondérée) ; ports nommés + port 'signals' en fan-in".into(),
             inputs: vec![
-                PortDef { name: "vector".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "bm25".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "sparse".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "signals".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "status".into(), port_type: PortType::Meta, required: false },
+                PortDef::value("vector", PortType::Results, false),
+                PortDef::value("bm25", PortType::Results, false),
+                PortDef::value("sparse", PortType::Results, false),
+                PortDef::value("signals", PortType::Results, false),
+                PortDef::value("status", PortType::Meta, false),
                 // La requête, pour savoir d'où viennent les poids (appelant,
                 // base de connaissances, gabarit). Facultatif : sans elle, le
                 // gabarit décide.
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
+                PortDef::value("query", PortType::Query, false),
             ],
             outputs: vec![results_out()],
             config_params: vec![
@@ -1298,7 +1266,7 @@ impl NodeFactory for RerankNodeFactory {
             node_type: "RerankNode".into(),
             description: "Cross-encoder sur la tête des résultats ; la queue passe inchangée. Sans `candidates`, le pool vient de la requête".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
+                PortDef::value("results", PortType::Results, true),
                 query_in(),
             ],
             outputs: vec![results_out(), meta_out()],
@@ -1360,8 +1328,8 @@ impl NodeFactory for PaginateNodeFactory {
             node_type: "PaginateNode".into(),
             description: "La page demandée (offset, limit de la requête), et rien de plus".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: true },
+                PortDef::value("results", PortType::Results, true),
+                PortDef::value("query", PortType::Query, true),
             ],
             outputs: vec![results_out()],
             config_params: vec![],
@@ -1395,14 +1363,10 @@ impl NodeFactory for ResolveParentNodeFactory {
             node_type: "ResolveParentNode".into(),
             description: "Resolve chunks to parent entities with data enrichment".into(),
             inputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: true },
-                PortDef { name: "query".into(), port_type: PortType::Query, required: false },
+                PortDef::value("results", PortType::Results, true),
+                PortDef::value("query", PortType::Query, false),
             ],
-            outputs: vec![PortDef {
-                name: "results".into(),
-                port_type: PortType::Results,
-                required: false,
-            }],
+            outputs: vec![PortDef::value("results", PortType::Results, false)],
             config_params: vec![ConfigParam {
                 name: "return_fields".into(),
                 param_type: ConfigParamType::Json,
@@ -1472,6 +1436,9 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::ocr_nodes::OcrNodeFactory));
     // Génération
     registry.register(Box::new(super::llm_nodes::LlmNodeFactory));
+    // Décider et aiguiller (les agents qui se parlent, lot 2).
+    registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
+    registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
     // Code
     #[cfg(feature = "code")]
     {
@@ -1494,7 +1461,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 14 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 14 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1748,6 +1715,8 @@ mod tests {
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
+                "Decide" => serde_json::json!({ "labels": "a|b" }),
+                "Route" => serde_json::json!({ "routes": "a|b" }),
                 _ => serde_json::json!({}),
             }
         };
@@ -1766,7 +1735,9 @@ mod tests {
                 }
             };
             vus += 1;
-            let schema = registry.schema(node_type).expect("schéma du type créé");
+            // Le schéma **de cette configuration** : les sorties d'un `Route`
+            // sont ses routes.
+            let schema = registry.schema_for(node_type, &minimum(node_type)).expect("schéma du type créé");
             // **Le nom ne suffit pas.** Un port présent des deux côtés mais
             // `required` d'un côté seulement change le comportement du
             // runtime : il attend l'entrée, ou il ne l'attend pas. Comparer
@@ -1842,10 +1813,10 @@ impl NodeFactory for ScanFilesNodeFactory {
                           balayage (posé par SearchSourceNode) : mots exacts, classés par \
                           mots trouvés puis proximité, bornés au budget de rendu — la méta \
                           dit combien d'autres. Hors mode balayage, il se tait.".into(),
-            inputs: vec![PortDef { name: "query".into(), port_type: PortType::Query, required: true }],
+            inputs: vec![PortDef::value("query", PortType::Query, true)],
             outputs: vec![
-                PortDef { name: "results".into(), port_type: PortType::Results, required: false },
-                PortDef { name: "meta".into(), port_type: PortType::Meta, required: false },
+                PortDef::value("results", PortType::Results, false),
+                PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![],
         }

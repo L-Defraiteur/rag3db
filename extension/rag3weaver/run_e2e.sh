@@ -208,7 +208,17 @@ arreter_les_demons_de_la_passe() {
 balayer_les_vieux_binaires() {
   local deps="${CARGO_TARGET_DIR:-$WEAVER/target}/debug/deps" nom garde f h efface=0
   [ -d "$deps" ] || return 0
-  for nom in $(find "$deps" -maxdepth 1 -type f -perm -u+x -name 'e2e_*-????????????????' -printf '%f\n' | sed 's/-[0-9a-f]*$//' | sort -u); do
+  # **Les binaires d'avant le binaire unique** (`e2e_<suite>-<empreinte>`, un
+  # par suite) ne sont plus jamais produits depuis le 11 octobre 2026 : en
+  # garder « le plus récent de chaque » laisserait ~270 Mo morts par suite.
+  # Ils partent tous.
+  for f in $(find "$deps" -maxdepth 1 -type f -perm -u+x -name 'e2e_*-????????????????' -printf '%f\n'); do
+    h="${f##*-}"; nom="${f%-*}"
+    rm -f -- "$deps/$nom-$h" "$deps/$nom-$h.d" "$deps/$nom-$h".*.dwo
+    efface=$((efface + 1))
+  done
+  # Le binaire unique : le plus récent est gardé, les empreintes d'avant partent.
+  for nom in $(find "$deps" -maxdepth 1 -type f -perm -u+x -name 'e2e-????????????????' -printf '%f\n' | sed 's/-[0-9a-f]*$//' | sort -u); do
     garde="$(ls -t "$deps/$nom"-???????????????? 2>/dev/null | head -1)"
     for f in "$deps/$nom"-????????????????; do
       [ -f "$f" ] && [ "$f" != "$garde" ] || continue
@@ -224,6 +234,17 @@ a_la_sortie() {
   [ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true
   arreter_les_demons_de_la_passe
   balayer_les_vieux_binaires
+  # Le parent des dossiers de la passe (les suites ont effacé les leurs) :
+  # même une passe interrompue nettoie. `RAG3WEAVER_GARDER=1` le garde.
+  local parent
+  for parent in "${E2E_TMP_PARENT:-}" "${E2E_DISQUE_PARENT:-}"; do
+    [ -n "$parent" ] && [ -d "$parent" ] || continue
+    if [ "${RAG3WEAVER_GARDER:-}" = 1 ]; then
+      echo "▸ dossiers de la passe gardés (RAG3WEAVER_GARDER=1) : $parent"
+    else
+      rm -rf -- "$parent"
+    fi
+  done
 }
 trap a_la_sortie EXIT
 
@@ -558,7 +579,219 @@ suites_vides() {
   return 0
 }
 
-echo "▸ Running: cargo test ${CARGO_ARGS[*]}"
+# ── Le binaire unique des e2e, lancé une fois PAR SUITE ─────────────────────
+#
+# Demande de Lucie (11 octobre 2026) : « bâtis une seule fois avec le même
+# cœur, pas instanciés 50 fois ». Chaque tests/e2e_*.rs était son propre
+# binaire de test : 97 éditions de liens du crate entier par passe, et un
+# target de plusieurs centaines de Go. Les suites sont maintenant les
+# modules d'UN binaire (tests/e2e/main.rs), bâti et relié une fois.
+#
+# **Lancé une fois par suite**, filtré sur `<suite>::` : chaque suite garde
+# son processus — ses `set_var`, ses `OnceLock`, ses statics, son démon —
+# exactement comme quand elle était son propre binaire. Le gain est au bâti,
+# pas à l'exécution. Les lignes « Running tests/<suite> » et « test result »
+# sont celles que cargo écrivait : le résumé plus bas les lit sans changer.
+#
+# **Chaque suite écrit dans son dossier** : `TMPDIR` pointe sur
+# `$E2E_TMP_PARENT/<suite>/`, que `std::env::temp_dir()`, `tempfile` et le
+# cache des catalogues respectent tous. Le dossier part à la fin de la suite,
+# le parent à la fin de la passe ; `RAG3WEAVER_GARDER=1` garde tout pour
+# l'examen. Avant : 11 Go de restes d'e2e dans /tmp du poste principal —
+# de la RAM — et 10,9 Go sur luciepc, mesurés et effacés le 11 octobre.
+jouer_les_suites() {
+  local e2e=() autres=() i nom code=0 bin statut
+  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
+    [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
+    nom="${CARGO_ARGS[$((i + 1))]}"
+    case "$nom" in e2e_*) e2e+=("$nom") ;; *) autres+=("$nom") ;; esac
+  done
+
+  # 1. Bâtir une fois : le binaire e2e, et les autres tests nommés.
+  local cibles=()
+  [ ${#e2e[@]} -gt 0 ] && cibles+=(--test e2e)
+  for nom in "${autres[@]}"; do cibles+=(--test "$nom"); done
+  echo "▸ Bâti : cargo test --no-run --features $FEATURES ${cibles[*]}"
+  local json
+  json="$(mktemp)"
+  confined cargo test --no-run --features "$FEATURES" "${cibles[@]}" \
+    --message-format=json-render-diagnostics > "$json"
+  statut=$?
+  bin="$(python3 -c '
+import json, sys
+for ligne in open(sys.argv[1]):
+    try:
+        m = json.loads(ligne)
+    except ValueError:
+        continue
+    if m.get("reason") == "compiler-artifact" and m.get("target", {}).get("name") == "e2e" and m.get("executable"):
+        print(m["executable"])
+' "$json")"
+  rm -f "$json"
+  if [ "$statut" -ne 0 ]; then
+    echo "✗ le bâti a échoué (code $statut)"
+    return 101
+  fi
+  if [ ${#e2e[@]} -gt 0 ] && [ ! -x "$bin" ]; then
+    # Sans ce refus, chaque suite échouerait sur une commande vide.
+    echo "✗ binaire e2e introuvable dans la sortie de cargo (cible « e2e », tests/e2e/main.rs)"
+    return 101
+  fi
+  if [ -n "$bin" ]; then
+    local mo ref
+    mo=$(( $(stat -c %s "$bin") / 1024 / 1024 ))
+    echo "▸ binaire e2e : $bin (${mo} Mo)"
+    # La référence commitée : une dérive se voit à la passe qui la crée.
+    ref=$(sed -n 's/^binaire_e2e_mo=//p' "$WEAVER/tests/e2e/poids-reference.txt" 2>/dev/null)
+    if [ -n "$ref" ] && [ "$mo" -gt $(( ref * 3 / 2 )) ]; then
+      echo "▸ ⚠ le binaire e2e pèse ${mo} Mo, plus de 1,5 fois sa référence (${ref} Mo,"
+      echo "    tests/e2e/poids-reference.txt) : une dérive à expliquer, ou une référence à remesurer"
+    fi
+  fi
+
+  # 2. Les filets du binaire lui-même (une suite montée, aucune relance par un
+  # nom court) : à sa racine, hors de tout `<suite>::`, aucun filtre de suite
+  # ne les désigne — ils jouent donc ici, en tête, à chaque passe.
+  if [ ${#e2e[@]} -gt 0 ]; then
+    echo "     Running tests/e2e_filets.rs (binaire e2e unique, ses propres filets)"
+    CARGO_MANIFEST_DIR="$WEAVER" "$bin" --exact chaque_suite_est_montee \
+      aucune_suite_ne_se_relance_par_son_nom_court --include-ignored || code=101
+  fi
+
+  # 3. Chaque suite e2e : son processus, son dossier.
+  for nom in "${e2e[@]}"; do
+    mkdir -p "$E2E_TMP_PARENT/$nom" "$E2E_DISQUE_PARENT/$nom/checkpoints"
+    export RAG3WEAVER_E2E_DOSSIER="$E2E_DISQUE_PARENT/$nom"
+    export RAG3WEAVER_CHECKPOINT_DIR="$E2E_DISQUE_PARENT/$nom/checkpoints"
+    echo "     Running tests/$nom.rs (binaire e2e unique, filtre $nom::)"
+    if [ -n "$TEST_FILTER" ]; then
+      local noms=()
+      mapfile -t noms < <("$bin" --list --format terse 2>/dev/null \
+        | sed -n 's/: test$//p' | grep "^$nom::" | grep -F -- "$TEST_FILTER")
+      if [ ${#noms[@]} -eq 0 ]; then
+        # La ligne que cargo écrit quand le filtre n'y désigne rien.
+        printf '\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n'
+        rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
+        continue
+      fi
+      TMPDIR="$E2E_TMP_PARENT/$nom" CARGO_MANIFEST_DIR="$WEAVER" \
+        confined "$bin" --exact "${noms[@]}" --include-ignored --nocapture "${EXTRA_ARGS[@]}"
+    else
+      TMPDIR="$E2E_TMP_PARENT/$nom" CARGO_MANIFEST_DIR="$WEAVER" \
+        confined "$bin" "$nom::" --include-ignored --nocapture "${EXTRA_ARGS[@]}"
+    fi
+    statut=$?
+    [ "$statut" -ne 0 ] && code=101
+    # **Une suite rouge garde son dossier disque** (relecture du banc, 11
+    # octobre 2026) : un rouge d'arrêt brutal tombe une fois sur vingt ou
+    # trente, et sa base est ce qu'on vient chercher — `GARDER=1` demanderait
+    # de prévoir le rouge avant de lancer. Déplacé (mv, sans copie) hors du
+    # parent de la passe, sous e2e-gardes/ que le balayage des passes mortes
+    # (e2e-<pid>) ne touche pas ; les cinq derniers par suite seulement. Une
+    # suite verte reste effacée.
+    if [ "$statut" -ne 0 ] && [ "${RAG3WEAVER_GARDER:-}" != 1 ] \
+       && [ -d "$E2E_DISQUE_PARENT/$nom" ]; then
+      local gardes="$E2E_DISQUE_RACINE/e2e-gardes" garde
+      garde="$gardes/$nom-$(date +%Y%m%d-%H%M%S)-$$"
+      mkdir -p "$gardes" && mv -- "$E2E_DISQUE_PARENT/$nom" "$garde" \
+        && echo "▸ $nom a rougi : son dossier est gardé dans $garde"
+      ls -1dt "$gardes/$nom"-[0-9]* 2>/dev/null | tail -n +6 | while read -r vieux; do
+        rm -rf -- "$vieux"
+      done
+    fi
+    if [ "${RAG3WEAVER_GARDER:-}" != 1 ]; then
+      rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
+    fi
+  done
+  unset RAG3WEAVER_E2E_DOSSIER RAG3WEAVER_CHECKPOINT_DIR
+
+  # 4. Les autres tests nommés (sondes, rendus) : par cargo, comme avant.
+  if [ ${#autres[@]} -gt 0 ]; then
+    local args=(--features "$FEATURES" --no-fail-fast)
+    for nom in "${autres[@]}"; do args+=(--test "$nom"); done
+    args+=(-- --include-ignored --nocapture)
+    [ -n "$TEST_FILTER" ] && args+=("$TEST_FILTER")
+    args+=("${EXTRA_ARGS[@]}")
+    confined cargo test "${args[@]}" || code=101
+  fi
+  return "$code"
+}
+
+# **Une suite non montée ne serait plus bâtie du tout** (autotests = false) :
+# refuser de partir plutôt que de la sauter en silence.
+# Seules les suites SUIVIES par git comptent (index compris : `git add`
+# suffit) : un brouillon non suivi d'une autre session, dans un arbre partagé,
+# n'est qu'annoncé — il ne bloque personne (11 octobre 2026).
+NON_MONTEES=()
+SUIVIES="$(git -C "$WEAVER" ls-files 'tests/e2e_*.rs' 2>/dev/null)"
+for f in "$WEAVER"/tests/e2e_*.rs; do
+  b="$(basename "$f")"
+  grep -qF "#[path = \"../$b\"]" "$WEAVER/tests/e2e/main.rs" && continue
+  if [ -z "$SUIVIES" ] || printf '%s\n' "$SUIVIES" | grep -qx "tests/$b"; then
+    NON_MONTEES+=("$b")
+  else
+    echo "▸ suite non suivie et non montée, ignorée : $b (git add, puis python3 tests/e2e/generer.py)"
+  fi
+done
+if [ ${#NON_MONTEES[@]} -gt 0 ]; then
+  echo "✗ suites non montées dans tests/e2e/main.rs : ${NON_MONTEES[*]}"
+  echo "  rejouer : python3 tests/e2e/generer.py"
+  exit 2
+fi
+
+# **Le parent des dossiers de la passe**, et les restes des passes mortes :
+# un parent dont le processus n'existe plus est effacé au départ (une passe
+# tuée ne nettoie pas derrière elle).
+E2E_TMP_RACINE="${TMPDIR:-/tmp}"
+E2E_TMP_PARENT="$E2E_TMP_RACINE/rag3weaver-e2e-$$"
+for d in "$E2E_TMP_RACINE"/rag3weaver-e2e-*; do
+  [ -d "$d" ] || continue
+  if [ ! -d "/proc/${d##*-}" ]; then
+    rm -rf -- "$d" && echo "▸ restes d'une passe morte effacés : $d"
+  fi
+done
+mkdir -p "$E2E_TMP_PARENT"
+
+# **Et un parent sur le vrai disque**, pour les suites qui ne veulent pas la
+# RAM de /tmp (arrêts brutaux, transactions, plein texte en fichiers) et pour
+# les points de reprise des catalogues de test : `RAG3WEAVER_E2E_DOSSIER`
+# (lu par `common::dossier_de_suite`) et `RAG3WEAVER_CHECKPOINT_DIR` pointent
+# dans `<parent>/<suite>/`, effacé derrière la suite comme son TMPDIR. Avant :
+# des bases gardées à chaque passe (arret-brutal, +4 par passe), et 955 Mo de
+# points de reprise de tests dans le vrai cache (11 octobre 2026).
+E2E_DISQUE_RACINE="${HOME}/.cache/rag3weaver-build"
+E2E_DISQUE_PARENT="$E2E_DISQUE_RACINE/e2e-$$"
+for d in "$E2E_DISQUE_RACINE"/e2e-[0-9]*; do
+  [ -d "$d" ] || continue
+  if [ ! -d "/proc/${d##*-}" ]; then
+    rm -rf -- "$d" && echo "▸ restes disque d'une passe morte effacés : $d"
+  fi
+done
+mkdir -p "$E2E_DISQUE_PARENT"
+
+# **Le target a un plafond.** Au-delà, la passe refuse de partir en le
+# disant : un target qui grossit sans fin est ce qui a rempli le disque le
+# 10 octobre (307 Go). Un bâti propre pèse 5,5 Go (mesuré le 11 octobre,
+# tests/e2e/poids-reference.txt) : 20 Go laissent deux jeux de features et
+# les autres tests, et au-delà c'est de l'accumulation. Proposé, à trancher
+# par Lucie ; `RAG3WEAVER_TARGET_MAX_GO` le change.
+TARGET_DE_LA_PASSE="${CARGO_TARGET_DIR:-$WEAVER/target}"
+PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-20}"
+if [ -d "$TARGET_DE_LA_PASSE" ]; then
+  POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
+  if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
+    echo "✗ le target $TARGET_DE_LA_PASSE pèse ${POIDS_TARGET_GO} Go, au-delà du plafond de ${PLAFOND_TARGET_GO} Go"
+    echo "  (RAG3WEAVER_TARGET_MAX_GO). Pour repartir d'un target propre (5,5 Go au rebâti) :"
+    echo "    rm -rf $TARGET_DE_LA_PASSE"
+    exit 2
+  fi
+  echo "▸ target : ${POIDS_TARGET_GO} Go (plafond ${PLAFOND_TARGET_GO} Go)"
+fi
+# Un target ne sert qu'un arbre à la fois (scripts/garde_target.sh).
+. "$WEAVER/scripts/garde_target.sh"
+garder_le_target "$TARGET_DE_LA_PASSE" "$WEAVER" || exit 2
+
+echo "▸ Running: suites ${CARGO_ARGS[*]}"
 
 export PATH="/usr/local/cuda/bin:$PATH"
 export LD_LIBRARY_PATH="$BUILD/src:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -651,7 +884,7 @@ if [ "$SUMMARY" = true ]; then
   # restent ceux du script, et pas de course à la fermeture du tube.
   say() { printf "$@"; printf "$@" >> "$E2E_LOG"; }
   set +e
-  confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$TMPLOG"
+  jouer_les_suites 2>&1 | tee "$TMPLOG"
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
 
@@ -664,9 +897,19 @@ if [ "$SUMMARY" = true ]; then
   # Suites qui ont rendu un résultat sans jouer un seul test.
   VIDES=0
 
-  # Collect Running/result lines in order
+  # **Une ligne de résultat par suite : la dernière avant la suivante.** Les
+  # suites qui relancent un fils par `current_exe()` font imprimer au fils sa
+  # propre ligne « test result » dans le même journal ; apparier par le rang
+  # décalait alors tout le tableau (des « ? », des « AUCUN TEST » à contresens)
+  # — justement quand une suite échoue et qu'on lit le résumé pour savoir
+  # laquelle (contre-épreuve du 11 octobre 2026). La ligne du parent vient
+  # toujours après celles de ses fils.
   mapfile -t SUITE_NAMES < <(grep -oP '(?<=Running tests/)\w+' "$TMPLOG")
-  mapfile -t RESULTS < <(grep '^test result:' "$TMPLOG")
+  mapfile -t RESULTS < <(awk '
+    /Running tests\// { if (n++) print (last == "" ? "test result: ok. 0 passed; 0 failed;" : last); last = ""; next }
+    /^test result:/ { last = $0 }
+    END { if (n) print (last == "" ? "test result: ok. 0 passed; 0 failed;" : last) }
+  ' "$TMPLOG")
 
   for i in "${!RESULTS[@]}"; do
     line="${RESULTS[$i]}"
@@ -678,6 +921,10 @@ if [ "$SUMMARY" = true ]; then
 
     if [ "${failed:-0}" -ne 0 ]; then
       say "  %-30s %3d passed, %d FAILED\n" "$suite" "$passed" "$failed"
+    elif [ "${passed:-0}" -eq 0 ] && [ -n "$TEST_FILTER" ]; then
+      # Sous un filtre, une suite sans test correspondant n'est pas une suite
+      # compilée hors du lot : elle n'a simplement rien que le filtre désigne.
+      say "  %-30s aucun test ne correspond au filtre « %s »\n" "$suite" "$TEST_FILTER"
     elif [ "${passed:-0}" -eq 0 ]; then
       # **Zéro test n'est pas une réussite.** Une suite entièrement compilée
       # hors du lot — un `#![cfg(feature = ...)]` que le lot de features
@@ -770,7 +1017,7 @@ if [ "$SUMMARY" = true ]; then
   exit "$EXIT_CODE"
 else
   set +e
-  confined cargo test "${CARGO_ARGS[@]}" 2>&1 | tee "$E2E_LOG"
+  jouer_les_suites 2>&1 | tee "$E2E_LOG"
   EXIT_CODE=${PIPESTATUS[0]}
   set -e
   echo ""

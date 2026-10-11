@@ -58,6 +58,10 @@ impl Hub {
     /// Ouvre un flux d'événements serveur sur `writer` (la réponse HTTP est
     /// écrite ici : tiny_http retiendrait de petits événements).
     pub fn subscribe(&self, mut writer: Box<dyn Write + Send>) {
+        // Sous le verrou : l'abonné est inscrit avant qu'une publication ou un
+        // comptage ne passe — aucun événement ne tombe entre l'en-tête et
+        // l'inscription.
+        let mut subscribers = self.subscribers.lock().unwrap_or_else(|e| e.into_inner());
         let opened = writer
             .write_all(
                 b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
@@ -65,10 +69,7 @@ impl Hub {
             )
             .and_then(|_| writer.flush());
         if opened.is_ok() {
-            self.subscribers
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(writer);
+            subscribers.push(writer);
         }
     }
 
@@ -182,14 +183,22 @@ impl Atelier {
             Err(error) => self.hub.publish(&json!({
                 "event": "refused", "source": "montre", "paths": changed, "error": error
             })),
-            Ok(pending) => {
-                let reloaded = self.backend.apply_reload(pending);
-                self.hub.publish(&json!({
+            // Les réactions de l'ancienne version arrêtées, celles de la
+            // nouvelle remontées ; ce qui est perdu en route est dit.
+            Ok(pending) => match self.backend.apply_reload_with_reactions(pending) {
+                Ok(reloaded) => self.hub.publish(&json!({
                     "event": "reloaded", "source": "montre", "paths": changed,
-                    "version": reloaded.version,
-                    "removed_reactions": reloaded.removed_reactions,
-                }));
-            }
+                    "version": reloaded.reloaded.version,
+                    "removed_reactions": reloaded.reloaded.removed_reactions,
+                    "mounted_reactions": reloaded.mounted,
+                    "dropped_cursors": reloaded.dropped_cursors,
+                    "reaction_errors": reloaded.errors_before,
+                })),
+                Err(error) => self.hub.publish(&json!({
+                    "event": "refused", "source": "montre", "paths": changed,
+                    "error": format!("rechargé, mais les réactions ne se remontent pas : {error}"),
+                })),
+            },
         }
     }
 
@@ -398,6 +407,9 @@ impl Observed<'_> {
                 self.hub.publish(&json!({
                     "event": "declared", "path": path, "version": result["version"],
                     "commit": result["commit"], "removed_reactions": result["removed_reactions"],
+                    "mounted_reactions": result["mounted_reactions"],
+                    "dropped_cursors": result["dropped_cursors"],
+                    "reaction_errors": result["reaction_errors"],
                 }));
             } else {
                 self.hub.publish(&json!({"event": "refused", "source": "declare", "path": path, "error": result["error"]}));

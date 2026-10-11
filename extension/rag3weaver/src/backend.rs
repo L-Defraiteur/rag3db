@@ -42,7 +42,7 @@ pub struct BackendManifest {
     pub vector_extension: PathBuf,
     pub entities: BTreeMap<String, BackendEntity>,
     #[serde(default)]
-    pub relations: HashMap<String, RelationDef>,
+    pub relations: HashMap<String, BackendRelation>,
     /// Only these attachments become tools. Bindings cannot be overridden by callers.
     pub tools: BTreeMap<String, ToolAttachment>,
     /// **Les graphes réactifs, à côté des outils et jamais parmi eux.** Un
@@ -203,6 +203,40 @@ pub struct ToolAttachment {
     pub after: Option<AfterToolHook>,
 }
 
+/// **Une relation du manifeste** : sa définition au catalogue, à plat, et la
+/// politique d'écriture que le backend lui ajoute — comme `writes` pour une
+/// entité.
+///
+/// `from_states` / `to_states` : le bout doit être dans l'un de ces états de son
+/// cycle de vie pour qu'un lien **s'y pose** (on n'ancre pas une mémoire
+/// `superseded`). Vérifiés au chargement (le bout a un cycle de vie, les états y
+/// existent) et à l'écriture par **les nœuds du backend qui posent des liens**.
+///
+/// **Le prix, dit ici parce que c'est ici qu'on déclare** : un appel nu à
+/// `Catalog::link` ne les voit pas. C'est un verbe brut, comme du SQL ; la
+/// garde tient pour les outils du backend, pas pour qui écrit au catalogue
+/// directement (relecture de rag3db-97, 11 octobre 2026).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendRelation {
+    #[serde(flatten)]
+    pub def: RelationDef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_states: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_states: Option<Vec<String>>,
+}
+
+/// La clé du service qui porte les politiques d'écriture des relations
+/// (`HashMap<String, BackendRelation>`), pour les nœuds qui posent des liens.
+pub const RELATION_POLICIES_SERVICE: &str = "backend_relation_policies";
+
+impl std::ops::Deref for BackendRelation {
+    type Target = RelationDef;
+    fn deref(&self) -> &RelationDef {
+        &self.def
+    }
+}
+
 /// **Une réaction** : un graphe monté au chargement du backend et déclenché
 /// par un sujet du bus, non par l'agent.
 ///
@@ -263,6 +297,67 @@ fn valider_noeuds_de_reaction(
         });
     }
     Ok(())
+}
+
+/// **Les relations qu'un graphe nomme**, pour un accès donné (lu ou écrit),
+/// d'après la marque que chaque nœud pose sur ses paramètres
+/// (`Choices::Relations { access }`) — jamais d'après un nom de type de nœud.
+///
+/// Une valeur de paramètre est un littéral, ou `$p` résolu par les liaisons du
+/// manifeste puis par le défaut de la fiche. Rend `(noms, toute)` : `toute` est
+/// vrai quand un paramètre reste ouvert (l'appelant choisira la relation à
+/// l'appel) — un tel outil peut écrire n'importe quelle relation déclarée. Un
+/// littéral vide ne nomme rien (« pas d'expansion » de la recherche de code).
+fn relations_nommees(
+    graphe: &crate::dataflow::GraphTool,
+    bindings: &serde_json::Map<String, Value>,
+    nodes: &NodeRegistry,
+    garder: impl Fn(crate::dataflow::node_registry::RelationAccess) -> bool,
+) -> (BTreeSet<String>, bool) {
+    use crate::dataflow::node_registry::Choices;
+    let mut noms = BTreeSet::new();
+    let mut toute = false;
+    for noeud in &graphe.template().nodes {
+        let Some(schema) = nodes.schema(&noeud.node_type) else { continue };
+        for cp in &schema.config_params {
+            let Some(Choices::Relations { access }) = &cp.choices else { continue };
+            if !garder(*access) {
+                continue;
+            }
+            let brute = noeud
+                .config
+                .get(cp.name.as_ref())
+                .cloned()
+                .or_else(|| cp.default.clone());
+            let Some(brute) = brute.as_ref().and_then(Value::as_str).map(str::to_string) else {
+                continue;
+            };
+            let valeur = match brute.strip_prefix('$') {
+                None => Some(brute),
+                Some(p) => bindings
+                    .get(p)
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| {
+                        graphe
+                            .params()
+                            .iter()
+                            .find(|q| q.name == p)
+                            .and_then(|q| q.default.as_ref())
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    }),
+            };
+            match valeur {
+                Some(v) if v.is_empty() => {}
+                Some(v) => {
+                    noms.insert(v);
+                }
+                None => toute = true,
+            }
+        }
+    }
+    (noms, toute)
 }
 
 /// **Tout ce qu'une réaction doit satisfaire pour être montée**, en une
@@ -477,6 +572,25 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
         .collect()
 }
 
+/// **Un refus dit la règle et la taille, jamais la donnée.** Le message de
+/// `jsonschema` recopie la valeur fautive entière : 2 Mo de JSON pour 20 000
+/// `records`, avant « has more than 512 items ». Au-delà de 200 caractères, la
+/// valeur cède la place à sa forme : « un tableau de 20000 éléments ».
+fn schema_refusal(e: &jsonschema::ValidationError<'_>) -> String {
+    let message = e.to_string();
+    let instance = e.instance().to_string();
+    if instance.len() <= 200 {
+        return message;
+    }
+    let forme = match e.instance().as_ref() {
+        Value::Array(a) => format!("un tableau de {} éléments", a.len()),
+        Value::Object(o) => format!("un objet de {} champs", o.len()),
+        Value::String(t) => format!("une chaîne de {} caractères", t.chars().count()),
+        autre => format!("une valeur de {} octets", autre.to_string().len()),
+    };
+    message.replacen(&instance, &forme, 1)
+}
+
 struct PreparedHook {
     tool: GraphTool,
     data: Value,
@@ -519,6 +633,10 @@ pub struct PreparedBackend {
     embed: crate::model_source::ModelSource,
     pub directory: PathBuf,
     entities: HashMap<String, EntityConfig>,
+    /// Les définitions nues des relations, sans leur politique d'écriture :
+    /// ce que voient la recherche, le catalogue et la comparaison
+    /// d'ouverture — une garde d'états se recharge, une relation non.
+    relation_defs: HashMap<String, RelationDef>,
     mappings: HashMap<String, JsonSchemaMapping>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
     tools: BTreeMap<String, GraphTool>,
@@ -588,7 +706,7 @@ impl PreparedBackend {
         program.compile(
             &crate::dataflow::search_chain::SearchSchema {
                 entities: &self.entities,
-                relations: &self.manifest.relations,
+                relations: &self.relation_defs,
             },
             &self.nodes,
         )
@@ -849,6 +967,34 @@ impl PreparedBackend {
             crate::schema::validate_identifier(name, "relation").map_err(|e| e.to_string())?;
             if !entities.contains_key(&relation.from) || !entities.contains_key(&relation.to) {
                 return Err(format!("{name}: unknown relation endpoint"));
+            }
+            // Les états permis d'un bout : il faut un cycle de vie, et des
+            // états qui y existent — sinon la garde ne pourrait jamais passer,
+            // ou jamais refuser.
+            for (cle, entite, permis) in [
+                ("from_states", &relation.from, &relation.from_states),
+                ("to_states", &relation.to, &relation.to_states),
+            ] {
+                let Some(permis) = permis else { continue };
+                let Some(cycle) = entities[entite].lifecycle.as_ref() else {
+                    return Err(format!(
+                        "relation « {name} » : {cle} sur « {entite} », qui n'a pas de cycle de vie — \
+                         retirez {cle}, ou déclarez un lifecycle sur l'entité"
+                    ));
+                };
+                let connus = cycle.states();
+                if permis.is_empty() {
+                    return Err(format!("relation « {name} » : {cle} est vide — aucun lien ne pourrait se poser"));
+                }
+                for etat in permis {
+                    if !connus.contains(&etat.as_str()) {
+                        return Err(format!(
+                            "relation « {name} » : {cle} nomme « {etat} », qui n'est pas un état de \
+                             « {entite} » (états : {})",
+                            connus.join(", ")
+                        ));
+                    }
+                }
             }
         }
         let scripts = manifest
@@ -1116,6 +1262,33 @@ impl PreparedBackend {
             )?;
             reactions.insert(name.clone(), graphe);
         }
+        // 8. **Une réaction qui remonte une relation qu'aucun outil n'écrit**
+        //    tournerait à chaque événement sans jamais rien trouver — c'est
+        //    ainsi que `review_anchored` a vécu dans le gabarit `memory` jusqu'au
+        //    11 octobre, sans un mot. Lu sur le manifeste seul : les relations
+        //    que les réactions lisent contre celles que les outils écrivent,
+        //    d'après la marque des paramètres des nœuds. Un outil dont la
+        //    relation reste ouverte (l'appelant la nomme) les écrit toutes.
+        let mut ecrites: BTreeSet<String> = BTreeSet::new();
+        let mut toutes_ecrites = false;
+        for (nom, outil) in &tools {
+            let (noms, toute) = relations_nommees(outil, &manifest.tools[nom].bindings, &nodes, |a| a.write);
+            ecrites.extend(noms);
+            toutes_ecrites |= toute;
+        }
+        if !toutes_ecrites {
+            for (nom, graphe) in &reactions {
+                let (lues, _) =
+                    relations_nommees(graphe, &manifest.reactions[nom].bindings, &nodes, |a| a.read);
+                if let Some(r) = lues.iter().find(|r| !ecrites.contains(*r)) {
+                    return Err(format!(
+                        "la réaction « {nom} » remonte la relation « {r} », qu'aucun outil du \
+                         manifeste n'écrit : elle tournerait sans jamais rien trouver — déclarez un \
+                         outil qui la pose (`templates/tools/link.mmd`, `relation` liée à « {r} »)"
+                    ));
+                }
+            }
+        }
         // Les entités décrites que chaque outil vise : par ses payloads, par
         // un binding qui nomme une entité, ou par ses nœuds de sélection et
         // de recherche (entité littérale ou liée). `describe()` les reprend.
@@ -1163,6 +1336,11 @@ impl PreparedBackend {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             scripted_types,
             routes,
+            relation_defs: manifest
+                .relations
+                .iter()
+                .map(|(k, v)| (k.clone(), v.def.clone()))
+                .collect(),
             manifest,
             embed,
             directory,
@@ -1445,6 +1623,7 @@ impl PreparedBackend {
             #[cfg(feature = "code")]
             garde,
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -1508,7 +1687,7 @@ fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> 
         ("workspace", value(&a.workspace), value(&b.workspace)),
         ("fts_positions", value(&a.fts_positions), value(&b.fts_positions)),
         ("buffer_pool", value(&a.buffer_pool), value(&b.buffer_pool)),
-        ("relations", value(&a.relations), value(&b.relations)),
+        ("relations", value(&old.relation_defs), value(&new.relation_defs)),
         ("entities", entities(old), entities(new)),
     ] {
         if before != after {
@@ -1668,7 +1847,7 @@ impl PreparedBackend {
         jsonschema::validator_for(&schema)
             .map_err(|e| e.to_string())?
             .validate(&request.arguments)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| schema_refusal(&e))?;
         let def = tool
             .instantiate(&request.arguments)
             .map_err(|e| e.to_string())?;
@@ -1751,7 +1930,7 @@ impl PreparedBackend {
                 .iter()
                 .find(|n| n.name == node)
                 .ok_or_else(|| format!("unknown output node {node}"))?;
-            let schema = self.nodes.schema(&n.node_type).unwrap();
+            let schema = self.nodes.schema_for(&n.node_type, &n.config).unwrap();
             if !schema.outputs.iter().any(|p| p.name == port) {
                 return Err(format!("unknown output {node}.{port}"));
             }
@@ -1769,6 +1948,11 @@ impl PreparedBackend {
     }
 }
 
+thread_local! {
+    /// La cellule de l'appel en cours dans ce fil (`Backend::call_in`).
+    static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
+}
+
 pub struct Backend {
     /// **Les réactions en service** — le réacteur qui les exécute, ou rien si
     /// le manifeste n'en déclare aucune. Montées à l'ouverture, arrêtées par
@@ -1781,6 +1965,11 @@ pub struct Backend {
     /// l'arrêt sans l'attendre — passe avant que l'`Arc` du catalogue ne soit
     /// lâché ici. Le contrat reste `stop_reactions`.
     reactions: Mutex<Option<ReactorHandle>>,
+    /// **Les réacteurs des autres cellules** (marche 1 bis, pas c) : un par
+    /// cellule qu'une requête a nommée, monté à sa première requête, sur le bus
+    /// et les services de cette cellule. Le bus préfixe ses sujets par la
+    /// cellule : le réacteur de la cellule du catalogue n'entend pas les autres.
+    cell_reactions: Mutex<HashMap<crate::scope::Scope, ReactorHandle>>,
     /// **Les déclarations en service.** Un appel prend la version courante au
     /// départ et la garde jusqu'au bout : un rechargement qui la remplace
     /// pendant ce temps ne change rien à l'appel en cours.
@@ -1870,7 +2059,40 @@ impl Backend {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .event_bus();
-        let mut services = self.build_services(&prepared);
+        let (handle, mounted) = self.monter_un_reacteur(&prepared, bus)?;
+        *slot = Some(handle);
+        Ok(mounted)
+    }
+
+    /// **Les réactions d'une cellule**, montées à la première requête qui la
+    /// nomme (`call_in`) : son bus, ses services. La cellule du catalogue a les
+    /// siennes par [`mount_reactions`](Self::mount_reactions).
+    fn reactions_de_la_cellule(&self, cell: &crate::scope::Scope) -> Result<(), String> {
+        let prepared = self.prepared();
+        if prepared.reactions.is_empty() || self.reactions.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
+            // Pas de réactions déclarées, ou pas en service (tests, arrêt) : rien à monter.
+            return Ok(());
+        }
+        let bus = {
+            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            if *cat.scope() == *cell {
+                return Ok(());
+            }
+            cat.event_bus_in(cell)
+        };
+        let mut cellules = self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if cellules.contains_key(cell) {
+            return Ok(());
+        }
+        let (handle, _) = self.monter_un_reacteur(&prepared, bus)?;
+        cellules.insert(cell.clone(), handle);
+        Ok(())
+    }
+
+    /// Un réacteur sur ce bus, avec les services de l'appel en cours (sa
+    /// cellule, si `call_in` l'a posée).
+    fn monter_un_reacteur(&self, prepared: &PreparedBackend, bus: crate::events::EventBus) -> Result<(ReactorHandle, Vec<String>), String> {
+        let mut services = self.build_services(prepared);
         // Le bus en LECTURE, sous la clé que demande `EventSourceNode` : le
         // catalogue n'en donne que `"event_bus"`, par lequel on **publie**.
         // Le même bus des deux côtés — c'est sur lui que `watch` ouvre les
@@ -1894,8 +2116,7 @@ impl Backend {
                 .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?;
             mounted.push(name.clone());
         }
-        *slot = Some(reactor.spawn());
-        Ok(mounted)
+        Ok((reactor.spawn(), mounted))
     }
 
     /// **Arrête les réactions et rend leurs erreurs** — un arrêt ATTENDU
@@ -1905,15 +2126,20 @@ impl Backend {
     ///
     /// À appeler avant de lâcher le backend. Rien en service : rend vide.
     pub fn stop_reactions(&self) -> Vec<String> {
-        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
-        match slot.take() {
-            Some(handle) => {
-                let errors = handle.errors();
-                handle.stop();
-                errors
-            }
-            None => Vec::new(),
+        let mut errors = Vec::new();
+        // Les réacteurs des autres cellules d'abord, puis celui du catalogue.
+        let cellules: Vec<ReactorHandle> =
+            self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner()).drain().map(|(_, h)| h).collect();
+        for handle in cellules {
+            errors.extend(handle.errors());
+            handle.stop();
         }
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(handle) = slot.take() {
+            errors.extend(handle.errors());
+            handle.stop();
+        }
+        errors
     }
 
     /// Les erreurs des réactions en service, dans l'ordre — ce qu'un hôte
@@ -2152,6 +2378,26 @@ impl Backend {
         Ok(response)
     }
 
+    /// **Un appel dans une cellule** (marche 1 bis de la forme C) : la cellule
+    /// de la session qui appelle, portée par les services de l'appel (`scope`)
+    /// jusqu'aux nœuds, au lieu de la cellule du catalogue. `call` reste
+    /// l'appel dans la cellule par défaut du catalogue.
+    pub fn call_in(&self, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
+        // La cellule vit le temps de cet appel, dans ce fil : les services se
+        // construisent ici, avant que le graphe ne parte sur d'autres fils.
+        struct Remettre(Option<crate::scope::Scope>);
+        impl Drop for Remettre {
+            fn drop(&mut self) {
+                CELL_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+            }
+        }
+        let avant = CELL_OF_CALL.with(|c| c.replace(Some(cell.clone())));
+        let _remettre = Remettre(avant);
+        // Les réactions de cette cellule écoutent avant que l'appel n'écrive.
+        self.reactions_de_la_cellule(cell)?;
+        self.call(name, args)
+    }
+
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
         let mut response = self.call_tool(name, args)?;
         harness_presentation(&mut response);
@@ -2177,7 +2423,7 @@ impl Backend {
             jsonschema::validator_for(&definition["inputSchema"])
                 .map_err(|e| e.to_string())?
                 .validate(&args)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| schema_refusal(&e))?;
             if name == "describe_backend" {
                 return Ok(prepared.search_description());
             }
@@ -2218,7 +2464,7 @@ impl Backend {
                 return Err(format!("unknown argument {key}"));
             }
         }
-        let errors: Vec<Value> = prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":e.to_string()})).collect();
+        let errors: Vec<Value> = prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":schema_refusal(&e)})).collect();
         if !errors.is_empty() {
             if attachment.harness.input_schema.is_none()
                 && attachment.harness.before.is_empty()
@@ -2524,10 +2770,21 @@ impl Backend {
     /// quel bus les curseurs ont été ouverts.
     fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
         let mut services = ServiceRegistry::new();
-        self.catalog
-            .lock()
-            .unwrap()
-            .register_search_services(&mut services);
+        // La cellule de l'appel, si `call_in` l'a posée : ses index et sa
+        // cellule remplacent ceux du catalogue pour les nœuds de cet appel.
+        match CELL_OF_CALL.with(|c| c.borrow().clone()) {
+            Some(cell) => {
+                let mut cat = self.catalog.lock().unwrap();
+                // Pas de repli sur la cellule du catalogue : ce serait chercher
+                // ailleurs sans le dire. Les nœuds de recherche refuseront,
+                // faute de leurs services.
+                if let Err(e) = cat.register_search_services_in(&cell, &mut services) {
+                    eprintln!("[backend] les services de recherche de la cellule {}/{} : {e}", cell.org, cell.project);
+                }
+                services.register("scope", cell);
+            }
+            None => self.catalog.lock().unwrap().register_search_services(&mut services),
+        }
         services.register("catalog", self.catalog.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
@@ -2569,6 +2826,12 @@ impl Backend {
         services.register("rhai_scripts", prepared.scripts.clone());
         services.register(
             "backend_relations",
+            prepared.relation_defs.clone(),
+        );
+        // La politique d'écriture des relations (états permis), lue par les
+        // nœuds qui posent des liens.
+        services.register(
+            crate::backend::RELATION_POLICIES_SERVICE,
             prepared.manifest.relations.clone(),
         );
         services.register("backend_mappings", prepared.mappings.clone());
@@ -2751,7 +3014,32 @@ impl Backend {
         self.catalog.lock().unwrap_or_else(|p| p.into_inner()).must_reopen()
     }
 
+    /// **Arrête ce backend : les réactions d'abord, le catalogue ensuite.**
+    ///
+    /// L'ordre n'est pas négociable, et il manquait au premier jet du montage
+    /// (11 octobre 2026, trouvé en jouant la passe MCP) : une réaction qui
+    /// finit d'écrire pendant que le catalogue se ferme écrirait dans un
+    /// catalogue en train de partir. L'arrêt est ATTENDU, pas espéré par un
+    /// `Drop`.
+    ///
+    /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
+    /// est parti avec elles, et personne d'autre ne les relira.
     pub fn shutdown(&mut self) -> Result<(), String> {
+        for erreur in self.stop_reactions() {
+            eprintln!("[réaction] {erreur}");
+        }
+        // **Les indexations en cours s'arrêtent au prochain paquet validé**, et
+        // on les attend avant de fermer la base : la relance reprendra là
+        // (marche 0 de la forme C). Le fil d'indexation tient le catalogue
+        // pendant tout son plein texte, d'où l'arrêt avant le verrou.
+        // L'indexation n'existe qu'avec la feature `code`.
+        #[cfg(feature = "code")]
+        {
+            let attendues = crate::dataflow::index_nodes::stop_indexings_of(&self.catalog);
+            if attendues > 0 {
+                eprintln!("[index] {attendues} indexation(s) arrêtée(s) ; relancer index reprend là");
+            }
+        }
         self.catalog
             .lock()
             .unwrap()
@@ -3008,6 +3296,24 @@ mod tests {
 
 
     use super::*;
+
+    /// Le refus d'un tableau trop long dit sa taille et la limite, sans le
+    /// recopier (ticket de G : 2 Mo de JSON dans le message d'`ingest_snapshot`).
+    #[test]
+    fn un_refus_de_schema_dit_la_taille_sans_recopier_la_donnee() {
+        let schema = json!({"type":"object","properties":{"records":{"type":"array","maxItems":512}}});
+        let records: Vec<Value> = (0..20_000).map(|i| json!({"id": i, "texte": "une ligne assez longue"})).collect();
+        let args = json!({ "records": records });
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let e = validator.validate(&args).unwrap_err();
+        let message = schema_refusal(&e);
+        assert!(message.len() < 200, "le refus recopie la donnée ({} octets) : {}", message.len(), &message[..message.len().min(300)]);
+        assert!(message.contains("20000") && message.contains("512"), "{message}");
+        // Une petite valeur reste dite telle quelle : elle aide à comprendre.
+        let petite = json!({"records": "pas un tableau"});
+        let e = validator.validate(&petite).unwrap_err();
+        assert!(schema_refusal(&e).contains("pas un tableau"), "{}", schema_refusal(&e));
+    }
     #[test]
     fn search_verbs_run_through_library_without_a_transport() {
         use crate::connection::{CallbackConnection, CypherValue, QueryResult};
@@ -3029,7 +3335,7 @@ mod tests {
         let plan = prepared.compile_search_program(&program).unwrap();
         assert_eq!(plan.entity, "Note");
         let conn = CallbackConnection::new(|q, _| {
-            Ok(if q.starts_with("MATCH (m:Note)") {
+            Ok(if q.starts_with("MATCH (m:`Note`)") {
                 QueryResult {
                     columns: vec![],
                     rows: vec![vec![CypherValue::Map(
@@ -3070,6 +3376,7 @@ mod tests {
             #[cfg(feature = "code")]
             garde: None,
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -3274,6 +3581,7 @@ mod tests {
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         }
     }
 

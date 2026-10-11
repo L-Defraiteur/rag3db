@@ -2,11 +2,19 @@
 name = "rag3weaver"
 version = "0.1.0"
 edition = "2021"
+# Les tests sont déclarés ci-dessous : les e2e forment UN binaire
+# (tests/e2e/main.rs), bâti et relié une fois (11 octobre 2026).
+autotests = false
 license-file = "LICENSE"
 description = "RAG pipeline orchestrator: events, config, embedder and DB traits for rag3db"
 
 [lib]
-crate-type = ["lib", "staticlib"]
+# **Pas de `staticlib` ici** (11 octobre 2026) : elle ne sert qu'au bâti WASM
+# (CMakeLists.txt), qui la demande lui-même par `cargo rustc --crate-type
+# staticlib`. Déclarée ici, chaque bâti natif — tests compris — reliait tout
+# le graphe de dépendances en un `librag3weaver.a` de 1,1 Go que personne ne
+# lisait : un cinquième du target d'une batterie.
+crate-type = ["lib"]
 
 # Lints scopés au paquet. On n'utilise PAS RUSTFLAGS=-D warnings au CI : cargo
 # ne plafonne les lints (`--cap-lints allow`) que pour les dépendances issues
@@ -37,7 +45,7 @@ minijinja = { version = "2", default-features = false, features = ["builtins", "
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.
-tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "signal"] }
 # **Le moteur de script générique** (`src/script/`) : rhai, et TypeScript —
 # le langage du produit. TypeScript n'est jamais compilé : `swc_ts_fast_strip`
 # (le retrait de types de Node) efface les annotations en blancs, lignes et
@@ -465,3 +473,54 @@ required-features = ["daemon", "rag3db-native", "code"]
 name = "rag3weaver-chat"
 path = "src/bin/rag3weaver-chat.rs"
 required-features = ["openai-llm"]
+
+# ── Tests ──────────────────────────────────────────────────────────────────
+# Les suites e2e : un seul binaire, chaque suite y est un module
+# (tests/e2e/main.rs, généré par tests/e2e/generer.py).
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+
+# Les autres tests restent chacun leur binaire (sondes, rendus, client LLM).
+[[test]]
+name = "impact_rendu"
+path = "tests/impact_rendu.rs"
+[[test]]
+name = "openai_llm_retry"
+path = "tests/openai_llm_retry.rs"
+[[test]]
+name = "openai_llm_sse"
+path = "tests/openai_llm_sse.rs"
+[[test]]
+name = "owned_names"
+path = "tests/owned_names.rs"
+[[test]]
+name = "sonde_cpp_rag3db"
+path = "tests/sonde_cpp_rag3db.rs"
+[[test]]
+name = "sonde_identifiants_lucivy"
+path = "tests/sonde_identifiants_lucivy.rs"
+[[test]]
+name = "sonde_liste_analyse"
+path = "tests/sonde_liste_analyse.rs"
+[[test]]
+name = "sonde_marques"
+path = "tests/sonde_marques.rs"
+[[test]]
+name = "sonde_racines"
+path = "tests/sonde_racines.rs"
+[[test]]
+name = "sonde_reouverture"
+path = "tests/sonde_reouverture.rs"
+[[test]]
+name = "sonde_sens_des_relations"
+path = "tests/sonde_sens_des_relations.rs"
+[[test]]
+name = "sonde_tampon_et_blobs"
+path = "tests/sonde_tampon_et_blobs.rs"
+[[test]]
+name = "structured_payloads"
+path = "tests/structured_payloads.rs"
+[[test]]
+name = "usages_rendu"
+path = "tests/usages_rendu.rs"
