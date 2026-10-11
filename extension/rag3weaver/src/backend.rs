@@ -1562,6 +1562,7 @@ impl PreparedBackend {
             #[cfg(feature = "code")]
             garde,
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -1903,6 +1904,11 @@ pub struct Backend {
     /// l'arrêt sans l'attendre — passe avant que l'`Arc` du catalogue ne soit
     /// lâché ici. Le contrat reste `stop_reactions`.
     reactions: Mutex<Option<ReactorHandle>>,
+    /// **Les réacteurs des autres cellules** (marche 1 bis, pas c) : un par
+    /// cellule qu'une requête a nommée, monté à sa première requête, sur le bus
+    /// et les services de cette cellule. Le bus préfixe ses sujets par la
+    /// cellule : le réacteur de la cellule du catalogue n'entend pas les autres.
+    cell_reactions: Mutex<HashMap<crate::scope::Scope, ReactorHandle>>,
     /// **Les déclarations en service.** Un appel prend la version courante au
     /// départ et la garde jusqu'au bout : un rechargement qui la remplace
     /// pendant ce temps ne change rien à l'appel en cours.
@@ -1974,7 +1980,40 @@ impl Backend {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .event_bus();
-        let mut services = self.build_services(&prepared);
+        let (handle, mounted) = self.monter_un_reacteur(&prepared, bus)?;
+        *slot = Some(handle);
+        Ok(mounted)
+    }
+
+    /// **Les réactions d'une cellule**, montées à la première requête qui la
+    /// nomme (`call_in`) : son bus, ses services. La cellule du catalogue a les
+    /// siennes par [`mount_reactions`](Self::mount_reactions).
+    fn reactions_de_la_cellule(&self, cell: &crate::scope::Scope) -> Result<(), String> {
+        let prepared = self.prepared();
+        if prepared.reactions.is_empty() || self.reactions.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
+            // Pas de réactions déclarées, ou pas en service (tests, arrêt) : rien à monter.
+            return Ok(());
+        }
+        let bus = {
+            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            if *cat.scope() == *cell {
+                return Ok(());
+            }
+            cat.event_bus_in(cell)
+        };
+        let mut cellules = self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if cellules.contains_key(cell) {
+            return Ok(());
+        }
+        let (handle, _) = self.monter_un_reacteur(&prepared, bus)?;
+        cellules.insert(cell.clone(), handle);
+        Ok(())
+    }
+
+    /// Un réacteur sur ce bus, avec les services de l'appel en cours (sa
+    /// cellule, si `call_in` l'a posée).
+    fn monter_un_reacteur(&self, prepared: &PreparedBackend, bus: crate::events::EventBus) -> Result<(ReactorHandle, Vec<String>), String> {
+        let mut services = self.build_services(prepared);
         // Le bus en LECTURE, sous la clé que demande `EventSourceNode` : le
         // catalogue n'en donne que `"event_bus"`, par lequel on **publie**.
         // Le même bus des deux côtés — c'est sur lui que `watch` ouvre les
@@ -1998,8 +2037,7 @@ impl Backend {
                 .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?;
             mounted.push(name.clone());
         }
-        *slot = Some(reactor.spawn());
-        Ok(mounted)
+        Ok((reactor.spawn(), mounted))
     }
 
     /// **Arrête les réactions et rend leurs erreurs** — un arrêt ATTENDU
@@ -2009,15 +2047,20 @@ impl Backend {
     ///
     /// À appeler avant de lâcher le backend. Rien en service : rend vide.
     pub fn stop_reactions(&self) -> Vec<String> {
-        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
-        match slot.take() {
-            Some(handle) => {
-                let errors = handle.errors();
-                handle.stop();
-                errors
-            }
-            None => Vec::new(),
+        let mut errors = Vec::new();
+        // Les réacteurs des autres cellules d'abord, puis celui du catalogue.
+        let cellules: Vec<ReactorHandle> =
+            self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner()).drain().map(|(_, h)| h).collect();
+        for handle in cellules {
+            errors.extend(handle.errors());
+            handle.stop();
         }
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(handle) = slot.take() {
+            errors.extend(handle.errors());
+            handle.stop();
+        }
+        errors
     }
 
     /// Les erreurs des réactions en service, dans l'ordre — ce qu'un hôte
@@ -2271,6 +2314,8 @@ impl Backend {
         }
         let avant = CELL_OF_CALL.with(|c| c.replace(Some(cell.clone())));
         let _remettre = Remettre(avant);
+        // Les réactions de cette cellule écoutent avant que l'appel n'écrive.
+        self.reactions_de_la_cellule(cell)?;
         self.call(name, args)
     }
 
@@ -3233,6 +3278,7 @@ mod tests {
             #[cfg(feature = "code")]
             garde: None,
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -3436,6 +3482,7 @@ mod tests {
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
             reactions: Mutex::new(None),
+            cell_reactions: Mutex::new(HashMap::new()),
         }
     }
 

@@ -1,6 +1,11 @@
 # Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer
 
-- **état** : ouvert (relevé par lecture le 11 octobre 2026, en relisant la page de la forme C)
+- **état** : corrigé par les pas b et c de la marche 1 bis (11 octobre 2026). Plus de bascule de cellule
+  autour d'un graphe (`rechercher` prend les index et le filtre de la cellule de sa requête) ; un réacteur
+  par cellule, sur le bus et les services de cette cellule ; `ReactTransitionNode` écrit dans la cellule de
+  ses services, et ne transitionne qu'une cible de cette cellule. Témoin :
+  `e2e_demon_hote::une_reaction_ecrit_dans_la_cellule_de_son_evenement` (rouge sans réacteur par cellule).
+  Relevé par lecture le 11 octobre 2026, en relisant la page de la forme C.
 - **gravité** : réponse fausse — une transition écrite dans une autre cellule que celle de sa source
 - **atteignable en service** : en principe oui, depuis `0387fe401` ; rare (il faut un outil qui bascule de cellule pendant qu'une réaction s'exécute) ; jamais observé
 - **touche rag3weaver** : oui, et seulement rag3weaver

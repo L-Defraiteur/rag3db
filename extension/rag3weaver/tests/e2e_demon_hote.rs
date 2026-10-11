@@ -367,3 +367,62 @@ fn chaque_session_ecrit_et_lit_dans_sa_cellule() {
     drop(conn);
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// **Marche 1 bis, pas c : une réaction écrit dans la cellule de son
+/// événement** (ticket `2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee`).
+/// Deux sessions sur deux cellules d'un même backend, chacune avec sa fiche,
+/// son sujet et son ancre. Le sujet de beta change : la réaction de beta
+/// transitionne la fiche de beta, et celle d'alpha ne bouge pas. Le bus
+/// préfixe ses sujets par la cellule : sans un réacteur par cellule, l'écriture
+/// de beta n'était entendue par personne.
+#[test]
+#[ignore]
+fn une_reaction_ecrit_dans_la_cellule_de_son_evenement() {
+    let d = dossier("reaction-cellule");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![]);
+    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![]);
+    // Les sujets d'abord, et la rafale retombe (la réaction attend 500 ms
+    // après la dernière écriture) : sinon elle partirait après l'ancre, et
+    // transitionnerait légitimement les deux fiches.
+    for (s, sujet) in [(&sa, "sujet-a"), (&sb, "sujet-b")] {
+        ok(&put(&host, s, &m, "put_sujet", sujet));
+    }
+    std::thread::sleep(Duration::from_millis(1500));
+    for (s, f, sujet) in [(&sa, "fiche-a", "sujet-a"), (&sb, "fiche-b", "sujet-b")] {
+        ok(&put(&host, s, &m, "put_fiche", f));
+        ok(&host.call(Some(s), &m, "ancrer", json!({"links": [{"from": {"titre": f}, "to": {"titre": sujet}}]})));
+    }
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(fiche(&host, &sa, &m, "fiche-a").map(|(e, _)| e).as_deref(), Some("courant"), "rien n'a changé dans alpha");
+    assert_eq!(fiche(&host, &sb, &m, "fiche-b").map(|(e, _)| e).as_deref(), Some("courant"), "ni dans beta");
+    ok(&host.call(
+        Some(&sb),
+        &m,
+        "put_sujet",
+        json!({"record": {"titre": "sujet-b", "corps": "le sujet de beta a changé", "etat": "courant"}, "expected_revision": 1}),
+    ));
+    let debut = std::time::Instant::now();
+    let fiche_b = loop {
+        let f = fiche(&host, &sb, &m, "fiche-b");
+        if f.as_ref().is_some_and(|(etat, _)| etat == "a_revoir") || debut.elapsed() > Duration::from_secs(20) {
+            break f;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    assert_eq!(fiche_b.map(|(e, _)| e).as_deref(), Some("a_revoir"), "la réaction de beta a transitionné la fiche de beta");
+    std::thread::sleep(Duration::from_secs(1));
+    let (etat_a, _) = fiche(&host, &sa, &m, "fiche-a").expect("la fiche d'alpha");
+    assert_eq!(etat_a, "courant", "la fiche d'alpha ne bouge pas");
+    host.shutdown();
+
+    // En base : la transition est restée dans la cellule de beta.
+    let conn = Rag3dbConnection::new(d.join("base.rag3db")).unwrap();
+    use rag3weaver::connection::DbConnection;
+    let r = conn.execute("MATCH (n:Fiche) RETURN n.titre, n.etat, n._project ORDER BY n.titre").unwrap();
+    let lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| v.as_str().unwrap_or("?").to_string()).collect::<Vec<_>>().join("/")).collect();
+    assert_eq!(lignes, vec!["fiche-a/courant/alpha", "fiche-b/a_revoir/beta"], "les fiches en base");
+    drop(conn);
+    let _ = std::fs::remove_dir_all(d);
+}

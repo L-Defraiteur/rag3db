@@ -8828,6 +8828,11 @@ impl Catalog {
         self.event_bus.in_scope(&self.scope)
     }
 
+    /// Le bus d'une cellule donnée (marche 1 bis : le réacteur d'une cellule).
+    pub fn event_bus_in(&self, cell: &crate::scope::Scope) -> EventBus {
+        self.event_bus.in_scope(cell)
+    }
+
     /// Publie dans la cellule **courante** — `set_scope` déplace donc aussi
     /// les événements, ce qui est la seule lecture cohérente.
     fn emit_event(&self, event: CatalogEvent) {

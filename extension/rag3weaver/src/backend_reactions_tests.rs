@@ -96,6 +96,7 @@ fn reactif() -> (tempfile::TempDir, Backend) {
     catalog.initialize().unwrap();
     let backend = Backend {
         reactions: Mutex::new(None),
+        cell_reactions: Mutex::new(std::collections::HashMap::new()),
         decider: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),

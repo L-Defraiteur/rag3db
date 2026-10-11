@@ -172,6 +172,7 @@ impl Node for ReactTransitionNode {
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .cloned()
             .ok_or("ReactTransitionNode: 'catalog' service not found")?;
+        let cellule = ctx.service::<crate::scope::Scope>("scope").cloned();
 
         let relation = identifiant(&self.cfg.relation, "relation")?;
         let target = identifiant(&self.cfg.target, "target")?;
@@ -266,6 +267,11 @@ impl Node for ReactTransitionNode {
         let mut saut = rag3weaver_ir::Hop::new("", &relation, &target, sens);
         saut.start = source.clone();
         saut.returns.push(rag3weaver_ir::Column::Node(champ.clone()));
+        // La cellule du nœud atteint (relecture de la recherche, marche 1 bis) :
+        // une arête qui traverserait deux cellules ne fait pas transitionner une
+        // cible d'une autre cellule que celle de la réaction.
+        saut.returns.push(rag3weaver_ir::Column::Node(crate::scope::ORG_COLUMN.into()));
+        saut.returns.push(rag3weaver_ir::Column::Node(crate::scope::PROJECT_COLUMN.into()));
 
         let lignes = {
             let cat = catalog.lock().map_err(|_| "ReactTransitionNode: catalog poisoned".to_string())?;
@@ -287,6 +293,17 @@ impl Node for ReactTransitionNode {
         for ligne in &lignes.rows {
             // La première colonne est l'uuid de départ : la cible vient après.
             let Some(uuid) = ligne.get(1).and_then(|v| v.as_str()) else { continue };
+            if let Some(cell) = &cellule {
+                let (org, project) = (ligne.get(3).and_then(|v| v.as_str()), ligne.get(4).and_then(|v| v.as_str()));
+                // Une ligne sans cellule (une base d'avant les cellules) est de la cellule par défaut.
+                let dans_la_cellule = match (org, project) {
+                    (Some(o), Some(p)) => o == cell.org && p == cell.project,
+                    _ => cell.is_default(),
+                };
+                if !dans_la_cellule {
+                    continue;
+                }
+            }
             // Seules les lignes **dans l'état de départ** sont concernées. Les
             // autres ne sont pas un refus : la transition ne les regarde pas.
             match ligne.get(2).and_then(|v| v.as_str()) {
@@ -304,7 +321,14 @@ impl Node for ReactTransitionNode {
             let mut data: BTreeMap<String, CypherValue> = BTreeMap::new();
             data.insert(champ.clone(), CypherValue::String(vers.clone()));
             let mut cat = catalog.lock().map_err(|_| "ReactTransitionNode: catalog poisoned".to_string())?;
-            match cat.update(&target, uuid, data) {
+            // La cellule de la réaction (ses services, marche 1 bis) : la
+            // transition s'écrit là où l'événement est né, pas dans la cellule
+            // du catalogue.
+            let ecrite = match &cellule {
+                Some(cell) => cat.dans_la_cellule(cell, |c| c.update(&target, uuid, data)),
+                None => cat.update(&target, uuid, data),
+            };
+            match ecrite {
                 Ok(()) => changees.push(uuid.clone()),
                 // **Un refus par ligne ne fait pas tomber le lot.** La garde de
                 // cycle de vie a pu changer d'avis entre la lecture et

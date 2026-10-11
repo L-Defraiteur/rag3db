@@ -61,6 +61,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         #[cfg(feature = "code")]
         garde: None,
         reactions: Mutex::new(None),
+        cell_reactions: Mutex::new(std::collections::HashMap::new()),
     };
     (dir, backend)
 }
