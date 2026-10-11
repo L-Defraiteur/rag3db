@@ -401,3 +401,10 @@ où elle vit.
   impact reste sur run_plan (−35 à −42 % d'allers-retours sur rag3db, rendu
   identique, temps égal). Les sauts directs de usages_of ne sont pas une
   redondance (arêtes devinées, scope le plus étroit) : gardés.
+- **Le vrai but du MCP** (Lucie, 15 h 45) : « qu'avec ce MCP vous vous
+  sentiez déjà comme dans un IDE adapté à vous ; s'il y a des choses à revoir,
+  on reverra ; comme des malvoyants qui ont d'autres sens ». Noté en vision
+  (section « Un IDE adapté aux agents »). Application dès le premier index
+  réel : les sessions du code posent leurs vraies questions par le MCP et
+  tiennent une page « ce qui manque à un agent dans cet IDE », chaque retour à
+  grep dit avec sa raison.

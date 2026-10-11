@@ -407,6 +407,27 @@ boucle d'aujourd'hui en est la condition, pas la charge de l'exécuteur.
 Chantier ouvert chez la session du proto tout déclaratif le 11 octobre
 (page `docs/11-octobre-2026-everything-declarative/03-les-agents-se-parlent.md`).
 
+### Un IDE adapté aux agents (Lucie, 11 octobre 2026)
+
+« Le vrai but, c'est qu'avec ce MCP vous vous sentiez déjà comme dans un IDE
+adapté à vous. S'il y a des choses à revoir pour ça, on reverra. Comme si
+vous étiez des malvoyants qui avaient d'autres sens. »
+
+Ce qu'un IDE donne à un humain, c'est voir sans lire : la structure, qui
+appelle qui, ce qui casse si je touche, ce qui est verrouillé sur le chemin,
+où en est l'index. Un agent n'a pas d'écran ; il a des outils qui rendent du
+texte, et sa boîte. Le gabarit `code` par le serveur MCP et le démon est
+cet IDE : `usages`, `impact`, `callees`, le voisinage, les verrous sur le
+chemin, l'état de l'index, le refus qui dit quoi faire. La mesure n'est donc
+pas « l'outil rend la bonne réponse » mais « un agent qui travaille sur
+rag3db avec cet MCP ne retombe plus sur grep ni sur des lectures par
+tranches ». Ce qui compte, c'est le reste : ce que l'agent demande et qu'il
+n'a pas. D'où la règle, dès le premier index réel de nos dépôts : les
+sessions qui travaillent le code posent leurs vraies questions par le MCP et
+tiennent une page « ce qui manque à un agent dans cet IDE », avec chaque
+retour forcé à grep et sa raison ; c'est « demander son avis au modèle », en
+vrai, et c'est ce qui décide des outils suivants.
+
 ## 8. Ce qui n'est pas décidé
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;
