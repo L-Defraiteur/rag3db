@@ -248,6 +248,13 @@ pub trait SchemaDialect: Send + Sync {
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
+    /// **L'instruction qui fixe un même instantané** pour toutes les lectures
+    /// d'une transaction, à envoyer juste après [`DbConnection::begin`]
+    /// (`crate::connection::DbConnection::begin`) ; `None` quand le moteur le
+    /// fait déjà. Un graphe de formes lu en plusieurs instructions s'en sert
+    /// pour se dire atomique.
+    fn snapshot_read(&self) -> Option<&'static str> { None }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -2210,6 +2217,12 @@ impl SchemaDialect for PostgresDialect {
     /// ouvre par la connexion (1d1e1d7de). Prouvé dans le texte ; le témoin
     /// vivant (`tests/e2e_contrat_transactions.rs`) attend une base
     /// PostgreSQL sur les postes.
+    /// `READ COMMITTED`, le niveau par défaut, prend un instantané par
+    /// instruction.
+    fn snapshot_read(&self) -> Option<&'static str> {
+        Some("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    }
+
     fn capabilities(&self) -> DialectCapabilities {
         DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false }
     }

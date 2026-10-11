@@ -66,6 +66,8 @@ mod e2e_burn_reranker;
 mod e2e_burn_xlmr_reranker;
 #[path = "../e2e_catalogue_gabarits.rs"]
 mod e2e_catalogue_gabarits;
+#[path = "../e2e_chainage.rs"]
+mod e2e_chainage;
 #[path = "../e2e_charge_ingestion.rs"]
 mod e2e_charge_ingestion;
 #[path = "../e2e_checkpoint.rs"]

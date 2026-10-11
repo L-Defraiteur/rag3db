@@ -8791,6 +8791,12 @@ impl Catalog {
         self.dialect.clone()
     }
 
+    /// **Exécuter un graphe de formes** sur cette base, par son dialecte
+    /// ([`crate::plan::run_plan`]).
+    pub fn run_plan(&self, plan: &rag3weaver_ir::Plan, options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
+    }
+
     /// Execute raw Cypher (useful for debugging/tests).
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))

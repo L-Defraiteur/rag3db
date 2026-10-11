@@ -135,12 +135,13 @@ moitié d'écriture.
 Le refus garde le nom de la règle P3 et ajoute le nœud fautif :
 
 ```
-TranslateError::Untranslated { dialect: "postgres", form: "write.load", node: "charger" }
-→ RAG3WEAVER_REFUS__le_dialecte_postgres_ne_traduit_pas__write.load (nœud « charger »)
+PlanError::Refused { node: "charger", message: "RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Write::Load" }
+→ RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Write::Load (nœud « charger »)
 ```
 
-Le dialecte nomme le **premier** nœud refusé dans l'ordre topologique. C'est le
-seul champ nouveau par rapport au refus d'une forme seule.
+Le dialecte nomme le **premier** nœud refusé dans l'ordre topologique. Le
+message est celui du refus d'une forme seule (`SchemaDialect::untranslated`) ;
+le nœud est le seul champ nouveau.
 
 ## 5. Le rapport
 
@@ -194,19 +195,34 @@ où l'instruction est atomique. Seuls les points suivants diffèrent.
    d'ordre garanti, même si l'un écrit ce que l'autre lit. En SQL, l'ordre
    d'écriture des instructions suffit à fixer cet ordre.
 
-## Ce qui attend le mot de Lucie
+## Ce que Lucie a tranché (11 octobre 2026)
 
-- **Le point 6.** Faut-il une arête d'ordre seul, sans donnée, pour dire « lis
-  après cette écriture » ? Ma recommandation est **non pour commencer** : aucun
-  appelant actuel n'en a besoin, puisque nos lectures après écriture passent
-  toutes par les uuids rendus.
-- **Un graphe non atomique : l'exécuter et le dire, ou le refuser ?** Ma
-  recommandation est de l'exécuter et de le dire par défaut, comme les liens
-  aujourd'hui. Un appelant qui exige l'atomicité le déclare, et le dialecte
-  refuse alors avant d'exécuter (refus nommé, § 4) plutôt que de rendre `false`
-  après coup.
-- **Le premier lot, si elle dit oui.** Le type du graphe et la vérification
-  commune (§ 1). Puis l'exécution découpée nœud par nœud, qui sera le repli des
-  deux dialectes et marchera donc partout dès le premier jour. La fusion viendra
-  ensuite, dialecte par dialecte, chaque fois avec un test de parité ligne à
-  ligne contre l'exécution découpée.
+- **Pas d'arête d'ordre seul pour commencer.** Mais l'arête porte « zéro ou
+  plusieurs colonnes » (`Edge::columns`), pour qu'une arête d'ordre soit plus
+  tard un cas de l'arête existante, pas un type de plus. La vérification
+  commune refuse aujourd'hui une arête sans colonne, en le disant.
+- **Un graphe non atomique s'exécute et le dit** (`atomic: false` et sa raison,
+  `instructions`, `fused`). Le refus seulement si l'appelant exige l'atomicité
+  (`PlanOptions::require_atomic`), avant toute exécution.
+
+## Le premier lot
+
+- Le type du graphe et la vérification commune, dans `rag3weaver-ir`
+  (`ir/src/plan.rs`) : `Form`, `PlanNode`, `Edge`, `Plan::check`.
+- Le repli découpé, commun aux deux dialectes (`src/plan.rs`, `run_plan`,
+  `Catalog::run_plan`) : un nœud, une instruction, dans l'ordre topologique.
+  Une arête passe en `$uuids` les valeurs **distinctes** de sa colonne, dans
+  l'ordre où elles paraissent ; une fusion devra respecter cette règle (un
+  `WITH DISTINCT`, pas une ligne par chemin). Une entrée vide n'envoie pas
+  d'instruction. Plusieurs instructions partent dans une transaction quand le
+  dialecte en déclare ; PostgreSQL y fixe l'instantané
+  (`SchemaDialect::snapshot_read`, `REPEATABLE READ`) dès que le graphe lit.
+- Pour l'instant, une arête ne nourrit que l'entrée `$uuids` d'une forme ;
+  l'entrée `$items` d'une écriture (`Upsert`, `Link`, `Update`, `Unlink`) se
+  remplit encore par l'appelant, et la vérification le dit.
+- Les témoins : `tests/e2e_chainage.rs` sur une base rag3db vivante, l'oracle
+  étant la même suite de formes exécutée à la main ; les refus et l'atomicité
+  par des tests unitaires qui prouvent que rien n'est parti.
+
+La fusion rag3db puis la fusion PostgreSQL suivent, chacune son lot, chacune
+prouvée contre ce même scénario.

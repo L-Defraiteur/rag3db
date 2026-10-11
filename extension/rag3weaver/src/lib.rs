@@ -157,6 +157,7 @@ pub mod node_id_cache;
 pub mod derived_kb;
 pub mod ocr;
 pub mod origin;
+pub mod plan;
 pub mod records;
 pub mod relation_directions;
 pub mod dataflow;
