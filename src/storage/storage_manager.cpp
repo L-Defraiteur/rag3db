@@ -84,6 +84,33 @@ Table* StorageManager::getTable(table_id_t tableID) {
     return tables.at(tableID).get();
 }
 
+std::vector<Table*> StorageManager::getNodeTables() {
+    std::lock_guard lck{mtx};
+    std::vector<Table*> result;
+    for (auto& [_, table] : tables) {
+        if (table->getTableType() == TableType::NODE) {
+            result.push_back(table.get());
+        }
+    }
+    return result;
+}
+
+std::vector<Table*> StorageManager::getRelTablesOf(table_id_t nodeTableID) {
+    std::lock_guard lck{mtx};
+    std::vector<Table*> result;
+    for (auto& [_, table] : tables) {
+        if (table->getTableType() != TableType::REL) {
+            continue;
+        }
+        auto& relTable = table->cast<RelTable>();
+        if (relTable.getFromNodeTableID() == nodeTableID ||
+            relTable.getToNodeTableID() == nodeTableID) {
+            result.push_back(table.get());
+        }
+    }
+    return result;
+}
+
 void StorageManager::recover(main::ClientContext& clientContext, bool throwOnWalReplayFailure,
     bool enableChecksums) {
     const auto walReplayer = std::make_unique<WALReplayer>(clientContext);

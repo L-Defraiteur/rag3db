@@ -33,6 +33,9 @@ public:
     ~StorageManager();
 
     Table* getTable(common::table_id_t tableID);
+    // Les tables de relations dont une extrémité est cette table de nœuds.
+    std::vector<Table*> getRelTablesOf(common::table_id_t nodeTableID);
+    std::vector<Table*> getNodeTables();
 
     static void recover(main::ClientContext& clientContext, bool throwOnWalReplayFailure,
         bool enableChecksums);

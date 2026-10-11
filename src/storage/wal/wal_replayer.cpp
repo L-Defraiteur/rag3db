@@ -15,6 +15,7 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_entry/type_catalog_entry.h"
 #include "common/checksum.h"
+#include "common/exception/duplicated_primary_key.h"
 #include "common/exception/end_of_file.h"
 #include "common/exception/io.h"
 #include "common/exception/runtime.h"
@@ -357,6 +358,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
                 auto walRecord = WALRecord::deserialize(deserializer, clientContext);
                 replayWALRecord(*walRecord);
             }
+            settleReplayedDuplicates();
             // After replaying all the records, we should truncate the WAL file to the last
             // COMMIT/CHECKPOINT record.
             truncateWALFile(*fileInfo, offsetDeserialized);
@@ -892,6 +894,80 @@ void WALReplayer::setAsideCutBytes(FileInfo& fileInfo, uint64_t offsetDeserializ
                               "({}) and copied to {}. They may hold committed transactions if the "
                               "journal was corrupted rather than cut; nothing was deleted.\n",
         walPath, cut, offsetDeserialized, why, asidePath);
+}
+
+void WALReplayer::settleReplayedDuplicates() const {
+    auto storageManager = StorageManager::Get(clientContext);
+    auto transactionContext = TransactionContext::Get(clientContext);
+    for (auto* table : storageManager->getNodeTables()) {
+        auto& nodeTable = table->cast<NodeTable>();
+        auto pkIndex = nodeTable.getPKIndex();
+        if (!pkIndex) {
+            continue;
+        }
+        auto duplicates = pkIndex->takeReplayedDuplicates();
+        if (duplicates.empty()) {
+            continue;
+        }
+        const auto tableID = nodeTable.getTableID();
+        auto mm = MemoryManager::Get(clientContext);
+        transactionContext->beginRecoveryTransaction();
+        auto transaction = transaction::Transaction::Get(clientContext);
+        for (auto& duplicate : duplicates) {
+            const auto state = DataChunkState::getSingleValueDataChunkState();
+            ValueVector keyVector(duplicate.key->getDataType().copy(), mm, state);
+            keyVector.copyFromValue(0, *duplicate.key);
+            offset_t indexed = INVALID_OFFSET;
+            const auto visible = [&](offset_t offset) {
+                return nodeTable.isVisible(transaction, offset);
+            };
+            const auto otherRowLives =
+                pkIndex->lookup(transaction, &keyVector, 0, indexed, visible) &&
+                indexed != duplicate.offset;
+            if (!otherRowLives) {
+                // La première ligne de cette clé a été supprimée depuis : celle-ci est la seule
+                // vivante, elle reste, avec son entrée d'index.
+                pkIndex->insert(transaction, &keyVector, 0, duplicate.offset, visible);
+                std::cerr << stringFormat(
+                    "rag3db: WAL {}: primary key {} of table {} was inserted twice in the "
+                    "journal; the earlier row is gone, the replayed row (offset {}) is kept.\n",
+                    walPath, duplicate.key->toString(), nodeTable.getTableName(), duplicate.offset);
+                continue;
+            }
+            // La pierre tombale : ses relations détachées, puis la ligne supprimée par décalage.
+            // L'index de clé n'est pas touché (il ne la connaît pas).
+            ValueVector nodeIDVector(LogicalType::INTERNAL_ID(), mm, state);
+            nodeIDVector.setValue<internalID_t>(0, internalID_t{duplicate.offset, tableID});
+            auto detached = 0u;
+            for (auto* relTable : storageManager->getRelTablesOf(tableID)) {
+                auto& rel = relTable->cast<RelTable>();
+                for (const auto direction : {RelDataDirection::FWD, RelDataDirection::BWD}) {
+                    const auto bound = direction == RelDataDirection::FWD ?
+                                           rel.getFromNodeTableID() :
+                                           rel.getToNodeTableID();
+                    if (bound != tableID) {
+                        continue;
+                    }
+                    ValueVector dstNodeIDVector(LogicalType::INTERNAL_ID(), mm, state);
+                    ValueVector relIDVector(LogicalType::INTERNAL_ID(), mm, state);
+                    RelTableDeleteState deleteState{nodeIDVector, dstNodeIDVector, relIDVector,
+                        direction};
+                    rel.detachDelete(transaction, &deleteState);
+                    detached++;
+                }
+            }
+            NodeTableDeleteState deleteState{nodeIDVector, keyVector};
+            nodeTable.delete_(transaction, deleteState);
+            nodeTable.finalizeDelete(transaction, deleteState);
+            std::cerr << stringFormat(
+                "rag3db: WAL {}: primary key {} of table {} was inserted twice in the journal; "
+                "the replayed row (offset {}) is deleted, with its relationships ({} relationship "
+                "table side(s) detached). Nothing else of the journal is lost.\n",
+                walPath, duplicate.key->toString(), nodeTable.getTableName(), duplicate.offset,
+                detached);
+        }
+        transactionContext->commit();
+    }
 }
 
 void WALReplayer::truncateWALFile(FileInfo& fileInfo, uint64_t size) const {
