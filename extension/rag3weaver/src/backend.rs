@@ -1349,6 +1349,11 @@ impl PreparedBackend {
 /// erreurs ; les avertissements en clair dessous. Une présentation déjà posée
 /// par le graphe de l'outil n'est pas touchée.
 impl PreparedBackend {
+    /// Le graphe déclaré d'un outil — pour le dessiner (la page vivante).
+    pub fn tool_graph(&self, name: &str) -> Option<&GraphTool> {
+        self.tools.get(name)
+    }
+
     /// Une politique de nœuds, plus les nœuds scriptés déclarés.
     fn with_scripted<S: Into<String>>(&self, base: impl IntoIterator<Item = S>) -> NodeTypePolicy {
         NodeTypePolicy::only(

@@ -62,7 +62,7 @@ dans `02-knowledge-dump.md`, à côté.
 | 3 — rechargement à chaud | **sur master** (page `05-lot-3-le-rechargement-a-chaud.md`) ; la montre des fichiers attend `watch_bound` |
 | 4 — route → graphe → vue, `serve` | **sur master** (page `06-lot-4-route-graphe-vue.md` ; le jouet `templates/proto/boutique`, son e2e vert) |
 | 5 — l'outil `declare` | **sur master** (page `07-lot-5-l-outil-declare.md`) |
-| 6 — la page vivante | — |
+| 6 — la page vivante | **sur master** (page `08-lot-6-la-page-vivante.md`, avec la recette en trois commandes) |
 
 ## 4. Lot 1, ce qui s'est passé (10 oct., nuit)
 

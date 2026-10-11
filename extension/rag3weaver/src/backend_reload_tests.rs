@@ -764,6 +764,39 @@ fn an_agent_corrects_a_refused_declaration_on_the_next_turn() {
     assert!(git_in(dir.path(), &["log", "-1", "--format=%B"]).starts_with("Un titre plus discret"));
 }
 
+// ─── La page vivante : les outils en processus, le graphe d'un outil (lot 6) ─
+
+#[test]
+fn a_backend_gives_its_tools_to_an_agent_in_process() {
+    use crate::agent::ToolBox;
+    use crate::llm::ToolCall;
+    let (_dir, backend) = toy_with_routes();
+    let tools = crate::backend_tools::BackendTools { backend: &backend };
+    let names: Vec<String> = tools.tool_defs().into_iter().map(|d| d.name).collect();
+    assert!(
+        names.contains(&"greet".to_string()) && names.contains(&"echo".to_string()),
+        "{names:?}"
+    );
+    let turn = tools.call(&ToolCall::new(
+        "c1",
+        "greet",
+        json!({"name": "Lucie"}).to_string(),
+    ));
+    assert!(turn.content.contains("Lucie"), "{}", turn.content);
+    let turn = tools.call(&ToolCall::new("c2", "nope", "{}"));
+    assert!(turn.content.contains("error"), "{}", turn.content);
+}
+
+#[test]
+fn the_graph_of_a_tool_is_readable_for_drawing() {
+    let (_dir, backend) = toy_with_routes();
+    let prepared = backend.prepared();
+    let graph = prepared.tool_graph("greet").expect("the greet tool");
+    let drawn = crate::dataflow::to_mermaid(graph.template());
+    assert!(drawn.contains("Greet"), "{drawn}");
+    assert!(prepared.tool_graph("nope").is_none());
+}
+
 // ─── serve : les routes sur HTTP (lot 4c) ───────────────────────────────────
 
 #[cfg(feature = "daemon")]
@@ -809,6 +842,209 @@ fn serve_answers_a_route_over_http_and_hands_the_backend_back_on_stop() {
 #[test]
 fn serve_refuses_an_address_outside_the_local_loop() {
     let (_dir, backend) = toy_with_routes();
-    let refused = crate::serve::serve(Arc::new(backend), "0.0.0.0:0", 1).unwrap_err();
+    let refused = crate::serve::serve(Arc::new(backend), "0.0.0.0:0", 1, None).unwrap_err();
     assert!(refused.contains("boucle locale"), "{refused}");
+}
+
+// ─── La page vivante (lot 6) ────────────────────────────────────────────────
+
+/// Ce que le flux pousse, gardé pour le relire.
+#[cfg(feature = "daemon")]
+#[derive(Clone, Default)]
+struct Captured(Arc<Mutex<Vec<u8>>>);
+
+#[cfg(feature = "daemon")]
+impl std::io::Write for Captured {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "daemon")]
+impl Captured {
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().unwrap()).to_string()
+    }
+}
+
+#[cfg(feature = "daemon")]
+fn atelier_without_model(backend: Arc<Backend>) -> Arc<crate::atelier::Atelier> {
+    crate::atelier::Atelier::new(backend, Err("pas de models.llm".into())).unwrap()
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn the_atelier_page_is_served_and_says_why_the_chat_is_off() {
+    let (dir, backend) = toy_with_routes();
+    let backend = Arc::new(backend);
+    let atelier = atelier_without_model(backend.clone());
+    assert!(dir.path().join(".atelier/.gitignore").exists());
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let serving = {
+        let (backend, atelier) = (backend.clone(), atelier.clone());
+        std::thread::spawn(move || crate::serve::serve_with(server, backend, 2, Some(atelier)))
+    };
+    let page = http(port, "GET /_atelier HTTP/1.1");
+    assert!(
+        page.starts_with("HTTP/1.1 200") && page.contains("EventSource"),
+        "{page}"
+    );
+    let state = http(port, "GET /_atelier/state HTTP/1.1");
+    let body: Value = serde_json::from_str(state.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert_eq!(body["chat"]["on"], false);
+    assert!(
+        body["chat"]["why"].as_str().unwrap().contains("models.llm"),
+        "{body}"
+    );
+    assert!(body["routes"].to_string().contains("GET /echo"), "{body}");
+    let graph = http(
+        port,
+        "GET /_atelier/graph?tool=greet&highlight=Greet HTTP/1.1",
+    );
+    assert!(
+        graph.contains("Greet") && graph.contains("style hello"),
+        "{graph}"
+    );
+    // Les routes déclarées répondent toujours à côté.
+    assert!(http(port, "GET /hello/Lucie HTTP/1.1").ends_with("<h1>Bonjour Lucie</h1>"));
+    // Le chat éteint dit pourquoi.
+    assert!(atelier.chat("bonjour").unwrap_err().contains("éteint"));
+    assert!(http(port, "POST /arret HTTP/1.1").starts_with("HTTP/1.1 200"));
+    serving.join().unwrap();
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn the_event_stream_reaches_a_subscriber_over_http() {
+    use std::io::{BufRead, BufReader};
+    let (_dir, backend) = toy_with_routes();
+    let backend = Arc::new(backend);
+    let atelier = atelier_without_model(backend.clone());
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let serving = {
+        let (backend, atelier) = (backend.clone(), atelier.clone());
+        std::thread::spawn(move || crate::serve::serve_with(server, backend, 2, Some(atelier)))
+    };
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+        .unwrap();
+    use std::io::Write;
+    write!(
+        stream,
+        "GET /_atelier/events HTTP/1.1\r\nHost: localhost\r\n\r\n"
+    )
+    .unwrap();
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    while !line.starts_with(": atelier") {
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+    }
+    assert!(atelier.hub().subscribers() >= 1);
+    atelier.hub().publish(&json!({"event": "ping", "n": 1}));
+    let mut seen = String::new();
+    while !seen.contains("\"ping\"") {
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        seen.push_str(&line);
+    }
+    assert!(seen.contains("event: ping"), "{seen}");
+    drop(reader);
+    assert!(http(port, "POST /arret HTTP/1.1").starts_with("HTTP/1.1 200"));
+    serving.join().unwrap();
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn the_watcher_reloads_a_view_edited_by_hand() {
+    let (dir, backend) = toy_with_routes();
+    let backend = Arc::new(backend);
+    let atelier = atelier_without_model(backend.clone());
+    let captured = Captured::default();
+    atelier.hub().subscribe(Box::new(captured.clone()));
+    atelier.look();
+    assert!(!captured.text().contains("reloaded"), "nothing changed yet");
+    write(
+        &dir.path().join("views"),
+        "hello.html",
+        "<h3>Coucou {{ result.hello }}</h3>",
+    );
+    atelier.look();
+    assert!(
+        captured.text().contains("event: reloaded"),
+        "{}",
+        captured.text()
+    );
+    assert!(
+        captured.text().contains("views/hello.html"),
+        "{}",
+        captured.text()
+    );
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h3>Coucou Lucie</h3>"
+    );
+    // Une vue cassée à la main : refusée, dite, l'ancienne répond.
+    write(&dir.path().join("views"), "hello.html", "<h3>{% if %}</h3>");
+    atelier.look();
+    assert!(
+        captured.text().contains("event: refused"),
+        "{}",
+        captured.text()
+    );
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h3>Coucou Lucie</h3>"
+    );
+}
+
+/// Un tour de chat avec un modèle enregistré : il déclare une vue ; le flux
+/// porte l'outil, la déclaration et la réponse ; la montre ne recharge pas
+/// une seconde fois ; la session est gardée.
+#[cfg(feature = "daemon")]
+#[test]
+fn a_chat_turn_declares_and_pushes_its_events() {
+    use crate::llm::{CallbackLlm, Llm, MockLlm};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (dir, backend) = toy_in_a_repository();
+    let backend = Arc::new(backend);
+    let view = json!({"path": "views/hello.html", "content": "<h1>Hello {{ result.hello }}</h1>", "reason": "En anglais"}).to_string();
+    let calls = AtomicUsize::new(0);
+    let llm = CallbackLlm::new("atelier-test", 8192, move |turns, opts, sink| {
+        let model = match calls.fetch_add(1, Ordering::SeqCst) {
+            0 => MockLlm::new("").with_tool_calls(vec![("declare", view.as_str())]),
+            _ => MockLlm::new("Fait."),
+        };
+        model.generate(turns, opts, sink)
+    });
+    let atelier = crate::atelier::Atelier::new(backend.clone(), Ok(Arc::new(llm))).unwrap();
+    let captured = Captured::default();
+    atelier.hub().subscribe(Box::new(captured.clone()));
+    assert_eq!(atelier.chat("passe la page en anglais").unwrap(), "Fait.");
+    let events = captured.text();
+    for kind in ["event: tool_start", "event: declared", "event: answer"] {
+        assert!(events.contains(kind), "{kind} : {events}");
+    }
+    assert_eq!(
+        get(&backend, "/hello/Lucie", &[]).body,
+        "<h1>Hello Lucie</h1>"
+    );
+    let version = backend.declarations_version();
+    atelier.look();
+    assert_eq!(
+        backend.declarations_version(),
+        version,
+        "declare already reloaded"
+    );
+    assert!(git_in(dir.path(), &["log", "-1", "--format=%B"]).starts_with("En anglais"));
+    assert!(dir.path().join(".atelier/session.json").exists());
+    // La session n'est pas commitée.
+    assert!(!git_in(dir.path(), &["status", "--porcelain"]).contains(".atelier"));
 }

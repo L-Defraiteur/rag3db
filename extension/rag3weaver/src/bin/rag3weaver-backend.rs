@@ -114,18 +114,56 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
 /// locale ([`rag3weaver::serve`]).
 ///
 /// ```text
-/// rag3weaver-backend serve --manifest <backend.json> [--address 127.0.0.1:7777] [--threads 4]
+/// rag3weaver-backend serve --manifest <backend.json> [--address 127.0.0.1:7777] [--threads 4] [--atelier]
 /// ```
 ///
+/// `--atelier` ajoute la page vivante sous `/_atelier` ([`rag3weaver::atelier`]) :
+/// son chat prend le modèle déclaré par `models.llm` (binaire bâti avec la
+/// feature `openai-llm`) ; sans modèle, la page dit pourquoi le chat est éteint.
+///
 /// `POST /arret` ferme l'écoute ; la base est alors fermée proprement ici.
+/// Le modèle du chat de l'atelier : `models.llm` du manifeste, ou pourquoi
+/// il n'y en a pas.
+fn modele_du_chat(
+    prepared: &PreparedBackend,
+) -> Result<std::sync::Arc<dyn rag3weaver::llm::Llm>, String> {
+    let Some(source) = prepared
+        .manifest
+        .models
+        .get(&rag3weaver::model_source::Capability::Llm)
+    else {
+        return Err("le manifeste ne déclare pas de modèle de langage (`models.llm`, \
+                    provider « compatible ») — déclarez-en un pour allumer le chat"
+            .into());
+    };
+    #[cfg(feature = "openai-llm")]
+    {
+        rag3weaver::model_source::connect_llm(source)
+            .map(|(llm, _)| std::sync::Arc::new(llm) as std::sync::Arc<dyn rag3weaver::llm::Llm>)
+    }
+    #[cfg(not(feature = "openai-llm"))]
+    {
+        let _ = source;
+        Err("ce binaire est bâti sans la feature `openai-llm` : rebâtir avec elle pour \
+             allumer le chat"
+            .into())
+    }
+}
+
 fn servir_http(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend serve --manifest <backend.json> \
-                         [--address 127.0.0.1:7777] [--threads 4]";
+                         [--address 127.0.0.1:7777] [--threads 4] [--atelier]";
     let mut manifeste: Option<String> = None;
     let mut adresse = "127.0.0.1:7777".to_string();
     let mut fils = 4usize;
+    let mut atelier = false;
     let mut i = 0;
     while i < args.len() {
+        if args[i] == "--atelier" {
+            atelier = true;
+            i += 1;
+            continue;
+        }
         let valeur = args
             .get(i + 1)
             .cloned()
@@ -157,9 +195,27 @@ fn servir_http(args: &[String]) -> Result<(), String> {
         Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
             .map_err(|e| e.to_string())?;
     let nom = prepared.manifest.name.clone();
+    let modele = modele_du_chat(&prepared);
     let backend = std::sync::Arc::new(prepared.open(Box::new(conn), embedder)?);
+    let atelier = if atelier {
+        let page = rag3weaver::atelier::Atelier::new(backend.clone(), modele)?;
+        let montre = page.watch(std::time::Duration::from_millis(500));
+        eprintln!("[serve] atelier : http://{adresse}/_atelier");
+        Some((page, montre))
+    } else {
+        None
+    };
     eprintln!("[serve] {nom} — http://{adresse}/ ; POST /arret pour arrêter");
-    rag3weaver::serve::serve(backend.clone(), &adresse, fils)?;
+    rag3weaver::serve::serve(
+        backend.clone(),
+        &adresse,
+        fils,
+        atelier.as_ref().map(|(page, _)| page.clone()),
+    )?;
+    if let Some((page, montre)) = atelier {
+        page.stop();
+        let _ = montre.join();
+    }
     let mut backend = std::sync::Arc::try_unwrap(backend)
         .map_err(|_| "un fil tient encore le backend après l'arrêt".to_string())?;
     backend.shutdown()

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<style>
+  :root { --fond: #f7f6f2; --encre: #1f1f1f; --doux: #6b6b6b; --trait: #d9d6cc; --accent: #b8860b; --refus: #a33; --ok: #2f6f3e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #1b1b1a; --encre: #ecebe6; --doux: #a3a29b; --trait: #3a3935; --accent: #e0b44c; --refus: #e07a7a; --ok: #7cc28a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--fond); color: var(--encre); height: 100vh; display: grid; grid-template-columns: minmax(300px, 34%) 1fr; }
+  header { grid-column: 1 / -1; padding: 8px 14px; border-bottom: 1px solid var(--trait); display: flex; gap: 12px; align-items: baseline; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .etat { color: var(--doux); font-size: 13px; }
+  body { grid-template-rows: auto 1fr; }
+  #chat { border-right: 1px solid var(--trait); display: flex; flex-direction: column; min-height: 0; }
+  #fil { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; }
+  .moi { background: var(--trait); align-self: flex-end; max-width: 85%; }
+  .agent { border: 1px solid var(--trait); }
+  .outil { color: var(--doux); font-size: 13px; }
+  .eteint { color: var(--refus); }
+  form { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--trait); }
+  textarea { flex: 1; resize: none; height: 64px; font: inherit; padding: 6px; background: transparent; color: inherit; border: 1px solid var(--trait); border-radius: 6px; }
+  button, select { font: inherit; color: inherit; background: transparent; border: 1px solid var(--trait); border-radius: 6px; padding: 4px 10px; }
+  #droite { display: grid; grid-template-rows: 1fr auto auto; min-height: 0; }
+  #page { display: flex; flex-direction: column; min-height: 0; }
+  #page .barre { display: flex; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--trait); align-items: center; }
+  iframe { flex: 1; width: 100%; border: 0; background: white; }
+  #graphe { border-top: 1px solid var(--trait); padding: 8px 10px; max-height: 32vh; overflow: auto; }
+  #journal { border-top: 1px solid var(--trait); padding: 6px 10px; max-height: 20vh; overflow: auto; font-size: 13px; }
+  #journal div { padding: 2px 0; }
+  .declared, .reloaded { color: var(--ok); }
+  .refused { color: var(--refus); white-space: pre-wrap; }
+  .vu { outline: 2px solid var(--accent); }
+</style>
+</head>
+<body>
+<header><h1 id="nom">Atelier</h1><span class="etat" id="etat"></span></header>
+<section id="chat">
+  <div id="fil"></div>
+  <form id="envoi">
+    <textarea id="message" placeholder="Dites ce qu'il faut changer…"></textarea>
+    <button>Envoyer</button>
+  </form>
+</section>
+<section id="droite">
+  <div id="page">
+    <div class="barre"><label>Page <select id="routes"></select></label><button id="recharger" type="button">↻</button></div>
+    <iframe id="cadre" title="La page produite"></iframe>
+  </div>
+  <div id="graphe"><pre class="mermaid" id="dessin"></pre></div>
+  <div id="journal"></div>
+</section>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: false, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" });
+
+const $ = (id) => document.getElementById(id);
+let state = {};
+let bulle = null;
+
+function ligne(classe, texte) {
+  const d = document.createElement("div");
+  d.className = classe;
+  d.textContent = new Date().toLocaleTimeString() + " · " + texte;
+  $("journal").prepend(d);
+}
+
+function message(classe, texte) {
+  const d = document.createElement("div");
+  d.className = "msg " + classe;
+  d.textContent = texte;
+  $("fil").append(d);
+  $("fil").scrollTop = $("fil").scrollHeight;
+  return d;
+}
+
+async function charger() {
+  state = await (await fetch("/_atelier/state")).json();
+  $("nom").textContent = "Atelier — " + state.name;
+  $("etat").textContent = "version " + state.version + (state.chat.on ? " · modèle " + state.chat.model : "");
+  if (!state.chat.on && !$("fil").querySelector(".eteint")) {
+    message("eteint", "Le chat est éteint : " + state.chat.why);
+  }
+  const choix = $("routes").value;
+  $("routes").innerHTML = "";
+  for (const r of state.routes) {
+    const o = document.createElement("option");
+    o.value = r.slice(4);
+    o.textContent = r;
+    $("routes").append(o);
+  }
+  if (choix) $("routes").value = choix;
+  if (!$("cadre").src && state.routes.length) {
+    // D'abord une route qui a une vue : c'est une page à regarder.
+    const vue = state.routes.find((r) => state.views[r]) || state.routes[0];
+    montrer(vue.slice(4));
+  }
+}
+
+
+async function dessiner(outil, surligne) {
+  if (!outil) return;
+  const url = "/_atelier/graph?tool=" + encodeURIComponent(outil) + (surligne ? "&highlight=" + encodeURIComponent(surligne) : "");
+  const r = await fetch(url);
+  if (!r.ok) return;
+  const el = $("dessin");
+  el.removeAttribute("data-processed");
+  el.textContent = await r.text();
+  await mermaid.run({ nodes: [el] });
+}
+
+function montrer(chemin) {
+  $("routes").value = chemin;
+  $("cadre").src = chemin;
+  // Le graphe suit la page : celui de l'outil de la route montrée.
+  dessiner((state.route_tools || {})["GET " + chemin]);
+}
+
+function rafraichir(chemins) {
+  // Une vue touchée : la montrer ; un graphe touché : le dessiner.
+  for (const p of chemins || []) {
+    if (p.startsWith("views/")) {
+      const vue = p.slice(6);
+      const route = Object.entries(state.views || {}).find(([k, v]) => v === vue && k.startsWith("GET ") && !k.includes("{"));
+      if (route) montrer(route[0].slice(4));
+    }
+    if (p.endsWith(".mmd")) {
+      const outil = Object.entries(state.graphs || {}).find(([, g]) => g.endsWith(p));
+      if (outil) dessiner(outil[0]);
+    }
+  }
+  $("cadre").src = $("cadre").src;
+  $("cadre").classList.add("vu");
+  setTimeout(() => $("cadre").classList.remove("vu"), 1200);
+}
+
+const flux = new EventSource("/_atelier/events");
+flux.addEventListener("token", (e) => {
+  const d = JSON.parse(e.data);
+  if (!bulle) bulle = message("agent", "");
+  bulle.textContent += d.text;
+});
+flux.addEventListener("tool_start", (e) => {
+  const d = JSON.parse(e.data);
+  bulle = null;
+  message("outil", "→ " + d.name);
+});
+flux.addEventListener("answer", () => { bulle = null; });
+flux.addEventListener("declared", async (e) => {
+  const d = JSON.parse(e.data);
+  ligne("declared", "déclaré " + d.path + " (version " + d.version + (d.commit ? ", commit " + String(d.commit).slice(0, 9) : "") + ")");
+  await charger();
+  rafraichir([d.path]);
+});
+flux.addEventListener("reloaded", async (e) => {
+  const d = JSON.parse(e.data);
+  ligne("reloaded", "rechargé " + (d.paths || []).join(", ") + " (version " + d.version + ")" +
+    ((d.removed_reactions || []).length ? " — réactions retirées : " + d.removed_reactions.join(", ") : ""));
+  await charger();
+  rafraichir(d.paths);
+});
+flux.addEventListener("refused", (e) => {
+  const d = JSON.parse(e.data);
+  ligne("refused", "refusé " + (d.path || (d.paths || []).join(", ")) + " — " + d.error);
+});
+flux.addEventListener("error", (e) => {
+  if (e.data) ligne("refused", JSON.parse(e.data).text);
+});
+
+$("routes").addEventListener("change", () => montrer($("routes").value));
+$("recharger").addEventListener("click", () => { $("cadre").src = $("cadre").src; });
+$("envoi").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const texte = $("message").value.trim();
+  if (!texte) return;
+  $("message").value = "";
+  message("moi", texte);
+  bulle = null;
+  await fetch("/_atelier/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: texte }) });
+});
+
+await charger();
+</script>
+</body>
+</html>

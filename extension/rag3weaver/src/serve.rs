@@ -19,8 +19,14 @@ use std::sync::Arc;
 /// Le chemin qui arrête le serveur.
 pub const STOP: &str = "/arret";
 
-/// Écoute sur `address` (boucle locale seulement) et sert jusqu'à `POST /arret`.
-pub fn serve(backend: Arc<Backend>, address: &str, threads: usize) -> Result<(), String> {
+/// Écoute sur `address` (boucle locale seulement) et sert jusqu'à `POST /arret`,
+/// avec la page vivante sous `/_atelier` si on la donne.
+pub fn serve(
+    backend: Arc<Backend>,
+    address: &str,
+    threads: usize,
+    atelier: Option<Arc<crate::atelier::Atelier>>,
+) -> Result<(), String> {
     if !crate::daemon::est_local(address) {
         return Err(format!(
             "serve n'écoute que sur la boucle locale (le proto n'a pas d'authentification) : \
@@ -28,18 +34,29 @@ pub fn serve(backend: Arc<Backend>, address: &str, threads: usize) -> Result<(),
         ));
     }
     let server = tiny_http::Server::http(address).map_err(|e| format!("{address} : {e}"))?;
-    serve_on(server, backend, threads);
+    serve_with(server, backend, threads, atelier);
     Ok(())
 }
 
 /// Sert sur un écouteur déjà ouvert, jusqu'à `POST /arret`.
 pub fn serve_on(server: tiny_http::Server, backend: Arc<Backend>, threads: usize) {
+    serve_with(server, backend, threads, None)
+}
+
+/// Sert sur un écouteur déjà ouvert, avec l'atelier s'il est donné.
+pub fn serve_with(
+    server: tiny_http::Server,
+    backend: Arc<Backend>,
+    threads: usize,
+    atelier: Option<Arc<crate::atelier::Atelier>>,
+) {
     let server = Arc::new(server);
     let stopping = Arc::new(AtomicBool::new(false));
     let count = threads.max(1);
     let workers: Vec<_> = (0..count)
         .map(|i| {
             let (server, backend, stopping) = (server.clone(), backend.clone(), stopping.clone());
+            let atelier = atelier.clone();
             std::thread::Builder::new()
                 .name(format!("serve-{i}"))
                 .spawn(move || {
@@ -57,6 +74,17 @@ pub fn serve_on(server: tiny_http::Server, backend: Arc<Backend>, threads: usize
                                 server.unblock();
                             }
                             break;
+                        }
+                        if let Some(atelier) = &atelier {
+                            if path_of(&url).starts_with(crate::atelier::PREFIX) {
+                                let mut body = Vec::new();
+                                let _ = request.as_reader().read_to_end(&mut body);
+                                // Le flux garde la connexion ; le reste répond.
+                                if let Some((request, answer)) = atelier.handle(request, &body) {
+                                    let _ = request.respond(response(answer));
+                                }
+                                continue;
+                            }
                         }
                         let content_type = request
                             .headers()
