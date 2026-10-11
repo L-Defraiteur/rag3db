@@ -55,15 +55,23 @@ même temps.
 
 ## Trois choses trouvées en chemin, à trancher
 
-1. **`_uuid` ne dépend pas de la cellule** (`hashsafe_uuid`, `catalog.rs:1781`). La même identité
-   dans deux cellules donne le même `_uuid`. Ma lecture : collision de clé primaire si la même
-   fiche est écrite dans deux cellules. *À vérifier par un témoin avant de décider* ; si c'est
-   confirmé, la cellule entre dans le hachage, et c'est une migration.
+1. **`_uuid` ne dépend pas de la cellule** (`hashsafe_uuid`, `catalog.rs:1781`). **Confirmé par
+   le témoin** (`e2e_scope::la_meme_fiche_dans_deux_cellules_fait_deux_lignes`, rouge sur la
+   branche `marche-1-bis`). La même fiche écrite dans une seconde cellule ne fait pas de seconde
+   ligne : elle **déplace** la ligne de la première cellule, qui perd sa fiche sans un mot
+   (ticket `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md`). **La forme
+   candidate**, une migration à faire valider par Lucie avant le code : l'identité dérivée de
+   (cellule, identité déclarée). La cellule par défaut peut garder ses `_uuid` (seules les autres
+   entrent dans le hachage), et les bases d'aujourd'hui n'ont presque toutes que celle-là.
+   Ce qu'elle change : le lien générique de la mémoire nomme ses bouts par leur identité, et devra
+   dire dans quelle cellule il les cherche ; un lien entre deux cellules devient une décision
+   explicite, et non plus un accident de hachage.
 2. **Des marques ne sont pas par cellule** : `FTS_PENDING{entité}`, les marques de progression et
-   les marques de dette. La forme les préfixe de la cellule, comme les clés de session.
-3. **`set_scope` reste-t-il ?** Il a des usages de test, et peut-être un usage d'API. Je propose
-   de le garder comme « la cellule par défaut de ce catalogue », celle de `call(name, args)`, et
-   qu'aucun chemin en service ne l'appelle plus.
+   les marques de dette. **Décidé** (orchestration) : préfixées de la cellule, comme les clés de
+   session. Le ticket « index plein texte hors du point de reprise » le dira.
+3. **`set_scope`** : **décidé**, il reste la cellule par défaut du catalogue, pour la ligne de
+   commande et les tests seulement. Sous l'hôte, un chemin de service qui l'atteindrait est
+   **refusé en le disant**, et non laissé à un commentaire.
 
 ## Les marches, testables une à une
 
