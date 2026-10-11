@@ -96,8 +96,17 @@ impl Node for ReindexFileNode {
         };
         let (mut reindexed, mut removed, mut deferred) = (Vec::new(), Vec::new(), Vec::new());
         let mut errors = Vec::new();
-        for path in todo {
-            let (source_id, _) = crate::code_tools::indexed_name(source.as_ref(), &path);
+        let stop = ctx.service::<Arc<std::sync::atomic::AtomicBool>>(super::REACTION_STOP_SERVICE).cloned();
+        let mut interrupted = 0usize;
+        let total = todo.len();
+        for (rang, path) in todo.into_iter().enumerate() {
+            // **L'arrêt passe entre deux fichiers** : ce qui est fait reste, le
+            // reste garde son retard, et la réconciliation le reprendra.
+            if stop.as_ref().is_some_and(|s| s.load(std::sync::atomic::Ordering::SeqCst)) {
+                interrupted = total - rang;
+                break;
+            }
+            let source_id = crate::code_sync::registry_key(source.as_ref());
             // Une indexation entière tient la source : le fichier est lu à son
             // paquet, ou repris à la fin — on ne la double pas. Si elle démarre
             // juste après ce regard, le fichier peut passer deux fois (ici puis à
@@ -165,7 +174,7 @@ impl Node for ReindexFileNode {
         ));
         ctx.set_output(
             "report",
-            PortValue::new(json!({"reindexed": reindexed, "removed": removed, "deferred": deferred, "errors": errors})),
+            PortValue::new(json!({"reindexed": reindexed, "removed": removed, "deferred": deferred, "errors": errors, "interrupted": interrupted})),
         );
         Ok(())
     }

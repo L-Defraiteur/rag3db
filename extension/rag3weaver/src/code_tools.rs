@@ -170,6 +170,14 @@ impl WorkingTree {
     /// des secrets a écarté, avec sa raison — pour qu'une estimation dise
     /// « 3 écartés : secrets probables » plutôt que rien.
     pub fn list_with_exclusions(&self) -> Result<(Vec<String>, Vec<(String, &'static str)>), String> {
+        // Une racine disparue (un worktree effacé) se dit en la nommant,
+        // pas en « IO error … No such file or directory ».
+        if !self.root.is_dir() {
+            return Err(format!(
+                "racine du workspace absente : {} — le dossier a été effacé ou déplacé ; rouvrez le backend sur une racine qui existe",
+                self.root.display()
+            ));
+        }
         let mut out = Vec::new();
         let mut ecartes = Vec::new();
         let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
@@ -228,6 +236,12 @@ impl FileSource for WorkingTree {
         format!("worktree:{}", self.root.display())
     }
     fn list(&self) -> Result<Vec<String>, String> {
+        if !self.root.is_dir() {
+            return Err(format!(
+                "racine du workspace absente : {} — le dossier a été effacé ou déplacé ; rouvrez le backend sur une racine qui existe",
+                self.root.display()
+            ));
+        }
         if !self.all_files {
             return self.list_respecting_rules();
         }

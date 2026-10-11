@@ -247,3 +247,25 @@ fn a_quiet_scan_of_the_engine_tree_costs_less_than_a_listing() {
     assert!(tour < liste, "un tour au repos ({tour:?}) doit coûter moins qu'une liste ({liste:?})");
     }
 }
+
+
+/// **La racine disparue met la montre en pause** : rien n'est retiré, ni par
+/// la liste ni par les dates ; la racine revenue, la montre reprend.
+#[test]
+fn a_vanished_root_pauses_the_watch() {
+    let (dir, source) = tree();
+    let root = dir.path().to_path_buf();
+    let mut s = Scanner::new(root.clone(), source, &config(0)).unwrap();
+    let t0 = Instant::now();
+    let backup = tempfile::tempdir().unwrap();
+    let ailleurs = backup.path().join("racine");
+    std::fs::rename(&root, &ailleurs).unwrap();
+    for i in 0..3 {
+        assert!(s.scan(t0 + Duration::from_secs(61 * i)).unwrap().is_empty(), "rien n'est retiré");
+    }
+    assert!(s.paused().is_some_and(|p| p.contains("racine absente")), "{:?}", s.paused());
+    assert_eq!(s.len(), 3, "les fichiers connus le restent");
+    std::fs::rename(&ailleurs, &root).unwrap();
+    assert!(s.scan(t0 + Duration::from_secs(200)).unwrap().is_empty());
+    assert_eq!(s.paused(), None, "la racine revenue, la montre reprend");
+}

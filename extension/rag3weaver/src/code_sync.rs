@@ -83,6 +83,15 @@ pub enum ChangeDuringIndexing {
     QueuedForResume,
 }
 
+/// **La clé du registre** d'une source : son curseur (`worktree:<racine>`),
+/// pas son `source_id` — toutes les copies de travail partagent l'identifiant
+/// `local`, et une indexation de l'une faisait mettre en reprise les éditions
+/// d'une autre (reprises ensuite dans le mauvais catalogue). Trouvé par les
+/// témoins de la montre, deux backends sous le même processus.
+pub fn registry_key(source: &dyn FileSource) -> String {
+    source.cursor()
+}
+
 /// **Un fichier de la source vient de changer** (écrit, ou supprimé) : à
 /// appeler *après* l'écriture. Si une indexation de la source est en cours,
 /// le fichier est soit lu plus tard à son paquet, soit mis à reprendre.
@@ -151,7 +160,7 @@ pub fn edit_file_shared(
     path: &str,
     op: &crate::code_tools::EditOp,
 ) -> Result<crate::code_tools::EditResult, String> {
-    let (source_id, _) = crate::code_tools::indexed_name(source, path);
+    let source_id = registry_key(source);
     loop {
         match catalog.try_lock() {
             Ok(mut guard) => return crate::code_tools::edit_file(source, Some(&mut guard), path, op),
@@ -486,7 +495,8 @@ pub fn sync_source(
 ) -> Result<SourceSyncReport, String> {
     let cursor = source.cursor();
     let source_id = crate::code::source_id(&cursor);
-    let mut inscription = Inscription::new(&source_id);
+    let cle = registry_key(source);
+    let mut inscription = Inscription::new(&cle);
     // Les replis comptés sont ceux de cette synchronisation.
     let _ = catalog.take_bulk_load_refusals();
     let (mut report, mut avancement) = synchroniser_la_source(catalog, source, options, progress, &source_id)?;
@@ -734,7 +744,7 @@ fn synchroniser(
     for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
-        marquer_lus(&report.source, paquet);
+        marquer_lus(&registry_key(source), paquet);
         let lu_a = crate::catalog::retard::now_ms();
         let t = std::time::Instant::now();
         let mut sources = Vec::with_capacity(paquet.len());
@@ -844,7 +854,7 @@ fn synchroniser(
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         avancement.relations_pending = catalog.pending_work().relations.len();
-        avancement.files_to_resume = nombre_a_reprendre(&report.source);
+        avancement.files_to_resume = nombre_a_reprendre(&registry_key(source));
         if mode == RelationsMode::Bulk {
             let _ = catalog.persist_meta_key(marque, &format!("{s_scopes}|{}", avancement.relations_pending));
         }

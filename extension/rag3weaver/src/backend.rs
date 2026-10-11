@@ -1631,6 +1631,7 @@ impl PreparedBackend {
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
             watches: Mutex::new(Vec::new()),
+            reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -1975,6 +1976,11 @@ pub struct Backend {
     /// Les montres de fichiers en service ; arrêtées **avant** les réactions
     /// qu'elles nourrissent.
     watches: Mutex<Vec<crate::watch::WatchHandle>>,
+    /// **L'arrêt des réactions** : levé par `stop_reactions`, lu par une
+    /// réaction longue entre deux unités de travail (`ReindexFileNode`, entre
+    /// deux fichiers). Ce qui est fait reste ; le reste garde son retard et la
+    /// réconciliation le reprend au prochain démarrage.
+    reaction_stop: Arc<std::sync::atomic::AtomicBool>,
     /// **Les réacteurs des autres cellules** (marche 1 bis, pas c) : un par
     /// cellule qu'une requête a nommée, monté à sa première requête, sur le bus
     /// et les services de cette cellule. Le bus préfixe ses sujets par la
@@ -2168,6 +2174,7 @@ impl Backend {
             crate::dataflow::trace_nodes::EVENTS_SERVICE,
             Arc::new(bus.clone()),
         );
+        services.register(crate::dataflow::REACTION_STOP_SERVICE, self.reaction_stop.clone());
         let mut reactor = Reactor::new(bus, prepared.nodes.clone(), Arc::new(services));
         let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
         let mut mounted = Vec::new();
@@ -2195,6 +2202,15 @@ impl Backend {
     pub fn stop_reactions(&self) -> Vec<String> {
         // Les montres d'abord : plus rien n'arrive aux réactions qu'on arrête.
         self.stop_watches();
+        // Puis le drapeau : une réaction longue s'arrête au prochain fichier.
+        self.reaction_stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        let errors = self.stop_reactors();
+        // Remontables ensuite.
+        self.reaction_stop.store(false, std::sync::atomic::Ordering::SeqCst);
+        errors
+    }
+
+    fn stop_reactors(&self) -> Vec<String> {
         let mut errors = Vec::new();
         // Les réacteurs des autres cellules d'abord, puis celui du catalogue.
         let cellules: Vec<ReactorHandle> =
@@ -3450,6 +3466,7 @@ mod tests {
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
             watches: Mutex::new(Vec::new()),
+            reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -3655,6 +3672,7 @@ mod tests {
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
             watches: Mutex::new(Vec::new()),
+            reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -3846,6 +3864,88 @@ mod tests {
         backend.mount_reactions().unwrap();
         let u = attendre_les_usages(&backend, "depart", |u| !u.contains("neuf"));
         assert!(!u.contains("neuf"), "la suppression faite à l'arrêt n'est pas reprise : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Un changement localisé ne fait pas refuser une lecture** : le
+    /// catalogue tenu le temps d'une réindexation (ici 300 ms), `usages` attend
+    /// et répond — « catalogue occupé » est réservé à une tenue longue.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_short_hold_of_the_catalog_does_not_refuse_a_read() {
+        let (_dir, backend) = backend_qui_surveille();
+        let catalog = backend.catalog.clone();
+        let (pris, prends) = std::sync::mpsc::channel();
+        let tenu = std::thread::spawn(move || {
+            let _g = catalog.lock().unwrap();
+            pris.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        });
+        prends.recv().unwrap();
+        let u = usages_de(&backend, "depart");
+        tenu.join().unwrap();
+        assert!(!u.contains("Catalogue occupé") && u.contains("main"), "{u}");
+    }
+
+    /// **L'arrêt coupe une réaction longue au prochain fichier** : des
+    /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
+    /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation
+    /// reprend le reste.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn stopping_cuts_a_long_reaction_and_the_restart_resumes_it() {
+        let (dir, backend) = backend_qui_surveille();
+        let lot = dir.path().join("sources/lot");
+        std::fs::create_dir(&lot).unwrap();
+        for i in 0..400 {
+            std::fs::write(lot.join(format!("f{i}.rs")), format!("fn f{i}() {{ depart(); }}\n")).unwrap();
+        }
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        }
+        backend.mount_reactions().unwrap();
+        std::fs::remove_dir_all(&lot).unwrap();
+        // La réaction a commencé : le retard est noté.
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while backend.index_states().unwrap()["lag"]["files"].as_u64().unwrap_or(0) == 0 && std::time::Instant::now() < fin {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let t = std::time::Instant::now();
+        assert!(backend.stop_reactions().is_empty());
+        assert!(t.elapsed() < std::time::Duration::from_secs(3), "l'arrêt a attendu la réaction : {:?}", t.elapsed());
+        // Au redémarrage, la réconciliation reprend ce qui restait.
+        backend.mount_reactions().unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| !u.contains("lot/"));
+        assert!(!u.contains("lot/"), "le reste n'est pas repris : {}", &u[..u.len().min(400)]);
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Une racine disparue met la montre en pause** : rien n'est retiré de
+    /// l'index, l'état le dit, et la liste de la source nomme la racine.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_vanished_root_pauses_the_watch_and_keeps_the_index() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        let racine = dir.path().join("sources");
+        let ailleurs = dir.path().join("ailleurs");
+        std::fs::rename(&racine, &ailleurs).unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let etat = loop {
+            let e = backend.index_states().unwrap();
+            if e["watches"]["code"]["paused"].is_string() || std::time::Instant::now() > fin {
+                break e;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert!(etat["watches"]["code"]["paused"].as_str().unwrap_or("").contains("racine absente"), "{etat}");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("outils.rs") && u.contains("main"), "l'index a été vidé : {u}");
+        let err = backend.file_source.clone().unwrap().list().unwrap_err();
+        assert!(err.contains("racine du workspace absente") && err.contains("sources"), "{err}");
         assert!(backend.stop_reactions().is_empty());
     }
 

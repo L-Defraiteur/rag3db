@@ -34,6 +34,10 @@ pub enum CatalogRead<'a> {
     Refused(String),
 }
 
+/// Combien une lecture attend un catalogue tenu avant de refuser : de quoi
+/// laisser passer la réindexation d'un fichier, pas une indexation entière.
+pub const READ_WAIT: std::time::Duration = std::time::Duration::from_millis(1000);
+
 /// Le catalogue est tenu par une indexation.
 pub const BUSY: &str = "Catalogue occupé : une indexation le tient en ce moment. Réessayez dans un moment, ou prenez `search_code`, qui balaie les fichiers.";
 /// Rien n'a jamais été indexé.
@@ -65,8 +69,19 @@ pub fn read_catalog_in<'a>(
     entity: &str,
     cell: Option<&crate::scope::Scope>,
 ) -> CatalogRead<'a> {
-    let Ok(cat) = catalog.try_lock() else {
-        return CatalogRead::Refused(BUSY.into());
+    // **Un verrou tenu brièvement s'attend** : la réindexation d'un fichier
+    // (la réaction de la montre) le tient le temps d'une ingestion, quelques
+    // dizaines de millisecondes. Seule une tenue longue — une indexation
+    // entière — rend le refus ; la réponse, sinon, porte le retard dit.
+    let deadline = std::time::Instant::now() + READ_WAIT;
+    let cat = loop {
+        match catalog.try_lock() {
+            Ok(cat) => break cat,
+            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(_) => return CatalogRead::Refused(BUSY.into()),
+        }
     };
     let status = match cat.index_state_for(entity) {
         Ok(state) if state.text == Level::Never => return CatalogRead::Refused(NEVER_INDEXED.into()),

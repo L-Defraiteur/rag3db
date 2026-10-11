@@ -124,6 +124,9 @@ pub struct WatchStats {
     pub other_us: u64,
     /// Les chemins les plus hachés, et combien de fois (les cinq premiers).
     pub most_hashed: Vec<(String, u64)>,
+    /// La montre est en pause, et pourquoi (la racine a disparu, ou la source
+    /// ne liste plus rien) : rien n'est retiré tant qu'elle l'est.
+    pub paused: Option<String>,
 }
 
 /// Un changement dit par la montre.
@@ -169,6 +172,7 @@ pub struct Scanner {
     lists: usize,
     stats: WatchStats,
     hashed_paths: BTreeMap<String, u64>,
+    paused: Option<String>,
 }
 
 #[cfg(feature = "code")]
@@ -188,6 +192,7 @@ impl Scanner {
             lists: 0,
             stats: WatchStats::default(),
             hashed_paths: BTreeMap::new(),
+            paused: None,
         };
         let listed = s.listed()?;
         s.remember_dirs(&listed);
@@ -211,7 +216,13 @@ impl Scanner {
         top.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         top.truncate(5);
         s.most_hashed = top;
+        s.paused = self.paused.clone();
         s
+    }
+
+    /// Pourquoi la montre est en pause, si elle l'est.
+    pub fn paused(&self) -> Option<&str> {
+        self.paused.as_deref()
     }
 
     fn dir_date(&self, dir: &std::path::Path) -> Option<SystemTime> {
@@ -325,6 +336,15 @@ impl Scanner {
     }
 
     fn scan_inner(&mut self, now: Instant) -> Result<Vec<FileChange>, String> {
+        // **La racine a disparu** (un worktree effacé, un disque démonté) :
+        // tous les fichiers sembleraient supprimés, et la réaction viderait
+        // l'index. La montre se met en pause et ne dit rien ; elle reprend
+        // quand la racine revient.
+        if !self.root.is_dir() {
+            self.paused = Some(format!("racine absente : {}", self.root.display()));
+            return Ok(Vec::new());
+        }
+        self.paused = None;
         let mut out = Vec::new();
         self.stats.stats += self.dirs.len() as u64;
         // **La liste ne se relit que si un dossier a bougé**, ou en filet :
@@ -338,6 +358,12 @@ impl Scanner {
             let t = Instant::now();
             let listed = self.listed()?;
             self.stats.list_us += t.elapsed().as_micros() as u64;
+            // Une source qui ne liste plus rien alors qu'on connaissait des
+            // fichiers : la même pause, pas une suppression en masse.
+            if listed.is_empty() && !self.known.is_empty() {
+                self.paused = Some(format!("la source ne liste plus aucun fichier sous {}", self.root.display()));
+                return Ok(Vec::new());
+            }
             self.remember_dirs(&listed);
             let present: std::collections::BTreeSet<&str> = listed.iter().map(String::as_str).collect();
             // Supprimés, ou sortis des règles : connus, plus listés.
@@ -502,6 +528,7 @@ pub fn spawn(
     let mut scanner = Scanner::new(root, source, config)?;
     let published = Arc::new(Mutex::new(WatchStats::default()));
     let to_publish = published.clone();
+    let mut last_paused: Option<String> = None;
     // Ce qui a bougé entre le dernier index et ce démarrage : publié au premier
     // tour du fil, la réaction déjà à l'écoute.
     let mut pending = indexed.map(|i| scanner.reconcile(&i)).unwrap_or_default();
@@ -534,6 +561,17 @@ pub fn spawn(
             // Les compteurs, lisibles par `index_state` pendant que le fil tourne.
             if let Ok(mut p) = to_publish.lock() {
                 *p = scanner.stats();
+            }
+            // L'entrée en pause se dit, une fois.
+            let paused = scanner.paused().map(str::to_string);
+            if paused != last_paused {
+                if let Some(why) = &paused {
+                    bus.emit(crate::events::Event::Warning {
+                        context: format!("montre:{name}"),
+                        message: format!("{why} : montre en pause, rien n'est retiré"),
+                    });
+                }
+                last_paused = paused;
             }
             match scanned {
                 Ok(changes) => {

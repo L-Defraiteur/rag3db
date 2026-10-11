@@ -1,6 +1,6 @@
 # L'arrêt de l'hôte attend la fin d'une réaction de la montre
 
-- **État** : ouvert (11 octobre 2026) — constaté sur l'hôte de luciepc (session codeparsers)
+- **État** : corrigé (doublon de [l'arrêt attendait une longue réaction](2026-10-11-l-arret-attendait-une-longue-reaction.md), fermé par le même commit : un drapeau d'arrêt lu entre deux fichiers, la réconciliation reprend le reste)
 - **Gravité** : blocage (un redémarrage prend des minutes, sans borne ; tous les backends de l'hôte restent indisponibles pendant ce temps)
 - **Atteignable en service** : oui, dès qu'un arbre indexé change beaucoup d'un coup (un worktree effacé, un `git checkout` d'une autre branche)
 - **Touche rag3weaver** : oui (hôte, réactions, `ReindexFileNode`)
