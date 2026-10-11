@@ -2202,6 +2202,65 @@ impl SchemaDialect for PostgresDialect {
         })
     }
 
+    /// **Un saut** par la table de relation : `unnest($uuids)` joint aux
+    /// arêtes par le bout de départ (`from_uuid` en sortant, `to_uuid` en
+    /// entrant), puis à la table d'arrivée par l'autre bout. La table de
+    /// départ, quand elle est connue, est jointe aussi : un uuid qui n'y est
+    /// pas ne part pas, comme `(d:Départ {_uuid: u})` en Cypher. Sans table
+    /// d'arrivée, seul l'uuid atteint se lit (l'autre bout de l'arête) ; un
+    /// champ, la ligne entière, un filtre ou un ordre sur le nœud atteint s'y
+    /// refusent en le nommant.
+    fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::{Column, Direction};
+        hop.validate()?;
+        let refus = |form: &'static str| Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form });
+        let (depart, arrivee) = match hop.direction {
+            Direction::Outgoing => ("from_uuid", "to_uuid"),
+            Direction::Incoming => ("to_uuid", "from_uuid"),
+        };
+        let mut colonnes = vec!["v.u".to_string()];
+        for c in &hop.returns {
+            colonnes.push(match (c, &hop.end) {
+                (Column::Node(f), _) if f == "_uuid" => format!("r.\"{arrivee}\""),
+                (Column::Node(f), Some(_)) => format!("m.{}", self.quote(f)),
+                (Column::Edge(f), _) => format!("r.{}", self.quote(f)),
+                (Column::Null, _) => "NULL".to_string(),
+                (Column::Label, Some(t)) => format!("'{t}'"),
+                (Column::Whole, _) => return refus("Hop (ligne entière)"),
+                (Column::Node(_) | Column::Label, None) => return refus("Hop (champ sans table d'arrivée)"),
+            });
+        }
+        if hop.end.is_none() && (hop.filter.is_some() || !hop.order_by.is_empty()) {
+            return refus("Hop (condition sans table d'arrivée)");
+        }
+        let mut sql = format!("SELECT {} FROM unnest($uuids::text[]) AS v(u)", colonnes.join(", "));
+        if let Some(t) = &hop.start {
+            sql.push_str(&format!(" JOIN {} AS d ON d.\"_uuid\" = v.u", self.quote(t)));
+        }
+        sql.push_str(&format!(" JOIN {} AS r ON r.\"{depart}\" = v.u", self.quote(&hop.relation)));
+        if let Some(t) = &hop.end {
+            sql.push_str(&format!(" JOIN {} AS m ON m.\"_uuid\" = r.\"{arrivee}\"", self.quote(t)));
+        }
+        let mut conditions: Vec<String> = Vec::new();
+        if let Some(x) = &hop.exclude {
+            let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
+            conditions.push(format!("r.{f} IS NULL OR r.{f} <> ALL (ARRAY[{valeurs}])", f = self.quote(&x.field)));
+        }
+        if let Some(p) = &hop.filter {
+            conditions.push(postgres_condition(self, p));
+        }
+        if !conditions.is_empty() {
+            sql.push_str(&format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")));
+        }
+        if !hop.order_by.is_empty() {
+            sql.push_str(&format!(" ORDER BY {}", hop.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", ")));
+        }
+        if let Some(n) = hop.limit {
+            sql.push_str(&format!(" LIMIT {n}"));
+        }
+        Ok(sql)
+    }
+
     /// Les lignes, les lignes retenues, et le degré par départ
     /// (`from_uuid`/`to_uuid` de la table de relation).
     fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
@@ -3340,9 +3399,18 @@ mod tests {
             Rag3dbDialect.hop(&h).unwrap(),
             "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})-[r:`CONSUMES`]->(m:`Scope`) WHERE r.`resolution` IS NULL OR NOT r.`resolution` IN ['nom', 'import'] RETURN u, m.`_uuid`, m.`name`, NULL, r.`resolution`"
         );
-        assert_eq!(PostgresDialect.hop(&h).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop");
+        // PostgreSQL le dit par la table de relation (11 octobre 2026, lot du
+        // saut) ; la ligne entière s'y refuse en se nommant.
+        assert_eq!(
+            PostgresDialect.hop(&h).unwrap(),
+            "SELECT v.u, r.\"to_uuid\", m.\"name\", NULL, r.\"resolution\" FROM unnest($uuids::text[]) AS v(u) \
+             JOIN \"scope\" AS d ON d.\"_uuid\" = v.u JOIN \"consumes\" AS r ON r.\"from_uuid\" = v.u \
+             JOIN \"scope\" AS m ON m.\"_uuid\" = r.\"to_uuid\" \
+             WHERE (r.\"resolution\" IS NULL OR r.\"resolution\" <> ALL (ARRAY['nom', 'import']))"
+        );
         let mut libre = Hop::untyped("CHUNKED_FROM", Direction::Incoming);
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
+        assert_eq!(PostgresDialect.hop(&libre).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (champ sans table d'arrivée)");
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:`CHUNKED_FROM`]-(m) RETURN u, m.`_uuid`, label(m), m");
         let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
         journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];

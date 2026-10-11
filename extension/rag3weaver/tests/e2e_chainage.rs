@@ -39,8 +39,10 @@ fn ligne(paires: &[(&str, &str)]) -> BTreeMap<String, CypherValue> {
 }
 
 /// Deux fichiers, quatre symboles. `f1` définit `a` et `b`, `f2` définit
-/// `c` ; `c` utilise `a` et `b`, `d` utilise `a`.
-struct Scene {
+/// `c` ; `c` utilise `a` et `b`, `d` utilise `a`. Le même scénario joue sur
+/// rag3db (ici) et sur PostgreSQL (`e2e_postgres::le_chainage_*`, sur le
+/// conteneur) : seul le catalogue change.
+pub(crate) struct Scene {
     cat: Catalog,
     f1: String,
     a: String,
@@ -56,6 +58,12 @@ fn scene() -> Scene {
     let config = CatalogConfig { name: Some("chainage-e2e".into()), embedding_dim: 64, ..Default::default() };
     let mut cat = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
     cat.initialize().unwrap();
+    peupler(cat)
+}
+
+/// Les entités, les relations et les lignes du scénario, dans un catalogue
+/// ouvert.
+pub(crate) fn peupler(mut cat: Catalog) -> Scene {
     cat.register_entity("File", entite(&["path"])).unwrap();
     cat.register_entity("Symbol", entite(&["name", "note"])).unwrap();
     cat.register_relation("defines", "File", "Symbol").unwrap();
@@ -77,6 +85,10 @@ fn scene() -> Scene {
     ] {
         cat.link(rel, de.as_str(), vers.as_str(), BTreeMap::new()).unwrap();
     }
+    // Un catalogue au régime par lot (celui du banc PostgreSQL) garde ses
+    // liens en file jusqu'au vidage.
+    let vidage = cat.drain();
+    assert_eq!(vidage.failed, 0, "le vidage a échoué : {vidage:?}");
     Scene { f1: uf[0].clone(), a: us[0].clone(), b: us[1].clone(), cat }
 }
 
@@ -121,12 +133,16 @@ fn a_la_main(cat: &Catalog, f: &str) -> QueryResult {
     cat.execute_raw_with_params(&d.count(&deg_uses()).unwrap(), &[uuids(&atteints.iter().map(String::as_str).collect::<Vec<_>>())]).unwrap()
 }
 
-/// **Une chaîne** `Select` → `Hop` → `Count` : les lignes de l'oracle, trois
-/// instructions dans une transaction, atomique et dit.
+/// **Une chaîne** `Select` → `Hop` → `Count` : les lignes de l'oracle,
+/// fondue en une instruction si le dialecte sait (`fond`), sinon trois dans
+/// une transaction ; atomique et dit.
 #[test]
 #[ignore]
 fn une_chaine_rend_les_lignes_de_l_oracle_et_dit_sa_decoupe() {
-    let s = scene();
+    une_chaine(&scene(), true);
+}
+
+pub(crate) fn une_chaine(s: &Scene, fond: bool) {
     let plan = Plan::new()
         .node("sel", Form::Select(sel_file()), vec![uuids(&[&s.f1])])
         .node("hop", Form::Hop(hop_defines()), vec![])
@@ -140,8 +156,12 @@ fn une_chaine_rend_les_lignes_de_l_oracle_et_dit_sa_decoupe() {
     let degres: BTreeMap<String, i64> =
         r.outputs["deg"].rows.iter().map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_i64().unwrap())).collect();
     assert_eq!(degres, BTreeMap::from([(s.a.clone(), 2), (s.b.clone(), 1)]), "a est utilisé deux fois, b une fois");
-    assert_eq!(r.instructions, 1, "fondu en une instruction : {r:?}");
-    assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string(), "deg".to_string()]]);
+    if fond {
+        assert_eq!(r.instructions, 1, "fondu en une instruction : {r:?}");
+        assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string(), "deg".to_string()]]);
+    } else {
+        assert_eq!(r.fused, decoupe.fused, "ce dialecte ne fond pas : {r:?}");
+    }
     assert!(r.atomic && r.atomic_reason.is_none(), "{r:?}");
     assert_eq!(decoupe.instructions, 3);
     assert_eq!(decoupe.fused, vec![vec!["sel".to_string()], vec!["hop".to_string()], vec!["deg".to_string()]]);
@@ -153,7 +173,10 @@ fn une_chaine_rend_les_lignes_de_l_oracle_et_dit_sa_decoupe() {
 #[test]
 #[ignore]
 fn un_noeud_qui_en_nourrit_deux_rend_deux_sorties() {
-    let s = scene();
+    un_noeud_qui_en_nourrit_deux(&scene());
+}
+
+pub(crate) fn un_noeud_qui_en_nourrit_deux(s: &Scene) {
     let deg_defines = Count::Edges { start: "File".into(), relation: "defines".into(), direction: Direction::Outgoing };
     let plan = Plan::new()
         .node("sel", Form::Select(sel_file()), vec![uuids(&[&s.f1])])
@@ -184,10 +207,15 @@ fn note_de(cat: &Catalog, u: &str) -> CypherValue {
 #[test]
 #[ignore]
 fn un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
-    let s = scene();
+    un_noeud_qui_echoue(&scene(), true);
+}
+
+pub(crate) fn un_noeud_qui_echoue(s: &Scene, fond: bool) {
     let sel = Select::by_uuids("Symbol", vec![Column::Node("_uuid".into())]);
     let marquer = Write::Mark { table: "Symbol".into(), set: vec![("note".into(), None)] };
-    let fautif = Select::filtered("Symbol", Predicate::Compiled("m.`nope` = 1".into()), vec![Column::Node("_uuid".into())]);
+    // Un champ qui n'existe pas, dit dans la langue du dialecte.
+    let nope = format!("m.{} = 1", s.cat.dialect_arc().quote("nope"));
+    let fautif = Select::filtered("Symbol", Predicate::Compiled(nope), vec![Column::Node("_uuid".into())]);
     let plan = Plan::new()
         .node("sel", Form::Select(sel.clone()), vec![uuids(&[&s.a])])
         .node("marquer", Form::Write(marquer.clone()), vec![])
@@ -211,7 +239,11 @@ fn un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
         .edge("sel", 0, "marquer");
     let r = s.cat.run_plan(&plan, PlanOptions { require_atomic: true, ..Default::default() }).unwrap();
     assert!(r.atomic);
-    assert_eq!(r.fused, vec![vec!["sel".to_string(), "marquer".to_string()]], "la lecture et la marque en une instruction");
+    if fond {
+        assert_eq!(r.fused, vec![vec!["sel".to_string(), "marquer".to_string()]], "la lecture et la marque en une instruction");
+    } else {
+        assert_eq!(r.fused, vec![vec!["sel".to_string()], vec!["marquer".to_string()]], "{r:?}");
+    }
     assert!(note_de(&s.cat, &s.a).is_null(), "la marque a vidé le champ");
     assert_eq!(note_de(&s.cat, &s.b), CypherValue::String("x".into()), "et seulement pour a");
 }
@@ -221,7 +253,10 @@ fn un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
 #[test]
 #[ignore]
 fn une_entree_vide_n_envoie_rien() {
-    let s = scene();
+    une_entree_vide(&scene(), true);
+}
+
+pub(crate) fn une_entree_vide(s: &Scene, fond: bool) {
     let plan = Plan::new()
         .node("sel", Form::Select(sel_file()), vec![uuids(&["aucun"])])
         .node("hop", Form::Hop(hop_defines()), vec![])
@@ -231,6 +266,6 @@ fn une_entree_vide_n_envoie_rien() {
         .output("deg");
     let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions::default());
     assert!(r.outputs["deg"].rows.is_empty());
-    assert_eq!(r.instructions, 1, "fondu : une instruction, qui ne trouve rien : {r:?}");
+    assert_eq!(r.instructions, 1, "fondu : une instruction, qui ne trouve rien ; découpé : la sélection seule (fond = {fond}) : {r:?}");
     assert_eq!(decoupe.instructions, 1, "découpé : seule la sélection est partie : {decoupe:?}");
 }

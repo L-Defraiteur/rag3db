@@ -1787,3 +1787,44 @@ fn la_transaction_epinglee_tient_sur_une_session() {
     let e = conn.commit().unwrap_err().to_string();
     assert!(e.contains("aucune transaction"), "{e}");
 }
+
+// ═══ Le chaînage des formes, sur PostgreSQL ══════════════════════════════════
+//
+// Les scénarios d'`e2e_chainage`, joués sur le conteneur : même graphe, même
+// oracle (la suite de formes faite à la main), fondu puis découpé avec les
+// mêmes lignes. `fond` dit si ce dialecte fond la chaîne.
+
+#[cfg(feature = "rag3db-native")]
+const PG_FOND: bool = false;
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_une_chaine() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::une_chaine(&crate::e2e_chainage::peupler(cat), PG_FOND);
+}
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_un_noeud_qui_en_nourrit_deux() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::un_noeud_qui_en_nourrit_deux(&crate::e2e_chainage::peupler(cat));
+}
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::un_noeud_qui_echoue(&crate::e2e_chainage::peupler(cat), PG_FOND);
+}
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_une_entree_vide() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::une_entree_vide(&crate::e2e_chainage::peupler(cat), PG_FOND);
+}

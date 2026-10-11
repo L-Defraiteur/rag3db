@@ -383,23 +383,27 @@ mod tests {
     #[test]
     fn postgresql_ne_fond_rien_pour_l_instant() {
         let (conn, recu) = espion();
-        let plan = Plan::new()
-            .node("sel", Form::Select(Select::by_uuids("File", vec![Column::Node("_uuid".into())])), vec![])
-            .node("deg", Form::Count(rag3weaver_ir::Count::Edges {
-                start: "File".into(), relation: "defines".into(), direction: rag3weaver_ir::Direction::Outgoing,
-            }), vec![])
-            .edge("sel", 0, "deg")
-            .output("deg");
-        let r = run_plan(&PostgresDialect, &conn, &plan, PlanOptions::default()).unwrap();
+        let r = run_plan(&PostgresDialect, &conn, &chaine(), PlanOptions::default()).unwrap();
         assert_eq!(r.fused, vec![vec!["sel".to_string()]], "la sélection part seule, et l'espion ne rend rien");
-        assert!(recu.lock().unwrap().iter().any(|q| q == "BEGIN TRANSACTION"), "deux groupes prévus : une transaction");
+        assert!(recu.lock().unwrap().iter().any(|q| q == "BEGIN TRANSACTION"), "trois groupes prévus : une transaction");
     }
 
     #[test]
-    fn postgresql_refuse_un_saut_en_nommant_le_noeud() {
+    fn postgresql_traduit_le_saut_et_refuse_la_ligne_entiere_en_nommant_le_noeud() {
+        use rag3weaver_ir::{Direction, Hop};
+        let mut saut = Hop::new("File", "defines", "Symbol", Direction::Outgoing);
+        saut.returns.push(Column::Node("name".into()));
+        assert_eq!(
+            PostgresDialect.hop(&saut).unwrap(),
+            "SELECT v.u, r.\"to_uuid\", m.\"name\" FROM unnest($uuids::text[]) AS v(u) \
+             JOIN \"file\" AS d ON d.\"_uuid\" = v.u JOIN \"defines\" AS r ON r.\"from_uuid\" = v.u \
+             JOIN \"symbol\" AS m ON m.\"_uuid\" = r.\"to_uuid\""
+        );
+        saut.returns.push(Column::Whole);
         let (conn, recu) = espion();
-        let e = run_plan(&PostgresDialect, &conn, &chaine(), PlanOptions::default()).unwrap_err();
-        assert_eq!(e.to_string(), "RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Hop (nœud « hop »)");
+        let plan = Plan::new().node("lire", lire(), vec![]).node("tout", Form::Hop(saut), vec![]);
+        let e = run_plan(&PostgresDialect, &conn, &plan, PlanOptions::default()).unwrap_err();
+        assert_eq!(e.to_string(), "RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Hop (ligne entière) (nœud « tout »)");
         assert!(recu.lock().unwrap().is_empty());
     }
 }
