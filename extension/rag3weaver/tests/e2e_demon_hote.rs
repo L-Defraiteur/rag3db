@@ -535,7 +535,7 @@ fn fermer_un_backend_lache_sa_base_et_les_refus_sont_nommes() {
 #[test]
 #[ignore]
 fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
-    use rag3weaver::code_tree::{add_files, register, remove_files, unregister, Roots};
+    use rag3weaver::code_tree::{add_files, add_with_host, register, remove_files, unregister, FromAroundCopy, Roots};
     let d = dossier("code-tree");
     let roots = Roots { config: d.join("config"), data: d.join("data") };
     // Le `--from` : le gabarit `code` du dépôt, l'extension vecteur du dépôt.
@@ -602,11 +602,22 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     let u = appeler(&a.manifest, "usages", json!({"name": "prendre_le_verrou"}));
     assert!(u.contains("appelant"), "{u}");
 
-    // Un second arbre, né de l'instantané de la base du premier : il répond
-    // sans index (le même arbre, donc les mêmes identités).
-    let b = add_files(&roots, &arbre, "code-coeur", Some("code-clone")).unwrap();
+    // Un second arbre, né de l'instantané de la base du premier — ouvert dans
+    // l'hôte : fermé le temps de la copie (une base ne se copie que fermée),
+    // rouvert après. Le clone répond sans index (le même arbre, donc les
+    // mêmes identités).
+    let ouvertures = |etat: &Value, nom: &str| -> u64 {
+        etat["backends"].as_array().into_iter().flatten().find(|x| x["manifest"].as_str().is_some_and(|m| m.contains(nom))).and_then(|x| x["opened"].as_u64()).unwrap_or(0)
+    };
+    let etat_de = || -> Value { serde_json::from_str(&agent.get(format!("http://{adresse}/etat")).call().unwrap().body_mut().read_to_string().unwrap()).unwrap() };
+    let avant = ouvertures(&etat_de(), "/code-coeur/");
+    let (b, autour) = add_with_host(&roots, &arbre, "code-coeur", Some("code-clone"), &adresse).unwrap();
+    assert_eq!(autour, FromAroundCopy::ClosedAndReopened, "le départ était ouvert");
     assert!(!b.copied.is_empty(), "la base du premier est copiée : {b:?}");
-    register(&adresse, &b.manifest).unwrap();
+    let apres = etat_de();
+    assert_eq!(ouvertures(&apres, "/code-coeur/"), avant + 1, "fermé puis rouvert : {apres}");
+    let u = appeler(&a.manifest, "usages", json!({"name": "prendre_le_verrou"}));
+    assert!(u.contains("appelant"), "le départ répond de nouveau : {u}");
     let u = appeler(&b.manifest, "usages", json!({"name": "prendre_le_verrou"}));
     assert!(u.contains("appelant"), "la base née de l'instantané répond sans index : {u}");
 
