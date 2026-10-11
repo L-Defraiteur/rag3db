@@ -176,6 +176,8 @@ mod e2e_proto_boutique;
 mod e2e_rag3daemon;
 #[path = "../e2e_reacteur.rs"]
 mod e2e_reacteur;
+#[path = "../e2e_reaction_groupee.rs"]
+mod e2e_reaction_groupee;
 #[path = "../e2e_reaction_montee.rs"]
 mod e2e_reaction_montee;
 #[path = "../e2e_recherche_dense_apres_suppressions.rs"]
