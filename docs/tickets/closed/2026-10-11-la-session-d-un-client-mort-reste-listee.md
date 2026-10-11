@@ -1,6 +1,6 @@
 # La session d'un client mort reste listée par l'hôte du démon
 
-- **état** : ouvert (11 octobre 2026, relevé par l'orchestration en jouant la marche 4 sur la base de Lucie)
+- **état** : corrigé (11 octobre 2026) — le client donne son pid à l'ouverture de sa session ; l'hôte ferme celle dont le pid ne vit plus, toutes les 10 s et à chaque lecture de l'état ; témoin `e2e_mcp_cycle_de_vie::la_session_d_un_client_tue_se_ferme`
 - **gravité** : P4, réponse fausse (l'état dit une session qui n'existe plus) ; et une session qui ne se ferme jamais
 - **atteignable en service** : oui, dès qu'un client MCP meurt sans fermer sa session (tué, ou la sonde de `claude mcp get`)
 - **touche rag3weaver** : oui (et seulement)

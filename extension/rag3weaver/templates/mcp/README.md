@@ -127,6 +127,10 @@ Au démarrage, le client dit à qui il parle :
   listé, et tout autre appel est une erreur d'outil qui le dit — et retente de
   joindre l'hôte. Claude Code ne relit pas la liste d'outils de lui-même : quand
   l'hôte répond de nouveau, `/mcp` pour reconnecter.
+- **Un client meurt sans fermer sa session** (tué, ou la sonde de `claude mcp get`) :
+  l'hôte connaît son pid, et ferme sa session au relevé suivant (toutes les 10 s, et à
+  chaque lecture de l'état). `daemon_status` compte ces fermetures
+  (`closed_dead_sessions`).
 - **L'hôte meurt pendant une session** (tué, arrêté) : l'appel suivant le relance,
   rouvre la session et rejoue l'appel une fois — la connexion refusée prouve qu'il
   n'avait pas été reçu. Une erreur transitoire (la base se rouvre pendant l'appel),
@@ -200,7 +204,7 @@ claude mcp add memoire-longue \
 Chemins en absolu dans la vraie commande. `RAG3WEAVER_EMBED_SERVICE` prend des
 adresses **complètes** ; la mémoire longue déclare bge-m3, servi sur 7980.
 
-**C'est tout.** La première session lance l'hôte ; `/mcp` montre les outils, dont
+**C'est tout.** La première session lance l'hôte — et `claude mcp get <nom>` aussi, qui lance le serveur pour le sonder : l'hôte peut donc être déjà là avant la première session, c'est voulu ; `/mcp` montre les outils, dont
 `daemon_status`. Les sessions suivantes trouvent l'hôte. Pour voir l'état : l'outil
 `daemon_status`, ou `curl` avec le jeton (§4).
 

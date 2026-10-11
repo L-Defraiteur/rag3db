@@ -270,7 +270,9 @@ fn open_session(
     client: &str,
     keys: &[String],
 ) -> Result<String, String> {
-    let corps = json!({ "client": client, "keys": keys }).to_string();
+    // Le pid, pour que l'hôte ferme la session si ce client meurt sans la
+    // fermer (tué, ou abandonné par la sonde de `claude mcp get`).
+    let corps = json!({ "client": client, "keys": keys, "pid": std::process::id() }).to_string();
     let mut requete = agent.post(format!("{base}/session")).header("content-type", "application/json");
     if let Some(t) = token {
         requete = requete.header("Authorization", &format!("Bearer {t}"));
@@ -422,6 +424,7 @@ impl McpClient {
                     "this_session": c.session(),
                     "sessions": etat["sessions"],
                     "backends": etat["backends"],
+                    "closed_dead_sessions": etat["closed_dead_sessions"],
                 }),
                 Err(e) => json!({ "state": "injoignable", "reason": e, "log": crate::daemon_lifecycle::log_path() }),
             },

@@ -59,6 +59,10 @@ pub struct Session {
     pub keys: Vec<String>,
     /// Millisecondes depuis l'époque Unix.
     pub opened_at: u128,
+    /// Le pid du client, quand il le donne : l'hôte n'écoute que la boucle
+    /// locale, donc ce pid est sur la même machine, et une session dont le
+    /// client ne vit plus se ferme ([`DaemonHost::reap_dead_sessions`]).
+    pub pid: Option<u32>,
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
@@ -75,6 +79,8 @@ pub struct DaemonHost {
     backends: Mutex<HashMap<PathBuf, Arc<Hosted>>>,
     sessions: Mutex<HashMap<String, Session>>,
     opener: Opener,
+    /// Combien de sessions ont été fermées parce que leur client était mort.
+    closed_dead: std::sync::atomic::AtomicUsize,
 }
 
 impl DaemonHost {
@@ -87,17 +93,48 @@ impl DaemonHost {
     /// Un hôte qui ouvre ses backends par `opener` (les témoins y posent leur
     /// crochet de point de reprise échoué).
     pub fn with_opener(opener: Opener) -> Self {
-        Self { backends: Mutex::new(HashMap::new()), sessions: Mutex::new(HashMap::new()), opener }
+        Self {
+            backends: Mutex::new(HashMap::new()),
+            sessions: Mutex::new(HashMap::new()),
+            opener,
+            closed_dead: std::sync::atomic::AtomicUsize::new(0),
+        }
     }
 
     /// **Enregistrer un client** : rend l'identifiant de sa session.
-    pub fn open_session(&self, client: &str, cell: Option<Value>, keys: Vec<String>) -> String {
+    pub fn open_session(&self, client: &str, cell: Option<Value>, keys: Vec<String>, pid: Option<u32>) -> String {
         let opened_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
         let seed = format!("{client}|{opened_at}|{}|{:?}", std::process::id(), std::thread::current().id());
         let id = format!("s-{}", &blake3::hash(seed.as_bytes()).to_hex()[..16]);
-        let session = Session { id: id.clone(), client: client.to_string(), cell, keys, opened_at };
+        let session = Session { id: id.clone(), client: client.to_string(), cell, keys, opened_at, pid };
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), session);
         id
+    }
+
+    /// **Fermer les sessions dont le client est mort** (ticket du 11 octobre
+    /// 2026) : un client tué ne fait pas `DELETE /session`. Une session dont
+    /// le pid ne vit plus se ferme, et se dit ; une session sans pid (un
+    /// client qui ne le donne pas) n'est jamais fermée ainsi. Rend les
+    /// sessions fermées.
+    pub fn reap_dead_sessions(&self) -> Vec<Session> {
+        let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
+        let mortes: Vec<String> = sessions
+            .values()
+            .filter(|s| s.pid.is_some_and(|pid| !crate::daemon_lifecycle::pid_alive(pid)))
+            .map(|s| s.id.clone())
+            .collect();
+        let fermees: Vec<Session> = mortes.iter().filter_map(|id| sessions.remove(id)).collect();
+        drop(sessions);
+        for s in &fermees {
+            eprintln!(
+                "[démon] session {} fermée : son client « {} » (pid {}) n'existe plus",
+                s.id,
+                s.client,
+                s.pid.unwrap_or(0)
+            );
+        }
+        self.closed_dead.fetch_add(fermees.len(), std::sync::atomic::Ordering::SeqCst);
+        fermees
     }
 
     /// Le client part. Rend vrai si la session existait.
@@ -204,6 +241,7 @@ impl DaemonHost {
     /// **L'état du démon** : ses backends (ouverts ou non, combien de fois)
     /// et ses sessions. C'est ce que l'outil « état du démon » dira.
     pub fn state(&self) -> Value {
+        self.reap_dead_sessions();
         let backends: Vec<Value> = self
             .backends
             .lock()
@@ -220,7 +258,13 @@ impl DaemonHost {
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
-        json!({ "service": SERVICE, "pid": std::process::id(), "backends": backends, "sessions": sessions })
+        json!({
+            "service": SERVICE,
+            "pid": std::process::id(),
+            "backends": backends,
+            "sessions": sessions,
+            "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
+        })
     }
 
     /// **Fermer tous les backends** proprement : leurs indexations au
@@ -277,7 +321,8 @@ impl DaemonHost {
                     let client = v["client"].as_str().unwrap_or("anonyme").to_string();
                     let cell = v.get("cell").cloned().filter(|c| !c.is_null());
                     let keys = v["keys"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
-                    (200, json!({ "session": self.open_session(&client, cell, keys) }))
+                    let pid = v["pid"].as_u64().map(|p| p as u32);
+                    (200, json!({ "session": self.open_session(&client, cell, keys, pid) }))
                 }
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
@@ -349,6 +394,9 @@ pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: u
     DaemonServer::new(server, threads).serve(host, None)
 }
 
+/// Le pas du relevé des sessions dont le client est mort.
+const REAP_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// La réponse à une requête sans le jeton local, ou avec un faux. **403, et
 /// pas 401** : 401 dit une session inconnue, que le client rouvre et rejoue.
 pub const BAD_TOKEN: &str = "badToken";
@@ -406,6 +454,25 @@ impl DaemonServer {
     pub fn serve(self, host: Arc<DaemonHost>, token: Option<String>) {
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
+        // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
+        // session de client mort ne se fermerait qu'à la lecture de l'état.
+        let releve = {
+            let (host, stopping) = (host.clone(), self.stopping.clone());
+            std::thread::Builder::new()
+                .name("demon-releve".into())
+                .spawn(move || {
+                    let mut ecoule = std::time::Duration::ZERO;
+                    while !stopping.load(Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        ecoule += std::time::Duration::from_millis(200);
+                        if ecoule >= REAP_EVERY {
+                            ecoule = std::time::Duration::ZERO;
+                            host.reap_dead_sessions();
+                        }
+                    }
+                })
+                .expect("le fil du relevé")
+        };
         let workers: Vec<_> = (0..self.threads)
             .map(|i| {
                 let (server, host, stopping, stopper) =
@@ -462,6 +529,7 @@ impl DaemonServer {
         for worker in workers {
             let _ = worker.join();
         }
+        let _ = releve.join();
         for erreur in host.shutdown() {
             eprintln!("[démon] fermeture : {erreur}");
         }
@@ -556,5 +624,23 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(100));
         arret.stop();
         fil.join().unwrap();
+    }
+
+    /// **Une session dont le client est mort se ferme** au relevé, et l'état
+    /// le compte ; une session sans pid n'est jamais fermée ainsi.
+    #[test]
+    fn le_releve_ferme_la_session_d_un_client_mort() {
+        let hote = DaemonHost::new();
+        let mut mort = std::process::Command::new("true").spawn().unwrap();
+        let pid_mort = mort.id();
+        mort.wait().unwrap();
+        let morte = hote.open_session("le mort", None, vec![], Some(pid_mort));
+        let vivante = hote.open_session("le vivant", None, vec![], Some(std::process::id()));
+        let sans_pid = hote.open_session("sans pid", None, vec![], None);
+        let etat = hote.state();
+        let ids: Vec<&str> = etat["sessions"].as_array().unwrap().iter().filter_map(|s| s["id"].as_str()).collect();
+        assert!(!ids.contains(&morte.as_str()), "{etat}");
+        assert!(ids.contains(&vivante.as_str()) && ids.contains(&sans_pid.as_str()), "{etat}");
+        assert_eq!(etat["closed_dead_sessions"], 1, "{etat}");
     }
 }

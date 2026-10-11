@@ -155,7 +155,7 @@ fn deux_backends_dans_un_processus_chacun_sa_base() {
     let (da, db) = (dossier("a"), dossier("b"));
     let (ma, mb) = (manifeste(&da), manifeste(&db));
     let host = DaemonHost::new();
-    let s = host.open_session("témoin", None, vec![]);
+    let s = host.open_session("témoin", None, vec![], None);
     ok(&host.open(Some(&s), &ma));
     ok(&host.open(Some(&s), &mb));
     ok(&put(&host, &s, &ma, "put_fiche", "seulement-dans-a"));
@@ -180,8 +180,8 @@ fn deux_sessions_un_backend_charge_une_fois_et_une_seule_reaction() {
     // backend, par le chemin canonique.
     let m_bis = d.join(".").join("backend.json");
     let host = DaemonHost::new();
-    let sa = host.open_session("session A", None, vec![]);
-    let sb = host.open_session("session B", None, vec![]);
+    let sa = host.open_session("session A", None, vec![], None);
+    let sb = host.open_session("session B", None, vec![], None);
     ok(&host.open(Some(&sa), &m));
     ok(&host.open(Some(&sb), &m_bis));
     let etat = host.state();
@@ -248,7 +248,7 @@ fn une_base_a_rouvrir_ne_lache_que_son_backend() {
         pour_l_ouvreur.lock().unwrap().insert(base, conn.failed_checkpoint_hook());
         prepared.open(Box::new(conn), None)
     }));
-    let s = host.open_session("témoin", None, vec![]);
+    let s = host.open_session("témoin", None, vec![], None);
     ok(&host.open(Some(&s), &ma));
     ok(&host.open(Some(&s), &mb));
     ok(&put(&host, &s, &ma, "put_fiche", "avant"));
@@ -342,8 +342,8 @@ fn chaque_session_ecrit_et_lit_dans_sa_cellule() {
     let d = dossier("cellules");
     let m = manifeste(&d);
     let host = DaemonHost::new();
-    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![]);
-    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![]);
+    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![], None);
+    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![], None);
     ok(&host.open(Some(&sa), &m));
     ok(&put(&host, &sa, &m, "put_fiche", "fa"));
     ok(&put(&host, &sb, &m, "put_fiche", "fb"));
@@ -381,8 +381,8 @@ fn une_reaction_ecrit_dans_la_cellule_de_son_evenement() {
     let d = dossier("reaction-cellule");
     let m = manifeste(&d);
     let host = DaemonHost::new();
-    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![]);
-    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![]);
+    let sa = host.open_session("alpha", Some(json!({"org": "acme", "project": "alpha"})), vec![], None);
+    let sb = host.open_session("beta", Some(json!({"org": "acme", "project": "beta"})), vec![], None);
     // Les sujets d'abord, et la rafale retombe (la réaction attend 500 ms
     // après la dernière écriture) : sinon elle partirait après l'ancre, et
     // transitionnerait légitimement les deux fiches.
