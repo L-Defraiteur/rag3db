@@ -37,3 +37,7 @@ Le test lui-même, sous charge. Il n'a pas de témoin à part.
 panique (« le démon n'a pas répondu », `fn demon`, ligne 843) pendant une lib
 complète sur luciepc, sous une batterie voisine ; rejoué seul, trois fois vert.
 Même cause : le délai de 2 s de `fn demon`, pas le démon.
+
+Et `daemon::db::tests::un_blob_traverse_le_demon` (`src/daemon/db.rs:416`), même panique, une fois
+sur quatre lib complètes de l'arbre principal (11 octobre, 4 h 35, retrait du filet du COPY) ;
+vert à la passe suivante.

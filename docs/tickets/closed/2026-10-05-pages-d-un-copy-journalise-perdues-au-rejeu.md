@@ -52,6 +52,40 @@ témoin, puis avec index vectoriel et plein texte) ; la base de la version 39 ; 
 réutilisées par le COPY suivant. Et les sept témoins du point de reprise interrompu
 (`checkpoint_test.cpp`) font le contrôle de fuite.
 
+### Le témoin produit, resté sans fin (arbre principal, 11 octobre 2026, nuit)
+
+Le témoin rag3weaver (`e2e_tx_par_paquet_arret`, branche `temoin-fuite-3`) devait tuer
+l'écrivain au second paquet, après que le premier (150 000 scopes, plus qu'un groupe plein) a été
+validé au journal. Les essais du 10 octobre ont trouvé une base de 114 Mo pour un journal de 33 Ko,
+et la question était : par quel chemin le premier paquet évite-t-il le journal ?
+
+**Réponse : aucun. Le premier paquet n'est jamais validé à cette taille.**
+
+- **Petit corpus** (16 fichiers de 250 fonctions, 4 000 scopes au premier paquet, sonde
+  `sonde_le_premier_paquet_quitte_le_journal_par_l_index_vectoriel_releve`) :
+  - le premier paquet est validé au journal : 14,6 Mo avec vecteurs, 14,4 Mo sans, à la mort de
+    l'écrivain ;
+  - l'index vectoriel ne tombe pas ;
+  - la piste « `CREATE_VECTOR_INDEX` force un point de reprise qui vide le journal »
+    (`create_hnsw_index.cpp`) est donc réfutée à cette taille.
+- **Taille réelle** (600 × 250, un seul écrivain, avec vecteurs, `RAG3DB_PROFILE_JOURNAL=1`, délai
+  de 25 min dont 4 de compilation) :
+  - le fichier de la base atteint 114 Mo à la 8ᵉ minute, puis ne bouge plus pendant 13 minutes ;
+  - le journal reste à 33 851 octets, écrits à l'ouverture ;
+  - aucune ligne « [journal] transaction validée » n'apparaît : aucune transaction n'a été
+    validée, forcée ou non ;
+  - le délai a tué la passe.
+- **Ce que veut dire 114 Mo pour 33 Ko** : c'est l'état d'un premier paquet **en cours**. Un COPY
+  écrit ses groupes pleins dans le fichier avant sa validation, et le journal n'est écrit qu'à la
+  validation. Les essais du 10 octobre ont lu cet état en vol, pas un journal évité.
+
+Ce qui reste :
+- Pourquoi un paquet de 600 fichiers et 150 000 scopes reste plus de 13 minutes sans écrire, après
+  ses COPY : ce n'est pas lu. Les candidats sont la résolution des relations, l'embarquement, et le
+  plein texte en mémoire.
+- Un témoin produit ne peut pas exister sans un corpus long tant que ce paquet ne se valide pas en
+  quelques minutes. Les témoins du moteur ci-dessus portent la preuve du correctif.
+
 ## Non mesuré encore (périmé)
 
 - Le `COPY` forcé d'aujourd'hui, tué avant son point de reprise : par raisonnement il laisse les mêmes pages sans propriétaire, et le défaut actuel aurait donc déjà cette fuite sur mort. À mesurer avant de l'affirmer.

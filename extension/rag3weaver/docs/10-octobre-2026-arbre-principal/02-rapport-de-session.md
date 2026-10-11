@@ -1,7 +1,50 @@
 # Arbre principal — rapport de session, 10 octobre 2026
 
-*Mis à jour le 10 octobre au soir. La version du matin (pause pour le redémarrage du
-poste) est dans l'historique de ce fichier.*
+*Mis à jour le 11 octobre à 5 h 15, avant le repos. La nuit est en tête ; ce qui suit
+« Ce qui est sur master » est l'état du 10 au soir, gardé pour l'historique. Les faits
+utiles sont dans `04-knowledge-dump.md`.*
+
+## La nuit du 10 au 11 octobre
+
+Sur master, dans l'ordre :
+
+| Commit | Quoi |
+|---|---|
+| `6d7f2a811` | Le filet : `force_checkpoint_on_copy=true` sur toute connexion, contre la corruption du COPY journalisé. Le témoin `un_copy_de_plus_d_un_groupe_avec_un_tableau_garde_ses_doubles` est rouge sans lui. |
+| `8ab83640a` | La vérité dans la réponse d'`index` : elle meurt avec le serveur, et relancer est refusé. Les journaux de la commande en fond s'écrivent directement en fichiers, plafonnés par le surveillant : la commande survit à son hôte. |
+| `17cca6e17`…`a514e66ed` | T1, de codeparsers : un bloc impl ne définit pas son nom ; pointeur `06d6e92`. |
+| `fc636f7e6` | Un refus de schéma dit la règle et la taille, jamais la donnée (ticket de G : `ingest_snapshot` recopiait 2 Mo). |
+| `f9bf4574d` | Le filet retiré après le correctif du cœur (`eae3863ab`). Le témoin est vert sans lui ; ticket fermé. |
+
+**La corruption du COPY journalisé** :
+- le rouge probabiliste d'`OwnerlessPagesTest` (le témoin de mon étendue `0aed3c4b5`) ne venait
+  pas de l'étendue ;
+- reproduit sans harnais (`~/.cache/rag3weaver-notes-A/etendue/variantes.cpp`) : un COPY
+  journalisé de plus d'un groupe, avec deux fils et une colonne `FLOAT[N]`, relisait 0 dans une
+  colonne DOUBLE ;
+- un CHECKPOINT dans le même processus rendait les valeurs justes : c'était donc la lecture ;
+- le cœur a trouvé l'index absolu passé à `patchFloatExceptions` pour un second segment ALP, et
+  l'a corrigé en une ligne. Ticket
+  `closed/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md`.
+
+**Lib commune** : rebâtie à 03:49 (I1), puis à 04:33 sur le correctif (`00a1dde0…`, extension
+`5b026608…`), chaque fois après les « fini » de toutes les sessions. Plusieurs ont dit
+qu'elles n'ont plus à être demandées cette nuit (cœur, hotfixs, F, everything declarative,
+mémoire).
+
+**Le témoin de la fuite** (branche `temoin-fuite-3`, worktree `wt-fuite3`) : le premier
+paquet n'évite pas le journal, il n'est jamais validé à taille réelle. Le détail est au ticket
+`closed/2026-10-05-pages-d-un-copy-journalise-perdues-au-rejeu.md`. Pas de correctif.
+
+**Ce qui attend**, dans l'ordre de l'orchestration :
+1. Le lot reprise croisée. Hotfixs a fusionné le point de reprise interrompu (`b411e7f20`,
+   crochet `RAG3DB_TEST_HOOKS=1` + `RAG3DB_TEST_DIE_AT=checkpoint-logged`, message « a
+   checkpoint of this database was interrupted »). La lib du poste principal n'est pas encore
+   rebâtie dessus.
+2. Les formes A puis C de l'indexation portée par le démon (`03-…`), si Lucie les choisit.
+3. Les ~11 s non imputées de la lib complète (voir le knowledge dump).
+
+Worktrees : `wt-docs` (détaché, les docs), `wt-fuite3` (`temoin-fuite-3`). Pas de target-A.
 
 ## Ce qui est sur master
 
