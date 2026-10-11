@@ -2611,6 +2611,10 @@ impl Catalog {
                 }
             }
             let retour = texte(2);
+            // Une base indexée avant `template_params` reçoit la colonne à
+            // l'ouverture (l'enregistrement de l'entité l'ajoute), vide : ses
+            // fonctions gabarits ne se résolvent qu'une fois leur fichier
+            // réindexé — un `index` complet le règle, sans rien casser avant.
             let params: Vec<String> = texte(4).split(',').map(str::trim).filter(|p| !p.is_empty()).map(String::from).collect();
             if !retour.trim().is_empty() && !params.is_empty() {
                 let g = (retour.clone(), params);
