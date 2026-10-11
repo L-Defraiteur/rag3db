@@ -40,6 +40,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <thread>
+#include <future>
 #include <iostream>
 #include <chrono>
 #include <map>
@@ -1526,6 +1528,37 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
 
 INSTANTIATE_TEST_SUITE_P(Paths, RealVectorsReachability, ::testing::Values("Masse", "Fond"),
     [](const ::testing::TestParamInfo<std::string>& info) { return info.param; });
+
+
+// Sous le mode multi-écrivains : un SET de vecteur qui attend l'index derrière une insertion non
+// validée, puis reprend après sa validation (ticket
+// 2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite). L'état de
+// mise à jour de l'index a été dimensionné sur les lignes d'avant l'attente (300) ; l'instantané,
+// repris après l'attente, voit les arêtes vers les 50 lignes de l'autre, au-delà : « node offset N
+// is beyond the visited set of 300 nodes », trois fois sur trois (sonde du 11 octobre). Un DELETE
+// ou un CREATE à la même place passe. Le relevé venait de H4_IndexedRandomMix, 10 sur 10.
+TEST_F(VectorIndexUpdate, AnUpdateWaitingBehindAnInsertSeesItsNewRows) {
+    createDocs(0, 300);
+    rag3db::main::Connection holder(database.get());
+    rag3db::main::Connection waiter(database.get());
+    ASSERT_TRUE(waiter.query("CALL lock_timeout=20000;")->isSuccess());
+    // L'autre écrivain tient l'index : 50 lignes neuves, tout près de celles que le SET touche.
+    ASSERT_TRUE(holder.query("BEGIN TRANSACTION;")->isSuccess());
+    const auto insert = holder.query(stringFormat(
+        "UNWIND range(1000, 1049) AS i CREATE (n:{} {id: i}) SET n.vec = [i % 17, i % 23, i % 29, "
+        "300 + (i - 1000) / 10.0];",
+        table));
+    ASSERT_TRUE(insert->isSuccess()) << insert->getErrorMessage();
+    auto waiting = std::async(std::launch::async, [&] {
+        auto result = waiter.query(stringFormat(
+            "MATCH (n:{}) WHERE n.id = 5 SET n.vec = [5, 5, 5, 305];", table));
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    ASSERT_TRUE(holder.query("COMMIT;")->isSuccess());
+    const auto outcome = waiting.get();
+    EXPECT_EQ(outcome, "ok") << "[check: no-visited-set-refusal] " << outcome;
+}
 
 } // namespace
 

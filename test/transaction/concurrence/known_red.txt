@@ -131,3 +131,10 @@ Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash no-unexpected-error
 # La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
 # 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure) : 1,8 à 4,3 Mo en trois morts.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt data-file-bounded
+#
+# L'index vectoriel sous deux écrivains (ticket
+# 2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite) : un SET de
+# vecteur qui attend derrière une insertion non validée refuse son instruction après la validation
+# de l'autre (« node offset N is beyond the visited set of 300 nodes »), trois fois sur trois. Le
+# témoin minimal de ce que H4 montrait.
+VectorIndexUpdate.AnUpdateWaitingBehindAnInsertSeesItsNewRows no-visited-set-refusal
