@@ -356,3 +356,19 @@ où elle vit.
   `touch` d'un fichier modifié, la ligne Checking/Compiling doit apparaître.
 - **Marche 4** : côté hôte relu par l'arbre principal, deux corrections
   prises par la mémoire, passe sur la lib C7 en cours, push ensuite.
+- **Piste pour après, pas un chantier** (Lucie, 15 h) : un embarqueur
+  multimodal local (EmbeddingGemma-2 : texte, images, audio, vidéo dans le
+  même espace de vecteurs), « à expérimenter après ça pour des images ». Chez
+  nous : un service de plus derrière `RAG3WEAVER_EMBED_SERVICE` qui accepte
+  des octets et déclare ce qu'il prend, un gabarit à champ fichier dont le
+  vecteur vient du même modèle que les textes ; usages : fiches avec images,
+  documents, tisserande. Règle inchangée : local pour éprouver, Gemini pour
+  juger, aucune promesse de tout-local.
+- **La marche 4 essayée par l'orchestration sur la base réelle de Lucie**
+  (trois clients MCP sur stdio) : vert de bout en bout (hôte lancé par le
+  premier client, dix outils, rappel des fiches en 0,1 à 0,2 s) ; un défaut
+  P4 en ticket chez la mémoire : la session d'un client mort sans fermer reste
+  listée par `daemon_status`.
+- **La bascule du défaut moteur** : permission levée par Lucie dans la session
+  du cœur ; branche `verrous-a9b`, liste complète et banc chez le cœur, e2e du
+  produit chez l'arbre principal sur son propre bâti de la branche.
