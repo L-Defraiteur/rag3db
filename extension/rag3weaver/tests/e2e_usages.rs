@@ -557,3 +557,124 @@ fn une_reexportation_part_du_scope_de_son_pub_use() {
     assert_eq!(liens.len(), 1, "{liens:?}");
     assert!(liens[0].0.ends_with("dataflow/runtime.rs") && liens[0].1 != "nom", "{liens:?}");
 }
+
+/// **La question du cœur, en petit** (retours du 11 octobre 2026) : « qui
+/// appelle `NodeBatchInsert::acquireLocksBeforeExecution` ? ». Trois
+/// appels dans `QueryProcessor::acquireLocksBeforeExecution` : l'entrée
+/// (processor.cpp:38), la récursion (:69), et
+/// `ku_dynamic_cast<ProcessorTask*>(task)->sink->acquireLocksBeforeExecution(…)`
+/// (:71), qui atteint la surcharge par envoi virtuel. Par les gabarits réels :
+/// `usages` de la méthode de `QueryProcessor` rend la récursion ; `usages` et
+/// `impact` de la surcharge de `NodeBatchInsert` rendent l'appelant « par
+/// envoi virtuel », par `PhysicalOperator::acquireLocksBeforeExecution`.
+#[test]
+#[ignore]
+fn la_question_du_coeur_l_envoi_virtuel_et_la_recursion() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/include/common/cast.h".to_string(), "template<typename TO, typename FROM>\nTO ku_dynamic_cast(FROM old) {\n    return dynamic_cast<TO>(old);\n}\n".to_string()),
+        (
+            "src/include/processor/physical_operator.h".to_string(),
+            "struct Ctx {};\nclass PhysicalOperator {\npublic:\n    virtual ~PhysicalOperator() = default;\n    virtual void acquireLocksBeforeExecution(Ctx* ctx) {}\n};\n".to_string(),
+        ),
+        (
+            "src/include/processor/node_batch_insert.h".to_string(),
+            "#include \"physical_operator.h\"\nclass NodeBatchInsert : public PhysicalOperator {\npublic:\n    void acquireLocksBeforeExecution(Ctx* ctx) override;\n};\n".to_string(),
+        ),
+        (
+            "src/processor/node_batch_insert.cpp".to_string(),
+            "#include \"node_batch_insert.h\"\nvoid NodeBatchInsert::acquireLocksBeforeExecution(Ctx* ctx) {}\n".to_string(),
+        ),
+        (
+            "src/include/processor/processor.h".to_string(),
+            "#include \"physical_operator.h\"\nstruct Task { Task* children[2]; };\nstruct ProcessorTask : Task { PhysicalOperator* sink; };\nclass QueryProcessor {\npublic:\n    void execute(Task* task, Ctx* ctx);\n    void acquireLocksBeforeExecution(Task* task, Ctx* ctx);\n};\n".to_string(),
+        ),
+        (
+            "src/processor/processor.cpp".to_string(),
+            "#include \"processor.h\"\nvoid QueryProcessor::execute(Task* task, Ctx* ctx) {\n    acquireLocksBeforeExecution(task, ctx);\n}\nvoid QueryProcessor::acquireLocksBeforeExecution(Task* task, Ctx* ctx) {\n    for (auto* child : task->children) {\n        acquireLocksBeforeExecution(child, ctx);\n    }\n    ku_dynamic_cast<ProcessorTask*>(task)->sink->acquireLocksBeforeExecution(ctx);\n}\n".to_string(),
+        ),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    {
+        let cat = catalog.lock().unwrap();
+        let r = cat
+            .execute_raw(
+                "MATCH (a:Scope {name: 'acquireLocksBeforeExecution'})-[c:CONSUMES]->(b:Scope {name: 'acquireLocksBeforeExecution'}) \
+                 RETURN a.parent_name, b.parent_name, c.resolution ORDER BY a.parent_name, b.parent_name",
+            )
+            .unwrap();
+        let liens: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect::<Vec<_>>().join(" → ")).collect();
+        eprintln!("{liens:?}");
+        assert!(liens.iter().any(|l| l.starts_with("QueryProcessor → PhysicalOperator → ")), "le receveur typé par ku_dynamic_cast puis sink : {liens:?}");
+        assert!(liens.iter().any(|l| l.starts_with("QueryProcessor → QueryProcessor → ")), "la récursion : {liens:?}");
+        assert!(!liens.iter().any(|l| l.starts_with("QueryProcessor → NodeBatchInsert")), "jamais l'homonyme d'une autre classe : {liens:?}");
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let usages = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let du_processeur = usages
+        .execute(&registry, services.clone(), &serde_json::json!({"name": "acquireLocksBeforeExecution", "path": "src/processor/processor.cpp"}))
+        .unwrap();
+    eprintln!("{du_processeur}");
+    assert!(du_processeur.contains("execute — "), "l'entrée : {du_processeur}");
+    assert!(du_processeur.contains("acquireLocksBeforeExecution — /projet/src/processor/processor.cpp:"), "la récursion : {du_processeur}");
+    let de_la_surcharge = usages
+        .execute(&registry, services.clone(), &serde_json::json!({"name": "acquireLocksBeforeExecution", "path": "src/processor/node_batch_insert.cpp"}))
+        .unwrap();
+    eprintln!("{de_la_surcharge}");
+    let virtuel = de_la_surcharge.split("## Par envoi virtuel").nth(1).unwrap_or_else(|| panic!("pas de section par envoi virtuel : {de_la_surcharge}"));
+    assert!(virtuel.contains("physical_operator.h"), "par la méthode de base : {de_la_surcharge}");
+    assert!(virtuel.contains("acquireLocksBeforeExecution — /projet/src/processor/processor.cpp:"), "l'appelant de la base : {de_la_surcharge}");
+    let impact = GraphTool::from_mermaid(include_str!("../templates/tools/impact.mmd")).unwrap().bind(&registry).unwrap();
+    let out = impact
+        .execute(&registry, services, &serde_json::json!({"name": "acquireLocksBeforeExecution", "path": "src/processor/node_batch_insert.cpp", "depth": 2}))
+        .unwrap();
+    eprintln!("{out}");
+    let virtuel = out.split("Par envoi virtuel").nth(1).unwrap_or_else(|| panic!("pas de groupe par envoi virtuel : {out}"));
+    assert!(virtuel.contains("processor.cpp"), "{out}");
+}
+
+/// **Chaque réponse dit l'arbre et le commit indexés** (manque relevé par
+/// l'orchestration, 11 octobre 2026 : le cœur interrogeait un index de master
+/// pendant qu'il éditait sa branche, sans le savoir). Après un index noté, la
+/// réponse d'`usages` commence par « index : <racine> @ <commit> » ; une
+/// modification non commitée le dit.
+#[test]
+#[ignore]
+fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
+    let racine = std::env::temp_dir().join(format!("rag3weaver-arbre-indexe-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&racine);
+    std::fs::create_dir_all(&racine).unwrap();
+    let git = |args: &[&str]| {
+        let o = std::process::Command::new("git").arg("-C").arg(&racine).args(args).output().unwrap();
+        assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    git(&["init", "-q"]);
+    std::fs::write(racine.join("a.rs"), "pub fn f() {}\n").unwrap();
+    git(&["add", "a.rs"]);
+    git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a"]);
+    let commit = git(&["rev-parse", "--short", "HEAD"]);
+    let catalog = setup();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("a.rs".into(), "pub fn f() {}\npub fn g() { f(); }\n".into())])).unwrap();
+    let racine_s = racine.to_string_lossy().to_string();
+    catalog.lock().unwrap().note_indexed_tree(&racine_s).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let usages = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let out = usages.execute(&registry, services.clone(), &serde_json::json!({"name": "f"})).unwrap();
+    eprintln!("{out}");
+    assert!(out.starts_with(&format!("> index : {racine_s} @ {commit}, indexé à l'instant")), "{out}");
+    // Une modification non commitée, notée par un index suivant.
+    std::fs::write(racine.join("a.rs"), "pub fn f() {}\npub fn h() {}\n").unwrap();
+    catalog.lock().unwrap().note_indexed_tree(&racine_s).unwrap();
+    let out = usages.execute(&registry, services, &serde_json::json!({"name": "f"})).unwrap();
+    assert!(out.contains(&format!("@ {commit} + modifications non commitées")), "{out}");
+    let _ = std::fs::remove_dir_all(&racine);
+}
