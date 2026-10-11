@@ -946,6 +946,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             },
             line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
             edge_mark: super::graph_walk::EdgeMark::from_config(config, "NeighborhoodNode")?,
+            qualifier_field: s("qualifier_field").filter(|v| !v.is_empty()),
         };
         let relations = liste(config.get("relations"));
         if relations.is_empty() {
@@ -988,6 +989,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .map(String::as_str)
             .chain(st.defined_by.iter().map(String::as_str))
             .chain(st.used_by.iter().map(String::as_str))
+            .chain(st.qualifier_field.iter().map(String::as_str))
             .chain(cfg.relations.iter().map(String::as_str))
             .chain(st.path_fields.iter().map(String::as_str))
             .chain(cfg.also_path.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
@@ -1130,6 +1132,7 @@ mod tests_saut {
                 path_fields: vec!["file_path".into(), "source".into()],
                 line_field: "start_line".into(),
                 edge_mark: mark,
+                qualifier_field: None,
             },
             relations: vec!["CONSUMES".into()],
             direction: Direction::Incoming,

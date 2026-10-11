@@ -30,7 +30,7 @@ fn le_rendu_groupe_par_genre_et_coupe_avec_ses_comptes() {
     let def = item("d", "merge_port_values", "src/dataflow/port.rs", 205);
     let mut usages: Vec<Usage> = (0..5).map(|i| usage(item(&format!("u{i}"), &format!("appelant{i}"), "src/dataflow/runtime.rs", 600 + i), "call", Some("d"))).collect();
     usages.push(usage(item("t", "signature", "src/dataflow/x.rs", 10), "type", Some("d")));
-    let r = UsagesReport { name: "merge_port_values".into(), definitions: vec![def], definitions_hidden: 0, usages, ambiguous: false };
+    let r = UsagesReport { name: "merge_port_values".into(), definitions: vec![def], definitions_hidden: 0, usages, ambiguous: false, qualifier: None, qualifier_hidden: 0 };
     let md = r.markdown("all", 3);
     assert!(md.contains("## Définitions (1)") && md.contains("src/dataflow/port.rs:205"), "{md}");
     assert!(md.contains("## Usages (6) — call 5 · type 1"), "{md}");
@@ -48,7 +48,7 @@ fn un_nom_ambigu_montre_tout_et_n_attribue_que_le_sur() {
         usage(item("x", "direct", "one.rs", 9), "call", Some("a")),
         usage(item("y", "par_le_nom", "user.rs", 2), "call", None),
     ];
-    let r = UsagesReport { name: "helper".into(), definitions: vec![a, b], definitions_hidden: 0, usages, ambiguous: true };
+    let r = UsagesReport { name: "helper".into(), definitions: vec![a, b], definitions_hidden: 0, usages, ambiguous: true, qualifier: None, qualifier_hidden: 0 };
     let md = r.markdown("all", 20);
     assert!(md.contains("## Définitions (2)") && md.contains("Nom ambigu"), "{md}");
     assert!(md.contains("direct — one.rs:9 → one.rs:1"), "l'usage direct est rangé sous sa définition : {md}");
@@ -64,7 +64,7 @@ fn un_usage_devine_dit_par_le_nom() {
         usage(item("s", "sur", "a.rs", 3), "call", Some("d")),
         Usage { guessed: true, ..usage(item("g", "devine", "b.rs", 7), "call", Some("d")) },
     ];
-    let r = UsagesReport { name: "clear".into(), definitions: vec![def], definitions_hidden: 0, usages, ambiguous: false };
+    let r = UsagesReport { name: "clear".into(), definitions: vec![def], definitions_hidden: 0, usages, ambiguous: false, qualifier: None, qualifier_hidden: 0 };
     let md = r.markdown("all", 20);
     assert!(md.contains("devine — b.rs:7 (par le nom)"), "{md}");
     assert!(md.lines().any(|l| l.contains("sur — a.rs:3") && !l.contains("par le nom")), "{md}");
@@ -89,12 +89,12 @@ fn la_declaration_se_montre_avec_sa_definition_ou_seule() {
     use rag3weaver::dataflow::usage_nodes::Declaration;
     let def = Item { uuid: "u-bar".into(), title: "bar".into(), kind: "function".into(), path: "src/foo.cpp".into(), line: Some(3) };
     let decl = Declaration { definition: Some("u-bar".into()), container: "Foo".into(), path: "src/foo.h".into(), line: Some(5), signature: "int bar(int x) const".into() };
-    let r = UsagesReport { name: "bar".into(), definitions: vec![def], definitions_hidden: 0, usages: vec![], ambiguous: false };
+    let r = UsagesReport { name: "bar".into(), definitions: vec![def], definitions_hidden: 0, usages: vec![], ambiguous: false, qualifier: None, qualifier_hidden: 0 };
     let md = r.markdown_with("all", 10, &[decl]);
     assert!(md.contains("- function bar — src/foo.cpp:3 — déclaré src/foo.h:5 (dans Foo)"), "{md}");
 
     let pure = Declaration { definition: None, container: "Foo".into(), path: "src/foo.h".into(), line: Some(8), signature: "virtual int pure(int y) = 0".into() };
-    let r = UsagesReport { name: "pure".into(), definitions: vec![], definitions_hidden: 0, usages: vec![], ambiguous: false };
+    let r = UsagesReport { name: "pure".into(), definitions: vec![], definitions_hidden: 0, usages: vec![], ambiguous: false, qualifier: None, qualifier_hidden: 0 };
     let md = r.markdown_with("all", 10, &[pure]);
     assert!(md.contains("aucune définition indexée — déclaré seulement"), "{md}");
     assert!(md.contains("- déclaré dans Foo — src/foo.h:8 : `virtual int pure(int y) = 0`"), "{md}");

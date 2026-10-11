@@ -8,7 +8,7 @@
 %% result: callees.result
 
 graph LR
-    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, include_by_name=$include_by_name, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin')"]
+    callees["NeighborhoodNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, relations=CONSUMES, direction=outgoing, heading=callees, rest_title='Ce qu’il appelle', title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, name=$name, path=$path, depth=$depth, budget=$budget, include_by_name=$include_by_name, max_degree=50, edge_field=resolution, edge_guessed=nom, collect='LOCKS>', collect_field=name, collect_note=usage, collect_title='Verrous pris sur le chemin')"]
 
 %% Le voisinage d'`impact` dans l'autre sens : les `CONSUMES` **sortants**
 %% — ce que le départ appelle ou utilise —, puis ce que ceux-là appellent.

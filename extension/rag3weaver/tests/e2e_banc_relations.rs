@@ -153,6 +153,7 @@ fn usages_config(relations: &[&str], marque: &EdgeMark) -> UsagesConfig {
         path_fields: vec!["file_path".into()],
         line_field: "start_line".into(),
         edge_mark: marque.clone(),
+        qualifier_field: None,
     }
 }
 

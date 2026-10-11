@@ -64,6 +64,7 @@ fn code_config() -> UsagesConfig {
         path_fields: vec!["repo_path".into(), "file_path".into()],
         line_field: "start_line".into(),
         edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+        qualifier_field: Some("parent_name".into()),
     }
 }
 
@@ -686,4 +687,50 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     let out = usages.execute(&registry, services, &serde_json::json!({"name": "f"})).unwrap();
     assert!(out.contains(&format!("@ {commit} + modifications non commitées")), "{out}");
     let _ = std::fs::remove_dir_all(&racine);
+}
+
+/// **Le nom qualifié** (P4 de la page des manques : `usages {name: "NodeTable::update"}`
+/// rendait « 0 définition » sans un mot). `Classe::methode`, `module::fonction` et
+/// `Classe.methode` se lisent comme le nom seul contraint par son conteneur
+/// (`parent_name`) ou par le nom de son fichier ; le rendu dit comment il a lu,
+/// et un conteneur qui n'a pas ce nom le dit au lieu de rendre zéro.
+#[test]
+#[ignore]
+fn un_nom_qualifie_rend_le_nom_seul_dans_son_conteneur() {
+    let catalog = setup();
+    let dir = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze(&dir, read_sources(&dir).unwrap())).unwrap();
+    }
+    let cat = catalog.lock().unwrap();
+    let cfg = code_config();
+
+    // Classe::methode : un `execute` parmi des dizaines.
+    let seul = usages_of(&cat, &cfg, "execute", "").unwrap();
+    let q = usages_of(&cat, &cfg, "EmbedNode::execute", "").unwrap();
+    eprintln!("{}", q.markdown("all", 20));
+    assert!(seul.definitions.len() > 5, "le nom seul est ambigu : {}", seul.definitions.len());
+    assert_eq!(q.definitions.len(), 1, "une seule méthode `execute` d'EmbedNode : {:?}", q.definitions);
+    assert_eq!(fichier(&q.definitions[0].path), "record_nodes.rs");
+    assert_eq!(q.qualifier, Some(("EmbedNode".to_string(), "execute".to_string())));
+    assert_eq!(q.qualifier_hidden, seul.definitions.len() - 1, "les autres sont dites écartées");
+    assert!(q.markdown("all", 20).contains("Nom qualifié : « execute » dans « EmbedNode »"));
+    // La même chose écrite `Classe.methode`.
+    let point = usages_of(&cat, &cfg, "EmbedNode.execute", "").unwrap();
+    assert_eq!(point.definitions, q.definitions);
+
+    // module::fonction : la même réponse que le nom seul, défini dans port.rs.
+    let mf = usages_of(&cat, &cfg, "port::merge_port_values", "").unwrap();
+    let nu = usages_of(&cat, &cfg, "merge_port_values", "").unwrap();
+    assert_eq!(mf.definitions, nu.definitions, "module::fonction contraint par le fichier");
+    let appels = |r: &rag3weaver::dataflow::usage_nodes::UsagesReport| r.usages.iter().map(|u| u.user.uuid.clone()).collect::<BTreeSet<_>>();
+    assert_eq!(appels(&mf), appels(&nu), "et les mêmes usages");
+
+    // Un conteneur qui n'a pas ce nom : dit, pas un zéro muet.
+    let rien = usages_of(&cat, &cfg, "PasUnConteneur::execute", "").unwrap();
+    assert!(rien.definitions.is_empty());
+    assert!(rien.qualifier_hidden > 0);
+    let texte = rien.markdown("all", 20);
+    assert!(texte.contains("aucune définition dans ce conteneur"), "{texte}");
 }

@@ -64,6 +64,12 @@ pub struct UsagesConfig {
     pub line_field: String,
     /// Les arêtes devinées : `usages` les dit, le voisinage ne les suit pas.
     pub edge_mark: super::graph_walk::EdgeMark,
+    /// **Le nom qualifié** (`Classe::methode`, `module::fonction`,
+    /// `Class.method`) : le champ de la définition qui porte son conteneur
+    /// (pour le code, `parent_name`). Une définition convient quand son
+    /// conteneur, ou le nom de son fichier, vaut le qualifiant. `None` : le
+    /// nom se lit tel quel.
+    pub qualifier_field: Option<String>,
 }
 
 /// Une définition, ou un usage.
@@ -99,6 +105,11 @@ pub struct UsagesReport {
     pub definitions_hidden: usize,
     pub usages: Vec<Usage>,
     pub ambiguous: bool,
+    /// Le qualifiant lu dans un nom qualifié (`NodeTable` de
+    /// `NodeTable::update`), et le nom cherché alors (`update`).
+    pub qualifier: Option<(String, String)>,
+    /// Définitions du nom seul écartées par le qualifiant.
+    pub qualifier_hidden: usize,
 }
 
 /// **Une déclaration** : la ligne d'un conteneur qui annonce un nom défini
@@ -389,8 +400,27 @@ fn usage_props(row: &[CypherValue], debut: usize) -> (String, Vec<String>, Optio
 }
 
 /// Le rapport : les définitions du nom, puis les usages par les deux chemins.
+/// **Lire un nom qualifié** : `A::B::m` ou `A.m` → (`m`, le dernier qualifiant
+/// `B` ou `A`). Sans `qualifier_field` déclaré, ou sans séparateur, le nom
+/// tel quel.
+pub fn lire_le_nom<'a>(name: &'a str, cfg: &UsagesConfig) -> (&'a str, Option<&'a str>) {
+    if cfg.qualifier_field.is_none() {
+        return (name, None);
+    }
+    let coupe = name.rfind("::").map(|i| (i, 2)).or_else(|| name.rfind('.').map(|i| (i, 1)));
+    let Some((i, n)) = coupe else { return (name, None) };
+    let (avant, nom) = (&name[..i], &name[i + n..]);
+    let qualifiant = avant.rsplit("::").next().unwrap_or(avant).rsplit('.').next().unwrap_or(avant);
+    if nom.is_empty() || qualifiant.is_empty() {
+        return (name, None);
+    }
+    (nom, Some(qualifiant))
+}
+
 pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix: &str) -> Result<UsagesReport, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
+    let nom_demande = name;
+    let (name, qualifiant) = lire_le_nom(name, cfg);
     let entity = catalog.entity_config(&cfg.pivot).ok_or_else(|| format!("UsagesNode: entité inconnue « {} »", cfg.pivot))?;
     // Le pivot : par son uuid déterministe quand la clé est son identité.
     let pivots: Vec<String> = if entity.hashsafe.as_deref() == Some(std::slice::from_ref(&cfg.key)) {
@@ -429,6 +459,29 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
         definitions.retain(|d| sous_le_chemin(&d.path, path_prefix));
     }
     let definitions_hidden = total - definitions.len();
+
+    // **Le qualifiant** : le conteneur de chaque définition, lu à part (les
+    // colonnes des autres requêtes se lisent par position), puis le filtre.
+    let mut qualifier_hidden = 0;
+    if let (Some(q), Some(champ), Some(def)) = (qualifiant, cfg.qualifier_field.as_ref(), cfg.defined_by.as_ref()) {
+        if !definitions.is_empty() {
+            let table = rel_info(catalog, def)?.from;
+            let lire = rag3weaver_ir::Select::by_uuids(&table, vec![rag3weaver_ir::Column::Node(champ.clone())]);
+            let qs = catalog.dialect_arc().select(&lire).map_err(|e| format!("UsagesNode: {e}"))?;
+            let liste = CypherValue::List(definitions.iter().map(|d| CypherValue::String(d.uuid.clone())).collect());
+            let rows = catalog.execute_raw_with_params(&qs, &[QueryParam::new("uuids", liste)]).map_err(err)?;
+            let conteneur: HashMap<String, String> = rows.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)))).collect();
+            let fichier = |chemin: &str| {
+                let base = chemin.rsplit('/').next().unwrap_or(chemin);
+                base.split('.').next().unwrap_or(base).to_string()
+            };
+            let avant = definitions.len();
+            definitions.retain(|d| {
+                conteneur.get(&d.uuid).is_some_and(|c| c == q) || fichier(&d.path) == q || d.path.contains(&format!("/{q}/"))
+            });
+            qualifier_hidden = avant - definitions.len();
+        }
+    }
 
     // Les usages directs, sous leur définition.
     let mut usages: Vec<Usage> = Vec::new();
@@ -495,7 +548,15 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
         .collect();
     usages.retain(|u| !conteneur(&u.user.kind) || !sites_etroits.contains(&(u.user.path.clone(), u.user.line, u.definition.clone())));
     usages.sort_by(|a, b| (&a.user.path, a.user.line, &a.user.title).cmp(&(&b.user.path, b.user.line, &b.user.title)));
-    Ok(UsagesReport { name: name.to_string(), definitions, definitions_hidden, usages, ambiguous })
+    Ok(UsagesReport {
+        name: nom_demande.to_string(),
+        definitions,
+        definitions_hidden,
+        usages,
+        ambiguous,
+        qualifier: qualifiant.map(|q| (q.to_string(), name.to_string())),
+        qualifier_hidden,
+    })
 }
 
 /// Le chemin d'un scope commence par `prefixe`, au début ou après un `/` :
@@ -551,6 +612,14 @@ impl UsagesReport {
     /// foo.h:5 (dans Foo) » ; sans définition indexée, la déclaration seule.
     pub fn markdown_with(&self, usage: &str, limit: usize, declarations: &[Declaration]) -> String {
         let mut out = format!("# usages: {}\n\n", self.name);
+        // Le nom qualifié se dit : comment il a été lu, et ce qu'il écarte.
+        if let Some((q, nom)) = &self.qualifier {
+            out.push_str(&format!("Nom qualifié : « {nom} » dans « {q} » (conteneur ou fichier)"));
+            if self.qualifier_hidden > 0 {
+                out.push_str(&format!(" — {} définition(s) de « {nom} » ailleurs, écartée(s)", self.qualifier_hidden));
+            }
+            out.push_str(".\n\n");
+        }
         let defs = &self.definitions;
         out.push_str(&format!("## Définitions ({})", defs.len()));
         if self.definitions_hidden > 0 {
@@ -563,7 +632,9 @@ impl UsagesReport {
         };
         if defs.is_empty() {
             let seules: Vec<&Declaration> = declarations.iter().filter(|x| x.definition.is_none()).collect();
-            if seules.is_empty() {
+            if seules.is_empty() && self.qualifier.is_some() && self.qualifier_hidden > 0 {
+                out.push_str("(aucune définition dans ce conteneur : donnez le nom seul, avec un chemin, pour les voir toutes)\n");
+            } else if seules.is_empty() {
                 out.push_str("(aucune définition indexée sous ce nom)\n");
             } else {
                 out.push_str("(aucune définition indexée — déclaré seulement)\n");
@@ -733,6 +804,7 @@ impl NodeFactory for UsagesNodeFactory {
             },
             line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
             edge_mark: super::graph_walk::EdgeMark::from_config(config, "UsagesNode")?,
+            qualifier_field: s("qualifier_field").filter(|v| !v.is_empty()),
         };
         // Des identifiants seulement : ils entrent dans le texte des requêtes.
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
@@ -740,6 +812,7 @@ impl NodeFactory for UsagesNodeFactory {
             .into_iter()
             .chain(cfg.defined_by.iter())
             .chain(cfg.used_by.iter())
+            .chain(cfg.qualifier_field.iter())
             .chain(cfg.direct.iter())
             .chain(cfg.path_fields.iter())
             .collect();
@@ -880,6 +953,7 @@ mod tests_saut {
                 path_fields: vec!["file_path".into(), "source".into()],
                 line_field: "start_line".into(),
                 edge_mark,
+                qualifier_field: None,
             };
             for props in [vec![], vec!["usage".to_string(), "line".into(), "resolution".into()]] {
                 let rel = RelInfo { name: "CONSUMES".into(), from: "Scope".into(), to: "Symbol".into(), props };
