@@ -182,3 +182,20 @@ marque voyage jusqu'au rendez-vous (`MENTIONS.untyped_receiver`), et
 antérieur : un rendez-vous non relié s'affichait comme un usage sûr).
 Témoin `e2e_usages::un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie`,
 rouge avant (une arête `run → update` par le nom), vert après.
+
+**Suite (décision de l'orchestration pour Lucie, renversable)** : les
+liens posés par le nom seul sur un receveur non typé ne sont ni retirés ni
+laissés « fichier » ; ils prennent la marque « nom ». codeparsers `a83ba74`
+(`metadata.by_name`, et au banc le compte neutre
+`relations.consumes.par_le_nom`) ; second commit de la branche
+`receveurs-non-types` (`718cfbe1d`, `CodeRelation.by_name` → résolution
+« nom »). Témoin `e2e_usages::un_lien_par_le_nom_dans_le_fichier_se_marque_nom`,
+rouge (« fichier ») puis vert.
+
+**Correction d'un chiffre que j'avais donné** : les « 1 492 liens marqués
+fichier » venaient du mode entre fichiers de codeparsers. En fichier seul
+— le mode de rag3weaver — un receveur non typé passe au rendez-vous, déjà
+marqué « nom » par le repli d'un seul définisseur. Les liens « fichier » par
+le nom y sont **45 sur rag3weaver, 0 sur le C++ de rag3db** ; ce sont eux
+que la marque corrige. Entre fichiers : 1 997 sur rag3weaver, 583 sur
+rag3db/src.
