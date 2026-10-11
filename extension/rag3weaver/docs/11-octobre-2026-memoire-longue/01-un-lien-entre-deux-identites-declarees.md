@@ -91,15 +91,25 @@ chose se fondent). Ce qui change en lui :
    entity for payload » tombe pour une relation qui déclare ses propriétés, et
    reste pour celle qui n'en déclare pas (une propriété non déclarée se refuse en
    la nommant) ;
-3. **il ne vide plus toute la file du catalogue.** Aujourd'hui il appelle
-   `drain()`, qui draine **tout** ce qui attend, pas seulement ses liens, et
-   « writes may be partial » sans retour arrière. Il doit drainer **ses** liens
-   (`link_jusqu_a` avec exigence, ou un drain borné à sa relation) et rendre ce
-   qui a été effectivement posé ;
-4. **il compte ce qui est posé**, pas ce qui est soumis : `submitted`, `posed`,
-   `unchanged` (déjà là), et un refus nommé si un bout a disparu entre la
-   vérification et l'écriture — sous la forme C, les écritures d'un backend sont
-   sérialisées, donc ce cas ne peut venir que d'un outil direct sur la base.
+3. **il draine la fermeture de ses liens, pas toute la file** — *corrigé après la
+   relecture de rag3db-97*. J'avais écrit « ses seuls liens » : ce serait faux dans
+   un cas réel. Un bout mis en file dans le même run sans être encore posé ne serait
+   pas trouvé par le `MATCH` du lien, et le lien se perdrait sans erreur. Le
+   catalogue sait déjà drainer la **fermeture** d'une cible et remettre le reste en
+   file (`drainer(…, Some((graine, pour_ecrire)))`, que `link_jusqu_a` emploie par
+   `tenir_l_exigence_d_ecriture`) : `RelationBatchNode` appelle cela, exposé en
+   `pub(crate)`, au lieu de `drain()` ;
+4. **il s'enveloppe dans une transaction quand le dialecte en a.** Borner le drain
+   ne le rend pas atomique. `begin`/`commit`/`rollback` sont dans `DbConnection`
+   depuis `bb7dddde5`, rag3db et PostgreSQL les ont, et la transaction par paquet
+   les emploie. Le lot de liens s'y enveloppe quand le dialecte déclare
+   `transactions`, et son rapport dit « non atomique » sinon ;
+5. **il compte ce qui est posé — avec l'IR, pas sans elle.** Un `MERGE` ne dit pas
+   s'il a créé. Sans relire (ce qui ouvrirait une course), le nœud ne peut pas
+   distinguer « posé » de « déjà là ». C'est donc le compte que rag3db-6f propose
+   pour `Write::Link` (créé / existant : `RETURN count(r)` côté rag3db, le
+   `rowcount` côté PostgreSQL) qui fera le rapport honnête. D'ici là, le rapport
+   dit `submitted` et `verified`, pas `posed`.
 
 **La fiche** : `templates/tools/link.mmd`, générique, une ligne
 (`RelationBatchNode(relation=$relation, links=$links)`), décrite pour un agent
@@ -107,9 +117,25 @@ chose se fondent). Ce qui change en lui :
 reste le temps que les outils de l'expérience MTG (`experiments/mtga`, seuls à
 la déclarer, six outils, aucun bout géré) la quittent, puis part.
 
-**`AddRefNode` passe par le même chemin** pour sa part « lien » : la vérification
-d'existence et le comptage deviennent une fonction partagée avec
-`RelationBatchNode`, appelée par les deux. C'est ce qui ferme le défaut de
+**`AddRefNode` passe par le même chemin** pour sa part « lien ». La vérification
+d'existence va **au catalogue**, pas dans un module de nœuds (relecture de
+rag3db-97) : c'est là que l'identité devient uuid, et `entity_uuid`, déterministe,
+ne prouve rien sur l'existence. Une méthode du genre
+`Catalog::bouts_existants(relation, paires) -> Result<Vec<(uuid, uuid)>, BoutsAbsents>`
+(résolution, puis lecture par lot), appelée par les deux nœuds et par `link`.
+**Un bout « existant » est en base ou en file** : la même raison qu'au point 3
+— un bout écrit plus tôt dans le même run, pas encore drainé, n'est pas absent.
+
+**La lecture d'existence passe par l'IR** (relecture de rag3db-6f) : pas
+`get_many`, qui ramène les lignes entières, mais
+`Select::by_uuids(table, [Column::Node("_uuid")])`, traduit par le dialecte et
+exécuté avec `$uuids`. Elle rend une ligne par uuid présent ; les absents sont
+ceux qui manquent. Par tranches de 512. rag3db la traduit
+(`UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, m._uuid`) ; **PostgreSQL
+pas encore**, et `Catalog::link` est le verbe de tous les backends : la
+traduction PostgreSQL de ce `Select`
+(`SELECT "_uuid" FROM t WHERE "_uuid" = ANY($uuids)`) est donc une **condition
+de la marche 1 bis**, que rag3db-6f pose. C'est ce qui ferme le défaut de
 l'annonce fausse pour lui, sans attendre que le verbe du catalogue change.
 
 **Et pourquoi l'IR ne bouge pas** (relu et accepté par rag3db-6f) : `Write::Link` reste en uuids. L'identité
@@ -176,15 +202,22 @@ inchargeable (la raison est écrite au ticket
 `2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md`).
 
 **Plus loin dans l'abstraction, ici aussi** : savoir qu'« un outil écrit la
-relation R » ne doit nommer aucun type de nœud en dur. Proposition : le schéma
-d'un nœud déclare **lesquels de ses paramètres nomment une relation qu'il écrit**
-(et lesquels nomment une relation qu'il lit), comme il déclare déjà ses ports et
-ses paramètres. `RelationBatchNode` et `AddRefNode` déclarent `relation` écrite ;
-`ReactTransitionNode` déclare `relation` lue. Le refus se lit alors sur le
-manifeste seul : pour chaque relation lue par une réaction, au moins un outil
-déclaré l'écrit — par une liaison du manifeste ou par une valeur fixe de sa fiche.
-La même déclaration servira à l'atelier (montrer qui écrit quoi) et à la vision
-des droits par clés.
+relation R » ne doit nommer aucun type de nœud en dur. **Le mécanisme existe à
+moitié** (relecture de rag3db-97) : `Choices::Relations` (`@relations`,
+`node_registry.rs:41`) marque déjà un paramètre comme « nomme une relation
+déclarée ». Il lui manque le sens : `Relations { acces: Lecture | Ecriture }`,
+**sur le paramètre**, pas une liste au niveau du schéma du nœud, qui doublerait
+les paramètres et dériverait. `RelationBatchNode` et `AddRefNode` marquent
+`relation` en écriture ; `ReactTransitionNode` en lecture.
+
+Le refus a déjà son traceur : `wired_params` (`graph_tool.rs`) suit quel paramètre
+de nœud chaque paramètre d'outil alimente, liaison du manifeste ou valeur fixe de
+la fiche. Pour chaque relation lue par une réaction, au moins un outil déclaré
+doit l'écrire. **Un piège à couvrir d'un témoin** : un sous-graphe déclaré
+(`GraphNodeFactory::templated`) qui expose un paramètre câblé sur le `relation`
+d'un `RelationBatchNode` intérieur doit **hériter** de la marque, comme il hérite
+déjà du type. La même marque servira à l'atelier (montrer qui écrit quoi) et aux
+droits par clés.
 
 ## 6. Les marches et leur coût
 
@@ -192,11 +225,11 @@ des droits par clés.
 
 | marche | ce qu'elle fait | témoin | coût |
 |---|---|---|---|
-| **1** | `RelationBatchNode` général : garde retirée, propriétés déclarées, drain de ses seuls liens, comptage du posé ; fonction partagée d'existence et de comptage, employée aussi par `AddRefNode` | `e2e_garde_des_liens` retourné (le lien entre bouts gérés **passe par l'outil**, les garanties tiennent) ; `add_ref` vers une fiche absente se refuse en la nommant ; propriétés déclarées posées, non déclarées refusées | 1 |
+| **1** | `RelationBatchNode` général : garde retirée, propriétés déclarées, drain de la fermeture, transaction quand le dialecte en a ; `Catalog::bouts_existants` (base ou file), employé aussi par `AddRefNode` | `e2e_garde_des_liens` retourné (le lien entre bouts gérés **passe par l'outil**, les garanties tiennent) ; `add_ref` vers une fiche absente se refuse en la nommant ; propriétés déclarées posées, non déclarées refusées | 1 |
 | **1 bis** | `Catalog::link` et la mise en file des liens **refusent un bout absent en le nommant**, vérifié par lot (une lecture des uuids par paquet) ; si le coût est visible, la variante par lot qui rapporte les bouts absents pour l'indexation | `un_lien_vers_un_bout_absent_rend_ok_et_n_ecrit_rien` **retourné** (le ticket se ferme) ; `e2e_code` avant/après, durée et comptes identiques | ½ à 1 |
 | **2** | `from_states` / `to_states` dans la déclaration de relation, vérifiés au chargement et à l'écriture | un état hors liste refusé en le nommant ; un état inconnu refusé au chargement | ½ |
 | **3** | `link.mmd`, et `anchor` / `supersede_link` dans le gabarit `memory` | `e2e_reaction_montee` ancre **par l'outil** ; `gabarits` charge | ½ |
-| **4** | le huitième refus, sur la déclaration « relation écrite / lue » des schémas de nœud | le gabarit `memory` charge ; un manifeste à réaction sans écrivain se refuse en nommant la relation | ½ à 1 |
+| **4** | le sens sur `Choices::Relations` (lecture / écriture), le huitième refus par `wired_params` | le gabarit `memory` charge ; un manifeste à réaction sans écrivain se refuse en nommant la relation ; un sous-graphe qui expose le `relation` d'un nœud intérieur hérite de la marque | ½ à 1 |
 
 En tout, **deux et demie à quatre passes**, la marche 1 bis portant la mesure. Les compteurs de liste blanche ne bougent pas
 (aucun type nouveau) ; le ticket du nœud manquant se ferme à la marche 1 (« il
@@ -223,5 +256,5 @@ vers un bout absent à la marche 1 bis.
 3. **Une seule garde déclarée** (`from_states`/`to_states`) ; pas de révision qui
    monte ; pas d'`Unlink` dans ce lot — `Write::Unlink` existe, le nœud y passera
    dans un lot à lui (§3).
-4. **Le huitième refus par une déclaration dans le schéma des nœuds** (§5), jamais
-   une liste de types en dur.
+4. **Le huitième refus par une marque sur le paramètre** (`Choices::Relations`
+   avec son sens, §5), jamais une liste de types en dur.
