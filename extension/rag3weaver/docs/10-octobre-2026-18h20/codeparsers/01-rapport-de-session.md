@@ -217,3 +217,18 @@ j'y ai écrit l'ordre de mes lots, corrigé les colonnes de mes tickets et retro
   e2e_usages::…` ; un rejeu après rebase doit le savoir (les cibles `--test e2e_usages`
   n'existent plus).
 Suite : `analyze` en racine relative (P3), puis les prototypes C, les C++ anonymes, le nom seul.
+
+**Suite de l'après-midi (stèle du produit)** :
+- **Lot 3, `analyze` en racine relative** (branche `analyze-racine`) : la racine se résout et se
+  dit ; le défaut avait changé de forme (chemins « absolus » relatifs et doublés).
+- **Lot 4, les prototypes C** (codeparsers `9531860`, branche `prototypes-c`) : membres du scope
+  de fichier ; un `struct` sans corps n'est plus une seconde définition. Arêtes de rag3db/src
+  identiques.
+- **Lot 5, les C++ anonymes** (codeparsers `35faa0f`, branche `cpp-anonymes`, en attente de la
+  lib) : 287 → 0 sur rag3db. Les classes exportées (`class RAG3DB_API Foo`) se lisaient comme des
+  fonctions ; masquées avant l'analyse, elles redeviennent des classes avec leurs méthodes, et les
+  méthodes gabarits ont leur scope. **Appels reliés entre fichiers sur rag3db/src : 41,5 →
+  50,7 %**, +1 362 méthodes. Le message du commit dit « 2 restants » : compté trop tôt, c'est 0.
+- **Le target** : un sous-dossier par worktree (règle de l'orchestration, à partir du piège des
+  artefacts partagés) ; `check_features.sh` avant tout hash.
+Reste de ma part de la stèle : le nom seul et les segments de module (P1).

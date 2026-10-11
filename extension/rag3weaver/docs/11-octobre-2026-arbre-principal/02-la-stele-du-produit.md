@@ -102,9 +102,10 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
    4. **Les prototypes C au niveau du fichier** (P1) — fait (codeparsers `9531860`, branche
       `prototypes-c`) : membres du scope de fichier, noms hors des références ; et un `struct`
       sans corps n'est plus une seconde définition. Arêtes de rag3db/src identiques.
-   5. **Les C++ anonymes** (P4) : tirer cinquante cas parmi les 738, classer, nommer ce qui se
-      nomme. Ce qui ne se nomme pas (une lambda passée en argument) est compté et dit tel, pas
-      rendu `AnonymousFunction`. Reste ensuite en P4 : rien.
+   5. **Les C++ anonymes** (P4) — fait (codeparsers `35faa0f`, branche `cpp-anonymes`) : 287 →
+      0 sur rag3db. La cause majeure était les classes exportées (`class RAG3DB_API Foo`), lues
+      comme des fonctions ; avec elles, les méthodes gabarits retrouvent leur scope. Appels
+      reliés entre fichiers sur rag3db/src : 41,5 → 50,7 %. Reste ensuite en P4 : rien.
    6. **Le nom seul et les segments de module** (P1) : un paramètre nommé dans une signature et un
       segment de chemin qui nomme un module ne sont plus des références par le nom. C'est le lot
       le plus large. Reste ensuite en P1 : la passe de contrôle.
