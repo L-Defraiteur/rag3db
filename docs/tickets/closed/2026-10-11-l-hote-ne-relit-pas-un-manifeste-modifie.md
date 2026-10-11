@@ -1,6 +1,6 @@
 # L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend
 
-- **État** : ouvert (11 octobre 2026) — trouvé en montant le MCP du code pour rag3db (session codeparsers)
+- **État** : corrigé (11 octobre 2026, arbre principal) — trouvé en montant le MCP du code pour rag3db (session codeparsers)
 - **Gravité** : réponse trompeuse (l'outil répond selon un manifeste qui n'est plus celui du fichier, sans le dire)
 - **Atteignable en service** : oui, à chaque correction d'un manifeste servi par un hôte qui tourne
 - **Touche rag3weaver** : oui (`daemon_host.rs`)
@@ -40,3 +40,27 @@ Au choix :
 - une route `close` qui lâche un backend (réactions et indexations arrêtées d'abord, comme dans
   `daemon_host.rs:146-155`) ;
 - au minimum, un avertissement dans la réponse quand le fichier a changé depuis l'ouverture.
+
+## Correctif
+
+Deux routes de l'hôte (`src/daemon_host.rs`), et l'empreinte du manifeste (son contenu, pas sa
+date) notée à chaque ouverture :
+
+- `POST /backend/open {manifest}` (et `/open`, son ancien nom) : ouvre ; déjà ouvert, rend tel quel,
+  **sauf si le manifeste a changé** : le backend est fermé proprement et rouvert sur le fichier
+  d'aujourd'hui, même base (`reread: true`). Un manifeste absent est un refus nommé
+  (`manifeste absent`).
+- `POST /backend/close {manifest}` : ferme proprement (réactions et montre, indexations, catalogue)
+  et lâche la base ; le prochain appel rouvrirait. Refus nommés : `aucun backend hébergé pour ce
+  manifeste`, et `backend tenu par une indexation` (n en cours), qu'on arrête par l'outil `index`.
+- Un `/call` ou `/describe` servi sur un manifeste modifié porte `warnings` (« le manifeste a changé
+  depuis l'ouverture… POST /backend/open le relit ») ; `/etat` dit, par backend, `open`, `opened`,
+  `closed` et `manifest_changed`.
+
+Témoins (`tests/e2e_demon_hote.rs`) : `un_manifeste_modifie_se_dit_puis_se_relit_a_l_ouverture`
+(un outil ajouté au manifeste : absent et averti avant, présent sur la même base après la
+relecture) et `fermer_un_backend_lache_sa_base_et_les_refus_sont_nommes` (la base lâchée s'ouvre
+hors de l'hôte avec sa fiche ; les deux refus nommés). Le refus « tenu par une indexation » n'a pas
+de témoin e2e : il demande une indexation assez longue pour être prise en cours, ce qui rendrait le
+témoin dépendant de la vitesse du poste.
+

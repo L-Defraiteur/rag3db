@@ -426,3 +426,102 @@ fn une_reaction_ecrit_dans_la_cellule_de_son_evenement() {
     drop(conn);
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// Une route de l'hôte par le routage, avec la session en en-tête.
+fn route(host: &DaemonHost, chemin: &str, session: &str, corps: Value) -> (u16, Value) {
+    host.handle("POST", chemin, Some(session), &serde_json::to_vec(&corps).unwrap())
+}
+
+/// **Un manifeste modifié se dit, puis se relit à l'ouverture** (ticket
+/// « l'hôte ne relit pas un manifeste modifié ») : l'appel servi sur l'ancien
+/// porte l'avertissement ; `POST /backend/open` ferme proprement et rouvre sur
+/// le fichier d'aujourd'hui, avec la même base.
+#[test]
+#[ignore]
+fn un_manifeste_modifie_se_dit_puis_se_relit_a_l_ouverture() {
+    let d = dossier("relire");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(r["result"]["reread"], json!(false), "{r}");
+    ok(&put(&host, &s, &m, "put_fiche", "avant"));
+
+    // Un outil de plus au manifeste, sur le disque.
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&m).unwrap()).unwrap();
+    v["tools"]["lire_fiche"] = v["tools"]["get_fiche"].clone();
+    std::fs::write(&m, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+
+    // Servi sur l'ancien : l'outil neuf n'existe pas, et la réponse le dit.
+    let (_, r) = route(&host, "/call", &s, json!({"manifest": m, "name": "lire_fiche", "arguments": {"record": {"titre": "avant"}}}));
+    assert_eq!(r["ok"], json!(false), "l'ancien manifeste n'a pas l'outil : {r}");
+    assert!(r["warnings"].to_string().contains("le manifeste a changé"), "l'avertissement : {r}");
+    assert_eq!(host.state()["backends"][0]["manifest_changed"], json!(true));
+
+    // Relu à l'ouverture : l'outil neuf répond, sur la même base.
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(r["result"]["reread"], json!(true), "{r}");
+    let (_, r) = route(&host, "/call", &s, json!({"manifest": m, "name": "lire_fiche", "arguments": {"record": {"titre": "avant"}}}));
+    assert_eq!(r["result"]["result"]["data"]["titre"], json!("avant"), "{r}");
+    assert!(r.get("warnings").is_none(), "plus d'avertissement : {r}");
+    let etat = host.state();
+    let b = &etat["backends"][0];
+    assert_eq!((b["opened"].clone(), b["closed"].clone(), b["manifest_changed"].clone()), (json!(2), json!(1), json!(false)), "{etat}");
+
+    // Ouvert de nouveau sans changement : rien n'est rouvert.
+    let (_, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(r["result"]["reread"], json!(false), "{r}");
+    assert_eq!(host.state()["backends"][0]["opened"], json!(2));
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// **Fermer un backend lâche sa base** (ticket « aucune route ne ferme un
+/// backend », et le backend abandonné) : après `POST /backend/close`, la base
+/// s'ouvre hors de l'hôte et garde ce qui était validé ; l'appel suivant
+/// rouvre. Les refus sont nommés : manifeste absent à l'ouverture, manifeste
+/// jamais hébergé à la fermeture.
+#[test]
+#[ignore]
+fn fermer_un_backend_lache_sa_base_et_les_refus_sont_nommes() {
+    let d = dossier("fermer");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    ok(&put(&host, &s, &m, "put_fiche", "gardee"));
+
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(r["result"]["closed"], json!(true), "{r}");
+    let etat = host.state();
+    assert_eq!((etat["backends"][0]["open"].clone(), etat["backends"][0]["closed"].clone()), (json!(false), json!(1)), "{etat}");
+
+    // La base est lâchée : elle s'ouvre hors de l'hôte, avec la fiche.
+    {
+        let conn = Rag3dbConnection::new(d.join("base.rag3db")).expect("la base lâchée s'ouvre hors de l'hôte");
+        use rag3weaver::connection::DbConnection;
+        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vecteur())).unwrap();
+        let r = conn.execute("MATCH (n:Fiche) RETURN n.titre").unwrap();
+        assert_eq!(r.rows.len(), 1, "la fiche validée est en base");
+    }
+    // Fermer encore : rien d'ouvert, pas une erreur.
+    let (_, r) = route(&host, "/backend/close", &s, json!({"manifest": m}));
+    assert_eq!(r["result"]["closed"], json!(false), "{r}");
+    // L'appel suivant rouvre.
+    assert!(fiche(&host, &s, &m, "gardee").is_some(), "rouvert au prochain appel");
+    assert_eq!(host.state()["backends"][0]["opened"], json!(2));
+
+    // Les refus nommés.
+    let absent = d.join("absent.json");
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": absent}));
+    assert_eq!(code, 422, "{r}");
+    assert!(r["error"].as_str().unwrap().starts_with(rag3weaver::daemon_host::MANIFEST_MISSING), "{r}");
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": absent}));
+    assert_eq!(code, 422, "{r}");
+    assert!(r["error"].as_str().unwrap().starts_with(rag3weaver::daemon_host::NOT_HOSTED), "{r}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}

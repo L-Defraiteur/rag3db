@@ -45,6 +45,15 @@ pub const SERVICE: &str = "rag3weaver-daemon";
 /// abouti, et il n'est pas rejoué.
 pub const REOPENED: &str = "la base de ce backend a été rouverte";
 
+/// Le refus d'ouvrir un manifeste qui n'existe pas.
+pub const MANIFEST_MISSING: &str = "manifeste absent";
+
+/// Le refus de fermer (ou de relire) un backend qu'une indexation tient.
+pub const BUSY_INDEXING: &str = "backend tenu par une indexation";
+
+/// Le refus de fermer un manifeste que cet hôte n'a jamais ouvert.
+pub const NOT_HOSTED: &str = "aucun backend hébergé pour ce manifeste";
+
 /// Ouvre un backend depuis son manifeste chargé.
 pub type Opener = Box<dyn Fn(PreparedBackend) -> Result<Backend, String> + Send + Sync>;
 
@@ -76,7 +85,24 @@ struct Hosted {
     backend: Mutex<Option<Backend>>,
     /// Combien de fois ce backend a été ouvert (1 au premier appel).
     opened: std::sync::atomic::AtomicUsize,
+    /// Combien de fois il a été fermé par `POST /backend/close`.
+    closed: std::sync::atomic::AtomicUsize,
+    /// L'empreinte du manifeste lu à la dernière ouverture : un manifeste
+    /// modifié depuis se voit, se dit dans les réponses, et se relit à
+    /// `POST /backend/open`.
+    print: Mutex<Option<String>>,
 }
+
+/// L'empreinte d'un manifeste : son contenu, pas sa date (un `touch` ne
+/// rouvre rien).
+fn manifest_print(manifest: &Path) -> Result<String, String> {
+    let octets = std::fs::read(manifest).map_err(|e| format!("manifeste {} : {e}", manifest.display()))?;
+    Ok(blake3::hash(&octets).to_hex()[..16].to_string())
+}
+
+/// Ce qu'une réponse dit d'un manifeste modifié depuis l'ouverture.
+pub const MANIFEST_CHANGED: &str =
+    "le manifeste a changé depuis l'ouverture de ce backend : il sert encore l'ancien ; POST /backend/open le relit";
 
 /// **L'hôte** : les backends et les sessions d'un démon.
 pub struct DaemonHost {
@@ -175,7 +201,14 @@ impl DaemonHost {
             .entry(canonical.clone())
             .or_insert_with(|| {
                 let id = blake3::hash(canonical.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
-                Arc::new(Hosted { id, manifest: canonical, backend: Mutex::new(None), opened: Default::default() })
+                Arc::new(Hosted {
+                    id,
+                    manifest: canonical,
+                    backend: Mutex::new(None),
+                    opened: Default::default(),
+                    closed: Default::default(),
+                    print: Mutex::new(None),
+                })
             })
             .clone())
     }
@@ -183,11 +216,7 @@ impl DaemonHost {
     /// Le backend ouvert, sous son verrou : l'ouvre s'il ne l'est pas.
     fn with_backend<T>(&self, hosted: &Hosted, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
         let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
-        if slot.is_none() {
-            let prepared = PreparedBackend::load(&hosted.manifest)?;
-            *slot = Some((self.opener)(prepared)?);
-            hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        }
+        self.open_slot(hosted, &mut slot)?;
         let backend = slot.as_ref().expect("ouvert juste au-dessus");
         let out = f(backend);
         // **Une base à rouvrir lâche ce backend, et lui seul** : sans
@@ -210,19 +239,116 @@ impl DaemonHost {
         Ok(out)
     }
 
-    /// **`open`** : charge le backend s'il ne l'est pas. Idempotent ; il
-    /// charge et n'accorde rien.
+    /// Ouvrir le backend de cet emplacement s'il ne l'est pas, et noter
+    /// l'empreinte du manifeste lu.
+    fn open_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<(), String> {
+        if slot.is_none() {
+            let print = manifest_print(&hosted.manifest)?;
+            let prepared = PreparedBackend::load(&hosted.manifest)?;
+            *slot = Some((self.opener)(prepared)?);
+            *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
+            hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        Ok(())
+    }
+
+    /// **Fermer proprement** le backend de cet emplacement : ses réactions
+    /// (et la montre), ses indexations, son catalogue ; la base est lâchée.
+    /// Refusé, en le nommant, quand une indexation le tient : la fermer
+    /// couperait un premier index de plusieurs minutes, que `index` arrête
+    /// lui-même entre deux paquets. Rend vrai si un backend était ouvert.
+    fn close_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<bool, String> {
+        let Some(backend) = slot.as_ref() else { return Ok(false) };
+        #[cfg(feature = "code")]
+        {
+            let n = crate::dataflow::index_nodes::indexings_running(&backend.catalog);
+            if n > 0 {
+                return Err(format!(
+                    "{BUSY_INDEXING} ({n} en cours) pour {} : arrêtez-la (outil index, action stop) ou attendez sa fin, puis recommencez",
+                    hosted.manifest.display()
+                ));
+            }
+        }
+        #[cfg(not(feature = "code"))]
+        let _ = backend;
+        let mut backend = slot.take().expect("vu ouvert juste au-dessus");
+        let fermeture = backend.shutdown();
+        drop(backend);
+        *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        hosted.closed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        fermeture.map(|_| true).map_err(|e| format!("fermeture de {} : {e}", hosted.manifest.display()))
+    }
+
+    /// Le manifeste a-t-il changé depuis l'ouverture ? `false` pour un
+    /// backend fermé, ou un manifeste illisible (l'appel le dira lui-même).
+    fn manifest_changed(&self, hosted: &Hosted) -> bool {
+        let lu = hosted.print.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        match (lu, manifest_print(&hosted.manifest)) {
+            (Some(lu), Ok(maintenant)) => lu != maintenant,
+            _ => false,
+        }
+    }
+
+    /// Le backend hébergé de ce chemin, sans le créer : par le chemin
+    /// canonique quand le fichier existe, sinon par le chemin tel quel (un
+    /// manifeste effacé se ferme encore).
+    fn hosted_existing(&self, manifest: &Path) -> Option<Arc<Hosted>> {
+        let backends = self.backends.lock().unwrap_or_else(|p| p.into_inner());
+        let canonique = std::fs::canonicalize(manifest).ok();
+        let absolu = std::path::absolute(manifest).ok();
+        backends
+            .values()
+            .find(|h| Some(&h.manifest) == canonique.as_ref() || Some(&h.manifest) == absolu.as_ref())
+            .cloned()
+    }
+
+    /// **`POST /backend/open`** (et `/open`, son ancien nom) : ouvre le
+    /// backend de ce manifeste ; déjà ouvert, le rend tel quel, **sauf si le
+    /// manifeste a changé** : il le ferme proprement et le rouvre sur le
+    /// fichier d'aujourd'hui (ticket « l'hôte ne relit pas un manifeste
+    /// modifié »). Refus nommés : le manifeste absent, une indexation qui
+    /// tient le backend à relire.
     pub fn open(&self, session: Option<&str>, manifest: &Path) -> Value {
         let result = self.check_session(session).and_then(|_| {
+            if !manifest.is_file() {
+                return Err(format!("{MANIFEST_MISSING} : {}", manifest.display()));
+            }
             let hosted = self.hosted(manifest)?;
+            let relu = {
+                let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
+                let relu = slot.is_some() && self.manifest_changed(&hosted);
+                if relu {
+                    eprintln!("[démon] {} : le manifeste a changé — le backend est fermé et rouvert", hosted.manifest.display());
+                    self.close_slot(&hosted, &mut slot)?;
+                }
+                self.open_slot(&hosted, &mut slot)?;
+                relu
+            };
             self.with_backend(&hosted, |b| {
                 json!({
                     "id": hosted.id,
                     "manifest": hosted.manifest,
+                    "reread": relu,
                     "describe": b.prepared().describe(),
                     "reactions": b.prepared().reaction_graphs().keys().cloned().collect::<Vec<_>>(),
                 })
             })
+        });
+        op_response(result)
+    }
+
+    /// **`POST /backend/close`** : ferme proprement le backend de ce
+    /// manifeste et lâche sa base ; le prochain appel le rouvrirait. Un
+    /// backend jamais hébergé est un refus nommé ; un backend déjà fermé
+    /// rend `closed: false`.
+    pub fn close(&self, session: Option<&str>, manifest: &Path) -> Value {
+        let result = self.check_session(session).and_then(|_| {
+            let hosted = self
+                .hosted_existing(manifest)
+                .ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
+            let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
+            let ferme = self.close_slot(&hosted, &mut slot)?;
+            Ok(json!({ "id": hosted.id, "manifest": hosted.manifest, "closed": ferme }))
         });
         op_response(result)
     }
@@ -269,6 +395,8 @@ impl DaemonHost {
                     "manifest": h.manifest,
                     "open": ouvert,
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
+                    "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
+                    "manifest_changed": self.manifest_changed(h),
                 })
             })
             .collect();
@@ -307,7 +435,8 @@ impl DaemonHost {
     /// | `GET /etat` | | backends et sessions |
     /// | `POST /session` | `{client, cell?, keys?}` | `{session}` |
     /// | `DELETE /session` | | `{closed}` |
-    /// | `POST /open` | `{manifest}` | `{ok, result: {id, describe, reactions}}` |
+    /// | `POST /backend/open` (ou `/open`) | `{manifest}` | `{ok, result: {id, reread, describe, reactions}}` ; un manifeste modifié est relu |
+    /// | `POST /backend/close` | `{manifest}` | `{ok, result: {id, closed}}` ; la base est lâchée |
     /// | `POST /describe` | `{manifest}` | `{ok, result}` |
     /// | `POST /call` | `{manifest, name, arguments}` | `{ok, result}` ou `{ok: false, error}` |
     pub fn handle(&self, method: &str, path: &str, session: Option<&str>, body: &[u8]) -> (u16, Value) {
@@ -347,20 +476,26 @@ impl DaemonHost {
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
             ("DELETE", "/session") => (200, json!({ "closed": session.is_some_and(|s| self.close_session(s)) })),
-            ("POST", "/open" | "/describe" | "/call") => {
+            ("POST", "/open" | "/backend/open" | "/backend/close" | "/describe" | "/call") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
                     Err(e) => return (400, json!({ "ok": false, "error": e })),
                 };
                 let (v, m) = v;
-                let reponse = match path {
-                    "/open" => self.open(session, &m),
+                let mut reponse = match path {
+                    "/open" | "/backend/open" => self.open(session, &m),
+                    "/backend/close" => self.close(session, &m),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
                         Some(name) => self.call(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({}))),
                         None => json!({ "ok": false, "error": "« name » manque : l'outil à appeler" }),
                     },
                 };
+                // Un backend servi sur un manifeste modifié depuis : la réponse
+                // le dit, plutôt que de répondre selon l'ancien sans un mot.
+                if matches!(path, "/describe" | "/call") && self.hosted_existing(&m).is_some_and(|h| self.manifest_changed(&h)) {
+                    reponse["warnings"] = json!([MANIFEST_CHANGED]);
+                }
                 (statut(&reponse), reponse)
             }
             _ => (404, json!({ "ok": false, "error": format!("route inconnue : {method} {path}") })),

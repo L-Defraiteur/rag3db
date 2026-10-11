@@ -259,6 +259,17 @@ struct Indexing {
 }
 static INDEXINGS: std::sync::LazyLock<Mutex<Vec<Indexing>>> = std::sync::LazyLock::new(Default::default);
 
+/// Combien d'indexations de ce catalogue tournent encore : l'hôte du démon
+/// refuse de fermer un backend qui en a une, en le nommant.
+pub fn indexings_running(catalog: &Arc<Mutex<Catalog>>) -> usize {
+    INDEXINGS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .iter()
+        .filter(|i| Arc::ptr_eq(&i.catalog, catalog) && !i.handle.is_finished())
+        .count()
+}
+
 /// **Arrêter les indexations de ce catalogue**, au prochain paquet validé
 /// (ou à la prochaine passe de vecteurs), et attendre leur fil. Rend le
 /// nombre d'indexations attendues. À appeler hors du runtime asynchrone et
