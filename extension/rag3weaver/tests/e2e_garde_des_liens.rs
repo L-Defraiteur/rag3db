@@ -177,7 +177,8 @@ fn manifeste(dir: &Path) -> PathBuf {
             "ANCRE": {"from": "Fiche", "to": "Sujet"},
             "PREUVE": {"from": "Fiche", "to": "Piece"},
             // Une relation qui déclare une propriété.
-            "NOTE": {"from": "Fiche", "to": "Sujet", "properties": {"poids": {"type": "string"}}},
+            "NOTE": {"from": "Fiche", "to": "Sujet",
+                     "properties": {"poids": {"type": "string"}, "rang": {"type": "integer"}}},
             "CITE": {"from": "Fiche", "to": "Ref"}
         },
         "tools": {
@@ -440,10 +441,76 @@ fn une_propriete_declaree_se_pose_et_une_autre_se_refuse_en_la_nommant() {
     let refus = backend.call("noter", json!({"links": [faux]})).expect_err("non déclarée");
     assert!(refus.contains("couleur") && refus.contains("poids"), "{refus}");
 
+    // Le type déclaré se tient ici, pas dans le moteur.
+    let mut mal_typee = paire.clone();
+    mal_typee["props"] = json!({"rang": "trois"});
+    let refus = backend.call("noter", json!({"links": [mal_typee]})).expect_err("rang est un entier");
+    assert!(refus.contains("NOTE.rang"), "le refus nomme la propriété mal typée : {refus}");
+
     let mut sur_ancre = paire.clone();
     sur_ancre["props"] = json!({"poids": "fort"});
     let refus = backend.call("ancrer", json!({"links": [sur_ancre]})).expect_err("ANCRE n'en déclare aucune");
     assert!(refus.contains("declares no properties"), "{refus}");
+}
+
+/// **Une paire donnée deux fois** (relecture de rag3db-97) : identique, elle se
+/// fond ; avec d'autres propriétés, le lot se refuse. Garder la première en
+/// silence aurait été la perte même que le nœud ferme.
+#[test]
+#[ignore]
+fn une_paire_donnee_deux_fois_se_fond_ou_se_refuse() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    let lien = |poids: &str| {
+        json!({"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}, "props": {"poids": poids}})
+    };
+    backend
+        .call("noter", json!({"links": [lien("fort"), lien("fort")]}))
+        .expect("deux fois la même paire, mêmes propriétés : fondue");
+    assert_eq!(compter(&backend, "NOTE"), 1);
+
+    let refus = backend
+        .call("noter", json!({"links": [lien("fort"), lien("faible")]}))
+        .expect_err("deux fois la même paire, propriétés différentes");
+    assert!(refus.contains("given twice"), "{refus}");
+    let r = backend
+        .catalog
+        .lock()
+        .unwrap()
+        .execute_raw_with_params("MATCH ()-[r:NOTE]->() RETURN r.poids", &[])
+        .expect("la relecture");
+    assert_eq!(r.rows[0][0].as_str(), Some("fort"), "le refus n'a rien réécrit");
+}
+
+/// **Le bout `to` en file** (relecture de rag3db-97) : la graine du drain est
+/// le bout `from` ; il faut prouver que sa fermeture emporte l'autre bout, créé
+/// dans le même run et pas encore posé.
+#[test]
+#[ignore]
+fn un_bout_to_encore_en_file_est_pose_avec_le_lien() {
+    use rag3weaver::disponibilite::Disponibilites;
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    {
+        let mut cat = backend.catalog.lock().unwrap();
+        let mut nouveau = BTreeMap::new();
+        nouveau.insert("titre".to_string(), CypherValue::String("en file".into()));
+        nouveau.insert("corps".to_string(), CypherValue::String("pas encore posé".into()));
+        cat.create_jusqu_a("Sujet", nouveau, Disponibilites::AUCUNE).expect("mis en file");
+    }
+    backend
+        .call("ancrer", json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "en file"}}]}))
+        .expect("le bout `to` en file compte comme présent");
+    assert_eq!(compter(&backend, "ANCRE"), 1, "le lien est posé avec son bout");
+    let r = backend
+        .catalog
+        .lock()
+        .unwrap()
+        .execute_raw_with_params("MATCH (s:Sujet {titre: 'en file'}) RETURN count(s)", &[])
+        .expect("la relecture");
+    assert_eq!(r.rows[0][0].as_i64(), Some(1), "et le bout est en base");
 }
 
 #[test]

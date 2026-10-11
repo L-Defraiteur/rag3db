@@ -763,7 +763,9 @@ impl Node for RelationBatchNode {
         // L'identité de chaque bout, gardée pour nommer un absent par ce que
         // l'appelant a écrit, pas par un uuid qu'il n'a jamais vu.
         let mut identites: HashMap<(String, String), String> = HashMap::new();
-        let mut seen = std::collections::HashSet::new();
+        // La paire → l'indice de son lien, pour refuser une paire donnée deux
+        // fois avec des propriétés différentes au lieu de jeter la seconde.
+        let mut seen: HashMap<(String, String), usize> = HashMap::new();
         let mut links: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::new();
         for link in self.config["links"].as_array().unwrap() {
             let mut ids = Vec::new();
@@ -793,11 +795,13 @@ impl Node for RelationBatchNode {
                 ids.push(id);
             }
             // Les propriétés : permises quand la relation les déclare, chacune
-            // nommée si elle ne l'est pas.
+            // nommée si elle ne l'est pas, et **typée** par sa déclaration
+            // (`rag3weaver_ir::normalize`) — une chaîne pour un entier déclaré
+            // se refuse ici, pas dans le moteur.
             let mut props = BTreeMap::new();
             if let Some(donnees) = link.get("props").and_then(Value::as_object) {
                 for (cle, valeur) in donnees {
-                    if !declarees.iter().any(|d| *d == cle) {
+                    let Some(champ) = definition.properties.as_ref().and_then(|p| p.get(cle)) else {
                         return Err(if declarees.is_empty() {
                             format!("{relation} declares no properties; property {cle} refused")
                         } else {
@@ -806,14 +810,30 @@ impl Node for RelationBatchNode {
                                 declarees.iter().map(|d| d.as_str()).collect::<Vec<_>>().join(", ")
                             )
                         });
-                    }
-                    let v: CypherValue =
-                        serde_json::from_value(valeur.clone()).map_err(|e| format!("{cle}: {e}"))?;
+                    };
+                    let v = rag3weaver_ir::normalize(&champ.field_type, valeur)
+                        .map_err(|e| format!("{relation}.{cle}: {e}"))?;
                     props.insert(cle.clone(), v);
                 }
             }
-            if seen.insert((ids[0].clone(), ids[1].clone())) {
-                links.push((ids[0].clone(), ids[1].clone(), props));
+            // **Une paire donnée deux fois** : identique, elle se fond ; avec
+            // d'autres propriétés, le lot se refuse en la nommant. Garder la
+            // première en silence aurait été la perte même que ce nœud ferme
+            // (relecture de rag3db-97).
+            let paire = (ids[0].clone(), ids[1].clone());
+            match seen.get(&paire) {
+                Some(&i) if links[i].2 == props => {}
+                Some(_) => {
+                    return Err(format!(
+                        "from {}, to {} given twice with different properties; no links in this \
+                         batch written",
+                        link["from"], link["to"]
+                    ));
+                }
+                None => {
+                    seen.insert(paire, links.len());
+                    links.push((ids[0].clone(), ids[1].clone(), props));
+                }
             }
         }
         // **Tout le lot vérifié avant la première écriture** : un bout ni en
