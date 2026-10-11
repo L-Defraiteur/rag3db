@@ -25,14 +25,10 @@
 # autre ligne vivante de sa clé, gardée avec son entrée d'index sinon) ; la base s'ouvre ;
 # LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen est vert.
 #
-# Marche A4′ — le mélange de C7 après un vrai arrêt brutal : depuis A3′ la base se rouvre (plus
-# de clé en double au journal) ; ce qui reste est celui de C2 (relations vers des nœuds
-# supprimés par un autre écrivain). same-answers y compris : les lignes qui n'existent qu'après
-# le rejeu sont toutes des relations à une extrémité manquante (« <missing> », 3 à 6 lignes
-# par passe, 3 passes sur 3 le 10 octobre) — le rejeu « répare » la relation pendante, comme pour
-# C2_DetachRelationCommitsFirst/Thread_Crash ; ce n'est pas la durabilité. Ses variantes à chaud
-# et après réouverture restent probabilistes.
-Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-endpoints-exist,same-answers,stored-endpoints-visible
+# C7 après un vrai arrêt brutal : FAIT le 11 octobre 2026 — ce n'était pas la concurrence mais le
+# rejeu du DETACH DELETE, qui perdait la seconde relation d'un lot (un seul écrivain suffisait) ;
+# Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash est vert (×10). Ses variantes à chaud et
+# après réouverture restent probabilistes.
 #
 # Marche A7 (l'attente d'un point de reprise forcé à la validation) — la seconde limite du
 # 4 octobre, sur son chemin d'origine : deux COPY FORCÉS (force_checkpoint_on_copy=true, le

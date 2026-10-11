@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (26)
+### Ouverts (51)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -45,7 +45,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Au journal, chaque cellule réécrit son type](2026-10-05-cout-par-cellule-au-journal.md) | ouvert, confort | volume et temps | toujours | en volume |
 | [Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait](2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md) | ouvert côté moteur ; filet rag3weaver `99e6f0ee0` | réponse fausse | oui | oui (repli REPLI_EN_MASSE) |
 | [Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée](2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md) | ouvert (relevé par le banc, 10 oct.) | réponse fausse, puis plantage | en principe oui ; le seul chemin vu est fermé par A3′ | pas de cas connu |
-| [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | ouvert (A4′ faite, chemin non trouvé) | réponse fausse après reprise | non (mode multi-écrivains) | non |
 | [Sous des écritures de BLOB, la mémoire résidente dépasse nettement le tampon du moteur](2026-10-11-memoire-residente-au-dela-du-tampon-sous-des-blobs.md) | ouvert | mémoire | oui | oui (magasin de blobs, index creux) |
 | [Le COPY de blobs en point de reprise forcé fait échouer la validation sous un petit tampon](2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md) | ouvert — forme retenue, non engagée ; filet produit ; reprise après la condition 3 | blocage | oui | oui (poussée des blobs du plein texte, bases d'avant la bascule) |
 | [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert, confort (hors condition 1) | réponse fausse | oui | non |
@@ -98,13 +97,14 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (70), dans `closed/`
+### Fermés (71), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Une branche non prise tue le run entier, sans rapport](closed/2026-10-11-une-branche-non-prise-tue-le-run-sans-rapport.md) | corrigé (le saut, lot 0 des flux) | blocage : le run meurt sur ce qui n'est pas une faute (P3, refus muet) | oui, dès qu'un graphe aiguille | oui — `runtime.rs`, `report.rs` |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](closed/2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | corrigé par B2b (`6002c3ccd`), témoin du 11 oct. | réponse fausse | oui | oui (rendez-vous) |
 | [`add_ref` et `create_ref_type` jettent le rapport de leur ingestion](closed/2026-10-11-add-ref-et-create-ref-type-jettent-le-rapport-d-ingestion.md) | corrigé par la forme A de l'enveloppe (le rapport se lit, et le dit) | réponse fausse (`executed: true` sur une écriture partielle) | oui (gabarit `memory`) | oui (et seulement) |
+| [Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu](closed/2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md) | corrigé (11 oct., le DETACH DELETE rejoué perdait la seconde relation d'un lot) | réponse fausse après reprise | oui (un seul écrivain, rejeu) — corrigé | non |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](closed/2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | corrigé, codeparsers `d90a1f6` (11 oct.) | réponse incomplète (faible) | oui | oui (impact, usages) |
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](closed/2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | corrigé par la marche 1 bis du lien générique (le verbe refuse un bout absent quand le lien se pose) | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
 | [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](closed/2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | corrigé par la marche 4 du lien générique (la marque lue / écrite sur le paramètre) | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
