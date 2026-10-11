@@ -71,7 +71,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | ouvert — témoin rouge sur `marche-1-bis` ; migration, le mot de Lucie avant le code | perte | oui (deux cellules, la même identité) | oui |
+| [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | partiel : la perte est fermée (refus nommé) ; l'identité par cellule reste, variante (a) tranchée | perte | oui (deux cellules, la même identité) | oui |
 | [`add_ref` et `create_ref_type` jettent le rapport de leur ingestion](2026-10-11-add-ref-et-create-ref-type-jettent-le-rapport-d-ingestion.md) | ouvert (lecture) | réponse fausse (`executed: true` sur une écriture partielle) | oui (gabarit `memory`) | oui (et seulement) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |

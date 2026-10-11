@@ -78,6 +78,17 @@ impl BoutsVerifies {
 
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
+    /// **Une identité ne vit que dans une cellule**, jusqu'à la migration qui
+    /// fera entrer la cellule dans l'identité (ticket
+    /// `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne`). Sans ce
+    /// refus, l'écriture dans la seconde cellule déplaçait la ligne de la
+    /// première, qui perdait sa fiche sans un mot.
+    #[error(
+        "{entity} {uuid} vit déjà dans la cellule {lives_in} : l'écrire dans la cellule {written_in} est refusé, \
+         une identité ne vit que dans une cellule jusqu'à la migration (rien n'est écrit, la fiche de {lives_in} \
+         est intacte)"
+    )]
+    IdentityInAnotherCell { entity: String, uuid: String, lives_in: String, written_in: String },
     #[error("index persistence failed: {0}; writes may be partial, buffered blobs retained for retry")]
     IndexPersistence(String),
     #[error("not initialized")]
@@ -5579,6 +5590,14 @@ impl Catalog {
             });
         }
 
+        // **Une identité ne vit que dans une cellule** : une base à plusieurs
+        // cellules vérifie, avant d'écrire, qu'aucune ligne du lot n'existe
+        // déjà dans une autre cellule. Une base à une seule cellule (presque
+        // toutes) ne paie rien.
+        if self.multi_cell {
+            self.refuser_une_identite_d_une_autre_cellule(entity_name, &entity_records)?;
+        }
+
         // **Une première indexation en cours** : seules les naissances partent,
         // avec leur marque de session ; ce que cette indexation a déjà écrit
         // ne repart pas (`begin_fresh_ingest`).
@@ -6414,13 +6433,14 @@ impl Catalog {
         // Create entity ref pair
         let (entity_ref, resolver) = EntityRef::new(entity_name);
 
+        let record = EntityRecord::new(entity_name.to_string(), full_data, resolver, entity_ref.clone());
+        // Comme l'ingestion : une identité qui vit dans une autre cellule est
+        // refusée avant d'entrer en file.
+        if self.multi_cell {
+            self.refuser_une_identite_d_une_autre_cellule(entity_name, std::slice::from_ref(&record))?;
+        }
         // Push entity record with resolver into PendingWork
-        self.pending.entities.push(EntityRecord::new(
-            entity_name.to_string(),
-            full_data,
-            resolver,
-            entity_ref.clone(),
-        ));
+        self.pending.entities.push(record);
         self.devoir(entity_name, crate::disponibilite::Disponibilites::TOUT);
         self.drain_counters.total_queued += 1;
         let derivations = self.derivations_pour_racine(entity_name, std::slice::from_ref(&uuid));
@@ -8148,6 +8168,60 @@ impl Catalog {
 
     pub fn has_pending(&self) -> bool {
         !self.pending.is_empty()
+    }
+
+    /// Refuse un lot dont une ligne existe déjà, par son `_uuid`, dans une
+    /// autre cellule que celle où le lot l'écrit. Une lecture par tranche de
+    /// 512 uuids, par l'IR.
+    fn refuser_une_identite_d_une_autre_cellule(&self, entity: &str, records: &[EntityRecord]) -> Result<(), CatalogError> {
+        let cellule_de = |data: &BTreeMap<String, CypherValue>| -> (String, String) {
+            let lire = |c: &str| data.get(c).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN))
+        };
+        let ecrites: HashMap<String, (String, String)> = records
+            .iter()
+            .filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(|u| (u.to_string(), cellule_de(&r.data))))
+            .collect();
+        if ecrites.is_empty() {
+            return Ok(());
+        }
+        let requete = self
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::by_uuids(
+                entity,
+                vec![
+                    rag3weaver_ir::Column::Node("_uuid".into()),
+                    rag3weaver_ir::Column::Node(crate::scope::ORG_COLUMN.into()),
+                    rag3weaver_ir::Column::Node(crate::scope::PROJECT_COLUMN.into()),
+                ],
+            ))
+            .map_err(|e| CatalogError::SchemaError(format!("vérifier la cellule des lignes de « {entity} » : {e}")))?;
+        let uuids: Vec<&String> = ecrites.keys().collect();
+        for tranche in uuids.chunks(512) {
+            let liste = CypherValue::List(tranche.iter().map(|u| CypherValue::String((*u).clone())).collect());
+            let lignes = self.execute_raw_with_params(&requete, &[QueryParam::new("uuids", liste)])?;
+            for ligne in &lignes.rows {
+                // Les trois dernières colonnes : l'uuid, l'organisation, le
+                // projet (rag3db rend l'uuid demandé en tête).
+                let n = ligne.len();
+                if n < 3 {
+                    continue;
+                }
+                let texte = |v: &CypherValue| v.as_str().unwrap_or_default().to_string();
+                let (uuid, org, project) = (texte(&ligne[n - 3]), texte(&ligne[n - 2]), texte(&ligne[n - 1]));
+                if let Some((org_ecrit, projet_ecrit)) = ecrites.get(&uuid) {
+                    if (&org, &project) != (org_ecrit, projet_ecrit) {
+                        return Err(CatalogError::IdentityInAnotherCell {
+                            entity: entity.to_string(),
+                            uuid,
+                            lives_in: format!("{org}/{project}"),
+                            written_in: format!("{org_ecrit}/{projet_ecrit}"),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Access the PendingWork queue.

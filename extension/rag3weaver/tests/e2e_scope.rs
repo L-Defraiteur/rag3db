@@ -114,6 +114,39 @@ fn ids(catalog: &Catalog, table: &str) -> Vec<String> {
 
 // ─── A/B : stamp, nœuds, migration ──────────────────────────────────────────
 
+/// **La même fiche dans une seconde cellule est refusée, en le disant**
+/// (ticket `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne`).
+/// L'`_uuid` se calcule sur les champs de la fiche, pas sur sa cellule : la
+/// seconde écriture **déplaçait** la ligne de la première cellule, qui perdait
+/// sa fiche sans un mot. Jusqu'à la migration qui fera entrer la cellule dans
+/// l'identité, une identité ne vit que dans une cellule, et l'écrire ailleurs
+/// est refusé ; la fiche de la première cellule reste intacte.
+#[test]
+#[ignore]
+fn la_meme_fiche_dans_une_seconde_cellule_est_refusee_et_la_premiere_reste() {
+    let mut catalog = catalog_in_memory();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
+    catalog.set_scope(Scope::new("acme", "beta")).unwrap();
+    let refus = catalog
+        .ingest_entities("Product", vec![make_product("A", "alpha text")])
+        .expect_err("la même identité dans une seconde cellule est refusée");
+    let texte = refus.to_string();
+    assert!(texte.contains("vit déjà dans la cellule acme/alpha"), "le refus nomme la cellule où elle vit : {texte}");
+    assert!(texte.contains("acme/beta"), "et celle où on l'écrivait : {texte}");
+    assert!(texte.contains("jusqu'à la migration"), "et la raison : {texte}");
+    // Une fiche différente, elle, s'écrit dans la seconde cellule.
+    catalog.ingest_entities("Product", vec![make_product("B", "beta text")]).unwrap();
+    let mut rows = scope_pairs(&catalog, "Product");
+    rows.sort();
+    assert_eq!(
+        rows,
+        vec![("acme".to_string(), "alpha".to_string()), ("acme".to_string(), "beta".to_string())],
+        "la fiche d'alpha est restée dans alpha"
+    );
+}
+
 #[test]
 #[ignore]
 fn scope_default_is_stamped_without_ceremony() {
