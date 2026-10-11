@@ -89,10 +89,11 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
       Reste ensuite en P4 : les C++ anonymes.
    2. **Rejouer deux recettes** — fait (branche `recettes-p1`) : le type d'un champ déclaré dans
       un autre fichier est **fermé** (B2b, témoin posé) ; le chemin vers une réexportation est
-      **rouge**, plus net que le ticket (avec un homonyme : aucune arête). Il devient le lot 2 bis,
-      le correctif décidé le 4 octobre (codeparsers : un import dit qu'il réexporte ;
-      `code.rs` : un rendez-vous `REEXPORTS`, suivi par `choose_target` sur des sauts bornés,
-      marque « import »). Reste ensuite en P1 : le nom seul et les segments de module, et les
+      **rouge**, plus net que le ticket (avec un homonyme : aucune arête). Il devient le lot 2 bis.
+   2 bis. **La réexportation** — fait (codeparsers `77c8ea6`, branche `reexportations-2`) : un
+      import suit les `pub use` du fichier qu'il désigne, trois sauts au plus, marque « import ».
+      Ticket fermé. Restent hors de la stèle tant qu'aucun cas ne les montre : `pub use x::*`, le
+      renommage, `export … from` (TypeScript), `__init__.py` (Python). Reste ensuite en P1 : le nom seul et les segments de module, et les
       prototypes C.
    3. **`analyze` en racine relative** (P3) : refuser une racine relative avec une erreur
       nommée, ou la résoudre en le disant ; et un fichier analysé qui ne rend rien entre dans

@@ -199,3 +199,21 @@ marqué « nom » par le repli d'un seul définisseur. Les liens « fichier » p
 le nom y sont **45 sur rag3weaver, 0 sur le C++ de rag3db** ; ce sont eux
 que la marque corrige. Entre fichiers : 1 997 sur rag3weaver, 583 sur
 rag3db/src.
+
+## 11 octobre, après-midi — la stèle du produit, ma part
+
+La stèle du produit (page de l'arbre principal, `docs/11-octobre-2026-arbre-principal/02-la-stele-du-produit.md`) :
+j'y ai écrit l'ordre de mes lots, corrigé les colonnes de mes tickets et retrouvé le 21ᵉ ticket
+(fermé à 11 h 28, avant la page).
+- **T5** (fermeture locale, `map(aide)`) : codeparsers `d90a1f6`, sur master (`48ae8e4b5`).
+- **Lot 2, deux recettes rejouées** (`e7950860a`, sur master) : le type d'un champ déclaré dans
+  un autre fichier est fermé (B2b) ; la réexportation est rouge — avec un homonyme, aucune arête.
+- **Lot 2 bis, la réexportation** : codeparsers `77c8ea6` (`ImportReference.reexport`) ; branche
+  `reexportations-2` (`code.rs` : `MENTIONS.reexport_from`, `par_reexportation`), vérifiée,
+  proposée. Témoin rouge (aucune arête) puis vert (« import »).
+- **Les targets** : un seul pour la session, `target-codeparsers` (règle de midi) ; le banc sous
+  lui.
+- **Les e2e** sont un binaire unique depuis midi : `cargo test --test e2e -- --ignored
+  e2e_usages::…` ; un rejeu après rebase doit le savoir (les cibles `--test e2e_usages`
+  n'existent plus).
+Suite : `analyze` en racine relative (P3), puis les prototypes C, les C++ anonymes, le nom seul.
