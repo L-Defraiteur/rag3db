@@ -109,10 +109,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (104), dans `closed/`
+### Fermés (105), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le client mince ne revient pas seul quand l'hôte revient](closed/2026-10-11-le-client-mince-ne-revient-pas-seul-quand-l-hote-revient.md) | corrigé (reprise en fond, list_changed, coupure non rejouée) | blocage | oui | oui (et seulement) |
 | [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](closed/2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | corrigé (voir le ticket) ; H4 au vert | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
 | [Une mesure attend sans fin derrière des lourds qui « entrent quand même »](closed/2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme.md) | corrigé : priorité à la mesure, délai dans la place, `poste --qui` (11 oct.) | blocage | oui, sur le poste | oui (`poste`) |
 | [« Catalogue occupé » pour un changement localisé](closed/2026-10-11-catalogue-occupe-pour-un-changement-localise.md) | corrigé (la lecture attend un verrou court) | blocage | oui | oui (et seulement) |

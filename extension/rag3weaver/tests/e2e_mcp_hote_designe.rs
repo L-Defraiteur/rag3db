@@ -120,6 +120,7 @@ struct Client {
     entree: ChildStdin,
     sortie: BufReader<std::process::ChildStdout>,
     id: u64,
+    notifications: Vec<Value>,
 }
 
 impl Client {
@@ -135,7 +136,7 @@ impl Client {
             .expect("lancer le client");
         let entree = enfant.stdin.take().unwrap();
         let sortie = BufReader::new(enfant.stdout.take().unwrap());
-        let mut c = Self { enfant, entree, sortie, id: 0 };
+        let mut c = Self { enfant, entree, sortie, id: 0, notifications: Vec::new() };
         let r = c.demander(
             "initialize",
             json!({"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "désigné", "version": "0"}}),
@@ -148,9 +149,16 @@ impl Client {
         self.id += 1;
         writeln!(self.entree, "{}", json!({"jsonrpc": "2.0", "id": self.id, "method": methode, "params": params})).unwrap();
         self.entree.flush().unwrap();
-        let mut ligne = String::new();
-        assert!(self.sortie.read_line(&mut ligne).unwrap() > 0, "pas de réponse à {methode}");
-        serde_json::from_str(&ligne).unwrap()
+        loop {
+            let mut ligne = String::new();
+            assert!(self.sortie.read_line(&mut ligne).unwrap() > 0, "pas de réponse à {methode}");
+            let v: Value = serde_json::from_str(&ligne).unwrap();
+            if v.get("id").is_none() {
+                self.notifications.push(v);
+                continue;
+            }
+            return v;
+        }
     }
 
     fn appeler(&mut self, nom: &str, args: Value) -> (bool, String) {
@@ -226,4 +234,33 @@ fn une_source_absente_se_dit() {
     assert!(texte.contains("nulle-part.daemon.json"), "l'état nomme la source absente : {texte}");
     let (erreur, texte) = c.appeler("list_categories", json!({}));
     assert!(erreur && texte.contains("nulle-part.daemon.json"), "{texte}");
+}
+
+/// **Un démarrage lent ne bloque pas `initialize`** (Claude Code abandonne un
+/// serveur muet au bout de 30 s) : la source du jeton met 12 s à répondre ;
+/// `initialize` répond quand même vite, avec `daemon_status` seul, et les outils
+/// arrivent ensuite, annoncés par `notifications/tools/list_changed`.
+#[test]
+#[ignore = "e2e : une source de jeton lente"]
+fn une_source_lente_ne_bloque_pas_le_demarrage() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = boutique(tmp.path());
+    let distant = tmp.path().join("distant");
+    let local = tmp.path().join("local");
+    std::fs::create_dir_all(&distant).unwrap();
+    std::fs::create_dir_all(&local).unwrap();
+    let port = port_libre();
+    let _hote = Hote::lancer(&distant, port);
+    let commande = format!("sleep 12; cat {}", distant.join("daemon.json").display());
+    let debut = Instant::now();
+    let mut c = Client::lancer(&manifeste, &local, &["--daemon", &format!("127.0.0.1:{port}"), "--daemon-json-command", &commande]);
+    assert!(debut.elapsed() < Duration::from_secs(8), "initialize a attendu {:?}", debut.elapsed());
+    let debut = Instant::now();
+    while !c.notifications.iter().any(|n| n["method"] == "notifications/tools/list_changed") {
+        assert!(debut.elapsed() < Duration::from_secs(40), "pas d'annonce en 40 s : {:?}", c.notifications);
+        std::thread::sleep(Duration::from_secs(2));
+        let _ = c.appeler("daemon_status", json!({}));
+    }
+    let (erreur, texte) = c.appeler("list_categories", json!({}));
+    assert!(!erreur, "les outils du backend sont là : {texte}");
 }

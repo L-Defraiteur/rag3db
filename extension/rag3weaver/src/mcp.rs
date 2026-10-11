@@ -39,9 +39,17 @@ pub const PROTOCOLE_DEFAUT: &str = "2026-07-28";
 /// Ce que le serveur sait faire. Déclaré honnêtement : ni `resources`, ni
 /// `prompts`, ni `sampling`, ni `roots` — **absents et dits absents**, plutôt
 /// que silencieux, pour qu'un client n'aille pas les demander.
-fn capacites() -> Value {
-    json!({ "tools": { "listChanged": false } })
+fn capacites(hote: &dyn Hote) -> Value {
+    json!({ "tools": { "listChanged": hote.liste_changeante() } })
 }
+
+/// **Le message interne qui fait sortir `notifications/tools/list_changed`.**
+/// Un hôte dont la liste d'outils change hors d'une requête (le client mince
+/// qui rejoint son démon revenu) le glisse dans l'entrée de la boucle, qui le
+/// traduit en notification pour le client. Un nom en `$/`, hors de l'espace
+/// des méthodes MCP : venu de l'extérieur, il ne ferait qu'annoncer une liste
+/// à relire.
+pub const OUTILS_CHANGES: &str = "$/rag3weaver/tools_changed";
 
 /// Ce que le protocole demande à son hôte, et rien de plus.
 ///
@@ -74,6 +82,11 @@ pub trait Hote {
     /// nommée plutôt qu'un « outil inconnu ».
     fn accepte(&self, nom: &str) -> bool {
         self.outils().iter().any(|t| t["name"] == nom)
+    }
+    /// La liste d'outils peut-elle changer pendant la session (et le serveur
+    /// l'annoncer par `notifications/tools/list_changed`) ?
+    fn liste_changeante(&self) -> bool {
+        false
     }
 }
 
@@ -140,7 +153,7 @@ pub fn traiter(requete: &Value, hote: &dyn Hote, cles: &[String]) -> Option<Valu
                 .to_string();
             let mut r = json!({
                 "protocolVersion": version,
-                "capabilities": capacites(),
+                "capabilities": capacites(hote),
                 "serverInfo": info_du_serveur(hote, cles),
             });
             if let Some(texte) = hote.instructions() {
@@ -154,7 +167,7 @@ pub fn traiter(requete: &Value, hote: &dyn Hote, cles: &[String]) -> Option<Valu
             json!({
                 "protocolVersion": requete["params"]["protocolVersion"]
                     .as_str().unwrap_or(PROTOCOLE_DEFAUT),
-                "capabilities": capacites(),
+                "capabilities": capacites(hote),
                 "serverInfo": info_du_serveur(hote, cles),
                 "tools": hote.outils(),
             }),
@@ -234,6 +247,9 @@ pub fn servir(
             continue;
         }
         let reponse = match serde_json::from_str::<Value>(&ligne) {
+            Ok(requete) if requete["method"] == OUTILS_CHANGES => {
+                Some(json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }))
+            }
             Ok(requete) => traiter(&requete, hote, cles),
             // Une ligne illisible : le protocole veut un `id` nul.
             Err(e) => Some(erreur(Value::Null, -32700, format!("JSON illisible : {e}"))),
@@ -499,5 +515,17 @@ mod tests {
         assert!(avis["params"]["data"].as_str().unwrap().contains("rouverte"));
         // Un avis est une notification : pas d'`id`, jamais.
         assert!(avis.get("id").is_none());
+    }
+
+    /// **Le message interne devient la notification de liste changée** : un
+    /// hôte dont les outils arrivent hors d'une requête le glisse dans
+    /// l'entrée ; le client MCP reçoit `notifications/tools/list_changed`.
+    #[test]
+    fn le_message_interne_annonce_la_liste_changee() {
+        let entree = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"{OUTILS_CHANGES}\"}}\n");
+        let mut sortie = Vec::new();
+        servir(&HoteDeTest { refuse: false, rouvrir: None }, &[], entree.as_bytes(), &mut sortie).unwrap();
+        let texte = String::from_utf8(sortie).unwrap();
+        assert_eq!(texte.trim(), r#"{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}"#);
     }
 }

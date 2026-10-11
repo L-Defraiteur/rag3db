@@ -130,6 +130,8 @@ struct Client {
     entree: ChildStdin,
     sortie: BufReader<std::process::ChildStdout>,
     id: u64,
+    /// Les notifications reçues (lignes sans `id`), gardées dans l'ordre.
+    notifications: Vec<Value>,
 }
 
 impl Client {
@@ -145,7 +147,7 @@ impl Client {
             .expect("lancer le client MCP");
         let entree = enfant.stdin.take().unwrap();
         let sortie = BufReader::new(enfant.stdout.take().unwrap());
-        Self { enfant, entree, sortie, id: 0 }
+        Self { enfant, entree, sortie, id: 0, notifications: Vec::new() }
     }
 
     fn demander(&mut self, methode: &str, params: Value) -> Value {
@@ -153,10 +155,19 @@ impl Client {
         let requete = json!({"jsonrpc": "2.0", "id": self.id, "method": methode, "params": params});
         writeln!(self.entree, "{requete}").unwrap();
         self.entree.flush().unwrap();
-        let mut ligne = String::new();
-        let lus = self.sortie.read_line(&mut ligne).expect("lire la réponse");
-        assert!(lus > 0, "le client n'a rien répondu à {requete}");
-        serde_json::from_str(&ligne).unwrap_or_else(|e| panic!("réponse illisible ({e}) : {ligne}"))
+        // Une notification peut arriver avant la réponse : on la garde, et on lit
+        // jusqu'à la réponse de cet `id`.
+        loop {
+            let mut ligne = String::new();
+            let lus = self.sortie.read_line(&mut ligne).expect("lire la réponse");
+            assert!(lus > 0, "le client n'a rien répondu à {requete}");
+            let v: Value = serde_json::from_str(&ligne).unwrap_or_else(|e| panic!("réponse illisible ({e}) : {ligne}"));
+            if v.get("id").is_none() {
+                self.notifications.push(v);
+                continue;
+            }
+            return v;
+        }
     }
 
     fn initialiser(&mut self) -> Value {
@@ -414,4 +425,35 @@ fn la_session_d_un_client_tue_se_ferme() {
     assert_eq!(ids.len(), 1, "seule celle de b reste : {etat}");
     assert!(etat["closed_dead_sessions"].as_u64().is_some_and(|n| n >= 1), "l'état dit ce qu'il a fermé : {etat}");
     b.fermer();
+}
+
+/// **(8) Les outils reviennent seuls quand l'hôte devient joignable** (retour du
+/// cœur C++, 11 octobre 2026 : sans hôte au démarrage, les outils restaient
+/// absents jusqu'à un `/mcp`). Le client démarre avec `daemon_status` seul,
+/// retente toutes les 10 s, lance l'hôte dès que le port se libère, et annonce
+/// `notifications/tools/list_changed` ; la liste relue a les outils.
+#[test]
+#[ignore = "e2e : l'hôte devient joignable après le démarrage du client"]
+fn les_outils_reviennent_seuls_quand_l_hote_devient_joignable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = boutique(tmp.path());
+    let demon = Demon::new(tmp.path());
+    let occupe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = occupe.local_addr().unwrap().to_string();
+    let mut c = Client::lancer(&manifeste, &demon, &adresse);
+    let r = c.initialiser();
+    assert_eq!(r["result"]["capabilities"]["tools"]["listChanged"], true, "le client annonce une liste qui peut changer : {r}");
+    assert_eq!(c.outils(), vec!["daemon_status".to_string()], "sans hôte, l'outil d'état seul");
+    drop(occupe); // le port se libère : l'hôte pourra le prendre
+    let debut = Instant::now();
+    while !c.notifications.iter().any(|n| n["method"] == "notifications/tools/list_changed") {
+        assert!(debut.elapsed() < Duration::from_secs(40), "pas d'annonce de liste changée en 40 s : {:?}", c.notifications);
+        std::thread::sleep(Duration::from_secs(2));
+        let _ = c.appeler("daemon_status", json!({})); // lit ce qui est arrivé entre-temps
+    }
+    let outils = c.outils();
+    assert!(outils.iter().any(|o| o == "put_category"), "la liste relue a les outils du backend : {outils:?}");
+    let (erreur, texte) = c.appeler("put_category", json!({"record": {"key": "outils", "name": "Les outils"}}));
+    assert!(!erreur, "{texte}");
+    c.fermer();
 }

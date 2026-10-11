@@ -361,9 +361,7 @@ impl DaemonClient {
         if let Some(t) = self.token() {
             requete = requete.header("Authorization", &format!("Bearer {t}"));
         }
-        let mut reponse = requete
-            .send(body.to_string())
-            .map_err(|e| Injoignable(format!("l'hôte {base} ne répond pas : {e}")))?;
+        let mut reponse = requete.send(body.to_string()).map_err(|e| classer(&base, e))?;
         let texte = reponse
             .body_mut()
             .read_to_string()
@@ -372,18 +370,46 @@ impl DaemonClient {
     }
 }
 
-/// Pourquoi un envoi n'a pas de réponse : l'hôte ne répond pas (relançable),
-/// ou sa réponse ne se lit pas.
+/// Pourquoi un envoi n'a pas de réponse :
+/// - **l'hôte n'a pas été joint** (connexion refusée, hôte introuvable) : le
+///   message n'a pas été reçu, on peut relancer l'hôte et le rejouer ;
+/// - **la connexion a été coupée pendant l'appel** (remise à zéro, fin
+///   prématurée, délai de lecture) : le message a pu être joué — on ne le
+///   rejoue pas, on le dit, transitoire (l'hôte redémarrait, 11 octobre 2026) ;
+/// - sa réponse ne se lit pas.
 enum Envoi {
     Injoignable(String),
+    Coupure(String),
     Autre(String),
 }
-use Envoi::{Autre, Injoignable};
+use Envoi::{Autre, Coupure, Injoignable};
+
+fn classer(base: &str, e: ureq::Error) -> Envoi {
+    let jamais_recu = match &e {
+        ureq::Error::ConnectionFailed | ureq::Error::HostNotFound => true,
+        ureq::Error::Io(io) => matches!(
+            io.kind(),
+            std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::NotFound
+        ),
+        _ => false,
+    };
+    if jamais_recu {
+        Injoignable(format!("l'hôte {base} ne répond pas : {e}"))
+    } else {
+        Coupure(format!(
+            "la connexion à l'hôte {base} a été coupée pendant l'appel ({e}) : il a pu être joué ou non, \
+             il n'est pas rejoué — l'hôte redémarrait peut-être ; vérifiez avant de le refaire"
+        ))
+    }
+}
 
 impl From<Envoi> for OpError {
     fn from(e: Envoi) -> Self {
         match e {
             Injoignable(error) | Autre(error) => OpError { error, transient: false },
+            // Son texte dit déjà ce qui s'est passé ; « transitoire » ici voudrait
+            // dire « la base s'est rouverte », ce qui serait faux.
+            Coupure(error) => OpError { error, transient: false },
         }
     }
 }
@@ -477,20 +503,117 @@ enum Side {
 /// `daemon_status` ; l'hôte manquant, il n'expose que `daemon_status`, le dit à
 /// `initialize`, et chaque appel retente de s'attacher.
 pub struct McpClient {
+    inner: std::sync::Arc<McpInner>,
+}
+
+/// L'état du client, partagé avec le fil qui le rebranche.
+pub struct McpInner {
     attach: Attach,
     manifest: PathBuf,
     client: String,
     keys: Vec<String>,
     side: Mutex<Side>,
+    /// Ce qui fait sortir `notifications/tools/list_changed` (posé par le
+    /// binaire : un message glissé dans l'entrée de la boucle MCP).
+    notifier: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+}
+
+impl std::ops::Deref for McpClient {
+    type Target = McpInner;
+    fn deref(&self) -> &McpInner {
+        &self.inner
+    }
+}
+
+/// Combien de temps `start` attend l'hôte avant de laisser la session démarrer
+/// sans lui : Claude Code abandonne un serveur muet au bout de 30 s.
+const START_WAIT: std::time::Duration = std::time::Duration::from_secs(4);
+/// Le pas de la reprise quand l'hôte manque.
+pub const RETRY_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+
+impl McpInner {
+    fn annoncer(&self) {
+        if let Some(n) = &*self.notifier.lock().unwrap_or_else(|p| p.into_inner()) {
+            n();
+        }
+    }
+
+    /// Se rebrancher toutes les [`RETRY_EVERY`] tant que l'hôte manque ; une
+    /// fois branché, annoncer la liste d'outils changée.
+    fn reprendre(self: std::sync::Arc<Self>) {
+        loop {
+            if !matches!(&*self.side.lock().unwrap_or_else(|p| p.into_inner()), Side::Missing(_)) {
+                return;
+            }
+            std::thread::sleep(RETRY_EVERY);
+            let side = McpClient::try_attach(&self.attach, &self.manifest, &self.client, &self.keys);
+            let branche = matches!(side, Side::Attached(_));
+            let mut courant = self.side.lock().unwrap_or_else(|p| p.into_inner());
+            if matches!(&*courant, Side::Attached(_)) {
+                return; // un appel l'a rebranché entre-temps
+            }
+            *courant = side;
+            drop(courant);
+            if branche {
+                eprintln!("[mcp] l'hôte répond de nouveau : les outils du backend sont annoncés (tools/list_changed)");
+                self.annoncer();
+                return;
+            }
+        }
+    }
 }
 
 impl McpClient {
+    /// **Démarrer sans jamais bloquer `initialize`** : le branchement se fait
+    /// dans un fil ; `start` l'attend au plus [`START_WAIT`]. Au-delà, ou si
+    /// l'hôte manque, la session démarre avec `daemon_status` seul, et le fil
+    /// se rebranche toutes les [`RETRY_EVERY`] — puis annonce les outils.
     pub fn start(attach: Attach, manifest: &Path, client: &str, keys: Vec<String>) -> Self {
-        let side = Self::try_attach(&attach, manifest, client, &keys);
-        if let Side::Missing(m) = &side {
-            eprintln!("[mcp] hôte {} : {} — seul l'outil {DAEMON_STATUS} est exposé", m.state(), m.reason());
+        use crate::daemon_lifecycle::Missing;
+        let inner = std::sync::Arc::new(McpInner {
+            attach,
+            manifest: manifest.to_path_buf(),
+            client: client.to_string(),
+            keys,
+            side: Mutex::new(Side::Missing(Missing::Absent("connexion à l'hôte en cours".into()))),
+            notifier: Mutex::new(None),
+        });
+        let (fait, attendu) = std::sync::mpsc::channel::<()>();
+        let fil = inner.clone();
+        std::thread::spawn(move || {
+            let side = McpClient::try_attach(&fil.attach, &fil.manifest, &fil.client, &fil.keys);
+            let branche = matches!(side, Side::Attached(_));
+            if let Side::Missing(m) = &side {
+                eprintln!(
+                    "[mcp] hôte {} : {} — seul l'outil {DAEMON_STATUS} est exposé ; nouvel essai toutes les {} s",
+                    m.state(),
+                    m.reason(),
+                    RETRY_EVERY.as_secs()
+                );
+            }
+            *fil.side.lock().unwrap_or_else(|p| p.into_inner()) = side;
+            let en_retard = fait.send(()).is_err();
+            if branche {
+                if en_retard {
+                    fil.annoncer();
+                }
+            } else {
+                fil.reprendre();
+            }
+        });
+        if attendu.recv_timeout(START_WAIT).is_err() {
+            eprintln!(
+                "[mcp] l'hôte ne répond pas encore après {} s : la session démarre, les outils viendront",
+                START_WAIT.as_secs()
+            );
         }
-        Self { attach, manifest: manifest.to_path_buf(), client: client.to_string(), keys, side: Mutex::new(side) }
+        Self { inner }
+    }
+
+    /// Ce qui annonce la liste d'outils changée (le binaire y glisse un
+    /// message dans l'entrée de la boucle MCP).
+    pub fn set_notifier(&self, n: Box<dyn Fn() + Send + Sync>) {
+        *self.notifier.lock().unwrap_or_else(|p| p.into_inner()) = Some(n);
     }
 
     fn try_attach(attach: &Attach, manifest: &Path, client: &str, keys: &[String]) -> Side {
@@ -605,6 +728,11 @@ impl Hote for McpClient {
         let mut side = self.side.lock().unwrap_or_else(|p| p.into_inner());
         if let Side::Missing(_) = &*side {
             *side = Self::try_attach(&self.attach, &self.manifest, &self.client, &self.keys);
+            if matches!(&*side, Side::Attached(_)) {
+                drop(side);
+                self.annoncer();
+                side = self.side.lock().unwrap_or_else(|p| p.into_inner());
+            }
         }
         match &*side {
             Side::Attached(c) => c.appeler(nom, arguments),
@@ -614,6 +742,10 @@ impl Hote for McpClient {
                 m.reason()
             )),
         }
+    }
+
+    fn liste_changeante(&self) -> bool {
+        true
     }
 
     /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
@@ -749,5 +881,74 @@ mod tests {
         let m = manifeste_quelconque();
         let e = DaemonClient::connect("127.0.0.1:9", m.path(), "le témoin", vec![]).err().expect("refusé");
         assert!(e.contains("127.0.0.1:9"), "{e}");
+    }
+
+    /// Un hôte en TCP brut qui répond à `/session` et `/open`, puis **coupe la
+    /// connexion** au premier `/call`, sans répondre. Rend l'adresse et le
+    /// nombre de `/call` reçus.
+    fn hote_qui_coupe() -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{BufRead, Read, Write};
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        let appels = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let compte = appels.clone();
+        std::thread::spawn(move || {
+            for flux in ecoute.incoming() {
+                let Ok(mut flux) = flux else { return };
+                let mut lecteur = std::io::BufReader::new(flux.try_clone().unwrap());
+                let mut premiere = String::new();
+                if lecteur.read_line(&mut premiere).is_err() {
+                    continue;
+                }
+                let mut longueur = 0usize;
+                loop {
+                    let mut l = String::new();
+                    if lecteur.read_line(&mut l).is_err() || l == "\r\n" || l.is_empty() {
+                        break;
+                    }
+                    if let Some(v) = l.to_ascii_lowercase().strip_prefix("content-length:") {
+                        longueur = v.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut corps = vec![0u8; longueur];
+                let _ = lecteur.read_exact(&mut corps);
+                let reponse = if premiere.contains("/session") {
+                    json!({"session": "s-1"})
+                } else if premiere.contains("/open") || premiere.contains("/describe") {
+                    json!({"ok": true, "result": {"describe": {"name": "toy", "version": 1, "tools": []}, "reactions": []}})
+                } else {
+                    compte.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    drop(flux); // la coupure en plein appel
+                    continue;
+                };
+                let texte = reponse.to_string();
+                let _ = write!(
+                    flux,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{texte}",
+                    texte.len()
+                );
+            }
+        });
+        (adresse, appels)
+    }
+
+    /// **Une coupure en plein appel n'est pas rejouée** (l'hôte qui redémarre
+    /// sous un client vivant, 11 octobre 2026) : l'appel a pu être joué ; le
+    /// client le dit, et ne le renvoie pas — même quand il sait relancer l'hôte.
+    #[test]
+    fn une_coupure_en_plein_appel_se_dit_et_ne_se_rejoue_pas() {
+        let (adresse, appels) = hote_qui_coupe();
+        let m = manifeste_quelconque();
+        let c = DaemonClient::attach(
+            Endpoint { address: adresse, token: None },
+            Some(PathBuf::from("/inexistant/rag3weaver-backend")),
+            m.path(),
+            "le témoin",
+            vec![],
+        )
+        .expect("branché");
+        let e = c.appeler("un_outil", json!({})).expect_err("la coupure est une erreur");
+        assert!(e.contains("coupée pendant l'appel") && e.contains("pas rejoué"), "{e}");
+        assert_eq!(appels.load(std::sync::atomic::Ordering::SeqCst), 1, "l'appel n'a été envoyé qu'une fois");
     }
 }

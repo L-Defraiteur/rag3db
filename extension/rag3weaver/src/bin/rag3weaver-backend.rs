@@ -45,6 +45,9 @@ use std::{
 /// signal peut glisser la fin.
 struct EntreeInterruptible {
     lignes: std::sync::mpsc::Receiver<Option<Vec<u8>>>,
+    /// Pour glisser une ligne interne dans la boucle (la liste d'outils
+    /// changée, annoncée par le client mince).
+    envoyeur: std::sync::mpsc::Sender<Option<Vec<u8>>>,
     tampon: Vec<u8>,
     position: usize,
     finie: bool,
@@ -54,6 +57,7 @@ impl EntreeInterruptible {
     fn sur_stdin() -> Self {
         let (envoi, lignes) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
         let lecteur = envoi.clone();
+        let envoyeur = envoi.clone();
         std::thread::spawn(move || {
             let mut stdin = io::stdin().lock();
             loop {
@@ -95,7 +99,7 @@ impl EntreeInterruptible {
                 std::future::pending::<()>().await;
             });
         });
-        Self { lignes, tampon: Vec::new(), position: 0, finie: false }
+        Self { lignes, envoyeur, tampon: Vec::new(), position: 0, finie: false }
     }
 }
 
@@ -225,6 +229,18 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
             eprintln!("[mcp] {} réaction(s) montée(s) par l'hôte : {}", reactions.len(), reactions.join(", "));
         }
         let mut entree = EntreeInterruptible::sur_stdin();
+        // **Les outils revenus s'annoncent** : quand le client se rebranche à
+        // son hôte (revenu, ou lent à répondre au démarrage), il glisse un
+        // message interne dans l'entrée, que la boucle traduit en
+        // `notifications/tools/list_changed` — Claude Code relit la liste sans
+        // `/mcp`.
+        {
+            let envoyeur = std::sync::Mutex::new(entree.envoyeur.clone());
+            client.set_notifier(Box::new(move || {
+                let ligne = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"{}\"}}\n", rag3weaver::mcp::OUTILS_CHANGES);
+                let _ = envoyeur.lock().unwrap_or_else(|p| p.into_inner()).send(Some(ligne.into_bytes()));
+            }));
+        }
         let mut sortie = io::stdout();
         let suite = rag3weaver::mcp::servir(&client, &cles, &mut entree, &mut sortie);
         client.close();
