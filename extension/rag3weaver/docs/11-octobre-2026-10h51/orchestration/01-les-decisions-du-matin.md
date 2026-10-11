@@ -862,3 +862,30 @@ où elle vit.
   push. Le poste corrigé fait ce qu'on lui a demandé : plus aucun lourd
   n'entre devant une mesure. Rien n'est sorti ; master vert ; l'hôte de
   Lucie attend minuit (guet de `fa652a320`).
+- **23 h 40 – 0 h 10, nuit (12 octobre)**. **Deuxième mesure perdue au
+  poste** : la trace des fils du cœur a tenu la place exclusive de 23 h 32 à
+  0 h 02 sans courir, parce que `run_e2e.sh` appelle lui-même `poste lourd`
+  pour son bâti et qu'avec la priorité de la mesure ce lourd intérieur
+  attend sa propre mesure sans fin. Le ticket « un poste sous un poste »
+  passe devant B4 chez G (forme : le poste reconnaît un ancêtre tenant par
+  la chaîne des parents de /proc et passe, sans variable ; témoin dans
+  test_poste.sh) ; d'ici là, une commande de mesure n'appelle pas le poste.
+  Le cœur relance sa trace sous le seul lourd de run_e2e.sh (on lit les fils
+  donnés par tâche, pas les millisecondes). **La mesure du petit masque est
+  faite** (banc, ici, sur b808a3bee, page 12 §8 du cœur `a452a0054`) :
+  67 584 lignes lues sous le masque à 1 fil comme à 32, 5,72 ms contre
+  5,25 ms : les fils ne changent rien au balayage, et le balayage est
+  petit ; donc les 360 ms d'`usages` sur l'index réel (F) sont ailleurs
+  (l'ordonnancement des tâches × fils, plusieurs pipelines par instruction,
+  le plein texte) : le cœur lit sa trace par tâche sur la requête de F avant
+  de choisir la forme, la règle des fils reste en brouillon. Le banc a
+  retiré sa mesure et son worktree de luciepc : rien de lui ne tombera sur
+  Lucie. **Le push des défenses** a eu le verrou à 0 h 02 ; les e2e ont
+  refusé la lib d'ici, plus vieille que le visited set (`3e0f98f08`, dans
+  l'extension vector) : relancé avec `RAG3WEAVER_MOTEUR_ANCIEN=1` déclaré
+  (lot produit seul), verrou tenu depuis 0 h 06. **Le rebâti de la lib
+  d'ici attend le matin, à mon signal** : la mémoire bâtit le binaire de
+  Lucie à minuit contre la lib actuelle ; une lib neuve derrière obligerait
+  à le rebâtir une seconde fois avant le redémarrage suivant ; au matin, les
+  « fini », le rebâti par l'arbre principal (ABI dite par nm), puis le
+  binaire de Lucie dans la foulée, annoncés ensemble.
