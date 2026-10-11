@@ -34,3 +34,14 @@ Ce n'est pas le « Catalogue occupé : une indexation le tient » de 18 h, qui, 
     manque.
 - Témoin : un index long sur un backend, un `usages` pendant ; la réponse arrive en moins de N s,
   « occupé » ou servie.
+
+## Un second cas : l'ouverture d'un backend qui rattrape ses vecteurs (11 octobre, 20 h 35)
+
+Mesuré par la mémoire longue en redémarrant l'hôte de Lucie (binaire e9d690915, lib de
+20 h 08) : le **premier `initialize`** d'un client sur `code-rag3db` a pris **26 s**. Le journal
+de l'hôte annonçait juste avant un rattrapage de **2 074 morceaux** à embarquer sur
+`Scope_Chunk` (l'index vectoriel tombe le temps du rattrapage) : le backend se rouvre et
+rattrape **avant** de répondre au premier appel. Les appels suivants : `daemon_status`
+instantané, `usages` 0,46 s. C'est la même forme que le cas de l'index : le rattrapage se fait
+derrière une réponse qui dit le retard (« vecteurs de N morceaux en rattrapage »), pas avant
+elle — le client attend 26 s sans un mot, Claude Code reste sur « Connecting… ».
