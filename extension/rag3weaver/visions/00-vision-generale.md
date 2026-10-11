@@ -444,6 +444,23 @@ vrai, et c'est ce qui décide des outils suivants.
   l'appelant, comme un agent à nous. Le principe : entrer dans l'usage
   existant, et le moteur, les fiches et l'index deviennent ce que ces agents
   partagent entre eux. Pas de chantier.
+- **Injecter dans Claude Code, les canaux** (Lucie, 11 octobre 2026 : « on ne
+  peut pas altérer le contexte existant de Claude, mais lui en injecter petit
+  à petit ; l'archiviste, des hooks pour des résumés »). Vérifié sur la
+  documentation de Claude Code (hooks, channels, mcp, sessions, Agent SDK) :
+  **les channels MCP** (`notifications/claude/channel` émise par le serveur,
+  session lancée avec `--channels server:<nom>`, arrive au tour suivant dans
+  une balise `<channel source=…>`) sont le seul canal poussé par le serveur
+  quand il le décide ; **les hooks** (`SessionStart`, `UserPromptSubmit`,
+  `PostToolUse`, `Stop`, `PreCompact`) injectent `additionalContext` jusqu'à
+  10 000 caractères à leur moment ; les ressources MCP ne sont lues qu'à la
+  demande ; l'Agent SDK n'entre pas dans une session interactive existante ;
+  rien ne pousse sans hook ni channel, et toute injection consomme du
+  contexte. Pour l'archiviste (vision du 4 octobre) : l'hôte, qui sait ce
+  qui change (fiche à revoir, index en retard, un pair qui écrit), pousse par
+  le channel au moment où ça arrive ; un hook avant chaque message demande à
+  l'hôte les fiches pertinentes et les glisse en contexte. Graine, pas de
+  chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
