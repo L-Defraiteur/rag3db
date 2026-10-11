@@ -191,3 +191,12 @@ ligne perd plus de quelques pour cent ») n'est pas atteinte** : rien à remplac
 Le mode par défaut se bascule en lot à part (le réglage perd son `debug_`, `enable_multi_writes`
 à `true`, `CALL enable_multi_writes=false` pour l'ancienne sémantique, la liste complète et les e2e
 du produit dessus), sur le mot de Lucie, et se renverse par le même réglage.
+
+**La décision (11 octobre, 16 h 10)** — le mot de Lucie, au matin, rendu par l'orchestration :
+« A9 mesure puis bascule du défaut sur son coût dit », la condition pour s'abstenir étant « plus
+de quelques pour cent » sur le ligne à ligne. La mesure qui déclenche : +0,7 % sur 100 000
+insertions ligne à ligne, sous le bruit de ±3 % entre passes ; nul sur le COPY ; sans sens sur le
+SET sous index. La condition n'est pas atteinte : **le mode est le défaut**, lot `verrous-a9b`
+(le réglage `enable_multi_writes`, `true` dans `DBConfig`, les témoins de l'ancienne sémantique
+la rendent par `CALL enable_multi_writes=false`, deux commentaires Rust mis à jour), renversable
+par le même réglage. Lucie a levé en séance la permission qui bloquait l'édition.
