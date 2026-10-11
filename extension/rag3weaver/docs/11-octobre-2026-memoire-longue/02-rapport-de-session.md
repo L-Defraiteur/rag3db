@@ -1,4 +1,4 @@
-# Rapport de session — mémoire longue, 11 octobre 2026 (matin et midi)
+# Rapport de session — mémoire longue, 11 octobre 2026 (matin, midi et après-midi)
 
 *Pour Lucie et pour l'orchestration. Ce qui est sur master, ce qui reste, ce qui attend.*
 
@@ -27,25 +27,44 @@ course dès que plusieurs clients partagent un backend.
 éprouvée par MCP sur une copie de ta base — ancrer, changer le sujet, la mémoire passe
 « à revoir » d'elle-même. Ta base n'est pas touchée, l'ancien est gardé.
 
+## L'après-midi, sur master
+
+| commit | ce que c'est |
+|---|---|
+| `59718e806` | **SIGTERM vaut la fermeture du tube** dans `servir_mcp` : l'appel en cours finit, les indexations s'arrêtent au prochain paquet, la base se ferme ; témoin `e2e_mcp_sigterm` (sortie 0, la base se rouvre) |
+| `2d0687a71` | **le rapport des liens dit la vérité sur `atomic`** : une instruction, atomique par le moteur ; plusieurs instructions de liens seuls, enveloppées d'une transaction ; une fermeture qui porte des créations, `atomic: false` et sa raison. Rouge réel par faute injectée (deux variables, jamais active sans les deux) |
+| `d25cad18b` | **le client mince de la forme C** : `mcp --daemon <adresse>` parle à l'hôte du démon par un `impl Hote` (`DaemonClient`), sans rien posséder ; une session perdue se rouvre une fois ; `--demon` est refusé en nommant `--daemon`. `e2e_mcp_stdio` rejoué entier par l'hôte, et deux sessions MCP partagent un backend |
+| `fa04ccd3c` | **marche 1 bis du lien** : `Catalog::link` refuse un bout absent en le nommant, quand le lien se pose maintenant ; les liens différés se comptent au drain comme avant. Le ticket du bout absent est fermé |
+| `b1b673d2b` | la page du lien, §3 bis : **la cellule des bouts** — avec l'identité par cellule (variante a), un lien résout ses bouts dans la cellule de la session ; un lien entre cellules se déclare. À faire avec la migration de l'arbre principal, pas avant |
+| `442791fde` … `d03fbfe31` | **la page de l'enveloppe d'un outil d'écriture**, avec l'arbre principal (`03-l-enveloppe-d-un-outil-d-ecriture.md`) : le recensement, ce que le paquet garantit, les formes A à D et leur coût |
+| `cd919b053` | **forme A de l'enveloppe** : chaque outil d'écriture dit `atomic` et sa raison ; l'échec d'un put dit si la ligne existe (dans la cellule de l'appel) et ce qui est prêt d'elle ; `add_ref` et `create_ref_type` lisent enfin leur rapport (ticket fermé). Témoin `e2e_outils_disent_ce_qui_reste` (trois tests, faute injectée à l'insertion) |
+| `e161365d5` | **le banc `pg_trgm` tranché** (voir plus bas) |
+
+**`e2e_postgres`, première exécution réelle** (conteneur de Lucie, port 5433) : 19 passés
+sur 20. Le rouge, `ou_vit_la_frontiere_entre_le_vrai_et_le_bruit`, est identique au
+commit d'avant l'échappement : il n'est pas dû au travail de F. Mesuré dans le
+conteneur, `word_similarity('sauterau baroqe', …)` vaut 0,5789, au-dessus du plancher
+0,3 : l'attente du banc est juste. La cause est le pool `deadpool` : le plancher est
+posé par un `SET` joué une seule fois, donc sur une seule session. Confié à F
+(`SET LOCAL` dans la transaction de la requête, sur la connexion épinglée).
+
 ## Ce qui reste
 
-- **Marche 1 bis** : que `Catalog::link` refuse lui-même un bout absent. Elle attend la
-  traduction PostgreSQL du `Select` que rag3db-6f pose après l'échappement des noms
-  (`link` est le verbe de tous les backends). Le ticket du bout absent se ferme avec elle.
-- **L'enveloppe transactionnelle d'un outil d'écriture** : une marche à part. La forme
-  légère de rag3db-97 : si la fermeture à drainer ne contient que des liens,
-  `begin`/`commit` autour est sûr.
-- **SIGTERM traité comme la fermeture du tube** dans `servir_mcp` : écrit au §4 de la
-  page C comme une marche à part, à moi.
+- **Forme B de l'enveloppe** (envelopper un put, invalider les seuls caches de sa
+  ligne, rouvrir la poignée FTS à la génération marquée ; deux passes) : attend les
+  deux vérifications de l'arbre principal et le mot de Lucie sur la §6.
+- **La cellule des bouts d'un lien** (`to_cell` / `from_cell`, `entity_uuid_in`) :
+  attend la migration de l'arbre principal.
+- **La marche 5 du lien** (les gabarits qui en profitent) : pas demandée.
 
-## Cinq tickets ouverts, trois fermés
+## Tickets
 
-Ouverts : le canal d'échecs d'une réaction sans lecteur ; un `put` sans le champ de
-cycle de vie qui réécrit l'état initial ; une réaction qui écrit dans la cellule
-basculée (se ferme à la marche 1 bis de C) ; un lien vers un bout absent qui rend
-`Ok` (se ferme à la 1 bis du lien).
-Fermés : le nœud qui ne relierait pas deux entités gérées (il n'en manquait pas) ;
-l'outil d'ancrage absent du gabarit ; le huitième refus.
+Fermés aujourd'hui par cette session : le nœud qui ne relierait pas deux entités
+gérées ; l'outil d'ancrage absent ; le huitième refus ; un lien vers un bout absent
+qui rend `Ok` ; `add_ref` / `create_ref_type` qui jettent leur rapport.
+Ouverts par elle, toujours ouverts : le canal d'échecs d'une réaction sans lecteur ;
+un `put` sans le champ de cycle de vie ; une réaction qui écrit dans la cellule
+basculée ; le banc `pg_trgm` (cause trouvée, à F).
 
 ## Ce que la session a appris
 
@@ -59,3 +78,9 @@ l'outil d'ancrage absent du gabarit ; le huitième refus.
   « ses seuls liens » (un lien perdu sans erreur), la paire donnée deux fois
   (perdue sans un mot), et l'affirmation fausse sur les transactions. C'est le prix
   d'une page avant le code, et il est bas.
+- **Un témoin écrit avant le code attrape le code.** La forme A disait « the record
+  exists » pour une ligne absente : `get` rend `Ok(None)`, j'avais testé `is_ok()`.
+  Le témoin l'a vu à sa première passe.
+- **Un rouge s'attribue avant de s'expliquer.** Rejouer le banc au commit d'avant
+  l'échappement a mis F hors de cause en une passe. Ensuite, une requête SQL
+  directe a tranché ce que le banc ne séparait pas, sans une heure de carte.
