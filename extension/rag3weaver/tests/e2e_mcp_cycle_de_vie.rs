@@ -383,3 +383,35 @@ fn un_second_hote_devant_un_hote_vivant_refuse_de_demarrer() {
     assert_eq!(demon.demarrages(), 1);
     c.fermer();
 }
+
+/// **(7) La session d'un client mort se ferme** (ticket
+/// `2026-10-11-la-session-d-un-client-mort-reste-listee`) : un client tué par
+/// SIGKILL ne ferme pas sa session ; l'hôte, qui connaît son pid, la ferme, et
+/// `daemon_status` d'un autre client ne la montre plus.
+#[test]
+#[ignore = "e2e : un client tué sans fermer sa session"]
+fn la_session_d_un_client_tue_se_ferme() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = boutique(tmp.path());
+    let demon = Demon::new(tmp.path());
+
+    let mut a = Client::lancer(&manifeste, &demon, LIBRE);
+    a.initialiser();
+    let (_, texte) = a.appeler("daemon_status", json!({}));
+    let session_a = serde_json::from_str::<Value>(&texte).unwrap()["this_session"].as_str().unwrap().to_string();
+    let mut b = Client::lancer(&manifeste, &demon, LIBRE);
+    b.initialiser();
+    assert_eq!(demon.etat()["sessions"].as_array().map(Vec::len), Some(2));
+
+    a.enfant.kill().expect("SIGKILL"); // pas de DELETE /session
+    a.enfant.wait().unwrap();
+
+    let (erreur, texte) = b.appeler("daemon_status", json!({}));
+    assert!(!erreur, "{texte}");
+    let etat: Value = serde_json::from_str(&texte).unwrap();
+    let ids: Vec<&str> = etat["sessions"].as_array().unwrap().iter().filter_map(|s| s["id"].as_str()).collect();
+    assert!(!ids.contains(&session_a.as_str()), "la session du client tué est fermée : {etat}");
+    assert_eq!(ids.len(), 1, "seule celle de b reste : {etat}");
+    assert!(etat["closed_dead_sessions"].as_u64().is_some_and(|n| n >= 1), "l'état dit ce qu'il a fermé : {etat}");
+    b.fermer();
+}
