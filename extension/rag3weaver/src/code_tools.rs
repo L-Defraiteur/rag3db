@@ -994,6 +994,41 @@ pub fn grep_files(
     })
 }
 
+/// **La porte d'une relation demandée à `grep`** : un nom qui part dans une
+/// requête doit être un identifiant (la garde contre l'injection, en plus de la
+/// citation du dialecte) **et** une relation que le catalogue connaît — par sa
+/// config, pas par la liste en dur du gabarit code : une relation déclarée par un
+/// manifeste passe (changé le 11 octobre 2026, avec l'arbre principal ; la porte
+/// d'avant n'admettait que `code::RELATIONS`).
+pub fn admit_relation(catalog: &Catalog, relation: &str) -> Result<(), String> {
+    if !rag3weaver_ir::is_valid_identifier(relation) {
+        return Err(format!("relation '{relation}' : ce n'est pas un identifiant"));
+    }
+    if catalog.get_relation_def(relation).is_none() {
+        return Err(format!("relation '{relation}' inconnue ; déclarées : {}", catalog.relation_names().join(", ")));
+    }
+    Ok(())
+}
+
+/// **Le saut du voisinage** d'un scope par une relation : la table d'arrivée
+/// est celle que la relation déclare au catalogue (`rel_info`, sa config), et chaque
+/// colonne lue (`name`, `scope_type`, `file_path`, `start_line`, `end_line`)
+/// est un champ de cette table s'il y est déclaré, une colonne vide sinon —
+/// `DEFINES` arrive sur `Symbol`, qui n'a ni genre ni lignes. Le départ reste
+/// libre : l'uuid suffit. Sans table d'arrivée, PostgreSQL refusait le saut
+/// (ticket 2026-10-11-le-voisinage-de-grep-refuse-par-postgresql).
+pub fn neighbor_hop(catalog: &Catalog, relation: &str, limit: usize) -> Result<rag3weaver_ir::Hop, String> {
+    let arrivee = crate::dataflow::usage_nodes::rel_info(catalog, relation)?.to;
+    let declares = |f: &str| f == "_uuid" || catalog.entity_config(&arrivee).is_some_and(|c| c.fields.contains_key(f));
+    let mut saut = rag3weaver_ir::Hop::untyped(relation, rag3weaver_ir::Direction::Outgoing);
+    saut.end = Some(arrivee.clone());
+    saut.returns = ["name", "scope_type", "file_path", "start_line", "end_line"]
+        .map(|f| if declares(f) { rag3weaver_ir::Column::Node(f.into()) } else { rag3weaver_ir::Column::Null })
+        .to_vec();
+    saut.limit = Some(limit);
+    Ok(saut)
+}
+
 /// Les voisins des scopes distincts qu'un `grep` a rencontrés.
 ///
 /// **Distincts**, et dans l'ordre de la première rencontre : dix lignes dans
@@ -1009,14 +1044,7 @@ fn voisins_des_scopes(
     let Some(catalog) = catalog else { return Ok(Vec::new()) };
     let limit = if limit == 0 { DEFAULT_RELATION_LIMIT } else { limit.min(MAX_RELATION_LIMIT) };
 
-    // Un nom de relation part dans du Cypher : on n'accepte que ce que le
-    // schéma déclare. Sans cette porte, `grep` deviendrait une injection.
-    if !crate::code::RELATIONS.iter().any(|(r, _, _)| *r == relation) {
-        return Err(format!(
-            "relation '{relation}' inconnue ; déclarées : {}",
-            crate::code::RELATIONS.iter().map(|(r, _, _)| *r).collect::<Vec<_>>().join(", ")
-        ));
-    }
+    admit_relation(catalog, relation)?;
 
     let mut vus: Vec<(String, String)> = Vec::new(); // (uuid, nom)
     for m in matches {
@@ -1027,14 +1055,13 @@ fn voisins_des_scopes(
         }
     }
 
+    // Le saut ne dépend que de la relation et de la borne : bâti une fois.
+    let saut = neighbor_hop(catalog, relation, limit)?;
+    let cypher = catalog.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for (uuid, nom) in vus {
         // Un saut depuis ce seul scope, de table quelconque, borné : la
         // première colonne est son uuid, les champs du voisin viennent après.
-        let mut saut = rag3weaver_ir::Hop::untyped(relation, rag3weaver_ir::Direction::Outgoing);
-        saut.returns = ["name", "scope_type", "file_path", "start_line", "end_line"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec();
-        saut.limit = Some(limit);
-        let cypher = catalog.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
         let rows = catalog
             .execute_raw_with_params(&cypher, &[crate::dataflow::graph_walk::uuid_param(&[uuid])])
             .map_err(|e| e.to_string())?;

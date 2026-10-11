@@ -1904,3 +1904,26 @@ fn le_chainage_defaire_les_aretes() {
     let (_garde, cat) = catalogue(8);
     crate::e2e_chainage::defaire_les_aretes(&crate::e2e_chainage::peupler(cat));
 }
+
+/// **Le voisinage de `grep` sur PostgreSQL** (ticket
+/// 2026-10-11-le-voisinage-de-grep-refuse-par-postgresql) : `src/daemon`
+/// indexé dans rag3db et dans le conteneur ; le saut de `grep` par quatre
+/// relations rend les mêmes lignes des deux côtés.
+#[cfg(all(feature = "rag3db-native", feature = "code"))]
+#[test]
+#[ignore]
+fn le_voisinage_de_grep_rend_les_memes_lignes_que_rag3db() {
+    use rag3weaver::code::{analyze, default_scope_chunking, read_sources, register_code_schema};
+    let rag3db = crate::e2e_mesure_impact::rag3db_indexe(Arc::new(std::sync::atomic::AtomicUsize::new(0)));
+    let (_garde, mut catalog) = catalogue(8);
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let dir = format!("{}/src/daemon", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    catalog.ingest_code(&analyze(&dir, read_sources(&dir).unwrap())).unwrap();
+    let vidage = catalog.drain();
+    assert_eq!(vidage.failed, 0, "{vidage:?}");
+    let attendu = crate::e2e_mesure_impact::voisinage(&rag3db);
+    assert!(attendu.iter().any(|l| l.starts_with("CONSUMED_BY")), "joindre a des appelants : {attendu:?}");
+    assert!(attendu.iter().any(|l| l.starts_with("DEFINES")), "et définit des symboles : {attendu:?}");
+    let rendu = crate::e2e_mesure_impact::voisinage(&catalog);
+    assert_eq!(rendu, attendu, "PostgreSQL rend les lignes de rag3db");
+}

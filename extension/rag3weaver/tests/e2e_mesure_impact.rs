@@ -155,12 +155,11 @@ pub(crate) fn mesurer(moteur: &str, cat: &Catalog, n: &AtomicUsize) -> Vec<Strin
     lignes
 }
 
-#[test]
-#[ignore]
-fn mesure_impact_sur_rag3db() {
-    let n = Arc::new(AtomicUsize::new(0));
+/// Un catalogue rag3db en mémoire, `src/daemon` indexé, sa connexion comptée
+/// par `n`.
+pub(crate) fn rag3db_indexe(n: Arc<AtomicUsize>) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
-    let boxed: Box<dyn DbConnection> = Box::new(Compteur { inner: Box::new(conn), n: n.clone() });
+    let boxed: Box<dyn DbConnection> = Box::new(Compteur { inner: Box::new(conn), n });
     let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("mesure-impact".into()), embedding_dim: 64, ..Default::default() };
@@ -169,8 +168,44 @@ fn mesure_impact_sur_rag3db() {
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
     let dir = format!("{}/src/daemon", std::env::var("CARGO_MANIFEST_DIR").unwrap());
     catalog.ingest_code(&analyze(&dir, read_sources(&dir).unwrap())).unwrap();
+    catalog
+}
+
+#[test]
+#[ignore]
+fn mesure_impact_sur_rag3db() {
+    let n = Arc::new(AtomicUsize::new(0));
+    let catalog = rag3db_indexe(n.clone());
     let lignes = mesurer("rag3db", &catalog, &n);
     assert_eq!(lignes.len(), 6);
+}
+
+/// **Le voisinage d'un scope** par le saut de `grep` (`neighbor_hop`), pour
+/// quelques relations depuis les scopes nommés `joindre` : les lignes, en
+/// texte, triées (la première colonne, l'uuid de départ, comprise).
+#[cfg_attr(not(feature = "postgres"), allow(dead_code))]
+pub(crate) fn voisinage(cat: &Catalog) -> Vec<String> {
+    use rag3weaver::connection::CypherValue;
+    use rag3weaver_ir::{Column, Predicate, Select};
+    let d = cat.dialect_arc();
+    let q = d.select(&Select::filtered("Scope", Predicate::Equals { field: "name".into(), param: "nom".into() }, vec![Column::Node("_uuid".into())])).unwrap();
+    let departs: Vec<CypherValue> = cat
+        .execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String("joindre".into()))])
+        .unwrap()
+        .rows
+        .iter()
+        .map(|r| r[0].clone())
+        .collect();
+    assert!(!departs.is_empty(), "un scope nommé joindre");
+    let mut lignes = Vec::new();
+    for relation in ["CONSUMED_BY", "CONSUMES", "DEFINES", "DEFINED_IN"] {
+        let saut = rag3weaver::code_tools::neighbor_hop(cat, relation, 50).unwrap();
+        let texte = d.hop(&saut).unwrap_or_else(|e| panic!("{relation} : {e}"));
+        let r = cat.execute_raw_with_params(&texte, &[QueryParam::new("uuids", CypherValue::List(departs.clone()))]).unwrap_or_else(|e| panic!("{relation} : {e}\n{texte}"));
+        lignes.extend(r.rows.iter().map(|l| format!("{relation} {l:?}")));
+    }
+    lignes.sort();
+    lignes
 }
 
 // ═══ Les éventails seuls, sur un graphe peuplé par le catalogue ══════════════
@@ -265,4 +300,40 @@ fn mesure_eventails_sur_rag3db() {
     catalog.initialize().unwrap();
     let uuids = peupler_le_graphe(&mut catalog);
     assert_eq!(mesurer_eventails("rag3db", &catalog, &uuids).len(), 4);
+}
+
+/// **La porte d'une relation demandée à `grep`** (`admit_relation`) : une
+/// relation que le catalogue déclare hors de la liste du gabarit code passe et
+/// rend ses voisins ; un nom inconnu se refuse en nommant les déclarées ; un nom
+/// qui n'est pas un identifiant se refuse en le nommant.
+#[test]
+#[ignore]
+fn la_porte_de_grep_admet_une_relation_declaree_hors_du_gabarit() {
+    use rag3weaver::code_tools::{admit_relation, neighbor_hop};
+    use rag3weaver::connection::CypherValue;
+    use rag3weaver_ir::{Column, Predicate, Select};
+    use std::collections::BTreeMap;
+    let mut cat = rag3db_indexe(Arc::new(AtomicUsize::new(0)));
+    assert!(!rag3weaver::code::RELATIONS.iter().any(|(r, _, _)| *r == "TEST_APPELLE"));
+    cat.register_relation("TEST_APPELLE", "Scope", "Scope").unwrap();
+    let d = cat.dialect_arc();
+    let uuid_de = |cat: &Catalog, nom: &str| -> String {
+        let q = d.select(&Select::filtered("Scope", Predicate::Equals { field: "name".into(), param: "nom".into() }, vec![Column::Node("_uuid".into())])).unwrap();
+        cat.execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(nom.into()))]).unwrap().rows[0][0].as_str().unwrap().to_string()
+    };
+    let (de, vers) = (uuid_de(&cat, "joindre"), uuid_de(&cat, "est_local"));
+    cat.link("TEST_APPELLE", de.as_str(), vers.as_str(), BTreeMap::new()).unwrap();
+    cat.drain();
+
+    admit_relation(&cat, "TEST_APPELLE").expect("déclarée au catalogue, elle passe");
+    let saut = neighbor_hop(&cat, "TEST_APPELLE", 5).unwrap();
+    let r = cat.execute_raw_with_params(&d.hop(&saut).unwrap(), &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(de.clone())]))]).unwrap();
+    assert_eq!(r.rows.len(), 1, "{:?}", r.rows);
+    assert_eq!(r.rows[0][1].as_str(), Some("est_local"), "le voisin, par son nom (après l'uuid de départ)");
+    assert_eq!(r.rows[0][2].as_str(), Some("function"), "et son genre");
+
+    let inconnue = admit_relation(&cat, "INCONNUE").unwrap_err();
+    assert!(inconnue.contains("inconnue") && inconnue.contains("TEST_APPELLE") && inconnue.contains("CONSUMES"), "{inconnue}");
+    let injection = admit_relation(&cat, "CONSUMES]->() DETACH DELETE m //").unwrap_err();
+    assert!(injection.contains("n'est pas un identifiant") && injection.contains("CONSUMES]"), "{injection}");
 }

@@ -62,7 +62,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -75,7 +75,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [La montre de fichiers coûte sept dixièmes d'un cœur en continu](2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | ouvert — chez le proto | coût (un cœur en permanence) | oui, dès qu'un manifeste déclare watches | oui (et seulement) |
 | [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
 | [L'hôte du démon hérite de l'environnement du premier client qui le lance](2026-10-11-l-hote-herite-de-l-environnement-du-premier-client.md) | ouvert — côté hôte, arbre principal | réponse fausse ou blocage (un service d'embarquement manque) | oui, dès qu'un hôte sert des backends aux services différents | oui (et seulement) |
-| [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | ouvert — embarquements, après les lots du Cypher brut | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
 | [Une transition faite par une réaction n'applique pas les écritures du cycle de vie](2026-10-11-une-transition-de-reaction-n-applique-pas-les-ecritures-du-cycle-de-vie.md) | ouvert | réponse fausse (reviewed_at, revision, updated_at manquent) | oui, dès qu'une réaction transitionne | oui (et seulement) |
 | [e2e_impact dépend de la forme du code vivant qu'il indexe](2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md) | ouvert — après la migration (a) | test fragile | non | oui (`tests/e2e_impact.rs`, `tests/e2e_usages.rs`) |
@@ -103,10 +102,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 
-### Fermés (89), dans `closed/`
+### Fermés (90), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](closed/2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | corrigé, témoin vert sur les deux moteurs (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](closed/2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | corrigé (voir le ticket) | réponse trompeuse | oui | oui (rendu d'impact) |
 | [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](closed/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | corrigé (voir le ticket) | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`) |
 | [La session d'un client mort reste listée par l'hôte du démon](closed/2026-10-11-la-session-d-un-client-mort-reste-listee.md) | corrigé (le pid du client, le relevé de l'hôte) | P4, réponse fausse | oui | oui (et seulement) |

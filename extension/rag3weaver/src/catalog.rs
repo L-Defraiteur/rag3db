@@ -8987,6 +8987,13 @@ impl Catalog {
         self.config.relations.get(name)
     }
 
+    /// Les relations que ce catalogue déclare, triées.
+    pub fn relation_names(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.config.relations.keys().cloned().collect();
+        v.sort();
+        v
+    }
+
     /// Les cibles qu'accepte [`Self::resolve_search_target`], triées : les
     /// entités qui ont leur propre pipeline, dérivées (anciennes bases de
     /// connaissances) comprises. C'est la liste qu'une fiche d'outil
