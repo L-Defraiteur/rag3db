@@ -83,3 +83,27 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
   message : seul le `TokenSink` coupe (`Flow::Stop`).
 - Les tests de la boucle qui serviront de témoin de parité : voir la page 03,
   §4.2.
+
+## Ce que le lot 1 a appris (ports d'agent, base `522fa6780`)
+
+- Les points d'accroche **posés** sont décrits dans `src/agent_ports.rs` (la table
+  des ports en tête du module). Le relevé ci-dessus disait « `user_in` est
+  poussé par l'appelant avant `run` » : le port lit désormais le dernier tour
+  `user`, une fois, avant la boucle.
+- `ToolCall` est `Serialize`/`Deserialize` avec son champ opaque : un
+  aller-retour JSON est exact, c'est ce qui rend `model_out` et
+  `tool_call_out` transparents.
+- `Finish.reason` ne suit pas `tool_calls` d'elle-même : qui retire les appels
+  doit passer la raison à `Eos`, sinon le run finit en `Finished(ToolCall)`.
+- Un outil en fond rend un accusé (par `tool_result_in`) et poste son vrai
+  résultat dans la boîte sous l'émetteur `outil #<outil>-<n>` (la constante
+  `ASYNC_RESULT_FROM` d'`agent.rs`). La dernière lecture de la boîte suit la
+  jointure des fils de portée, si bien que le résultat est toujours dans
+  l'historique, mais à une place qui dépend du moment où le fil a rendu.
+- `GraphToolError::NotTaken { node, port, reason }` (recherche, `522fa6780`) :
+  le nœud de résultat a été sauté. `NoResult` veut dire qu'il a tourné sans
+  poser son résultat. Pour un port d'agent, les deux veulent dire « retenu ».
+- Un nœud scripté rhai qui rend `#{}` ne pose aucune sortie (sortie
+  `required: false`) : c'est la branche non prise la plus simple. `in` est un
+  mot réservé de rhai : un port nommé `in` ne se lit pas par
+  `input.inputs.in`.
