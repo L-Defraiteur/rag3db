@@ -73,11 +73,21 @@ tube.
 **1. La réaction est montée mais elle ne peut rien transitionner.** Aucun des
 sept outils ne pose `ANCHORED_TO` : `add_ref` pose `CITE`, et rien n'écrit
 `ANCHORED_TO` ni `REPLACES`. Donc `review_anchored` part à chaque écriture de
-sujet et trouve toujours zéro ligne concernée. La pièce manquante existe déjà
-(`templates/tools/link_snapshot.mmd`, un `RelationBatchNode` générique) et se
-déclare en six lignes de manifeste — je ne l'ai pas fait parce que l'ordre
-était « tel quel ». Ticket :
-`docs/tickets/2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md`.
+sujet et trouve toujours zéro ligne concernée. J'ai cru que la pièce existait déjà
+(`templates/tools/link_snapshot.mmd`, un `RelationBatchNode` générique) et que
+six lignes de manifeste suffisaient. **Essayé, et non** :
+
+```
+anchor(links: [{from: {claim, reach}, to: {name}}])
+→ "snapshot links cannot modify relations of managed entities"
+```
+
+Ce nœud refuse si l'un des deux bouts a un cycle de vie, une révision ou des
+dates serveur — `Memory` et `Subject` ont les trois. Il n'existe donc, à cette
+date, **aucun nœud qui relie deux entités gérées par leur identité**. Le ticket
+`docs/tickets/2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md` porte
+les trois chemins possibles et leur coût ; le moins risqué est un nœud de lien
+générique, donc une signature nouvelle — ce que l'ordre A excluait.
 
 C'est le même défaut que celui que ce dépôt écrit en boucle, pris une couche
 plus haut : la déclaration est vraie, le moteur est vrai, et le chemin qui les
@@ -145,5 +155,7 @@ Ce que je peux dire, c'est ce qui l'aidera ou la gênera :
    pointe vers un chemin qu'on va effacer est une recette morte. Le rebâtir se
    fait par `cargo build --release --bin rag3weaver-backend` avec les features
    de `run_e2e.sh`, puis une copie.
-5. Je n'ai pas ajouté l'outil d'ancrage, par respect du « tel quel ». Si tu
-   dis oui, c'est six lignes et une passe.
+5. Je n'ai pas ajouté l'outil d'ancrage : l'orchestration a dit oui sur ma
+   parole qu'il tenait en six lignes, et j'avais tort — le nœud existant le
+   refuse. L'essai a été joué sur ta copie puis retiré ; ton manifeste a bien
+   ses sept outils, pas huit. Le ticket dit ce qu'il faudrait.

@@ -47,26 +47,47 @@ premier lecteur — et a rendu le trou visible.
 
 ## Ce qu'il faut pour le fermer
 
-La pièce existe déjà : `templates/tools/link_snapshot.mmd`
-(`RelationBatchNode(relation=$relation, links=$links)`) relie des identités
-déclarées, sans propriétés, avec validation du lot avant écriture. Il suffit de
-la déclarer dans le gabarit, liée sur `ANCHORED_TO`, avec une `description` qui
-parle de mémoire et non d'instantané :
+**Et d'abord : ce qui ne le ferme pas.** J'avais écrit ici que la pièce existait
+déjà — `templates/tools/link_snapshot.mmd` (`RelationBatchNode`) —, qu'il
+suffisait de la déclarer, et je l'ai dit à l'orchestration qui a répondu « oui,
+six lignes ». **C'est faux, et c'est mesuré** (11 octobre 2026, essai joué par
+MCP sur une copie hors dépôt, outil `anchor` déclaré puis retiré) :
 
-```json
-"anchor": {
-  "graph": "../../tools/link_snapshot.mmd",
-  "bindings": { "relation": "ANCHORED_TO" },
-  "description": "Ancre une mémoire à un sujet : la mémoire repassera « à revoir » si le sujet change."
-}
+```
+anchor(links: [{from: {claim, reach}, to: {name}}])
+→ "snapshot links cannot modify relations of managed entities"
 ```
 
-Non fait ici parce que l'ordre était de brancher le gabarit **tel quel** en une
-passe. À décider avec le même geste : exposer aussi `REPLACES` (une mémoire qui
-remplace une autre), que la vision de la mémoire longue emploie et qu'aucun
-outil n'écrit non plus.
+`RelationBatchNode` refuse si **l'un des deux bouts est géré** — un cycle de
+vie, une révision, `created_at`, `updated_at` ou une date de transition
+(`backend_nodes.rs:757-766`). `Memory` et `Subject` ont les trois dernières et
+un cycle de vie chacun. Le nœud est, par sa propre documentation, pour les liens
+d'un **instantané** : « Snapshot links use stable endpoint identities ». Aucun
+témoin n'épingle cette garde, donc elle ressemble à une portée (« ce nœud sert
+aux instantanés ») plus qu'à un invariant démontré — mais une garde ne se
+relâche pas sans prouver ce qu'elle mesurait.
+
+Il n'y a donc, à cette date, **aucun nœud qui relie deux entités gérées par
+leur identité**. Le seul qui relie une entité gérée est `AddRefNode`, et il
+fabrique une `Ref` en chemin : il ne sert pas ici.
+
+Trois chemins, et aucun ne tient en six lignes :
+
+1. **Un nœud de lien générique** (`LinkRecordsNode(relation, links)`) : deux
+   identités déclarées, une relation sans propriété, la garde de cycle de vie
+   des deux bouts inchangée — c'est le plus propre, et c'est une signature
+   nouvelle.
+2. **Un verbe de plus sur `EntityRecordNode`** (`action='link'`) : moins de
+   surface, mais le nœud mélangerait écrire un record et poser une relation.
+3. **Élargir la portée de `RelationBatchNode`** : le moins de code, et le plus
+   de risque — il faudrait d'abord établir ce que la garde protégeait, puisque
+   rien ne l'épingle. À ne pas faire sans cette preuve.
+
+Préférence de qui l'a relevé : la 1. Et à décider dans le même geste : exposer
+aussi `REPLACES` (une mémoire qui remplace une autre), que la vision de la
+mémoire longue emploie et qu'aucun outil n'écrit non plus.
 
 **Et une règle à écrire si elle est retenue** : le chargement pourrait refuser
 un manifeste dont une réaction remonte une relation qu'aucun outil n'écrit. Ce
 serait le huitième refus de la section `"reactions"`, et celui-ci se lit sur le
-manifeste seul.
+manifeste seul. Il aurait attrapé ce défaut-ci au chargement du gabarit.
