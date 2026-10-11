@@ -5604,7 +5604,10 @@ impl Catalog {
                 seule.validate().map_err(CatalogError::SchemaError)?;
                 self.ensure_scope_nodes_for(&seule)?;
                 self.multi_cell = true;
-                return self.dans_la_cellule(&seule, |c| c.ingest_entities_dans_sa_cellule(entity_name, records, exige));
+                // Une fois basculé, le lot est dans sa cellule : cet appel passe
+                // la garde ci-dessus sans y revenir. Le corps reste ici, et le
+                // graphe d'appels garde sa profondeur (`e2e_impact` le mesure).
+                return self.dans_la_cellule(&seule, |c| c.ingest_entities_jusqu_a(entity_name, records, exige));
             }
             plusieurs => {
                 return Err(CatalogError::SchemaError(format!(
@@ -5613,17 +5616,6 @@ impl Catalog {
                 )))
             }
         }
-        self.ingest_entities_dans_sa_cellule(entity_name, records, exige)
-    }
-
-    /// [`ingest_entities_jusqu_a`](Self::ingest_entities_jusqu_a), dans la
-    /// cellule courante.
-    fn ingest_entities_dans_sa_cellule(
-        &mut self,
-        entity_name: &str,
-        records: Vec<BTreeMap<String, CypherValue>>,
-        exige: crate::disponibilite::Disponibilites,
-    ) -> Result<FlushResult, CatalogError> {
         let avec_embarquement = self.peut_embarquer(exige.dense() || exige.sparse());
         let t_appel = std::time::Instant::now();
         let t = std::time::Instant::now();
