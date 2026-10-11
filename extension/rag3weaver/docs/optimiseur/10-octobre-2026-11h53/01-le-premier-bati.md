@@ -535,6 +535,31 @@ sous `alpha-1-publiee/`, les essais d'avant sous `e52091ea0/` et
 La démo rejouée contre la tête et le sous-paquet Linux locaux : verte
 (index 22 s avec le service, 3,7 s sans).
 
+### La séance suspendue : le COPY journalisé, et la sonde
+
+À 3 h 20, l'orchestration suspend la séance : l'arbre principal a reproduit
+en 9 s que le COPY journalisé (défaut ouvert du moteur, dans la tête
+786dfec13) corrompt une colonne DOUBLE en mémoire sous deux fils avec une
+colonne tableau — le chemin de rag3weaver. Les quatre archives de 786dfec13
+sont rangées sous `publier/786dfec13-COPY-journalise-defectueux-NE-PAS-PUBLIER/`.
+Ce qui vient : le filet de A sur master (`force_checkpoint_on_copy=true` tant
+que le ticket est ouvert), puis la fusion, trois bâtis neufs, les quatre
+archives du nouveau commit.
+
+**La sonde du COPY**, dans `npm test` (`test/sonde_copy.js`, d7970d73d) : une
+entité `Mesure` déclarée au manifeste (clé texte, `num` int64, `score`
+double, `vecteur` liste de 4 doubles, texte en plein texte), des lignes
+`score = num + 0.5`, ingérées par `ingest_snapshot` (le chemin de masse,
+COPY — vu au profil `RAG3WEAVER_INGEST_PROFILE`), relues par pages de 5 000
+(`SelectRecordsNode`, filtre sur `num`) et comparées une à une. Ici, sur
+l'arbre d'avant le filet : 200 000 lignes, 82 s d'ingestion, 10 s de
+relecture, zéro ligne fausse — la sonde ne reproduit pas le défaut sur ce
+poste. Deux limites : l'outil plafonne `records` à 512 par appel (donc des
+COPY de 512 lignes, pas un grand COPY — question posée à A), et `CypherNode`
+n'est pas un nœud d'outil de backend (le compte se fait côté Node, pas par
+le moteur). 50 000 lignes sur le runner Windows, 200 000 ailleurs. À ticket :
+le refus « has more than 512 items » recopie les 2 Mo d'entrée.
+
 ## Ce qui vient ensuite
 
 0. La fusion de `paquet-npm` dans master attend l'embarqueur absent de
