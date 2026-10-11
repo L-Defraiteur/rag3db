@@ -122,6 +122,43 @@ un seuil de 16 Mio de journal (`database.h`). Ce qu'on ne sait pas : ce que le
 point de reprise épingle en mémoire (tout le journal ? les pages des BLOB ?),
 ni la plus petite taille de tampon qui passe.
 
+## Reproduit sur master et localisé (11 octobre 2026, seconde session cœur C++)
+
+- **La sonde Rust du ticket, sur la lib commune de luciepc (master `5c5feb527`)** : en mode
+  `ajoute` sous 2 Gio, elle échoue toujours après 544 Mo, à la génération 8, au mot près du
+  4 octobre. En mode `remplace`, elle passe 3 Go, avec un pic de mémoire résidente de 3,4 Go.
+- **Une sonde C++ jetable** (des transactions de 8 blobs de 4 Mo, `MERGE` préparé, la mémoire
+  utilisée du tampon relevée ; `~/.cache/rag3db-tickets-notes/blobs_checkpoint_probe_scratch_test.cpp`)
+  dit trois choses :
+  - **ni fuite ni accumulation** : le tampon tient 38 Mo avant chaque validation et retombe à
+    6 Mo après chaque point de reprise. Le point de reprise automatique passe après chaque
+    validation (32 Mo de journal), il n'est jamais reporté ;
+  - **un CHECKPOINT explicite après chaque validation échoue de même**, à la validation où la
+    table franchit 512 Mio ;
+  - **le seuil suit le tampon, en puissance de 2** : il est franchi à 256 Mio sous 1 Gio, à
+    512 Mio sous 2 Gio, à 1 024 Mio sous 4 Gio. Le point de reprise d'une colonne BLOB demande
+    donc environ quatre fois la taille de la colonne, arrondie à la puissance de 2 supérieure.
+- **La pile de l'échec** (gdb, `catch throw` sur l'exception du tampon, 1 Gio) :
+  `Checkpointer::writeCheckpoint` → `NodeTable::checkpoint` → `NodeGroup::checkpointInMemAndOnDisk`
+  → `ColumnChunk::checkpoint` → `StringColumn::checkpointSegment` →
+  `Column::checkpointColumnChunkOutOfPlace` → `StringChunkData::write` →
+  `DictionaryChunk::appendString` → `ColumnChunkData::resize` → `MemoryManager::allocateBuffer`.
+- **Lecture, à éprouver** (repérage par agent, lignes à `c011643d2`) :
+  - une insertion de 4 Mo ne tient jamais dans la place restante d'un segment de chaînes, donc
+    le segment est toujours réécrit hors place (`DictionaryColumn::canDataCommitInPlace`) ;
+  - le segment est relu en entier dans un tampon arrondi par `std::bit_ceil`
+    (`DictionaryColumn::scan`) ;
+  - chaque ajout qui déborde double le tampon (`DictionaryChunk::appendString`), et
+    `ColumnChunkData::resize` alloue le nouveau tampon avant de libérer l'ancien ;
+  - puis `split()` recopie le tout, par lots de 64 valeurs, avant le premier `flush`.
+
+  Le seuil mesuré dit que le segment réécrit grandit avec toute la colonne : le découpage par
+  segments ne le borne pas pour ces blobs. Pourquoi, c'est à lire, d'abord `shouldSplit`,
+  `split` et `isLastSegment`.
+- **Ce que ça veut dire pour le produit** : une table de BLOB ne doit pas dépasser environ le
+  quart du tampon (moins le reste), sinon son prochain point de reprise échoue, et la base est
+  à rouvrir.
+
 ## Ce qu'il faut pour le fermer
 
 - Une recette minimale au niveau du moteur (une table à colonne BLOB, des
