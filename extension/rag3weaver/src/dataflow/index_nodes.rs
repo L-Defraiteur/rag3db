@@ -228,6 +228,18 @@ impl NodeFactory for EstimateNodeFactory {
 /// La dernière ligne d'un journal d'indexation qui a abouti. C'est le motif
 /// que `wait` attend ; il ne change pas.
 pub const DONE_LINE: &str = "indexation terminée";
+
+/// **Ce que vit cette indexation, dit dans la réponse** (11 octobre 2026,
+/// ticket « l'indexation est un enfant du serveur MCP et meurt avec lui »).
+/// Elle est un fil de ce processus : elle s'arrête avec lui, et ce n'est pas
+/// le démon `--demon` qui la porterait (il ne tient que la base). Et après un
+/// arrêt en cours de route, la relancer est refusé tant que la session laissée
+/// ouverte n'est pas reprise (ticket « reprise après arrêt exige takeover »).
+/// Le dire, plutôt que laisser croire que le travail continue sans nous.
+pub const VIE_DE_L_INDEXATION: &str = "Elle tourne dans ce serveur et s'arrêtera s'il s'arrête (session ou tube fermés) : \
+     gardez-le ouvert jusqu'à « indexation terminée ». Après un arrêt en cours de route, relancer index est \
+     aujourd'hui refusé (la session de synchronisation laissée ouverte doit être reprise ; défaut connu, ticket \
+     « reprise après arrêt exige takeover »).";
 /// Le début de la dernière ligne d'un journal d'indexation qui a échoué.
 pub const FAILED_PREFIX: &str = "indexation échouée";
 
@@ -438,10 +450,10 @@ impl Node for IndexNode {
         let path = journal.to_string_lossy().to_string();
         let value = match self.format {
             ToolFormat::Markdown => serde_json::Value::String(format!(
-                "indexation lancée en fond.\njournal : {path}\n{}\nSuivre : wait(journal, pattern='{DONE_LINE}|{FAILED_PREFIX}') — avec timeout_s=0 pour lire l'état sans attendre.",
+                "indexation lancée en fond.\njournal : {path}\n{}\nSuivre : wait(journal, pattern='{DONE_LINE}|{FAILED_PREFIX}') — avec timeout_s=0 pour lire l'état sans attendre.\n{VIE_DE_L_INDEXATION}",
                 estimate.text()
             )),
-            ToolFormat::Json => serde_json::json!({ "journal": path, "done": DONE_LINE, "failed": FAILED_PREFIX, "estimate": estimate }),
+            ToolFormat::Json => serde_json::json!({ "journal": path, "done": DONE_LINE, "failed": FAILED_PREFIX, "estimate": estimate, "vie": VIE_DE_L_INDEXATION }),
         };
         ctx.set_output("result", PortValue::new(value));
         Ok(())
@@ -605,6 +617,35 @@ mod tests {
         assert_eq!(confirmation_refusal(&fast, false), None, "sous le seuil : rien à confirmer");
         let unknown = Estimate::new(s, choice, None, CONFIRM_ABOVE);
         assert_eq!(confirmation_refusal(&unknown, false), None, "on ne bloque pas sur une durée inconnue");
+    }
+
+    /// **La réponse d'`index` dit ce que vit l'indexation** : un fil de ce
+    /// serveur, qui s'arrête avec lui, et une relance aujourd'hui refusée
+    /// après un arrêt en cours de route (ticket « l'indexation est un enfant
+    /// du serveur MCP et meurt avec lui »).
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn la_reponse_d_index_dit_que_l_indexation_meurt_avec_le_serveur() {
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", [("a.rs".to_string(), "pub fn a() {}\n".to_string())]));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("vie".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let mut services = ServiceRegistry::new();
+        services.register(FILE_SOURCE_SERVICE, source);
+        services.register("catalog", Arc::new(Mutex::new(catalog)));
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        IndexNode::new("index").execute(&mut ctx).expect("lancée");
+        let texte = ctx
+            .drain_outputs()
+            .remove("result")
+            .and_then(crate::dataflow::port::take_or_clone::<serde_json::Value>)
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        assert!(texte.contains("s'arrêtera s'il s'arrête"), "{texte}");
+        assert!(texte.contains("relancer index est aujourd'hui refusé"), "ce qui est vrai après un arrêt : {texte}");
+        assert!(!texte.contains("--demon"), "le démon ne la porterait pas : {texte}");
     }
 
     #[test]
