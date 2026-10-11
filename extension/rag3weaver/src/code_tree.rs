@@ -197,6 +197,72 @@ fn copy(de: &Path, vers: &Path, reflink: bool) -> Result<bool, String> {
     Ok(false)
 }
 
+/// Ce que [`add_with_host`] a fait de `--from` autour de la copie.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+#[derive(Debug, Clone, PartialEq)]
+pub enum FromAroundCopy {
+    /// Aucun hôte ne répond : la base de `--from` n'est ouverte par personne,
+    /// la copie est sûre telle quelle.
+    NoHost,
+    /// L'hôte répond, `--from` n'y était pas ouvert.
+    NotOpen,
+    /// `--from` était ouvert : fermé avant la copie, rouvert après (quelques
+    /// secondes d'indisponibilité).
+    ClosedAndReopened,
+}
+
+/// L'état de l'hôte (`GET /etat`, le jeton de `daemon.json` s'il décrit
+/// cette adresse), ou `None` s'il ne répond pas.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub fn host_state(address: &str) -> Option<Value> {
+    let endpoint = crate::daemon_client::Endpoint::forced(address);
+    let mut requete = crate::daemon::agent().get(format!("{}/etat", crate::daemon::base_url(address)));
+    if let Some(t) = endpoint.token {
+        requete = requete.header("Authorization", &format!("Bearer {t}"));
+    }
+    let mut r = requete.call().ok()?;
+    serde_json::from_str(&r.body_mut().read_to_string().ok()?).ok()
+}
+
+/// `manifest` est-il ouvert dans cet état de l'hôte ?
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+fn is_open(state: &Value, manifest: &Path) -> bool {
+    let canon = std::fs::canonicalize(manifest).unwrap_or_else(|_| manifest.to_path_buf());
+    state["backends"].as_array().into_iter().flatten().any(|b| {
+        b["open"] == Value::Bool(true) && b["manifest"].as_str().is_some_and(|m| Path::new(m) == canon.as_path())
+    })
+}
+
+/// **`add` avec l'hôte** (relecture de l'arbre principal) : une base ne se
+/// copie que **fermée**. Un reflink du `.rag3db` et du `.wal` pris pendant
+/// une écriture (la montre réindexe à chaque édition) donne un journal qui
+/// ne se rejoue pas. Si l'hôte tient `--from` ouvert : `POST /backend/close`
+/// (réactions et montre arrêtées, point de reprise, base lâchée ; le refus
+/// « backend tenu par une indexation » se rend tel quel), la copie, puis
+/// `POST /backend/open` pour le rouvrir — même si la copie a échoué. Enfin
+/// l'arbre neuf est enregistré.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, address: &str) -> Result<(Added, FromAroundCopy), String> {
+    let source = roots.manifest(from);
+    let autour = match host_state(address) {
+        None => FromAroundCopy::NoHost,
+        Some(etat) if is_open(&etat, &source) => {
+            unregister(address, &source).map_err(|e| format!("--from {from} : l'hôte ne le ferme pas avant la copie : {e} — réessayez après l'index"))?;
+            FromAroundCopy::ClosedAndReopened
+        }
+        Some(_) => FromAroundCopy::NotOpen,
+    };
+    let copie = add_files(roots, tree, from, name);
+    if autour == FromAroundCopy::ClosedAndReopened {
+        register(address, &source).map_err(|e| format!("--from {from} : fermé pour la copie, pas rouvert : {e}"))?;
+    }
+    let a = copie?;
+    if autour != FromAroundCopy::NoHost {
+        register(address, &a.manifest)?;
+    }
+    Ok((a, autour))
+}
+
 /// **Enregistrer l'arbre à l'hôte** : ouvrir son backend (`POST
 /// /backend/open`, qui relit un manifeste modifié — le repointage de
 /// `code-coeur`). La réconciliation et la montre partent de là.
@@ -211,7 +277,8 @@ pub fn register(address: &str, manifest: &Path) -> Result<Value, String> {
 }
 
 /// **Fermer le backend de l'arbre à l'hôte** (`POST /backend/close`) : la
-/// base lâchée, avant [`remove_files`].
+/// base lâchée, avant [`remove_files`]. Le manifeste est canonisé : il doit
+/// encore exister — `remove` ferme d'abord, déplace ensuite ; garder cet ordre.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub fn unregister(address: &str, manifest: &Path) -> Result<Value, String> {
     let client = crate::daemon_client::DaemonClient::connect(address, manifest, "code-tree", vec!["dev".into()])?;

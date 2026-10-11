@@ -508,7 +508,7 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 fn code_tree(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote]\n       \
                          rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
-    use rag3weaver::code_tree::{add_files, name_of_tree, register, remove_files, unregister, Roots};
+    use rag3weaver::code_tree::{add_files, add_with_host, name_of_tree, remove_files, unregister, FromAroundCopy, Roots};
     let (action, reste) = args.split_first().ok_or(USAGE)?;
     let mut cible = None;
     let mut from = "code-lourd".to_string();
@@ -532,18 +532,25 @@ fn code_tree(args: &[String]) -> Result<(), String> {
     let adresse = || hote.clone().unwrap_or_else(|| rag3weaver::daemon_lifecycle::read().map(|f| f.address).unwrap_or_else(|| rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS.to_string()));
     match action.as_str() {
         "add" => {
-            let a = add_files(&roots, Path::new(&cible), &from, nom.as_deref())?;
+            let (a, autour) = if sans_hote {
+                (add_files(&roots, Path::new(&cible), &from, nom.as_deref())?, FromAroundCopy::NoHost)
+            } else {
+                add_with_host(&roots, Path::new(&cible), &from, nom.as_deref(), &adresse())?
+            };
             println!("{} : manifeste {}", a.name, a.manifest.display());
             println!("base {} — {} fichier(s) de {from}, {}", a.database.display(), a.copied.len(), if a.reflink { "par reflink" } else { "copie pleine (pas de reflink ici)" });
-            if !sans_hote {
-                let r = register(&adresse(), &a.manifest)?;
-                println!("ouvert par l'hôte {} : {r}", adresse());
+            match autour {
+                FromAroundCopy::NoHost => println!("aucun hôte ne répond : la base de {from} n'est ouverte par personne, copiée telle quelle"),
+                FromAroundCopy::NotOpen => println!("{from} n'était pas ouvert dans l'hôte ; {} enregistré à l'hôte {}", a.name, adresse()),
+                FromAroundCopy::ClosedAndReopened => println!("{from} fermé le temps de la copie puis rouvert (quelques secondes) ; {} enregistré à l'hôte {}", a.name, adresse()),
             }
             Ok(())
         }
         "remove" => {
             // Un nom de backend, ou le chemin de l'arbre.
             let nom = if roots.manifest(&cible).exists() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
+            // Fermer d'abord (le manifeste doit exister pour être canonisé),
+            // déplacer ensuite.
             if !sans_hote {
                 unregister(&adresse(), &roots.manifest(&nom))?;
                 println!("{nom} : fermé par l'hôte {}", adresse());
