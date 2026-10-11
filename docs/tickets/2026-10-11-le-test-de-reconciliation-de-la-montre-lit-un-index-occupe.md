@@ -45,3 +45,11 @@ Deux formes possibles, au choix de l'auteur de la montre :
 - poser `watches` aussi dans le reçu occupé, puisqu'il ne dépend pas du catalogue (c'est un
   vrai défaut du reçu : la montre est la plus utile justement quand l'index travaille) ;
 - ou faire attendre au test un état non occupé avant de lire.
+
+**11 octobre, 23 h 17 (arbre principal)** : la première forme est faite dans `cce19d031` (en file
+de push) : `index_states` lit les montres sur le backend avant de prendre le catalogue, et le
+reçu « busy » les porte, comme il porte l'embarquement en cours. Le test n'est pas touché. Reste,
+pour fermer, le témoin déterministe (une réaction qui tient le catalogue, puis la lecture de
+l'état). À savoir : depuis le même lot, chaque lecture d'outil lit aussi une clé méta (le compte
+des morceaux sans texte, pour l'en-tête) sous le verrou du catalogue, ce qui allonge un peu sa
+tenue.
