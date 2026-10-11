@@ -470,6 +470,9 @@ pub const fn rebuild_threshold(dim: usize) -> usize {
 }
 
 /// Clé de `_catalog_meta` : le choix du premier index et sa raison.
+/// La clé méta de l'arbre indexé (racine, commit, heure) : voir
+/// [`Catalog::note_indexed_tree`].
+pub const INDEXED_TREE_KEY: &str = "indexed_tree";
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
 /// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
@@ -3057,6 +3060,46 @@ impl Catalog {
                 }
             }
         }
+    }
+
+    // ── L'arbre indexé ───────────────────────────────────────────────────
+
+    /// **Noter l'arbre et le commit d'un index réussi** : la racine, le
+    /// commit court, des modifications non commitées ou non, l'heure. Chaque
+    /// réponse de lecture les dit ([`Self::indexed_tree_line`]) : un agent
+    /// sait sur quel code on lui répond.
+    pub fn note_indexed_tree(&self, root: &str) -> Result<(), CatalogError> {
+        let git = |args: &[&str]| -> Option<String> {
+            let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().ok()?;
+            out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        };
+        let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
+        let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
+        let v = serde_json::json!({ "root": root, "commit": commit, "dirty": dirty, "at_ms": retard::now_ms() });
+        self.persist_meta_key(INDEXED_TREE_KEY, &v.to_string())
+    }
+
+    /// La ligne « index : racine @ commit, indexé il y a … », ou `None` sans
+    /// index noté.
+    pub fn indexed_tree_line(&self, now_ms: u64) -> Option<String> {
+        let v: serde_json::Value = serde_json::from_str(&self.read_meta_key(INDEXED_TREE_KEY).ok()??).ok()?;
+        let root = v.get("root")?.as_str()?;
+        let commit = v.get("commit").and_then(|c| c.as_str()).filter(|c| !c.is_empty());
+        let dirty = v.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false);
+        let at = v.get("at_ms").and_then(|a| a.as_u64()).unwrap_or(now_ms);
+        let minutes = now_ms.saturating_sub(at) / 60_000;
+        let quand = match minutes {
+            0 => "à l'instant".to_string(),
+            m if m < 120 => format!("il y a {m} min"),
+            m if m < 48 * 60 => format!("il y a {} h", m / 60),
+            m => format!("il y a {} j", m / (24 * 60)),
+        };
+        let version = match (commit, dirty) {
+            (Some(c), false) => format!(" @ {c}"),
+            (Some(c), true) => format!(" @ {c} + modifications non commitées"),
+            (None, _) => " (hors git)".to_string(),
+        };
+        Some(format!("index : {root}{version}, indexé {quand}"))
     }
 
     // ── Persistence (_catalog_meta) ─────────────────────────────────────

@@ -45,12 +45,28 @@ use rag3weaver_ir::{Column, Hop};
 pub const MAX_DEPTH: usize = 3;
 pub const MAX_BUDGET: usize = 2_000;
 
-/// Un pas d'un chemin déclaré : une relation et son sens.
+/// Un pas d'un chemin déclaré : une relation et son sens. Dans `also_path`,
+/// un pas peut nommer plusieurs relations (`IMPLEMENTS/INHERITS_FROM>`) et
+/// se répéter (`…>+` : de 1 à [`MAX_REPEAT`] niveaux, une hiérarchie).
 #[derive(Debug, Clone)]
 pub struct Step {
+    /// La première relation (la seule hors de `also_path`).
     pub relation: String,
+    /// Toutes les relations du pas, la première comprise.
+    pub alternatives: Vec<String>,
     pub direction: Direction,
+    pub repeat: bool,
 }
+
+impl Step {
+    /// Un pas d'une seule relation, non répété.
+    pub fn new(relation: &str, direction: Direction) -> Self {
+        Step { relation: relation.to_string(), alternatives: vec![relation.to_string()], direction, repeat: false }
+    }
+}
+
+/// Les niveaux au plus d'un pas répété (`+`) : la profondeur d'une hiérarchie.
+pub const MAX_REPEAT: usize = 8;
 
 /// Ce que le gabarit déclare.
 #[derive(Debug, Clone)]
@@ -276,35 +292,75 @@ impl Moteur<'_> {
         if cfg.also_path.is_empty() || departs.is_empty() {
             return Ok(Vec::new());
         }
-        let mut courant: Vec<(String, String)> = departs.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
-        for (i, pas) in cfg.also_path.iter().enumerate() {
-            let rel = rel_info(self.catalog, &pas.relation)?;
-            let dernier = i + 1 == cfg.also_path.len();
-            let mut hop = super::graph_walk::hop_of(&rel, pas.direction, &super::graph_walk::EdgeMark::default());
-            if dernier {
-                hop.returns.push(Column::Node(cfg.also_same.clone()));
-            }
-            let q = self.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
-            let liste = CypherValue::List(courant.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
-            let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Self::err)?;
-            let origine: HashMap<&str, &str> = courant.iter().map(|(u, n)| (u.as_str(), n.as_str())).collect();
-            let mut suivant = Vec::new();
-            for r in &rows.rows {
-                let de = texte(r.first());
-                let Some(nom_depart) = origine.get(de.as_str()) else { continue };
-                let vers = texte(r.get(1));
-                if dernier && texte(r.get(2)) != *nom_depart {
-                    continue;
-                }
-                suivant.push((vers, nom_depart.to_string()));
-            }
-            suivant.sort();
-            suivant.dedup();
-            courant = suivant;
-        }
+        let depuis: Vec<(String, String)> = departs.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
+        let courant = follow_also(self.catalog, &cfg.also_path, &cfg.also_same, &depuis)?;
         let a_exclure: HashSet<&str> = departs.iter().map(|d| d.uuid.as_str()).collect();
         Ok(courant.into_iter().map(|(u, _)| u).filter(|u| !a_exclure.contains(u.as_str())).collect())
     }
+}
+
+/// **Suivre un chemin déclaré** (`also_path`) depuis des départs (uuid,
+/// titre) : chaque pas, par chacune de ses relations, répété s'il le dit ; au
+/// bout, ne garder que les nœuds dont le champ `same` vaut le titre du départ.
+/// Rend les paires (atteint, titre du départ). Partagé par `impact` (« par
+/// envoi virtuel ») et `usages`.
+pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(String, String)]) -> Result<Vec<(String, String)>, String> {
+    if chemin.is_empty() || departs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut courant: Vec<(String, String)> = departs.to_vec();
+    for (i, pas) in chemin.iter().enumerate() {
+        let dernier = i + 1 == chemin.len();
+        // Un saut par chacune des relations du pas, depuis `depuis`.
+        let sauter = |depuis: &[(String, String)]| -> Result<Vec<(String, String)>, String> {
+            let mut suivant = Vec::new();
+            if depuis.is_empty() {
+                return Ok(suivant);
+            }
+            let origine: HashMap<&str, &str> = depuis.iter().map(|(u, n)| (u.as_str(), n.as_str())).collect();
+            let liste = CypherValue::List(depuis.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
+            for relation in &pas.alternatives {
+                let rel = rel_info(catalog, relation)?;
+                let mut hop = super::graph_walk::hop_of(&rel, pas.direction, &super::graph_walk::EdgeMark::default());
+                if dernier {
+                    hop.returns.push(Column::Node(same.to_string()));
+                }
+                let q = catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+                let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+                for r in &rows.rows {
+                    let de = texte(r.first());
+                    let Some(nom_depart) = origine.get(de.as_str()) else { continue };
+                    let vers = texte(r.get(1));
+                    if dernier && texte(r.get(2)) != *nom_depart {
+                        continue;
+                    }
+                    suivant.push((vers, nom_depart.to_string()));
+                }
+            }
+            suivant.sort();
+            suivant.dedup();
+            Ok(suivant)
+        };
+        if pas.repeat {
+            // Tous les niveaux atteints, de 1 à MAX_REPEAT : une méthode
+            // redéfinie chez un grand-parent compte aussi.
+            let mut tous: Vec<(String, String)> = Vec::new();
+            let mut vus: HashSet<String> = courant.iter().map(|(u, _)| u.clone()).collect();
+            let mut front = courant.clone();
+            for _ in 0..MAX_REPEAT {
+                let neufs: Vec<(String, String)> = sauter(&front)?.into_iter().filter(|(u, _)| vus.insert(u.clone())).collect();
+                if neufs.is_empty() {
+                    break;
+                }
+                tous.extend(neufs.iter().cloned());
+                front = neufs;
+            }
+            courant = tous;
+        } else {
+            courant = sauter(&courant)?;
+        }
+    }
+    Ok(courant)
 }
 
 /// **Le relevé sur le chemin** : la relation déclarée (`collect`), suivie
@@ -814,14 +870,21 @@ fn liste(v: Option<&serde_json::Value>) -> Vec<String> {
 }
 
 /// `HAS_PARENT>` (sortant) ou `<IMPLEMENTS` (entrant).
-fn pas(s: &str) -> Result<Step, String> {
-    if let Some(r) = s.strip_suffix('>') {
-        Ok(Step { relation: r.to_string(), direction: Direction::Outgoing })
+pub fn pas(s: &str) -> Result<Step, String> {
+    let (s, repeat) = match s.strip_suffix('+') {
+        Some(r) => (r, true),
+        None => (s, false),
+    };
+    let (r, direction) = if let Some(r) = s.strip_suffix('>') {
+        (r, Direction::Outgoing)
     } else if let Some(r) = s.strip_prefix('<') {
-        Ok(Step { relation: r.to_string(), direction: Direction::Incoming })
+        (r, Direction::Incoming)
     } else {
-        Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant)"))
-    }
+        return Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant), A/B> pour plusieurs relations, + pour répéter"));
+    };
+    let alternatives: Vec<String> = r.split('/').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect();
+    let relation = alternatives.first().cloned().ok_or_else(|| format!("NeighborhoodNode: pas « {s} » sans relation"))?;
+    Ok(Step { relation, alternatives, direction, repeat })
 }
 
 impl NodeFactory for NeighborhoodNodeFactory {
@@ -888,7 +951,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .chain(st.used_by.iter().map(String::as_str))
             .chain(cfg.relations.iter().map(String::as_str))
             .chain(st.path_fields.iter().map(String::as_str))
-            .chain(cfg.also_path.iter().map(|p| p.relation.as_str()))
+            .chain(cfg.also_path.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
             .chain(cfg.collect.iter().flat_map(|c| [c.step.relation.as_str(), c.field.as_str(), c.note.as_str()]))
             .collect();
         if let Some(x) = tous.iter().find(|x| !ident(x)) {
