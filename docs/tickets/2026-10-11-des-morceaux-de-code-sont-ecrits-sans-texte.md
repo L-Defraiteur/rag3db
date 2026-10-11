@@ -48,3 +48,31 @@ correctif, et **la réécriture des morceaux touchés** : la montre ne les rever
 pas changé) ; l'index doit lancer de lui-même la réécriture des morceaux sans texte quand leur
 compte est non nul. La question de fond, gardée pour Lucie : un morceau sans texte doit-il exister
 (un scope sans embarquement mais avec ses relations) ou ne jamais naître.
+
+## Ce qui ne reproduit pas (sondes de codeparsers, 11 octobre au soir)
+
+Sonde `sonde_morceaux_vides.rs` (worktree `rag3db-vide`, non commitée ; bases gardées sous
+`~/.cache/rag3weaver-build/sonde-vides-*`), lib du même bâti que l'hôte de luciepc
+(`rag3db-build-6df47a543…`). Colonnes comptées : `Scope_Chunk`, `_text` nul, `_text` vide, vides
+avec hash. **Aucun vide, nulle part** :
+
+- `sharded_handle.rs` seul, en masse (`sync_source`) puis paquet par paquet (`ingest_code`) : 351 morceaux ;
+- base mémoire : `lucivy_core` (1 757), `ld-lucivy` (28 703), le dépôt entier (130 228) ;
+- base disque, fermeture et réouverture : `ld-lucivy` sans vecteurs puis avec vecteurs (embarqués
+  pendant l'ingestion), le dépôt entier sans vecteurs ;
+- une masse arrêtée à 320 fichiers sur 1 147 puis reprise, avec réouvertures ;
+- `edit_file` sur `sharded_handle.rs` (ligne remplacée à longueur égale, ligne insérée en tête), puis
+  resynchronisation de la source ;
+- la passe de rattrapage (`embarquer_le_retard` en boucle, 57 passes, puis réouverture) et la
+  réclamation seule répétée mille fois sur les mêmes lignes.
+
+Une passe propre ne perd donc rien : ni la masse, ni le SET de réclamation, ni celui du vecteur, ni
+le point de reprise. Restent hors des sondes : **l'hôte lui-même** (sessions concurrentes, montre
+et réactions, rebâti du plein texte à l'ouverture après une génération interrompue), **un vrai
+service d'embarquement lent**, **les arrêts brutaux** et le rejeu du journal, et **la copie prise au
+vol** (celle que F a comptée a été prise pendant que l'hôte tenait la base). La sonde par l'hôte,
+avec un faux service lent et une session qui interroge pendant l'index, est la suivante (codeparsers,
+12 octobre au matin).
+
+La réclamation seule reproduit en revanche **la boucle** : sans le service, elle rend sans fin ses
+propres lignes (512 000 en 8,7 s) — ce que les défenses de l'arbre principal arrêtent.
