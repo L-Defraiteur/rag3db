@@ -103,7 +103,13 @@ fn usages_rend_la_definition_et_les_appels_releves_a_la_main() {
         .filter(|u| u.usage == "call" || u.usages.iter().any(|g| g == "call"))
         .map(|u| fichier(&u.user.path))
         .collect();
-    assert_eq!(appels, BTreeSet::from(["port.rs".to_string(), "runtime.rs".to_string()]), "les appels relevés à la main");
+    // Relevés à la main dans les sources (11 octobre 2026) : `port.rs` (ses
+    // propres tests), `runtime.rs:829` et `:1295`, `node.rs:481` (le fan-in
+    // d'une entrée, 9521ab63c) et `concurrent.rs:341` (l'exécuteur
+    // concurrent, 439ca3c9c). Un appel nouveau dans `src/dataflow` change ce
+    // relevé : le relire dans le fichier avant de l'ajouter ici.
+    let attendus = ["concurrent.rs", "node.rs", "port.rs", "runtime.rs"];
+    assert_eq!(appels, attendus.iter().map(|f| f.to_string()).collect::<BTreeSet<_>>(), "les appels relevés à la main");
     let tous: BTreeSet<String> = r.usages.iter().map(|u| fichier(&u.user.path)).collect();
     for f in ["render_nodes.rs", "generic_search_nodes.rs"] {
         assert!(!tous.contains(f), "{f} ne nomme merge_port_values que dans des chaînes ou un commentaire : {tous:?}");
