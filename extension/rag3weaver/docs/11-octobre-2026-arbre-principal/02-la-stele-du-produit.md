@@ -87,10 +87,13 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
    quand des liens bougent), et le pointeur à l'arbre principal :
    1. **T5** (fermeture locale, `map(aide)`) : fait, branche `t5-fermetures` en vérification.
       Reste ensuite en P4 : les C++ anonymes.
-   2. **Rejouer deux recettes probablement déjà fermées** : le type d'un champ déclaré dans un
-      autre fichier (B2b) et le chemin vers une réexportation (la sonde B9 le voit traverser).
-      Chacun en témoin ; fermé s'il est vert, corrigé sinon. Reste ensuite en P1 : le nom seul et
-      les segments de module, et les prototypes C.
+   2. **Rejouer deux recettes** — fait (branche `recettes-p1`) : le type d'un champ déclaré dans
+      un autre fichier est **fermé** (B2b, témoin posé) ; le chemin vers une réexportation est
+      **rouge**, plus net que le ticket (avec un homonyme : aucune arête). Il devient le lot 2 bis,
+      le correctif décidé le 4 octobre (codeparsers : un import dit qu'il réexporte ;
+      `code.rs` : un rendez-vous `REEXPORTS`, suivi par `choose_target` sur des sauts bornés,
+      marque « import »). Reste ensuite en P1 : le nom seul et les segments de module, et les
+      prototypes C.
    3. **`analyze` en racine relative** (P3) : refuser une racine relative avec une erreur
       nommée, ou la résoudre en le disant ; et un fichier analysé qui ne rend rien entre dans
       `skipped` avec sa raison. Petit lot. Reste ensuite : rien en P3 côté codeparsers.
