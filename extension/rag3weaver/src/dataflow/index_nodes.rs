@@ -339,8 +339,11 @@ fn spawn_index_with_stop(
         Ok(()) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
             if let Some(root) = source.cursor().strip_prefix("worktree:") {
+                // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
+                let v = crate::catalog::indexed_tree_of(root);
                 if let Ok(cat) = catalog.lock() {
-                    if let Err(e) = cat.note_indexed_tree(root) {
+                    let cell = cat.scope().clone();
+                    if let Err(e) = cat.note_indexed_tree(&cell, &v) {
                         log(&journal, &format!("(l'arbre indexé n'a pas pu être noté : {e})"));
                     }
                 }

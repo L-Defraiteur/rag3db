@@ -473,6 +473,25 @@ pub const fn rebuild_threshold(dim: usize) -> usize {
 /// La clé méta de l'arbre indexé (racine, commit, heure) : voir
 /// [`Catalog::note_indexed_tree`].
 pub const INDEXED_TREE_KEY: &str = "indexed_tree";
+
+/// La clé méta de l'arbre indexé d'une cellule : deux cellules peuvent
+/// indexer deux arbres (marche 1 bis).
+fn indexed_tree_key(cell: &crate::scope::Scope) -> String {
+    format!("{INDEXED_TREE_KEY}:{}/{}", cell.org, cell.project)
+}
+
+/// **L'arbre et le commit de `root`** : la racine, le commit court, des
+/// modifications non commitées ou non, l'heure. Lance `git` : à appeler sans
+/// tenir le verrou du catalogue, puis [`Catalog::note_indexed_tree`].
+pub fn indexed_tree_of(root: &str) -> serde_json::Value {
+    let git = |args: &[&str]| -> Option<String> {
+        let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
+    let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
+    serde_json::json!({ "root": root, "commit": commit, "dirty": dirty, "at_ms": retard::now_ms() })
+}
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
 /// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
@@ -3064,25 +3083,18 @@ impl Catalog {
 
     // ── L'arbre indexé ───────────────────────────────────────────────────
 
-    /// **Noter l'arbre et le commit d'un index réussi** : la racine, le
-    /// commit court, des modifications non commitées ou non, l'heure. Chaque
-    /// réponse de lecture les dit ([`Self::indexed_tree_line`]) : un agent
-    /// sait sur quel code on lui répond.
-    pub fn note_indexed_tree(&self, root: &str) -> Result<(), CatalogError> {
-        let git = |args: &[&str]| -> Option<String> {
-            let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().ok()?;
-            out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        };
-        let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
-        let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-        let v = serde_json::json!({ "root": root, "commit": commit, "dirty": dirty, "at_ms": retard::now_ms() });
-        self.persist_meta_key(INDEXED_TREE_KEY, &v.to_string())
+    /// **Noter l'arbre et le commit d'un index réussi** dans la cellule
+    /// `cell` : la valeur que rend [`indexed_tree_of`], calculée **hors du
+    /// verrou du catalogue** (`git status` coûte sur un gros arbre). Chaque
+    /// réponse de lecture de cette cellule les dit ([`Self::indexed_tree_line`]).
+    pub fn note_indexed_tree(&self, cell: &crate::scope::Scope, v: &serde_json::Value) -> Result<(), CatalogError> {
+        self.persist_meta_key(&indexed_tree_key(cell), &v.to_string())
     }
 
-    /// La ligne « index : racine @ commit, indexé il y a … », ou `None` sans
-    /// index noté.
-    pub fn indexed_tree_line(&self, now_ms: u64) -> Option<String> {
-        let v: serde_json::Value = serde_json::from_str(&self.read_meta_key(INDEXED_TREE_KEY).ok()??).ok()?;
+    /// La ligne « index : racine @ commit, indexé il y a … » de la cellule,
+    /// ou `None` sans index noté.
+    pub fn indexed_tree_line(&self, cell: &crate::scope::Scope, now_ms: u64) -> Option<String> {
+        let v: serde_json::Value = serde_json::from_str(&self.read_meta_key(&indexed_tree_key(cell)).ok()??).ok()?;
         let root = v.get("root")?.as_str()?;
         let commit = v.get("commit").and_then(|c| c.as_str()).filter(|c| !c.is_empty());
         let dirty = v.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false);

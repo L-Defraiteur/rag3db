@@ -773,6 +773,7 @@ impl NodeFactory for UsagesNodeFactory {
                 if let Some(x) = path.iter().flat_map(|p| p.alternatives.iter()).chain(std::iter::once(&same)).find(|x| !ident(x)) {
                     return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
                 }
+                super::neighborhood_nodes::check_also_path(&path).map_err(|e| format!("UsagesNode: virtual_path : {e}"))?;
                 Some(VirtualConfig { path, same })
             }
             None => None,

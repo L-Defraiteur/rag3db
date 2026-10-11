@@ -85,7 +85,7 @@ pub fn read_catalog_in<'a>(
         (partial, lag) => partial.or(lag),
     };
     // **Sur quel code on répond** : l'arbre et le commit du dernier index.
-    let arbre = cat.indexed_tree_line(crate::catalog::retard::now_ms());
+    let arbre = cat.indexed_tree_line(&cell, crate::catalog::retard::now_ms());
     let status = match (arbre, status) {
         (Some(a), Some(s)) => Some(format!("{a} — {s}")),
         (a, s) => a.or(s),

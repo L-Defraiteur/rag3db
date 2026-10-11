@@ -299,6 +299,20 @@ impl Moteur<'_> {
     }
 }
 
+/// **Un pas répété ne finit pas un chemin** : le dernier pas filtre `same`
+/// à chaque niveau, et une hiérarchie s'arrêterait au premier niveau qui ne
+/// correspond pas — refusé en le nommant. Les gabarits répètent le pas du
+/// milieu (`HAS_PARENT>|IMPLEMENTS/INHERITS_FROM>+|PARENT_OF>`).
+pub fn check_also_path(chemin: &[Step]) -> Result<(), String> {
+    match chemin.last() {
+        Some(p) if p.repeat => Err(format!(
+            "chemin : le dernier pas ({}) ne se répète pas — il filtre le nom à chaque niveau ; répéter un pas du milieu",
+            p.alternatives.join("/")
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// **Suivre un chemin déclaré** (`also_path`) depuis des départs (uuid,
 /// titre) : chaque pas, par chacune de ses relations, répété s'il le dit ; au
 /// bout, ne garder que les nœuds dont le champ `same` vaut le titre du départ.
@@ -308,6 +322,7 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
     if chemin.is_empty() || departs.is_empty() {
         return Ok(Vec::new());
     }
+    check_also_path(chemin)?;
     let mut courant: Vec<(String, String)> = departs.to_vec();
     for (i, pas) in chemin.iter().enumerate() {
         let dernier = i + 1 == chemin.len();
@@ -942,6 +957,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             Some(d) => return Err(format!("NeighborhoodNode: sens inconnu « {d} »")),
         };
         let also_path = liste(config.get("also_path")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
+        check_also_path(&also_path).map_err(|e| format!("NeighborhoodNode: also_path : {e}"))?;
         let mut start_cfg = start;
         start_cfg.direct = relations.clone();
         let cfg = NeighborhoodConfig {
@@ -1081,6 +1097,19 @@ impl NodeFactory for NeighborhoodNodeFactory {
 
 #[cfg(test)]
 mod tests_saut {
+
+    #[test]
+    fn un_pas_se_lit_avec_ses_alternatives_et_sa_repetition() {
+        let p = pas("IMPLEMENTS/INHERITS_FROM>+").unwrap();
+        assert_eq!(p.alternatives, vec!["IMPLEMENTS".to_string(), "INHERITS_FROM".to_string()]);
+        assert!(p.repeat && p.relation == "IMPLEMENTS");
+        let chemin: Vec<Step> = ["HAS_PARENT>", "IMPLEMENTS/INHERITS_FROM>+", "PARENT_OF>"].iter().map(|x| pas(x).unwrap()).collect();
+        assert!(check_also_path(&chemin).is_ok());
+        let fautif: Vec<Step> = ["HAS_PARENT>", "PARENT_OF>+"].iter().map(|x| pas(x).unwrap()).collect();
+        let e = check_also_path(&fautif).unwrap_err();
+        assert!(e.contains("PARENT_OF") && e.contains("ne se répète pas"), "{e}");
+    }
+
     use super::*;
     use crate::dialect::{Rag3dbDialect, SchemaDialect};
     use super::super::graph_walk::EdgeMark;
