@@ -60,6 +60,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         file_source: None,
         #[cfg(feature = "code")]
         garde: None,
+        reactions: Mutex::new(None),
     };
     (dir, backend)
 }
@@ -194,7 +195,7 @@ const REACTION: &str = "%% tool: watch
 %% param: target string = \"Memory\" -- la cible
 %% result: react.report
 graph LR
-    events[\"EventSourceNode(topics='catalog', cursor='r', limit=1000)\"]
+    events[\"EventSourceNode(topics='catalog', cursor='watch', limit=1000)\"]
     react[\"ReactTransitionNode(target=$target)\"]
     events -->|events| react
 ";

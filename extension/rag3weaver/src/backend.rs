@@ -1,8 +1,9 @@
 //! A backend is a manifest, payload schemas and explicitly exposed graph tools.
 //! No domain vocabulary lives in this module. One host owns the catalogue.
 use crate::dataflow::{
-    build_definition, builtin_graph_tools, port_value_to_checkpoint, DataflowRuntime,
-    GraphDefinition, GraphTool, NodeRegistry, NodeTypePolicy, ServiceRegistry,
+    build_definition, builtin_graph_tools, port_value_to_checkpoint,
+    reactor::{Reactor, ReactorHandle},
+    DataflowRuntime, GraphDefinition, GraphTool, NodeRegistry, NodeTypePolicy, ServiceRegistry,
 };
 use crate::{
     catalog::Catalog,
@@ -289,6 +290,23 @@ fn valider_une_reaction(
              le dire — renommez l'une des deux"
         ));
     }
+    // 1 bis. **La clé du manifeste EST le curseur, donc elle doit être le nom
+    //    de la fiche.** `Reactor::watch` ouvre `bus.cursor(sujet,
+    //    tool.name())` — le nom de la FICHE, pas la clé — et la fiche nomme
+    //    elle-même ce curseur dans son `EventSourceNode(cursor='…')`. Déclarée
+    //    sous une autre clé, la réaction se lirait sous un nom et se vérifierait
+    //    sous un autre : le refus homonyme ci-dessus porterait sur une clé que
+    //    le bus ignore, et deux clés sur la même fiche partageraient un curseur
+    //    en silence (le défaut que le point 1 prétend fermer).
+    if graphe.name() != nom {
+        return Err(format!(
+            "la réaction « {nom} » porte la fiche « {} » : pour une réaction, la clé du \
+             manifeste EST le curseur du réacteur, donc elle doit être le nom de la fiche — \
+             renommez la clé en « {} », ou donnez-lui sa propre fiche",
+            graphe.name(),
+            graphe.name()
+        ));
+    }
     // 2. La liste blanche réactive.
     valider_noeuds_de_reaction(
         nom,
@@ -308,6 +326,30 @@ fn valider_une_reaction(
              « %% on: <sujet> ». Ajoutez-la, ou déclarez ce graphe dans \"tools\" si c'est \
              l'agent qui doit l'appeler"
         ));
+    }
+    // 3 bis. **Les deux curseurs doivent porter le même nom.** Le réacteur
+    //    ouvre le curseur du graphe (`bus.cursor(sujet, nom)`) au `watch`,
+    //    AVANT ce qu'on veut observer ; le graphe le relit par le nom écrit
+    //    dans son `EventSourceNode(cursor='…')`. Deux noms différents, et le
+    //    curseur relu n'existe pas encore : il s'ouvre à la première
+    //    exécution, donc il **manque tout ce qui a été émis avant** — une
+    //    réaction qui dort silencieusement sur son premier lot. Vu le
+    //    11 octobre 2026 sur une fiche de témoin (`cursor='r'` pour une
+    //    réaction nommée `watch`), signalé par « everything declarative ».
+    for noeud in &graphe.template().nodes {
+        if noeud.node_type != "EventSourceNode" {
+            continue;
+        }
+        let Some(curseur) = noeud.config.get("cursor").and_then(Value::as_str) else { continue };
+        if curseur != nom {
+            return Err(format!(
+                "la réaction « {nom} » : son {} nomme le curseur « {curseur} », mais le \
+                 réacteur ouvre « {nom} » (le curseur EST le nom de la réaction, et il est \
+                 ouvert avant ce qu'on observe). Écrivez cursor='{nom}' — sinon la réaction \
+                 manque tout ce qui a été émis avant sa première exécution",
+                noeud.name
+            ));
+        }
     }
     for cle in bindings.keys() {
         if !graphe.params().iter().any(|p| p.name == *cle) {
@@ -427,7 +469,8 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
         })
         .map(|n| {
             format!(
-                "{outil} : le port status de {} ne va à aucune fusion — un échec                  de toutes les branches rendra un résultat vide (status non câblé)",
+                "{outil} : le port status de {} ne va à aucune fusion — un échec \
+                 de toutes les branches rendra un résultat vide (status non câblé)",
                 n.name
             )
         })
@@ -479,7 +522,10 @@ pub struct PreparedBackend {
     mappings: HashMap<String, JsonSchemaMapping>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
     tools: BTreeMap<String, GraphTool>,
-    nodes: NodeRegistry,
+    /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
+    /// temps d'un appel, le réacteur des réactions le garde le temps de son
+    /// service.
+    nodes: Arc<NodeRegistry>,
     tool_schemas: BTreeMap<String, Value>,
     tool_validators: HashMap<String, jsonschema::Validator>,
     harnesses: HashMap<String, PreparedHarness>,
@@ -1091,7 +1137,7 @@ impl PreparedBackend {
             tools,
             after_hooks,
             reactions,
-            nodes,
+            nodes: Arc::new(nodes),
             tool_schemas,
             tool_validators,
             harnesses,
@@ -1328,7 +1374,7 @@ impl PreparedBackend {
             Some(source) => Some(crate::decider::connect_decider(source)?.0),
             None => None,
         };
-        Ok(Backend {
+        let backend = Backend {
             decider,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -1337,7 +1383,15 @@ impl PreparedBackend {
             file_source,
             #[cfg(feature = "code")]
             garde,
-        })
+            reactions: Mutex::new(None),
+        };
+        // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
+        // ici, pas sur un appel que l'hôte pourrait oublier : une section
+        // `"reactions"` lue, validée, puis montée par personne serait
+        // exactement la déclaration inerte qu'on écrit en boucle dans ce
+        // dépôt. Sans réaction déclarée, aucun réacteur ne démarre.
+        backend.mount_reactions()?;
+        Ok(backend)
     }
 }
 
@@ -1426,6 +1480,27 @@ pub struct Reloaded {
     /// Les réactions retirées par ce rechargement (voir
     /// [`PendingReload::removed_reactions`]).
     pub removed_reactions: Vec<String>,
+}
+
+/// Ce qu'un rechargement a fait des réactions en service
+/// ([`Backend::reload_reactions`]).
+///
+/// Tout est RENDU, rien n'est seulement journalisé : l'arrêt d'un réacteur
+/// emporte ses erreurs avec lui, et un curseur oublié perd ses événements en
+/// attente. Les taire ici en ferait deux pertes silencieuses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReactionsReloaded {
+    pub reloaded: Reloaded,
+    /// Les erreurs des réactions arrêtées — personne d'autre ne les relira,
+    /// leur réacteur est parti.
+    pub errors_before: Vec<String>,
+    /// Les curseurs oubliés, en clair (`<sujet>@<réaction>`) : **leurs
+    /// événements en attente sont perdus**, c'est le prix de retirer une
+    /// réaction d'un manifeste. Sans cet oubli, le bus garderait un curseur
+    /// que plus rien ne vide.
+    pub dropped_cursors: Vec<String>,
+    /// Les réactions remontées.
+    pub mounted: Vec<String>,
 }
 
 fn harness_presentation(response: &mut Value) {
@@ -1634,6 +1709,17 @@ impl PreparedBackend {
 }
 
 pub struct Backend {
+    /// **Les réactions en service** — le réacteur qui les exécute, ou rien si
+    /// le manifeste n'en déclare aucune. Montées à l'ouverture, arrêtées par
+    /// [`Backend::stop_reactions`] (un arrêt ATTENDU) avant que le catalogue
+    /// ne soit lâché : une réaction qui finit d'écrire pendant qu'on ferme
+    /// écrirait dans un catalogue en train de partir.
+    ///
+    /// **Premier champ, et c'est voulu** : les champs tombent dans l'ordre de
+    /// leur déclaration, donc le `Drop` de la poignée — le filet, qui signale
+    /// l'arrêt sans l'attendre — passe avant que l'`Arc` du catalogue ne soit
+    /// lâché ici. Le contrat reste `stop_reactions`.
+    reactions: Mutex<Option<ReactorHandle>>,
     /// **Les déclarations en service.** Un appel prend la version courante au
     /// départ et la garde jusqu'au bout : un rechargement qui la remplace
     /// pendant ce temps ne change rien à l'appel en cours.
@@ -1667,6 +1753,186 @@ impl Backend {
     /// format du manifeste.
     pub fn declarations_version(&self) -> u64 {
         self.version.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// **Les réactions du manifeste, montées sur le bus du catalogue** — la
+    /// première et seule porte par laquelle un backend exécute ses graphes
+    /// réactifs. Jusqu'au 11 octobre 2026, `Reactor::watch` n'avait aucun
+    /// appelant dans tout `src/` : la section `"reactions"` se lisait, se
+    /// validait, et ne tournait jamais.
+    ///
+    /// Chaque réaction part avec **ses liaisons du manifeste**, telles quelles
+    /// — le chargement a déjà refusé celle qui ne s'instancie pas avec elles
+    /// seules, parce que personne ne complète un argument à l'exécution.
+    ///
+    /// **La politique de nœuds est écrite ICI, jamais dans le manifeste.**
+    /// `ReactionAttachment` n'a pas de champ `policy`, et ce n'est pas un
+    /// oubli : un gabarit qui nommerait sa propre politique s'accorderait une
+    /// capacité de fichier ou de commande en l'écrivant. La liste blanche
+    /// réactive était jusqu'ici le seul garde-fou et il était au chargement ;
+    /// il est maintenant aux deux bouts, et le second refus nomme le nœud.
+    ///
+    /// Rend les noms montés. Sans réaction déclarée, aucun réacteur ne
+    /// démarre et le résultat est vide.
+    pub fn mount_reactions(&self) -> Result<Vec<String>, String> {
+        let prepared = self.prepared();
+        if prepared.reactions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return Err("les réactions sont déjà en service : arrêtez-les par \
+                        Backend::stop_reactions, ou remontez-les sur de nouvelles \
+                        déclarations par Backend::reload_reactions"
+                .into());
+        }
+        let bus = self
+            .catalog
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .event_bus();
+        let mut services = self.build_services(&prepared);
+        // Le bus en LECTURE, sous la clé que demande `EventSourceNode` : le
+        // catalogue n'en donne que `"event_bus"`, par lequel on **publie**.
+        // Le même bus des deux côtés — c'est sur lui que `watch` ouvre les
+        // curseurs, et de lui que le graphe les relit.
+        services.register(
+            crate::dataflow::trace_nodes::EVENTS_SERVICE,
+            Arc::new(bus.clone()),
+        );
+        let mut reactor = Reactor::new(bus, prepared.nodes.clone(), Arc::new(services));
+        let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
+        let mut mounted = Vec::new();
+        for (name, graphe) in prepared.reaction_graphs() {
+            let bindings = prepared
+                .manifest
+                .reactions
+                .get(name)
+                .map(|a| a.bindings.clone())
+                .unwrap_or_default();
+            reactor = reactor
+                .watch_bound(graphe.clone(), Value::Object(bindings), policy.clone())
+                .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?;
+            mounted.push(name.clone());
+        }
+        *slot = Some(reactor.spawn());
+        Ok(mounted)
+    }
+
+    /// **Arrête les réactions et rend leurs erreurs** — un arrêt ATTENDU
+    /// (`ReactorHandle::stop`), pas espéré par un `Drop` : une réaction qui
+    /// finit d'écrire pendant qu'on ferme écrirait dans un catalogue en train
+    /// de partir.
+    ///
+    /// À appeler avant de lâcher le backend. Rien en service : rend vide.
+    pub fn stop_reactions(&self) -> Vec<String> {
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        match slot.take() {
+            Some(handle) => {
+                let errors = handle.errors();
+                handle.stop();
+                errors
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// Les erreurs des réactions en service, dans l'ordre — ce qu'un hôte
+    /// affiche, et ce qu'un témoin lit. Une réaction qui échoue n'a aucun
+    /// appelant à qui rendre son erreur : si personne ne demande ici, elle
+    /// n'est nulle part.
+    pub fn reaction_errors(&self) -> Vec<String> {
+        self.reactions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(ReactorHandle::errors)
+            .unwrap_or_default()
+    }
+
+    /// Le nombre d'exécutions de réaction depuis le montage.
+    pub fn reaction_runs(&self) -> usize {
+        self.reactions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(ReactorHandle::runs)
+            .unwrap_or(0)
+    }
+
+    /// Attend que les réactions aient exécuté `n` fois, au plus `timeout` —
+    /// pour un témoin, ou un hôte qui veut synchroniser.
+    pub fn wait_reaction_runs(&self, n: usize, timeout: std::time::Duration) -> bool {
+        let start = std::time::Instant::now();
+        while self.reaction_runs() < n {
+            if start.elapsed() > timeout {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        true
+    }
+
+    /// **Recharge les déclarations ET remonte les réactions**, dans le seul
+    /// ordre qui tienne :
+    ///
+    /// 1. [`Backend::check_reload`] — un refus ici n'arrête rien, les
+    ///    réactions en service continuent ;
+    /// 2. l'arrêt ATTENDU des réactions — après la vérification, parce qu'un
+    ///    refus ne doit pas coûter une interruption ;
+    /// 3. [`Backend::apply_reload`] — d'un seul geste, et il ne peut plus
+    ///    échouer ;
+    /// 4. l'oubli des curseurs des réactions retirées, **en le disant** : ce
+    ///    qui attendait dessus est perdu, et le bus n'accumule plus pour
+    ///    personne ;
+    /// 5. le remontage depuis la nouvelle version.
+    ///
+    /// Ce qui rend l'étape 2 sûre, c'est le refus de l'étape 1 : le schéma,
+    /// la base et l'espace de travail ne se rechargent pas, donc une réaction
+    /// de l'ancienne version qui finit d'écrire écrit dans un catalogue que
+    /// la nouvelle ne change pas.
+    pub fn reload_reactions(&self) -> Result<ReactionsReloaded, String> {
+        self.apply_reload_with_reactions(self.check_reload()?)
+    }
+
+    /// **Les étapes 2 à 5 seules**, sur un [`PendingReload`] déjà vérifié —
+    /// pour un hôte qui veut garder l'étape 1 à lui (un refus avec retour
+    /// arrière doit pouvoir dire « rien n'a été arrêté », ce qu'il ne peut
+    /// plus dire si la vérification et l'arrêt sont dans le même appel).
+    /// Demandé par « everything declarative » pour `Backend::declare`.
+    pub fn apply_reload_with_reactions(
+        &self,
+        pending: PendingReload,
+    ) -> Result<ReactionsReloaded, String> {
+        let before = self.prepared();
+        let removed: Vec<String> = pending.removed_reactions().to_vec();
+        let errors_before = self.stop_reactions();
+        let reloaded = self.apply_reload(pending);
+        let mut dropped_cursors = Vec::new();
+        if !removed.is_empty() {
+            let bus = self
+                .catalog
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .event_bus();
+            for name in &removed {
+                let Some(graphe) = before.reaction_graphs().get(name) else { continue };
+                for topic in graphe.on() {
+                    // Le curseur du GRAPHE seulement. La sonnette du réacteur
+                    // (`<nom>@reactor`) est un abonnement, pas un curseur
+                    // enregistré sur le bus : elle part avec son récepteur.
+                    bus.drop_cursor(topic, name);
+                    dropped_cursors.push(format!("{topic}@{name}"));
+                }
+            }
+        }
+        let mounted = self.mount_reactions()?;
+        Ok(ReactionsReloaded {
+            reloaded,
+            errors_before,
+            dropped_cursors,
+            mounted,
+        })
     }
 
     /// **Relit les déclarations et les met en service d'un coup** :
@@ -2167,27 +2433,17 @@ impl Backend {
         }
         combined
     }
-    fn execute_graph(
-        &self,
-        prepared: &PreparedBackend,
-        tool: &GraphTool,
-        def: &GraphDefinition,
-        metadata_ports: &[OutputPort],
-        policy: &NodeTypePolicy,
-    ) -> Result<Value, String> {
-        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
-    }
-    fn execute_plan(
-        &self,
-        prepared: &PreparedBackend,
-        result_port: (&str, &str),
-        def: &GraphDefinition,
-        metadata_ports: &[OutputPort],
-        policy: &NodeTypePolicy,
-    ) -> Result<Value, String> {
-        let mut graph =
-            build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
-        // The host serializes tool calls; services are fresh so shutdown owns all handles.
+    /// **Les services d'un graphe de ce backend, en un seul endroit.** Le
+    /// chemin des outils ([`Backend::execute_plan`]) et le montage des
+    /// réactions ([`Backend::mount_reactions`]) donnent exactement les mêmes :
+    /// sans ce partage, une réaction validée au chargement échouerait à
+    /// l'exécution sur un service absent, et le manifeste aurait menti.
+    ///
+    /// `"events"` (lecture du bus, ce que demande `EventSourceNode`) n'est
+    /// pas ici : le catalogue donne `"event_bus"`, par lequel on **publie**.
+    /// C'est le montage qui ajoute le premier, parce que lui seul sait sur
+    /// quel bus les curseurs ont été ouverts.
+    fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
         let mut services = ServiceRegistry::new();
         self.catalog
             .lock()
@@ -2247,6 +2503,30 @@ impl Backend {
                 .map(|(k, v)| (k.clone(), v.writes.clone()))
                 .collect::<HashMap<_, _>>(),
         );
+        services
+    }
+    fn execute_graph(
+        &self,
+        prepared: &PreparedBackend,
+        tool: &GraphTool,
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+    ) -> Result<Value, String> {
+        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
+    }
+    fn execute_plan(
+        &self,
+        prepared: &PreparedBackend,
+        result_port: (&str, &str),
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+    ) -> Result<Value, String> {
+        let mut graph =
+            build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
+        // The host serializes tool calls; services are fresh so shutdown owns all handles.
+        let services = self.build_services(prepared);
         let output = DataflowRuntime::with_services(100, services).execute(&mut graph)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
@@ -2508,7 +2788,7 @@ mod tests {
         )
     }
 
-    /// **Les quatre refus d'une réaction disent chacun quoi faire.**
+    /// **Les sept refus d'une réaction disent chacun quoi faire.**
     ///
     /// Ils sont la valeur de la section `"reactions"` : sans eux, un manifeste
     /// faux se découvre à la première panne, dans un flux que personne ne lit.
@@ -2524,10 +2804,10 @@ mod tests {
 
         // Vert d'abord : la forme attendue passe, sinon les rouges ci-dessous
         // ne prouveraient rien.
-        super::valider_une_reaction("review", &bonne, &vide, false, &BTreeSet::new()).expect("la forme attendue");
+        super::valider_une_reaction("r", &bonne, &vide, false, &BTreeSet::new()).expect("la forme attendue");
 
         // 1. Homonyme d'un outil — le curseur du réacteur EST ce nom.
-        let e = super::valider_une_reaction("review", &bonne, &vide, true, &BTreeSet::new()).unwrap_err();
+        let e = super::valider_une_reaction("r", &bonne, &vide, true, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("curseur"), "{e}");
 
         // 2. Un nœud hors de la liste réactive, avec sa capacité : le refus
@@ -2537,29 +2817,48 @@ mod tests {
             "    lu[\"ReadFileNode(path='x')\"]\n",
             "lu.content",
         );
-        let e = super::valider_une_reaction("review", &lit, &vide, false, &BTreeSet::new()).unwrap_err();
+        let e = super::valider_une_reaction("r", &lit, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("read_files") && e.contains("tools"), "{e}");
 
         // 3. Pas de `%% on:` — et l'autre porte de sortie est nommée.
         let muette = fiche_reactive("%% param: target string = \"Memory\" -- la cible\n");
-        let e = super::valider_une_reaction("review", &muette, &vide, false, &BTreeSet::new()).unwrap_err();
+        let e = super::valider_une_reaction("r", &muette, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("%% on:") && e.contains("tools"), "{e}");
 
         // 4. Une liaison que la fiche ne déclare pas.
         let mut inconnue = Map::new();
         inconnue.insert("cible".into(), json!("Memory"));
-        let e = super::valider_une_reaction("review", &bonne, &inconnue, false, &BTreeSet::new()).unwrap_err();
+        let e = super::valider_une_reaction("r", &bonne, &inconnue, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("liaison inconnue cible"), "{e}");
 
         // 5. Non déterminée par ses liaisons : un paramètre obligatoire que
         //    personne ne remplira à l'exécution.
         let exigeante = fiche_reactive("%% on: catalog\n%% param: target string! -- la cible\n");
-        let e = super::valider_une_reaction("review", &exigeante, &vide, false, &BTreeSet::new()).unwrap_err();
+        let e = super::valider_une_reaction("r", &exigeante, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("n'est pas déterminée par ses liaisons"), "{e}");
         // Liée, la même fiche passe.
         let mut liee = Map::new();
         liee.insert("target".into(), json!("Memory"));
-        super::valider_une_reaction("review", &exigeante, &liee, false, &BTreeSet::new()).expect("liée");
+        super::valider_une_reaction("r", &exigeante, &liee, false, &BTreeSet::new()).expect("liée");
+
+        // 6. **La clé n'est pas le nom de la fiche** — et le curseur, c'est le
+        //    nom de la fiche. Le refus donne le nom à écrire.
+        let e = super::valider_une_reaction("revoir", &bonne, &vide, false, &BTreeSet::new())
+            .unwrap_err();
+        assert!(e.contains("« r »") && e.contains("curseur"), "{e}");
+
+        // 7. **Le curseur du graphe nomme autre chose que la réaction.** Le
+        //    réacteur ouvre le curseur au `watch`, avant ce qu'on observe :
+        //    deux noms, et la réaction manque son premier lot sans rien dire.
+        let ailleurs = fiche(
+            "%% on: catalog\n%% param: target string = \"Memory\" -- la cible\n",
+            "    events[\"EventSourceNode(topics='catalog', cursor='autre', limit=1000)\"]\n    \
+             react[\"ReactTransitionNode(target=$target)\"]\n    events -->|events| react\n",
+            "react.report",
+        );
+        let e = super::valider_une_reaction("r", &ailleurs, &vide, false, &BTreeSet::new())
+            .unwrap_err();
+        assert!(e.contains("cursor='r'") && e.contains("avant"), "{e}");
     }
 
     /// **Le compte de chaque liste blanche est épinglé.**
@@ -2676,6 +2975,7 @@ mod tests {
             file_source: None,
             #[cfg(feature = "code")]
             garde: None,
+            reactions: Mutex::new(None),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -2878,6 +3178,7 @@ mod tests {
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
+            reactions: Mutex::new(None),
         }
     }
 
@@ -3328,3 +3629,7 @@ mod tests {
 #[cfg(test)]
 #[path = "backend_reload_tests.rs"]
 mod reload_tests;
+
+#[cfg(test)]
+#[path = "backend_reactions_tests.rs"]
+mod reactions_tests;

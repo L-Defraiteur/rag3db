@@ -34,42 +34,33 @@
 %% attend au curseur.
 %%
 %% ────────────────────────────────────────────────────────────────────────────
-%% **Cette fiche n'est PAS déclarée dans les outils du gabarit, et elle ne peut
-%% pas l'être aujourd'hui.** Mesuré le 4 octobre 2026 : un outil de backend ne
-%% peut contenir que les nœuds d'une liste blanche (`backend_code.rs`,
-%% `BASE_NODES` et les listes par capacité), et `EventSourceNode` n'y est pas —
-%% le backend **refuse de charger** son manifeste, en le disant :
-%% « l'outil « review_anchored » contient EventSourceNode, qui n'est pas un
-%% nœud d'outil de backend ».
+%% **Déclarée et montée depuis le 11 octobre 2026.** Ce qui suit est l'histoire
+%% de ce qui manquait, gardée parce qu'elle dit *pourquoi* le chemin a cette
+%% forme — et non ce qui manque encore.
 %%
-%% Et ce refus est juste : un graphe réactif n'est pas un verbe qu'un agent
-%% appelle, c'est ce que le **réacteur** exécute. C'est pourquoi `trace.mmd`
-%% vit dans `templates/` et non dans un manifeste de backend.
+%% Elle n'est PAS dans les outils du gabarit, et elle ne peut pas l'être. Un
+%% outil de backend ne peut contenir que les nœuds d'une liste blanche
+%% (`backend_code.rs`), et `EventSourceNode` n'y est pas : le backend refuse de
+%% charger un manifeste qui l'y mettrait, en le disant. Ce refus est juste — un
+%% graphe réactif n'est pas un verbe qu'un agent appelle, c'est ce que le
+%% réacteur exécute.
 %%
-%% **Ce qui manque pour la monter** : `Reactor::watch(GraphTool)` existe
-%% (`dataflow/reactor.rs:146`) et **personne ne l'appelle** dans tout `src/`.
-%% Il n'y a donc, à cette date, aucun chemin par lequel un backend déclare ses
-%% graphes réactifs. Le nœud et son témoin de bout en bout
-%% (`tests/e2e_reacteur.rs`) sont vrais ; le branchement attend ce chemin.
+%% Le 10 octobre, le manifeste a reçu une section `"reactions"`, à côté de
+%% `"tools"` : lue, construite, liée et validée au chargement, avec sa propre
+%% liste blanche (`backend_code::reaction_nodes` — la base plus
+%% `EventSourceNode` et `ReactTransitionNode`, et aucune capacité de fichier ni
+%% de commande). Mais personne n'appelait `Reactor::watch` dans tout `src/`, et
+%% `run_tool` instanciait avec `json!({})` : déclarée, cette fiche aurait chargé
+%% sans broncher et n'aurait été **montée par rien** — exactement la
+%% déclaration inerte qu'on écrit en boucle dans ce dépôt.
 %%
-%% **Depuis le 10 octobre 2026, la moitié de ce chemin existe.** Le manifeste a
-%% une section `"reactions"`, à côté de `"tools"` : lue, construite, liée et
-%% validée au chargement, avec sa propre liste blanche
-%% (`backend_code::reaction_nodes` — la base plus `EventSourceNode` et
-%% `ReactTransitionNode`, et aucune capacité de fichier ni de commande). Une
-%% fiche comme celle-ci s'y déclare donc **sans rien changer ici**, avec ses
-%% liaisons (`target`, `relation`, `transition`, `source`).
-%%
-%% **Ce qui manque encore, et pourquoi elle n'y est pas déjà** : personne
-%% n'appelle `Reactor::watch`, et `run_tool` instancie avec `json!({})` — les
-%% liaisons d'un manifeste ne l'atteignent pas. Déclarée aujourd'hui, cette
-%% fiche chargerait sans broncher — à condition de lier ses trois paramètres
-%% obligatoires (`target`, `relation`, `transition` ; `source` a un défaut), car
-%% une réaction doit être **entièrement déterminée par ses liaisons** : personne
-%% n'est là pour compléter un argument à l'exécution. Mais elle ne serait
-%% **montée par rien**, et une déclaration inerte dans un gabarit livré est
-%% exactement le défaut qu'on écrit en boucle ici. Elle entre le jour où
-%% `Reactor::watch` a un appelant qui porte ses liaisons.
+%% Le 11 octobre, `Backend::mount_reactions` l'appelle. Elle part avec ses
+%% liaisons (`target`, `relation`, `transition`, `source`) et sous la liste
+%% blanche réactive, **écrite dans le montage et non dans le manifeste** : un
+%% gabarit ne peut pas s'accorder une capacité en se la déclarant. Ses trois
+%% paramètres obligatoires doivent être liés — une réaction est entièrement
+%% déterminée par ses liaisons, personne n'est là pour en compléter une à
+%% l'exécution.
 %% ────────────────────────────────────────────────────────────────────────────
 graph LR
     events["EventSourceNode(topics='catalog', cursor='review_anchored', limit=1000)"]
