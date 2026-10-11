@@ -380,3 +380,23 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
   2. **Dire quand** : la réponse d'`usages` pourrait porter « index à jour au <heure> » (ou « N
      fichiers en attente »), pour qu'un agent sache s'il lit l'état d'après son édition.
   3. **Un client de session qui se reconnecte seul** quand l'hôte revient (ici `/mcp` à la main).
+
+### 11 oct., 18 h 45 — codeparsers — « un seul changement localisé doit être rapide » (question de Lucie, mesure pour le cœur)
+
+- **La question posée** : combien de temps entre l'écriture d'une fonction dans l'arbre indexé et
+  la première réponse d'`usages` qui la rend ?
+- **Le montage** : l'hôte de luciepc (binaire master a3c1ca98f, montre `reindex_on_change`),
+  `code-principal` sur `~/git_workspaces/rag3db` ; le cœur ajoute
+  `essaiIndexationAChaudSecondeFonction` (qui appelle la première) au fichier d'essai de Lucie
+  `test/essai_indexation_a_chaud.cpp`, écrit à 18:42:18.7 (mtime).
+- **Ce qu'il a rendu** : à 18:42:29.9, la première interrogation rendait déjà la définition
+  (`test/essai_indexation_a_chaud.cpp:19`) — **11,2 s au plus** (borne haute : la boucle n'a
+  commencé qu'à cet instant) ; à 18:42:41, `usages essaiIndexationAChaudDixNeufHeures` rendait le
+  nouvel appelant (`:20`).
+- **Ce qui manquait** : une mesure à borne basse (une boucle qui tourne avant l'écriture), et
+  surtout le client du cœur lui-même — son client MCP de session avait expiré au redémarrage de
+  l'hôte et ne se reconnecte pas sans un `/mcp` de Lucie : un client qui survit au redémarrage de
+  l'hôte (relit le jeton, se reconnecte) manque.
+- **Les temps de luciepc, pour mémoire** : premier index `rag3db-bascule` 450 s (pic de l'hôte
+  7,9 Go), `rag3db` (mtg-experiments) 490 s (12,1 Go, deux bases ouvertes) ; l'arrêt de l'hôte
+  pendant que la montre retirait un arbre effacé : 42 min, forcé par Lucie (ticket de l'arrêt).
