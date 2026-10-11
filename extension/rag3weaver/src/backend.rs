@@ -477,6 +477,25 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
         .collect()
 }
 
+/// **Un refus dit la règle et la taille, jamais la donnée.** Le message de
+/// `jsonschema` recopie la valeur fautive entière : 2 Mo de JSON pour 20 000
+/// `records`, avant « has more than 512 items ». Au-delà de 200 caractères, la
+/// valeur cède la place à sa forme : « un tableau de 20000 éléments ».
+fn schema_refusal(e: &jsonschema::ValidationError<'_>) -> String {
+    let message = e.to_string();
+    let instance = e.instance().to_string();
+    if instance.len() <= 200 {
+        return message;
+    }
+    let forme = match e.instance().as_ref() {
+        Value::Array(a) => format!("un tableau de {} éléments", a.len()),
+        Value::Object(o) => format!("un objet de {} champs", o.len()),
+        Value::String(t) => format!("une chaîne de {} caractères", t.chars().count()),
+        autre => format!("une valeur de {} octets", autre.to_string().len()),
+    };
+    message.replacen(&instance, &forme, 1)
+}
+
 struct PreparedHook {
     tool: GraphTool,
     data: Value,
@@ -1607,7 +1626,7 @@ impl PreparedBackend {
         jsonschema::validator_for(&schema)
             .map_err(|e| e.to_string())?
             .validate(&request.arguments)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| schema_refusal(&e))?;
         let def = tool
             .instantiate(&request.arguments)
             .map_err(|e| e.to_string())?;
@@ -2098,7 +2117,7 @@ impl Backend {
             jsonschema::validator_for(&definition["inputSchema"])
                 .map_err(|e| e.to_string())?
                 .validate(&args)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| schema_refusal(&e))?;
             if name == "describe_backend" {
                 return Ok(prepared.search_description());
             }
@@ -2139,7 +2158,7 @@ impl Backend {
                 return Err(format!("unknown argument {key}"));
             }
         }
-        let errors: Vec<Value> = prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":e.to_string()})).collect();
+        let errors: Vec<Value> = prepared.tool_validators[name].iter_errors(&Value::Object(args.clone())).map(|e|json!({"code":"schema","path":e.instance_path().to_string(),"message":schema_refusal(&e)})).collect();
         if !errors.is_empty() {
             if attachment.harness.input_schema.is_none()
                 && attachment.harness.before.is_empty()
@@ -2928,6 +2947,24 @@ mod tests {
 
 
     use super::*;
+
+    /// Le refus d'un tableau trop long dit sa taille et la limite, sans le
+    /// recopier (ticket de G : 2 Mo de JSON dans le message d'`ingest_snapshot`).
+    #[test]
+    fn un_refus_de_schema_dit_la_taille_sans_recopier_la_donnee() {
+        let schema = json!({"type":"object","properties":{"records":{"type":"array","maxItems":512}}});
+        let records: Vec<Value> = (0..20_000).map(|i| json!({"id": i, "texte": "une ligne assez longue"})).collect();
+        let args = json!({ "records": records });
+        let validator = jsonschema::validator_for(&schema).unwrap();
+        let e = validator.validate(&args).unwrap_err();
+        let message = schema_refusal(&e);
+        assert!(message.len() < 200, "le refus recopie la donnée ({} octets) : {}", message.len(), &message[..message.len().min(300)]);
+        assert!(message.contains("20000") && message.contains("512"), "{message}");
+        // Une petite valeur reste dite telle quelle : elle aide à comprendre.
+        let petite = json!({"records": "pas un tableau"});
+        let e = validator.validate(&petite).unwrap_err();
+        assert!(schema_refusal(&e).contains("pas un tableau"), "{}", schema_refusal(&e));
+    }
     #[test]
     fn search_verbs_run_through_library_without_a_transport() {
         use crate::connection::{CallbackConnection, CypherValue, QueryResult};
