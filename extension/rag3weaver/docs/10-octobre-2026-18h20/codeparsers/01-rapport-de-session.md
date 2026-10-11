@@ -146,3 +146,39 @@ est à ignorer : rebasée, poussée sous un nom neuf.
 principal (`17cca6e17` … `a514e66ed`, pointeur codeparsers `06d6e92`) ;
 worktree `rag3db-cp` et `target-impact` effacés. Reste sur le poste : le
 clone `cp-b2d` et `target-cp` (chantier codeparsers, B2d), `wt-docs`.
+
+## 11 octobre, matin — les appels sur une locale non typée, visibles (décision de Lucie)
+
+**Codeparsers `d0c0e46`** (master). Un appel sur une locale qui reste non
+typée était écarté en silence. La référence est désormais gardée, marquée
+`untyped_receiver` ; le résolveur ne la relie jamais par le nom et la range
+sous la raison « receveur non typé ». Une locale liée à une expression
+différée (`let t = f()`, `auto t = f()`) porte la même marque : le type
+différé reste lu s'il se trouve.
+
+**Un écart corrigé avant le commit** : ma première version marquait aussi
+les appels déjà visibles que le résolveur reliait par le nom dans le
+fichier — 1 492 sur rag3weaver, à moitié justes sur un échantillon de 40
+(`agent.run()`, `conn.execute()` justes ; `uuid.as_str()` vers
+`Resolution::as_str`, `r.get(0)` vers `Catalog::get` faux). Ce n'était pas
+la décision (« écarté en silence ») : la marque est resserrée aux appels
+qui étaient écartés et aux locales à type différé. **Question ouverte pour
+Lucie** : retirer aussi ces liens par le nom dans le fichier (marqués
+« fichier », donc suivis par `impact` comme sûrs) ?
+
+**Banc, corpus égal** : références d'appel rag3weaver 53 199 → 56 811
+(+3 612 visibles, 7 044 « receveur non typé » entre fichiers) ; liens
+d'appel comparés arête par arête avant/après : rag3weaver et codeparsers
+identiques, IR identique, rag3db/src 0 perdue et 1 paire gagnée (juste :
+`~MiniZStreamWrapper() → MiniZStreamWrapper::close()`). Un lien faux
+trouvé en chemin et fermé : la classe agrégeait l'appel marqué d'une de ses
+méthodes comme référence de type (`GraphTool → spec`, vers une fermeture
+homonyme).
+
+**Côté rag3weaver** (branche `receveurs-non-types`, vérifiée, proposée) : la
+marque voyage jusqu'au rendez-vous (`MENTIONS.untyped_receiver`), et
+`choose_target` ne fait plus de repli par le seul nom sans type lu ;
+`usages` dit « (par le nom) » des usages venus du seul rendez-vous (défaut
+antérieur : un rendez-vous non relié s'affichait comme un usage sûr).
+Témoin `e2e_usages::un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie`,
+rouge avant (une arête `run → update` par le nom), vert après.
