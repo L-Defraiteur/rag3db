@@ -1,10 +1,12 @@
 # Après un arrêt brutal du mélange C7, des relations à une extrémité manquante n'existent qu'après le rejeu
 
-- **État** : ouvert (A4′ faite, 10 octobre 2026, nuit ; le chemin n'est pas trouvé).
+- **État** : corrigé par le commit qui déplace ce ticket (11 octobre 2026, 13 h 30 ; ouvert le 10 octobre à A4′, chemin
+  trouvé par la trace du rejeu d'une passe rouge gardée). Rejeu seulement, un seul écrivain suffit.
 - **Gravité** : réponse fausse (des relations pendantes après la reprise, que la base vivante
   n'avait pas) ; le vérificateur d'intégrité les voit (`rel-endpoints-exist`,
   `rel-directions-agree`, `stored-endpoints-visible`, `same-answers`).
-- **Atteignable en service** : non (mode multi-écrivains, éteint hors du banc).
+- **Atteignable en service** : OUI — un nœud avec deux relations ou plus, `DETACH DELETE`, mort avant le
+  point de reprise, rejeu : la seconde relation du lot survit d'un seul côté (corrigé).
 - **Touche rag3weaver** : non tant que le mode reste éteint.
 
 ## Ce que c'est
@@ -44,3 +46,26 @@ qu'avant A4′, pas une régression.
 Un témoin minimal (le banc l'a proposé) tiré du journal d'une passe rouge : les enregistrements
 de la relation pendante et du détachement de son extrémité, dans l'ordre du fichier, contre
 l'ordre des événements du banc. Puis la correction, et la ligne de `known_red.txt` qui sort.
+
+## La cause, et la fermeture (cœur C++, 11 octobre 2026)
+
+Enquête : une passe rouge de `C7_RandomMix/Thread_Crash` gardée (base, journal, dump vivant) et le
+rejeu tracé enregistrement par enregistrement, puis la liste CSR du nœud détaché et la visibilité
+ligne à ligne. Au détachement du côté arrière du nœud 60 (table Link3), deux relations visibles dans
+le même lot du balayage (49 et 54) ; une seule supprimée ; la 54 restait, d'un seul côté
+(« forward only »), avec une extrémité manquante — elle n'existait pas dans le dump vivant.
+
+La cause : `WALReplayer::replayRelDetachDeletionRecord` branchait les vecteurs voisin et relation
+sur l'état du vecteur **source** (plat, une position). Le balayage des relations du nœud y écrit la
+sélection du lot, et `RelTableData::delete_` lit alors le nœud source à la position de la relation
+— nulle au-delà de la position 0 — et rend faux avant d'écrire, en silence. L'exécuteur vivant
+(`NodeTableDeleteInfo`) donne à voisin et relation un état à eux, distinct du source : c'est la forme
+reprise au rejeu. Les trois pistes du ticket (validation à moitié appliquée, vue du dernier validé,
+nœud local) n'y étaient pour rien.
+
+Témoin déterministe : `PendingRelAfterReplayTest` (`journaled_copy_test.cpp`) — deux relations vers
+un nœud, le nœud détaché et supprimé, la mort, le rejeu ; aucune relation ne survit d'un côté ni de
+l'autre ; sous le mode multi-écrivains aussi. Rouge sur master, vert après ; `C7_RandomMix/Thread_Crash`
+×10 vert, sa ligne sort de `known_red`. Pièges de l'enquête : garder la base et le journal AVANT le
+rejeu (le harnais rejoue tout de suite) ; un témoin minimal à UNE relation était vert — le motif
+demandait deux relations dans le même lot.
