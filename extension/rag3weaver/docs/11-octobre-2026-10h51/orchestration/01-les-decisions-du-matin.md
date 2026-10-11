@@ -624,3 +624,35 @@ où elle vit.
   libs par identifiant de bâti (une lib par commit du moteur, rangée une fois,
   jamais réécrite, chaque arbre charge celle de son commit, le contrôle de
   bâti fait le reste). Noté pour G après ses lots, pas avant.
+- **Vers 20 h** : nom-seul (`cad384056`) et les anonymes C++ (`66752a44e`)
+  sur master, toute la part de codeparsers passée par l'arbre principal ;
+  envoi-virtuel en push ; les routes de l'hôte (`636c4b392`) en file ; le
+  banc des fiches classées avec ses deux tentatives datées (mémoire,
+  `30ce3aadc` : le petit modèle se trompe sûr de lui, Gemini tronqué par le
+  plafond de Decide) ; le ticket des verrous du cœur fermé (`b4655da39`) ;
+  `CALL build_id()` (hotfixs, `48b74ead1`) ; la mesure de F (`821d70a63`,
+  page 06) : **l'exécution domine, et dans l'exécution les fils** : une
+  lecture d'outil de quelques lignes reçoit 32 fils, impact à 1 fil va 47 %
+  plus vite ; suite : l'ingestion mesurée à 1/4/32 fils, puis une connexion
+  de lecture à peu de fils (capacité du dialecte), puis l'instruction
+  préparée ; ticket moteur à ouvrir « fils proportionnés à la cardinalité
+  estimée ».
+- **Master rouge une demi-heure** (30ce3aadc, deux jeux de features) :
+  cause dite par la mémoire, son script comptait « 4 lignes VERT » (cinq jeux
+  depuis l'après-midi) et lisait `$?` derrière un tube ; corrigé `519ae1d9f`.
+  Règle diffusée : vert = aucune ligne ROUGE dans la sortie écrite dans un
+  fichier ET le vrai code de sortie lu sans tube, jamais un compte ;
+  check_features.sh rend une ligne finale et un code (recherche). Autres
+  règles du soir : master lu par le FETCH_HEAD de son propre fetch (les
+  worktrees partagent origin/master, G) ; check_tickets avant tout push de
+  docs qui touche l'index ; `poste push --lourd`, ordre fixe des verrous ;
+  B4 de G : une racine locale par base, la seconde nommée.
+- **luciepc, soirée** : l'hôte arrêté de force deux fois par Lucie (18 h 40
+  après 42 min ; 19 h 45 après un figement de l'index de code-lourd pendant
+  un checkout et un rebâti de la lib sous lui, mémoire à 30 Go ; la lib avait
+  bien été remplacée par un fichier neuf, suspect écarté ; piles perdues ;
+  ticket du figement chez le proto : « finir proprement et reprendre ») ;
+  règle : prévenir codeparsers avant tout rebâti de la lib commune et tout
+  checkout de rag3db-lourd, surtout pendant un index ; code-principal saine,
+  code-lourd à réindexer, chemin
+  `/home/lucied/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`.
