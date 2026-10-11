@@ -1073,3 +1073,33 @@ variante à borne nulle ; la liaison Rust porte `file_lock_wait_ms` (le e2e Rust
 peuvent pas ouvrir la même base » garde sa conclusion, l'enfant attend 5 s avant le refus). Passe en cours sur luciepc (`rag3db-verrous-b2`) : le témoin (a) a attrapé une vraie perte à la première forme (voir ci-dessous), corrigée ; sur la tête corrigée, témoins 3, C9 2, transaction_test 263, api 104, c_api 136, copy 23, stockage, vector 74/63, Cypher 1867 verts ; banc conforme 9 rouges / 255 verts ; les cinq jeux de features verts avec la ligne `Checking rag3weaver` (le premier `check_features.sh` était rouge pour deux raisons étrangères au code : le sous-module codeparsers absent d'un worktree neuf, et l'index des tickets de la base de branche d'avant la réparation de G). Push par `poste push "coeur c++" --lourd` (quatre tours refusés 75 à la porte, le poste pris par une mesure de l'arbre principal, puis le cinquième) : rebase sur master par FETCH_HEAD, `check_tickets.py` vert, bâti chaud 73 étapes, témoins 3, C9 2, banc 10 rouges attendus / 256 verts, **master `0a630b764`** (20 h 35, trois contrôles lus). `rag3db-verrous-b2` effacé ; la lib commune de luciepc attend le créneau de codeparsers (règle du soir : prévenir avant, attendre « hôte arrêté »). **Condition 3 : A complet (T0, A3′ reprise, A7, A8, A9), B1 et B2 faits ; B3 est côté produit.**
 
 **La perte attrapée par le témoin (a)** : « opened 1512 1 », 2 lignes sur 3 à la fin. L'ouverture en écriture lisait le journal (taille capturée, rejeu) avant d'attendre le verrou du fichier de données, pris seulement au FileHandle ; le second rejouait le journal tel qu'au début de son attente, la ligne validée par le premier pendant l'attente manquait, et le point de reprise du second à sa fermeture l'effaçait. Forme : `Database` prend une garde sur le fichier de données (verrou exclusif, avec la borne) avant toute lecture, et la tient jusqu'après le gestionnaire de tampons (un verrou fcntl tombe à la fermeture de n'importe quel descripteur du fichier dans le processus) — e5f9da853 ; le banc a demandé un contrôle de plus dans (a), « le second voit à l'ouverture les lignes du premier », bb4a4dc55.
+
+## Soirée : l'incident de la lib, le lot ABI, l'instrument des fils (11 octobre 2026, 20 h 40 à 21 h 10)
+
+**L'incident, à mon compte.** La lib commune de luciepc rebâtie sur master avec B2 (selon la règle :
+codeparsers arrête l'hôte, je bâtis, « lib faite ») a laissé l'hôte de luciepc incapable de
+redémarrer : « undefined symbol: _ZN6rag3db4main12SystemConfigC1Emmbbmbmbbb » — B2 avait ajouté
+`fileLockWaitMs` au constructeur de `SystemConfig`, le symbole exporté a changé, et le binaire de
+l'hôte, lié à la lib d'avant, ne le trouve plus ; l'unité bouclait, codeparsers l'a arrêtée, G
+rebâtit le binaire. L'identifiant de bâti protège les extensions, pas les binaires qui lient la
+lib. Règles posées : l'annonce « lib faite » dit **« ABI changée »** quand le lot touche
+`tools/rust_api` ou une signature exportée (`SystemConfig`, `Database`, `Connection`, le C API),
+et les binaires installés se rebâtissent avant la relance de leurs hôtes ; un lot qui change
+l'API publique le dit **avant** le rebâti de la lib commune. Ticket moteur ouvert, à mon nom, pour
+après : un binaire lié à un autre bâti reçoit un refus nommé (« bâti contre X, lib Y ») au lieu
+d'un symbole manquant.
+
+**Le lot ABI** (branche `systemconfig-abi`, 1d74f8ae1, worktree `rag3db-abi`) : l'ancienne
+signature de `SystemConfig` reste, en surcharge qui délègue à la complète avec l'attente par
+défaut ; un binaire lié à la lib d'avant se lie et démarre. Témoin
+`SystemConfigTest.TheOldConstructorStillLinksAndGivesTheDefaultFileLockWait` (l'ancienne forme
+donne 5 000 ms, la complète prend 0, `dlsym` trouve le symbole d'avant) ; au push, `nm -D` de la lib
+le vérifie aussi ; le `--describe` de l'hôte d'avant contre la lib neuve, par codeparsers, est le
+témoin d'exploitation.
+
+**L'instrument des fils** (branche `fils-proportionnes`, a3e5e5dd7, worktree `rag3db-fils`, page
+12 §6) : la cardinalité estimée descend au plan physique, chaque tâche se dit sous
+`RAG3DB_TRACE_TASKS`. La mesure de F (`e2e_mesure_impact`, sa commande, `RUST_TEST_THREADS=1`,
+`poste mesure`) tourne sur ce bâti avec la trace : résultats à la page 12 §8. F a mesuré
+l'ingestion à 1, 4 et 32 fils : ≤ 2 % d'écart ; impact −20 % (176 fichiers), −47 % (src/daemon).
+F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit masque éparpillé.
