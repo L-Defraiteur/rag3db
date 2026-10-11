@@ -90,3 +90,86 @@ d'un banc annonçant 66 aiguilles et 45 questions quand il en avait 63 et 43 ;
 Le dernier cas est le plus instructif : j'ai présumé le défaut parce que je
 venais d'en voir cinq. Un motif qu'on reconnaît bien devient un motif qu'on voit
 partout.
+
+---
+
+# Ajout de 3 h 40 — le montage des réactions, et l'ordre A joué
+
+## Ce qui est entré dans master
+
+**`0387fe401` — les réactions du manifeste sont montées sur le réacteur.**
+`Reactor::watch` n'avait aucun appelant dans tout `src/` : la section
+`"reactions"` du 10 octobre se lisait, se validait, et ne tournait jamais.
+C'était le premier des six cas du motif de la journée, et c'est celui-là qui
+est fermé.
+
+- `Backend::mount_reactions` / `stop_reactions` / `reload_reactions` /
+  `apply_reload_with_reactions`. `Backend::open` monte tout seul ce que le
+  manifeste déclare : un appel que l'hôte doit penser à faire est un appel que
+  l'hôte oublie.
+- **La politique de nœuds est écrite dans le montage, jamais dans le
+  manifeste** : `ReactionAttachment` n'a pas de champ `policy`, et ce n'est pas
+  un oubli. Un gabarit qui nommerait la sienne s'accorderait une capacité de
+  fichier ou de commande en l'écrivant.
+- `review_anchored` déclaré dans le gabarit `memory` avec ses quatre liaisons ;
+  sa fiche ne dit plus « ce qui manque pour la monter » mais ce qui manquait.
+- Deux refus de chargement nouveaux : la clé du manifeste doit être le nom de la
+  fiche, et le `cursor=` de l'`EventSourceNode` doit être ce même nom — sinon le
+  graphe ouvre son curseur à sa première exécution et **manque tout ce qui a été
+  émis avant**, sans rien dire.
+- `Backend::shutdown` arrête les réactions avant le catalogue. Il ne le faisait
+  pas au premier jet : trouvé en jouant la passe MCP, pas en relisant le code.
+
+**Les témoins.** `tests/e2e_reaction_montee.rs` est celui qui compte : un
+manifeste déclare, `Backend::open` monte, un `put_sujet` ordinaire émet sur le
+bus, et la fiche ancrée passe `a_revoir`. Aucun appel ne nomme la réaction,
+nulle part. `src/backend_reactions_tests.rs` porte le contre-témoin « un nœud
+hors liste est refusé à l'exécution » — il ne peut pas passer par un manifeste,
+puisque le chargement le refuse, donc il monte la fiche interdite à la main sur
+le réacteur avec la politique du montage.
+
+Mesuré : lib 1351 passés 0 échec après rebase ; e2e_reaction_montee,
+e2e_reacteur, e2e_proto_boutique, e2e_liens (6), e2e_mcp_stdio au vert.
+
+## L'ordre A, joué
+
+Page à part : `07-l-ordre-a-la-memoire-branchee.md`. En deux lignes : la
+mémoire longue est branchée, la base vit dans `~/.local/share/rag3weaver/`, deux
+processus successifs prouvent qu'elle se souvient, et le serveur annonce
+maintenant les réactions qu'il monte en plus des outils qu'il expose.
+
+La question de l'ordre A — « est-ce que Claude range spontanément ? » — attend
+Lucie : je suis la session qui a écrit l'outil, mon usage ne prouve rien.
+
+## Quatre tickets ouverts, tous relevés en faisant
+
+1. les échecs de groupe d'une réaction ne sont lus par personne et s'accumulent
+   (le réacteur garde **un** `ServiceRegistry` pour toute sa vie) ;
+2. un `put` qui omet le champ de cycle de vie réécrit l'état **initial** et
+   défait une transition sans le dire ;
+3. aucun outil du gabarit `memory` n'ancre une mémoire à un sujet : la réaction
+   est montée et ne peut rien transitionner. **Le motif de la journée pris une
+   couche plus haut** — la déclaration est vraie, le moteur est vrai, et le
+   chemin qui les relie est fermé par en haut ;
+4. (le README des tickets annonçait 46 ouverts pour 46 lignes avant moi ;
+   recompté à 49 après les trois.)
+
+## Ce que cet ajout a appris
+
+**Un signalement vaut mieux qu'une correction.** « everything declarative » m'a
+dit qu'un de ses témoins allait rougir de mon durcissement, avec la ligne et le
+remède. Son témoin ne rougissait pas — mais en vérifiant pourquoi, j'ai trouvé
+qu'il passait au vert **en ayant le défaut dedans** (`cursor='r'` pour une
+réaction nommée `watch`). La correction demandée tenait en un mot ; le filet
+qu'elle a fait naître refuse maintenant le cas au chargement.
+
+**Jouer trouve ce que relire ne trouve pas.** `Backend::shutdown` qui ne
+stoppait pas les réactions, et le serveur qui n'annonçait pas ce qu'il montait,
+sont deux choses que j'avais sous les yeux dans mon propre diff. C'est la passe
+MCP qui les a montrées.
+
+**Et une continuation perdue.** Trois messages de refus avaient dix-huit
+espaces au milieu d'une phrase : un `\` de fin de ligne mangé par le script
+Python qui a écrit le Rust. Le test qui compare un texte de refus l'a attrapé —
+c'est tout l'intérêt de regarder le **texte** d'un refus et pas seulement qu'il
+y en ait un.

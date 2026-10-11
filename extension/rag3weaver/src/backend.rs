@@ -2658,7 +2658,20 @@ impl Backend {
         self.catalog.lock().unwrap_or_else(|p| p.into_inner()).must_reopen()
     }
 
+    /// **Arrête ce backend : les réactions d'abord, le catalogue ensuite.**
+    ///
+    /// L'ordre n'est pas négociable, et il manquait au premier jet du montage
+    /// (11 octobre 2026, trouvé en jouant la passe MCP) : une réaction qui
+    /// finit d'écrire pendant que le catalogue se ferme écrirait dans un
+    /// catalogue en train de partir. L'arrêt est ATTENDU, pas espéré par un
+    /// `Drop`.
+    ///
+    /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
+    /// est parti avec elles, et personne d'autre ne les relira.
     pub fn shutdown(&mut self) -> Result<(), String> {
+        for erreur in self.stop_reactions() {
+            eprintln!("[réaction] {erreur}");
+        }
         self.catalog
             .lock()
             .unwrap()

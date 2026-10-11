@@ -93,6 +93,20 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         ),
     };
     let mut backend = prepared.open(conn, embedder)?;
+    // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
+    // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
+    // qu'un graphe tourne derrière les outils, et un opérateur ne peut pas
+    // distinguer « la réaction est montée » de « la section a été ignorée ».
+    let reactions = backend.prepared().reaction_graphs().keys().cloned().collect::<Vec<_>>();
+    if reactions.is_empty() {
+        eprintln!("[mcp] aucune réaction déclarée");
+    } else {
+        eprintln!(
+            "[mcp] {} réaction(s) montée(s) : {}",
+            reactions.len(),
+            reactions.join(", ")
+        );
+    }
     let mut entree = io::BufReader::new(io::stdin());
     let mut sortie = io::stdout();
     match rag3weaver::mcp::servir(&backend, &cles, &mut entree, &mut sortie)? {

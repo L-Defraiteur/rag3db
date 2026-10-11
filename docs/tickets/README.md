@@ -25,11 +25,12 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (49)
+### Ouverts (50)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | ouvert, filet côté rag3weaver (point de reprise forcé) ; correctif au cœur | perte | oui sans le filet (COPY de plus d'un groupe, grand tampon) | oui |
+| [Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir](2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md) | ouvert | déclaration inatteignable (la réaction ne transitionne jamais rien) | oui | oui (un gabarit) |
 | [Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro](2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md) | ouvert (vu par la liste d'I1 ; hotfixs bissecte) | perte | oui (reprise après arrêt brutal pendant un COPY) | oui |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
