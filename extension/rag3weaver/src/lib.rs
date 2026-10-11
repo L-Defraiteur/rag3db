@@ -176,6 +176,8 @@ pub mod daemon_host;
 /// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_client;
+/// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
+pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
 /// lancement par le premier client.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]

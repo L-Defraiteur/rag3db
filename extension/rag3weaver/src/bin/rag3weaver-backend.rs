@@ -503,6 +503,59 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     backend.shutdown()
 }
 
+/// **`code-tree`** : poser ou retirer un arbre de code indexé (voir
+/// `rag3weaver::code_tree`).
+fn code_tree(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote]\n       \
+                         rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
+    use rag3weaver::code_tree::{add_files, name_of_tree, register, remove_files, unregister, Roots};
+    let (action, reste) = args.split_first().ok_or(USAGE)?;
+    let mut cible = None;
+    let mut from = "code-lourd".to_string();
+    let mut nom = None;
+    let mut hote = None;
+    let mut sans_hote = false;
+    let mut i = 0;
+    while i < reste.len() {
+        let valeur = |i: usize| reste.get(i + 1).cloned().ok_or_else(|| format!("{} demande une valeur\n{USAGE}", reste[i]));
+        match reste[i].as_str() {
+            "--from" => { from = valeur(i)?; i += 2; }
+            "--as" => { nom = Some(valeur(i)?); i += 2; }
+            "--daemon" => { hote = Some(valeur(i)?); i += 2; }
+            "--sans-hote" => { sans_hote = true; i += 1; }
+            x if cible.is_none() && !x.starts_with("--") => { cible = Some(x.to_string()); i += 1; }
+            x => return Err(format!("argument inconnu « {x} »\n{USAGE}")),
+        }
+    }
+    let cible = cible.ok_or(USAGE)?;
+    let roots = Roots::of_user()?;
+    let adresse = || hote.clone().unwrap_or_else(|| rag3weaver::daemon_lifecycle::read().map(|f| f.address).unwrap_or_else(|| rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS.to_string()));
+    match action.as_str() {
+        "add" => {
+            let a = add_files(&roots, Path::new(&cible), &from, nom.as_deref())?;
+            println!("{} : manifeste {}", a.name, a.manifest.display());
+            println!("base {} — {} fichier(s) de {from}, {}", a.database.display(), a.copied.len(), if a.reflink { "par reflink" } else { "copie pleine (pas de reflink ici)" });
+            if !sans_hote {
+                let r = register(&adresse(), &a.manifest)?;
+                println!("ouvert par l'hôte {} : {r}", adresse());
+            }
+            Ok(())
+        }
+        "remove" => {
+            // Un nom de backend, ou le chemin de l'arbre.
+            let nom = if roots.manifest(&cible).exists() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
+            if !sans_hote {
+                unregister(&adresse(), &roots.manifest(&nom))?;
+                println!("{nom} : fermé par l'hôte {}", adresse());
+            }
+            let r = remove_files(&roots, &nom)?;
+            println!("{nom} : manifeste et base mis de côté sous {}", r.aside.display());
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
 fn run() -> Result<(), String> {
     // La sous-commande se reconnaît au premier mot ; la forme positionnelle
     // d'avant (`rag3weaver-backend backend.json [--describe]`) reste intacte.
@@ -515,6 +568,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("daemon") {
         return servir_le_demon(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("code-tree") {
+        return code_tree(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args
