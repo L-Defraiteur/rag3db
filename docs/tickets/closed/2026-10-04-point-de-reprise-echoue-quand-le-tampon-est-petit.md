@@ -1,6 +1,6 @@
 # Le point de reprise échoue pendant une indexation quand le tampon du moteur est petit
 
-- **État** : corrigé `47a283e6c` (11 octobre 2026, seconde session cœur C++) — des segments de chaînes bornés en octets ; témoins `StringSplitTest` et `BlobCheckpointTest` (`33792e69d`), rouges avant, verts après
+- **État** : corrigé `47a283e6c` **pour les écritures ligne à ligne (CREATE, MERGE), pas pour le COPY** (la confirmation en blobs du 11 octobre reste rouge : ticket ouvert `2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md`) (11 octobre 2026, seconde session cœur C++) — des segments de chaînes bornés en octets ; témoins `StringSplitTest` et `BlobCheckpointTest` (`33792e69d`), rouges avant, verts après
 - **Gravité** : blocage (l'indexation s'arrête, la base doit être rouverte)
 - **Atteignable en service** : oui — tout poste dont le tampon du moteur est
   plus petit que ce qu'un point de reprise veut tenir en mémoire
@@ -213,3 +213,12 @@ ni la plus petite taille de tampon qui passe.
     passe par celle de ses chaînes, qui compte maintenant les vrais octets, mais un segment peut
     dépasser la cible de jusqu'à un lot de 64 valeurs (remarque de la relecture du cœur). Ce n'est
     pas corrigé.
+
+## Fermé sur une preuve plus étroite que le défaut (11 octobre 2026, 10 h 40)
+
+La confirmation de l'arbre principal, sous 2 Gio avec la lib de `4820e9154`, est verte en
+fichiers. Mais ce chemin ne met aucun blob en base. **En blobs, elle reste rouge**, au-delà de
+3 072 fichiers, avec le même message. Les témoins et la sonde de ce ticket écrivent les blobs ligne
+à ligne (CREATE, MERGE). Le produit les écrit par un COPY de `_index_blobs`, en point de reprise
+forcé, et ce chemin n'était pas couvert. La fermeture vaut pour les écritures ligne à ligne. Le
+COPY continue dans `../2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md`.

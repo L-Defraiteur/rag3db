@@ -1,5 +1,9 @@
 # Sous des écritures de BLOB, la mémoire résidente du processus dépasse nettement le tampon du moteur
 
+> **11 octobre, 10 h 40 : vrai aussi sans blobs.** La première indexation de ce dépôt sous 2 Gio de
+> tampon croît d'environ 1 Go de mémoire résidente par millier de fichiers, en fichiers comme en
+> blobs. Le titre ne dit qu'un cas.
+
 - **État** : ouvert (11 octobre 2026, seconde session cœur C++)
 - **Gravité** : mémoire (le processus tient plus que le tampon qu'on lui a donné ; rien n'est
   perdu ni faux)
@@ -29,6 +33,21 @@ brut : une table `(clé, BLOB)`, des lots `UNWIND … MERGE … SET` de 32 Mo de
 Une sonde C++ du même jour (des transactions de 8 blobs de 4 Mo, un point de reprise après
 chacune) voit la mémoire **du tampon** retomber à 6 Mo après chaque point de reprise : ce qui
 dépasse n'est donc pas compté par le tampon.
+
+## Par le produit (arbre principal, 11 octobre, 10 h 28 à 10 h 34, luciepc)
+
+La première indexation de ce dépôt, tampon de 2 Gio, lib de `4820e9154`. La mémoire résidente a
+été relevée par le test lui-même, en Mo :
+
+| fichiers faits | 1 024 | 2 048 | 3 072 | 7 160 |
+|---|---|---|---|---|
+| plein texte en fichiers | 2 574 | 3 584 | 4 432 | 6 941 (pic 7 240) |
+| plein texte en blobs | 2 721 | 4 160 | 5 313 | — (rouge, pic 7 540) |
+
+Presque tout est anonyme. Elle croît d'environ 1 Go par millier de fichiers, **dans les deux
+stockages** : la cause n'est donc pas d'abord les blobs, mais quelque chose qui grandit avec la
+base ou avec ce que le produit tient en mémoire. Journaux : luciepc
+`~/.cache/rag3weaver-notes-A/confirmation/e2e.log` et `e2e-blobs.log`.
 
 ## Ce qui est tenu hors du tampon, d'après la lecture (non mesuré)
 
