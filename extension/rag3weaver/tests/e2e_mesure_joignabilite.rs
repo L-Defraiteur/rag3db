@@ -32,8 +32,9 @@
 //! ce crate). `MESURE_JOIGNABILITE_EXPORT=<dossier>` : chaque table
 //! vectorielle en CSV (`uuid,decalage,v0,…`, dans l'ordre des décalages) et
 //! la liste de ses introuvables — pour rejouer au banc sur les mêmes vecteurs.
-#![cfg(all(feature = "rag3db-native", feature = "code", feature = "daemon"))]
+#![cfg(all(feature = "rag3db-native", feature = "code", feature = "daemon", feature = "burn-embedder"))]
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::collections::HashSet;

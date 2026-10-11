@@ -417,6 +417,7 @@ pub mod burn_ocr {
 /// éprouvent justement les arrêts. `module_path!()` est évalué au point
 /// d'appel : `e2e::<suite>` dans le binaire unique, d'où `<suite>::<test>` ;
 /// le nom court seul quand la suite est son propre binaire.
+#[allow(unused_macros)] // inutilisée quand aucune suite qui se relance n'est compilée
 macro_rules! test_de_cette_suite {
     ($nom:expr) => {{
         match module_path!().split_once("::") {

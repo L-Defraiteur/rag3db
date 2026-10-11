@@ -59,6 +59,7 @@
 //! ```
 #![cfg(feature = "burn-embedder")]
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use rag3weaver::embedder::Embedder;

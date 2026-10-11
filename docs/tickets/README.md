@@ -94,10 +94,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (75), dans `closed/`
+### Fermés (76), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le binaire e2e ne compile pas sans burn-embedder](closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md) | corrigé : le `cfg` de la suite demande sa feature, `scripts/check_features.sh` vérifie les quatre jeux (11 oct.) | blocage (`cargo check --tests` rouge) | non (tests) | oui (tests) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](closed/2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | corrigé : le démon de test sert un écouteur lié au port 0, plus de course au port (11 oct.) | test instable | non | oui (tests du démon) |
 | [PostgreSQL : une requête à deux fautes ne rend rien, même au plancher abaissé](closed/2026-10-11-postgres-une-requete-a-deux-fautes-ne-rend-rien-meme-au-plancher-abaisse.md) | corrigé, `56a680169` (11 oct.) | réponse fausse (selon la session reçue) | sur PostgreSQL | oui |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](closed/2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | corrigé, pas b et c de la marche 1 bis (11 oct.) | réponse fausse | sous l'hôte du démon | oui |

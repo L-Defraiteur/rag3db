@@ -6,6 +6,7 @@
 //! Run with: ./run_e2e.sh --test e2e_synchronisation
 #![cfg(feature = "rag3db-native")]
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::collections::{BTreeMap, HashMap};

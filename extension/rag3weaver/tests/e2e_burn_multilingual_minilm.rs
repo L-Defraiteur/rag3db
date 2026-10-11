@@ -37,6 +37,7 @@ use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
 use rag3weaver::disponibilite::RegimeEcriture;
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 use common::burn::MULTILINGUAL_MINILM;
 

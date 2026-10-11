@@ -34,6 +34,7 @@ use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::postures::Postures;
 use rag3weaver::{CatalogConfig, Rag3dbConnection};
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 fn rag3db_root() -> String {

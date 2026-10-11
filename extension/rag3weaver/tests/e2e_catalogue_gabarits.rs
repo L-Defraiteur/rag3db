@@ -22,6 +22,7 @@
 //! « filtered out » à chaque passe complète — la moitié de la suite ne tournait
 //! nulle part. Relevé le 3 septembre 2026.
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::sync::Arc;

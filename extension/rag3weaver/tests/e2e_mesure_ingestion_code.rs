@@ -15,6 +15,7 @@
 //! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
 //! elle mesure ce que coûte une ingestion sur la carte de ce poste (`tests/common`, `SUITES_LOCALES`).
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder", feature = "code"))]
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::sync::Arc;

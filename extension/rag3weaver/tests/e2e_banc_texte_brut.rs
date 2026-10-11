@@ -20,6 +20,7 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::sync::{Arc, Mutex};

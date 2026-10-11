@@ -18,6 +18,7 @@ use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
 
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 #[cfg(feature = "burn-embedder")]

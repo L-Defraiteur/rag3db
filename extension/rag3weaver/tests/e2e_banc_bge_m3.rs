@@ -10,6 +10,7 @@
 //! **Reste sur la carte d'ici** même si `RAG3WEAVER_EMBED_SERVICE` est posée :
 //! elle mesure le débit de la carte de ce poste (`tests/common`, `SUITES_LOCALES`).
 #![cfg(all(feature = "burn-embedder", feature = "daemon"))]
+#[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
 use std::time::Instant;

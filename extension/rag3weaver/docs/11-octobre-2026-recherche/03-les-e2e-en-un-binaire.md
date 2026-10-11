@@ -186,3 +186,31 @@ passe rend 1. Le défaut était donc rouge, pas un vert vide ; avec le correctif
 montré que le résumé appariait suites et résultats **par le rang** : la ligne
 d'un fils décalait tout le tableau. Il prend maintenant, pour chaque suite, la
 dernière ligne avant la suivante — celle du parent.
+
+## 8. Les jeux de features sous lesquels le check doit passer
+
+Une suite est un module du binaire unique : un `#![cfg]` qui oublie une feature
+employée par la suite casse **tout** le binaire sous un jeu qui ne l'a pas.
+G l'a trouvé le 11 octobre (`e2e_mesure_joignabilite` appelait `common::burn`
+sans demander `burn-embedder`). Le ticket est fermé :
+`docs/tickets/closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md`.
+
+`cargo check --tests` doit passer sous chacun de ces jeux :
+
+| jeu | qui l'emploie |
+|---|---|
+| `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres` | la batterie (`run_e2e.sh`) |
+| `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm` | la batterie avec les suites qui appellent un vrai modèle |
+| `rag3db-native,code,daemon,openai-llm` | le paquet npm (G), les postes sans carte |
+| `rag3db-native,code` | le minimum natif du backend de code |
+
+La commande, depuis `extension/rag3weaver`, avec le moteur partagé :
+
+```
+scripts/check_features.sh
+```
+
+Elle écrit VERT ou ROUGE par jeu et rend 1 dès qu'un jeu est rouge. Un jeu
+seul se vérifie par `cargo check --tests --features <jeu>`. À jouer avant tout
+hash qui touche `tests/` ou les features de `Cargo.toml`. Un jeu nouveau,
+employé par une session ou un script, s'ajoute au tableau **et** au script.
