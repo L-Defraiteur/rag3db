@@ -64,6 +64,8 @@ dépend de codeparsers par chemin), sur tout `src/` : 1 543 fichiers `.h` /
 
 | T4 — un macro_rules! est un scope (B9 Rust) | codeparsers `93e82b8` ; pointeur dans la branche rag3db `impl-pas-definisseur-2` (rebasée, proposée) | La macro devient un scope `Function` (modificateur `macro`), ses références lues dans le corps de ses règles : `par_macro → disons → aide`, le corps ne pollue plus le scope du fichier. Banc Rust en gain net (non-résolues en baisse ; appels reliés de codeparsers entre fichiers 20,9 → 21,8 %). Tickets dans la même branche : « appel par chemin vers un type externe » fermé (témoin de sa recette, rouge avant f91fc58) ; « receveurs sans type » en cours ; T5 (fermeture locale, `map(aide)`) ouvert. |
 
+| B2d — les boucles C++ sur intervalle | codeparsers `06d6e92` | `for (Noeud* n : v)` se lit tel quel ; `for (auto& n : v)` prend l'élément du conteneur déclaré dans la fonction (`vector<unique_ptr<Noeud>>` → `Noeud`). Témoin `tests/boucles_cpp.rs`, rouge 2/3 puis vert. Banc sans recul (rag3db/src : non-résolues entre fichiers 69 756 → 69 745) ; le gain porte au rendez-vous de rag3weaver. Vérification côté rag3weaver en cours, pour un ajout au bout de la branche `impl-pas-definisseur-2`. |
+
 | La borne à la source des types différés | rag3db master (`d6a2827ce`) | Remarque de relecture : chaque mention se résout avec les types écrits de la source et du dépôt de son scope (couple source, repo : deux dépôts locaux partagent la source `file`). Témoin : une classe homonyme dans un instantané. |
 
 ## La mesure réelle : le C++ de rag3db indexé par rag3weaver
