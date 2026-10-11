@@ -1,6 +1,8 @@
 # Après des écritures annulées et des mises à jour de vecteur validées, la recherche ne rend plus qu'une ligne
 
-- **État** : ouvert (11 octobre 2026, 2 h 15, trouvé par le témoin des verrous d'I1).
+- **État** : corrigé — fermé par les correctifs de `bfc1434e1` (lot « mise à jour de vecteurs »
+  du banc), témoin vert (11 octobre 2026, 2 h 05 ; ouvert le même jour à 2 h 15, trouvé par le
+  témoin des verrous d'I1).
 - **Gravité** : réponse fausse (une recherche vectorielle rend 1 ligne pour 100 vivantes).
 - **Atteignable en service** : à établir — vu sous le mode multi-écrivains ; les quatre pièces
   prises une à une hors du mode (une annulation de `CREATE`, de `SET` de vecteur, de `DELETE` ;
@@ -44,3 +46,12 @@ Rejouer la séquence sur la lib du lot « mise à jour de vecteurs » ; si elle 
 les points d'entrée à l'annulation d'une mise à jour et d'une suppression (ou les recalculer à
 la première écriture validée qui suit), avec ce témoin au vert. Propriétaire : le banc (extension
 vector).
+
+## Fermeture (11 octobre 2026)
+
+Rejoué sur `verrous-i1-3` (`b549e607f`, rebasée sur master `6044723a5` qui porte `bfc1434e1`),
+luciepc, bâti de 2 h 00 : `EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUntilTheEnd` avec
+`liveRowsByIndex(*conn, 100) == 100` ajouté avant le `MATCH` — **vert**. Fermé par les correctifs
+de `bfc1434e1`, témoin vert ; lequel des deux correctifs le ferme n'est pas établi (réserve du
+banc). Le témoin livré compte toujours par `MATCH` ; les quatre pièces d'`IndexedTableRollbackTest`
+restent.

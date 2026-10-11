@@ -247,7 +247,9 @@ vector ne voit pas les défauts du rejeu sans extension — rouvrir dans un proc
    le ligne à ligne de ×7 à ×13 (branche `essai-fin-d-instruction-maj`). Restent probabilistes
    `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et `TwentyRowsToTheSameVectorInOneStatement`,
    qui relève des groupes de copies. La condition 4 de la stèle n'est pas fermée : la stèle §2
-   nomme les six tickets du moteur encore ouverts. Le texte d'origine :
+   nomme les tickets du moteur encore ouverts (six le 11 octobre à 2 h ; cinq depuis que la
+   recherche à une seule ligne après annulations est fermée par les mêmes correctifs, témoin
+   vert sur I1 rebasée). Le texte d'origine :
    un contrôle en fin d'instruction sur tout
    ce qu'elle a touché, la dimension 768, les dix mille lignes ; et la ligne lointaine
    injoignable à la construction. Avant V1 seulement si l'invariant « toute ligne à vecteur

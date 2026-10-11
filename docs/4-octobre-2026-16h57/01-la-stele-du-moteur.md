@@ -62,10 +62,11 @@ poser la version.
   `closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`). Deux témoins
   restent probabilistes : `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et
   `TwentyRowsToTheSameVectorInOneStatement`, qui relève des groupes de copies.
-  **La condition 4 n'est pas fermée.** Côté moteur, six tickets restent ouverts avec la gravité
-  « perte » ou « réponse fausse » :
-  - la recherche ne rend plus qu'une ligne après des annulations et des mises à jour
-    (`2026-10-11-recherche-vectorielle-une-seule-ligne-apres-annulations-et-mises-a-jour.md`) ;
+  **La condition 4 n'est pas fermée.** Côté moteur, cinq tickets restent ouverts avec la gravité
+  « perte » ou « réponse fausse » (la recherche qui ne rendait plus qu'une ligne après des
+  annulations et des mises à jour est fermée le 11 octobre par les correctifs de `bfc1434e1`,
+  témoin vert sur I1 rebasée :
+  `closed/2026-10-11-recherche-vectorielle-une-seule-ligne-apres-annulations-et-mises-a-jour.md`) :
   - le CALL de la recherche rend des nœuds supprimés
     (`2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md`) ;
   - la validation à moitié appliquée
