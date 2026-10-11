@@ -169,3 +169,15 @@ où elle vit.
   `02-rapport-de-session.md`, avec la forme en cinq points ; page de
   conception courte d'abord, témoins rouges à faux modèle, lots bornés ; le
   côté démon / serveur MCP reste à l'arbre principal.
+- **L'échappement systématique est sur master** (F, `4cc23f781`) : chaque
+  dialecte cite tout nom du schéma qu'il écrit ; personne au-dessus du dialecte
+  ne voit l'échappement sauf la trace et le Cypher brut ; trois refus nommés
+  (délimiteur, nom intégré, souligné en tête). Précision pour Lucie : le champ
+  intégré est `_uuid` ; un champ déclaré `uuid` sans souligné est un nom
+  ordinaire et passe. PostgreSQL traduit Select et Count dans le même lot.
+- **La marche 1 du démon est sur master** (arbre principal, `deb423288`,
+  `src/daemon_host.rs`) : plusieurs backends par processus, chacun chargé une
+  fois et sérialisé ; sessions d'abord (`POST /session`, en-tête sur chaque
+  requête, refus nommé sans session) ; une base à rouvrir ne lâche que son
+  backend. Suite : marche 1 bis (cellule par session) chez l'arbre principal,
+  marche 3 (client MCP mince par HTTP) chez la mémoire, go donné.
