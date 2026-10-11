@@ -53,6 +53,8 @@ thread_local! {
     static ECHEC_AU_PAQUET: std::cell::Cell<usize> = const { std::cell::Cell::new(6) };
     /// Le corpus de la fuite, et le COPY journalisé.
     static FUITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// La sonde du chemin : le petit corpus, et `Some(true)` sans vecteurs.
+    static SONDE_FUITE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 /// Le « rang » qui demande la mort juste avant la poussée finale du plein
 /// texte, après tous les paquets et les relations.
@@ -95,9 +97,28 @@ fn fuite() -> bool {
     std::env::var_os("TX_ARRET_FUITE").is_some()
 }
 
+/// La taille du corpus de la fuite, « fichiers x fonctions »
+/// (`TX_ARRET_FUITE_TAILLE`, transmis aux fils) : 600 x 250 par défaut. La
+/// sonde du chemin prend un petit corpus.
+fn taille_fuite() -> (usize, usize) {
+    std::env::var("TX_ARRET_FUITE_TAILLE")
+        .ok()
+        .and_then(|t| {
+            let (f, n) = t.split_once('x')?;
+            Some((f.parse().ok()?, n.parse().ok()?))
+        })
+        .unwrap_or((600, 250))
+}
+
+/// Sans embarqueur (`TX_ARRET_SANS_VECTEURS`, transmis aux fils) : aucun
+/// vecteur ne s'écrit, et l'index vectoriel ne tombe ni ne se relève.
+fn sans_vecteurs() -> bool {
+    std::env::var_os("TX_ARRET_SANS_VECTEURS").is_some()
+}
+
 fn paquet() -> usize {
     if fuite() {
-        600
+        taille_fuite().0
     } else if gros() {
         200
     } else {
@@ -107,8 +128,9 @@ fn paquet() -> usize {
 
 fn corpus() -> Vec<(String, String)> {
     if fuite() {
-        let gros_fichiers = (0..600).map(|i| {
-            let corps: String = (0..250).map(|j| format!("pub fn g{i}_{j}() -> u32 {{ {j} }}\n")).collect();
+        let (nb_fichiers, nb_fonctions) = taille_fuite();
+        let gros_fichiers = (0..nb_fichiers).map(move |i| {
+            let corps: String = (0..nb_fonctions).map(|j| format!("pub fn g{i}_{j}() -> u32 {{ {j} }}\n")).collect();
             (format!("src/g{i:03}.rs"), corps)
         });
         let petits = (0..10).map(|i| (format!("src/p{i:02}.rs"), format!("pub fn p{i}() -> u32 {{ {i} }}\n")));
@@ -140,10 +162,15 @@ fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
     conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
-    let mut catalog = if lecture {
-        Catalog::ouvrir_en_lecture(Box::new(conn), Box::new(HashEmbedder::new(16)), config)
+    let embarqueur: Box<dyn rag3weaver::embedder::Embedder> = if sans_vecteurs() {
+        Box::new(rag3weaver::embedder::AbsentEmbedder::new("hash-16", 16))
     } else {
-        Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config)
+        Box::new(HashEmbedder::new(16))
+    };
+    let mut catalog = if lecture {
+        Catalog::ouvrir_en_lecture(Box::new(conn), embarqueur, config)
+    } else {
+        Catalog::new(Box::new(conn), embarqueur, config)
     };
     // `TX_ARRET_FTS=fichiers` : le plein texte dans des fichiers à côté de la
     // base (`FtsStorage::Files`), dont la génération est validée avec les
@@ -170,7 +197,7 @@ fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
         batch_files: paquet(),
         relations: Some(RelationsMode::Bulk),
         // La fuite se cherche aussi par vecteur : les vecteurs s'écrivent.
-        exige: if fuite() { Disponibilites::TOUT } else { Disponibilites::RECHERCHE_TEXTE },
+        exige: if fuite() && !sans_vecteurs() { Disponibilites::TOUT } else { Disponibilites::RECHERCHE_TEXTE },
         force: true,
         takeover: reprendre,
         ..Default::default()
@@ -513,6 +540,21 @@ fn lancer_avec(role: &str, base: &Path, tuer: Option<usize>, transaction: bool, 
         cmd.env("TX_ARRET_FUITE", "1").env("RAG3WEAVER_TEST_COPY_JOURNALISE", "1");
     } else {
         cmd.env_remove("TX_ARRET_FUITE").env_remove("RAG3WEAVER_TEST_COPY_JOURNALISE");
+    }
+    match SONDE_FUITE.with(|f| f.get()) {
+        Some(sans) => {
+            // `TX_SONDE_TAILLE` : la taille réelle pour un passage à la main.
+            let taille = std::env::var("TX_SONDE_TAILLE").unwrap_or_else(|_| "16x250".into());
+            cmd.env("TX_ARRET_FUITE_TAILLE", taille).env("RAG3DB_PROFILE_JOURNAL", "1");
+            if sans {
+                cmd.env("TX_ARRET_SANS_VECTEURS", "1");
+            } else {
+                cmd.env_remove("TX_ARRET_SANS_VECTEURS");
+            }
+        }
+        None => {
+            cmd.env_remove("TX_ARRET_FUITE_TAILLE").env_remove("TX_ARRET_SANS_VECTEURS");
+        }
     }
     match TUER_AVANT_SYNC.with(|f| f.get()) {
         Some(n) => {
@@ -1254,4 +1296,51 @@ fn en_fichiers_une_mort_pendant_un_copy_journalise_se_rejoue_et_se_retrouve() {
 #[ignore]
 fn en_blobs_une_mort_pendant_un_copy_journalise_se_rejoue_et_se_retrouve() {
     mort_pendant_un_copy_journalise(false);
+}
+
+/// **La sonde du chemin** (11 octobre 2026) : par où le premier paquet
+/// quitte-t-il le journal ? Le même écrivain que le témoin de la fuite, COPY
+/// journalisé et point de reprise automatique coupé, sur un petit corpus
+/// (16 fichiers de 250 fonctions : 4 000 scopes au premier paquet, au-delà du
+/// seuil de 1 500 où l'index vectoriel tombe le temps du rattrapage), mort au
+/// second paquet. Avec l'embarqueur, puis sans. On dit les deux journaux et
+/// les lignes de l'index ; l'hypothèse est que l'index relevé, après le
+/// rattrapage du premier paquet, valide son `CREATE_VECTOR_INDEX` par un
+/// point de reprise forcé (`create_hnsw_index.cpp`) qui vide le journal.
+#[test]
+#[ignore]
+fn sonde_le_premier_paquet_quitte_le_journal_par_l_index_vectoriel_releve() {
+    FICHIERS.with(|f| f.set(false));
+    FUITE.with(|f| f.set(true));
+    let mut mesures = Vec::new();
+    let variantes: &[bool] = if std::env::var_os("TX_SONDE_AVEC_SEULEMENT").is_some() { &[false] } else { &[false, true] };
+    for &sans in variantes {
+        SONDE_FUITE.with(|f| f.set(Some(sans)));
+        let cas = if sans { "sonde-fuite-sans-vecteurs" } else { "sonde-fuite-vecteurs" };
+        let dossier = dossier_sur_disque(cas);
+        let base = dossier.join("base.rag3db");
+        let (statut, sortie) = lancer_avec("ecrivain", &base, Some(1), true, 1);
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(statut.signal(), Some(9), "l'écrivain meurt au paquet 1 :\n{}", sortie.chars().take(3000).collect::<String>());
+        let octets: u64 = journal(&dossier).iter().map(|(_, t)| *t).sum();
+        let index: Vec<&str> = sortie.lines().filter(|l| l.contains("l'index `") || l.contains("reconstruction de l'index")).collect();
+        // Les validations de l'écrivain, et celles dont la durabilité est un
+        // point de reprise forcé (la trace `RAG3DB_PROFILE_JOURNAL` du moteur).
+        let validations: Vec<&str> = sortie.lines().filter(|l| l.starts_with("[journal] transaction validée")).collect();
+        let forcees: Vec<&str> = validations.iter().copied().filter(|l| l.contains("forcé")).collect();
+        println!("▸ {cas} : journal {octets} octets ; {} validations dont {} forcées ; index : {index:?}", validations.len(), forcees.len());
+        for l in &forcees {
+            println!("    forcée : {}", l.chars().take(400).collect::<String>());
+        }
+        mesures.push((sans, octets, index.iter().any(|l| l.contains("reconstruction"))));
+        let _ = std::fs::remove_dir_all(&dossier);
+    }
+    SONDE_FUITE.with(|f| f.set(None));
+    if mesures.len() < 2 {
+        return;
+    }
+    let (_, avec, releve) = mesures[0];
+    let (_, sans, _) = mesures[1];
+    assert!(sans >= 1 << 20, "sans vecteurs, le premier paquet reste au journal : {mesures:?}");
+    assert!(releve && avec < sans / 10, "avec vecteurs, l'index relevé a vidé le journal : {mesures:?}");
 }
