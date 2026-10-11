@@ -22,6 +22,7 @@
 #include "main/database.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
+#include "transaction/transaction_context.h"
 #include "storage/storage_utils.h"
 #include "transaction/transaction_manager.h"
 
@@ -436,6 +437,55 @@ TEST_F(InsertLockTest, ASecondWriteOfARelationCommittedAfterTheSnapshotIsASerial
     ASSERT_TRUE(result->hasNext());
     EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 14);
     EXPECT_FALSE(result->hasNext());
+}
+
+// ── Marche T0 : la transaction en échec garde ses verrous jusqu'au ROLLBACK ────────────────
+// Après l'échec d'une instruction dans BEGIN … COMMIT, la transaction est annulée (rien de ce
+// qu'elle a écrit ne reste) mais elle reste OUVERTE, marquée en échec : elle refuse toute
+// instruction, garde ses verrous, et ne se ferme que par ROLLBACK — ou par COMMIT, qui annule et
+// le dit (PostgreSQL : « current transaction is aborted » ; Neo4j refuse le commit). Avant T0,
+// l'échec rendait les verrous tout de suite : celui qui attendait derrière écrivait pendant que le
+// bloc était encore ouvert.
+TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
+    Connection other(database.get());
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(other, "CALL lock_timeout=300;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
+    for (const auto* closing : {"COMMIT;", "ROLLBACK;"}) {
+        mustRun(*conn, "BEGIN TRANSACTION;");
+        mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 1;");
+        const auto id = transactionIDOf(*conn);
+        const auto held = locks().getNumLocksHeld(id);
+        EXPECT_GE(held, 1u) << closing;
+        const auto failed = failureOf(*conn, "CREATE (:Item {id: 2, v: 9});");
+        EXPECT_NE(failed.find("duplicated primary key"), std::string::npos) << failed;
+        // En échec : rien de validé, rien d'écrit, les verrous tenus, tout refusé.
+        EXPECT_EQ(locks().getNumLocksHeld(id), held) << closing << " / locks dropped at failure";
+        const auto waited = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = 2;");
+        EXPECT_NE(waited.find(LockManager::LOCK_TIMEOUT), std::string::npos) << closing << " / " << waited;
+        const auto refused = failureOf(*conn, "MATCH (n:Item {id: 1}) RETURN n.v;");
+        EXPECT_NE(refused.find(TransactionContext::MANUAL_TRANSACTION_FAILED), std::string::npos)
+            << refused;
+        if (std::string(closing) == "COMMIT;") {
+            const auto commit = failureOf(*conn, closing);
+            EXPECT_NE(commit.find(TransactionContext::MANUAL_TRANSACTION_FAILED), std::string::npos)
+                << commit;
+        } else {
+            mustRun(*conn, closing);
+        }
+        // Fermée : les verrous rendus, l'autre écrit, la valeur de l'échec n'est pas là.
+        EXPECT_EQ(locks().getNumResources(), 0u) << closing;
+        mustRun(other, "MATCH (n:Item {id: 1}) SET n.v = 2;");
+        auto result = conn->query("MATCH (n:Item) RETURN n.id, n.v ORDER BY n.id;");
+        ASSERT_TRUE(result->isSuccess());
+        std::vector<std::pair<int64_t, int64_t>> rows;
+        while (result->hasNext()) {
+            auto row = result->getNext();
+            rows.emplace_back(row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>());
+        }
+        EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 2}, {2, 0}})) << closing;
+        mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 0;");
+    }
 }
 
 // ── Marche V2 : l'annonce des verrous en tête de transaction (CALL acquire_locks) ─────────
