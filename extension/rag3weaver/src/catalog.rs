@@ -4261,26 +4261,67 @@ impl Catalog {
         if !scope.is_default() {
             self.multi_cell = true;
         }
-        if scope != self.scope {
-            // Un index par cellule : on gare ceux de la cellule qu'on quitte,
-            // on reprend ceux de la cellule qu'on rejoint (ouverts paresseusement
-            // sinon).
-            let old = std::mem::replace(&mut self.scope, scope);
-            let fts = std::mem::take(&mut self.fts_handles);
-            let sparse = std::mem::take(&mut self.sparse_handles);
-            if !fts.is_empty() {
-                self.parked_fts.insert(old.clone(), fts);
-            }
-            if !sparse.is_empty() {
-                self.parked_sparse.insert(old, sparse);
-            }
-            self.fts_handles = self.parked_fts.remove(&self.scope).unwrap_or_default();
-            self.sparse_handles = self.parked_sparse.remove(&self.scope).unwrap_or_default();
-        }
+        // Un index par cellule : on gare ceux de la cellule qu'on quitte, on
+        // reprend ceux de la cellule qu'on rejoint (ouverts paresseusement sinon).
+        self.basculer(scope);
         if self.initialized {
             self.ensure_scope_nodes()?;
         }
         Ok(())
+    }
+
+    /// **La bascule interne** : la cellule et ses index, sans rien écrire en
+    /// base (pas de nœuds `_Org` / `_Project`, donc permise en lecture seule).
+    fn basculer(&mut self, scope: crate::scope::Scope) {
+        if scope == self.scope {
+            return;
+        }
+        let old = std::mem::replace(&mut self.scope, scope);
+        let fts = std::mem::take(&mut self.fts_handles);
+        let sparse = std::mem::take(&mut self.sparse_handles);
+        if !fts.is_empty() {
+            self.parked_fts.insert(old.clone(), fts);
+        }
+        if !sparse.is_empty() {
+            self.parked_sparse.insert(old, sparse);
+        }
+        self.fts_handles = self.parked_fts.remove(&self.scope).unwrap_or_default();
+        self.sparse_handles = self.parked_sparse.remove(&self.scope).unwrap_or_default();
+    }
+
+    /// **Faire `f` dans une cellule** (marche 1 bis, pas b), puis revenir. Sous
+    /// `&mut self`, donc sous le verrou que l'appelant tient de bout en bout :
+    /// la bascule ne se voit de personne, contrairement à celle qu'on faisait
+    /// autour d'un graphe dont les nœuds relâchent le verrou.
+    pub(crate) fn dans_la_cellule<T>(
+        &mut self,
+        cell: &crate::scope::Scope,
+        f: impl FnOnce(&mut Self) -> Result<T, CatalogError>,
+    ) -> Result<T, CatalogError> {
+        if *cell == self.scope {
+            return f(self);
+        }
+        cell.validate().map_err(CatalogError::SchemaError)?;
+        let avant = self.scope.clone();
+        self.basculer(cell.clone());
+        let r = f(self);
+        self.basculer(avant);
+        r
+    }
+
+    /// **Les services de recherche d'une cellule** : ses index plein texte et
+    /// creux (ouverts s'il le faut), sa cellule, sous le verrou de l'appelant.
+    pub fn register_search_services_in(
+        &mut self,
+        cell: &crate::scope::Scope,
+        services: &mut crate::dataflow::services::ServiceRegistry,
+    ) -> Result<(), CatalogError> {
+        self.dans_la_cellule(cell, |c| {
+            let noms: Vec<String> = c.entity_configs.keys().cloned().collect();
+            c.open_fts_handles_for(&noms);
+            c.register_search_services(services);
+            Ok(())
+        })
     }
 
     /// Les handles FTS d'une cellule (courante ou garée), par table.
@@ -4891,6 +4932,17 @@ impl Catalog {
         entity: &str,
         condition: Option<&FilterCondition>,
     ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
+        self.compile_filter_for_vector_in(&self.scope.clone(), entity, condition)
+    }
+
+    /// [`compile_filter_for_vector`](Self::compile_filter_for_vector) dans la
+    /// cellule de la requête (marche 1 bis, pas b), et non celle du catalogue.
+    pub fn compile_filter_for_vector_in(
+        &self,
+        cell: &crate::scope::Scope,
+        entity: &str,
+        condition: Option<&FilterCondition>,
+    ) -> Result<(Option<String>, Vec<QueryParam>, Option<String>), CatalogError> {
         // `n` est la table de **chunks** : c'est elle que le HNSW indexe. Un
         // filtre porte pourtant sur les champs du **parent** (`file_path`,
         // `repo`, `language`…), qui n'existent pas sur un chunk. On compile
@@ -4911,8 +4963,8 @@ impl Catalog {
             crate::scope::ORG_COLUMN,
             crate::scope::PROJECT_COLUMN
         );
-        params.push(QueryParam::new("_scope_org", CypherValue::String(self.scope.org.clone())));
-        params.push(QueryParam::new("_scope_project", CypherValue::String(self.scope.project.clone())));
+        params.push(QueryParam::new("_scope_org", CypherValue::String(cell.org.clone())));
+        params.push(QueryParam::new("_scope_project", CypherValue::String(cell.project.clone())));
         let combined = match where_str {
             Some(w) => format!("({w}) AND {scope_where}"),
             None => scope_where,
@@ -5523,6 +5575,50 @@ impl Catalog {
     /// au lieu de croire qu'il a tout. Un verbe qui rend moins sans le dire
     /// serait le mensonge qu'on a passé la nuit à enlever.
     pub fn ingest_entities_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        records: Vec<BTreeMap<String, CypherValue>>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        // **Un lot écrit dans une autre cellule que celle du catalogue**
+        // (marche 1 bis) : ses lignes portent déjà leur cellule, posée par le
+        // nœud de l'appel. Il s'écrit dans cette cellule, ses index plein texte
+        // et creux compris, sous le verrou que `&mut self` tient.
+        let lire = |data: &BTreeMap<String, CypherValue>| -> Option<crate::scope::Scope> {
+            let champ = |c: &str| data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            Some(crate::scope::Scope::new(champ(crate::scope::ORG_COLUMN)?, champ(crate::scope::PROJECT_COLUMN)?))
+        };
+        let mut cellules: Vec<crate::scope::Scope> = Vec::new();
+        for r in &records {
+            if let Some(c) = lire(r) {
+                if !cellules.contains(&c) {
+                    cellules.push(c);
+                }
+            }
+        }
+        match cellules.as_slice() {
+            [] => {}
+            [seule] if *seule == self.scope => {}
+            [seule] => {
+                let seule = seule.clone();
+                seule.validate().map_err(CatalogError::SchemaError)?;
+                self.ensure_scope_nodes_for(&seule)?;
+                self.multi_cell = true;
+                return self.dans_la_cellule(&seule, |c| c.ingest_entities_dans_sa_cellule(entity_name, records, exige));
+            }
+            plusieurs => {
+                return Err(CatalogError::SchemaError(format!(
+                    "un lot de « {entity_name} » porte {} cellules : un lot ne s'écrit que dans une cellule",
+                    plusieurs.len()
+                )))
+            }
+        }
+        self.ingest_entities_dans_sa_cellule(entity_name, records, exige)
+    }
+
+    /// [`ingest_entities_jusqu_a`](Self::ingest_entities_jusqu_a), dans la
+    /// cellule courante.
+    fn ingest_entities_dans_sa_cellule(
         &mut self,
         entity_name: &str,
         records: Vec<BTreeMap<String, CypherValue>>,
@@ -8478,21 +8574,18 @@ impl Catalog {
     /// verrouillent le temps d'un appel — un `&mut self` ne peut pas se
     /// donner lui-même. C'est la forme que le produit tient déjà.
     ///
-    /// Le fan-out de cellules et la bascule de cellule (`options.scopes`,
-    /// `options.scope`) se font **autour** du graphe, comme dans le
-    /// monolithe, en changeant la cellule du catalogue le temps de l'appel.
-    /// Ce n'est pas plus sûr qu'avant face à une recherche concurrente sur le
-    /// même catalogue — c'est la même limite, nommée : des cellules **par
-    /// requête**, sans bascule d'état global, sont un chantier à part.
+    /// **Les cellules passent par la requête** (marche 1 bis, pas b) : le
+    /// fan-out (`options.scopes`) et la cellule demandée (`options.scope`) ne
+    /// changent plus la cellule du catalogue autour du graphe. Chaque recherche
+    /// reçoit les index et le filtre de sa cellule dans ses services, pris sous
+    /// le verrou ; deux recherches concurrentes sur deux cellules ne se voient
+    /// pas.
     pub fn rechercher(
         catalogue: &Arc<Mutex<Catalog>>,
         cible: &str,
         requete: &str,
         options: search::SearchOptions,
     ) -> Result<search::SearchResponse, CatalogError> {
-        use crate::dataflow::graph_tool::{build_definition, GraphTool, NodeTypePolicy, SEARCH_BASE_MERMAID};
-        use crate::dataflow::{DataflowRuntime, NodeRegistry, ServiceRegistry};
-
         // ── Plusieurs cellules : une recherche par cellule, fondues par rang ──
         if !options.scopes.is_empty() {
             let mut cells: Vec<crate::scope::Scope> = Vec::new();
@@ -8501,45 +8594,36 @@ impl Catalog {
                     cells.push(c.clone());
                 }
             }
-            let saved = catalogue.lock().unwrap().scope().clone();
             let mut base = options.clone();
             base.scopes.clear();
             base.scope = None;
             base.limit = options.limit + options.offset;
             base.offset = 0;
             let mut per_cell: Vec<search::SearchResponse> = Vec::new();
-            let mut first_err: Option<CatalogError> = None;
             for cell in &cells {
-                if let Err(e) = catalogue.lock().unwrap().set_scope(cell.clone()) {
-                    first_err = Some(e);
-                    break;
-                }
-                match Self::rechercher(catalogue, cible, requete, base.clone()) {
-                    Ok(r) => per_cell.push(r),
-                    Err(e) => {
-                        first_err = Some(e);
-                        break;
-                    }
-                }
-            }
-            catalogue.lock().unwrap().set_scope(saved)?;
-            if let Some(e) = first_err {
-                return Err(e);
+                per_cell.push(Self::rechercher_dans(catalogue, cible, requete, base.clone(), Some(cell.clone()))?);
             }
             return fusionner_par_cellule(per_cell, cells.len(), options.offset, options.limit);
         }
-        // ── Une autre cellule que la courante ──────────────────────────────
+        // ── Une autre cellule que celle du catalogue ───────────────────────
         if let Some(wanted) = options.scope.clone() {
-            let courant = catalogue.lock().unwrap().scope().clone();
-            if wanted != courant {
-                catalogue.lock().unwrap().set_scope(wanted)?;
-                let mut inner = options.clone();
-                inner.scope = None;
-                let out = Self::rechercher(catalogue, cible, requete, inner);
-                catalogue.lock().unwrap().set_scope(courant)?;
-                return out;
-            }
+            let mut inner = options.clone();
+            inner.scope = None;
+            return Self::rechercher_dans(catalogue, cible, requete, inner, Some(wanted));
         }
+        Self::rechercher_dans(catalogue, cible, requete, options, None)
+    }
+
+    /// Une recherche dans une cellule (`None` : celle du catalogue).
+    fn rechercher_dans(
+        catalogue: &Arc<Mutex<Catalog>>,
+        cible: &str,
+        requete: &str,
+        options: search::SearchOptions,
+        cellule: Option<crate::scope::Scope>,
+    ) -> Result<search::SearchResponse, CatalogError> {
+        use crate::dataflow::graph_tool::{build_definition, GraphTool, NodeTypePolicy, SEARCH_BASE_MERMAID};
+        use crate::dataflow::{DataflowRuntime, NodeRegistry, ServiceRegistry};
 
         let debut = Instant::now();
 
@@ -8551,10 +8635,14 @@ impl Catalog {
         // servent plus bas à rapporter `meta.signals` comme le monolithe :
         // les signaux **demandés**, pas ceux qui ont parlé.
         let (declared_signals, chunk_table) = {
-            let cat = catalogue.lock().unwrap();
+            let mut cat = catalogue.lock().unwrap();
             cat.check_initialized()?;
             let resolved = cat.resolve_search_target(cible)?;
-            cat.register_search_services(&mut services);
+            match &cellule {
+                // Les index et la cellule de la requête, sous ce verrou.
+                Some(cell) => cat.register_search_services_in(cell, &mut services)?,
+                None => cat.register_search_services(&mut services),
+            }
             (resolved.default_signals, resolved.chunk_table.clone())
         };
         services.register("catalog", catalogue.clone());

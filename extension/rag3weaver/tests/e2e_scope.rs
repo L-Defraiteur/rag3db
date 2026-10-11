@@ -451,3 +451,66 @@ fn the_projected_graph_honours_the_vector_filter() {
         "la projection ne retenait que beta, la recherche vectorielle doit s'y tenir : {projs:?}"
     );
 }
+
+/// Les noms d'une recherche BM25 dans une cellule donnée par la requête.
+fn search_names_in(catalog: &Arc<Mutex<Catalog>>, q: &str, cell: &Scope) -> Vec<String> {
+    let resp = Catalog::rechercher(catalog, "Product", q, SearchOptions {
+        consistency: Consistency::Immediate,
+        signals: Some(SearchSignals::BM25),
+        scope: Some(cell.clone()),
+        limit: 50,
+        ..Default::default()
+    })
+    .unwrap();
+    let mut names: Vec<String> = resp
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).map(String::from))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// **La cellule par la requête** (marche 1 bis, pas b ; ticket
+/// `2026-10-11-plein-texte-d-une-autre-cellule-dans-l-index-du-catalogue`).
+/// Des lignes écrites dans deux cellules par leur requête, le catalogue
+/// restant dans la sienne : chacune a son plein texte dans l'index de sa
+/// cellule, et une recherche ne trouve que les siennes. Deux fils qui
+/// cherchent en même temps dans les deux cellules ne se voient jamais, et la
+/// cellule du catalogue n'a pas bougé.
+#[test]
+#[ignore]
+fn la_cellule_de_la_requete_ecrit_et_cherche_sans_basculer_le_catalogue() {
+    let catalog = Arc::new(Mutex::new(catalog_in_memory()));
+    catalog.lock().unwrap().register_entity("Product", make_product_config()).unwrap();
+    let (alpha, beta) = (Scope::new("acme", "alpha"), Scope::new("acme", "beta"));
+    // La cellule posée sur les lignes, comme le nœud d'un appel la pose.
+    let dans = |cell: &Scope, name: &str, text: &str| {
+        let mut p = make_product(name, text);
+        cell.stamp(&mut p);
+        p
+    };
+    catalog.lock().unwrap().ingest_entities("Product", vec![dans(&alpha, "A", "zebra xylophone")]).unwrap();
+    catalog.lock().unwrap().ingest_entities("Product", vec![dans(&beta, "B", "zebra clavecin")]).unwrap();
+    assert!(catalog.lock().unwrap().scope().is_default(), "le catalogue reste dans sa cellule");
+    assert_eq!(search_names_in(&catalog, "zebra", &alpha), vec!["A"]);
+    assert_eq!(search_names_in(&catalog, "zebra", &beta), vec!["B"]);
+    assert!(search_names_in(&catalog, "clavecin", &alpha).is_empty(), "le mot de beta ne se trouve pas depuis alpha");
+
+    let fils: Vec<_> = [(alpha.clone(), "A"), (beta.clone(), "B")]
+        .into_iter()
+        .map(|(cell, attendu)| {
+            let catalog = catalog.clone();
+            std::thread::spawn(move || {
+                for _ in 0..30 {
+                    assert_eq!(search_names_in(&catalog, "zebra", &cell), vec![attendu], "dans {}/{}", cell.org, cell.project);
+                }
+            })
+        })
+        .collect();
+    for f in fils {
+        f.join().expect("une recherche concurrente a vu l'autre cellule");
+    }
+    assert!(catalog.lock().unwrap().scope().is_default(), "toujours la même cellule au catalogue");
+}

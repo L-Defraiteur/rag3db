@@ -1,7 +1,11 @@
 # Le plein texte d'une fiche écrite dans une autre cellule tombe dans l'index de la cellule du catalogue
 
-- **État** : ouvert (11 octobre 2026), à fermer par le pas b de la marche 1 bis (les index par cellule,
-  `rechercher` sans bascule ; page `extension/rag3weaver/docs/11-octobre-2026-arbre-principal/04-la-marche-1-bis.md`).
+- **État** : corrigé par le pas b de la marche 1 bis (11 octobre 2026). Un lot écrit dans une autre
+  cellule que celle du catalogue s'écrit dans cette cellule, ses index plein texte et creux compris, sous le
+  verrou de l'ingestion ; la recherche prend les index et le filtre de la cellule de sa requête, sans
+  basculer la cellule du catalogue. Témoin :
+  `e2e_scope::la_cellule_de_la_requete_ecrit_et_cherche_sans_basculer_le_catalogue` (deux cellules, et deux
+  fils qui cherchent en même temps sans jamais voir l'autre).
 - **Gravité** : réponse fausse (P1 de la stèle du produit) : une recherche d'une session peut rendre une
   fiche d'une autre cellule.
 - **Atteignable en service** : sous l'hôte du démon seulement, depuis le pas a (`9dd4baedd`) : deux

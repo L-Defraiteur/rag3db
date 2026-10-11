@@ -2646,14 +2646,20 @@ impl Backend {
     /// quel bus les curseurs ont été ouverts.
     fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
         let mut services = ServiceRegistry::new();
-        self.catalog
-            .lock()
-            .unwrap()
-            .register_search_services(&mut services);
-        // La cellule de l'appel, si `call_in` l'a posée : elle remplace celle du
-        // catalogue pour les nœuds de cet appel.
-        if let Some(cell) = CELL_OF_CALL.with(|c| c.borrow().clone()) {
-            services.register("scope", cell);
+        // La cellule de l'appel, si `call_in` l'a posée : ses index et sa
+        // cellule remplacent ceux du catalogue pour les nœuds de cet appel.
+        match CELL_OF_CALL.with(|c| c.borrow().clone()) {
+            Some(cell) => {
+                let mut cat = self.catalog.lock().unwrap();
+                // Pas de repli sur la cellule du catalogue : ce serait chercher
+                // ailleurs sans le dire. Les nœuds de recherche refuseront,
+                // faute de leurs services.
+                if let Err(e) = cat.register_search_services_in(&cell, &mut services) {
+                    eprintln!("[backend] les services de recherche de la cellule {}/{} : {e}", cell.org, cell.project);
+                }
+                services.register("scope", cell);
+            }
+            None => self.catalog.lock().unwrap().register_search_services(&mut services),
         }
         services.register("catalog", self.catalog.clone());
         if let Some(decider) = &self.decider {
