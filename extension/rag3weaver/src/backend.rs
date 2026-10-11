@@ -3786,6 +3786,21 @@ mod tests {
         assert_eq!(lag.summary_in(&cell), None, "relu par la synchronisation, le retard tombe");
     }
 
+    /// **Un fichier créé est vu** : la montre relit la liste de la source à
+    /// chaque balayage, pas celle de l'index — un fichier neuf, avec une
+    /// définition et son appelant, et `usages` les voit sans `index`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_file_created_by_hand_is_indexed() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        assert!(usages_de(&backend, "arrivee").contains("Définitions (0)"));
+        std::fs::write(dir.path().join("sources/nouveau.rs"), "pub fn arrivee() {}\nfn appelant() { arrivee(); }\n").unwrap();
+        let u = attendre_les_usages(&backend, "arrivee", |u| u.contains("appelant"));
+        assert!(u.contains("nouveau.rs") && u.contains("appelant"), "le fichier créé n'a pas été indexé : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// Une montre ne surveille qu'une copie de travail : sur un `snapshot`
     /// (une source chargée en mémoire), elle est refusée en le disant.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]

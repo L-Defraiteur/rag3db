@@ -2,7 +2,9 @@
 //! (W1, `docs/11-octobre-2026-everything-declarative/04-surveiller-les-fichiers.md`).
 //!
 //! Une montre déclarée au manifeste (`watches`) balaie à intervalle les
-//! fichiers de sa source — ceux que l'index connaît, `FileSource::list()` —
+//! fichiers de sa source — le workspace **sur le disque**, relu à chaque
+//! balayage avec les règles d'exclusion de l'index (`FileSource::list()`) :
+//! un fichier créé après l'index est vu —
 //! et publie un [`crate::events::Event::FileChanged`] par fichier créé,
 //! modifié ou supprimé, sur le sujet `files` du bus. Une réaction (W2) en fait
 //! une réindexation.
