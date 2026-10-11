@@ -229,10 +229,26 @@ témoins qui le verrouillent déjà (`runtime.rs`) :
 inverse (`migration_nodes.rs`, `catalog.rs` `migration_rollback_graph`) ; et
 toute la lib.
 
-**Ce qu'un flux demande aux points de reprise et à l'annulation**, à trancher
-par la recherche et à dire : un flux n'a pas de « valeur finale » — soit il se
-matérialise à sa fin pour le point de reprise, soit ses nœuds se rejouent
-(comme le mode `Operations`) ; l'annulation garde un ordre de fin connu.
+**Les décisions de la recherche** (11 octobre, à son lot 0) :
+- **La parité par construction** : l'exécuteur par niveaux reste inchangé pour
+  tout graphe **sans port de flux** ; l'exécuteur concurrent ne prend que les
+  graphes qui en ont (la forme de `run_level_auto`). Un flux doit couler
+  pendant que l'amont émet, sinon un canal borné plein interbloque : les
+  niveaux ne valent plus pour eux.
+- **La reprise d'un flux à moitié émis** : la fin d'un flux est l'unité de
+  reprise ; un producteur n'est fini que quand son flux l'est ; à la reprise,
+  on rejoue le producteur et tout ce qui a consommé son flux partiel.
+  Persister les éléments par rang viendra si un graphe réel le réclame.
+- **Sauté s'écrit** au rapport **et** au point de reprise (sinon la reprise le
+  rejoue) ; le saut se propage par les entrées requises ; un flux vide n'est
+  pas un producteur en échec : deux états distincts.
+- **L'annulation lâche les récepteurs** : un producteur bloqué sur un canal
+  plein lit l'envoi refusé comme « arrêté », pas comme une erreur ; la portée
+  du run se vide avant le join, comme aujourd'hui.
+- **Le pont** : un nœud synchrone qui consomme élément par élément tient un fil
+  tant que son flux coule (acceptable sur le runtime multi-fil, refusé
+  nommément sur un fil unique) ; **le genre d'un port (flux ou valeur) survit
+  à `to_definition` et au mermaid**, comme le type déclaré d'un nœud.
 
 **Le témoin de flux** (le premier, avant toute généralisation) : un nœud qui
 émet des jetons un par un, un nœud *élément* qui les voit dans l'ordre pendant
@@ -240,13 +256,14 @@ que le premier travaille, un nœud *complété* qui voit le message entier ; une
 branche qui se ferme vide, sautée et dite au rapport ; un nœud *complété* sur
 un flux sans fin refusé à la vérification.
 
-**La frontière de fichiers** (à confirmer à deux avant le premier commit) :
-la recherche tient `src/dataflow/runtime.rs`, `graph.rs`, `node.rs`,
-`port.rs`, `report.rs`, les points de reprise et `rt.rs` ; cette session tient
-les points d'accroche de la boucle (`agent.rs`, relus par la recherche), un
-fichier neuf pour l'exécution des sous-graphes de ports, les nœuds `decide`
-et `route` (fichiers neufs dans `src/dataflow/`, relus), `send`, `spawn`,
-l'`AgentNode`, et la page vivante.
+**La frontière, convenue à deux le 11 octobre** : la recherche porte
+**l'exécuteur** (`runtime.rs`, les points de reprise, l'annulation, le
+rapport, le pont `rt.rs`) ; cette session porte **le côté nœud** — la
+déclaration de posture (élément ou complété), la vérification commune qui
+refuse un nœud complété sur un flux sans fin, les premiers nœuds qui émettent
+(dont `LlmNode`) — puis les points d'accroche de la boucle (`agent.rs`), les
+nœuds `decide` et `route`, `send`, `spawn`, l'`AgentNode` et la page vivante.
+Chacune relit l'autre avant master.
 
 ### 4.2 Le graphe par défaut d'un agent
 
