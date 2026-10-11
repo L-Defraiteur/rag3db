@@ -28,7 +28,7 @@
     "templates/"
   ],
   "scripts": {
-    "test": "node test/essai.js"
+    "test": "node test/essai.js && node test/sonde_copy.js"
   },
   "optionalDependencies": {
     "rag3weaver-linux-x64-gnu": "0.0.1-alpha.2",

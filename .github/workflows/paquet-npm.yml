@@ -224,6 +224,11 @@ jobs:
       # depuis dist/, puis « un dossier vide, trois fichiers, une recherche ».
       - name: L'épreuve JS du paquet (npm test)
         working-directory: extension/rag3weaver/bindings/nodejs
+        env:
+          # La sonde du COPY (score = num + 0.5 sur une entité DOUBLE + liste) :
+          # 200 000 lignes ailleurs, 50 000 ici — le runner Windows est lent
+          # sur le disque (ici 200 000 lignes : 82 s d'ingestion, 10 s de relecture).
+          SONDE_LIGNES: 50000
         run: |
           bash scripts/preparer.sh
           ls -la npm/windows-x64/
