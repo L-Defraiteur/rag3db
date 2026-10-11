@@ -278,3 +278,61 @@ Les durées du ligne à ligne restent celles de la base : `SetFromNullLineByLine
 
 Le §5 supposait que les pertes venaient du contrôle fait ligne par ligne sur un graphe qui bouge.
 C'était faux : les deux défauts seuls suffisent à les expliquer.
+
+## 10. Les mesures après la fusion, et ce qu'elles disent pour I2 (11 octobre, 3 h 45)
+
+**Le code poussé** (`bfc1434e1`) a été mesuré en exclusif sur le poste principal, avec
+l'extension prouvée (bâtie à 03:04 sur `0e71de3c0`).
+
+`TenThousandRowsInBatchesOf512` :
+
+| | référence (base) | code poussé |
+|---|---|---|
+| durées | 19,5 / 24,3 / 20,1 s | 25,8 / 23,6 / 24,3 s |
+| lignes qui se retrouvent par leur propre vecteur | 953 / 1000 / 957 | 1000 / 1000 / 995 |
+
+La durée tient sous le plafond ×2, et le rappel est meilleur. Sur luciepc, dix essais de plus sont
+tous verts, soit un seul rouge léger sur treize essais en tout. Le témoin reste dans les
+probabilistes. Les lignes perdues sont des lignes mises à jour, coupées par les lignes suivantes de
+la même instruction (1940, 1950 et 1960, derrière 1989 et les suivantes) : le contrôle par ligne
+regarde les anciens voisins, jamais la ligne elle-même une fois les suivantes posées.
+
+**Les vrais vecteurs** viennent de l'export de l'arbre principal (`Scope_Chunk`, 12 942 morceaux,
+768 dimensions, cosine), sur la sonde « RealVectorsUpdate », non commitée. Aucun morceau n'est
+introuvable par son propre vecteur (k = 10), ni dans le fond (index créé vide, vecteurs posés par
+lots de 32, joué deux fois), ni dans le remplacement (chaque ligne prend le vecteur d'une autre,
+par lots de 512).
+
+**Pour I2** (la maintenance de l'index au commit, page `coeur-cpp/10`), deux essais sur la branche
+`essai-fin-d-instruction-filtre`. Les deux portent le crochet de fin d'instruction, avec
+l'heuristique par ligne remise comme filtre sur l'union de l'instruction, sans vider les élagages
+différés :
+- `53c742c0b`, « pertes seules » : seuls les nœuds qui perdent une arête entrante sont
+  recontrôlés ;
+- `bb50fb768`, « union » : chaque ligne mise à jour reçoit aussi la recherche complète.
+
+Ils ont été mesurés en exclusif sur luciepc, master `7c7682111` en regard, en alternant les bâtis,
+avec un essai par témoin. Chaque cellule donne les deux passes.
+
+| | master | pertes seules | union |
+|---|---|---|---|
+| `SetFromNullLineByLine` | 26,0 / 25,7 s | 26,7 / 26,6 s | 28,3 / 29,7 s |
+| `SetToAnotherVectorLineByLine` | 25,8 / 25,8 s | 25,4 / 25,5 s | 27,4 / 27,2 s |
+| `TenThousandRowsInBatchesOf512` | 26,4 / 25,7 s | 21,2 / 21,1 s | 26,1 / 26,4 s |
+| `TenThousand`, dix essais | 10 sur 10 verts | 2 rouges légers (993 et 998 sur 1000) | **1 rouge grave : 7 982 lignes sur 10 000 joignables** |
+
+Ce que cela dit :
+1. **Le coût de la fin d'instruction tient au contrôle, pas au report.** Avec l'heuristique en
+   filtre, elle coûte ce que coûte master, et même moins sur les lots. Le ×7 à ×13 du §9 venait
+   seulement de la recherche complète faite sur chaque perte. Une maintenance reportée au commit
+   (I2) ne coûtera donc rien de plus, à condition de garder ce filtre.
+2. **Aucune des deux variantes n'est plus juste que master.** « Pertes seules » perd un peu plus.
+   « Union » a coupé un cinquième de l'index dans un essai sur dix : un défaut nouveau, d'origine
+   non trouvée, à comprendre avant toute adoption. La pente à surveiller : une ligne mise à jour
+   recontrôlée après coup par une recherche, et liée par `keepNodeReachable` sans élagage, change
+   les voisinages des lignes suivantes.
+3. **I2 peut reprendre la forme « pertes seules filtrée »** pour la maintenance au commit, avec
+   son coût mesuré. La justesse à atteindre reste celle de master, que ni l'une ni l'autre
+   variante ne dépasse aujourd'hui.
+
+Les deux essais restent sur leur branche, non fusionnés.
