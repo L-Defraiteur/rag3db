@@ -260,8 +260,24 @@ impl Node for AddRefNode {
         let uuid_ref = cat
             .entity_uuid(&refs_entity, &record)
             .map_err(|e| format!("AddRefNode: l'identité de la référence : {e}"))?;
-        cat.ingest_entities(&refs_entity, vec![record])
+        // **Le rapport d'ingestion se lit** (ticket « add_ref et create_ref_type
+        // jettent le rapport de leur ingestion ») : un échec compté n'est pas
+        // une `Err`, et passait pour un succès.
+        let rapport = cat
+            .ingest_entities(&refs_entity, vec![record])
             .map_err(|e| format!("AddRefNode: {e}"))?;
+        if rapport.failed > 0 {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "la référence ne s'est pas écrite entière, rien n'est lié — prêt après l'échec : {} ; {:?}",
+                    rapport.rendu_pret.map(|d| d.to_string()).unwrap_or_else(|| "rien".into()),
+                    rapport.warnings
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref},
+            }));
+            return Ok(());
+        }
 
         // La fiche est désignée par ses champs d'identité, pas par un uuid que
         // l'appelant n'a pas : c'est le catalogue qui sait les réduire.
@@ -349,7 +365,12 @@ impl Node for AddRefNode {
             return Ok(());
         }
         cat.link(&relation, uuid_fiche.clone(), uuid_ref.clone(), BTreeMap::new())
-            .map_err(|e| format!("AddRefNode: le lien {relation} : {e}"))?;
+            .map_err(|e| {
+                format!(
+                    "AddRefNode: le lien {relation} : {e} — la référence est restée, écrite seule ; \
+                     rappeler add_ref avec la même valeur ne la doublera pas"
+                )
+            })?;
 
         rendre(ctx, serde_json::json!({
             "executed": true,
@@ -359,6 +380,9 @@ impl Node for AddRefNode {
             // est « citée, non vérifiée », et le rapport le porte.
             "verifiee": !script.trim().is_empty(),
             "note": verdict.pourquoi,
+            // Deux écritures : la référence, puis son lien.
+            "atomic": false,
+            "atomic_reason": "two writes: the reference, then its link; a failure between them leaves the reference alone, and says so",
         }));
         Ok(())
     }
@@ -568,8 +592,17 @@ impl Node for CreateRefTypeNode {
         record.insert("description".into(), CypherValue::String(description));
         record.insert("forme".into(), CypherValue::String(forme));
         record.insert("script".into(), CypherValue::String(script.clone()));
-        cat.ingest_entities(&types_entity, vec![record])
+        let rapport = cat
+            .ingest_entities(&types_entity, vec![record])
             .map_err(|e| format!("CreateRefTypeNode: {e}"))?;
+        if rapport.failed > 0 {
+            return Err(format!(
+                "CreateRefTypeNode: le genre « {nom} » ne s'est pas écrit entier — prêt après \
+                 l'échec : {} ; {:?}",
+                rapport.rendu_pret.map(|d| d.to_string()).unwrap_or_else(|| "rien".into()),
+                rapport.warnings
+            ));
+        }
 
         rendre(ctx, serde_json::json!({
             "executed": true,
@@ -579,6 +612,8 @@ impl Node for CreateRefTypeNode {
             "harnais": if script.trim().is_empty() { "description seule" } else { "script" },
             "epreuve": epreuve,
             "rappel": format!("il est dans la liste dès maintenant : add_ref(genre: {nom:?}, valeur: …)"),
+            "atomic": false,
+            "atomic_reason": "the row, its full text and its vectors are written by several statements without a transaction around them",
         }));
         Ok(())
     }

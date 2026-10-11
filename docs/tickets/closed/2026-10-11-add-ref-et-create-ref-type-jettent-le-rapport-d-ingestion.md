@@ -1,6 +1,6 @@
 # `add_ref` et `create_ref_type` jettent le rapport de leur ingestion — un échec partiel passe pour un succès
 
-- **état** : ouvert (relevé par lecture le 11 octobre 2026, en recensant les outils d'écriture des gabarits livrés)
+- **état** : corrigé par la forme A de l'enveloppe d'un outil d'écriture (le commit qui déplace ce fichier dans `closed/`, 11 octobre 2026) — les deux nœuds lisent `failed` et le disent, avec ce qui est prêt ; témoin `e2e_outils_disent_ce_qui_reste` (faute injectée dans l'insertion)
 - **gravité** : réponse fausse — un outil rend `executed: true` sur une écriture qui a pu échouer en partie
 - **atteignable en service** : oui, par les deux outils du gabarit `memory`, dès qu'une ingestion compte un échec (un embarquement refusé, une écriture du plein texte qui casse)
 - **touche rag3weaver** : oui, et seulement rag3weaver

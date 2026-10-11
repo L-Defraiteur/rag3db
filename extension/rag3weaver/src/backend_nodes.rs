@@ -227,13 +227,31 @@ impl Node for EntityRecordNode {
         let report = cat
             .ingest_entities(entity, vec![data])
             .map_err(|e| e.to_string())?;
+        // **Un échec dit ce qui est resté** (forme A de l'enveloppe d'un outil
+        // d'écriture, 11 octobre 2026), au lieu de « inspect state » : le drain
+        // sait ce qui est prêt, et l'agent doit savoir si la ligne existe sans
+        // sa recherche, ou si rien n'est resté.
+        // `rendu_pret` dit ce que les opérations *réussies* du drain ont rendu
+        // prêt : il ne vaut pour cette fiche que si sa ligne existe.
         if report.failed > 0 {
+            let existe = cat.get(entity, &uuid).ok().flatten().is_some_and(|row| dans_la_cellule(&row));
+            let pret = match report.rendu_pret {
+                Some(d) if existe => d.to_string(),
+                _ => "rien".to_string(),
+            };
             return Err(format!(
-                "write/index failure (inspect state before retry): {:?}",
+                "write/index failure: ready after the failure (ce qui est prêt) = {pret}; the record \
+                 {} — {:?}",
+                if existe { "exists" } else { "does not exist" },
                 report.warnings
             ));
         }
-        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret});
+        // `atomic: false`, dit : la ligne, ses morceaux, son plein texte et ses
+        // vecteurs partent en plusieurs instructions, sans transaction autour
+        // (la forme B de la page de l'enveloppe les envelopperait).
+        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret,
+            "atomic":false,
+            "atomic_reason":"the row, its chunks, its full text and its vectors are written by several statements without a transaction around them"});
         ctx.set_output("record", PortValue::new(result));
         Ok(())
     }

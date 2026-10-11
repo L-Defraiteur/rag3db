@@ -331,7 +331,29 @@ impl Node for InsertRecordNode {
             .cloned();
         let mut copied = 0usize;
 
+        // **La faute injectée des témoins** (11 octobre 2026, forme A de
+        // l'enveloppe d'un outil d'écriture) : faire échouer le n-ième groupe
+        // d'une table, comme si le moteur avait refusé l'insertion. Deux
+        // variables, jamais l'une sans l'autre — la table et le rang du groupe —,
+        // comme pour le drain des liens.
+        let faute = faute_injectee_insertion();
+        let mut rang_dans_la_table: HashMap<&str, usize> = HashMap::new();
         for ((entity_name, columns), indices) in &groups {
+            let rang = {
+                let r = rang_dans_la_table.entry(entity_name.as_str()).or_insert(0);
+                *r += 1;
+                *r
+            };
+            if faute.as_ref().is_some_and(|(t, n)| t == entity_name && *n == rang) {
+                let cause = format!("faute injectée par le témoin (groupe {rang} de « {entity_name} »)");
+                for &i in indices {
+                    if let Some(r) = items[i].take_resolver() {
+                        r.fail(format!("insertion dans « {entity_name} » échouée : {cause}"));
+                    }
+                }
+                consigner_l_echec(ctx, "InsertRecordNode", entity_name, indices.len(), Disponibilites::TOUT, cause);
+                continue;
+            }
             let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
             // Ce que la relecture des identifiants doit servir : le cache et
             // lucivy (par table), le handle sparse (par enregistrement).
@@ -636,6 +658,12 @@ pub(crate) const REPLI_EN_MASSE: &str = "chargement en masse refusé";
 /// Jamais active sans les **deux** variables (`RAG3WEAVER_TEST_LINK_FAULT_RELATION`
 /// et `RAG3WEAVER_TEST_LINK_FAULT_GROUP`) : une seule posée par mégarde ne fait
 /// rien.
+fn faute_injectee_insertion() -> Option<(String, usize)> {
+    let table = std::env::var("RAG3WEAVER_TEST_INSERT_FAULT_TABLE").ok().filter(|r| !r.is_empty())?;
+    let rang = std::env::var("RAG3WEAVER_TEST_INSERT_FAULT_GROUP").ok()?.parse().ok()?;
+    Some((table, rang))
+}
+
 fn faute_injectee() -> Option<(String, usize)> {
     let relation = std::env::var("RAG3WEAVER_TEST_LINK_FAULT_RELATION").ok().filter(|r| !r.is_empty())?;
     let rang = std::env::var("RAG3WEAVER_TEST_LINK_FAULT_GROUP").ok()?.parse().ok()?;

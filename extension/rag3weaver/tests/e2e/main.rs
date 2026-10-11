@@ -148,6 +148,8 @@ mod e2e_mesure_sync_source;
 mod e2e_native;
 #[path = "../e2e_nom_reserve.rs"]
 mod e2e_nom_reserve;
+#[path = "../e2e_outils_disent_ce_qui_reste.rs"]
+mod e2e_outils_disent_ce_qui_reste;
 #[path = "../e2e_phase0b.rs"]
 mod e2e_phase0b;
 #[path = "../e2e_plans_par_lot.rs"]

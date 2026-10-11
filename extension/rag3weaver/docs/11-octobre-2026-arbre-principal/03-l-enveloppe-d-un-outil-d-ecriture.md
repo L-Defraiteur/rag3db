@@ -150,7 +150,7 @@ sans l'autre).
 
 **B. Envelopper un `put`** : `begin`, l'ingestion d'une ligne, `commit` ; sur un échec,
 `rollback` et **l'invalidation des seuls caches que cette ligne a touchés**, sans
-empoisonner. *Une à deux passes.*
+empoisonner. *Deux passes* (relevé après les vérifications de l'arbre principal, ci-dessous).
 - C'est la règle de la §3 portée à un outil : un outil n'empoisonne que sur ce que le
   moteur impose (point de reprise échoué, `COMMIT` refusé). Un échec qu'il sait défaire
   invalide l'identifiant de nœud de sa ligne et sa génération de plein texte, pas le
@@ -159,10 +159,25 @@ empoisonner. *Une à deux passes.*
 - `AddRefNode` y gagne le plus : la `Ref` et son lien `CITE` dans une seule transaction.
   La vérification de la fiche passe **avant** l'écriture, et « écrite seule » disparaît
   pour un échec du moteur.
-- **À vérifier par l'arbre principal avant le code** : qu'un `put` hors d'une
-  synchronisation marque bien sa génération de plein texte dans sa transaction
-  (`flush_blob_store` → `mark_next_generation`), comme le paquet le fait. Et la liste
-  exacte des caches qu'une ligne touche.
+- **Vérifié par l'arbre principal** (lu, pas encore éprouvé) : un `put` hors
+  synchronisation finit par `flush_blob_store("ingest")`, qui rend le dossier du plein
+  texte durable puis écrit `fts_generation:<index>` **sur la connexion du catalogue** :
+  dans une enveloppe, la marque entre dans la transaction, comme au paquet. Les caches
+  qu'une ligne touche, et ce qu'un `rollback` laisse faux :
+  - `node_id_cache` : l'entrée de la ligne, **à retirer** ;
+  - **le handle plein texte de l'entité en mémoire** (et le creux s'il y en a un) : il
+    a vu une génération que la base n'a pas marquée, et il faut **le rouvrir à la
+    génération marquée**. Oublier une entrée ne suffit pas. **C'est la vraie pièce de
+    B** ;
+  - la dette de disponibilité en mémoire : inoffensive (un rattrapage ne trouve rien),
+    mais fausse dans l'état d'index jusqu'au rafraîchissement ;
+  - les modèles d'embarquement enregistrés à la première écriture : c'est du DDL, posé
+    avant toute transaction, donc rien à défaire ;
+  - `presents_connus`, `fresh_ingest` et la file des liens ne vivent que pendant une
+    synchronisation : rien pour un `put` isolé.
+
+  **Le coût de B monte donc à deux passes** : la moitié pour l'enveloppe, le reste pour
+  la réouverture du handle plein texte à la génération marquée, et son témoin.
 - Témoin rouge d'abord : une faute injectée entre l'écriture de la ligne et le `commit`.
   Aujourd'hui, la ligne reste. Avec l'enveloppe, la ligne est absente, et le `put`
   suivant réussit **sans réouverture**.
