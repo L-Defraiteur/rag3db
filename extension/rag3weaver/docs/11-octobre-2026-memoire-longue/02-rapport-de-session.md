@@ -1,4 +1,4 @@
-# Rapport de session — mémoire longue, 11 octobre 2026 (matin, midi et après-midi)
+# Rapport de session — mémoire longue, 11 octobre 2026 (matin, midi, après-midi et soir)
 
 *Pour Lucie et pour l'orchestration. Ce qui est sur master, ce qui reste, ce qui attend.*
 
@@ -48,14 +48,34 @@ conteneur, `word_similarity('sauterau baroqe', …)` vaut 0,5789, au-dessus du p
 posé par un `SET` joué une seule fois, donc sur une seule session. Confié à F
 (`SET LOCAL` dans la transaction de la requête, sur la connexion épinglée).
 
+## La fin d'après-midi, sur master
+
+| commit | ce que c'est |
+|---|---|
+| `aeddf002a`, `f7c83a4f4` | la recette MCP de la marche 3, jouée de zéro ; la page des fiches classées par sortie structurée (cinq réponses prises par Lucie : on tente, on mesure, on ajuste, chaque tentative datée) |
+| `2b1818d68` | **marche 4 de la forme C** : `daemon.json` (adresse servie, pid, jeton, bâti, 0600), le jeton local sur chaque requête sauf `/sante` (403), le client mince par défaut de `mcp`, l'hôte lancé par le premier client (verrou de fichier, détaché, survit au client), relancé quand il tombe, `daemon_status` même sans hôte, un second hôte refusé, `--standalone` pour l'ancienne forme ; six témoins ; côté hôte relu par l'arbre principal (`DaemonServer`/`Stopper`, jeton à temps constant) |
+| `bfec631cc` | **review_anchored en une passe** : 40 fiches, 1 drain et 94 instructions au lieu de 40 drains et 1 318 ; une transition d'état ne change plus le hash du contenu (plus de redécoupage ni de réembarquement) ; le rapport dit `atomic` |
+| `e9387d545` | **la session d'un client mort se ferme** : le pid et l'instant de démarrage du client, relevés toutes les 10 s et à chaque état |
+| `e60f2342e` | **marche 5, première part** : le client vers un hôte désigné — `--daemon-json`, `--daemon-json-command` (le jeton relu sur un refus), `--daemon` pour le tunnel ; éprouvé contre l'hôte de luciepc ; README §7, page C |
+| tickets | ouverts : extension vector relative au gabarit, écritures du cycle de vie absentes d'une réaction, hôte qui hérite de l'environnement du premier client, montre à 0,7 cœur, journal de l'hôte sans heure ; fermés : add_ref/create_ref_type, client mort, pg_trgm (par F) |
+
+**L'hôte de Lucie** a été redémarré trois fois, toujours à une heure annoncée, par
+`kill -TERM` et au repos (16 h 55, 17 h 10, 17 h 50). Il tourne sur `e60f2342e` (binaire
+`2af4554702ac`), lié à la lib d'A8 et A9 (inodes vérifiés dans `/proc/<pid>/maps`), avec
+les trois services d'embarquement. Sa copie du gabarit `code` a reçu la montre et sa
+réaction (sauvegardes `*.avant-montre-11-oct-17h02`) : une édition à la main est vue par
+`usages` en 5 à 6 s, un fichier créé en 4,7 s, et retirés en 4 à 6 s.
+
 ## Ce qui reste
 
-- **Forme B de l'enveloppe** (envelopper un put, invalider les seuls caches de sa
-  ligne, rouvrir la poignée FTS à la génération marquée ; deux passes) : attend les
-  deux vérifications de l'arbre principal et le mot de Lucie sur la §6.
-- **La cellule des bouts d'un lien** (`to_cell` / `from_cell`, `entity_uuid_in`) :
-  attend la migration de l'arbre principal.
-- **La marche 5 du lien** (les gabarits qui en profitent) : pas demandée.
+- **Le banc des fiches classées**, puis la première tentative datée (le sujet au
+  `put_memory`), maintenant que `Decide` a son `prompt` (branche `banc-fiches-classees`).
+- **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé plutôt
+  que son chemin.
+- **La forme B de l'enveloppe** : attend les deux vérifications de l'arbre principal et
+  la §6.
+- **La cellule des bouts d'un lien** (`to_cell`) : la migration de l'arbre principal est
+  faite, à prendre après le banc.
 
 ## Tickets
 
@@ -84,3 +104,12 @@ basculée ; le banc `pg_trgm` (cause trouvée, à F).
 - **Un rouge s'attribue avant de s'expliquer.** Rejouer le banc au commit d'avant
   l'échappement a mis F hors de cause en une passe. Ensuite, une requête SQL
   directe a tranché ce que le banc ne séparait pas, sans une heure de carte.
+- **Un critère de repos se lit hors de ce qui tourne toujours.** Le redémarrage de 17 h 50
+  s'est arrêté de lui-même : la montre prend 0,7 cœur en continu, et le CPU du processus
+  entier ne dit plus rien du repos. Les tops des autres fils, si.
+- **Un script dérivé garde ses effets de bord.** Le redémarrage « sans réinstallation »
+  gardait la ligne de sauvegarde : elle a écrasé la sauvegarde du binaire précédent. Un
+  script qu'on dérive se relit en entier, pas à la ligne qu'on retire.
+- **Une passe longue ne gagne pas la course contre master** : trois pushes perdus, puis
+  une fenêtre, puis `poste push` (le verrou de G) ; une avance faite de docs seules se
+  rebase et se pousse sans rejeu.
