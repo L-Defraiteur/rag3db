@@ -459,3 +459,34 @@ où elle vit.
   deux appelants et 88 par le nom seul ; le nom qualifié `NodeTable::update`
   rend zéro sans un mot : manque mis en tête de la liste de l'arbre principal
   (comprendre `Classe::methode`, et le dire sinon).
+- **Le serveur code-rag3db dans les sessions du cœur** (vers 16 h 30) : une
+  session ouverte avant le `claude mcp add` ne voit pas le serveur ; Lucie a
+  relancé le cœur (nouvelle session `rag3db-1f`, contexte entier) ; hotfixs
+  attend un `/mcp`. Premiers retours réels du cœur (page 04 des codeparsers,
+  `a50256f39`) : sur sa question (les appelants d'une méthode virtuelle qu'il
+  venait de changer) grep a gagné, l'outil a manqué l'envoi virtuel et la
+  récursion (cause commune trouvée par codeparsers : le nom du scope courant
+  exclu de toutes les références, correctif double chez lui et dans la garde
+  de code.rs) et a dit « 0 tests » là où les tests passent par Cypher (à dire
+  « non suivis », arbre principal) ; mais « verrous pris sur le chemin » lui a
+  donné en une seconde ce que grep ne donne pas. Ni retard de la montre ni
+  échec complet : un échec de compréhension, indépendant de la fraîcheur.
+- **L'index doit suivre l'arbre que l'agent édite** (en tête de la page 04,
+  ticket `e7fcbe938`) : l'index d'ici est master à 15 h 22, le cœur édite sa
+  branche sur luciepc. Formes : une base par arbre (reflink de celle de
+  master puis delta), un hôte par poste et un client qui sait lequel ; au
+  minimum chaque réponse dit l'arbre et le commit indexés.
+- **L'hôte sur luciepc par un tunnel ssh : oui de Lucie** (17 h). Ordre : G
+  installe l'hôte sur luciepc (binaire release hors target, lib commune,
+  unité en option, 127.0.0.1:7970 là-bas, tunnel `ssh -N -L
+  7971:127.0.0.1:7970`) ; la mémoire donne au client le jeton d'un autre poste
+  (`--daemon-json` ou équivalent, jamais en argument), marche 5 de la page C
+  « le manifeste dit son hôte » ; codeparsers indexe les arbres du cœur sur
+  luciepc, témoin : le cœur voit sa propre modification par le client d'ici.
+- **Master rouge sous `rag3db-native` seul** (restes de W1/W2 sous -D
+  warnings) : corrigé par le proto en tête de file ; ce jeu devient le
+  cinquième de check_features.sh avec le recompte des tickets.
+- **L'unité systemd de l'hôte** (G, page `b816c75ae`, lot sur la branche
+  paquet-npm `e58e53c94`, non fusionné, non publié) : `npx rag3weaver-unit
+  install|uninstall|status`, SIGTERM, relance sur arrêt brutal, le refus d'un
+  second hôte ne boucle pas ; cinq témoins sur une unité d'essai.
