@@ -1,6 +1,6 @@
 # Les « nom seul » et les segments de module
 
-- **État** : ouvert — pas pour maintenant (orchestration, 4 octobre)
+- **État** : corrigé — codeparsers `a6111cc` (11 oct. 2026, P1 de la stèle du produit) ; témoin `codeparsers/tests/nom_seul_rust.rs`
 - **Gravité** : réponse fausse (une part des arêtes « nom » est fausse)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous, usages, Liens)
@@ -40,3 +40,20 @@ La sonde, classe « nom seul (type, valeur) » et « nom par chemin de module »
    nommés dans la signature, qui ne sont pas des usages).
 2. Un segment de chemin qui nomme un module n'est pas une référence, ou une
    référence d'un genre à part que les marches ne suivent pas.
+
+## Correction (11 octobre 2026)
+
+codeparsers `a6111cc` :
+1. **Le paramètre** : un bloc `impl` lisait ses références sur tout son corps,
+   paramètres des méthodes compris (`f` de `fn fmt(&self, f: &mut Formatter)`,
+   `name` de `fn create(&self, name: &str)`) ; ils sont exclus. Arêtes d'appel
+   de rag3weaver comparées une à une : 96 retirées, toutes de cette forme,
+   fausses ; aucune gagnée.
+2. **Les segments de module** : un préfixe de chemin en minuscules
+   (`dataflow` dans `crate::dataflow::X`, `fmt` dans `fmt::Formatter`) n'est
+   plus une référence — dans le code comme dans les jetons d'une macro ; un
+   préfixe en majuscule (un type) en reste une. Sur rag3weaver, les
+   non-résolues baissent de près de 7 000.
+**Reste**, hors de ce ticket : les types justes d'une signature
+(`Vec<PortDef>` → `PortDef`) restent des références par le nom quand le nom
+est unique — c'est juste et marqué « nom », pas un faux.

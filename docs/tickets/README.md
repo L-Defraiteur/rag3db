@@ -63,7 +63,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -91,7 +91,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [La portée `person` d'une mémoire est écrite, et jamais rappelée](2026-10-04-portee-person-ecrite-jamais-rappelee.md) | ouvert — dette nommée, condition de sortie écrite | réponse fausse | oui, dès que le gabarit `memory` sert | oui (crochet de rappel, protocole d'outil) |
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens et impact (master) ; réexportations à faire | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
-| [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | en cours (B2d, 11 oct.) | réponse fausse | oui | oui (usages, Liens, impact) |
 | [Sur PostgreSQL, le rebâti du plein texte en fond envoie du Cypher](2026-10-10-postgresql-rebati-du-plein-texte-en-cypher.md) | ouvert | blocage | avec un montage PostgreSQL et lucivy | oui |
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
@@ -104,7 +103,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
 
-### Fermés (92), dans `closed/`
+### Fermés (93), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -113,6 +112,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](closed/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | corrigé (voir le ticket) | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`) |
 | [Sous index, une ligne supprimée par un autre écrivain donne une erreur d'exécution au lieu de l'erreur de sérialisation](closed/2026-10-11-sous-index-une-ligne-supprimee-par-un-autre-ecrivain-donne-une-erreur-d-execution-au-lieu-de-la-serialisation.md) | corrigé, ouvert et fermé dans le même commit (11 octobre) | réponse mal nommée (P3 sous le défaut) | oui (deux sessions, table indexée) | oui |
 | [La session d'un client mort reste listée par l'hôte du démon](closed/2026-10-11-la-session-d-un-client-mort-reste-listee.md) | corrigé (le pid du client, le relevé de l'hôte) | P4, réponse fausse | oui | oui (et seulement) |
+| [Les « nom seul » et les segments de module](closed/2026-10-04-nom-seul-et-segments-de-module.md) | corrigé, codeparsers `a6111cc` (11 oct.) | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](closed/2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | corrigé, parent par passe effacé à la fin du lanceur (11 octobre) | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |
 | [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](closed/2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | corrigé, migration (a) de la marche 1 bis (11 oct.) | perte | oui (deux cellules, la même identité) | oui |
