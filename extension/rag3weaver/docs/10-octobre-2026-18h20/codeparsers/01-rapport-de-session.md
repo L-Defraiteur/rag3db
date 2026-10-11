@@ -273,3 +273,23 @@ Reste de ma part de la stèle : le nom seul et les segments de module (P1).
 
   Le client est mince : il parle à l'hôte déjà lancé (127.0.0.1:7970). L'index est fait. La base suit l'arbre principal tel qu'il était
   à 15 h 22 : à réindexer après le rebâti de l'hôte avec les lots 5 et 6 (qualité C++).
+
+**Fin d'après-midi (11 oct.)** :
+- **La mesure des marques sur rag3weaver** (page `05-les-marques-sur-rag3weaver.md`) : quatre
+  passes de la sonde sur un corpus figé, le lot 6 prouvé arête par arête (« import » −469 : 468
+  visaient une déclaration de module, l'objet du lot).
+- **Trois défauts trouvés par la mesure et par le cœur, corrigés** :
+  - un mot de chaîne ou de commentaire n'est plus une référence (codeparsers `1f5506f`, branche
+    `chaines-hors-references`) : 6 728 références retirées sur rag3weaver, toutes dans une
+    chaîne ou un commentaire ;
+  - une réexportation part du scope de son `pub use` (sur master : `5d0223d6e`, `39734d772`,
+    relu par l'arbre principal) : les 300 arêtes « nom » sans ligne disparaissent ;
+  - le nom du scope n'est plus un mot interdit dans son corps (codeparsers `af7bc52`, branche
+    `nom-propre-par-position`) : l'appel récursif et `sink->acquireLocksBeforeExecution(…)`
+    reviennent ; rag3db/src +810 relations.
+  Les deux branches codeparsers reposent sur `nom-seul` et suivront sa reprise.
+- **Tickets** : quatre manques du MCP (`c41e53986`), l'index ne suit pas l'arbre édité
+  (`e7fcbe938`), `new` mot vide en Rust.
+- **Suite** : l'envoi virtuel (le type de retour d'un gabarit à argument explicite, le champ,
+  OVERRIDES au rendez-vous), la récursion au rendez-vous (`code.rs`, après nom-seul), puis
+  l'index des arbres du cœur sur luciepc dès que l'hôte y est.
