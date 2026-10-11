@@ -198,6 +198,8 @@ pub struct NodeContext {
     misuse: Vec<String>,
     /// Sous l'exécuteur concurrent : les canaux du nœud.
     stream: Option<super::stream::StreamBinding>,
+    /// Les entrées dont un producteur est un flux ouvert.
+    open_inputs: HashSet<String>,
     services: Arc<ServiceRegistry>,
     metrics: Vec<(String, f64)>,
     logs: Vec<(NodeLogLevel, String)>,
@@ -215,6 +217,7 @@ impl NodeContext {
             emitted: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
+            open_inputs: HashSet::new(),
             services: Arc::new(ServiceRegistry::new()),
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -231,6 +234,7 @@ impl NodeContext {
             emitted: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
+            open_inputs: HashSet::new(),
             services,
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -298,6 +302,17 @@ impl NodeContext {
         if let Some(b) = self.stream.as_mut() {
             b.close_input(port);
         }
+    }
+
+    /// L'entrée `port` est-elle nourrie par un flux ouvert (qui peut ne
+    /// jamais finir) ?
+    pub fn input_is_open(&self, port: &str) -> bool {
+        self.open_inputs.contains(port)
+    }
+
+    /// La sortie `port` est-elle un flux (genre résolu) ?
+    pub fn is_stream_output(&self, port: &str) -> bool {
+        self.stream_outputs.contains(port)
     }
 
     /// **Le jeton d'annulation du run** : pour un nœud qui calcule longtemps
@@ -416,6 +431,17 @@ impl NodeContext {
     /// Rend le lien aux canaux, à la fin du nœud.
     pub(crate) fn take_stream(&mut self) -> Option<super::stream::StreamBinding> {
         self.stream.take()
+    }
+
+    /// Les entrées du nœud dont un producteur est un flux ouvert.
+    pub(crate) fn set_open_inputs(&mut self, open: HashSet<String>) {
+        self.open_inputs = open;
+    }
+
+    /// Les éléments émis sur chaque sortie en flux que rien ne lit, avant leur
+    /// fusion (l'exécuteur concurrent les rend dans la sortie du run).
+    pub(crate) fn emitted_elements(&self) -> HashMap<String, Vec<PortValue>> {
+        self.emitted.clone()
     }
 
     /// Les ports lus élément par élément, et les sorties en flux, du nœud.

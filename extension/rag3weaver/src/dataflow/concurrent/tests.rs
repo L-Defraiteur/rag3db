@@ -515,3 +515,92 @@ fn a_resumed_stream_replays_its_elements_without_rerunning_the_producer() {
     assert_eq!(seen(&out, "whole"), "abc");
     assert_eq!(seen(&out, "each"), "a,b,c");
 }
+
+/// Une fabrique de test : crée le nœud que rend la fermeture, et lit son
+/// schéma sur une instance.
+struct Factory(&'static str, Arc<dyn Fn(&str) -> Box<dyn Node> + Send + Sync>);
+
+impl crate::dataflow::node_registry::NodeFactory for Factory {
+    fn create(&self, name: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        Ok((self.1)(name))
+    }
+    fn node_type(&self) -> &str {
+        self.0
+    }
+    fn schema(&self) -> crate::dataflow::node_registry::NodeSchema {
+        let n = (self.1)("schéma");
+        crate::dataflow::node_registry::NodeSchema {
+            node_type: self.0.into(),
+            description: "".into(),
+            inputs: n.inputs(),
+            outputs: n.outputs(),
+            config_params: vec![],
+        }
+    }
+}
+
+/// **10. Le sous-graphe** : un flux fini sort, élément par élément et dans
+/// l'ordre ; un flux entre, élément par élément ; un flux ouvert sur une
+/// entrée est refusé en le nommant, au lieu d'attendre pour toujours.
+#[test]
+fn a_subgraph_relays_streams_and_refuses_an_open_input() {
+    use crate::dataflow::checkpoint::{EdgeDef, GraphDefinition, NodeDef};
+    use crate::dataflow::graph_node::GraphNode;
+    use crate::dataflow::NodeRegistry;
+    let mut registry = NodeRegistry::new();
+    registry.register(Box::new(Factory(
+        "Tokens",
+        Arc::new(|name: &str| {
+            node(name, vec![], vec![stream_out("out", PortKind::Finite, true)], |ctx| {
+                for t in ["a", "b", "c"] {
+                    ctx.emit("out", s(t))?;
+                }
+                Ok(())
+            })
+        }),
+    )));
+    registry.register(Box::new(Factory("Collect", Arc::new(|name: &str| collector(name)))));
+    let registry = Arc::new(registry);
+    let one = |name: &str, ty: &str| GraphDefinition {
+        nodes: vec![NodeDef { name: name.into(), node_type: ty.into(), config: serde_json::json!({}) }],
+        edges: Vec::<EdgeDef>::new(),
+    };
+
+    // Un flux sort du sous-graphe.
+    let inner = GraphNode::from_definition("sub", one("t", "Tokens"), registry.clone()).unwrap();
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(inner)).unwrap();
+    g.add_node(collector("reader")).unwrap();
+    g.connect("sub", "t.out", "reader", "in").unwrap();
+    let (out, _) = run(rt(), g).unwrap();
+    assert_eq!(seen(&out, "reader"), "a,b,c");
+
+    // Un flux entre dans le sous-graphe.
+    let inner = GraphNode::from_definition("sub", one("c", "Collect"), registry.clone()).unwrap();
+    let mut g = DataflowGraph::new();
+    g.add_node(node("tokens", vec![], vec![stream_out("out", PortKind::Finite, true)], |ctx| {
+        for t in ["x", "y"] {
+            ctx.emit("out", s(t))?;
+        }
+        Ok(())
+    }))
+    .unwrap();
+    g.add_node(Box::new(inner)).unwrap();
+    g.connect("tokens", "out", "sub", "c.in").unwrap();
+    let (out, _) = run(rt(), g).unwrap();
+    assert_eq!(text(out.get("sub", "c.seen").cloned().expect("c.seen")), "x,y");
+
+    // Un flux ouvert sur une entrée : refusé, nommé.
+    let inner = GraphNode::from_definition("sub", one("c", "Collect"), registry).unwrap();
+    let mut g = DataflowGraph::new();
+    g.add_node(node("peer_in", vec![], vec![stream_out("out", PortKind::Open, false)], |ctx| {
+        ctx.emit("out", s("salut"))?;
+        while !ctx.cancellation().wait_timeout(Duration::from_millis(50)) {}
+        Ok(())
+    }))
+    .unwrap();
+    g.add_node(Box::new(inner)).unwrap();
+    g.connect("peer_in", "out", "sub", "c.in").unwrap();
+    let err = run(rt(), g).map(|_| ()).unwrap_err();
+    assert!(err.contains("c.in") && err.contains("Open"), "{err}");
+}

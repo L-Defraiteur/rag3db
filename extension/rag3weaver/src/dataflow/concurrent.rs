@@ -127,6 +127,9 @@ struct Plan {
     per_element: HashSet<String>,
     stream_outputs: HashSet<String>,
     initial: HashMap<String, PortValue>,
+    /// Des flux posés d'avance sur une entrée lue élément par élément.
+    initial_streams: HashMap<String, Vec<PortValue>>,
+    open_inputs: HashSet<String>,
     /// Entrée → ses canaux, et les producteurs nommés (pour la raison d'un saut).
     in_chans: HashMap<String, Vec<ChannelId>>,
     producers: HashMap<String, Vec<String>>,
@@ -142,7 +145,7 @@ struct Plan {
 
 /// Comment un nœud a fini.
 enum Ended {
-    Completed { unconnected: HashMap<String, PortValue> },
+    Completed { unconnected: HashMap<String, PortValue>, streams: HashMap<String, Vec<PortValue>> },
     Skipped(String),
     Failed(String),
     Cancelled,
@@ -171,7 +174,7 @@ impl DataflowRuntime {
         graph: &mut DataflowGraph,
         run_id: &str,
         mut initial_inputs: HashMap<String, HashMap<String, PortValue>>,
-        stream_ports: &HashMap<String, (HashSet<String>, HashSet<String>)>,
+        stream_ports: &HashMap<String, super::runtime::StreamPorts>,
         start: Instant,
         checkpointing: Option<Checkpointing<'_>>,
     ) -> Result<DataflowOutput, String> {
@@ -197,6 +200,7 @@ impl DataflowRuntime {
             }
         }
         let fail_node = self.services.get::<String>("fail_node").cloned();
+        let mut initial_streams = std::mem::take(&mut graph.initial_streams);
         let (persist_tx, persist_rx) = mpsc::channel::<Persist>();
         let keep_state = checkpointing.as_ref().is_some_and(|c| c.keep_state);
         let capacity = self.services.get::<usize>("stream_capacity").copied().unwrap_or(64);
@@ -228,7 +232,8 @@ impl DataflowRuntime {
             .iter()
             .map(|node| {
                 let name = node.name().to_string();
-                let (per_element, stream_outputs) = stream_ports.get(&name).cloned().unwrap_or_default();
+                let ports = stream_ports.get(&name).cloned().unwrap_or_default();
+                let (per_element, stream_outputs, open_inputs) = (ports.per_element, ports.stream_outputs, ports.open_inputs);
                 let inputs = node.inputs();
                 let outputs = node.outputs();
                 Plan {
@@ -253,6 +258,8 @@ impl DataflowRuntime {
                         .map(|(c, (_, t))| (*c, t.clone()))
                         .collect(),
                     initial: initial_inputs.remove(&name).unwrap_or_default(),
+                    initial_streams: initial_streams.remove(&name).unwrap_or_default(),
+                    open_inputs,
                     restored: restored.remove(&name),
                     fail: fail_node.as_deref() == Some(name.as_str()),
                     persist: checkpointing.is_some().then(|| persist_tx.clone()),
@@ -314,10 +321,14 @@ impl DataflowRuntime {
         let cause = hub.cancelled();
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
         let mut skipped = HashMap::new();
+        let mut streams = HashMap::new();
         let mut failures = Vec::new();
         for (name, ended) in ends {
             match ended {
-                Ended::Completed { unconnected } => {
+                Ended::Completed { unconnected, streams: elements } => {
+                    for (port, list) in elements {
+                        streams.insert((name.clone(), port), list);
+                    }
                     if !unconnected.is_empty() {
                         data.insert(name, unconnected);
                     }
@@ -347,7 +358,7 @@ impl DataflowRuntime {
             total_nodes: graph.nodes.len(),
             duration_ms: start.elapsed().as_millis() as u64,
         });
-        Ok(DataflowOutput::new(data, skipped, cause))
+        Ok(DataflowOutput::new(data, skipped, cause, streams))
     }
 
     /// Le fil d'un nœud : ses entrées de départ, le saut ou l'exécution, ses
@@ -397,7 +408,7 @@ impl DataflowRuntime {
             }
             binding.finish();
             self.emit(DataflowEvent::CheckpointResumed { node: plan.name.clone(), output_ports: outputs.keys().cloned().collect() });
-            return Ended::Completed { unconnected: HashMap::new() };
+            return Ended::Completed { unconnected: HashMap::new(), streams: HashMap::new() };
         }
 
         // ── Les entrées de départ ──────────────────────────────────────────
@@ -446,6 +457,7 @@ impl DataflowRuntime {
         let mut ctx = NodeContext::with_services(self.services.clone());
         ctx.set_run_id(run_id);
         ctx.set_stream_ports(plan.per_element.clone(), plan.stream_outputs.clone());
+        ctx.set_open_inputs(plan.open_inputs.clone());
         let mut missing: Option<String> = None;
         for input in &plan.inputs {
             let port = input.name.to_string();
@@ -456,6 +468,11 @@ impl DataflowRuntime {
                     binding.inputs.insert(port.clone(), chans.clone());
                 }
                 let mut queue = pending.remove(&port).unwrap_or_default();
+                if let Some(elements) = plan.initial_streams.get(&port) {
+                    for v in elements.iter().rev() {
+                        queue.push_front(v.clone());
+                    }
+                }
                 if let Some(v) = initial {
                     queue.push_front(v);
                 }
@@ -524,6 +541,7 @@ impl DataflowRuntime {
         if hub.cancelled().is_some() && !own_failure {
             return cancelled(&mut binding, "pendant son exécution");
         }
+        let stream_elements = ctx.emitted_elements();
         let result = result.and_then(|()| ctx.settle_streams()).and_then(|()| {
             let missing: Vec<&String> = plan.required_outputs.iter().filter(|p| !ctx_has_output(&ctx, &binding, p)).collect();
             if missing.is_empty() {
@@ -600,7 +618,7 @@ impl DataflowRuntime {
         }
         binding.finish();
         self.emit(DataflowEvent::NodeCompleted { node: plan.name.clone(), duration_ms, outputs: output_snapshots, metrics });
-        Ended::Completed { unconnected }
+        Ended::Completed { unconnected, streams: stream_elements }
     }
 }
 

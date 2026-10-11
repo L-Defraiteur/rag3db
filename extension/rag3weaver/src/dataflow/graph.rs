@@ -26,6 +26,10 @@ pub struct DataflowGraph {
     pub(crate) edges: Vec<Edge>,
     /// Pre-loaded inputs for nodes (consumed by runtime at execution start).
     pub(crate) initial_inputs: HashMap<String, HashMap<String, PortValue>>,
+    /// Des flux posés d'avance sur une entrée lue élément par élément (les
+    /// éléments reçus par un sous-graphe) : sous l'exécuteur concurrent, ils
+    /// arrivent un par un ; sous les niveaux, fusionnés.
+    pub(crate) initial_streams: HashMap<String, HashMap<String, Vec<PortValue>>>,
 }
 
 impl DataflowGraph {
@@ -34,11 +38,30 @@ impl DataflowGraph {
             nodes: Vec::new(),
             edges: Vec::new(),
             initial_inputs: HashMap::new(),
+            initial_streams: HashMap::new(),
         }
     }
 
     /// Pre-load an input port on a node with initial data.
     /// Used to feed data into entry nodes.
+    /// Pose d'avance un flux sur l'entrée `port` de `node_name`.
+    pub fn set_initial_stream(&mut self, node_name: &str, port: &str, elements: Vec<PortValue>) {
+        self.initial_streams.entry(node_name.to_string()).or_default().insert(port.to_string(), elements);
+    }
+
+    /// Les flux posés d'avance, fusionnés en valeurs initiales (l'exécuteur
+    /// par niveaux, qui ne lit pas d'élément).
+    pub(crate) fn merge_initial_streams(&mut self, into: &mut HashMap<String, HashMap<String, PortValue>>) {
+        for (node, ports) in std::mem::take(&mut self.initial_streams) {
+            for (port, elements) in ports {
+                let mut it = elements.into_iter();
+                let Some(first) = it.next() else { continue };
+                let merged = it.fold(first, |a, b| super::node::merge_stream_elements(a, b).unwrap_or(PortValue::Trigger));
+                into.entry(node.clone()).or_default().insert(port, merged);
+            }
+        }
+    }
+
     pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
         self.initial_inputs
             .entry(node_name.to_string())
@@ -164,7 +187,10 @@ impl DataflowGraph {
                     });
                     let connected_by_initial = self.initial_inputs
                         .get(node.name())
-                        .map_or(false, |ports| ports.contains_key(&*input.name));
+                        .map_or(false, |ports| ports.contains_key(&*input.name))
+                        || self.initial_streams
+                            .get(node.name())
+                            .map_or(false, |ports| ports.contains_key(&*input.name));
                     if !connected_by_edge && !connected_by_initial {
                         warnings.push(format!(
                             "required input '{}' on node '{}' is not connected",

@@ -12,7 +12,7 @@ use super::checkpoint::GraphDefinition;
 use super::graph::DataflowGraph;
 use super::node::{Node, NodeContext};
 use super::node_registry::{NodeFactory, NodeRegistry, NodeSchema};
-use super::port::PortDef;
+use super::port::{PortDef, PortValue};
 
 // ─── GraphNode ──────────────────────────────────────────────────────────────
 
@@ -225,9 +225,34 @@ impl Node for GraphNode {
         // 1. Materialize the sub-graph
         let mut sub_graph = DataflowGraph::from_definition(&self.definition, &self.registry)?;
 
-        // 2. Inject inputs from parent context into sub-graph initial_inputs
+        // 2. Inject inputs from parent context into sub-graph initial_inputs.
+        // **Une entrée lue élément par élément** reçoit ses éléments en
+        // entier, puis les pose d'avance dans le sous-graphe (page 05, §4 :
+        // rendu à la fin, pas encore vivant). Un flux ouvert ne finirait
+        // jamais : refusé en le nommant, au lieu d'attendre pour toujours.
+        let per_element: std::collections::HashSet<String> = self
+            .inputs
+            .iter()
+            .filter(|p| p.posture == super::port::Posture::PerElement)
+            .map(|p| p.name.to_string())
+            .collect();
         for (ext_name, (inner_node, inner_port)) in &self.input_map {
-            if let Some(value) = ctx.take_input(ext_name) {
+            if per_element.contains(ext_name) {
+                if ctx.input_is_open(ext_name) {
+                    return Err(format!(
+                        "{} : l'entrée « {ext_name} » reçoit un flux ouvert (Open) ; un sous-graphe ne le relaie \
+                         pas encore en direct (page 05, §4, 3b) et l'attendrait pour toujours",
+                        self.name
+                    ));
+                }
+                let mut elements = Vec::new();
+                while let Some(v) = ctx.next(ext_name)? {
+                    elements.push(v);
+                }
+                if !elements.is_empty() {
+                    sub_graph.set_initial_stream(inner_node, inner_port, elements);
+                }
+            } else if let Some(value) = ctx.take_input(ext_name) {
                 sub_graph.set_initial_input(inner_node, inner_port, value);
             }
         }
@@ -242,12 +267,28 @@ impl Node for GraphNode {
             std::sync::Arc::new(layer)
         };
         let max_iterations = sub_graph.nodes.len().max(1);
-        let output = super::runtime::DataflowRuntime::with_services_arc(max_iterations, services)
-            .execute(&mut sub_graph)?;
+        let inner = super::runtime::DataflowRuntime::with_services_arc(max_iterations, services);
+        // L'annulation du parent arrête le sous-graphe à flux.
+        let stop = inner.cancel_handle();
+        ctx.cancellation().on_cancel(move || stop.cancel());
+        let output = inner.execute(&mut sub_graph)?;
 
-        // 5. Collect free outputs and set them on the parent context
+        // 5. Collect free outputs and set them on the parent context. Une
+        // sortie en flux rend ses éléments, dans l'ordre.
         for (ext_name, (inner_node, inner_port)) in &self.output_map {
-            if let Some(value) = output.get(inner_node, inner_port) {
+            if ctx.is_stream_output(ext_name) {
+                let elements: Vec<PortValue> = match output.stream(inner_node, inner_port) {
+                    Some(list) => list.to_vec(),
+                    None => output.get(inner_node, inner_port).cloned().into_iter().collect(),
+                };
+                for v in elements {
+                    match ctx.emit(ext_name, v) {
+                        Ok(()) => {}
+                        Err(super::node::Stopped::NoReader) => break,
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+            } else if let Some(value) = output.get(inner_node, inner_port) {
                 ctx.set_output(ext_name, value.clone());
             }
         }

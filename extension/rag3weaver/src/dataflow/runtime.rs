@@ -141,6 +141,10 @@ pub struct DataflowOutput {
     /// Le run a été arrêté avant sa fin (par l'hôte) : la sortie est ce qui
     /// était fait.
     stopped: Option<super::node::CancelCause>,
+    /// Les éléments des sorties en flux que rien ne lit dans le graphe, dans
+    /// l'ordre (un sous-graphe les rend à son parent élément par élément) ;
+    /// `data` les porte fusionnés.
+    streams: HashMap<(String, String), Vec<PortValue>>,
 }
 
 impl DataflowOutput {
@@ -148,8 +152,14 @@ impl DataflowOutput {
         data: HashMap<String, HashMap<String, PortValue>>,
         skipped: HashMap<String, String>,
         stopped: Option<super::node::CancelCause>,
+        streams: HashMap<(String, String), Vec<PortValue>>,
     ) -> Self {
-        Self { data, skipped, stopped }
+        Self { data, skipped, stopped, streams }
+    }
+
+    /// Les éléments, dans l'ordre, d'une sortie en flux que rien ne lisait.
+    pub fn stream(&self, node: &str, port: &str) -> Option<&[PortValue]> {
+        self.streams.get(&(node.to_string(), port.to_string())).map(Vec::as_slice)
     }
 
     /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été (l'hôte a
@@ -169,6 +179,7 @@ impl DataflowOutput {
             data: HashMap::new(),
             skipped: HashMap::new(),
             stopped: None,
+            streams: HashMap::new(),
         }
     }
 
@@ -671,7 +682,7 @@ impl DataflowRuntime {
         let stream_ports = stream_ports_of(graph)?;
         // Un graphe à flux, sous points de reprise : l'exécuteur concurrent,
         // qui range un flux par ses éléments (page 05, §3.7).
-        if self.force_concurrent || graph.has_streams()? {
+        if self.force_concurrent || graph.has_streams()? || !graph.initial_streams.is_empty() {
             let initial = std::mem::take(&mut initial_inputs);
             let checkpointing = super::concurrent::Checkpointing {
                 store,
@@ -683,6 +694,7 @@ impl DataflowRuntime {
                 self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, Some(checkpointing))
             });
         }
+        graph.merge_initial_streams(&mut initial_inputs);
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
@@ -810,8 +822,9 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
-                if let Some((per_element, stream_outputs)) = stream_ports.get(node_name.as_str()) {
-                    ctx.set_stream_ports(per_element.clone(), stream_outputs.clone());
+                if let Some(ports) = stream_ports.get(node_name.as_str()) {
+                    ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
+                    ctx.set_open_inputs(ports.open_inputs.clone());
                 }
                 let edges_for_node: Vec<_> = graph
                     .edges
@@ -1047,7 +1060,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None })
+        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new() })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1174,12 +1187,13 @@ impl DataflowRuntime {
         let stream_ports = stream_ports_of(graph)?;
         // **Un flux, et l'exécuteur concurrent** (page 05) : un graphe de
         // valeurs garde les niveaux, inchangés.
-        if self.force_concurrent || graph.has_streams()? {
+        if self.force_concurrent || graph.has_streams()? || !graph.initial_streams.is_empty() {
             let initial = std::mem::take(&mut initial_inputs);
             return tokio::task::block_in_place(|| {
                 self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None)
             });
         }
+        graph.merge_initial_streams(&mut initial_inputs);
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         // Each edge that reads from a port is one consumer. When the last consumer
@@ -1273,8 +1287,9 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
-                if let Some((per_element, stream_outputs)) = stream_ports.get(node_name.as_str()) {
-                    ctx.set_stream_ports(per_element.clone(), stream_outputs.clone());
+                if let Some(ports) = stream_ports.get(node_name.as_str()) {
+                    ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
+                    ctx.set_open_inputs(ports.open_inputs.clone());
                 }
                 let edges_for_node: Vec<_> = graph
                     .edges
@@ -1447,7 +1462,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None })
+        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new() })
     }
 }
 
@@ -1494,7 +1509,16 @@ impl NodeEventFilter {
 /// d'après les genres **résolus** (une sortie qui suit un flux est un flux).
 /// Refuse d'abord `Complete ← Open` sur ces genres : un graphe monté à la
 /// main (`connect`) n'est pas passé par `from_definition`.
-fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, (HashSet<String>, HashSet<String>)>, String> {
+/// Les ports de flux d'un nœud, d'après les genres résolus.
+#[derive(Clone, Default)]
+pub(super) struct StreamPorts {
+    pub per_element: HashSet<String>,
+    pub stream_outputs: HashSet<String>,
+    /// Les entrées dont un producteur est un flux ouvert.
+    pub open_inputs: HashSet<String>,
+}
+
+fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, StreamPorts>, String> {
     graph.validate_streams()?;
     let kinds = graph.resolved_kinds()?;
     let mut out = HashMap::new();
@@ -1512,8 +1536,15 @@ fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, (HashSet<Str
             .filter(|p| kinds.get(&(name.clone(), p.name.to_string())).is_some_and(|k| k.is_stream()))
             .map(|p| p.name.to_string())
             .collect();
-        if !per_element.is_empty() || !stream_outputs.is_empty() {
-            out.insert(name, (per_element, stream_outputs));
+        let open_inputs: HashSet<String> = graph
+            .edges
+            .iter()
+            .filter(|e| e.to_node == name)
+            .filter(|e| kinds.get(&(e.from_node.clone(), e.from_port.clone())) == Some(&super::port::PortKind::Open))
+            .map(|e| e.to_port.clone())
+            .collect();
+        if !per_element.is_empty() || !stream_outputs.is_empty() || !open_inputs.is_empty() {
+            out.insert(name, StreamPorts { per_element, stream_outputs, open_inputs });
         }
     }
     Ok(out)

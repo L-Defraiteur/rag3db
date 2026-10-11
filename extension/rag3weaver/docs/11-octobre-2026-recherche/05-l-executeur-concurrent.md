@@ -291,8 +291,7 @@ façon de ne pas rejouer le producteur.
    jetons donne le texte) ; le fan-in garde `merge_port_values`. Témoins 1 à 8,
    11 et 13 (`dataflow::concurrent::tests`), sous une garde de temps ; le
    témoin 1 rougit sous les niveaux (« l'aval n'a rien lu pendant
-   l'émission »). Un sous-graphe à sortie de flux n'est pas encore relayé
-   (commit 4).
+   l'émission »).
 3. **Fait** : sous points de reprise, un graphe à flux passe par l'exécuteur
    concurrent. Les fils des nœuds confient ce qu'il faut persister au fil
    principal, seul à écrire au magasin. Un flux se range comme une suite de
@@ -304,7 +303,18 @@ façon de ne pas rejouer le producteur.
    `a_resumed_stream_replays_its_elements_without_rerunning_the_producer`,
    rouge sous les niveaux (le lecteur élément par élément y reçoit « abc » d'un
    bloc au lieu de « a,b,c »).
-4. Le sous-graphe 3a, avec le témoin 10.
+4. **Fait** : le sous-graphe 3a. Sur une entrée lue élément par élément, il
+   reçoit les éléments en entier puis les pose d'avance dans le sous-graphe
+   (`set_initial_stream`). Un graphe qui reçoit un flux posé d'avance passe par
+   l'exécuteur concurrent, et ses nœuds le lisent élément par élément. Une
+   sortie en flux rend ses éléments dans l'ordre, à la fin (`DataflowOutput::stream`).
+   Un flux **ouvert** sur une entrée est refusé en le nommant dès le départ du
+   nœud (`ctx.input_is_open`), au lieu d'attendre pour toujours. Le refus a
+   lieu au départ et non au montage : le sous-graphe ne voit pas son
+   producteur. L'annulation du parent arrête le sous-graphe (`on_cancel` sur
+   sa poignée d'arrêt). Témoin 10, `a_subgraph_relays_streams_and_refuses_an_open_input`,
+   rouge avec l'ancien `GraphNode` (« set_output sur « t.out », un port de
+   flux »). Le pont vivant (3b) reste à faire.
 5. `LlmNode` qui émet vient chez le proto.
 
 Chaque commit passe toute la lib et `scripts/check_features.sh`, et la batterie
