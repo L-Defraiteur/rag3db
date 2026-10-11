@@ -572,3 +572,29 @@ paquet npm) ; B ne vaut pas son coût. Rien de plus sans son mot.
   est éteint), mermaid chargé du réseau pour le proto seulement, session de
   chat persistante hors de git. La page 08 portera les trois commandes pour
   jouer la recette au réveil.
+
+## 12. Ajout de 3 h 20 : une corruption du COPY journalisé, le défaut du moteur
+
+**À lire en premier au réveil.** Le rouge de rejeu de la nuit n'était ni le
+lecteur affamé ni l'étendue du fichier : A a reproduit en 9 s, sans gtest,
+sur master, que **le COPY journalisé** (le défaut du moteur depuis
+`ff9bad960`, hier 15 h 54) **corrompt une colonne DOUBLE en mémoire, dans le
+processus vivant, avant toute mort** : 3 sur 3 avec `copy_journal_threshold`
+à 1 Gio, une colonne FLOAT[4] présente et 2 fils (134 à 241 lignes à 0.0,
+ids ~199 550 à 199 999) ; juste avec 1 fil, juste sans colonne tableau, juste
+sans seuil, juste sous `force_checkpoint_on_copy`. Le journal porte les
+valeurs fausses, le rejeu les écrit, le point de reprise les garde. Chemin :
+`0f4a54b2c` (étape 2 du chargement journalisé). Piste : le groupe partiel
+fusionné par deux fils, relu en mémoire avec une colonne ARRAY.
+
+Décidé cette nuit, renversable : **le cœur C++ prend le correctif en priorité
+absolue** avec la sonde de A (`~/.cache/rag3weaver-notes-A/etendue/variantes.cpp`) ;
+**rag3weaver pose un filet** : `force_checkpoint_on_copy=true` (l'ancien
+défaut, +1 % mesuré) tant que le ticket est ouvert, avec témoin rouge sans le
+filet ; hotfixs ne pousse rien sur `wal_replayer` avant le correctif. La
+**condition 2 de la stèle** (« le COPY journalisé est le défaut du moteur »)
+est de fait rouverte jusqu'au correctif : le cœur l'écrira à la stèle avec le
+ticket. rag3weaver charge ses entités avec des vecteurs FLOAT[768] et à
+plusieurs fils : le chemin fautif est le sien ; les bases indexées depuis hier
+15 h 54 avec une colonne DOUBLE à côté d'un vecteur sont à vérifier (la sonde
+dit comment : `MATCH … WHERE d.score <> …`).
