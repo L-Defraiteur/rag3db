@@ -133,11 +133,13 @@ impl io::BufRead for EntreeInterruptible {
 
 fn servir_mcp(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
-                         [--keys dev,admin] [--daemon <adresse> | --standalone]";
+                         [--keys dev,admin] [--daemon <adresse>] \
+                         [--daemon-json <chemin> | --daemon-json-command <commande>] [--standalone]";
     let mut manifeste: Option<String> = None;
     let mut cles: Vec<String> = Vec::new();
     let mut hote: Option<String> = None;
     let mut seul = false;
+    let mut source: Option<rag3weaver::daemon_client::DaemonSource> = None;
     let mut i = 0;
     while i < args.len() {
         let valeur = |i: usize| -> Result<String, String> {
@@ -150,6 +152,16 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
             // Une session à la fois ; gardée pour les témoins et les usages à
             // une seule session, jusqu'à son retrait (page C, en dernier).
             "--standalone" => { seul = true; i += 1; }
+            // **Un hôte désigné** (marche 5) : son daemon.json, en fichier ou
+            // par une commande ; le jeton n'est jamais un argument.
+            "--daemon-json" => {
+                source = Some(rag3weaver::daemon_client::DaemonSource::File(std::path::PathBuf::from(valeur(i)?)));
+                i += 2;
+            }
+            "--daemon-json-command" => {
+                source = Some(rag3weaver::daemon_client::DaemonSource::Command(valeur(i)?));
+                i += 2;
+            }
             // **L'ancien sens, refusé en le disant** (page C, §3) : `--demon`
             // ne déportait que la connexion, et N sessions y faisaient N
             // réacteurs. Pas un synonyme silencieux de `--daemon`, qui veut
@@ -175,6 +187,9 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         }
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
+    if seul && source.is_some() {
+        return Err(format!("--standalone et --daemon-json s'excluent\n{USAGE}"));
+    }
     if seul && hote.is_some() {
         return Err(format!("--standalone et --daemon s'excluent : l'un possède la base, l'autre la laisse à l'hôte\n{USAGE}"));
     }
@@ -186,9 +201,13 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     // `daemon_status`.
     if !seul {
         use rag3weaver::daemon_client::{Attach, McpClient};
-        let attach = match &hote {
-            Some(adresse) => Attach::Forced(adresse.clone()),
-            None => Attach::Discover(std::env::current_exe().map_err(|e| format!("l'exécutable courant : {e}"))?),
+        let attach = match (&hote, source) {
+            (adresse, Some(source)) => Attach::Designated(rag3weaver::daemon_client::Designated {
+                source,
+                address: adresse.clone(),
+            }),
+            (Some(adresse), None) => Attach::Forced(adresse.clone()),
+            (None, None) => Attach::Discover(std::env::current_exe().map_err(|e| format!("l'exécutable courant : {e}"))?),
         };
         let client = McpClient::start(attach, Path::new(&manifeste), &format!("mcp (pid {})", std::process::id()), cles.clone());
         eprintln!(

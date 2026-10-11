@@ -207,7 +207,8 @@ fn un_hote_designe_par_son_daemon_json_et_son_jeton_relu() {
     let (erreur, texte) = par_commande.appeler("list_categories", json!({}));
     assert!(!erreur && texte.contains("outils"), "la commande relit le jeton neuf, et l'appel passe : {texte}");
     let (erreur, texte) = par_copie.appeler("list_categories", json!({}));
-    assert!(erreur, "la copie figée a l'ancien jeton : refus nommé");
+    eprintln!("[hôte désigné] la copie figée après redémarrage : erreur={erreur} — {texte}");
+    assert!(erreur, "la copie figée a l'ancien jeton : refus nommé — {texte}");
     assert!(texte.contains("jeton") && texte.contains("luciepc.daemon.json"), "le refus nomme le jeton et sa source : {texte}");
 }
 

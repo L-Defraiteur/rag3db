@@ -65,6 +65,65 @@ impl From<crate::daemon_lifecycle::DaemonFile> for Endpoint {
     }
 }
 
+/// **D'où vient un hôte désigné** (marche 5, première part) : un `daemon.json`
+/// qui n'est pas celui de ce poste — copié depuis l'autre poste, ou rendu par
+/// une commande (`ssh luciepc cat …/daemon.json`). Le jeton n'est jamais un
+/// argument : il vient de cette source, et se relit quand l'hôte le refuse.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DaemonSource {
+    File(PathBuf),
+    Command(String),
+}
+
+impl DaemonSource {
+    /// Lire l'adresse et le jeton.
+    pub fn read(&self) -> Result<crate::daemon_lifecycle::DaemonFile, String> {
+        let octets = match self {
+            DaemonSource::File(p) => std::fs::read(p).map_err(|e| format!("{self} : {e}"))?,
+            DaemonSource::Command(c) => {
+                let sortie = std::process::Command::new("sh")
+                    .args(["-c", c])
+                    .stdin(std::process::Stdio::null())
+                    .output()
+                    .map_err(|e| format!("{self} : {e}"))?;
+                if !sortie.status.success() {
+                    return Err(format!(
+                        "{self} : {} — {}",
+                        sortie.status,
+                        String::from_utf8_lossy(&sortie.stderr).trim()
+                    ));
+                }
+                sortie.stdout
+            }
+        };
+        serde_json::from_slice(&octets).map_err(|e| format!("{self} : pas un daemon.json ({e})"))
+    }
+}
+
+impl std::fmt::Display for DaemonSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DaemonSource::File(p) => write!(f, "le daemon.json désigné {}", p.display()),
+            DaemonSource::Command(c) => write!(f, "la commande du daemon.json désigné `{c}`"),
+        }
+    }
+}
+
+/// Un hôte désigné : sa source, et l'adresse qui remplace la sienne (un
+/// tunnel), s'il y en a une.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Designated {
+    pub source: DaemonSource,
+    pub address: Option<String>,
+}
+
+impl Designated {
+    pub fn endpoint(&self) -> Result<Endpoint, String> {
+        let fiche = self.source.read()?;
+        Ok(Endpoint { address: self.address.clone().unwrap_or(fiche.address), token: Some(fiche.token) })
+    }
+}
+
 /// **Le client d'un backend hébergé** par un démon.
 pub struct DaemonClient {
     agent: ureq::Agent,
@@ -73,6 +132,8 @@ pub struct DaemonClient {
     /// L'exécutable qui relance l'hôte quand il ne répond plus (marche 4) ;
     /// `None` pour une adresse forcée : on ne relance pas l'hôte d'un autre.
     relaunch: Option<PathBuf>,
+    /// Un hôte désigné : sa source se relit quand il refuse le jeton.
+    designated: Option<Designated>,
     manifest: PathBuf,
     client: String,
     keys: Vec<String>,
@@ -101,6 +162,18 @@ impl DaemonClient {
     ) -> Result<Self, String> {
         let manifest = std::fs::canonicalize(manifest)
             .map_err(|e| format!("manifeste {} : {e}", manifest.display()))?;
+        Self::attach_as_sent(endpoint, relaunch, manifest, client, keys)
+    }
+
+    /// Se brancher en envoyant le chemin du manifeste **tel quel** : l'hôte
+    /// l'ouvre chez lui.
+    fn attach_as_sent(
+        endpoint: Endpoint,
+        relaunch: Option<PathBuf>,
+        manifest: PathBuf,
+        client: &str,
+        keys: Vec<String>,
+    ) -> Result<Self, String> {
         let agent = crate::daemon::agent();
         let base = crate::daemon::base_url(&endpoint.address);
         let session = open_session(&agent, &base, endpoint.token.as_deref(), client, &keys)?;
@@ -108,6 +181,7 @@ impl DaemonClient {
             agent,
             endpoint: Mutex::new((base, endpoint.token)),
             relaunch,
+            designated: None,
             manifest,
             client: client.to_string(),
             keys,
@@ -121,6 +195,38 @@ impl DaemonClient {
         me.name = ouvert["describe"]["name"].as_str().unwrap_or("").to_string();
         me.version = ouvert["describe"]["version"].as_u64().unwrap_or(0) as u32;
         Ok(me)
+    }
+
+    /// **Se brancher sur un hôte désigné** : l'adresse et le jeton de sa
+    /// source ; un jeton refusé relit la source une fois.
+    pub fn attach_designated(designated: Designated, manifest: &Path, client: &str, keys: Vec<String>) -> Result<Self, String> {
+        // **Le manifeste est celui de l'hôte** : sur un autre poste, il n'existe
+        // peut-être pas ici. Un chemin absolu part tel quel, l'hôte l'ouvre chez
+        // lui ; un chemin relatif ne dirait rien là-bas.
+        if !manifest.is_absolute() {
+            return Err(format!(
+                "manifeste {} : un hôte désigné l'ouvre à son chemin à lui — donnez un chemin absolu",
+                manifest.display()
+            ));
+        }
+        let endpoint = designated.endpoint()?;
+        let mut me = Self::attach_as_sent(endpoint, None, manifest.to_path_buf(), client, keys)
+            .map_err(|e| format!("{e} — jeton et adresse lus dans {}", designated.source))?;
+        me.designated = Some(designated);
+        Ok(me)
+    }
+
+    /// L'hôte désigné a refusé le jeton : relire la source, une session neuve,
+    /// le backend rouvert.
+    fn relire_le_jeton(&self, d: &Designated) -> Result<(), OpError> {
+        let refus = |e: String| OpError { error: format!("jeton local refusé par l'hôte {}, relu dans {} : {e}", self.base(), d.source), transient: false };
+        let endpoint = d.endpoint().map_err(refus)?;
+        let base = crate::daemon::base_url(&endpoint.address);
+        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys).map_err(refus)?;
+        eprintln!("[mcp] l'hôte désigné a refusé le jeton : relu dans {}, une session neuve", d.source);
+        *self.endpoint.lock().unwrap_or_else(|p| p.into_inner()) = (base, endpoint.token);
+        *self.session.lock().unwrap_or_else(|p| p.into_inner()) = session;
+        Ok(())
     }
 
     fn base(&self) -> String {
@@ -186,6 +292,25 @@ impl DaemonClient {
                 }
             },
             autre => autre.map_err(OpError::from)?,
+        };
+        // Un jeton refusé (l'hôte désigné a redémarré) : la source relue, et le
+        // message rejoué une fois — refusé avant d'être joué.
+        let premier = match &self.designated {
+            Some(d) if premier[crate::daemon_host::BAD_TOKEN] == json!(true) => {
+                self.relire_le_jeton(d)?;
+                if route != "/open" {
+                    self.envoyer("/open", &json!({ "manifest": self.manifest })).map_err(OpError::from)?;
+                }
+                let encore = self.envoyer(route, &body).map_err(OpError::from)?;
+                if encore[crate::daemon_host::BAD_TOKEN] == json!(true) {
+                    return Err(OpError {
+                        error: format!("jeton local refusé par l'hôte {} même relu dans {}", self.base(), d.source),
+                        transient: false,
+                    });
+                }
+                encore
+            }
+            _ => premier,
         };
         let reponse = if premier["unknownSession"] == json!(true) {
             let nouvelle = open_session(&self.agent, &self.base(), self.token().as_deref(), &self.client, &self.keys)
@@ -338,6 +463,8 @@ pub enum Attach {
     Forced(String),
     /// `daemon.json`, et l'hôte lancé par cet exécutable s'il manque.
     Discover(PathBuf),
+    /// Un hôte désigné par un autre daemon.json (marche 5) ; jamais lancé d'ici.
+    Designated(Designated),
 }
 
 enum Side {
@@ -370,6 +497,8 @@ impl McpClient {
         use crate::daemon_lifecycle::Missing;
         let essai = match attach {
             Attach::Forced(adresse) => DaemonClient::connect(adresse, manifest, client, keys.to_vec()).map_err(Missing::Unreachable),
+            Attach::Designated(d) => DaemonClient::attach_designated(d.clone(), manifest, client, keys.to_vec())
+                .map_err(Missing::Unreachable),
             Attach::Discover(exe) => crate::daemon_lifecycle::ensure(exe).and_then(|fiche| {
                 DaemonClient::attach(Endpoint::from(fiche), Some(exe.clone()), manifest, client, keys.to_vec())
                     .map_err(Missing::Unreachable)
@@ -490,10 +619,19 @@ impl Hote for McpClient {
     /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
     /// rend sinon une erreur d'outil qui dit pourquoi (page C, §4).
     fn accepte(&self, nom: &str) -> bool {
-        if matches!(&*self.side.lock().unwrap_or_else(|p| p.into_inner()), Side::Missing(_)) {
+        if nom == DAEMON_STATUS {
             return true;
         }
-        self.outils().iter().any(|t| t["name"] == nom)
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Missing(_) => true,
+            // Un hôte qui ne décrit plus ce backend (jeton refusé, hôte parti) :
+            // le nom passe à l'appel, qui rend l'erreur nommée plutôt qu'un
+            // « outil inconnu » de protocole.
+            Side::Attached(c) => match c.op("/describe", json!({ "manifest": c.manifest })) {
+                Ok(d) => d["tools"].as_array().is_some_and(|t| t.iter().any(|t| t["name"] == nom)),
+                Err(_) => true,
+            },
+        }
     }
 
     fn instructions(&self) -> Option<String> {

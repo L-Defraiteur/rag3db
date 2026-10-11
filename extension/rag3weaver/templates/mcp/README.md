@@ -213,6 +213,36 @@ adresses **complètes** ; la mémoire longue déclare bge-m3, servi sur 7980.
 retire `daemon.json` et sort ; la session suivante en relance un. Jamais `kill -9` :
 une base rag3db tuée en pleine écriture garde un journal à rejouer.
 
+## 7. Un hôte sur un autre poste (marche 5)
+
+L'hôte peut tourner ailleurs — sur luciepc, sous son unité utilisateur — et se joindre par
+un tunnel ssh. Le client ne lit alors pas le `daemon.json` de ce poste, mais celui d'en
+face, qui donne le jeton ; `--daemon` donne l'adresse du tunnel.
+
+```sh
+# le tunnel, en fond (à rouvrir s'il tombe)
+ssh -f -N -L 7971:127.0.0.1:7970 lucied@luciepc
+
+claude mcp add code-rag3db-luciepc \
+  --env LD_LIBRARY_PATH=<dépôt>/build/lecteurs-csv/src \
+  -- ~/.local/bin/rag3weaver-backend mcp \
+     --manifest /home/lucied/.config/rag3weaver/code-principal/templates/backends/code/backend.json \
+     --daemon 127.0.0.1:7971 \
+     --daemon-json-command "ssh -T -o BatchMode=yes lucied@luciepc cat .local/share/rag3weaver/daemon.json" \
+     --keys dev
+```
+
+- **Le manifeste est celui de l'hôte** : un chemin absolu **sur luciepc**, envoyé tel
+  quel ; il n'a pas à exister ici.
+- **Le jeton** vient de la commande, jamais d'un argument ; il change à chaque
+  démarrage de l'hôte d'en face, et le client le relit quand l'hôte le refuse. Une copie
+  (`--daemon-json <chemin>`) marche aussi, jusqu'au prochain redémarrage là-bas.
+- **L'embarquement reste à l'hôte**, là-bas : rien à poser ici
+  (`RAG3WEAVER_EMBED_SERVICE` est inutile au client, et jamais
+  `RAG3WEAVER_EMBEDDINGS_ADDR` sur un tunnel).
+- Un hôte désigné n'est jamais lancé d'ici : s'il ne répond pas, `daemon_status` dit
+  pourquoi (tunnel fermé, source illisible).
+
 ## Ce que le serveur ne fait pas
 
 Ni `resources`, ni `prompts`, ni `sampling`, ni `roots` — **absents et déclarés

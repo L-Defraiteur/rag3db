@@ -558,6 +558,43 @@ démarrage).
 - L'identifiant de bâti du moteur n'est pas exposé ; `build` dit la version du crate et l'empreinte de
   l'exécutable, en attendant un `CALL build_id()` du moteur, à placer par l'orchestration.
 
+### La marche 5 : un hôte nommé, ailleurs (11 octobre 2026, la mémoire longue)
+
+Lucie a dit oui à l'hôte de luciepc, joint d'ici par un tunnel ssh. La marche 4 trouve
+l'hôte **de ce poste** par son `daemon.json` ; la marche 5 désigne **un autre** hôte.
+
+**La forme générique.** Le manifeste dit son hôte — une adresse, et où trouver le jeton
+(un fichier, ou une commande qui rend le `daemon.json` d'en face) —, et le client choisit
+l'hôte par le manifeste : un backend de code sur luciepc, une mémoire sur ce poste, depuis
+la même session. Le tunnel n'est qu'un transport : l'adresse du manifeste peut être
+remplacée par celle d'un tunnel sans rien changer d'autre. Le jeton n'est **jamais** un
+argument ni une valeur du manifeste (visible dans `ps`, copié avec le manifeste) : une
+source, relue quand l'hôte le refuse (son jeton change à chaque démarrage).
+
+**Ce qui est fait (première part, `client-designe`)** — la même chose en options, sans
+toucher au manifeste :
+
+- `--daemon-json <chemin>` : un `daemon.json` désigné (copié d'en face) ;
+- `--daemon-json-command <commande>` : la commande qui le rend, par exemple
+  `ssh luciepc cat .local/share/rag3weaver/daemon.json` — la forme à préférer, puisqu'elle
+  relit le jeton du jour ;
+- `--daemon <adresse>` remplace l'adresse du fichier (le tunnel) ;
+- sur un refus de jeton (403 `badToken`), la source est relue une fois, une session
+  neuve ouverte, l'appel rejoué ; refusé encore, l'erreur nomme le jeton et sa source ;
+- le manifeste est **celui de l'hôte** : un chemin absolu, envoyé tel quel, que l'hôte
+  ouvre chez lui (il peut ne pas exister ici) ;
+- un hôte désigné n'est jamais lancé d'ici ; une source absente se dit par
+  `daemon_status`.
+
+Témoins : `e2e_mcp_hote_designe` (un hôte derrière une adresse qui n'est pas celle de
+son `daemon.json`, le jeton relu par commande après un redémarrage, la copie figée
+refusée en le nommant, une source absente) ; et le vrai, contre l'hôte de luciepc par le
+tunnel (`code-principal`, manifeste absent d'ici) : `initialize` 0,32 s, `usages` 0,21 s.
+
+**Ce qui reste (la seconde part)** : la déclaration au manifeste (`host: {address,
+token_from}`), le choix de l'hôte par le manifeste, et le nom du backend plutôt que son
+chemin (l'hôte résout un nom qu'il déclare, le client n'a plus à connaître ses chemins).
+
 ## 8. Ce qui reste à Lucie
 
 *Premier jet de l'arbre principal, à compléter par la mémoire longue.*
