@@ -9,7 +9,7 @@ autres attendent en le disant.
 ## La forme
 
 ```bash
-~/.cache/rag3weaver-build/poste push <session> -- <commande…>
+~/.cache/rag3weaver-build/poste push <session> [--lourd] -- <commande…>
 ~/.cache/rag3weaver-build/poste push --qui
 ```
 
@@ -25,6 +25,46 @@ autres attendent en le disant.
 - Le script ne fetch, ne rebase et ne pousse rien lui-même ; il n'y a aucune
   force. Pas de plafond de mémoire sur `push` : le rejeu, dans la commande,
   passe par `poste lourd` comme d'habitude.
+
+## L'ordre des verrous : le poste d'abord, le push ensuite
+
+**Le trou** (arbre principal, 11 octobre au soir) : sa commande, sous le verrou de push,
+rejouait sous `poste lourd`. Elle a attendu le poste 28 minutes derrière une mesure exclusive et
+sa porte, en tenant le verrou de push pour rien, et tout le monde attendait derrière elle.
+
+**La forme** : un ordre fixe des verrous.
+
+```bash
+~/.cache/rag3weaver-build/poste push <session> --lourd -- <commande…>   # ou POSTE_PUSH_LOURD=1
+```
+
+- `--lourd` prend d'abord la place `lourd` du poste, la porte puis le partagé, au plus
+  `POSTE_PUSH_LOURD_MAX` secondes (60). S'il ne l'obtient pas, il dit « poste occupé par
+  <commande> (pid …) » et rend **code 75, rien de pris** : ni le poste ni le push. La session se
+  remet en file plus tard.
+- Puis le verrou de push, puis la commande, dans le plafond de mémoire et la priorité basse du
+  lourd.
+- La commande n'appelle plus `poste lourd` : dedans (`POSTE_DANS_LOURD=1`), `poste lourd` passe
+  la main tel quel, et `poste mesure` est refusé (code 2), car il attendrait sa propre place.
+- **Jamais l'inverse.** Une mesure exclusive se lance avec `poste mesure`, qui attend les
+  partagés en cours comme avant. Elle ne connaît pas le push, et n'a pas à le connaître.
+- Sur luciepc, `--lourd` prend la place du poste **local**, puis le verrou de push de
+  lucie-tablette par le relais.
+
+Témoins, sur des verrous d'essai (`POSTE_LOCK_DIR` pour la porte et le poste, `POSTE_PUSH_DIR`
+pour le push, `POSTE_PUSH_LOURD_MAX=5`) :
+
+| cas | ce qui se passe |
+|---|---|
+| une mesure tient le poste, un push lourd demande | refus en 5 s, code 75, le tenant nommé (`sleep 15`), le verrou de push libre, aucune fiche |
+| un push lourd tient le poste, une mesure demande | la mesure commence à la seconde où le push finit |
+| dedans le push lourd | `poste lourd true` passe en 0 s ; `poste mesure` refusé, code 2 |
+| poste libre | le push lourd passe tout de suite, code 0 |
+| sans `--lourd` | rien ne change |
+| luciepc, par le relais | « dedans sur LuciePC : POSTE_DANS_LOURD=1 », code 0 |
+
+Déployé sur les deux postes, md5 `70fe3f1f…`. La version précédente est gardée en
+`poste.avant-lourd`.
 
 ## Un seul verrou pour les deux postes
 
