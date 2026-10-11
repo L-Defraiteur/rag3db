@@ -396,6 +396,46 @@ TEST_F(VectorIndexUpdate, UpdateInARolledBackTransaction) {
     });
 }
 
+// Le CALL de la recherche ne rend aucun nœud supprimé (ticket
+// 2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call) : relevé par le cœur C++ sur
+// I1, cent lignes, deux supprimées, k = 100 rendait 100 lignes au CALL et 98 clés projetées. Les
+// autres témoins ne le voient pas : ils projettent le nœud, et la projection écarte les lignes
+// supprimées. Deux moments : après la suppression validée, et dans la transaction qui supprime.
+TEST_F(VectorIndexUpdate, DeletedRowsAreNotReturnedByTheCall) {
+    const auto count = [&](const std::string& query) -> int64_t {
+        auto result = conn->query(query);
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
+        return result->isSuccess() && result->hasNext() ?
+                   result->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    };
+    createDocs(0, 100);
+    const auto callRows = [&]() {
+        return count(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [0, 0, 0, 0], 100, efs := 100) "
+            "RETURN count(*);",
+            table));
+    };
+    const auto projectedKeys = [&]() {
+        return count(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [0, 0, 0, 0], 100, efs := 100) "
+            "RETURN count(node.id);",
+            table));
+    };
+    mustRun("BEGIN TRANSACTION;");
+    mustRun(stringFormat("MATCH (n:{}) WHERE n.id IN [10, 11] DELETE n;", table));
+    const auto callInTransaction = callRows();
+    const auto keysInTransaction = projectedKeys();
+    mustRun("COMMIT;");
+    const auto callAfterCommit = callRows();
+    const auto keysAfterCommit = projectedKeys();
+    EXPECT_TRUE(callInTransaction == 98 && callAfterCommit == 98)
+        << "[check: vector-call-dead] the CALL returns " << callInTransaction
+        << " rows in the deleting transaction (" << keysInTransaction << " keys) and "
+        << callAfterCommit << " after its commit (" << keysAfterCommit
+        << " keys), for 98 living rows";
+}
+
 // Une ligne créée puis mise à jour dans la même transaction (page 04, §7). NodeTable::update
 // appelait index->update sans tester si la ligne est locale : OnDiskHNSWIndex::update l'insérait
 // dans le graphe, et le commit l'insérait de nouveau (commitInsert). Attendu : la ligne n'entre

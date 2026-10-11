@@ -25,10 +25,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (52)
+### Ouverts (53)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | ouvert — décision de Lucie (signature nouvelle) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
 | [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | ouvert — à faire APRÈS le nœud de lien | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
 | [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | ouvert, filet côté rag3weaver (point de reprise forcé) ; correctif au cœur | perte | oui sans le filet (COPY de plus d'un groupe, grand tampon) | oui |
