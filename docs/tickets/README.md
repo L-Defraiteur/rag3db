@@ -63,7 +63,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (24)
+### Ouverts — produit (23)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -79,7 +79,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | ouvert — confirmation pour l'arbre principal | blocage (s'il revenait) | oui | oui (premier index) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
-| [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
 | [Une synchronisation reprise après un arrêt brutal exige takeover](2026-10-04-reprise-apres-arret-exige-takeover.md) | levé après un arrêt propre (`75de6618f`) ; reste la mort brutale | blocage | oui | oui (sessions de `sync_source`) |
 | [Les journaux d'annulation du dataflow restent à vie dans /tmp, qui est de la mémoire vive](2026-10-04-journaux-d-annulation-laisses-dans-tmp.md) | ouvert | perte | oui | oui (son code) |
 | [Les services de modèles n'ont aucune authentification](2026-10-04-services-de-modeles-sans-authentification.md) | ouvert (accepté aujourd'hui) | à faire avant toute exposition hors d'un tunnel | depuis l'un des deux postes | oui (démon d'embarquement et ses clients) |
@@ -95,10 +94,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (77), dans `closed/`
+### Fermés (78), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [738 définitions C++ restent anonymes](closed/2026-10-04-fonctions-anonymes-cpp-restantes.md) | corrigé, codeparsers `35faa0f` (11 oct.) : 0 anonyme sur rag3db | réponse fausse | oui | oui |
 | [La lib ne compile pas sans la feature `code`](closed/2026-10-11-la-lib-ne-compile-pas-sans-la-feature-code.md) | corrigé, l'arbre principal (11 oct.) | blocage | non | oui (`backend.rs`, garde de feature) |
 | [Le binaire e2e ne compile pas sans burn-embedder](closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md) | corrigé : le `cfg` de la suite demande sa feature, `scripts/check_features.sh` vérifie les quatre jeux (11 oct.) | blocage (`cargo check --tests` rouge) | non (tests) | oui (tests) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](closed/2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | corrigé : le démon de test sert un écouteur lié au port 0, plus de course au port (11 oct.) | test instable | non | oui (tests du démon) |
