@@ -1,33 +1,28 @@
 # Optimiseur — rapport de session
 
-**Mis à jour le 10 octobre 2026 en soirée.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
+**Mis à jour le 11 octobre 2026 à 3 h 20.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
 `../orchestration/03-le-paquet-npm.md`. Le rapport précédent (envois à
 tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseur/`.
 
 ## État
 
-- Branche `paquet-npm` (worktree `../rag3db-paquet-npm`) : elle fond master
-  et `embarqueur-absent` (c98d4ff9b) ; la porte pose `AbsentEmbedder`, plus
-  aucun mock dans le produit ; `npm test` passe. Rien n'est publié ; c'est
-  l'orchestration qui publie `0.0.1-alpha.1` sous `next` avec les OTP de
-  Lucie, depuis `~/.cache/rag3weaver-build/paquet-npm/publier/`
-  (sous-paquet d'abord).
-- La démo `bindings/nodejs/demo/demo.sh` est répétée et verte (voir le
-  relevé) ; les tunnels 7979-7981 vers luciepc (services 7878-7880) sont
-  tenus par une autre session, ne pas les rouvrir.
-- Linux x64 publié. **Les sous-paquets Windows x64 et macOS arm64 sont
-  montés** (ba387459f : `npm/windows-x64`, `npm/darwin-arm64`, dépendances
-  optionnelles ; dans le workflow : cache du bâti sur tout le target,
-  extension vecteur par le cmake de cargo, `npm test` sur le runner ;
-  `prepareManifest` pose `sandbox: off` hors Linux) ; leurs premiers runs
-  (Windows 38068526690, macOS 38068584216) tournaient sur GitHub à la pause
-  du nettoyage du disque — lire leur verdict en reprenant. macOS x64 est à
-  Lucie. Ordre tranché par l'orchestration : Windows, macOS arm64, puis le
-  vecteur en statique comme amélioration commune.
-- Pause du 10 octobre au soir : le poste nettoie ses disques, tous les
-  target et worktrees sauf l'arbre principal sont effacés ; les bâtis se
-  refont par Docker sur luciepc (`~/git_workspaces/rag3db-paquet-npm` et
-  `~/.cache/rag3weaver-build/paquet-npm/docker-cache` là-bas).
+- Branche `paquet-npm` (worktree `~/git_workspaces/rag3db-paquet-npm`,
+  target `~/.cache/rag3weaver-build/target-G`) : elle fond master
+  97acd579b (contrôle de bâti des extensions, lot 1 du chantier I, rechargement
+  des déclarations) ; tête de la séance **786dfec13**. Reste à fondre après
+  la séance : master 274ce4fc5 (`RAG3DB_BUILD_ID_GIT_DIR`, dont build.rs
+  pose déjà la variable sur la branche).
+- **Les quatre archives `0.0.1-alpha.2` sont prêtes**, toutes de 786dfec13,
+  sous `~/.cache/rag3weaver-build/paquet-npm-garde/publier/`, épreuve verte
+  sur les trois plateformes, identifiant de bâti vérifié ; la démo rejouée
+  dessus est verte. L'orchestration a les quatre commandes (linux, windows,
+  darwin, tête) ; **rien n'est publié**, l'OTP est à Lucie.
+- Les règles du chantier : `[profile.paquet]` (LTO complète, 61 Mo au lieu
+  de 89), les trois correctifs Windows (chemin cité pour Cypher, fsync de
+  dossier, fsync de fichier), journaux et copies de cache hors du checkout,
+  identifiant de bâti vérifié dans les recettes.
+- À la fusion de `paquet-npm` dans master (règle de Lucie) : effacer
+  `target-G` et le worktree ici, le clone sur luciepc ; dire « effacé ».
 
 ## Ce qui est fait
 
@@ -78,19 +73,17 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. Si l'alpha est publiée : jouer `demo.sh` sans `DEMO_SOURCE` (vraie
-   installation depuis npm) et lire ce que Lucie en dit ; sinon, la
-   répétition par `DEMO_SOURCE=<archive>`.
-2. Après la fusion de `embarqueur-absent` dans master : rebase de
-   `paquet-npm` (la fusion est déjà faite dans la branche, le rebase doit
-   être vide ou presque), puis fusion de `paquet-npm` dans master quand
-   l'orchestration le dit.
-3. Windows : l'extension vecteur dans le job, `Swatinem/rust-cache` (47 min
-   → moins), l'épreuve JS sur le runner, le sous-paquet
-   `rag3weaver-win32-x64-msvc`. macOS : x64 (`macos-15-large` ou
-   `macos-13`), puis les sous-paquets `darwin-arm64` / `darwin-x64`.
-4. Le vecteur en statique (dire à l'arbre principal avant de toucher au
-   manifeste) ; `release.yml` copié de lucivy, porte fermée.
+1. La séance de publication (quatre `npm publish` dans l'ordre linux,
+   windows, darwin, tête, depuis `paquet-npm-garde/publier/`), puis
+   `npm view rag3weaver@next version optionalDependencies` et la démo sans
+   `DEMO_SOURCE`.
+2. Fondre master 274ce4fc5 dans `paquet-npm`, rejouer les trois bâtis (le
+   cache Windows et macOS change de clé : cmake/ et CMakeLists.txt sont
+   dans la clé), vérifier les identifiants.
+3. Fusion de `paquet-npm` dans master quand l'orchestration le dit ; puis
+   effacer target-G, le worktree, le clone luciepc.
+4. Ensuite : macOS x64 (à Lucie), le vecteur en statique (amélioration
+   commune), `release.yml` copié de lucivy avec porte fermée.
 
 ## Pièges
 

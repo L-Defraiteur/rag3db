@@ -457,7 +457,13 @@ de publication : windows, darwin, puis la tête.
   `FlushFileBuffers` exige sous Windows un handle en écriture. Correctif
   `fsync_file` (ouverture en écriture là-bas ; un fichier tenu par un autre
   handle est laissé à NTFS, dit une fois) — 786dfec13.
-- **Vingt-troisième** (38097939930, 786dfec13) : en cours.
+- **Vingt-troisième** (38097939930, 786dfec13, 55 min) : **vert de bout en
+  bout** — binaire lié, extension chargée, index plein texte, dette lue,
+  « not available » sur le dense, arrêt propre. L'identifiant de bâti y
+  porte le commit (`rag3db-build-786dfec13…`, le même sur l'extension) :
+  sur le runner, `rag3db-src` est un vrai lien symbolique et git voit le
+  dépôt ; « nogit » ne concerne qu'un poste Windows sans ce droit.
+  Windows est livrable.
 
 **L'identifiant de bâti** (cœur C++, sur master depuis 458ff7157, fondu
 dans la branche à c65db36da) : le moteur et chaque extension portent
@@ -523,7 +529,7 @@ sous `alpha-1-publiee/`, les essais d'avant sous `e52091ea0/` et
 |---|---|---|---|
 | `rag3weaver-linux-x64-gnu-0.0.1-alpha.2.tgz` (22 Mo) | Docker luciepc, 4 min | **61 Mo** strippé, glibc 2.28 | `rag3db-build-458ff7157…` |
 | `rag3weaver-darwin-arm64-0.0.1-alpha.2.tgz` (19 Mo) | run 7, 17 min | **52,5 Mo** après `strip -x` | `rag3db-build-786dfec13…` |
-| `rag3weaver-windows-x64-0.0.1-alpha.2.tgz` | run 23, en cours | ~60 Mo | « nogit » |
+| `rag3weaver-windows-x64-0.0.1-alpha.2.tgz` (24 Mo) | run 23, 55 min | **61 Mo** + extension 12,6 Mo | `rag3db-build-786dfec13…` |
 | `rag3weaver-0.0.1-alpha.2.tgz` (27 ko) | la tête, README anglais | | |
 
 La démo rejouée contre la tête et le sous-paquet Linux locaux : verte
