@@ -233,6 +233,18 @@ bouge : un lien `courant`.**
    cherche d'abord à côté de la lib. Témoins : `scripts/test_rag3db_libs.py`
    (quatre cas, rouges sans l'outil) et
    `the_vector_extension_is_looked_up_next_to_the_lib_first`, rouge avec
-   l'ordre d'avant. **Reste 3b** : les consommateurs.
+   l'ordre d'avant.
 4. Les consommateurs : `run_e2e.sh`, les modèles MCP, les scripts. Puis le
-   rpath (point 3.4), une fois le magasin en place.
+   rpath (point 3.4), une fois le magasin en place. **3b, fait pour
+   `run_e2e.sh`** : `RAG3DB_LIB=courant` (ou un identifiant) prend la lib, les
+   en-têtes et l'extension d'un dossier du magasin, résolu une fois au départ
+   (`scripts/lib_du_magasin.sh`). Sans la variable, rien ne change.
+   `--build` publie la lib neuve au magasin. Témoin
+   `scripts/test_lib_du_magasin.sh`, six cas ; il a été écrit après l'outil,
+   et n'a donc pas été vu rouge. **Limite dite** : une vingtaine de suites
+   bâtissent le chemin de l'extension par `RAG3DB_ROOT`. Sous le magasin, la
+   passe refuse donc en nommant les deux identifiants si l'extension de
+   l'arbre n'est pas du bâti du magasin. **3c** : les migrer vers un appel
+   commun qui cherche à côté de la lib. **Reste à prouver** : une passe réelle
+   sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
+   porte sa section). Les modèles MCP et la recette de G suivront, avec G.

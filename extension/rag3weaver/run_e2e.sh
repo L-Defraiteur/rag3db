@@ -110,6 +110,18 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"
 WEAVER="$ROOT/extension/rag3weaver"
 
+# **Le magasin de libs** (page docs/11-octobre-2026-recherche/07-le-magasin-de-libs.md) :
+# `RAG3DB_LIB=courant`, ou un identifiant de bâti, prend la lib, les en-têtes
+# et l'extension d'un dossier du magasin, résolu **une fois**, ici : une
+# publication pendant la passe ne la change pas, et plus personne n'a à
+# s'arrêter pour un rebâti. Sans `RAG3DB_LIB`, le dossier de bâti, comme avant.
+LIBDIR="$BUILD/src"
+if [ -n "${RAG3DB_LIB:-}" ]; then
+  . "$WEAVER/scripts/lib_du_magasin.sh"
+  LIBDIR="$(lib_du_magasin "$RAG3DB_LIB")" || exit 2
+  echo "▸ lib du magasin ($RAG3DB_LIB) : $LIBDIR"
+fi
+
 # **Un worktree ne lie pas son propre moteur en silence** (10 octobre 2026).
 # Sans `RAG3DB_BUILD`, `BUILD` est le `build/lecteurs-csv` **du worktree** :
 # s'il en a un (une session qui y a bâti), la passe le lie sans le dire, et
@@ -117,7 +129,7 @@ WEAVER="$ROOT/extension/rag3weaver"
 # session recherche pendant sa tenue de mesure). Un worktree nomme donc sa
 # lib, ou déclare qu'il éprouve la sienne (`RAG3WEAVER_MOTEUR_DU_WORKTREE=1`,
 # le cas du cœur C++).
-if [ -z "${RAG3DB_BUILD:-}" ] && [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" != 1 ]; then
+if [ -z "${RAG3DB_BUILD:-}" ] && [ -z "${RAG3DB_LIB:-}" ] && [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" != 1 ]; then
   commun="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   propre="$(git -C "$ROOT" rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
   if [ -n "$commun" ] && [ "$commun" != "$propre" ]; then
@@ -283,11 +295,11 @@ done
 NEED_BUILD=false
 if [ "$FORCE_BUILD" = true ]; then
   NEED_BUILD=true
-elif [ ! -f "$BUILD/src/librag3db.so" ]; then
+elif [ ! -f "$LIBDIR/librag3db.so" ]; then
   # **Pas de bâti du moteur implicite** (10 octobre 2026) : il partait ici
   # sans rien demander — vingt minutes de C++, la mémoire du poste, et un
   # moteur de plus dans un dossier que personne ne nommait.
-  echo "✗ pas de lib sous $BUILD/src : rien n'est bâti sans le demander."
+  echo "✗ pas de lib sous $LIBDIR : rien n'est bâti sans le demander."
   echo "  RAG3DB_BUILD vers une lib existante, ou --build pour bâtir celle-ci."
   exit 2
 fi
@@ -312,6 +324,15 @@ if [ "$NEED_BUILD" = true ]; then
   JOBS=$(( $(nproc) > 2 ? $(nproc) - 2 : 1 ))
   confined cmake --build "$BUILD" -j"$JOBS"
   echo "▸ Build done."
+  # La lib neuve au magasin, si elle porte son identifiant (refus dit sinon) ;
+  # `courant` la désigne désormais.
+  if python3 "$WEAVER/scripts/rag3db_libs.py" publier "$BUILD" --racine "$ROOT"; then
+    if [ "${RAG3DB_LIB:-}" = courant ]; then
+      LIBDIR="$(lib_du_magasin courant)" || exit 2
+    fi
+  else
+    echo "▸ lib non publiée au magasin (voir ci-dessus) ; la passe garde $LIBDIR"
+  fi
 fi
 
 if [ "$BUILD_ONLY" = true ]; then
@@ -534,9 +555,23 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 # `RAG3DB_ROOT` désigne l'arbre où elle est, comme pour les tests ; sinon
 # l'arbre du script.
 EXTENSION_VECTOR="${RAG3DB_ROOT:-$ROOT}/extension/vector/build/libvector.rag3db_extension"
+# **Sous le magasin, la paire vient du même bâti.** Le backend cherche
+# l'extension à côté de la lib ; mais une vingtaine de suites bâtissent son
+# chemin par `RAG3DB_ROOT` (leur migration est le lot 3c de la page 07). Tant
+# qu'elles le font, l'extension de l'arbre doit être du bâti du magasin : un
+# refus qui nomme les deux plutôt qu'un `LOAD EXTENSION` refusé au fond d'un test.
+if [ -n "${RAG3DB_LIB:-}" ]; then
+  ID_MAGASIN="$(cat "$LIBDIR/BUILD_ID" 2>/dev/null)"
+  if [ -f "$EXTENSION_VECTOR" ] && ! grep -qaF "$ID_MAGASIN" "$EXTENSION_VECTOR"; then
+    echo "✗ l'extension de l'arbre ($EXTENSION_VECTOR) n'est pas du bâti du magasin ($ID_MAGASIN) :"
+    echo "  des suites la chargent par RAG3DB_ROOT. Rebâtissez l'arbre, ou prenez l'identifiant de son bâti (RAG3DB_LIB=<id>)."
+    exit 2
+  fi
+  EXTENSION_VECTOR="$LIBDIR/libvector.rag3db_extension"
+fi
 
 verifier_le_moteur() {
-  local lib="$BUILD/src/librag3db.so" ext="$EXTENSION_VECTOR"
+  local lib="$LIBDIR/librag3db.so" ext="$EXTENSION_VECTOR"
   local sources_ct sources_de vieux=0 f ct chemins
   # Chaque bibliothèque se compare aux sources qui la bâtissent : le moteur à
   # `src/`, l'extension vecteur à ses propres sources et aux en-têtes du
@@ -579,7 +614,7 @@ verifier_le_moteur
 # soir avaient la même, à l'octet).
 empreinte_du_moteur() {
   local f
-  for f in "$BUILD/src/librag3db.so" "$EXTENSION_VECTOR"; do
+  for f in "$LIBDIR/librag3db.so" "$EXTENSION_VECTOR"; do
     # Un `[ -f ] && …` en dernière ligne rendait 1 quand le fichier manquait,
     # et `set -e` arrêtait le script sans un mot (4 octobre 2026, depuis un
     # worktree). La fonction ne doit jamais échouer : elle relève ce qui est.
@@ -836,7 +871,7 @@ garder_le_target "$TARGET_DE_LA_PASSE" "$WEAVER" || exit 2
 echo "▸ Running: suites ${CARGO_ARGS[*]}"
 
 export PATH="/usr/local/cuda/bin:$PATH"
-export LD_LIBRARY_PATH="$BUILD/src:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$LIBDIR:/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export CUDA_ROOT="/usr/local/cuda"
 
 # ── Le régime, et pourquoi c'est `confort` par défaut ───────────────────────
@@ -855,8 +890,8 @@ export RAG3WEAVER_REGIME="${RAG3WEAVER_REGIME:-confort}"
 echo "▸ régime = $RAG3WEAVER_REGIME (RAG3WEAVER_REGIME=plein pour la vitesse)"
 
 export RAG3DB_SHARED=1
-export RAG3DB_LIBRARY_DIR="$BUILD/src"
-export RAG3DB_INCLUDE_DIR="$BUILD/src"
+export RAG3DB_LIBRARY_DIR="$LIBDIR"
+export RAG3DB_INCLUDE_DIR="$LIBDIR"
 # Depuis un worktree, `RAG3DB_ROOT` peut viser le dépôt principal, où
 # l'extension vecteur est construite (extension/vector/build/) : posé, on le
 # garde ; sinon la racine du script.
