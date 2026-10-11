@@ -97,6 +97,9 @@ public:
 
     void commit(common::transaction_t commitTS) const;
     void rollback(main::ClientContext* context) const;
+    // Oublie les enregistrements : après une annulation déjà appliquée (la transaction en échec
+    // reste ouverte, marche T0), un second rollback n'a plus rien à défaire.
+    void clear() { memoryBuffers.clear(); }
 
 private:
     uint8_t* createUndoRecord(uint64_t size);

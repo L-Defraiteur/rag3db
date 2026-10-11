@@ -45,6 +45,9 @@ public:
 
     void commit(main::ClientContext& clientContext, Transaction* transaction);
     void rollback(main::ClientContext& clientContext, Transaction* transaction);
+    // Marche T0 : une instruction a échoué dans une transaction explicite. Ses effets sont
+    // annulés, elle reste active, ses verrous tenus ; rollback() la ferme ensuite.
+    void failAfterStatement(main::ClientContext& clientContext, Transaction* transaction);
 
     void checkpoint(main::ClientContext& clientContext);
 

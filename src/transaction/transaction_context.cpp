@@ -57,6 +57,13 @@ void TransactionContext::commit() {
     if (!hasActiveTransaction()) {
         return;
     }
+    if (manualTransactionFailed) {
+        // Rien à valider : le COMMIT ferme le bloc comme un ROLLBACK, et le dit.
+        rollback();
+        throw TransactionManagerException(
+            stringFormat("{}: nothing was committed. The transaction is now closed.",
+                MANUAL_TRANSACTION_FAILED));
+    }
     clientContext.getDatabase()->getTransactionManager()->commit(clientContext, activeTransaction);
     clearTransaction();
 }
@@ -74,9 +81,15 @@ void TransactionContext::rollbackAfterStatementFailure() {
     if (!hasActiveTransaction()) {
         return;
     }
-    const auto wasManual = mode == TransactionMode::MANUAL;
-    rollback();
-    manualTransactionFailed = wasManual;
+    if (mode != TransactionMode::MANUAL) {
+        rollback();
+        return;
+    }
+    // Marche T0 : la transaction reste ouverte et garde ses verrous jusqu'au ROLLBACK (ou au
+    // COMMIT, qui annule et le dit) ; ses effets sont annulés tout de suite.
+    clientContext.getDatabase()->getTransactionManager()->failAfterStatement(clientContext,
+        activeTransaction);
+    manualTransactionFailed = true;
 }
 
 void TransactionContext::throwIfManualTransactionFailed() const {
@@ -90,6 +103,7 @@ void TransactionContext::throwIfManualTransactionFailed() const {
 void TransactionContext::clearTransaction() {
     activeTransaction = nullptr;
     mode = TransactionMode::AUTO;
+    manualTransactionFailed = false;
 }
 
 TransactionContext* TransactionContext::Get(const main::ClientContext& context) {

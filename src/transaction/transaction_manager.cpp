@@ -130,6 +130,17 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
 // Note: We take in additional `transaction` here is due to that `transactionContext` might be
 // destructed when a transaction throws an exception, while we need to roll back the active
 // transaction still.
+void TransactionManager::failAfterStatement(main::ClientContext& clientContext,
+    Transaction* transaction) {
+    std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
+    clientContext.cleanUp();
+    KU_ASSERT(transaction->isWriteTransaction() || transaction->isReadOnly());
+    if (transaction->isWriteTransaction()) {
+        transaction->failAfterStatement(&wal);
+    }
+    // Pas de clearTransactionNoLock : la transaction reste active et garde ses verrous.
+}
+
 void TransactionManager::rollback(main::ClientContext& clientContext, Transaction* transaction) {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
     // Celui qui attend le départ des transactions est réveillé par clearTransactionNoLock.
@@ -140,7 +151,9 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
     } break;
     case TransactionType::RECOVERY:
     case TransactionType::WRITE: {
-        transaction->rollback(&wal);
+        if (!transaction->hasFailed()) {
+            transaction->rollback(&wal);
+        }
         clearTransactionNoLock(transaction->getID());
     } break;
     default: {

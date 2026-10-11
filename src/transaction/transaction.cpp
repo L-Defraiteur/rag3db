@@ -214,6 +214,13 @@ void Transaction::rollback(storage::WAL*) {
     hasCatalogChanges = false;
 }
 
+void Transaction::failAfterStatement(storage::WAL* wal) {
+    rollback(wal);
+    undoBuffer->clear();
+    localWAL->clear();
+    failed = true;
+}
+
 bool Transaction::isUnCommitted(common::table_id_t tableID, common::offset_t nodeOffset) const {
     return localStorage && localStorage->getLocalTable(tableID) &&
            nodeOffset >= getMinUncommittedNodeOffset(tableID);
