@@ -69,6 +69,12 @@ private:
         bool tornEnd) const;
 
     void replayWALRecord(WALRecord& walRecord) const;
+    // Marche A3′ reprise : les clés en double notées par l'index de clé pendant le rejeu (un
+    // journal du moteur d'avant le verrou de clé) sont réglées à la fin, dans une transaction de
+    // reprise : s'il reste une autre ligne vivante de la même clé, la ligne rejouée reçoit une
+    // pierre tombale (ses relations détachées, puis supprimée par décalage, sans toucher
+    // l'index) ; sinon elle est gardée et reçoit son entrée d'index.
+    void settleReplayedDuplicates() const;
     void replayCreateCatalogEntryRecord(WALRecord& walRecord) const;
     void replayDropCatalogEntryRecord(const WALRecord& walRecord) const;
     void replayAlterTableEntryRecord(const WALRecord& walRecord) const;
