@@ -1012,3 +1012,32 @@ voit). Témoin `InsertLockTest.CreateTableAsTakesTheIndexOfTheTableItCreates` (`
 correctif `6a4ebaa89`. Le banc et l'arbre principal prévenus : leurs passes sur 63e6a26bf valent
 première passe, la preuve est sur la tête finale. Seconde passe sur luciepc : bâti, témoins,
 transaction_test, copy, vector, Cypher, banc — **tout vert** (17 h 05, luciepc) : témoins 42, transaction_test 260, copy 23, vector 74 et 63, Cypher 1867, banc conforme 6 rouges / 253 verts. Tête finale `6a4ebaa89`, dite au banc et à l'arbre principal pour leurs passes de preuve.
+
+**17 h 45 — A8 sur master, la bascule rebasée.** A8 d'hotfixs est sur master (f024578d5, lib
+commune 481afb550) ; la bascule rebasée dessus sans conflit sous un nom neuf, `verrous-a9b-2`,
+tête `4ee70e386` ; rejeu sur luciepc dans `rag3db-a9b` (bâti 66 étapes, témoins 42 verts, puis
+transaction_test, ddl, banc). Le banc et l'arbre principal rejouent leurs preuves sur cette tête
+(leur première passe sur 6a4ebaa89 : banc transaction 260 et e2e 27 verts ; arbre principal 116
+e2e du produit verts, aucune attente ni erreur de sérialisation, artefact prouvé par md5).
+**Trois rouges 10/10 sur master, hors bascule, relevés par le banc** (probabilistes rejoués dix
+fois sur fd10b8c27) : H4_IndexedRandomMix Hot/Crash — « HNSW index: node offset 310 is beyond the
+visited set » et « Row 314 of table Doc has no primary key to lock: it is not visible to this
+transaction » (ce dernier est un message de mes verrous : une ligne supprimée et validée par un
+autre écrivain entre le MATCH et le SET devrait donner l'erreur nommée de sérialisation, pas un
+refus inattendu — à prendre après la bascule) ; JournaledCopyDeath `data-file-bounded` (le
+fichier de données grossit à chaque mort au milieu d'un COPY). Tickets par le banc.
+
+**17 h 50 — rejeu sur 4ee70e386 (bascule + A8), luciepc** : bâti 66 étapes, témoins 42, transaction_test 260, e2e ddl 72, banc conforme 6 rouges / 254 verts (le témoin d'A8 en plus). L'arbre principal « fini » : 116 e2e du produit verts sur cette tête, artefact prouvé (md5 par ldd), aucune attente ni erreur de sérialisation, durées comparables. Reste le « fini » du banc (protocole entier sur 4ee70e386 contre master 481afb550), puis `poste push`.
+
+**18 h 15 — la bascule est sur master, `a0a79016e`.** Le banc « fini » : son protocole sur 4ee70e386
+contre master 481afb550 ne montre aucun écart (lib/extension md5 distincts ; transaction_test 259 /
+260 — le témoin CreateTableAs en plus ; e2e de concurrence 27/27 ; probabilistes ×10 : 70 verts
+30 rouges des deux côtés, les trois mêmes cas de master ; banc conforme 6 rouges / 254 verts des
+deux côtés, les six mêmes). Push par `poste push` : premier tour refusé par ma faute (la branche
+rebasée poussée sous son ancien nom, non-fast-forward, rien poussé — le script pousse désormais
+sous un nom neuf à chaque tour) ; second tour : rebase sur 3f13b1657 (rien du moteur), bâti chaud
+33 étapes, témoins 42, e2e ddl 72, banc 6/254, master immobile, push. Trois contrôles lus.
+**Le mode multi-écrivains est le défaut du moteur** ; `CALL enable_multi_writes=false` rend
+l'ancienne sémantique. Lib commune de luciepc rebâtie dessus, `rag3db-a9b` effacé. Reste à moi :
+B2, et le ticket de mes verrous relevé par le banc (ligne supprimée par un autre écrivain entre
+le MATCH et le SET → l'erreur nommée de sérialisation, pas un refus inattendu).

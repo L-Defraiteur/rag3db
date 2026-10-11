@@ -200,3 +200,11 @@ SET sous index. La condition n'est pas atteinte : **le mode est le défaut**, lo
 (le réglage `enable_multi_writes`, `true` dans `DBConfig`, les témoins de l'ancienne sémantique
 la rendent par `CALL enable_multi_writes=false`, deux commentaires Rust mis à jour), renversable
 par le même réglage. Lucie a levé en séance la permission qui bloquait l'édition.
+
+**Sur master `a0a79016e` (11 octobre, 18 h 15).** La liste a fait sortir un défaut de la bascule,
+corrigé dans le même lot : `CREATE TABLE … AS` sous le mode — le COPY prenait le verrou d'index de
+sa table avant l'exécution du plan, où la table n'existe pas encore ; pour une table créée par le
+plan, la prise se fait à l'initialisation, libre par construction. Preuves : liste complète, Cypher,
+vector et banc sur la tête rebasée sur A8 ; le protocole du banc (aucun écart contre master) ; les
+116 e2e du produit qui ouvrent un backend (arbre principal, artefact prouvé par md5). Marche 4 faite ;
+A8 est sur master aussi (hotfixs, f024578d5) : **A est complet**, reste B2.
