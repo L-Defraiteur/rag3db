@@ -228,6 +228,16 @@ pub enum Event {
     WatchAcrossScopes {
         by: String,
     },
+    /// **Un fichier a changé** sous une montre déclarée (`watches`) :
+    /// `change` vaut `created`, `modified` ou `removed` ; `hash` est le
+    /// blake3 du contenu (vide pour un fichier supprimé). Sujet `files`.
+    FileChanged {
+        watch: String,
+        path: String,
+        change: String,
+        hash: String,
+        at_ms: u64,
+    },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
     Message {
@@ -309,6 +319,7 @@ impl Event {
             Self::EntitiesChanged { .. } => topic::CATALOG,
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
+            Self::FileChanged { .. } => topic::FILES,
             _ => topic::CATALOG,
         }
     }
@@ -390,6 +401,10 @@ impl Event {
                 "kind": "Message", "run": run, "from": from, "to": to, "content": content,
                 "conversation": conversation,
             }),
+            Self::FileChanged { watch, path, change, hash, at_ms } => json!({
+                "kind": "FileChanged", "watch": watch, "path": path, "change": change,
+                "hash": hash, "at_ms": at_ms,
+            }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
     }
@@ -408,6 +423,8 @@ pub mod topic {
     pub const DATAFLOW: &str = "dataflow";
     /// Messages d'une boucle à une autre.
     pub const MESSAGES: &str = "messages";
+    /// Les fichiers changés sous une montre (`watches`).
+    pub const FILES: &str = "files";
 }
 
 /// Le sujet d'un run : `run.<id>`.

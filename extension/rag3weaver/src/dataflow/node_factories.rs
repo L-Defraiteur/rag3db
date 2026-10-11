@@ -1448,6 +1448,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::code_nodes::GrepNodeFactory));
         registry.register(Box::new(super::code_nodes::ListFilesNodeFactory));
         registry.register(Box::new(super::code_nodes::EditFileNodeFactory));
+        // Réservé aux réactions : la montre de fichiers (W2).
+        registry.register(Box::new(super::reindex_nodes::ReindexFileNodeFactory));
         registry.register(Box::new(super::index_nodes::EstimateNodeFactory));
         registry.register(Box::new(super::index_nodes::IndexNodeFactory));
         registry.register(Box::new(ScanFilesNodeFactory));
@@ -1461,7 +1463,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 14 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 15 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1717,6 +1719,7 @@ mod tests {
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
                 "Route" => serde_json::json!({ "routes": "a|b" }),
+                "ReindexFileNode" => serde_json::json!({}),
                 _ => serde_json::json!({}),
             }
         };

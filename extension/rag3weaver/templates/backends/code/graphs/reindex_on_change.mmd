@@ -1,0 +1,18 @@
+%% tool: reindex_on_change
+%% description: Quand un fichier du workspace change hors de nos outils (un éditeur, git, un autre agent), il est réindexé ; un fichier supprimé est retiré de l'index. Rend {reindexed, removed, deferred, errors}.
+%% on: files
+%% policy: batch 300
+%% result: reindex.report
+%%
+%% **L'index suit le disque.** La montre `code` du manifeste (`watches`)
+%% publie un `FileChanged` par fichier créé, modifié ou supprimé ; cette
+%% réaction les tire de son curseur et passe par les deux chemins qui existent
+%% déjà (`reingest_file`, `remove_file`). Pendant une indexation entière, un
+%% fichier changé est mis en reprise, comme une édition. `batch 300` : une
+%% sauvegarde de plusieurs fichiers ne fait qu'un passage.
+%% ────────────────────────────────────────────────────────────────────────────
+graph LR
+    events["EventSourceNode(topics='files', cursor='reindex_on_change', limit=1000)"]
+    reindex["ReindexFileNode(watch='code')"]
+
+    events -->|events| reindex

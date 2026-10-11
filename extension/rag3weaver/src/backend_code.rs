@@ -243,7 +243,10 @@ const RUN_NODES: &[&str] = &["RunCommandNode"];
 /// **port** — qu'aucun paramètre d'outil ne peut alimenter. C'est le moteur
 /// qui a tranché avant moi : déclarer une fiche réactive dans `tools` faisait
 /// refuser le manifeste entier.
-const REACTION_NODES: &[&str] = &["EventSourceNode", "ReactTransitionNode"];
+/// `ReindexFileNode` : écrire l'index du code pour un fichier changé sous une
+/// montre — une capacité nommée, pas la porte de fichiers ni de commandes
+/// (W2, page 04 des agents qui se parlent).
+const REACTION_NODES: &[&str] = &["EventSourceNode", "ReactTransitionNode", "ReindexFileNode"];
 
 /// **Les nœuds d'un graphe réactif** : la base, plus les deux ci-dessus.
 ///

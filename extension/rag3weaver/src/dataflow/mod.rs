@@ -43,6 +43,8 @@ pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
 pub mod decide_nodes;
+#[cfg(feature = "code")]
+pub mod reindex_nodes;
 pub mod ocr_nodes;
 #[cfg(feature = "code")]
 pub mod code_nodes;

@@ -62,6 +62,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         garde: None,
         reactions: Mutex::new(None),
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
+        watches: Mutex::new(Vec::new()),
     };
     (dir, backend)
 }
