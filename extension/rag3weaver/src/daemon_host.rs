@@ -263,8 +263,15 @@ impl DaemonHost {
         };
         let statut = |v: &Value| if v["ok"] == json!(true) { 200 } else if v["unknownSession"] == json!(true) { 401 } else { 422 };
         match (method, path) {
-            ("GET", "/sante") => (200, json!({ "service": SERVICE, "pid": std::process::id() })),
-            ("GET", "/etat") => (200, self.state()),
+            ("GET", "/sante") => (
+                200,
+                json!({ "service": SERVICE, "pid": std::process::id(), "build": crate::daemon_lifecycle::build_id() }),
+            ),
+            ("GET", "/etat") => {
+                let mut etat = self.state();
+                etat["build"] = json!(crate::daemon_lifecycle::build_id());
+                (200, etat)
+            }
             ("POST", "/session") => match corps() {
                 Ok(v) => {
                     let client = v["client"].as_str().unwrap_or("anonyme").to_string();
@@ -336,8 +343,20 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
 }
 
 /// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
-/// puis fermer tous ses backends proprement.
+/// puis fermer tous ses backends proprement. Sans jeton : les témoins qui
+/// lancent un hôte à la main ; le binaire passe par [`serve_daemon_guarded`].
 pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize) {
+    serve_daemon_guarded(host, server, threads, None)
+}
+
+/// La réponse à une requête sans le jeton local, ou avec un faux. **403, et
+/// pas 401** : 401 dit une session inconnue, que le client rouvre et rejoue.
+pub const BAD_TOKEN: &str = "badToken";
+
+/// **Servir l'hôte, le jeton local exigé** (marche 4, page C §6) : chaque
+/// requête porte `Authorization: Bearer <jeton>`, sauf `GET /sante`, que les
+/// clients sondent avant de connaître le jeton.
+pub fn serve_daemon_guarded(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize, token: Option<String>) {
     use std::sync::atomic::{AtomicBool, Ordering};
     let server = Arc::new(server);
     let stopping = Arc::new(AtomicBool::new(false));
@@ -345,6 +364,7 @@ pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: u
     let workers: Vec<_> = (0..count)
         .map(|i| {
             let (server, host, stopping) = (server.clone(), host.clone(), stopping.clone());
+            let attendu = token.as_ref().map(|t| format!("Bearer {t}"));
             std::thread::Builder::new()
                 .name(format!("demon-{i}"))
                 .spawn(move || {
@@ -353,6 +373,22 @@ pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: u
                         let method = request.method().as_str().to_string();
                         let url = request.url().to_string();
                         let path = url.split('?').next().unwrap_or("").to_string();
+                        if let Some(attendu) = &attendu {
+                            let porte = request
+                                .headers()
+                                .iter()
+                                .find(|h| h.field.equiv("Authorization"))
+                                .map(|h| h.value.as_str() == attendu.as_str())
+                                .unwrap_or(false);
+                            if !porte && !(method == "GET" && path == "/sante") {
+                                let _ = request.respond(json_response(
+                                    403,
+                                    &json!({ "ok": false, BAD_TOKEN: true, "error": "jeton local absent ou faux : \
+                                        il est dans daemon.json, à envoyer en Authorization: Bearer" }),
+                                ));
+                                continue;
+                            }
+                        }
                         if method == "POST" && path == STOP {
                             stopping.store(true, Ordering::SeqCst);
                             let _ = request.respond(json_response(200, &json!({ "stopping": true })));
@@ -389,4 +425,68 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
     tiny_http::Response::from_string(value.to_string())
         .with_status_code(status)
         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("en-tête littéral"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Un hôte gardé par un jeton, sur un port libre ; rend l'adresse.
+    fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+        let jeton = jeton.to_string();
+        let fil = std::thread::spawn(move || serve_daemon_guarded(Arc::new(DaemonHost::new()), server, 2, Some(jeton)));
+        (adresse, fil)
+    }
+
+    fn demander(methode: &str, url: &str, jeton: Option<&str>) -> (u16, Value) {
+        let agent = crate::daemon::agent();
+        let mut r = if methode == "GET" {
+            let mut q = agent.get(url);
+            if let Some(t) = jeton {
+                q = q.header("Authorization", &format!("Bearer {t}"));
+            }
+            q.call().unwrap()
+        } else {
+            let mut q = agent.post(url).header("content-type", "application/json");
+            if let Some(t) = jeton {
+                q = q.header("Authorization", &format!("Bearer {t}"));
+            }
+            q.send(json!({ "client": "le témoin" }).to_string()).unwrap()
+        };
+        let statut = r.status().as_u16();
+        let texte = r.body_mut().read_to_string().unwrap();
+        (statut, serde_json::from_str(&texte).unwrap())
+    }
+
+    /// **Le jeton local** (marche 4) : `GET /sante` répond sans lui — un client
+    /// sonde avant de le connaître — ; tout le reste le demande, refusé en 403
+    /// et nommé (401 voudrait dire « session inconnue », que le client rejoue).
+    #[test]
+    fn sans_le_jeton_seule_la_sante_repond() {
+        let (adresse, fil) = hote_garde("le-bon");
+        let base = format!("http://{adresse}");
+        let (statut, sante) = demander("GET", &format!("{base}/sante"), None);
+        assert_eq!(statut, 200);
+        assert_eq!(sante["service"], SERVICE);
+        assert!(sante["build"].as_str().is_some_and(|b| !b.is_empty()), "{sante}");
+        for (methode, route, jeton) in [("GET", "/etat", None), ("POST", "/session", None), ("POST", "/session", Some("le-faux"))] {
+            let (statut, r) = demander(methode, &format!("{base}{route}"), jeton);
+            assert_eq!(statut, 403, "{methode} {route} {jeton:?} : {r}");
+            assert_eq!(r[BAD_TOKEN], true, "{r}");
+        }
+        let (statut, r) = demander("POST", &format!("{base}/session"), Some("le-bon"));
+        assert_eq!(statut, 200, "{r}");
+        assert!(r["session"].as_str().is_some());
+        let (statut, etat) = demander("GET", &format!("{base}/etat"), Some("le-bon"));
+        assert_eq!(statut, 200);
+        assert_eq!(etat["sessions"].as_array().map(Vec::len), Some(1), "{etat}");
+        let (statut, _) = demander("POST", &format!("{base}/arret"), None);
+        assert_eq!(statut, 403, "l'arrêt aussi demande le jeton");
+        let (statut, _) = demander("POST", &format!("{base}/arret"), Some("le-bon"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
 }

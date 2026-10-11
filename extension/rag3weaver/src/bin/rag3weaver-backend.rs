@@ -10,22 +10,19 @@ use std::{
 /// un backend et le lui donner.
 ///
 /// ```text
-/// rag3weaver-backend mcp --manifest <backend.json> [--keys dev,admin] [--demon 127.0.0.1:7979]
+/// rag3weaver-backend mcp --manifest <backend.json> [--keys dev,admin] [--daemon <adresse> | --standalone]
 /// ```
 ///
-/// **Deux modes, et c'est la propriété de la base qui les sépare.**
+/// **Par défaut, un client mince de l'hôte du démon** (forme C, marches 3 et
+/// 4) : une base rag3db ne s'ouvre que par un processus, et Claude Code lance
+/// un processus MCP par session — l'hôte (`rag3weaver-backend daemon`) tient
+/// les bases, N sessions lui parlent. Le client trouve l'hôte par
+/// `daemon.json` et le lance s'il manque ; `--daemon <adresse>` force une
+/// adresse. Sans hôte joignable, le serveur démarre quand même et l'outil
+/// `daemon_status` dit pourquoi.
 ///
-/// Sans `--demon`, le serveur **possède** la base : bon pour un backend de code
-/// en lecture, une session. Mais une base rag3db ne s'ouvre que par un seul
-/// processus, et Claude Code lance **un processus MCP par session** — donc deux
-/// sessions sur la même mémoire seraient deux écrivains, refusés par le moteur.
-///
-/// Avec `--demon`, le serveur ne possède plus rien : son backend reste local
-/// (ses outils et ses schémas ne demandent aucune base) et sa **connexion**
-/// passe par `rag3daemon`, qui est le processus unique qui tient la base.
-/// N serveurs, un écrivain, et aucun protocole à relayer — `DaemonConnection`
-/// est une `DbConnection` comme une autre. C'est la forme produit : installer
-/// rag3weaver, c'est installer un démon.
+/// `--standalone` : la forme d'avant, le serveur **possède** sa base — une
+/// session à la fois.
 /// **L'entrée du serveur MCP, qui finit sur EOF ou sur SIGTERM** (11 octobre
 /// 2026, marche à part de la page C, §4).
 ///
@@ -136,10 +133,11 @@ impl io::BufRead for EntreeInterruptible {
 
 fn servir_mcp(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
-                         [--keys dev,admin] [--daemon <adresse>]";
+                         [--keys dev,admin] [--daemon <adresse> | --standalone]";
     let mut manifeste: Option<String> = None;
     let mut cles: Vec<String> = Vec::new();
     let mut hote: Option<String> = None;
+    let mut seul = false;
     let mut i = 0;
     while i < args.len() {
         let valeur = |i: usize| -> Result<String, String> {
@@ -148,6 +146,10 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         match args[i].as_str() {
             "--manifest" => { manifeste = Some(valeur(i)?); i += 2; }
             "--daemon" => { hote = Some(valeur(i)?); i += 2; }
+            // **La forme d'avant la forme C** : ce processus possède sa base.
+            // Une session à la fois ; gardée pour les témoins et les usages à
+            // une seule session, jusqu'à son retrait (page C, en dernier).
+            "--standalone" => { seul = true; i += 1; }
             // **L'ancien sens, refusé en le disant** (page C, §3) : `--demon`
             // ne déportait que la connexion, et N sessions y faisaient N
             // réacteurs. Pas un synonyme silencieux de `--daemon`, qui veut
@@ -173,29 +175,34 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         }
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
-    // **Le client mince** (marche 3 de la forme C) : rien ne s'ouvre ici, ni
-    // base ni modèle ; tout passe à l'hôte, et ce processus ne garde que le
-    // protocole MCP. Sans `--daemon`, la forme d'aujourd'hui (le serveur
-    // possède sa base) reste, jusqu'à la découverte et au lancement de l'hôte
-    // (marche 4).
-    if let Some(adresse) = &hote {
-        let client = rag3weaver::daemon_client::DaemonClient::connect(
-            adresse,
-            Path::new(&manifeste),
-            &format!("mcp (pid {})", std::process::id()),
-            cles.clone(),
-        )?;
+    if seul && hote.is_some() {
+        return Err(format!("--standalone et --daemon s'excluent : l'un possède la base, l'autre la laisse à l'hôte\n{USAGE}"));
+    }
+    // **Le client mince, par défaut** (marches 3 et 4 de la forme C) : rien ne
+    // s'ouvre ici, ni base ni modèle ; tout passe à l'hôte, et ce processus ne
+    // garde que le protocole MCP. L'hôte se trouve par `daemon.json` et se
+    // lance s'il manque ; `--daemon <adresse>` force une adresse. S'il ne peut
+    // pas être joint, le serveur démarre quand même et le dit par l'outil
+    // `daemon_status`.
+    if !seul {
+        use rag3weaver::daemon_client::{Attach, McpClient};
+        let attach = match &hote {
+            Some(adresse) => Attach::Forced(adresse.clone()),
+            None => Attach::Discover(std::env::current_exe().map_err(|e| format!("l'exécutable courant : {e}"))?),
+        };
+        let client = McpClient::start(attach, Path::new(&manifeste), &format!("mcp (pid {})", std::process::id()), cles.clone());
         eprintln!(
-            "[mcp] {} — {} outils, clés présentées : {} — client mince de l'hôte {adresse}, session {}",
+            "[mcp] {} — {} outils, clés présentées : {} — client mince de l'hôte{}",
             rag3weaver::mcp::Hote::nom(&client),
             rag3weaver::mcp::Hote::outils(&client).len(),
             if cles.is_empty() { "aucune".to_string() } else { cles.join(",") },
-            client.session()
+            match client.session() {
+                Some(s) => format!(", session {s}"),
+                None => " — absent pour l'instant".to_string(),
+            }
         );
         let reactions = client.reactions();
-        if reactions.is_empty() {
-            eprintln!("[mcp] aucune réaction montée par l'hôte pour ce backend");
-        } else {
+        if !reactions.is_empty() {
             eprintln!("[mcp] {} réaction(s) montée(s) par l'hôte : {}", reactions.len(), reactions.join(", "));
         }
         let mut entree = EntreeInterruptible::sur_stdin();
@@ -328,9 +335,70 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     if !rag3weaver::daemon::est_local(&adresse) {
         return Err(format!("le démon n'écoute que sur la boucle locale : {adresse}"));
     }
-    let server = tiny_http::Server::http(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
-    eprintln!("[démon] {} — http://{adresse}/ ; POST /session, puis /open, /describe, /call ; POST /arret pour arrêter", rag3weaver::daemon_host::SERVICE);
-    rag3weaver::daemon_host::serve_daemon(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()), server, fils);
+    use rag3weaver::daemon_lifecycle as cycle;
+    // **Le port d'abord, `daemon.json` ensuite** (marche 4, page C §5) : le
+    // fichier dit l'adresse réellement servie, un port 0 résolu.
+    let ecoute = std::net::TcpListener::bind(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
+    let servie = ecoute.local_addr().map_err(|e| e.to_string())?.to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).map_err(|e| format!("{servie} : {e}"))?;
+    let jeton = cycle::new_token()?;
+    let pid = std::process::id();
+    let fiche = cycle::DaemonFile {
+        address: servie.clone(),
+        pid,
+        token: jeton.clone(),
+        build: cycle::build_id(),
+        started_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    };
+    // Un hôte vivant qui répond ailleurs garde son fichier : ce démarrage-ci
+    // n'a pas été demandé par un client (qui l'aurait trouvé), il est à la main.
+    if let Some(autre) = cycle::read().filter(|f| f.pid != pid && cycle::answers(f)) {
+        eprintln!(
+            "[démon] un autre hôte répond déjà ({} , pid {}) : {} n'est pas réécrit, les clients \
+             continueront d'aller à lui",
+            autre.address,
+            autre.pid,
+            cycle::file_path().display()
+        );
+    } else {
+        cycle::write(&fiche)?;
+    }
+    eprintln!(
+        "[démon] {} — http://{servie}/ ; POST /session, puis /open, /describe, /call ; POST /arret pour \
+         arrêter ; {} (jeton local exigé)",
+        rag3weaver::daemon_host::SERVICE,
+        cycle::file_path().display()
+    );
+    // **SIGTERM vaut `POST /arret`** : le même chemin d'arrêt, les bases
+    // fermées proprement, puis `daemon.json` retiré.
+    {
+        let (adresse, jeton) = (servie.clone(), jeton.clone());
+        std::thread::spawn(move || {
+            let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
+            rt.block_on(async {
+                use tokio::signal::unix::{signal, SignalKind};
+                let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
+                if terme.recv().await.is_some() {
+                    eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
+                    let _ = rag3weaver::daemon::agent()
+                        .post(format!("{}/arret", rag3weaver::daemon::base_url(&adresse)))
+                        .header("Authorization", &format!("Bearer {jeton}"))
+                        .send("");
+                }
+            });
+        });
+    }
+    rag3weaver::daemon_host::serve_daemon_guarded(
+        std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()),
+        server,
+        fils,
+        Some(jeton),
+    );
+    cycle::remove_if_mine(pid);
+    eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
     Ok(())
 }
 

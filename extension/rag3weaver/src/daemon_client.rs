@@ -42,10 +42,37 @@ pub struct OpError {
     pub transient: bool,
 }
 
+/// Où joindre l'hôte : son adresse et le jeton local de `daemon.json`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Endpoint {
+    pub address: String,
+    pub token: Option<String>,
+}
+
+impl Endpoint {
+    /// Une adresse forcée (`--daemon`) : le jeton vient de `daemon.json` s'il
+    /// décrit cette adresse-là, sinon aucun (un hôte lancé à la main par un
+    /// témoin, sans jeton).
+    pub fn forced(address: &str) -> Self {
+        let token = crate::daemon_lifecycle::read().filter(|f| f.address == address).map(|f| f.token);
+        Self { address: address.to_string(), token }
+    }
+}
+
+impl From<crate::daemon_lifecycle::DaemonFile> for Endpoint {
+    fn from(f: crate::daemon_lifecycle::DaemonFile) -> Self {
+        Self { address: f.address, token: Some(f.token) }
+    }
+}
+
 /// **Le client d'un backend hébergé** par un démon.
 pub struct DaemonClient {
     agent: ureq::Agent,
-    base: String,
+    /// L'adresse de base et le jeton : ils changent quand l'hôte est relancé.
+    endpoint: Mutex<(String, Option<String>)>,
+    /// L'exécutable qui relance l'hôte quand il ne répond plus (marche 4) ;
+    /// `None` pour une adresse forcée : on ne relance pas l'hôte d'un autre.
+    relaunch: Option<PathBuf>,
     manifest: PathBuf,
     client: String,
     keys: Vec<String>,
@@ -59,14 +86,28 @@ impl DaemonClient {
     /// injoignable, ou un manifeste qu'il refuse, est une erreur ici — au
     /// démarrage, pas au premier appel.
     pub fn connect(address: &str, manifest: &Path, client: &str, keys: Vec<String>) -> Result<Self, String> {
+        Self::attach(Endpoint::forced(address), None, manifest, client, keys)
+    }
+
+    /// Se brancher sur `endpoint` ; `relaunch` donné, un hôte qui ne répond
+    /// plus est relancé par [`crate::daemon_lifecycle::ensure`] à l'appel
+    /// suivant, la session rouverte et l'appel rejoué une fois.
+    pub fn attach(
+        endpoint: Endpoint,
+        relaunch: Option<PathBuf>,
+        manifest: &Path,
+        client: &str,
+        keys: Vec<String>,
+    ) -> Result<Self, String> {
         let manifest = std::fs::canonicalize(manifest)
             .map_err(|e| format!("manifeste {} : {e}", manifest.display()))?;
         let agent = crate::daemon::agent();
-        let base = crate::daemon::base_url(address);
-        let session = open_session(&agent, &base, client, &keys)?;
+        let base = crate::daemon::base_url(&endpoint.address);
+        let session = open_session(&agent, &base, endpoint.token.as_deref(), client, &keys)?;
         let mut me = Self {
             agent,
-            base,
+            endpoint: Mutex::new((base, endpoint.token)),
+            relaunch,
             manifest,
             client: client.to_string(),
             keys,
@@ -76,10 +117,18 @@ impl DaemonClient {
         };
         let ouvert = me
             .op("/open", json!({ "manifest": me.manifest }))
-            .map_err(|e| format!("l'hôte {} n'ouvre pas ce backend : {}", me.base, e.error))?;
+            .map_err(|e| format!("l'hôte {} n'ouvre pas ce backend : {}", me.base(), e.error))?;
         me.name = ouvert["describe"]["name"].as_str().unwrap_or("").to_string();
         me.version = ouvert["describe"]["version"].as_u64().unwrap_or(0) as u32;
         Ok(me)
+    }
+
+    fn base(&self) -> String {
+        self.endpoint.lock().unwrap_or_else(|p| p.into_inner()).0.clone()
+    }
+
+    fn token(&self) -> Option<String> {
+        self.endpoint.lock().unwrap_or_else(|p| p.into_inner()).1.clone()
     }
 
     /// Les réactions que l'hôte a montées pour ce backend, telles que `open`
@@ -96,11 +145,11 @@ impl DaemonClient {
     /// déjà parti n'empêche pas le client de sortir.
     pub fn close(&self) {
         let session = self.session();
-        let _ = self
-            .agent
-            .delete(format!("{}/session", self.base))
-            .header(SESSION_HEADER, &session)
-            .call();
+        let mut requete = self.agent.delete(format!("{}/session", self.base())).header(SESSION_HEADER, &session);
+        if let Some(t) = self.token() {
+            requete = requete.header("Authorization", &format!("Bearer {t}"));
+        }
+        let _ = requete.call();
     }
 
     /// L'identifiant de la session en cours.
@@ -108,12 +157,38 @@ impl DaemonClient {
         self.session.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
+    /// `GET /etat` de l'hôte, jeton compris.
+    pub fn daemon_state(&self) -> Result<Value, String> {
+        let mut requete = self.agent.get(format!("{}/etat", self.base()));
+        if let Some(t) = self.token() {
+            requete = requete.header("Authorization", &format!("Bearer {t}"));
+        }
+        let mut r = requete.call().map_err(|e| format!("l'hôte {} ne répond pas : {e}", self.base()))?;
+        let texte = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        serde_json::from_str(&texte).map_err(|e| format!("état illisible ({e}) : {texte}"))
+    }
+
     /// **Un message `op`** à l'hôte. Une session inconnue est rouverte une
-    /// fois et le message rejoué — il n'avait pas été joué.
+    /// fois et le message rejoué — il n'avait pas été joué. Un hôte qui ne
+    /// répond plus est relancé (si ce client sait le faire), la session
+    /// rouverte, le backend rouvert, et le message rejoué une fois : la
+    /// connexion refusée prouve qu'il n'avait pas été reçu.
     pub fn op(&self, route: &str, body: Value) -> Result<Value, OpError> {
-        let premier = self.envoyer(route, &body)?;
+        let premier = match self.envoyer(route, &body) {
+            Err(Injoignable(e)) => match &self.relaunch {
+                None => return Err(OpError { error: e, transient: false }),
+                Some(exe) => {
+                    self.relancer(exe, &e)?;
+                    if route != "/open" {
+                        self.envoyer("/open", &json!({ "manifest": self.manifest })).map_err(OpError::from)?;
+                    }
+                    self.envoyer(route, &body).map_err(OpError::from)?
+                }
+            },
+            autre => autre.map_err(OpError::from)?,
+        };
         let reponse = if premier["unknownSession"] == json!(true) {
-            let nouvelle = open_session(&self.agent, &self.base, &self.client, &self.keys)
+            let nouvelle = open_session(&self.agent, &self.base(), self.token().as_deref(), &self.client, &self.keys)
                 .map_err(|e| OpError { error: e, transient: false })?;
             eprintln!(
                 "[mcp] l'hôte ne connaissait plus la session ({}) : une autre est ouverte, et le \
@@ -121,7 +196,7 @@ impl DaemonClient {
                 premier["error"].as_str().unwrap_or("?")
             );
             *self.session.lock().unwrap_or_else(|p| p.into_inner()) = nouvelle;
-            self.envoyer(route, &body)?
+            self.envoyer(route, &body).map_err(OpError::from)?
         } else {
             premier
         };
@@ -135,28 +210,79 @@ impl DaemonClient {
         }
     }
 
-    fn envoyer(&self, route: &str, body: &Value) -> Result<Value, OpError> {
+    /// L'hôte ne répond plus : l'assurer de nouveau (un seul relancement même
+    /// si plusieurs clients le voient ensemble), puis une session neuve.
+    fn relancer(&self, exe: &Path, cause: &str) -> Result<(), OpError> {
+        eprintln!("[mcp] l'hôte ne répond plus ({cause}) : il est assuré de nouveau");
+        let fiche = crate::daemon_lifecycle::ensure(exe)
+            .map_err(|m| OpError { error: format!("l'hôte {} : {}", m.state(), m.reason()), transient: false })?;
+        let endpoint = Endpoint::from(fiche);
+        let base = crate::daemon::base_url(&endpoint.address);
+        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys)
+            .map_err(|e| OpError { error: e, transient: false })?;
+        *self.endpoint.lock().unwrap_or_else(|p| p.into_inner()) = (base, endpoint.token);
+        *self.session.lock().unwrap_or_else(|p| p.into_inner()) = session;
+        Ok(())
+    }
+
+    fn envoyer(&self, route: &str, body: &Value) -> Result<Value, Envoi> {
         let session = self.session();
-        let mut reponse = self
+        let base = self.base();
+        let mut requete = self
             .agent
-            .post(format!("{}{route}", self.base))
+            .post(format!("{base}{route}"))
             .header("content-type", "application/json")
-            .header(SESSION_HEADER, &session)
+            .header(SESSION_HEADER, &session);
+        if let Some(t) = self.token() {
+            requete = requete.header("Authorization", &format!("Bearer {t}"));
+        }
+        let mut reponse = requete
             .send(body.to_string())
-            .map_err(|e| OpError { error: format!("l'hôte {} ne répond pas : {e}", self.base), transient: false })?;
+            .map_err(|e| Injoignable(format!("l'hôte {base} ne répond pas : {e}")))?;
         let texte = reponse
             .body_mut()
             .read_to_string()
-            .map_err(|e| OpError { error: format!("réponse de l'hôte illisible : {e}"), transient: false })?;
-        serde_json::from_str(&texte)
-            .map_err(|e| OpError { error: format!("réponse de l'hôte illisible ({e}) : {texte}"), transient: false })
+            .map_err(|e| Autre(format!("réponse de l'hôte illisible : {e}")))?;
+        serde_json::from_str(&texte).map_err(|e| Autre(format!("réponse de l'hôte illisible ({e}) : {texte}")))
     }
 }
 
-fn open_session(agent: &ureq::Agent, base: &str, client: &str, keys: &[String]) -> Result<String, String> {
+/// Pourquoi un envoi n'a pas de réponse : l'hôte ne répond pas (relançable),
+/// ou sa réponse ne se lit pas.
+enum Envoi {
+    Injoignable(String),
+    Autre(String),
+}
+use Envoi::{Autre, Injoignable};
+
+impl From<Envoi> for OpError {
+    fn from(e: Envoi) -> Self {
+        match e {
+            Injoignable(error) | Autre(error) => OpError { error, transient: false },
+        }
+    }
+}
+
+fn open_session(
+    agent: &ureq::Agent,
+    base: &str,
+    token: Option<&str>,
+    client: &str,
+    keys: &[String],
+) -> Result<String, String> {
     let corps = json!({ "client": client, "keys": keys }).to_string();
-    let texte = crate::daemon::poster(agent, base, "/session", corps)
-        .map_err(|e| format!("pas de session auprès de l'hôte {base} : {e}"))?;
+    let mut requete = agent.post(format!("{base}/session")).header("content-type", "application/json");
+    if let Some(t) = token {
+        requete = requete.header("Authorization", &format!("Bearer {t}"));
+    }
+    let mut reponse = requete
+        .send(corps)
+        .map_err(|e| format!("pas de session auprès de l'hôte {base} : {base} ne répond pas : {e}"))?;
+    let statut = reponse.status().as_u16();
+    let texte = reponse.body_mut().read_to_string().map_err(|e| e.to_string())?;
+    if statut != 200 {
+        return Err(format!("pas de session auprès de l'hôte {base} : refus {statut} — {texte}"));
+    }
     let v: Value = serde_json::from_str(&texte).map_err(|e| format!("session illisible ({e}) : {texte}"))?;
     v["session"]
         .as_str()
@@ -174,8 +300,7 @@ impl Hote for DaemonClient {
     }
 
     /// La liste vient de `describe`, comme pour un backend possédé. Un hôte
-    /// qui ne répond plus rend une liste vide **et le dit** sur stderr ;
-    /// l'outil « état du démon », qui l'expliquera au modèle, est la marche 4.
+    /// qui ne répond plus rend une liste vide **et le dit** sur stderr.
     fn outils(&self) -> Vec<Value> {
         match self.op("/describe", json!({ "manifest": self.manifest })) {
             Ok(d) => d["tools"].as_array().cloned().unwrap_or_default(),
@@ -199,6 +324,185 @@ impl Hote for DaemonClient {
                     e.error
                 }
             })
+    }
+}
+
+/// Le nom de l'outil d'état du démon, exposé par le client lui-même.
+pub const DAEMON_STATUS: &str = "daemon_status";
+
+/// Comment le client joint l'hôte.
+pub enum Attach {
+    /// `--daemon <adresse>` : cette adresse, jamais relancée.
+    Forced(String),
+    /// `daemon.json`, et l'hôte lancé par cet exécutable s'il manque.
+    Discover(PathBuf),
+}
+
+enum Side {
+    Attached(DaemonClient),
+    Missing(crate::daemon_lifecycle::Missing),
+}
+
+/// **Le côté MCP du client mince** (marche 4, page C §4 et décision 6) : il
+/// démarre toujours. Attaché, il expose les outils du backend et
+/// `daemon_status` ; l'hôte manquant, il n'expose que `daemon_status`, le dit à
+/// `initialize`, et chaque appel retente de s'attacher.
+pub struct McpClient {
+    attach: Attach,
+    manifest: PathBuf,
+    client: String,
+    keys: Vec<String>,
+    side: Mutex<Side>,
+}
+
+impl McpClient {
+    pub fn start(attach: Attach, manifest: &Path, client: &str, keys: Vec<String>) -> Self {
+        let side = Self::try_attach(&attach, manifest, client, &keys);
+        if let Side::Missing(m) = &side {
+            eprintln!("[mcp] hôte {} : {} — seul l'outil {DAEMON_STATUS} est exposé", m.state(), m.reason());
+        }
+        Self { attach, manifest: manifest.to_path_buf(), client: client.to_string(), keys, side: Mutex::new(side) }
+    }
+
+    fn try_attach(attach: &Attach, manifest: &Path, client: &str, keys: &[String]) -> Side {
+        use crate::daemon_lifecycle::Missing;
+        let essai = match attach {
+            Attach::Forced(adresse) => DaemonClient::connect(adresse, manifest, client, keys.to_vec()).map_err(Missing::Unreachable),
+            Attach::Discover(exe) => crate::daemon_lifecycle::ensure(exe).and_then(|fiche| {
+                DaemonClient::attach(Endpoint::from(fiche), Some(exe.clone()), manifest, client, keys.to_vec())
+                    .map_err(Missing::Unreachable)
+            }),
+        };
+        match essai {
+            Ok(c) => Side::Attached(c),
+            Err(m) => Side::Missing(m),
+        }
+    }
+
+    /// La session à l'hôte, s'il y en a une — pour la ligne d'annonce.
+    pub fn session(&self) -> Option<String> {
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Attached(c) => Some(c.session()),
+            Side::Missing(_) => None,
+        }
+    }
+
+    pub fn reactions(&self) -> Vec<String> {
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Attached(c) => c.reactions(),
+            Side::Missing(_) => Vec::new(),
+        }
+    }
+
+    pub fn close(&self) {
+        if let Side::Attached(c) = &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            c.close();
+        }
+    }
+
+    fn status_tool() -> Value {
+        json!({
+            "name": DAEMON_STATUS,
+            "description": "L'état de l'hôte du démon qui tient les bases : en marche (adresse, bâti, sessions, \
+                            backends ouverts), ou absent / injoignable — avec la raison, le journal à lire et \
+                            quoi faire. À appeler quand un autre outil échoue ou manque.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        })
+    }
+
+    fn status(&self) -> Value {
+        let side = self.side.lock().unwrap_or_else(|p| p.into_inner());
+        match &*side {
+            Side::Attached(c) => match c.daemon_state() {
+                Ok(etat) => json!({
+                    "state": "running",
+                    "address": c.base(),
+                    "pid": etat["pid"],
+                    "build": etat["build"],
+                    "this_session": c.session(),
+                    "sessions": etat["sessions"],
+                    "backends": etat["backends"],
+                }),
+                Err(e) => json!({ "state": "injoignable", "reason": e, "log": crate::daemon_lifecycle::log_path() }),
+            },
+            Side::Missing(m) => json!({
+                "state": m.state(),
+                "reason": m.reason(),
+                "log": crate::daemon_lifecycle::log_path(),
+                "daemon_file": crate::daemon_lifecycle::file_path(),
+                "what_to_do": "lire le journal ; l'hôte se lance seul au prochain appel d'outil, ou à la main par \
+                               `rag3weaver-backend daemon` (avec LD_LIBRARY_PATH, RAG3DB_ROOT et le service \
+                               d'embarquement)",
+            }),
+        }
+    }
+}
+
+impl Hote for McpClient {
+    fn nom(&self) -> String {
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Attached(c) => c.nom(),
+            Side::Missing(_) => self
+                .manifest
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "rag3weaver".to_string()),
+        }
+    }
+
+    fn version(&self) -> u32 {
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Attached(c) => c.version(),
+            Side::Missing(_) => 0,
+        }
+    }
+
+    fn outils(&self) -> Vec<Value> {
+        let mut outils = vec![Self::status_tool()];
+        if let Side::Attached(c) = &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            outils.extend(c.outils());
+        }
+        outils
+    }
+
+    fn appeler(&self, nom: &str, arguments: Value) -> Result<Value, String> {
+        if nom == DAEMON_STATUS {
+            return Ok(json!({ "result": self.status() }));
+        }
+        let mut side = self.side.lock().unwrap_or_else(|p| p.into_inner());
+        if let Side::Missing(_) = &*side {
+            *side = Self::try_attach(&self.attach, &self.manifest, &self.client, &self.keys);
+        }
+        match &*side {
+            Side::Attached(c) => c.appeler(nom, arguments),
+            Side::Missing(m) => Err(format!(
+                "l'hôte du démon est {} : {} — appelez {DAEMON_STATUS} pour le détail",
+                m.state(),
+                m.reason()
+            )),
+        }
+    }
+
+    /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
+    /// rend sinon une erreur d'outil qui dit pourquoi (page C, §4).
+    fn accepte(&self, nom: &str) -> bool {
+        if matches!(&*self.side.lock().unwrap_or_else(|p| p.into_inner()), Side::Missing(_)) {
+            return true;
+        }
+        self.outils().iter().any(|t| t["name"] == nom)
+    }
+
+    fn instructions(&self) -> Option<String> {
+        match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            Side::Attached(_) => None,
+            Side::Missing(m) => Some(format!(
+                "L'hôte du démon qui tient les bases est {} ({}). Seul l'outil {DAEMON_STATUS} est exposé : il dit \
+                 pourquoi et quoi faire. Un appel d'outil retente de joindre l'hôte.",
+                m.state(),
+                m.reason()
+            )),
+        }
     }
 }
 

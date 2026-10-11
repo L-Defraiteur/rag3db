@@ -176,6 +176,10 @@ pub mod daemon_host;
 /// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_client;
+/// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
+/// lancement par le premier client.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_lifecycle;
 pub mod schema;
 pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,

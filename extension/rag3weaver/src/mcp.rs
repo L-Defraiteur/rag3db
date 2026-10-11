@@ -62,6 +62,19 @@ pub trait Hote {
     fn doit_rouvrir(&self) -> Option<String> {
         None
     }
+    /// Ce que `initialize` doit dire au client en plus (le champ
+    /// `instructions` du protocole) — par exemple, pourquoi seul l'outil
+    /// d'état du démon est là. `None` : rien à dire.
+    fn instructions(&self) -> Option<String> {
+        None
+    }
+    /// Ce nom d'outil va-t-il à [`Hote::appeler`] ? Par défaut, s'il est dans
+    /// [`Hote::outils`]. Un hôte qui ne peut pas encore lister ses outils (le
+    /// client mince sans démon) laisse passer, pour rendre une erreur d'outil
+    /// nommée plutôt qu'un « outil inconnu ».
+    fn accepte(&self, nom: &str) -> bool {
+        self.outils().iter().any(|t| t["name"] == nom)
+    }
 }
 
 /// Ce que la boucle veut que l'appelant fasse ensuite.
@@ -125,14 +138,15 @@ pub fn traiter(requete: &Value, hote: &dyn Hote, cles: &[String]) -> Option<Valu
                 .as_str()
                 .unwrap_or(PROTOCOLE_DEFAUT)
                 .to_string();
-            Some(resultat(
-                id,
-                json!({
-                    "protocolVersion": version,
-                    "capabilities": capacites(),
-                    "serverInfo": info_du_serveur(hote, cles),
-                }),
-            ))
+            let mut r = json!({
+                "protocolVersion": version,
+                "capabilities": capacites(),
+                "serverInfo": info_du_serveur(hote, cles),
+            });
+            if let Some(texte) = hote.instructions() {
+                r["instructions"] = json!(texte);
+            }
+            Some(resultat(id, r))
         }
         // La forme qui remplace `initialize` : tout d'un coup, outils compris.
         "server/discover" => Some(resultat(
@@ -159,7 +173,7 @@ pub fn traiter(requete: &Value, hote: &dyn Hote, cles: &[String]) -> Option<Valu
             // serveur, et le dire ainsi ne révèle rien de ce qui existe
             // ailleurs (ce sera la même réponse pour un outil écarté faute de
             // clés d'exposition).
-            if !hote.outils().iter().any(|t| t["name"] == nom) {
+            if !hote.accepte(nom) {
                 return Some(erreur(id, -32602, format!("outil inconnu : {nom}")));
             }
             match hote.appeler(nom, arguments) {

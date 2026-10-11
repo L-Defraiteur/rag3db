@@ -113,16 +113,22 @@ impl Serveur {
         Self::lancer_avec(manifeste, cles, None)
     }
 
-    /// Un serveur MCP, propriétaire de sa base (`hote` vide) ou **client mince**
-    /// de l'hôte du démon (`--daemon <adresse>`, marche 3 de la forme C).
-    fn lancer_avec(manifeste: &Path, cles: &[&str], hote: Option<&str>) -> Self {
+    /// Un serveur MCP, propriétaire de sa base (`hote` vide : `--standalone`)
+    /// ou **client mince** de l'hôte du démon (`--daemon <adresse>`, marche 3 de
+    /// la forme C), le jeton lu dans le dossier de démon de cet hôte.
+    fn lancer_avec(manifeste: &Path, cles: &[&str], hote: Option<&Hote>) -> Self {
         let mut commande = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"));
         commande.args(["mcp", "--manifest", &manifeste.to_string_lossy()]);
         if !cles.is_empty() {
             commande.args(["--keys", &cles.join(",")]);
         }
-        if let Some(adresse) = hote {
-            commande.args(["--daemon", adresse]);
+        match hote {
+            Some(h) => {
+                commande.args(["--daemon", &h.adresse]).env("RAG3WEAVER_DAEMON_DIR", h.dossier.path());
+            }
+            None => {
+                commande.arg("--standalone");
+            }
         }
         let mut enfant = commande
             .stdin(Stdio::piped())
@@ -186,7 +192,7 @@ fn le_meme_client_mcp_par_l_hote_du_demon() {
     std::fs::create_dir_all(&tmp).expect("dossier temporaire");
     let manifeste = manifeste_jouable(&tmp);
     let hote = Hote::lancer();
-    let mut s = Serveur::lancer_avec(&manifeste, &["dev"], Some(&hote.adresse));
+    let mut s = Serveur::lancer_avec(&manifeste, &["dev"], Some(&hote));
     jouer(&mut s);
     drop(s);
     let etat = hote.etat();
@@ -205,8 +211,8 @@ fn deux_sessions_mcp_partagent_un_backend_par_l_hote() {
     let tmp = tempfile::tempdir().expect("dossier");
     let manifeste = boutique(tmp.path());
     let hote = Hote::lancer();
-    let mut a = Serveur::lancer_avec(&manifeste, &[], Some(&hote.adresse));
-    let mut b = Serveur::lancer_avec(&manifeste, &[], Some(&hote.adresse));
+    let mut a = Serveur::lancer_avec(&manifeste, &[], Some(&hote));
+    let mut b = Serveur::lancer_avec(&manifeste, &[], Some(&hote));
     for (s, nom) in [(&mut a, "a"), (&mut b, "b")] {
         let r = s.demander(json!({
             "jsonrpc":"2.0","id":1,"method":"initialize",
@@ -286,14 +292,19 @@ fn boutique(dir: &Path) -> PathBuf {
 struct Hote {
     enfant: Child,
     adresse: String,
+    /// Son dossier de démon : `daemon.json` (et le jeton) y est écrit, jamais
+    /// dans celui de la personne.
+    dossier: tempfile::TempDir,
 }
 
 impl Hote {
     fn lancer() -> Self {
         let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let adresse = format!("127.0.0.1:{port}");
+        let dossier = tempfile::tempdir().expect("dossier du démon");
         let enfant = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
             .args(["daemon", "--address", &adresse])
+            .env("RAG3WEAVER_DAEMON_DIR", dossier.path())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
@@ -304,11 +315,30 @@ impl Hote {
             assert!(debut.elapsed() < std::time::Duration::from_secs(30), "l'hôte ne répond pas sur {adresse}");
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        Self { enfant, adresse }
+        Self { enfant, adresse, dossier }
+    }
+
+    /// Le jeton local de cet hôte, dans son `daemon.json`.
+    fn jeton(&self) -> String {
+        let debut = std::time::Instant::now();
+        loop {
+            if let Some(t) = std::fs::read(self.dossier.path().join("daemon.json"))
+                .ok()
+                .and_then(|o| serde_json::from_slice::<Value>(&o).ok())
+                .and_then(|v| v["token"].as_str().map(str::to_string))
+            {
+                return t;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(30), "pas de daemon.json");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 
     fn etat(&self) -> Value {
-        reqwest::blocking::get(format!("http://{}/etat", self.adresse))
+        reqwest::blocking::Client::new()
+            .get(format!("http://{}/etat", self.adresse))
+            .bearer_auth(self.jeton())
+            .send()
             .and_then(|r| r.json())
             .expect("l'état du démon")
     }
@@ -316,7 +346,10 @@ impl Hote {
 
 impl Drop for Hote {
     fn drop(&mut self) {
-        let _ = reqwest::blocking::Client::new().post(format!("http://{}/arret", self.adresse)).send();
+        let _ = reqwest::blocking::Client::new()
+            .post(format!("http://{}/arret", self.adresse))
+            .bearer_auth(self.jeton())
+            .send();
         let debut = std::time::Instant::now();
         while debut.elapsed() < std::time::Duration::from_secs(30) {
             if let Ok(Some(_)) = self.enfant.try_wait() {

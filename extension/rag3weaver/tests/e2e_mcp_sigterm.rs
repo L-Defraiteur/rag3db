@@ -54,7 +54,7 @@ fn boutique(dir: &Path) -> PathBuf {
 
 fn lancer(manifeste: &Path) -> Child {
     Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
-        .args(["mcp", "--manifest", &manifeste.to_string_lossy()])
+        .args(["mcp", "--standalone", "--manifest", &manifeste.to_string_lossy()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
