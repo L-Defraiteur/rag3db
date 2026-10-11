@@ -80,10 +80,18 @@ private:
 
     // Interdit le démarrage de nouvelles transactions et attend que toutes les autres que
     // `staying` partent, en relâchant le verrou public pendant l'attente : une transaction ne
-    // peut partir (commit, rollback) qu'en le prenant. Lève une TransactionManagerException si
-    // le délai expire, et rouvre alors le démarrage.
+    // peut partir (commit, rollback) qu'en le prenant. Les validations rangées dans la file
+    // (A7) ne bloquent pas : quand il ne reste qu'elles, elles valident à leur tour, et le point
+    // de reprise qui suit les contient. Lève une TransactionManagerException si le délai
+    // expire, et rouvre alors le démarrage.
     void stopNewTransactionsAndWaitForOthersNoLock(std::unique_lock<std::mutex>& publicLock,
         const Transaction* staying);
+    // A7 : une validation qui veut un point de reprise alors qu'un autre attend se range dans la
+    // file au lieu d'attendre la fin du premier. Rend vrai si elle a validé et qu'un point de
+    // reprise commencé après sa validation s'est écrit ; faux si le point de reprise en attente
+    // a renoncé avant qu'elle valide (rien n'est validé : elle prend alors sa place en tête).
+    bool commitInCheckpointQueueNoLock(main::ClientContext& clientContext,
+        std::unique_lock<std::mutex>& publicLock, Transaction* transaction);
     void allowNewTransactionsNoLock();
     // Un point de reprise automatique reporté, parce qu'une autre transaction est ouverte.
     void postponeCheckpointNoLock();
@@ -110,6 +118,15 @@ private:
     // transaction ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
     bool checkpointPending = false;
     std::condition_variable transactionsChanged;
+    // A7, la file des points de reprise. Les validations qui veulent un point de reprise et en
+    // trouvent un en attente ; quand il ne reste qu'elles, le point de reprise en attente pose
+    // `commitQueuedNow` et elles valident en mémoire, puis attendent un point de reprise commencé
+    // après leur validation (`checkpointsStarted` au moment de valider, comparé à
+    // `lastCompletedCheckpoint`). Gardé par le verrou public.
+    std::vector<const Transaction*> queuedCheckpointCommits;
+    bool commitQueuedNow = false;
+    uint64_t checkpointsStarted = 0;
+    uint64_t lastCompletedCheckpoint = 0;
     // La taille du journal au dernier avertissement de report ; 0 après un point de reprise.
     uint64_t walSizeAtLastPostponeWarning = 0;
     uint64_t checkpointWaitTimeoutInMicros = common::DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS;

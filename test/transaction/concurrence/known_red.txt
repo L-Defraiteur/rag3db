@@ -40,7 +40,6 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash rel-directions-agree,rel-en
 # reprise ; la première attend le départ de la seconde jusqu'au délai (5 s) et échoue. Sa forme
 # journalisée (le défaut depuis ff9bad960) est verte : aucun des deux ne veut de point de
 # reprise. Mesuré sur luciepc le 10 octobre : 5 014 ms.
-Copies/TwoCommitsThatWantACheckpoint.DoNotWaitForTheTimeout/Forced both-commit,committed-rows,no-checkpoint-timeout,no-wait-until-timeout
 #
 # Marche A4′ (la ligne en exclusif à la mise à jour et à la suppression, les extrémités d'une
 # relation en partagé pour créer et en exclusif pour écrire, l'erreur de sérialisation après
