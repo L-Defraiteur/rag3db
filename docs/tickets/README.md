@@ -64,7 +64,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (26)
+### Ouverts — produit (25)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -90,7 +90,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Une arête ne dit pas comment elle a été résolue](2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md) | en cours — filtre dans Liens et impact (master) ; réexportations à faire | réponse fausse | oui | oui (rendez-vous, usages, impact, liens) |
 | [Trois rendus d'arbre à fondre](2026-10-04-trois-rendus-d-arbre-a-fondre.md) | ouvert — deux sur trois fondus | dette | non | oui (rendu) |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
-| [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | en cours (B2d, 11 oct.) | réponse fausse | oui | oui (usages, Liens, impact) |
 | [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, le rebâti du plein texte en fond envoie du Cypher](2026-10-10-postgresql-rebati-du-plein-texte-en-cypher.md) | ouvert | blocage | avec un montage PostgreSQL et lucivy | oui |
@@ -98,11 +97,12 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (69), dans `closed/`
+### Fermés (70), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Une branche non prise tue le run entier, sans rapport](closed/2026-10-11-une-branche-non-prise-tue-le-run-sans-rapport.md) | corrigé (le saut, lot 0 des flux) | blocage : le run meurt sur ce qui n'est pas une faute (P3, refus muet) | oui, dès qu'un graphe aiguille | oui — `runtime.rs`, `report.rs` |
+| [Un chemin vers une réexportation reste « par le nom »](closed/2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | corrigé, codeparsers `77c8ea6` et code.rs (11 oct.) ; restent `*`, renommage, TS et Python | réponse fausse | oui | oui (rendez-vous) |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](closed/2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | corrigé par B2b (`6002c3ccd`), témoin du 11 oct. | réponse fausse | oui | oui (rendez-vous) |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](closed/2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | corrigé, codeparsers `d90a1f6` (11 oct.) | réponse incomplète (faible) | oui | oui (impact, usages) |
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](closed/2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | corrigé par la marche 1 bis du lien générique (le verbe refuse un bout absent quand le lien se pose) | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
