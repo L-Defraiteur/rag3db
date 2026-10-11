@@ -41,4 +41,12 @@ Sinon l'arête reste « nom ». Mesurée à part.
 
 ## Témoin
 
-Aucun test encore ; la sonde en donne le volume.
+Rejoué le 11 octobre (session codeparsers), sur master `48ae8e4b5` : avec
+un homonyme dans le projet (`src/autre.rs` définit aussi `DataflowEvent`),
+`use crate::dataflow::DataflowEvent; … DataflowEvent::neuf()` ne laisse
+**aucune** arête vers `dataflow/runtime.rs` — pire que « nom » : le
+rendez-vous s'abstient. Sans homonyme (le cas de la sonde B9 de la session
+recherche), le seul définisseur suffit et l'appel paraît attribué : c'est le
+repli « un seul définisseur », marqué « nom ». Le témoin est écrit (recette
+en quatre fichiers, deux assertions : un lien, vers runtime.rs, pas « nom »),
+gardé hors de la batterie tant qu'il est rouge ; il entre avec le correctif.

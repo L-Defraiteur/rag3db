@@ -463,3 +463,24 @@ fn un_lien_par_le_nom_dans_le_fichier_se_marque_nom() {
     let ligne = md.lines().find(|l| l.contains(" cles —")).unwrap_or_else(|| panic!("cles absent : {md}")).to_string();
     assert!(ligne.ends_with("(par le nom)"), "{md}");
 }
+
+/// **Le type d'un champ déclaré dans un autre fichier se lit** (recette du
+/// ticket du 4 octobre) : `Svc` dans a.rs, son `impl` dans b.rs, deux `get`
+/// dans c.rs. `self.store.get()` vise `Store::get`, par le type.
+#[test]
+#[ignore]
+fn le_type_d_un_champ_declare_dans_un_autre_fichier_se_lit() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("a.rs".to_string(), "pub struct Svc {\n    pub store: Store,\n}\n".to_string()),
+        ("b.rs".to_string(), "impl Svc {\n    pub fn run(&self) {\n        self.store.get();\n    }\n}\n".to_string()),
+        ("c.rs".to_string(), "pub struct Store;\nimpl Store {\n    pub fn get(&self) {}\n}\npub struct Other;\nimpl Other {\n    pub fn get(&self) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let r = cat
+        .execute_raw("MATCH (a:Scope {name: 'run'})-[c:CONSUMES]->(b:Scope {name: 'get'}) RETURN b.parent_name, c.resolution")
+        .unwrap();
+    let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    assert_eq!(liens, vec![("Store".to_string(), "type".to_string())], "run → Store::get, par le type");
+}
