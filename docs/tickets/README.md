@@ -104,7 +104,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
 | [Un index se fige sur un appel d'embarquement sans délai](2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | ouvert — piste forte, preuve à faire | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
-| [Un gros fichier Rust s'analyse sept fois plus lentement qu'un fichier C++ de taille comparable](2026-10-11-un-gros-fichier-rust-s-analyse-sept-fois-plus-lentement.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
+| [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
 ### Fermés (94), dans `closed/`
 
