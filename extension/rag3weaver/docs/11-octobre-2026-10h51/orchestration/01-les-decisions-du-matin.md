@@ -845,3 +845,20 @@ où elle vit.
   filet dans le processus en plus, le RUNPATH par identifiant au lot du
   magasin ; la trace des fils du cœur ici en `poste mesure` (« mesure prise »
   23 h 00), la mesure 1/32 fils du banc derrière avec le même instrument.
+- **23 h 05 – 23 h 40, nuit**. Le rouge qui a arrêté le push des défenses
+  (23 h 05) était le témoin de réconciliation de la montre du ticket
+  `5a1b1df11` ; l'arbre principal a corrigé la cause plutôt qu'écarter le
+  test (`cce19d031` : index_states lit les montres avant de prendre le
+  catalogue, le reçu occupé les porte, comme l'embarquement en cours) ; le
+  proto garde son témoin déterministe pour fermer le ticket au matin
+  (`2abe3a54d`), conflit d'index_states à résoudre en gardant les deux
+  formes. La place d'ici a été tenue de 22 h 56 à 23 h 32 par la sonde sur
+  disque de codeparsers (la cause des morceaux sans texte : un index du
+  dépôt sans puis avec vecteurs ; trois variantes jouées suffisent, la
+  quatrième terminée proprement à ma demande, 25 min épargnées) ; depuis,
+  la mesure du cœur (trace des fils, `e2e_mesure_impact`) tient la place en
+  exclusif, le banc (petit masque) attend derrière, puis les lourds (le
+  cœur, codeparsers), puis le rejeu des défenses et G sous le verrou de
+  push. Le poste corrigé fait ce qu'on lui a demandé : plus aucun lourd
+  n'entre devant une mesure. Rien n'est sorti ; master vert ; l'hôte de
+  Lucie attend minuit (guet de `fa652a320`).
