@@ -144,3 +144,17 @@ où elle vit.
   limite est dite (mode blobs + petit tampon + gros dépôt) ; la seule forme
   qui couvre les deux est celle du moteur (un COPY borné en octets à
   l'assemblage), reportée après la condition 3.
+- **La stèle du produit est posée** (A, `9bd5f1892`,
+  `11-octobre-2026-arbre-principal/02-la-stele-du-produit.md`) : P1 rien
+  n'est rendu comme sûr qui ne l'est pas ; P2 aucune perte ; P3 aucun refus
+  muet ; P4 ce que l'outil ne sait pas est dit. Vingt tickets rangés dessous,
+  avec ce qui ferme chacun ; codeparsers y écrit l'ordre de ses lots. Deux
+  tickets ont bougé avec la marche 0 (l'indexation enfant du serveur :
+  fermeture propre et SIGTERM réglés, reste le serveur tué ; la reprise par
+  takeover : levée après un arrêt propre) — A met leurs états à jour.
+- **Agents et DAG** (Lucie) : un agent est une boucle autour de graphes
+  déclarés ; un agent comme outil d'un autre agent n'est pas encore déclaré —
+  même forme que `GraphNode` (un nœud « lance cet agent », ports question /
+  réponse / trace, politique et bornes), à faire quand un gabarit en a
+  besoin ; avec le démon, « appelle l'agent du backend X » est un appel sur le
+  fil.
