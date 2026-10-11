@@ -1,4 +1,4 @@
-# Les fils d'un plan proportionnés à la cardinalité estimée — la mesure avant le code
+# Les petites cardinalités : les fils d'un plan, et le balayage sous masque — la mesure avant le code
 
 *11 octobre 2026, 20 h 45, session cœur C++. Lot né de la mesure de F (page
 `11-octobre-2026-embarquements/06-ou-va-le-temps-d-un-aller-retour.md`, 821d70a63). Ticket :
@@ -73,3 +73,46 @@ l'appelant ; elle ne touche pas à l'ordonnanceur.
    pour des petites tables, ses attentes de simultanéité peuvent changer — le dire au banc avant).
 
 Résultats : à venir (section 6), puis le lot.
+
+## 6. L'instrument (11 octobre, 20 h 45, branche `fils-proportionnes`, a3e5e5dd7)
+
+Avant la règle, de quoi lire où vont les fils : la cardinalité estimée descend du plan logique au
+plan physique quand le planificateur l'a posée (`LogicalOperator::hasCardinalityEstimate`, le 1
+par défaut ne dit rien ; `PhysicalOperator::getEstimatedCardinality`, vide sinon), et chaque tâche
+se dit à sa fin sous `RAG3DB_TRACE_TASKS=1` : « [tache] source=<opérateur> card=<estimée|?>
+puits=<opérateur> fils=<venus>/<donnés> duree=<ms> ». À lire sur la mesure de F
+(`e2e_mesure_impact`, `RUST_TEST_THREADS=1`, `poste mesure`) : sur quelles tâches les 32 fils se
+mettent en route pour rien, et si l'estimation y est juste. Résultats : section 8.
+
+## 7. Le second cas, trouvé par F : le balayage entier sous un petit masque **[lu, plan de F]**
+
+Sur la copie de l'index entier de rag3db (7 310 fichiers), le saut d'`usages` —
+`UNWIND $uuids AS u MATCH (d:Symbol {_uuid: u})<-[r:MENTIONS]-(m:Scope) RETURN m…` — se planifie
+ainsi (PROFILE) : `PRIMARY_KEY_SCAN` de d (1 ligne), l'extension MENTIONS (117 arêtes), puis un
+`HASH_JOIN` dont le côté Scope est un **`SCAN_NODE_TABLE` de toute la table sous `SEMI_MASKER`** :
+**71 657 lignes sorties pour 117 retenues**, 7 ms de balayage et 5 ms de sonde à 2 colonnes ; à 9
+colonnes, 420 à 470 ms par appel. L'estimation est juste (117) : c'est l'opérateur qui lit tout.
+
+Ce que fait le moteur : l'optimiseur de jointure accumulée (`acc_hash_join_optimizer.cpp`,
+`tryApplySemiMask`) pose un `SemiMasker` sur le côté construit et masque le balayage du côté
+sondé par les identifiants déjà connus (`SemiMaskTargetType::SCAN_NODE`). Le masque est **par
+décalage** (`SemiMask::mask(offset)`, `range(start, end)` rend les décalages masqués d'un groupe),
+et le balayage le consomme **par groupe de nœuds** (`NodeGroup::scan`, `state.semiMask->range`) :
+il ne saute un groupe que s'il n'y a aucun décalage masqué dedans, et lit sinon les colonnes du
+groupe entier (131 072 lignes) pour en garder quelques-unes. Cent dix-sept scopes éparpillés sur
+une table de 71 657 lignes touchent presque chaque groupe : le balayage lit tout, et son coût suit
+la taille de la table et le nombre de colonnes, pas le travail.
+
+- **PostgreSQL** : une boucle imbriquée avec accès par index ou par TID sous un petit ensemble,
+  choisie au plan sur le coût (le hachage de la table entière ne gagne que si l'ensemble est
+  grand).
+- **Neo4j** : l'expansion rend des identifiants de nœuds, et les propriétés se lisent **par
+  identifiant** (accès direct au magasin), jamais par balayage de l'étiquette.
+
+**Forme [déduit, à mesurer]** : quand le masque est petit (quelques centaines de décalages, seuil
+sur la cardinalité estimée du côté construit, comme pour les fils), le côté sondé **ne balaye pas** :
+il lit les lignes masquées **par décalage** (`NodeTable::lookup` sur les décalages du masque,
+groupe par groupe, les seules colonnes demandées), et au-delà du seuil il balaye comme aujourd'hui.
+Mesure avant/après : la copie de l'index entier de F, `usages` et son saut en 2 et 9 colonnes, lignes
+lues (PROFILE) et temps par appel ; attendu : de 71 657 à 117 lignes lues, et `usages` de 400 ms à
+quelques dizaines de millisecondes. Ticket : par F, avec son plan collé ; pris après les fils.
