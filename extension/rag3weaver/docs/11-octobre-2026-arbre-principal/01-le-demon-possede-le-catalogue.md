@@ -335,7 +335,7 @@ empreinte du chemin), utilisable dans les chemins d'URL.
 
 | route | message | notes |
 |---|---|---|
-| `POST /open` | `{manifest, scope?}` | idempotent ; rend `describe` + réactions montées + `id` |
+| `POST /open` | `{manifest}` | idempotent ; charge, n'accorde rien ; rend `describe` + réactions montées + `id` |
 | `POST /describe` | `{manifest}` | |
 | `POST /call` | `{manifest, name, arguments}` | `{ok, result}`, `{ok:false, error}`, erreur transitoire nommée |
 | `GET /events/{id}` | SSE | le flux de l'atelier, généralisé, par backend |
@@ -357,9 +357,13 @@ empreinte du chemin), utilisable dans les chemins d'URL.
   temps que l'adresse.
 - **Les clés disent ce qui est exposé.** `--keys` existe et ne filtre rien (`mcp.rs:193`).
   `exposure`, une expression sur des clés par déclaration et par cellule, n'existe que dans les
-  pages. Sous C, le filtre se fait **à la frontière du démon** : le client envoie ses clés avec
-  `open`, et le démon ne décrit ni n'exécute que ce que ces clés exposent. Le client mince ne
-  filtre rien lui-même : un client modifié ne doit rien gagner.
+  pages. Sous C, le filtre se fait **à la frontière du démon**, et le démon ne décrit ni n'exécute
+  que ce que les clés exposent. Le client mince ne filtre rien lui-même : un client modifié ne doit
+  rien gagner. **Les clés et la cellule se lient à la requête, pas au backend chargé** (relecture
+  de la mémoire longue). Un backend est chargé une fois et partagé, et `open` est idempotent : si
+  les clés se liaient au chargement, le second client hériterait de l'exposition et de la cellule
+  du premier. Elles voyagent donc avec chaque `describe` et chaque `call`, ou avec un identifiant
+  de session rendu par `open`.
 
 Sortir de la boucle locale (`--exposer`) exige le jeton et des clés. C'est la marche 6, après le
 reste.
@@ -407,7 +411,7 @@ de grandeur relatif, pas un délai.
 | marche | ce qu'elle fait | témoin | coût |
 |---|---|---|---|
 | **0. L'arrêt propre entre deux paquets** (forme A, dans le serveur d'aujourd'hui) | un drapeau lu à la frontière du paquet ; `abort_snapshot` ; le travail « arrêté au paquet N » ; `index` relancé reprend | tube fermé au paquet 2, puis reprise aux comptes d'une passe sans arrêt (sur le modèle d'`e2e_tx_par_paquet_arret`) | 1 à 2 |
-| **1. `serve` hôte de plusieurs backends** | registre par chemin canonique, `open`/`describe`/`call`/`events`, réouverture d'un seul backend, budget de tampon partagé | deux backends dans un processus ; la réouverture de l'un sans l'autre ; parité avec le mode positionnel | 2 |
+| **1. `serve` hôte de plusieurs backends** | registre par chemin canonique, `open`/`describe`/`call`/`events`, réouverture d'un seul backend, budget de tampon partagé ; **les appels sérialisés par backend, réacteur compris** (la bascule de cellule de `Catalog::rechercher` ne tient qu'à un appel à la fois ; les cellules par requête viendront plus tard) | deux backends dans un processus ; la réouverture de l'un sans l'autre ; parité avec le mode positionnel ; deux clients sur un backend, chacun dans sa cellule | 2 à 3 |
 | **2. Les travaux du démon** | registre ; `index` et la commande en fond ; lancer, suivre, arrêter ; reprise au redémarrage par `takeover` du propriétaire | le client part, l'index finit ; démon arrêté au paquet N puis relancé, la reprise rend les mêmes comptes ; démon tué, il redémarre sans refus | 2 |
 | **3. Le client MCP** (mémoire longue) | `impl Hote` par le fil | ceux du côté client, ci-dessus | 1 à 2 |
 | **4. Le cycle de vie** | `daemon.json` (adresse, pid, jeton, bâti) ; `assurer` qui vérifie le pid ; démon périmé avec ou sans travaux | l'énigme 3 retournée ; remplacement refusé pendant un travail | 1 |
@@ -415,7 +419,7 @@ de grandeur relatif, pas un délai.
 | **6. Jeton et clés à la frontière** | le jeton sur chaque requête ; `exposure` filtrée dans le démon | une requête sans jeton est refusée ; une clé ne voit que ce qu'elle expose | 1 à 2 |
 | **7. Le retrait** | `--demon` (l'ancien sens), le binaire `rag3daemon`, `DaemonConnection` sauf pour l'outillage | la batterie, sans eux | ½ |
 
-En tout, 10 à 13 jours d'agent pour l'arbre principal et la mémoire longue. C'est la fourchette de
+En tout, 10 à 14 jours d'agent pour l'arbre principal et la mémoire longue. C'est la fourchette de
 la page du 10 (« une à deux semaines »). Le paquet npm qui installe et lance le démon est le travail
 de l'optimiseur : il vient après la marche 4.
 
