@@ -11,6 +11,16 @@
   sont.
 - **Touche rag3weaver** : oui (la poussée des blobs du plein texte, par paquet)
 
+> **Recentré (11 octobre, midi).** Ce qui est établi : **un gros COPY de blobs échoue à
+> l'assemblage du groupe en mémoire**, pendant le COPY et avant tout point de reprise (pile au
+> § « Reproduit sans harnais »). Le témoin est forcé ; le même chemin d'assemblage sert au COPY
+> journalisé, qui devrait donc échouer aussi : **à éprouver**, par la variante
+> `force_checkpoint_on_copy=false`, à ajouter au témoin de la branche à la reprise. Le produit, lui,
+> écrit `_index_blobs` par `UNWIND … MERGE` en lots bornés (lecture de l'arbre principal) : ses
+> rouges sous 2 Gio venaient du COPY en point de reprise forcé de ses lignes et liens, sur un gros
+> volume. Le filet du produit (ne plus forcer) vaut pour le produit tel qu'il écrit ; il ne prouve
+> pas qu'un gros COPY journalisé de blobs tienne.
+
 ## Ce que c'est
 
 Sous un tampon de 2 Gio, la première indexation de ce dépôt en blobs meurt encore, au-delà de
