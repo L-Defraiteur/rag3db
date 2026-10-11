@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (48)
+### Ouverts — moteur (25)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -63,14 +63,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (24)
+### Ouverts — produit (23)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [La lib ne compile pas sans la feature `code`](2026-10-11-la-lib-ne-compile-pas-sans-la-feature-code.md) | ouvert | blocage | non | oui (`backend.rs`, garde de feature) |
 | [Un gabarit livré cherche l'extension vector relativement à lui-même](2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | ouvert | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
 | [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | partiel : la perte est fermée (refus nommé) ; l'identité par cellule reste, variante (a) tranchée | perte | oui (deux cellules, la même identité) | oui |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
@@ -95,10 +94,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (76), dans `closed/`
+### Fermés (77), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La lib ne compile pas sans la feature `code`](closed/2026-10-11-la-lib-ne-compile-pas-sans-la-feature-code.md) | corrigé, l'arbre principal (11 oct.) | blocage | non | oui (`backend.rs`, garde de feature) |
 | [Le binaire e2e ne compile pas sans burn-embedder](closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md) | corrigé : le `cfg` de la suite demande sa feature, `scripts/check_features.sh` vérifie les quatre jeux (11 oct.) | blocage (`cargo check --tests` rouge) | non (tests) | oui (tests) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](closed/2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | corrigé : le démon de test sert un écouteur lié au port 0, plus de course au port (11 oct.) | test instable | non | oui (tests du démon) |
 | [PostgreSQL : une requête à deux fautes ne rend rien, même au plancher abaissé](closed/2026-10-11-postgres-une-requete-a-deux-fautes-ne-rend-rien-meme-au-plancher-abaisse.md) | corrigé, `56a680169` (11 oct.) | réponse fausse (selon la session reçue) | sur PostgreSQL | oui |

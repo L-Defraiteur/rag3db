@@ -149,6 +149,7 @@ impl DaemonHost {
                 for erreur in lache.stop_reactions() {
                     eprintln!("[réaction] {erreur}");
                 }
+                #[cfg(feature = "code")]
                 crate::dataflow::index_nodes::stop_indexings_of(&lache.catalog);
                 drop(lache);
             }

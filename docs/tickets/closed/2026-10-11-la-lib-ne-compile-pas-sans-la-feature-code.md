@@ -1,6 +1,6 @@
 # La lib ne compile pas sans la feature `code`
 
-- **État** : ouvert
+- **État** : corrigé (11 octobre 2026) par l'arbre principal : l'arrêt des indexations (`stop_indexings_of`, marche 0) est sous `#[cfg(feature = "code")]` dans `Backend::shutdown` et dans l'hôte du démon ; `cargo check --features rag3db-native` seul repasse, et il entre dans les contrôles de l'arbre principal avant tout hash.
 - **Gravité** : blocage (une combinaison de features ne se bâtit plus)
 - **Atteignable en service** : non (les binaires livrés portent `code`)
 - **Touche rag3weaver** : oui (`src/backend.rs`)
