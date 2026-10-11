@@ -172,6 +172,9 @@ pub mod serve;
 /// clients minces sur la boucle locale.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_host;
+/// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_client;
 pub mod schema;
 pub mod script;
 /// **Le régime de travail** : un nom pour la composition « carte, rythme,

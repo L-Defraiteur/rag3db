@@ -493,6 +493,39 @@ Les marches du client, dans l'ordre : `impl Hote` par le fil (avec `e2e_mcp_stdi
 inchangé) ; puis le lancement et l'absence (§4) ; puis le chat sur le démon ;
 puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
 
+**La marche 3 est faite** (11 octobre, après-midi). `rag3weaver-backend mcp
+--manifest <m> --daemon <adresse>` est un client mince : `src/daemon_client.rs`, un
+`impl Hote` qui parle à l'hôte par HTTP (`ureq`). Une session d'abord, puis `/open`,
+`/describe`, `/call`. `mcp.rs` n'a pas bougé. Sans `--daemon`, rien ne change
+encore : la découverte par `daemon.json`, le lancement par `assurer` et l'outil
+« état du démon » sont la marche 4. `--demon` est refusé en nommant son
+remplaçant. Deux refus, jamais muets :
+- une session que l'hôte ne connaît plus est rouverte **une fois**, et le message
+  rejoué, puisque l'hôte refuse avant de jouer ;
+- une réouverture de la base rend une erreur **transitoire**, qui n'est pas rejouée.
+
+Témoins : `e2e_mcp_stdio` rejoué par l'hôte **sans changer une assertion** (le corps
+est devenu `jouer`, appelé par les deux tests) ; **deux sessions MCP sur un même
+backend** par l'hôte, où ce que l'une écrit, l'autre le lit, et l'état du démon dit
+deux sessions pour un seul backend ; le refus de `--demon` ; et quatre témoins
+unitaires du client contre un hôte de fantaisie (session perdue rouverte et rejouée,
+refus qui persiste rendu nommé, réouverture non rejouée, hôte injoignable refusé au
+démarrage).
+
+**Deux notes, pour plus tard, pas résolues ici** :
+- **un `index` long passe par `/call`** dans l'hôte, donc il tient le verrou de son
+  backend pendant l'estimation et le lancement, puis son fil vit dans l'hôte et non
+  plus dans le processus MCP. Pour le ticket « l'indexation est un enfant du serveur
+  MCP » (partiel), cela veut dire que la fermeture d'une session Claude Code ne
+  l'arrête plus. Mais sa poignée reste celle du registre des indexations, pas un
+  travail de l'hôte : la forme vient avec les travaux (marche 2) ;
+- **un flux entrant** (les messages des pairs d'un agent, le chantier « un DAG est un
+  outil, les agents se parlent ») : `Hote` reste requête / réponse, et c'est voulu.
+  La couture qui le recevra est **le canal d'entrée du binaire** (`EntreeInterruptible`,
+  qui mêle déjà les lignes de stdin et SIGTERM) : un troisième producteur, le flux
+  `events` de l'hôte, y glisserait des notifications. Rien n'est conçu ; la place
+  existe.
+
 ### La marche 1, faite (11 octobre 2026, `deb423288`)
 
 `src/daemon_host.rs`, la sous-commande `rag3weaver-backend daemon`, et le témoin `e2e_demon_hote`

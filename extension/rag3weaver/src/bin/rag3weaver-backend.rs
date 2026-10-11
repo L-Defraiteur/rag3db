@@ -136,10 +136,10 @@ impl io::BufRead for EntreeInterruptible {
 
 fn servir_mcp(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend mcp --manifest <backend.json> \
-                         [--keys dev,admin] [--demon <adresse>]";
+                         [--keys dev,admin] [--daemon <adresse>]";
     let mut manifeste: Option<String> = None;
     let mut cles: Vec<String> = Vec::new();
-    let mut demon: Option<String> = None;
+    let mut hote: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         let valeur = |i: usize| -> Result<String, String> {
@@ -147,7 +147,19 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         };
         match args[i].as_str() {
             "--manifest" => { manifeste = Some(valeur(i)?); i += 2; }
-            "--demon" => { demon = Some(valeur(i)?); i += 2; }
+            "--daemon" => { hote = Some(valeur(i)?); i += 2; }
+            // **L'ancien sens, refusé en le disant** (page C, §3) : `--demon`
+            // ne déportait que la connexion, et N sessions y faisaient N
+            // réacteurs. Pas un synonyme silencieux de `--daemon`, qui veut
+            // dire l'inverse : tout passe à l'hôte.
+            "--demon" => {
+                return Err(format!(
+                    "--demon est retiré : il ne déportait que la connexion à la base, et chaque \
+                     session gardait son catalogue et son réacteur. Sous la forme C, le serveur \
+                     MCP est un client mince de l'hôte : --daemon <adresse> (l'hôte se lance par \
+                     `rag3weaver-backend daemon`)\n{USAGE}"
+                ))
+            }
             "--keys" => {
                 cles = valeur(i)?
                     .split(',')
@@ -161,6 +173,39 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         }
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
+    // **Le client mince** (marche 3 de la forme C) : rien ne s'ouvre ici, ni
+    // base ni modèle ; tout passe à l'hôte, et ce processus ne garde que le
+    // protocole MCP. Sans `--daemon`, la forme d'aujourd'hui (le serveur
+    // possède sa base) reste, jusqu'à la découverte et au lancement de l'hôte
+    // (marche 4).
+    if let Some(adresse) = &hote {
+        let client = rag3weaver::daemon_client::DaemonClient::connect(
+            adresse,
+            Path::new(&manifeste),
+            &format!("mcp (pid {})", std::process::id()),
+            cles.clone(),
+        )?;
+        eprintln!(
+            "[mcp] {} — {} outils, clés présentées : {} — client mince de l'hôte {adresse}, session {}",
+            rag3weaver::mcp::Hote::nom(&client),
+            rag3weaver::mcp::Hote::outils(&client).len(),
+            if cles.is_empty() { "aucune".to_string() } else { cles.join(",") },
+            client.session()
+        );
+        let reactions = client.reactions();
+        if reactions.is_empty() {
+            eprintln!("[mcp] aucune réaction montée par l'hôte pour ce backend");
+        } else {
+            eprintln!("[mcp] {} réaction(s) montée(s) par l'hôte : {}", reactions.len(), reactions.join(", "));
+        }
+        let mut entree = EntreeInterruptible::sur_stdin();
+        let mut sortie = io::stdout();
+        let suite = rag3weaver::mcp::servir(&client, &cles, &mut entree, &mut sortie);
+        client.close();
+        // `doit_rouvrir` n'existe pas pour un client mince : c'est l'hôte qui
+        // rouvre, et l'appel concerné l'a dit (erreur transitoire).
+        return suite.map(|_| ());
+    }
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
     let database = prepared.path(&prepared.manifest.database);
     if let Some(parent) = database.parent() {
@@ -182,24 +227,10 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         prepared.manifest.name,
         if cles.is_empty() { "aucune".to_string() } else { cles.join(",") }
     );
-    let conn: Box<dyn rag3weaver::connection::DbConnection> = match &demon {
-        Some(adresse) => {
-            let serveur = rag3weaver::daemon::DaemonConnection::serveur(
-                adresse.clone(),
-                "rag3daemon",
-                database.display().to_string(),
-            );
-            eprintln!("[mcp] la base est tenue par le démon sur {adresse} — ce serveur ne la possède pas");
-            Box::new(
-                rag3weaver::daemon::DaemonConnection::assurer(&serveur)
-                    .map_err(|e| format!("le démon sur {adresse} : {e}"))?,
-            )
-        }
-        None => Box::new(
-            Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
-                .map_err(|e| e.to_string())?,
-        ),
-    };
+    let conn: Box<dyn rag3weaver::connection::DbConnection> = Box::new(
+        Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
+            .map_err(|e| e.to_string())?,
+    );
     let mut backend = prepared.open(conn, embedder)?;
     // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
     // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
