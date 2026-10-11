@@ -15,7 +15,7 @@ la nommant.
 | `Hop` | départ/arrivée avec ou sans table, colonnes (nœud, arête, vide, étiquette, nœud entier), arêtes écartées, filtre et ordre du nœud atteint, limite | les sauts du graphe de code (graph_walk, voisinage, usages, déclarations, voisins de code_tools et code.rs), fetch_related, la transition réactive, le journal d'une conversation |
 | `Count` | lignes d'une table, lignes retenues par une condition, degré par départ | les degrés du graphe, le compte filtré des résultats composés |
 | `Select` | par uuids ou par condition (égal, contient, au moins, l'un de, condition compilée par le parseur de filtres), colonnes, ordre, limite | fiches des liens et du voisinage, départs d'un fichier, pivot par sa clé, conteneurs qui déclarent un nom, résultats composés filtrés, identité d'un run, valeurs d'énumération, genres déclarés |
-| `Write` | `Upsert`, `Link`, `Update`, `Mark`, `Delete`, `Unlink` ; **reste `Load`** | toutes les écritures de l'ingestion sauf le COPY : insertion par MERGE, liens, marques de découpe et de creux, mises à jour, vidage de marqueurs, suppressions et annulations |
+| `Write` | `Upsert`, `Link`, `Update`, `Mark`, `Delete`, `Unlink`, `Load` (sous `bulk_load`) | toutes les écritures de l'ingestion : COPY, insertion par MERGE, liens, marques de découpe et de creux, mises à jour, vidage de marqueurs, suppressions et annulations |
 | `Tx` | un appel sur la connexion (`begin`, `commit`, `rollback`), pas une requête | la transaction par paquet de la synchronisation (passée par la connexion par A, `1d1e1d7de`) |
 
 Les fonctions de recherche en Cypher direct que plus aucun nœud n'appelait sont
@@ -40,6 +40,9 @@ entièrement par le `SearchBackend`.
 | `Write` : `Update`, `Mark` | `b2ab950b6` | luciepc, lib de 23 h 32 |
 | `Write` : `Delete`, `Unlink` ; le lien PostgreSQL corrigé dans le texte | `c3734d975` | luciepc, lib de 00 h 15 |
 | PostgreSQL déclare les transactions ; test 5 du contrat | `87e9739c9` | luciepc, lib de 00 h 15 |
+| rapport de la nuit (ce fichier) | `8065f8acd` | — |
+| `Write::Load` ; page `06-load.md` (ce que demanderait `COPY FROM STDIN`) | `2eb065404` | luciepc, lib de 01 h 12, rejoué après trois rebases porteurs de code |
+| un nom réservé du dialecte refusé en le nommant (liste rag3db tirée de la grammaire, liste PostgreSQL déclarée) ; ticket « Order » fermé | `56079f1cb` … `5800649de` | luciepc, lib de 01 h 12 ; témoin rouge d'abord (`6bf632f51`) |
 
 **Écart de lib** : les trois premiers lots du tableau ont été vérifiés contre
 une lib du moteur d'avant la bascule du COPY journalisé. Ils ne touchent que
@@ -89,8 +92,9 @@ recherche comme à moi). Trois choses sont donc corrigées dans le texte et
 
 ## Ce qui reste, dans l'ordre
 
-1. **`Load`** (le COPY par le dialecte, sous `bulk_load`) : la page d'abord.
-   PostgreSQL refuse en le nommant, ou passe par `COPY FROM STDIN`.
+1. **Permettre un nom réservé** (voie (b) : échapper tout le texte du
+   dialecte rag3db) : posé à Lucie, avec son coût (toutes les parités à
+   refaire). D'ici là, le refus nommé tient.
 2. **`code_sync`** (fichier de A) : la suppression des arêtes d'un fichier
    attend un `Unlink` par condition sur les nœuds, à proposer à A.
 3. **Les écritures de `catalog.rs`** (verrou de migration, marques de
