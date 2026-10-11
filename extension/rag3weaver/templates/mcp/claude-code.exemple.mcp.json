@@ -1,9 +1,9 @@
 {
-  "_lisez_moi": "Exemple. Copiez-le en .mcp.json à la racine d'un dépôt À VOUS, remplacez les « À REMPLACER », et lisez templates/mcp/README.md — notamment pourquoi un .mcp.json à la racine est un réglage COMMUN à toutes les sessions du dépôt. Le serveur « memoire » parle à l'hôte du démon : lancez-le d'abord (README, §6, étape 3), avec l'environnement complet.",
+  "_lisez_moi": "Exemple. Copiez-le en .mcp.json à la racine d'un dépôt À VOUS, remplacez les « À REMPLACER », et lisez templates/mcp/README.md — notamment pourquoi un .mcp.json à la racine est un réglage COMMUN à toutes les sessions du dépôt. Le premier client lance l'hôte du démon s'il manque : donnez-lui l'environnement complet.",
   "mcpServers": {
     "rag3weaver-code": {
       "_role": "Chercher dans ce dépôt : search_code, usages, impact, grep_files, read_file, schema…  La liste exacte vient du manifeste, jamais d'ici.",
-      "_sans_daemon": "Ce serveur possède sa base (une session à la fois). Pour la partager entre sessions, même forme que « memoire » : --daemon 127.0.0.1:7970, et l'environnement à l'hôte.",
+      "_meme_forme": "Même forme : un client mince de l'hôte, qui tient aussi cette base. --standalone ferait posséder la base à ce seul processus (une session à la fois).",
       "command": "À REMPLACER (absolu)/.local/bin/rag3weaver-backend",
       "args": [
         "mcp",
@@ -20,19 +20,19 @@
     },
     "rag3weaver-memoire": {
       "_role": "La mémoire longue, d'une session à l'autre : put_memory, get_memory, recall, put_subject, recall_subjects, anchor, supersede_link, add_ref, create_ref_type. La liste exacte vient du manifeste.",
-      "_pourquoi_daemon": "Claude Code lance un processus MCP PAR SESSION, et une base rag3db n'a qu'un écrivain. Avec --daemon, ce serveur est un client mince : l'hôte (rag3weaver-backend daemon) tient la base, les modèles et les réactions, et N sessions lui parlent. Le service d'embarquement et RAG3DB_ROOT se donnent à l'hôte, pas ici.",
+      "_pourquoi_client_mince": "Claude Code lance un processus MCP PAR SESSION, et une base rag3db n'a qu'un écrivain. Ce serveur est un client mince : l'hôte (rag3weaver-backend daemon) tient la base, les modèles et les réactions ; le client le trouve par daemon.json, le lance s'il manque, et l'hôte hérite de cet environnement. L'outil daemon_status dit son état.",
       "command": "À REMPLACER (absolu)/.local/bin/rag3weaver-backend",
       "args": [
         "mcp",
         "--manifest",
         "À REMPLACER (absolu)/.config/rag3weaver/memoire-longue/backends/memory/backend.json",
-        "--daemon",
-        "127.0.0.1:7970",
         "--keys",
         "dev"
       ],
       "env": {
-        "LD_LIBRARY_PATH": "À REMPLACER/build/lecteurs-csv/src"
+        "LD_LIBRARY_PATH": "À REMPLACER/build/lecteurs-csv/src",
+        "RAG3DB_ROOT": "À REMPLACER (l'arbre où le moteur est bâti)",
+        "RAG3WEAVER_EMBED_SERVICE": "127.0.0.1:7980"
       }
     }
   }
