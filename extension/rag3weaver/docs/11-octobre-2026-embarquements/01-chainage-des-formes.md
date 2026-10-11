@@ -1,0 +1,212 @@
+# Le chaînage des formes : un sous-graphe confié entier au dialecte
+
+*11 octobre 2026. Session embarquements (chantier F). Page de conception, aucun
+code. Suite des pages 01 à 07 de `8-octobre-2026-16h29/embarquements/`.*
+
+Lucie veut que « tout parle en DAG partout ». Aujourd'hui une forme de l'IR
+(`Hop`, `Count`, `Select`, `Write`) part seule vers le dialecte. Le code au-dessus
+enchaîne lui-même : il lit les uuids rendus par un `Select`, puis les passe à un
+`Hop`. La proposition est la suivante : une requête devient un **sous-graphe de
+formes**, et ce sous-graphe est confié **entier** au dialecte. Le dialecte décide
+alors ce qu'il traduit en une seule instruction et ce qu'il exécute en plusieurs.
+
+## 1. La structure
+
+- **Un nœud est une forme**, celle d'aujourd'hui, sans changement : `Hop`,
+  `Count`, `Select` ou `Write` (avec ses sept variantes). Chaque nœud porte un
+  identifiant local au graphe.
+- **Une arête dit que la sortie de l'un devient l'entrée de l'autre.** Les formes
+  ont déjà leurs entrées : les uuids d'un `Select::by_uuids`, le départ d'un
+  `Hop`, les uuids d'un `Count::Edges`, la cible `by` d'un `Delete`. Chacune de
+  ces entrées peut recevoir deux choses :
+  - une **valeur**, comme aujourd'hui ;
+  - une **référence** de la forme « la colonne *c* rendue par le nœud *n* ».
+- **Un nœud peut nourrir deux suivants.** Par exemple, un `Select` des
+  déclarations d'un fichier nourrit à la fois un `Hop` vers leurs usages et un
+  `Count::Edges` de leur degré. Le graphe est un DAG, pas une chaîne.
+- **Les sorties sont désignées.** L'appelant dit quels nœuds il veut lire. Il
+  reçoit les lignes de chacun de ces nœuds, rangées par identifiant de nœud. Un
+  nœud intermédiaire peut ne rien rendre à l'appelant.
+
+Avant de passer le graphe au dialecte, une vérification **commune à tous les
+dialectes** a lieu, une seule fois. Elle porte sur trois points :
+
+- le graphe n'a pas de cycle ;
+- chaque référence désigne une colonne que le nœud amont rend ;
+- le type de la colonne convient à l'entrée. Par exemple, un compte ne va pas
+  dans une entrée d'uuids.
+
+Une faute à cette étape donne `TranslateError::Invalid`, comme aujourd'hui pour
+une forme seule. Elle ne dépend d'aucun moteur.
+
+## 2. Ce qui reste à la couche au-dessus
+
+**Rien de textuel.** La couche au-dessus construit le graphe en valeurs Rust :
+des formes et des références. Elle n'écrit aucune instruction et ne cite aucun
+nom. Les noms du schéma voyagent tels que déclarés, et c'est le dialecte qui les
+échappe, selon sa règle, en écrivant l'instruction (page 07).
+
+**Aucun conflit avec nos verbes.** Les mots `Select`, `Hop`, `Count` et `Write`
+sont des types Rust. Ils ne sont jamais des mots d'une requête. La page 07 l'a
+prouvé pour les formes seules : `e2e_nom_reserve` passe de bout en bout avec des
+entités nommées `Select`, `hop` et `Count`. Le graphe ne fait qu'assembler ces
+formes et n'ajoute aucun mot.
+
+Une seule chose remonte du dialecte vers la couche au-dessus : le **rapport**
+(§ 5).
+
+## 3. Ce qui se fond en une instruction, et ce qui ne se fond pas
+
+La règle est la même pour les deux dialectes : **ne pas fondre n'est jamais un
+refus.** Un dialecte qui ne sait pas fondre deux nœuds les exécute l'un après
+l'autre. Il passe les uuids rendus par le premier en paramètre du second, comme
+le fait aujourd'hui la couche au-dessus. Fondre est une optimisation et le
+découpage est le cas de repli. Seule une **forme** que le dialecte ne sait pas
+exécuter du tout est un refus (§ 4).
+
+### rag3db (Cypher)
+
+**Se fond.** Une chaîne `Select` → `Hop` → `Count` qui finit sur une seule
+sortie. Par exemple, « les déclarations de ce fichier, ce qu'elles définissent,
+et le degré de chacune » :
+
+```
+MATCH (m:`Order`) WHERE m.`_uuid` IN $uuids
+MATCH (m)-[:`defines`]->(n:`Symbol`)
+OPTIONAL MATCH (n)<-[r:`uses`]-()
+RETURN n.`_uuid`, count(r)
+```
+
+Les clauses `MATCH`/`WITH` de Cypher sont faites pour cela. Une écriture qui
+suit une lecture se fond aussi : un `Select` suivi d'un `Write::Mark` donne
+`MATCH … SET`.
+
+**Ne se fond pas.**
+
+- **Deux sorties désignées.** Une requête Cypher rend un seul tableau de lignes.
+  Un `Select` qui nourrit un `Hop` et un `Count`, tous deux demandés par
+  l'appelant, donne deux instructions. Le `Select` est rejoué dans chacune, ou
+  bien exécuté une fois et ses uuids passés en paramètre. Le dialecte choisit.
+  Tout replier dans un `collect()` serait possible, mais ce serait un détour
+  illisible, et on ne le fait pas.
+- **`Write::Load`.** `COPY` est une instruction à part dans le moteur. Elle ne se
+  compose avec aucune clause.
+
+### PostgreSQL
+
+**Se fond.** Le même `Select` → `Hop` → `Count`, écrit en CTE :
+
+```
+WITH m AS (SELECT v.u FROM unnest($1::text[]) AS v(u)
+           JOIN "order" AS o ON o."_uuid" = v.u),
+     n AS (SELECT d."to_uuid" AS u FROM m JOIN "defines" AS d ON d."from_uuid" = m.u)
+SELECT n.u, count(r.*) FROM n LEFT JOIN "uses" AS r ON r."to_uuid" = n.u GROUP BY n.u
+```
+
+PostgreSQL fond aussi des **écritures chaînées** en une instruction, grâce aux
+CTE qui modifient des données. Par exemple, `WITH d AS (DELETE … RETURNING
+"_uuid") DELETE FROM "defines" WHERE "from_uuid" IN (SELECT "_uuid" FROM d)` est
+un `Delete` suivi d'un `Unlink`, en une seule instruction atomique. rag3db ne
+sait pas faire cela en une instruction : il lui en faut deux, dans une
+transaction.
+
+**Ne se fond pas.**
+
+- **Une lecture de table placée après une écriture de la même instruction.**
+  Toutes les CTE d'une instruction voient le même instantané. Un `Select` sur
+  `"order"` placé après un `Write::Update` de `"order"` dans la même instruction
+  verrait les anciennes valeurs. Une arête reste sûre : le nœud aval lit ce que
+  rend le `RETURNING` du nœud amont, pas la table. Le dialecte coupe donc
+  l'instruction **dès qu'un nœud lit une table qu'un nœud antérieur écrit sans
+  arête entre eux**.
+- **`Write::Load`.** `COPY` ne va pas dans une CTE, et le dialecte ne déclare
+  d'ailleurs pas `bulk_load` aujourd'hui.
+- **Deux sorties désignées.** C'est la même limite que pour rag3db : une
+  instruction rend un seul résultat.
+
+## 4. Quand un dialecte refuse un sous-graphe (P3)
+
+Le refus a lieu **avant toute exécution**. Le dialecte parcourt d'abord le graphe
+entier. Il refuse si un nœud porte une forme qu'il ne sait exécuter **ni seule ni
+découpée**, par exemple un `Load` sur PostgreSQL sans `bulk_load`. Rien n'est lu
+et rien n'est écrit. Un graphe à moitié exécuté ne peut donc pas laisser une
+moitié d'écriture.
+
+Le refus garde le nom de la règle P3 et ajoute le nœud fautif :
+
+```
+TranslateError::Untranslated { dialect: "postgres", form: "write.load", node: "charger" }
+→ RAG3WEAVER_REFUS__le_dialecte_postgres_ne_traduit_pas__write.load (nœud « charger »)
+```
+
+Le dialecte nomme le **premier** nœud refusé dans l'ordre topologique. C'est le
+seul champ nouveau par rapport au refus d'une forme seule.
+
+## 5. Le rapport
+
+Le rapport reprend la règle que la session mémoire vient de poser pour les liens
+(`2d0687a71`), étendue à n'importe quel graphe :
+
+| Exécution | `atomic` | `atomic_reason` |
+|---|---|---|
+| une seule instruction | `true` : atomique par le moteur | — |
+| plusieurs instructions, dialecte à `transactions`, toutes dans la transaction | `true` : enveloppées de `begin` / `commit` / `rollback` | — |
+| plusieurs instructions dont une hors transaction (`Load` si le moteur ne l'y admet pas, plein texte et vecteurs rebâtis après coup) | `false` | la partie qui sort, nommée |
+| plusieurs instructions, dialecte sans `transactions` | `false` | « le dialecte n'a pas de transactions » |
+
+Le rapport porte aussi deux autres champs :
+
+- **`instructions`**, le nombre d'instructions envoyées ;
+- **`fused`**, les groupes de nœuds partis ensemble, par exemple
+  `[["sel","hop","deg"],["mark"]]`.
+
+Ces champs disent ce que le dialecte a fait de ce qu'on lui a confié. Un test les
+lit, et un agent aussi.
+
+**Un point pour une lecture découpée en plusieurs instructions.** Sous
+PostgreSQL, le niveau par défaut (`READ COMMITTED`) prend un instantané par
+instruction. Pour annoncer `atomic: true` sur une lecture en plusieurs
+instructions, le dialecte ouvre la transaction en `REPEATABLE READ`. Sinon il dit
+`false`.
+
+## 6. Écarts avec ce que fait un planificateur SQL
+
+Le reste est ce que fait n'importe quel planificateur SQL : un graphe d'opérateurs
+où une sortie nourrit une entrée, où les CTE se fondent ou se matérialisent, et
+où l'instruction est atomique. Seuls les points suivants diffèrent.
+
+1. **Pas de coûts, des règles.** Le dialecte fond selon la forme du graphe, sans
+   statistiques, et ne réordonne pas les nœuds. Le planificateur du moteur
+   optimise toujours *à l'intérieur* de chaque instruction. Il y a donc deux
+   étages : notre découpe, puis son plan.
+2. **Plusieurs sorties.** Une requête SQL rend un seul résultat. Notre graphe
+   peut en rendre plusieurs. Ce point est la première raison de couper en
+   plusieurs instructions.
+3. **La découpe est visible.** SQL cache son plan, sauf avec `EXPLAIN`. Ici, le
+   rapport dit toujours combien d'instructions sont parties et quels nœuds sont
+   partis ensemble.
+4. **L'atomicité est annoncée, pas supposée.** En SQL, une instruction est
+   toujours atomique. Ici, un graphe peut ne pas l'être, et il le dit, avec sa
+   raison.
+5. **Le refus a lieu avant l'exécution, et il nomme une forme.** Ce n'est pas une
+   erreur de syntaxe ou d'exécution en cours de route.
+6. **L'ordre ne vient que des arêtes.** Deux nœuds sans arête entre eux n'ont pas
+   d'ordre garanti, même si l'un écrit ce que l'autre lit. En SQL, l'ordre
+   d'écriture des instructions suffit à fixer cet ordre.
+
+## Ce qui attend le mot de Lucie
+
+- **Le point 6.** Faut-il une arête d'ordre seul, sans donnée, pour dire « lis
+  après cette écriture » ? Ma recommandation est **non pour commencer** : aucun
+  appelant actuel n'en a besoin, puisque nos lectures après écriture passent
+  toutes par les uuids rendus.
+- **Un graphe non atomique : l'exécuter et le dire, ou le refuser ?** Ma
+  recommandation est de l'exécuter et de le dire par défaut, comme les liens
+  aujourd'hui. Un appelant qui exige l'atomicité le déclare, et le dialecte
+  refuse alors avant d'exécuter (refus nommé, § 4) plutôt que de rendre `false`
+  après coup.
+- **Le premier lot, si elle dit oui.** Le type du graphe et la vérification
+  commune (§ 1). Puis l'exécution découpée nœud par nœud, qui sera le repli des
+  deux dialectes et marchera donc partout dès le premier jour. La fusion viendra
+  ensuite, dialecte par dialecte, chaque fois avec un test de parité ligne à
+  ligne contre l'exécution découpée.
