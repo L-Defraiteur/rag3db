@@ -525,3 +525,100 @@ fn fermer_un_backend_lache_sa_base_et_les_refus_sont_nommes() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// **`code-tree add | remove` par un vrai hôte** (page
+/// `codeparsers/06-code-tree-l-arbre-du-coeur.md`) : un arbre posé depuis un
+/// `--from` (le gabarit `code`), enregistré à l'hôte par `/backend/open`,
+/// indexé, interrogé ; un second arbre né de l'instantané de la base du
+/// premier ; puis `remove` ferme le backend par `/backend/close` et met
+/// manifeste et base de côté.
+#[test]
+#[ignore]
+fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
+    use rag3weaver::code_tree::{add_files, register, remove_files, unregister, Roots};
+    let d = dossier("code-tree");
+    let roots = Roots { config: d.join("config"), data: d.join("data") };
+    // Le `--from` : le gabarit `code` du dépôt, l'extension vecteur du dépôt.
+    let gabarit = roots.config.join("code-depart/templates");
+    std::fs::create_dir_all(gabarit.parent().unwrap()).unwrap();
+    assert!(std::process::Command::new("cp").arg("-a").arg(concat!(env!("CARGO_MANIFEST_DIR"), "/templates")).arg(&gabarit).status().unwrap().success());
+    let depart = roots.manifest("code-depart");
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&depart).unwrap()).unwrap();
+    m["database"] = json!(roots.data.join("code-depart.rag3db").display().to_string());
+    m["vector_extension"] = json!(extension_vecteur());
+    std::fs::write(&depart, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // L'arbre : un petit dépôt git.
+    let arbre = d.join("arbres/coeur");
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("src/verrous.rs"), "pub fn prendre_le_verrou() -> u8 {\n    1\n}\n\npub fn appelant() -> u8 {\n    prendre_le_verrou()\n}\n").unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&arbre).args(args).output().unwrap().status.success(), "git {args:?}");
+    git(&["init", "-q"]);
+    git(&["add", "-A"]);
+    git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a"]);
+
+    // L'hôte, sur un port libre.
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let adresse = format!("127.0.0.1:{}", server.server_addr().to_ip().unwrap().port());
+    let host = Arc::new(DaemonHost::new());
+    let servi = {
+        let host = host.clone();
+        std::thread::spawn(move || serve_daemon(host, server, 4))
+    };
+    let agent = ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).build());
+    let post = |chemin: &str, session: Option<&str>, corps: Value| -> Value {
+        let mut req = agent.post(format!("http://{adresse}{chemin}"));
+        if let Some(s) = session {
+            req = req.header(SESSION_HEADER, s);
+        }
+        serde_json::from_str(&req.header("Content-Type", "application/json").send(corps.to_string()).unwrap().body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let s = post("/session", None, json!({"client": "témoin code-tree", "keys": ["dev"]}))["session"].as_str().unwrap().to_string();
+    let appeler = |manifest: &Path, outil: &str, arguments: Value| -> String {
+        let r = post("/call", Some(&s), json!({"manifest": manifest, "name": outil, "arguments": arguments}));
+        assert_eq!(r["ok"], json!(true), "{outil} : {r}");
+        r["result"].as_str().map(String::from).unwrap_or_else(|| r["result"].to_string())
+    };
+
+    // add : le manifeste et la base (vide : le départ n'a pas encore de base).
+    let a = add_files(&roots, &arbre, "code-depart", None).unwrap();
+    assert_eq!(a.name, "code-coeur");
+    assert!(a.copied.is_empty(), "{:?}", a.copied);
+    register(&adresse, &a.manifest).unwrap();
+    let lance = appeler(&a.manifest, "index", json!({"confirm": true}));
+    // La réponse peut être un JSON sérialisé (des `\n` échappés) : le chemin
+    // s'arrête au premier blanc, à la barre oblique inverse ou au guillemet.
+    let journal: String = lance
+        .split("journal : ")
+        .nth(1)
+        .unwrap_or_else(|| panic!("pas de journal : {lance}"))
+        .chars()
+        .take_while(|c| !c.is_whitespace() && *c != '\\' && *c != '"')
+        .collect();
+    let fin = std::time::Instant::now() + Duration::from_secs(300);
+    while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
+        assert!(std::time::Instant::now() < fin, "index trop long ({journal}) : {}", std::fs::read_to_string(&journal).unwrap_or_default());
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let u = appeler(&a.manifest, "usages", json!({"name": "prendre_le_verrou"}));
+    assert!(u.contains("appelant"), "{u}");
+
+    // Un second arbre, né de l'instantané de la base du premier : il répond
+    // sans index (le même arbre, donc les mêmes identités).
+    let b = add_files(&roots, &arbre, "code-coeur", Some("code-clone")).unwrap();
+    assert!(!b.copied.is_empty(), "la base du premier est copiée : {b:?}");
+    register(&adresse, &b.manifest).unwrap();
+    let u = appeler(&b.manifest, "usages", json!({"name": "prendre_le_verrou"}));
+    assert!(u.contains("appelant"), "la base née de l'instantané répond sans index : {u}");
+
+    // remove : fermé par l'hôte, puis manifeste et base mis de côté.
+    unregister(&adresse, &b.manifest).unwrap();
+    let r = remove_files(&roots, "code-clone").unwrap();
+    assert!(!b.database.exists() && r.aside.join("code-clone.rag3db").exists(), "{r:?}");
+    let etat: Value = serde_json::from_str(&agent.get(format!("http://{adresse}/etat")).call().unwrap().body_mut().read_to_string().unwrap()).unwrap();
+    let ouverts: Vec<String> = etat["backends"].as_array().into_iter().flatten().filter(|x| x["open"] == json!(true)).filter_map(|x| x["manifest"].as_str().map(String::from)).collect();
+    assert!(!ouverts.iter().any(|x| x.contains("code-clone")), "le clone est fermé : {ouverts:?}");
+
+    post("/arret", None, json!({}));
+    servi.join().unwrap();
+    let _ = std::fs::remove_dir_all(d);
+}
