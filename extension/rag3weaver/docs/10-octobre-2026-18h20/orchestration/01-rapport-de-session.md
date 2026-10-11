@@ -774,3 +774,16 @@ est entière de nouveau, et le COPY journalisé est le défaut sans réserve.
   maintenant que le crochet existe (son correctif rag3weaver : le refus
   immédiat avec la vraie cause).
 - **Le relevé d'orchestration passe à l'heure** à partir de 4 h 50.
+
+**Ajout de 5 h 15, A au repos** (nuit consignée, `3ed14644e`). La sonde de la
+fuite à taille réelle (600 × 250, un écrivain, trace du journal, 25 min)
+corrige la lecture d'hier : le premier paquet du mode blobs **n'évite pas le
+journal, il n'est jamais validé pendant l'essai** — la base monte à 114 Mo à
+la 8ᵉ minute puis ne bouge plus pendant 13 minutes, le journal reste à ses
+33 Ko d'ouverture. Les « 114 Mo pour 33 Ko » d'hier étaient l'état en vol
+d'un COPY qui écrit ses groupes pleins avant la validation. **Pourquoi ce
+paquet reste 13 minutes sans écrire n'est pas lu** : au ticket fermé de la
+fuite, comme reste ; un témoin produit demande un corpus long. À regarder de
+jour (une indexation en mode blobs qui stagne 13 min est un fait de produit,
+même si le mode n'est plus le défaut). Le lot « reprise sur croisement » de A
+est prêt, au signal du matin. La durée de la lib : au knowledge dump de A.
