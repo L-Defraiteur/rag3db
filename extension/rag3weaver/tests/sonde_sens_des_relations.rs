@@ -29,6 +29,7 @@ use rag3weaver::Rag3dbConnection;
 /// Depuis un worktree, le code vit ici et l'extension est bâtie dans l'arbre
 /// qui a lancé cmake : un chemin dérivé de `CARGO_MANIFEST_DIR` cherche donc la
 /// bibliothèque là où elle n'est pas.
+#[cfg(feature = "code")]
 fn extension_vectorielle() -> String {
     let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -98,6 +99,7 @@ fn la_recette_du_banc_garde_les_deux_sens_egaux() {
 /// partent, et l'arête de la première région avec eux), puis un CHECKPOINT.
 /// L'arête du dernier fichier, dans l'autre région, doit rester lisible dans
 /// les deux sens, et l'index valoir un index bâti à neuf.
+#[cfg(feature = "code")]
 #[test]
 #[ignore]
 fn un_fichier_retire_ne_fait_pas_perdre_les_aretes_des_autres_regions() {

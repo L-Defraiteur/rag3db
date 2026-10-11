@@ -462,7 +462,14 @@ fn parcourir(
     let mut a_explorer: Vec<Reached> = premiers;
     for lvl in 1..=depth {
         let mut neufs: Vec<Reached> = Vec::new();
-        for mut m in plus_etroits(a_explorer.drain(..).collect()) {
+        // L'ordre des lignes rendues par la base suit l'ordre d'insertion,
+        // qui suit des tables de hachage : sans tri, le rendu et ce que le
+        // budget coupe changeaient d'un processus à l'autre. Le rang garde
+        // la priorité d'avant (le premier vu l'emporte) : une arête, puis à
+        // travers un carrefour, puis par le trait, puis par le nom seul.
+        let mut candidats: Vec<Reached> = a_explorer.drain(..).collect();
+        candidats.sort_by(|a, b| ordre_stable(a).cmp(&ordre_stable(b)));
+        for mut m in plus_etroits(candidats) {
             if !vus.insert(m.uuid.clone()) {
                 continue;
             }
@@ -512,6 +519,22 @@ fn parcourir(
     // Ce qui reste à explorer quand on s'arrête n'est pas compté : seul le
     // budget coupe ce qui a été trouvé.
     Ok((atteints, cut))
+}
+
+/// La clé du tri d'un niveau : le rang de la voie, puis le lieu, le titre et
+/// l'uuid ; la relation et le carrefour départagent un même nœud atteint
+/// deux fois.
+fn ordre_stable(m: &Reached) -> (u8, &str, Option<i64>, &str, &str, &str, Option<&str>) {
+    let rang = if m.by_name {
+        3
+    } else if m.by_also {
+        2
+    } else if m.through_hub.is_some() {
+        1
+    } else {
+        0
+    };
+    (rang, &m.path, m.line, &m.title, &m.uuid, &m.relation, m.through_hub.as_deref())
 }
 
 /// Un même site vu par un membre et par le conteneur qui le contient — un

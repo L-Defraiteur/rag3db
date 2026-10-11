@@ -203,6 +203,7 @@ sans demander `burn-embedder`). Le ticket est fermé :
 | `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm` | la batterie avec les suites qui appellent un vrai modèle |
 | `rag3db-native,code,daemon,openai-llm` | le paquet npm (G), les postes sans carte |
 | `rag3db-native,code` | le minimum natif du backend de code |
+| `rag3db-native` | le minimum du moteur seul (ajouté par l'arbre principal le 11 octobre : un import qui ne sert que sous `code` y devient une erreur, et ce contrôle, joué à part, s'oubliait) |
 
 La commande, depuis `extension/rag3weaver`, avec le moteur partagé :
 
@@ -210,7 +211,9 @@ La commande, depuis `extension/rag3weaver`, avec le moteur partagé :
 scripts/check_features.sh
 ```
 
-Elle écrit VERT ou ROUGE par jeu et rend 1 dès qu'un jeu est rouge. Un jeu
+Elle recompte d'abord l'index des tickets (`scripts/check_tickets.py` : chaque en-tête de
+table compte ses lignes, chaque ligne mène à un fichier, chaque fichier a sa ligne ; refus nommé
+sinon), puis écrit VERT ou ROUGE par jeu, et rend 1 dès qu'un contrôle est rouge. Un jeu
 seul se vérifie par `cargo check --tests --features <jeu>`. À jouer avant tout
 hash qui touche `tests/` ou les features de `Cargo.toml`. Un jeu nouveau,
 employé par une session ou un script, s'ajoute au tableau **et** au script.

@@ -297,3 +297,37 @@ fn impact_nomme_les_tests_que_des_changements_reels_ont_casses() {
     }
     assert!(manques.is_empty(), "tests attendus absents : {manques:#?}");
 }
+
+/// **Le même rendu d'un catalogue neuf à l'autre** (ticket
+/// `2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre`) :
+/// la base rend ses lignes dans l'ordre d'insertion, qui suit des tables de
+/// hachage dont la graine change d'une table à l'autre ; le parcours trie
+/// chaque niveau. Quatre catalogues neufs du même corpus, le même nom et la
+/// même profondeur : le même Markdown, au caractère près, et le budget coupe
+/// les mêmes nœuds. Comparé par `==` et résumé borné (jamais d'assert_eq sur
+/// un grand texte).
+#[test]
+#[ignore]
+fn le_rendu_d_impact_est_le_meme_d_un_catalogue_neuf_a_l_autre() {
+    let dir = format!("{}/src/dataflow", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let sources = read_sources(&dir).unwrap();
+    let mut rendus: Vec<String> = Vec::new();
+    for _ in 0..4 {
+        let catalog = setup();
+        catalog.lock().unwrap().ingest_code(&analyze(&dir, sources.clone())).unwrap();
+        let cat = catalog.lock().unwrap();
+        let mut texte = String::new();
+        // Un budget court : ce qu'il coupe doit être le même aussi.
+        for (nom, profondeur, budget) in [("take_or_clone", 3, 200), ("merge_port_values", 3, 200), ("take_or_clone", 3, 15)] {
+            texte.push_str(&md(&neighborhood_of(&cat, &code_config(), nom, "", profondeur, budget, 50).unwrap()));
+        }
+        rendus.push(texte);
+    }
+    assert!(rendus[0].lines().count() > 20, "le rendu est trop court pour prouver un ordre :\n{}", rendus[0]);
+    for (i, r) in rendus.iter().enumerate().skip(1) {
+        if *r != rendus[0] {
+            let (n, (a, b)) = rendus[0].lines().zip(r.lines()).enumerate().find(|(_, (a, b))| a != b).unwrap_or((0, ("(longueurs)", "(différentes)")));
+            panic!("le catalogue {i} ne rend pas comme le premier ; ligne {n} :\n  premier : {a}\n  {i}e     : {b}");
+        }
+    }
+}

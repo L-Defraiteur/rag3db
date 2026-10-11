@@ -19,6 +19,9 @@ JEUX=(
   "rag3db-native,code,daemon,openai-llm"
   # Le minimum natif du backend de code.
   "rag3db-native,code"
+  # Le natif seul, sans le code : le contrôle à part qu'on oubliait (un import
+  # qui ne sert que sous `code` y devient une erreur ; 11 octobre 2026).
+  "rag3db-native"
 )
 ICI="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ICI/scripts/garde_target.sh"

@@ -6,6 +6,8 @@
 //!
 //! Run with: SONDE_LISTE=/chemin cargo test --test sonde_liste_analyse -- --ignored
 
+#![cfg(feature = "code")]
+
 use rag3weaver::code::{verdict, Verdict};
 use rag3weaver::code_tools::{FileSource, WorkingTree};
 
