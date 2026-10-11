@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Témoins du magasin de libs (scripts/rag3db_libs.py ; page
+docs/11-octobre-2026-recherche/07-le-magasin-de-libs.md). Des bâtis factices :
+une lib = /bin/true à qui objcopy pose la section .rag3db_build_id, un en-tête
+qui définit RAG3DB_BUILD_ID, une extension qui porte la chaîne de l'identifiant.
+Usage : python3 scripts/test_rag3db_libs.py"""
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+import unittest
+from pathlib import Path
+
+OUTIL = Path(__file__).resolve().parent / "rag3db_libs.py"
+
+
+def faux_bati(racine: Path, nom: str, ident: str, ext_ident: str | None = None, contenu: str = "") -> Path:
+    """Un dossier de bâti (`<bati>/src/…`) et l'extension de son arbre."""
+    src = racine / nom / "src"
+    (src / "include/common").mkdir(parents=True)
+    lib = src / "librag3db.so"
+    subprocess.run(["cp", "/bin/true", lib], check=True)
+    section = racine / f"{nom}.section"
+    section.write_bytes(ident.encode() + b"\0")
+    subprocess.run(["objcopy", f"--add-section=.rag3db_build_id={section}", lib], check=True)
+    if contenu:
+        with open(lib, "ab") as f:
+            f.write(contenu.encode())
+    (src / "rag3db.hpp").write_text("// en-tête unique factice\n")
+    (src / "include/common/build_id.h").write_text(f'#pragma once\n#define RAG3DB_BUILD_ID "{ident}"\n')
+    ext = racine / nom / "arbre/extension/vector/build"
+    ext.mkdir(parents=True)
+    (ext / "libvector.rag3db_extension").write_bytes(b"\x7fELF-factice\0" + (ext_ident or ident).encode() + b"\0")
+    return racine / nom
+
+
+def outil(magasin: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    e = dict(os.environ, RAG3DB_LIBS_DIR=str(magasin), **(env or {}))
+    return subprocess.run([sys.executable, OUTIL, *args], capture_output=True, text=True, env=e)
+
+
+def publier(magasin: Path, bati: Path, *extra: str) -> subprocess.CompletedProcess:
+    return outil(magasin, "publier", str(bati), "--racine", str(bati / "arbre"), *extra)
+
+
+class Magasin(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.racine = Path(self.tmp.name)
+        self.magasin = self.racine / "magasin"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_publier_pose_un_dossier_immuable_et_courant(self):
+        bati = faux_bati(self.racine, "a", "rag3db-build-A")
+        r = publier(self.magasin, bati)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        d = self.magasin / "rag3db-build-A"
+        for f in ["librag3db.so", "rag3db.hpp", "include/common/build_id.h", "libvector.rag3db_extension", "BUILD_ID", "MANIFESTE"]:
+            self.assertTrue((d / f).exists(), f)
+        self.assertEqual((d / "BUILD_ID").read_text().strip(), "rag3db-build-A")
+        self.assertEqual(os.path.realpath(self.magasin / "courant"), str(d.resolve()))
+        r = outil(self.magasin, "courant")
+        self.assertEqual(r.stdout.strip(), str(d.resolve()))
+        self.assertEqual(list(self.magasin.glob(".tmp-*")), [], "aucun temporaire ne reste")
+
+    def test_republier_le_meme_ne_change_rien_un_autre_contenu_est_refuse(self):
+        bati = faux_bati(self.racine, "a", "rag3db-build-A")
+        publier(self.magasin, bati)
+        avant = (self.magasin / "rag3db-build-A/MANIFESTE").read_text()
+        r = publier(self.magasin, bati)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("déjà publié", r.stdout)
+        self.assertEqual((self.magasin / "rag3db-build-A/MANIFESTE").read_text(), avant)
+        autre = faux_bati(self.racine, "a-bis", "rag3db-build-A", contenu="autre binaire")
+        r = publier(self.magasin, autre)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("rag3db-build-A", r.stderr)
+        self.assertEqual((self.magasin / "rag3db-build-A/MANIFESTE").read_text(), avant, "rien n'est écrasé")
+
+    def test_une_paire_qui_ne_va_pas_ensemble_est_refusee(self):
+        bati = faux_bati(self.racine, "a", "rag3db-build-A", ext_ident="rag3db-build-Z")
+        r = publier(self.magasin, bati)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("libvector", r.stderr)
+        self.assertFalse((self.magasin / "rag3db-build-A").exists())
+        bati = faux_bati(self.racine, "b", "rag3db-build-B")
+        (bati / "src/include/common/build_id.h").write_text('#define RAG3DB_BUILD_ID "rag3db-build-X"\n')
+        r = publier(self.magasin, bati)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("rag3db-build-X", r.stderr)
+
+    def test_le_menage_epargne_le_courant_l_epingle_le_mappe_et_le_reference(self):
+        for n in "ABCDEF":
+            publier(self.magasin, faux_bati(self.racine, n.lower(), f"rag3db-build-{n}"), "--sans-courant")
+            time.sleep(0.02)
+        outil(self.magasin, "courant", "--poser", "rag3db-build-A")
+        (self.magasin / "rag3db-build-B/ÉPINGLÉ").write_text("une mesure à refaire\n")
+        # C : mappé par un processus vivant.
+        tenu = self.magasin / "rag3db-build-C/librag3db.so"
+        proc = subprocess.Popen(
+            [sys.executable, "-c", f"import mmap,sys;f=open({str(tenu)!r},'rb');m=mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ);print('ok',flush=True);sys.stdin.read()"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        self.assertEqual(proc.stdout.readline().strip(), "ok")
+        # D : référencé par le RUNPATH d'un binaire installé.
+        bins = self.racine / "bin"
+        bins.mkdir()
+        c = self.racine / "x.c"
+        c.write_text("int main(void){return 0;}\n")
+        subprocess.run(["gcc", c, "-o", bins / "hote", f"-Wl,-rpath,{self.magasin}/rag3db-build-D", "-Wl,--enable-new-dtags"], check=True)
+        try:
+            r = outil(self.magasin, "menage", "--garder", "1", env={"RAG3DB_LIBS_BINS": str(bins), "RAG3DB_LIBS_SANS_UNITES": "1"})
+        finally:
+            proc.stdin.close()
+            proc.wait()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        restants = sorted(p.name for p in self.magasin.iterdir() if p.name.startswith("rag3db-build-"))
+        # F : le plus récent (garder 1) ; A courant, B épinglé, C mappé, D référencé ; E part.
+        self.assertEqual(restants, ["rag3db-build-A", "rag3db-build-B", "rag3db-build-C", "rag3db-build-D", "rag3db-build-F"], r.stdout)
+        for raison in ["courant", "épinglé", "mappé", "référencé"]:
+            self.assertIn(raison, r.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

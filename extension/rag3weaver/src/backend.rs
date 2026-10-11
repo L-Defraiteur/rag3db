@@ -1395,18 +1395,12 @@ impl PreparedBackend {
                 ))
             };
         }
-        let fichier = format!("lib{texte}.rag3db_extension");
-        let mut cherches: Vec<PathBuf> = Vec::new();
-        if let Some(racine) = std::env::var_os("RAG3DB_ROOT") {
-            cherches.push(PathBuf::from(racine).join("extension").join(&*texte).join("build").join(&fichier));
-        }
-        if let Some(lib) = std::env::var_os("RAG3DB_LIBRARY_DIR") {
-            cherches.push(PathBuf::from(lib).join(&fichier));
-        }
-        if let Some(dossier) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
-            cherches.push(dossier.join(&fichier));
-        }
-        cherches.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extension").join(&*texte).join("build").join(&fichier));
+        let cherches = vector_extension_candidates(
+            &texte,
+            std::env::var_os("RAG3DB_ROOT"),
+            std::env::var_os("RAG3DB_LIBRARY_DIR"),
+            std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)),
+        );
         if let Some(trouve) = cherches.iter().find(|p| p.is_file()) {
             return Ok(trouve.clone());
         }
@@ -3360,6 +3354,24 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
+    /// **L'extension se cherche d'abord à côté de la lib** (le dossier d'un
+    /// identifiant du magasin), puis dans l'arbre : un dossier de bâti sans
+    /// extension retombe sur l'ordre d'avant.
+    #[test]
+    fn the_vector_extension_is_looked_up_next_to_the_lib_first() {
+        let c = super::vector_extension_candidates(
+            "vector",
+            Some("/arbre".into()),
+            Some("/magasin/rag3db-build-A".into()),
+            Some(PathBuf::from("/bin-dir")),
+        );
+        assert_eq!(c[0], PathBuf::from("/magasin/rag3db-build-A/libvector.rag3db_extension"));
+        assert_eq!(c[1], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+        assert_eq!(c[2], PathBuf::from("/bin-dir/libvector.rag3db_extension"));
+        let sans_lib = super::vector_extension_candidates("vector", Some("/arbre".into()), None, None);
+        assert_eq!(sans_lib[0], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+    }
+
     /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
     /// moteur est bâti), sinon à côté de ce crate. Un worktree n'a pas
     /// d'extension à lui (il n'en bâtit pas, et n'a plus de lien vers
@@ -4645,3 +4657,29 @@ mod reload_tests;
 #[cfg(test)]
 #[path = "backend_reactions_tests.rs"]
 mod reactions_tests;
+
+/// **Où chercher l'extension vectorielle, dans l'ordre.** D'abord **à côté de
+/// la lib** (`RAG3DB_LIBRARY_DIR`) : sous le magasin de libs, le dossier d'un
+/// identifiant porte la lib et l'extension du même bâti (page
+/// 07-le-magasin-de-libs, §2.1). Un dossier de bâti sans extension
+/// (`build/lecteurs-csv/src`) retombe sur l'arbre (`RAG3DB_ROOT`), comme avant.
+pub(crate) fn vector_extension_candidates(
+    name: &str,
+    root: Option<std::ffi::OsString>,
+    lib_dir: Option<std::ffi::OsString>,
+    exe_dir: Option<PathBuf>,
+) -> Vec<PathBuf> {
+    let fichier = format!("lib{name}.rag3db_extension");
+    let mut cherches: Vec<PathBuf> = Vec::new();
+    if let Some(lib) = lib_dir {
+        cherches.push(PathBuf::from(lib).join(&fichier));
+    }
+    if let Some(racine) = root {
+        cherches.push(PathBuf::from(racine).join("extension").join(name).join("build").join(&fichier));
+    }
+    if let Some(dossier) = exe_dir {
+        cherches.push(dossier.join(&fichier));
+    }
+    cherches.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extension").join(name).join("build").join(&fichier));
+    cherches
+}

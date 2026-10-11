@@ -88,6 +88,38 @@ bouge : un lien `courant`.**
   processus qui le tiennent continuent ; les nouveaux prennent le nouveau.
   Le « dis-moi fini » de ce soir disparaît.
 
+### 2.1 Tranché avec G (12 octobre, avant le lot 3)
+
+- **Le magasin ne sert qu'aux postes de développement Linux** (ici et
+  luciepc). La portabilité (Windows, macOS) passe par le paquet npm, qui lie
+  le moteur en statique : ni lib partagée ni RUNPATH. Un RUNPATH absolu vers
+  le dossier d'un identifiant convient ; `$ORIGIN` n'apporterait rien (le
+  binaire est dans `~/.local/bin`, le magasin ailleurs).
+- **L'emplacement est un cache** : tout s'y rebâtit.
+  `${XDG_CACHE_HOME:-~/.cache}/rag3db-libs`, ou `RAG3DB_LIBS_DIR` pour les
+  témoins (sur le modèle de `POSTE_LOCK_DIR`).
+- **Un binaire installé et son unité suivent un identifiant fixe**, choisi au
+  bâti du binaire, jamais `courant` : c'est exactement la panne de 20 h 39.
+  L'`ExecStartPre` (`rag3db-check-lib`) compare le binaire à la lib de son
+  RUNPATH. `courant` reste aux passes, résolu une fois au départ.
+- **Le ménage épargne aussi les identifiants référencés**, pas seulement ceux
+  qui sont mappés : un binaire de `~/.local/bin`, ou le binaire d'`ExecStart`
+  d'une unité utilisateur active ou activée, qui vise un dossier par RUNPATH,
+  le garde, même arrêté. Sinon un hôte arrêté proprement ne redémarre plus
+  après un ménage (le binaire prêt de luciepc, posé à côté sans être lancé,
+  est dans ce cas).
+- **L'extension vector vit dans le dossier de l'identifiant**, et
+  `vector_extension_path` la cherche d'abord à côté de la lib
+  (`RAG3DB_LIBRARY_DIR`), puis comme aujourd'hui. Un dossier de bâti sans
+  extension (`build/lecteurs-csv/src`) retombe donc sur l'ordre d'avant : rien
+  ne change pour qui n'emploie pas le magasin.
+- **Les consommateurs** : `run_e2e.sh` et les e2e cargo (`LD_LIBRARY_PATH`,
+  `RAG3DB_LIBRARY_DIR`), les scripts Python qui lancent le binaire, le client
+  MCP (le même binaire, qui lance l'hôte : les deux doivent avoir le même
+  identifiant, ce que `/sante` dit déjà), et `rag3db-check-lib`.
+- **Le dossier d'un identifiant porte aussi `include/common/build_id.h`** :
+  c'est là que le `build.rs` de rag3weaver lit l'identifiant compilé.
+
 ## 3. Ce qu'il faut changer pour que ce soit vrai
 
 1. **`tools/rust_api/build.rs`** : `cargo:rerun-if-env-changed` sur
@@ -190,6 +222,17 @@ bouge : un lien `courant`.**
    `build_check::check_loaded` reste le filet dans le processus. Témoins
    `build_check::tests`, deux rouges avant. Ticket fermé.
 3. Le magasin, la publication et le ménage (script de G, appelé par
-   `run_e2e.sh --build`).
+   `run_e2e.sh --build`). **Fait, 3a** (porté par la session recherche, pas
+   G) : `scripts/rag3db_libs.py` (`publier`, `courant [--poser]`, `liste`,
+   `menage [--garder N] [--simuler]`). La publication refuse une lib sans
+   section, un en-tête d'un autre bâti, une extension d'un autre bâti, et un
+   identifiant déjà publié avec une autre lib (rien n'est écrasé). Le dossier
+   se pose par `rename`, `courant` par un lien changé atomiquement. Le ménage
+   épargne les N plus récents, `courant`, `ÉPINGLÉ`, ce qui est mappé et ce
+   que vise un RUNPATH installé ou une unité. Et `vector_extension_path`
+   cherche d'abord à côté de la lib. Témoins : `scripts/test_rag3db_libs.py`
+   (quatre cas, rouges sans l'outil) et
+   `the_vector_extension_is_looked_up_next_to_the_lib_first`, rouge avec
+   l'ordre d'avant. **Reste 3b** : les consommateurs.
 4. Les consommateurs : `run_e2e.sh`, les modèles MCP, les scripts. Puis le
    rpath (point 3.4), une fois le magasin en place.
