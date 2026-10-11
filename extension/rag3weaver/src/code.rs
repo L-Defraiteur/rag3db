@@ -632,6 +632,12 @@ pub struct ScopeRecord {
     /// Le type de retour écrit d'une fonction ; vide sinon.
     #[serde(default)]
     pub return_type: String,
+    /// **Un bloc qui prolonge un type défini ailleurs** (un `impl` Rust,
+    /// modificateur `impl` de codeparsers) : il porte le nom du type sans le
+    /// définir — pas de DEFINES vers ce nom, sinon `Marteau` aurait deux
+    /// définitions partout où un `impl` existe. Pas une colonne.
+    #[serde(default)]
+    pub extends_type: bool,
     pub start_line: usize,
     pub end_line: usize,
     pub start_byte: usize,
@@ -966,6 +972,7 @@ pub fn analyze_in_project(
             repo_path,
             name: sc.name.clone(),
             scope_type: "texte_brut".to_string(),
+            extends_type: false,
             signature: String::new(),
             content: sc.content.clone(),
             folds: String::new(),
@@ -1058,6 +1065,7 @@ pub fn analyze_in_project(
                 repo: repo.clone(),
                 repo_path: repo_path.clone(),
                 name: s.name.clone(),
+                extends_type: s.modifiers.iter().any(|m| m == "impl"),
                 scope_type: type_str,
                 signature: s.signature.clone(),
                 content,
@@ -1983,7 +1991,7 @@ impl Catalog {
         // Ce que le lot offre, et ce qu'il attend — en file par relation.
         let mut definitions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.scopes.len());
         let mut mentions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending.len());
-        for sc in &analysis.scopes {
+        for sc in analysis.scopes.iter().filter(|sc| !sc.extends_type) {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
