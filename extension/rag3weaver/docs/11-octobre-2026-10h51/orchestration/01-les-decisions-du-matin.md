@@ -243,3 +243,14 @@ où elle vit.
   valeurs, exécuteur concurrent seulement quand un port de flux existe,
   parité prouvée d'abord) ; le proto fait le lot 1 (points d'accroche +
   parité) en parallèle et relit.
+- **L'identité par cellule, variante (a)** (Lucie, fin d'après-midi) : le
+  témoin de l'arbre principal est rouge et c'est une perte (la même fiche
+  écrite dans une seconde cellule déplace la ligne de la première ; ticket
+  `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md`). Filet
+  d'abord sur master : l'écriture d'une identité qui vit déjà dans une autre
+  cellule est refusée en le disant (la perte fermée, le ticket partiel). Puis
+  la migration (a) : `_uuid` dérivé de (cellule, identité déclarée), la
+  cellule par défaut garde ses identités d'aujourd'hui, aucune base existante
+  ne bouge ; raison : une base sans cellules ne change pas d'identité à une
+  mise à jour. Le lien générique de la mémoire dit sa cellule, un lien entre
+  cellules devient explicite.
