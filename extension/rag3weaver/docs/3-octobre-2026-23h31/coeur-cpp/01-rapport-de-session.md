@@ -954,3 +954,30 @@ HNSW, un bruit de ±30 % dans les deux modes, sans sens. **Le coût du mode est 
 cas sautés sans la variable, 18 verts avec, la comparaison du banc sur le binaire qui porte la
 mesure. Lu avant le push : banc conforme (6 rouges comparés / 252 verts, 8 lignes attendues, 13 h 57 à 14 h 10), le rebase n'apportait aucun C++. Sur master en avance rapide : `87137a766` (14 h 12) ; `rag3db-a9` effacé. Suite : la bascule du défaut en lot à part, sur le mot
 de Lucie (la page 11 dit la forme et le renversement).
+
+## A9b, la bascule du défaut — bloquée par une permission de la session (11 octobre 2026, 14 h 30)
+
+L'orchestration a rendu la règle de Lucie du matin : la bascule se fait sur le coût dit, et il est
+nul. Le lot est prêt (worktree `rag3db-a9b` bâti sur luciepc, forme : `enable_multi_writes` sans
+`debug_`, `true` par défaut dans `DBConfig`, `CALL enable_multi_writes=false` pour l'ancienne
+sémantique, 18 fichiers de tests et `.test` à renommer, deux commentaires côté Rust), mais le
+renommage en masse a été **refusé par le classifieur de permissions** de la session (« Modify
+Shared Resources »), et la consigne du refus interdit d'atteindre le même résultat par un autre
+outil. Rien n'a été modifié (arbre vérifié propre). Il faut la main de Lucie (une règle de
+permission, ou le `sed` fait par elle sur la branche). Dit à l'orchestration et à hotfixs.
+
+## Les bases gtest sous un parent par passe (11 octobre 2026, 14 h 35 à 15 h 55) — le ticket de rag3db-97
+
+Branche `tests-tmp-par-passe`, worktree `rag3db-a9b` réemployé. Forme : `TestHelper::getRootTempDir()`
+rend `<commun>/<pid du lanceur>` (pid pris à l'initialisation statique, avant tout fork, donc hérité
+par les enfants du banc) ; `getSharedTempRoot()` est l'ancien `/tmp/rag3db` ; un `::testing::Environment`
+global (`TempDirPerRun`, `test_helper.cpp`, enregistré à l'initialisation statique) efface le parent au
+début et à la fin du lanceur (jamais depuis un enfant : `getpid()` comparé), et au début les parents
+des passes dont le lanceur n'existe plus (`kill(pid, 0)`, noms numériques seulement). `cleanup_test`
+efface le dossier commun. Témoin `HarnessMechanics.WhatAKilledChildLeavesLivesUnderTheRunsParent` :
+un enfant fork ouvre une base puis `_exit` ; la base est sous le parent de la passe ; un parent nommé
+du pid d'un enfant fini est effacé, le nôtre reste (témoin et forme dans le même commit : sans l'API
+il ne compile pas). Relecture du banc (rag3db-10) : rien ne casse dans le harnais, le processus
+neuf de `probeOpenInFreshProcess` se prend pour un lanceur sans dégât. **Ce qui reste à la main,
+une fois** : les dossiers d'avant à la racine de `/tmp/rag3db`, quand tous les arbres sont rebâtis.
+Passe sur luciepc (`rag3db-a9b`) : témoin vert (HarnessMechanics ×4), transaction_test 257, api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher 1867, banc conforme (6 rouges comparés / 253 verts : le témoin neuf en plus) ; après chaque suite, aucun parent numérique laissé dans `/tmp/rag3db` (les entrées non numériques qui y sont apparues pendant la passe venaient de la liste d'A8 d'hotfixs, jouée en même temps avec un binaire d'avant). Sur master en avance rapide : `dd9413d5e` (15 h 58 ; le rebase n'apportait que du code de test, le lecteur du journal du banc). `rag3db-a9b` effacé ; la lib commune de luciepc n'a pas à être rebâtie (aucun C++ du moteur).
