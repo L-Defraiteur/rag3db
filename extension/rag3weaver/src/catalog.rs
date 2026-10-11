@@ -7146,6 +7146,35 @@ impl Catalog {
         Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
     }
 
+    /// **Mettre à jour plusieurs lignes d'une entité en un drain** : chacune
+    /// passe en file, puis l'exigence d'écriture est tenue **une** fois. Le
+    /// drain les écrit par `UpdateRecordNode` — une lecture groupée, un `SET`
+    /// par forme de mise à jour — au lieu d'un drain par ligne. Le
+    /// `FlushResult` dit chaque ligne (`update_results`), refus compris.
+    pub fn update_many(
+        &mut self,
+        entity_name: &str,
+        rows: Vec<(String, BTreeMap<String, CypherValue>)>,
+    ) -> Result<FlushResult, CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let res = self.update_many_jusqu_a(entity_name, rows, exige)?;
+        self.dire_les_avertissements("update", &res);
+        Ok(res)
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn update_many_jusqu_a(
+        &mut self,
+        entity_name: &str,
+        rows: Vec<(String, BTreeMap<String, CypherValue>)>,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        for (uuid, data) in rows {
+            self.mettre_en_file_la_mise_a_jour(entity_name, &uuid, data)?;
+        }
+        Ok(self.tenir_l_exigence_d_ecriture(entity_name, exige))
+    }
+
     fn mettre_en_file_la_mise_a_jour(
         &mut self,
         entity_name: &str,

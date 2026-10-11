@@ -3595,12 +3595,37 @@ impl Node for UpdateRecordNode {
                 entity_indices.iter().copied().filter(|i| !rejetes.contains_key(i)).collect();
             let entity_indices = &retenus;
 
+            // **Une mise à jour qui ne touche aucun champ du contenu ne le change
+            // pas** (11 octobre 2026) : le hash est calculé sur les seuls champs
+            // fournis, et un `{state}` seul rendait hash("") — contenu jugé
+            // changé, ligne relue, redécoupée et réembarquée, et un
+            // `_content_hash` faux posé. Elle garde l'ancien hash. La sentinelle
+            // vide (des mises à jour fusionnées) force toujours le redécoupage.
+            let sources: HashSet<&str> = entity_configs
+                .get(entity_name.as_str())
+                .map(|c| c.content_source_fields().into_iter().collect())
+                .unwrap_or_default();
+            let hash_retenu: HashMap<&str, &str> = entity_indices
+                .iter()
+                .map(|&i| {
+                    let rec = &items[i];
+                    let garde = !rec.new_content_hash.is_empty()
+                        && !sources.is_empty()
+                        && !rec.data.keys().any(|k| sources.contains(k.as_str()));
+                    let hash = match old_hashes.get(&rec.uuid) {
+                        Some(ancien) if garde => ancien.as_str(),
+                        _ => rec.new_content_hash.as_str(),
+                    };
+                    (rec.uuid.as_str(), hash)
+                })
+                .collect();
+
             // 2. Detect content changes
             let changed: Vec<bool> = entity_indices.iter()
                 .map(|&i| {
                     let rec = &items[i];
                     old_hashes.get(&rec.uuid)
-                        .map_or(true, |old| old != &rec.new_content_hash)
+                        .map_or(true, |old| old != hash_retenu[rec.uuid.as_str()])
                 })
                 .collect();
 
@@ -3618,7 +3643,7 @@ impl Node for UpdateRecordNode {
                         let rec = &items[i];
                         let mut m = BTreeMap::new();
                         m.insert("_uuid".to_string(), CypherValue::String(rec.uuid.clone()));
-                        m.insert("_content_hash".to_string(), CypherValue::String(rec.new_content_hash.clone()));
+                        m.insert("_content_hash".to_string(), CypherValue::String(hash_retenu[rec.uuid.as_str()].to_string()));
                         for (k, v) in &rec.data {
                             let ty = config.entities.get(entity_name).and_then(|e| e.fields.get(k)).map(|f| &f.field_type);
                             m.insert(k.clone(), typed_payload_param(v.clone(), ty));
