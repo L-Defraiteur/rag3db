@@ -11,21 +11,21 @@ mécanique avec deux manifestes différents :
 
 ## 0. La forme d'aujourd'hui : un hôte, des sessions qui lui parlent
 
-Depuis le 11 octobre 2026 (marche 3 de la forme C), **un seul processus tient les
-bases** : l'hôte, lancé par `rag3weaver-backend daemon`. Chaque session Claude Code
-lance son serveur MCP avec `--daemon <adresse>` ; ce serveur est un **client mince**.
-Il n'ouvre ni base ni modèle : il parle MCP à Claude Code et passe chaque appel
-d'outil à l'hôte.
+Depuis le 11 octobre 2026 (marches 3 et 4 de la forme C), **un seul processus tient
+les bases** : l'hôte (`rag3weaver-backend daemon`). Le serveur MCP que chaque session
+Claude Code lance est un **client mince** : il n'ouvre ni base ni modèle, il parle
+MCP à Claude Code et passe chaque appel d'outil à l'hôte.
 
 ```
-session Claude Code A ──stdio── rag3weaver-backend mcp --daemon ─┐
-session Claude Code B ──stdio── rag3weaver-backend mcp --daemon ─┼── l'hôte (daemon) ── la base, les modèles, les réactions
-session Claude Code C ──stdio── rag3weaver-backend mcp --daemon ─┘
+session Claude Code A ──stdio── rag3weaver-backend mcp ─┐
+session Claude Code B ──stdio── rag3weaver-backend mcp ─┼── l'hôte (daemon) ── la base, les modèles, les réactions
+session Claude Code C ──stdio── rag3weaver-backend mcp ─┘
 ```
 
-Deux sessions qui nomment **le même manifeste** partagent **le même backend** dans
-l'hôte : une base, un écrivain, les réactions montées une fois. C'est la forme pour
-une mémoire partagée entre sessions, et pour n'importe quel backend.
+**Personne ne lance l'hôte à la main.** Le premier client qui ne le trouve pas le
+lance, détaché ; les suivants le trouvent par `daemon.json`. L'hôte survit aux
+sessions. Deux sessions qui nomment **le même manifeste** partagent **le même
+backend** : une base, un écrivain, les réactions montées une fois.
 
 **La recette entière, de zéro, est au §6.** Les sections 1 à 5 disent pourquoi
 chaque morceau est là.
@@ -58,7 +58,7 @@ cp -r <dépôt>/extension/rag3weaver/templates ~/.config/rag3weaver/mon-projet
 # puis éditer mon-projet/backends/code/backend.json
 ```
 
-**Sans `--daemon`, gardez la session ouverte pendant le premier index.** `index`
+**Avec `--standalone`, gardez la session ouverte pendant le premier index.** `index`
 rend aussitôt et travaille en fond, mais ce travail est un **enfant du serveur** :
 fermer le tube le tue (mesuré deux fois). Sous l'hôte, le travail vit dans l'hôte ;
 un premier index par l'hôte n'a pas encore été joué. Une fois l'index fait, la base est persistée et la
@@ -86,8 +86,9 @@ dépôt à vous.
 
 ## 3. Les variables d'environnement, et pourquoi chacune
 
-Sous la forme du §0, elles vont **à l'hôte** ; le client mince ne garde que
-`LD_LIBRARY_PATH`. Sans `--daemon`, le serveur en a besoin des trois.
+Sous la forme du §0, **donnez-les toutes au client** : c'est lui qui lance l'hôte
+quand il manque, et l'hôte hérite de son environnement. Le client lui-même ne se
+sert que de `LD_LIBRARY_PATH`.
 
 - `LD_LIBRARY_PATH` → `<bâti>/src`, pour que `librag3db.so` se charge. Sans
   elle, le serveur meurt au démarrage sans rien dire d'utile ;
@@ -98,46 +99,54 @@ Sous la forme du §0, elles vont **à l'hôte** ; le client mince ne garde que
   d'embarquement (`127.0.0.1:7878,127.0.0.1:7879`), jamais les ports seuls. Le
   gabarit de code déclare des vecteurs, donc il en exige un.
 
-## 4. Avec ou sans `--daemon`
+## 4. Comment le client trouve l'hôte, et ce qu'il fait sans lui
 
-**Avec `--daemon <adresse>`** (la forme du §0) : l'hôte possède la base, N sessions
-lui parlent. Le client n'a besoin que de `LD_LIBRARY_PATH` (le binaire se lie à
-`librag3db.so`) ; le service d'embarquement et `RAG3DB_ROOT` sont l'affaire de
-**l'hôte**, qui ouvre la base et les modèles. Au démarrage, le client dit à qui il
-parle :
+**Par défaut** (aucun drapeau) : le client lit `~/.local/share/rag3weaver/daemon.json`,
+que l'hôte écrit en démarrant (adresse réellement servie, pid, jeton local, bâti ;
+mode 0600). Si l'hôte de ce fichier répond, le client s'y attache. Sinon — pas de
+fichier, ou un fichier périmé (pid mort, hôte muet) — il **lance**
+`rag3weaver-backend daemon` (même exécutable, `127.0.0.1:7970`), détaché, son journal
+dans `~/.local/state/rag3weaver/daemon.log`, et attend qu'il réponde. Deux clients
+qui démarrent ensemble ne lancent qu'**un** hôte (verrou sur `daemon.lock`).
+
+Au démarrage, le client dit à qui il parle :
 
 ```
-[mcp] memory — 9 outils, clés présentées : dev — client mince de l'hôte 127.0.0.1:7970, session s-…
+[mcp] memory — 10 outils, clés présentées : dev — client mince de l'hôte, session s-…
 [mcp] 1 réaction(s) montée(s) par l'hôte : review_anchored
 ```
 
-- **L'hôte n'est pas là** : le serveur s'arrête aussitôt (code 1) et le dit —
-  `pas de session auprès de l'hôte http://127.0.0.1:7970 : … ne répond pas`. Claude
-  Code montre alors le serveur en échec : lancez l'hôte, puis `/mcp` pour
-  reconnecter.
-- **L'hôte redémarre pendant une session** : à l'appel suivant, le client rouvre sa
-  session une fois et rejoue l'appel. Une erreur transitoire (la base se rouvre),
+- **Le jeton local.** Chaque requête à l'hôte porte `Authorization: Bearer <jeton>`
+  (celui de `daemon.json`), sauf `GET /sante`. Sans lui : 403. Pour regarder à la
+  main : `curl -s -H "Authorization: Bearer $(jq -r .token ~/.local/share/rag3weaver/daemon.json)" http://127.0.0.1:7970/etat`.
+- **L'outil `daemon_status`**, exposé par le client lui-même : l'état de l'hôte
+  (adresse, bâti, sessions, backends ouverts), ou, s'il manque, la raison, le
+  journal à lire et quoi faire. C'est l'outil à appeler quand un autre échoue.
+- **L'hôte ne peut pas être joint** (le port est pris, l'hôte meurt au démarrage) :
+  le client démarre quand même. `initialize` dit pourquoi, seul `daemon_status` est
+  listé, et tout autre appel est une erreur d'outil qui le dit — et retente de
+  joindre l'hôte. Claude Code ne relit pas la liste d'outils de lui-même : quand
+  l'hôte répond de nouveau, `/mcp` pour reconnecter.
+- **L'hôte meurt pendant une session** (tué, arrêté) : l'appel suivant le relance,
+  rouvre la session et rejoue l'appel une fois — la connexion refusée prouve qu'il
+  n'avait pas été reçu. Une erreur transitoire (la base se rouvre pendant l'appel),
   elle, se dit et ne se rejoue pas.
 
-**Sans `--daemon`**, le serveur **possède** sa base, comme avant le 11 octobre :
-bon pour un dépôt de code et une seule session. Mais Claude Code lance **un
-processus MCP par session**, et une base rag3db ne s'ouvre que par un processus :
-une deuxième session sur la même base est refusée par le moteur. Et un travail long
-(`index`) est un enfant de ce serveur : il meurt avec la session (ticket
+**`--daemon <adresse>`** force une adresse : ni lecture de l'hôte à lancer, ni
+relance. Le jeton vient de `daemon.json` s'il décrit cette adresse.
+
+**`--standalone`** : la forme d'avant le 11 octobre, le serveur **possède** sa base.
+Une seule session à la fois (une base rag3db ne s'ouvre que par un processus), et un
+travail long (`index`) meurt avec la session (ticket
 `docs/tickets/2026-10-11-indexation-enfant-du-serveur-mcp.md`).
 
-**`--demon` (l'ancien drapeau) est refusé** en nommant `--daemon` : il ne déportait
-que la connexion, et chaque session gardait son catalogue et ses réactions.
+**`--demon` (l'ancien drapeau) est refusé** en nommant `--daemon`.
 
-**Ce qui manque encore** (marche 4 de la forme C, pas faite) :
-
-- **la découverte** : l'adresse de l'hôte s'écrit à la main dans chaque
-  configuration ; pas encore de `daemon.json` où un client la lirait ;
-- **le lancement par le premier client** : l'hôte se lance à la main (ou par votre
-  gestionnaire de services). Le premier client qui ne le trouve pas ne le lance pas,
-  il s'arrête en le disant ;
-- **un outil « état du démon »** côté MCP : en attendant, `curl
-  http://127.0.0.1:7970/etat` dit les backends ouverts et les sessions.
+**Ce qui manque encore** : la notification `tools/list_changed` (les outils du
+manifeste apparaissent à la prochaine lecture de la liste, pas d'eux-mêmes) ; une
+unité systemd (une option du paquet, plus tard) ; le remplacement d'un hôte d'un bâti
+plus ancien (aujourd'hui il est gardé tant qu'il répond — `daemon_status` dit son
+bâti).
 
 ## 5. `--keys` : déclaré n'est pas exposé
 
@@ -153,15 +162,13 @@ annonce au démarrage ce qu'il expose et sous quelles clés :
 Le jour où des déclarations seront écartées, cette ligne est ce qui évitera de
 chercher pourquoi la liste est vide.
 
-## 6. La recette, de zéro (jouée le 11 octobre 2026)
+## 6. La recette, de zéro
 
-Pour une mémoire partagée entre toutes vos sessions Claude Code. Jouée telle quelle
-le 11 octobre sur une copie du manifeste : l'hôte a ouvert la base une fois, deux
-sessions l'ont partagée, et la seconde a retrouvé ce que la première avait écrit.
+Pour une mémoire partagée entre toutes vos sessions Claude Code.
 
-**1. Un binaire qui connaît `daemon` et `--daemon`.** Un binaire bâti avant le
-11 octobre après-midi ne les connaît pas (`option inconnue : --daemon`) : il faut le
-rebâtir. Le copier **hors de tout `target`** (un target s'efface) :
+**1. Un binaire de la marche 4.** Un binaire d'avant ne connaît pas `daemon_status`
+(et, d'avant le 11 octobre après-midi, ni `daemon` ni `--daemon`). Le rebâtir et le
+copier **hors de tout `target`** (un target s'efface) :
 
 ```sh
 cd <dépôt>/extension/rag3weaver
@@ -176,39 +183,31 @@ cp <target>/release/rag3weaver-backend ~/.local/bin/
 `database` et `vector_extension` en absolu. Pour la mémoire longue :
 `~/.config/rag3weaver/memoire-longue/backends/memory/backend.json`.
 
-**3. L'hôte**, avec tout l'environnement — c'est lui qui ouvre la base et les
-modèles. Dans un terminal qui reste ouvert, ou sous votre gestionnaire de services :
-
-```sh
-LD_LIBRARY_PATH=<dépôt>/build/lecteurs-csv/src \
-RAG3DB_ROOT=<dépôt> \
-RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7980 \
-~/.local/bin/rag3weaver-backend daemon            # écoute 127.0.0.1:7970 ; --address pour une autre
-curl -s http://127.0.0.1:7970/sante               # {"pid":…,"service":"rag3weaver-daemon"}
-```
-
-L'hôte n'écoute que sur la boucle locale et refuse une autre adresse.
-`RAG3WEAVER_EMBED_SERVICE` prend des adresses **complètes** ; la mémoire longue
-déclare bge-m3, servi sur 7980.
-
-**4. Chaque session**, une fois, en configuration **utilisateur** (pas un
-`.mcp.json` de dépôt partagé, voir §2) :
+**3. Chaque session**, une fois, en configuration **utilisateur** (pas un
+`.mcp.json` de dépôt partagé, voir §2). L'environnement complet, puisque ce client
+lancera l'hôte s'il manque :
 
 ```sh
 claude mcp add memoire-longue \
   --env LD_LIBRARY_PATH=<dépôt>/build/lecteurs-csv/src \
+  --env RAG3DB_ROOT=<dépôt> \
+  --env RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7980 \
   -- ~/.local/bin/rag3weaver-backend mcp \
      --manifest ~/.config/rag3weaver/memoire-longue/backends/memory/backend.json \
-     --daemon 127.0.0.1:7970 --keys dev
+     --keys dev
 ```
 
-Chemins en absolu dans la vraie commande. Toute session ouverte ensuite a les
-outils de la mémoire ; `/mcp` les montre, et `curl -s http://127.0.0.1:7970/etat`
-montre une session par Claude Code ouvert, et un seul backend.
+Chemins en absolu dans la vraie commande. `RAG3WEAVER_EMBED_SERVICE` prend des
+adresses **complètes** ; la mémoire longue déclare bge-m3, servi sur 7980.
 
-**5. Arrêter l'hôte proprement** : `curl -s -X POST http://127.0.0.1:7970/arret`.
-L'écoute se ferme, puis chaque base. Jamais `kill -9` : une base rag3db tuée en
-pleine écriture garde un WAL à rejouer.
+**C'est tout.** La première session lance l'hôte ; `/mcp` montre les outils, dont
+`daemon_status`. Les sessions suivantes trouvent l'hôte. Pour voir l'état : l'outil
+`daemon_status`, ou `curl` avec le jeton (§4).
+
+**Arrêter l'hôte proprement**, si un jour il le faut (un nouveau binaire installé) :
+`kill -TERM $(jq .pid ~/.local/share/rag3weaver/daemon.json)`. Il ferme ses bases,
+retire `daemon.json` et sort ; la session suivante en relance un. Jamais `kill -9` :
+une base rag3db tuée en pleine écriture garde un journal à rejouer.
 
 ## Ce que le serveur ne fait pas
 
@@ -227,9 +226,10 @@ stdio seulement.
   posé à l'ouverture. Déclarez-le, **puis** appelez l'outil `index` (`estimate`
   dit ce que ça coûtera). Le refus le dit lui-même depuis le 11 octobre 2026
   (`9dc3f083a`) ; avant, il ne disait que « unknown entity: File ».
-- **`option inconnue : --daemon`** : le binaire date d'avant la forme C,
+- **seul `daemon_status` est listé** : l'hôte n'a pas pu être lancé ou joint.
+  Appelez-le : il dit pourquoi et où est le journal
+  (`~/.local/state/rag3weaver/daemon.log`) ; puis `/mcp` pour reconnecter ;
+- **`option inconnue`** sur un drapeau de ce README : le binaire est ancien,
   rebâtissez-le (§6, étape 1) ;
-- **« pas de session auprès de l'hôte … ne répond pas »** : l'hôte n'est pas lancé,
-  ou pas à cette adresse (§6, étape 3) ;
-- **le serveur s'arrête avec le code 75** (sans `--daemon`) : la base demande une réouverture, et
+- **le serveur s'arrête avec le code 75** (avec `--standalone`) : la base demande une réouverture, et
   il vous l'a dit par un `notifications/message` avant de partir. Relancez-le.
