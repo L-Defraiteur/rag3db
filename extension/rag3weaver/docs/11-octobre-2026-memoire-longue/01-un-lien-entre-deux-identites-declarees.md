@@ -211,6 +211,43 @@ Pour la mémoire : on n'ancre pas une mémoire `superseded`.
   l'annulation des liens de l'ingestion passe déjà par lui). Le jour où un outil
   doit défaire un lien, c'est un paramètre de ce même nœud, et l'IR est prête.
 
+## 3 bis. La cellule des bouts — ce que l'identité par cellule change au lien
+
+*Ajouté le 11 octobre au soir, après le défaut que la marche 1 bis de C a trouvé*
+(ticket `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md`, page
+`docs/11-octobre-2026-arbre-principal/01-le-demon-possede-le-catalogue.md`).
+
+**Le fait.** L'`_uuid` d'une ligne se calculait sur son identité déclarée **sans sa
+cellule** : la même fiche écrite dans une seconde cellule déplaçait la ligne de la
+première. Lucie a tranché (variante a) : l'identité devient dérivée de *(cellule,
+identité déclarée)*. La cellule par défaut garde ses `_uuid` d'aujourd'hui, seules
+les autres cellules entrent dans le hachage, et aucune base existante ne bouge.
+
+**Ce que ça change au lien.** Le nœud nomme ses bouts par leurs champs d'identité et
+les résout en `_uuid` (`Catalog::entity_uuid`). Après la migration, ce `_uuid`
+dépend de la cellule. Un lien doit donc **dire dans quelle cellule il cherche chaque
+bout** :
+
+- **par défaut, la cellule de la session qui écrit le lien**, c'est-à-dire la cellule
+  courante de l'appel. C'est le cas d'aujourd'hui, celui de la mémoire d'un projet,
+  et il ne demande rien de plus à l'appelant ;
+- **un lien entre deux cellules devient une déclaration explicite** : une entrée de
+  `links` porte, pour l'un de ses bouts, la cellule où le chercher (par exemple
+  `{"from": {…}, "to": {…}, "to_cell": {"org": …, "project": …}}`), dans les droits
+  de la session. Ce n'est plus un accident de hachage. Pour la mémoire, c'est la
+  forme d'« ancrer une mémoire de ce projet à un sujet global ».
+
+**Ce qui reste juste sans rien changer** : la vérification d'existence
+(`bouts_absents`) et la garde d'états travaillent sur des `_uuid` déjà résolus. Elles
+suivent la résolution, quelle qu'elle soit.
+
+**Ce qui est à faire, et quand** : la résolution par cellule (`entity_uuid` avec la
+cellule de la session, puis celle qu'une entrée nomme) vient **avec la migration de
+l'arbre principal**, pas avant. Écrit plus tôt, le nœud calculerait des `_uuid` que
+la base ne connaît pas encore. Et le filet que l'arbre principal pose d'abord
+(`IdentityInAnotherCell`, une identité qui vit déjà dans une autre cellule se refuse)
+protège la mémoire de la perte d'ici là.
+
 ## 4. Ce que le gabarit `memory` en reçoit
 
 Deux outils, déclarés, sans une ligne de code de plus que le §2 :
