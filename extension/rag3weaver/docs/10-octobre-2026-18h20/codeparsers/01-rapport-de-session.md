@@ -293,3 +293,24 @@ Reste de ma part de la stèle : le nom seul et les segments de module (P1).
 - **Suite** : l'envoi virtuel (le type de retour d'un gabarit à argument explicite, le champ,
   OVERRIDES au rendez-vous), la récursion au rendez-vous (`code.rs`, après nom-seul), puis
   l'index des arbres du cœur sur luciepc dès que l'hôte y est.
+
+**Soir (11 oct.) — l'index des arbres du cœur sur luciepc** (hôte de luciepc, binaire master
+a3c1ca98f, granite-278m sur 7878, lecture seule, sous le `poste lourd` de là-bas, après la
+mesure `bascule2` du cœur qui tenait le verrou en exclusif) :
+
+| arbre | commit | temps | base + plein texte | pic de l'hôte (VmHWM) |
+|---|---|---|---|---|
+| `rag3db-bascule` (le cœur) | `4ee70e386` | 450 s | 879 Mo + 578 Mo | 7,9 Go |
+| `~/git_workspaces/rag3db` (`mtg-experiments`) | `ab95c3a2d` | 490 s | 1 014 Mo + 621 Mo | 12,1 Go (deux bases ouvertes) |
+
+Manifestes `~/.config/rag3weaver/code-bascule` et `code-principal` (gabarit de `rag3db-hote`,
+la montre `reindex_on_change` comprise). Témoin : un client local à luciepc, `usages
+acquireLocksBeforeExecution` sur `code-bascule`, voit l'arbre du cœur ; sans mes lots, un seul
+appel (ni la récursion, ni l'envoi virtuel). Recette du client d'ici : par le tunnel de G
+(`docs/optimiseur/11-octobre-2026-16h40/01-l-hote-sur-luciepc.md`), le jeton lu sur luciepc —
+la part de la session mémoire.
+
+**L'envoi virtuel** : codeparsers `b473c3a` (gabarits explicites, `this` implicite) puis
+`353d2c4` (la récursion fait une arête vers soi) ; branche rag3db `envoi-virtuel` en cours
+(rendez-vous, `also_path` A/B et +, section « Par envoi virtuel » d'`usages`, l'arbre et le
+commit en tête de chaque réponse).
