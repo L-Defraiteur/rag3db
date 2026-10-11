@@ -244,6 +244,32 @@ propre, aucun rebase en cours, `git log -1 origin/master` au hash annoncé).
    compiler un worktree neuf, puis s'est arrêtée sans pousser — et tout le
    monde attendait derrière elle.
 
+## Un rejeu sur un autre poste : la forme optimiste
+
+*Ajouté par la session everything declarative, 11 octobre 2026 au soir, sur la
+demande de l'orchestration.*
+
+Quand le rejeu d'un lot tourne **sur un autre poste** que celui du verrou de
+push (le worktree vit sur luciepc, le push part d'ici), `--lourd` local ne sert à
+rien : rien ne bâtit ici. Et prendre le verrou de push **avant** le rejeu distant
+fait tenir le verrou pendant que le rejeu attend la place lourde de là-bas — ce
+qui est arrivé le 11 octobre au soir, verrou tenu une demi-heure derrière un
+client figé sur luciepc.
+
+La forme, celle des moteurs de fusion optimistes :
+
+1. **Hors du verrou de push** : fetch, et la base notée (le `FETCH_HEAD` de ce
+   fetch, propre au worktree) ; rebase sur elle ; le rejeu court **sous le
+   `poste lourd` du poste distant** (pris, pas seulement vérifié libre : les
+   lourds parallèles et la mesure le voient).
+2. **Sous le verrou de push**, seulement : un fetch, la comparaison du
+   `FETCH_HEAD` à la base notée — égal, ou une avance faite de docs seules
+   (règle 3) — et le push. Quelques secondes.
+3. **Si master a reçu du code** entre la base et ce fetch : rendre le verrou,
+   et rejouer hors verrou sur la nouvelle base.
+
+Rien n'est poussé derrière un test non lu ; le verrou n'attend jamais une place.
+
 ## Ce qu'une avance de master change pour chaque sorte de lot
 
 La règle 3 dite exactement (orchestration, 11 octobre, 16 h) : **une avance de master qui ne
