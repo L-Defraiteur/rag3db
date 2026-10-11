@@ -289,3 +289,21 @@ où elle vit.
   Lucie le plus ; `decide` du proto, pplx-decider candidat à évaluer, Gemini
   pour juger), aucun code avant son mot. Les quatre points de la §6 de
   l'enveloppe sont rendus à Lucie (recommandation : oui aux quatre).
+- **Les fiches mémoire classées : un régime d'expérimentation** (Lucie, soir,
+  « je parle des fiches mémoire hein ») : « on essaie, on ne fige pas, on tente
+  avec ce qu'on a dans les visions, au mieux et rentable en temps / mémoire GPU
+  / efficience, ensuite on regarde les briques posées, l'assemblage, les
+  retours, on ajuste ; on garde les gabarits de chaque tentative, datés ». Les
+  cinq réponses proposées par la mémoire sont prises ; chaque tentative vit
+  dans un dossier daté avec son gabarit, son graphe, sa note de retours et ses
+  mesures. Ce régime ne s'étend pas aux autres chantiers.
+- **Sur master, fin de soirée** : le pas b de la marche 1 bis (`bac552c22`,
+  index et recherche par cellule, ticket fermé) ; le lot 1 des agents qui se
+  parlent (proto, `d3aa6f281`, les sept ports de la boucle, parité à ports
+  transparents) ; le chaînage lot 1 (F, `76cf86cbc`, le type du graphe dans
+  l'IR, la vérification commune, le repli découpé, quatre témoins) ; le
+  plancher pg_trgm par la requête (F, `56a680169`, `e2e_postgres` 21/21 sur le
+  conteneur) ; la recette MCP de la marche 3 jouée de zéro (mémoire,
+  `aeddf002a`). La course de `port_libre` des tests du démon (ticket du 10,
+  trois sessions touchées) confiée à G. Règle de forme diffusée : « poussé »
+  après `git status` propre, aucun rebase en cours, hash lu sur origin/master.
