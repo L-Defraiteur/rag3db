@@ -95,11 +95,13 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
       Ticket fermé. Restent hors de la stèle tant qu'aucun cas ne les montre : `pub use x::*`, le
       renommage, `export … from` (TypeScript), `__init__.py` (Python). Reste ensuite en P1 : le nom seul et les segments de module, et les
       prototypes C.
-   3. **`analyze` en racine relative** (P3) : refuser une racine relative avec une erreur
-      nommée, ou la résoudre en le disant ; et un fichier analysé qui ne rend rien entre dans
-      `skipped` avec sa raison. Petit lot. Reste ensuite : rien en P3 côté codeparsers.
-   4. **Les prototypes C au niveau du fichier** (P1) : les `declaration` à déclarateur de
-      fonction deviennent des membres du scope de fichier, leurs noms sortent des références.
+   3. **`analyze` en racine relative** (P3) — fait (branche `analyze-racine`) : la racine se
+      résout et se dit (le défaut avait changé de forme : des chemins « absolus » relatifs et
+      doublés). Pas fait, faute de cas : le fichier non rendu dans `skipped`. Reste ensuite :
+      rien en P3 côté codeparsers.
+   4. **Les prototypes C au niveau du fichier** (P1) — fait (codeparsers `9531860`, branche
+      `prototypes-c`) : membres du scope de fichier, noms hors des références ; et un `struct`
+      sans corps n'est plus une seconde définition. Arêtes de rag3db/src identiques.
    5. **Les C++ anonymes** (P4) : tirer cinquante cas parmi les 738, classer, nommer ce qui se
       nomme. Ce qui ne se nomme pas (une lambda passée en argument) est compté et dit tel, pas
       rendu `AnonymousFunction`. Reste ensuite en P4 : rien.
