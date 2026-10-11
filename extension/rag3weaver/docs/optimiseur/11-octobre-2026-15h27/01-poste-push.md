@@ -111,6 +111,24 @@ done
 contrôle est nécessaire : `BATI` contient `extension/rag3weaver`, et sans lui, un rapport
 `.md` poussé là arrêterait la boucle comme du code. Vu le 11 octobre au premier essai de G.
 
+**Le seul conflit qu'une commande résout seule : l'index des tickets.** Chaque lot qui ouvre ou
+ferme un ticket touche `docs/tickets/README.md`, au même endroit que les autres, et le rebase y
+bute à presque chaque tour. La commande garde le côté master, retire toute ligne de son ticket,
+pose sa ligne (ouverte ou fermée) une seule fois, et **recompte chaque section (moteur, produit,
+fermés) sur ses lignes réelles, jamais par ±1**. Puis `scripts/check_tickets.py` doit être vert.
+Sur tout autre fichier en conflit, ou si elle ne sait pas quelle ligne poser, elle s'arrête
+(code 8), rien poussé. Deux exemples :
+
+- `~/.cache/rag3weaver-build/embarquements/pousser.sh` (F) : `FERMER_TICKET` (le fichier) et
+  `FERMER_LIGNE` (la ligne fermée complète), résolus par `readme-fermer.py`. Sans les deux
+  variables, il s'arrête. Il rebase sans rejouer sur une avance de `.md` seuls, et dit
+  `MOTEUR_ANCIEN=1` dans sa sortie quand on l'emploie.
+- `~/.cache/rag3weaver-notes-A/pousser2.sh` (arbre principal) : l'index résolu seul, tout autre
+  conflit arrête.
+
+La commande de G du 11 octobre faisait ±1, puis `check_tickets.py` contrôlait le résultat. Ce
+contrôle seul est juste, mais la forme à suivre est celle des deux exemples.
+
 La boucle n'a pas de plafond de tours : chaque tour demande un push de docs
 arrivé pendant le précédent, qui ne dure que le temps d'un fetch et d'un
 rebase. Un refus qui ne vient pas d'une avance de master l'arrête (code 10).
