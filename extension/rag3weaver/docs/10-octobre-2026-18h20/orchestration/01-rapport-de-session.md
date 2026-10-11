@@ -437,3 +437,101 @@ manifeste de zéro (mémoire, sept interfaces supposées).
 Le ticket du mode `--demon` ; le lecteur qui pend sur le démon après le
 départ des écrivains (défaut possible) ; la décision sur l'export vivant
 pour le critère « 0 introuvable ».
+
+## 9. La nuit, fin (0 h 50 → 2 h 30) — à lire au réveil
+
+### Les trois priorités de la nuit : tenues
+
+1. **Le poids des tests e2e** : fait (`c9ff68a4f`). Un binaire e2e passe de
+   469 à 273 Mo ; le moteur partagé au bâti ; `cargo check --tests` ; les
+   vieux hachages balayés ; le repli silencieux refusé. Disque à 50 % ici,
+   78 % sur luciepc, stable toute la nuit.
+2. **Indexer notre code** : fait, et prouvé. La page de l'exemple réel pour
+   toi : `../codeparsers/03-impact-node-table-update.md` — « qui appelle
+   `NodeTable::update` » passe de 0 à ses deux appelants réels marqués sûrs ;
+   les verrous de 0 à 181 (169 sur champs mutex, 12 par les fonctions de
+   verrou déclarées) ; `impact` ne montre plus que les appelants sûrs (le
+   compte des autres à part, `include_by_name` pour les voir) ; `callees`,
+   treizième outil ; `locks_via` déclaré au manifeste ; les types différés
+   résolus à la matérialisation (le graphe ne dépend pas du paquet) ; B2a,
+   B2c, B2d côté codeparsers ; appels C++ reliés entre fichiers 35,0 →
+   40,3 % ; B9 Rust : les cinq trous nommés par cas minimaux (impl qui
+   dédouble le type, méthodes de trait homonymes, receveur de boucle muet,
+   corps de macro au scope fichier, fermetures invisibles). Tout
+   `rag3db-lourd` indexé en 20 min sur luciepc (7 172 fichiers), base gardée
+   (1,1 Go), qui survit au rebâti du moteur.
+3. **MCP** : sur master (`69bb9f4a9`), B6 fermé (le refus nomme la
+   déclaration), **B7 : la recette « une base par session » jouée**
+   (`79d56229e`, la question réelle posée par MCP et sa réponse collée) ; le
+   mode `--demon` ni validé ni réfuté (ticket, trois énigmes) ; la page
+   « mémoire par MCP » (`faad33f8e`).
+
+### Entré sur master cette nuit (après 0 h 50)
+
+Mise à jour massive de vecteurs (`bfc1434e1`, deux vrais défauts : le
+contrôle qui n'entrait pas comme une requête, la réinsertion qui partait du
+nœud qu'elle insère ; le crochet de fin d'instruction gardé sur branche, il
+régressait le ligne à ligne) ; **V2** (`11887dc21`, `CALL acquire_locks`) ;
+**le lecteur affamé** (`e4198f862`, coordination à la SQLite, 0 refus sur 80
+contre 34) ; le **contrôle de bâti des extensions** (`458ff7157`) ; **Write
+complet** (sept formes, F) ; les **noms réservés** refusés au chargement
+(liste tirée de la grammaire du moteur) ; les transactions PostgreSQL
+déclarées (non prouvées vivantes : conteneur) ; le NULL en tête de liste ;
+« duplicate node name: sparse » (une fixture, pas le produit ; filet des 31
+fiches d'outils) ; le proto : lots 3, 4 entiers (rechargement à chaud, la
+boutique jouet, routes → graphe → vue, `serve`, **la recette commence : une
+colonne ajoutée à une vue en service apparaît après rechargement, sans
+compilation**), lot 5 (`declare`) en cours ; I1 (verrou d'index exclusif)
+en fusion vers 3 h 30. Banc de concurrence : 56 → 15 rouges connus après
+I1. Le ticket « une ligne sur cent » fermé par les correctifs du banc.
+
+### Les décisions prises à ta place, toutes renversables
+
+| Décision | Où |
+|---|---|
+| tableau des sémantiques A4′ (lignes comme PostgreSQL, détachement comme Neo4j) | `coeur-cpp/07` §0 |
+| forme A du nœud scripté (`nodes/<nom>.node.json` + script relatif, dossier découvert) | proto, lot 2 |
+| sept formes de Write, Mark justifié, Load sous capacité | `embarquements/05` |
+| npm : tout en `0.0.1-alpha.2`, même commit, épinglage exact ; profil `paquet` LTO | G |
+| la montre des fichiers vit dans l'hôte, pas dans un graphe | proto, lot 3 |
+| I1 avant I2 (les écrivains d'une table indexée s'attendent jusqu'à I2 mesurée) | `coeur-cpp/09` §0 |
+| `impact` : les sûrs d'abord, `include_by_name` ; `callees` ; `locks_via` au manifeste | A, codeparsers |
+| le lecteur affamé à la SQLite (verrou `<base>.readers`, bornes nommées, filet gardé) | hotfixs |
+| nom réservé : (a) refus au chargement ; (b) les permettre en échappant tout le texte = ta question | F |
+| `declare` : un commit par chemins dans le dépôt englobant, identité git de la personne, raison de l'agent en message | proto, lot 5 |
+| un crochet de test dans la lib livrée (`RAG3DB_TEST_HOOKS=1` + `RAG3DB_TEST_DIE_AT`), ligne d'avertissement au démarrage | hotfixs |
+| analyze explicite seulement ; estimation des relations : ticket, pas de code | hotfixs |
+
+### Ce qui t'attend
+
+- **Quatre OTP** pour la séance npm (linux, windows, darwin, tête, tout en
+  alpha.2) — Windows 23 en cours à 2 h 20 (fsync des fichiers corrigé) ; si
+  rouge, séance à trois et Windows ensuite. Rien n'est parti.
+- **Relancer les deux sessions cœur C++ avec le serveur MCP** sur la base de
+  `rag3db-lourd` (recette `docs/10-octobre-2026-18h00/04`).
+- Le conteneur `pgvector:pg17` sur 5433 (trois tickets PostgreSQL attendent
+  un témoin vivant) ; `usermod -aG docker`.
+- Le ticket du mode `--demon` ; **l'indexation lancée par un outil MCP meurt
+  avec le tube du client** (le travail long devrait appartenir au démon :
+  page de A à venir).
+- La règle du target : « effacé à chaque fusion » a rendu 101 Go ; la
+  mémoire mesure 8 min de bâti à froid pour 3 min de vérification et
+  propose « gardé entre les lots d'une même session, effacé à la fin de la
+  session ». À toi.
+- Les 21 tickets « perte / réponse fausse » côté produit : comptent-ils pour
+  la stèle du moteur ou pour le produit ?
+- Les « nouveaux projets émergents » de classification, pour la page
+  mémoire ; sa recommandation : brancher le gabarit tel quel (A), voir si
+  Claude range spontanément, puis soigner « ranger » (B).
+- Le ménage des branches distantes (liste au §6, plus celles de la nuit).
+- F a supprimé trois de ses branches de travail fusionnées (ses propres
+  branches, rien de forcé) : à savoir.
+
+### Règles nées de la nuit
+
+Une session chaîne ses propres lourds ; lib et extension du même bâti,
+identifiants vérifiés par le moteur ; tout `src/dataflow/` relu par la
+recherche avant master ; copier un gabarit livré et en retirer ; `pgrep -x`
+ne voit pas un nom de plus de 15 caractères (`pidof` + `/proc/<pid>/exe`) ;
+après un rebase, on ne repousse pas la branche ; jamais un push derrière un
+test non lu.
