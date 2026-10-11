@@ -357,3 +357,26 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
      dire « aucune correspondance lexicale, voici les voisins par le sens » avec un score bas.
   4. **Quel arbre, quelle tête** (déjà dit à 19 h 05) : l'agent ne sait pas sur quoi il interroge ;
      ici le serveur regardait un arbre mort.
+
+### 11 oct., 18 h 42 (heure luciepc) — cœur C++ et codeparsers — « une édition localisée est-elle retranscrite vite, l'hôte étant sain ? »
+
+- **La question posée** : la même qu'à 17 h 55, refaite sur `code-principal` après le retour de
+  l'hôte (18 h 40 ; Lucie a forcé l'arrêt après 42 min de réaction de la montre sur l'arbre disparu,
+  `code-bascule` mise de côté).
+- **L'outil essayé** : une seconde fonction ajoutée au fichier d'essai (`mtime` 18:42:18.7), puis
+  `usages {name: essaiIndexationAChaudSecondeFonction}` et `usages {name:
+  essaiIndexationAChaudDixNeufHeures}` par codeparsers (mon client de session avait expiré au
+  démarrage et ne se reconnecte pas sans `/mcp`).
+- **Ce qu'il a rendu** : à 18:42:29.9, la première interrogation rendait déjà la définition
+  (`test/essai_indexation_a_chaud.cpp:19`) : **11,2 s au plus** après l'écriture (borne haute, la
+  boucle n'a commencé qu'alors) ; à 18:42:41, l'appelant aussi (deux appelants de la première
+  fonction, dont la seconde, :20). Le premier fichier (déposé à 17:55) était lui aussi dans l'index
+  dès le retour de l'hôte (définition :7, appelant :12).
+- **Ce que j'ai dû faire à côté** : passer par codeparsers pour interroger ; retirer le fichier à la
+  main.
+- **Ce qui manquait** :
+  1. **Une borne basse** : pour la lire, une boucle d'interrogation doit tourner avant l'écriture —
+     à refaire si Lucie veut le chiffre exact ; 11 s est déjà dans l'ordre attendu d'une montre.
+  2. **Dire quand** : la réponse d'`usages` pourrait porter « index à jour au <heure> » (ou « N
+     fichiers en attente »), pour qu'un agent sache s'il lit l'état d'après son édition.
+  3. **Un client de session qui se reconnecte seul** quand l'hôte revient (ici `/mcp` à la main).
