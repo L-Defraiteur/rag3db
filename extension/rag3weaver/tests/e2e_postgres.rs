@@ -1859,3 +1859,11 @@ fn mesure_eventails_sur_postgres() {
     let uuids = crate::e2e_mesure_impact::peupler_le_graphe(&mut catalog);
     assert_eq!(crate::e2e_mesure_impact::mesurer_eventails("postgresql", &catalog, &uuids).len(), 4);
 }
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_un_filtre_en_liste() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::un_filtre_en_liste(&crate::e2e_chainage::peupler(cat));
+}

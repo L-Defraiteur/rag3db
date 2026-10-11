@@ -351,3 +351,29 @@ pub(crate) fn un_eventail(s: &Scene) {
     let r = s.cat.run_plan(&plan, PlanOptions::default()).unwrap();
     assert_eq!(r.instructions, 3, "éventail non levé : {r:?}");
 }
+
+/// **Un filtre en liste et en conjonction** (`Predicate::In` dans
+/// `Predicate::AllOf`), sur les deux moteurs : les symboles dont le nom est
+/// dans la liste et dont la note vaut `x`. La forme qui remplace le Cypher
+/// brut de `charger_les_types_ecrits` (code.rs).
+#[test]
+#[ignore]
+fn un_filtre_en_liste_et_en_conjonction() {
+    un_filtre_en_liste(&scene());
+}
+
+pub(crate) fn un_filtre_en_liste(s: &Scene) {
+    let filtre = Predicate::AllOf(vec![
+        Predicate::In { field: "name".into(), param: "noms".into() },
+        Predicate::Equals { field: "note".into(), param: "note".into() },
+    ]);
+    let q = s.cat.dialect_arc().select(&Select::filtered("Symbol", filtre, vec![Column::Node("_uuid".into()), Column::Node("name".into())])).unwrap();
+    let noms = |v: &[&str]| QueryParam::new("noms", CypherValue::List(v.iter().map(|n| CypherValue::String(n.to_string())).collect()));
+    let lire = |liste: &[&str], note: &str| -> BTreeSet<String> {
+        let r = s.cat.execute_raw_with_params(&q, &[noms(liste), QueryParam::new("note", CypherValue::String(note.into()))]).unwrap_or_else(|e| panic!("{e}\n{q}"));
+        r.rows.iter().map(|l| l[1].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(lire(&["a", "c", "zz"], "x"), BTreeSet::from(["a".to_string(), "c".to_string()]), "dans la liste, et note x");
+    assert!(lire(&["a", "c"], "y").is_empty(), "la conjonction tient : aucune note y");
+    assert!(lire(&[], "x").is_empty(), "une liste vide ne retient rien");
+}

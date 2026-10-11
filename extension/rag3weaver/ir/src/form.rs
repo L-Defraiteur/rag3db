@@ -160,6 +160,10 @@ pub enum Predicate {
     AtLeast { field: String, param: String },
     /// L'une au moins des conditions.
     AnyOf(Vec<Predicate>),
+    /// Toutes les conditions.
+    AllOf(Vec<Predicate>),
+    /// Le champ vaut l'une des valeurs du paramètre (une liste).
+    In { field: String, param: String },
     /// Une condition déjà dite dans la langue du dialecte, par son propre
     /// parseur de filtres (`FilterParser`), sur l'alias `m` : le filtre d'un
     /// utilisateur, avec ses paramètres. Elle ne se valide pas ici.
@@ -169,11 +173,14 @@ pub enum Predicate {
 impl Predicate {
     fn names(&self, out: &mut Vec<String>) {
         match self {
-            Predicate::Equals { field, param } | Predicate::Contains { field, param } | Predicate::AtLeast { field, param } => {
+            Predicate::Equals { field, param }
+            | Predicate::Contains { field, param }
+            | Predicate::AtLeast { field, param }
+            | Predicate::In { field, param } => {
                 out.push(field.clone());
                 out.push(param.clone());
             }
-            Predicate::AnyOf(v) => v.iter().for_each(|p| p.names(out)),
+            Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.names(out)),
             Predicate::Compiled(_) => {}
         }
     }

@@ -2505,12 +2505,24 @@ impl Catalog {
         retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
     ) -> Result<(), CatalogError> {
         let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
+        // Par le dialecte : les scopes dont le nom est dans la liste, de cette
+        // source et de ce dépôt ; le nom en tête, comme avant.
+        use rag3weaver_ir::{Column, Predicate};
+        let filtre = Predicate::AllOf(vec![
+            Predicate::In { field: "name".into(), param: "noms".into() },
+            Predicate::Equals { field: "source".into(), param: "source".into() },
+            Predicate::Equals { field: "repo".into(), param: "repo".into() },
+        ]);
+        let lire = rag3weaver_ir::Select::filtered(
+            SCOPE,
+            filtre,
+            ["name", "field_types", "return_type", "parent_name"].map(|f| Column::Node(f.into())).to_vec(),
+        );
+        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
             .execute_with_params(
-                &format!(
-                    "UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) WHERE s.source = $source AND s.repo = $repo RETURN n, s.field_types, s.return_type, s.parent_name"
-                ),
+                &requete,
                 &[
                     crate::connection::QueryParam::new("noms", param),
                     crate::connection::QueryParam::new("source", CypherValue::String(source.0.clone())),

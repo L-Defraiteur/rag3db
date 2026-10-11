@@ -1227,6 +1227,8 @@ fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> Stri
         Predicate::Contains { field, param } => format!("strpos(m.{}, ${param}) > 0", d.quote(field)),
         Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", d.quote(field)),
         Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" OR ")),
+        Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" AND ")),
+        Predicate::In { field, param } => format!("m.{} = ANY(${param})", d.quote(field)),
         Predicate::Compiled(c) => c.clone(),
     }
 }
@@ -1241,6 +1243,9 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
         Predicate::Contains { field, param } => format!("m.{} CONTAINS ${param}", cypher_quote(field)),
         Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", cypher_quote(field)),
         Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
+        // Chaque membre entre parenthèses : un `AnyOf` dedans garde son sens.
+        Predicate::AllOf(v) => v.iter().map(|q| format!("({})", rag3db_condition(q))).collect::<Vec<_>>().join(" AND "),
+        Predicate::In { field, param } => format!("m.{} IN ${param}", cypher_quote(field)),
         Predicate::Compiled(c) => c.clone(),
     }
 }
@@ -4024,5 +4029,26 @@ mod tests {
         assert!(matches!(ColumnType::from_field_type(&FieldType::Text), ColumnType::Text));
         assert!(matches!(ColumnType::from_field_type(&FieldType::Int64), ColumnType::Int64));
         assert!(matches!(ColumnType::from_field_type(&FieldType::Boolean), ColumnType::Boolean));
+    }
+
+    #[test]
+    fn un_filtre_en_liste_et_en_conjonction_se_dit_dans_les_deux_dialectes() {
+        use rag3weaver_ir::{Column, Predicate, Select};
+        let filtre = Predicate::AllOf(vec![
+            Predicate::In { field: "name".into(), param: "noms".into() },
+            Predicate::AnyOf(vec![
+                Predicate::Equals { field: "source".into(), param: "s".into() },
+                Predicate::Equals { field: "repo".into(), param: "r".into() },
+            ]),
+        ]);
+        let lire = Select::filtered("Scope", filtre, vec![Column::Node("name".into())]);
+        assert_eq!(
+            Rag3dbDialect.select(&lire).unwrap(),
+            "MATCH (m:`Scope`) WHERE (m.`name` IN $noms) AND (m.`source` = $s OR m.`repo` = $r) RETURN m.`name`"
+        );
+        assert_eq!(
+            PostgresDialect.select(&lire).unwrap(),
+            "SELECT m.\"name\" FROM \"scope\" AS m WHERE (m.\"name\" = ANY($noms) AND (m.\"source\" = $s OR m.\"repo\" = $r))"
+        );
     }
 }
