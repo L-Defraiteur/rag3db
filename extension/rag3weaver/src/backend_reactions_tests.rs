@@ -95,6 +95,7 @@ fn reactif() -> (tempfile::TempDir, Backend) {
     );
     catalog.initialize().unwrap();
     let backend = Backend {
+        avertissement_sans_service: None,
         reactions: Mutex::new(None),
         decider: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
