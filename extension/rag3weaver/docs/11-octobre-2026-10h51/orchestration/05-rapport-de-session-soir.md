@@ -106,22 +106,28 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 - Un pari sur l'ordre (réindexer après le binaire neuf) qui a coûté deux
   arrêts forcés à Lucie : la règle de l'annonce et de l'heure convenue.
 
-## 6. Ce qui attend Lucie au réveil
+## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 1 h 15)
 
-- Ses sessions s'ouvrent de nouveau : son binaire a été rebâti contre la lib
-  B2 à 21 h (mémoire, md5 69adbfe94735) ; son hôte d'ici redémarré à 23 h.
-- **L'hôte de luciepc, figé depuis 22 h 02 (quatrième fois), gardé pour toi** :
-  la cause est une boucle de la passe de vecteurs sur des morceaux sans
-  texte (prouvée, défenses de l'arbre principal sur master ou en push) ; la
-  suite dans l'ordre est en tête du rapport de codeparsers
-  (`docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`,
-  section « Pour Lucie ») : arrêt propre, comptage des morceaux vides base
-  fermée, montre remise, binaire prêt de G installé, redémarrage.
-- Brancher le cœur sur `code-lourd` ensuite : commande dans `01-les-decisions…`.
-- **Une question** : 20 % des morceaux de code sont écrits sans texte (ticket
-  P1 `6cdef9585`, cause en cours chez l'arbre principal) ; un morceau sans
-  texte doit-il exister ou ne jamais naître ? (fil de nuit, 23 h 05).
-- La séance npm (quatre OTP) quand elle le voudra ; le ménage des branches
+- **Tes sessions d'ici marchent** : ton hôte a été redémarré à 0 h 26 sur un
+  binaire avec la montre, les défenses contre la boucle et le client qui se
+  rétablit (md5 3e95f0302023) ; sain et au repos à 1 h 01. Il sera rebâti
+  une fois de plus au matin (la lib d'ici, B4) : on te préviendra, et
+  code-rag3db sera effacé et réindexé à ce moment (12 min).
+- **luciepc, dans l'ordre** (section « Pour Lucie » du rapport de codeparsers,
+  `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`, et la
+  note de hotfixs `ba63aa135`) : terminer le client d'index 132918 (libère
+  la place du poste, la mesure de hotfixs passe seule) ; arrêt propre de
+  l'hôte figé (`systemctl --user stop rag3weaver-daemon`, pile gdb
+  facultative) ; compter base fermée les Scope_Chunk sans texte de
+  code-lourd ; remettre la montre ; installer le binaire prêt de G (≥ B4) ;
+  **effacer puis réindexer** code-lourd et code-principal ; relancer, /sante ;
+  hotfixs rebâtit la lib commune après l'arrêt.
+- **Deux questions** : (1) un morceau sans texte doit-il exister ou ne jamais
+  naître (ticket P1 `6cdef9585`, 20 % du code, texte perdu à l'écriture,
+  cause chez l'arbre principal) ; (2) la forme en deux temps d'usages
+  (page 06 de F) si le lot des fils ne suffit pas : décidée « oui si > 100 ms »,
+  renversable.
+- La séance npm (quatre OTP) quand tu le voudras ; le ménage des branches
   distantes (liste à produire).
-- Rien d'autre : les décisions renversables sont toutes dans
-  `01-les-decisions-du-matin.md`, avec « renversable par Lucie ».
+- Tout le reste est dans le fil de nuit de `01-les-decisions-du-matin.md`
+  (depuis « 21 h – 21 h 40 ») et dans `06-knowledge-dump-soir.md` §2.

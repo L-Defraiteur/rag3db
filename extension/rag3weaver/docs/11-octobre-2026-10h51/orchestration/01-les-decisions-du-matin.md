@@ -930,3 +930,45 @@ où elle vit.
   figé et gardé ; la mesure de hotfixs attend aussi derrière le client de
   codeparsers ; personne n'y touche ; le bâti du binaire prêt de G attend là
   aussi. Le knowledge dump 06 est à jour pour le réveil (`c50d7b454`).
+- **0 h 40 – 1 h 15, nuit**. **B4 est sur master** (G, `6e3561268`, identités
+  relatives : une racine locale par base, la seconde nommée, chemins en « / »,
+  ticket fermé, relectures après coup par l'arbre principal et codeparsers) :
+  **les quatre briques de la priorité de Lucie sont là** (montre, routes,
+  code-tree, B4). Conséquence à savoir : **toute base de code existante est
+  « d'avant la règle »** ; un binaire ≥ 6e3561268 refuse sa synchro, ses
+  rééditions et son ingestion en le disant (« à réindexer : effacer la base,
+  puis relancer l'indexation », warning dans index_state) ; code-principal
+  et code-lourd sur luciepc, code-rag3db ici : à effacer et réindexer ; la
+  mémoire longue n'est pas une base de code, pas touchée. **Ordre du matin**
+  accordé avec la mémoire et codeparsers : le rebâti de la lib d'ici par
+  l'arbre principal à mon signal (visited set, section ELF, « ABI inchangée,
+  section ajoutée ») ; le binaire de Lucie ≥ B4 prouvé à l'écart, installé
+  seulement au moment de l'arrêt (sinon un client neuf de Lucie serait
+  refusé) ; l'arrêt propre de l'hôte au journal soldé ; code-rag3db effacé
+  et réindexé par codeparsers avec ce binaire en autonome (~12 min),
+  annoncé ; le redémarrage ; puis la recherche publie la lib au magasin, G
+  pose l'ExecStartPre, lot 3c. Sur luciepc : « effacer puis réindexer » dans
+  la section « Pour Lucie » (`ba63aa135` : ce qui attend derrière le client
+  de codeparsers). **Lot de nuit à codeparsers** : le témoin de bout en bout
+  « une session voit sa propre modification », ici, en autonome (hôte à lui
+  sur un autre port, bases sous ~/.cache, binaire ≥ B4, code-tree add, index,
+  édition d'un symbole, temps par phase jusqu'à ce que usages et search_code
+  le voient, code-tree remove) ; un rouge serait le résultat de la nuit.
+  **Sur master aussi** : le nom qualifié (`bc51b0aec`, premier manque de la
+  page 04 fermé) ; l'état des index par backend dans /etat et daemon_status
+  (`318e37776`, /etat ne fait plus la queue derrière un appel long) ; les
+  consommateurs du magasin (`f846db8e6`, `RAG3DB_LIB=courant`) ; la page 06
+  de F et sa suite de mesure (`dc4919150` : usages 367-399 ms, la forme en
+  deux temps 57 ms, mêmes lignes ; et **les 26 092 morceaux vides portent
+  tous le hash d'un vrai texte : le texte est perdu à l'écriture**, preuve
+  pour le ticket P1). **L'hôte de Lucie est sain** à 1 h 01 (usages 0,51 s,
+  search_code 0,84 s, au repos, reconstruction finie sans ligne au journal :
+  manque noté, couvert par /etat au matin). **Décision page 06** : ni
+  attendre le semi-masque ni poser tout de suite : remesurer usages dès que
+  le lot des fils du cœur est sur master ; si la médiane reste > 100 ms,
+  poser la forme en deux temps comme chaînage générique de l'IR, ticket du
+  semi-masque gardé, forme retirée quand le moteur n'en a plus besoin
+  (renversable par Lucie). Le cœur : push ABI (verrou depuis 1 h 11, après
+  un rouge connu du banc passé vert par hasard, remis aux probabilistes
+  `94a09d84e`), le lot des fils en bâti (fils.sh), la passe du produit sur
+  sa branche par l'arbre principal.
