@@ -20,9 +20,20 @@ de quiconque avait rebasé sur B2.*
 - **Un binaire ne garde pas le chemin de sa lib.** `tools/rust_api/build.rs:220`
   émet `-Wl,-rpath,<lib>` par `cargo:rustc-link-arg`, qui ne vaut que pour les
   cibles de la crate `rag3db` elle-même. Les binaires de rag3weaver (tests e2e,
-  `rag3weaver-backend` du target et de `~/.local/bin`) **n'ont ni RPATH ni
-  RUNPATH** (`readelf -d`). La lib chargée se décide donc au lancement, par
-  `LD_LIBRARY_PATH` seul.
+  `rag3weaver-backend` du target et de `~/.local/bin`) **de ce poste** n'ont ni
+  RPATH ni RUNPATH (`readelf -d`) : la lib chargée s'y décide au lancement, par
+  `LD_LIBRARY_PATH` seul. **Sur luciepc, les binaires de G en portent un**
+  (`RUNPATH [~/git_workspaces/rag3db-lourd/build/lecteurs-csv/src]`, vérifié
+  le soir même par ssh). Il vient de sa recette de bâti
+  (`~/.cache/rag3weaver-build/hote-bati3.sh`, page
+  `docs/optimiseur/11-octobre-2026-16h40/01-l-hote-sur-luciepc.md`) :
+  `RUSTFLAGS="-C link-args=-Wl,-rpath,$L"` avec
+  `L=~/git_workspaces/rag3db-lourd/build/lecteurs-csv/src`. L'unité systemd
+  qui lance l'hôte ne pose pas de `LD_LIBRARY_PATH` : le RUNPATH est le seul
+  chemin. Il vise le dossier rebâti en place, et un rebâti y change donc la
+  lib sous l'hôte au prochain redémarrage. **Le paquet npm lie le moteur en
+  statique** : il n'a ni RUNPATH ni lib partagée, et le magasin ne le concerne
+  pas.
 - **Les en-têtes compilés ne sont pas liés à la lib chargée.** Le pont cxx
   inclut `rag3db.hpp` depuis `RAG3DB_INCLUDE_DIR` au bâti. `build.rs` ne
   surveille ni `RAG3DB_LIBRARY_DIR`, ni `RAG3DB_INCLUDE_DIR`, ni l'en-tête
@@ -106,6 +117,10 @@ bouge : un lien `courant`.**
    Je proposerais (a) : un binaire installé dans `~/.local/bin` trouverait seul
    la lib de son bâti, et le contrôle du point 2 dirait l'écart si on le force
    ailleurs. Comme l'ancien dossier reste au magasin, son rpath reste valable.
+   Sur luciepc, (a) existe déjà sous la forme du RUNPATH de G : avec le magasin,
+   il devra viser `…/rag3db-libs/<id>/`, jamais `courant` ni le dossier de bâti.
+   Ajouter un rpath aux bâtis de ce poste est un changement de conception, à
+   décider par l'orchestration.
 5. **`templates/mcp/*` et les scripts** qui écrivent
    `build/lecteurs-csv/src` en dur : ils passent à `~/.cache/rag3db-libs/courant`,
    résolu à l'installation. Avec (a), ils n'ont plus de variable à poser.
@@ -158,7 +173,12 @@ bouge : un lien `courant`.**
 ## 7. L'ordre proposé
 
 1. `build.rs` : les `rerun-if` (point 3.1). Petit, utile tout de suite, et
-   indépendant du reste.
+   indépendant du reste. **Fait** : `rerun-if-env-changed` sur
+   `RAG3DB_LIBRARY_DIR` et `RAG3DB_INCLUDE_DIR`, `rerun-if-changed` sur
+   `rag3db.hpp` et sur la lib. Témoin `scripts/test_pont_recompile.sh` (trois
+   cas : rien ne change et rien ne se recompile, un autre dossier d'en-têtes,
+   l'en-tête modifié en place). Les deux derniers étaient rouges avant le
+   correctif.
 2. Le refus nommé binaire ↔ lib (point 3.2), qui ferme le ticket ouvert.
 3. Le magasin, la publication et le ménage (script de G, appelé par
    `run_e2e.sh --build`).

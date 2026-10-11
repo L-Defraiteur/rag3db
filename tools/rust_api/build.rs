@@ -214,9 +214,22 @@ fn main() {
     let mut include_paths =
         vec![Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("include")];
 
+    // **Le pont suit la lib et l'en-tête qu'il emploie** : un autre dossier,
+    // ou l'en-tête et la lib remplacés en place, recompilent le pont. Sans
+    // cela, un pont compilé contre un vieil en-tête se lie à une lib neuve
+    // (rag3weaver, page 07-le-magasin-de-libs, 11 octobre 2026).
+    println!("cargo:rerun-if-env-changed=RAG3DB_LIBRARY_DIR");
+    println!("cargo:rerun-if-env-changed=RAG3DB_INCLUDE_DIR");
     if let (Ok(rag3db_lib_dir), Ok(rag3db_include)) =
         (env::var("RAG3DB_LIBRARY_DIR"), env::var("RAG3DB_INCLUDE_DIR"))
     {
+        println!("cargo:rerun-if-changed={rag3db_include}/rag3db.hpp");
+        for lib in ["librag3db.so", "librag3db.dylib", "rag3db_shared.lib", "librag3db.a"] {
+            let path = Path::new(&rag3db_lib_dir).join(lib);
+            if path.exists() {
+                println!("cargo:rerun-if-changed={}", path.display());
+            }
+        }
         println!("cargo:rustc-link-search=native={rag3db_lib_dir}");
         println!("cargo:rustc-link-arg=-Wl,-rpath,{rag3db_lib_dir}");
         include_paths.push(Path::new(&rag3db_include).to_path_buf());
