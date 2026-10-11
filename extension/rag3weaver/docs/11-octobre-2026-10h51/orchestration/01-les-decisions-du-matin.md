@@ -490,3 +490,35 @@ où elle vit.
   paquet-npm `e58e53c94`, non fusionné, non publié) : `npx rag3weaver-unit
   install|uninstall|status`, SIGTERM, relance sur arrêt brutal, le refus d'un
   second hôte ne boucle pas ; cinq témoins sur une unité d'essai.
+- **Vers 17 h 20** : le gabarit code s'indexe sur PostgreSQL (F, quatre
+  lots `68dbcfc4b` → `c8fae292a`, ticket du Cypher brut fermé ; témoin :
+  src/daemon indexé sur le conteneur, impact y rend les mêmes empreintes que
+  sur rag3db dans les six cas, 5 à 11 ms contre 42 à 67) ; l'exécuteur
+  concurrent des graphes à flux (recherche, `439ca3c9c`) ; la session d'un
+  client mort (mémoire, `e9387d545`, pid et instant de démarrage) ;
+  review_anchored (`bfec631cc`) ; la mesure des marques de codeparsers
+  (`339ebb412` : chaînes et commentaires hors références, nom propre par
+  position, gabarit explicite `b473c3a` ; ticket « `new` mot vide en Rust »).
+- **La bascule prouvée par le banc** (sur 4ee70e386 contre master : mêmes
+  résultats des deux côtés, 260 transactions, 27/27, probabilistes et banc
+  identiques) après le « fini » des 116 e2e du produit : le cœur pousse par
+  poste push ; l'arbre principal rebâtit la lib d'ici une fois après
+  (`RAG3WEAVER_MOTEUR_ANCIEN=1` déclaré d'ici là pour les lots du produit
+  seul). Trois rouges 10/10 sur master hors bascule en tickets (banc).
+- **L'hôte de Lucie redémarré deux fois** (16 h 55 : binaire neuf, montre
+  absente parce que sa copie du manifeste datait d'avant ; 17 h 10 : copies
+  complétées avec sauvegardes, la montre tourne : fichier modifié vu en 5,8 s,
+  créé en 4,7 s, retiré en 4 à 6 s). Un fichier créé est vu (la montre relit
+  la liste de la source). Ticket : l'hôte hérite de l'environnement du
+  premier client (forme : une configuration à lui, lue au démarrage).
+- **L'hôte sur luciepc** (G, page `3f7ef3102`, unité utilisateur, RUNPATH
+  inscrit dans le binaire, jeton dans le daemon.json de là-bas qui change à
+  chaque démarrage, tunnel `ssh -f -N -L 7971:127.0.0.1:7970 lucied@luciepc`,
+  rien d'ouvert sur le réseau : la sécurité est ssh plus le jeton, Tailscale
+  n'est que le réseau) ; l'index des deux arbres du cœur y tourne
+  (codeparsers) ; le client désigné avec son jeton chez la mémoire. G :
+  archives npm alpha.3 sans publier.
+- **poste push, précisions** : les pushes de docs seules restent dispensés du
+  verrou ; sous le verrou, une avance de .md seuls se rebase et se repousse
+  dans le même tour sans rendre le verrou ; la règle 3 dite par les chemins
+  du bâti (hotfixs, `481afb550`).
