@@ -79,3 +79,28 @@ où elle vit.
 | rag3db-10 (banc) | C7 témoin minimal ; les marches de la condition 3 au banc |
 | rag3db-90 (optimiseur) | en pause : les archives restent prêtes ; l'alpha suivante portera le correctif ALP et la fin du filet |
 | everything declarative (proto) | en pause : la montre sur la porte est faite ; retour en arrière, mermaid embarqué, plusieurs sessions quand C avance |
+
+## 4. Ajouts de la matinée
+
+- **Le lien entre deux identités déclarées** (mémoire, page
+  `11-octobre-2026-memoire-longue/01-…`) : le témoin a montré que la garde du
+  nœud de liens ne protégeait aucune garantie (copiée sans raison le
+  20 septembre) ; la réponse « plus loin dans l'abstraction » est **une garde
+  de moins, pas un nœud de plus** — `RelationBatchNode` devient le nœud de
+  lien général, face dataflow de `Write::Link`. Tranché par l'orchestration,
+  renversable : fondre ; `Catalog::link` refuse lui-même un bout absent, en le
+  nommant, avec l'existence vérifiée par lot et le coût mesuré sur
+  l'indexation du code ; une seule garde déclarée (`from_states`/`to_states`) ;
+  le huitième refus par une déclaration dans le schéma des nœuds. Un défaut
+  trouvé en chemin et ticketé : un lien vers un bout absent rendait `Ok` sans
+  rien écrire.
+- **Le COPY de blobs sous petit tampon** (hotfixs) : reproduit sans harnais,
+  c'est le COPY lui-même (un groupe en mémoire qui tient tout un groupe de
+  lignes avant d'écrire), pas le point de reprise ; forme générique à décider
+  avec le cœur (vidage par morceaux bornés en octets) ; en attendant, un filet
+  côté produit chez A : **un paquet est borné en lignes et en octets**.
+- **WASM, l'avis de l'orchestration à Lucie** : ni fork de tokio ni réécriture
+  de luciole en « vrai tokio » ; ce qui manque dans un navigateur est
+  l'entrée-sortie, pas l'ordonnanceur ; le navigateur devient un client mince
+  du démon, et ce qui y tourne (graphes, ports, nœuds purs, clics) tient
+  derrière un exécuteur de poche. Pas maintenant.
