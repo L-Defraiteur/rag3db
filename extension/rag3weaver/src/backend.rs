@@ -2768,6 +2768,14 @@ impl Backend {
         for erreur in self.stop_reactions() {
             eprintln!("[réaction] {erreur}");
         }
+        // **Les indexations en cours s'arrêtent au prochain paquet validé**, et
+        // on les attend avant de fermer la base : la relance reprendra là
+        // (marche 0 de la forme C). Le fil d'indexation tient le catalogue
+        // pendant tout son plein texte, d'où l'arrêt avant le verrou.
+        let attendues = crate::dataflow::index_nodes::stop_indexings_of(&self.catalog);
+        if attendues > 0 {
+            eprintln!("[index] {attendues} indexation(s) arrêtée(s) ; relancer index reprend là");
+        }
         self.catalog
             .lock()
             .unwrap()

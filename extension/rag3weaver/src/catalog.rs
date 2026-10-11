@@ -8134,6 +8134,18 @@ impl Catalog {
         &self.pending
     }
 
+    /// **Oublier les liens en file de ces relations**, ceux d'une
+    /// synchronisation qui s'arrête avant de les poser : la reprise les
+    /// refait de ses fichiers. Sans cela, une reprise dans le même processus
+    /// les poserait deux fois (ce qu'une mort, qui vide la mémoire, ne fait
+    /// pas). Les liens des autres relations restent : un autre écrivain du
+    /// catalogue peut en avoir en file. Rend le nombre de liens oubliés.
+    pub fn forget_pending_relations_named(&mut self, names: &[&str]) -> usize {
+        let avant = self.pending.relations.len();
+        self.pending.relations.retain(|r| !names.contains(&r.rel_name.as_str()));
+        avant - self.pending.relations.len()
+    }
+
     pub fn drain_stats(&self) -> DrainStats {
         DrainStats {
             pending: self.pending.total_count(),
