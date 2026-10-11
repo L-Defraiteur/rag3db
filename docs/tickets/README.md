@@ -62,7 +62,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (29)
+### Ouverts — produit (28)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -71,7 +71,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 |---|---|---|---|---|
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | ouvert — embarquements, après les lots du Cypher brut | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
-| [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | ouvert — embarquements, après impact sur `run_plan` | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | ouvert — l'arbre principal, tri stable | réponse trompeuse | oui | oui (rendu d'impact) |
 | [Une transition faite par une réaction n'applique pas les écritures du cycle de vie](2026-10-11-une-transition-de-reaction-n-applique-pas-les-ecritures-du-cycle-de-vie.md) | ouvert | réponse fausse (reviewed_at, revision, updated_at manquent) | oui, dès qu'une réaction transitionne | oui (et seulement) |
 | [e2e_impact dépend de la forme du code vivant qu'il indexe](2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md) | ouvert — après la migration (a) | test fragile | non | oui (`tests/e2e_impact.rs`) |
@@ -99,10 +98,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 
-### Fermés (87), dans `closed/`
+### Fermés (88), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](closed/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | corrigé en quatre lots, témoin vert sur le conteneur (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`, `code_sync.rs`) |
 | [La session d'un client mort reste listée par l'hôte du démon](closed/2026-10-11-la-session-d-un-client-mort-reste-listee.md) | corrigé (le pid du client, le relevé de l'hôte) | P4, réponse fausse | oui | oui (et seulement) |
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](closed/2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | corrigé, parent par passe effacé à la fin du lanceur (11 octobre) | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |

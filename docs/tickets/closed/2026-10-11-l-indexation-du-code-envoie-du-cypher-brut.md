@@ -1,6 +1,6 @@
 # L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL
 
-- **État** : ouvert (11 octobre 2026) — à la session embarquements, après le branchement d'impact sur `run_plan` ; l'arbre principal relit `code.rs`
+- **État** : corrigé (11 octobre 2026), en quatre lots (68dbcfc4b, da02a612e, bcea5ea9e, et le lot 4 qui ferme) ; témoin : `e2e_postgres::mesure_impact_sur_postgres`, vert sur le conteneur
 - **Gravité** : blocage (sur PostgreSQL, `ingest_code` échoue)
 - **Atteignable en service** : avec un montage PostgreSQL du backend de code ; rag3db n'est pas concerné
 - **Touche rag3weaver** : oui (`src/code.rs`)
@@ -31,3 +31,18 @@ catalogue du conteneur (`e2e_postgres::catalogue`), avec la connexion qui compte
 instructions (`e2e_mesure_impact::Compteur`), `register_code_schema`, `ingest_code`,
 `drain`, puis `e2e_mesure_impact::mesurer("postgresql", …)`. Elle se remet en place
 avec la conversion et doit passer au vert.
+
+## Fermé (11 octobre 2026)
+
+Les sept endroits passent par le dialecte (page
+`extension/rag3weaver/docs/11-octobre-2026-embarquements/05-cypher-brut-de-l-indexation.md`) :
+deux `Select::by_uuids` (lot 1), un `Select::filtered` avec `AllOf` et `In`, deux
+prédicats ajoutés à l'IR (lot 2), `Write::Detach` (lot 3), et deux crochets du dialecte
+pour les réglages du moteur, `copy_session_setup` et `engine_setting` (lot 4).
+`e2e_code` a été rejoué sur rag3db à chaque lot, avec des comptes identiques à un relevé
+pris sur la même base.
+
+Le témoin : `src/daemon` indexé sur le conteneur, puis la mesure d'impact. Les
+empreintes des lignes rendues (triées) sont **les mêmes sur PostgreSQL et sur
+rag3db** dans les six cas, avec les mêmes allers-retours (17 à 24) ; impact y prend 5 à
+11 ms, contre 42 à 67 ms sur rag3db.

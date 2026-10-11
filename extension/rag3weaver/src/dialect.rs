@@ -263,6 +263,19 @@ pub trait SchemaDialect: Send + Sync {
     /// pour se dire atomique.
     fn snapshot_read(&self) -> Option<&'static str> { None }
 
+    /// **Les réglages du moteur avant un paquet de chargements en masse**,
+    /// à envoyer avant son `begin` : rien par défaut. rag3db y force le point
+    /// de reprise du COPY quand le plein texte vit en base (ses blobs
+    /// passeraient sinon deux fois, par le journal).
+    fn copy_session_setup(&self) -> Vec<String> { Vec::new() }
+
+    /// **Lire un réglage du moteur** (une instruction qui rend sa valeur) ;
+    /// `None` pour un moteur qui n'en a pas de ce nom.
+    fn engine_setting(&self, name: &str) -> Option<String> {
+        let _ = name;
+        None
+    }
+
     /// **Fondre deux nœuds d'un graphe de formes en une instruction** : le
     /// texte d'amont (déjà fondu ou non, et dont `upstream` est la dernière
     /// forme), la colonne qui nourrit l'aval, et le texte de l'aval. `None` :
@@ -1415,6 +1428,15 @@ impl SchemaDialect for Rag3dbDialect {
             "{} WITH DISTINCT {expression} AS __chain WHERE __chain IS NOT NULL WITH __chain AS {alias} {reste}",
             &upstream_text[..coupe]
         ))
+    }
+
+    fn copy_session_setup(&self) -> Vec<String> {
+        vec!["CALL force_checkpoint_on_copy=true".to_string()]
+    }
+
+    /// `CALL current_setting('<nom>') RETURN *` ; le nom est un identifiant.
+    fn engine_setting(&self, name: &str) -> Option<String> {
+        rag3weaver_ir::is_valid_identifier(name).then(|| format!("CALL current_setting('{name}') RETURN *"))
     }
 
     /// `MATCH (m:T)-[r:R]->() WHERE … DELETE r` en sortant, `MATCH
@@ -4088,5 +4110,14 @@ mod tests {
             PostgresDialect.select(&lire).unwrap(),
             "SELECT m.\"name\" FROM \"scope\" AS m WHERE (m.\"name\" = ANY($noms) AND (m.\"source\" = $s OR m.\"repo\" = $r))"
         );
+    }
+
+    #[test]
+    fn les_reglages_du_moteur_sont_au_dialecte() {
+        assert_eq!(Rag3dbDialect.copy_session_setup(), ["CALL force_checkpoint_on_copy=true"]);
+        assert!(PostgresDialect.copy_session_setup().is_empty(), "PostgreSQL n'a pas ce réglage");
+        assert_eq!(Rag3dbDialect.engine_setting("copy_journal_fallbacks").as_deref(), Some("CALL current_setting('copy_journal_fallbacks') RETURN *"));
+        assert_eq!(Rag3dbDialect.engine_setting("a'b"), None, "un nom qui n'est pas un identifiant ne s'envoie pas");
+        assert_eq!(PostgresDialect.engine_setting("copy_journal_fallbacks"), None);
     }
 }

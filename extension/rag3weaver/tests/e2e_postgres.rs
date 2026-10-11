@@ -1845,11 +1845,40 @@ fn le_chainage_un_eventail() {
     crate::e2e_chainage::un_eventail(&crate::e2e_chainage::peupler(cat));
 }
 
-// ═══ Les éventails, mesurés sur PostgreSQL ══════════════════════════════════
+// ═══ La mesure d'impact, et les éventails, sur PostgreSQL ════════════════════
 //
-// La mesure d'impact de bout en bout attend l'indexation du code sur
-// PostgreSQL (ticket 2026-10-11-l-indexation-du-code-envoie-du-cypher-brut) :
-// elle en sera le témoin. D'ici là, les éventails seuls.
+// La mesure d'impact de bout en bout est le témoin du ticket
+// 2026-10-11-l-indexation-du-code-envoie-du-cypher-brut : `src/daemon` indexé
+// sur le conteneur, puis la même mesure qu'`e2e_mesure_impact` sur rag3db
+// (mêmes noms, même configuration ; chaque aller-retour traverse ici une
+// connexion vers le conteneur).
+
+#[cfg(all(feature = "rag3db-native", feature = "code"))]
+#[test]
+#[ignore]
+fn mesure_impact_sur_postgres() {
+    use rag3weaver::code::{analyze, default_scope_chunking, read_sources, register_code_schema};
+    let _garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
+    table_rase(ouvrir().as_ref());
+    let n = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let boxed: Box<dyn DbConnection> = Box::new(crate::e2e_mesure_impact::Compteur {
+        inner: Box::new(PostgresConnection::new(&conn_str()).expect("connexion")),
+        n: n.clone(),
+    });
+    let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(8)), config_vide(8)).avec_regime(RegimeEcriture::ParLot);
+    let partagee = catalog.conn_arc();
+    catalog.set_dialect(Arc::new(PostgresDialect));
+    catalog.set_search_backend(Arc::new(PostgresSearchBackend::new(partagee.clone())));
+    catalog.set_blob_store(Arc::new(rag3weaver::postgres_blob_store::PostgresBlobStore::new(partagee)));
+    catalog.initialize().expect("initialize sur postgres");
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let dir = format!("{}/src/daemon", std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    catalog.ingest_code(&analyze(&dir, read_sources(&dir).unwrap())).unwrap();
+    let vidage = catalog.drain();
+    assert_eq!(vidage.failed, 0, "{vidage:?}");
+    let lignes = crate::e2e_mesure_impact::mesurer("postgresql", &catalog, &n);
+    assert_eq!(lignes.len(), 6);
+}
 
 #[cfg(all(feature = "rag3db-native", feature = "code"))]
 #[test]

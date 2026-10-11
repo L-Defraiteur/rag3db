@@ -921,8 +921,10 @@ fn synchroniser(
     // (au-delà de `copy_journal_threshold`, moteur 71cffbc4b) : un dépôt
     // assez gros pour franchir le seuil se voit ici.
     if std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some() {
-        if let Ok(r) = catalog.conn().execute("CALL current_setting('copy_journal_fallbacks') RETURN *") {
-            eprintln!("[ingest-profile] replis du COPY journalisé : {:?}", r.rows.first());
+        if let Some(q) = catalog.dialect_arc().engine_setting("copy_journal_fallbacks") {
+            if let Ok(r) = catalog.conn().execute(&q) {
+                eprintln!("[ingest-profile] replis du COPY journalisé : {:?}", r.rows.first());
+            }
         }
     }
     Ok((report, avancement))
@@ -1057,7 +1059,9 @@ fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     // tant que le défaut du moteur est encore « forcé » ; un moteur qui ne
     // connaît pas le réglage l'ignore.
     if catalog.plein_texte_en_base() {
-        let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=true");
+        for reglage in catalog.dialect_arc().copy_session_setup() {
+            let _ = catalog.conn().execute(&reglage);
+        }
     }
     catalog.conn().begin().map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
     catalog.set_in_transaction(true);
