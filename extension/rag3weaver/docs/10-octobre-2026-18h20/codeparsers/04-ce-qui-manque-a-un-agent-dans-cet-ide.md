@@ -416,3 +416,26 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
 - **Ce que j'ai dû faire à côté** : rien.
 - **Ce qui manquait** : rien de neuf — le délai est celui d'une montre, et les deux manques
   d'avant restent (dire « index à jour au <heure> », un client qui se reconnecte seul).
+
+### 11 oct., 20 h 16 (heure luciepc) — cœur C++ — « et le signal lexical seul, sur un fichier frais ? » (Lucie) — un appel suspendu deux minutes
+
+- **La question posée** : les 6 s mesurées valent pour `usages` (l'index structurel, sans
+  embarquement) ; Lucie demande si le signal lexical seul (bm25) d'un fichier frais s'obtient plus
+  vite, sans attendre les vecteurs — et trouve déjà 6 s long pour relier un seul fichier.
+- **L'outil essayé** : fichier `test/essai_bm25_frais.cpp` (un mot rare) écrit à 20:16:29 dans
+  `~/git_workspaces/rag3db` sur luciepc, pendant que l'hôte (relevé 20:12, pid 4190522)
+  **réindexait code-principal** ; puis `search_code {query: zorglubetteFraicheur, mode: indexed,
+  options: {signals: [bm25], limit: 3}}` et `usages {name: zorglubetteFraicheur}`.
+- **Ce qu'il a rendu** : **rien — les deux appels sont restés suspendus environ deux minutes**,
+  sans « occupé », sans délai, jusqu'à ce que Lucie les interrompe. Pas de mesure.
+- **Ce que j'ai dû faire à côté** : retirer le fichier, et renoncer tant que l'index tourne.
+- **Ce qui manquait** :
+  1. **Un appel ne se suspend jamais** : pendant une indexation, répondre tout de suite « occupé
+     (indexation de code-principal depuis N s), réessayez » ou servir le dernier état, avec un
+     délai borné côté client (quelques secondes), jamais une attente ouverte.
+  2. **Le signal lexical d'un fichier frais devrait être servi avant ses vecteurs** : le texte est
+     là dès l'écriture ; si l'index le relit en deux temps (structure puis embarquement), dire
+     lequel est à jour, et laisser `signals: [bm25]` répondre sur le premier.
+  3. **6 s pour un fichier, c'est long** (Lucie) : à mesurer où passe le temps (montre, extraction,
+     écriture en base, relâchement du catalogue) — une édition localisée devrait se voir en moins
+     d'une seconde.
