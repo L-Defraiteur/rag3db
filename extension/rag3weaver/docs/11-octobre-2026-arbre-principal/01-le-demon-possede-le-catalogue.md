@@ -292,6 +292,24 @@ disparition des autres outils passent par `notifications/tools/list_changed` —
 la première raison pour laquelle le client MCP a besoin du flux `events` (§3,
 point 3), et `listChanged` devient `true`.
 
+**Quand le client s'en va — et SIGTERM** (relu sur la marche 0 de l'arbre
+principal). Le cycle de vie MCP sur stdio prévoit que le client ferme l'entrée,
+attend la sortie, **puis envoie SIGTERM** s'il juge l'attente trop longue, puis
+SIGKILL. Depuis la marche 0, fermer le tube arrête les indexations au prochain
+paquet validé et les attend — quelques secondes, davantage sur un paquet de
+blobs ; le serveur le dit sur stderr avant d'attendre. Mais **il n'intercepte pas
+SIGTERM** : un client un peu pressé retombe dans le cas du serveur tué, session
+laissée ouverte, relance refusée sans `takeover`.
+
+**Une marche à part, côté client (mémoire longue, dans `servir_mcp`)** : SIGTERM
+traité **comme la fermeture du tube** — il pose les drapeaux d'arrêt et laisse
+`shutdown` faire son travail, au lieu de tuer. Seul SIGKILL laisse alors la
+session en plan. Sous C, la même règle vaut pour le démon (`POST /arret` et
+SIGTERM reviennent déjà au même, §5) ; pour le client mince, SIGTERM n'a plus
+rien à attendre, puisqu'il ne porte aucun travail. Cette marche vaut donc
+**surtout pour la forme d'aujourd'hui**, d'ici que le client soit mince — et
+c'est la raison de la faire petite.
+
 **Quand le démon meurt entre deux appels**, l'appel suivant passe par `assurer` :
 le démon renaît, rouvre le backend, et l'appel en cours rend une erreur
 transitoire nommée — jamais un tube cassé, jamais un rejeu silencieux.
