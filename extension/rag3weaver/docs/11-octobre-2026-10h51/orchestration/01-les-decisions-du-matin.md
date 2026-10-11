@@ -972,3 +972,21 @@ où elle vit.
   un rouge connu du banc passé vert par hasard, remis aux probabilistes
   `94a09d84e`), le lot des fils en bâti (fils.sh), la passe du produit sur
   sa branche par l'arbre principal.
+- **1 h 15 – 1 h 45, nuit**. **Le lot ABI du cœur est sur master**
+  (`2bc7b4a3b` : la signature d'avant B2 du constructeur de SystemConfig reste
+  en surcharge qui délègue, témoin par dlsym ; un binaire d'avant B2 charge la
+  lib neuve sans rebâti ; hotfixs a le hash pour la lib de luciepc après
+  l'arrêt de Lucie). **La passe du produit sur le lot des fils est verte**
+  (arbre principal : 131 tests en 12 groupes, 0 rouge, aucune attente,
+  e2e_code 160 s contre 198 ; artefact prouvé par ldd et md5) : le cœur
+  pousse les fils proportionnés. Le rebâti de la lib d'ici se fera en une
+  fois après ce push (visited set, section ELF, ABI, fils). **Le témoin de
+  bout en bout tourne** (codeparsers, ici, isolé : hôte à lui sur 7975 sous
+  ~/.cache/codeparsers-temoin, worktree détaché de 8610eaec6 avec les quatre
+  briques et l'ABI, binaire bâti contre la lib d'ici, moteur ancien déclaré ;
+  code-tree add, index entier, `name_of_tree` renommé sur disque, le temps
+  jusqu'à ce qu'usages et search_code le voient, en-tête des morceaux sans
+  texte, code-tree remove). La section « Pour Lucie » est à jour pour B4
+  (`8610eaec6` : les bases de luciepc mises de côté dans avant-b4/ après la
+  copie de comptage, le binaire neuf, la réindexation à heure accordée).
+  Deux mesures attendent la place d'ici derrière le témoin (F, le banc).
