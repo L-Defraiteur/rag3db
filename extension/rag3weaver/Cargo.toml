@@ -9,7 +9,12 @@ license-file = "LICENSE"
 description = "RAG pipeline orchestrator: events, config, embedder and DB traits for rag3db"
 
 [lib]
-crate-type = ["lib", "staticlib"]
+# **Pas de `staticlib` ici** (11 octobre 2026) : elle ne sert qu'au bâti WASM
+# (CMakeLists.txt), qui la demande lui-même par `cargo rustc --crate-type
+# staticlib`. Déclarée ici, chaque bâti natif — tests compris — reliait tout
+# le graphe de dépendances en un `librag3weaver.a` de 1,1 Go que personne ne
+# lisait : un cinquième du target d'une batterie.
+crate-type = ["lib"]
 
 # Lints scopés au paquet. On n'utilise PAS RUSTFLAGS=-D warnings au CI : cargo
 # ne plafonne les lints (`--cap-lints allow`) que pour les dépendances issues
