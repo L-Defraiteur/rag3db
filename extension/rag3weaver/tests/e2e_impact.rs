@@ -64,9 +64,9 @@ fn code_config() -> NeighborhoodConfig {
         label_field: "test_name".into(),
         note_field: "test_certainty".into(),
         also_path: vec![
-            Step { relation: "HAS_PARENT".into(), direction: Direction::Outgoing },
-            Step { relation: "IMPLEMENTS".into(), direction: Direction::Outgoing },
-            Step { relation: "PARENT_OF".into(), direction: Direction::Outgoing },
+            Step::new("HAS_PARENT", Direction::Outgoing),
+            Step::new("IMPLEMENTS", Direction::Outgoing),
+            Step::new("PARENT_OF", Direction::Outgoing),
         ],
         also_same: "name".into(),
         also_label: "Par le trait (peut-être)".into(),

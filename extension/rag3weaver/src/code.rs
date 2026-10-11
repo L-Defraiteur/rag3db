@@ -313,6 +313,7 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // .h). Vides quand il n'y en a pas.
     fields.insert("field_types".into(), field(FieldType::String));
     fields.insert("return_type".into(), field(FieldType::String));
+    fields.insert("template_params".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
     // Les enfants repliés dans `content` : de quoi rendre un extrait avec
@@ -638,6 +639,11 @@ pub struct ScopeRecord {
     /// Le type de retour écrit d'une fonction ; vide sinon.
     #[serde(default)]
     pub return_type: String,
+    /// Les paramètres d'une fonction gabarit, dans l'ordre, séparés par des
+    /// virgules (`TO,FROM`) ; vide sinon. Le retour d'un appel à arguments
+    /// explicites s'en lit (`ku_dynamic_cast<ProcessorTask*>(t)`).
+    #[serde(default)]
+    pub template_params: String,
     /// **Un bloc qui prolonge un type défini ailleurs** (un `impl` Rust,
     /// modificateur `impl` de codeparsers) : il porte le nom du type sans le
     /// définir — pas de DEFINES vers ce nom, sinon `Marteau` aurait deux
@@ -1023,6 +1029,7 @@ pub fn analyze_in_project(
             declarations: String::new(),
             field_types: String::new(),
             return_type: String::new(),
+            template_params: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
             start_byte: sc.scope_start_byte,
@@ -1118,6 +1125,7 @@ pub fn analyze_in_project(
                 declarations: declarations_of(s),
                 field_types: field_types_of(s),
                 return_type: s.return_type.clone().unwrap_or_default(),
+                template_params: s.generic_parameters.iter().flatten().map(|g| g.name.as_str()).collect::<Vec<_>>().join(","),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
                 start_byte: s.scope_start_byte,
@@ -1259,7 +1267,14 @@ pub fn analyze_in_project(
                     continue;
                 }
                 let id = r.identifier.as_str();
-                if id.is_empty() || id == sc.name || libraries.contains(id) {
+                // Son propre nom : seul un appel depuis une fonction ou une
+                // méthode passe — la récursion (`acquireLocks(child, ctx)`,
+                // processor.cpp:69), un appelant comme un autre. Le nom d'une
+                // classe dans son propre corps reste écarté.
+                let recursion = id == sc.name
+                    && r.usage == Some(UsageKind::Call)
+                    && matches!(sc.r#type, ScopeInfoType::Function | ScopeInfoType::Method);
+                if id.is_empty() || (id == sc.name && !recursion) || libraries.contains(id) {
                     continue;
                 }
                 // **Un accès de champ ne prend pas de rendez-vous** avec une
@@ -1322,7 +1337,12 @@ pub fn analyze_in_project(
                     _ => *modules = None,
                 }
                 let par_instance = r.qualifier.as_deref().is_some_and(|q| matches!(q, "self" | "Self" | "this"));
-                let englobant = sc.parent.clone().filter(|p| par_instance && !p.is_empty());
+                // **Le `this` implicite** (C++, C#, Java) : un appel sans
+                // receveur dans une méthode vise d'abord sa classe, comme
+                // `this->f()` — la récursion, une méthode sœur. Pas en Rust ni
+                // en Python, où un nom nu n'est jamais une méthode.
+                let implicite = r.qualifier.is_none() && r.usage == Some(UsageKind::Call) && this_implicite(abs);
+                let englobant = sc.parent.clone().filter(|p| (par_instance || implicite) && !p.is_empty());
                 let englobants = englobants_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 match (englobants.as_mut(), englobant) {
                     (Some(v), Some(t)) => {
@@ -1601,7 +1621,9 @@ fn fold_lambdas(a: &mut CodeAnalysis) {
         if to_is_lambda {
             r.to_key = resolve(&r.to_key);
         }
-        if r.from_entity == r.to_entity && r.from_key == r.to_key {
+        // Une boucle née du repli (une fermeture vers son scope) n'a pas de
+        // sens ; une boucle d'origine, si : l'appel récursif.
+        if (from_is_lambda || to_is_lambda) && r.from_entity == r.to_entity && r.from_key == r.to_key {
             continue;
         }
         kept.push(r);
@@ -1839,6 +1861,7 @@ impl ScopeRecord {
             ("declarations".into(), s(&self.declarations)),
             ("field_types".into(), s(&self.field_types)),
             ("return_type".into(), s(&self.return_type)),
+            ("template_params".into(), s(&self.template_params)),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
             ("start_byte".into(), i(self.start_byte)),
@@ -2288,9 +2311,10 @@ impl Catalog {
                     continue;
                 };
                 let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
-                if m.from == target {
-                    continue;
-                }
+                // Une arête d'un scope vers lui-même ne vient plus que d'un
+                // appel récursif (le nom propre n'entre au rendez-vous que
+                // par lui) : elle se pose. Le parcours d'impact s'en garde par
+                // son ensemble « déjà vus ».
                 if !tous && !lot.is_some_and(|(_, mentionneurs)| mentionneurs.contains(&m.from)) {
                     continue;
                 }
@@ -2458,7 +2482,7 @@ impl Catalog {
             for d in &m.deferred {
                 noms.insert(match d {
                     D::FieldOf { owner, .. } => owner.clone(),
-                    D::ReturnOf { function, .. } => function.clone(),
+                    D::ReturnOf { function, .. } | D::TemplateReturnOf { function, .. } => function.clone(),
                 });
             }
         }
@@ -2469,6 +2493,9 @@ impl Catalog {
         // `None` : deux déclarations qui ne s'accordent pas.
         let mut champs: HashMap<(String, String), Option<String>> = HashMap::new();
         let mut retours: HashMap<String, Option<(String, String)>> = HashMap::new();
+        // Gabarit → (retour écrit, paramètres) : sans le parent, puisque la
+        // même méthode gabarit (`constCast`) est déclarée par plusieurs classes.
+        let mut gabarits: HashMap<String, Option<(String, Vec<String>)>> = HashMap::new();
         let mut charges: BTreeSet<String> = BTreeSet::new();
         let nom_du_type = |ecrit: &str, peel: &[String], champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
             if peel.is_empty() {
@@ -2477,8 +2504,12 @@ impl Catalog {
                 codeparsers::scope_extraction::receveur::peel_avec(ecrit, peel, champ).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
             }
         };
-        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+        type Gabarits = HashMap<String, Option<(String, Vec<String>)>>;
+        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, gabarits: &Gabarits, champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
             match d {
+                D::TemplateReturnOf { function, args, peel, .. } => gabarits.get(function).cloned().flatten().and_then(|(t, params)| {
+                    nom_du_type(&codeparsers::scope_extraction::usage::substitute_template(&t, &params, args), peel, champ)
+                }),
                 D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ)),
                 D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
                     // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
@@ -2495,7 +2526,7 @@ impl Catalog {
                 break;
             }
             tours += 1;
-            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours)?;
+            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours, &mut gabarits)?;
             charges.extend(a_charger);
             // Les classes qu'un pas de champ demande, pas encore chargées.
             let demandes = std::cell::RefCell::new(BTreeSet::new());
@@ -2507,14 +2538,14 @@ impl Catalog {
             };
             for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
                 for d in &m.deferred {
-                    let _ = resoudre(d, &champs, &retours, &champ);
+                    let _ = resoudre(d, &champs, &retours, &gabarits, &champ);
                 }
             }
             noms.extend(demandes.into_inner());
         }
         let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
         for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty() && de_la_source(m)) {
-            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &champ)).collect();
+            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &gabarits, &champ)).collect();
             if let Some(mut v) = lus {
                 v.sort();
                 v.dedup();
@@ -2535,6 +2566,7 @@ impl Catalog {
         source: &(String, String),
         champs: &mut std::collections::HashMap<(String, String), Option<String>>,
         retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
+        gabarits: &mut std::collections::HashMap<String, Option<(String, Vec<String>)>>,
     ) -> Result<(), CatalogError> {
         let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
         // Par le dialecte : les scopes dont le nom est dans la liste, de cette
@@ -2548,7 +2580,7 @@ impl Catalog {
         let lire = rag3weaver_ir::Select::filtered(
             SCOPE,
             filtre,
-            ["name", "field_types", "return_type", "parent_name"].map(|f| Column::Node(f.into())).to_vec(),
+            ["name", "field_types", "return_type", "parent_name", "template_params"].map(|f| Column::Node(f.into())).to_vec(),
         );
         let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
@@ -2579,6 +2611,18 @@ impl Catalog {
                 }
             }
             let retour = texte(2);
+            let params: Vec<String> = texte(4).split(',').map(str::trim).filter(|p| !p.is_empty()).map(String::from).collect();
+            if !retour.trim().is_empty() && !params.is_empty() {
+                let g = (retour.clone(), params);
+                gabarits
+                    .entry(nom.clone())
+                    .and_modify(|o| {
+                        if o.as_ref() != Some(&g) {
+                            *o = None;
+                        }
+                    })
+                    .or_insert(Some(g));
+            }
             if !retour.trim().is_empty() {
                 let v = (retour, texte(3));
                 retours
@@ -2774,6 +2818,13 @@ impl Resolution {
 ///   désigne son fichier, `Name` sinon.
 /// - Plusieurs, et un import : le définisseur du fichier de ce module, s'il
 ///   est seul.
+/// Le langage du fichier a-t-il un `this` implicite (un appel nu dans une
+/// méthode peut viser une méthode de la classe) ?
+fn this_implicite(fichier: &str) -> bool {
+    let ext = fichier.rsplit('.').next().unwrap_or("");
+    matches!(ext, "cpp" | "cc" | "cxx" | "c++" | "h" | "hh" | "hpp" | "hxx" | "cs" | "java")
+}
+
 fn choose_target(
     m: &Mention,
     definers: &[String],

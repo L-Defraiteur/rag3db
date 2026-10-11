@@ -336,7 +336,17 @@ fn spawn_index_with_stop(
     stop: Arc<std::sync::atomic::AtomicBool>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &stop) {
-        Ok(()) => log(&journal, DONE_LINE),
+        Ok(()) => {
+            // L'arbre et le commit indexés, que chaque lecture dira.
+            if let Some(root) = source.cursor().strip_prefix("worktree:") {
+                if let Ok(cat) = catalog.lock() {
+                    if let Err(e) = cat.note_indexed_tree(root) {
+                        log(&journal, &format!("(l'arbre indexé n'a pas pu être noté : {e})"));
+                    }
+                }
+            }
+            log(&journal, DONE_LINE)
+        }
         Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => log(&journal, &format!("{STOPPED_PREFIX} : {e}")),
         Err(e) if e.starts_with(STOPPED_PREFIX) => log(&journal, &e),
         Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),

@@ -143,6 +143,17 @@ impl Node for ReindexFileNode {
                 }
             }
         }
+        // L'arbre indexé a avancé : son commit (et ses modifications) sont
+        // ceux de maintenant.
+        if !reindexed.is_empty() || !removed.is_empty() {
+            if let Some(root) = source.cursor().strip_prefix("worktree:") {
+                if let Ok(cat) = catalog.lock() {
+                    if let Err(e) = cat.note_indexed_tree(root) {
+                        ctx.warn(&format!("ReindexFileNode : l'arbre indexé n'a pas pu être noté : {e}"));
+                    }
+                }
+            }
+        }
         ctx.info(&format!(
             "ReindexFileNode : {} réindexé(s), {} retiré(s), {} repris plus tard, {} en échec",
             reindexed.len(),

@@ -84,6 +84,12 @@ pub fn read_catalog_in<'a>(
         (Some(partial), Some(lag)) => Some(format!("{partial} {lag}")),
         (partial, lag) => partial.or(lag),
     };
+    // **Sur quel code on répond** : l'arbre et le commit du dernier index.
+    let arbre = cat.indexed_tree_line(crate::catalog::retard::now_ms());
+    let status = match (arbre, status) {
+        (Some(a), Some(s)) => Some(format!("{a} — {s}")),
+        (a, s) => a.or(s),
+    };
     CatalogRead::Ready { catalog: cat, status }
 }
 

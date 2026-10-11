@@ -180,6 +180,100 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
+/// **L'envoi virtuel** : où chercher la méthode de base qu'une définition
+/// redéfinit (le chemin d'`also_path`, `HAS_PARENT>|IMPLEMENTS/INHERITS_FROM>+|PARENT_OF>`),
+/// et le champ qui doit valoir le nom au bout.
+#[derive(Debug, Clone)]
+pub struct VirtualConfig {
+    pub path: Vec<super::neighborhood_nodes::Step>,
+    pub same: String,
+}
+
+/// Une méthode de base que les définitions redéfinissent, et ses appelants :
+/// chacun peut atteindre la redéfinition par envoi virtuel.
+#[derive(Debug, Clone, Serialize)]
+pub struct VirtualBase {
+    pub base: Item,
+    pub callers: Vec<Usage>,
+}
+
+/// Les appelants des méthodes de base que `definitions` redéfinissent
+/// (classe de base ou trait, à tout niveau).
+pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfig, definitions: &[Item]) -> Result<Vec<VirtualBase>, String> {
+    let err = |e: CatalogError| format!("UsagesNode: {e}");
+    let departs: Vec<(String, String)> = definitions.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
+    let propres: std::collections::HashSet<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
+    let mut bases: Vec<String> = super::neighborhood_nodes::follow_also(catalog, &v.path, &v.same, &departs)?
+        .into_iter()
+        .map(|(u, _)| u)
+        .filter(|u| !propres.contains(u.as_str()))
+        .collect();
+    bases.sort();
+    bases.dedup();
+    if bases.is_empty() {
+        return Ok(Vec::new());
+    }
+    let liste = CypherValue::List(bases.iter().map(|u| CypherValue::String(u.clone())).collect());
+    // Les bases elles-mêmes, pour les nommer.
+    // La table des définitions : celle d'où part `defined_by` (le Scope).
+    let table = match &cfg.defined_by {
+        Some(d) => rel_info(catalog, d)?.from,
+        None => cfg.pivot.clone(),
+    };
+    // Le dialecte rend l'uuid demandé en tête, puis les colonnes.
+    let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(&table, colonnes_item(cfg))).map_err(|e| format!("UsagesNode: {e}"))?;
+    let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
+    let mut out: Vec<VirtualBase> = rows.rows.iter().map(|r| VirtualBase { base: item(r, 1, cfg), callers: Vec::new() }).collect();
+    // Leurs appelants directs.
+    for name_rel in &cfg.direct {
+        let rel = rel_info(catalog, name_rel)?;
+        let q = catalog.dialect_arc().hop(&direct_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
+        let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
+        for r in &rows.rows {
+            let def = texte(r.first());
+            let mut user = item(r, 1, cfg);
+            let debut = 1 + 4 + cfg.path_fields.len();
+            let (usage, ensemble, site) = usage_props(r, debut);
+            if usage != "call" || propres.contains(user.uuid.as_str()) {
+                continue;
+            }
+            user.line = site.or(user.line);
+            let guessed = cfg.edge_mark.is_guessed(&texte(r.get(debut + 3)));
+            if let Some(b) = out.iter_mut().find(|b| b.base.uuid == def) {
+                if !b.callers.iter().any(|c| c.user.uuid == user.uuid && c.user.line == user.line) {
+                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed });
+                }
+            }
+        }
+    }
+    out.retain(|b| !b.callers.is_empty());
+    for b in &mut out {
+        b.callers.sort_by(|a, b| (&a.user.path, a.user.line, &a.user.title).cmp(&(&b.user.path, b.user.line, &b.user.title)));
+    }
+    out.sort_by(|a, b| (&a.base.path, a.base.line).cmp(&(&b.base.path, b.base.line)));
+    Ok(out)
+}
+
+/// La section « par envoi virtuel » du rendu d'`usages`.
+pub fn virtual_markdown(bases: &[VirtualBase], limit: usize) -> String {
+    if bases.is_empty() {
+        return String::new();
+    }
+    let n: usize = bases.iter().map(|b| b.callers.len()).sum();
+    let mut out = format!("\n## Par envoi virtuel ({n}) — appels de la méthode de base, qui peuvent atteindre celle-ci\n");
+    for b in bases {
+        out.push_str(&format!("\n### {} {} — {}\n", b.base.kind, b.base.title, lieu(&b.base)));
+        for u in b.callers.iter().take(limit) {
+            let devine = if u.guessed { " (par le nom)" } else { "" };
+            out.push_str(&format!("- {} {} — {}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
+        }
+        if b.callers.len() > limit {
+            out.push_str(&format!("… {} de plus\n", b.callers.len() - limit));
+        }
+    }
+    out
+}
+
 /// Le texte d'avant le dialecte, gardé pour la parité des tests — les noms
 /// cités comme le dialecte rag3db les cite.
 #[cfg(test)]
@@ -352,7 +446,9 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
                 let mut user = item(r, 1, cfg);
                 let debut = 1 + 4 + cfg.path_fields.len();
                 let (usage, ensemble, site) = usage_props(r, debut);
-                if user.uuid == def {
+                // Une arête d'une définition vers elle-même : seul l'appel
+                // récursif en pose une, et c'est un appelant.
+                if user.uuid == def && usage != "call" {
                     continue;
                 }
                 user.line = site.or(user.line);
@@ -550,6 +646,8 @@ pub struct UsagesNode {
     json: bool,
     /// Où lire les déclarations (`declared_in`), quand le gabarit le dit.
     declarations: Option<DeclarationsConfig>,
+    /// L'envoi virtuel (`virtual_path`), quand le gabarit le dit.
+    virtuel: Option<VirtualConfig>,
 }
 
 impl Node for UsagesNode {
@@ -581,10 +679,14 @@ impl Node for UsagesNode {
                     Some(d) => declarations_of(&cat, &self.cfg, d, &self.name, &report.definitions)?,
                     None => Vec::new(),
                 };
-                ((report, declarations), status)
+                let virtuels = match &self.virtuel {
+                    Some(v) => virtual_usages_of(&cat, &self.cfg, v, &report.definitions)?,
+                    None => Vec::new(),
+                };
+                ((report, declarations, virtuels), status)
             }
         };
-        let (report, declarations) = report;
+        let (report, declarations, virtuels) = report;
         ctx.metric("definitions", report.definitions.len() as f64);
         ctx.metric("usages", report.usages.len() as f64);
         let value = if self.json {
@@ -592,9 +694,12 @@ impl Node for UsagesNode {
             if !declarations.is_empty() {
                 v["declarations"] = serde_json::to_value(&declarations).map_err(|e| e.to_string())?;
             }
+            if !virtuels.is_empty() {
+                v["virtual"] = serde_json::to_value(&virtuels).map_err(|e| e.to_string())?;
+            }
             v
         } else {
-            serde_json::Value::String(report.markdown_with(&self.usage, self.limit, &declarations))
+            serde_json::Value::String(report.markdown_with(&self.usage, self.limit, &declarations) + virtual_markdown(&virtuels, self.limit).as_str())
         };
         ctx.set_output("result", PortValue::new(with_status(status.as_deref(), value, self.json)));
         Ok(())
@@ -661,9 +766,21 @@ impl NodeFactory for UsagesNodeFactory {
                 return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
             }
         }
+        let virtuel = match s("virtual_path").filter(|v| !v.is_empty()) {
+            Some(p) => {
+                let path = liste(Some(&serde_json::Value::String(p))).iter().map(|x| super::neighborhood_nodes::pas(x)).collect::<Result<Vec<_>, _>>()?;
+                let same = s("virtual_same").filter(|v| !v.is_empty()).unwrap_or_else(|| cfg.title.clone());
+                if let Some(x) = path.iter().flat_map(|p| p.alternatives.iter()).chain(std::iter::once(&same)).find(|x| !ident(x)) {
+                    return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
+                }
+                Some(VirtualConfig { path, same })
+            }
+            None => None,
+        };
         Ok(Box::new(UsagesNode {
             node_name: name.to_string(),
             cfg,
+            virtuel,
             name: requis("name")?,
             path: s("path").unwrap_or_default(),
             usage,
@@ -709,6 +826,8 @@ impl NodeFactory for UsagesNodeFactory {
                 p("path_fields", S, false, Some(serde_json::json!("file_path")), "Champs de chemin, le premier non vide, séparés par |"),
                 p("line_field", S, false, Some(serde_json::json!("start_line")), "Champ de ligne de la déclaration"),
                 p("declared_in", S, false, Some(serde_json::json!("")), "Relation d'une définition vers son conteneur, qui porte les déclarations (ex. HAS_PARENT)"),
+                p("virtual_path", S, false, Some(serde_json::json!("")), "Chemin d'une définition vers la méthode de base qu'elle redéfinit (pas REL> ou <REL, A/B pour plusieurs relations, + pour répéter, séparés par |) : ses appelants sont dits « par envoi virtuel »"),
+                p("virtual_same", S, false, Some(serde_json::json!("")), "Champ qui doit valoir le nom de la définition au bout du chemin (défaut : title)"),
                 p("declarations_field", S, false, Some(serde_json::json!("declarations")), "Champ du conteneur : liste JSON de {name, line, signature, kind}"),
                 p("name", S, true, None, "Le nom cherché"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne montrer que les définitions sous ce chemin"),
