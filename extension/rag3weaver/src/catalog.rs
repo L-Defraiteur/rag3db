@@ -2325,7 +2325,7 @@ impl Catalog {
         self.check_initialized()?;
 
         // Validate identifiers
-        crate::schema::validate_identifier(rel_name, "relation")
+        crate::schema::validate_declared_name(rel_name, "relation")
             .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
 
         // Check that both endpoints exist
