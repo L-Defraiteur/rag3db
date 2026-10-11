@@ -63,7 +63,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -85,7 +85,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | ouvert — confirmation pour l'arbre principal | blocage (s'il revenait) | oui | oui (premier index) |
-| [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
 | [Une synchronisation reprise après un arrêt brutal exige takeover](2026-10-04-reprise-apres-arret-exige-takeover.md) | levé après un arrêt propre (`75de6618f`) ; reste la mort brutale | blocage | oui | oui (sessions de `sync_source`) |
 | [Les journaux d'annulation du dataflow restent à vie dans /tmp, qui est de la mémoire vive](2026-10-04-journaux-d-annulation-laisses-dans-tmp.md) | ouvert | perte | oui | oui (son code) |
 | [Les services de modèles n'ont aucune authentification](2026-10-04-services-de-modeles-sans-authentification.md) | ouvert (accepté aujourd'hui) | à faire avant toute exposition hors d'un tunnel | depuis l'un des deux postes | oui (démon d'embarquement et ses clients) |
@@ -105,7 +104,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
 
-### Fermés (91), dans `closed/`
+### Fermés (92), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
@@ -117,11 +116,12 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](closed/2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | corrigé, parent par passe effacé à la fin du lanceur (11 octobre) | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |
 | [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](closed/2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | corrigé, migration (a) de la marche 1 bis (11 oct.) | perte | oui (deux cellules, la même identité) | oui |
+| [738 définitions C++ restent anonymes](closed/2026-10-04-fonctions-anonymes-cpp-restantes.md) | corrigé, codeparsers (11 oct.) | réponse fausse | oui | oui |
+| [analyze() avec une racine relative rend zéro scope, en silence](closed/2026-10-04-analyze-racine-relative-rend-zero-scope.md) | corrigé, codeparsers (11 oct.) | réponse fausse | oui | oui (son API d'analyse) |
+| [Les prototypes C au niveau du fichier sont du bruit de références](closed/2026-10-04-prototypes-c-au-niveau-du-fichier.md) | corrigé, codeparsers (11 oct.) | réponse fausse | oui | oui |
 | [Le témoin des transactions PostgreSQL crée sa table sans `_uuid`](closed/2026-10-11-le-temoin-des-transactions-postgresql-cree-sa-table-sans-uuid.md) | corrigé, ouvert et fermé dans le même commit (11 oct.) | test faux | non (tests) | oui (tests) |
 | [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](closed/2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | corrigé, témoins vivants verts sur le conteneur (11 oct.) | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](closed/2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | corrigé, témoin vivant vert sur le conteneur (11 oct.) | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
-| [Les prototypes C au niveau du fichier sont du bruit de références](closed/2026-10-04-prototypes-c-au-niveau-du-fichier.md) | corrigé, codeparsers (11 oct.) | réponse fausse | oui | oui |
-| [analyze() avec une racine relative rend zéro scope, en silence](closed/2026-10-04-analyze-racine-relative-rend-zero-scope.md) | corrigé, codeparsers (11 oct.) | réponse fausse | oui | oui (son API d'analyse) |
 | [La lib ne compile pas sans la feature `code`](closed/2026-10-11-la-lib-ne-compile-pas-sans-la-feature-code.md) | corrigé, l'arbre principal (11 oct.) | blocage | non | oui (`backend.rs`, garde de feature) |
 | [Le binaire e2e ne compile pas sans burn-embedder](closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md) | corrigé : le `cfg` de la suite demande sa feature, `scripts/check_features.sh` vérifie les quatre jeux (11 oct.) | blocage (`cargo check --tests` rouge) | non (tests) | oui (tests) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](closed/2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | corrigé : le démon de test sert un écouteur lié au port 0, plus de course au port (11 oct.) | test instable | non | oui (tests du démon) |
