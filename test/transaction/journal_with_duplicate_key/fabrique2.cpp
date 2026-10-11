@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
         auto r = conn->query(q);
         if (!r->isSuccess()) { std::cout << "ERREUR " << q << " : " << r->getErrorMessage() << "\n"; _exit(3); }
     };
-    run(first, "CALL debug_enable_multi_writes=true;");
+    run(first, "CALL enable_multi_writes=true;");
     run(first, "CALL auto_checkpoint=false;");
     run(first, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
     run(first, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");

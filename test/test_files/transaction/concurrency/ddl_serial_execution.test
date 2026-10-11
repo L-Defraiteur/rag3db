@@ -1,7 +1,11 @@
 -DATASET CSV empty
 --
 
+# L'ancienne sémantique, un seul écrivain par base : depuis le 11 octobre 2026 le mode
+# multi-écrivains est le défaut, ce cas le rend par le réglage.
 -CASE MultiWritesException
+-STATEMENT CALL enable_multi_writes=false;
+---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT CREATE NODE TABLE t(a INT, b INT, PRIMARY KEY(a));
@@ -17,10 +21,8 @@ Cannot start a new write transaction in the system. Only one write transaction a
 0|a|INT32|NULL|True
 1|b|INT32|NULL|False
 
-# Test CALL debug_enable_multi_writes=true
+# Le défaut : deux transactions d'écriture ouvertes en même temps.
 -CASE EnableMultiWrites
--STATEMENT CALL debug_enable_multi_writes=true;
----- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
 -STATEMENT CREATE NODE TABLE t(a INT, b INT, PRIMARY KEY(a));
@@ -77,7 +79,7 @@ Catalog exception: t does not exist in catalog.
 
 # Test W-W conflict
 -CASE CreateTableWriteWriteConflict
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
@@ -161,7 +163,7 @@ Catalog exception: t does not exist in catalog.
 1|b|INT32|NULL|False
 
 -CASE CreateAndDropMultiConnections
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
@@ -209,7 +211,7 @@ Binder exception: Table t does not exist.
 1|b|INT32|NULL|False
 
 -CASE RenameTable
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT BEGIN TRANSACTION;
 ---- ok
@@ -246,7 +248,7 @@ Catalog exception: t does not exist in catalog.
 1|b|INT32|NULL|False
 
 -CASE RenameColumn
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT CALL auto_checkpoint=false;
 ---- ok

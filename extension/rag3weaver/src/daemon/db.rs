@@ -4,10 +4,10 @@
 //!
 //! Mesuré, pas supposé (`tests/e2e_prise_atomique.rs`) : **un second processus
 //! ne peut pas ouvrir la même base.** `LocalFileSystem::openFile` pose un
-//! `F_WRLCK` en `F_SETLK` — non bloquant, donc refus immédiat. Et dans le
-//! moteur, `TransactionManager::beginTransaction` refuse une seconde
-//! transaction d'écriture ; le seul réglage qui le relâche s'appelle
-//! `debug_enable_multi_writes`, ce qui dit son statut.
+//! `F_WRLCK` en `F_SETLK` — non bloquant, donc refus immédiat. (Dans le
+//! moteur, plusieurs transactions d'écriture d'un même processus se font
+//! désormais sous verrous, `enable_multi_writes` à vrai par défaut depuis le
+//! 11 octobre 2026 ; `CALL enable_multi_writes=false` rend l'ancien refus.)
 //!
 //! C'est la propriété d'une base **embarquée**, pas un défaut : SQLite et
 //! DuckDB font pareil. La réponse est la même que la leur — **mettre le

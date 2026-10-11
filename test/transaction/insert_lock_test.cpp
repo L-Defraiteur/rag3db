@@ -82,7 +82,7 @@ TEST_F(InsertLockTest, WithoutMultiWritesNothingIsLocked) {
 }
 
 TEST_F(InsertLockTest, AnInsertHoldsTheIndexSharedAndItsKeyExclusiveUntilTheEnd) {
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     for (const auto* end : {"COMMIT;", "ROLLBACK;"}) {
         mustRun(*conn, "BEGIN TRANSACTION;");
         mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
@@ -98,7 +98,7 @@ TEST_F(InsertLockTest, AnInsertHoldsTheIndexSharedAndItsKeyExclusiveUntilTheEnd)
 }
 
 TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, copyOfKeys(100, 10));
     const auto id = transactionIDOf(*conn);
@@ -111,7 +111,7 @@ TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
 
 TEST_F(InsertLockTest, ASecondInsertOfTheSameKeyWaitsForTheFirstTransaction) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(other, "CALL lock_timeout=200;");
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
@@ -134,7 +134,7 @@ TEST_F(InsertLockTest, ASecondInsertOfTheSameKeyWaitsForTheFirstTransaction) {
 
 TEST_F(InsertLockTest, UniquenessIsCheckedAgainstTheLatestCommitNotTheSnapshot) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     // L'instantané de 'other' précède la validation de la clé 7 par 'conn' ; sans
     // chevauchement, aucun verrou ne les sépare. Seul le contrôle contre le dernier état
     // validé refuse la seconde insertion (C1_SnapshotPredatesCommit du banc).
@@ -156,7 +156,7 @@ TEST_F(InsertLockTest, UniquenessIsCheckedAgainstTheLatestCommitNotTheSnapshot) 
 // suivante, SIGSEGV).
 TEST_F(InsertLockTest, AKeyDeletedAndCommittedAfterTheSnapshotIsFreeAtCommitToo) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
     mustRun(other, "BEGIN TRANSACTION;");
     mustRun(other, "MATCH (n:Item) RETURN count(n);");
@@ -193,7 +193,7 @@ protected:
 };
 
 TEST_F(FewWorkerThreadsLockTest, TheHolderCommitsWhileMoreWaitersThanWorkerThreadsWait) {
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
     constexpr auto numWaiters = 4u;
@@ -241,7 +241,7 @@ TEST_F(FewWorkerThreadsLockTest, TheHolderCommitsWhileMoreWaitersThanWorkerThrea
 // PostgreSQL : ni nœud ni relation ne restent, avant comme après une réouverture.
 TEST_F(InsertLockTest, DetachDeleteAlsoDetachesARelationCommittedAfterTheSnapshot) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
     mustRun(other, "BEGIN TRANSACTION;");
@@ -281,7 +281,7 @@ TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADe
             Connection second(&child);
             for (const auto& [connection, query] :
                 std::vector<std::pair<Connection*, const char*>>{
-                    {&first, "CALL debug_enable_multi_writes=true;"},
+                    {&first, "CALL enable_multi_writes=true;"},
                     {&first, "CALL auto_checkpoint=false;"},
                     {&first, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);"},
                     {&first, "CHECKPOINT;"},
@@ -324,7 +324,7 @@ TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADe
 // la relation attachée et validée par un autre après l'instantané compte. La base est intacte.
 TEST_F(InsertLockTest, DeleteIsRefusedByARelationCommittedAfterTheSnapshot) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
     mustRun(other, "BEGIN TRANSACTION;");
@@ -347,7 +347,7 @@ TEST_F(InsertLockTest, DeleteIsRefusedByARelationCommittedAfterTheSnapshot) {
 // répétable) ; si l'autre a annulé, l'écriture passe.
 TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializationError) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0}), (:Item {id: 3, v: 0});");
     mustRun(other, "BEGIN TRANSACTION;");
     mustRun(other, "MATCH (n:Item) RETURN count(n);");
@@ -385,7 +385,7 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
 // relation après attente) ; si l'autre a annulé, l'écriture passe.
 TEST_F(InsertLockTest, ASecondWriteOfARelationCommittedAfterTheSnapshotIsASerializationError) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
     mustRun(*conn, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);");
@@ -448,7 +448,7 @@ TEST_F(InsertLockTest, ASecondWriteOfARelationCommittedAfterTheSnapshotIsASerial
 // bloc était encore ouvert.
 TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
     Connection other(database.get());
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(other, "CALL lock_timeout=300;");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});");
     for (const auto* closing : {"COMMIT;", "ROLLBACK;"}) {
@@ -497,7 +497,7 @@ TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
 // valeur de A, la met à jour SANS erreur de sérialisation (ce que l'option A refuserait sans
 // annonce), et valide.
 TEST_F(InsertLockTest, AnAnnouncedKeyWaitsThenReadsAndWritesWhatTheHolderCommitted) {
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 10;");
@@ -534,7 +534,7 @@ TEST_F(InsertLockTest, AnAnnouncedKeyWaitsThenReadsAndWritesWhatTheHolderCommitt
 }
 
 TEST_F(InsertLockTest, AnAnnouncementIsRefusedAfterAWriteOrTwiceOrInAutoCommit) {
-    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CALL enable_multi_writes=true;");
     const auto autoCommit = failureOf(*conn, "CALL acquire_locks('Item', [1]);");
     EXPECT_NE(autoCommit.find("explicit transaction"), std::string::npos) << autoCommit;
     mustRun(*conn, "BEGIN TRANSACTION;");
@@ -580,7 +580,7 @@ protected:
         mustRun(*conn, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, vec: [CAST(i % 7 AS FLOAT), "
                        "CAST(i % 11 AS FLOAT), CAST(i % 13 AS FLOAT), CAST(i AS FLOAT)]});");
         mustRun(*conn, "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
-        mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+        mustRun(*conn, "CALL enable_multi_writes=true;");
     }
     // Les identifiants que la recherche rend (k au plus), triés.
     std::vector<int64_t> idsByIndex(Connection& connection, int64_t k) {
@@ -637,7 +637,7 @@ protected:
         if (IsSkipped()) {
             return;
         }
-        mustRun(*conn, "CALL debug_enable_multi_writes=false;");
+        mustRun(*conn, "CALL enable_multi_writes=false;");
     }
     void rolledBack(const char* write) {
         mustRun(*conn, "BEGIN TRANSACTION;");

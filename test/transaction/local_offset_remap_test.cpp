@@ -63,7 +63,7 @@ protected:
 
     // Le scénario : deux transactions ouvertes ensemble, validées l'une après l'autre.
     void runOverlappingTransactions(bool secondCommitsFirst) {
-        ok("CALL debug_enable_multi_writes=true;");
+        ok("CALL enable_multi_writes=true;");
         ok("CALL auto_checkpoint=false;");
         ok("CALL force_checkpoint_on_close=false;");
         ok("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");

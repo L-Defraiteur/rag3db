@@ -64,7 +64,7 @@ public:
         }
         systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
         createDBAndConn();
-        mustRun("CALL debug_enable_multi_writes=true;");
+        mustRun("CALL enable_multi_writes=true;");
         mustRun("CALL auto_checkpoint=false;");
     }
 
