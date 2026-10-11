@@ -64,7 +64,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (26)
+### Ouverts — produit (25)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -80,7 +80,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | ouvert — confirmation pour l'arbre principal | blocage (s'il revenait) | oui | oui (premier index) |
 | [analyze() avec une racine relative rend zéro scope, en silence](2026-10-04-analyze-racine-relative-rend-zero-scope.md) | ouvert | réponse fausse | oui | oui (son API d'analyse) |
-| [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
 | [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
 | [Une synchronisation reprise après un arrêt brutal exige takeover](2026-10-04-reprise-apres-arret-exige-takeover.md) | levé après un arrêt propre (`75de6618f`) ; reste la mort brutale | blocage | oui | oui (sessions de `sync_source`) |
@@ -102,6 +101,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le type d'un champ déclaré dans un autre fichier ne se lit pas](closed/2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | corrigé par B2b (`6002c3ccd`), témoin du 11 oct. | réponse fausse | oui | oui (rendez-vous) |
 | [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](closed/2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | corrigé, codeparsers `d90a1f6` (11 oct.) | réponse incomplète (faible) | oui | oui (impact, usages) |
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](closed/2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | corrigé par la marche 1 bis du lien générique (le verbe refuse un bout absent quand le lien se pose) | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
 | [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](closed/2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | corrigé par la marche 4 du lien générique (la marque lue / écrite sur le paramètre) | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
