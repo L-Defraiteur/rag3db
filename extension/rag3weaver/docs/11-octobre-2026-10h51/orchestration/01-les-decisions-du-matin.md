@@ -522,3 +522,33 @@ où elle vit.
   verrou ; sous le verrou, une avance de .md seuls se rebase et se repousse
   dans le même tour sans rendre le verrou ; la règle 3 dite par les chemins
   du bâti (hotfixs, `481afb550`).
+- **17 h 40 : le mode multi-écrivains est le défaut du moteur** (cœur,
+  `a0a79016e`, par poste push ; preuves lues avant : sa liste complète et le
+  banc sur la tête rebasée sur A8, le banc sans écart entre master et la
+  bascule, les 116 e2e du produit verts sur l'artefact prouvé).
+  `CALL enable_multi_writes=false` rend l'ancienne sémantique, renversable par
+  Lucie. Condition 3, voie A faite : T0, A3′ reprise, A7, A8, C7, A9 ; reste
+  B2 puis B3. L'arbre principal rebâtit la lib d'ici sur cette tête.
+- **La montre, deux défauts trouvés sur la base de Lucie** : pas de
+  réconciliation au démarrage (hotfixs : une fonction d'A8 introuvable, la
+  montre ayant pris le disque de 17 h 10 comme point de départ ; forme de
+  Lucie : la référence est ce que l'index a enregistré par fichier, reprise
+  de ce qui a bougé depuis, pendant un index entier les événements attendent)
+  et 0,7 cœur en continu au repos (mémoire, ticket `db65e8c99`) : les deux au
+  proto, en tête de sa file. La lenteur de l'hôte de 17 h 10 était passagère
+  (réouverture et réindexations sous le verrou du backend).
+- **Les sessions du cœur et d'hotfixs ont les outils** (relancées :
+  `rag3db-1f`, `rag3db-cc`) ; retours réels dans la page 04 ; les deux index
+  des arbres du cœur sur luciepc faits (450 et 490 s, pics 7,9 et 12,1 Go) ;
+  la branche envoi-virtuel de codeparsers passe la question du cœur (trois
+  appelants, « par envoi virtuel ») et met « index : racine @ commit, indexé
+  il y a N min » en tête de chaque réponse.
+- **Les correctifs du produit restés sur paquet-npm** (G) : la porte de
+  l'embarqueur absent (trois portes sur quatre refusent un gabarit à vecteurs
+  sans service, sur master), puis le lot B par relecteur (B1 backend et
+  connexions → arbre principal, B2 dialect.rs → F, B3 build.rs → cœur ; avec
+  la règle des chemins normalisés en « / », question de Lucie), puis le lot C :
+  la marche 4 ne tient que sous Linux (ticket `2307f4470` ; macOS lance un
+  second hôte parce que pid_alive lit /proc ; forme portable, « inconnu » dit
+  là où une plateforme ne sait pas, CI Windows/macOS du paquet). L'alpha.3
+  Linux se fait ; Windows et macOS après C.
