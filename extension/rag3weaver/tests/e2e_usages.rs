@@ -103,7 +103,14 @@ fn usages_rend_la_definition_et_les_appels_releves_a_la_main() {
         .filter(|u| u.usage == "call" || u.usages.iter().any(|g| g == "call"))
         .map(|u| fichier(&u.user.path))
         .collect();
-    assert_eq!(appels, BTreeSet::from(["port.rs".to_string(), "runtime.rs".to_string()]), "les appels relevés à la main");
+    // concurrent.rs:485 (`merge_port_values(a, b)` dans un `reduce`, l'exécuteur
+    // concurrent) et node.rs:481 (`super::port::merge_port_values(a, b)`) sont
+    // venus avec le corpus vivant (11 octobre 2026), de vrais appels.
+    assert_eq!(
+        appels,
+        BTreeSet::from(["concurrent.rs".to_string(), "node.rs".to_string(), "port.rs".to_string(), "runtime.rs".to_string()]),
+        "les appels relevés à la main"
+    );
     let tous: BTreeSet<String> = r.usages.iter().map(|u| fichier(&u.user.path)).collect();
     for f in ["render_nodes.rs", "generic_search_nodes.rs"] {
         assert!(!tous.contains(f), "{f} ne nomme merge_port_values que dans des chaînes ou un commentaire : {tous:?}");
