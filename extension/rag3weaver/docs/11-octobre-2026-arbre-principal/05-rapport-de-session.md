@@ -48,3 +48,38 @@ Les scripts de push sont hors du dépôt : `~/.cache/rag3weaver-notes-A/pousser4
 3. La relecture de la commande « ajoute / retire cet arbre » de codeparsers (sur les routes `a0f3e3653`).
 4. Le pas d de la marche 1 bis : marques par cellule, `oublier_les_aretes_du_fichier` filtré par cellule, le registre « indexation en cours » entre cellules.
 5. Le ticket du service d'embarquement injoignable à l'ouverture ; le workspace en lecture seule.
+
+## Suite du soir (20 h 15 → 0 h 15)
+
+| hash | quoi |
+|---|---|
+| `1a1ee04b0` | L'extension vector par le nom : les gabarits disent `"vector"`, trouvé par `RAG3DB_ROOT`, la lib ou le binaire ; refus nommé ; ticket fermé. |
+| `5ca4b811c` | La page du rebâti de la lib partagée (page 06), avec la règle de l'ABI ; ticket moteur au nom du cœur. |
+| `6cdef9585`, `28daa8b1b` | Le ticket P1 des morceaux sans texte (20 % de code-rag3db), et ce que les sondes écartent. |
+| `1b8d48dc0` | Le délai d'embarquement : `timeout_secs`, le lot expiré rejoué morceau par morceau, le muet nommé et laissé dû, l'arrêt entre deux appels, le lot en cours dans `index_states`, l'échec qui n'est plus avalé. |
+| `ab12bd4c2` | La boucle du gel de code-lourd : un morceau sans texte n'est jamais dû ; une passe sans progrès s'arrête nommée ; le compte des morceaux sans texte dit partout. |
+| `e5c53d2e2` | Le reçu « busy » de `index_states` porte les montres. |
+
+**La lib partagée** rebâtie une troisième fois à 20 h 39 avec B2 (`e71c85b5…` / `b1646d4f…`, ABI changée,
+annoncé) ; la quatrième, avec le visited set (`3e0f98f08`), au matin du 12 au signal de
+l'orchestration, avec le binaire de Lucie dans la foulée.
+
+**Le gel de code-lourd** (luciepc, quatre fois vers 20 %) : une boucle, pas un verrou. Les relevés
+de codeparsers l'ont tranché (fils nés de l'appel `index`, WAL qui grossit, aucun appel au
+service) ; la carte des verrous (un agent) n'a trouvé aucun cycle. `run_index` réclamait sans fin
+des morceaux sans texte, que l'embarquement sautait sans les marquer. **La cause des morceaux sans
+texte reste ouverte** : aucune passe propre ne la reproduit ; la sonde par l'hôte est pour le
+matin (codeparsers).
+
+**Ce que j'ai dit de travers** : j'ai d'abord avancé la boucle, puis reculé vers lucivy sur la carte
+des verrous, puis suis revenu à la boucle sur le WAL ; chaque fois dit à l'orchestration, mais le
+second mouvement aurait dû attendre les relevés. Et un « ne pas tenir compte » envoyé par erreur à
+F, corrigé.
+
+**Relu et accordé ce soir** : `voisinage-pg` et `cypher-brut` 3-4 (F), `code-tree` (codeparsers,
+copie d'une base fermée), `envoi-virtuel-2`, la suite de la montre et W3 (proto), `session-morte`
+et `build-id-hote` (mémoire), `embarqueur-absent-portes` (G).
+
+**La suite** : le rebâti du matin ; la cause des morceaux sans texte (sonde par l'hôte, puis le
+correctif et la réécriture des morceaux touchés) ; le rendez-vous par les symboles du fichier et les
+arêtes externes ; puis les manques du MCP (le nom qualifié en tête).
