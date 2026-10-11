@@ -10,12 +10,6 @@
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Hot
 Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
 #
-# H4 — le mélange de C7 sur une table indexée par HNSW (3 octobre) : le processus
-# écrivain meurt (SIGSEGV, ou SIGABRT sur « corrupted double-linked list »), et la base
-# ne se rouvre parfois plus (« Found duplicated primary key value » au rejeu).
-Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Hot
-Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash
-#
 # Dix mille lignes mises à jour par lots de 512 (vector_index_update_test.cpp) : rouge six
 # essais sur six le 4 octobre au matin, vert à la comparaison longue de midi. Long aussi :
 # 25 s avant c8fdaf196, 12 à 27 min après (signalé au cœur C++) ; ctest -LE concurrence-probabiliste
@@ -56,12 +50,6 @@ Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackCheckpointT
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/RolledBackThenClose
 Ends/ProductReloadRecovery.VectorsSetAfterRecoveryAreFound/Close
 #
-# Les pages d'un COPY tué au milieu ne sont jamais récupérées (ticket de durabilité ; la
-# fuite n'est pas bornée, mesurée par une sonde le 5 octobre). Le témoin compare la taille
-# après trois morts à des délais fixes : rouge 4 fois sur 5, vert quand la troisième mort
-# tombe avant que le COPY ait écrit ses pages (1,78 Mo au lieu de 4,3 à 6,7). Sorti de
-# known_red.txt le 5 octobre, sans correctif : le défaut demeure.
-JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
 # Sa fin sans annulation (Death) n'est pas un garde-fou sûr : verte 30 fois sur 30 jouée
 # seule (5 octobre), elle a perdu des lignes APRÈS les SET de vecteurs une fois dans une
 # passe complète (rows-found-after-the-sets). C'est la famille des lignes injoignables après

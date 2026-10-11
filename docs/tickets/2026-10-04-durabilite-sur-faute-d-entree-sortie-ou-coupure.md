@@ -63,6 +63,13 @@ Deux lignes de la cause sont traitées ; le ticket reste ouvert pour les autres.
 - Ce qui manque pour le prouver : un crochet de faute dans `src/` qui simule une coupure (écritures non synchronisées perdues). Une mort de processus ne suffit pas, le cache de pages du noyau survit.
 - Coût mesuré à une réouverture avec rejeu (200 000 lignes, base sur btrfs) : avec la synchronisation 76, 89 et 115 ms, sans 69, 71 et 72 ms : environ 20 ms à la médiane, 45 ms au pire. Payé une fois, seulement quand la reprise rejoue des pages fantômes (mort pendant un point de reprise).
 
+**11 octobre 2026 (banc, preuve de la bascule) : le témoin rougit 10 fois sur 10.**
+`JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt` (`data-file-bounded`) a rougi à chaque
+essai sur master `fd10b8c27` et `481afb550`, hors bascule, et autant sur la bascule `4ee70e386`. Le
+fichier de données passe de 1,8 à 4,3 Mo en trois morts. Le 5 octobre, il était vert une fois sur
+cinq, quand la troisième mort tombait avant les pages du COPY. Il repasse de probabilistic.txt à
+known_red.txt.
+
 **Les pages d'un COPY tué : la fuite n'est pas bornée** (5 octobre 2026, banc, mesuré, non corrigé).
 
 - Sonde non commitée (`~/.cache/rag3db-banc-notes/sonde-fuite-copy.patch`, sur la fixture `JournaledCopyDeath`). Elle tue 12 fois un COPY d'un million de lignes, rouvre, fait un point de reprise, puis écrit 200 000 lignes ordinaires et fait un point de reprise. Même chose sur l'ancien chemin et sur une base sans morts.
