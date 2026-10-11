@@ -9,8 +9,12 @@ add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     minimal_reproduction_test.cpp integrity_checker_test.cpp harness_mechanics_test.cpp
     lock_bench_test.cpp single_writer_crash_test.cpp vector_index_update_test.cpp
     uncommitted_relations_test.cpp read_only_reader_test.cpp
-    upstream_fixes_test.cpp)
+    upstream_fixes_test.cpp lock_cost_test.cpp)
 target_link_libraries(concurrence_test PRIVATE test_helper test_runner graph_test)
+# La mesure du coût du mode multi-écrivains (lock_cost_test.cpp) imprime l'identifiant de bâti
+# du moteur mesuré (common/build_id.h, écrit dans le dossier de bâti).
+add_dependencies(concurrence_test rag3db_build_id)
+target_include_directories(concurrence_test PRIVATE ${PROJECT_BINARY_DIR}/src/include)
 if (ENABLE_BACKTRACES)
     target_link_libraries(concurrence_test PRIVATE register_backtrace_signal_handler)
 endif()
