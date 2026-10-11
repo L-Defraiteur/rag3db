@@ -21,6 +21,10 @@
 
 #include <fcntl.h>
 
+#include <cerrno>
+#include <chrono>
+#include <thread>
+
 #include <cstring>
 
 #include "storage/storage_utils.h"
@@ -53,6 +57,18 @@ static void validateFileFlags(uint8_t flags) {
     // CREATE_IF_NOT_EXISTS and CREATE_AND_TRUNCATE_IF_EXISTS flags cannot be combined.
     KU_ASSERT(!(flags & FileFlags::CREATE_IF_NOT_EXISTS &&
                 flags & FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS));
+}
+
+// Le refus du verrou du fichier : le préfixe d'avant (« Could not set lock on file ») reste, les
+// clients le reconnaissent ; après une attente (B2), la phrase nommée convenue avec le banc dit la
+// borne : « waited <N> ms for the database file held by another writer process ».
+static std::string lockRefusedMessage(const std::string& fullPath, uint64_t lockWaitMs) {
+    std::string message = "Could not set lock on file : " + fullPath;
+    if (lockWaitMs > 0) {
+        message += " (waited " + std::to_string(lockWaitMs) +
+                   " ms for the database file held by another writer process)";
+    }
+    return message + "\nSee the docs: https://docs.rag3db.com/concurrency for more information.";
 }
 
 std::unique_ptr<FileInfo> LocalFileSystem::openFile(const std::string& path, FileOpenFlags flags,
@@ -118,12 +134,21 @@ std::unique_ptr<FileInfo> LocalFileSystem::openFile(const std::string& path, Fil
                             LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK;
         OVERLAPPED overlapped = {0};
         overlapped.Offset = 0;
-        BOOL rc = LockFileEx(handle, dwFlags, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/,
-            &overlapped);
+        // B2 : tant que le verrou est tenu par un autre processus, réessayer toutes les 50 ms
+        // jusqu'à la borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(flags.lockWaitMs);
+        BOOL rc = FALSE;
+        while (true) {
+            rc = LockFileEx(handle, dwFlags, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/,
+                &overlapped);
+            if (rc || flags.lockWaitMs == 0 || std::chrono::steady_clock::now() >= deadline) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
         if (!rc) {
-            throw IOException(
-                "Could not set lock on file : " + fullPath + "\n" +
-                "See the docs: https://docs.rag3db.com/concurrency for more information.");
+            throw IOException(lockRefusedMessage(fullPath, flags.lockWaitMs));
         }
     }
     return std::make_unique<LocalFileInfo>(fullPath, handle, this);
@@ -139,11 +164,23 @@ std::unique_ptr<FileInfo> LocalFileSystem::openFile(const std::string& path, Fil
         fl.l_whence = SEEK_SET;
         fl.l_start = 0;
         fl.l_len = 0;
-        int rc = fcntl(fd, F_SETLK, &fl);
+        // B2 : tant que le verrou est tenu par un autre processus (EACCES ou EAGAIN), réessayer
+        // toutes les 50 ms jusqu'à la borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant. Il
+        // n'y a pas encore de connexion à interrompre à ce moment : la borne est la seule sortie.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(flags.lockWaitMs);
+        int rc = -1;
+        while (true) {
+            rc = fcntl(fd, F_SETLK, &fl);
+            if (rc != -1 || (errno != EACCES && errno != EAGAIN) || flags.lockWaitMs == 0 ||
+                std::chrono::steady_clock::now() >= deadline) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
         if (rc == -1) {
-            throw IOException(
-                "Could not set lock on file : " + fullPath + "\n" +
-                "See the docs: https://docs.rag3db.com/concurrency for more information.");
+            close(fd);
+            throw IOException(lockRefusedMessage(fullPath, flags.lockWaitMs));
         }
     }
     return std::make_unique<LocalFileInfo>(fullPath, fd, this);

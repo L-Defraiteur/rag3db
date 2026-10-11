@@ -1027,13 +1027,40 @@ TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
         .autoCheckpoint = true});
 }
 
-// C9 — le contrat inter-processus d'aujourd'hui : deux processus ouvrent la base en
-// écriture, un seul y parvient, l'autre est refusé par le verrou de fichier. C'est le
-// cas qu'on retournera avec B.
-TEST_P(ConcurrencyBench, C9_SecondWriterProcessRefused) {
+// C9 — le contrat inter-processus depuis B2 (11 octobre 2026) : deux processus ouvrent la
+// base en écriture ; le second attend au verrou du fichier que le premier ferme (la borne
+// de SystemConfig::fileLockWaitMs), puis écrit. C'est le relais, pas la simultanéité : pas
+// de barrière entre les deux, le premier écrit et sort, le second entre alors.
+TEST_P(ConcurrencyBench, C9_SecondWriterProcessWaitsThenWrites) {
     runCase({.numWorkers = 2,
         .setup =
             [](ConcurrencyBench& bench) {
+                bench.systemConfig->fileLockWaitMs = 10'000;
+                bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+            },
+        .scenario =
+            [](Worker& worker) {
+                worker.run(stringFormat("CREATE (:Item {id: {}, writer: {}});", worker.index(),
+                    worker.index()));
+            },
+        .expect =
+            [](ConcurrencyBench& bench, const SharedArea& area) {
+                EXPECT_EQ(totalRefusals(area, Refusal::FileLock), 0u)
+                    << "[check: no-file-lock-refusal] the second writer waits, it is not refused";
+                EXPECT_EQ(bench.queryInt("MATCH (n:Item) RETURN count(n);"), 2)
+                    << "[check: both-writers-rows] ";
+            },
+        .runsInProcesses = true,
+        .onlyInProcesses = true});
+}
+
+// C9 bis — l'ancien contrat, sur demande : avec une borne nulle, le second est refusé tout de
+// suite par le verrou de fichier (le refus que le démon de rag3weaver attend pour se savoir seul).
+TEST_P(ConcurrencyBench, C9_SecondWriterProcessRefusedWithoutWait) {
+    runCase({.numWorkers = 2,
+        .setup =
+            [](ConcurrencyBench& bench) {
+                bench.systemConfig->fileLockWaitMs = 0;
                 bench.mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
             },
         .scenario = [](Worker& worker) { worker.sync(); },
