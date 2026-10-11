@@ -343,3 +343,41 @@ fn par_self_le_type_englobant_d_abord() {
     assert_eq!(vers("finish"), vec![("b.rs".to_string(), "type".to_string())], "le record de Catalog, pas celui d'Autre");
     assert_eq!(vers("bonjour"), vec![("e.rs".to_string(), "nom".to_string())], "l'héritage ne se perd pas");
 }
+
+/// **Les cas B9 de la session recherche** (11 octobre 2026), par le
+/// gabarit réel d'`usages` : un bloc `impl` ne fait pas de `Marteau` un nom
+/// ambigu (T1) ; l'appel sur un receveur concret (`let m = Marteau;`) et sur
+/// la variable d'une boucle (`for o in &outils`) est attribué à la méthode
+/// de l'impl (T2, T3).
+#[test]
+#[ignore]
+fn un_bloc_impl_ne_redefinit_pas_son_type_et_ses_appels_s_attribuent() {
+    let catalog = setup();
+    let fichiers = vec![
+        (
+            "traits.rs".to_string(),
+            "pub trait Outil { fn jouer(&self) -> i32; }\npub struct Marteau;\nimpl Outil for Marteau {\n    fn jouer(&self) -> i32 { 1 }\n}\npub fn frappe() -> i32 {\n    let m = Marteau;\n    m.jouer()\n}\n".to_string(),
+        ),
+        (
+            "boucle.rs".to_string(),
+            "use crate::traits::{Marteau, Outil};\npub fn tous() -> i32 {\n    let outils = vec![Marteau, Marteau];\n    let mut total = 0;\n    for o in &outils { total += o.jouer(); }\n    total\n}\n".to_string(),
+        ),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let marteau = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "Marteau"})).unwrap();
+    eprintln!("{marteau}");
+    assert!(!marteau.contains("Nom ambigu"), "le bloc impl n'est pas une seconde définition : {marteau}");
+    assert!(marteau.contains("traits.rs:2"), "{marteau}");
+    let jouer = tool.execute(&registry, services, &serde_json::json!({"name": "jouer", "path": "/projet/traits.rs"})).unwrap();
+    eprintln!("{jouer}");
+    let ligne = |nom: &str| jouer.lines().find(|l| l.contains(&format!(" {nom} —"))).unwrap_or_else(|| panic!("{nom} absent : {jouer}")).to_string();
+    assert!(!ligne("frappe").contains("par le nom"), "receveur concret typé : {jouer}");
+    assert!(!ligne("tous").contains("par le nom"), "variable de boucle typée : {jouer}");
+    assert!(!jouer.contains("non attribués"), "{jouer}");
+}
