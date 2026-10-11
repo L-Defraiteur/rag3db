@@ -30,7 +30,8 @@ réouverture. Journal : luciepc `~/.cache/rag3db-moteur-notes/i1/liste-fusion/tr
 
 ## Ce qu'on sait
 
-- Seul, ×2 (`--gtest_filter='OwnerlessPagesTest.*'`, 9 cas) : vert. Vert aussi dans la liste
+- Seul, ×2 (`--gtest_filter='OwnerlessPagesTest.*'`, 9 cas) : vert ; la suite `transaction_test`
+  entière rejouée une fois sur le même bâti (2 h 44, en lourd) : 247 verts. Vert aussi dans la liste
   précédente d'I1 (base `81d5c4823`, qui porte déjà `0aed3c4b5`) et dans la liste complète du
   lecteur affamé d'hotfixs (`f8afe7202`), et une fois dans la liste de son lot suivant. **Probabiliste**,
   mais pas par l'instant de la mort (le fils finit son `COPY` avant de se tuer, remarque d'hotfixs) :
