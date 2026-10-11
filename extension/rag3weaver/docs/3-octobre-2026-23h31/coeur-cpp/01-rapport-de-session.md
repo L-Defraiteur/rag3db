@@ -792,3 +792,42 @@ banc en tenue exclusive conforme (10 rouges / 248 verts, 5 h 09) — le premier 
 course de témoin `AnnouncedWritersOfOneIndexedTable` (bornée à `commit:start` par le banc, prise
 dans le lot du COPY). Sur master en avance rapide : `81f74f86c` témoin, `69f3ff53e` correctif
 (5 h 10). Lib commune de luciepc rebâtie dessus, worktree effacé.
+
+## Arrêt sur rapport propre (11 octobre 2026, 5 h 20) — la nuit du 10 au 11, et comment reprendre
+
+Ordre de l'orchestration : I2 porte une règle visible (page 10 §1, « l'index est l'état validé »)
+que Lucie peut renverser, et pèse deux à trois I1 — elle s'ouvre au matin sur son mot.
+
+**Entré sur master cette nuit** (tout en avance rapide, listes complètes vertes, banc en tenue
+exclusive conforme, relectures croisées) :
+
+- A3′ (`21b6cb370`…`9a57a17b2`), A4′ (`9904fefc0`…`67ff3816b`), V2 (`95ced051e`…`11887dc21`),
+  **I1** (`83fdf22f3`…`3ad09c8cc`) : la condition 1 de la stèle est à une marche (I2) de sa fin ;
+- **la corruption du COPY journalisé** (`eae3863ab`, témoin `10a796166`) : un défaut de lecture
+  de l'amont révélé par le COPY journalisé, trouvé en une heure par sonde — la condition 2 reste
+  fermée ; le filet rag3weaver est retiré par l'arbre principal (`f9bf4574d`) ;
+- **rel2** (`69f3ff53e`), A4′ pour les relations ;
+- relus pour d'autres : le lecteur affamé (hotfixs, `e4198f862`), le point de reprise interrompu,
+  les segments de chaînes bornés (hotfixs, poussés derrière moi) ; le contrôle de bâti des
+  extensions (`458ff7157`) tient depuis V2.
+
+**Le banc de concurrence** : de 56 lignes attendues rouges au départ des verrous à **10** après rel2
+(248 verts). Ce qui reste rouge y est nommé ligne à ligne (`known_red.txt`).
+
+**Ce qui reste, dans l'ordre** :
+
+1. **I2**, la maintenance de l'index au commit : page 10 tranchée sur la mesure du banc (« pertes
+   seules filtrée », l'état d'instruction devient l'état de transaction, bornes `commit:start`), avec
+   la contrainte du pont coupé (§3 bis : une recherche par région détachée, à mesurer). Premier jet
+   quand Lucie dit oui ; le banc réécrit ses témoins sur une branche partie de la mienne à ce
+   moment-là — le lui dire.
+2. C7 après un arrêt brutal (relations pendantes nées au rejeu, ticket ouvert).
+3. La part reprise du journal à doublon (`LockBench.RecoveryOfAJournalWithADuplicateKey…`, fixture
+   `test/transaction/journal_with_duplicate_key`).
+
+**Les arbres** : ici, `rag3db-moteur` (branches `verrous-i1`, `verrous-rel2`, `copie-journalisee-double`,
+toutes sur master, sans bâti) et `rag3db-docs-note` (`docs-i1`, poussée) ; sur luciepc, seul
+`rag3db-lourd` reste, lib commune sur `3ed14644e` (librag3db.so 05:10:32 md5 `4598f15f67b1`,
+libvector `4c12f0d4577a`) — un worktree neuf par lot, effacé à la fusion. Notes :
+`~/.cache/rag3db-moteur-notes/{i1,rel2,copie}/` (scripts de passe détachés `passe*.sh`, journaux).
+Rien ne tourne.
