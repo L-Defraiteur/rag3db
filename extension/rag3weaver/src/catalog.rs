@@ -838,9 +838,14 @@ impl Catalog {
             self.fts_storage = fichiers;
             return;
         }
+        // Une ligne suffit : une sélection bornée à 1, par le dialecte.
+        let mut une = rag3weaver_ir::Select::all(self.dialect.internal_table("_index_blobs"), vec![rag3weaver_ir::Column::Node("_key".into())]);
+        une.limit = Some(1);
         let des_blobs = self
-            .conn
-            .execute("MATCH (b:_index_blobs) RETURN b._key LIMIT 1")
+            .dialect
+            .select(&une)
+            .ok()
+            .and_then(|q| self.conn.execute(&q).ok())
             .map(|r| !r.rows.is_empty())
             .unwrap_or(false);
         if !des_blobs {
