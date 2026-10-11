@@ -3,6 +3,7 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/enums/rel_direction.h"
 #include "common/exception/runtime.h"
+#include "common/exception/transaction_manager.h"
 #include "common/string_format.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
@@ -10,6 +11,7 @@
 #include "storage/storage_utils.h"
 #include "storage/table/node_group.h"
 #include "storage/table/rel_table.h"
+#include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::catalog;
@@ -106,6 +108,26 @@ void RelTableData::initPropertyColumns(const RelGroupCatalogEntry& relGroupEntry
     columns[REL_ID_COLUMN_ID]->cast<InternalIDColumn>().setCommonTableID(table.getTableID());
 }
 
+// Marche A4′ pour les relations : une relation que la transaction a vue (son instantané) mais
+// qu'une autre a supprimée ou mise à jour et validée depuis ne se réécrit pas — l'erreur de
+// sérialisation, la même que pour une ligne de nœud (option A), à la place du refus immédiat
+// « Write-write conflict » de la version. Sous le mode multi-écrivains seulement : hors du mode,
+// un seul écrivain à la fois, le cas ne se présente pas.
+static void throwIfWrittenByAnotherCommitAfterSnapshot(const Transaction* transaction,
+    const CSRNodeGroup& csrNodeGroup, CSRNodeGroupScanSource source, row_idx_t rowIdx,
+    offset_t relOffset, const Table& table) {
+    if (!transaction->usesLocks()) {
+        return;
+    }
+    if (csrNodeGroup.wasWrittenByCommitAfter(transaction->getStartTS(), transaction->getID(),
+            source, rowIdx)) {
+        throw TransactionManagerException(stringFormat(
+            "Transaction aborted: {} — relationship {} of table {} was written by another "
+            "transaction after this one started. Roll it back and run it again.",
+            LockManager::COULD_NOT_SERIALIZE, relOffset, table.getTableName()));
+    }
+}
+
 bool RelTableData::update(Transaction* transaction, ValueVector& boundNodeIDVector,
     const ValueVector& relIDVector, column_id_t columnID, const ValueVector& dataVector) const {
     KU_ASSERT(boundNodeIDVector.state->getSelVector().getSelSize() == 1);
@@ -131,6 +153,8 @@ bool RelTableData::update(Transaction* transaction, ValueVector& boundNodeIDVect
     }
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeOffset);
     auto& csrNodeGroup = getNodeGroup(nodeGroupIdx)->cast<CSRNodeGroup>();
+    throwIfWrittenByAnotherCommitAfterSnapshot(transaction, csrNodeGroup, source, rowIdx,
+        relIDVector.getValue<nodeID_t>(relIDPos).offset, table);
     csrNodeGroup.update(transaction, source, rowIdx, columnID, dataVector);
     return true;
 }
@@ -150,6 +174,8 @@ bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVec
     const auto boundNodeOffset = boundNodeIDVector.getValue<nodeID_t>(boundNodePos).offset;
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeOffset);
     auto& csrNodeGroup = getNodeGroup(nodeGroupIdx)->cast<CSRNodeGroup>();
+    throwIfWrittenByAnotherCommitAfterSnapshot(transaction, csrNodeGroup, source, rowIdx,
+        relIDVector.getValue<nodeID_t>(relIDPos).offset, table);
     bool isDeleted = csrNodeGroup.delete_(transaction, source, rowIdx);
     if (isDeleted && transaction->shouldAppendToUndoBuffer()) {
         transaction->pushDeleteInfo(nodeGroupIdx, rowIdx, 1, getVersionRecordHandler(source));
