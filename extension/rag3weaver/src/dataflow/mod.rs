@@ -16,6 +16,9 @@ pub mod graph;
 pub mod node;
 pub mod observe;
 pub(crate) mod kinds;
+pub(crate) mod stream;
+pub(crate) mod concurrent;
+pub use concurrent::CancelHandle;
 #[cfg(test)]
 mod flux_tests;
 pub mod port;
@@ -71,7 +74,7 @@ pub mod migrations;
 pub mod services;
 
 pub use graph::{DataflowGraph, Edge};
-pub use node::{CancelCause, Cancelled, Node, NodeContext, NodeLogEntry, NodeLogLevel, Stopped};
+pub use node::{CancelCause, CancelToken, Cancelled, EmitSink, Node, NodeContext, NodeLogEntry, NodeLogLevel, Stopped};
 pub use observe::{TapEvent, TapSpec};
 pub use port::{merge_port_values, BatchPayload, PortDef, PortType, PortValue, QueryPayload};
 pub use resultat::{source_info, ChildSummary, UnifiedResult};

@@ -112,6 +112,32 @@ impl TapRegistry {
             value: value.clone(),
         });
     }
+
+    /// Le robinet de cette arête, s'il est ouvert, détaché du registre : le
+    /// fil d'un nœud de l'exécuteur concurrent le garde et émet chaque élément.
+    pub(crate) fn tap_of(&self, edge: &Edge) -> Option<EdgeTap> {
+        (self.all || self.specs.iter().any(|s| s.matches(edge)))
+            .then(|| EdgeTap { edge: edge.clone(), tx: self.tx.clone() })
+    }
+}
+
+/// Le robinet d'une arête (voir [`TapRegistry::tap_of`]).
+#[derive(Clone)]
+pub(crate) struct EdgeTap {
+    edge: Edge,
+    tx: async_broadcast::Sender<TapEvent>,
+}
+
+impl EdgeTap {
+    pub(crate) fn emit(&self, value: &PortValue) {
+        let _ = self.tx.try_broadcast(TapEvent {
+            from_node: self.edge.from_node.clone(),
+            from_port: self.edge.from_port.clone(),
+            to_node: self.edge.to_node.clone(),
+            to_port: self.edge.to_port.clone(),
+            value: value.clone(),
+        });
+    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

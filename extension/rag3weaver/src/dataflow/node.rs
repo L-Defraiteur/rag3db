@@ -196,6 +196,8 @@ pub struct NodeContext {
     emitted: HashMap<String, Vec<PortValue>>,
     /// Les fautes d'emploi du contexte, dites à la fin du nœud.
     misuse: Vec<String>,
+    /// Sous l'exécuteur concurrent : les canaux du nœud.
+    stream: Option<super::stream::StreamBinding>,
     services: Arc<ServiceRegistry>,
     metrics: Vec<(String, f64)>,
     logs: Vec<(NodeLogLevel, String)>,
@@ -212,6 +214,7 @@ impl NodeContext {
             stream_outputs: HashSet::new(),
             emitted: HashMap::new(),
             misuse: Vec::new(),
+            stream: None,
             services: Arc::new(ServiceRegistry::new()),
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -227,6 +230,7 @@ impl NodeContext {
             stream_outputs: HashSet::new(),
             emitted: HashMap::new(),
             misuse: Vec::new(),
+            stream: None,
             services,
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -264,6 +268,9 @@ impl NodeContext {
     /// `while let Some(e) = ctx.next("element")? { … }` tourne aussi bien sur
     /// une valeur que sur un flux.
     pub fn next(&mut self, port: &str) -> Result<Option<PortValue>, Cancelled> {
+        if let Some(b) = self.stream.as_mut().filter(|b| b.inputs.contains_key(port) || b.pending.contains_key(port)) {
+            return b.next(port);
+        }
         Ok(self.inputs.remove(port))
     }
 
@@ -272,6 +279,9 @@ impl NodeContext {
     /// C'est la lecture qui ne s'interbloque pas pour un nœud à plusieurs
     /// entrées en flux.
     pub fn next_any(&mut self) -> Result<Option<(String, PortValue)>, Cancelled> {
+        if let Some(b) = self.stream.as_mut() {
+            return b.next_any();
+        }
         let mut ports: Vec<&String> = self.per_element.iter().filter(|p| self.inputs.contains_key(*p)).collect();
         ports.sort();
         let Some(port) = ports.first().map(|p| (*p).clone()) else {
@@ -285,6 +295,29 @@ impl NodeContext {
     /// producteur voit `Stopped::NoReader`.
     pub fn close_input(&mut self, port: &str) {
         self.inputs.remove(port);
+        if let Some(b) = self.stream.as_mut() {
+            b.close_input(port);
+        }
+    }
+
+    /// **Le jeton d'annulation du run** : pour un nœud qui calcule longtemps
+    /// sans lire ni émettre, ou qui attend hors des canaux (le bus). Sous
+    /// l'exécuteur par niveaux, il n'est jamais annulé.
+    pub fn cancellation(&self) -> CancelToken {
+        CancelToken { hub: self.stream.as_ref().map(|b| b.hub.clone()) }
+    }
+
+    /// Un puits de jetons qui **émet chaque jeton** sur `port`, et ne rend
+    /// `Flow::Stop` que si le run est annulé : un lecteur des jetons qui lâche
+    /// ne tronque pas la réponse qu'un autre port rendra.
+    pub fn token_sink(&mut self, port: &str) -> EmitSink<'_> {
+        EmitSink { ctx: self, port: port.to_string(), stop_when_unread: false }
+    }
+
+    /// Le même, qui rend aussi `Flow::Stop` quand plus personne ne lit `port` :
+    /// pour un nœud dont les jetons sont la seule sortie lue.
+    pub fn token_sink_stop_when_unread(&mut self, port: &str) -> EmitSink<'_> {
+        EmitSink { ctx: self, port: port.to_string(), stop_when_unread: true }
     }
 
     /// **Émet un élément** sur `port`. Sur une sortie de valeur, c'est
@@ -292,6 +325,9 @@ impl NodeContext {
     /// lit, ou le run est annulé — le nœud s'arrête, ce n'est pas une faute.
     pub fn emit(&mut self, port: &str, value: PortValue) -> Result<(), Stopped> {
         if self.stream_outputs.contains(port) {
+            if let Some(b) = self.stream.as_mut().filter(|b| b.outputs.contains_key(port)) {
+                return b.send(port, value);
+            }
             self.emitted.entry(port.to_string()).or_default().push(value);
         } else {
             self.outputs.insert(port.to_string(), value);
@@ -367,7 +403,19 @@ impl NodeContext {
     /// La sortie `port` a-t-elle été posée ? (L'exécuteur vérifie qu'un nœud
     /// a posé ses sorties requises avant de les ranger.)
     pub(crate) fn has_output(&self, port: &str) -> bool {
-        self.outputs.contains_key(port) || self.emitted.get(port).is_some_and(|v| !v.is_empty())
+        self.outputs.contains_key(port)
+            || self.emitted.get(port).is_some_and(|v| !v.is_empty())
+            || self.stream.as_ref().is_some_and(|b| b.sent.get(port).is_some_and(|n| *n > 0))
+    }
+
+    /// Relie le contexte aux canaux de son nœud (exécuteur concurrent).
+    pub(crate) fn bind_stream(&mut self, binding: super::stream::StreamBinding) {
+        self.stream = Some(binding);
+    }
+
+    /// Rend le lien aux canaux, à la fin du nœud.
+    pub(crate) fn take_stream(&mut self) -> Option<super::stream::StreamBinding> {
+        self.stream.take()
     }
 
     /// Les ports lus élément par élément, et les sorties en flux, du nœud.
@@ -386,7 +434,7 @@ impl NodeContext {
         for (port, elements) in std::mem::take(&mut self.emitted) {
             let mut it = elements.into_iter();
             let Some(first) = it.next() else { continue };
-            let merged = it.try_fold(first, super::port::merge_port_values).map_err(|e| {
+            let merged = it.try_fold(first, merge_stream_elements).map_err(|e| {
                 format!("les éléments émis sur « {port} » ne se fusionnent pas en une valeur : {e}")
             })?;
             self.outputs.insert(port, merged);
@@ -418,5 +466,79 @@ impl NodeContext {
     /// Borrow inputs (used by the runtime for snapshotting before execute).
     pub(crate) fn inputs(&self) -> &HashMap<String, PortValue> {
         &self.inputs
+    }
+}
+
+/// **Les éléments d'un flux, fusionnés** pour un lecteur qui lit le tout : des
+/// chaînes se mettent bout à bout (un flux de jetons donne le texte), le reste
+/// passe par `merge_port_values`, comme un fan-in.
+pub(crate) fn merge_stream_elements(a: PortValue, b: PortValue) -> Result<PortValue, String> {
+    if a.is::<String>() && b.is::<String>() {
+        let mut text = super::port::take_or_clone::<String>(a).expect("une chaîne");
+        text.push_str(&super::port::take_or_clone::<String>(b).expect("une chaîne"));
+        return Ok(PortValue::new(text));
+    }
+    super::port::merge_port_values(a, b)
+}
+
+/// **Le jeton d'annulation** d'un run (voir [`NodeContext::cancellation`]).
+#[derive(Clone)]
+pub struct CancelToken {
+    hub: Option<super::stream::StreamHub<PortValue>>,
+}
+
+impl CancelToken {
+    pub fn is_cancelled(&self) -> bool {
+        self.cause().is_some()
+    }
+
+    /// Pourquoi le run s'arrête, s'il s'arrête.
+    pub fn cause(&self) -> Option<CancelCause> {
+        self.hub.as_ref().and_then(|h| h.cancelled())
+    }
+
+    /// Dort au plus `timeout` ; `true` si le run est annulé pendant ce temps.
+    pub fn wait_timeout(&self, timeout: std::time::Duration) -> bool {
+        match &self.hub {
+            Some(h) => h.wait_cancel_timeout(timeout),
+            None => {
+                std::thread::sleep(timeout);
+                false
+            }
+        }
+    }
+
+    /// `f` sera appelé une fois à l'annulation (tout de suite si le run l'est
+    /// déjà) : une source bloquée hors des canaux s'y réveille (un message de
+    /// réveil sur son bus, un récepteur fermé).
+    pub fn on_cancel(&self, f: impl FnOnce() + Send + 'static) {
+        if let Some(h) = &self.hub {
+            h.on_cancel(f);
+        }
+    }
+}
+
+/// Un puits de jetons qui émet sur un port (voir [`NodeContext::token_sink`]).
+pub struct EmitSink<'a> {
+    ctx: &'a mut NodeContext,
+    port: String,
+    stop_when_unread: bool,
+}
+
+impl crate::llm::TokenSink for EmitSink<'_> {
+    fn on_token(&mut self, delta: &str) -> crate::llm::Flow {
+        match self.ctx.emit(&self.port, PortValue::new(delta.to_string())) {
+            Ok(()) => crate::llm::Flow::Continue,
+            Err(Stopped::NoReader) if !self.stop_when_unread => crate::llm::Flow::Continue,
+            Err(_) => crate::llm::Flow::Stop,
+        }
+    }
+
+    fn on_retry(&mut self, _event: &crate::llm::RetryEvent<'_>) -> crate::llm::Flow {
+        if self.ctx.cancellation().is_cancelled() {
+            crate::llm::Flow::Stop
+        } else {
+            crate::llm::Flow::Continue
+        }
     }
 }

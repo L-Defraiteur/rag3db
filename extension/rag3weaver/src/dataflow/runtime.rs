@@ -118,6 +118,13 @@ pub enum DataflowEvent {
     },
     /// Processing failed.
     Failed { error: String },
+    /// **Un nœud arrêté** par l'annulation du run (un autre a échoué,
+    /// l'hôte a arrêté, un interblocage) : pas sa faute. Exécuteur concurrent.
+    NodeCancelled {
+        node: String,
+        node_type: String,
+        cause: String,
+    },
 }
 
 // ─── DataflowOutput ──────────────────────────────────────────────────────────
@@ -131,9 +138,26 @@ pub struct DataflowOutput {
     /// d'un nœud qui a oublié de le poser (`GraphToolError::NotTaken` contre
     /// `NoResult`), sans payer le rapport et ses instantanés.
     skipped: HashMap<String, String>,
+    /// Le run a été arrêté avant sa fin (par l'hôte) : la sortie est ce qui
+    /// était fait.
+    stopped: Option<super::node::CancelCause>,
 }
 
 impl DataflowOutput {
+    pub(super) fn new(
+        data: HashMap<String, HashMap<String, PortValue>>,
+        skipped: HashMap<String, String>,
+        stopped: Option<super::node::CancelCause>,
+    ) -> Self {
+        Self { data, skipped, stopped }
+    }
+
+    /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été (l'hôte a
+    /// déclenché sa poignée d'arrêt).
+    pub fn stopped(&self) -> Option<&super::node::CancelCause> {
+        self.stopped.as_ref()
+    }
+
     /// Get a specific output value.
     pub fn get(&self, node: &str, port: &str) -> Option<&PortValue> {
         self.data.get(node).and_then(|ports| ports.get(port))
@@ -144,6 +168,7 @@ impl DataflowOutput {
         Self {
             data: HashMap::new(),
             skipped: HashMap::new(),
+            stopped: None,
         }
     }
 
@@ -161,8 +186,13 @@ pub struct DataflowRuntime {
     max_iterations: usize,
     event_tx: Sender<DataflowEvent>,
     _inactive_rx: InactiveReceiver<DataflowEvent>,
-    taps: TapRegistry,
-    services: Arc<ServiceRegistry>,
+    pub(super) taps: TapRegistry,
+    pub(super) services: Arc<ServiceRegistry>,
+    /// La poignée d'arrêt des runs à flux de ce runtime.
+    pub(super) cancel: super::concurrent::CancelHandle,
+    /// Un graphe de valeurs passe aussi par l'exécuteur concurrent (le
+    /// témoin de parité).
+    pub(super) force_concurrent: bool,
 }
 
 /// Un nœud prêt, avec son contexte rempli — ce qui sort de la phase 1.
@@ -279,6 +309,8 @@ impl DataflowRuntime {
             _inactive_rx: rx.deactivate(),
             taps: TapRegistry::new(),
             services: Arc::new(ServiceRegistry::new()),
+            cancel: Default::default(),
+            force_concurrent: false,
         }
     }
 
@@ -292,6 +324,8 @@ impl DataflowRuntime {
             _inactive_rx: rx.deactivate(),
             taps: TapRegistry::new(),
             services: Arc::new(services),
+            cancel: Default::default(),
+            force_concurrent: false,
         }
     }
 
@@ -305,7 +339,25 @@ impl DataflowRuntime {
             _inactive_rx: rx.deactivate(),
             taps: TapRegistry::new(),
             services,
+            cancel: Default::default(),
+            force_concurrent: false,
         }
+    }
+
+    /// **La poignée d'arrêt** : l'hôte la prend avant le run et la déclenche
+    /// quand la durée de l'agent se ferme. Un graphe à flux s'arrête (les
+    /// nœuds en cours finissent `Cancelled`, le run rend `Ok`) ; un graphe de
+    /// valeurs, qui finit seul, ne la regarde pas.
+    pub fn cancel_handle(&self) -> super::concurrent::CancelHandle {
+        self.cancel.clone()
+    }
+
+    /// Un graphe de valeurs passe aussi par l'exécuteur concurrent (le
+    /// témoin de parité des deux exécuteurs).
+    #[cfg(test)]
+    pub(crate) fn forcing_concurrent(mut self) -> Self {
+        self.force_concurrent = true;
+        self
     }
 
     /// Subscribe to execution events.
@@ -399,7 +451,7 @@ impl DataflowRuntime {
         }
     }
 
-    fn emit(&self, event: DataflowEvent) {
+    pub(super) fn emit(&self, event: DataflowEvent) {
         let _ = self.event_tx.try_broadcast(event);
     }
 
@@ -981,7 +1033,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped })
+        Ok(DataflowOutput { data, skipped, stopped: None })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1038,7 +1090,7 @@ impl DataflowRuntime {
     /// (`dataflow`) ; avec, ce sujet-là — le catalogue met ses graphes
     /// d'ingestion sur `catalog`, pour qu'un graphe de trace qui écoute
     /// `dataflow` ne se voie pas écrire. `run.<id>` reçoit dans tous les cas.
-    fn publish(&self, event: crate::events::CatalogEvent) {
+    pub(super) fn publish(&self, event: crate::events::CatalogEvent) {
         let Some(bus) = self.services.get::<Arc<crate::events::EventBus>>("event_bus") else { return };
         match self.services.get::<String>("run_topic") {
             Some(topic) => {
@@ -1106,6 +1158,14 @@ impl DataflowRuntime {
         let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
         let stream_ports = stream_ports_of(graph)?;
+        // **Un flux, et l'exécuteur concurrent** (page 05) : un graphe de
+        // valeurs garde les niveaux, inchangés.
+        if self.force_concurrent || graph.has_streams()? {
+            let initial = std::mem::take(&mut initial_inputs);
+            return tokio::task::block_in_place(|| {
+                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start)
+            });
+        }
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         // Each edge that reads from a port is one consumer. When the last consumer
@@ -1373,7 +1433,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped })
+        Ok(DataflowOutput { data, skipped, stopped: None })
     }
 }
 
@@ -1404,6 +1464,7 @@ impl NodeEventFilter {
             DataflowEvent::NodeLog { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeFailed { node, .. } => self.nodes.contains(node),
             DataflowEvent::NodeSkipped { node, .. } => self.nodes.contains(node),
+            DataflowEvent::NodeCancelled { node, .. } => self.nodes.contains(node),
             DataflowEvent::CheckpointResumed { node, .. } => self.nodes.contains(node),
             DataflowEvent::Completed { .. } | DataflowEvent::Failed { .. } => true,
         }

@@ -28,6 +28,9 @@ pub enum NodeStatus {
     /// Ce n'est pas un échec : le run continue. La raison nomme l'entrée et
     /// ses producteurs.
     Skipped { reason: String },
+    /// **Arrêté** par l'annulation du run (un autre nœud a échoué, l'hôte a
+    /// arrêté, un interblocage) : pas sa faute.
+    Cancelled { cause: String },
 }
 
 // ─── NodeReport ─────────────────────────────────────────────────────────────
@@ -202,6 +205,18 @@ impl ExecutionReport {
                         status: NodeStatus::Skipped { reason: reason.clone() },
                         duration_ms: 0,
                         inputs: vec![],
+                        outputs: vec![],
+                        logs: node_logs.remove(node).unwrap_or_default(),
+                        metrics: std::collections::HashMap::new(),
+                    });
+                }
+                DataflowEvent::NodeCancelled { node, node_type, cause } => {
+                    nodes.push(NodeReport {
+                        name: node.clone(),
+                        node_type: node_type.clone(),
+                        status: NodeStatus::Cancelled { cause: cause.clone() },
+                        duration_ms: 0,
+                        inputs: node_inputs.remove(node).unwrap_or_default(),
                         outputs: vec![],
                         logs: node_logs.remove(node).unwrap_or_default(),
                         metrics: std::collections::HashMap::new(),

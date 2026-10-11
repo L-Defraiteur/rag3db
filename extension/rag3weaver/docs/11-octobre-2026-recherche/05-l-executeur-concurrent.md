@@ -280,9 +280,20 @@ façon de ne pas rejouer le producteur.
    `dataflow::flux_tests` (le témoin 12, côté niveaux). Le canal maison est
    écrit avec ses douze témoins, mais il part avec l'exécuteur qui l'emploie :
    le lib refuse le code mort.
-2. Le canal maison et son détecteur, l'exécuteur concurrent et son choix,
-   `cancel_handle`, `ctx.cancellation()` et `token_sink` dans ses deux
-   variantes, avec les témoins du canal, 1 à 8, 11 et 13.
+2. **Fait** (master `9521ab63c` pour le commit 1 ; celui-ci suit) : le canal
+   maison et son détecteur (`dataflow::stream`, douze témoins), l'exécuteur
+   concurrent (`dataflow::concurrent`), pris dès qu'une sortie résolue est un
+   flux, `DataflowRuntime::cancel_handle`, `ctx.cancellation()` (`CancelToken` :
+   `is_cancelled`, `cause`, `wait_timeout`, `on_cancel`), `token_sink` et
+   `token_sink_stop_when_unread`, `NodeStatus::Cancelled`,
+   `DataflowEvent::NodeCancelled`, `DataflowOutput::stopped`. Un flux lu en
+   entier se fusionne élément par élément, des chaînes bout à bout (un flux de
+   jetons donne le texte) ; le fan-in garde `merge_port_values`. Témoins 1 à 8,
+   11 et 13 (`dataflow::concurrent::tests`), sous une garde de temps ; le
+   témoin 1 rougit sous les niveaux (« l'aval n'a rien lu pendant
+   l'émission »). **Pas encore** : le mode avec points de reprise garde les
+   niveaux pour un graphe à flux (commit 3), et un sous-graphe à sortie de
+   flux n'est pas encore relayé (commit 4).
 3. Le point de reprise des flux, avec le témoin 9.
 4. Le sous-graphe 3a, avec le témoin 10.
 5. `LlmNode` qui émet vient chez le proto.
