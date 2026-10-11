@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <optional>
 
 #include "storage/checkpoint_profile.h"
 
@@ -11,6 +12,7 @@
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
 #include "common/string_format.h"
+#include "common/task_system/task_scheduler.h"
 #include "main/attached_database.h"
 #include "main/client_context.h"
 #include "main/database.h"
@@ -24,13 +26,35 @@ using namespace rag3db::storage;
 namespace rag3db {
 namespace transaction {
 
+namespace {
+
+// Le CHECKPOINT et le COMMIT explicites s'exécutent sur un fil du planificateur (l'opérateur
+// Transaction). Une attente du gestionnaire sur un tel fil le rend à la file pendant qu'elle dure
+// (un remplaçant la sert), comme l'attente des verrous (A3′) : sinon deux attentes prennent les
+// deux fils du banc, et la transaction attendue ne trouve plus de fil pour valider ; tout reste
+// figé jusqu'au délai du point de reprise (page coeur-cpp-tickets/06, « ce qui reste »). Sans
+// effet hors d'un fil ouvrier. On ne cède que si l'attente est réelle (son prédicat encore faux),
+// et une seule fois par fonction : la portée survit à l'attente jusqu'à la fin de la fonction.
+// Le fil ouvrier finit donc ses dernières instructions avec un remplaçant en plus ; c'est voulu,
+// et borné à la fonction.
+void yieldWorkerWhileWaiting(std::optional<common::TaskScheduler::BlockingWait>& blocking,
+    const main::ClientContext* clientContext) {
+    if (blocking.has_value() || clientContext == nullptr ||
+        !common::TaskScheduler::onWorkerThread()) {
+        return;
+    }
+    blocking.emplace(common::TaskScheduler::Get(*clientContext));
+}
+
+} // namespace
+
 Transaction* TransactionManager::beginTransaction(main::ClientContext& clientContext,
     TransactionType type) {
     // We acquire the lock for starting new transactions. In case this cannot be acquired, this
     // ensures calls to other public functions are not restricted.
     std::unique_lock publicFunctionLck{mtxForSerializingPublicFunctionCalls};
     // Pas de nouvelle transaction pendant qu'un point de reprise attend ou s'écrit.
-    waitWhileCheckpointPendingNoLock(publicFunctionLck);
+    waitWhileCheckpointPendingNoLock(&clientContext, publicFunctionLck);
     throwIfCheckpointFailedNoLock();
     switch (type) {
     case TransactionType::READ_ONLY: {
@@ -97,7 +121,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             // journal) ne devient visible que si ce point de reprise peut se faire : on attend
             // d'abord le départ des autres transactions. Si le délai expire, l'exception sort
             // avant la validation, l'appelant annule, et l'erreur dit vrai : rien n'est validé.
-            stopNewTransactionsAndWaitForOthersNoLock(lck, transaction);
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction);
         }
         lastTimestamp++;
         transaction->commitTS = lastTimestamp;
@@ -224,13 +248,18 @@ TransactionManager* TransactionManager::Get(const main::ClientContext& context) 
 }
 
 void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
-    std::unique_lock<std::mutex>& publicLock, const Transaction* staying) {
+    const main::ClientContext* clientContext, std::unique_lock<std::mutex>& publicLock,
+    const Transaction* staying) {
+    std::optional<common::TaskScheduler::BlockingWait> blocking;
     // Un seul point de reprise attend à la fois ; une validation qui en veut un pendant ce temps
     // se range dans la file (commitInCheckpointQueueNoLock) au lieu d'attendre ici. Une demande
     // automatique en attente (A8) est reprise par ce point de reprise, qui la remplit.
     if (autoCheckpointRequested) {
         autoCheckpointRequested = false;
     } else {
+        if (checkpointPending) {
+            yieldWorkerWhileWaiting(blocking, clientContext);
+        }
         transactionsChanged.wait(publicLock, [this] { return !checkpointPending; });
     }
     checkpointPending = true;
@@ -242,6 +271,9 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
         });
     };
     // wait_for relâche le verrou public : les transactions ouvertes peuvent valider ou annuler.
+    if (!othersLeftOrQueued()) {
+        yieldWorkerWhileWaiting(blocking, clientContext);
+    }
     if (!transactionsChanged.wait_for(publicLock,
             std::chrono::microseconds(checkpointWaitTimeoutInMicros), othersLeftOrQueued)) {
         allowNewTransactionsNoLock();
@@ -261,6 +293,7 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
         };
         commitQueuedNow = true;
         transactionsChanged.notify_all();
+        yieldWorkerWhileWaiting(blocking, clientContext);
         const auto left = transactionsChanged.wait_for(publicLock,
             std::chrono::microseconds(checkpointWaitTimeoutInMicros), othersLeft);
         commitQueuedNow = false;
@@ -277,6 +310,7 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
 
 bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clientContext,
     std::unique_lock<std::mutex>& publicLock, Transaction* transaction) {
+    std::optional<common::TaskScheduler::BlockingWait> blocking;
     queuedCheckpointCommits.push_back(transaction);
     const auto leaveQueue = [this, transaction] {
         std::erase(queuedCheckpointCommits, transaction);
@@ -284,6 +318,9 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     };
     // Le point de reprise en attente réévalue : cette transaction ne le bloque plus.
     transactionsChanged.notify_all();
+    if (!(commitQueuedNow || !checkpointPending || checkpointFailed)) {
+        yieldWorkerWhileWaiting(blocking, &clientContext);
+    }
     transactionsChanged.wait(publicLock,
         [this] { return commitQueuedNow || !checkpointPending || checkpointFailed; });
     if (checkpointFailed || !commitQueuedNow) {
@@ -306,9 +343,13 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     const auto ticket = checkpointsStarted;
     leaveQueue();
     clearTransactionNoLock(transaction->getID());
-    transactionsChanged.wait(publicLock, [this, ticket] {
+    const auto checkpointDoneOrGivenUp = [this, ticket] {
         return lastCompletedCheckpoint > ticket || checkpointFailed || !checkpointPending;
-    });
+    };
+    if (!checkpointDoneOrGivenUp()) {
+        yieldWorkerWhileWaiting(blocking, &clientContext);
+    }
+    transactionsChanged.wait(publicLock, checkpointDoneOrGivenUp);
     throwIfCheckpointFailedNoLock();
     if (lastCompletedCheckpoint <= ticket) {
         // Le point de reprise qui devait la contenir n'a pas eu lieu (la validation qui le
@@ -325,7 +366,12 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     return true;
 }
 
-void TransactionManager::waitWhileCheckpointPendingNoLock(std::unique_lock<std::mutex>& publicLock) {
+void TransactionManager::waitWhileCheckpointPendingNoLock(const main::ClientContext* clientContext,
+    std::unique_lock<std::mutex>& publicLock) {
+    std::optional<common::TaskScheduler::BlockingWait> blocking;
+    if (checkpointPending) {
+        yieldWorkerWhileWaiting(blocking, clientContext);
+    }
     // Une demande automatique (A8) ne retient pas plus de AUTO_CHECKPOINT_WAIT : au-delà, elle est
     // abandonnée, et le point de reprise reporté (un écrivain long la tient).
     while (checkpointPending) {
@@ -343,7 +389,7 @@ void TransactionManager::waitWhileCheckpointPendingNoLock(std::unique_lock<std::
 
 void TransactionManager::waitUntilNewTransactionsAreAllowed() {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
-    waitWhileCheckpointPendingNoLock(lck);
+    waitWhileCheckpointPendingNoLock(nullptr, lck);
 }
 
 void TransactionManager::writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
@@ -430,7 +476,7 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
     // query.
     if (!newTransactionsAlreadyStopped) {
         try {
-            stopNewTransactionsAndWaitForOthersNoLock(publicLock, nullptr);
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, publicLock, nullptr);
         } catch (std::exception& e) {
             throw CheckpointException{e};
         }

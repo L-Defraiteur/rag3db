@@ -82,7 +82,11 @@ point calme impossible par construction.
   (`TransactionManager::checkpoint`, dans l'opérateur Transaction) et la validation forcée (COPY
   forcé, index créé : `stopNewTransactionsAndWaitForOthersNoLock` dans le commit, sur le fil du
   COMMIT). Toutes deux sont bornées par le délai de 5 s, et c'était le 5 014 ms d'A7 avant la file.
-  Elles sont à déplacer dans le fil de l'appelant comme le BEGIN, dans un lot d'après.
+  **Fait dans un lot d'après, sous une autre forme** (relue et préférée par le cœur) : elles ne
+  sont pas déplacées. Pendant qu'elles attendent, le fil ouvrier rend sa place à un remplaçant,
+  par le `TaskScheduler::BlockingWait` de l'attente des verrous (A3′). Cela couvre d'un coup
+  le CHECKPOINT, la validation forcée et la file d'A7, dont les attentes étaient sans délai.
+  Témoin : `LockBench.CheckpointsWaitingForAnOpenWriterLeaveAThreadForItsCommit`.
 - **Le dernier partant peut être une connexion en lecture seule** du même processus (la validation
   d'une transaction READ_ONLY) : c'est son contexte client qui sert au Checkpointer. Le `readOnly`
   de DBConfig est celui de la base, faux ici, donc l'écriture passe d'après la lecture. **Non

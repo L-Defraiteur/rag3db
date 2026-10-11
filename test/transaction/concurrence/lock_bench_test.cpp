@@ -24,6 +24,7 @@
 #include <atomic>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <thread>
 
@@ -849,6 +850,43 @@ INSTANTIATE_TEST_SUITE_P(Copies, TwoCommitsThatWantACheckpoint, ::testing::Bool(
     [](const ::testing::TestParamInfo<bool>& info) {
         return info.param ? "Forced" : "Journaled";
     });
+
+// Le CHECKPOINT explicite attend le départ des autres transactions sur un fil du planificateur
+// (page coeur-cpp-tickets/06, « ce qui reste ») ; le second attend que le premier ait fini, sur un
+// fil lui aussi. Deux CHECKPOINT prennent ainsi les deux fils du banc (MAX_NUM_THREADS, 2 par
+// défaut), et le COMMIT explicite de la transaction qu'ils attendent ne trouve plus de fil : tout
+// reste figé jusqu'au délai du point de reprise (5 s), puis le premier CHECKPOINT échoue.
+// Attendu : le COMMIT passe sans attendre le délai, et les deux CHECKPOINT réussissent.
+TEST_F(LockBench, CheckpointsWaitingForAnOpenWriterLeaveAThreadForItsCommit) {
+    mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
+    rag3db::main::Connection writer(database.get());
+    rag3db::main::Connection first(database.get());
+    rag3db::main::Connection second(database.get());
+    ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
+    const auto create = writer.query("CREATE (:Item {id: 1, v: 1});");
+    ASSERT_TRUE(create->isSuccess()) << create->getErrorMessage();
+    const auto checkpoint = [](rag3db::main::Connection* connection) {
+        const auto result = connection->query("CHECKPOINT;");
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    };
+    auto firstCheckpoint = std::async(std::launch::async, checkpoint, &first);
+    auto secondCheckpoint = std::async(std::launch::async, checkpoint, &second);
+    // Les deux CHECKPOINT ont le temps d'entrer dans leur attente (300 ms n'y suffisaient pas
+    // toujours : une passe sur trois voyait le COMMIT partir avant eux).
+    std::this_thread::sleep_for(std::chrono::seconds{1});
+    const auto start = std::chrono::steady_clock::now();
+    const auto commit = writer.query("COMMIT;");
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+    std::cerr << "  commit under two waiting checkpoints: " << elapsed.count() << " ms\n";
+    EXPECT_TRUE(commit->isSuccess()) << "[check: commit] " << commit->getErrorMessage();
+    EXPECT_LT(elapsed.count(), 2'500)
+        << "[check: commit-finds-a-thread] the commit took " << elapsed.count() << " ms";
+    EXPECT_EQ(firstCheckpoint.get(), "ok") << "[check: checkpoints-succeed] first";
+    EXPECT_EQ(secondCheckpoint.get(), "ok") << "[check: checkpoints-succeed] second";
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 1) << "[check: committed-row] ";
+    expectIntegrity();
+}
 
 // A8, le point de reprise sous écrivains permanents (page coeur-cpp/11 §1) : sous le mode
 // multi-écrivains, des écrivains qui enchaînent BEGIN, écriture, COMMIT sans pause laissent presque
