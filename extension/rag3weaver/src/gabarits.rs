@@ -77,8 +77,10 @@ mod tests {
         }
 
         m["database"] = Value::String(ou.join("base.rag3db").to_string_lossy().to_string());
+        // Un nom (`vector`) est l'extension du bâti, trouvée à l'ouverture ; seul
+        // un chemin relatif se réécrit.
         if let Some(ext) = m.get("vector_extension").and_then(|v| v.as_str()) {
-            if !ext.starts_with('/') {
+            if ext.contains('/') && !ext.starts_with('/') {
                 m["vector_extension"] =
                     Value::String(gabarit.join(ext).to_string_lossy().to_string());
             }

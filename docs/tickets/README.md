@@ -68,7 +68,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -85,7 +85,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
 | [Une transition faite par une réaction n'applique pas les écritures du cycle de vie](2026-10-11-une-transition-de-reaction-n-applique-pas-les-ecritures-du-cycle-de-vie.md) | ouvert | réponse fausse (reviewed_at, revision, updated_at manquent) | oui, dès qu'une réaction transitionne | oui (et seulement) |
 | [e2e_impact dépend de la forme du code vivant qu'il indexe](2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md) | ouvert — après la migration (a) | test fragile | non | oui (`tests/e2e_impact.rs`, `tests/e2e_usages.rs`) |
-| [Un gabarit livré cherche l'extension vector relativement à lui-même](2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | ouvert | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
@@ -110,10 +109,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (94), dans `closed/`
+### Fermés (95), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un gabarit livré cherche l'extension vector relativement à lui-même](closed/2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | corrigé : `vector_extension` nomme l'extension du bâti (`"vector"`), trouvée par RAG3DB_ROOT, la lib ou le binaire (11 oct.) | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
 | [L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend](closed/2026-10-11-l-hote-ne-relit-pas-un-manifeste-modifie.md) | corrigé : `POST /backend/open` relit un manifeste modifié, `POST /backend/close` ferme et lâche la base (11 oct.) | réponse trompeuse | oui, à chaque correction d'un manifeste servi | oui (`daemon_host.rs`) |
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](closed/2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | corrigé, témoin vert sur les deux moteurs (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](closed/2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | corrigé (voir le ticket) | réponse trompeuse | oui | oui (rendu d'impact) |

@@ -43,8 +43,10 @@ Dans la copie de `backend.json` :
 
 - `database` → un chemin absolu à vous, p. ex. `~/.cache/rag3weaver/mon-projet.rag3db` ;
 - `workspace.root` → **la racine du dépôt** à fouiller, en absolu ;
-- `vector_extension` → le chemin absolu de `libvector.rag3db_extension` dans
-  l'arbre où le moteur a été bâti.
+- `vector_extension` : rien à changer. Le gabarit dit `"vector"`, l'extension du
+  bâti, cherchée à l'ouverture sous `RAG3DB_ROOT/extension/vector/build/`, puis
+  dans `RAG3DB_LIBRARY_DIR`, puis à côté du binaire ; un chemin n'y est qu'un
+  forçage. Posez `RAG3DB_ROOT` sur l'arbre où le moteur a été bâti.
 
 **Et copiez tout `templates/`, pas le seul dossier du gabarit** — corrigé le
 11 octobre après avoir joué la recette : le gabarit `code` range ses graphes
@@ -184,7 +186,7 @@ cp <target>/release/rag3weaver-backend ~/.local/bin/
 ```
 
 **2. Le manifeste**, comme au §1 : une copie de **tout** `templates/`, avec
-`database` et `vector_extension` en absolu. Pour la mémoire longue :
+`database` en absolu (`vector_extension` reste `"vector"`, l'extension du bâti). Pour la mémoire longue :
 `~/.config/rag3weaver/memoire-longue/backends/memory/backend.json`.
 
 **3. Chaque session**, une fois, en configuration **utilisateur** (pas un

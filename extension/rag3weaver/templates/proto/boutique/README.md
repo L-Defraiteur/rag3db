@@ -12,5 +12,6 @@ rag3weaver-backend serve --manifest templates/proto/boutique/backend.json
   par `ProductForm` ; `GET /products/{key}` — la fiche, par `Identity`.
 - `GET|POST /categories`, `GET|POST /orders` — en JSON (sans vue).
 
-Le chemin `vector_extension` est relatif à ce dossier dans le dépôt ; une
-copie ailleurs le réécrit (ou pose l'extension à côté).
+`vector_extension` dit `"vector"` : l'extension du bâti, trouvée à l'ouverture
+(`RAG3DB_ROOT`, `RAG3DB_LIBRARY_DIR`, puis à côté du binaire) ; une copie
+ailleurs n'a rien à réécrire.

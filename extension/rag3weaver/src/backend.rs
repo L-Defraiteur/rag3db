@@ -21,6 +21,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Le nom de l'extension vectorielle du bâti : le défaut de
+/// `vector_extension`, et ce que les gabarits livrés déclarent.
+pub const DEFAULT_VECTOR_EXTENSION: &str = "vector";
+
+fn default_vector_extension() -> PathBuf {
+    PathBuf::from(DEFAULT_VECTOR_EXTENSION)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
@@ -39,6 +47,11 @@ pub struct BackendManifest {
     /// (`crate::model_source::ModelSource`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
+    /// **L'extension vectorielle** : un **nom** (`vector`, le défaut) veut
+    /// dire « celle du bâti », trouvée par [`PreparedBackend::vector_extension_path`] ;
+    /// un **chemin** (un séparateur, ou le nom de fichier entier) est un
+    /// forçage, relatif au manifeste.
+    #[serde(default = "default_vector_extension")]
     pub vector_extension: PathBuf,
     pub entities: BTreeMap<String, BackendEntity>,
     #[serde(default)]
@@ -1351,6 +1364,55 @@ impl PreparedBackend {
     pub fn path(&self, path: &Path) -> PathBuf {
         self.directory.join(path)
     }
+
+    /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré
+    /// est un forçage, relatif au manifeste. Un nom (`vector`) est celle du
+    /// bâti, cherchée là où le moteur se trouve, dans cet ordre :
+    /// `RAG3DB_ROOT/extension/<nom>/build/` (l'arbre bâti), `RAG3DB_LIBRARY_DIR`
+    /// (une lib installée), le dossier de l'exécutable (le paquet npm la pose
+    /// à côté du binaire), puis l'arbre dont ce crate vient (un bâti de
+    /// développement). Introuvable : le refus nomme chaque endroit cherché et
+    /// la variable à poser. Un gabarit livré ne la cherche jamais relativement
+    /// à lui-même (ticket du 11 octobre 2026 : copié ailleurs, il ne s'ouvrait
+    /// plus).
+    pub fn vector_extension_path(&self) -> Result<PathBuf, String> {
+        let declare = &self.manifest.vector_extension;
+        let texte = declare.to_string_lossy();
+        let est_un_chemin = texte.contains('/') || texte.contains('\\') || texte.ends_with(".rag3db_extension");
+        if est_un_chemin {
+            let chemin = self.path(declare);
+            return if chemin.is_file() {
+                Ok(chemin)
+            } else {
+                Err(format!(
+                    "extension vectorielle introuvable : {} (`vector_extension` du manifeste, un chemin relatif à lui) — \
+                     donnez un chemin qui existe, ou le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle du bâti",
+                    chemin.display()
+                ))
+            };
+        }
+        let fichier = format!("lib{texte}.rag3db_extension");
+        let mut cherches: Vec<PathBuf> = Vec::new();
+        if let Some(racine) = std::env::var_os("RAG3DB_ROOT") {
+            cherches.push(PathBuf::from(racine).join("extension").join(&*texte).join("build").join(&fichier));
+        }
+        if let Some(lib) = std::env::var_os("RAG3DB_LIBRARY_DIR") {
+            cherches.push(PathBuf::from(lib).join(&fichier));
+        }
+        if let Some(dossier) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+            cherches.push(dossier.join(&fichier));
+        }
+        cherches.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extension").join(&*texte).join("build").join(&fichier));
+        if let Some(trouve) = cherches.iter().find(|p| p.is_file()) {
+            return Ok(trouve.clone());
+        }
+        let liste: Vec<String> = cherches.iter().map(|p| p.display().to_string()).collect();
+        Err(format!(
+            "extension vectorielle « {texte} » introuvable ; cherchée dans : {} — posez RAG3DB_ROOT sur l'arbre où le moteur est bâti, \
+             ou `vector_extension` sur le chemin du fichier",
+            liste.join(" ; ")
+        ))
+    }
     pub fn describe(&self) -> Value {
         let mut tools:Vec<Value>=self.tools.iter().map(|(name,t)|{
             // La surcharge du manifeste, sinon la ligne du gabarit ; puis la
@@ -1477,7 +1539,7 @@ impl PreparedBackend {
             }
             (None, _) => {}
         }
-        let ext = self.path(&self.manifest.vector_extension);
+        let ext = self.vector_extension_path()?;
         cat.execute_raw(&format!(
             "LOAD EXTENSION '{}'",
             ext.to_string_lossy().replace('\'', "''")
@@ -3860,6 +3922,64 @@ mod tests {
         };
         assert!(erreur.contains("embarquement"), "{erreur}");
         assert!(erreur.contains("RAG3WEAVER_EMBED_SERVICE"), "le refus dit quoi faire : {erreur}");
+    }
+
+    /// **Un gabarit copié hors de l'arbre trouve l'extension du bâti** (ticket
+    /// « un gabarit livré cherche l'extension vector relativement à
+    /// lui-même ») : le notebook copié ailleurs, comme un paquet installé ou
+    /// un worktree sans moteur, son `vector_extension` **tel que livré**,
+    /// s'ouvre en trouvant l'extension du bâti déclaré (RAG3DB_ROOT).
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn un_gabarit_copie_hors_de_l_arbre_trouve_l_extension_du_bati() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+        let dir = tempfile::tempdir().unwrap();
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        copier(&src, dir.path());
+        std::fs::copy(src.join("../../tools/search_structured.mmd"), dir.path().join("search_structured.mmd")).unwrap();
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+        manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
+        manifest["embeddings"]["address"] = json!("127.0.0.1:9");
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        // Le bâti est déclaré par RAG3DB_ROOT, comme dans toute passe.
+        let _ = extension_vector_de_test();
+        let prepared = PreparedBackend::load(&chemin).unwrap();
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let backend = prepared
+            .open(Box::new(conn), None)
+            .unwrap_or_else(|e| panic!("le gabarit copié doit trouver l'extension du bâti : {e}"));
+        let r = backend
+            .call_tool("put_note", json!({"record": {"key": "k1", "text": "le four ne chauffe plus", "labels": [], "stage": "working"}}))
+            .unwrap();
+        assert!(r.get("ok").map(|v| v != false).unwrap_or(true), "{r}");
+        assert_eq!(backend.prepared().manifest.vector_extension, Path::new(DEFAULT_VECTOR_EXTENSION), "le gabarit livré nomme l'extension");
+
+        // Les refus nomment ce qui manque : un chemin forcé, puis un nom que
+        // rien ne porte (la liste des endroits cherchés, et la variable).
+        for (declare, attendus) in [
+            ("ailleurs/libvector.rag3db_extension", vec!["introuvable", "ailleurs/libvector.rag3db_extension", "relatif"]),
+            ("inexistante", vec!["« inexistante » introuvable", "libinexistante.rag3db_extension", "RAG3DB_ROOT"]),
+        ] {
+            manifest["vector_extension"] = json!(declare);
+            std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+            let erreur = PreparedBackend::load(&chemin).unwrap().vector_extension_path().unwrap_err();
+            for a in attendus {
+                assert!(erreur.contains(a), "« {a} » absent du refus : {erreur}");
+            }
+        }
     }
 
     /// **Le crochet après outil** : la section s'ajoute au rendu, une

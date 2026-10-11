@@ -3,7 +3,7 @@
   "name": "boutique",
   "database": "data/boutique.rag3db",
   "embeddings": { "address": "127.0.0.1:9", "model": "none", "dimensions": 8 },
-  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "vector_extension": "vector",
   "entities": {
     "Category": {
       "schema": "schemas/category.json",

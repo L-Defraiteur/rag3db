@@ -7,7 +7,7 @@
     "model": "bge-m3",
     "dimensions": 1024
   },
-  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "vector_extension": "vector",
   "entities": {
     "Submission": {
       "schema": "schemas/submission.json",

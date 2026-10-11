@@ -1,6 +1,6 @@
 # Un gabarit livré cherche l'extension vector relativement à lui-même, sans repli sur le bâti
 
-- **état** : ouvert (11 octobre 2026, banc des fiches classées)
+- **état** : corrigé (11 octobre 2026, arbre principal) — ouvert par le banc des fiches classées
 - **gravité** : blocage (le backend ne s'ouvre pas)
 - **atteignable en service** : oui, pour qui charge un gabarit sur place depuis un arbre où le moteur n'est pas bâti (un worktree, un paquet installé)
 - **touche rag3weaver** : oui (et seulement)
@@ -39,3 +39,19 @@ posé au bâti), jamais par un chemin relatif au gabarit. Un `vector_extension` 
 dans un manifeste reste un forçage ; son absence (ou une valeur réservée) veut dire
 « celle du bâti », et l'échec le dit en nommant la variable à poser. Témoin : le banc
 des fiches classées ouvre le gabarit `memory` sur place depuis un worktree.
+
+## Correctif
+
+`vector_extension` est un **nom** ou un **chemin** (`src/backend.rs`,
+`PreparedBackend::vector_extension_path`). Les gabarits livrés disent `"vector"`, qui est aussi
+le défaut quand le champ manque. Un nom est l'extension du bâti, cherchée à l'ouverture dans cet
+ordre : `RAG3DB_ROOT/extension/<nom>/build/`, `RAG3DB_LIBRARY_DIR`, le dossier de l'exécutable
+(le paquet npm la pose à côté du binaire), puis l'arbre dont le crate vient. Un chemin (un
+séparateur, ou le nom de fichier entier) reste un forçage, relatif au manifeste. Introuvable, le
+refus nomme chaque endroit cherché et la variable à poser.
+
+Témoin : `backend::tests::un_gabarit_copie_hors_de_l_arbre_trouve_l_extension_du_bati` — le
+notebook copié dans un dossier temporaire, `vector_extension` tel que livré, s'ouvre et écrit ;
+rouge avant le correctif (« The extension /tmp/…/../../../../vector/build/libvector.rag3db_extension
+is neither an official extension… »). Le même test vérifie les deux refus nommés.
+

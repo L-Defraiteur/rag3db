@@ -6,7 +6,7 @@
     "model": "granite-278m",
     "dimensions": 768
   },
-  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "vector_extension": "vector",
   "workspace": {
     "source": "snapshot",
     "root": "workspace",
