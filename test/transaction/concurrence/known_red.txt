@@ -105,6 +105,11 @@ LockBench.FailedTransactionReleasesItsLocksAtRollback waited
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 #
+# Le CALL de la recherche vectorielle rend des nœuds supprimés (ticket
+# 2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call) : la projection du nœud les
+# écarte, le compte du CALL les garde. Relevé par le cœur C++ sur I1.
+VectorIndexUpdate.DeletedRowsAreNotReturnedByTheCall vector-call-dead
+#
 # Un groupe de copies bien plus grand que le degré (vector_index_update_test.cpp,
 # SameVectorForEveryRow, la recette de rag3db-9c du 10 octobre) : 1 402 lignes du même vecteur
 # (FLOAT[384], cosinus), 23 fois le degré. Aucun plantage, mais des lignes injoignables par la
