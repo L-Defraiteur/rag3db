@@ -259,5 +259,41 @@ MATCH (d:`Symbol` {_uuid: u})<-[r:`uses`]-() RETURN u, count(r)
   tient dans les deux modes (fondu : `[sel, marquer]` puis `[fautif]`, deux
   instructions dans une transaction, défaite). Rouges sous un bouchon qui coupait
   la fusion, verts sans.
-- PostgreSQL ne fond rien encore, et refuse `Hop` (P3, nœud nommé) : la fusion
-  PostgreSQL (son lot) commence par traduire le saut.
+Poussé : `7da725287`.
+
+## Le saut PostgreSQL, puis la fusion en CTE (troisième et quatrième lots)
+
+- **Le saut** (`d0aacfcf7`) : `unnest($uuids)` joint aux arêtes par le bout de
+  départ (`from_uuid` en sortant, `to_uuid` en entrant), puis à la table
+  d'arrivée par l'autre bout ; la table de départ, connue, est jointe aussi. Sans
+  table d'arrivée, un champ, une étiquette, un filtre ou un ordre sur le nœud
+  atteint se refusent en se nommant, et la ligne entière aussi. Le scénario
+  d'`e2e_chainage` est devenu commun aux deux moteurs ; `e2e_postgres` le joue sur
+  le conteneur (`le_chainage_*`).
+- **La fusion en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et
+  chaque `$uuids` de l'aval devient
+  `ARRAY(SELECT DISTINCT cK FROM __chain WHERE cK IS NOT NULL)`. Une chaîne déjà
+  fondue devient le corps de la CTE suivante. Une sélection, un saut ou un compte
+  se fondent en amont, même ordonnés ou bornés : la CTE garde ses lignes, ce que
+  rag3db ne sait pas faire avec un `WITH` de Cypher. **Jamais une écriture en
+  amont**, dans aucun des deux dialectes : toutes les parties d'une instruction
+  PostgreSQL voient le même instantané, et la lecture placée après ne verrait pas
+  l'écriture. Le témoin `une_lecture_apres_une_ecriture_reste_decoupee` (les deux
+  moteurs) : un `Upsert` nourrit la relecture de la même table, le rapport dit
+  `[["ecrire"], ["relire"]]`, et la relecture voit la nouvelle valeur.
+- La chaîne du témoin, sur PostgreSQL :
+
+```
+WITH __chain(c0, c1) AS (
+  WITH __chain(c0, c1) AS (
+    SELECT v.u, m."_uuid" FROM unnest($uuids::text[]) AS v(u) JOIN "file" AS m ON m."_uuid" = v.u)
+  SELECT v.u, r."to_uuid" FROM unnest(ARRAY(SELECT DISTINCT c0 FROM __chain WHERE c0 IS NOT NULL)::text[]) AS v(u)
+    JOIN "file" AS d ON d."_uuid" = v.u JOIN "defines" AS r ON r."from_uuid" = v.u
+    JOIN "symbol" AS m ON m."_uuid" = r."to_uuid")
+SELECT v.u, count(*) FROM unnest(ARRAY(SELECT DISTINCT c1 FROM __chain WHERE c1 IS NOT NULL)::text[]) AS v(u)
+  JOIN "uses" AS r ON r."to_uuid" = v.u GROUP BY v.u
+```
+
+- Les deux écarts entre dialectes, dits ici plutôt que cachés : PostgreSQL fond
+  un amont ordonné ou borné, rag3db non ; ni l'un ni l'autre ne fond deux sorties
+  désignées (une instruction rend un seul tableau).

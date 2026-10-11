@@ -1795,7 +1795,7 @@ fn la_transaction_epinglee_tient_sur_une_session() {
 // mêmes lignes. `fond` dit si ce dialecte fond la chaîne.
 
 #[cfg(feature = "rag3db-native")]
-const PG_FOND: bool = false;
+const PG_FOND: bool = true;
 
 #[cfg(feature = "rag3db-native")]
 #[test]
@@ -1827,4 +1827,12 @@ fn le_chainage_un_noeud_qui_echoue_defait_l_ecriture_d_avant() {
 fn le_chainage_une_entree_vide() {
     let (_garde, cat) = catalogue(8);
     crate::e2e_chainage::une_entree_vide(&crate::e2e_chainage::peupler(cat), PG_FOND);
+}
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_une_lecture_apres_une_ecriture_reste_decoupee() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::une_lecture_apres_une_ecriture(&crate::e2e_chainage::peupler(cat));
 }

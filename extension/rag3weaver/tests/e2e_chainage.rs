@@ -269,3 +269,33 @@ pub(crate) fn une_entree_vide(s: &Scene, fond: bool) {
     assert_eq!(r.instructions, 1, "fondu : une instruction, qui ne trouve rien ; découpé : la sélection seule (fond = {fond}) : {r:?}");
     assert_eq!(decoupe.instructions, 1, "découpé : seule la sélection est partie : {decoupe:?}");
 }
+
+/// **Une lecture placée après une écriture reste découpée**, et le rapport
+/// le dit : l'`Upsert` change la note de `a`, la sélection qu'il nourrit la
+/// relit. Fondues en une instruction, sur PostgreSQL, la lecture verrait
+/// l'instantané d'avant l'écriture ; aucun dialecte ne fond une écriture en
+/// amont.
+#[test]
+#[ignore]
+fn une_lecture_apres_une_ecriture_reste_decoupee() {
+    une_lecture_apres_une_ecriture(&scene());
+}
+
+pub(crate) fn une_lecture_apres_une_ecriture(s: &Scene) {
+    let ecrire = Write::Upsert { table: "Symbol".into(), columns: vec!["_uuid".into(), "note".into()] };
+    let item = CypherValue::Map(BTreeMap::from([
+        ("_uuid".to_string(), CypherValue::String(s.a.clone())),
+        ("note".to_string(), CypherValue::String("y".into())),
+    ]));
+    let plan = Plan::new()
+        .node("ecrire", Form::Write(ecrire), vec![QueryParam::new("items", CypherValue::List(vec![item]))])
+        .node("relire", Form::Select(Select::by_uuids("Symbol", vec![Column::Node("note".into())])), vec![])
+        .edge("ecrire", 1, "relire")
+        .output("relire");
+    let r = s.cat.run_plan(&plan, PlanOptions { require_atomic: true, ..Default::default() }).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.fused, vec![vec!["ecrire".to_string()], vec!["relire".to_string()]], "l'écriture ne se fond pas : {r:?}");
+    assert!(r.atomic, "deux instructions dans une transaction");
+    let lignes = &r.outputs["relire"].rows;
+    assert_eq!(lignes.len(), 1, "{lignes:?}");
+    assert_eq!(lignes[0][1], CypherValue::String("y".into()), "la relecture voit ce que l'écriture vient de poser");
+}

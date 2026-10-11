@@ -381,11 +381,34 @@ mod tests {
     }
 
     #[test]
-    fn postgresql_ne_fond_rien_pour_l_instant() {
+    fn postgresql_fond_une_chaine_en_cte() {
         let (conn, recu) = espion();
-        let r = run_plan(&PostgresDialect, &conn, &chaine(), PlanOptions::default()).unwrap();
-        assert_eq!(r.fused, vec![vec!["sel".to_string()]], "la sélection part seule, et l'espion ne rend rien");
-        assert!(recu.lock().unwrap().iter().any(|q| q == "BEGIN TRANSACTION"), "trois groupes prévus : une transaction");
+        let r = run_plan(&PostgresDialect, &conn, &chaine(), PlanOptions { require_atomic: true, ..Default::default() }).unwrap();
+        assert_eq!(r.fused, vec![vec!["sel".to_string(), "hop".to_string(), "deg".to_string()]]);
+        let recu = recu.lock().unwrap();
+        assert_eq!(
+            *recu,
+            ["WITH __chain(c0, c1) AS (\
+              WITH __chain(c0, c1) AS (\
+              SELECT v.u, m.\"_uuid\" FROM unnest($uuids::text[]) AS v(u) JOIN \"file\" AS m ON m.\"_uuid\" = v.u) \
+              SELECT v.u, r.\"to_uuid\" FROM unnest(ARRAY(SELECT DISTINCT c0 FROM __chain WHERE c0 IS NOT NULL)::text[]) AS v(u) \
+              JOIN \"file\" AS d ON d.\"_uuid\" = v.u JOIN \"defines\" AS r ON r.\"from_uuid\" = v.u \
+              JOIN \"symbol\" AS m ON m.\"_uuid\" = r.\"to_uuid\") \
+              SELECT v.u, count(*) FROM unnest(ARRAY(SELECT DISTINCT c1 FROM __chain WHERE c1 IS NOT NULL)::text[]) AS v(u) \
+              JOIN \"uses\" AS r ON r.\"to_uuid\" = v.u GROUP BY v.u"],
+            "une instruction, sans transaction autour"
+        );
+    }
+
+    #[test]
+    fn une_ecriture_ne_se_fond_jamais_en_amont() {
+        let up = Form::Write(Write::Upsert { table: "Symbol".into(), columns: vec!["_uuid".into(), "note".into()] });
+        let sel = Form::Select(Select::by_uuids("Symbol", vec![Column::Node("note".into())]));
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            let texte_up = super::translate(d, &up).unwrap();
+            let texte_sel = super::translate(d, &sel).unwrap();
+            assert_eq!(d.fuse(&texte_up, &up, 1, &texte_sel), None, "{}", d.name());
+        }
     }
 
     #[test]

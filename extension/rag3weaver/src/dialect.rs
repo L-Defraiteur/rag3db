@@ -2202,6 +2202,29 @@ impl SchemaDialect for PostgresDialect {
         })
     }
 
+    /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et
+    /// chaque `$uuids` de l'aval devient
+    /// `ARRAY(SELECT DISTINCT cK FROM __chain WHERE cK IS NOT NULL)` — la règle
+    /// du repli (valeurs distinctes, non nulles). Une chaîne déjà fondue
+    /// devient le corps de la CTE suivante : la `__chain` intérieure ne se voit
+    /// que dans ce corps. Une sélection, un saut ou un compte se fondent en
+    /// amont, même ordonnés ou bornés (la CTE garde ses lignes) ; **jamais une
+    /// écriture** : toutes les parties d'une instruction voient le même
+    /// instantané, et une lecture placée après ne verrait pas ce que
+    /// l'écriture vient de poser.
+    fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
+        if upstream.is_write() || downstream_text.starts_with("WITH") || !downstream_text.contains("$uuids") {
+            return None;
+        }
+        let n = upstream.output().len();
+        if column >= n {
+            return None;
+        }
+        let colonnes = (0..n).map(|i| format!("c{i}")).collect::<Vec<_>>().join(", ");
+        let source = format!("ARRAY(SELECT DISTINCT c{column} FROM __chain WHERE c{column} IS NOT NULL)");
+        Some(format!("WITH __chain({colonnes}) AS ({upstream_text}) {}", downstream_text.replace("$uuids", &source)))
+    }
+
     /// **Un saut** par la table de relation : `unnest($uuids)` joint aux
     /// arêtes par le bout de départ (`from_uuid` en sortant, `to_uuid` en
     /// entrant), puis à la table d'arrivée par l'autre bout. La table de
