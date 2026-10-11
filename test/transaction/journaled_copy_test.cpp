@@ -1781,6 +1781,70 @@ TEST_F(ForcedTransactionJournalTest, OrdinaryWritesBeforeACopyThatSkipsRowsCommi
 // personne — le fichier n'a pas d'étendue connue. La mesure est celle du contrôle de fuite de
 // la suite Cypher : toutes les tables retirées, un point de reprise, puis les pages du fichier
 // moins les pages libres, comparées à celles d'une base qui a fait le même travail sans mourir.
+// Le COPY journalisé relu en mémoire, sans mort ni rejeu (11 octobre 2026, sonde de l'arbre
+// principal) : 200 000 lignes avec une colonne FLOAT[4] à côté d'une DOUBLE, deux fils, le
+// seuil du journal à 1 Gio. Sur master, 3 fois sur 3 : la DOUBLE des ~600 dernières lignes du
+// groupe partiel se lit comme des dénormaux (imprimés 0.000000) alors que les données en
+// mémoire sont justes (un CHECKPOINT dans le même processus les relit justes). Le journal
+// porte ce qui a été lu : le rejeu écrit les mêmes faux. Un fil, ou vec en STRING, ou le point
+// de reprise forcé : juste.
+class JournaledCopyReadBackTest : public JournaledCopyTest {
+protected:
+    static constexpr int64_t NUM_ROWS = 200000;
+
+    void writeRowsWithVectors() const {
+        std::ofstream csv(csvPath);
+        for (int64_t id = 0; id < NUM_ROWS; id++) {
+            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7
+                << "," << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
+        }
+    }
+
+    // La configuration de la sonde : un tampon de ~73 Mio, deux fils.
+    SystemConfig probeConfig() const {
+        auto config = *systemConfig;
+        config.bufferPoolSize = (1ull << 26) + 256ull * 4096 * 9;
+        config.maxNumThreads = 2;
+        return config;
+    }
+
+    static std::string wrongScores(Connection& connection) {
+        auto result = connection.query(
+            "MATCH (d:Doc) WHERE d.score <> d.id + 0.5 RETURN count(*), min(d.id), max(d.id);");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        return result->isSuccess() ? result->getNext()->toString() : "<error>";
+    }
+};
+
+TEST_F(JournaledCopyReadBackTest, TwoThreadsAndAnArrayColumnReadEveryScoreBack) {
+    writeRowsWithVectors();
+    std::filesystem::remove_all(databasePath);
+    std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
+    const auto config = probeConfig();
+    Database database(databasePath, config);
+    Connection connection(&database);
+    ASSERT_TRUE(connection.query("CALL auto_checkpoint=false;")->isSuccess());
+    ASSERT_TRUE(connection.query("CALL force_checkpoint_on_copy=false;")->isSuccess());
+    ASSERT_TRUE(connection
+                    .query("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE, "
+                           "vec FLOAT[4]);")
+                    ->isSuccess());
+    ASSERT_TRUE(connection.query("CHECKPOINT;")->isSuccess());
+    ASSERT_TRUE(connection.query("CALL copy_journal_threshold=1073741824;")->isSuccess());
+    auto copy = connection.query("COPY Doc FROM '" + csvPath + "';");
+    ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+    // Trois essais : la répartition des lignes entre les fils fait le hasard.
+    for (auto attempt = 0; attempt < 3; attempt++) {
+        EXPECT_EQ(wrongScores(connection), "0||\n") << "attempt " << attempt;
+        if (attempt < 2) {
+            ASSERT_TRUE(connection.query("MATCH (d:Doc) DELETE d;")->isSuccess());
+            ASSERT_TRUE(connection.query("CHECKPOINT;")->isSuccess());
+            copy = connection.query("COPY Doc FROM '" + csvPath + "';");
+            ASSERT_TRUE(copy->isSuccess()) << copy->getErrorMessage();
+        }
+    }
+}
+
 class OwnerlessPagesTest : public CopyJournalThresholdTest {
 protected:
     // Plus qu'un groupe de nœuds : un COPY n'écrit ses pages avant la validation que par groupe
