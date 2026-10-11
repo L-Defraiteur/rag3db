@@ -218,7 +218,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = prepared.embedder_or_absent();
+    let (embedder, raison) = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
     // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
     // aucun gabarit livré n'en porte encore, donc rien n'est écarté
@@ -234,7 +234,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
             .map_err(|e| e.to_string())?,
     );
-    let mut backend = prepared.open(conn, embedder)?;
+    let mut backend = prepared.open_with_reason(conn, embedder, raison)?;
     // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
     // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
     // qu'un graphe tourne derrière les outils, et un opérateur ne peut pas
@@ -445,13 +445,13 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = prepared.embedder_or_absent();
+    let (embedder, raison) = prepared.embedder_or_absent();
     let conn =
         Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
             .map_err(|e| e.to_string())?;
     let nom = prepared.manifest.name.clone();
     let modele = modele_du_chat(&prepared);
-    let backend = std::sync::Arc::new(prepared.open(Box::new(conn), embedder)?);
+    let backend = std::sync::Arc::new(prepared.open_with_reason(Box::new(conn), embedder, raison)?);
     let atelier = if atelier {
         let page = rag3weaver::atelier::Atelier::new(backend.clone(), modele)?;
         let montre = page.watch(std::time::Duration::from_millis(500));
@@ -510,7 +510,7 @@ fn run() -> Result<(), String> {
     // backend qui déclare du vecteur démarre sans lui en le disant (plein
     // texte seul, vecteurs en dette — `PreparedBackend::open` redit la phrase
     // dans le reçu). Une identité de modèle différente reste un refus.
-    let embedder = prepared.embedder_or_absent();
+    let (embedder, raison) = prepared.embedder_or_absent();
     let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(prepared.manifest.buffer_pool);
     eprintln!("[rag3weaver] tampon du moteur : {}", rag3weaver::rag3db_connection::describe_buffer_pool(tampon));
     let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
@@ -521,7 +521,7 @@ fn run() -> Result<(), String> {
         .ok()
         .and_then(|v| v.parse().ok());
     let mut calls = 0usize;
-    let mut backend = prepared.open(Box::new(conn), embedder)?;
+    let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
     for line in io::stdin().lock().lines() {
         let request: Result<Value, String> = line.map_err(|e| e.to_string())
             .and_then(|line| serde_json::from_str(&line).map_err(|e| e.to_string()));

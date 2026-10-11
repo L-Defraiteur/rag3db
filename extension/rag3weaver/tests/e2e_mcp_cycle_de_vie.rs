@@ -487,7 +487,7 @@ fn un_backend_de_code_sans_service_s_ouvre_dans_l_hote() {
     c.fermer();
     let journal = std::fs::read_to_string(demon.dir.join("daemon.log")).unwrap_or_default();
     assert!(
-        journal.contains("pas de service d'embarquement"),
-        "l'hôte dit qu'il ouvre sans service, dans son journal : {journal}"
+        journal.contains("pas de service d'embarquement") && journal.contains("aucun service déclaré"),
+        "l'hôte dit qu'il ouvre sans service, et pourquoi, dans son journal : {journal}"
     );
 }

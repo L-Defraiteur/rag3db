@@ -402,9 +402,9 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let embedder = prepared.embedder_or_absent();
+    let (embedder, raison) = prepared.embedder_or_absent();
     let conn = crate::Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
-    prepared.open(Box::new(conn), embedder)
+    prepared.open_with_reason(Box::new(conn), embedder, raison)
 }
 
 /// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,

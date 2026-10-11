@@ -1388,38 +1388,67 @@ impl PreparedBackend {
     }
     /// **L'embarqueur de toutes les portes** (lignes JSON, `mcp`, `serve`,
     /// l'hôte du démon) : celui de la déclaration s'il répond ; sinon
-    /// `None`, dit sur stderr avec la raison, et [`Self::open`] pose
-    /// l'embarqueur absent (plein texte seul, vecteurs en dette, la phrase
-    /// dans le reçu). Un backend en mots seuls n'en demande pas. Une
-    /// identité de modèle différente reste un refus, dans `open`. Une seule
-    /// méthode : le 11 octobre 2026, trois portes sur quatre refusaient
-    /// encore un backend vectoriel sans service (le témoin « MCP de zéro »
-    /// de l'archive alpha.3, par l'hôte lancé par le premier client).
-    pub fn embedder_or_absent(&self) -> Option<Box<dyn Embedder>> {
+    /// `None` **et la raison**, que [`Self::open_with_reason`] met dans le
+    /// reçu avec l'embarqueur absent (plein texte seul, vecteurs en dette).
+    /// La raison dit quoi faire, et ce n'est pas la même chose selon le
+    /// cas : rien de déclaré (le donner), un service déclaré mais pas joint
+    /// (le démarrer), un modèle local indisponible. Un backend en mots seuls
+    /// n'en demande pas : `(None, None)`. Une identité de modèle différente
+    /// reste un refus, dans `open`. Une seule méthode : le 11 octobre 2026,
+    /// trois portes sur quatre refusaient encore un backend vectoriel sans
+    /// service (le témoin « MCP de zéro » de l'archive alpha.3).
+    pub fn embedder_or_absent(&self) -> (Option<Box<dyn Embedder>>, Option<String>) {
         if !self.needs_embeddings() {
-            return None;
+            return (None, None);
         }
         match self.connect_embedder() {
-            Ok((embedder, _)) => Some(embedder),
-            Err(raison) => {
-                eprintln!("[rag3weaver] pas de service d'embarquement : index en plein texte seul, vecteurs en dette ({raison})");
-                None
-            }
+            Ok((embedder, _)) => (Some(embedder), None),
+            Err(erreur) => (None, Some(self.raison_sans_service(&erreur))),
+        }
+    }
+    /// La raison du manque, et quoi faire, d'après la déclaration.
+    fn raison_sans_service(&self, erreur: &str) -> String {
+        use crate::model_source::{Capability, Provider};
+        let adresses = self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok());
+        match self.embed.provider {
+            Provider::Local => format!("modèle local {} indisponible : {erreur}", self.embed.model),
+            _ if adresses.is_empty() => format!(
+                "aucun service déclaré — donnez models.embed.address (ou embeddings.address), ou \
+                 RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)"
+            ),
+            _ => format!(
+                "service déclaré mais pas joint ({}) — démarrez-le ; l'index rattrapera la dette \
+                 à la réouverture : {erreur}",
+                adresses.join(", ")
+            ),
         }
     }
     /// Ce que le backend dit quand il déclare du vecteur et démarre sans
     /// service d'embarquement — la même phrase sur stderr et dans le reçu.
     /// La phrase de fond est celle du catalogue
-    /// (`AVERTISSEMENT_EMBARQUEUR_ABSENT`) ; ici s'ajoute quoi faire.
+    /// (`AVERTISSEMENT_EMBARQUEUR_ABSENT`) ; s'y ajoute la raison, ou à
+    /// défaut quoi faire.
     pub const AVERTISSEMENT_SANS_SERVICE: &str = "pas de service d'embarquement : index en \
         plein texte seul, vecteurs en dette (ce backend déclare des signaux vecteur ou sparse, \
-        ou un workspace indexé) — pour les calculer, donnez models.embed.address (ou \
+        ou un workspace indexé)";
+    const QUOI_FAIRE_SANS_SERVICE: &str = "pour les calculer, donnez models.embed.address (ou \
         embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)";
 
     pub fn open(
         self,
         conn: Box<dyn DbConnection>,
         embedder: Option<Box<dyn Embedder>>,
+    ) -> Result<Backend, String> {
+        self.open_with_reason(conn, embedder, None)
+    }
+
+    /// [`Self::open`], avec la raison du manque d'embarqueur quand la porte
+    /// la connaît ([`Self::embedder_or_absent`]) : elle va dans le reçu.
+    pub fn open_with_reason(
+        self,
+        conn: Box<dyn DbConnection>,
+        embedder: Option<Box<dyn Embedder>>,
+        raison: Option<String>,
     ) -> Result<Backend, String> {
         // Un backend en mots seuls démarre sans service d'embarquement. Un
         // backend qui déclare du vecteur démarre aussi (décision du
@@ -1432,7 +1461,11 @@ impl PreparedBackend {
         // 2026 : l'hôte du démon, `mcp` autonome et `serve` refusaient encore).
         let sans_service = embedder.is_none();
         let avertissement_sans_service = if sans_service && self.needs_embeddings() {
-            let texte = Self::AVERTISSEMENT_SANS_SERVICE.to_string();
+            let texte = format!(
+                "{} — {}",
+                Self::AVERTISSEMENT_SANS_SERVICE,
+                raison.as_deref().unwrap_or(Self::QUOI_FAIRE_SANS_SERVICE)
+            );
             eprintln!("[backend] {texte}");
             Some(texte)
         } else {
@@ -3942,17 +3975,27 @@ mod tests {
             }
         }
         manifest["vector_extension"] = json!(extension_vector_de_test());
+        // Un service déclaré où personne n'écoute (port 1) : la raison dit
+        // « pas joint » et l'adresse, donc « démarrez-le », pas « déclarez-le ».
+        manifest["embeddings"]["address"] = json!("127.0.0.1:1");
         std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
         let prepared = PreparedBackend::load(&chemin).unwrap();
         assert!(prepared.needs_embeddings());
+        let (embedder, raison) = prepared.embedder_or_absent();
+        assert!(embedder.is_none(), "personne n'écoute au port 1");
+        let raison = raison.expect("la porte connaît la raison");
+        assert!(raison.contains("pas joint") && raison.contains("127.0.0.1:1"), "{raison}");
         let conn = crate::Rag3dbConnection::in_memory().unwrap();
         let backend = prepared
-            .open(Box::new(conn), None)
+            .open_with_reason(Box::new(conn), None, Some(raison))
             .expect("du vecteur déclaré sans service démarre en le disant");
         let avertissements = backend.avertissements();
         assert_eq!(avertissements.len(), 1, "{avertissements:?}");
         assert!(avertissements[0].contains("pas de service d'embarquement"), "{avertissements:?}");
-        assert!(avertissements[0].contains("RAG3WEAVER_EMBED_SERVICE"), "l'avertissement dit quoi faire : {avertissements:?}");
+        assert!(
+            avertissements[0].contains("démarrez-le") && avertissements[0].contains("127.0.0.1:1"),
+            "le reçu dit la raison et quoi faire, pas seulement stderr : {avertissements:?}"
+        );
         assert_eq!(backend.describe()["warnings"], json!(avertissements), "le reçu de describe porte l'avertissement");
     }
 
