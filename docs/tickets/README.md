@@ -105,13 +105,14 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
 
-### Fermés (90), dans `closed/`
+### Fermés (91), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](closed/2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | corrigé, témoin vert sur les deux moteurs (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](closed/2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | corrigé (voir le ticket) | réponse trompeuse | oui | oui (rendu d'impact) |
 | [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](closed/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | corrigé (voir le ticket) | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`) |
+| [Sous index, une ligne supprimée par un autre écrivain donne une erreur d'exécution au lieu de l'erreur de sérialisation](closed/2026-10-11-sous-index-une-ligne-supprimee-par-un-autre-ecrivain-donne-une-erreur-d-execution-au-lieu-de-la-serialisation.md) | corrigé, ouvert et fermé dans le même commit (11 octobre) | réponse mal nommée (P3 sous le défaut) | oui (deux sessions, table indexée) | oui |
 | [La session d'un client mort reste listée par l'hôte du démon](closed/2026-10-11-la-session-d-un-client-mort-reste-listee.md) | corrigé (le pid du client, le relevé de l'hôte) | P4, réponse fausse | oui | oui (et seulement) |
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](closed/2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | corrigé, parent par passe effacé à la fin du lanceur (11 octobre) | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |

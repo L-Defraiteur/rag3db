@@ -1036,6 +1036,16 @@ std::string NodeTable::lockKeyOfRow(Transaction* transaction, offset_t nodeOffse
     scanState.setToTable(transaction, const_cast<NodeTable*>(this), {pkColumnID});
     initScanState(transaction, scanState, tableID, nodeOffset);
     if (!lookup(transaction, scanState) || pkVector.isNull(0)) {
+        // Sur une table à index secondaire, lockIndexForWrite a rafraîchi l'instantané avant
+        // cette lecture : une ligne que le MATCH voyait et qu'un autre écrivain a supprimée et
+        // validée depuis n'est plus visible. C'est l'erreur de sérialisation nommée (A4′), à
+        // rejouer — pas une erreur d'exécution (H4 du banc, 10 fois sur 10 sous le défaut).
+        if (!isVisibleToLatestCommit(transaction, nodeOffset)) {
+            throw TransactionManagerException(stringFormat(
+                "Transaction aborted: {} — row {} of table {} was deleted by another "
+                "transaction after this one started. Roll it back and run it again.",
+                LockManager::COULD_NOT_SERIALIZE, nodeOffset, tableName));
+        }
         throw RuntimeException(stringFormat(
             "Row {} of table {} has no primary key to lock: it is not visible to this "
             "transaction.",
