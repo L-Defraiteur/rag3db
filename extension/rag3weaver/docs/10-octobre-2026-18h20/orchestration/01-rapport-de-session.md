@@ -598,3 +598,13 @@ ticket. rag3weaver charge ses entités avec des vecteurs FLOAT[768] et à
 plusieurs fils : le chemin fautif est le sien ; les bases indexées depuis hier
 15 h 54 avec une colonne DOUBLE à côté d'un vecteur sont à vérifier (la sonde
 dit comment : `MATCH … WHERE d.score <> …`).
+
+**Ajout de 3 h 25, séance npm** : Windows est vert (23ᵉ essai, tête
+786dfec13 ; l'identifiant de bâti y porte le commit) et les quatre archives
+`0.0.1-alpha.2` sont prêtes — mais elles portent le COPY journalisé
+défectueux. **Séance retenue** : dès que le filet de A est sur master, G
+refait les trois bâtis (caches chauds, ~35 min), ajoute à l'épreuve une
+entité avec un FLOAT[4] et un DOUBLE qui vérifie les valeurs écrites,
+remballe, et rend les quatre commandes. Les archives de 786dfec13 sont
+gardées à part, étiquetées « ne pas publier ». Quatre OTP au matin, sur les
+archives refaites.
