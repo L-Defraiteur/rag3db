@@ -812,3 +812,37 @@ est prêt, au signal du matin. La durée de la lib : au knowledge dump de A.
   OTP) ; la recette du proto (`everything-declarative/08` §1) ; la mémoire
   longue (`10-octobre-2026-18h00/07`, `claude mcp add`) ; les décisions
   renversables (§9) ; I2 au mot de Lucie.
+
+## 19. Le matin du 11 octobre : les décisions de Lucie
+
+- **Une locale non typée** : son appel devient visible, non attribué, dans le
+  relevé des non-résolues (codeparsers ; les lignes du banc se réécrivent une
+  fois).
+- **I2** : plus tard, « un luxe qu'on prendra après coup » ; I1 reste le
+  produit, la page 10 reste prête.
+- **Condition 3** : A d'abord (plusieurs écrivains dans le processus, dans
+  l'ordre du cœur : T0, A7, A3′ reprise, A9 mesure puis bascule du défaut sur
+  son coût dit, A8, C7), puis B par la voie Neo4j (B2 le second processus
+  attend au fichier, B3 le démon) ; le multi-processus simultané (mémoire
+  partagée) reste écrit comme refonte, non engagée. « L'un n'empêche pas
+  l'autre. »
+- **Le serveur MCP n'est qu'une interface vers un démon** : la forme C ;
+  page `11-octobre-2026-arbre-principal/01-le-demon-possede-le-catalogue.md`
+  (treize choix au §8, rendus à Lucie avec un avis ; réponse attendue).
+- **Un nœud qui relie deux entités gérées** : oui aux deux lots dans l'ordre,
+  « toujours générique, et si le mécanisme doit être pensé plus loin dans
+  l'abstraction, à faire aussi » — la face dataflow de `Write::Link`, le
+  témoin de la garde existante d'abord.
+- **Les e2e** : « bâtis une seule fois avec le même cœur, pas un target par
+  test » — un seul binaire d'e2e, lancé une fois par suite (isolation des
+  processus gardée), un seul target d'e2e par poste ; mesure avant/après par
+  la recherche ; la règle du target se tranche après cette mesure (« 100 Go
+  pour un bâti, pas normal »).
+- **Les noms réservés** : la voie (b) par l'échappement systématique de chaque
+  identifiant dans chaque dialecte (accents graves rag3db, guillemets
+  PostgreSQL), bas niveau, invisible au concepteur de gabarits, aucune
+  migration ; le préfixe `E_`/`R_` écarté (une table de correspondance à
+  cacher partout) ; le refus (a) de la nuit tombe.
+- Reste à répondre : les treize choix de C ; les 21 tickets « perte ou
+  réponse fausse » côté produit, pour la stèle ou pour le produit ; les
+  quatre OTP de la séance npm ; `claude mcp add`.
