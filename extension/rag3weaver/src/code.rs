@@ -1195,7 +1195,13 @@ pub fn analyze_in_project(
         // scope qui la contienne. Le premier scope de fichier portait tout :
         // une seconde arête, sans site (ligne 0) et marquée « nom » (300 sur
         // rag3weaver, `lib.rs` → `RefError`, sonde des marques du 11 octobre).
-        let premier_de_fichier = fa.scopes.iter().position(|sc| sc.name.starts_with("file_scope"));
+        // Le repli, comme les porteurs, doit avoir une clé : sinon la boucle
+        // le saute, et ses réexportations ne seraient posées nulle part.
+        let premier_de_fichier = fa
+            .scopes
+            .iter()
+            .enumerate()
+            .position(|(i, sc)| sc.name.starts_with("file_scope") && cle_du_scope.contains_key(&(rel.clone(), i)));
         let porteur_de = |ligne: Option<usize>| -> Option<usize> {
             ligne
                 .and_then(|l| {
@@ -1203,7 +1209,7 @@ pub fn analyze_in_project(
                         .iter()
                         .enumerate()
                         .filter(|(i, sc)| sc.scope_start_line <= l && l <= sc.scope_end_line && cle_du_scope.contains_key(&(rel.clone(), *i)))
-                        .min_by_key(|(_, sc)| sc.scope_end_line - sc.scope_start_line)
+                        .min_by_key(|(_, sc)| sc.scope_end_line.saturating_sub(sc.scope_start_line))
                         .map(|(i, _)| i)
                 })
                 .or(premier_de_fichier)
