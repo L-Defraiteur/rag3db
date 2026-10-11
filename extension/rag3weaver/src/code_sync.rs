@@ -258,17 +258,25 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
         crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string())),
         crate::connection::QueryParam::new("path", CypherValue::String(indexed_path.to_string())),
     ];
-    let filtre = "WHERE s.source = $source AND s.file_path = $path DELETE r";
+    // Par le dialecte (`Write::Detach`) : les arêtes sortantes des scopes du
+    // fichier, relation par relation, puis les `CONSUMED_BY` qui y arrivent.
+    use rag3weaver_ir::{Direction, Predicate, Write};
+    let filtre = Predicate::AllOf(vec![
+        Predicate::Equals { field: "source".into(), param: "source".into() },
+        Predicate::Equals { field: "file_path".into(), param: "path".into() },
+    ]);
+    let defaire = |relation: &str, side: Direction| -> Result<(), String> {
+        let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone() };
+        let requete = catalog.dialect_arc().write(&ecrire).map_err(|e| e.to_string())?;
+        catalog.execute_raw_with_params(&requete, &params).map_err(|e| e.to_string())?;
+        Ok(())
+    };
     for (rel, from, _) in crate::code::RELATIONS {
         if from == SCOPE && rel != "CONSUMED_BY" {
-            catalog
-                .execute_raw_with_params(&format!("MATCH (s:{SCOPE})-[r:{rel}]->() {filtre}"), &params)
-                .map_err(|e| e.to_string())?;
+            defaire(rel, Direction::Outgoing)?;
         }
     }
-    catalog
-        .execute_raw_with_params(&format!("MATCH ()-[r:CONSUMED_BY]->(s:{SCOPE}) {filtre}"), &params)
-        .map_err(|e| e.to_string())?;
+    defaire("CONSUMED_BY", Direction::Incoming)?;
     Ok(())
 }
 

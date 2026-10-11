@@ -377,3 +377,58 @@ pub(crate) fn un_filtre_en_liste(s: &Scene) {
     assert!(lire(&["a", "c"], "y").is_empty(), "la conjonction tient : aucune note y");
     assert!(lire(&[], "x").is_empty(), "une liste vide ne retient rien");
 }
+
+/// **Défaire les arêtes d'un ensemble de nœuds** (`Write::Detach`), sur les
+/// deux moteurs : les `uses` sortants des symboles de note `x` dont le nom est
+/// `c`. Le témoin de la forme est le repli qu'elle remplace, la composition
+/// `Select` → `Hop` → `Unlink` : les paires qu'elle aurait défaites sont
+/// relevées avant, et les arêtes qui restent après sont toutes les autres.
+#[test]
+#[ignore]
+fn defaire_les_aretes_d_un_ensemble_de_noeuds() {
+    defaire_les_aretes(&scene());
+}
+
+pub(crate) fn defaire_les_aretes(s: &Scene) {
+    let d = s.cat.dialect_arc();
+    let filtre = Predicate::AllOf(vec![
+        Predicate::Equals { field: "name".into(), param: "nom".into() },
+        Predicate::Equals { field: "note".into(), param: "note".into() },
+    ]);
+    let params = [QueryParam::new("nom", CypherValue::String("c".into())), QueryParam::new("note", CypherValue::String("x".into()))];
+    let toutes = |cat: &Catalog| -> BTreeSet<(String, String)> {
+        let q = d.select(&Select::all("Symbol", vec![Column::Node("_uuid".into())])).unwrap();
+        let tous: Vec<String> = cat.execute_raw_with_params(&q, &[]).unwrap().rows.iter().map(|r| r[0].as_str().unwrap().to_string()).collect();
+        let h = d.hop(&Hop::new("Symbol", "uses", "Symbol", Direction::Outgoing)).unwrap();
+        let r = cat.execute_raw_with_params(&h, &[uuids(&tous.iter().map(String::as_str).collect::<Vec<_>>())]).unwrap();
+        r.rows.iter().map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_str().unwrap().to_string())).collect()
+    };
+
+    // Le repli : Select (le filtre) → Hop (uses sortants), les paires à défaire.
+    let q = d.select(&Select::filtered("Symbol", filtre.clone(), vec![Column::Node("_uuid".into())])).unwrap();
+    let departs: Vec<String> = s.cat.execute_raw_with_params(&q, &params).unwrap().rows.iter().map(|r| r[0].as_str().unwrap().to_string()).collect();
+    let h = d.hop(&Hop::new("Symbol", "uses", "Symbol", Direction::Outgoing)).unwrap();
+    let a_defaire: BTreeSet<(String, String)> = s
+        .cat
+        .execute_raw_with_params(&h, &[uuids(&departs.iter().map(String::as_str).collect::<Vec<_>>())])
+        .unwrap()
+        .rows
+        .iter()
+        .map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_str().unwrap().to_string()))
+        .collect();
+    assert_eq!(a_defaire.len(), 2, "c utilise a et b : {a_defaire:?}");
+    let avant = toutes(&s.cat);
+
+    // La forme : une instruction.
+    let ecrire = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: filtre };
+    let texte = d.write(&ecrire).unwrap_or_else(|e| panic!("{e}"));
+    s.cat.execute_raw_with_params(&texte, &params).unwrap_or_else(|e| panic!("{e}\n{texte}"));
+    let apres = toutes(&s.cat);
+    let attendu: BTreeSet<(String, String)> = avant.difference(&a_defaire).cloned().collect();
+    assert_eq!(apres, attendu, "restent toutes les arêtes sauf celles du repli");
+    assert!(apres.iter().any(|(_, vers)| vers == &s.a), "d → a reste");
+
+    // Une condition vide se refuse avant le moteur.
+    let vide = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: Predicate::AllOf(vec![]) };
+    assert!(d.write(&vide).is_err(), "AllOf vide refusé");
+}

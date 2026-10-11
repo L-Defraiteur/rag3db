@@ -1867,3 +1867,11 @@ fn le_chainage_un_filtre_en_liste() {
     let (_garde, cat) = catalogue(8);
     crate::e2e_chainage::un_filtre_en_liste(&crate::e2e_chainage::peupler(cat));
 }
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_defaire_les_aretes() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::defaire_les_aretes(&crate::e2e_chainage::peupler(cat));
+}

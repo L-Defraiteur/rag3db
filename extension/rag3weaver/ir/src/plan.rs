@@ -58,6 +58,7 @@ impl Form {
                 Write::Delete { .. } => "write.delete",
                 Write::Unlink { .. } => "write.unlink",
                 Write::Load { .. } => "write.load",
+                Write::Detach { .. } => "write.detach",
             },
         }
     }
@@ -79,7 +80,7 @@ impl Form {
             Form::Count(_) => None,
             Form::Select(s) => s.by_uuids.then_some(Slot::Uuids),
             Form::Write(Write::Mark { .. } | Write::Delete { .. }) => Some(Slot::Uuids),
-            Form::Write(Write::Load { .. }) => None,
+            Form::Write(Write::Load { .. } | Write::Detach { .. }) => None,
             Form::Write(_) => Some(Slot::Items),
         }
     }

@@ -287,6 +287,15 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// [`rag3weaver_ir::Write::Detach`] : défaire les arêtes de `relation`
+    /// dont le nœud du côté `side` est une ligne de `table` que `filter`
+    /// retient. `None` : ce dialecte ne le dit pas, et l'écriture se refuse en
+    /// se nommant.
+    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let _ = (relation, table, side, filter);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1192,6 +1201,9 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
         },
         rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
+        rag3weaver_ir::Write::Detach { relation, table, side, filter } => d
+            .detach_edges(relation, table, *side, filter)
+            .ok_or_else(|| rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Detach" })?,
         rag3weaver_ir::Write::Load { target, path } => {
             let refus = || rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Load" };
             if !d.capabilities().bulk_load {
@@ -1403,6 +1415,17 @@ impl SchemaDialect for Rag3dbDialect {
             "{} WITH DISTINCT {expression} AS __chain WHERE __chain IS NOT NULL WITH __chain AS {alias} {reste}",
             &upstream_text[..coupe]
         ))
+    }
+
+    /// `MATCH (m:T)-[r:R]->() WHERE … DELETE r` en sortant, `MATCH
+    /// ()-[r:R]->(m:T) WHERE … DELETE r` en entrant.
+    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let (t, r) = (self.quote(table), self.quote(relation));
+        let motif = match side {
+            rag3weaver_ir::Direction::Outgoing => format!("(m:{t})-[r:{r}]->()"),
+            rag3weaver_ir::Direction::Incoming => format!("()-[r:{r}]->(m:{t})"),
+        };
+        Some(format!("MATCH {motif} WHERE {} DELETE r", rag3db_condition(filter)))
     }
 
     /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
@@ -2254,6 +2277,21 @@ impl SchemaDialect for PostgresDialect {
         } else {
             format!("SELECT {} FROM {table} AS m{filtre}{ordre}{borne}", colonnes.join(", "))
         })
+    }
+
+    /// La table de relation, jointe à la table des nœuds par le bout du côté
+    /// `side` (`from_uuid` en sortant, `to_uuid` en entrant).
+    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let bout = match side {
+            rag3weaver_ir::Direction::Outgoing => "from_uuid",
+            rag3weaver_ir::Direction::Incoming => "to_uuid",
+        };
+        Some(format!(
+            "DELETE FROM {} AS r USING {} AS m WHERE m.\"_uuid\" = r.\"{bout}\" AND ({})",
+            self.quote(relation),
+            self.quote(table),
+            postgres_condition(self, filter)
+        ))
     }
 
     /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et

@@ -180,6 +180,9 @@ impl Predicate {
                 out.push(field.clone());
                 out.push(param.clone());
             }
+            // Une liste vide ne dit rien (`WHERE ` vide, `()`) : elle se refuse
+            // comme un nom qui n'est pas un identifiant, avant le moteur.
+            Predicate::AnyOf(v) | Predicate::AllOf(v) if v.is_empty() => out.push("(condition vide)".into()),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.names(out)),
             Predicate::Compiled(_) => {}
         }
@@ -270,6 +273,11 @@ pub enum Write {
     /// l'ingestion). Un dialecte qui ne déclare pas `bulk_load` le refuse en
     /// le nommant, et l'appelant repasse par `Upsert` / `Link`.
     Load { target: LoadTarget, path: String },
+    /// **Défaire les arêtes d'un ensemble de nœuds** : les arêtes de
+    /// `relation` dont le nœud du côté `side` (`Outgoing` : la source,
+    /// `Incoming` : la cible) est une ligne de `table` que `filter` retient
+    /// (sur l'alias `m`). Une instruction par relation.
+    Detach { relation: String, table: String, side: Direction, filter: Predicate },
 }
 
 /// Ce qu'un [`Write::Load`] remplit.
@@ -317,6 +325,16 @@ impl Write {
             Write::Load { target: LoadTarget::Links { relation, ends, props }, .. } => {
                 noms.extend([relation.as_str(), ends.0.as_str(), ends.1.as_str()]);
                 noms.extend(props.iter().map(String::as_str));
+            }
+            Write::Detach { relation, table, filter, .. } => {
+                let mut du_filtre = Vec::new();
+                filter.names(&mut du_filtre);
+                let mut tous: Vec<&str> = vec![relation, table];
+                tous.extend(du_filtre.iter().map(String::as_str));
+                return match tous.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+                    Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
+                    None => Ok(()),
+                };
             }
         }
         match noms.into_iter().find(|n| !crate::is_valid_identifier(n)) {
