@@ -871,20 +871,43 @@ nommé par hotfixs, laissé tel quel : un `ROLLBACK` qui lèverait lui-même dan
 laisse le bloc ouvert jusqu'à un second `ROLLBACK` ou la fin de la connexion — rien n'est perdu.
 Sur master en avance rapide : `e963fb220`…`82a5f4851` (11 h 40).
 
-## A3′ reprise, le journal à doublon (11 octobre 2026, 11 h 30) — condition 3, marche 3
+## A3′ reprise, le journal à doublon (11 octobre 2026, 11 h 30 à 12 h 30) — condition 3, marche 3
 
-Branche `verrous-a3-reprise`. Le rejeu butait sur « Found duplicated primary key value 7 » et la
-base ne se rouvrait plus (journal fabriqué par le moteur d'avant le verrou de clé, sous le mode
-multi-écrivains : deux transactions validées sur la même clé, mort base ouverte). Forme : une
-exception typée (`DuplicatedPrimaryKeyException`, même message) levée par l'index de clé, la table
-locale et la table de nœuds ; au rejeu, sur cette exception seulement, la transaction de reprise en
-cours est annulée, ses enregistrements lus sans être rejoués jusqu'à son `COMMIT`, la clé nommée sur
-stderr avec les octets [début, fin) ; le rejeu continue ; à la fin les octets sautés sont copiés
-dans `<journal>.ecarte-<ms>` (rien n'est supprimé ; en lecture seule rien n'est écrit). Toute autre
-erreur de rejeu reste une corruption : la base ne s'ouvre pas (les témoins `WalTornEndTest`
-inchangés). La transaction fautive reste dans le journal jusqu'au prochain point de reprise : une
-seconde mort avant lui la fait sauter de nouveau, pareil. Témoins : d'un fil
-`DuplicateKeyJournalTest.TheFaultyTransactionIsSkippedAndTheDatabaseOpens` (la base s'ouvre, une
-ligne de clé 7, un fichier écarté non vide, puis une écriture, un point de reprise, une
-réouverture) ; au banc `RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen`, sa ligne sort de
-`known_red`. Passe : PASSE_A3R.
+Branche `verrous-a3-reprise`. Le rejeu butait sur « Found duplicated primary key value 7 » et la base
+ne se rouvrait plus (journal fabriqué par le moteur d'avant le verrou de clé, sous le mode
+multi-écrivains : deux transactions validées sur la même clé, mort base ouverte).
+
+**Première forme, retirée** : sauter la transaction fautive jusqu'à son `COMMIT` et copier ses octets
+à côté. Relecture d'hotfixs : les enregistrements du journal désignent les lignes **par décalage**
+(mise à jour, suppression, extrémités des relations) ; sauter k insertions décale toutes les lignes
+insertées après dans la même table, et une mise à jour ou une relation journalisée après tombe sur la
+mauvaise ligne, sans erreur. Réponse fausse silencieuse — j'ai refait.
+
+**La pierre tombale** : rien n'est sauté. Au rejeu, `NodeTable::insert` ne contrôle plus l'unicité
+(le journal l'a fait quand il a été écrit) : la ligne prend son décalage ; au commit,
+`PrimaryKeyIndex::commitInsert` note le doublon (décalage, clé) au lieu de lever, en RECOVERY
+seulement — hors reprise, `DuplicatedPrimaryKeyException` (sous-classe de `RuntimeException`, même
+message). À la fin du rejeu, `WALReplayer::settleReplayedDuplicates`, dans une transaction de
+reprise (en mémoire en lecture seule, comme le reste) : si l'index mène à une **autre** ligne vivante
+de la clé, la ligne rejouée est détachée de ses relations (toutes les tables de relations dont la
+table est une extrémité, les deux sens) puis supprimée par décalage, l'index non touché (il ne la
+connaît pas) ; sinon — la première ligne supprimée après coup — elle est gardée et reçoit son entrée
+d'index (les trois cas d'hotfixs : décider à la fin, nommer ce que la pierre tombale emporte, la
+lecture seule en mémoire). Chaque cas est nommé sur stderr (clé, table, décalage, côtés détachés).
+Toute autre erreur de rejeu reste une corruption : la base ne s'ouvre pas.
+
+**Témoins** : trois fixtures fabriquées par `ff9bad960` (worktree `rag3db-vieux` sur luciepc, la cible
+`single_file_header` pour `rag3db.hpp`) dans `test/transaction/journal_with_duplicate_key/` : le
+doublon seul ; B insère 7 et 8, C insère 9, la met à jour, la relie à 1 (9 porte sa mise à jour et
+sa relation, par la clé comme par le balayage) ; comme la 2 puis D supprime la 7 de A (la 7 de B
+survit, trouvée par la clé, mise à jour, relue après point de reprise). Rouges propres sur master,
+verts après ; au banc `RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen` 3/3, sa ligne sort
+de `known_red`. Pièges : `git commit -- <chemin>` refuse un fichier neuf non ajouté ; `git reset
+--hard` vers un commit qui ne porte pas un fichier l'efface de l'arbre ; un `ASSERT` dans une aide
+ne stoppe pas le test (plantage au lieu de rouge). Passe, sur luciepc (`rag3db-a3r`, rebasée sur
+T0) : transaction_test 254, api 104, c_api 136, copy 23, stockage 83 + column_stats 2 +
+string_split 2, vector 74 et 63, Cypher 1867 ; banc en tenue exclusive : 8 rouges / 250 verts, le
+seul écart avec `known_red` étant la ligne qui verdit, sortie dans le commit final. Relu par
+hotfixs (quatre points, dont la lecture seule : une transaction de reprise ne journalise jamais).
+Sur master en avance rapide : `f8795e215` témoins, `b08396988` correctif, `b49423a49` known_red
+(12 h 35). **Le banc est à 10 lignes rouges attendues.**
