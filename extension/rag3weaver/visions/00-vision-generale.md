@@ -441,6 +441,20 @@ vrai, et c'est ce qui décide des outils suivants.
   réseau) ; les agents qui se parlent entre postes par la boîte durable en
   base ; une base gardée à deux endroits, sauvegarde avant réplication. Pas
   de cap « distribué » pour lui-même : chaque ligne arrive par un besoin.
+  Et, de Lucie le même soir : « des échanges entre bases, un truc bizarre de
+  réseaux : contrôler toute ton infra d'un seul agent, qui se répercute sur
+  des nœuds qui eux-mêmes se répercutent après, comme un réseau de fourmis ;
+  je ne sais pas encore quels cas exacts ». Chez nous c'est la réaction vue
+  en réseau : un hôte s'abonne aux événements d'un autre (la boîte durable en
+  base pour passer d'un hôte à l'autre, la réaction déclarée au manifeste
+  pour répondre, `spawn` pour lancer un agent là où l'événement arrive),
+  chaque hôte ne connaissant que ses voisins déclarés ; « contrôler l'infra
+  d'un agent », c'est le backend déclaratif altérable depuis lui-même dont la
+  déclaration se propage aux hôtes abonnés, chacun l'appliquant à sa façon ou
+  refusant en nommant, chaque propagation tracée comme un run avec son
+  parent. Premier cas sans rien inventer : nos deux postes (lib rebâtie,
+  index rafraîchi, ticket fermé, dits d'un hôte à l'autre sans relais à la
+  main).
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;
 - le prix exact, et ce que l'abonnement compte (une personne, un poste, un
