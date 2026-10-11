@@ -1845,6 +1845,65 @@ TEST_F(JournaledCopyReadBackTest, TwoThreadsAndAnArrayColumnReadEveryScoreBack) 
     }
 }
 
+// C7 après arrêt brutal (ticket du 10 octobre) : dans la trace du rejeu d'une passe rouge, la
+// relation pendante est celle créée par la transaction juste AVANT celle qui détache et supprime
+// sa cible ; les deux détachements (un par sens) sont rejoués, et son côté avant reste. Ici, à
+// un fil et sans concurrence : la relation créée, puis la cible détachée-supprimée dans la
+// transaction suivante, puis la mort, puis le rejeu — aucune relation ne doit survivre, vue d'un
+// côté comme de l'autre.
+class PendingRelAfterReplayTest : public JournaledCopyTest {
+protected:
+    void prepare(Connection& child, bool multiWrites) {
+        must(child, "CALL debug_enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
+        must(child, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
+        must(child, "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
+        for (auto id = 0; id < 12; id++) {
+            must(child, "CREATE (:Item {id: " + std::to_string(id) + ", writer: 0});");
+        }
+        must(child, "CHECKPOINT;");
+    }
+    void scenario(Connection& child) {
+        // La transaction d'avant : une mise à jour, puis la relation 10 -> 8.
+        must(child, "BEGIN TRANSACTION;");
+        must(child, "MATCH (n:Item {id: 3}) SET n.writer = 2;");
+        must(child, "MATCH (a:Item {id: 10}), (b:Item {id: 8}) "
+                    "CREATE (a)-[:Link {src_id: 10, dst_id: 8}]->(b);");
+        must(child, "COMMIT;");
+        // La suivante : la cible détachée et supprimée.
+        must(child, "MATCH (n:Item {id: 8}) DETACH DELETE n;");
+        // Et une transaction après, pour que le journal continue.
+        must(child, "MATCH (a:Item {id: 0}), (b:Item {id: 0}) "
+                    "CREATE (a)-[:Link {src_id: 0, dst_id: 0}]->(b);");
+    }
+    void expectNoPendingRel() {
+        createDBAndConn();
+        EXPECT_EQ(single("MATCH (n:Item) RETURN count(n);"), 11);
+        EXPECT_EQ(single("MATCH (a:Item)-[l:Link]->(b:Item) RETURN count(l);"), 1) << "forward";
+        EXPECT_EQ(single("MATCH (b:Item)<-[l:Link]-(a:Item) RETURN count(l);"), 1) << "backward";
+        EXPECT_EQ(single("MATCH (a:Item {id: 10})-[l:Link]->() RETURN count(l);"), 0)
+            << "a relationship from 10 survives its detached target";
+        EXPECT_EQ(single("MATCH ()-[l:Link]->() WHERE l.dst_id = 8 RETURN count(l);"), 0);
+    }
+};
+
+TEST_F(PendingRelAfterReplayTest, ADetachDeleteRightAfterTheRelIsCreatedIsReplayedWhole) {
+    writeThenDie([&](Connection& child) {
+        prepare(child, false);
+        scenario(child);
+    });
+    ASSERT_GT(journalSize(), 0u);
+    expectNoPendingRel();
+}
+
+TEST_F(PendingRelAfterReplayTest, TheSameUnderMultiWrites) {
+    writeThenDie([&](Connection& child) {
+        prepare(child, true);
+        scenario(child);
+    });
+    ASSERT_GT(journalSize(), 0u);
+    expectNoPendingRel();
+}
+
 class OwnerlessPagesTest : public CopyJournalThresholdTest {
 protected:
     // Plus qu'un groupe de nœuds : un COPY n'écrit ses pages avant la validation que par groupe
