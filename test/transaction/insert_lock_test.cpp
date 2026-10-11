@@ -459,8 +459,9 @@ TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
         EXPECT_GE(held, 1u) << closing;
         const auto failed = failureOf(*conn, "CREATE (:Item {id: 2, v: 9});");
         EXPECT_NE(failed.find("duplicated primary key"), std::string::npos) << failed;
-        // En échec : rien de validé, rien d'écrit, les verrous tenus, tout refusé.
-        EXPECT_EQ(locks().getNumLocksHeld(id), held) << closing << " / locks dropped at failure";
+        // En échec : rien de validé, rien d'écrit, les verrous tenus (ceux de l'instruction qui a
+        // échoué compris : elle avait pris l'index et sa clé avant le doublon), tout refusé.
+        EXPECT_GE(locks().getNumLocksHeld(id), held) << closing << " / locks dropped at failure";
         const auto waited = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = 2;");
         EXPECT_NE(waited.find(LockManager::LOCK_TIMEOUT), std::string::npos) << closing << " / " << waited;
         const auto refused = failureOf(*conn, "MATCH (n:Item {id: 1}) RETURN n.v;");
