@@ -361,3 +361,34 @@ la part de la session mémoire.
 `353d2c4` (la récursion fait une arête vers soi) ; branche rag3db `envoi-virtuel` en cours
 (rendez-vous, `also_path` A/B et +, section « Par envoi virtuel » d'`usages`, l'arbre et le
 commit en tête de chaque réponse).
+
+**Nuit du 11 au 12 octobre**
+
+- **code-tree sur master** (`a601b8308`). `rag3weaver-backend code-tree add <arbre> [--from code-lourd]
+  [--as <nom>]` pose un worktree indexé (gabarit en lecture seule, base reflinkée, enregistré auprès
+  de l'hôte) ; `code-tree remove` le retire, la base mise de côté. Premier essai rouge : master
+  exige maintenant `RAG3WEAVER_EMBED_SERVICE`. Le rejeu joué après le push est vert (`e2e_demon_hote::`,
+  `e2e_mcp_stdio::`, 14/14). Le binaire prêt de luciepc (22 h 13) ne contient pas code-tree.
+- **Le figement de `code-lourd` sur luciepc** : une boucle de réclamation, tranchée par des relevés
+  en lecture seule (le `.wal` croît de 255 à 376 Ko toutes les 10 s, les 25 fils actifs nés de
+  l'appel `index`, aucune recherche). Hôte gardé figé pour Lucie (section en tête). Ticket :
+  `docs/tickets/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md`.
+- **Les morceaux sans texte** (20 % sur la copie de F, hash présent ; ticket de l'arbre principal
+  `2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md`) : aucune de mes sondes ne les
+  reproduit. Même bâti du moteur que l'hôte de luciepc (`6df47a54…`). Sonde
+  `tests/sonde_morceaux_vides.rs`, worktree `rag3db-vide`, non commitée. 0 vide, 0 vide avec
+  hash, avant fermeture et après réouverture :
+
+  | sonde | morceaux |
+  |---|---|
+  | `sharded_handle.rs` seul, `sync_source` et `ingest_code` | 351 |
+  | dépôt entier en mémoire | 130 228 |
+  | `ld-lucivy` sur disque, sans et avec vecteurs | 28 703 |
+  | dépôt entier sur disque, sans vecteurs | 130 228 |
+  | masse arrêtée à 320 fichiers puis reprise | 4 871 → 28 703 |
+  | `sharded_handle.rs` édité (longueur égale, ligne en tête), resynchronisé | 1 757 |
+  | rattrapage `embarquer_le_retard` (57 passes) | 28 703 |
+  | réclamation seule (1 000 passes, 512 000 lignes : la boucle reproduite sans service) | 28 703 |
+
+  Reste, demain matin : le chemin par l'hôte, avec un faux service lent et une session qui
+  interroge pendant l'index.
