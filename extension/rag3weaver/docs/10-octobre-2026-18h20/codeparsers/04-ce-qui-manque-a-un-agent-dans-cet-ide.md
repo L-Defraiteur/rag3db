@@ -22,6 +22,15 @@ fois, même courte. Ne pas corriger les entrées des autres : en ajouter une.
 - **Ce qui manquait** : l'outil, le paramètre ou la réponse qui m'aurait évité ça.
 ```
 
+## En tête aussi : 20 % des morceaux sans texte
+
+*Ajouté le 11 octobre 2026 à 23 h par l'arbre principal, à la demande de l'orchestration.*
+Sur l'index du dépôt, 20 % des morceaux de code ont perdu leur texte à l'écriture : ces passages
+ne sont ni cherchables par leur texte ni embarqués. **Des recherches et des usages rendent donc
+des faux négatifs jusqu'au correctif** ; cela explique peut-être des manques notés plus bas
+(`search_code` confiant sur un jeton absent, un nom qualifié à zéro). L'index le dit désormais
+dans l'en-tête de chaque réponse. Ticket : `docs/tickets/2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md`.
+
 ## En tête : l'index ne suit pas l'arbre que l'agent édite
 
 *Ajouté le 11 octobre 2026 au soir, à la demande de l'orchestration, après les premiers retours
