@@ -25,7 +25,8 @@
     "index.js",
     "index.d.ts",
     "README.md",
-    "templates/"
+    "templates/",
+    "bin/"
   ],
   "scripts": {
     "test": "node test/essai.js && node test/sonde_copy.js"
@@ -34,5 +35,8 @@
     "rag3weaver-linux-x64-gnu": "0.0.1-alpha.2",
     "rag3weaver-windows-x64": "0.0.1-alpha.2",
     "rag3weaver-darwin-arm64": "0.0.1-alpha.2"
+  },
+  "bin": {
+    "rag3weaver-unit": "bin/rag3weaver-unit.js"
   }
 }

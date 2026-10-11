@@ -79,6 +79,26 @@ await backend.shutdown();
 - `journal` / `journal_read` (an agent's thread), `index_state`, a clean
   shutdown, and `mustReopen` on an error that requires reopening the database.
 
+## Optional: a systemd user unit for the host (Linux)
+
+The backend's host (`rag3weaver-backend daemon`) is started by the first
+client that needs it. If you prefer it to start with your session and be
+restarted if it dies, the package can install a **systemd user unit** — never
+by default:
+
+```bash
+npx rag3weaver-unit install      # writes ~/.config/systemd/user/rag3weaver-daemon.service, enables it
+npx rag3weaver-unit status
+npx rag3weaver-unit uninstall    # stops it (SIGTERM, a clean shutdown) and removes it
+```
+
+The unit stops the host with SIGTERM (the bases are closed, never killed),
+restarts it if it dies from a signal or panics, and does not restart it when it
+refuses to start because a host launched by a client is already running. It
+writes to the same log as a host started by a client. The environment variables
+set when you run `install` (`RAG3WEAVER_DAEMON_DIR`, `RAG3WEAVER_EMBED_SERVICE`,
+…) are written next to the unit, since a unit does not inherit your shell.
+
 ## What is missing
 
 - Commands (`run_command`): the shipped template keeps them closed
