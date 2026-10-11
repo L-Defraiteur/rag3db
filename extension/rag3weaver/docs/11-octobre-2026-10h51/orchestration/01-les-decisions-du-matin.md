@@ -441,3 +441,21 @@ où elle vit.
   en recette seulement.
 - **G, suite** : l'unité systemd utilisateur de l'hôte, en option du paquet
   (page C), jamais par défaut, SIGTERM, refus d'un second hôte.
+- **Le Cypher brut de l'indexation du code, relevé et quatre lots** (F,
+  `0e69ebbfe`, `11-octobre-2026-embarquements/05-cypher-brut-de-l-indexation.md`) :
+  sept endroits, fichier et ligne ; les outils du gabarit n'ont plus de texte
+  brut. Décidé par l'orchestration, renversable : (1) les traductions exactes
+  par `Select::by_uuids` ; (2) deux prédicats de plus dans l'IR,
+  `Predicate::AllOf` et `Predicate::In`, sur les deux dialectes ; (3) une forme
+  `Write::Detach { relation, table, side, filter }` (une instruction par
+  relation ; la composition Select → Hop → Unlink prouvée équivalente comme
+  témoin, pas comme seconde voie) ; (4) les réglages du moteur par des
+  crochets du dialecte, pas des formes. Relevé d'avant d'e2e_code sur le
+  corpus vivant avant tout code ; l'arbre principal relit en branche ; la
+  mesure d'impact sur PostgreSQL ferme le ticket.
+- **Le serveur `code-rag3db` branché par Lucie** (`claude mcp add`, 16 h) et
+  essayé depuis l'orchestration : `usages {name: update, path:
+  src/storage/table/node_table, usage: call}` en 0,65 s rend la définition,
+  deux appelants et 88 par le nom seul ; le nom qualifié `NodeTable::update`
+  rend zéro sans un mot : manque mis en tête de la liste de l'arbre principal
+  (comprendre `Classe::methode`, et le dire sinon).
