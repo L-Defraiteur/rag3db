@@ -136,6 +136,24 @@ pub fn pid_alive(pid: u32) -> bool {
     }
 }
 
+/// **L'instant de démarrage d'un processus** (champ 22 de `/proc/<pid>/stat`,
+/// en tops d'horloge depuis le démarrage de la machine). Avec le pid, il
+/// désigne **un** processus : un pid repris par un autre n'a pas le même. Le
+/// nom du processus (champ 2) peut contenir des espaces et des parenthèses :
+/// on découpe après la **dernière** `)`.
+pub fn process_start(pid: u32) -> Option<u64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let (_, reste) = stat.rsplit_once(") ")?;
+    // `reste` commence au champ 3 (l'état) : le champ 22 est le 20e.
+    reste.split_whitespace().nth(19)?.parse().ok()
+}
+
+/// Le processus `(pid, démarrage)` vit-il encore ? Le pid existe, n'est pas
+/// zombie, et c'est **le même** processus (même démarrage).
+pub fn process_alive(pid: u32, started: u64) -> bool {
+    pid_alive(pid) && process_start(pid) == Some(started)
+}
+
 /// **L'hôte de ce fichier répond-il ?** Son pid vit, et `GET /sante` (sans
 /// jeton) rend le service et **le même pid**.
 pub fn answers(file: &DaemonFile) -> bool {
@@ -303,6 +321,14 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn le_demarrage_designe_un_processus() {
+        let moi = std::process::id();
+        let debut = process_start(moi).expect("le démarrage de ce processus");
+        assert!(process_alive(moi, debut));
+        assert!(!process_alive(moi, debut + 1), "le même pid, un autre démarrage : un autre processus");
     }
 
     #[test]

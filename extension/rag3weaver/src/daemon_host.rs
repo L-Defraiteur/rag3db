@@ -63,6 +63,10 @@ pub struct Session {
     /// locale, donc ce pid est sur la même machine, et une session dont le
     /// client ne vit plus se ferme ([`DaemonHost::reap_dead_sessions`]).
     pub pid: Option<u32>,
+    /// L'instant de démarrage de ce pid, lu par l'hôte à l'ouverture
+    /// ([`crate::daemon_lifecycle::process_start`]) : un pid repris par un autre
+    /// processus n'a pas le même, et la session se ferme quand même.
+    pub pid_started: Option<u64>,
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
@@ -102,11 +106,19 @@ impl DaemonHost {
     }
 
     /// **Enregistrer un client** : rend l'identifiant de sa session.
-    pub fn open_session(&self, client: &str, cell: Option<Value>, keys: Vec<String>, pid: Option<u32>) -> String {
+    pub fn open_session(&self, client: &str, cell: Option<Value>, keys: Vec<String>, process: Option<(u32, u64)>) -> String {
         let opened_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
         let seed = format!("{client}|{opened_at}|{}|{:?}", std::process::id(), std::thread::current().id());
         let id = format!("s-{}", &blake3::hash(seed.as_bytes()).to_hex()[..16]);
-        let session = Session { id: id.clone(), client: client.to_string(), cell, keys, opened_at, pid };
+        let session = Session {
+            id: id.clone(),
+            client: client.to_string(),
+            cell,
+            keys,
+            opened_at,
+            pid: process.map(|(p, _)| p),
+            pid_started: process.map(|(_, d)| d),
+        };
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), session);
         id
     }
@@ -120,7 +132,10 @@ impl DaemonHost {
         let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
         let mortes: Vec<String> = sessions
             .values()
-            .filter(|s| s.pid.is_some_and(|pid| !crate::daemon_lifecycle::pid_alive(pid)))
+            .filter(|s| match (s.pid, s.pid_started) {
+                (Some(pid), Some(debut)) => !crate::daemon_lifecycle::process_alive(pid, debut),
+                _ => false,
+            })
             .map(|s| s.id.clone())
             .collect();
         let fermees: Vec<Session> = mortes.iter().filter_map(|id| sessions.remove(id)).collect();
@@ -321,8 +336,13 @@ impl DaemonHost {
                     let client = v["client"].as_str().unwrap_or("anonyme").to_string();
                     let cell = v.get("cell").cloned().filter(|c| !c.is_null());
                     let keys = v["keys"].as_array().map(|a| a.iter().filter_map(|k| k.as_str().map(str::to_string)).collect()).unwrap_or_default();
-                    let pid = v["pid"].as_u64().map(|p| p as u32);
-                    (200, json!({ "session": self.open_session(&client, cell, keys, pid) }))
+                    // Le démarrage se lit ici, sur la même machine ; un pid sans
+                    // /proc lisible ne compte pas : la session n'est pas relevée.
+                    let process = v["pid"]
+                        .as_u64()
+                        .map(|p| p as u32)
+                        .and_then(|p| crate::daemon_lifecycle::process_start(p).map(|d| (p, d)));
+                    (200, json!({ "session": self.open_session(&client, cell, keys, process) }))
                 }
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
@@ -627,19 +647,19 @@ mod tests {
     }
 
     /// **Une session dont le client est mort se ferme** au relevé, et l'état
-    /// le compte ; une session sans pid n'est jamais fermée ainsi.
+    /// le compte ; un pid **repris** par un autre processus (même pid, autre
+    /// démarrage) aussi ; une session sans pid n'est jamais fermée ainsi.
     #[test]
     fn le_releve_ferme_la_session_d_un_client_mort() {
         let hote = DaemonHost::new();
-        let mut mort = std::process::Command::new("true").spawn().unwrap();
-        let pid_mort = mort.id();
-        mort.wait().unwrap();
-        let morte = hote.open_session("le mort", None, vec![], Some(pid_mort));
-        let vivante = hote.open_session("le vivant", None, vec![], Some(std::process::id()));
+        let moi = std::process::id();
+        let debut = crate::daemon_lifecycle::process_start(moi).unwrap();
+        let reprise = hote.open_session("pid repris", None, vec![], Some((moi, debut + 1)));
+        let vivante = hote.open_session("le vivant", None, vec![], Some((moi, debut)));
         let sans_pid = hote.open_session("sans pid", None, vec![], None);
         let etat = hote.state();
         let ids: Vec<&str> = etat["sessions"].as_array().unwrap().iter().filter_map(|s| s["id"].as_str()).collect();
-        assert!(!ids.contains(&morte.as_str()), "{etat}");
+        assert!(!ids.contains(&reprise.as_str()), "{etat}");
         assert!(ids.contains(&vivante.as_str()) && ids.contains(&sans_pid.as_str()), "{etat}");
         assert_eq!(etat["closed_dead_sessions"], 1, "{etat}");
     }
