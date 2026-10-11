@@ -25,10 +25,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (52)
+### Ouverts (53)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | ouvert (relevé par « e2e et disque ») | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | ouvert — décision de Lucie (signature nouvelle) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
