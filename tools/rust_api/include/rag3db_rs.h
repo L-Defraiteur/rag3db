@@ -96,7 +96,7 @@ inline uint32_t logical_type_get_decimal_scale(const rag3db::common::LogicalType
 std::unique_ptr<rag3db::main::Database> new_database(std::string_view databasePath,
     uint64_t bufferPoolSize, uint64_t maxNumThreads, bool enableCompression, bool readOnly,
     uint64_t maxDBSize, bool autoCheckpoint, int64_t checkpointThreshold,
-    bool throwOnWalReplayFailure, bool enableChecksums);
+    bool throwOnWalReplayFailure, bool enableChecksums, uint64_t fileLockWaitMs);
 
 void database_set_logging_level(rag3db::main::Database& database, const std::string& level);
 

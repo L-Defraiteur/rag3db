@@ -1,5 +1,8 @@
 #include "storage/file_handle.h"
 
+#include "main/client_context.h"
+#include "main/db_config.h"
+
 #include <cmath>
 
 #include "common/file_system/virtual_file_system.h"
@@ -39,6 +42,11 @@ void FileHandle::constructPersistentFileHandle(const std::string& path, VirtualF
             FileFlags::WRITE | FileFlags::READ_ONLY |
             ((createFileIfNotExists()) ? FileFlags::CREATE_IF_NOT_EXISTS : 0x00000000);
         openFlags.lockType = isLockRequired() ? FileLockType::WRITE_LOCK : FileLockType::NO_LOCK;
+        // B2 : l'ouverture en écriture attend le verrou tenu par un autre processus, jusqu'à la
+        // borne de la configuration (0 : refus immédiat).
+        if (openFlags.lockType == FileLockType::WRITE_LOCK && context != nullptr) {
+            openFlags.lockWaitMs = context->getDBConfig()->fileLockWaitMs;
+        }
     }
     fileInfo = vfs->openFile(path, openFlags, context);
     const auto fileLength = fileInfo->getFileSize();

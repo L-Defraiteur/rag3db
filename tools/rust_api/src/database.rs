@@ -43,6 +43,9 @@ pub struct SystemConfig {
     throw_on_wal_replay_failure: bool,
     /// If true, the database will use checksums to detect corruption in the WAL file.
     enable_checksums: bool,
+    /// How long an opening for writing waits for the database file lock held by another writer
+    /// process (milliseconds); 0 refuses at once. Defaults to the engine's default (5000).
+    file_lock_wait_ms: u64,
 }
 
 #[cfg(test)]
@@ -58,6 +61,7 @@ pub(crate) const SYSTEM_CONFIG_FOR_TESTS: SystemConfig = SystemConfig {
     checkpoint_threshold: -1_i64,
     throw_on_wal_replay_failure: true,
     enable_checksums: true,
+    file_lock_wait_ms: 5000,
 };
 
 impl Default for SystemConfig {
@@ -73,6 +77,7 @@ impl Default for SystemConfig {
             checkpoint_threshold: -1_i64,
             throw_on_wal_replay_failure: true,
             enable_checksums: true,
+            file_lock_wait_ms: 5000,
         }
     }
 }
@@ -96,6 +101,12 @@ impl SystemConfig {
     }
     pub fn max_db_size(mut self, max_db_size: u64) -> Self {
         self.max_db_size = max_db_size;
+        self
+    }
+    /// How long an opening for writing waits for the file lock held by another writer process
+    /// (milliseconds); 0 refuses at once.
+    pub fn file_lock_wait_ms(mut self, file_lock_wait_ms: u64) -> Self {
+        self.file_lock_wait_ms = file_lock_wait_ms;
         self
     }
     pub fn auto_checkpoint(mut self, auto_checkpoint: bool) -> Self {
@@ -138,6 +149,7 @@ impl Database {
                 config.checkpoint_threshold,
                 config.throw_on_wal_replay_failure,
                 config.enable_checksums,
+                config.file_lock_wait_ms,
             )?),
         })
     }
