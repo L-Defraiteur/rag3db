@@ -79,6 +79,7 @@ Puis deux marches sans rouge aujourd'hui, parce qu'aucun témoin ne les joue :
   `SetToAnotherVectorLineByLine`, un COPY de 200 000 lignes, et une insertion ligne à ligne de
   100 000 lignes, mode éteint contre allumé — si le ligne à ligne perd plus de quelques pour cent,
   la clé imprimée se remplace par la clé brute (entier ou chaîne) avant d'allumer.
+  **Mesuré le 11 octobre (§5) : le coût est nul.**
 
 Ce que A ne change pas : le commit reste sérialisé (un fsync par commit ; le regroupement des
 commits est une optimisation, pas une condition) ; I1 garde un écrivain à la fois par table
@@ -166,3 +167,27 @@ Ordres de grandeur d'agent, à lire comme des rapports entre eux, pas comme des 
    disparaît ; un second écrivain attend sur ses clés, et peut recevoir « lock timeout », « deadlock
    detected » ou « could not serialize » — les clients qui comptaient sur le refus immédiat doivent
    le savoir (rag3weaver n'en dépend pas : il sérialise lui-même).
+
+## 5. A9, la mesure du coût du mode **[lu]** (11 octobre 2026, 13 h 47)
+
+Protocole : `test/transaction/concurrence/lock_cost_test.cpp` (`Mode/LockCost.*`, joué seulement
+sous `CONCURRENCE_MEASURE=1`), sur luciepc en tenue exclusive (`poste mesure`), moteur Release bâti
+de `rag3db-a9` — identifiant de bâti `rag3db-build-2c7704b27…-Release-p12-v11-g17-s18`, imprimé sur
+chaque ligne de mesure, et porté par l'extension vector chargée (LOAD EXTENSION la refuse sinon).
+Trois cas, chacun sur une base neuve, mode éteint (`debug_enable_multi_writes=false`, le défaut)
+puis allumé, les deux modes alternés cas par cas, trois répétitions (`--gtest_repeat=3`) ; chaque
+cas vérifie son compte de lignes après la mesure (18 verts).
+
+| cas | éteint (ms, trois passes) | allumé (ms, trois passes) | lecture |
+|---|---|---|---|
+| mille SET d'un vecteur vers un autre, ligne à ligne, sous index HNSW (1 000 lignes) | 7 262 · 10 523 · 10 274 | 8 099 · 11 110 · 7 766 | bruit de ±30 % d'une passe à l'autre **dans les deux modes**, sans sens constant (somme : 28,1 s contre 27,0 s) |
+| COPY de 200 000 lignes (id, chaîne, double) depuis un CSV | 181 · 181 · 184 | 178 · 175 · 187 | nul : un verrou d'index par COPY |
+| 100 000 insertions ligne à ligne, auto-commit, instruction préparée | 59 877 · 56 782 · 56 964 | 59 569 · 57 160 · 58 068 | +0,7 % sur la somme (173,6 s contre 174,8 s), sous le bruit entre passes (±3 %) |
+
+Lecture : par ligne écrite, la clé imprimée et l'entrée de la table des verrous coûtent moins que
+le bruit de mesure — l'insertion ligne à ligne est à ~570 µs par ligne dans les deux modes, dominée
+par le commit (un fsync par instruction en auto-commit). **La condition de la page (« si le ligne à
+ligne perd plus de quelques pour cent ») n'est pas atteinte** : rien à remplacer avant d'allumer.
+Le mode par défaut se bascule en lot à part (le réglage perd son `debug_`, `enable_multi_writes`
+à `true`, `CALL enable_multi_writes=false` pour l'ancienne sémantique, la liste complète et les e2e
+du produit dessus), sur le mot de Lucie, et se renverse par le même réglage.

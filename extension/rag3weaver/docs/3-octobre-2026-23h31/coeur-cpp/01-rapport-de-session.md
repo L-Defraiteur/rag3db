@@ -940,3 +940,17 @@ api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vect
 passait au vert par hasard, un second conforme (6 rouges comparés / 252 verts, 8 lignes attendues).
 Sur master en avance rapide : `edb411858` témoins, `2c7704b27` correctif (13 h 35). **Le banc est à
 8 lignes rouges attendues** : A7 (hotfixs) et C7 sortis.
+
+## A9, la mesure du coût du mode multi-écrivains (11 octobre 2026, 13 h 40 à 14 h 10) — condition 3, marche 4, première moitié
+
+Branche `verrous-a9`, worktree `rag3db-a9` sur luciepc. Un témoin de mesure,
+`test/transaction/concurrence/lock_cost_test.cpp` (`Mode/LockCost.*`, `TEST_P` sur le mode, sauté
+sans `CONCURRENCE_MEASURE=1`), qui imprime chaque chiffre avec l'identifiant de bâti du moteur
+mesuré (`common/build_id.h`, le dossier de bâti ajouté aux inclusions de `concurrence_test`).
+Protocole et chiffres dans la page 11 §5 : sur le COPY de 200 000 lignes et les 100 000 insertions
+ligne à ligne, aucun écart mesurable (moins d'un pour cent, sous le bruit) ; sur le SET sous index
+HNSW, un bruit de ±30 % dans les deux modes, sans sens. **Le coût du mode est nul** : la condition
+« plus de quelques pour cent » n'est pas atteinte, la clé imprimée reste. Avant la fusion : les six
+cas sautés sans la variable, 18 verts avec, la comparaison du banc sur le binaire qui porte la
+mesure. Lu avant le push : banc conforme (6 rouges comparés / 252 verts, 8 lignes attendues, 13 h 57 à 14 h 10), le rebase n'apportait aucun C++. Sur master en avance rapide : `87137a766` (14 h 12) ; `rag3db-a9` effacé. Suite : la bascule du défaut en lot à part, sur le mot
+de Lucie (la page 11 dit la forme et le renversement).
