@@ -99,3 +99,21 @@ manifeste modifié, et aucune route ne ferme un backend ». `remove` et le repoi
 
 D'ici là, la recette d'une ligne de la page 04 et un `index` complet (7 à 8 min) tiennent lieu
 de `add`.
+
+## L'état au soir du 11 octobre
+
+- **`code-tree add | remove` est écrit** (branche rag3db `code-tree`, 67f048fa1, en relecture par
+  l'arbre principal) : le gabarit de `--from` copié, le manifeste réécrit en lecture seule, la
+  base née d'un instantané reflink, l'enregistrement par `/backend/open`, le retrait par
+  `/backend/close` et la mise de côté (rien d'effacé).
+- **Fait — une base ne se copie que fermée** : si l'hôte tient `--from` ouvert, la commande le ferme
+  le temps de la copie et le rouvre après (quelques secondes d'indisponibilité, dites dans sa
+  sortie) ; le refus « backend tenu par une indexation » se rend tel quel.
+- **La réconciliation à l'ouverture est sur master** (session proto, 9d80aa873) : au démarrage de
+  la montre, le disque comparé à `File.content_hash` ; modifié, créé, retiré, repris par la
+  réaction. Pour une base copiée ouverte sur **un autre arbre**, il manque encore la lecture par
+  chemin relatif (lot suivant du proto) et les identités relatives (B4 de G) : d'ici là, un clone
+  vers une autre racine réingère tout à son premier index.
+- **`--as code-coeur`** : posé par `add --as`, le repointage d'un nom stable vers un autre arbre
+  passe par `remove code-coeur` puis `add --as code-coeur <autre arbre>` ; un repointage sur place
+  par `/backend/open` (qui relit un manifeste modifié) est la suite.
