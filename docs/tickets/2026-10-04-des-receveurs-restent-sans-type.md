@@ -1,6 +1,6 @@
 # Des receveurs restent sans type
 
-- **État** : ouvert — pas pour maintenant (le filtre d'impact tient sans)
+- **État** : en cours — chantier B2d de la session codeparsers (11 oct. 2026), pas à pas
 - **Gravité** : réponse fausse (une arête « nom » vers une méthode homonyme)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (usages : « par le nom » ; Liens et impact les taisent)
@@ -29,6 +29,25 @@ et retour du même fichier pelés par leur chaîne, motifs `Some` / `Ok`.
   n'ont que des noms de base).
 - Une méthode du projet dans une chaîne (`n.enfants().iter()`) : son type de
   retour, en différé, comme pour une fonction.
+
+## Fait le 11 octobre 2026 (B2d)
+
+- La variable de boucle : `for x in v` (`&v`, `v.iter()`, `iter_mut`,
+  `into_iter` sur Vec, VecDeque, HashSet, tranche…) a le type de l'élément ;
+  `vec![T, …]` et une struct unité (`let m = Marteau;`) nomment leur type
+  (codeparsers `1fc380a`).
+- Un appel par chemin sur un type (`Catalog::Get(…)`) a ce type pour
+  receveur (codeparsers `f91fc58`).
+- Sonde rag3db/src : CONSUMES « nom » 8 720 → 7 215, « type » 3 377 → 5 517.
+- `banc_couverture --receveurs` range chaque méthode non résolue par
+  l'origine de son receveur : le prochain pas se choisit là (retours
+  d'appel, paramètres de fermeture, indexation).
+
+Reste : les paramètres de fermeture, les retours d'une méthode du projet
+dans une chaîne, l'élément d'un itérateur (`Iterator<T>`), C++ `for (auto&
+x : v)`. Et un choix pour l'orchestration : un appel sur une locale qui
+reste non typée est écarté en silence (règle d'origine du crate) — le
+rendre visible, non attribué, changerait ce qu'affiche `usages`.
 
 ## Pour le fermer
 

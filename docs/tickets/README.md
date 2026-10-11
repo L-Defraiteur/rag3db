@@ -25,10 +25,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (44)
+### Ouverts (46)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'appel à une fermeture locale est écarté, une fonction passée en argument est un « other »](2026-10-11-appel-a-une-fermeture-locale-ecarte.md) | ouvert | réponse incomplète (faible) | oui | oui (impact, usages) |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | ouvert | test instable | non | oui (tests du démon) |
@@ -46,7 +47,6 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Un accent grave doublé dans un nom n'est pas réduit](2026-10-04-accent-grave-double-dans-un-nom.md) | ouvert, confort (hors condition 1) | réponse fausse | oui | non |
 | [Deux défauts de chaînes annoncés par Ladybug, non reproduits chez nous](2026-10-04-recettes-de-l-amont-non-reproduites.md) | ouvert — non reproduit | perte (annoncée) / réponse fausse (annoncée) | incertain | non vérifié |
 | [Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant](2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md) | ouvert | perte (pour la plupart) | non au banc sans crochet dans src/ | oui en cas d'incident (disque plein, coupure) |
-| [Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet](2026-10-04-appel-par-chemin-vers-un-type-externe.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Le type d'un champ déclaré dans un autre fichier ne se lit pas](2026-10-04-type-d-un-champ-declare-dans-un-autre-fichier.md) | ouvert | réponse fausse | oui | oui (rendez-vous) |
 | [Les prototypes C au niveau du fichier sont du bruit de références](2026-10-04-prototypes-c-au-niveau-du-fichier.md) | ouvert | réponse fausse | oui | oui |
 | [738 définitions C++ restent anonymes](2026-10-04-fonctions-anonymes-cpp-restantes.md) | ouvert | réponse fausse | oui | oui |
@@ -60,7 +60,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le point de reprise réécrit en entier une table de blobs dès qu'une de ses lignes change](2026-10-04-point-de-reprise-reecrit-toute-une-table-de-blobs.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (`_index_blobs`, contourné) |
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
-| [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (usages, Liens, impact) |
+| [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | en cours (B2d, 11 oct.) | réponse fausse | oui | oui (usages, Liens, impact) |
 | [Un COPY de relations vers des nœuds locaux garde leurs décalages provisoires](2026-10-05-copy-de-relations-vers-des-noeuds-locaux-sans-remappage.md) | ouvert (témoin attendu d'A3′) | réponse fausse | non (multi-écrivains seulement) | non aujourd'hui |
 | [L'index RTree de l'extension geo reçoit des décalages provisoires](2026-10-05-rtree-recoit-des-decalages-provisoires.md) | ouvert (confort ; lecture seule, non exécuté) | réponse fausse (annoncée) | incertain | non |
 | [Au journal, un vecteur coûte trois fois sa taille](2026-10-04-un-flottant-coute-douze-octets-au-journal.md) | ouvert (optimisation, hors stèle) | lenteur | oui | oui (l'embarquement en fond) |
@@ -77,10 +77,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (56), dans `closed/`
+### Fermés (57), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet](closed/2026-10-04-appel-par-chemin-vers-un-type-externe.md) | corrigé, codeparsers `f91fc58` (11 oct.) | réponse fausse | oui | oui (rendez-vous) |
 | [Après une mise à jour massive de vecteurs, des lignes restent injoignables dans l'index](closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md) | corrigé (11 oct.) | réponse fausse | oui | peu |
 | [Une entité au nom réservé (« Order ») casse l'ouverture du backend, au lieu d'être refusée au chargement](closed/2026-10-11-une-entite-au-nom-reserve-casse-l-ouverture.md) | corrigé `56079f1cb` | blocage | oui | oui (DDL des entités) |
 | [« duplicate node name: sparse » à la première recherche de test_backend_sparse](closed/2026-10-10-duplicate-node-name-sparse-par-la-fixture.md) | corrigé `413e7ba93` | réponse fausse (un rouge de fixture pris pour un défaut du moteur) | non — fixture de suite seulement | oui — tests seulement, plus le filet des 31 fiches d'outils |

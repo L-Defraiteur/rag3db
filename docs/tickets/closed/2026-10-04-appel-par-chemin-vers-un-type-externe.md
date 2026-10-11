@@ -1,6 +1,6 @@
 # Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet
 
-- **État** : ouvert — non revérifié depuis le résolveur unique (63d154730)
+- **État** : corrigé — codeparsers `f91fc58` (11 oct. 2026) ; témoin `e2e_usages::un_appel_par_chemin_vers_un_type_externe_ne_prend_pas_rendez_vous`
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (la voie des rendez-vous, `code.rs`)
@@ -34,3 +34,14 @@ externe).
 Côté rendez-vous : un qualificatif de chemin qui nomme un type importé
 d'une crate externe (ou absent du projet) s'abstient. Mesurer au banc des
 relations.
+
+## Correction (11 octobre 2026)
+
+codeparsers `f91fc58` : le qualificatif d'un appel par chemin qui finit par
+un nom de type devient le type du receveur (`qualifier_type = Tokenizer`).
+`choose_target` ne relie un receveur typé qu'à une méthode de ce type : le
+projet n'en a pas, aucune arête. Témoin (la recette ci-dessus) :
+`e2e_usages::un_appel_par_chemin_vers_un_type_externe_ne_prend_pas_rendez_vous`,
+rouge avec codeparsers `1fc380a` (une arête `charge → from_file`), vert
+après. Sur rag3weaver, 330 faux liens de cette forme écartés au banc
+(types externes et variantes d'enum).

@@ -381,3 +381,23 @@ fn un_bloc_impl_ne_redefinit_pas_son_type_et_ses_appels_s_attribuent() {
     assert!(!ligne("tous").contains("par le nom"), "variable de boucle typée : {jouer}");
     assert!(!jouer.contains("non attribués"), "{jouer}");
 }
+
+/// **Un appel par chemin vers un type externe ne prend pas rendez-vous avec
+/// un homonyme du projet** (ticket du 4 octobre, fermé par codeparsers
+/// f91fc58) : `Tokenizer::from_file(…)` a `Tokenizer` pour type de
+/// receveur ; le rendez-vous ne le relie qu'à un `from_file` de ce type, et
+/// le projet n'en a pas — la fonction libre `from_file` de b.rs n'est pas
+/// appelée.
+#[test]
+#[ignore]
+fn un_appel_par_chemin_vers_un_type_externe_ne_prend_pas_rendez_vous() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("a.rs".to_string(), "use tokenizers::Tokenizer;\npub fn charge() {\n    let _ = Tokenizer::from_file(\"t.json\");\n}\n".to_string()),
+        ("b.rs".to_string(), "pub fn from_file(p: &str) -> u32 {\n    p.len() as u32\n}\n".to_string()),
+    ];
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat.execute_raw("MATCH (a:Scope {name: 'charge'})-[:CONSUMES]->(b:Scope {name: 'from_file'}) RETURN count(*)").unwrap();
+    assert_eq!(r.rows[0][0].as_i64(), Some(0), "aucune arête charge → from_file");
+}
