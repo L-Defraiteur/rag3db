@@ -1,4 +1,4 @@
-# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi
+# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi (mis à jour vers 14 h 30)
 
 *Suite du rapport de nuit (`11-octobre-2026-01h14/embarquements/01-rapport-de-session.md`).*
 
@@ -10,6 +10,9 @@
 | `76cf86cbc` | chaînage, lot 1 : le graphe, la vérification commune, le repli découpé, le refus nommé, le rapport `atomic` / `instructions` / `fused` |
 | `56a680169` | PostgreSQL : le plancher de rappel `pg_trgm` voyage avec la requête (`SET LOCAL`), ticket fermé |
 | `7da725287` | chaînage, lot 2 : la fusion rag3db, prouvée contre le repli |
+| `d0aacfcf7` | chaînage, lot 3 : PostgreSQL traduit le saut ; le scénario joue sur le conteneur |
+| `e5a93a913` | chaînage, lot 4 : la fusion PostgreSQL en CTE ; une écriture ne se fond jamais en amont |
+| `b10b49300` | le témoin des transactions PostgreSQL crée sa table avec `_uuid` ; défaire un lien a son témoin vivant ; trois tickets fermés |
 
 Décisions de Lucie (11 octobre) : pas d'arête d'ordre seul pour commencer, mais
 l'arête porte zéro ou plusieurs colonnes ; un graphe non atomique s'exécute et le
@@ -17,13 +20,11 @@ dit, refusé seulement si l'appelant exige l'atomicité.
 
 ## Ce qui reste
 
-- **La fusion PostgreSQL** (lot 3) : traduire d'abord le saut (`Hop`, refusé
-  aujourd'hui par P3), puis fondre en CTE, contre le scénario d'`e2e_chainage`
-  joué sur le conteneur (port 5433).
-- L'entrée `$items` d'une écriture nourrie par une arête, et l'arête d'ordre seul :
-  refusées en le disant, à ouvrir quand un appelant en aura besoin.
-- Brancher des appelants réels sur `Catalog::run_plan` (aujourd'hui, seuls les
-  témoins s'en servent).
+- Le chaînage est au complet pour ce que la page prévoyait. Ce qui manque attend
+  un appelant : l'entrée `$items` d'une écriture nourrie par une arête, l'arête
+  d'ordre seul (le type l'admet déjà : zéro colonne), et brancher de vrais
+  appelants sur `Catalog::run_plan` (seuls les témoins s'en servent).
+- PostgreSQL : le ticket « rebâti du plein texte en Cypher » reste ouvert.
 - En fin de session : effacer `target-F` ici et `target-embarquements` sur luciepc.
 
 ## Ce qu'il faut savoir pour reprendre
