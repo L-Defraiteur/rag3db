@@ -168,6 +168,10 @@ pub mod declare;
 pub mod routes;
 #[cfg(feature = "daemon")]
 pub mod serve;
+/// L'hôte du démon de la forme C : plusieurs backends, des sessions, des
+/// clients minces sur la boucle locale.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod daemon_host;
 pub mod schema;
 mod mots_reserves_rag3db;
 pub mod script;

@@ -272,6 +272,37 @@ fn modele_du_chat(
     }
 }
 
+/// **Le démon de la forme C** (marche 1) : plusieurs backends, des sessions,
+/// des clients minces sur la boucle locale ([`rag3weaver::daemon_host`]).
+///
+/// ```text
+/// rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]
+/// ```
+///
+/// `POST /arret` ferme l'écoute, puis chaque backend proprement.
+fn servir_le_demon(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
+    let mut adresse = "127.0.0.1:7970".to_string();
+    let mut fils = 8usize;
+    let mut i = 0;
+    while i < args.len() {
+        let valeur = args.get(i + 1).cloned().ok_or_else(|| format!("{} attend une valeur\n{USAGE}", args[i]))?;
+        match args[i].as_str() {
+            "--address" => adresse = valeur,
+            "--threads" => fils = valeur.parse().map_err(|_| format!("--threads attend un nombre\n{USAGE}"))?,
+            autre => return Err(format!("option inconnue : {autre}\n{USAGE}")),
+        }
+        i += 2;
+    }
+    if !rag3weaver::daemon::est_local(&adresse) {
+        return Err(format!("le démon n'écoute que sur la boucle locale : {adresse}"));
+    }
+    let server = tiny_http::Server::http(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
+    eprintln!("[démon] {} — http://{adresse}/ ; POST /session, puis /open, /describe, /call ; POST /arret pour arrêter", rag3weaver::daemon_host::SERVICE);
+    rag3weaver::daemon_host::serve_daemon(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()), server, fils);
+    Ok(())
+}
+
 fn servir_http(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend serve --manifest <backend.json> \
                          [--address 127.0.0.1:7777] [--threads 4] [--atelier]";
@@ -352,6 +383,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("serve") {
         return servir_http(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("daemon") {
+        return servir_le_demon(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

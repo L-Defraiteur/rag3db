@@ -92,6 +92,8 @@ mod e2e_copy_refuse_rouvre;
 mod e2e_dataflow_observe;
 #[path = "../e2e_demon_embeddings.rs"]
 mod e2e_demon_embeddings;
+#[path = "../e2e_demon_hote.rs"]
+mod e2e_demon_hote;
 #[path = "../e2e_drain_unified.rs"]
 mod e2e_drain_unified;
 #[path = "../e2e_embarqueur_absent.rs"]
