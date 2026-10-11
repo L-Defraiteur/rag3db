@@ -66,7 +66,7 @@ poser la version.
   `closed/2026-10-04-mise-a-jour-massive-de-vecteurs-lignes-injoignables.md`). Deux témoins
   restent probabilistes : `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et
   `TwentyRowsToTheSameVectorInOneStatement`, qui relève des groupes de copies.
-  **La condition 4 n'est pas fermée.** Côté moteur, cinq tickets restent ouverts avec la gravité
+  **La condition 4 n'est pas fermée.** Côté moteur, quatre tickets restent ouverts avec la gravité
   « perte » ou « réponse fausse » (la recherche qui ne rendait plus qu'une ligne après des
   annulations et des mises à jour est fermée le 11 octobre par les correctifs de `bfc1434e1`,
   témoin vert sur I1 rebasée :
@@ -75,7 +75,8 @@ poser la version.
     (`2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md`) ;
   - la validation à moitié appliquée
     (`2026-10-10-validation-a-moitie-appliquee-sur-echec-apres-l-ajout-des-lignes.md`) ;
-  - C7 après un arrêt brutal (`2026-10-10-c7-apres-arret-brutal-relations-pendantes-nees-au-rejeu.md`) ;
+  - ~~C7 après un arrêt brutal~~ — fermé le 11 octobre (`HASH_C7`, le `DETACH DELETE` rejoué perdait la
+    seconde relation d'un lot ; atteignable à un seul écrivain, corrigé) ;
   - le COPY refusé pour mémoire, avec un filet côté rag3weaver
     (`2026-10-05-copy-refuse-pour-memoire-table-faussee-en-memoire.md`) ;
   - les grands groupes de copies (`2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md`).

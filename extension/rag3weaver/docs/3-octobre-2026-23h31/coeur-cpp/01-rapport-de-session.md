@@ -911,3 +911,32 @@ seul écart avec `known_red` étant la ligne qui verdit, sortie dans le commit f
 hotfixs (quatre points, dont la lecture seule : une transaction de reprise ne journalise jamais).
 Sur master en avance rapide : `f8795e215` témoins, `b08396988` correctif, `b49423a49` known_red
 (12 h 35). **Le banc est à 10 lignes rouges attendues.**
+
+## C7 après arrêt brutal (11 octobre 2026, 12 h 40 à 13 h 30) — condition 3, marche 6 ; un défaut de rejeu à un seul écrivain
+
+Branche `verrous-c7`. Méthode : un patch d'enquête sur luciepc (une trace du rejeu par enregistrement
+sous `RAG3DB_TRACE_REPLAY`, le harnais gardant la base, le journal et le dump vivant avant le rejeu
+sous `C7_KEEP`), `C7_RandomMix/Thread_Crash` rouge au premier essai ; puis un petit programme qui
+rejoue la base gardée seule, et deux traces de plus (la liste CSR du nœud détaché, la visibilité
+ligne à ligne). Lecture : la relation pendante (54, 95→60) est créée par la transaction juste avant
+celle qui détache et supprime 60 ; le détachement du côté arrière de 60 voit deux relations visibles
+dans le même lot (49 et 54) et n'en supprime qu'une. **Cause** :
+`WALReplayer::replayRelDetachDeletionRecord` branchait les vecteurs voisin et relation sur l'état du
+vecteur **source** (plat) ; le balayage y écrit la sélection du lot, et `RelTableData::delete_` lit le
+source à la position de la relation — nulle au-delà de 0 — et rend faux en silence. L'exécuteur
+vivant donne à voisin et relation un état à eux (`NodeTableDeleteInfo`) : la forme reprise. **Rejeu
+seulement, un seul écrivain suffit** : un nœud à deux relations, `DETACH DELETE`, mort avant le
+point de reprise — atteignable en service, condition 4, le ticket passe d'« inatteignable » à fermé.
+Les trois pistes du ticket n'y étaient pour rien. Témoin `PendingRelAfterReplayTest` (deux relations
+vers un nœud, détaché, mort, rejeu ; sous le mode aussi), rouge sur master, déterministe — un premier
+témoin à UNE relation était vert : le motif demandait deux relations dans le même lot. Relecture
+d'hotfixs : **le même défaut était dans ma pierre tombale** d'A3′ reprise (un seul état partagé) —
+corrigé dans le même commit, avec une fixture 4 (la clé en doublon à deux relations par sens, toutes
+retirées). Le ticket C7 est déplacé dans `closed/` par le commit qui corrige (règle de
+l'orchestration), avec sa cause. Passe, sur luciepc (`rag3db-c7`, rebasée sur A7) : six témoins
+rouges sur master puis verts, `C7_RandomMix/Thread_Crash` ×10 puis ×3 verts, transaction_test 257,
+api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher
+1867 ; banc en tenue exclusive : un premier passage où une ligne vectorielle du ticket des copies
+passait au vert par hasard, un second conforme (6 rouges comparés / 252 verts, 8 lignes attendues).
+Sur master en avance rapide : `edb411858` témoins, `2c7704b27` correctif (13 h 35). **Le banc est à
+8 lignes rouges attendues** : A7 (hotfixs) et C7 sortis.
