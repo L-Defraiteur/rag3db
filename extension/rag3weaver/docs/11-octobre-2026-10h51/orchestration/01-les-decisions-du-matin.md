@@ -181,3 +181,27 @@ où elle vit.
   requête, refus nommé sans session) ; une base à rouvrir ne lâche que son
   backend. Suite : marche 1 bis (cellule par session) chez l'arbre principal,
   marche 3 (client MCP mince par HTTP) chez la mémoire, go donné.
+- **La boucle d'agent est un graphe à ports** (Lucie, début d'après-midi) :
+  « à tout moment pouvoir faire un appel structuré : selon ce qu'a dit
+  l'utilisateur une classification, un routage vers un autre agent ou une
+  action ; selon ce que quelqu'un lui a envoyé, transmettre ou non ; selon un
+  retour d'outil ou une réponse d'agent, faire telle chose en plus ; que tout
+  soit traduisible dans le graphe de l'agent, comme un flot de conversation
+  mais beaucoup plus permissif, en synergie avec le moteur ». Forme confiée à
+  « everything declarative » : la boucle (aujourd'hui `agent.rs:1283`, boîte
+  drainée avant chaque appel au modèle `:1339`) devient un graphe déclaré par
+  défaut à ports nommés (`user_in`, `peer_in`, `tool_result_in`, `model_out`,
+  `tool_call_out`, `answer_out`, `turn_end`) ; sur chaque port un sous-graphe
+  fait de quatre nœuds génériques (`decide` appel structuré, `route`,
+  `filter`, `act`) ou d'un nœud scripté ; pas d'états ; `send` / `spawn`
+  verbes du modèle et nœuds posables ; `interrupt` et la politique de
+  livraison réglages de `peer_in`. Les quatre choix de la page
+  `11-octobre-2026-everything-declarative/03-les-agents-se-parlent.md` sont
+  pris ; l'ordre des lots est revu (branchement conditionnel du dataflow s'il
+  manque, puis la boucle à ports avec témoin de parité, puis decide/route/
+  filter, puis send, AgentNode, spawn, atelier/MCP, vrai modèle).
+- **Le chaînage des formes** (F, page `11-octobre-2026-embarquements/01-chainage-des-formes.md`,
+  `26216e3be`) : deux questions à Lucie, arête d'ordre seul (recommandé non,
+  avec une arête à zéro ou plusieurs colonnes) et graphe non atomique
+  (recommandé : exécuté et dit, refus seulement si l'appelant exige
+  l'atomicité). En attente.
