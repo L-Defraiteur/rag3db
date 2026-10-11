@@ -627,3 +627,15 @@ prix à la liste »). Le tour avec un vrai modèle n'a pas été joué cette nui
 page est prouvé avec un modèle enregistré. Reste ouvert : la montre branchée
 sur la porte de la mémoire à sa fusion, le retour en arrière d'une
 déclaration, mermaid embarqué, plusieurs sessions.
+
+**Ajout de 3 h 45** : le filet est sur master (`6d7f2a811`) — toute connexion
+rag3weaver pose `force_checkpoint_on_copy=true` tant que le ticket
+`2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md`
+est ouvert ; témoin rouge sans le filet (198 lignes fausses à la troisième
+passe de 200 000 lignes, 2 fils, FLOAT[4] + DOUBLE), vert avec. Fait nouveau
+pour le cœur : un CHECKPOINT dans le même processus rend les valeurs justes —
+la mémoire est saine, c'est le balayage du groupe partiel qui lit 0, et il
+faut plus d'un groupe. Les bases écrites par rag3weaver depuis hier 15 h 54
+n'ont donc pas de valeurs fausses au repos si un point de reprise a suivi
+(ce que l'indexation fait) ; à vérifier quand même sur une base qui compte.
+G refait les quatre archives alpha.2 sur ce master.
