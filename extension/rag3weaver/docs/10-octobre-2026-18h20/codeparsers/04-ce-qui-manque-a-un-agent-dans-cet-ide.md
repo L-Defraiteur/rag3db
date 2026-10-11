@@ -48,6 +48,33 @@ montre ou pas. Un IDE indexe l'arbre que l'agent édite.
 Les formes 1 et 2 se combinent : une base par arbre, née d'un instantané de la base de master,
 puis tenue à jour par le delta.
 
+### La règle d'aujourd'hui : un worktree et sa base vivent et meurent ensemble
+
+*11 octobre 2026, 18 h, décision de l'orchestration, en attendant « une base par arbre née d'un
+reflink ». Le cas qui l'a fait naître : `rag3db-bascule`, indexé à 17 h 02, effacé vers 17 h 50
+par le banc qui ignorait qu'il l'était. Le backend `code-bascule` de l'hôte de luciepc pointait
+dans le vide : `search_code` rendait « IO error … No such file or directory », `usages` restait
+« Catalogue occupé » le temps que la montre retire 6 000 fichiers disparus, et l'hôte a mis
+plusieurs minutes à s'arrêter proprement.*
+
+- **C'est la session qui tient le worktree qui crée et retire le manifeste.** Elle l'annonce en
+  le créant et en l'effaçant.
+- **On n'indexe un arbre que s'il vit plus d'une heure.** Un worktree d'un lot (`rag3db-pk`,
+  `rag3db-b2`) ne se monte pas.
+- **À l'effacement d'un worktree indexé** : retirer d'abord son manifeste, puis redémarrer l'hôte
+  par son unité (aucune route ne ferme un backend), puis effacer le worktree.
+
+**La recette d'une ligne**, sur le poste de l'arbre (luciepc ici), pour un worktree `<arbre>`
+(`~/git_workspaces/<arbre>`) :
+
+```
+D=~/.config/rag3weaver/code-<arbre>; mkdir -p "$D" && cp -a ~/git_workspaces/rag3db-hote/extension/rag3weaver/templates "$D/templates" && python3 -c "import json,os,sys; p=sys.argv[1]; m=json.load(open(p)); h=os.path.expanduser('~'); m['name']='code-<arbre>'; m['database']=h+'/.local/share/rag3weaver/code-<arbre>.rag3db'; m['embeddings']={'model':'granite-278m','dimensions':768,'address':'127.0.0.1:7878'}; m['vector_extension']=h+'/git_workspaces/rag3db-lourd/extension/vector/build/libvector.rag3db_extension'; m['workspace'].update(root=h+'/git_workspaces/<arbre>', commands='off', read_only=True, locks_via=['acquireLock','acquireLocks','lockRowForWrite','lockIndexForWrite']); [m['tools'].pop(t,None) for t in ('edit_file','run_command')]; json.dump(m,open(p,'w'),ensure_ascii=False,indent=2)" "$D/templates/backends/code/backend.json"
+```
+
+Puis `index {"confirm": true}` par un client sur ce
+manifeste. Pour le retirer : `mv ~/.config/rag3weaver/code-<arbre> ~/.config/rag3weaver/code-<arbre>.retire`
+et `systemctl --user restart rag3weaver-daemon`.
+
 ## Les entrées
 
 ### 11 oct., 15 h 30 — codeparsers — monter le MCP du code pour rag3db (avant toute question)
