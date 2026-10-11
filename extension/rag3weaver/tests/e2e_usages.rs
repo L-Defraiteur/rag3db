@@ -510,3 +510,44 @@ fn un_chemin_vers_une_reexportation_n_est_pas_par_le_nom() {
     assert!(liens[0].0.ends_with("dataflow/runtime.rs"), "vers la définition réexportée : {liens:?}");
     assert_ne!(liens[0].1, "nom", "pas par le nom : {liens:?}");
 }
+
+/// **La réexportation part du scope de son `pub use`**, à sa ligne : pas
+/// d'une seconde arête du premier scope de fichier, sans site et marquée
+/// « nom » (300 sur rag3weaver, `lib.rs` → `RefError`, sonde des marques du
+/// 11 octobre 2026). Le suivi par le chemin reste.
+#[test]
+#[ignore]
+fn une_reexportation_part_du_scope_de_son_pub_use() {
+    let catalog = setup();
+    let fichiers = vec![
+        // Un scope de fichier avant celui du `pub use` (ligne 8) : `use std::fmt;`.
+        ("src/dataflow/mod.rs".to_string(), "use std::fmt;\npub mod runtime;\n\npub fn aide() -> u8 {\n    1\n}\n\npub use runtime::DataflowEvent;\n".to_string()),
+        ("src/dataflow/runtime.rs".to_string(), "pub struct DataflowEvent;\nimpl DataflowEvent {\n    pub fn neuf() -> Self { DataflowEvent }\n}\n".to_string()),
+        // Pas d'homonyme ici : avec deux définisseurs, l'arête parasite
+        // tombait dans l'abstention et le défaut ne se voyait pas.
+        ("src/appel.rs".to_string(), "use crate::dataflow::DataflowEvent;\npub fn emet() -> DataflowEvent {\n    DataflowEvent::neuf()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let r = cat
+        .execute_raw(
+            "MATCH (a:Scope)-[c:CONSUMES]->(b:Scope {name: 'DataflowEvent'}) WHERE a.file_path ENDS WITH 'dataflow/mod.rs' \
+             RETURN a.start_line, a.end_line, b.file_path, c.resolution ORDER BY a.start_line",
+        )
+        .unwrap();
+    let depuis_mod: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().map(String::from).unwrap_or_else(|| format!("{v:?}"))).collect::<Vec<_>>().join(" ")).collect();
+    eprintln!("{depuis_mod:?}");
+    assert_eq!(depuis_mod.len(), 1, "une seule arête depuis mod.rs : {depuis_mod:?}");
+    let ligne = &r.rows[0];
+    let (debut, fin) = (ligne[0].as_i64().unwrap_or(0), ligne[1].as_i64().unwrap_or(0));
+    assert!(debut <= 8 && 8 <= fin, "depuis le scope du `pub use` (ligne 8) : {depuis_mod:?}");
+    assert!(ligne[2].as_str().unwrap_or("").ends_with("dataflow/runtime.rs"), "{depuis_mod:?}");
+    assert_ne!(ligne[3].as_str().unwrap_or(""), "nom", "pas par le nom : {depuis_mod:?}");
+    // Le suivi par le chemin, inchangé.
+    let r = cat
+        .execute_raw("MATCH (a:Scope {name: 'emet'})-[c:CONSUMES]->(b:Scope {name: 'DataflowEvent'}) RETURN b.file_path, c.resolution")
+        .unwrap();
+    let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    assert_eq!(liens.len(), 1, "{liens:?}");
+    assert!(liens[0].0.ends_with("dataflow/runtime.rs") && liens[0].1 != "nom", "{liens:?}");
+}

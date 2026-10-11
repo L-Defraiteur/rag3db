@@ -1175,35 +1175,45 @@ pub fn analyze_in_project(
     let aucune = std::collections::HashSet::new();
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
-        // Les noms que le fichier réexporte, et leur module source. Un
-        // renommage (`pub use a::X as Y`) n'est pas suivi : le nom cherché
-        // n'est pas celui du définisseur.
-        let reexportes: Vec<(String, String)> = fa
+        // Les noms que le fichier réexporte, leur module source et la ligne
+        // du `pub use`. Un renommage (`pub use a::X as Y`) n'est pas suivi :
+        // le nom cherché n'est pas celui du définisseur.
+        let reexportes: Vec<(String, String, Option<usize>)> = fa
             .import_references
             .iter()
             .filter(|imp| imp.reexport && imp.kind == codeparsers::scope_extraction::types::ImportReferenceKind::Named)
             .filter_map(|imp| {
                 let nom = imp.alias.clone()?;
                 let dernier = imp.imported.rsplit("::").next().unwrap_or(&imp.imported);
-                (dernier == nom).then(|| (nom, imp.module_path.clone().unwrap_or_else(|| imp.source.clone())))
+                (dernier == nom).then(|| (nom, imp.module_path.clone().unwrap_or_else(|| imp.source.clone()), imp.line))
             })
             .collect();
-        let mut reexportations_posees = reexportes.is_empty();
+        // **Le scope qui porte une réexportation est celui du `pub use`** :
+        // le plus étroit qui contient sa ligne, et dont l'arête du nom est
+        // déjà posée par la référence de la ligne (avec son site et son
+        // module d'import). Le premier scope de fichier, faute de ligne ou de
+        // scope qui la contienne. Le premier scope de fichier portait tout :
+        // une seconde arête, sans site (ligne 0) et marquée « nom » (300 sur
+        // rag3weaver, `lib.rs` → `RefError`, sonde des marques du 11 octobre).
+        let premier_de_fichier = fa.scopes.iter().position(|sc| sc.name.starts_with("file_scope"));
+        let porteur_de = |ligne: Option<usize>| -> Option<usize> {
+            ligne
+                .and_then(|l| {
+                    fa.scopes
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, sc)| sc.scope_start_line <= l && l <= sc.scope_end_line && cle_du_scope.contains_key(&(rel.clone(), *i)))
+                        .min_by_key(|(_, sc)| sc.scope_end_line - sc.scope_start_line)
+                        .map(|(i, _)| i)
+                })
+                .or(premier_de_fichier)
+        };
+        let reexportes: Vec<(String, String, Option<usize>, Option<usize>)> =
+            reexportes.into_iter().map(|(nom, module, ligne)| (nom, module, ligne, porteur_de(ligne))).collect();
         for (i, sc) in fa.scopes.iter().enumerate() {
             let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
                 continue;
             };
-            // Le premier scope de fichier porte les réexportations : un
-            // rendez-vous de lui vers le nom, avec le module source.
-            if !reexportations_posees && sc.name.starts_with("file_scope") {
-                reexportations_posees = true;
-                for (nom, module) in &reexportes {
-                    if !analysis.pending.iter().any(|(k, n, _)| k == key && n == nom) {
-                        analysis.pending.push((key.clone(), nom.clone(), "CONSUMES".to_string()));
-                    }
-                    analysis.pending_reexport.push((key.clone(), nom.clone(), module.clone()));
-                }
-            }
             let libraries = fichier_du_scope.get(key).and_then(|f| libraries_du_fichier.get(f)).unwrap_or(&aucune);
             let mut seen = std::collections::HashSet::new();
             let mut sites: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
@@ -1360,6 +1370,22 @@ pub fn analyze_in_project(
                         liste.push(site);
                     }
                 }
+            }
+            // Les réexportations de ce scope : l'arête du nom et son site s'ils
+            // manquent (une ligne sans référence lue, ou le repli sur le
+            // premier scope de fichier), puis le module source.
+            for (nom, module, ligne, _) in reexportes.iter().filter(|(_, _, _, porteur)| *porteur == Some(i)) {
+                if !analysis.pending.iter().any(|(k, n, _)| k == key && n == nom) {
+                    analysis.pending.push((key.clone(), nom.clone(), "CONSUMES".to_string()));
+                }
+                if let Some(l) = ligne {
+                    let site = UsageSite { usage: UsageKind::Import, line: Some(*l) };
+                    let liste = sites.entry(nom.clone()).or_default();
+                    if !liste.iter().any(|s| s.line == Some(*l)) {
+                        liste.push(site);
+                    }
+                }
+                analysis.pending_reexport.push((key.clone(), nom.clone(), module.clone()));
             }
             for (name, liste) in sites {
                 analysis.pending_sites.push((key.clone(), name, liste));
