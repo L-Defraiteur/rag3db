@@ -39,14 +39,20 @@ L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réc
    les 20 premiers fichiers d'où ils viennent, leur nombre, et `_parent_uuid`, `_parent_field`,
    `_text_hash`. Sans parent ni hash, c'est une ligne fantôme ; un parent texte brut d'extension
    exotique, c'est un binaire lu avec un octet nul. Rien à faire de ta part sur ce point.
-4. La montre remise et le redémarrage sur le binaire prêt de G, **une fois le correctif de l'arbre
-   principal dedans** (G le rebâtit si le push arrive avant son réveil) :
+4. **Les deux bases s'effacent** (B4 de G, master `6e3561268` : les chemins sont relatifs à la
+   racine, et un binaire ≥ ce hash refuse une base de code d'avant, en le disant). Hôte arrêté et
+   copie de l'étape 3 prise, mettre de côté les fichiers des deux bases :
+   `cd ~/.local/share/rag3weaver && mkdir -p avant-b4 && mv code-lourd.rag3db* code-lourd.checkpoints code-principal.rag3db* code-principal.checkpoints avant-b4/`.
+5. La montre remise et le redémarrage sur le binaire prêt de G, **rebâti sur `6e3561268` et le
+   correctif de l'arbre principal** :
    `cp ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`,
    `cp ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json`,
    puis `mv ~/.local/bin/rag3weaver-backend.pret ~/.local/bin/rag3weaver-backend && systemctl --user start rag3weaver-daemon`.
+6. La réindexation des deux bases, par codeparsers, avec ce binaire : dis-moi que l'hôte est
+   reparti. `code-principal` sert au cœur : l'heure s'accorde avec lui.
 
 Après l'arrêt, le cœur et hotfixs rebâtissent la lib de `rag3db-lourd` (ils attendent ce
-signal). `code-principal` reste tel quel : le cœur s'en sert. Le ticket :
+signal). Le ticket :
 `docs/tickets/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md`.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
