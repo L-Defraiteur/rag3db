@@ -300,3 +300,33 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
 - **En une ligne** : sur ces questions-là, l'outil a gagné sur grep — l'appelant `lockEndpoints` de
   `rel_table.cpp` que je n'aurais pas cherché, et un test de l'API que grep sur « F_SETLK »
   n'aurait pas trouvé.
+
+### 11 oct., 17 h 55 (heure luciepc) — cœur C++ — « une édition est-elle retranscrite à chaud ? » (demande de Lucie)
+
+- **La question posée** : déposer un fichier avec une fonction au nom unique dans l'arbre indexé,
+  et voir si `usages` la connaît sans réindexation.
+- **L'outil essayé** : un fichier `test/essai_indexation_a_chaud.cpp` déposé à 17:55:48 dans
+  `/home/lucied/git_workspaces/rag3db` sur luciepc (la racine de `code-principal`) ; puis `usages
+  {name: essaiIndexationAChaudDixNeufHeures}`, `search_code` (scan puis indexed), `daemon_status`,
+  et `claude mcp get code-rag3db-luciepc` ici.
+- **Ce qu'il a rendu** : `usages` — « Catalogue occupé : une indexation le tient en ce moment »
+  (17:56, 17:58), puis « aucune définition » (17:57:25). `search_code` scan — **erreur brute** « IO
+  error for operation on /home/lucied/git_workspaces/rag3db-bascule: No such file or directory ».
+  `search_code` indexed — trois résultats sans lien (set_tinysnb.test, interval.test, openai_llm.rs)
+  à ★0,74-0,75 « vector ». `daemon_status` — trois backends `open: true`, dont `code-bascule`.
+  `claude mcp get` — **le serveur est lié au manifeste `code-bascule`**, racine
+  `/home/lucied/git_workspaces/rag3db-bascule`, un worktree du banc effacé après sa preuve.
+- **Ce que j'ai dû faire à côté** : lire la configuration locale du serveur pour comprendre
+  qu'il n'indexe pas l'arbre où j'avais écrit ; l'essai est à refaire avec un serveur lié à
+  `code-principal` (le fichier d'essai reste en place pour ça).
+- **Ce qui manquait** :
+  1. **Un backend dont la racine a disparu doit le dire** — dans `daemon_status` (« racine
+     absente ») et dans chaque outil, nommément ; pas une erreur d'entrée-sortie brute, et pas
+     `open: true`.
+  2. **Une lecture ne se refuse pas pour une indexation en cours** : « catalogue occupé » sur
+     `usages` devrait servir le dernier état indexé, et dire « indexation en cours depuis N s,
+     M fichiers ».
+  3. **Un jeton inconnu ne rend pas une liste confiante** : trois chunks sans rapport à ★0,74 ;
+     dire « aucune correspondance lexicale, voici les voisins par le sens » avec un score bas.
+  4. **Quel arbre, quelle tête** (déjà dit à 19 h 05) : l'agent ne sait pas sur quoi il interroge ;
+     ici le serveur regardait un arbre mort.
