@@ -1180,6 +1180,18 @@ pub fn ecriture<D: SchemaDialect + ?Sized>(dialect: &D, write: &rag3weaver_ir::W
     dialect.write(write).unwrap_or_else(|_| dialect.untranslated("Write"))
 }
 
+/// Une condition de [`rag3weaver_ir::Predicate`] en SQL PostgreSQL, sur l'alias `m`.
+fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> String {
+    use rag3weaver_ir::Predicate;
+    match p {
+        Predicate::Equals { field, param } => format!("m.{} = ${param}", d.quote(field)),
+        Predicate::Contains { field, param } => format!("strpos(m.{}, ${param}) > 0", d.quote(field)),
+        Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", d.quote(field)),
+        Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" OR ")),
+        Predicate::Compiled(c) => c.clone(),
+    }
+}
+
 /// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
 /// Les champs sont cités ([`cypher_quote`]) ; une condition déjà compilée
 /// passe telle quelle.
@@ -2089,6 +2101,64 @@ impl SchemaDialect for PostgresDialect {
     /// identifiant validé ne porte jamais de point.
     fn quote(&self, name: &str) -> String {
         name.split('.').map(|partie| format!("\"{}\"", partie.to_lowercase())).collect::<Vec<_>>().join(".")
+    }
+
+    /// Par uuids : `SELECT v.u, … FROM unnest($uuids::text[]) AS v(u) JOIN "t"
+    /// AS m ON m."_uuid" = v.u`, l'uuid donné en première colonne comme sur
+    /// rag3db ; sinon `SELECT … FROM "t" AS m WHERE …`. La ligne entière
+    /// (`Column::Whole`) ne se relit pas en colonnes ici : refusée en la
+    /// nommant.
+    fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::Column;
+        select.validate()?;
+        let mut colonnes: Vec<String> = Vec::new();
+        for c in &select.returns {
+            colonnes.push(match c {
+                Column::Node(f) => format!("m.{}", self.quote(f)),
+                Column::Null => "NULL".to_string(),
+                _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select (ligne entière)" }),
+            });
+        }
+        let table = self.quote(&select.table);
+        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", postgres_condition(self, p))).unwrap_or_default();
+        let ordre = if select.order_by.is_empty() {
+            String::new()
+        } else {
+            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
+        };
+        let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        Ok(if select.by_uuids {
+            let mut toutes = vec!["v.u".to_string()];
+            toutes.extend(colonnes);
+            format!(
+                "SELECT {} FROM unnest($uuids::text[]) AS v(u) JOIN {table} AS m ON m.\"_uuid\" = v.u{filtre}{ordre}{borne}",
+                toutes.join(", ")
+            )
+        } else {
+            format!("SELECT {} FROM {table} AS m{filtre}{ordre}{borne}", colonnes.join(", "))
+        })
+    }
+
+    /// Les lignes, les lignes retenues, et le degré par départ
+    /// (`from_uuid`/`to_uuid` de la table de relation).
+    fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
+        count.validate()?;
+        Ok(match count {
+            rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
+            rag3weaver_ir::Count::Matching { table, filter } => {
+                format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(table), postgres_condition(self, filter))
+            }
+            rag3weaver_ir::Count::Edges { relation, direction, .. } => {
+                let bout = match direction {
+                    rag3weaver_ir::Direction::Outgoing => "from_uuid",
+                    rag3weaver_ir::Direction::Incoming => "to_uuid",
+                };
+                format!(
+                    "SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) JOIN {} AS r ON r.\"{bout}\" = v.u GROUP BY v.u",
+                    self.quote(relation)
+                )
+            }
+        })
     }
 
     fn node_offset_expr(&self, alias: &str) -> String {
@@ -3226,7 +3296,31 @@ mod tests {
         assert_eq!(Rag3dbDialect.count(&Count::Rows { table: "Doc".into() }).unwrap(), Rag3dbDialect.count_rows("Doc"));
         let c = Count::Edges { start: "Scope".into(), relation: "CONSUMES".into(), direction: Direction::Incoming };
         assert_eq!(Rag3dbDialect.count(&c).unwrap(), "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})<-[r:`CONSUMES`]-() RETURN u, count(r)");
-        assert_eq!(PostgresDialect.count(&c).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Count");
+        assert!(PostgresDialect.count(&c).is_ok(), "PostgreSQL dit le degré (test postgresql_traduit_la_selection_et_le_compte)");
+    }
+
+    /// PostgreSQL traduit la sélection et le compte : par uuids (l'uuid donné en
+    /// tête), par condition, et le degré par départ ; la ligne entière se
+    /// refuse en se nommant.
+    #[test]
+    fn postgresql_traduit_la_selection_et_le_compte() {
+        use rag3weaver_ir::{Column, Count, Direction, Predicate, Select};
+        let d = PostgresDialect;
+        let s = Select::by_uuids("Order", vec![Column::Node("_uuid".into())]);
+        assert_eq!(
+            d.select(&s).unwrap(),
+            r#"SELECT v.u, m."_uuid" FROM unnest($uuids::text[]) AS v(u) JOIN "order" AS m ON m."_uuid" = v.u"#
+        );
+        let f = Select::filtered("Doc", Predicate::AnyOf(vec![
+            Predicate::Equals { field: "source".into(), param: "s".into() },
+            Predicate::Contains { field: "titre".into(), param: "t".into() },
+        ]), vec![Column::Node("titre".into()), Column::Null]);
+        assert_eq!(d.select(&f).unwrap(), r#"SELECT m."titre", NULL FROM "doc" AS m WHERE (m."source" = $s OR strpos(m."titre", $t) > 0)"#);
+        assert!(d.select(&Select::all("Doc", vec![Column::Whole])).is_err());
+        assert_eq!(
+            d.count(&Count::Edges { start: "Symbol".into(), relation: "DEFINES".into(), direction: Direction::Incoming }).unwrap(),
+            r#"SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) JOIN "defines" AS r ON r."to_uuid" = v.u GROUP BY v.u"#
+        );
     }
 
     /// La sélection : rag3db la traduit, PostgreSQL la refuse en la nommant.
@@ -3246,7 +3340,7 @@ mod tests {
         f.order_by.push("_uuid".into());
         f.limit = Some(3);
         assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:`Scope`) WHERE m.`file_path` = $file OR m.`source` = $file RETURN m.`_uuid` ORDER BY m.`_uuid` LIMIT 3");
-        assert_eq!(PostgresDialect.select(&s).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Select");
+        assert!(PostgresDialect.select(&s).is_ok(), "PostgreSQL dit la sélection (test postgresql_traduit_la_selection_et_le_compte)");
         let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
         assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:`Card`) WHERE m.cost > $filter_p0 RETURN count(m)");
         assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:`Card`) RETURN m");
