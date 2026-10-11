@@ -185,6 +185,11 @@ pub struct PortDef {
     pub kind: PortKind,
     /// Comment ce port se lit, sur une **entrée**. Ignoré sur une sortie.
     pub posture: Posture,
+    /// Sur une **sortie** : son genre **suit** celui de l'entrée nommée (un
+    /// `Route` aiguille des valeurs ou un flux selon ce qu'il reçoit). `kind`
+    /// est alors le genre minimal. Résolu sur le graphe entier
+    /// (`dataflow::kinds`), d'après les producteurs de l'entrée.
+    pub follows: Option<Cow<'static, str>>,
 }
 
 /// **Le genre d'une sortie** : « les ports portent des flux ». Une valeur est
@@ -224,6 +229,7 @@ impl PortDef {
             required,
             kind: PortKind::Value,
             posture: Posture::Complete,
+            follows: None,
         }
     }
 
@@ -237,6 +243,31 @@ impl PortDef {
     pub fn posture(mut self, posture: Posture) -> Self {
         self.posture = posture;
         self
+    }
+
+    /// La même sortie, dont le genre suit celui de l'entrée `input` (qui doit
+    /// se lire `PerElement`). Une valeur reçue donne une valeur, un flux donne
+    /// un flux.
+    pub fn follows(mut self, input: impl Into<Cow<'static, str>>) -> Self {
+        self.follows = Some(input.into());
+        self
+    }
+}
+
+impl PortKind {
+    /// Le plus ouvert l'emporte : `Value` < `Finite` < `Open`.
+    pub fn max(self, other: PortKind) -> PortKind {
+        let rank = |k: PortKind| match k {
+            PortKind::Value => 0,
+            PortKind::Finite => 1,
+            PortKind::Open => 2,
+        };
+        if rank(other) > rank(self) { other } else { self }
+    }
+
+    /// Un flux, fini ou non.
+    pub fn is_stream(self) -> bool {
+        self != PortKind::Value
     }
 }
 

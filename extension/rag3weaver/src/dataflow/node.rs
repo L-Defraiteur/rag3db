@@ -5,7 +5,7 @@
 //! will implement `luciole::Node` directly with zero changes to their execute() bodies.
 
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -133,9 +133,69 @@ pub trait Node: Send {
 /// - `metric(key, f64)`
 /// - `info/warn/error/debug(&str)`
 /// - `service::<T>(key) -> Option<&T>`
+/// Pourquoi un run à flux s'arrête avant sa fin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CancelCause {
+    /// Un nœud a échoué : les autres s'arrêtent.
+    Failed { node: String },
+    /// Tous les nœuds vivants s'attendaient : la description nomme chaque attente.
+    Deadlock(String),
+    /// L'hôte a arrêté le run (la durée d'un agent se ferme) : pas une faute.
+    External,
+}
+
+impl std::fmt::Display for CancelCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CancelCause::Failed { node } => write!(f, "le nœud « {node} » a échoué"),
+            CancelCause::Deadlock(why) => write!(f, "interblocage : {why}"),
+            CancelCause::External => write!(f, "arrêté par l'hôte"),
+        }
+    }
+}
+
+/// Une lecture interrompue : le run est annulé. Le `?` d'un nœud la propage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cancelled(pub CancelCause);
+
+impl From<Cancelled> for String {
+    fn from(c: Cancelled) -> String {
+        format!("annulé : {}", c.0)
+    }
+}
+
+/// Une émission qui ne sert plus à rien.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Stopped {
+    /// Plus personne ne lit ce port : le producteur s'arrête, sans faute.
+    NoReader,
+    /// Le run est annulé.
+    Cancelled(CancelCause),
+}
+
+impl From<Stopped> for String {
+    fn from(s: Stopped) -> String {
+        match s {
+            Stopped::NoReader => "plus personne ne lit".to_string(),
+            Stopped::Cancelled(c) => format!("annulé : {c}"),
+        }
+    }
+}
+
 pub struct NodeContext {
     inputs: HashMap<String, PortValue>,
     outputs: HashMap<String, PortValue>,
+    /// Les entrées que le nœud déclare lire élément par élément (posé par le
+    /// runtime) : celles que `next_any` parcourt.
+    per_element: HashSet<String>,
+    /// Les sorties en flux du nœud (posé par le runtime) : `emit` y range
+    /// chaque élément, `set_output` y est une faute.
+    stream_outputs: HashSet<String>,
+    /// Sous l'exécuteur par niveaux, les éléments émis sur un port de flux,
+    /// fusionnés à la fin du nœud comme un lecteur `Complete` les verrait.
+    emitted: HashMap<String, Vec<PortValue>>,
+    /// Les fautes d'emploi du contexte, dites à la fin du nœud.
+    misuse: Vec<String>,
     services: Arc<ServiceRegistry>,
     metrics: Vec<(String, f64)>,
     logs: Vec<(NodeLogLevel, String)>,
@@ -148,6 +208,10 @@ impl NodeContext {
         Self {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
+            per_element: HashSet::new(),
+            stream_outputs: HashSet::new(),
+            emitted: HashMap::new(),
+            misuse: Vec::new(),
             services: Arc::new(ServiceRegistry::new()),
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -159,6 +223,10 @@ impl NodeContext {
         Self {
             inputs: HashMap::new(),
             outputs: HashMap::new(),
+            per_element: HashSet::new(),
+            stream_outputs: HashSet::new(),
+            emitted: HashMap::new(),
+            misuse: Vec::new(),
             services,
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -180,7 +248,55 @@ impl NodeContext {
 
     /// Set an output port value.
     pub fn set_output(&mut self, port: &str, value: PortValue) {
+        if self.stream_outputs.contains(port) {
+            self.misuse.push(format!(
+                "set_output sur « {port} », un port de flux : un flux s'émet élément par élément (emit)"
+            ));
+            return;
+        }
         self.outputs.insert(port.to_string(), value);
+    }
+
+    // ── Les flux (page 05-l-executeur-concurrent, §3.4) ─────────────────
+
+    /// **L'élément suivant** de l'entrée `port`, `None` à la fin. Sur une
+    /// entrée de valeur, la valeur puis `None` : un nœud écrit
+    /// `while let Some(e) = ctx.next("element")? { … }` tourne aussi bien sur
+    /// une valeur que sur un flux.
+    pub fn next(&mut self, port: &str) -> Result<Option<PortValue>, Cancelled> {
+        Ok(self.inputs.remove(port))
+    }
+
+    /// L'élément suivant de **n'importe quelle** entrée lue élément par
+    /// élément, avec le nom de son port ; `None` quand toutes sont finies.
+    /// C'est la lecture qui ne s'interbloque pas pour un nœud à plusieurs
+    /// entrées en flux.
+    pub fn next_any(&mut self) -> Result<Option<(String, PortValue)>, Cancelled> {
+        let mut ports: Vec<&String> = self.per_element.iter().filter(|p| self.inputs.contains_key(*p)).collect();
+        ports.sort();
+        let Some(port) = ports.first().map(|p| (*p).clone()) else {
+            return Ok(None);
+        };
+        let value = self.inputs.remove(&port).expect("présent");
+        Ok(Some((port, value)))
+    }
+
+    /// N'en lira pas plus sur `port` : quand plus personne ne le lit, son
+    /// producteur voit `Stopped::NoReader`.
+    pub fn close_input(&mut self, port: &str) {
+        self.inputs.remove(port);
+    }
+
+    /// **Émet un élément** sur `port`. Sur une sortie de valeur, c'est
+    /// `set_output` (la dernière gagne). `Err(Stopped)` : plus personne ne
+    /// lit, ou le run est annulé — le nœud s'arrête, ce n'est pas une faute.
+    pub fn emit(&mut self, port: &str, value: PortValue) -> Result<(), Stopped> {
+        if self.stream_outputs.contains(port) {
+            self.emitted.entry(port.to_string()).or_default().push(value);
+        } else {
+            self.outputs.insert(port.to_string(), value);
+        }
+        Ok(())
     }
 
     /// Emit a trigger signal on an output port.
@@ -251,7 +367,31 @@ impl NodeContext {
     /// La sortie `port` a-t-elle été posée ? (L'exécuteur vérifie qu'un nœud
     /// a posé ses sorties requises avant de les ranger.)
     pub(crate) fn has_output(&self, port: &str) -> bool {
-        self.outputs.contains_key(port)
+        self.outputs.contains_key(port) || self.emitted.get(port).is_some_and(|v| !v.is_empty())
+    }
+
+    /// Les ports lus élément par élément, et les sorties en flux, du nœud.
+    pub(crate) fn set_stream_ports(&mut self, per_element: HashSet<String>, stream_outputs: HashSet<String>) {
+        self.per_element = per_element;
+        self.stream_outputs = stream_outputs;
+    }
+
+    /// **La fin du nœud, sous les niveaux** : une faute d'emploi est dite, et
+    /// les éléments émis sur chaque port de flux sont fusionnés en une valeur
+    /// (`merge_port_values`), comme un lecteur `Complete` les recevrait.
+    pub(crate) fn settle_streams(&mut self) -> Result<(), String> {
+        if !self.misuse.is_empty() {
+            return Err(std::mem::take(&mut self.misuse).join(" ; "));
+        }
+        for (port, elements) in std::mem::take(&mut self.emitted) {
+            let mut it = elements.into_iter();
+            let Some(first) = it.next() else { continue };
+            let merged = it.try_fold(first, super::port::merge_port_values).map_err(|e| {
+                format!("les éléments émis sur « {port} » ne se fusionnent pas en une valeur : {e}")
+            })?;
+            self.outputs.insert(port, merged);
+        }
+        Ok(())
     }
 
     /// Drain all output values (used by the runtime after execution).

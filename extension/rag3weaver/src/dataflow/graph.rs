@@ -131,7 +131,7 @@ impl DataflowGraph {
         if let (Some(from), Some(to)) =
             (self.find_output_port(from_node, from_port), self.find_input_port(to_node, to_port))
         {
-            if from.kind == PortKind::Open && to.posture == Posture::Complete {
+            if from.follows.is_none() && from.kind == PortKind::Open && to.posture == Posture::Complete {
                 return Err(format!(
                     "{from_node}.{from_port} porte un flux ouvert (Open) : {to_node}.{to_port} le lit en \
                      entier (Complete) et l'attendrait pour toujours ; il doit le lire élément par \
@@ -248,7 +248,53 @@ impl DataflowGraph {
         for edge in &def.edges {
             graph.connect(&edge.from_node, &edge.from_port, &edge.to_node, &edge.to_port)?;
         }
+        graph.validate_streams()?;
         Ok(graph)
+    }
+
+    fn kinds_input(&self) -> (Vec<super::kinds::NodePorts>, Vec<super::kinds::EdgeRef>) {
+        let nodes = self
+            .nodes
+            .iter()
+            .map(|n| super::kinds::NodePorts { name: n.name().to_string(), inputs: n.inputs(), outputs: n.outputs() })
+            .collect();
+        let edges = self
+            .edges
+            .iter()
+            .map(|e| super::kinds::EdgeRef {
+                from_node: e.from_node.clone(),
+                from_port: e.from_port.clone(),
+                to_node: e.to_node.clone(),
+                to_port: e.to_port.clone(),
+            })
+            .collect();
+        (nodes, edges)
+    }
+
+    /// **Le genre résolu de chaque sortie** (`dataflow::kinds`) : une sortie
+    /// qui suit une entrée prend le genre de ses producteurs ; une entrée libre
+    /// suivie reçoit une valeur initiale.
+    pub fn resolved_kinds(&self) -> Result<HashMap<(String, String), PortKind>, String> {
+        let (nodes, edges) = self.kinds_input();
+        Ok(super::kinds::resolve(&nodes, &edges)?
+            .into_iter()
+            .map(|(k, r)| (k, r.with_value_inputs()))
+            .collect())
+    }
+
+    /// Le refus `Complete ← Open` sur les genres **résolus** : `connect` ne
+    /// voit que les genres fixes, une sortie qui suit se juge sur le graphe
+    /// entier.
+    pub fn validate_streams(&self) -> Result<(), String> {
+        let kinds = self.resolved_kinds()?;
+        let (nodes, edges) = self.kinds_input();
+        super::kinds::refuse_complete_on_open(&nodes, &edges, |n, p| kinds.get(&(n.to_string(), p.to_string())).copied())
+    }
+
+    /// Le graphe a-t-il une sortie en flux, une fois les genres résolus ?
+    /// C'est le choix de l'exécuteur.
+    pub fn has_streams(&self) -> Result<bool, String> {
+        Ok(self.resolved_kinds()?.values().any(|k| k.is_stream()))
     }
 
     /// List all node names.
@@ -340,6 +386,38 @@ mod tests {
         assert!(g.edges.is_empty(), "l'arête refusée n'est pas posée");
         g.connect("open", "out", "each", "in").unwrap();
         g.connect("finite", "out", "whole2", "in").unwrap();
+    }
+
+    /// **Le refus sur les genres résolus** : derrière un aiguillage qui suit
+    /// une source ouverte, `connect` ne peut pas juger (le genre dépend du
+    /// producteur) ; `validate_streams` refuse le lecteur du tout. Le choix de
+    /// l'exécuteur lit les mêmes genres : un graphe de valeurs n'a pas de flux.
+    #[test]
+    fn a_complete_input_behind_a_following_open_output_is_refused() {
+        use crate::dataflow::port::{PortKind, Posture};
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(TestNode::new("peer_in", vec![], vec![PortDef::value("out", PortType::Results, false).stream(PortKind::Open)])))
+            .unwrap();
+        g.add_node(Box::new(TestNode::new(
+            "route",
+            vec![PortDef::value("element", PortType::Results, true).posture(Posture::PerElement)],
+            vec![PortDef::value("out", PortType::Results, false).follows("element")],
+        )))
+        .unwrap();
+        g.add_node(sink_node("whole")).unwrap();
+        g.connect("peer_in", "out", "route", "element").unwrap();
+        g.connect("route", "out", "whole", "in").unwrap();
+        assert_eq!(g.resolved_kinds().unwrap()[&("route".to_string(), "out".to_string())], PortKind::Open);
+        let err = g.validate_streams().unwrap_err();
+        assert!(err.contains("route.out") && err.contains("whole.in"), "{err}");
+        assert!(g.has_streams().unwrap());
+
+        let mut values = DataflowGraph::new();
+        values.add_node(source_node("a")).unwrap();
+        values.add_node(sink_node("b")).unwrap();
+        values.connect("a", "out", "b", "in").unwrap();
+        assert!(!values.has_streams().unwrap());
+        values.validate_streams().unwrap();
     }
 
     fn passthrough_node(name: &str) -> Box<dyn Node> {

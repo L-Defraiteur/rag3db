@@ -83,6 +83,7 @@ impl GraphNode {
         // flux ouvert enveloppé échapperait au refus Complete ← Open.
         let mut inputs: Vec<PortDef> = Vec::new();
         let mut outputs: Vec<PortDef> = Vec::new();
+        let mut inner_ports = Vec::new();
 
         for node_def in &definition.nodes {
             let schema = registry.schema_for(&node_def.node_type, &node_def.config).ok_or_else(|| {
@@ -115,6 +116,43 @@ impl GraphNode {
                     outputs.push(PortDef { name: ext_name.into(), ..port.clone() });
                 }
             }
+            inner_ports.push(super::kinds::NodePorts {
+                name: node_def.name.clone(),
+                inputs: schema.inputs,
+                outputs: schema.outputs,
+            });
+        }
+
+        // **Le genre d'une sortie libre, résolu à l'intérieur** : fixe, ou
+        // suivant (de proche en proche) une entrée libre, republiée sous son
+        // nom externe.
+        let inner_edges: Vec<super::kinds::EdgeRef> = definition
+            .edges
+            .iter()
+            .map(|e| super::kinds::EdgeRef {
+                from_node: e.from_node.clone(),
+                from_port: e.from_port.clone(),
+                to_node: e.to_node.clone(),
+                to_port: e.to_port.clone(),
+            })
+            .collect();
+        let resolved = super::kinds::resolve(&inner_ports, &inner_edges)?;
+        super::kinds::refuse_complete_on_open(&inner_ports, &inner_edges, |n, p| {
+            resolved.get(&(n.to_string(), p.to_string())).map(|r| r.with_value_inputs())
+        })?;
+        for out in &mut outputs {
+            let inner = &output_map[out.name.as_ref()];
+            match resolved.get(inner) {
+                Some(super::kinds::Resolved::Fixed(k)) => {
+                    out.kind = *k;
+                    out.follows = None;
+                }
+                Some(super::kinds::Resolved::Follows { node, port, at_least }) => {
+                    out.kind = *at_least;
+                    out.follows = Some(format!("{node}.{port}").into());
+                }
+                None => {}
+            }
         }
 
         Ok(Self {
@@ -142,6 +180,12 @@ impl GraphNode {
         // Update the PortDef
         if let Some(pd) = self.inputs.iter_mut().find(|p| p.name == inner) {
             pd.name = alias.to_string().into();
+        }
+        // Une sortie qui suivait cette entrée la suit sous son nouveau nom.
+        for out in &mut self.outputs {
+            if out.follows.as_deref() == Some(inner) {
+                out.follows = Some(alias.to_string().into());
+            }
         }
         Ok(())
     }
@@ -463,6 +507,71 @@ mod tests {
         assert_eq!((out.kind, out.required), (PortKind::Open, false));
         let inp = gn.inputs.iter().find(|p| p.name == "s.in").expect("s.in libre");
         assert_eq!((inp.posture, inp.required), (Posture::PerElement, true));
+    }
+
+    /// **Une sortie qui suit traverse la frontière résolue** : derrière une
+    /// source ouverte intérieure, elle est `Open` ; sur une entrée libre, elle
+    /// suit l'entrée externe (et son alias) ; un lecteur du tout derrière une
+    /// source ouverte est refusé dès le sous-graphe.
+    #[test]
+    fn graph_node_resolves_following_outputs() {
+        use crate::dataflow::port::{PortKind, PortType, Posture};
+        struct Fixed(&'static str, Vec<PortDef>, Vec<PortDef>);
+        impl NodeFactory for Fixed {
+            fn create(&self, _: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+                Err("le schéma suffit à ce témoin".into())
+            }
+            fn node_type(&self) -> &str {
+                self.0
+            }
+            fn schema(&self) -> NodeSchema {
+                NodeSchema {
+                    node_type: self.0.into(),
+                    description: "".into(),
+                    inputs: self.1.clone(),
+                    outputs: self.2.clone(),
+                    config_params: vec![],
+                }
+            }
+        }
+        let mut registry = NodeRegistry::new();
+        registry.register(Box::new(Fixed("Open", vec![], vec![PortDef::value("out", PortType::Results, false).stream(PortKind::Open)])));
+        registry.register(Box::new(Fixed(
+            "Follow",
+            vec![PortDef::value("element", PortType::Results, true).posture(Posture::PerElement)],
+            vec![PortDef::value("out", PortType::Results, false).follows("element")],
+        )));
+        registry.register(Box::new(Fixed("Whole", vec![PortDef::value("in", PortType::Results, true)], vec![])));
+        let registry = Arc::new(registry);
+        let node = |name: &str, ty: &str| NodeDef { name: name.into(), node_type: ty.into(), config: serde_json::json!({}) };
+        let edge = |f: &str, fp: &str, t: &str, tp: &str| EdgeDef {
+            from_node: f.into(),
+            from_port: fp.into(),
+            to_node: t.into(),
+            to_port: tp.into(),
+        };
+
+        let alone = GraphDefinition { nodes: vec![node("f", "Follow")], edges: vec![] };
+        let mut gn = GraphNode::from_definition("g", alone, registry.clone()).unwrap();
+        let out = gn.outputs.iter().find(|p| p.name == "f.out").unwrap();
+        assert_eq!((out.kind, out.follows.as_deref()), (PortKind::Value, Some("f.element")));
+        gn.alias_input("element", "f.element").unwrap();
+        assert_eq!(gn.outputs[0].follows.as_deref(), Some("element"), "l'alias suit");
+
+        let behind_open = GraphDefinition {
+            nodes: vec![node("src", "Open"), node("f", "Follow")],
+            edges: vec![edge("src", "out", "f", "element")],
+        };
+        let gn = GraphNode::from_definition("g", behind_open, registry.clone()).unwrap();
+        let out = gn.outputs.iter().find(|p| p.name == "f.out").unwrap();
+        assert_eq!((out.kind, out.follows.as_deref()), (PortKind::Open, None));
+
+        let whole = GraphDefinition {
+            nodes: vec![node("src", "Open"), node("f", "Follow"), node("w", "Whole")],
+            edges: vec![edge("src", "out", "f", "element"), edge("f", "out", "w", "in")],
+        };
+        let err = GraphNode::from_definition("g", whole, registry).err().expect("refusé");
+        assert!(err.contains("f.out") && err.contains("w.in"), "{err}");
     }
 
     // ── Test 3: empty definition errors ──────────────────────────────
