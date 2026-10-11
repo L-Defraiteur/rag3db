@@ -26,7 +26,7 @@
  ]
 
 -CASE WWConflictNodeCopyUpdate
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -CREATE_CONNECTION conn2
@@ -43,7 +43,7 @@
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE NodeUpdateOverlappedRows
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -CREATE_CONNECTION conn2
 -STATEMENT CREATE NODE TABLE test(id INT64, val INT64, PRIMARY KEY(id));
@@ -73,7 +73,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 21
 
 -CASE NodeUpdatesRollback
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT CALL auto_checkpoint=false;
 ---- ok
@@ -103,7 +103,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 0
 
 -CASE NodeUpdatesMixedCommitAndRollback
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT CALL auto_checkpoint=false;
 ---- ok
@@ -154,7 +154,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 100
 
 -CASE WWConflictNodeCopyDelete
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -CREATE_CONNECTION conn2
@@ -171,7 +171,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelCopyUpdate
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_KNOWS
@@ -189,7 +189,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelCopyDelete
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_KNOWS
@@ -207,7 +207,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictNodeInsertUpdate
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
@@ -225,7 +225,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictNodeInsertDelete
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
@@ -243,7 +243,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelInsertUpdate
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
@@ -261,7 +261,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE WWConflictRelInsertDelete
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -CREATE_DATASET_SCHEMA tinysnb
 -INSERT_DATASET_BY_ROW tinysnb
@@ -279,7 +279,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it back and run it again, or raise lock_timeout.
 
 -CASE MultiTransactionNodeInsert
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT CALL auto_checkpoint=false;
 ---- ok
@@ -333,7 +333,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 10
 
 -CASE MultiTransactionRelInsert
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT CALL auto_checkpoint=false;
 ---- ok
@@ -408,7 +408,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 
 -CASE MultiTransactionNodeCopy
 -SKIP
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -STATEMENT create node table person (ID INt64, fName StRING, gender INT64, isStudent BoOLEAN, isWorker BOOLEAN, age INT64, eyeSight DOUBLE, birthdate DATE, registerTime TIMESTAMP, lastJobDuration interval, workedHours INT64[], usedNames STRING[], courseScoresPerTerm INT64[][], grades INT64[4], height float, u UUID, PRIMARY KEY (ID));
 ---- ok
@@ -457,7 +457,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 
 -CASE MultiTransactionRelCopy
 -SKIP
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -STATEMENT create rel table knows (FROM person TO person, date DATE, meetTime TIMESTAMP, validInterval INTERVAL, comments STRING[], summary STRUCT(locations STRING[], transfer STRUCT(day DATE, amount INT64[])), notes UNION(firstmet DATE, type INT16, comment STRING), someMap MAP(STRING, STRING), MANY_MAnY);
@@ -524,7 +524,7 @@ Transaction aborted: lock timeout while waiting for row '0' of table 0. Roll it 
 
 -CASE MixedMultiTransactionRelCopyInsert
 -SKIP
--STATEMENT CALL debug_enable_multi_writes=true;
+-STATEMENT CALL enable_multi_writes=true;
 ---- ok
 -INSERT_STATEMENT_BLOCK COPY_TINYSNB_PERSON
 -STATEMENT create rel table knows (FROM person TO person, date DATE, meetTime TIMESTAMP, validInterval INTERVAL, comments STRING[], summary STRUCT(locations STRING[], transfer STRUCT(day DATE, amount INT64[])), notes UNION(firstmet DATE, type INT16, comment STRING), someMap MAP(STRING, STRING), MANY_MAnY);

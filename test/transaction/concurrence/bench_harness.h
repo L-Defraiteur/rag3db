@@ -561,7 +561,7 @@ inline void loadVectorExtension(main::Connection& connection) {
 // Le premier n'est pas persistant : il se repose à chaque ouverture.
 inline void applyBenchSettings(main::Connection& connection) {
     for (const auto* query :
-        {"CALL debug_enable_multi_writes=true;", "CALL auto_checkpoint=false;"}) {
+        {"CALL enable_multi_writes=true;", "CALL auto_checkpoint=false;"}) {
         auto result = connection.query(query);
         if (!result->isSuccess()) {
             throw std::runtime_error(std::string(query) + ": " + result->getErrorMessage());
