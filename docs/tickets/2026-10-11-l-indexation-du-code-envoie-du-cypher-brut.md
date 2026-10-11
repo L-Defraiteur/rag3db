@@ -21,3 +21,13 @@ les nœuds sont passés aux formes de l'IR, l'indexation du code non.
 Convertir les requêtes de l'indexation du code en formes de l'IR (cette lecture est
 un `Select::by_uuids`), relever les autres requêtes du même chemin, puis indexer
 `src/daemon` sur le conteneur : la mesure d'impact sur PostgreSQL devient le témoin.
+
+## Le témoin à venir
+
+La mesure d'impact de bout en bout sur PostgreSQL, retirée de la branche
+`impact-run-plan` parce qu'elle rougit ici : même corpus (`src/daemon`), mêmes noms
+et même configuration que `e2e_mesure_impact::mesure_impact_sur_rag3db`, sur le
+catalogue du conteneur (`e2e_postgres::catalogue`), avec la connexion qui compte les
+instructions (`e2e_mesure_impact::Compteur`), `register_code_schema`, `ingest_code`,
+`drain`, puis `e2e_mesure_impact::mesurer("postgresql", …)`. Elle se remet en place
+avec la conversion et doit passer au vert.

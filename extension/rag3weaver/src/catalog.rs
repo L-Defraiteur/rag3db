@@ -274,6 +274,9 @@ pub struct Catalog {
     /// ne se rebâtissent pas, le rattrapage d'embarquement attend. Une
     /// annulation emporterait sinon le schéma avec les lignes.
     in_transaction: bool,
+    /// La fusion des éventails levée ou baissée pour ce montage
+    /// ([`Self::set_fanout`]) ; `None` : ce que déclare le dialecte.
+    fanout: Option<bool>,
     /// Garder les points de reprise du dataflow dans une transaction
     /// ([`set_checkpoints_in_transaction`](Self::set_checkpoints_in_transaction)) ;
     /// coupés par défaut.
@@ -494,6 +497,7 @@ impl Catalog {
             peut_devoir_un_embarquement: false,
             absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
+            fanout: None,
             checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
@@ -8828,8 +8832,18 @@ impl Catalog {
 
     /// **Exécuter un graphe de formes** sur cette base, par son dialecte
     /// ([`crate::plan::run_plan`]).
-    pub fn run_plan(&self, plan: &rag3weaver_ir::Plan, options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+    pub fn run_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        if options.fanout.is_none() {
+            options.fanout = self.fanout;
+        }
         crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
+    }
+
+    /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
+    /// que déclare le dialecte : un PostgreSQL distant, où chaque
+    /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
+    pub fn set_fanout(&mut self, fanout: Option<bool>) {
+        self.fanout = fanout;
     }
 
     /// Execute raw Cypher (useful for debugging/tests).

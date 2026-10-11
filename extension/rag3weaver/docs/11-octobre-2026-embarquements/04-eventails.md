@@ -54,3 +54,38 @@ sortie, sur rag3db et sur le conteneur PostgreSQL :
 Ensuite, impact se branche sur `run_plan`. Il sera mesuré avant et après, en
 allers-retours **et** en temps, sur les deux moteurs, avec l'arbre principal en
 relecture de `code_tools`.
+
+## Mesuré, et choisi (11 octobre 2026)
+
+**Impact branché sur `run_plan`** (`e2e_mesure_impact`, corpus `src/daemon`, `poste
+mesure`, même base avant et après). Les allers-retours tombent de 35 à 42 % :
+20→12, 23→13, 17→11, 17→11, 21→13, 24→14. Les lignes rendues sont les mêmes (même
+empreinte des lignes triées, dans les six cas). Le temps sur rag3db ne baisse pas :
+39→43, 46→49, 32→33, 33→33, 39→44, 44→48 ms.
+
+**Les éventails seuls**, sur un graphe peuplé par le catalogue (300 nœuds, trois
+relations, les mêmes 300 uuids), découpés puis fondus, en médiane de 21 :
+
+| moteur | éventail | découpé | fondu |
+|---|---|---|---|
+| rag3db | six degrés | 6 instructions, 20,05 ms | 1 instruction, 20,18 ms |
+| rag3db | trois sauts | 3 instructions, 8,34 ms | 1 instruction, 9,97 ms |
+| PostgreSQL (conteneur local) | six degrés | 6 instructions, 2,70 ms | 1 instruction, 2,81 ms |
+| PostgreSQL (conteneur local) | trois sauts | 3 instructions, 2,12 ms | 1 instruction, 2,35 ms |
+
+Les mêmes lignes sortent partout (1 800 et 2 700). **En local, la fusion ne gagne de
+temps sur aucun des deux moteurs, et coûte 1 à 20 %.** rag3db vit dans le processus ;
+le conteneur PostgreSQL est sur la boucle locale, où un aller-retour coûte à peine
+0,1 ms. Le gain n'existe qu'avec un aller-retour cher.
+
+*Projection, pas une mesure* : à 1 ms d'aller-retour, six instructions en une
+économisent environ 5 ms, pour 0,1 à 0,2 ms de travail en plus.
+
+**Le choix** (orchestration, 11 octobre) : une capacité déclarée,
+`DialectCapabilities::fanout`, **fausse pour rag3db et fausse pour PostgreSQL par
+défaut**. Un montage la lève par `Catalog::set_fanout(Some(true))` (un PostgreSQL
+distant), ou elle se lève après une mesure sur un vrai déploiement ; jamais sur la foi
+d'un calcul. Les deux traductions restent et sont éprouvées directement : textes
+exacts, et e2e fondu puis découpé avec la fusion levée (`PlanOptions::fanout`). Impact
+reste sur `run_plan`, et sans éventail levé il fait les allers-retours d'avant, moins
+les deux de callees.

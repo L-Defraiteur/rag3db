@@ -34,6 +34,15 @@ pub struct PlanOptions {
     /// Ne rien fondre : un nœud, une instruction. Pour comparer une fusion au
     /// repli sur le même graphe.
     pub split: bool,
+    /// N'ouvrir aucune transaction autour de plusieurs instructions :
+    /// l'appelant en tient peut-être une, ou lit sans en vouloir (une
+    /// lecture d'outil, qui n'en ouvrait pas avant). Le rapport dit alors
+    /// `atomic: false` et pourquoi.
+    pub no_transaction: bool,
+    /// Fondre les éventails, ou non, quoi que déclare le dialecte
+    /// (`DialectCapabilities::fanout`) : `Some(true)` pour un montage qui le
+    /// lève (`Catalog::set_fanout`), ou un témoin qui éprouve la traduction.
+    pub fanout: Option<bool>,
 }
 
 /// **Le rapport** : les lignes des sorties, et ce que le dialecte a fait du
@@ -174,6 +183,7 @@ pub fn run_plan(
     };
     let mut groupes: Vec<Group> = Vec::new();
     let mut groupe_de: Vec<Option<usize>> = vec![None; ordre.len()];
+    let eventails = !options.split && options.fanout.unwrap_or(dialect.capabilities().fanout);
     let sans_uuids = |i: usize| -> Vec<QueryParam> {
         let mut p = ordre[i].params.clone();
         p.retain(|q| q.name != "uuids");
@@ -188,7 +198,7 @@ pub fn run_plan(
 
         // Un éventail sans amont : les sœurs sans arête, même `$uuids`, même
         // forme de sortie.
-        if !options.split && entree.is_none() {
+        if eventails && entree.is_none() {
             if let (Some(cle), Some(forme)) = (uuids_of(&n.params), shape(&n.form)) {
                 let soeurs: Vec<usize> = (i..ordre.len())
                     .filter(|&j| groupe_de[j].is_none() && plan.input_of(&ordre[j].id).is_none())
@@ -253,7 +263,7 @@ pub fn run_plan(
         // Un éventail sous ce nœud : tous ses suivants, de même forme, et lui
         // ni sortie ni lu par personne d'autre.
         let suivants = suivants_de(&n.id);
-        if options.split || suivants.len() < 2 || plan.outputs.contains(&n.id) {
+        if !eventails || suivants.len() < 2 || plan.outputs.contains(&n.id) {
             continue;
         }
         let forme = shape(&ordre[suivants[0]].form);
@@ -290,6 +300,8 @@ pub fn run_plan(
     let charge = ordre.iter().any(|n| matches!(n.form, Form::Write(rag3weaver_ir::Write::Load { .. })));
     let (atomic, atomic_reason, envelopper) = if groupes.len() <= 1 {
         (true, None, false)
+    } else if options.no_transaction {
+        (false, Some("several statements, and the caller asked for no transaction"), false)
     } else if !capacites.transactions {
         (false, Some("several statements, and this dialect declares no transactions"), false)
     } else if charge {
@@ -564,7 +576,8 @@ mod tests {
     #[test]
     fn un_eventail_part_en_une_instruction_union_all() {
         let (conn, recu) = espion();
-        let r = run_plan(&Rag3dbDialect, &conn, &deux_degres(), PlanOptions::default()).unwrap();
+        let force = PlanOptions { fanout: Some(true), ..Default::default() };
+        let r = run_plan(&Rag3dbDialect, &conn, &deux_degres(), force).unwrap();
         assert_eq!(r.fused, vec![vec!["in".to_string(), "out".to_string()]]);
         assert_eq!(
             *recu.lock().unwrap(),
@@ -573,7 +586,7 @@ mod tests {
               UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})-[r:`uses`]->() RETURN 1 AS __branch, u AS c0, count(r) AS c1"]
         );
         let (conn, recu) = espion();
-        run_plan(&PostgresDialect, &conn, &deux_degres(), PlanOptions::default()).unwrap();
+        run_plan(&PostgresDialect, &conn, &deux_degres(), force).unwrap();
         assert_eq!(
             *recu.lock().unwrap(),
             ["SELECT 0 AS __branch, b0.* FROM (SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) \
@@ -589,9 +602,20 @@ mod tests {
         let mut p = deux_degres();
         p.nodes[1].params = vec![QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String("b".into())]))];
         let (conn, _) = espion();
-        let r = run_plan(&Rag3dbDialect, &conn, &p, PlanOptions::default()).unwrap();
+        let force = PlanOptions { fanout: Some(true), ..Default::default() };
+        let r = run_plan(&Rag3dbDialect, &conn, &p, force).unwrap();
         assert_eq!(r.fused.len(), 2, "deux listes différentes : {r:?}");
         let r = run_plan(&Rag3dbDialect, &conn, &deux_degres(), PlanOptions { split: true, ..Default::default() }).unwrap();
         assert_eq!(r.fused.len(), 2, "split : {r:?}");
+    }
+
+    #[test]
+    fn les_eventails_ne_se_fondent_que_si_on_les_leve() {
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            assert!(!d.capabilities().fanout, "{} : faux par défaut", d.name());
+            let (conn, _) = espion();
+            let r = run_plan(d, &conn, &deux_degres(), PlanOptions::default()).unwrap();
+            assert_eq!(r.fused.len(), 2, "{} : découpé par défaut, {r:?}", d.name());
+        }
     }
 }

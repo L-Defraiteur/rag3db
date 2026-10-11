@@ -141,14 +141,23 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
     if uuids.is_empty() {
         return Ok(out);
     }
+    // Un éventail de degrés sur la même liste : une instruction quand le
+    // dialecte sait le fondre (`crate::plan`), une par degré sinon.
     let liste = uuid_param(uuids);
+    let mut plan = rag3weaver_ir::Plan::new();
+    let mut k = 0usize;
     for rel in rels {
         for &direction in directions {
-            let q = catalog.dialect_arc().count(&degree_count(rel, direction)).map_err(|e| e.to_string())?;
-            let rows = catalog.execute_raw_with_params(&q, std::slice::from_ref(&liste)).map_err(|e| e.to_string())?;
-            for r in &rows.rows {
-                *out.entry(text(r.first())).or_default() += r.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
-            }
+            let id = format!("d{k}");
+            plan = plan.node(&id, rag3weaver_ir::Form::Count(degree_count(rel, direction)), vec![liste.clone()]).output(&id);
+            k += 1;
+        }
+    }
+    let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
+    let rapport = catalog.run_plan(&plan, options).map_err(|e| e.to_string())?;
+    for rows in rapport.outputs.values() {
+        for r in &rows.rows {
+            *out.entry(text(r.first())).or_default() += r.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         }
     }
     Ok(out)

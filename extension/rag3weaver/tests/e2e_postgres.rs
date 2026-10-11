@@ -1844,3 +1844,18 @@ fn le_chainage_un_eventail() {
     let (_garde, cat) = catalogue(8);
     crate::e2e_chainage::un_eventail(&crate::e2e_chainage::peupler(cat));
 }
+
+// ═══ Les éventails, mesurés sur PostgreSQL ══════════════════════════════════
+//
+// La mesure d'impact de bout en bout attend l'indexation du code sur
+// PostgreSQL (ticket 2026-10-11-l-indexation-du-code-envoie-du-cypher-brut) :
+// elle en sera le témoin. D'ici là, les éventails seuls.
+
+#[cfg(all(feature = "rag3db-native", feature = "code"))]
+#[test]
+#[ignore]
+fn mesure_eventails_sur_postgres() {
+    let (_garde, mut catalog) = catalogue(8);
+    let uuids = crate::e2e_mesure_impact::peupler_le_graphe(&mut catalog);
+    assert_eq!(crate::e2e_mesure_impact::mesurer_eventails("postgresql", &catalog, &uuids).len(), 4);
+}

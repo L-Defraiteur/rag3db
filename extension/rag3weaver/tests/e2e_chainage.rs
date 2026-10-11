@@ -302,7 +302,9 @@ pub(crate) fn une_lecture_apres_une_ecriture(s: &Scene) {
 
 /// **Un éventail** (page 04) : deux degrés de même forme, sur la même liste
 /// d'uuids de l'appelant, puis sous une même sélection ; chacun en une
-/// instruction, rangé par sortie, avec les lignes du repli.
+/// instruction, rangé par sortie, avec les lignes du repli. La fusion est
+/// levée ici (`fanout`) ; un dernier plan vérifie qu'elle ne l'est pas par
+/// défaut.
 #[test]
 #[ignore]
 fn un_eventail_part_en_une_instruction() {
@@ -310,6 +312,9 @@ fn un_eventail_part_en_une_instruction() {
 }
 
 pub(crate) fn un_eventail(s: &Scene) {
+    // Les éventails ne se fondent que levés (faux par défaut, page 04) : le
+    // témoin les lève pour éprouver la traduction.
+    let leve = PlanOptions { require_atomic: true, fanout: Some(true), ..Default::default() };
     let degre = |direction| Form::Count(Count::Edges { start: "Symbol".into(), relation: "uses".into(), direction });
     let degres = |r: &PlanReport, nom: &str| -> BTreeMap<String, i64> {
         r.outputs[nom].rows.iter().map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_i64().unwrap())).collect()
@@ -321,7 +326,7 @@ pub(crate) fn un_eventail(s: &Scene) {
         .node("sortants", degre(Direction::Outgoing), vec![uuids(&[&s.a, &s.b])])
         .output("entrants")
         .output("sortants");
-    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions { require_atomic: true, ..Default::default() });
+    let (r, decoupe) = deux_fois(&s.cat, &plan, leve);
     assert_eq!(r.fused, vec![vec!["entrants".to_string(), "sortants".to_string()]], "une instruction : {r:?}");
     assert_eq!(r.instructions, 1);
     assert_eq!(decoupe.instructions, 2);
@@ -337,8 +342,12 @@ pub(crate) fn un_eventail(s: &Scene) {
         .edge("sel", 1, "sortants")
         .output("entrants")
         .output("sortants");
-    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions { require_atomic: true, ..Default::default() });
+    let (r, decoupe) = deux_fois(&s.cat, &plan, leve);
     assert_eq!(r.fused, vec![vec!["sel".to_string(), "entrants".to_string(), "sortants".to_string()]], "une instruction : {r:?}");
     assert_eq!(decoupe.instructions, 3);
     assert_eq!(degres(&r, "entrants"), BTreeMap::from([(s.a.clone(), 2), (s.b.clone(), 1)]));
+
+    // Sans la lever : le dialecte ne fond pas d'éventail.
+    let r = s.cat.run_plan(&plan, PlanOptions::default()).unwrap();
+    assert_eq!(r.instructions, 3, "éventail non levé : {r:?}");
 }

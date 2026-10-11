@@ -187,12 +187,20 @@ pub struct DialectCapabilities {
     pub bulk_load: bool,
     /// Champs liste ou structure, et filtres imbriqués sur eux.
     pub structured_fields: bool,
+    /// **Fondre les éventails** ([`SchemaDialect::fuse_fanout`]) : des sœurs
+    /// en une instruction. Faux pour les deux dialectes : mesuré le
+    /// 11 octobre 2026, la fusion ne gagne de temps ni sur rag3db (base dans
+    /// le processus) ni sur un PostgreSQL local, et coûte 1 à 20 %. Elle ne
+    /// paie qu'avec un aller-retour cher : un montage PostgreSQL distant la
+    /// lève (`Catalog::set_fanout`), jamais sur la foi d'un calcul
+    /// (`docs/11-octobre-2026-embarquements/04-eventails.md`).
+    pub fanout: bool,
 }
 
 impl DialectCapabilities {
     /// Ce que suppose un dialecte qui ne se prononce pas : il parle Cypher
     /// (l'hypothèse de tout le code d'avant), et rien de plus.
-    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false };
+    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false, fanout: false };
 }
 
 pub trait SchemaDialect: Send + Sync {
@@ -1643,7 +1651,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true }
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -2438,7 +2446,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false, fanout: false }
     }
 
     // ── Les lots passent par JSON ────────────────────────────────────────

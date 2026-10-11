@@ -232,10 +232,20 @@ impl Moteur<'_> {
             return Ok(Vec::new());
         }
         let liste = CypherValue::List(depuis.iter().map(|u| CypherValue::String(u.clone())).collect());
+        // Un saut par relation, sur la même liste : un éventail, une
+        // instruction quand le dialecte sait le fondre (`crate::plan`).
+        let mut plan = rag3weaver_ir::Plan::new();
+        for (k, rel) in self.rels.iter().enumerate() {
+            let id = format!("r{k}");
+            plan = plan
+                .node(&id, rag3weaver_ir::Form::Hop(hop_of(self.cfg, rel, self.cfg.direction)), vec![QueryParam::new("uuids", liste.clone())])
+                .output(&id);
+        }
+        let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
+        let mut rapport = self.catalog.run_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
         let mut out = Vec::new();
-        for rel in &self.rels {
-            let q = self.catalog.dialect_arc().hop(&hop_of(self.cfg, rel, self.cfg.direction)).map_err(|e| format!("NeighborhoodNode: {e}"))?;
-            let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(Self::err)?;
+        for (k, rel) in self.rels.iter().enumerate() {
+            let rows = rapport.outputs.remove(&format!("r{k}")).unwrap_or_default();
             for r in &rows.rows {
                 let de = texte(r.first());
                 let mut m = reached_from(r, 1, self.cfg);
@@ -348,7 +358,16 @@ pub fn neighborhood_of(
 
     // Le départ et le premier saut : comme `usages`, en union avec le
     // rendez-vous (dans le sens entrant seulement : c'est un usage).
-    let usages = usages_of(catalog, &cfg.start, name, path_prefix)?;
+    // En sortant, seules les définitions servent : les usages (arêtes
+    // directes entrantes, rendez-vous) ne sont lus que dans le sens entrant.
+    // Les lignes rendues avant et après sont les mêmes (empreintes des
+    // lignes triées, `tests/e2e_mesure_impact.rs`, 11 octobre 2026).
+    let depart = if cfg.direction == Direction::Incoming {
+        std::borrow::Cow::Borrowed(&cfg.start)
+    } else {
+        std::borrow::Cow::Owned(UsagesConfig { direct: Vec::new(), used_by: None, ..cfg.start.clone() })
+    };
+    let usages = usages_of(catalog, &depart, name, path_prefix)?;
     let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
