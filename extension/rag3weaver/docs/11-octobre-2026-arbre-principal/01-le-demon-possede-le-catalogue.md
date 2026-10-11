@@ -9,19 +9,107 @@ directement. « Le serveur MCP ne doit être qu'une interface vers un démon. »
 catalogue, et donc l'indexation, la commande en fond et le réacteur. Les serveurs MCP, le chat,
 l'atelier et la CLI deviennent des clients minces, qui lui parlent tous de la même façon.
 
-*Les sections marquées « à écrire » ne sont pas encore rédigées. Chacune porte le nom de la session
-qui l'écrit.*
+*Chaque section porte le nom de la session qui l'a écrite.*
 
 ## 1. Ce que le démon tient aujourd'hui, et ce qu'il devra tenir
 
-*Arbre principal, à écrire.*
+*Arbre principal.*
+
+Trois processus tiennent aujourd'hui un morceau chacun. Aucun ne tient l'ensemble.
+
+| | Ce qu'il tient | Fil | Remarques |
+|---|---|---|---|
+| `rag3daemon` | **une base, rien d'autre** : une `DbConnection`, sans catalogue, sans plein texte, sans bus ni réacteur | HTTP/1.1 par tiny_http, JSON, une route `POST /cypher` (`daemon/db.rs:232`), plus `GET /sante` et `POST /quitter` | aucune clé : la confiance est celle de la boucle locale, `--exposer` pour en sortir |
+| `rag3weaver-backend serve` | **un backend entier** : la base en écriture, le catalogue, le réacteur monté, l'atelier et son flux | HTTP par tiny_http : les routes du manifeste, `/_atelier/*` (SSE `events`, `state`, `graph`, `chat`), `POST /arret` | boucle locale obligatoire ; c'est déjà presque le démon de C, pour un seul backend |
+| `rag3weaver-backend mcp` | **un backend entier, par session** : catalogue, plein texte, bus, réacteur, indexation, commandes en fond | stdio JSON-RPC (MCP) | avec `--demon`, seule la connexion part chez `rag3daemon` |
+
+Ce que montre la carte :
+
+- **`--demon` ne déporte que la connexion.** Le catalogue, lucivy, le bus d'événements, le
+  réacteur, l'indexation et la table des commandes en fond restent dans chaque processus MCP. Avec
+  N sessions sur une base, on a N réacteurs : chaque réaction s'exécute N fois. Chaque bus vit en
+  mémoire de son processus : une écriture de la session 1 n'atteint pas le réacteur de la
+  session 2. Enfin, `DaemonConnection` ne redéfinit pas `begin`/`commit`, donc les transactions de
+  deux clients passent par la même connexion du démon (lecture, à éprouver). `--demon` est faux par
+  construction, dès qu'un manifeste a des réactions (mémoire longue).
+- **Tout ce qui est long vit dans une table du processus.** L'indexation (`spawn_index`) jette sa
+  poignée : pas de registre, pas d'arrêt possible. Les commandes en fond sont dans `suivies()`, un
+  `HashMap` statique (`run_nodes.rs:126`). Les deux meurent avec le serveur qui les a lancées.
+  Depuis `8ab83640a`, une commande en fond écrit ses journaux directement en fichiers et survit à
+  son hôte. Sa poignée, elle, meurt encore avec lui.
+- **Le chat terminal parle un troisième dialecte** : il lance le backend en enfant et lui parle
+  en JSONL `{"op": describe|call|shutdown|…}` sur stdio (`bin/rag3weaver-chat.rs`, mode
+  positionnel de `rag3weaver-backend`).
+
+**Ce que le démon devra tenir** : tout ce que tient aujourd'hui un processus MCP, pour chaque
+backend, et une seule fois. Il portera les catalogues et leurs bases, le plein texte, le bus et le
+réacteur de chaque backend, les travaux longs (indexations, commandes en fond) avec leurs poignées
+et leurs journaux, l'atelier et ses flux. Il ne tiendra pas les modèles : le démon d'embarquement
+(`rag3weaver-embeddings`) reste à part, il est souvent sur une autre machine (luciepc), et le démon
+de C lui parle comme le fait aujourd'hui un serveur.
 
 ## 2. Le démon : un processus, ses backends, ses travaux
 
-*Arbre principal, à écrire.* Il y a un démon pour toutes les bases, et un backend se nomme par le
-chemin canonique de son manifeste. Les travaux longs (index, commande en fond) se lancent, se
-suivent et s'arrêtent. La reprise d'une indexation commence par la forme A : l'arrêt propre entre
-deux paquets en est la première marche.
+*Arbre principal.*
+
+**Le démon, c'est `serve`, pas `rag3daemon`.** Les deux parlent déjà HTTP par la même
+bibliothèque, mais `serve` héberge déjà un backend entier, ses routes, l'atelier, le flux SSE et le
+réacteur. Ce qui lui manque : héberger plusieurs backends, et porter les travaux. `rag3daemon`
+n'apporte que `POST /cypher`, qui devient une route du démon par backend, réservée à l'outillage
+(le banc, les sondes). Le binaire `rag3daemon` est retiré quand plus rien ne l'appelle, à la
+marche 3. La mémoire penchait pour l'inverse (`rag3daemon` qui apprend à charger des
+manifestes) ; on garde son idée, un seul processus et une seule adresse, portée par l'autre
+binaire, parce que c'est lui qui a déjà tout le reste.
+
+**Un démon pour toutes les bases.** Claude Code lance un processus MCP par session, et une
+utilisatrice a plusieurs bases : sa mémoire, plus une par dépôt de code. Le démon a donc une seule
+adresse, et chaque client nomme son backend. Un backend se nomme par le **chemin canonique de son
+manifeste** : deux copies de `memory` s'appellent toutes deux « memory », un chemin est unique. Le
+démon charge un backend à la première demande qui le nomme, et le garde.
+
+- **Un écrivain par base**, naturellement : il n'y a plus qu'un processus. Le verrou de fichier
+  du moteur (`F_WRLCK`) reste la garde contre un second démon ou un outil direct.
+- **Le prix, à dire tel quel** : un démon qui tombe emporte toutes les bases. Et le tampon du
+  moteur se compte **par base** : la règle d'aujourd'hui (la moitié de la mémoire, au plus 8 Gio)
+  vaut pour une seule base. Avec trois bases ouvertes, il faut un budget de démon partagé entre les
+  backends. C'est un point dur de la marche 1, à mesurer.
+
+**Les travaux.** Un travail est une indexation ou une commande en fond. Le démon les tient dans un
+registre : un identifiant, un genre, un journal en fichier, un état (en cours, terminé, échoué,
+arrêté), le backend qui l'a lancé.
+
+- `lancer` rend aussitôt l'identifiant et le chemin du journal, comme `index` aujourd'hui.
+- `suivre` rend l'état et la fin du journal.
+- `arrêter` demande l'arrêt.
+- Un client qui part n'emporte rien : le travail appartient au démon.
+
+**La reprise d'une indexation : la forme A en est la première marche.**
+
+- **L'arrêt propre.** Un drapeau d'arrêt se lit entre deux paquets. L'endroit est la frontière
+  transactionnelle de la transaction par paquet : en tête de la boucle des paquets
+  (`code_sync.rs:687`), ou juste après `terminer`. Il se lit aussi entre deux passes de vecteurs
+  (`index_nodes.rs:356`). L'arrêt referme la session de synchronisation par `abort_snapshot`, et
+  le travail est marqué « arrêté au paquet N ».
+- **La reprise.** Relancer `index` reprend à partir de là. Les paquets validés restent, et le
+  journal de la passe dit ce qui reste à faire.
+- **Un démon tué** (SIGKILL, plantage) laisse la session ouverte. Aujourd'hui, la relance est alors
+  refusée sans `takeover` (ticket `2026-10-04-reprise-apres-arret-exige-takeover.md`). Sous C, le
+  démon est le seul propriétaire possible de la session : à son redémarrage, il peut la reprendre
+  lui-même (`takeover`), en le disant dans le journal du travail. Le refus actuel servait à
+  protéger un autre processus vivant, et ce cas n'existe plus.
+- **L'arrêt du démon** (`POST /arret`) arrête d'abord ses travaux au prochain paquet, puis ferme
+  les bases proprement, avec leur point de reprise, et sort.
+
+**La commande en fond** passe telle quelle dans le registre. Ses journaux sont déjà des fichiers
+plafonnés (`8ab83640a`), et la portée du run (`run_scope`, tuée en fin de run) reste juste : le
+run aussi appartient désormais au démon.
+
+**Rouvrir un backend sans toucher aux autres** (question de la mémoire au §3) : oui. Chaque
+backend a sa propre instance de base, ouverte par son chemin (registre `OPEN_FOR_WRITING`,
+`rag3db_connection.rs:908`). Rouvrir un backend, c'est arrêter son réacteur et ses travaux au
+prochain paquet, fermer sa base, la rouvrir et remonter ses réactions ; les autres backends ne
+voient rien. `mustReopen` devient donc l'erreur transitoire que décrit le §3. Le seul lien
+entre les backends est le budget de tampon partagé.
 
 ## 3. Le client mince, et une seule forme sur le fil
 
@@ -188,16 +276,110 @@ messages.
 
 ## 5. Le cycle de vie du démon
 
-*Arbre principal, à écrire.* Qui le lance, qui l'arrête, le paquet npm, un démon qui tombe et ce
-qu'il emporte avec lui.
+*Arbre principal.*
+
+- **Qui le lance** : le premier client, par `Serveur::assurer` (§4). Il n'y a pas de service système
+  par défaut. Une unité `systemd --user` (ou son équivalent macOS) peut venir plus tard, installée
+  à la demande par le paquet. Elle n'est pas nécessaire pour que tout marche.
+- **Où il écrit** : son journal va dans `~/.local/state/rag3weaver/daemon.log`, plus dans
+  `$TMPDIR`. Sur ce poste, `/tmp` est de la mémoire vive, et le journal d'un démon qui vit des
+  jours doit survivre à un redémarrage. `daemon.json` (§4) est écrit **après** que le port est
+  pris, avec l'adresse réellement servie.
+- **Qui l'arrête** : jamais un client qui part. `POST /arret`, ou SIGTERM, qui revient au même :
+  les travaux s'arrêtent au prochain paquet, les réacteurs s'arrêtent, les bases se ferment avec
+  leur point de reprise, `daemon.json` est retiré, puis le démon sort. Un démon sans client reste
+  en vie (`Fin::Laisser`, comme aujourd'hui).
+- **Un binaire plus neuf que le démon qui tourne** : `GET /sante` dit déjà l'empreinte de
+  l'exécutable (`chemin@mtime`) ; on y ajoute l'identifiant de bâti du moteur. Un client plus neuf
+  qui trouve un démon périmé fait deux choses selon le cas :
+  - si aucun travail ne tourne, il lui demande `/arret` et le relance ;
+  - si un travail tourne, il garde l'ancien démon et le dit (« démon périmé, N travaux en
+    cours »), jamais en silence. C'est le mécanisme du démon d'embarquement (`est_a_jour_avec`,
+    `quitter`), étendu aux travaux.
+- **Un démon qui tombe** emporte toutes les bases ouvertes. L'appel suivant d'un client le relance
+  (§4). Les backends se rouvrent à leur premier appel, et les indexations interrompues se reprennent
+  d'elles-mêmes (§2, `takeover` par le seul propriétaire possible). Chaque base est rejouée par son
+  journal comme après tout arrêt brutal. Ce qui ne revient pas : un appel en vol (erreur transitoire
+  nommée) et une commande en fond, que sa mort tue avec son groupe de processus.
+- **L'adresse par défaut** (question de la mémoire au §4) : `127.0.0.1:7970`. Les ports 7979 à 7981
+  servent aux tunnels d'embarquement de ce poste, 7878 à 7880 aux services de luciepc, et un démon
+  de C ne doit pas croiser ces adresses. `daemon.json` reste la vérité : `--daemon <adresse>`
+  l'emporte, et le port par défaut ne sert qu'au premier lancement.
+- **`assurer` peut-il annoncer une adresse et en servir une autre** (question de la mémoire au §3,
+  l'énigme 3) ? Pas lu à fond. Le démon de C la rend sans objet : il écrit lui-même l'adresse
+  servie et son pid dans `daemon.json` après avoir pris le port, et `/sante` rend le même pid.
+  Un client qui voit deux pids différents sait qu'il ne parle pas au démon annoncé, et le dit.
+  Le témoin vient à la marche 4.
 
 ## 6. Sur le fil : transport, format, clés
 
-*Les deux sessions, à écrire.* L'exposition par clés se fait à la frontière du démon.
+*Arbre principal, à relire par la mémoire longue.*
+
+**Transport** : HTTP/1.1 en JSON, sur la boucle locale. C'est ce que parlent déjà les deux démons
+(tiny_http), et les flux d'événements y sont déjà en SSE. Une socket unix serait plus étroite, mais
+elle ne passe pas sous Windows (le paquet npm vise trois plateformes) et ne s'ouvre pas depuis la
+page de l'atelier. Elle peut venir plus tard comme second transport, avec les mêmes messages.
+
+**Les routes** : les messages du protocole `op` (§3), une route chacun. Le backend est nommé dans
+le corps, par le chemin canonique de son manifeste. `open` rend aussi un identifiant court (une
+empreinte du chemin), utilisable dans les chemins d'URL.
+
+| route | message | notes |
+|---|---|---|
+| `POST /open` | `{manifest, scope?}` | idempotent ; rend `describe` + réactions montées + `id` |
+| `POST /describe` | `{manifest}` | |
+| `POST /call` | `{manifest, name, arguments}` | `{ok, result}`, `{ok:false, error}`, erreur transitoire nommée |
+| `GET /events/{id}` | SSE | le flux de l'atelier, généralisé, par backend |
+| `POST /travaux` | `{manifest, genre, …}` | rend `{travail, journal}` ; `index` passe par là |
+| `GET /travaux/{t}` | | état et fin du journal |
+| `POST /travaux/{t}/arreter` | | arrêt au prochain paquet |
+| `POST /cypher/{id}` | `{query, params}` | l'ancienne route de `rag3daemon`, réservée à l'outillage |
+| `GET /m/{id}/…` | | les routes déclarées au manifeste (vues HTML, JSON), sous l'identifiant de leur backend |
+| `GET /_atelier…` | | l'atelier, qui choisit son backend |
+| `GET /sante`, `POST /arret` | | la plomberie d'aujourd'hui |
+
+**Deux choses différentes, à ne pas confondre** :
+
+- **Le jeton dit qui parle.** Sur la boucle locale, tout processus de la machine atteint le port,
+  quel que soit l'utilisateur qui l'a lancé. Aujourd'hui, `rag3daemon` exécute du Cypher pour qui
+  atteint son port (issue `29-08-2026/05`). Proposition : le démon écrit un jeton aléatoire dans
+  `daemon.json`, en mode 0600, et l'exige sur chaque requête (`Authorization: Bearer`). On obtient
+  la frontière d'une socket unix (le même utilisateur), sans la socket. Un client le lit en même
+  temps que l'adresse.
+- **Les clés disent ce qui est exposé.** `--keys` existe et ne filtre rien (`mcp.rs:193`).
+  `exposure`, une expression sur des clés par déclaration et par cellule, n'existe que dans les
+  pages. Sous C, le filtre se fait **à la frontière du démon** : le client envoie ses clés avec
+  `open`, et le démon ne décrit ni n'exécute que ce que ces clés exposent. Le client mince ne
+  filtre rien lui-même : un client modifié ne doit rien gagner.
+
+Sortir de la boucle locale (`--exposer`) exige le jeton et des clés. C'est la marche 6, après le
+reste.
 
 ## 7. Les marches, testables une à une, et leur coût
 
-*Les deux sessions, à écrire.*
+*Les deux sessions.*
+
+**Côté démon, les marches de l'arbre principal.** Elles sont testables une à une. Le coût est
+compté en jours d'agent (un jour d'agent vaut environ une heure et demie réelle) : c'est un ordre
+de grandeur relatif, pas un délai.
+
+| marche | ce qu'elle fait | témoin | coût |
+|---|---|---|---|
+| **0. L'arrêt propre entre deux paquets** (forme A, dans le serveur d'aujourd'hui) | un drapeau lu à la frontière du paquet ; `abort_snapshot` ; le travail « arrêté au paquet N » ; `index` relancé reprend | tube fermé au paquet 2, puis reprise aux comptes d'une passe sans arrêt (sur le modèle d'`e2e_tx_par_paquet_arret`) | 1 à 2 |
+| **1. `serve` hôte de plusieurs backends** | registre par chemin canonique, `open`/`describe`/`call`/`events`, réouverture d'un seul backend, budget de tampon partagé | deux backends dans un processus ; la réouverture de l'un sans l'autre ; parité avec le mode positionnel | 2 |
+| **2. Les travaux du démon** | registre ; `index` et la commande en fond ; lancer, suivre, arrêter ; reprise au redémarrage par `takeover` du propriétaire | le client part, l'index finit ; démon arrêté au paquet N puis relancé, la reprise rend les mêmes comptes ; démon tué, il redémarre sans refus | 2 |
+| **3. Le client MCP** (mémoire longue) | `impl Hote` par le fil | ceux du côté client, ci-dessus | 1 à 2 |
+| **4. Le cycle de vie** | `daemon.json` (adresse, pid, jeton, bâti) ; `assurer` qui vérifie le pid ; démon périmé avec ou sans travaux | l'énigme 3 retournée ; remplacement refusé pendant un travail | 1 |
+| **5. Le chat et l'atelier sur le démon** | les mêmes messages ; l'atelier qui choisit son backend | le chat rejoué contre le démon ; le flux d'un backend ne reçoit pas les événements d'un autre | 1 |
+| **6. Jeton et clés à la frontière** | le jeton sur chaque requête ; `exposure` filtrée dans le démon | une requête sans jeton est refusée ; une clé ne voit que ce qu'elle expose | 1 à 2 |
+| **7. Le retrait** | `--demon` (l'ancien sens), le binaire `rag3daemon`, `DaemonConnection` sauf pour l'outillage | la batterie, sans eux | ½ |
+
+En tout, 10 à 13 jours d'agent pour l'arbre principal et la mémoire longue. C'est la fourchette de
+la page du 10 (« une à deux semaines »). Le paquet npm qui installe et lance le démon est le travail
+de l'optimiseur : il vient après la marche 4.
+
+**La marche 0 sert tout de suite, sans attendre le reste** : elle règle le cas mesuré (tube fermé,
+travail perdu), et sa reprise entre deux paquets passe telle quelle dans la marche 2.
 
 **Côté client, les témoins que la mémoire longue propose** (le coût en passes
 viendra avec les marches de l'arbre principal) :
@@ -220,4 +402,17 @@ puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
 
 ## 8. Ce qui reste à Lucie
 
-*À écrire en dernier.*
+*Premier jet de l'arbre principal, à compléter par la mémoire longue.*
+
+1. **`serve` devient le démon**, et `rag3daemon` est retiré (§2). L'inverse est possible, mais il
+   referait dans `rag3daemon` tout ce que `serve` a déjà.
+2. **Un démon pour toutes les bases** (§2). Le prix : un démon qui tombe emporte tout, et le tampon
+   du moteur se partage entre les backends.
+3. **Lancé par le premier client**, sans service système par défaut (§5). Ou bien une unité
+   installée par le paquet.
+4. **L'adresse par défaut `127.0.0.1:7970`**, avec `daemon.json` (§4, §5).
+5. **Un jeton local exigé sur chaque requête**, en plus des clés (§6).
+6. **Le client sans démon** : un seul outil, `etat_du_demon`, ou un refus d'`initialize` (§4).
+7. **Le mode positionnel reste propriétaire de sa base** pour le constructeur de decks (§4).
+8. **Le client MCP** : un binaire à part, ou un rôle du même binaire (§3).
+9. **L'ordre** : la marche 0 d'abord, puis 1, 2, 3 ; le paquet npm après la marche 4 (§7).
