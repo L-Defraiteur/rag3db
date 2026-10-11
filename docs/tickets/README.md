@@ -64,13 +64,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (25)
+### Ouverts — produit (26)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le plein texte d'une fiche écrite dans une autre cellule tombe dans l'index de la cellule du catalogue](2026-10-11-plein-texte-d-une-autre-cellule-dans-l-index-du-catalogue.md) | ouvert — fermé par le pas b de la marche 1 bis | réponse fausse | sous l'hôte du démon (deux cellules) | oui |
 | [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | partiel : la perte est fermée (refus nommé) ; l'identité par cellule reste, variante (a) tranchée | perte | oui (deux cellules, la même identité) | oui |
 | [`add_ref` et `create_ref_type` jettent le rapport de leur ingestion](2026-10-11-add-ref-et-create-ref-type-jettent-le-rapport-d-ingestion.md) | ouvert (lecture) | réponse fausse (`executed: true` sur une écriture partielle) | oui (gabarit `memory`) | oui (et seulement) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
