@@ -457,3 +457,21 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
   3. **6 s pour un fichier, c'est long** (Lucie) : à mesurer où passe le temps (montre, extraction,
      écriture en base, relâchement du catalogue) — une édition localisée devrait se voir en moins
      d'une seconde.
+
+### 11 oct., 20 h 28 (heure luciepc) — cœur C++ — le signal lexical seul sur un fichier frais, hôte relevé et sans réindexation
+
+- **La question posée** : la même qu'à 20 h 16, l'hôte relevé par codeparsers à 20 h 28 (pid 24698,
+  « index servi tel quel, pas de réindexation entière tant que tu travailles »).
+- **L'outil essayé** : `test/essai_bm25_frais.cpp` (mot rare `zorglubetteFraicheur`) écrit à
+  **20:28:35.6** ; aussitôt `search_code {query: zorglubetteFraicheur, mode: indexed, options:
+  {signals: [bm25], limit: 3}}` et `usages {name: zorglubetteFraicheur}`, en parallèle.
+- **Ce qu'il a rendu** : `search_code` — **le fichier frais, par bm25 seul** (★ 34,93 la fonction,
+  17,91 l'espace de noms, « · bm25 »), sans attendre de vecteur ; `usages` — la définition
+  (`:5`), avec l'en-tête neuf « index : /home/lucied/git_workspaces/rag3db @ ab95c3a2d, indexé à
+  l'instant » (le manque n° 1 de 19 h 05, comblé par G). Les deux réponses avant 20:29:16, soit
+  **au plus 40 s** après l'écriture — borne grossière : les deux appels et la lecture de l'heure
+  ont couru en parallèle, la mesure de 20 h 10 (< 6 s) reste la plus serrée.
+- **Ce que j'ai dû faire à côté** : rien ; retirer le fichier.
+- **Ce qui manquait** : **l'heure de la réponse dans la réponse** (« servi à 20:28:4x ») : sans
+  elle, la borne dépend de ma montre et de l'ordre des appels ; et le n° 3 de 20 h 16 (où passent
+  les secondes) reste à mesurer côté hôte.
