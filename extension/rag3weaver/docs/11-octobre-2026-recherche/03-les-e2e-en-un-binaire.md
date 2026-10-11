@@ -213,7 +213,11 @@ scripts/check_features.sh
 
 Elle recompte d'abord l'index des tickets (`scripts/check_tickets.py` : chaque en-tête de
 table compte ses lignes, chaque ligne mène à un fichier, chaque fichier a sa ligne ; refus nommé
-sinon), puis écrit VERT ou ROUGE par jeu, et rend 1 dès qu'un contrôle est rouge. Un jeu
+sinon), puis écrit VERT ou ROUGE par jeu, et rend 1 dès qu'un contrôle est rouge. **Sa
+dernière ligne conclut** : `CHECK_FEATURES VERT n/n`, ou `CHECK_FEATURES ROUGE <jeux>`. Une
+commande de push lit cette ligne et le code de sortie (sans tube : écrire avant de filtrer),
+jamais un compte de lignes VERT. Le 11 octobre au soir, un script qui attendait « 4 VERT » a
+laissé passer quatre verts et un rouge, quand les jeux sont passés à cinq. Un jeu
 seul se vérifie par `cargo check --tests --features <jeu>`. À jouer avant tout
 hash qui touche `tests/` ou les features de `Cargo.toml`. Un jeu nouveau,
 employé par une session ou un script, s'ajoute au tableau **et** au script.

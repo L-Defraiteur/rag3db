@@ -27,15 +27,29 @@ ICI="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ICI/scripts/garde_target.sh"
 garder_le_target "${CARGO_TARGET_DIR:-$ICI/target}" "$ICI" || exit 2
 echec=0
+rouges=()
 # L'index des tickets, recompté sur les fichiers : ses en-têtes ne se
 # corrigent plus à la main.
-python3 "$ICI/scripts/check_tickets.py" "$ICI/../.." || echec=1
+if ! python3 "$ICI/scripts/check_tickets.py" "$ICI/../.."; then
+  echec=1
+  rouges+=("tickets")
+fi
 for jeu in "${JEUX[@]}"; do
   if timeout 1800 cargo check --tests --features "$jeu" > /dev/null 2>&1; then
     echo "VERT  $jeu"
   else
     echo "ROUGE $jeu   (cargo check --tests --features $jeu)"
     echec=1
+    rouges+=("$jeu")
   fi
 done
+# **La conclusion en une ligne, la dernière** : une commande de push lit
+# celle-ci et le code de sortie, jamais un compte de lignes VERT (le nombre de
+# jeux change ; quatre verts et un rouge sont passés pour un vert le
+# 11 octobre au soir).
+if [ $echec -eq 0 ]; then
+  echo "CHECK_FEATURES VERT ${#JEUX[@]}/${#JEUX[@]}"
+else
+  echo "CHECK_FEATURES ROUGE ${rouges[*]}"
+fi
 exit $echec
