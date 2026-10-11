@@ -53,8 +53,14 @@ void NodeBatchInsert::acquireLocksBeforeExecution(ExecutionContext* context) {
     if (!transaction->usesLocks()) {
         return;
     }
-    const auto nodeTableEntry = Catalog::Get(*clientContext)
-                                    ->getTableCatalogEntry(transaction, info->tableName)
+    auto catalog = Catalog::Get(*clientContext);
+    // CREATE TABLE … AS : la table est créée par ce même plan, avant le COPY — elle n'est pas
+    // encore au catalogue ici. Son identifiant est neuf, aucune autre transaction ne peut tenir
+    // son index : la prise se fait dans initGlobalStateInternal, où elle n'attend jamais.
+    if (!catalog->containsTable(transaction, info->tableName)) {
+        return;
+    }
+    const auto nodeTableEntry = catalog->getTableCatalogEntry(transaction, info->tableName)
                                     ->ptrCast<NodeTableCatalogEntry>();
     transaction->acquireLock(transaction::LockResource::index(nodeTableEntry->getTableID()),
         transaction::LockMode::EXCLUSIVE);
@@ -66,6 +72,12 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     auto transaction = Transaction::Get(*clientContext);
     auto nodeTableEntry = catalog->getTableCatalogEntry(transaction, info->tableName)
                               ->ptrCast<NodeTableCatalogEntry>();
+    if (transaction->usesLocks()) {
+        // Déjà tenu depuis acquireLocksBeforeExecution (la reprise d'un verrou tenu est sans
+        // effet) — sauf pour la table que ce plan vient de créer, libre par construction.
+        transaction->acquireLock(transaction::LockResource::index(nodeTableEntry->getTableID()),
+            transaction::LockMode::EXCLUSIVE);
+    }
     auto nodeTable = StorageManager::Get(*clientContext)->getTable(nodeTableEntry->getTableID());
     const auto& pkDefinition = nodeTableEntry->getPrimaryKeyDefinition();
     // Init info
