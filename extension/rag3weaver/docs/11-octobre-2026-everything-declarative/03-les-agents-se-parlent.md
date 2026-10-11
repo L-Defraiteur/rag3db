@@ -1,7 +1,8 @@
 # Un agent est un graphe, un graphe est un outil, les agents se parlent
 
 11 octobre 2026, session « everything declarative ». Page de conception avant
-le premier lot de code ; rien n'est codé. Pour l'orchestration et pour Lucie.
+le premier lot de code ; rien n'est codé. Reprise le même jour : les choix
+pris (§3), la boucle comme graphe à ports et les flux (§4), les lots revus (§5). Pour l'orchestration et pour Lucie.
 
 ## 0. La demande
 
@@ -101,12 +102,11 @@ interceptés par nom :
 
 ### 2.4 Rester à l'écoute
 
-Un agent lancé en fond ne meurt pas à la fin de son premier tour : un
-réacteur sur sa boîte le réveille à chaque message, avec son historique.
-Il s'arrête quand il le dit (une pause de genre `finished`, ou `leave`),
-quand sa durée déclarée est passée, ou à l'arrêt de l'hôte — jamais à la fin
-du tour de son appelant (l'appelant peut être un chat, dont chaque tour est
-un run).
+Un agent lancé en fond ne meurt pas à la fin de son premier tour : il est
+réveillé à chaque message de sa boîte, avec son historique. Il vit **tant
+qu'un de ses flux d'entrée est ouvert** (§4.5) — jamais seulement le temps du
+tour de son appelant (l'appelant peut être un chat, dont chaque tour est un
+run).
 
 ### 2.5 Un annuaire des participants
 
@@ -132,35 +132,171 @@ relayée par toute la chaîne d'outils. La page vivante est à moi ; le chat
 (`chat.rs`), le démon et le serveur MCP sont à l'arbre principal : je lui
 propose l'interface, je ne touche pas à son fil.
 
-## 3. Quatre choix
+## 3. Les choix pris (orchestration, 11 octobre — renversables par Lucie)
 
-1. **Le mode « en fond »** : A (recommandé) un verbe générique `spawn(tool,
-   arguments, message)` ; B un paramètre réservé `background` ajouté au
-   schéma de chaque outil qui le permet (le précédent de `run.mmd`). A ne
-   touche aucun schéma et met la politique au même endroit pour tous.
-2. **L'adressage** : A (recommandé) un annuaire de session, nom → run ; B
-   des run ids seulement (ce que font les tests aujourd'hui, nom = run id).
-3. **La vie d'un agent lancé** : A (recommandé) jusqu'à sa pause `finished`
-   ou `leave`, sa durée déclarée, ou l'arrêt de l'hôte ; B lié au run de
-   l'appelant (tué à sa fin, comme une commande en fond).
-4. **Où se déclare un agent** : A (recommandé) un `.mmd` avec un `AgentNode`,
-   attaché comme outil ; B une section `agents` au manifeste, projetée en
-   outils.
+1. **Le mode « en fond »** : un verbe générique `spawn(tool, arguments,
+   message)`, pas un paramètre ajouté au schéma de chaque outil.
+2. **L'adressage** : un annuaire de session (nom → run, participants d'un
+   fil), pas des run ids seuls.
+3. **La vie d'un agent lancé** : indépendante du run de l'appelant — et, avec
+   les flux (§4), réduite à une règle : **il vit tant qu'un de ses flux
+   d'entrée est ouvert**.
+4. **Où se déclare un agent** : un `.mmd` qui contient un `AgentNode`, attaché
+   comme outil ; pas de section `agents`.
 
-## 4. Les lots
+## 4. La boucle est un graphe à ports, et les ports portent des flux
 
-Chacun : témoin rouge d'abord (faux modèle, `MockLlm`/`CallbackLlm`), tests
-du changement, fusion en avance rapide, worktree effacé. Un vrai modèle
-seulement pour l'expérience finale.
+Lucie, le 11 octobre : « j'aimerais à tout moment pouvoir faire un appel
+structuré, par exemple selon ce qu'a dit l'user une classification, routing
+vers autre agent, ou action spécifique, que ça se voie au possible dans un
+graph […] que tout soit traduisible niveau graph de l'agent. Comme un conv
+flow mais en beaucoup plus permissif, en synergie avec notre moteur. » Les
+cas qu'elle cite sont **des exemples** : le mécanisme est **n'importe quel
+sous-graphe sur n'importe quel port**. Et sa règle de méthode : « complexité
+on s'en fout, jamais un argument, l'important c'est que ce soit au top ».
 
-| Lot | Ce qu'il pose | Témoin rouge | Fichiers (et relecture) |
-|---|---|---|---|
-| 1 | `send` réservé ; l'annuaire ; le fil dit dans le tour reçu | deux agents : c'est l'**agent** qui répond à l'autre par `send`, pas le test | `agent.rs`, `postures.rs` voisin (relu par la recherche) |
-| 2 | `with_parent` ; `AgentNode` ; un agent appelé comme un outil qui attend | un agent appelle l'outil d'un autre et reçoit sa réponse ; `CHILD_OF` en trace | `agent.rs`, `dataflow/` (relu par la recherche) |
-| 3 | `spawn` ; rester à l'écoute ; les bornes au manifeste | un agent en lance un autre en fond, reçoit sa réponse dans sa boîte ; la durée l'arrête | `agent.rs`, `backend.rs`, `dataflow/reactor.rs` (relu) |
-| 4 | la boîte de session dans la page vivante ; l'interface proposée au chat et au MCP | un pair écrit au chat de l'atelier, le tour suivant le lit | `atelier.rs` ; `chat.rs`/`harness.rs` proposés à l'arbre principal |
-| 5 | l'expérience à vrai modèle : deux agents du jouet qui se parlent pour une tâche | — (expérience, gardée avec son artefact) | — |
+### 4.1 Un seul mécanisme : le flux
+
+- **Tout port porte un flux** : des éléments dans le temps, et une fin. Une
+  valeur est un flux d'un seul élément, marqué comme tel à la vérification du
+  graphe — pas un second type de port.
+- **Un flux peut finir vide.** C'est ce qui manque aujourd'hui au moteur pour
+  brancher : une branche non prise y est une entrée requise qui ne reçoit
+  jamais rien, et le graphe entier finit en « deadlock » (`runtime.rs`, pas de
+  statut « sauté » dans `report.rs`). Avec les flux, une branche non prise
+  reçoit un flux fini vide ; le nœud qu'elle alimente est **sauté**, et le
+  rapport d'exécution le dit (`NodeStatus::Skipped`).
+- **Un nœud dit sa posture** : *élément par élément* (il voit chaque élément
+  à son arrivée — un message d'un pair, un jeton) ou *sur le flux complété* (il
+  voit le tout — le message entier, jamais des jetons). La vérification commune
+  du graphe **refuse un nœud « complet » branché sur un flux sans fin**.
+- **L'exécuteur** : aujourd'hui, un nœud tourne une fois, ses sorties sont
+  rangées à sa fin, les nœuds vont par niveaux topologiques
+  (`runtime.rs`, `run_level`, `run_level_async`). Les précédents de flux sont
+  hors du moteur de graphes : le puits de jetons (`TokenSink`) et la boîte
+  lue entre deux tours. Il faut un exécuteur qui lance les nœuds d'un graphe
+  ensemble et les relie par des canaux bornés, et dont **l'exécution d'un
+  graphe de valeurs seules redonne exactement l'exécution d'aujourd'hui** :
+  c'est la condition de tout le reste (toute la lib verte, les points de
+  reprise, le rapport, l'annulation).
+- **Pas de cycle dans un graphe** : « le retour au début » d'une boucle
+  d'agent n'est pas une arête qui remonte. Le tour est le graphe ; la boucle
+  est la répétition du tour à sa frontière (la règle d'août : « une boucle
+  réagit à sa frontière, pas au milieu »).
+
+### 4.2 Le graphe par défaut d'un agent
+
+L'`AgentNode` est la forme compacte d'un graphe de tour, à ports nommés :
+
+| port | flux | ce qui y passe |
+|---|---|---|
+| `user_in` | de un | le message de la personne |
+| `peer_in` | ouvert | les messages des pairs, avec leur fil |
+| `tool_result_in` | ouvert (un outil synchrone : de un) | les résultats d'outils, ceux des outils en fond compris |
+| `model_out` | de jetons, qui se complète en message | la réponse du modèle avant tout aiguillage |
+| `tool_call_out` | un par appel | les appels d'outils annoncés |
+| `answer_out` | jetons pour l'écran, valeur pour la trace | la réponse finale |
+| `turn_end` | de un | la fin du tour : continuer ou s'arrêter |
+
+**Sans rien de branché, il se comporte exactement comme `agent.rs`
+aujourd'hui** : la boîte lue avant chaque appel au modèle, les outils réservés
+interceptés, les outils en fond, les bornes, l'annulation, le contrôle de
+complétion.
+
+**Comment, dans l'ordre** : d'abord, la boucle d'`agent.rs` reste le moteur
+et chaque port y devient un **point d'accroche** où un sous-graphe déclaré est
+exécuté (les endroits sont relevés au `02`, ligne par ligne : la lecture de la
+boîte pour `peer_in`, après le rattrapage des appels pour `model_out`, la
+branche finale pour `answer_out`, autour de l'interception des outils réservés
+pour `tool_call_out`, avant l'ajout du résultat pour `tool_result_in`, la fin
+d'itération pour `turn_end`). Ensuite, quand l'exécuteur de flux tient la
+parité, le tour lui-même devient l'exécution du graphe par défaut, et le code
+de la boucle n'est plus que son repli. **Le témoin de parité** est le même aux
+deux étapes : les tests de la boucle (`a_plain_answer_ends_the_loop`,
+`parallel_calls_are_all_announced_before_all_results`,
+`an_async_tool_answers_with_a_handle_and_the_result_comes_later`,
+`an_interruption_mid_call_leaves_a_replayable_history`, les pauses, les bornes,
+l'absorption…) passent à l'identique, et un scénario à faux modèle donne le
+même historique, les mêmes appels, et **les mêmes jetons dans le même ordre**
+sur `model_out` — le premier cas de flux, avant toute généralisation.
+
+Une contrainte du protocole, dite : un appel annoncé reçoit toujours un
+résultat. Un sous-graphe qui retient un appel en fabrique un (comme le fait
+déjà `close_orphan_tool_calls`).
+
+### 4.3 Le plus petit jeu de nœuds
+
+Les exemples de Lucie (classer un message, aiguiller vers un agent ou une
+action, transmettre ou retenir le message d'un pair, faire quelque chose de
+plus après un outil ou un agent) se composent de **deux nœuds neufs** :
+
+- **`decide`** : un appel structuré au modèle — le texte du flux complété, N
+  étiquettes — qui rend une étiquette (et sa probabilité quand le fournisseur
+  la donne). Deux voies, choisies par ce que le modèle déclaré sait faire :
+  le `Decider` (déjà au crate, une probabilité par option en un jeton, servi
+  par llama-server, sans aucun nœud client aujourd'hui) ; la sortie structurée
+  (`GenOptions::with_response_format`, schéma à `enum`, honorée par le client
+  compatible OpenAI, donc Vertex et llama-server). Le décodage contraint n'existe
+  pas encore : la vérification après coup, comme `BadChoice`, refuse une
+  étiquette hors liste.
+- **`route`** : un flux d'entrée et une clé (une étiquette, un champ) ; il
+  transmet chaque élément sur le port de sortie de cette clé et **finit les
+  autres vides**.
+
+Et ce qui n'est pas un nœud de plus :
+
+- **`filter` est un `route`** dont une sortie ne mène nulle part (retenir) ;
+  réécrire un message est un nœud scripté ou un appel au modèle posé avant.
+- **`act` est l'appel d'outil qui existe** : un graphe-outil posé comme nœud
+  (`GraphTool::as_node_factory`), ou `send` / `spawn` posés comme nœuds (§4.5).
+- Ce que deux nœuds ne disent pas, un **nœud scripté TypeScript** le dit.
+
+Pas d'états : un flot de conversation classique fige des états, ici il n'y a
+que des ports, des flux et des sous-graphes.
+
+### 4.4 La synergie avec le moteur
+
+Chaque décision, message et aiguillage retombe en base avec la trace (`Run`,
+`Message`, `Conversation`, `Participant`, `CHILD_OF`) ; un `decide` ou un
+`route` peut lire le graphe par l'IR (`Hop`, `Select`) avant de choisir ; les
+fiches mémoire et le catalogue sont dans la même base que l'agent.
+Configuration et exécution sont le même objet : tout se rejoue et se mesure
+(« un nœud de décision, pas une boucle d'agent : elles se mesurent »).
+
+### 4.5 Ce que les flux donnent au reste
+
+- `send` et `spawn` sont des verbes que le modèle choisit **et** des nœuds
+  qu'on pose sur un port : le déclaré et le choisi, un seul mécanisme.
+- **`interrupt`** = fermer un flux avant sa fin : `model_out` coupé (le texte
+  partiel gardé, l'appel d'outil inachevé refermé comme aujourd'hui).
+- **La politique de livraison** = le moment où le nœud modèle lit `peer_in`
+  (par défaut : avant chaque appel au modèle, comme aujourd'hui).
+- **La vie d'un agent lancé** = tant qu'un de ses flux d'entrée est ouvert ;
+  sa pause `finished` ou `leave` ferme le sien, sa durée déclarée ou l'arrêt de
+  l'hôte les ferment.
+- La voix (STT, TTS) : des ports de flux ordinaires.
+
+## 5. Les lots
+
+Chacun : témoin rouge d'abord (faux modèle), tests du changement, fusion en
+avance rapide, worktree effacé. `src/dataflow/` et la boucle d'agent passent
+par la relecture de la session recherche avant master.
+
+| Lot | Ce qu'il pose | Témoin rouge |
+|---|---|---|
+| 0 | **les flux dans le moteur de graphes** : un flux fini vide, `NodeStatus::Skipped`, la posture d'un nœud, la vérification (pas de « complet » sur un flux ouvert), l'exécuteur à canaux bornés — avec la parité exacte des graphes de valeurs | une branche non prise est sautée et dite, pas un « deadlock » ; un flux de jetons lu élément par élément ; un nœud complet sur un flux ouvert refusé à la vérification ; toute la lib verte |
+| 1 | la boucle comme graphe à ports : les points d'accroche, le premier flux (`model_out` en jetons) | parité : mêmes historiques, appels et jetons sur un scénario à faux modèle |
+| 2 | `decide` et `route`, posés sur un port | un exemple de Lucie : le message de la personne classé, aiguillé vers un outil ou vers rien |
+| 3 | `send` et l'annuaire | c'est l'**agent** qui répond à l'autre par `send`, pas le test |
+| 4 | `AgentNode`, le parent, un agent appelé en attendant | un agent appelle l'outil d'un autre et reçoit sa réponse ; `CHILD_OF` en trace |
+| 5 | `spawn`, rester à l'écoute (flux ouvert), les bornes au manifeste | un agent en lance un autre en fond et reçoit sa réponse dans sa boîte ; la durée ferme ses flux |
+| 6 | la boîte de session dans la page vivante ; l'interface proposée au chat et au MCP | un pair écrit au chat de l'atelier, le tour suivant le lit |
+| 7 | l'expérience à vrai modèle, gardée avec son artefact | — |
+
+**Le lot 0 est au cœur de `src/dataflow/runtime.rs`**, que la session
+recherche tient : il se fait avec sa relecture à chaque pas, et si elle préfère
+le porter, je prends la suite à partir du lot 1.
 
 Hors de ce chantier, dits pour ne pas y tomber : la boîte durable entre
-processus (`MessageSourceNode`), `interrupt`, les rôles attachés à une
-identité, les gabarits `builtin/*`, la présence par curseurs.
+processus (`MessageSourceNode`), les rôles attachés à une identité, les
+gabarits `builtin/*`, la présence par curseurs, le décodage contraint.

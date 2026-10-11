@@ -54,3 +54,32 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
 `src/dataflow/` et la boucle d'agent : relus par la session recherche ;
 `chat.rs`, le démon, le serveur MCP : l'arbre principal ; `declare.rs`,
 `atelier.rs`, `serve`, les nœuds scriptés : cette session.
+
+## Ce que le relevé de la boucle et du moteur a appris (master `d88ecfcbb`)
+
+- **Pas de branchement dans le moteur de graphes** : un nœud qui ne pose pas
+  une sortie laisse l'entrée **requise** en aval sans donnée, et le graphe
+  entier finit en `deadlock: nodes [...] cannot execute` (`runtime.rs`, boucle
+  d'exécution) ; une entrée optionnelle reliée laisse tourner le nœud sans
+  elle ; un fan-in sur une entrée requise se contente d'une branche (`any`).
+  Pas de `NodeStatus::Skipped` (`report.rs` : `Completed`, `Failed`,
+  `Resumed`). Graphes strictement sans cycle (`topological_sort`).
+- **Un port, une valeur par exécution** : les sorties sont rangées à la fin
+  du nœud (`drain_outputs`) ; exécution par niveaux (`run_level` en fils de
+  portée, `run_level_async` séquentiel).
+- **Décision** : `Decider` (`decider.rs`, une probabilité par option en un
+  jeton, `LlamaServerDecider`), service `"decider"` posé par le backend, aucun
+  nœud client. `GenOptions::with_response_format` (`ResponseFormat::JsonSchema`)
+  n'est honoré que par `OpenAiLlm`, et aucun appelant de production ne s'en
+  sert. Pas de décodage contraint : `Choices::Fixed` = un `enum` dans le
+  schéma de l'outil, puis `BadChoice` après coup.
+- **Les points d'accroche de la boucle** (`agent.rs`) : `peer_in` dans
+  `read_inbox` (les résultats d'outils en fond y arrivent aussi, `from =
+  "outil #…"`) ; `model_out` après le rattrapage des appels écrits dans le
+  texte ; `answer_out` dans la branche finale, à côté du contrôle de
+  complétion ; `tool_call_out` autour de l'interception des outils réservés ;
+  `tool_result_in` avant l'ajout du résultat ; `turn_end` en fin d'itération ;
+  `user_in` est poussé par l'appelant avant `run`. Aucun `interrupt` sur
+  message : seul le `TokenSink` coupe (`Flow::Stop`).
+- Les tests de la boucle qui serviront de témoin de parité : voir la page 03,
+  §4.2.
