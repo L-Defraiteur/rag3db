@@ -981,3 +981,34 @@ il ne compile pas). Relecture du banc (rag3db-10) : rien ne casse dans le harnai
 neuf de `probeOpenInFreshProcess` se prend pour un lanceur sans dégât. **Ce qui reste à la main,
 une fois** : les dossiers d'avant à la racine de `/tmp/rag3db`, quand tous les arbres sont rebâtis.
 Passe sur luciepc (`rag3db-a9b`) : témoin vert (HarnessMechanics ×4), transaction_test 257, api 104, c_api 136, copy 23, stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher 1867, banc conforme (6 rouges comparés / 253 verts : le témoin neuf en plus) ; après chaque suite, aucun parent numérique laissé dans `/tmp/rag3db` (les entrées non numériques qui y sont apparues pendant la passe venaient de la liste d'A8 d'hotfixs, jouée en même temps avec un binaire d'avant). Sur master en avance rapide : `dd9413d5e` (15 h 58 ; le rebase n'apportait que du code de test, le lecteur du journal du banc). `rag3db-a9b` effacé ; la lib commune de luciepc n'a pas à être rebâtie (aucun C++ du moteur).
+
+## A9b, la bascule du défaut (11 octobre 2026, 16 h 10 à PASSE_A9B_FIN) — condition 3, marche 4, seconde moitié
+
+Lucie a levé la permission en séance (« vas-y je t'autorise explicitement »). Branche `verrous-a9b`,
+worktree `rag3db-a9b` refait sur luciepc. Forme : `EnableMVCCSetting::name` = `enable_multi_writes`
+(plus de `debug_`), `DBConfig::enableMultiWrites{true}`, commentaire du réglage ; les 18 fichiers de
+tests et `.test` qui le nommaient renommés ; les témoins de l'ancienne sémantique la posent par
+`CALL enable_multi_writes=false` — `ddl_serial_execution.test` (le refus du second BEGIN),
+`FailedTransactionTest.AutoCommitAndOtherConnectionsAreNotAffected` (première moitié), et, sur
+relecture du banc (page 05 §4 du banc), les trois `InsertLockTest.WithoutMultiWrites…` qui
+comptaient sur le défaut sans le poser (deux auraient rougi, le troisième aurait testé le mode sous
+un nom qui dit le contraire). Deux commentaires Rust (`daemon/db.rs`, `e2e_prise_atomique.rs`)
+disent le défaut neuf. Page 11 : la phrase de Lucie et la mesure qui déclenche. Commits
+`f1db9d9aa` (la bascule), `63e6a26bf` (les trois témoins). Preuves avant le hash : ma liste
+complète et le banc (PASSE_A9B), le protocole référence/branche du banc (BANC_A9B), les e2e du
+produit qui ouvrent un backend rejoués par l'arbre principal sur son bâti de la branche (E2E_A9B).
+
+**Ce que la liste a fait sortir (16 h 50)** : sur 63e6a26bf, tout vert sauf (1) un `.test` de
+l'extension vector qui nommait encore l'ancien réglage — le renommage n'avait pris que `src` et
+`test` (`1a34a4315`) ; (2) **cinq tests Cypher `ddl`/`rel_group` rouges, un vrai défaut de la
+bascule** : `CREATE NODE TABLE Person2 AS LOAD FROM …` → « Person2 does not exist in catalog ».
+Cause : depuis A3′, sous le mode, `NodeBatchInsert::acquireLocksBeforeExecution` prend le verrou
+d'index de sa table **avant l'exécution du plan** (sur le fil du client, pour ne pas geler
+l'ordonnanceur) — pour `CREATE TABLE … AS`, la table est créée par le même plan, elle n'est pas
+encore au catalogue. Forme : si la table n'est pas au catalogue à ce moment, pas de prise ; la
+prise se fait dans `initGlobalStateInternal` (la reprise d'un verrou tenu est sans effet), et
+pour une table créée par le plan elle n'attend jamais (identifiant neuf, personne d'autre ne la
+voit). Témoin `InsertLockTest.CreateTableAsTakesTheIndexOfTheTableItCreates` (`ebf81a632`),
+correctif `6a4ebaa89`. Le banc et l'arbre principal prévenus : leurs passes sur 63e6a26bf valent
+première passe, la preuve est sur la tête finale. Seconde passe sur luciepc : bâti, témoins,
+transaction_test, copy, vector, Cypher, banc — **tout vert** (17 h 05, luciepc) : témoins 42, transaction_test 260, copy 23, vector 74 et 63, Cypher 1867, banc conforme 6 rouges / 253 verts. Tête finale `6a4ebaa89`, dite au banc et à l'arbre principal pour leurs passes de preuve.
