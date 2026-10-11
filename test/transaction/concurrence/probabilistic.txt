@@ -65,3 +65,12 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstCopy
 # sur verrous-a4 jouée seule sur luciepc, charge 5 (10 octobre, 22 h 40). Non attribué : rien
 # n'établit qu'A4′ y soit pour quelque chose. Même ticket.
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
+#
+# La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
+# 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure). Elle dépend du moment des morts, et
+# donc du poste : 10 fois sur 10 rouge sur luciepc le 11 octobre (1,8 à 4,3 Mo en trois morts),
+# mais vert une fois sur le poste principal le 12 octobre à 0 h 32, au rejeu d'un push du cœur
+# (30 ms → 1 765 376 octets, 80 ms → 2 334 720, 150 ms → 2 355 200 ; la borne, 1,5 fois la
+# première, vaut 2 648 064). Revenu de known_red.txt le même jour. Le défaut demeure ; un témoin
+# qui mesure la fuite sans dépendre du moment des morts reste à écrire.
+JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt

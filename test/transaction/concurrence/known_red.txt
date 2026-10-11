@@ -117,9 +117,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstCopy same-ve
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
-# La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
-# 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure) : 1,8 à 4,3 Mo en trois morts.
-JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt data-file-bounded
 #
 # Le balayage sous un petit masque (ticket 2026-10-11-un-saut-par-semi-masque-lit-toute-la-table) :
 # un saut vers 72 000 Scope dont le masque retient 117 lignes éparpillées lit toute la table. Le
