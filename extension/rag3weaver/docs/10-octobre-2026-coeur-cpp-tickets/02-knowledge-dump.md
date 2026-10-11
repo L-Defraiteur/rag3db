@@ -112,3 +112,21 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
 - Un guetteur qui attend « FIN » dans un journal où l'on recopie un autre journal finissant par
   « FIN » s'arrête trop tôt. Prendre un marqueur unique (« TERMINÉ », « sonde remplace »).
 
+## Le 11 octobre, l'après-midi
+
+- **Les instructions BEGIN, COMMIT et CHECKPOINT s'exécutent sur un fil du planificateur**
+  (l'opérateur Transaction ; deux fils au banc). Y attendre que d'autres transactions partent est
+  une impasse, puisqu'elles ont besoin des mêmes fils pour partir. Une attente se fait dans le fil
+  de l'appelant (`ClientContext::executeNoLock`), ou pas du tout.
+- **Un témoin de concurrence se vérifie aussi contre sa propre satisfiabilité.** Une règle de
+  relais (« valider seulement si un autre est ouvert ») empêche le point calme que la forme
+  attend.
+- **Un témoin qui doit rougir par mesure** : mesurer d'abord la série sur master et la série
+  corrigée, puis choisir le plafond qui les sépare, et l'écrire avec les deux chiffres.
+- **`poste push`** : pour un lot du moteur, une avance de master hors des chemins du bâti
+  (`src cmake CMakeLists.txt test extension/vector extension/geo third_party scripts
+  tools/rust_api`) ne demande pas de rejeu (page de G) ; le banc en `mesure` se joue hors du
+  verrou.
+- **gdb sous `ptrace_scope=1`** (luciepc) : on ne s'attache pas à un processus ; il faut lancer
+  le test sous gdb, avec `timeout --signal=INT 25 gdb -batch -ex run -ex "thread apply all bt"`.
+

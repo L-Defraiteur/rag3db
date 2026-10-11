@@ -309,6 +309,39 @@ fenêtre étroite par la session cœur C++.
     (`~/.cache/rag3db-tickets-notes/blobs_checkpoint_probe_scratch_test.cpp`) ;
   - les deux tickets Ladybug sur les chaînes, à lire.
 
+## Le 11 octobre, de midi au soir — la condition 3 (A7, A8) et `CALL build_id()`
+
+- **Le COPY de blobs**, reproduit sans harnais : un seul COPY de plus d'un quart du tampon échoue
+  à l'assemblage du groupe en mémoire. La forme retenue est un groupe vidé par morceaux bornés en
+  octets, en allongeant les segments de la tête persistante (page 04, relue par le cœur). Le lot
+  est **reporté** après la condition 3 ; le filet du produit est en place.
+- **A7, la file des points de reprise** : `c0f50f453` et la page 05. La relecture du cœur a
+  trouvé deux défauts (une validation de la file qui échoue reste active ; une attente non bornée),
+  corrigés avant la fusion.
+- **A8, le dernier partant écrit** : `f024578d5` et la page 06.
+  - La première forme (attendre dans la validation) bloquait le planificateur à deux fils.
+  - Le BEGIN explicite attendait lui aussi sur un fil du planificateur ; il attend maintenant dans
+    le fil de l'appelant.
+  - La liste complète a trouvé que sous un lecteur long, chaque écriture attendait 1 s :
+    correction par une seule attente, de 250 ms.
+  - Le plafond du témoin est fixé par la mesure (master de 210 à 358 Kio, correctif de 74 à 91 Kio).
+- **`CALL build_id()`**, pour le démon de la mémoire : `48b74ead1`.
+- **Relu pour le cœur** : T0, la pierre tombale d'A3′ reprise (avec le risque des décalages
+  positionnels, puis un second défaut, l'état partagé du détachement, trouvé en relisant C7), C7.
+- **Fautes** :
+  - par deux fois, un bâti par cible sans `rag3db_vector_extension` (la mémoire le garde) ;
+  - un témoin d'A8 insatisfiable par construction, vu par le cœur ;
+  - le rebâti de la lib commune de luciepc lancé malgré un démon qui la chargeait (sans dégât ;
+    le script s'arrêtera désormais).
+- **Pour reprendre** :
+  - le ticket « index vectoriel sous écrivains simultanés, beyond the visited set » (banc,
+    témoin `VectorIndexUpdate.AnUpdateWaitingBehindAnInsertSeesItsNewRows`) ; la forme pressentie
+    agrandit l'ensemble visité au nombre de lignes au début de chaque opération, sans relâcher le
+    contrôle de borne ;
+  - le CHECKPOINT explicite et la validation forcée attendent encore sur un fil du planificateur
+    (page 06).
+  - Le worktree `rag3db-tickets` de luciepc est gardé, sur master, avec son `build/` chaud.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre
