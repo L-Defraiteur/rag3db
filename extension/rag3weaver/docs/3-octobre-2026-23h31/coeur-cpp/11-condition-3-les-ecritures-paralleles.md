@@ -141,6 +141,9 @@ avant chaque écriture) — ce n'est pas sur le chemin de la stèle, et je ne le
   existe déjà chez nous — `rag3daemon`. Avec A allumé, le démon sert plusieurs écrivains à la
   fois ; B3 est côté produit (le démon par défaut, le `takeover` des sessions remplacé par un
   bail), pas côté moteur.
+  **État au 11 octobre, 20 h 40** : B3 est en grande partie là côté produit (l'hôte unique par
+  poste, le client qui le lance, l'unité en option). **La condition 3 est ouverte par la seule B3
+  côté produit ; les tickets font foi** — elle ne se dit pas « fermée ».
 - **B4, le vrai multi-processus** : la refonte ci-dessus. À ne décider que si B2 + B3 ne suffisent
   pas à un usage réel ; **[écart à rendre à Lucie]** : PostgreSQL le fait, Neo4j ne le fait pas, je
   recommande la voie Neo4j (B3), qui est déjà la nôtre.

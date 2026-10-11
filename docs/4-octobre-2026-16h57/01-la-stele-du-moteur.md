@@ -50,8 +50,15 @@ poser la version.
   complète verte sous ce défaut, contrôle de fuite de pages compris ; la série de confirmation
   des embarquements (fichiers +1 %, blobs −2 %, 12 passes au calme). Pages :
   `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04`, `05`, `06`.
-- **3, les écritures parallèles** : T0, A2, A5, A5 bis livrées ; le mode
-  reste éteint hors du banc ; la suite attend les verrous.
+- **3, les écritures parallèles** (11 octobre, 20 h 40) : **ouverte par la seule B3 côté produit,
+  les tickets font foi** — jamais « fermée ». Côté moteur, tout est sur master : le gestionnaire
+  de verrous (V1, A3′, A4′, V2, I1), T0, la pierre tombale de la reprise, A7 et A8 (le point de
+  reprise sous écrivains permanents, hotfixs), **le mode multi-écrivains par défaut** (A9,
+  `a0a79016e`, coût mesuré nul), C7 fermé, les erreurs de verrou nommées (`b4655da39`), et B2 —
+  le second processus écrivain attend au verrou du fichier au lieu d'être refusé (`0a630b764`).
+  B3, un processus qui tient la base et les autres qui lui parlent, est côté produit et en grande
+  partie là (l'hôte unique par poste, le client qui le lance, l'unité en option). Page :
+  `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/11`.
 - **4, les défauts** : la corruption de mémoire d'`e2e_code` a sa cause et son correctif
   (`57c8389b4`, 4 octobre au soir) : deux exemplaires de la même base ouverts en écriture dans le
   même processus — rag3weaver rouvrait avant la fin de la fermeture, et le verrou du fichier
