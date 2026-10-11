@@ -85,6 +85,10 @@ les comptes et l'imputation ici.
   rouges tombent tous à « after the replay and a checkpoint » (ligne 1936), puis à la réouverture
   (ligne 1941), et la ligne 199999 n'est fausse que dans une partie des cas.
 - **Le taux** : environ 1 sur 20 sur ce bâti (4 rouges sur 70 passes).
+- **Imputé ensuite au COPY journalisé** par l'arbre principal (11 octobre, nuit) : ni l'étendue ni
+  le lecteur affamé. Dans un processus vivant, sans mort ni rejeu, un COPY journalisé avec deux
+  fils et une colonne tableau met à 0 la colonne DOUBLE des dernières lignes (3 fois sur 3). Le
+  chemin vient de `0f4a54b2c`. Voir le ticket de la session cœur C++ (stèle), qui le prend.
 
 ## Pour le fermer
 
