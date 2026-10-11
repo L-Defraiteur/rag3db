@@ -1,6 +1,43 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, matin.
+Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, 22 h 30.
+
+## Pour Lucie (11 octobre, 22 h 30) — l'hôte de luciepc est figé, gardé tel quel pour toi
+
+L'index de `code-lourd` sur luciepc s'est figé une quatrième fois, **sans la montre** (retirée
+des deux manifestes pour l'essai). L'orchestration a décidé de ne pas arrêter l'hôte cette nuit :
+le figement vaut plus en preuve qu'en redémarrage, et ma permission refuse l'arrêt. Personne n'y
+touche avant toi.
+
+- **Hôte** : pid `132823` (lu dans `~/.local/share/rag3weaver/daemon.json`), démarré à 21 h 53,
+  binaire `~/.local/bin/rag3weaver-backend@1791744137`.
+- **Index** : lancé à 22 h 02 min 46 s, journal
+  `~/.cache/rag3weaver/commandes/index/1791748859452-132823.out` ; plein texte fini (7 400 fichiers,
+  31 796 scopes), puis **28 369 vecteurs sur 138 579 (20 %) dès les deux premières minutes, plus
+  un seul ensuite**. Les 28 369 viennent tous des essais précédents : ce run n'a écrit aucun
+  vecteur neuf (« 110 146 chunks à embarquer »).
+- **Ce que j'ai lu** (sans m'attacher : `ptrace_scope` vaut 1) :
+  - tous les fils de l'hôte dorment sur un futex ; un seul, `demon-7`, prend encore un peu de
+    CPU (~4 %) ;
+  - le service 7878 est au repos (1,7 % de CPU) ; les connexions de l'hôte vers lui sont établies,
+    files d'envoi et de réception vides ;
+  - aucune panique ni erreur dans `~/.local/state/rag3weaver/daemon.log` ;
+  - `/sante` et `/etat` répondent ; un appel MCP sur `code-lourd` bloque derrière l'index.
+
+À faire, dans l'ordre :
+
+1. La pile, avant tout arrêt :
+   `sudo gdb -p 132823 -batch -ex 'thread apply all bt' > ~/pile-hote-code-lourd.txt 2>&1`
+2. L'arrêt : `systemctl --user stop rag3weaver-daemon` (mon `index.sh`, pid `132918`, sort de
+   lui-même ou se tue par `kill -TERM 132918`).
+3. La montre remise et l'hôte redémarré :
+   `cp ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`,
+   `cp ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json`,
+   puis `systemctl --user start rag3weaver-daemon`.
+
+Après l'arrêt, le cœur et hotfixs rebâtissent la lib de `rag3db-lourd` (ils attendent ce
+signal). `code-principal` reste tel quel : le cœur s'en sert. Le ticket :
+`docs/tickets/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md`.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
 plus grande possible de codeparsers, C++ et Rust d'abord, mesurée sur nos
