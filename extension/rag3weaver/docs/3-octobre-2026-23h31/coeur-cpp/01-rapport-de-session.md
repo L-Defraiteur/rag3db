@@ -1103,3 +1103,35 @@ témoin d'exploitation.
 `poste mesure`) tourne sur ce bâti avec la trace : résultats à la page 12 §8. F a mesuré
 l'ingestion à 1, 4 et 32 fils : ≤ 2 % d'écart ; impact −20 % (176 fichiers), −47 % (src/daemon).
 F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit masque éparpillé.
+
+## Nuit (11 octobre 2026, 21 h 10 à 22 h 45) — luciepc figé, le push ABI en file, la règle des fils en brouillon
+
+- **La mesure des fils n'a pas couru** : `poste mesure` a pris la porte à 20 h 44 puis `run_e2e.sh` a
+  attendu une heure la place partagée tenue par les lourds qui « entraient quand même » (bâti ABI,
+  index de codeparsers, un `cargo test`) ; expirée (124) à 21 h 45 sans une tâche tracée. Remonté ;
+  G a corrigé `poste` (e70a78a72) : une mesure en attente bloque l'entrée des lourds, le délai se
+  pose par `POSTE_MESURE_MAX` et ne court qu'une fois la place prise. Script adapté ; à rejouer.
+- **L'hôte de luciepc s'est figé** à 22 h 02 en pleine réindexation de code-lourd (28 369 vecteurs
+  sur 138 579, plus rien ensuite) : les 91 fils en `futex_wait`, les `scheduler-N` du moteur
+  compris — le moteur n'exécute rien ; les piles demandent `gdb` sous root (`ptrace_scope=1`),
+  demandé à Lucie avant tout arrêt. Réponse à l'arbre principal : la lib figée (6df47a543, 20 h 39)
+  n'a pas le correctif du visited set d'hotfixs (3e0f98f08) ; ce défaut rougit, ne gèle pas ; sous
+  le mode toutes les attentes du moteur sont bornées (verrou 30 s → « lock timeout », interblocage
+  nommé, 250 ms au BEGIN, point de reprise forcé sous délai) ; un gel avec le moteur au repos
+  ressemble à un rejeu sans fin d'une erreur nommée côté produit — à compter dans `daemon.log` ;
+  `CALL enable_multi_writes=false` rend l'ancien contrat (second écrivain refusé, aucun verrou)
+  en contournement. Aucun appel MCP de ma part entre 22 h 00 et 22 h 05.
+- **Le push ABI** (`systemconfig-abi` 1d74f8ae1, bâti vert sur rag3db-abi, 1188 étapes) : vingt
+  tours refusés (75) en cinquante minutes, la place lourde du poste local tenue par l'index entier
+  de F ; remis sous le seul verrou de push, le rejeu court étant distant (luciepc). Hotfixs attend le
+  hash pour le rebâti unique de la lib, lui-même suspendu à l'arrêt de l'hôte par Lucie.
+- **La règle des fils**, en brouillon local sur `fils-proportionnes` (5f7507783, non poussé) : un
+  fil par tranche de 2 048 lignes estimées le long du pipeline (la plus grande cardinalité
+  estimée), sous le plafond `threads` (`Task::limitNumThreads`, ne fait que réduire : un `CALL
+  threads=1` reste 1 — demande du banc, ProductReloadRecovery), plafond gardé si un opérateur n'a
+  pas d'estimation. Le paramètre attend la trace.
+- **Relectures** : la forme d'hotfixs pour les attentes sur fil ouvrier (CHECKPOINT explicite,
+  COMMIT forcé, file d'A7 : `BlockingWait` d'A3′ réemployé, une portée par fonction, cède
+  seulement si on va attendre) — juste, deux remarques. Le témoin du semi-masque convenu avec le
+  banc (`PROFILE`, `NumOutputTuples` sous le `SCAN_NODE_TABLE` masqué, échec nommé « plan »,
+  ≤ 10·k, mesure 1/32 fils à part).
