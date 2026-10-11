@@ -307,3 +307,29 @@ où elle vit.
   `aeddf002a`). La course de `port_libre` des tests du démon (ticket du 10,
   trois sessions touchées) confiée à G. Règle de forme diffusée : « poussé »
   après `git status` propre, aucun rebase en cours, hash lu sur origin/master.
+- **Nuit, sur master** : C7 après arrêt brutal (cœur, `2c7704b27`, ticket
+  fermé dans le commit, stèle du moteur à quatre tickets ; condition 3 :
+  T0, A3′ reprise, A7, C7 faits, restent A8 chez hotfixs, A9 mesure puis
+  bascule, B2) ; le pas c de la marche 1 bis (arbre principal, `8bb2af2d7`,
+  un réacteur par cellule, contre-épreuve rouge sans lui) ; la fusion rag3db
+  du chaînage (F, `7da725287`, groupes sous cinq conditions, une instruction
+  par groupe, chaque scénario fondu puis découpé avec les mêmes lignes ; suite
+  Hop PostgreSQL puis CTE) ; la course de `port_libre` des tests du démon
+  fermée (G, `2d3009efc`, l'écouteur du port 0 donné au démon ; suite : les
+  binaires de service disent leur port) ; la recette MCP jouée de zéro et le
+  binaire de Lucie rafraîchi (mémoire).
+- **Trois défauts trouvés en route**, tickets produit : master rouge en
+  `cargo check --tests` sous les quatre features (recherche) et sans la
+  feature `code` sur `backend.rs:2897` (arbre principal) ; les gabarits livrés
+  cherchent l'extension vector relativement à eux-mêmes (`754e863a9`, arbre
+  principal : le gabarit nomme l'extension, l'ouverture la résout par le bâti
+  ou le binaire et refuse en nommant) ; `e2e_impact` rouge depuis le pas b
+  parce qu'il exige un chemin exact à travers une fonction vivante (corrigé en
+  rendant au code sa profondeur ; ticket sur la forme du témoin : un
+  module-corpus stable, à faire après la migration).
+- **La marche 4 avant l'essai MCP de Lucie** (« tu as dit marche 4, tu as
+  raison ») : confiée à la mémoire (daemon.json, lancement par le premier
+  client avec un seul lancement, jeton, outil « état du démon », cinq témoins
+  rouges d'abord, recette jouée de zéro sans rien lancer à la main) ; côté
+  hôte relu par l'arbre principal. Le banc des fiches classées passe après
+  (branche `banc-fiches-classees` poussée sous son nom).
