@@ -378,6 +378,13 @@ fenêtre étroite par la session cœur C++.
     luciepc a été refusée, et je n'ai pas pu vérifier si elle avait eu lieu. Sans `FIGE_PID`, les
     deux versions s'arrêtent net (exit 2) tant que l'hôte charge la lib. À trancher : arrêter
     l'hôte (après en avoir pris la pile), ou accorder la forme par déplacement ;
+  - **pour Lucie, ce qui attend sur luciepc** (12 octobre, 0 h 30) : le client d'index de
+    codeparsers (pid 132918, `index.sh lourd principal`) s'adresse à l'hôte figé et tient le
+    poste. Derrière lui attendent ma mesure (pid 242676, les témoins voisins du point de reprise)
+    et son script parent `att-vert.sh`, puis `att-2.sh` (le témoin à pause d'1 s, cinq fois sur
+    master puis cinq fois avec le correctif), et les bâtis lourds des autres, dont le binaire de
+    G. Terminer le client 132918 libère la place : tout cela repart seul, dans l'ordre. Rien
+    n'est à relancer de mon côté ;
   - le CHECKPOINT explicite et la validation forcée sur un fil du planificateur (page 06) ;
   - le COPY de blobs (page 04).
 
