@@ -55,13 +55,12 @@ Session « banc » (rag3db-10).
 - **Une borne laissée au cœur C++** : `AnnouncedWritersOfOneIndexedTableWaitThenBothCommit` passe à
   `commit:start`, dans son lot rel2.
 
-**Le témoin minimal de C7, pas commencé.** Il demande trois pièces :
-1. la garde de la base et du journal quand `C7_RandomMix/Thread_Crash` rougit (le banc n'en a pas) ;
-2. un lecteur des enregistrements du journal, écrit sur `WALRecord::deserialize` (il n'y en a pas) ;
-3. des passes jusqu'au rouge.
-Ensuite viendront les enregistrements de la relation pendante et du détachement de son extrémité,
-contre l'ordre des événements du banc (le ticket C7). C'est plus d'une heure et demie ; c'est le
-premier lot de la prochaine session.
+**Le témoin minimal de C7 : sans objet.** Le cœur C++ a trouvé la cause et l'a corrigée
+(`2c7704b27` : un défaut du rejeu du DETACH DELETE, à un seul écrivain), avec ses témoins minimaux
+(`edb411858`). Le ticket est fermé, et `C7_RandomMix/Thread_Crash` est vert (×10). Ses scripts
+d'enquête (la trace du rejeu, la garde de la base d'une passe rouge) sont sur luciepc, dans
+`~/.cache/rag3db-moteur-notes/c7/`. Un lecteur du journal sur `WALRecord::deserialize` manque
+toujours ; il n'est pas commandé.
 
 ## Le 10 octobre, tard : l'élagage HNSW est sur master (`9a2818df9`)
 
