@@ -1,6 +1,6 @@
 # `analyze()` avec une racine relative rend zéro scope, en silence
 
-- **État** : ouvert.
+- **État** : corrigé (11 oct. 2026, P3 de la stèle du produit) ; témoin `code::tests_resolution::une_racine_relative_n_est_pas_un_corpus_vide`.
 - **Gravité** : réponse fausse (un corpus vide qui passe pour un corpus analysé).
 - **Atteignable en service** : oui — tout appelant de `rag3weaver::code::analyze`
   qui passe une racine relative (`.`, `../depot`), y compris par un backend
@@ -50,3 +50,19 @@ Au choix, et idéalement les deux :
 - un fichier présent dans `files` mais dont le parse ne rend rien ET ne
   signale rien entre dans `skipped` avec une raison — le silence est le
   défaut autant que le zéro.
+
+## Correction (11 octobre 2026)
+
+Rejouée le 11 octobre, la recette ne rendait plus zéro scope : le défaut
+avait changé de forme. Les scopes étaient rendus, mais le chemin « absolu »
+de chaque fichier valait `racine/relative/racine/relative/a.rs` — relatif,
+la racine en double : une identité fausse, en silence. Désormais
+`analyze_in_project` résout une racine relative d'une source locale depuis
+le répertoire courant (`std::path::absolute`, sans toucher au disque) et le
+dit sur la sortie d'erreur (« racine relative … résolue en … »). Témoin
+unitaire (sans base) : un scope rendu, rien d'écarté, des chemins absolus ;
+rouge avant (`racine/relative/racine/relative/a.rs`), vert après.
+
+**Pas fait** : la seconde moitié (« un fichier présent dans `files` dont le
+parse ne rend rien entre dans `skipped` ») — aucun cas ne la reproduit
+aujourd'hui ; à reprendre avec un témoin s'il en paraît un.

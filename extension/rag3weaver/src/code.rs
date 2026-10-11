@@ -860,6 +860,18 @@ pub fn analyze_in_project(
     // heuristique — la source est **connue** à l'ingestion (doc 04 v3).
     let source = source_id(cursor);
     let virtual_source = source != LOCAL_SOURCE;
+    // **Une racine relative d'une source locale se résout, et se dit**
+    // (ticket du 4 octobre, P3 de la stèle du produit) : laissée relative,
+    // elle donnait des chemins « absolus » relatifs et doublés
+    // (`r/r/a.rs`) — une identité fausse, en silence. Résolue depuis le
+    // répertoire courant, sans toucher au disque.
+    let racine_resolue: Option<String> = (!virtual_source && Path::new(root).is_relative())
+        .then(|| std::path::absolute(root).ok().map(|p| p.to_string_lossy().to_string()))
+        .flatten();
+    if let Some(r) = &racine_resolue {
+        eprintln!("[rag3weaver] analyze : racine relative « {root} » résolue en « {r} »");
+    }
+    let root: &str = racine_resolue.as_deref().unwrap_or(root);
     let registry = crate::origin::CoordinateRegistry::default();
     let mut named: HashMap<String, (String, BTreeMap<String, String>)> = HashMap::new();
     // Les fichiers sans grammaire, gardés de côté : ils ne passent pas par
@@ -3250,6 +3262,18 @@ mod tests_vocabulaire {
 
 #[cfg(test)]
 mod tests_resolution {
+
+    /// **Une racine relative n'est pas un corpus vide** (ticket du 4
+    /// octobre, P3 de la stèle du produit) : `analyze("rel", …)` rendait zéro
+    /// scope, sans erreur ni entrée dans `skipped`.
+    #[test]
+    fn une_racine_relative_n_est_pas_un_corpus_vide() {
+        let a = super::analyze("racine/relative", vec![("a.rs".to_string(), "pub fn f() -> i32 {\n    1\n}\n".to_string())]);
+        assert!(a.scopes.iter().any(|s| s.name == "f"), "le scope f est rendu : {:?}", a.scopes.iter().map(|s| &s.name).collect::<Vec<_>>());
+        assert!(a.skipped.is_empty(), "rien d'écarté : {:?}", a.skipped);
+        assert!(a.files.iter().all(|f| std::path::Path::new(&f.absolute_path).is_absolute()), "chemins absolus : {:?}", a.files.iter().map(|f| &f.absolute_path).collect::<Vec<_>>());
+    }
+
     use super::*;
 
     fn mention(kind: &str, types: &[&str], imports: &[&str]) -> Mention {
