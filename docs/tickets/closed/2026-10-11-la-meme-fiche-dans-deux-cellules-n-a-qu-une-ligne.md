@@ -1,12 +1,12 @@
 # La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace
 
-- **État** : partiel (11 octobre 2026). **La perte est fermée** : une base à plusieurs cellules
-  refuse en le nommant d'écrire une identité qui vit déjà dans une autre cellule
-  (`CatalogError::IdentityInAnotherCell`, vérifié avant l'ingestion et avant la mise en file
-  d'une création ; une base à une seule cellule ne paie rien). **L'identité par cellule reste**
-  : Lucie a tranché la variante (a), l'identité dérivée de (cellule, identité déclarée), la
-  cellule par défaut garde ses `_uuid`, aucune base existante ne bouge. C'est un pas de la
-  marche 1 bis, avec son témoin.
+- **État** : corrigé (11 octobre 2026) par la migration (a) de la marche 1 bis, tranchée par Lucie :
+  l'identité d'une ligne est (cellule, identité déclarée). La cellule par défaut garde exactement la
+  formule d'avant (aucune base existante ne change d'identité, témoin
+  `e2e_scope::la_cellule_par_defaut_garde_les_identites_d_avant`), une autre cellule entre dans le
+  hachage, et la même fiche écrite dans deux cellules fait deux lignes
+  (`e2e_scope::la_meme_fiche_dans_deux_cellules_fait_deux_lignes`). Le nœud de lien calcule ses bouts dans
+  la cellule de l'appel. Le filet `IdentityInAnotherCell` reste comme garde contre une collision.
 - **Gravité** : perte. La fiche de la première cellule disparaît de cette cellule, sans un mot.
 - **Atteignable en service** : oui, dès que deux cellules écrivent la même identité. Une même
   mémoire « globale » et « de ce projet », ou deux projets qui indexent le même fichier, suffisent.

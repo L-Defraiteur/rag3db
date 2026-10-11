@@ -1784,26 +1784,69 @@ impl Catalog {
     /// calcul que `ingest_entities`, exposé pour que ceux qui relient des
     /// entités par identité (l'ingestion de code) n'aient pas à le deviner.
     pub fn entity_uuid(&self, entity_name: &str, data: &BTreeMap<String, CypherValue>) -> Result<String, CatalogError> {
-        let entity_def = self.config.entities.get(entity_name)
-            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
-        Ok(Self::uuid_for(entity_name, entity_def, data))
+        self.entity_uuid_in(&self.scope.clone(), entity_name, data)
     }
 
+    /// [`entity_uuid`](Self::entity_uuid) dans une cellule donnée : celle de la
+    /// requête (marche 1 bis), et non celle du catalogue.
+    pub fn entity_uuid_in(
+        &self,
+        cell: &crate::scope::Scope,
+        entity_name: &str,
+        data: &BTreeMap<String, CypherValue>,
+    ) -> Result<String, CatalogError> {
+        let entity_def = self.config.entities.get(entity_name)
+            .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
+        Ok(Self::uuid_for_in(cell, entity_name, entity_def, data))
+    }
+
+    /// L'identité dans la cellule par défaut : celle d'avant les cellules.
+    #[cfg(test)]
     fn uuid_for(entity_name: &str, entity_def: &crate::config::EntityDef, data: &BTreeMap<String, CypherValue>) -> String {
-        if let Some(ref hashsafe_fields) = entity_def.hashsafe {
-            let field_values: Vec<&str> = hashsafe_fields
+        Self::uuid_for_in(&crate::scope::Scope::default(), entity_name, entity_def, data)
+    }
+
+    /// **L'identité d'une ligne : (cellule, identité déclarée)** (migration (a)
+    /// de la marche 1 bis, tranchée par Lucie le 11 octobre 2026). La cellule
+    /// par défaut garde exactement la formule d'avant, et aucune base existante
+    /// ne change d'identité ; une autre cellule entre dans le hachage, et la
+    /// même fiche écrite dans deux cellules fait deux lignes.
+    fn uuid_for_in(
+        cell: &crate::scope::Scope,
+        entity_name: &str,
+        entity_def: &crate::config::EntityDef,
+        data: &BTreeMap<String, CypherValue>,
+    ) -> String {
+        let mut field_values: Vec<String> = if let Some(ref hashsafe_fields) = entity_def.hashsafe {
+            hashsafe_fields
                 .iter()
-                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or(""))
-                .collect();
-            hashsafe_uuid(entity_name, &field_values)
+                .map(|f| data.get(f).and_then(|v| v.as_str()).unwrap_or("").to_string())
+                .collect()
         } else {
-            // Use all data fields as hashsafe input for deterministic UUIDs
-            let mut field_values: Vec<String> = data.iter()
+            // Tous les champs de la ligne, sauf sa cellule : elle n'y était pas
+            // avant les cellules (posée après le calcul), et elle n'entre dans
+            // l'identité que par la règle ci-dessous.
+            let mut v: Vec<String> = data
+                .iter()
+                .filter(|(k, _)| k.as_str() != crate::scope::ORG_COLUMN && k.as_str() != crate::scope::PROJECT_COLUMN)
                 .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
                 .collect();
-            field_values.sort();
-            let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
-            hashsafe_uuid(entity_name, &refs)
+            v.sort();
+            v
+        };
+        if !cell.is_default() {
+            field_values.insert(0, format!("_cellule={}/{}", cell.org, cell.project));
+        }
+        let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
+        hashsafe_uuid(entity_name, &refs)
+    }
+
+    /// La cellule que porte une ligne, sinon celle du catalogue.
+    fn cellule_de(&self, data: &BTreeMap<String, CypherValue>) -> crate::scope::Scope {
+        let champ = |c: &str| data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+        match (champ(crate::scope::ORG_COLUMN), champ(crate::scope::PROJECT_COLUMN)) {
+            (Some(org), Some(project)) => crate::scope::Scope::new(org, project),
+            _ => self.scope.clone(),
         }
     }
 
@@ -5660,7 +5703,7 @@ impl Catalog {
         let mut uuids_du_lot: Vec<String> = Vec::with_capacity(records.len());
         for mut data in records {
             // Generate deterministic UUID from hashsafe fields or all content fields
-            let uuid = Self::uuid_for(entity_name, &entity_def, &data);
+            let uuid = Self::uuid_for_in(&self.cellule_de(&data), entity_name, &entity_def, &data);
             uuids_du_lot.push(uuid.clone());
             data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
 
@@ -6512,7 +6555,7 @@ impl Catalog {
         // premier. Ce qui n'a pas de clé déclarée et doit rester distinct à
         // contenu égal — un achat sans numéro — déclare une clé ; le moteur
         // ne peut pas la deviner, et il ne l'invente plus.
-        let uuid = Self::uuid_for(entity_name, &entity_def, &data);
+        let uuid = Self::uuid_for_in(&self.cellule_de(&data), entity_name, &entity_def, &data);
 
         // Compute content hash
         let content_text = self.build_content_text(entity_name, &data);

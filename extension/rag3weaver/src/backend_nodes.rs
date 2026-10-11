@@ -123,15 +123,14 @@ impl Node for EntityRecordNode {
                 return Err(format!("identity field {field} must be a non-empty string"));
             }
         }
+        // **La cellule de l'appel** (marche 1 bis) : l'identité de la ligne est
+        // (cellule, identité déclarée), et une ligne d'une autre cellule n'est
+        // pas celle de cet appel.
+        let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
         let identity = serde_json::from_value(input.clone()).map_err(|e| e.to_string())?;
         let uuid = cat
-            .entity_uuid(entity, &identity)
+            .entity_uuid_in(&cell, entity, &identity)
             .map_err(|e| e.to_string())?;
-        // **La cellule de l'appel** (marche 1 bis) : la ligne d'une autre cellule
-        // n'est pas celle de cet appel. La lire comme absente ; l'écrire sera
-        // refusé par le catalogue en le nommant (une identité ne vit que dans
-        // une cellule jusqu'à la migration).
-        let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
         let dans_la_cellule = |row: &std::collections::BTreeMap<String, CypherValue>| {
             let lire = |c: &str| row.get(c).and_then(|v| v.as_str()).map(str::to_string);
             match (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
@@ -792,6 +791,11 @@ impl Node for RelationBatchNode {
                 return Err(format!("undeclared endpoint {entity}"));
             }
         }
+        // **La cellule du lien** (migration (a) de la marche 1 bis) : l'identité
+        // d'un bout est (cellule, identité déclarée), et par défaut ses deux
+        // bouts sont dans la cellule de l'appel. Un lien entre deux cellules se
+        // déclarera (`from_cell` / `to_cell`, page du lien de la mémoire longue).
+        let cellule = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
         // L'identité de chaque bout, gardée pour nommer un absent par ce que
         // l'appelant a écrit, pas par un uuid qu'il n'a jamais vu.
         let mut identites: HashMap<(String, String), String> = HashMap::new();
@@ -822,7 +826,7 @@ impl Node for RelationBatchNode {
                     ));
                 }
                 let data = serde_json::from_value(link[side].clone()).map_err(|e| e.to_string())?;
-                let id = cat.entity_uuid(entity, &data).map_err(|e| e.to_string())?;
+                let id = cat.entity_uuid_in(&cellule, entity, &data).map_err(|e| e.to_string())?;
                 identites.insert((entity.clone(), id.clone()), link[side].to_string());
                 ids.push(id);
             }

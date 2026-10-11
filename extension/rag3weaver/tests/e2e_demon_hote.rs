@@ -334,9 +334,8 @@ fn par_le_fil_http_jusqu_a_l_arret() {
 /// **Marche 1 bis, pas a : chaque session écrit et lit dans sa cellule.**
 /// Deux sessions sur deux cellules d'un même backend : chacune relit sa
 /// fiche et ne voit pas celle de l'autre ; la même identité dans l'autre
-/// cellule est refusée en le nommant (une identité ne vit que dans une
-/// cellule jusqu'à la migration) ; et en base, chaque ligne porte la cellule
-/// de la session qui l'a écrite.
+/// cellule fait sa propre fiche (migration (a)) ; et en base, chaque ligne
+/// porte la cellule de la session qui l'a écrite.
 #[test]
 #[ignore]
 fn chaque_session_ecrit_et_lit_dans_sa_cellule() {
@@ -352,18 +351,19 @@ fn chaque_session_ecrit_et_lit_dans_sa_cellule() {
     assert!(fiche(&host, &sb, &m, "fb").is_some(), "B relit la sienne");
     assert!(fiche(&host, &sa, &m, "fb").is_none(), "A ne voit pas la fiche de B");
     assert!(fiche(&host, &sb, &m, "fa").is_none(), "B ne voit pas celle de A");
-    let refus = put(&host, &sb, &m, "put_fiche", "fa");
-    assert_eq!(refus["ok"], json!(false), "{refus}");
-    assert!(refus["error"].as_str().unwrap().contains("vit déjà dans la cellule acme/alpha"), "{refus}");
-    assert!(fiche(&host, &sa, &m, "fa").is_some(), "la fiche de A est intacte après le refus");
+    // La même identité dans la cellule de B fait sa propre fiche (migration (a)) ;
+    // celle de A reste à A.
+    ok(&put_corps(&host, &sb, &m, "put_fiche", "fa", "la fiche fa de beta"));
+    assert!(fiche(&host, &sa, &m, "fa").is_some(), "la fiche de A est intacte");
+    assert!(fiche(&host, &sb, &m, "fa").is_some(), "B a la sienne");
     host.shutdown();
 
     // En base : chaque ligne porte la cellule de sa session.
     let conn = Rag3dbConnection::new(d.join("base.rag3db")).unwrap();
     use rag3weaver::connection::DbConnection;
-    let r = conn.execute("MATCH (n:Fiche) RETURN n.titre, n._org, n._project ORDER BY n.titre").unwrap();
+    let r = conn.execute("MATCH (n:Fiche) RETURN n.titre, n._org, n._project ORDER BY n.titre, n._project").unwrap();
     let lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| v.as_str().unwrap_or("?").to_string()).collect::<Vec<_>>().join("/")).collect();
-    assert_eq!(lignes, vec!["fa/acme/alpha", "fb/acme/beta"], "les cellules en base");
+    assert_eq!(lignes, vec!["fa/acme/alpha", "fa/acme/beta", "fb/acme/beta"], "les cellules en base");
     drop(conn);
     let _ = std::fs::remove_dir_all(d);
 }

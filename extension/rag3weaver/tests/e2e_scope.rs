@@ -114,37 +114,41 @@ fn ids(catalog: &Catalog, table: &str) -> Vec<String> {
 
 // ─── A/B : stamp, nœuds, migration ──────────────────────────────────────────
 
-/// **La même fiche dans une seconde cellule est refusée, en le disant**
-/// (ticket `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne`).
-/// L'`_uuid` se calcule sur les champs de la fiche, pas sur sa cellule : la
-/// seconde écriture **déplaçait** la ligne de la première cellule, qui perdait
-/// sa fiche sans un mot. Jusqu'à la migration qui fera entrer la cellule dans
-/// l'identité, une identité ne vit que dans une cellule, et l'écrire ailleurs
-/// est refusé ; la fiche de la première cellule reste intacte.
+/// **La même fiche dans deux cellules fait deux lignes** (migration (a) de la
+/// marche 1 bis ; ticket `2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne`).
+/// L'identité d'une ligne est (cellule, identité déclarée) : la seconde écriture
+/// ne déplace plus la ligne de la première cellule, et chacune garde la sienne.
 #[test]
 #[ignore]
-fn la_meme_fiche_dans_une_seconde_cellule_est_refusee_et_la_premiere_reste() {
+fn la_meme_fiche_dans_deux_cellules_fait_deux_lignes() {
     let mut catalog = catalog_in_memory();
     catalog.register_entity("Product", make_product_config()).unwrap();
     catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
     catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
     catalog.set_scope(Scope::new("acme", "beta")).unwrap();
-    let refus = catalog
-        .ingest_entities("Product", vec![make_product("A", "alpha text")])
-        .expect_err("la même identité dans une seconde cellule est refusée");
-    let texte = refus.to_string();
-    assert!(texte.contains("vit déjà dans la cellule acme/alpha"), "le refus nomme la cellule où elle vit : {texte}");
-    assert!(texte.contains("acme/beta"), "et celle où on l'écrivait : {texte}");
-    assert!(texte.contains("jusqu'à la migration"), "et la raison : {texte}");
-    // Une fiche différente, elle, s'écrit dans la seconde cellule.
-    catalog.ingest_entities("Product", vec![make_product("B", "beta text")]).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
     let mut rows = scope_pairs(&catalog, "Product");
     rows.sort();
     assert_eq!(
         rows,
         vec![("acme".to_string(), "alpha".to_string()), ("acme".to_string(), "beta".to_string())],
-        "la fiche d'alpha est restée dans alpha"
+        "une ligne par cellule ; uuids : {:?}",
+        ids(&catalog, "Product")
     );
+    assert_eq!(ids(&catalog, "Product").len(), 2, "deux identités");
+}
+
+/// **La cellule par défaut garde ses identités** : une base sans cellules ne
+/// change pas d'identité à la migration. La valeur de référence est celle que
+/// la formule d'avant les cellules rendait pour cette fiche (relevée sur
+/// master le 11 octobre 2026, par le témoin rouge du ticket).
+#[test]
+#[ignore]
+fn la_cellule_par_defaut_garde_les_identites_d_avant() {
+    let mut catalog = catalog_in_memory();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities("Product", vec![make_product("A", "alpha text")]).unwrap();
+    assert_eq!(ids(&catalog, "Product"), vec!["d820690e-ccdd-a554-a26e-5f0bf1380e97".to_string()]);
 }
 
 #[test]

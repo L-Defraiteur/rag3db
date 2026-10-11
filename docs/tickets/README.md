@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (43)
+### Ouverts — moteur (24)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -62,7 +62,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (25)
+### Ouverts — produit (24)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -73,7 +73,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | ouvert — l'arbre principal, tri stable | réponse trompeuse | oui | oui (rendu d'impact) |
 | [e2e_impact dépend de la forme du code vivant qu'il indexe](2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md) | ouvert — après la migration (a) | test fragile | non | oui (`tests/e2e_impact.rs`) |
 | [Un gabarit livré cherche l'extension vector relativement à lui-même](2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | ouvert | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
-| [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | partiel : la perte est fermée (refus nommé) ; l'identité par cellule reste, variante (a) tranchée | perte | oui (deux cellules, la même identité) | oui |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
 | [Des erreurs du moteur avalées par des replis, et l'écriture continue](2026-10-05-erreurs-du-moteur-avalees-par-les-replis.md) | ouvert (lecture) | réponse fausse possible | oui | oui |
@@ -95,12 +94,13 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Pas de gabarit `code` en lecture seule](2026-10-11-pas-de-gabarit-code-en-lecture-seule.md) | ouvert | friction | oui | oui (gabarit `code`) |
 | [On ne peut pas dire ce qu'on indexe : ni racines multiples, ni chemins inclus](2026-10-11-on-ne-peut-pas-dire-ce-qu-on-indexe.md) | ouvert | friction et coût | oui | oui (`workspace`, source de fichiers) |
 
-### Fermés (85), dans `closed/`
+### Fermés (86), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Les tests gtest du moteur laissent leurs bases dans /tmp/rag3db, qui est de la mémoire vive](closed/2026-10-11-les-tests-gtest-du-moteur-laissent-leurs-bases-dans-tmp.md) | corrigé, parent par passe effacé à la fin du lanceur (11 octobre) | confort — 8 à 11 Go de RAM par poste | non (tests) | non (ses e2e ont le même défaut, à part) |
+| [La même fiche écrite dans deux cellules n'a qu'une ligne, et la seconde écriture la déplace](closed/2026-10-11-la-meme-fiche-dans-deux-cellules-n-a-qu-une-ligne.md) | corrigé, migration (a) de la marche 1 bis (11 oct.) | perte | oui (deux cellules, la même identité) | oui |
 | [Le témoin des transactions PostgreSQL crée sa table sans `_uuid`](closed/2026-10-11-le-temoin-des-transactions-postgresql-cree-sa-table-sans-uuid.md) | corrigé, ouvert et fermé dans le même commit (11 oct.) | test faux | non (tests) | oui (tests) |
 | [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](closed/2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | corrigé, témoins vivants verts sur le conteneur (11 oct.) | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](closed/2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | corrigé, témoin vivant vert sur le conteneur (11 oct.) | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
