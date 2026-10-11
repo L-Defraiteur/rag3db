@@ -379,7 +379,9 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
                 if usages.iter().any(|x| x.user.uuid == user.uuid && (x.definition == unique || unique.is_none())) {
                     continue;
                 }
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: false });
+                // Le rendez-vous n'a rien relié : attribué au seul définisseur
+                // pour le rangement, mais par le nom seul — dit tel.
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true });
             }
         }
     }

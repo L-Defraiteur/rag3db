@@ -534,6 +534,9 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // à peler — résolu à la matérialisation, quand les classes sont
             // en base.
             props.insert("deferred".to_string(), field_def(FieldType::String));
+            // « oui » : toutes les références du mentionneur sont des appels
+            // sur un receveur local non typé — jamais relié par le seul nom.
+            props.insert("untyped_receiver".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -719,6 +722,12 @@ pub struct CodeAnalysis {
     /// fichiers, et codeparsers reste en fichier seul.
     #[serde(default)]
     pub pending_deferred: Vec<(String, String, Vec<String>)>,
+    /// Les noms dont toutes les références sont des appels sur un receveur
+    /// local non typé (codeparsers `untyped_receiver`) : le rendez-vous ne
+    /// les relie jamais par le seul nom — visibles, non attribués (décision
+    /// de Lucie, 11 octobre 2026).
+    #[serde(default)]
+    pub pending_untyped: Vec<(String, String)>,
     /// Les verrous pris : (scope, symbole `Classe::champ`, sites).
     #[serde(default)]
     pub pending_locks: Vec<(String, String, Vec<UsageSite>)>,
@@ -1151,6 +1160,9 @@ pub fn analyze_in_project(
             let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : les types à lire ailleurs, pour les références sans type lu.
             let mut differes_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Par nom : toutes ses références sont-elles des appels sur un
+            // receveur local non typé ?
+            let mut non_types_lus: BTreeMap<String, bool> = BTreeMap::new();
             // Les verrous pris : symbole `Classe::champ` → sites.
             let mut verrous: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             for r in &sc.identifier_references {
@@ -1249,6 +1261,8 @@ pub fn analyze_in_project(
                     }
                     _ => *englobants = None,
                 }
+                let non_type = non_types_lus.entry(id.to_string()).or_insert(true);
+                *non_type &= r.untyped_receiver && r.qualifier_type.is_none();
                 let differes = differes_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 if r.qualifier_type.is_none() {
                     match (differes.as_mut(), r.qualifier_deferred.as_ref().and_then(|d| serde_json::to_string(d).ok())) {
@@ -1320,6 +1334,11 @@ pub fn analyze_in_project(
                 if let Some(mut v) = differes.filter(|v| !v.is_empty()) {
                     v.sort();
                     analysis.pending_deferred.push((key.clone(), name, v));
+                }
+            }
+            for (name, non_type) in non_types_lus {
+                if non_type {
+                    analysis.pending_untyped.push((key.clone(), name));
                 }
             }
         }
@@ -2053,6 +2072,7 @@ impl Catalog {
             analysis.pending_self_types.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
         let differes_of: HashMap<(&str, &str), &Vec<String>> =
             analysis.pending_deferred.iter().map(|(k, n, v)| ((k.as_str(), n.as_str()), v)).collect();
+        let non_types: std::collections::HashSet<(&str, &str)> = analysis.pending_untyped.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, name)?;
@@ -2073,6 +2093,8 @@ impl Catalog {
             props.insert("self_types".to_string(), s(&englobants));
             let differes = differes_of.get(&(scope_key.as_str(), name.as_str())).map(|v| format!("[{}]", v.join(","))).unwrap_or_default();
             props.insert("deferred".to_string(), s(&differes));
+            let non_type = if non_types.contains(&(scope_key.as_str(), name.as_str())) { "oui" } else { "" };
+            props.insert("untyped_receiver".to_string(), s(non_type));
             mentions.push((from, to, props));
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -2469,7 +2491,7 @@ impl Catalog {
         saut.start = Some(SYMBOL.to_string());
         if with_kind {
             saut.returns.extend(
-                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
+                ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
             );
         }
         let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -2504,9 +2526,10 @@ impl Catalog {
                 let self_types = liste(8);
                 let deferred: Vec<codeparsers::scope_extraction::types::DeferredType> =
                     row.get(9).and_then(|v| v.as_str()).filter(|t| !t.is_empty()).and_then(|t| serde_json::from_str(t).ok()).unwrap_or_default();
+                let untyped = row.get(10).and_then(|v| v.as_str()) == Some("oui");
                 out.entry(to.clone())
                     .or_default()
-                    .push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types, deferred });
+                    .push(Mention { from: from.clone(), kind, usage, qualifier_types: types, import_modules, self_types, deferred, untyped });
             }
         }
         Ok(out)
@@ -2580,6 +2603,9 @@ struct Mention {
     /// Les types à lire ailleurs (champ, retour), résolus à la
     /// matérialisation en `qualifier_types`.
     deferred: Vec<codeparsers::scope_extraction::types::DeferredType>,
+    /// Un appel sur un receveur local non typé : sans type lu (même
+    /// différé), aucune arête — jamais le repli par le seul nom.
+    untyped: bool,
 }
 
 /// **Comment une arête du rendez-vous a été résolue** : la marque qu'elle
@@ -2646,6 +2672,11 @@ fn choose_target(
             [un] => Some(seul_ou_import(un)),
             _ => None,
         };
+    }
+    // Un receveur local non typé, dont aucun type ne s'est lu : visible au
+    // rendez-vous, jamais relié par le seul nom.
+    if m.untyped && m.qualifier_types.is_empty() {
+        return None;
     }
     if !m.qualifier_types.is_empty() {
         let du_type: Vec<&String> = definers
@@ -3216,6 +3247,7 @@ mod tests_resolution {
             import_modules: imports.iter().map(|t| t.to_string()).collect(),
             self_types: Vec::new(),
             deferred: Vec::new(),
+            untyped: false,
         }
     }
 
