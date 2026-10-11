@@ -116,3 +116,24 @@ groupe par groupe, les seules colonnes demandées), et au-delà du seuil il bala
 Mesure avant/après : la copie de l'index entier de F, `usages` et son saut en 2 et 9 colonnes, lignes
 lues (PROFILE) et temps par appel ; attendu : de 71 657 à 117 lignes lues, et `usages` de 400 ms à
 quelques dizaines de millisecondes. Ticket : par F, avec son plan collé ; pris après les fils.
+
+## 8. Les mesures de la nuit (11-12 octobre)
+
+**Le petit masque, par le banc** (`MaskedScan.MeasureAtOneAndThirtyTwoThreads`, poste principal,
+`poste mesure`, master b808a3bee, cinq passes par nombre de fils ; le témoin
+`MaskedScan.ReadsAboutTheMaskNotTheTable` est en known_red, étiquette `scan-reads-the-mask`) :
+
+| fils | lignes sorties du `SCAN_NODE_TABLE` sous le masque | durée médiane | min / max |
+|---|---|---|---|
+| 1 | 67 584 | 5,72 ms | 5,50 / 6,52 |
+| 32 | 67 584 | 5,25 ms | 5,22 / 5,38 |
+
+Le nombre de fils ne change ni les lignes lues ni, presque, la durée (8 % à 32 fils pour 117
+lignes utiles) : **le coût est le balayage lui-même, pas sa parallélisation** — la lecture par
+décalages (§7) visera ≈ 117 lignes. Un écart entre postes (67 584 ici, 69 632 sur luciepc, même
+code et mêmes données) : le découpage du balayage par blocs, sans effet sur la borne.
+
+**La trace des fils** (`RAG3DB_TRACE_TASKS`, a3e5e5dd7) : la mesure de F n'a pas encore couru —
+sur luciepc, une heure à attendre derrière les lourds (poste corrigé depuis) ; ici, bloquée par le
+`poste lourd` intérieur de `run_e2e.sh` sous `poste mesure` (défaut à G) ; relancée à 0 h 02 sous le
+seul lourd de `run_e2e.sh` : résultats ci-dessous dès qu'ils sortent.
