@@ -180,6 +180,15 @@ bouge : un lien `courant`.**
    l'en-tête modifié en place). Les deux derniers étaient rouges avant le
    correctif.
 2. Le refus nommé binaire ↔ lib (point 3.2), qui ferme le ticket ouvert.
+   **Fait**, avec une forme qui change : nos binaires sont liés en BIND_NOW, et
+   un contrôle dans le processus viendrait après le symbole manquant. La lib
+   porte son identifiant dans la section ELF `.rag3db_build_id` (une ligne
+   dans `src/function/table/build_id.cpp`, relue par le cœur). Le binaire porte
+   le sien dans `.rag3db_compiled_against`, lu par `build.rs` dans le
+   `build_id.h` du bâti. `rag3db-check-lib <binaire> <lib>`, qui ne lie pas la
+   lib, les compare avant tout chargement (l'`ExecStartPre` de G), et
+   `build_check::check_loaded` reste le filet dans le processus. Témoins
+   `build_check::tests`, deux rouges avant. Ticket fermé.
 3. Le magasin, la publication et le ménage (script de G, appelé par
    `run_e2e.sh --build`).
 4. Les consommateurs : `run_e2e.sh`, les modèles MCP, les scripts. Puis le

@@ -326,6 +326,7 @@ impl Rag3dbConnection {
                 .unwrap_or(0);
             let reste = REOPEN_WAIT.saturating_sub(debut.elapsed());
             if tenues == 0 {
+                crate::build_check::check_loaded().map_err(DbError::ConnectionError)?;
                 match rag3db::Database::new(path, config.clone()) {
                     Ok(db) => {
                         let db = Arc::new(db);
@@ -352,6 +353,7 @@ impl Rag3dbConnection {
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
     pub fn with_config(path: impl AsRef<Path>, config: rag3db::SystemConfig) -> Result<Self, DbError> {
+        crate::build_check::check_loaded().map_err(DbError::ConnectionError)?;
         let db = Arc::new(
             rag3db::Database::new(path.as_ref(), config)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,

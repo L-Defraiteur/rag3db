@@ -117,6 +117,7 @@ pub mod cypher_blob_store;
 pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
+pub mod build_check;
 pub mod rag3db_search_backend;
 
 /// Par où un lecteur atteint la base : lui-même, ou par le relais.

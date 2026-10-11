@@ -256,6 +256,10 @@ required-features = ["daemon", "burn-embedder"]
 # `src/daemon/db.rs`. Une base rag3db ne s'ouvre que par un processus à la fois ;
 # celui-ci est ce processus, mis derrière une adresse.
 [[bin]]
+name = "rag3db-check-lib"
+path = "src/bin/rag3db-check-lib.rs"
+
+[[bin]]
 name = "rag3daemon"
 path = "src/bin/rag3daemon.rs"
 required-features = ["daemon", "rag3db-native"]
