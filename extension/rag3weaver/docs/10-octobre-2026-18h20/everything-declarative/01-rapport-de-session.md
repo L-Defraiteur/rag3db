@@ -165,8 +165,12 @@ nœuds (`nodes/<nom>.node.json` à côté du script, décidée par l'orchestrati
 
 - **La recette jouée par Lucie** (page 08, §1, trois commandes) : le chemin
   modèle → `declare` → page n'est prouvé qu'avec un modèle enregistré.
-- `declare` et la montre sur `apply_reload_with_reactions` — **seulement à la
-  fusion** de la session mémoire, pas avant (le jouet n'a pas de réactions).
+- ~~`declare` et la montre sur `apply_reload_with_reactions`~~ **fait le
+  11 octobre**, après la fusion de la session mémoire (`0387fe401`) : une
+  déclaration ou une modification à la main arrête les réactions de
+  l'ancienne version et remonte celles de la nouvelle au même curseur ; les
+  réactions remontées, les curseurs oubliés et les erreurs des réactions
+  arrêtées reviennent dans `Declared` et au journal de la page.
 - Le retour en arrière d'une déclaration (un commit qui défait) ; mermaid
   embarqué ; plusieurs sessions de chat ; la surbrillance d'un nœud scripté
   touché.

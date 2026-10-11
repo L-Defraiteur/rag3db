@@ -37,8 +37,9 @@ sont les mêmes gestes pour un autre hôte (la page vivante du lot 6).
    au chargement** (`check_reload`). Refusé : l'ancien contenu est remis (ou
    le fichier neuf retiré), et le refus revient à l'agent avec sa raison et
    sa ligne quand le chargement la connaît (vues, TypeScript, mermaid).
-3. Accepté : mis en service (`apply_reload`), puis **commité** dans le dépôt
-   git qui **englobe** le dossier (créé seulement s'il n'y en a aucun
+3. Accepté : mis en service — les réactions de l'ancienne version arrêtées,
+   celles de la nouvelle remontées (`apply_reload_with_reactions`, la porte de
+   la session mémoire) —, puis **commité** dans le dépôt git qui **englobe** le dossier (créé seulement s'il n'y en a aucun
    au-dessus) — **ce chemin seul** (`git add -- <chemin>`, `git commit --
    <chemin>` : jamais `-A`, jamais un fichier hors du dossier, les autres
    changements de la personne restent où ils sont), sous l'**identité git du

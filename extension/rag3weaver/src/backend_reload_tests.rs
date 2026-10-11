@@ -1049,3 +1049,81 @@ fn a_chat_turn_declares_and_pushes_its_events() {
     // La session n'est pas commitée.
     assert!(!git_in(dir.path(), &["status", "--porcelain"]).contains(".atelier"));
 }
+
+// ─── declare et la montre remontent les réactions (après la porte de la mémoire) ─
+
+/// Le jouet des routes, dans un dépôt, avec une réaction « watch » montée.
+fn toy_with_a_reaction() -> (tempfile::TempDir, Backend) {
+    let (dir, backend) = toy_in_a_repository();
+    write(dir.path(), "watch.mmd", REACTION);
+    let manifest = std::fs::read_to_string(dir.path().join("backend.json")).unwrap();
+    write(
+        dir.path(),
+        "backend.json",
+        &manifest.replace(
+            "\"tools\": {",
+            "\"reactions\": { \"watch\": { \"graph\": \"watch.mmd\" } },\n  \"tools\": {",
+        ),
+    );
+    backend.reload().unwrap();
+    assert_eq!(backend.mount_reactions().unwrap(), ["watch".to_string()]);
+    git_in(dir.path(), &["add", "-A"]);
+    git_in(dir.path(), &["commit", "-q", "-m", "une réaction"]);
+    (dir, backend)
+}
+
+#[test]
+fn a_declaration_stops_and_remounts_the_reactions() {
+    let (_dir, backend) = toy_with_a_reaction();
+    let declared = backend
+        .declare(
+            "views/hello.html",
+            "<p>{{ result.hello }}</p>",
+            "Une vue plus sobre",
+        )
+        .unwrap();
+    assert_eq!(declared.mounted_reactions, ["watch".to_string()]);
+    assert!(declared.dropped_cursors.is_empty());
+    backend.stop_reactions();
+}
+
+#[test]
+fn a_declaration_that_removes_a_reaction_forgets_its_cursor() {
+    let (dir, backend) = toy_with_a_reaction();
+    let manifest = std::fs::read_to_string(dir.path().join("backend.json")).unwrap();
+    let without = manifest.replace(
+        "\"reactions\": { \"watch\": { \"graph\": \"watch.mmd\" } },\n  ",
+        "",
+    );
+    let declared = backend
+        .declare("backend.json", &without, "Retirer la réaction")
+        .unwrap();
+    assert_eq!(declared.removed_reactions, ["watch".to_string()]);
+    assert_eq!(declared.dropped_cursors, ["catalog@watch".to_string()]);
+    assert!(declared.mounted_reactions.is_empty());
+    // Plus rien en service : un montage neuf ne trouve rien à monter.
+    assert!(backend.mount_reactions().unwrap().is_empty());
+}
+
+#[cfg(feature = "daemon")]
+#[test]
+fn the_watcher_remounts_the_reactions_and_says_the_forgotten_cursors() {
+    let (dir, backend) = toy_with_a_reaction();
+    let backend = Arc::new(backend);
+    let atelier = atelier_without_model(backend.clone());
+    let captured = Captured::default();
+    atelier.hub().subscribe(Box::new(captured.clone()));
+    let manifest = std::fs::read_to_string(dir.path().join("backend.json")).unwrap();
+    write(
+        dir.path(),
+        "backend.json",
+        &manifest.replace(
+            "\"reactions\": { \"watch\": { \"graph\": \"watch.mmd\" } },\n  ",
+            "",
+        ),
+    );
+    atelier.look();
+    let events = captured.text();
+    assert!(events.contains("event: reloaded"), "{events}");
+    assert!(events.contains("catalog@watch"), "{events}");
+}

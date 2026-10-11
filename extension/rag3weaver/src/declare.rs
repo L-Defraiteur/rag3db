@@ -12,7 +12,9 @@
 //! 2. écrire, puis **revérifier comme au chargement** (`check_reload`) ; un
 //!    refus remet l'ancien contenu et revient à l'agent avec sa raison (et sa
 //!    ligne quand le chargement la connaît) ;
-//! 3. accepté : mettre en service (`apply_reload`), puis **un commit** dans le
+//! 3. accepté : mettre en service — les réactions de l'ancienne version
+//!    arrêtées, celles de la nouvelle remontées
+//!    (`apply_reload_with_reactions`) —, puis **un commit** dans le
 //!    dépôt git qui englobe le dossier — par chemin, rien d'autre, sous
 //!    l'identité git de la personne, avec la raison de l'agent pour message.
 //!    C'est la première fiche de contexte : chaque changement dit pourquoi.
@@ -40,8 +42,15 @@ pub struct Declared {
     pub version: u64,
     /// Le commit qui la porte ; `None` si le contenu n'a pas changé.
     pub commit: Option<String>,
-    /// Les réactions que cette version retire (l'hôte oublie leur curseur).
+    /// Les réactions que cette version retire.
     pub removed_reactions: Vec<String>,
+    /// Les réactions remontées sur la nouvelle version.
+    pub mounted_reactions: Vec<String>,
+    /// Les curseurs oubliés des réactions retirées (`<sujet>@<réaction>`) :
+    /// leurs événements en attente sont perdus.
+    pub dropped_cursors: Vec<String>,
+    /// Les erreurs des réactions arrêtées — personne d'autre ne les relira.
+    pub reaction_errors: Vec<String>,
 }
 
 impl Backend {
@@ -76,6 +85,9 @@ impl Backend {
                 version: self.declarations_version(),
                 commit: None,
                 removed_reactions: vec![],
+                mounted_reactions: vec![],
+                dropped_cursors: vec![],
+                reaction_errors: vec![],
             });
         }
         write_atomically(&target, content)?;
@@ -93,18 +105,37 @@ impl Backend {
             }
         };
         let dir = self.prepared().directory.clone();
-        let reloaded = self.apply_reload(pending);
+        let back = |target: &Path, why: String| -> Result<Declared, String> {
+            // Pas de déclaration à moitié : on revient en arrière, réactions
+            // comprises.
+            undo(target)?;
+            self.reload_reactions()
+                .map_err(|e| format!("{path} : {why}, et le retour arrière aussi : {e}"))?;
+            Err(format!("{path} : {why}, rien n'est écrit"))
+        };
+        let reloaded = match self.apply_reload_with_reactions(pending) {
+            Ok(reloaded) => reloaded,
+            Err(error) => {
+                return back(
+                    &target,
+                    format!("les réactions ne se remontent pas ({error})"),
+                )
+            }
+        };
         match commit(&dir, path, reason) {
             Ok(hash) => Ok(Declared {
                 path: path.to_string(),
-                version: reloaded.version,
+                version: reloaded.reloaded.version,
                 commit: Some(hash),
-                removed_reactions: reloaded.removed_reactions,
+                removed_reactions: reloaded.reloaded.removed_reactions,
+                mounted_reactions: reloaded.mounted,
+                dropped_cursors: reloaded.dropped_cursors,
+                reaction_errors: reloaded.errors_before,
             }),
             Err(git) => {
                 // Pas de déclaration sans sa raison : on revient en arrière.
                 undo(&target)?;
-                self.reload().map_err(|e| {
+                self.reload_reactions().map_err(|e| {
                     format!("{path} : le commit a échoué ({git}) et le retour arrière aussi : {e}")
                 })?;
                 Err(format!(
@@ -334,6 +365,9 @@ impl DeclarationTools<'_> {
                         "version": declared.version,
                         "commit": declared.commit,
                         "removed_reactions": declared.removed_reactions,
+                        "mounted_reactions": declared.mounted_reactions,
+                        "dropped_cursors": declared.dropped_cursors,
+                        "reaction_errors": declared.reaction_errors,
                     }),
                     Err(error) => json!({"ok": false, "error": error}),
                 },
