@@ -27,7 +27,7 @@
 //! Run with: ./run_e2e.sh --test e2e_charge_ingestion
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder", feature = "code"))]
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 use std::time::Instant;

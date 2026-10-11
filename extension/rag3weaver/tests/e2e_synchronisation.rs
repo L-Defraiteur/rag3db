@@ -6,7 +6,7 @@
 //! Run with: ./run_e2e.sh --test e2e_synchronisation
 #![cfg(feature = "rag3db-native")]
 
-mod common;
+use crate::common;
 
 use std::collections::{BTreeMap, HashMap};
 

@@ -59,7 +59,7 @@
 //! ```
 #![cfg(feature = "burn-embedder")]
 
-mod common;
+use crate::common;
 
 use rag3weaver::embedder::Embedder;
 use std::path::Path;

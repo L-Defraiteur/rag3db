@@ -15,7 +15,7 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-mod common;
+use crate::common;
 
 use std::sync::{Arc, Mutex};
 

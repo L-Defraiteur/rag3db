@@ -34,7 +34,7 @@
 //! la liste de ses introuvables — pour rejouer au banc sur les mêmes vecteurs.
 #![cfg(all(feature = "rag3db-native", feature = "code", feature = "daemon"))]
 
-mod common;
+use crate::common;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

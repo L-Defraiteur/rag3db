@@ -10,7 +10,7 @@
 
 #![cfg(feature = "burn-ocr")]
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

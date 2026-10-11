@@ -31,7 +31,7 @@ use rag3weaver::search_strategy::UnifiedResult;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 use rag3weaver::disponibilite::RegimeEcriture;
 
-mod common;
+use crate::common;
 
 #[cfg(feature = "burn-embedder")]
 use common::burn::{BGE_M3, MINILM};

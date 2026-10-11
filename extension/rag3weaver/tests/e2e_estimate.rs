@@ -9,7 +9,7 @@
 //! Run with: ./run_e2e.sh --test e2e_estimate
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder", feature = "code"))]
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

@@ -25,7 +25,7 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder", feature = "code"))]
 
-mod common;
+use crate::common;
 
 
 use std::time::Instant;

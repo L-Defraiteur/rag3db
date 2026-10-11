@@ -22,7 +22,7 @@
 //! « filtered out » à chaque passe complète — la moitié de la suite ne tournait
 //! nulle part. Relevé le 3 septembre 2026.
 
-mod common;
+use crate::common;
 
 use std::sync::Arc;
 

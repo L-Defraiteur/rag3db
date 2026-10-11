@@ -31,7 +31,7 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "burn-embedder"))]
 
-mod common;
+use crate::common;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};

@@ -37,7 +37,7 @@ use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, Rag3dbConnection};
 use rag3weaver::disponibilite::RegimeEcriture;
 
-mod common;
+use crate::common;
 use common::burn::MULTILINGUAL_MINILM;
 
 fn rag3db_root() -> String {

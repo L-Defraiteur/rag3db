@@ -18,7 +18,7 @@ use rag3weaver::embedder::Embedder;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, CatalogEvent, EntityConfig, Rag3dbConnection, SimpleFieldDef, UpdateStatus};
 
-mod common;
+use crate::common;
 
 #[cfg(feature = "burn-embedder")]
 use common::burn::{BGE_M3, MINILM};

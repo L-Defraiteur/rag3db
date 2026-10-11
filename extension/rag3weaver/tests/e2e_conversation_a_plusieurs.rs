@@ -34,7 +34,7 @@ use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::postures::Postures;
 use rag3weaver::{CatalogConfig, Rag3dbConnection};
 
-mod common;
+use crate::common;
 
 fn rag3db_root() -> String {
     std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
