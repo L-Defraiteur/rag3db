@@ -831,3 +831,14 @@ toutes sur master, sans bâti) et `rag3db-docs-note` (`docs-i1`, poussée) ; sur
 libvector `4c12f0d4577a`) — un worktree neuf par lot, effacé à la fusion. Notes :
 `~/.cache/rag3db-moteur-notes/{i1,rel2,copie}/` (scripts de passe détachés `passe*.sh`, journaux).
 Rien ne tourne.
+
+## La condition 3, les écritures parallèles (11 octobre 2026, matin) — la page, rien à coder
+
+Décision de Lucie au réveil : I2 n'est pas bloquante (page 10 prête, I1 reste le produit) ; le
+chantier est la condition 3, « oui jusqu'à B, et A d'abord ». Page 11
+(`11-condition-3-les-ecritures-paralleles.md`, `1151b55b1`) : ce qui est (un refus sous un mutex,
+l'état MVCC en mémoire par processus), A = allumer le mode et fermer T0, A7, A3′ reprise, C7, plus
+A8 (le point de reprise sous écrivains permanents) et A9 (la mesure du coût, puis le mode par
+défaut) ; B = le lecteur (fait), le relais au fichier (B2), le démon (B3, la voie Neo4j) ; le vrai
+multi-processus est une refonte que je ne recommande pas ; quatre écarts rendus à Lucie. Rien à
+coder avant son mot.
