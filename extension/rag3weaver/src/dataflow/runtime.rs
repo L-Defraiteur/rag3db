@@ -145,6 +145,9 @@ pub struct DataflowOutput {
     /// l'ordre (un sous-graphe les rend à son parent élément par élément) ;
     /// `data` les porte fusionnés.
     streams: HashMap<(String, String), Vec<PortValue>>,
+    /// Combien d'éléments chaque sortie a envoyés sur ses canaux (un
+    /// sous-graphe délégué : ce que ses nœuds ont posé sur les arêtes du parent).
+    sent: HashMap<(String, String), usize>,
 }
 
 impl DataflowOutput {
@@ -154,7 +157,17 @@ impl DataflowOutput {
         stopped: Option<super::node::CancelCause>,
         streams: HashMap<(String, String), Vec<PortValue>>,
     ) -> Self {
-        Self { data, skipped, stopped, streams }
+        Self { data, skipped, stopped, streams, sent: HashMap::new() }
+    }
+
+    pub(super) fn with_sent(mut self, sent: HashMap<(String, String), usize>) -> Self {
+        self.sent = sent;
+        self
+    }
+
+    /// Combien d'éléments la sortie `node.port` a envoyés sur ses canaux.
+    pub(crate) fn sent(&self, node: &str, port: &str) -> usize {
+        self.sent.get(&(node.to_string(), port.to_string())).copied().unwrap_or(0)
     }
 
     /// Les éléments, dans l'ordre, d'une sortie en flux que rien ne lisait.
@@ -180,6 +193,7 @@ impl DataflowOutput {
             skipped: HashMap::new(),
             stopped: None,
             streams: HashMap::new(),
+            sent: HashMap::new(),
         }
     }
 
@@ -691,7 +705,7 @@ impl DataflowRuntime {
                 keep_state: garde_l_etat,
             };
             return tokio::task::block_in_place(|| {
-                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, Some(checkpointing))
+                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, Some(checkpointing), None)
             });
         }
         graph.merge_initial_streams(&mut initial_inputs);
@@ -825,6 +839,7 @@ impl DataflowRuntime {
                 if let Some(ports) = stream_ports.get(node_name.as_str()) {
                     ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
                     ctx.set_open_inputs(ports.open_inputs.clone());
+                    ctx.set_input_kinds(ports.input_kinds.clone());
                 }
                 let edges_for_node: Vec<_> = graph
                     .edges
@@ -1060,7 +1075,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new(), sent: HashMap::new() })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1130,7 +1145,7 @@ impl DataflowRuntime {
         }
     }
 
-    fn emit_run_started(&self, run_id: &str, graph: &DataflowGraph) {
+    pub(super) fn emit_run_started(&self, run_id: &str, graph: &DataflowGraph) {
         self.publish(crate::events::CatalogEvent::RunStarted {
             run: run_id.to_string(),
             parent: self.services.get::<String>("parent_run").cloned(),
@@ -1154,7 +1169,7 @@ impl DataflowRuntime {
         });
     }
 
-    fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
+    pub(super) fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
         self.publish(crate::events::CatalogEvent::RunFinished {
             run: run_id.to_string(),
             kind: "graph".to_string(),
@@ -1190,7 +1205,7 @@ impl DataflowRuntime {
         if self.force_concurrent || graph.has_streams()? || !graph.initial_streams.is_empty() {
             let initial = std::mem::take(&mut initial_inputs);
             return tokio::task::block_in_place(|| {
-                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None)
+                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None, None)
             });
         }
         graph.merge_initial_streams(&mut initial_inputs);
@@ -1290,6 +1305,7 @@ impl DataflowRuntime {
                 if let Some(ports) = stream_ports.get(node_name.as_str()) {
                     ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
                     ctx.set_open_inputs(ports.open_inputs.clone());
+                    ctx.set_input_kinds(ports.input_kinds.clone());
                 }
                 let edges_for_node: Vec<_> = graph
                     .edges
@@ -1462,7 +1478,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new(), sent: HashMap::new() })
     }
 }
 
@@ -1516,11 +1532,20 @@ pub(super) struct StreamPorts {
     pub stream_outputs: HashSet<String>,
     /// Les entrées dont un producteur est un flux ouvert.
     pub open_inputs: HashSet<String>,
+    /// Le genre de chaque entrée branchée : le plus ouvert de ses producteurs.
+    pub input_kinds: HashMap<String, super::port::PortKind>,
 }
 
 fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, StreamPorts>, String> {
+    stream_ports_of_with(graph, &HashMap::new())
+}
+
+pub(super) fn stream_ports_of_with(
+    graph: &DataflowGraph,
+    free_inputs: &HashMap<(String, String), super::port::PortKind>,
+) -> Result<HashMap<String, StreamPorts>, String> {
     graph.validate_streams()?;
-    let kinds = graph.resolved_kinds()?;
+    let kinds = graph.resolved_kinds_with(free_inputs)?;
     let mut out = HashMap::new();
     for node in &graph.nodes {
         let name = node.name().to_string();
@@ -1543,8 +1568,20 @@ fn stream_ports_of(graph: &DataflowGraph) -> Result<HashMap<String, StreamPorts>
             .filter(|e| kinds.get(&(e.from_node.clone(), e.from_port.clone())) == Some(&super::port::PortKind::Open))
             .map(|e| e.to_port.clone())
             .collect();
-        if !per_element.is_empty() || !stream_outputs.is_empty() || !open_inputs.is_empty() {
-            out.insert(name, StreamPorts { per_element, stream_outputs, open_inputs });
+        let mut input_kinds: HashMap<String, super::port::PortKind> = HashMap::new();
+        for e in graph.edges.iter().filter(|e| e.to_node == name) {
+            let k = kinds.get(&(e.from_node.clone(), e.from_port.clone())).copied().unwrap_or_default();
+            let slot = input_kinds.entry(e.to_port.clone()).or_default();
+            *slot = slot.max(k);
+        }
+        for ((n, p), k) in free_inputs {
+            if *n == name {
+                let slot = input_kinds.entry(p.clone()).or_default();
+                *slot = slot.max(*k);
+            }
+        }
+        if !per_element.is_empty() || !stream_outputs.is_empty() || !open_inputs.is_empty() || !input_kinds.is_empty() {
+            out.insert(name, StreamPorts { per_element, stream_outputs, open_inputs, input_kinds });
         }
     }
     Ok(out)

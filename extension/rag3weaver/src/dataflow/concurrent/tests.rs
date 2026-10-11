@@ -540,10 +540,9 @@ impl crate::dataflow::node_registry::NodeFactory for Factory {
 }
 
 /// **10. Le sous-graphe** : un flux fini sort, élément par élément et dans
-/// l'ordre ; un flux entre, élément par élément ; un flux ouvert sur une
-/// entrée est refusé en le nommant, au lieu d'attendre pour toujours.
+/// l'ordre ; un flux entre, élément par élément.
 #[test]
-fn a_subgraph_relays_streams_and_refuses_an_open_input() {
+fn a_subgraph_relays_streams() {
     use crate::dataflow::checkpoint::{EdgeDef, GraphDefinition, NodeDef};
     use crate::dataflow::graph_node::GraphNode;
     use crate::dataflow::NodeRegistry;
@@ -590,17 +589,177 @@ fn a_subgraph_relays_streams_and_refuses_an_open_input() {
     let (out, _) = run(rt(), g).unwrap();
     assert_eq!(text(out.get("sub", "c.seen").cloned().expect("c.seen")), "x,y");
 
-    // Un flux ouvert sur une entrée : refusé, nommé.
-    let inner = GraphNode::from_definition("sub", one("c", "Collect"), registry).unwrap();
+    // Un flux ouvert sur une entrée : le pont vivant le laisse couler
+    // (`elements_flow_through_a_subgraph_while_the_source_emits`).
+}
+
+/// Le registre des témoins du pont vivant : `Fwd` relaie chaque élément (sa
+/// sortie suit son entrée), `Boom` échoue au premier élément.
+fn bridge_registry() -> Arc<crate::dataflow::NodeRegistry> {
+    let mut registry = crate::dataflow::NodeRegistry::new();
+    registry.register(Box::new(Factory(
+        "Fwd",
+        Arc::new(|name: &str| {
+            node(
+                name,
+                vec![each_in("in", true)],
+                vec![PortDef::value("out", PortType::Results, false).follows("in")],
+                |ctx| {
+                    while let Some(v) = ctx.next("in")? {
+                        if ctx.emit("out", v).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(())
+                },
+            )
+        }),
+    )));
+    registry.register(Box::new(Factory(
+        "Boom",
+        Arc::new(|name: &str| {
+            node(name, vec![each_in("in", true)], vec![], |ctx| {
+                ctx.next("in")?;
+                Err("boom à l'intérieur".into())
+            })
+        }),
+    )));
+    Arc::new(registry)
+}
+
+fn sub(name: &str, inner: &str, ty: &str) -> Box<dyn Node> {
+    use crate::dataflow::checkpoint::{GraphDefinition, NodeDef};
+    let def = GraphDefinition {
+        nodes: vec![NodeDef { name: inner.into(), node_type: ty.into(), config: serde_json::json!({}) }],
+        edges: vec![],
+    };
+    Box::new(crate::dataflow::graph_node::GraphNode::from_definition(name, def, bridge_registry()).unwrap())
+}
+
+/// **3b. Ça coule à travers un sous-graphe** : la source ne rend son second
+/// élément qu'après que l'aval, derrière le sous-graphe, a lu le premier.
+/// Avec la voie 3a (tout à la fin), elle attendrait pour rien.
+#[test]
+fn elements_flow_through_a_subgraph_while_the_source_emits() {
+    let (read_tx, read_rx) = mpsc::channel::<()>();
     let mut g = DataflowGraph::new();
-    g.add_node(node("peer_in", vec![], vec![stream_out("out", PortKind::Open, false)], |ctx| {
-        ctx.emit("out", s("salut"))?;
-        while !ctx.cancellation().wait_timeout(Duration::from_millis(50)) {}
+    g.add_node(node("peer_in", vec![], vec![stream_out("out", PortKind::Open, false)], move |ctx| {
+        ctx.emit("out", s("a"))?;
+        read_rx.recv_timeout(Duration::from_secs(20)).map_err(|_| "rien n'a traversé le sous-graphe")?;
+        ctx.emit("out", s("b"))?;
         Ok(())
     }))
     .unwrap();
-    g.add_node(Box::new(inner)).unwrap();
-    g.connect("peer_in", "out", "sub", "c.in").unwrap();
-    let err = run(rt(), g).map(|_| ()).unwrap_err();
-    assert!(err.contains("c.in") && err.contains("Open"), "{err}");
+    g.add_node(sub("sous", "fwd", "Fwd")).unwrap();
+    g.add_node(node("reader", vec![each_in("in", true)], vec![value_out("seen")], move |ctx| {
+        let mut seen = Vec::new();
+        while let Some(v) = ctx.next("in")? {
+            seen.push(text(v));
+            let _ = read_tx.send(());
+        }
+        ctx.set_output("seen", s(&seen.join(",")));
+        Ok(())
+    }))
+    .unwrap();
+    g.connect("peer_in", "out", "sous", "fwd.in").unwrap();
+    g.connect("sous", "fwd.out", "reader", "in").unwrap();
+    let (out, report) = run(rt(), g).unwrap();
+    assert_eq!(seen(&out, "reader"), "a,b");
+    assert!(matches!(status(&report, "sous"), NodeStatus::Completed));
+}
+
+/// **3b. L'interblocage qui traverse la frontière est nommé**, avec le nom
+/// intérieur préfixé : un `fwd` de chaque côté, et la cause nomme `sous/fwd`.
+#[test]
+fn a_deadlock_across_the_boundary_names_the_inner_node() {
+    let mut g = DataflowGraph::new();
+    g.add_node(node("a", vec![], vec![stream_out("out", PortKind::Finite, false)], |ctx| {
+        for i in 0..50 {
+            ctx.emit("out", s(&i.to_string()))?;
+        }
+        Ok(())
+    }))
+    .unwrap();
+    g.add_node(sub("sous", "fwd", "Fwd")).unwrap();
+    g.add_node(node("fwd", vec![each_in("in", true)], vec![stream_out("out", PortKind::Finite, false)], |ctx| {
+        while let Some(v) = ctx.next("in")? {
+            if ctx.emit("out", v).is_err() {
+                break;
+            }
+        }
+        Ok(())
+    }))
+    .unwrap();
+    g.add_node(node("d", vec![each_in("b", false), each_in("c", false)], vec![], |ctx| {
+        while ctx.next("b")?.is_some() {}
+        while ctx.next("c")?.is_some() {}
+        Ok(())
+    }))
+    .unwrap();
+    g.connect("a", "out", "sous", "fwd.in").unwrap();
+    g.connect("a", "out", "fwd", "in").unwrap();
+    g.connect("sous", "fwd.out", "d", "b").unwrap();
+    g.connect("fwd", "out", "d", "c").unwrap();
+    let err = run(rt_with_capacity(2), g).map(|_| ()).unwrap_err();
+    assert!(err.contains("interblocage") && err.contains("sous/fwd"), "{err}");
+}
+
+/// **3b. L'arrêt de l'hôte traverse la frontière** : un sous-graphe qui lit
+/// un flux ouvert s'arrête avec le run, qui rend `Ok`.
+#[test]
+fn the_host_stops_a_subgraph_reading_an_open_stream() {
+    let (started_tx, started_rx) = mpsc::channel::<()>();
+    let rt = rt();
+    let handle = rt.cancel_handle();
+    let mut g = DataflowGraph::new();
+    g.add_node(node("peer_in", vec![], vec![stream_out("out", PortKind::Open, false)], move |ctx| {
+        ctx.emit("out", s("salut"))?;
+        let _ = started_tx.send(());
+        while !ctx.cancellation().wait_timeout(Duration::from_millis(20)) {}
+        Ok(())
+    }))
+    .unwrap();
+    g.add_node(sub("sous", "fwd", "Fwd")).unwrap();
+    g.add_node(collector("reader")).unwrap();
+    g.connect("peer_in", "out", "sous", "fwd.in").unwrap();
+    g.connect("sous", "fwd.out", "reader", "in").unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(rt.execute_with_report(&mut g));
+    });
+    started_rx.recv_timeout(Duration::from_secs(20)).expect("la source a émis");
+    std::thread::sleep(Duration::from_millis(50));
+    handle.cancel();
+    let (out, _) = rx.recv_timeout(Duration::from_secs(60)).expect("le run s'arrête").unwrap();
+    assert_eq!(out.stopped(), Some(&CancelCause::External));
+}
+
+/// **3b. Un nœud intérieur qui échoue** fait échouer le run avec son erreur,
+/// et le sous-graphe est `Failed` au rapport du parent.
+#[test]
+fn an_inner_failure_fails_the_run_with_its_error() {
+    let rt = rt();
+    let mut rx = rt.subscribe();
+    let mut g = DataflowGraph::new();
+    g.add_node(node("peer_in", vec![], vec![stream_out("out", PortKind::Open, false)], |ctx| {
+        let mut i = 0u64;
+        loop {
+            i += 1;
+            match ctx.emit("out", s(&i.to_string())) {
+                Ok(()) => {}
+                Err(Stopped::NoReader) => return Ok(()),
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }))
+    .unwrap();
+    g.add_node(sub("sous", "boom", "Boom")).unwrap();
+    g.connect("peer_in", "out", "sous", "boom.in").unwrap();
+    let err = run(rt, g).map(|_| ()).unwrap_err();
+    assert!(err.contains("boom à l'intérieur"), "{err}");
+    let mut events = Vec::new();
+    while let Ok(ev) = rx.try_recv() {
+        events.push(format!("{ev:?}"));
+    }
+    assert!(events.iter().any(|e| e.contains("NodeFailed") && e.contains("\"sous\"")), "{events:?}");
 }

@@ -200,6 +200,8 @@ pub struct NodeContext {
     stream: Option<super::stream::StreamBinding>,
     /// Les entrées dont un producteur est un flux ouvert.
     open_inputs: HashSet<String>,
+    /// Le genre de chaque entrée branchée.
+    input_kinds: HashMap<String, super::port::PortKind>,
     services: Arc<ServiceRegistry>,
     metrics: Vec<(String, f64)>,
     logs: Vec<(NodeLogLevel, String)>,
@@ -218,6 +220,7 @@ impl NodeContext {
             misuse: Vec::new(),
             stream: None,
             open_inputs: HashSet::new(),
+            input_kinds: HashMap::new(),
             services: Arc::new(ServiceRegistry::new()),
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -235,6 +238,7 @@ impl NodeContext {
             misuse: Vec::new(),
             stream: None,
             open_inputs: HashSet::new(),
+            input_kinds: HashMap::new(),
             services,
             metrics: Vec::new(),
             logs: Vec::new(),
@@ -308,6 +312,12 @@ impl NodeContext {
     /// jamais finir) ?
     pub fn input_is_open(&self, port: &str) -> bool {
         self.open_inputs.contains(port)
+    }
+
+    /// Le genre de ce qui arrive sur l'entrée `port` : le plus ouvert de ses
+    /// producteurs (`Value` sans producteur).
+    pub fn input_kind(&self, port: &str) -> super::port::PortKind {
+        self.input_kinds.get(port).copied().unwrap_or_default()
     }
 
     /// La sortie `port` est-elle un flux (genre résolu) ?
@@ -436,6 +446,34 @@ impl NodeContext {
     /// Les entrées du nœud dont un producteur est un flux ouvert.
     pub(crate) fn set_open_inputs(&mut self, open: HashSet<String>) {
         self.open_inputs = open;
+    }
+
+    pub(crate) fn set_input_kinds(&mut self, kinds: HashMap<String, super::port::PortKind>) {
+        self.input_kinds = kinds;
+    }
+
+    /// **Délègue les canaux du nœud** à un runtime imbriqué (le pont vivant
+    /// d'un sous-graphe, page 05 §4.1) : ses entrées lues élément par élément
+    /// et ses sorties branchées passent aux nœuds intérieurs. `None` hors de
+    /// l'exécuteur concurrent.
+    pub(crate) fn delegate_streams(&mut self) -> Option<super::stream::Delegation> {
+        let b = self.stream.as_mut()?;
+        Some(super::stream::Delegation {
+            hub: b.hub.clone(),
+            worker: b.worker,
+            worker_name: b.worker_name.clone(),
+            inputs: std::mem::take(&mut b.inputs),
+            pending: std::mem::take(&mut b.pending),
+            outputs: std::mem::take(&mut b.outputs),
+            input_kinds: self.input_kinds.clone(),
+        })
+    }
+
+    /// Ce qu'un runtime délégué a envoyé pour ce nœud sur la sortie `port`.
+    pub(crate) fn note_sent(&mut self, port: &str, n: usize) {
+        if let Some(b) = self.stream.as_mut() {
+            *b.sent.entry(port.to_string()).or_default() += n;
+        }
     }
 
     /// Les éléments émis sur chaque sortie en flux que rien ne lit, avant leur

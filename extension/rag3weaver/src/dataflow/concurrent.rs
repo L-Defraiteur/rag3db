@@ -117,9 +117,28 @@ fn restore_outputs(ports: &HashMap<String, CheckpointPortValue>) -> Result<HashM
         .collect())
 }
 
+/// **Le pont vivant** (page 05, §4.1) : un sous-graphe qui s'exécute sur les
+/// canaux de son parent. Ses ouvriers s'inscrivent au hub du parent sous
+/// `<préfixe>/<nœud>` ; ses entrées et sorties libres déléguées sont les
+/// canaux des arêtes extérieures.
+pub(crate) struct Outer {
+    pub hub: StreamHub<PortValue>,
+    /// L'ouvrier du nœud délégant, qui quitte le registre une fois les
+    /// ouvriers intérieurs inscrits.
+    pub leave: WorkerId,
+    pub prefix: String,
+    /// (nœud intérieur, entrée) → les canaux extérieurs, et ce que le parent en
+    /// avait déjà lu.
+    pub inputs: HashMap<(String, String), (Vec<ChannelId>, VecDeque<PortValue>)>,
+    /// (nœud intérieur, sortie) → les canaux extérieurs.
+    pub outputs: HashMap<(String, String), Vec<ChannelId>>,
+}
+
 /// Ce qu'un fil sait de son nœud avant de partir.
 struct Plan {
     name: String,
+    /// Son nom dans le hub : préfixé dans un sous-graphe délégué.
+    worker_name: String,
     node_type: String,
     worker: WorkerId,
     inputs: Vec<PortDef>,
@@ -130,6 +149,7 @@ struct Plan {
     /// Des flux posés d'avance sur une entrée lue élément par élément.
     initial_streams: HashMap<String, Vec<PortValue>>,
     open_inputs: HashSet<String>,
+    input_kinds: HashMap<String, super::port::PortKind>,
     /// Entrée → ses canaux, et les producteurs nommés (pour la raison d'un saut).
     in_chans: HashMap<String, Vec<ChannelId>>,
     producers: HashMap<String, Vec<String>>,
@@ -145,7 +165,11 @@ struct Plan {
 
 /// Comment un nœud a fini.
 enum Ended {
-    Completed { unconnected: HashMap<String, PortValue>, streams: HashMap<String, Vec<PortValue>> },
+    Completed {
+        unconnected: HashMap<String, PortValue>,
+        streams: HashMap<String, Vec<PortValue>>,
+        sent: HashMap<String, usize>,
+    },
     Skipped(String),
     Failed(String),
     Cancelled,
@@ -177,6 +201,7 @@ impl DataflowRuntime {
         stream_ports: &HashMap<String, super::runtime::StreamPorts>,
         start: Instant,
         checkpointing: Option<Checkpointing<'_>>,
+        mut outer: Option<Outer>,
     ) -> Result<DataflowOutput, String> {
         // Les nœuds finis d'un run précédent, dont les sorties se relisent ; un
         // lot qui ne se relit pas n'est pas un nœud fait : il est rejoué.
@@ -204,15 +229,28 @@ impl DataflowRuntime {
         let (persist_tx, persist_rx) = mpsc::channel::<Persist>();
         let keep_state = checkpointing.as_ref().is_some_and(|c| c.keep_state);
         let capacity = self.services.get::<usize>("stream_capacity").copied().unwrap_or(64);
-        let hub = StreamHub::<PortValue>::new();
-        self.cancel.attach(&hub);
+        let hub = outer.as_ref().map(|o| o.hub.clone()).unwrap_or_else(StreamHub::<PortValue>::new);
+        if outer.is_none() {
+            self.cancel.attach(&hub);
+        }
+        let prefix = outer.as_ref().map(|o| format!("{}/", o.prefix)).unwrap_or_default();
+        let mut outer_inputs = outer.as_mut().map(|o| std::mem::take(&mut o.inputs)).unwrap_or_default();
+        let outer_outputs = outer.as_mut().map(|o| std::mem::take(&mut o.outputs)).unwrap_or_default();
+        for ((node, port), (_, pending)) in outer_inputs.iter_mut() {
+            if !pending.is_empty() {
+                let queue = initial_streams.entry(node.clone()).or_default().entry(port.clone()).or_default();
+                let mut first: Vec<PortValue> = pending.drain(..).collect();
+                first.append(queue);
+                *queue = first;
+            }
+        }
 
         let mut out_chans: HashMap<(String, String), Vec<ChannelId>> = HashMap::new();
         let mut in_chans: HashMap<(String, String), Vec<ChannelId>> = HashMap::new();
         let mut producers: HashMap<(String, String), Vec<String>> = HashMap::new();
         let mut taps: HashMap<ChannelId, (String, EdgeTap)> = HashMap::new();
         for e in &graph.edges {
-            let label = format!("{}.{} → {}.{}", e.from_node, e.from_port, e.to_node, e.to_port);
+            let label = format!("{prefix}{}.{} → {prefix}{}.{}", e.from_node, e.from_port, e.to_node, e.to_port);
             let ch = hub.channel(label, capacity, 1, 1);
             out_chans.entry((e.from_node.clone(), e.from_port.clone())).or_default().push(ch);
             in_chans.entry((e.to_node.clone(), e.to_port.clone())).or_default().push(ch);
@@ -233,25 +271,40 @@ impl DataflowRuntime {
             .map(|node| {
                 let name = node.name().to_string();
                 let ports = stream_ports.get(&name).cloned().unwrap_or_default();
-                let (per_element, stream_outputs, open_inputs) = (ports.per_element, ports.stream_outputs, ports.open_inputs);
+                let (per_element, stream_outputs, open_inputs, input_kinds) =
+                    (ports.per_element, ports.stream_outputs, ports.open_inputs, ports.input_kinds);
                 let inputs = node.inputs();
                 let outputs = node.outputs();
+                let mut in_c: HashMap<String, Vec<ChannelId>> = inputs
+                    .iter()
+                    .filter_map(|p| in_chans.get(&(name.clone(), p.name.to_string())).map(|c| (p.name.to_string(), c.clone())))
+                    .collect();
+                let mut out_c: HashMap<String, Vec<ChannelId>> = outputs
+                    .iter()
+                    .filter_map(|p| out_chans.get(&(name.clone(), p.name.to_string())).map(|c| (p.name.to_string(), c.clone())))
+                    .collect();
+                for ((n, p), (chans, _)) in &outer_inputs {
+                    if *n == name {
+                        in_c.entry(p.clone()).or_default().extend(chans.iter().copied());
+                    }
+                }
+                for ((n, p), chans) in &outer_outputs {
+                    if *n == name {
+                        out_c.entry(p.clone()).or_default().extend(chans.iter().copied());
+                    }
+                }
+                let worker_name = format!("{prefix}{name}");
                 Plan {
-                    worker: hub.worker(name.clone()),
+                    worker: hub.worker(worker_name.clone()),
+                    worker_name,
                     node_type: node.node_type().to_string(),
                     required_outputs: outputs.iter().filter(|p| p.required).map(|p| p.name.to_string()).collect(),
-                    in_chans: inputs
-                        .iter()
-                        .filter_map(|p| in_chans.get(&(name.clone(), p.name.to_string())).map(|c| (p.name.to_string(), c.clone())))
-                        .collect(),
+                    in_chans: in_c,
                     producers: inputs
                         .iter()
                         .filter_map(|p| producers.get(&(name.clone(), p.name.to_string())).map(|c| (p.name.to_string(), c.clone())))
                         .collect(),
-                    out_chans: outputs
-                        .iter()
-                        .filter_map(|p| out_chans.get(&(name.clone(), p.name.to_string())).map(|c| (p.name.to_string(), c.clone())))
-                        .collect(),
+                    out_chans: out_c,
                     taps: taps
                         .iter()
                         .filter(|(_, (to, _))| *to == name)
@@ -260,6 +313,7 @@ impl DataflowRuntime {
                     initial: initial_inputs.remove(&name).unwrap_or_default(),
                     initial_streams: initial_streams.remove(&name).unwrap_or_default(),
                     open_inputs,
+                    input_kinds,
                     restored: restored.remove(&name),
                     fail: fail_node.as_deref() == Some(name.as_str()),
                     persist: checkpointing.is_some().then(|| persist_tx.clone()),
@@ -270,9 +324,15 @@ impl DataflowRuntime {
                 }
             })
             .collect();
+        // Les ouvriers intérieurs sont inscrits : le nœud délégant quitte le
+        // registre (il ne fait plus qu'attendre la portée ; le compter vivant
+        // empêcherait le détecteur de conclure).
+        if let Some(o) = &outer {
+            hub.worker_done(o.leave);
+        }
 
         let mut store_error: Option<String> = None;
-        let ends: Vec<(String, Ended)> = std::thread::scope(|scope| {
+        let ends: Vec<((String, String), Ended)> = std::thread::scope(|scope| {
             let handles: Vec<_> = graph
                 .nodes
                 .iter_mut()
@@ -280,9 +340,9 @@ impl DataflowRuntime {
                 .map(|(node, plan)| {
                     let hub = &hub;
                     scope.spawn(move || {
-                        let name = plan.name.clone();
+                        let names = (plan.name.clone(), plan.worker_name.clone());
                         let ended = self.run_one(node, plan, hub, run_id);
-                        (name, ended)
+                        (names, ended)
                     })
                 })
                 .collect();
@@ -312,7 +372,9 @@ impl DataflowRuntime {
             }
             handles.into_iter().map(|h| h.join().expect("un nœud a paniqué dans son fil")).collect()
         });
-        self.cancel.detach(&hub);
+        if outer.is_none() {
+            self.cancel.detach(&hub);
+        }
         if let Some(error) = store_error {
             self.emit(DataflowEvent::Failed { error: error.clone() });
             return Err(error);
@@ -322,12 +384,16 @@ impl DataflowRuntime {
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
         let mut skipped = HashMap::new();
         let mut streams = HashMap::new();
+        let mut sent_by = HashMap::new();
         let mut failures = Vec::new();
-        for (name, ended) in ends {
+        for ((name, worker_name), ended) in ends {
             match ended {
-                Ended::Completed { unconnected, streams: elements } => {
+                Ended::Completed { unconnected, streams: elements, sent } => {
                     for (port, list) in elements {
                         streams.insert((name.clone(), port), list);
+                    }
+                    for (port, n) in sent {
+                        sent_by.insert((name.clone(), port), n);
                     }
                     if !unconnected.is_empty() {
                         data.insert(name, unconnected);
@@ -336,15 +402,16 @@ impl DataflowRuntime {
                 Ended::Skipped(reason) => {
                     skipped.insert(name, reason);
                 }
-                Ended::Failed(error) => failures.push((name, error)),
+                Ended::Failed(error) => failures.push((worker_name, error)),
                 Ended::Cancelled => {}
             }
         }
         // La cause d'abord : le nœud qui a annulé le run, ou l'interblocage.
         let error = match &cause {
+            // Le nœud en cause, ou le sous-graphe qui le contient (`sous/x`).
             Some(CancelCause::Failed { node }) => failures
                 .iter()
-                .find(|(n, _)| n == node)
+                .find(|(n, _)| n == node || node.starts_with(&format!("{n}/")))
                 .map(|(_, e)| e.clone())
                 .or_else(|| Some(format!("le nœud « {node} » a paniqué"))),
             Some(CancelCause::Deadlock(why)) => Some(format!("interblocage des flux : {why}")),
@@ -358,16 +425,33 @@ impl DataflowRuntime {
             total_nodes: graph.nodes.len(),
             duration_ms: start.elapsed().as_millis() as u64,
         });
-        Ok(DataflowOutput::new(data, skipped, cause, streams))
+        Ok(DataflowOutput::new(data, skipped, cause, streams).with_sent(sent_by))
+    }
+
+    /// **Le pont vivant** : exécute un sous-graphe sur les canaux délégués de
+    /// son parent (voir [`Outer`]).
+    pub(crate) fn execute_delegated(&self, graph: &mut DataflowGraph, outer: Outer, free_inputs: HashMap<(String, String), super::port::PortKind>) -> Result<DataflowOutput, String> {
+        let run_id = crate::events::new_run_id("graph");
+        let start = Instant::now();
+        self.emit_run_started(&run_id, graph);
+        let result = (|| {
+            graph.validate()?;
+            let stream_ports = super::runtime::stream_ports_of_with(graph, &free_inputs)?;
+            let initial = std::mem::take(&mut graph.initial_inputs);
+            self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None, Some(outer))
+        })();
+        self.emit_run_finished(&run_id, start.elapsed().as_millis() as u64, result.is_ok());
+        result
     }
 
     /// Le fil d'un nœud : ses entrées de départ, le saut ou l'exécution, ses
     /// sorties, et la fin de ses canaux.
     fn run_one(&self, node: &mut Box<dyn Node>, plan: Plan, hub: &StreamHub<PortValue>, run_id: &str) -> Ended {
-        let _guard = WorkerGuard { hub, worker: plan.worker, node: plan.name.clone() };
+        let _guard = WorkerGuard { hub, worker: plan.worker, node: plan.worker_name.clone() };
         let mut binding = StreamBinding {
             hub: hub.clone(),
             worker: plan.worker,
+            worker_name: plan.worker_name.clone(),
             inputs: HashMap::new(),
             pending: HashMap::new(),
             outputs: plan.out_chans.clone(),
@@ -408,7 +492,7 @@ impl DataflowRuntime {
             }
             binding.finish();
             self.emit(DataflowEvent::CheckpointResumed { node: plan.name.clone(), output_ports: outputs.keys().cloned().collect() });
-            return Ended::Completed { unconnected: HashMap::new(), streams: HashMap::new() };
+            return Ended::Completed { unconnected: HashMap::new(), streams: HashMap::new(), sent: binding.sent.clone() };
         }
 
         // ── Les entrées de départ ──────────────────────────────────────────
@@ -430,7 +514,9 @@ impl DataflowRuntime {
         loop {
             // Une entrée PerElement requise est servie dès son premier élément.
             waiting.retain(|(port, c, _)| {
-                let first_seen = plan.per_element.contains(port) && pending.get(port).is_some_and(|q| !q.is_empty());
+                let first_seen = plan.per_element.contains(port)
+                    && (pending.get(port).is_some_and(|q| !q.is_empty())
+                        || plan.initial_streams.get(port).is_some_and(|q| !q.is_empty()));
                 !first_seen && !hub.ended(*c)
             });
             if waiting.is_empty() {
@@ -458,6 +544,7 @@ impl DataflowRuntime {
         ctx.set_run_id(run_id);
         ctx.set_stream_ports(plan.per_element.clone(), plan.stream_outputs.clone());
         ctx.set_open_inputs(plan.open_inputs.clone());
+        ctx.set_input_kinds(plan.input_kinds.clone());
         let mut missing: Option<String> = None;
         for input in &plan.inputs {
             let port = input.name.to_string();
@@ -509,7 +596,7 @@ impl DataflowRuntime {
             if input.required && plan.in_chans.contains_key(&port) && !has_data && missing.is_none() {
                 missing = Some(format!(
                     "entrée requise « {port} » sans donnée : {} n'a rien émis (branche non prise)",
-                    plan.producers.get(&port).map(|p| p.join(", ")).unwrap_or_default()
+                    plan.producers.get(&port).map(|p| p.join(", ")).unwrap_or_else(|| "l'entrée du sous-graphe".into())
                 ));
             }
         }
@@ -537,7 +624,9 @@ impl DataflowRuntime {
         let mut binding = ctx.take_stream().expect("le lien posé avant l'exécution");
 
         // Le run annulé pendant ce nœud : il est arrêté, sauf s'il est la cause.
-        let own_failure = matches!(hub.cancelled(), Some(CancelCause::Failed { ref node }) if *node == plan.name);
+        // La cause, c'est lui, ou un nœud de son sous-graphe délégué.
+        let own_failure = matches!(hub.cancelled(), Some(CancelCause::Failed { ref node })
+            if *node == plan.worker_name || node.starts_with(&format!("{}/", plan.worker_name)));
         if hub.cancelled().is_some() && !own_failure {
             return cancelled(&mut binding, "pendant son exécution");
         }
@@ -563,7 +652,7 @@ impl DataflowRuntime {
             error: result.as_ref().err().cloned(),
         });
         if let Err(error) = result {
-            hub.cancel(CancelCause::Failed { node: plan.name.clone() });
+            hub.cancel(CancelCause::Failed { node: plan.worker_name.clone() });
             if let Some(tx) = &plan.persist {
                 let _ = tx.send(Persist::Failed { node: plan.name.clone(), error: error.clone() });
             }
@@ -604,7 +693,7 @@ impl DataflowRuntime {
                         }
                         Err(e) => {
                             let error = format!("{} : la sortie « {port} » ne se range pas au point de reprise : {e}", plan.name);
-                            hub.cancel(CancelCause::Failed { node: plan.name.clone() });
+                            hub.cancel(CancelCause::Failed { node: plan.worker_name.clone() });
                             let _ = tx.send(Persist::Failed { node: plan.name.clone(), error: error.clone() });
                             binding.finish();
                             self.emit(DataflowEvent::NodeFailed { node: plan.name.clone(), error: error.clone() });
@@ -618,7 +707,7 @@ impl DataflowRuntime {
         }
         binding.finish();
         self.emit(DataflowEvent::NodeCompleted { node: plan.name.clone(), duration_ms, outputs: output_snapshots, metrics });
-        Ended::Completed { unconnected, streams: stream_elements }
+        Ended::Completed { unconnected, streams: stream_elements, sent: binding.sent.clone() }
     }
 }
 

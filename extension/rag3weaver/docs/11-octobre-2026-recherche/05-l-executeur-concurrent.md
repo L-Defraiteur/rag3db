@@ -269,6 +269,21 @@ reprise, reste la règle.
 - un nœud intérieur qui échoue fait échouer le run avec son erreur, et le
   sous-graphe est `Failed` au rapport du parent.
 
+**Fait** (relecture du proto : les noms préfixés dans le hub, et le contrôle
+au montage d'un lecteur par entrée libre et d'un émetteur par sortie libre).
+`NodeContext::delegate_streams` rend les canaux du nœud ; le runtime imbriqué
+(`DataflowRuntime::execute_delegated`) inscrit ses ouvriers au hub du parent
+sous `<sous-graphe>/<nœud>`, puis fait quitter le registre à l'ouvrier du
+nœud délégant. Le genre d'une sortie intérieure qui suit une entrée déléguée
+prend celui de l'arête extérieure (`resolved_kinds_with`). Une faute
+intérieure est rattachée au sous-graphe par son préfixe. Le refus d'un `Open`
+en entrée a disparu avec la voie 3a de l'exécuteur concurrent ; sous les
+niveaux, elle ne voit jamais de flux ouvert. Témoins : les quatre ci-dessus.
+Trois rougissent sans la délégation (ça coule, l'interblocage nommé, la faute
+intérieure). Le quatrième (l'arrêt de l'hôte) passe aussi par l'ancienne voie,
+dont la lecture était déjà interrompue par l'annulation du run : il garde le
+comportement, il ne distingue pas les deux voies.
+
 ## 5. Ce qui ne change pas
 
 - Un graphe de valeurs ne passe jamais par ici.

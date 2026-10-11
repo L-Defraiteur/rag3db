@@ -301,10 +301,28 @@ impl DataflowGraph {
     /// qui suit une entrée prend le genre de ses producteurs ; une entrée libre
     /// suivie reçoit une valeur initiale.
     pub fn resolved_kinds(&self) -> Result<HashMap<(String, String), PortKind>, String> {
+        self.resolved_kinds_with(&HashMap::new())
+    }
+
+    /// La même, quand des entrées libres reçoivent un flux d'ailleurs (un
+    /// sous-graphe délégué : ses entrées sont les canaux du parent) : une
+    /// sortie qui suit une telle entrée prend son genre.
+    pub(crate) fn resolved_kinds_with(
+        &self,
+        free_inputs: &HashMap<(String, String), PortKind>,
+    ) -> Result<HashMap<(String, String), PortKind>, String> {
         let (nodes, edges) = self.kinds_input();
         Ok(super::kinds::resolve(&nodes, &edges)?
             .into_iter()
-            .map(|(k, r)| (k, r.with_value_inputs()))
+            .map(|(k, r)| {
+                let kind = match &r {
+                    super::kinds::Resolved::Follows { node, port, at_least } => free_inputs
+                        .get(&(node.clone(), port.clone()))
+                        .map_or(*at_least, |outer| at_least.max(*outer)),
+                    fixed => fixed.with_value_inputs(),
+                };
+                (k, kind)
+            })
             .collect())
     }
 

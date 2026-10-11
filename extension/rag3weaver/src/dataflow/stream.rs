@@ -328,6 +328,8 @@ impl<T: Clone + Send> StreamHub<T> {
 pub(crate) struct StreamBinding {
     pub hub: StreamHub<super::port::PortValue>,
     pub worker: WorkerId,
+    /// Le nom de l'ouvrier dans le hub (préfixé dans un sous-graphe délégué).
+    pub worker_name: String,
     /// Une entrée lue élément par élément → ses canaux (un par arête).
     pub inputs: std::collections::HashMap<String, Vec<ChannelId>>,
     /// Ce que le runtime a déjà lu d'une entrée avant `execute` (son premier
@@ -342,6 +344,20 @@ pub(crate) struct StreamBinding {
     /// Sous points de reprise : ce qui est parti sur chaque sortie, dans
     /// l'ordre, pour que la reprise le rejoue sans rejouer le nœud.
     pub recorded: Option<std::collections::HashMap<String, Vec<super::port::PortValue>>>,
+}
+
+/// **Les canaux qu'un nœud délègue** à un runtime imbriqué (voir
+/// `NodeContext::delegate_streams`).
+pub(crate) struct Delegation {
+    pub hub: StreamHub<super::port::PortValue>,
+    /// L'ouvrier du nœud délégant : il quitte le registre une fois les
+    /// ouvriers intérieurs inscrits.
+    pub worker: WorkerId,
+    pub worker_name: String,
+    pub inputs: std::collections::HashMap<String, Vec<ChannelId>>,
+    pub pending: std::collections::HashMap<String, VecDeque<super::port::PortValue>>,
+    pub outputs: std::collections::HashMap<String, Vec<ChannelId>>,
+    pub input_kinds: std::collections::HashMap<String, super::port::PortKind>,
 }
 
 impl StreamBinding {

@@ -123,6 +123,23 @@ impl GraphNode {
             });
         }
 
+        // **Un seul lecteur intérieur par entrée libre, un seul émetteur par
+        // sortie libre** (relecture du proto) : le pont vivant leur délègue
+        // les canaux extérieurs, dont les comptes supposent un bout de chaque
+        // côté. Vrai par construction aujourd'hui ; dit au montage le jour où
+        // un alias nommerait deux ports intérieurs.
+        for (map, what) in [(&input_map, "entrée"), (&output_map, "sortie")] {
+            let mut seen = HashSet::new();
+            for (ext, inner) in map.iter() {
+                if !seen.insert(inner.clone()) {
+                    return Err(format!(
+                        "sous-graphe « {name} » : l'{what} libre « {ext} » vise {}.{}, déjà visé par une autre",
+                        inner.0, inner.1
+                    ));
+                }
+            }
+        }
+
         // **Le genre d'une sortie libre, résolu à l'intérieur** : fixe, ou
         // suivant (de proche en proche) une entrée libre, republiée sous son
         // nom externe.
@@ -208,6 +225,74 @@ impl GraphNode {
 }
 
 
+impl GraphNode {
+    /// Le sous-graphe sur les canaux délégués du parent : une entrée lue
+    /// élément par élément est lue par son nœud intérieur sur l'arête
+    /// extérieure, une sortie branchée est posée par son nœud intérieur sur
+    /// l'arête extérieure. Les valeurs reçues en entier passent comme valeurs
+    /// initiales, comme avant.
+    fn execute_delegated(
+        &self,
+        ctx: &mut NodeContext,
+        mut sub_graph: DataflowGraph,
+        delegation: super::stream::Delegation,
+    ) -> Result<(), String> {
+        let super::stream::Delegation { hub, worker, worker_name, mut inputs, mut pending, outputs, input_kinds } = delegation;
+        let mut outer_inputs = HashMap::new();
+        let mut free_kinds = HashMap::new();
+        for (ext_name, (inner_node, inner_port)) in &self.input_map {
+            let key = (inner_node.clone(), inner_port.clone());
+            if let Some(chans) = inputs.remove(ext_name) {
+                let queue = pending.remove(ext_name).unwrap_or_default();
+                free_kinds.insert(key.clone(), input_kinds.get(ext_name).copied().unwrap_or_default());
+                // L'entrée déléguée compte comme servie pour la validation.
+                sub_graph.set_initial_stream(inner_node, inner_port, Vec::new());
+                outer_inputs.insert(key, (chans, queue));
+            } else if let Some(queue) = pending.remove(ext_name) {
+                // Une entrée lue élément par élément sans arête : sa valeur initiale.
+                sub_graph.set_initial_stream(inner_node, inner_port, queue.into_iter().collect());
+            } else if let Some(value) = ctx.take_input(ext_name) {
+                sub_graph.set_initial_input(inner_node, inner_port, value);
+            }
+        }
+        let mut outer_outputs = HashMap::new();
+        for (ext_name, (inner_node, inner_port)) in &self.output_map {
+            if let Some(chans) = outputs.get(ext_name) {
+                outer_outputs.insert((inner_node.clone(), inner_port.clone()), chans.clone());
+            }
+        }
+        let services = if ctx.run_id().is_empty() {
+            ctx.services_arc()
+        } else {
+            let mut layer = super::services::ServiceRegistry::layered(ctx.services_arc());
+            layer.register("parent_run", ctx.run_id().to_string());
+            std::sync::Arc::new(layer)
+        };
+        let max_iterations = sub_graph.nodes.len().max(1);
+        let inner = super::runtime::DataflowRuntime::with_services_arc(max_iterations, services);
+        let outer = super::concurrent::Outer { hub, leave: worker, prefix: worker_name, inputs: outer_inputs, outputs: outer_outputs };
+        let output = inner.execute_delegated(&mut sub_graph, outer, free_kinds)?;
+
+        // Ce que les nœuds intérieurs ont posé sur les arêtes du parent compte
+        // pour les sorties de ce nœud ; une sortie libre non branchée revient
+        // comme avant (valeur, ou éléments dans l'ordre).
+        for (ext_name, (inner_node, inner_port)) in &self.output_map {
+            if outputs.contains_key(ext_name) {
+                ctx.note_sent(ext_name, output.sent(inner_node, inner_port));
+            } else if ctx.is_stream_output(ext_name) {
+                if let Some(list) = output.stream(inner_node, inner_port) {
+                    for v in list.to_vec() {
+                        ctx.emit(ext_name, v)?;
+                    }
+                }
+            } else if let Some(value) = output.get(inner_node, inner_port) {
+                ctx.set_output(ext_name, value.clone());
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Node for GraphNode {
     fn name(&self) -> &str {
         &self.name
@@ -225,11 +310,17 @@ impl Node for GraphNode {
         // 1. Materialize the sub-graph
         let mut sub_graph = DataflowGraph::from_definition(&self.definition, &self.registry)?;
 
+        // **Le pont vivant** (page 05, §4.1) : sous l'exécuteur concurrent, le
+        // sous-graphe s'exécute sur les canaux du parent, ses éléments coulent
+        // à travers la frontière.
+        if let Some(delegation) = ctx.delegate_streams() {
+            return self.execute_delegated(ctx, sub_graph, delegation);
+        }
+
         // 2. Inject inputs from parent context into sub-graph initial_inputs.
-        // **Une entrée lue élément par élément** reçoit ses éléments en
-        // entier, puis les pose d'avance dans le sous-graphe (page 05, §4 :
-        // rendu à la fin, pas encore vivant). Un flux ouvert ne finirait
-        // jamais : refusé en le nommant, au lieu d'attendre pour toujours.
+        // **Hors du pont vivant** (un parent sous l'exécuteur par niveaux, qui
+        // n'a pas de flux ouvert) : une entrée lue élément par élément reçoit
+        // ses éléments en entier, puis les pose d'avance dans le sous-graphe.
         let per_element: std::collections::HashSet<String> = self
             .inputs
             .iter()
@@ -238,13 +329,6 @@ impl Node for GraphNode {
             .collect();
         for (ext_name, (inner_node, inner_port)) in &self.input_map {
             if per_element.contains(ext_name) {
-                if ctx.input_is_open(ext_name) {
-                    return Err(format!(
-                        "{} : l'entrée « {ext_name} » reçoit un flux ouvert (Open) ; un sous-graphe ne le relaie \
-                         pas encore en direct (page 05, §4, 3b) et l'attendrait pour toujours",
-                        self.name
-                    ));
-                }
                 let mut elements = Vec::new();
                 while let Some(v) = ctx.next(ext_name)? {
                     elements.push(v);
