@@ -258,6 +258,8 @@ pub fn spawn(
     root: PathBuf,
     source: Arc<dyn FileSource>,
     bus: crate::events::EventBus,
+    lag: Arc<crate::catalog::retard::Lag>,
+    cell: crate::scope::Scope,
 ) -> Result<WatchHandle, String> {
     let mut scanner = Scanner::new(root, source, config)?;
     let every = Duration::from_millis(config.every_ms.max(10));
@@ -283,6 +285,8 @@ pub fn spawn(
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default();
                     for c in changes {
+                        // Le retard d'abord : une lecture qui suit l'événement le voit.
+                        lag.note(&cell, &c.path, at_ms);
                         bus.emit(crate::events::Event::FileChanged {
                             watch: name.clone(),
                             path: c.path,

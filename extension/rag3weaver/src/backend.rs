@@ -2028,7 +2028,12 @@ impl Backend {
             } else {
                 prepared.directory.join(&workspace.root)
             };
-            let bus = self.catalog.lock().unwrap_or_else(|e| e.into_inner()).event_bus();
+            // Le bus, le registre du retard et la cellule : la montre et sa
+            // réaction travaillent dans la cellule du catalogue.
+            let (bus, lag, cell) = {
+                let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+                (cat.event_bus(), cat.file_lag(), cat.scope().clone())
+            };
             let mut mounted = Vec::new();
             for (name, config) in &prepared.manifest.watches {
                 if config.source != "workspace" {
@@ -2037,7 +2042,7 @@ impl Backend {
                         config.source
                     ));
                 }
-                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone())?);
+                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone())?);
                 mounted.push(name.clone());
             }
             Ok(mounted)
@@ -2916,7 +2921,8 @@ impl Backend {
                 crate::code::LIBRARY,
                 crate::code::SYMBOL,
             ],
-            _ => return Ok(json!({})),
+            // Pas d'index de code déclaré : rien à rapporter, sauf un retard.
+            _ => &[],
         };
         let Ok(cat) = self.catalog.try_lock() else {
             return Ok(json!({"busy": true}));
@@ -2929,6 +2935,11 @@ impl Backend {
                     serde_json::to_value(state).map_err(|e| e.to_string())?,
                 );
             }
+        }
+        // Le retard de l'index sur le disque : des fichiers changés pas encore
+        // réindexés (la montre de fichiers).
+        if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
+            etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
         Ok(Value::Object(etats))
         }
@@ -3647,6 +3658,70 @@ mod tests {
 
         let erreurs = backend.stop_reactions();
         assert!(erreurs.is_empty(), "{erreurs:?}");
+    }
+
+
+    /// **Le retard se dit** (W3) : la montre en service, sans sa réaction —
+    /// une édition à la main n'est pas réindexée. L'état de l'index dit le
+    /// retard, et `usages` le dit en tête de sa réponse au lieu de rendre
+    /// l'index d'avant comme sûr. La réaction montée, une nouvelle édition
+    /// est réindexée et le retard tombe.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_lag_is_said_between_an_edit_and_its_reindexing() {
+        let (dir, backend) = backend_qui_surveille();
+        assert_eq!(backend.mount_watches().unwrap(), ["code"]);
+        assert!(!usages_de(&backend, "depart").contains("pas encore réindexé"));
+
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\n").unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let etat = loop {
+            let e = backend.index_states().unwrap();
+            if e["lag"]["files"] == 1 || std::time::Instant::now() > fin {
+                break e;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        assert_eq!(etat["lag"]["files"], 1, "l'état ne dit pas le retard : {etat}");
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("1 fichier changé") && u.contains("pas encore réindexé"), "{u}");
+        assert!(!u.contains("ailleurs"), "rien n'est réindexé sans la réaction : {u}");
+
+        // Une cellule voisine n'a pas ce retard, et le sien ne déborde pas ici.
+        let voisine = crate::scope::Scope { org: "voisine".into(), project: "p".into() };
+        let lag = backend.catalog.lock().unwrap().file_lag();
+        assert_eq!(lag.summary_in(&voisine), None);
+        lag.note(&voisine, "autre.rs", 0);
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("1 fichier changé"), "seul le retard de la cellule de l'appel compte : {u}");
+        lag.done(&voisine, "autre.rs", u64::MAX);
+
+        // La réaction montée : l'édition suivante est réindexée, le retard tombe.
+        backend.mount_reactions().unwrap();
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn ailleurs() { depart(); }\nfn encore() { depart(); }\n").unwrap();
+        let apres = attendre_les_usages(&backend, "depart", |u| u.contains("encore") && !u.contains("pas encore réindexé"));
+        assert!(apres.contains("encore") && !apres.contains("pas encore réindexé"), "{apres}");
+        assert!(backend.index_states().unwrap().get("lag").is_none());
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **La synchronisation efface le retard en relisant** : un retard noté
+    /// avant une synchronisation de la source tombe quand elle relit le
+    /// fichier — c'est elle qui reprend ce qu'une réaction a mis en reprise.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_sync_clears_the_lag_of_the_files_it_reads() {
+        let (_dir, backend) = backend_qui_surveille();
+        let (lag, cell) = {
+            let cat = backend.catalog.lock().unwrap();
+            (cat.file_lag(), cat.scope().clone())
+        };
+        lag.note(&cell, "outils.rs", crate::catalog::retard::now_ms());
+        assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        assert_eq!(lag.summary_in(&cell), None, "relu par la synchronisation, le retard tombe");
     }
 
     /// Une montre ne surveille qu'une copie de travail : sur un `snapshot`

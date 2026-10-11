@@ -94,6 +94,8 @@ fn the_running_watch_publishes_and_stops_at_once() {
         dir.path().to_path_buf(),
         source,
         bus.clone(),
+        Arc::new(crate::catalog::retard::Lag::new()),
+        crate::scope::Scope::default(),
     )
     .unwrap();
     std::fs::write(dir.path().join("src/a.rs"), "fn a() { 2 }\n").unwrap();
@@ -115,7 +117,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
 
     // Une période d'une minute : l'arrêt n'en attend rien.
     let (dir, source) = tree();
-    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus).unwrap();
+    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default()).unwrap();
     let t = Instant::now();
     handle.stop();
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
@@ -128,4 +130,34 @@ fn a_watch_is_read_from_the_manifest() {
     assert_eq!(w, WatchConfig::default());
     assert_eq!((w.every_ms, w.settle_ms, w.source.as_str()), (1000, 300, "workspace"));
     assert!(serde_json::from_value::<WatchConfig>(serde_json::json!({"période": 3})).is_err());
+}
+
+
+/// **La montre note le retard** dans la cellule donnée, avant de publier.
+#[test]
+fn the_watch_notes_the_lag_before_publishing() {
+    let (dir, source) = tree();
+    let bus = crate::events::EventBus::new(64);
+    let mut rx = bus.subscribe(crate::events::topic::FILES);
+    let lag = Arc::new(crate::catalog::retard::Lag::new());
+    let cell = crate::scope::Scope { org: "o".into(), project: "p".into() };
+    let handle = spawn(
+        "code",
+        &WatchConfig { every_ms: 20, settle_ms: 0, ..Default::default() },
+        dir.path().to_path_buf(),
+        source,
+        bus,
+        lag.clone(),
+        cell.clone(),
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("src/b.rs"), "fn b() { 2 }\n").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while rx.try_recv().is_err() {
+        assert!(Instant::now() < deadline, "aucun événement en 10 s");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
+    assert_eq!(lag.summary_in(&crate::scope::Scope::default()), None);
+    handle.stop();
 }

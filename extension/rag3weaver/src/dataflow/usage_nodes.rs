@@ -566,11 +566,11 @@ impl Node for UsagesNode {
         crate::dataflow::node_registry::ports_declares(&UsagesNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog, refusal, with_status, CatalogRead};
+        use super::catalog_read::{read_catalog_in, refusal, with_status, CatalogRead};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("UsagesNode: service 'catalog' absent")?;
         // Jamais un vide sans dire d'où il vient : occupé, jamais indexé,
         // ou partiel, le rendu le dit.
-        let (report, status) = match read_catalog(&catalog, &self.cfg.pivot) {
+        let (report, status) = match read_catalog_in(&catalog, &self.cfg.pivot, ctx.service::<crate::scope::Scope>("scope")) {
             CatalogRead::Refused(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());

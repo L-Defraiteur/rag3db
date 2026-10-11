@@ -19,6 +19,8 @@ use crate::search;
 
 mod aside;
 mod progress;
+/// Le retard de l'index sur le disque, par cellule (la montre de fichiers).
+pub mod retard;
 mod synchronisation;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
@@ -252,6 +254,10 @@ pub struct Catalog {
     /// LLM décodeur (étape 1) : exposé aux graphes comme service `"llm"`.
     llm: Option<Arc<dyn crate::llm::Llm>>,
     dual_embedder: Option<Arc<dyn DualEmbedder>>,
+    /// **Le retard de l'index sur le disque**, par cellule : noté par la
+    /// montre de fichiers, effacé par la réindexation, dit par les lectures.
+    /// Sous son propre verrou : la montre n'attend jamais le catalogue.
+    file_lag: Arc<retard::Lag>,
     config: CatalogConfig,
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
@@ -518,6 +524,7 @@ impl Catalog {
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
+            file_lag: Arc::new(retard::Lag::new()),
             parked_fts: HashMap::new(),
             parked_sparse: HashMap::new(),
             multi_cell: false,
@@ -4303,6 +4310,12 @@ impl Catalog {
     /// La cellule (org, project) courante.
     pub fn scope(&self) -> &crate::scope::Scope {
         &self.scope
+    }
+
+    /// Le registre du retard de l'index sur le disque (la montre y note, la
+    /// réindexation y efface, les lectures le disent).
+    pub fn file_lag(&self) -> Arc<retard::Lag> {
+        self.file_lag.clone()
     }
 
     /// Change la cellule courante : les ingestions suivantes sont estampillées

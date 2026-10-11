@@ -490,11 +490,14 @@ pub fn sync_source(
         avancement.files_to_resume = paths.len();
         progress(avancement);
         for path in paths {
+            let lu_a = crate::catalog::retard::now_ms();
             let r = match source.read(&path)? {
                 Some(content) => reingest_file(catalog, source, &path, &content, options.exige)?,
                 None => remove_file(catalog, source, &path, options.exige)?,
             };
             report.failed += r.failed;
+            // Relu et repris : le retard noté avant cette lecture tombe.
+            catalog.file_lag().done(&catalog.scope().clone(), &path, lu_a);
             report.files_resumed.push(path);
             avancement.files_resumed += 1;
             avancement.files_to_resume -= 1;
@@ -724,6 +727,7 @@ fn synchroniser(
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
         marquer_lus(&report.source, paquet);
+        let lu_a = crate::catalog::retard::now_ms();
         let t = std::time::Instant::now();
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
@@ -815,6 +819,18 @@ fn synchroniser(
             terminer(catalog, resultat)?;
         } else {
             resultat?;
+        }
+        // **Écrit** : le retard noté avant la lecture de ce paquet tombe —
+        // après l'écriture réussie, jamais sur un échec (le `?` ci-dessus sort
+        // avant), avec l'instant pris avant la lecture. Pas de témoin d'échec
+        // en test unitaire : la seule panne injectable sur ce chemin
+        // (`RAG3WEAVER_TEST_FAIL_IN_BATCH`) est une variable du processus, qui
+        // ferait échouer les synchronisations des tests voisins.
+        {
+            let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
+            for path in paquet {
+                lag.done(&cell, path, lu_a);
+            }
         }
         crate::ingest_profile::add("sync · paquet entier, de bout en bout", t_paquet);
         avancement.files_done += paquet.len();

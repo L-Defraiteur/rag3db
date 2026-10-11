@@ -86,6 +86,14 @@ impl Node for ReindexFileNode {
             .cloned()
             .ok_or("ReindexFileNode : pas de source de fichiers (le backend n'a pas de workspace)")?;
 
+        // Le registre du retard, et la cellule : celle de l'appel (le service
+        // `scope`), sinon celle du catalogue — comme la lecture
+        // (`read_catalog_in`), pour effacer là où la montre a noté.
+        let call_cell = ctx.service::<crate::scope::Scope>("scope").cloned();
+        let (lag, cell) = {
+            let cat = catalog.lock().map_err(|e| format!("catalogue empoisonné : {e}"))?;
+            (cat.file_lag(), call_cell.unwrap_or_else(|| cat.scope().clone()))
+        };
         let (mut reindexed, mut removed, mut deferred) = (Vec::new(), Vec::new(), Vec::new());
         let mut errors = Vec::new();
         for path in todo {
@@ -96,11 +104,16 @@ impl Node for ReindexFileNode {
             // son paquet) : sans dommage, la réingestion d'un même contenu est
             // idempotente (l'upsert inchangé est court-circuité).
             if crate::code_sync::indexing_in_progress(&source_id) {
+                // En reprise, **sans effacer le retard** : rien n'est relu ici.
+                // C'est la synchronisation qui l'effacera en relisant le fichier
+                // (à son paquet ou à la reprise).
                 crate::code_sync::note_change(&source_id, &path);
                 deferred.push(path);
                 continue;
             }
             let mut cat = catalog.lock().map_err(|e| format!("catalogue empoisonné : {e}"))?;
+            // L'instant de la lecture : un changement venu après garde son retard.
+            let read_at = crate::catalog::retard::now_ms();
             let outcome = match source.read(&path) {
                 Ok(Some(content)) => crate::code_tools::reingest_file(&mut cat, source.as_ref(), &path, &content)
                     .map(|r| if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed }),
@@ -114,6 +127,9 @@ impl Node for ReindexFileNode {
                 Err(e) => Err(e),
             };
             drop(cat);
+            if matches!(outcome, Ok(Outcome::Reindexed | Outcome::Removed)) {
+                lag.done(&cell, &path, read_at);
+            }
             match outcome {
                 Ok(Outcome::Reindexed) => reindexed.push(path),
                 Ok(Outcome::Removed) => removed.push(path),
