@@ -263,3 +263,40 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
   réponse (« index de `<hash>`, 14 h 05 ; master est à `<hash>` »), et, quand le nom manque, la
   phrase « peut-être plus récent que l'index » plutôt qu'un zéro sec.
 
+
+### 11 oct., 19 h 05 — cœur C++ — le serveur de luciepc (`code-rag3db-luciepc`) : « qui appelle `lockKeyOfRow`, que je viens de corriger ; que rejouer pour `lockIndexForWrite` ; où est le verrou de fichier du second écrivain (B2) ? »
+
+- **La question posée** : les mêmes qu'à 17 h 20, sur le serveur monté sur luciepc par Lucie
+  (session relancée pour le charger), plus une recherche par le sens pour préparer B2.
+- **L'outil essayé** : `daemon_status` ; `usages {name: lockKeyOfRow, usage: call}` ;
+  `impact {name: lockIndexForWrite, path: src/storage/table/node_table}` ;
+  `search_code {query: "le verrou de fichier F_SETLK du second processus écrivain refusé à
+  l'ouverture", options: {limit: 5}}`.
+- **Ce qu'il a rendu** : `daemon_status` — en marche sur 127.0.0.1:7971, trois backends ouverts
+  (`hote-essai/boutique`, `code-principal`, `code-bascule`), une session ; réponses instantanées
+  malgré le tunnel. `usages lockKeyOfRow` — **juste et complet** : deux appels, `NodeTable::update`
+  (node_table.cpp:658) et `RelTable::lockEndpoints` (rel_table.cpp:225) — le second, je ne l'avais
+  pas en tête : c'est le chemin des relations, où le même rafraîchissement d'instantané peut jouer
+  (à lire avant de fermer le lot). `impact lockIndexForWrite` — comme ici, mais la section
+  « Verrous pris sur le chemin » a **trois** entrées (`acquireLock`, `lockIndexForWrite`,
+  `lockRowForWrite`, avec les appelants à un saut) ; toujours « 0 tests qui la traversent ».
+  `search_code` par le sens — cinq résultats, **tous pertinents** : `C9_SecondWriterProcessRefused`
+  (le témoin à retourner pour B2), le e2e Rust `deux_processus_ne_peuvent_pas_ouvrir_la_meme_base`,
+  et `test/api/lecteurs_concurrents_test.cpp` (un second processus lecteur pendant qu'un écrivain
+  tient la base), que je ne connaissais pas ; avec un avertissement « parse without boolean
+  operators : OR des mots » — la phrase est prise comme un sac de mots, et pourtant le classement
+  est bon (vector + bm25).
+- **Ce que j'ai dû faire à côté** : rien pour ces trois-là. Pour savoir quel arbre et quel commit
+  le serveur indexe (`code-principal` ? `code-bascule` ?), rien ne le dit : les numéros de ligne
+  correspondent à master d'aujourd'hui, c'est ma seule preuve.
+- **Ce qui manquait** :
+  1. **Quel arbre, quel commit** : `daemon_status` nomme des manifestes, pas le dépôt ni la tête
+     indexée ; un agent qui travaille sur une branche veut savoir si l'index est celui de master
+     ou de sa branche, et de quand (« indexé à <heure>, tête <hash>, N fichiers en retard »).
+  2. Toujours « **0 tests qui la traversent** » pour `lockIndexForWrite` : voir l'entrée de 17 h 20
+     (les tests passent par Cypher).
+  3. La recherche par le sens pourrait dire **pourquoi** chaque résultat est là (les mots qui ont
+     porté) — le ★ seul ne l'explique pas ; mais c'est un confort, pas un manque.
+- **En une ligne** : sur ces questions-là, l'outil a gagné sur grep — l'appelant `lockEndpoints` de
+  `rel_table.cpp` que je n'aurais pas cherché, et un test de l'API que grep sur « F_SETLK »
+  n'aurait pas trouvé.
