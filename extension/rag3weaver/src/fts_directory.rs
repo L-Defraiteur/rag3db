@@ -53,6 +53,34 @@ use std::fs::{File, OpenOptions};
 /// C'était la cause du « création de l'index FTS … échouée » du dix-neuvième
 /// essai Windows du paquet npm (10 octobre 2026) : le fichier était écrit,
 /// seul le fsync du dossier tombait.
+/// **`fsync` d'un fichier écrit** (`sync_data`). Sous Windows, `FlushFileBuffers`
+/// exige un handle ouvert en écriture : `File::open` (lecture seule) puis
+/// `sync_data` rend « Access is denied » (os error 5) — c'était la chute de
+/// la « préparation du schéma » au premier bâti Windows avec le plein texte
+/// en fichiers (11 octobre 2026). On ouvre donc en écriture là-bas ; un
+/// fichier qu'un autre handle tient (partage refusé, os error 32) est laissé
+/// à NTFS, qui journalise, en le disant une fois.
+fn fsync_file(path: &Path) -> io::Result<()> {
+    #[cfg(not(windows))]
+    {
+        File::open(path)?.sync_data()
+    }
+    #[cfg(windows)]
+    {
+        match OpenOptions::new().read(true).write(true).open(path) {
+            Ok(f) => f.sync_data(),
+            Err(e) if e.raw_os_error() == Some(32) || e.kind() == io::ErrorKind::PermissionDenied => {
+                static DIT: std::sync::Once = std::sync::Once::new();
+                DIT.call_once(|| {
+                    eprintln!("[rag3weaver] plein texte : {} tenu par un autre handle, fsync impossible sous Windows ({e}) — durabilité laissée à NTFS", path.display());
+                });
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 fn fsync_dir(path: &Path) -> io::Result<()> {
     #[cfg(windows)]
     {
@@ -107,8 +135,8 @@ impl FtsDirectory {
     pub fn sync_generation(&self) -> io::Result<usize> {
         let paths: Vec<PathBuf> = self.pending.lock().unwrap().drain().collect();
         for path in &paths {
-            match File::open(path) {
-                Ok(f) => f.sync_data()?,
+            match fsync_file(path) {
+                Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e),
             }
