@@ -141,15 +141,17 @@ pub struct NeighborhoodReport {
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
-/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+/// Le texte d'avant le dialecte, gardé pour la parité des tests — les noms
+/// cités comme le dialecte rag3db les cite.
 #[cfg(test)]
 fn champs(alias: &str, cfg: &NeighborhoodConfig) -> String {
+    let q = crate::dialect::cypher_quote;
     let s = &cfg.start;
-    let mut c = vec![format!("{alias}._uuid"), format!("{alias}.{}", s.title), format!("{alias}.{}", s.kind_field)];
-    c.extend(s.path_fields.iter().map(|p| format!("{alias}.{p}")));
-    c.push(format!("{alias}.{}", s.line_field));
+    let mut c = vec![format!("{alias}.{}", q("_uuid")), format!("{alias}.{}", q(&s.title)), format!("{alias}.{}", q(&s.kind_field))];
+    c.extend(s.path_fields.iter().map(|p| format!("{alias}.{}", q(p))));
+    c.push(format!("{alias}.{}", q(&s.line_field)));
     for f in [&cfg.group_by, &cfg.label_field, &cfg.note_field] {
-        c.push(if f.is_empty() { "NULL".into() } else { format!("{alias}.{f}") });
+        c.push(if f.is_empty() { "NULL".into() } else { format!("{alias}.{}", q(f)) });
     }
     c.join(", ")
 }
@@ -1009,7 +1011,7 @@ mod tests_saut {
 
     /// La requête que `hop_query` écrivait avant de passer par le dialecte.
     fn requete_d_avant(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
-        let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", cfg.start.line) } else { "NULL".into() };
+        let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", crate::dialect::cypher_quote(&cfg.start.line)) } else { "NULL".into() };
         format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
     }
 
@@ -1037,9 +1039,9 @@ mod tests_saut {
         let r = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Scope".into(), props: vec![] };
         for d in [Direction::Incoming, Direction::Outgoing] {
             let mut h = super::super::graph_walk::hop_of(&r, d, &EdgeMark::default());
-            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid", d.pattern(&r)));
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m.`_uuid`", d.pattern(&r)));
             h.returns.push(Column::Node("name".into()));
-            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m._uuid, m.name", d.pattern(&r)));
+            assert_eq!(Rag3dbDialect.hop(&h).unwrap(), format!("UNWIND $uuids AS u MATCH {} RETURN u, m.`_uuid`, m.`name`", d.pattern(&r)));
         }
     }
 }

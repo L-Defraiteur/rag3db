@@ -180,21 +180,24 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
-/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+/// Le texte d'avant le dialecte, gardé pour la parité des tests — les noms
+/// cités comme le dialecte rag3db les cite.
 #[cfg(test)]
 fn champs(alias: &str, cfg: &UsagesConfig) -> String {
-    let mut c = vec![format!("{alias}._uuid"), format!("{alias}.{}", cfg.title), format!("{alias}.{}", cfg.kind_field)];
-    c.extend(cfg.path_fields.iter().map(|p| format!("{alias}.{p}")));
-    c.push(format!("{alias}.{}", cfg.line_field));
+    let q = crate::dialect::cypher_quote;
+    let mut c = vec![format!("{alias}.{}", q("_uuid")), format!("{alias}.{}", q(&cfg.title)), format!("{alias}.{}", q(&cfg.kind_field))];
+    c.extend(cfg.path_fields.iter().map(|p| format!("{alias}.{}", q(p))));
+    c.push(format!("{alias}.{}", q(&cfg.line_field)));
     c.join(", ")
 }
 
-/// Le texte d'avant le dialecte, gardé pour la parité des tests.
+/// Le texte d'avant le dialecte, gardé pour la parité des tests — les noms
+/// cités comme le dialecte rag3db les cite.
 #[cfg(test)]
 fn proprietes(rel: &RelInfo, cfg: &UsagesConfig) -> String {
     let mut c: Vec<String> = [&cfg.group_by, &cfg.usages_field, &cfg.line]
         .iter()
-        .map(|p| if rel.props.iter().any(|x| x == *p) { format!("r.{p}") } else { "NULL".to_string() })
+        .map(|p| if rel.props.iter().any(|x| x == *p) { format!("r.{}", crate::dialect::cypher_quote(p)) } else { "NULL".to_string() })
         .collect();
     c.push(cfg.edge_mark.column(rel));
     c.join(", ")
@@ -729,9 +732,9 @@ mod tests_saut {
     fn requete_d_avant(cfg: &UsagesConfig, rel: &RelInfo) -> String {
         format!(
             "UNWIND $uuids AS u MATCH (d:{to} {{_uuid: u}})<-[r:{name}]-(m:{from}) RETURN u, {c}, {props}",
-            to = rel.to,
-            name = rel.name,
-            from = rel.from,
+            to = crate::dialect::cypher_quote(&rel.to),
+            name = crate::dialect::cypher_quote(&rel.name),
+            from = crate::dialect::cypher_quote(&rel.from),
             c = champs("m", cfg),
             props = proprietes(rel, cfg)
         )
@@ -766,11 +769,11 @@ mod tests_saut {
                 // première colonne est l'uuid du pivot.
                 assert_eq!(
                     Rag3dbDialect.hop(&definitions_hop(&cfg, &rel)).unwrap(),
-                    format!("UNWIND $uuids AS u MATCH (d:Symbol {{_uuid: u}})<-[r:CONSUMES]-(m:Scope) RETURN u, {}", champs("m", &cfg))
+                    format!("UNWIND $uuids AS u MATCH (d:`Symbol` {{_uuid: u}})<-[r:`CONSUMES`]-(m:`Scope`) RETURN u, {}", champs("m", &cfg))
                 );
                 assert_eq!(
                     Rag3dbDialect.hop(&pivot_usages_hop(&cfg, &rel)).unwrap(),
-                    format!("UNWIND $uuids AS u MATCH (d:Symbol {{_uuid: u}})<-[r:CONSUMES]-(m:Scope) RETURN u, {}, {}", champs("m", &cfg), proprietes(&rel, &cfg))
+                    format!("UNWIND $uuids AS u MATCH (d:`Symbol` {{_uuid: u}})<-[r:`CONSUMES`]-(m:`Scope`) RETURN u, {}, {}", champs("m", &cfg), proprietes(&rel, &cfg))
                 );
             }
         }

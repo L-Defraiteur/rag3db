@@ -1,14 +1,12 @@
 # Une entité au nom réservé (« Order ») casse l'ouverture du backend, au lieu d'être refusée au chargement
 
-- **État** : corrigé (`56079f1cb`, voie (a) retenue par l'orchestration,
-  renversable par Lucie) : un nom réservé du dialecte (entité, champ,
-  relation) est refusé à la création du schéma, en le nommant : « « Order »
-  est un mot réservé du dialecte rag3db (entity) : renommez l'entité ». La
-  liste de rag3db est tirée de la grammaire du moteur
-  (`scripts/mots_reserves.py`, test `les_mots_reserves_suivent_la_grammaire`) ;
-  PostgreSQL déclare la sienne. Témoin `tests/e2e_nom_reserve.rs`, vert. La
-  voie (b), échapper tous les noms pour permettre un mot réservé, est posée à
-  Lucie.
+- **État** : corrigé par l'**échappement systématique** des noms (décision de
+  Lucie du 11 octobre au matin, page
+  `extension/rag3weaver/docs/8-octobre-2026-16h29/embarquements/07-echappement-des-noms.md`) :
+  chaque dialecte cite tout nom du schéma qu'il écrit (accents graves pour
+  rag3db, guillemets et nom replié pour PostgreSQL). `Order` et `order` passent
+  de bout en bout (témoin `tests/e2e_nom_reserve.rs`). Le refus de la nuit
+  (`56079f1cb`, voie (a)) est retiré.
 - **Gravité** : blocage — le backend ne s'ouvre pas, avec une erreur du
   parseur Cypher qui ne nomme ni le manifeste ni la règle.
 - **Atteignable en service** : oui, pour tout manifeste qui déclare une entité

@@ -496,7 +496,7 @@ impl Rag3dbConnection {
             .map_err(|e| self.engine_error(e))?;
         self.engine_succeeded();
 
-        let columns = result.get_column_names();
+        let columns = noms_de_colonnes(result.get_column_names());
         let mut rows = Vec::new();
         for row in &mut result {
             rows.push(row.into_iter().map(rag3db_value_to_cypher).collect());
@@ -531,7 +531,7 @@ impl Rag3dbConnection {
             .map_err(|e| self.engine_error(e))?;
         self.engine_succeeded();
 
-        let columns = result.get_column_names();
+        let columns = noms_de_colonnes(result.get_column_names());
         let mut rows = Vec::new();
         for row in &mut result {
             rows.push(row.into_iter().map(rag3db_value_to_cypher).collect());
@@ -539,6 +539,17 @@ impl Rag3dbConnection {
 
         Ok(QueryResult { columns, rows })
     }
+}
+
+/// **Les noms de colonnes sans accents graves.** Le moteur nomme une colonne
+/// sans alias par le texte de son expression : `RETURN n.\`title\`` rend la
+/// colonne « n.\`title\` ». Depuis que le dialecte cite tout nom du schéma
+/// ([`crate::dialect::SchemaDialect::quote`]), les lecteurs par nom (`n.title`,
+/// `row_to_map`, `code_tools::col`) recevraient la forme citée. Un identifiant
+/// validé ne contient jamais d'accent grave : les retirer rend exactement le
+/// nom d'avant.
+fn noms_de_colonnes(colonnes: Vec<String>) -> Vec<String> {
+    colonnes.into_iter().map(|c| if c.contains('`') { c.replace('`', "") } else { c }).collect()
 }
 
 impl DbConnection for Rag3dbConnection {

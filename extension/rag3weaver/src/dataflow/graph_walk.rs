@@ -40,11 +40,14 @@ impl Direction {
         }
     }
 
-    /// Le motif `(d:…)…(m:…)` de ce sens ; `r` nomme l'arête.
+    /// Le motif `(d:…)…(m:…)` de ce sens ; `r` nomme l'arête. Les noms sont
+    /// cités comme le dialecte rag3db les cite ([`crate::dialect::cypher_quote`]),
+    /// pour que la parité compare le même texte.
     pub fn pattern(self, rel: &RelInfo) -> String {
+        let q = crate::dialect::cypher_quote;
         match self {
-            Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", rel.to, rel.name, rel.from),
-            Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", rel.from, rel.name, rel.to),
+            Direction::Incoming => format!("(d:{} {{_uuid: u}})<-[r:{}]-(m:{})", q(&rel.to), q(&rel.name), q(&rel.from)),
+            Direction::Outgoing => format!("(d:{} {{_uuid: u}})-[r:{}]->(m:{})", q(&rel.from), q(&rel.name), q(&rel.to)),
         }
     }
 }
@@ -98,12 +101,12 @@ impl EdgeMark {
             return String::new();
         }
         let valeurs = self.guessed.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
-        format!(" WHERE r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = self.field)
+        format!(" WHERE r.{f} IS NULL OR NOT r.{f} IN [{valeurs}]", f = crate::dialect::cypher_quote(&self.field))
     }
 
     /// La colonne à relire sur l'arête `r` (`NULL` si la relation ne la porte pas).
     pub fn column(&self, rel: &RelInfo) -> String {
-        if self.applies(rel) { format!("r.{}", self.field) } else { "NULL".into() }
+        if self.applies(rel) { format!("r.{}", crate::dialect::cypher_quote(&self.field)) } else { "NULL".into() }
     }
 
     /// [`Self::column`] dans le langage intermédiaire.
@@ -184,8 +187,8 @@ mod tests {
     #[test]
     fn une_arete_devinee_n_est_pas_suivie_une_inconnue_l_est() {
         let m = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom"}), "N").unwrap();
-        assert_eq!(m.clause(&rel(&["usage", "resolution"])), " WHERE r.resolution IS NULL OR NOT r.resolution IN ['nom']");
-        assert_eq!(m.column(&rel(&["resolution"])), "r.resolution");
+        assert_eq!(m.clause(&rel(&["usage", "resolution"])), " WHERE r.`resolution` IS NULL OR NOT r.`resolution` IN ['nom']");
+        assert_eq!(m.column(&rel(&["resolution"])), "r.`resolution`");
         assert!(m.is_guessed("nom") && !m.is_guessed("type") && !m.is_guessed(""));
         // Une relation sans le champ n'est pas touchée.
         assert_eq!(m.clause(&rel(&["usage"])), "");
@@ -201,7 +204,7 @@ mod tests {
         let distincte = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Symbol".into(), props: vec!["resolution".into()] };
         for r in [rel(&["usage", "resolution"]), rel(&["usage"]), distincte] {
             for d in [Direction::Incoming, Direction::Outgoing] {
-                let avant = format!("UNWIND $uuids AS u MATCH {}{} RETURN u, m._uuid", d.pattern(&r), m.clause(&r));
+                let avant = format!("UNWIND $uuids AS u MATCH {}{} RETURN u, m.`_uuid`", d.pattern(&r), m.clause(&r));
                 assert_eq!(Rag3dbDialect.hop(&hop_of(&r, d, &m)).unwrap(), avant);
             }
         }
@@ -214,11 +217,11 @@ mod tests {
         let r = RelInfo { name: "DEFINES".into(), from: "File".into(), to: "Symbol".into(), props: vec![] };
         assert_eq!(
             Rag3dbDialect.count(&degree_count(&r, Direction::Incoming)).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:Symbol {_uuid: u})<-[r:DEFINES]-() RETURN u, count(r)"
+            "UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})<-[r:`DEFINES`]-() RETURN u, count(r)"
         );
         assert_eq!(
             Rag3dbDialect.count(&degree_count(&r, Direction::Outgoing)).unwrap(),
-            "UNWIND $uuids AS u MATCH (d:File {_uuid: u})-[r:DEFINES]->() RETURN u, count(r)"
+            "UNWIND $uuids AS u MATCH (d:`File` {_uuid: u})-[r:`DEFINES`]->() RETURN u, count(r)"
         );
     }
 

@@ -30,6 +30,16 @@ use crate::search_backend::*;
 /// la base rappelle large, nous ordonnons.
 const PLANCHER_RAPPEL: f64 = 0.3;
 
+/// **Citer un nom du schéma en SQL** : le guillemet double sur le nom replié
+/// en minuscules, la règle de [`crate::dialect::SchemaDialect::quote`] pour
+/// PostgreSQL (le nom physique d'une table créée sans citation). Ce moteur
+/// écrit ses requêtes lui-même : il emprunte la règle du dialecte au lieu de
+/// la réécrire.
+fn quote(name: &str) -> String {
+    use crate::dialect::SchemaDialect;
+    crate::dialect::PostgresDialect.quote(name)
+}
+
 /// PostgreSQL search backend using pgvector for vector similarity.
 pub struct PostgresSearchBackend {
     conn: Arc<dyn DbConnection>,
@@ -111,7 +121,8 @@ impl SearchBackend for PostgresSearchBackend {
             .iter()
             .map(|f| {
                 format!(
-                    "rag3weaver.sans_accents($q) <% rag3weaver.sans_accents(n.{f})"
+                    "rag3weaver.sans_accents($q) <% rag3weaver.sans_accents(n.{})",
+                    quote(f)
                 )
             })
             .collect::<Vec<_>>()
@@ -121,7 +132,8 @@ impl SearchBackend for PostgresSearchBackend {
             .map(|f| {
                 format!(
                     "word_similarity(rag3weaver.sans_accents($q), \
-                     rag3weaver.sans_accents(n.{f}))"
+                     rag3weaver.sans_accents(n.{}))",
+                    quote(f)
                 )
             })
             .collect::<Vec<_>>()
@@ -131,9 +143,10 @@ impl SearchBackend for PostgresSearchBackend {
         // répondu, seulement de voir tout le texte candidat.
         let texte = fields
             .iter()
-            .map(|f| format!("n.{f}"))
+            .map(|f| format!("n.{}", quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
+        let table = quote(table);
 
         // La cellule ferme la requête avant tout classement. L'index
         // `(_org, _project)` posé sur chaque table de données sert exactement
@@ -214,6 +227,7 @@ impl SearchBackend for PostgresSearchBackend {
         // **La colonne est celle du modèle courant**, pas `embedding` en dur :
         // une base de connaissances (`{kb}_embedding`) n'était jamais servie
         // par ce chemin, et un second modèle ne l'aurait pas été non plus.
+        let (table, column) = (quote(table), quote(column));
         let sql = format!(
             "SELECT _uuid, ({column} <=> '[{embedding_str}]'::vector) AS distance \
              FROM {table} \
@@ -252,6 +266,7 @@ impl SearchBackend for PostgresSearchBackend {
             .collect::<Vec<_>>()
             .join(",");
 
+        let (table, column) = (quote(table), quote(column));
         let where_clause = match filter_where {
             Some(w) => format!("WHERE n.{column} IS NOT NULL AND {w}"),
             None => format!("WHERE n.{column} IS NOT NULL"),
@@ -311,12 +326,13 @@ impl SearchBackend for PostgresSearchBackend {
             .collect::<Vec<_>>()
             .join(", ");
 
+        let table = quote(table);
         let mut select_cols = vec![
             format!("{table}._row_id"),
             format!("{table}._uuid"),
         ];
         for f in return_fields {
-            select_cols.push(format!("{table}.{f}"));
+            select_cols.push(format!("{table}.{}", quote(f)));
         }
 
         let sql = format!(
@@ -365,12 +381,13 @@ impl SearchBackend for PostgresSearchBackend {
             .join(", ");
 
         let select_cols = std::iter::once("_uuid".to_string())
-            .chain(fields.iter().map(|f| f.to_string()))
+            .chain(fields.iter().map(|f| quote(f)))
             .collect::<Vec<_>>()
             .join(", ");
 
         let sql = format!(
-            "SELECT {select_cols} FROM {table} WHERE _uuid = ANY(ARRAY[{uuid_list}])"
+            "SELECT {select_cols} FROM {} WHERE _uuid = ANY(ARRAY[{uuid_list}])",
+            quote(table)
         );
 
         let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
@@ -406,7 +423,8 @@ impl SearchBackend for PostgresSearchBackend {
         let sql = format!(
             "SELECT _uuid, _parent_uuid, _text, _index, \
              _start_line, _end_line, _start_char, _end_char \
-             FROM {chunk_table} WHERE _uuid = ANY(ARRAY[{uuid_list}])"
+             FROM {} WHERE _uuid = ANY(ARRAY[{uuid_list}])",
+            quote(chunk_table)
         );
 
         let result = self.conn.execute(&sql).map_err(|e| e.to_string())?;
@@ -443,6 +461,7 @@ impl SearchBackend for PostgresSearchBackend {
             .collect::<Vec<_>>()
             .join(", ");
 
+        let (entity, chunk_table, rel_table) = (quote(entity), quote(chunk_table), quote(rel_table));
         let mut select_cols = vec![
             format!("{entity}._row_id"),
             format!("{chunk_table}._uuid"),
@@ -455,7 +474,7 @@ impl SearchBackend for PostgresSearchBackend {
             format!("{chunk_table}._end_char"),
         ];
         for f in entity_fields {
-            select_cols.push(format!("{entity}.{f}"));
+            select_cols.push(format!("{entity}.{}", quote(f)));
         }
 
         let sql = format!(

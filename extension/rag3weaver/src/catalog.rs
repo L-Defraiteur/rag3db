@@ -10712,7 +10712,7 @@ mod tests {
     /// `failed = 1`, ne tombe pas, et le ref de la note dit son échec.
     #[test]
     fn un_groupe_d_insertion_rate_se_compte_et_les_autres_passent() {
-        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:`Note`"));
         catalog.initialize().unwrap();
         let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();
         let n = catalog.create("Note", note("N")).unwrap();
@@ -10731,7 +10731,7 @@ mod tests {
     /// n'attend pas trente secondes un ref que rien ne résoudra.
     #[test]
     fn un_lien_vers_une_ligne_ratee_echoue_tout_de_suite_et_se_compte() {
-        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:Note"));
+        let mut catalog = make_catalog_a_deux_entites_sur(MockConnection::qui_echoue_sur("MERGE (n:`Note`"));
         catalog.initialize().unwrap();
         let n = catalog.create("Note", note("N")).unwrap();
         let d = catalog.create("Document", make_doc_data("D", "corps")).unwrap();

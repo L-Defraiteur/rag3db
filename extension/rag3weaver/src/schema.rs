@@ -18,31 +18,9 @@ pub enum SchemaError {
 
     #[error("relation \"{rel}\" references unknown entity \"{entity}\"")]
     UnknownEntity { rel: String, entity: String },
-
-    /// Un nom que la grammaire du dialecte réserve : le moteur refuserait la
-    /// requête qui le porte. Le refus le nomme et dit quoi faire.
-    #[error("« {name} » est un mot réservé du dialecte {dialect} ({kind}) : renommez {quoi}")]
-    ReservedWord { kind: String, name: String, dialect: String, quoi: String },
 }
 
 // ─── Identifier validation ──────────────────────────────────────────────────
-
-/// Un identifiant valide **et** non réservé par le dialecte qui l'écrira
-/// ([`crate::dialect::SchemaDialect::reserved_words`]).
-pub fn validate_name(name: &str, kind: &str, dialect: &dyn crate::dialect::SchemaDialect) -> Result<(), SchemaError> {
-    validate_identifier(name, kind)?;
-    let haut = name.to_ascii_uppercase();
-    if dialect.reserved_words().iter().any(|m| *m == haut) {
-        let quoi = match kind {
-            "entity" => "l'entité",
-            "field" => "le champ",
-            "relation" => "la relation",
-            _ => "ce nom",
-        };
-        return Err(SchemaError::ReservedWord { kind: kind.into(), name: name.into(), dialect: dialect.name().into(), quoi: quoi.into() });
-    }
-    Ok(())
-}
 
 /// Validate that `name` is a safe Cypher identifier.
 ///
@@ -190,7 +168,7 @@ pub fn generate_node_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(entity_name, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
 
     let mut columns = vec![
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
@@ -222,7 +200,7 @@ pub fn generate_node_table_ddl_with_dialect(
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
     field_names.sort();
     for field_name in &field_names {
-        validate_name(field_name, "field", dialect)?;
+        validate_identifier(field_name, "field")?;
         let field_def = &entity_def.fields[*field_name];
         columns.push(ColumnDef {
             name: field_name.to_string(),
@@ -255,7 +233,7 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(entity_name, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
     let table_name = format!("{entity_name}_Chunk");
 
     let mut columns = vec![
@@ -318,7 +296,7 @@ pub fn generate_simple_chunk_rel_ddl_with_dialect(
     entity_name: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_name(entity_name, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
     let chunk_table = format!("{entity_name}_Chunk");
     let rel_name = format!("{entity_name}_CHUNKED_FROM");
     Ok(dialect.create_rel_table(&rel_name, &chunk_table, entity_name, &[]))
@@ -337,8 +315,8 @@ pub fn generate_derived_rel_ddl_with_dialect(
     from_entity: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_name(entity_name, "entity", dialect)?;
-    validate_name(from_entity, "entity", dialect)?;
+    validate_identifier(entity_name, "entity")?;
+    validate_identifier(from_entity, "entity")?;
     Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
 }
 
@@ -357,9 +335,9 @@ pub fn generate_rel_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_name(rel_name, "relation", dialect)?;
-    validate_name(&rel_def.from, "entity", dialect)?;
-    validate_name(&rel_def.to, "entity", dialect)?;
+    validate_identifier(rel_name, "relation")?;
+    validate_identifier(&rel_def.from, "entity")?;
+    validate_identifier(&rel_def.to, "entity")?;
 
     if !config.entities.contains_key(&rel_def.from) {
         return Err(SchemaError::UnknownEntity {
@@ -548,7 +526,7 @@ mod tests_derived {
             assert!(ddl.contains(col), "{col} manque dans {ddl}");
         }
         let rel = generate_derived_rel_ddl_with_dialect("TicketView", "Ticket", &crate::dialect::Rag3dbDialect).unwrap();
-        assert!(rel.contains("TicketView_DERIVED_FROM") && rel.contains("FROM TicketView TO Ticket"), "{rel}");
+        assert!(rel.contains("`TicketView_DERIVED_FROM`") && rel.contains("FROM `TicketView` TO `Ticket`"), "{rel}");
         let simple = EntityDef { fields: HashMap::new(), hashsafe: None, derived_from: None };
         assert!(!generate_node_table_ddl("Plain", &simple).unwrap().contains("_render_hash"));
     }
@@ -725,11 +703,11 @@ mod tests {
         };
 
         let ddl = generate_node_table_ddl("Person", &entity).unwrap();
-        assert!(ddl.starts_with("CREATE NODE TABLE IF NOT EXISTS Person("));
-        assert!(ddl.contains("_uuid STRING"));
-        assert!(ddl.contains("_content_hash STRING"));
-        assert!(ddl.contains("age INT64"));
-        assert!(ddl.contains("name STRING"));
+        assert!(ddl.starts_with("CREATE NODE TABLE IF NOT EXISTS `Person`("));
+        assert!(ddl.contains("`_uuid` STRING"));
+        assert!(ddl.contains("`_content_hash` STRING"));
+        assert!(ddl.contains("`age` INT64"));
+        assert!(ddl.contains("`name` STRING"));
         assert!(ddl.contains("PRIMARY KEY(_uuid)"));
         // Entity tables have no embeddings
         assert!(!ddl.contains("embedding"));
@@ -750,8 +728,8 @@ mod tests {
         let ddl = generate_node_table_ddl("Document", &entity).unwrap();
         assert!(!ddl.contains("embedding"), "entity tables must NOT have embedding columns");
         assert!(!ddl.contains("sparse_indices"));
-        assert!(ddl.contains("title STRING"));
-        assert!(ddl.contains("body STRING"));
+        assert!(ddl.contains("`title` STRING"));
+        assert!(ddl.contains("`body` STRING"));
     }
 
     #[test]
@@ -839,7 +817,7 @@ mod tests {
         );
 
         // Entity table has no embedding
-        let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).expect("Document table");
+        let doc_ddl = schema.ddl.iter().find(|s| s.contains("`Document`(")).expect("Document table");
         assert!(!doc_ddl.contains("embedding"), "entity table must not have embeddings");
 
         assert!(schema.ddl.iter().any(|s| s.contains("REFERENCES")), "user rel");
@@ -897,13 +875,13 @@ mod tests {
         let tag_ddl = schema
             .ddl
             .iter()
-            .find(|s| s.contains("Tag("))
+            .find(|s| s.contains("`Tag`("))
             .expect("Tag table");
         assert!(!tag_ddl.contains("embedding"));
 
         // No indexes, no KB tables
         assert!(schema.indexes.is_empty());
-        assert!(!schema.ddl.iter().any(|s| s.contains("_Index(")));
+        assert!(!schema.ddl.iter().any(|s| s.contains("_Index`(")));
     }
 
     #[test]
@@ -942,9 +920,9 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Entity tables (no embeddings)
-        let dir_ddl = schema.ddl.iter().find(|s| s.contains("Directory(")).expect("Directory table");
+        let dir_ddl = schema.ddl.iter().find(|s| s.contains("`Directory`(")).expect("Directory table");
         assert!(!dir_ddl.contains("embedding"));
-        let file_ddl = schema.ddl.iter().find(|s| s.contains(" File(") || s.starts_with("CREATE NODE TABLE IF NOT EXISTS File(")).expect("File table");
+        let file_ddl = schema.ddl.iter().find(|s| s.starts_with("CREATE NODE TABLE IF NOT EXISTS `File`(")).expect("File table");
         assert!(!file_ddl.contains("embedding"));
 
         // Plus de tables de base : la KB est une entité dérivée, posée par
@@ -998,12 +976,12 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Document table has no embedding
-        let doc = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
+        let doc = schema.ddl.iter().find(|s| s.contains("`Document`(")).unwrap();
         assert!(!doc.contains("embedding"));
 
         // La base « main » n'a pas de table ici : entité dérivée, posée par
         // le catalogue.
-        assert!(!schema.ddl.iter().any(|s| s.contains("main_Index(")));
+        assert!(!schema.ddl.iter().any(|s| s.contains("`main_Index`(")));
     }
 
     #[test]
@@ -1033,7 +1011,7 @@ mod tests {
         let schema = generate_full_schema(&config).unwrap();
 
         // Document table has no embedding
-        let doc_ddl = schema.ddl.iter().find(|s| s.contains("Document(")).unwrap();
+        let doc_ddl = schema.ddl.iter().find(|s| s.contains("`Document`(")).unwrap();
         assert!(!doc_ddl.contains("embedding"));
 
         // Plus d'index de base ici : la KB est une entité dérivée.

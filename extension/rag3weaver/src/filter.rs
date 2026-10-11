@@ -331,11 +331,15 @@ impl<'a> FilterParser<'a> {
         let path_expr = |path: &[String]| -> Result<String, FilterError> {
             if path.is_empty() { return Err(FilterError::Structured("empty path".into())); }
             for part in path { validate_identifier(part, "path component")?; }
-            Ok(path.join("."))
+            // Chaque partie citée par le dialecte, comme tout nom du schéma.
+            Ok(path.iter().map(|p| self.dialect.quote(p)).collect::<Vec<_>>().join("."))
         };
         match condition {
             FilterCondition::Path { path, value } => {
-                let field = path_expr(path)?;
+                // `build_clause` cite chaque partie lui-même : on lui passe le
+                // chemin validé mais nu, sans quoi il serait cité deux fois.
+                path_expr(path)?;
+                let field = path.join(".");
                 self.build_clause(alias, &field, value, params)
                     .ok_or_else(|| FilterError::Structured("empty predicate".into()))
             }
@@ -373,7 +377,8 @@ impl<'a> FilterParser<'a> {
         value: &FilterValue,
         params: &mut Vec<QueryParam>,
     ) -> Option<String> {
-        let prop = format!("{alias}.{field}");
+        // Le champ cité par le dialecte (chaque partie d'un chemin pointé).
+        let prop = format!("{alias}.{}", field.split('.').map(|p| self.dialect.quote(p)).collect::<Vec<_>>().join("."));
 
         match value {
             FilterValue::Direct(cv) => {
@@ -821,7 +826,7 @@ mod tests {
         let filters = filters_one("status", "active".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.status = $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`status` = $filter_p0"]);
         assert_eq!(r.params.len(), 1);
         assert_eq!(r.params[0].name, "filter_p0");
         assert_eq!(r.params[0].value.as_str(), Some("active"));
@@ -835,7 +840,7 @@ mod tests {
         let filters = filters_one("count", 42_i64.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.count = $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`count` = $filter_p0"]);
         assert_eq!(r.params[0].value.as_i64(), Some(42));
     }
 
@@ -846,7 +851,7 @@ mod tests {
         let filters = filters_one("active", true.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.active = $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`active` = $filter_p0"]);
         assert_eq!(r.params[0].value.as_bool(), Some(true));
     }
 
@@ -857,7 +862,7 @@ mod tests {
         let filters = filters_one("field", CypherValue::Null.into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.field IS NULL"]);
+        assert_eq!(r.where_clauses, vec!["n.`field` IS NULL"]);
         assert!(r.params.is_empty());
     }
 
@@ -873,7 +878,7 @@ mod tests {
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.status IN $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`status` IN $filter_p0"]);
         assert_eq!(r.params.len(), 1);
         match &r.params[0].value {
             CypherValue::List(items) => assert_eq!(items.len(), 2),
@@ -898,7 +903,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["n.age > $filter_p0 AND n.age < $filter_p1"]
+            vec!["n.`age` > $filter_p0 AND n.`age` < $filter_p1"]
         );
         assert_eq!(r.params.len(), 2);
         assert_eq!(r.params[0].value.as_i64(), Some(18));
@@ -920,7 +925,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["n.score >= $filter_p0 AND n.score <= $filter_p1"]
+            vec!["n.`score` >= $filter_p0 AND n.`score` <= $filter_p1"]
         );
     }
 
@@ -934,7 +939,7 @@ mod tests {
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.status <> $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`status` <> $filter_p0"]);
     }
 
     #[test]
@@ -947,7 +952,7 @@ mod tests {
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.type = $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`type` = $filter_p0"]);
     }
 
     #[test]
@@ -963,7 +968,7 @@ mod tests {
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.where_clauses, vec!["n.status IN $filter_p0"]);
+        assert_eq!(r.where_clauses, vec!["n.`status` IN $filter_p0"]);
     }
 
     // ── list operations ─────────────────────────────────────────────────
@@ -983,7 +988,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["(list_contains(n.tags, $filter_p0) OR list_contains(n.tags, $filter_p1))"]
+            vec!["(list_contains(n.`tags`, $filter_p0) OR list_contains(n.`tags`, $filter_p1))"]
         );
     }
 
@@ -1002,7 +1007,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["(list_contains(n.tags, $filter_p0) AND list_contains(n.tags, $filter_p1))"]
+            vec!["(list_contains(n.`tags`, $filter_p0) AND list_contains(n.`tags`, $filter_p1))"]
         );
     }
 
@@ -1018,7 +1023,7 @@ mod tests {
 
         assert_eq!(
             r.where_clauses,
-            vec!["NOT (list_contains(n.tags, $filter_p0))"]
+            vec!["NOT (list_contains(n.`tags`, $filter_p0))"]
         );
     }
 
@@ -1033,7 +1038,7 @@ mod tests {
             FilterValue::Ops(vec![FilterOp::IsNull]),
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["n.deleted_at IS NULL"]);
+        assert_eq!(r.where_clauses, vec!["n.`deleted_at` IS NULL"]);
         assert!(r.params.is_empty());
     }
 
@@ -1046,7 +1051,7 @@ mod tests {
             FilterValue::Ops(vec![FilterOp::IsNotNull]),
         );
         let r = parser.parse(&filters, "Person", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["n.email IS NOT NULL"]);
+        assert_eq!(r.where_clauses, vec!["n.`email` IS NOT NULL"]);
         assert!(r.params.is_empty());
     }
 
@@ -1059,7 +1064,7 @@ mod tests {
             FilterValue::Ops(vec![FilterOp::IsEmpty]),
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["size(n.tags) = 0"]);
+        assert_eq!(r.where_clauses, vec!["size(n.`tags`) = 0"]);
     }
 
     #[test]
@@ -1071,7 +1076,7 @@ mod tests {
             FilterValue::Ops(vec![FilterOp::IsNotEmpty]),
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["size(n.tags) > 0"]);
+        assert_eq!(r.where_clauses, vec!["size(n.`tags`) > 0"]);
     }
 
     #[test]
@@ -1088,7 +1093,7 @@ mod tests {
         let r = parser.parse(&filters, "Product", "n").unwrap();
         assert_eq!(
             r.where_clauses,
-            vec!["n.price >= $filter_p0 AND n.price <= $filter_p1"]
+            vec!["n.`price` >= $filter_p0 AND n.`price` <= $filter_p1"]
         );
         assert_eq!(r.params.len(), 2);
         assert_eq!(r.params[0].value.as_f64(), Some(10.0));
@@ -1107,7 +1112,7 @@ mod tests {
             ])]),
         );
         let r = parser.parse(&filters, "Document", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["NOT (n.status IN $filter_p0)"]);
+        assert_eq!(r.where_clauses, vec!["NOT (n.`status` IN $filter_p0)"]);
         assert_eq!(r.params.len(), 1);
     }
 
@@ -1120,7 +1125,7 @@ mod tests {
             FilterValue::Ops(vec![FilterOp::StartsWith("Dr.".to_string())]),
         );
         let r = parser.parse(&filters, "Person", "n").unwrap();
-        assert_eq!(r.where_clauses, vec!["starts_with(n.name, $filter_p0)"]);
+        assert_eq!(r.where_clauses, vec!["starts_with(n.`name`, $filter_p0)"]);
         assert_eq!(r.params[0].value.as_str(), Some("Dr."));
     }
 
@@ -1135,7 +1140,7 @@ mod tests {
         let r = parser.parse(&filters, "Document", "n").unwrap();
         assert_eq!(
             r.where_clauses,
-            vec!["contains(n.description, $filter_p0)"]
+            vec!["contains(n.`description`, $filter_p0)"]
         );
         assert_eq!(r.params[0].value.as_str(), Some("important"));
     }
@@ -1154,7 +1159,7 @@ mod tests {
         let r = parser.parse(&filters, "Document", "n").unwrap();
         assert_eq!(
             r.where_clauses,
-            vec!["size(n.tags) >= $filter_p0 AND size(n.tags) <= $filter_p1"]
+            vec!["size(n.`tags`) >= $filter_p0 AND size(n.`tags`) <= $filter_p1"]
         );
         assert_eq!(r.params.len(), 2);
         assert_eq!(r.params[0].value.as_i64(), Some(2));
@@ -1170,8 +1175,8 @@ mod tests {
         let filters = filters_one("Author.name", "John".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.match_clauses, vec!["MATCH (n)-[:WROTE]->(e1:Author)"]);
-        assert_eq!(r.where_clauses, vec!["e1.name = $filter_p0"]);
+        assert_eq!(r.match_clauses, vec!["MATCH (n)-[:`WROTE`]->(e1:`Author`)"]);
+        assert_eq!(r.where_clauses, vec!["e1.`name` = $filter_p0"]);
         assert_eq!(r.params[0].value.as_str(), Some("John"));
         assert_eq!(r.aliases["Author"], "e1");
     }
@@ -1185,8 +1190,8 @@ mod tests {
         let filters = filters_one("Author.name", "John".into());
         let r = parser.parse(&filters, "Document", "n").unwrap();
 
-        assert_eq!(r.match_clauses, vec!["MATCH (n)<-[:WROTE]-(e1:Author)"]);
-        assert_eq!(r.where_clauses, vec!["e1.name = $filter_p0"]);
+        assert_eq!(r.match_clauses, vec!["MATCH (n)<-[:`WROTE`]-(e1:`Author`)"]);
+        assert_eq!(r.where_clauses, vec!["e1.`name` = $filter_p0"]);
     }
 
     #[test]
@@ -1236,8 +1241,8 @@ mod tests {
         assert_eq!(r.params.len(), 2);
         // Order is not guaranteed (HashMap), but both clauses should be present
         let joined = r.combine_where();
-        assert!(joined.contains("n.status"));
-        assert!(joined.contains("n.count"));
+        assert!(joined.contains("n.`status`"));
+        assert!(joined.contains("n.`count`"));
     }
 
     // ── combine_where ───────────────────────────────────────────────────
@@ -1368,9 +1373,9 @@ mod tests {
             .parse_condition(&cond, "Document", "n")
             .unwrap();
         let where_str = r.combine_where();
-        assert!(where_str.contains("n.status = $filter_p0"));
+        assert!(where_str.contains("n.`status` = $filter_p0"));
         assert!(where_str.contains("AND"));
-        assert!(where_str.contains("n.count > $filter_p1"));
+        assert!(where_str.contains("n.`count` > $filter_p1"));
         assert_eq!(r.params.len(), 2);
     }
 
@@ -1393,8 +1398,8 @@ mod tests {
             .unwrap();
         let where_str = r.combine_where();
         assert!(where_str.contains("OR"));
-        assert!(where_str.contains("n.status = $filter_p0"));
-        assert!(where_str.contains("n.status = $filter_p1"));
+        assert!(where_str.contains("n.`status` = $filter_p0"));
+        assert!(where_str.contains("n.`status` = $filter_p1"));
     }
 
     #[test]
@@ -1410,7 +1415,7 @@ mod tests {
             .unwrap();
         let where_str = r.combine_where();
         assert!(where_str.starts_with("NOT ("));
-        assert!(where_str.contains("n.deleted = $filter_p0"));
+        assert!(where_str.contains("n.`deleted` = $filter_p0"));
     }
 
     #[test]
@@ -1454,7 +1459,7 @@ mod tests {
         let r = parser
             .parse_condition(&cond, "Document", "n")
             .unwrap();
-        assert!(r.combine_where().contains("n.status = $filter_p0"));
+        assert!(r.combine_where().contains("n.`status` = $filter_p0"));
         assert_eq!(r.params.len(), 1);
     }
 
@@ -1473,9 +1478,9 @@ mod tests {
             .parse_condition(&cond, "Person", "n")
             .unwrap();
         let w = r.combine_where();
-        assert!(w.contains("n.status = $filter_p0"));
-        assert!(w.contains("n.email IS NOT NULL"));
-        assert!(w.contains("starts_with(n.name, $filter_p"));
+        assert!(w.contains("n.`status` = $filter_p0"));
+        assert!(w.contains("n.`email` IS NOT NULL"));
+        assert!(w.contains("starts_with(n.`name`, $filter_p"));
         assert_eq!(r.params.len(), 2); // eq + starts_with (is_not_null has no params)
     }
 
@@ -1567,8 +1572,8 @@ mod structured_tests {
         let f=p.parse_condition(&c,"Card","n").unwrap();
         assert_eq!(f.params.len(),2);
         assert_eq!(f.combine_where().matches("any(").count(),1);
-        assert!(f.combine_where().contains("nested_0.label"));
-        assert!(f.combine_where().contains("nested_0.level"));
+        assert!(f.combine_where().contains("nested_0.`label`"));
+        assert!(f.combine_where().contains("nested_0.`level`"));
         assert!(!f.combine_where().contains("Flying"));
         assert!(FilterParser::new(&relations,&PostgresDialect).parse_condition(&c,"Card","n").is_err());
     }
@@ -1582,6 +1587,6 @@ mod structured_tests {
         let c=FilterCondition::Path{path:vec!["stats".into(),"power".into()],value:FilterValue::Direct(3.into())};
         let parsed=p.parse_condition(&c,"Card","n").unwrap();
         assert!(parsed.match_clauses.is_empty());
-        assert_eq!(parsed.combine_where(),"n.stats.power = $filter_p0");
+        assert_eq!(parsed.combine_where(),"n.`stats`.`power` = $filter_p0");
     }
 }
