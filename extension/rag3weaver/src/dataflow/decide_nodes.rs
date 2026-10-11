@@ -22,7 +22,7 @@ use super::node::{Node, NodeContext};
 use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{PortDef, PortType, PortValue, Posture};
 use crate::decider::{Decider, DECIDER_SERVICE};
-use crate::llm::{Flow, GenOptions, Llm, ResponseFormat, RetryEvent, TokenSink, Turn};
+use crate::llm::{FinishReason, Flow, GenOptions, Llm, ResponseFormat, RetryEvent, TokenSink, Turn};
 use super::node::{CancelToken, Stopped};
 
 /// Le port de `Route` qui reçoit ce qu'aucune route ne nomme.
@@ -307,6 +307,9 @@ pub struct DecideNode {
     /// `{text}` : tout le texte du decider, ou le tour `user` du llm. Absent :
     /// le texte composé par défaut.
     template: Option<String>,
+    /// Le plafond de jetons de l'appel au modèle : la réflexion d'un modèle
+    /// qui réfléchit (Gemini 3.x) y passe avant l'étiquette.
+    max_tokens: usize,
     field: Option<String>,
     target: String,
     via: Via,
@@ -385,7 +388,8 @@ impl DecideNode {
         });
         let opts = GenOptions::default()
             .with_response_format(ResponseFormat::strict_schema("decision", schema))
-            .with_temperature(0.0);
+            .with_temperature(0.0)
+            .with_max_tokens(self.max_tokens);
         let turns = vec![
             Turn::system(match &self.template {
                 // Le gabarit dit déjà la tâche : le système ne dit que la forme.
@@ -397,10 +401,22 @@ impl DecideNode {
         // Un puits qui s'arrête au jeton suivant si le run est annulé : l'hôte
         // qui arrête le graphe n'attend pas la fin de l'appel.
         let mut sink = CancellableSink { text: String::new(), cancel };
-        llm.generate(&turns, &opts, &mut sink)
+        let (finish, _) = llm
+            .generate(&turns, &opts, &mut sink)
             .map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
+        // **Coupée par le plafond**, la réponse se dit tronquée — pas « hors
+        // liste » : `{"label": "no` n'est pas une mauvaise étiquette, c'est une
+        // étiquette pas finie.
+        if finish.reason == FinishReason::MaxTokens {
+            return Err(format!(
+                "Decide ({}) : réponse tronquée au plafond de {} jetons (max_tokens) : « {} » — montez max_tokens, ou bornez la réflexion du modèle",
+                llm.name(),
+                self.max_tokens,
+                sink.text.trim()
+            ));
+        }
         if let Some(cause) = sink.cancel.cause() {
-            return Err(format!("Decide : run annulé ({cause:?})"));
+            return Err(format!("Decide : run annulé ({cause})"));
         }
         // La sortie structurée, ou l'étiquette nue d'un modèle qui l'ignore.
         let reply = sink.text.trim();
@@ -446,6 +462,7 @@ impl Node for DecideNode {
             "field": self.field.clone().unwrap_or_default(),
             "as": self.target,
             "via": via,
+            "max_tokens": self.max_tokens,
         })))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -506,6 +523,10 @@ impl NodeFactory for DecideNodeFactory {
             name: name.to_string(),
             labels: labels(config, "labels", &[], false)?,
             instruction: str_param(config, "instruction", "")?,
+            max_tokens: match config.get("max_tokens") {
+                None | Some(Value::Null) => 2048,
+                Some(v) => v.as_u64().filter(|n| *n > 0).ok_or_else(|| format!("'max_tokens' : un entier positif, pas {v}"))? as usize,
+            },
             template: {
                 let t = str_param(config, "prompt", "")?;
                 if !t.is_empty() {
@@ -537,6 +558,7 @@ impl NodeFactory for DecideNodeFactory {
                 param("field", ConfigParamType::String, false, Some(json!("")), "le champ de l'élément à classer ; vide : l'élément entier"),
                 param("as", ConfigParamType::String, false, Some(json!("label")), "le champ où poser l'étiquette ; sa probabilité, quand le decider la donne, va sous <as>_probability"),
                 param("via", ConfigParamType::String, false, Some(json!("auto")), "auto, decider ou llm"),
+                param("max_tokens", ConfigParamType::Int, false, Some(json!(2048)), "le plafond de jetons de l'appel au modèle (voie llm) ; la réflexion d'un modèle y passe avant l'étiquette"),
             ],
         }
     }

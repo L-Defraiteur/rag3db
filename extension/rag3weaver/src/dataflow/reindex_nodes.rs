@@ -41,6 +41,48 @@ enum Outcome {
     Deferred,
 }
 
+/// **La ligne de journal d'un fichier** : le verrou du catalogue attendu, puis
+/// tenu, et dans la tenue les phases de la réindexation (ou du retrait) et de
+/// l'embarquement, de la plus longue à la plus courte. Seules les phases vues
+/// sur le fil de la réaction y sont ; le reste de la tenue est ce qui n'est
+/// pas chronométré.
+fn journal_line(
+    path: &str,
+    outcome: &Result<Outcome, String>,
+    waited: std::time::Duration,
+    held: std::time::Duration,
+    steps: &[(&'static str, std::time::Duration)],
+) -> String {
+    let mut phases: std::collections::BTreeMap<&str, std::time::Duration> = Default::default();
+    for (stage, took) in steps {
+        let short = stage
+            .strip_prefix("réindexer · ")
+            .or_else(|| stage.strip_prefix("retirer · "))
+            .or((*stage == "nœud embed").then_some("embarquer"));
+        if let Some(short) = short {
+            *phases.entry(short).or_default() += *took;
+        }
+    }
+    let mut phases: Vec<_> = phases.into_iter().collect();
+    phases.sort_by(|a, b| b.1.cmp(&a.1));
+    let detail = phases
+        .iter()
+        .map(|(name, took)| format!("{name} {} ms", took.as_millis()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let verbe = match outcome {
+        Ok(Outcome::Reindexed) => "réindexé",
+        Ok(Outcome::Removed) => "retiré",
+        Ok(Outcome::Deferred) => "remis à l'indexation entière",
+        Err(_) => "en erreur",
+    };
+    format!(
+        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {detail}",
+        waited.as_millis(),
+        held.as_millis()
+    )
+}
+
 impl ReindexFileNode {
     /// Les chemins désignés, dédoublonnés, dans l'ordre. L'événement ne dit
     /// que **quel** fichier regarder ; ce qu'on en fait se lit sur le disque.
@@ -120,10 +162,22 @@ impl Node for ReindexFileNode {
                 deferred.push(path);
                 continue;
             }
+            // **Céder aux lecteurs** entre deux fichiers : un lecteur qui attend le
+            // catalogue passe avant le fichier suivant (au plus 100 ms d'attente,
+            // pour ne pas affamer la réaction sous des lectures continues).
+            let cede = std::time::Instant::now();
+            while super::catalog_read::readers_waiting(&catalog)
+                && cede.elapsed() < std::time::Duration::from_millis(100)
+            {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            let attente = std::time::Instant::now();
             let mut cat = catalog.lock().map_err(|e| format!("catalogue empoisonné : {e}"))?;
+            let waited = attente.elapsed();
+            let tenue = std::time::Instant::now();
             // L'instant de la lecture : un changement venu après garde son retard.
             let read_at = crate::catalog::retard::now_ms();
-            let outcome = match source.read(&path) {
+            let (outcome, steps) = crate::ingest_profile::record(|| match source.read(&path) {
                 Ok(Some(content)) => crate::code_tools::reingest_file(&mut cat, source.as_ref(), &path, &content)
                     .map(|r| if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed }),
                 Ok(None) => crate::code_sync::remove_file(
@@ -134,8 +188,9 @@ impl Node for ReindexFileNode {
                 )
                 .map(|_| Outcome::Removed),
                 Err(e) => Err(e),
-            };
+            });
             drop(cat);
+            eprintln!("{}", journal_line(&path, &outcome, waited, tenue.elapsed(), &steps));
             if matches!(outcome, Ok(Outcome::Reindexed | Outcome::Removed)) {
                 lag.done(&cell, &path, read_at);
             }
@@ -213,5 +268,26 @@ impl NodeFactory for ReindexFileNodeFactory {
                 json_schema: None,
             }],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_journal_line_tells_the_lock_and_the_phases() {
+        let ms = std::time::Duration::from_millis;
+        let steps = [
+            ("réindexer · analyser le fichier", ms(12)),
+            ("nœud embed", ms(900)),
+            ("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", ms(1500)),
+            ("nœud embed", ms(100)),
+            ("entités · gardes", ms(3)),
+        ];
+        let line = super::journal_line("arbre/scope.rs", &Ok(super::Outcome::Reindexed), ms(4), ms(1700), &steps);
+        assert_eq!(
+            line,
+            "[montre] arbre/scope.rs réindexé : verrou attendu 4 ms, tenu 1700 ms — \
+             ingérer (scopes, morceaux, vecteurs, liens) 1500 ms, embarquer 1000 ms, analyser le fichier 12 ms"
+        );
     }
 }

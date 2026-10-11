@@ -15,11 +15,28 @@
 //!
 //! Des chronomètres seulement : rien ici ne change ce que l'ingestion fait.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 static TOTALS: Mutex<BTreeMap<&'static str, (Duration, u64)>> = Mutex::new(BTreeMap::new());
+
+thread_local! {
+    /// Les étapes d'un seul travail, sur ce fil : armé par [`record`], même
+    /// sans la variable du profil.
+    static RECORDER: RefCell<Option<Vec<(&'static str, Duration)>>> = const { RefCell::new(None) };
+}
+
+/// **Les étapes d'un seul travail** : ce que `f` ajoute sur ce fil, rendu à
+/// part, que le profil global soit demandé ou non (la ligne de journal d'un
+/// fichier réindexé). Ce qui court sur d'autres fils n'y est pas.
+pub fn record<T>(f: impl FnOnce() -> T) -> (T, Vec<(&'static str, Duration)>) {
+    let previous = RECORDER.with(|r| r.replace(Some(Vec::new())));
+    let out = f();
+    let got = RECORDER.with(|r| r.replace(previous)).unwrap_or_default();
+    (out, got)
+}
 
 /// Le profil est-il demandé ? Lu une fois.
 pub fn enabled() -> bool {
@@ -34,6 +51,11 @@ pub fn add(stage: &'static str, since: Instant) {
 
 /// Ajoute une durée déjà mesurée (celle d'un nœud, rendue par le runtime).
 pub fn add_duration(stage: &'static str, took: Duration) {
+    RECORDER.with(|r| {
+        if let Some(steps) = r.borrow_mut().as_mut() {
+            steps.push((stage, took));
+        }
+    });
     if !enabled() {
         return;
     }

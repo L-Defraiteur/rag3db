@@ -88,8 +88,26 @@ pub enum ChangeDuringIndexing {
 /// `local`, et une indexation de l'une faisait mettre en reprise les éditions
 /// d'une autre (reprises ensuite dans le mauvais catalogue). Trouvé par les
 /// témoins de la montre, deux backends sous le même processus.
+///
+/// La racine est **canonisée** dans la clé : un même dossier atteint par un
+/// lien symbolique ou avec un `/` final ne fait qu'une clé. (Pas dans le
+/// curseur lui-même : il porte les chemins enregistrés dans l'index.)
 pub fn registry_key(source: &dyn FileSource) -> String {
-    source.cursor()
+    let cursor = source.cursor();
+    match cursor.strip_prefix("worktree:") {
+        Some(root) => match std::path::Path::new(root).canonicalize() {
+            Ok(canon) => format!("worktree:{}", canon.display()),
+            Err(_) => format!("worktree:{}", root.trim_end_matches('/')),
+        },
+        None => cursor,
+    }
+}
+
+/// **Les fichiers en reprise** d'une indexation entière de cette source :
+/// changés après leur passage, ils seront relus à sa fin. `None` hors
+/// indexation.
+pub fn pending_resume(source: &dyn FileSource) -> Option<usize> {
+    EN_COURS.lock().unwrap_or_else(|p| p.into_inner()).get(&registry_key(source)).map(|e| e.a_reprendre.len())
 }
 
 /// **Un fichier de la source vient de changer** (écrit, ou supprimé) : à
@@ -207,9 +225,13 @@ pub fn reingest_file(
     };
     // Les chemins du projet : un import vers un autre fichier n'est pas une
     // bibliothèque. Une source qui ne sait pas se lister analyse sans eux.
+    let t = std::time::Instant::now();
     let projet = source.list().ok();
+    crate::ingest_profile::add("réindexer · lister le projet (source.list)", t);
+    let t = std::time::Instant::now();
     let mut analysis =
         crate::code::analyze_in_project(&root, vec![(path.to_string(), content.to_string())], &cursor, projet.as_deref());
+    crate::ingest_profile::add("réindexer · analyser le fichier", t);
     for f in &mut analysis.files {
         f.cursor = cursor.clone();
         if virtual_source {
@@ -224,6 +246,7 @@ pub fn reingest_file(
     let mut deleted = 0usize;
     let mut deferred_to = None;
     let mut noms_retires = Vec::new();
+    let t = std::time::Instant::now();
     match catalog.begin_snapshot(SCOPE, &grain, true) {
         Ok(open) => {
             let uuids = analysis
@@ -245,10 +268,17 @@ pub fn reingest_file(
         Err(CatalogError::SnapshotRefused(raison)) => deferred_to = Some(raison),
         Err(e) => return Err(e.to_string()),
     }
+    crate::ingest_profile::add("réindexer · fin d'instantané sur le grain du fichier", t);
+    let t = std::time::Instant::now();
     oublier_les_aretes_du_fichier(catalog, &source_id, &indexed_path)?;
+    crate::ingest_profile::add("réindexer · oublier les arêtes du fichier", t);
+    let t = std::time::Instant::now();
     let report = catalog.ingest_code_jusqu_a(&analysis, exige).map_err(|e| e.to_string())?;
+    crate::ingest_profile::add("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", t);
     // Un nom dont un définisseur vient de partir a pu redevenir unique.
+    let t = std::time::Instant::now();
     catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
+    crate::ingest_profile::add("réindexer · résoudre les symboles", t);
     Ok(ReingestReport {
         scopes_upserted: report.scopes,
         scopes_deleted: deleted,
@@ -298,12 +328,15 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
 pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, exige: Disponibilites) -> Result<ReingestReport, String> {
     let (source_id, indexed_path) = crate::code_tools::indexed_name(source, path);
     let grain = grain_du_fichier(&source_id, &indexed_path);
+    let t = std::time::Instant::now();
     let open = catalog.begin_snapshot(SCOPE, &grain, true).map_err(|e| e.to_string())?;
     let plan = catalog
         .plan_snapshot_finish(SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
         .map_err(|e| e.to_string())?;
     let noms_retires = noms_des_scopes(catalog, &plan.removed)?;
     let fin = catalog.apply_snapshot_finish(plan).map_err(|e| e.to_string())?;
+    crate::ingest_profile::add("retirer · fin d'instantané (les scopes)", t);
+    let t = std::time::Instant::now();
     let fichier = BTreeMap::from([
         ("source".to_string(), CypherValue::String(source_id)),
         ("path".to_string(), CypherValue::String(indexed_path)),
@@ -312,7 +345,10 @@ pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, e
     if !catalog.get_many(FILE, std::slice::from_ref(&uuid)).map_err(|e| e.to_string())?.is_empty() {
         catalog.delete_jusqu_a(FILE, &uuid, exige).map_err(|e| e.to_string())?;
     }
+    crate::ingest_profile::add("retirer · la ligne File", t);
+    let t = std::time::Instant::now();
     catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
+    crate::ingest_profile::add("retirer · résoudre les symboles", t);
     Ok(ReingestReport { scopes_deleted: fin.removed.len(), ..Default::default() })
 }
 
@@ -1245,3 +1281,25 @@ mod tests {
         assert_eq!(regle(Some("0"), false, "postgres"), Ok((false, None)));
     }
 }
+
+#[cfg(test)]
+mod registry_key_tests {
+    /// **Un même dossier, une seule clé** : par un lien symbolique ou avec un
+    /// `/` final, la racine canonisée fait la même clé.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_reached_two_ways_has_one_key() {
+        use crate::code_tools::WorkingTree;
+        let dir = tempfile::tempdir().unwrap();
+        let racine = dir.path().join("racine");
+        std::fs::create_dir(&racine).unwrap();
+        let lien = dir.path().join("lien");
+        std::os::unix::fs::symlink(&racine, &lien).unwrap();
+        let a = super::registry_key(&WorkingTree::new(&racine));
+        let b = super::registry_key(&WorkingTree::new(&lien));
+        let c = super::registry_key(&WorkingTree::new(format!("{}/", racine.display())));
+        assert_eq!(a, b);
+        assert_eq!(a, c);
+    }
+}
+

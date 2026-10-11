@@ -53,3 +53,11 @@ pour fermer, le témoin déterministe (une réaction qui tient le catalogue, pui
 l'état). À savoir : depuis le même lot, chaque lecture d'outil lit aussi une clé méta (le compte
 des morceaux sans texte, pour l'en-tête) sous le verrou du catalogue, ce qui allonge un peu sa
 tenue.
+
+**12 octobre, nuit (everything declarative) : fermé.** Le correctif de l'arbre principal est sur
+master (`e5c53d2e2`). Le témoin déterministe `a_busy_index_state_still_tells_the_watches`
+(`backend.rs`) tient le catalogue 2,5 s, au-delà de l'attente d'une lecture, et exige `busy` **et**
+`watches.code` : rouge sur la branche d'avant (`{"busy":true}` seul), vert après. Le reçu occupé
+porte aussi `resume` (les fichiers repris à la fin d'une indexation entière), lu hors du catalogue
+comme les montres ; et `index_states` attend un verrou court (`lock_for_read`, au plus 1 s) au lieu
+de rendre `busy` au premier essai.

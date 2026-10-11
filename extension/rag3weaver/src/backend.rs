@@ -3103,8 +3103,9 @@ impl Backend {
     /// **L'état de l'index, par entité du schéma nommé** — pour la ligne de
     /// statut de l'application : ce qu'un harnais sait, il le dit lui-même
     /// plutôt que de compter sur le modèle pour le répéter (décision du
-    /// 4 octobre, après les rejeux T1). `try_lock` : une indexation qui
-    /// tient le verrou rend `{"busy": true}`, jamais une attente.
+    /// 4 octobre, après les rejeux T1). Une indexation qui tient le verrou
+    /// au-delà de l'attente d'une lecture rend `"busy": true`, avec ce qui se
+    /// lit hors du catalogue (montres, reprise, embarquement, avertissements).
     pub fn index_states(&self) -> Result<Value, String> {
         #[cfg(not(feature = "code"))]
         {
@@ -3157,8 +3158,20 @@ impl Backend {
             .iter()
             .map(|h| (h.name().to_string(), serde_json::to_value(h.stats()).unwrap_or_default()))
             .collect();
-        let Ok(cat) = self.catalog.try_lock() else {
+        // Une indexation entière en cours : combien de fichiers changés pendant
+        // elle seront repris à sa fin. Hors du catalogue : rendu même occupé.
+        let reprise = self
+            .file_source
+            .as_ref()
+            .and_then(|s| crate::code_sync::pending_resume(s.as_ref()))
+            .map(|n| json!({"indexing": true, "files": n}));
+        // Un verrou court (la réindexation d'un fichier) s'attend ; seule une
+        // tenue longue rend « busy ».
+        let Some(cat) = crate::dataflow::catalog_read::lock_for_read(&self.catalog) else {
             let mut occupe = json!({"busy": true});
+            if let Some(r) = reprise {
+                occupe["resume"] = r;
+            }
             if let Some(e) = embarquement {
                 occupe["embedding"] = e;
             }
@@ -3192,6 +3205,9 @@ impl Backend {
         // réindexés (la montre de fichiers).
         if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
             etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
+        }
+        if let Some(r) = reprise {
+            etats.insert("resume".to_string(), r);
         }
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
@@ -3897,13 +3913,15 @@ mod tests {
     /// Attend (10 s au plus) que `ok` tienne sur ce que rend `usages`.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn attendre_les_usages(backend: &Backend, name: &str, ok: impl Fn(&str) -> bool) -> String {
-        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        // Sondé toutes les 200 ms : une lecture partage désormais le verrou avec
+        // la réaction (elle lui cède), une sonde trop serrée la ralentirait.
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
         loop {
             let u = usages_de(backend, name);
             if ok(&u) || std::time::Instant::now() > fin {
                 return u;
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
 
@@ -4073,6 +4091,31 @@ mod tests {
         assert!(!u.contains("Catalogue occupé") && u.contains("main"), "{u}");
     }
 
+    /// **Le reçu « occupé » dit encore ce qui se lit sans le catalogue** : une
+    /// indexation qui tient le catalogue plus longtemps que l'attente d'une
+    /// lecture rend `busy`, mais le coût des montres se lit quand même — un
+    /// état qui le perdait faisait rougir une fois sur cinq la réconciliation
+    /// (ticket du 11 octobre, trouvé par G).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_busy_index_state_still_tells_the_watches() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        let catalog = backend.catalog.clone();
+        let (pris, prends) = std::sync::mpsc::channel();
+        let tenu = std::thread::spawn(move || {
+            let _g = catalog.lock().unwrap();
+            pris.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(2500));
+        });
+        prends.recv().unwrap();
+        let etat = backend.index_states().unwrap();
+        tenu.join().unwrap();
+        assert_eq!(etat["busy"], true, "le catalogue tenu ne rend pas busy : {etat}");
+        assert!(etat["watches"]["code"].is_object(), "le reçu occupé perd les montres : {etat}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation
@@ -4083,7 +4126,10 @@ mod tests {
         let (dir, backend) = backend_qui_surveille();
         let lot = dir.path().join("sources/lot");
         std::fs::create_dir(&lot).unwrap();
-        for i in 0..400 {
+        // Cent fichiers : la réaction de retrait dure assez pour être coupée
+        // (un retrait coûte des centaines de millisecondes sur ce moteur ; à
+        // mesurer, chantier suivant), et la reprise tient dans le délai.
+        for i in 0..100 {
             std::fs::write(lot.join(format!("f{i}.rs")), format!("fn f{i}() {{ depart(); }}\n")).unwrap();
         }
         {
@@ -4101,9 +4147,15 @@ mod tests {
         let t = std::time::Instant::now();
         assert!(backend.stop_reactions().is_empty());
         assert!(t.elapsed() < std::time::Duration::from_secs(3), "l'arrêt a attendu la réaction : {:?}", t.elapsed());
-        // Au redémarrage, la réconciliation reprend ce qui restait.
+        // Au redémarrage, la réconciliation reprend ce qui restait : on attend
+        // que le retard tombe (l'état de l'index, une lecture brève), puis on
+        // lit les usages une fois.
         backend.mount_reactions().unwrap();
-        let u = attendre_les_usages(&backend, "depart", |u| !u.contains("lot/"));
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while backend.index_states().unwrap().get("lag").is_some() && std::time::Instant::now() < fin {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        let u = usages_de(&backend, "depart");
         assert!(!u.contains("lot/"), "le reste n'est pas repris : {}", &u[..u.len().min(400)]);
         assert!(backend.stop_reactions().is_empty());
     }
@@ -4133,6 +4185,121 @@ mod tests {
         let err = backend.file_source.clone().unwrap().list().unwrap_err();
         assert!(err.contains("racine du workspace absente") && err.contains("sources"), "{err}");
         assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Une lecture passe pendant une réaction qui enchaîne les fichiers** :
+    /// la réaction reprend le verrou du catalogue fichier après fichier, et un
+    /// verrou qui n'est pas équitable laisserait le lecteur perdre à chaque
+    /// fois — « catalogue occupé » sans aucune tenue longue. Trois cents
+    /// fichiers créés d'un coup ; pendant leur réindexation, `usages` répond.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_gets_through_a_reaction_that_chains_files() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        let lot = dir.path().join("sources/lot");
+        std::fs::create_dir(&lot).unwrap();
+        for i in 0..300 {
+            std::fs::write(lot.join(format!("g{i}.rs")), format!("fn g{i}() {{ depart(); }}\n")).unwrap();
+        }
+        // La réaction a commencé : une partie est réindexée, pas tout.
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let u = usages_de(&backend, "depart");
+            assert!(!u.contains("Catalogue occupé"), "une lecture refusée pendant la réaction : {}", &u[..u.len().min(300)]);
+            if u.contains("lot/") || std::time::Instant::now() > fin {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // Et encore pendant qu'elle continue.
+        for _ in 0..10 {
+            let u = usages_de(&backend, "depart");
+            assert!(!u.contains("Catalogue occupé"), "une lecture refusée pendant la réaction : {}", &u[..u.len().min(300)]);
+        }
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Une base copiée se réconcilie par chemin relatif** : l'index fait sur
+    /// une racine, la source ouverte sur une copie de cet arbre qui en diffère
+    /// d'un fichier — la carte de l'index se lit à la racine que chaque ligne a
+    /// enregistrée, et la réconciliation ne rend que le fichier changé.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_copied_base_reconciles_by_relative_path() {
+        let (dir, backend) = backend_qui_surveille();
+        let copie = dir.path().join("copie");
+        std::fs::create_dir(&copie).unwrap();
+        for f in ["main.rs", "outils.rs"] {
+            std::fs::copy(dir.path().join("sources").join(f), copie.join(f)).unwrap();
+        }
+        std::fs::write(copie.join("main.rs"), "fn main() { depart(); }\nfn branche() { depart(); }\n").unwrap();
+        let source: Arc<dyn crate::code_tools::FileSource> = Arc::new(crate::code_tools::WorkingTree::new(&copie));
+        let indexed = crate::watch::indexed_files(&backend.catalog.lock().unwrap(), source.as_ref()).unwrap();
+        assert_eq!(indexed.keys().cloned().collect::<Vec<_>>(), ["main.rs", "outils.rs"], "lu par chemin relatif");
+        let scanner = crate::watch::Scanner::new(copie.clone(), source, &crate::watch::WatchConfig::default()).unwrap();
+        let changes: Vec<_> = scanner.reconcile(&indexed).into_iter().map(|c| (c.path, c.change)).collect();
+        assert_eq!(changes, [("main.rs".to_string(), crate::watch::Change::Modified)]);
+    }
+
+    /// **La mesure, phase par phase, de la réindexation d'un fichier** (les
+    /// « 6 s » de Lucie). Joué à la demande : `RAG3WEAVER_INGEST_PROFILE=1
+    /// cargo test … measure_one_file_reindexing -- --ignored --nocapture`.
+    /// Les sources de ce crate indexées, puis un petit fichier réindexé cinq
+    /// fois et un autre retiré : la durée de chacun, et les totaux par phase
+    /// (le profileur d'ingestion). Sans la montre : ce qui est mesuré est le
+    /// chemin du moteur, pas l'attente de l'événement.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    #[ignore]
+    fn measure_one_file_reindexing() {
+        fn copier(src: &Path, dst: &Path) -> usize {
+            std::fs::create_dir_all(dst).unwrap();
+            let mut n = 0;
+            for e in std::fs::read_dir(src).unwrap() {
+                let e = e.unwrap();
+                let cible = dst.join(e.file_name());
+                if e.file_type().unwrap().is_dir() {
+                    n += copier(&e.path(), &cible);
+                } else if e.path().extension().is_some_and(|x| x == "rs") {
+                    std::fs::copy(e.path(), &cible).unwrap();
+                    n += 1;
+                }
+            }
+            n
+        }
+        let (dir, backend) = backend_qui_surveille();
+        let arbre = dir.path().join("sources/arbre");
+        let n = copier(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &arbre);
+        let source = backend.file_source.clone().unwrap();
+        let t = std::time::Instant::now();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        }
+        eprintln!("[mesure] index de {n} fichiers : {:?}", t.elapsed());
+        let _ = crate::ingest_profile::take();
+        let petit = "arbre/scope.rs";
+        let original = std::fs::read_to_string(dir.path().join("sources").join(petit)).unwrap();
+        for i in 0..5 {
+            let contenu = format!("{original}\n// mesure {i}\nfn mesure_{i}() {{ depart(); }}\n");
+            std::fs::write(dir.path().join("sources").join(petit), &contenu).unwrap();
+            let t = std::time::Instant::now();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), petit, &contenu).unwrap();
+            eprintln!("[mesure] réindexer {petit} ({} octets), essai {i} : {:?}", contenu.len(), t.elapsed());
+        }
+        let retire = "arbre/meter.rs";
+        std::fs::remove_file(dir.path().join("sources").join(retire)).unwrap();
+        let t = std::time::Instant::now();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::remove_file(&mut cat, source.as_ref(), retire, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        }
+        eprintln!("[mesure] retirer {retire} : {:?}", t.elapsed());
+        for (etape, duree, fois) in crate::ingest_profile::take() {
+            eprintln!("[mesure]   {etape} : {duree:?} ({fois} fois)");
+        }
     }
 
     /// Une montre ne surveille qu'une copie de travail : sur un `snapshot`

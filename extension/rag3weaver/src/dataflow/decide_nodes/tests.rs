@@ -307,7 +307,7 @@ fn empty_lists_and_unbranchable_routes_are_refused() {
 /// reprise sur point de reprise.
 #[test]
 fn decide_keeps_its_whole_configuration_through_a_definition() {
-    let config = json!({"labels": ["a", "b"], "instruction": "dis", "prompt": "{text} ?", "field": "content", "as": "kind", "via": "llm"});
+    let config = json!({"labels": ["a", "b"], "instruction": "dis", "prompt": "{text} ?", "field": "content", "as": "kind", "via": "llm", "max_tokens": 4096});
     let def = GraphDefinition {
         nodes: vec![NodeDef { name: "d".into(), node_type: "Decide".into(), config: config.clone() }],
         edges: vec![],
@@ -629,4 +629,25 @@ fn a_reader_that_quits_does_not_fail_route() {
     let n = |v: &Arc<Mutex<Vec<Value>>>| v.lock().unwrap().iter().map(|e| e["n"].as_i64().unwrap()).collect::<Vec<_>>();
     assert_eq!(n(&questions), [1]);
     assert_eq!(n(&autres), [9]);
+}
+
+
+/// **Une réponse coupée par le plafond se dit tronquée**, pas « hors liste »
+/// (Gemini 3.5 Flash, banc de la mémoire : la réflexion mangeait les 512
+/// jetons) ; le plafond se règle, 2 048 par défaut.
+#[test]
+fn a_reply_cut_by_the_token_cap_is_said_truncated() {
+    use crate::llm::{Finish, FinishReason, Usage};
+    let asked = Arc::new(Mutex::new(0usize));
+    let a = asked.clone();
+    let llm = CallbackLlm::new("coupe", 4096, move |_turns, opts, sink| {
+        *a.lock().unwrap() = opts.max_tokens;
+        let _ = sink.on_token(r#"{"label": "no"#);
+        Ok((Finish::new(FinishReason::MaxTokens, vec![]), Usage::default()))
+    });
+    let def = graph(json!("x"), "Decide", json!({"labels": "yes|no"}), &[]);
+    let err = run(&def, with_llm(llm)).unwrap_err();
+    assert!(err.contains("tronquée") && err.contains("2048") && !err.contains("pas une étiquette admise"), "{err}");
+    assert_eq!(*asked.lock().unwrap(), 2048);
+    assert!(DecideNodeFactory.create("d", &json!({"labels": "a|b", "max_tokens": 0})).is_err());
 }

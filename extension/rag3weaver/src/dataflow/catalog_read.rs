@@ -38,6 +38,37 @@ pub enum CatalogRead<'a> {
 /// laisser passer la réindexation d'un fichier, pas une indexation entière.
 pub const READ_WAIT: std::time::Duration = std::time::Duration::from_millis(1000);
 
+/// **Les lecteurs qui attendent un catalogue**, comptés **par catalogue** (la
+/// clé est l'adresse de son `Arc`, que la lecture et la réaction partagent) :
+/// une réaction qui enchaîne les fichiers (et reprend le verrou à chaque fois)
+/// leur cède entre deux fichiers — le `Mutex` n'est pas équitable, et un
+/// lecteur qui sonde perdrait sinon à chaque reprise. Par catalogue, pour qu'un
+/// lecteur d'un backend ne ralentisse pas la réaction d'un autre.
+static READERS_WAITING: std::sync::LazyLock<Mutex<std::collections::HashMap<usize, usize>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn catalog_key(catalog: &Arc<Mutex<Catalog>>) -> usize {
+    Arc::as_ptr(catalog) as usize
+}
+
+/// Des lecteurs attendent-ils ce catalogue ?
+pub fn readers_waiting(catalog: &Arc<Mutex<Catalog>>) -> bool {
+    READERS_WAITING
+        .lock()
+        .map(|m| m.get(&catalog_key(catalog)).copied().unwrap_or(0) > 0)
+        .unwrap_or(false)
+}
+
+fn count_reader(key: usize, delta: isize) {
+    if let Ok(mut m) = READERS_WAITING.lock() {
+        let n = m.entry(key).or_insert(0);
+        *n = (*n as isize + delta).max(0) as usize;
+        if *n == 0 {
+            m.remove(&key);
+        }
+    }
+}
+
 /// Le catalogue est tenu par une indexation.
 pub const BUSY: &str = "Catalogue occupé : une indexation le tient en ce moment. Réessayez dans un moment, ou prenez `search_code`, qui balaie les fichiers.";
 /// Rien n'a jamais été indexé.
@@ -52,6 +83,40 @@ pub fn partial_status(text: Level, relations: Level) -> Option<String> {
         (_, Level::Running) => Some("Relations en cours de chargement : résultat partiel.".into()),
         _ => None,
     }
+}
+
+/// **Prendre le catalogue pour lire**, en attendant un verrou court : la
+/// réindexation d'un fichier le tient quelques dizaines de millisecondes. Le
+/// lecteur se compte comme en attente le temps de la sonde, et la réaction lui
+/// cède. `None` au-delà de [`READ_WAIT`] (une indexation entière) ou sur un
+/// verrou empoisonné.
+pub fn lock_for_read(catalog: &Arc<Mutex<Catalog>>) -> Option<std::sync::MutexGuard<'_, Catalog>> {
+    let deadline = std::time::Instant::now() + READ_WAIT;
+    // Compté comme lecteur en attente le temps de la sonde (rendu à la sortie).
+    struct Attente(bool, usize);
+    impl Drop for Attente {
+        fn drop(&mut self) {
+            if self.0 {
+                count_reader(self.1, -1);
+            }
+        }
+    }
+    let mut attente = Attente(false, catalog_key(catalog));
+    let cat = loop {
+        match catalog.try_lock() {
+            Ok(cat) => break cat,
+            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                if !attente.0 {
+                    count_reader(attente.1, 1);
+                    attente.0 = true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(_) => return None,
+        }
+    };
+    drop(attente);
+    Some(cat)
 }
 
 /// Prendre le catalogue pour lire `entity`, ou dire pourquoi pas. La
@@ -73,15 +138,8 @@ pub fn read_catalog_in<'a>(
     // (la réaction de la montre) le tient le temps d'une ingestion, quelques
     // dizaines de millisecondes. Seule une tenue longue — une indexation
     // entière — rend le refus ; la réponse, sinon, porte le retard dit.
-    let deadline = std::time::Instant::now() + READ_WAIT;
-    let cat = loop {
-        match catalog.try_lock() {
-            Ok(cat) => break cat,
-            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            Err(_) => return CatalogRead::Refused(BUSY.into()),
-        }
+    let Some(cat) = lock_for_read(catalog) else {
+        return CatalogRead::Refused(BUSY.into());
     };
     let status = match cat.index_state_for(entity) {
         Ok(state) if state.text == Level::Never => return CatalogRead::Refused(NEVER_INDEXED.into()),
