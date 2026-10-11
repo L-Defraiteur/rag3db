@@ -56,10 +56,63 @@ première marche, et elle tient seule.
 
 ## 3. Ce que la transaction par paquet garantit, ce qui vit hors de la base, et le prix de l'empoisonnement
 
-*Arbre principal, à écrire.* `commencer` / `terminer` de `code_sync`,
-`set_in_transaction`, les points de reprise coupés, l'empoisonnement après `ROLLBACK`,
-`close_without_checkpoint` ; le plein texte en fichiers, les blobs, les vecteurs, et
-comment le paquet les rattrape à la reprise.
+*Arbre principal.*
+
+**Ce que fait le paquet** (`code_sync.rs`, `commencer` et `terminer`) :
+
+- `commencer` ouvre `BEGIN` sur la connexion du catalogue et pose `set_in_transaction(true)`.
+  Le catalogue n'émet plus de DDL tant que la transaction est ouverte : le schéma est posé
+  avant, par `prepare_schema_for_ingest`. Les points de reprise du dataflow sont coupés
+  dans la transaction, puisqu'elle-même est le point de reprise.
+- `terminer` fait `COMMIT` si le paquet a réussi. Sur un échec, il fait `ROLLBACK`, **puis
+  empoisonne le catalogue** (`Catalog::poison`). Un `COMMIT` refusé vaut le même chemin.
+- **La garantie** : un paquet est entier ou absent. Une mort pendant la validation laisse
+  le paquet entier ou absent, jamais à moitié (`d74c0877e`, moteur `37608cf4b`), et une
+  reprise refait les paquets non validés. Depuis la marche 0 (`75de6618f`), l'arrêt propre
+  se fait à cette frontière.
+
+**Pourquoi l'empoisonnement.** Le moteur défait la base, mais pas les caches du catalogue,
+qui gardent des écritures défaites : les identifiants de nœuds, les modèles enregistrés, les
+index plein texte ouverts et la file des liens. Seule une réouverture les remet d'accord avec
+la base. L'empoisonnement refuse donc tout jusqu'à elle, plutôt que de laisser un cache
+mentir. Le même état sert au point de reprise échoué (« la base doit être rouverte »), avec
+`close_without_checkpoint` : la dernière connexion d'une base au tampon plein la ferme sans
+point de reprise, qu'elle ne pourrait pas faire.
+
+**Ce qui vit hors de la base, et comment le paquet le rattrape :**
+
+| quoi | pendant le paquet | si la transaction est défaite ou le processus meurt |
+|---|---|---|
+| **plein texte en fichiers** (le défaut d'une base neuve) | lucivy écrit ses segments ; avant le `COMMIT`, le dossier est rendu durable, puis sa **génération est marquée en base, dans la même transaction que les lignes** (`flush_blob_store` → `mark_next_generation`, `fts_generation:<clé>`) | la génération marquée reste l'ancienne ; à l'ouverture, le plein texte relit celle que la base connaît. Les segments en trop sont des orphelins, sans réponse fausse |
+| **plein texte en blobs** (les bases d'avant la bascule) | les blobs vont **dans** la transaction (`UNWIND … MERGE`, lots de 32 Mo) | défaits avec elle. Un mécanisme de report existe sans être le défaut : `defer_blob_push` jusqu'à la fin de la synchronisation, sous la marque durable `fts_pending` que `rebuild_pending_fts` rattrape. Le défaut casse sous un petit tampon (ticket du COPY de blobs) |
+| **vecteurs** | **jamais dans le paquet** : l'indexation exige le plein texte seul, et les vecteurs sont une **dette** payée après, par passes de 512 (`embarquer_le_retard`), dans leurs propres écritures | la dette se compte et se rattrape à la passe suivante ; l'état d'index dit « vecteurs en cours » |
+| **liens en file** (mode de masse) | en mémoire, posés à la fin ou quand la file dépasse sa borne ; la marque `relations_pending` est en base | une reprise finit en masse quand la marque est posée, et la file oubliée est refaite depuis les fichiers (marche 0) |
+
+**Réponse à la question de la §4 : oui, le paquet diffère déjà le hors-base au `COMMIT`**, et
+c'est la forme à porter. Ce n'est pas la poussée des blobs, qui est un report jusqu'à la fin
+de toute la synchronisation, mais le **plein texte en fichiers**. Le hors-base est rendu
+durable avant le `COMMIT`, et **sa marque de génération voyage dans la transaction de la
+base**. Si la transaction tombe, la marque tombe avec elle, et l'ancien état reste le seul que
+la base connaisse. Pour un `put` d'une ligne, c'est exactement le cas : la ligne et ses
+morceaux en base, les vecteurs en base (colonnes, et l'index vectoriel du moteur dans la même
+transaction), et le plein texte en fichiers avec sa génération marquée dans la transaction.
+
+**Le prix de l'empoisonnement, pour un outil :**
+
+- **Aujourd'hui**, un processus MCP par session : le serveur sort avec le code 75 et le
+  client le relance. Le prix est une relance pour **une** session.
+- **Sous la forme C** (marche 1, `deb423288`), le backend est lâché seul : ses réactions et
+  ses indexations s'arrêtent, l'appel en cours rend une erreur transitoire, et l'appel suivant
+  le rouvre. Les autres backends ne voient rien. Mais **toutes les sessions de ce backend**
+  perdent leurs appels en vol, et un réacteur s'arrête au milieu d'une réaction. Un outil
+  courant qui empoisonne sur un échec banal (une validation de schéma, un conflit de révision)
+  coûterait une réouverture à tout le monde.
+- **Donc un outil ne doit empoisonner que sur ce que le moteur impose** : un point de reprise
+  échoué ou un `COMMIT` refusé. Un échec qu'il sait défaire, un `ROLLBACK` d'une transaction
+  dont il connaît les caches touchés, doit **invalider ces caches-là**, et non le catalogue
+  entier. C'est le travail que l'empoisonnement évite au paquet, qui touche tous les caches ;
+  un outil d'une ligne en touche peu (l'identifiant de sa ligne, et sa génération de plein
+  texte).
 
 **La question dure, et la première réponse de l'arbre principal** (marche 1 de C) : sous
 l'hôte, un backend dont la base doit être rouverte est lâché seul. Son appel en cours
