@@ -70,11 +70,24 @@ struct RAG3DB_API SystemConfig {
      * relais, pas la simultanéité). 0 : le refus immédiat d'avant. Au-delà de la borne, une
      * IOException nommée (« waited <N> ms for the database file held by another writer process »).
      */
+    // La signature d'avant B2, gardée telle quelle (son symbole exporté compris) : un binaire
+    // lié à la lib d'avant continue de se lier et de démarrer ; elle délègue à la neuve avec
+    // l'attente au fichier par défaut. Un réglage ajouté s'ajoute à la neuve, jamais ici.
     explicit SystemConfig(uint64_t bufferPoolSize = -1u, uint64_t maxNumThreads = 0,
         bool enableCompression = true, bool readOnly = false, uint64_t maxDBSize = -1u,
         bool autoCheckpoint = true, uint64_t checkpointThreshold = 16777216 /* 16MB */,
         bool forceCheckpointOnClose = true, bool throwOnWalReplayFailure = true,
-        bool enableChecksums = true, uint64_t fileLockWaitMs = DEFAULT_FILE_LOCK_WAIT_MS
+        bool enableChecksums = true
+#if defined(__APPLE__)
+        ,
+        uint32_t threadQos = QOS_CLASS_DEFAULT
+#endif
+    );
+    // La signature complète (B2 : fileLockWaitMs), tous les réglages explicites.
+    explicit SystemConfig(uint64_t bufferPoolSize, uint64_t maxNumThreads, bool enableCompression,
+        bool readOnly, uint64_t maxDBSize, bool autoCheckpoint, uint64_t checkpointThreshold,
+        bool forceCheckpointOnClose, bool throwOnWalReplayFailure, bool enableChecksums,
+        uint64_t fileLockWaitMs
 #if defined(__APPLE__)
         ,
         uint32_t threadQos = QOS_CLASS_DEFAULT
