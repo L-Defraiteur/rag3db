@@ -197,6 +197,9 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOperator(const LogicalOperator*
     default:
         KU_UNREACHABLE;
     }
+    if (logicalOperator->hasCardinalityEstimate()) {
+        physicalOperator->setEstimatedCardinality(logicalOperator->getCardinality());
+    }
     if (!logicalOpToPhysicalOpMap.contains(logicalOperator)) {
         logicalOpToPhysicalOpMap.insert({logicalOperator, physicalOperator.get()});
     }

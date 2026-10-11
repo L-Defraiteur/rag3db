@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include "common/task_system/task.h"
 #include "processor/operator/sink.h"
 
@@ -18,10 +20,14 @@ public:
 
     bool terminate() override;
 
+    // L'opérateur source de la tâche (le bout du pipeline), et sa cardinalité estimée.
+    PhysicalOperator* getSource() const;
+
 private:
     bool sharedStateInitialized;
     Sink* sink;
     ExecutionContext* executionContext;
+    std::chrono::steady_clock::time_point createdAt;
 };
 
 } // namespace processor
