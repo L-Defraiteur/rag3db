@@ -2,6 +2,7 @@
 //! le tout, le saut, la sortie requise, l'échec qui annule, le lecteur qui
 //! lâche, l'interblocage nommé, le puits de jetons, l'arrêt de l'extérieur.
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::dataflow::graph::DataflowGraph;
@@ -446,4 +447,71 @@ fn the_host_stops_an_open_graph() {
     assert_eq!(out.stopped(), Some(&CancelCause::External));
     assert!(matches!(status(&report, "peer_in"), NodeStatus::Cancelled { .. }));
     assert!(matches!(status(&report, "reader"), NodeStatus::Cancelled { .. }));
+}
+
+/// **9. La reprise d'un flux** : le producteur finit et est rangé, son lecteur
+/// tombe (panne injectée) ; à la reprise, le producteur n'est pas rejoué, ses
+/// éléments le sont, dans l'ordre, au lecteur du tout comme au lecteur
+/// élément par élément.
+#[test]
+fn a_resumed_stream_replays_its_elements_without_rerunning_the_producer() {
+    use crate::dataflow::checkpoint_store::MockCheckpointStore;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let runs = Arc::new(AtomicUsize::new(0));
+    let build = |runs: Arc<AtomicUsize>, first_run: bool| {
+        let mut g = DataflowGraph::new();
+        g.add_node(node("tokens", vec![], vec![stream_out("out", PortKind::Finite, true)], move |ctx| {
+            runs.fetch_add(1, Ordering::SeqCst);
+            for t in ["a", "b", "c"] {
+                ctx.emit("out", s(t))?;
+            }
+            Ok(())
+        }))
+        .unwrap();
+        g.add_node(node("whole", vec![whole_in("in")], vec![value_out("seen")], |ctx| {
+            let v = ctx.take_input("in").ok_or("in")?;
+            ctx.set_output("seen", v);
+            Ok(())
+        }))
+        .unwrap();
+        // Au premier run, il lit tout puis attend l'annulation : il ne finit
+        // pas avant la panne, il est donc rejoué, sur les éléments rejoués.
+        // (Une sortie que rien ne consomme ne se range pas : un lecteur fini
+        // et repris n'aurait pas de `seen` dans la sortie, comme sous les niveaux.)
+        g.add_node(node("each", vec![each_in("in", true)], vec![value_out("seen")], move |ctx| {
+            let mut seen = Vec::new();
+            while let Some(v) = ctx.next("in")? {
+                seen.push(text(v));
+            }
+            if first_run && !ctx.cancellation().wait_timeout(Duration::from_secs(30)) {
+                return Err("le premier run aurait dû être annulé".into());
+            }
+            ctx.set_output("seen", s(&seen.join(",")));
+            Ok(())
+        }))
+        .unwrap();
+        g.connect("tokens", "out", "whole", "in").unwrap();
+        g.connect("tokens", "out", "each", "in").unwrap();
+        g
+    };
+    let store = Arc::new(MockCheckpointStore::new());
+    let checkpointed = |rt: DataflowRuntime, mut g: DataflowGraph| {
+        let store = store.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(rt.execute_with_checkpoint(&mut g, store.as_ref(), "flux-repris"));
+        });
+        rx.recv_timeout(Duration::from_secs(60)).expect("le run n'a pas fini en 60 s")
+    };
+
+    let mut services = ServiceRegistry::new();
+    services.register("fail_node", "whole".to_string());
+    let err = checkpointed(DataflowRuntime::with_services(100, services), build(runs.clone(), true)).unwrap_err();
+    assert!(err.contains("injected failure"), "{err}");
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+
+    let out = checkpointed(rt(), build(runs.clone(), false)).unwrap();
+    assert_eq!(runs.load(Ordering::SeqCst), 1, "le producteur rangé n'est pas rejoué");
+    assert_eq!(seen(&out, "whole"), "abc");
+    assert_eq!(seen(&out, "each"), "a,b,c");
 }

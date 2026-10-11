@@ -669,6 +669,20 @@ impl DataflowRuntime {
         let mut skipped: HashMap<String, String> = HashMap::new();
         let order = graph.topological_sort()?;
         let stream_ports = stream_ports_of(graph)?;
+        // Un graphe à flux, sous points de reprise : l'exécuteur concurrent,
+        // qui range un flux par ses éléments (page 05, §3.7).
+        if self.force_concurrent || graph.has_streams()? {
+            let initial = std::mem::take(&mut initial_inputs);
+            let checkpointing = super::concurrent::Checkpointing {
+                store,
+                execution_id,
+                checkpoint,
+                keep_state: garde_l_etat,
+            };
+            return tokio::task::block_in_place(|| {
+                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, Some(checkpointing))
+            });
+        }
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
@@ -1163,7 +1177,7 @@ impl DataflowRuntime {
         if self.force_concurrent || graph.has_streams()? {
             let initial = std::mem::take(&mut initial_inputs);
             return tokio::task::block_in_place(|| {
-                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start)
+                self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None)
             });
         }
 

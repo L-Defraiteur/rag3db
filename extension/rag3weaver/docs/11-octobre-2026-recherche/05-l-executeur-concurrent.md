@@ -291,10 +291,19 @@ façon de ne pas rejouer le producteur.
    jetons donne le texte) ; le fan-in garde `merge_port_values`. Témoins 1 à 8,
    11 et 13 (`dataflow::concurrent::tests`), sous une garde de temps ; le
    témoin 1 rougit sous les niveaux (« l'aval n'a rien lu pendant
-   l'émission »). **Pas encore** : le mode avec points de reprise garde les
-   niveaux pour un graphe à flux (commit 3), et un sous-graphe à sortie de
-   flux n'est pas encore relayé (commit 4).
-3. Le point de reprise des flux, avec le témoin 9.
+   l'émission »). Un sous-graphe à sortie de flux n'est pas encore relayé
+   (commit 4).
+3. **Fait** : sous points de reprise, un graphe à flux passe par l'exécuteur
+   concurrent. Les fils des nœuds confient ce qu'il faut persister au fil
+   principal, seul à écrire au magasin. Un flux se range comme une suite de
+   ports numérotés (`port#0`, `port#1`…) : chaque élément suit le chemin d'une
+   valeur, et ni le magasin ni le format ne changent (le champ `elements` que
+   prévoyait le §3.7 n'a pas été nécessaire). À la reprise, un nœud fini ne
+   s'exécute pas : il lâche ses entrées et rejoue ses sorties dans l'ordre.
+   La panne injectée (`fail_node`) y est reprise. Témoin 9,
+   `a_resumed_stream_replays_its_elements_without_rerunning_the_producer`,
+   rouge sous les niveaux (le lecteur élément par élément y reçoit « abc » d'un
+   bloc au lieu de « a,b,c »).
 4. Le sous-graphe 3a, avec le témoin 10.
 5. `LlmNode` qui émet vient chez le proto.
 

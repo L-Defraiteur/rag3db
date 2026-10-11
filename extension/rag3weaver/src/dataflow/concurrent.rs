@@ -10,8 +10,13 @@
 //! Un échec annule le run ; les autres nœuds finissent `Cancelled`.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Instant;
+
+use super::checkpoint::{
+    port_value_from_checkpoint, port_value_to_checkpoint, CheckpointPortValue, CheckpointStore, ExecutionCheckpoint,
+    NodeCheckpointStatus,
+};
 
 use super::graph::DataflowGraph;
 use super::node::{merge_stream_elements, CancelCause, Node, NodeContext};
@@ -63,6 +68,55 @@ impl CancelHandle {
     }
 }
 
+/// **Les points de reprise d'un run à flux** (page 05, §3.7). L'unité reste
+/// le nœud fini ; un flux se range comme une suite de ports numérotés
+/// (`port#0`, `port#1`…), chaque élément passant par le chemin d'une valeur :
+/// le magasin et le format ne changent pas, un ancien point se relit.
+pub(super) struct Checkpointing<'s> {
+    pub store: &'s dyn CheckpointStore,
+    pub execution_id: &'s str,
+    pub checkpoint: &'s ExecutionCheckpoint,
+    /// `Full` : l'état des nœuds ; sinon les entrées seules, une reprise rejoue tout.
+    pub keep_state: bool,
+}
+
+/// Ce qu'un fil de nœud confie au persisteur (le fil principal).
+enum Persist {
+    Completed {
+        node: String,
+        outputs: HashMap<String, CheckpointPortValue>,
+        undo: Option<serde_json::Value>,
+        duration_ms: u64,
+    },
+    Failed {
+        node: String,
+        error: String,
+    },
+}
+
+/// Le séparateur des éléments d'un flux rangé : aucun nom de port n'en a.
+const ELEMENT: char = '#';
+
+/// Les sorties rangées d'un nœud fini, relues : par port, sa valeur ou les
+/// éléments de son flux, dans l'ordre.
+fn restore_outputs(ports: &HashMap<String, CheckpointPortValue>) -> Result<HashMap<String, Vec<PortValue>>, String> {
+    let mut by_port: HashMap<String, Vec<(usize, PortValue)>> = HashMap::new();
+    for (key, cpv) in ports {
+        let value = port_value_from_checkpoint(cpv.clone())?;
+        match key.rsplit_once(ELEMENT).and_then(|(p, i)| i.parse::<usize>().ok().map(|i| (p, i))) {
+            Some((port, i)) => by_port.entry(port.to_string()).or_default().push((i, value)),
+            None => by_port.entry(key.clone()).or_default().push((0, value)),
+        }
+    }
+    Ok(by_port
+        .into_iter()
+        .map(|(port, mut elements)| {
+            elements.sort_by_key(|(i, _)| *i);
+            (port, elements.into_iter().map(|(_, v)| v).collect())
+        })
+        .collect())
+}
+
 /// Ce qu'un fil sait de son nœud avant de partir.
 struct Plan {
     name: String,
@@ -78,6 +132,12 @@ struct Plan {
     producers: HashMap<String, Vec<String>>,
     out_chans: HashMap<String, Vec<ChannelId>>,
     taps: HashMap<ChannelId, EdgeTap>,
+    /// Fini lors d'un run précédent : ses sorties, à rejouer sans l'exécuter.
+    restored: Option<HashMap<String, Vec<PortValue>>>,
+    /// La panne injectée des tests (service `fail_node`).
+    fail: bool,
+    /// Où confier ce qu'il faut persister, sous points de reprise.
+    persist: Option<mpsc::Sender<Persist>>,
 }
 
 /// Comment un nœud a fini.
@@ -113,7 +173,32 @@ impl DataflowRuntime {
         mut initial_inputs: HashMap<String, HashMap<String, PortValue>>,
         stream_ports: &HashMap<String, (HashSet<String>, HashSet<String>)>,
         start: Instant,
+        checkpointing: Option<Checkpointing<'_>>,
     ) -> Result<DataflowOutput, String> {
+        // Les nœuds finis d'un run précédent, dont les sorties se relisent ; un
+        // lot qui ne se relit pas n'est pas un nœud fait : il est rejoué.
+        let mut restored: HashMap<String, HashMap<String, Vec<PortValue>>> = HashMap::new();
+        if let Some(c) = &checkpointing {
+            for (node, cp) in &c.checkpoint.nodes {
+                if cp.status != NodeCheckpointStatus::Completed {
+                    continue;
+                }
+                match restore_outputs(&cp.output_ports) {
+                    Ok(outputs) => {
+                        restored.insert(node.clone(), outputs);
+                    }
+                    Err(e) => self.emit(DataflowEvent::NodeLog {
+                        node: node.clone(),
+                        node_type: String::new(),
+                        level: super::node::NodeLogLevel::Warn,
+                        text: format!("checkpoint : sortie non relue, le nœud sera rejoué ({e})"),
+                    }),
+                }
+            }
+        }
+        let fail_node = self.services.get::<String>("fail_node").cloned();
+        let (persist_tx, persist_rx) = mpsc::channel::<Persist>();
+        let keep_state = checkpointing.as_ref().is_some_and(|c| c.keep_state);
         let capacity = self.services.get::<usize>("stream_capacity").copied().unwrap_or(64);
         let hub = StreamHub::<PortValue>::new();
         self.cancel.attach(&hub);
@@ -168,6 +253,9 @@ impl DataflowRuntime {
                         .map(|(c, (_, t))| (*c, t.clone()))
                         .collect(),
                     initial: initial_inputs.remove(&name).unwrap_or_default(),
+                    restored: restored.remove(&name),
+                    fail: fail_node.as_deref() == Some(name.as_str()),
+                    persist: checkpointing.is_some().then(|| persist_tx.clone()),
                     inputs,
                     per_element,
                     stream_outputs,
@@ -176,6 +264,7 @@ impl DataflowRuntime {
             })
             .collect();
 
+        let mut store_error: Option<String> = None;
         let ends: Vec<(String, Ended)> = std::thread::scope(|scope| {
             let handles: Vec<_> = graph
                 .nodes
@@ -190,9 +279,37 @@ impl DataflowRuntime {
                     })
                 })
                 .collect();
+            // **Le persisteur** : le fil principal écrit au magasin ce que les
+            // nœuds lui confient, dans l'ordre d'arrivée, jusqu'au dernier fil.
+            drop(persist_tx);
+            if let Some(c) = &checkpointing {
+                for msg in persist_rx {
+                    let written = match msg {
+                        Persist::Completed { node, outputs, undo, duration_ms } if keep_state => c
+                            .store
+                            .save_node_completed(c.execution_id, &node, &outputs, undo.as_ref(), duration_ms)
+                            .map_err(|e| (node, e)),
+                        Persist::Completed { .. } => Ok(()),
+                        Persist::Failed { node, error } => {
+                            let _ = c.store.save_node_failed(c.execution_id, &node, &error);
+                            Ok(())
+                        }
+                    };
+                    if let Err((node, e)) = written {
+                        if store_error.is_none() {
+                            store_error = Some(format!("point de reprise de « {node} » non écrit : {e}"));
+                            hub.cancel(CancelCause::Failed { node });
+                        }
+                    }
+                }
+            }
             handles.into_iter().map(|h| h.join().expect("un nœud a paniqué dans son fil")).collect()
         });
         self.cancel.detach(&hub);
+        if let Some(error) = store_error {
+            self.emit(DataflowEvent::Failed { error: error.clone() });
+            return Err(error);
+        }
 
         let cause = hub.cancelled();
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
@@ -245,6 +362,7 @@ impl DataflowRuntime {
             outputs: plan.out_chans.clone(),
             sent: HashMap::new(),
             taps: plan.taps.clone(),
+            recorded: plan.persist.is_some().then(HashMap::new),
         };
         let cancelled = |binding: &mut StreamBinding, at: &str| {
             binding.finish();
@@ -255,6 +373,32 @@ impl DataflowRuntime {
             });
             Ended::Cancelled
         };
+
+        // ── Fini lors d'un run précédent : ses sorties, rejouées ──────────
+        if let Some(outputs) = &plan.restored {
+            for chans in plan.in_chans.values() {
+                for c in chans {
+                    hub.release_receiver(*c);
+                }
+            }
+            let mut ports: Vec<&String> = outputs.keys().collect();
+            ports.sort();
+            for port in ports {
+                if !binding.outputs.contains_key(port) {
+                    continue;
+                }
+                for value in &outputs[port] {
+                    match binding.send(port, value.clone()) {
+                        Ok(()) => {}
+                        Err(super::node::Stopped::NoReader) => break,
+                        Err(super::node::Stopped::Cancelled(_)) => return cancelled(&mut binding, "en rejouant ses sorties"),
+                    }
+                }
+            }
+            binding.finish();
+            self.emit(DataflowEvent::CheckpointResumed { node: plan.name.clone(), output_ports: outputs.keys().cloned().collect() });
+            return Ended::Completed { unconnected: HashMap::new() };
+        }
 
         // ── Les entrées de départ ──────────────────────────────────────────
         let mut complete: HashMap<String, Vec<Vec<PortValue>>> = HashMap::new();
@@ -364,7 +508,10 @@ impl DataflowRuntime {
         self.emit(DataflowEvent::NodeStarted { node: plan.name.clone(), node_type: plan.node_type.clone(), inputs: input_snapshots });
         ctx.bind_stream(binding);
         let started = Instant::now();
-        let result = if node.is_async() {
+        let result = if plan.fail {
+            // Panne injectée (tests) : le nœud ne s'exécute pas.
+            Err(format!("injected failure for node '{}'", plan.name))
+        } else if node.is_async() {
             super::rt::bloquer("nœud asynchrone d'un graphe à flux", node.execute_async(&mut ctx)).and_then(|r| r)
         } else {
             node.execute(&mut ctx)
@@ -399,6 +546,9 @@ impl DataflowRuntime {
         });
         if let Err(error) = result {
             hub.cancel(CancelCause::Failed { node: plan.name.clone() });
+            if let Some(tx) = &plan.persist {
+                let _ = tx.send(Persist::Failed { node: plan.name.clone(), error: error.clone() });
+            }
             binding.finish();
             self.emit(DataflowEvent::NodeFailed { node: plan.name.clone(), error: error.clone() });
             return Ended::Failed(error);
@@ -421,6 +571,32 @@ impl DataflowRuntime {
             } else {
                 unconnected.insert(port, value);
             }
+        }
+        if let Some(tx) = &plan.persist {
+            // Ce qui est parti sur chaque sortie branchée : une valeur sous son
+            // port, un flux en ports numérotés.
+            let mut checkpoint_outputs = HashMap::new();
+            for (port, elements) in binding.recorded.take().unwrap_or_default() {
+                let stream = plan.stream_outputs.contains(&port);
+                for (i, value) in elements.iter().enumerate() {
+                    let key = if stream { format!("{port}{ELEMENT}{i}") } else { port.clone() };
+                    match port_value_to_checkpoint(value) {
+                        Ok(cpv) => {
+                            checkpoint_outputs.insert(key, cpv);
+                        }
+                        Err(e) => {
+                            let error = format!("{} : la sortie « {port} » ne se range pas au point de reprise : {e}", plan.name);
+                            hub.cancel(CancelCause::Failed { node: plan.name.clone() });
+                            let _ = tx.send(Persist::Failed { node: plan.name.clone(), error: error.clone() });
+                            binding.finish();
+                            self.emit(DataflowEvent::NodeFailed { node: plan.name.clone(), error: error.clone() });
+                            return Ended::Failed(error);
+                        }
+                    }
+                }
+            }
+            let undo = node.undo_context().and_then(|b| b.downcast::<serde_json::Value>().ok().map(|v| *v));
+            let _ = tx.send(Persist::Completed { node: plan.name.clone(), outputs: checkpoint_outputs, undo, duration_ms });
         }
         binding.finish();
         self.emit(DataflowEvent::NodeCompleted { node: plan.name.clone(), duration_ms, outputs: output_snapshots, metrics });

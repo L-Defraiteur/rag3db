@@ -339,6 +339,9 @@ pub(crate) struct StreamBinding {
     pub sent: std::collections::HashMap<String, usize>,
     /// Les robinets ouverts, par canal.
     pub taps: std::collections::HashMap<ChannelId, super::observe::EdgeTap>,
+    /// Sous points de reprise : ce qui est parti sur chaque sortie, dans
+    /// l'ordre, pour que la reprise le rejoue sans rejouer le nœud.
+    pub recorded: Option<std::collections::HashMap<String, Vec<super::port::PortValue>>>,
 }
 
 impl StreamBinding {
@@ -406,6 +409,9 @@ impl StreamBinding {
     /// Envoie un élément sur une sortie branchée.
     pub(crate) fn send(&mut self, port: &str, value: super::port::PortValue) -> Result<(), Stopped> {
         let chans = self.outputs.get(port).cloned().unwrap_or_default();
+        if let Some(recorded) = self.recorded.as_mut() {
+            recorded.entry(port.to_string()).or_default().push(value.clone());
+        }
         self.hub.send(self.worker, &chans, value)?;
         *self.sent.entry(port.to_string()).or_default() += 1;
         Ok(())
