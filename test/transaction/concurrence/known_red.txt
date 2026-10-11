@@ -19,12 +19,9 @@
 # LockBench.SameKeyWaitsThenGetsDuplicateKey et SameKeyWaitsThenInsertsAfterRollback,
 # Order/RollbackOfACopy.RemovesOnlyItsOwnKeys/RolledBackCopiedFirst (réécrit à deux fils : c'est
 # le verrou d'index du COPY qui ferme la première limite du 4 octobre, le second COPY attend).
-#
-# A3′, la part REPRISE, pas faite — ce que la reprise fait d'un journal qui porte un doublon
-# validé sous le mode multi-écrivains, fabriqué par le moteur d'avant A3′ et gardé au dépôt
-# (test/transaction/journal_with_duplicate_key) : aujourd'hui la base ne se rouvre plus ;
-# attendu, refuser la transaction fautive en nommant la clé et ouvrir la base.
-LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen database-reopens
+# Marche A3′, la part reprise : FAITE le 11 octobre 2026 — au rejeu, la transaction validée dont
+# une insertion heurte un doublon de clé est annulée et sautée, ses octets copiés à côté, la
+# base s'ouvre ; LockBench.RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen est vert.
 #
 # Marche A4′ — le mélange de C7 après un vrai arrêt brutal : depuis A3′ la base se rouvre (plus
 # de clé en double au journal) ; ce qui reste est celui de C2 (relations vers des nœuds
