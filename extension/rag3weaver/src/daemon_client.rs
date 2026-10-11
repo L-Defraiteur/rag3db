@@ -658,8 +658,10 @@ impl McpClient {
         json!({
             "name": DAEMON_STATUS,
             "description": "L'état de l'hôte du démon qui tient les bases : en marche (adresse, bâti, sessions, \
-                            backends ouverts), ou absent / injoignable — avec la raison, le journal à lire et \
-                            quoi faire. À appeler quand un autre outil échoue ou manque.",
+                            backends ouverts et, pour chacun, l'état de ses index : retard sur le disque, \
+                            reconstruction, montres, lot d'embarquement en cours, morceaux sans texte), ou absent / \
+                            injoignable — avec la raison, le journal à lire et quoi faire. À appeler quand un autre \
+                            outil échoue ou manque, ou pour savoir où en est un index.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         })
     }

@@ -389,11 +389,23 @@ impl DaemonHost {
             .unwrap_or_else(|p| p.into_inner())
             .values()
             .map(|h| {
-                let ouvert = h.backend.lock().map(|b| b.is_some()).unwrap_or(false);
+                // **Sans attendre** : un appel long tient le backend, et l'état
+                // de l'hôte ne doit jamais faire la queue derrière lui. Ouvert,
+                // l'état de ses index (le retard, la reconstruction, les
+                // montres, le lot en cours, les morceaux sans texte), lu par
+                // `index_states`, qui sait lui-même dire un catalogue occupé.
+                let (ouvert, index) = match h.backend.try_lock() {
+                    Ok(slot) => match slot.as_ref() {
+                        Some(b) => (json!(true), b.index_states().unwrap_or_else(|e| json!({ "error": e }))),
+                        None => (json!(false), Value::Null),
+                    },
+                    Err(_) => (json!(true), json!({ "busy": true, "why": "un appel tient ce backend" })),
+                };
                 json!({
                     "id": h.id,
                     "manifest": h.manifest,
                     "open": ouvert,
+                    "index": index,
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
                     "manifest_changed": self.manifest_changed(h),

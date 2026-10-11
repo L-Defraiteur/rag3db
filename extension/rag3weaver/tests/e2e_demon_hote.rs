@@ -602,6 +602,23 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     let u = appeler(&a.manifest, "usages", json!({"name": "prendre_le_verrou"}));
     assert!(u.contains("appelant"), "{u}");
 
+    // **L'état des index par backend, dans l'état de l'hôte** (ce que
+    // `daemon_status` porte) : sans lui, personne ne pouvait lire ce que la
+    // montre a repris ni distinguer une reconstruction d'une boucle sans
+    // ouvrir le journal (11 octobre 2026).
+    let etat: Value = serde_json::from_str(&agent.get(format!("http://{adresse}/etat")).call().unwrap().body_mut().read_to_string().unwrap()).unwrap();
+    let index = etat["backends"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|x| x["manifest"].as_str().is_some_and(|m| m.contains("/code-coeur/")))
+        .map(|x| x["index"].clone())
+        .unwrap_or(Value::Null);
+    assert!(
+        index.get("Scope").is_some_and(Value::is_object) || index.get("busy").is_some(),
+        "l'état des index du backend ouvert, dans l'état de l'hôte : {index}"
+    );
+
     // Un second arbre, né de l'instantané de la base du premier — ouvert dans
     // l'hôte : fermé le temps de la copie (une base ne se copie que fermée),
     // rouvert après. Le clone répond sans index (le même arbre, donc les
