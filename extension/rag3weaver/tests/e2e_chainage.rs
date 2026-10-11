@@ -299,3 +299,46 @@ pub(crate) fn une_lecture_apres_une_ecriture(s: &Scene) {
     assert_eq!(lignes.len(), 1, "{lignes:?}");
     assert_eq!(lignes[0][1], CypherValue::String("y".into()), "la relecture voit ce que l'écriture vient de poser");
 }
+
+/// **Un éventail** (page 04) : deux degrés de même forme, sur la même liste
+/// d'uuids de l'appelant, puis sous une même sélection ; chacun en une
+/// instruction, rangé par sortie, avec les lignes du repli.
+#[test]
+#[ignore]
+fn un_eventail_part_en_une_instruction() {
+    un_eventail(&scene());
+}
+
+pub(crate) fn un_eventail(s: &Scene) {
+    let degre = |direction| Form::Count(Count::Edges { start: "Symbol".into(), relation: "uses".into(), direction });
+    let degres = |r: &PlanReport, nom: &str| -> BTreeMap<String, i64> {
+        r.outputs[nom].rows.iter().map(|l| (l[0].as_str().unwrap().to_string(), l[1].as_i64().unwrap())).collect()
+    };
+
+    // Sans amont : la même liste `$uuids` de l'appelant.
+    let plan = Plan::new()
+        .node("entrants", degre(Direction::Incoming), vec![uuids(&[&s.a, &s.b])])
+        .node("sortants", degre(Direction::Outgoing), vec![uuids(&[&s.a, &s.b])])
+        .output("entrants")
+        .output("sortants");
+    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions { require_atomic: true, ..Default::default() });
+    assert_eq!(r.fused, vec![vec!["entrants".to_string(), "sortants".to_string()]], "une instruction : {r:?}");
+    assert_eq!(r.instructions, 1);
+    assert_eq!(decoupe.instructions, 2);
+    assert_eq!(degres(&r, "entrants"), BTreeMap::from([(s.a.clone(), 2), (s.b.clone(), 1)]), "a est utilisé deux fois, b une fois");
+    assert!(degres(&r, "sortants").is_empty(), "ni a ni b n'utilisent rien : {:?}", r.outputs["sortants"]);
+
+    // Sous une sélection, qui n'est pas une sortie.
+    let plan = Plan::new()
+        .node("sel", Form::Select(Select::by_uuids("Symbol", vec![Column::Node("_uuid".into())])), vec![uuids(&[&s.a, &s.b])])
+        .node("entrants", degre(Direction::Incoming), vec![])
+        .node("sortants", degre(Direction::Outgoing), vec![])
+        .edge("sel", 0, "entrants")
+        .edge("sel", 1, "sortants")
+        .output("entrants")
+        .output("sortants");
+    let (r, decoupe) = deux_fois(&s.cat, &plan, PlanOptions { require_atomic: true, ..Default::default() });
+    assert_eq!(r.fused, vec![vec!["sel".to_string(), "entrants".to_string(), "sortants".to_string()]], "une instruction : {r:?}");
+    assert_eq!(decoupe.instructions, 3);
+    assert_eq!(degres(&r, "entrants"), BTreeMap::from([(s.a.clone(), 2), (s.b.clone(), 1)]));
+}

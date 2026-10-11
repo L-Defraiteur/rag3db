@@ -113,6 +113,26 @@ struct Group {
     members: Vec<usize>,
     text: String,
     params: Vec<QueryParam>,
+    /// Un éventail : les branches (positions), dans l'ordre de leur rang ;
+    /// les lignes de l'instruction portent ce rang en tête (`__branch`).
+    branches: Option<Vec<usize>>,
+}
+
+/// La forme de sortie d'une sœur d'éventail : des sœurs se fondent quand
+/// elle est la même (une union exige les mêmes colonnes). `None` : cette
+/// forme ne se fond pas en éventail.
+fn shape(form: &Form) -> Option<String> {
+    use rag3weaver_ir::Count;
+    match form {
+        Form::Hop(h) => Some(format!("hop {:?}", h.returns)),
+        Form::Count(Count::Edges { .. }) => Some("degree".to_string()),
+        Form::Select(s) if s.by_uuids => Some(format!("select {:?}", s.returns)),
+        _ => None,
+    }
+}
+
+fn uuids_of(params: &[QueryParam]) -> Option<String> {
+    params.iter().find(|p| p.name == "uuids").map(|p| format!("{:?}", p.value))
 }
 
 /// **Exécuter un graphe** : les groupes que le dialecte sait fondre, une
@@ -143,41 +163,124 @@ pub fn run_plan(
     // Un groupe s'exécute à la place de son premier nœud : ses autres nœuds
     // ne dépendent que de lui, et personne d'autre ne dépend de ses nœuds
     // intermédiaires.
+    //
+    // **Les éventails** (page 04) : des sœurs de même forme nourries par la
+    // même source partent en une instruction — les suivants d'un nœud qui
+    // n'est pas une sortie et n'a qu'eux pour suivants, ou des nœuds sans
+    // arête qui reçoivent la même liste `$uuids` de l'appelant.
     let position: BTreeMap<&str, usize> = ordre.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
-    let suivants = |id: &str| plan.edges.iter().filter(|e| e.from == id).count();
+    let suivants_de = |id: &str| -> Vec<usize> {
+        plan.edges.iter().filter(|e| e.from == id).map(|e| position[e.to.as_str()]).collect()
+    };
     let mut groupes: Vec<Group> = Vec::new();
-    let mut groupe_de = vec![0usize; ordre.len()];
+    let mut groupe_de: Vec<Option<usize>> = vec![None; ordre.len()];
+    let sans_uuids = |i: usize| -> Vec<QueryParam> {
+        let mut p = ordre[i].params.clone();
+        p.retain(|q| q.name != "uuids");
+        p
+    };
+    let recouvrent = |a: &[QueryParam], b: &[QueryParam]| a.iter().any(|q| b.iter().any(|r| r.name == q.name));
     for (i, n) in ordre.iter().enumerate() {
+        if groupe_de[i].is_some() {
+            continue; // déjà branche d'un éventail
+        }
         let entree = plan.input_of(&n.id);
+
+        // Un éventail sans amont : les sœurs sans arête, même `$uuids`, même
+        // forme de sortie.
+        if !options.split && entree.is_none() {
+            if let (Some(cle), Some(forme)) = (uuids_of(&n.params), shape(&n.form)) {
+                let soeurs: Vec<usize> = (i..ordre.len())
+                    .filter(|&j| groupe_de[j].is_none() && plan.input_of(&ordre[j].id).is_none())
+                    .filter(|&j| uuids_of(&ordre[j].params).as_ref() == Some(&cle) && shape(&ordre[j].form).as_ref() == Some(&forme))
+                    .collect();
+                let mut autres: Vec<QueryParam> = Vec::new();
+                let libres = soeurs.iter().all(|&j| {
+                    let p = sans_uuids(j);
+                    let ok = !recouvrent(&p, &autres);
+                    autres.extend(p);
+                    ok
+                });
+                if soeurs.len() >= 2 && libres {
+                    let branches: Vec<(usize, &str, &Form)> = soeurs.iter().map(|&j| (0, textes[j].as_str(), &ordre[j].form)).collect();
+                    if let Some(texte) = dialect.fuse_fanout(None, &branches) {
+                        let mut params = autres;
+                        params.extend(n.params.iter().filter(|q| q.name == "uuids").cloned());
+                        let g = groupes.len();
+                        for &j in &soeurs {
+                            groupe_de[j] = Some(g);
+                        }
+                        groupes.push(Group { members: soeurs.clone(), text: texte, params, branches: Some(soeurs) });
+                        continue;
+                    }
+                }
+            }
+        }
+
         let mut params: Vec<QueryParam> = n.params.clone();
         if entree.is_some() {
             params.retain(|p| p.name != "uuids");
         }
         let fondu = entree.and_then(|e| {
             let p = position[e.from.as_str()];
-            let g = groupe_de[p];
+            let g = groupe_de[p].expect("l'amont est placé avant");
             let groupe = &groupes[g];
             let libre = !options.split
+                && groupe.branches.is_none()
                 && groupe.members.last() == Some(&p)
-                && suivants(&e.from) == 1
+                && suivants_de(&e.from).len() == 1
                 && !plan.outputs.contains(&e.from)
-                && !params.iter().any(|q| groupe.params.iter().any(|r| r.name == q.name));
+                && !recouvrent(&params, &groupe.params);
             if !libre {
                 return None;
             }
             dialect.fuse(&groupe.text, &ordre[p].form, e.columns[0], &textes[i]).map(|t| (g, t))
         });
-        match fondu {
+        let g = match fondu {
             Some((g, texte)) => {
                 groupes[g].members.push(i);
                 groupes[g].text = texte;
                 groupes[g].params.extend(params);
-                groupe_de[i] = g;
+                g
             }
             None => {
-                groupe_de[i] = groupes.len();
-                groupes.push(Group { members: vec![i], text: textes[i].clone(), params });
+                groupes.push(Group { members: vec![i], text: textes[i].clone(), params, branches: None });
+                groupes.len() - 1
             }
+        };
+        groupe_de[i] = Some(g);
+
+        // Un éventail sous ce nœud : tous ses suivants, de même forme, et lui
+        // ni sortie ni lu par personne d'autre.
+        let suivants = suivants_de(&n.id);
+        if options.split || suivants.len() < 2 || plan.outputs.contains(&n.id) {
+            continue;
+        }
+        let forme = shape(&ordre[suivants[0]].form);
+        if forme.is_none() || suivants.iter().any(|&j| shape(&ordre[j].form) != forme) {
+            continue;
+        }
+        let mut autres = groupes[g].params.clone();
+        if !suivants.iter().all(|&j| {
+            let p = sans_uuids(j);
+            let ok = !recouvrent(&p, &autres);
+            autres.extend(p);
+            ok
+        }) {
+            continue;
+        }
+        let branches: Vec<(usize, &str, &Form)> = suivants
+            .iter()
+            .map(|&j| (plan.input_of(&ordre[j].id).expect("un suivant a son arête").columns[0], textes[j].as_str(), &ordre[j].form))
+            .collect();
+        if let Some(texte) = dialect.fuse_fanout(Some((&groupes[g].text, &n.form)), &branches) {
+            for &j in &suivants {
+                groupe_de[j] = Some(g);
+            }
+            groupes[g].members.extend(suivants.iter().copied());
+            groupes[g].text = texte;
+            groupes[g].params = autres;
+            groupes[g].branches = Some(suivants);
         }
     }
     let noms = |g: &Group| g.members.iter().map(|&i| ordre[i].id.clone()).collect::<Vec<_>>();
@@ -228,7 +331,28 @@ pub fn run_plan(
             Ok(r) => {
                 report.instructions += 1;
                 report.fused.push(noms(g));
-                lignes.insert(&dernier.id, r);
+                match &g.branches {
+                    None => {
+                        lignes.insert(&dernier.id, r);
+                    }
+                    // Les lignes rangées par branche, sans la colonne de rang.
+                    Some(branches) => {
+                        let colonnes: Vec<String> = r.columns.iter().skip(1).cloned().collect();
+                        let mut par_branche: Vec<QueryResult> =
+                            branches.iter().map(|_| QueryResult { columns: colonnes.clone(), rows: Vec::new() }).collect();
+                        for mut ligne in r.rows {
+                            let rang = ligne.first().and_then(|v| v.as_i64()).unwrap_or(-1);
+                            if let Some(q) = usize::try_from(rang).ok().and_then(|k| par_branche.get_mut(k)) {
+                                ligne.remove(0);
+                                q.rows.push(ligne);
+                            }
+                        }
+                        for (&b, q) in branches.iter().zip(par_branche) {
+                            let branche = ordre[b];
+                            lignes.insert(&branche.id, q);
+                        }
+                    }
+                }
             }
             Err(e) => {
                 let rolled_back = envelopper && conn.rollback().is_ok();
@@ -428,5 +552,46 @@ mod tests {
         let e = run_plan(&PostgresDialect, &conn, &plan, PlanOptions::default()).unwrap_err();
         assert_eq!(e.to_string(), "RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__Hop (ligne entière) (nœud « tout »)");
         assert!(recu.lock().unwrap().is_empty());
+    }
+
+    fn deux_degres() -> Plan {
+        use rag3weaver_ir::{Count, Direction};
+        let degre = |direction| Form::Count(Count::Edges { start: "Symbol".into(), relation: "uses".into(), direction });
+        let u = || vec![QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String("a".into())]))];
+        Plan::new().node("in", degre(Direction::Incoming), u()).node("out", degre(Direction::Outgoing), u()).output("in").output("out")
+    }
+
+    #[test]
+    fn un_eventail_part_en_une_instruction_union_all() {
+        let (conn, recu) = espion();
+        let r = run_plan(&Rag3dbDialect, &conn, &deux_degres(), PlanOptions::default()).unwrap();
+        assert_eq!(r.fused, vec![vec!["in".to_string(), "out".to_string()]]);
+        assert_eq!(
+            *recu.lock().unwrap(),
+            ["UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})<-[r:`uses`]-() RETURN 0 AS __branch, u AS c0, count(r) AS c1 \
+              UNION ALL \
+              UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})-[r:`uses`]->() RETURN 1 AS __branch, u AS c0, count(r) AS c1"]
+        );
+        let (conn, recu) = espion();
+        run_plan(&PostgresDialect, &conn, &deux_degres(), PlanOptions::default()).unwrap();
+        assert_eq!(
+            *recu.lock().unwrap(),
+            ["SELECT 0 AS __branch, b0.* FROM (SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) \
+              JOIN \"uses\" AS r ON r.\"to_uuid\" = v.u GROUP BY v.u) AS b0 \
+              UNION ALL \
+              SELECT 1 AS __branch, b1.* FROM (SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) \
+              JOIN \"uses\" AS r ON r.\"from_uuid\" = v.u GROUP BY v.u) AS b1"]
+        );
+    }
+
+    #[test]
+    fn des_soeurs_de_formes_differentes_ou_d_entrees_differentes_ne_se_fondent_pas() {
+        let mut p = deux_degres();
+        p.nodes[1].params = vec![QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String("b".into())]))];
+        let (conn, _) = espion();
+        let r = run_plan(&Rag3dbDialect, &conn, &p, PlanOptions::default()).unwrap();
+        assert_eq!(r.fused.len(), 2, "deux listes différentes : {r:?}");
+        let r = run_plan(&Rag3dbDialect, &conn, &deux_degres(), PlanOptions { split: true, ..Default::default() }).unwrap();
+        assert_eq!(r.fused.len(), 2, "split : {r:?}");
     }
 }

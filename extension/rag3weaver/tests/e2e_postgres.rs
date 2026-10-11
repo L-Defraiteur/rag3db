@@ -1836,3 +1836,11 @@ fn le_chainage_une_lecture_apres_une_ecriture_reste_decoupee() {
     let (_garde, cat) = catalogue(8);
     crate::e2e_chainage::une_lecture_apres_une_ecriture(&crate::e2e_chainage::peupler(cat));
 }
+
+#[cfg(feature = "rag3db-native")]
+#[test]
+#[ignore]
+fn le_chainage_un_eventail() {
+    let (_garde, cat) = catalogue(8);
+    crate::e2e_chainage::un_eventail(&crate::e2e_chainage::peupler(cat));
+}

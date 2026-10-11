@@ -267,6 +267,18 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **Un éventail en une instruction** : des branches sœurs de même forme
+    /// de sortie, nourries par la même source — le texte d'un amont et sa
+    /// forme (`upstream`), chaque branche lisant sa colonne de lui ; ou, sans
+    /// amont, la même liste `$uuids` de l'appelant. Le texte rend en tête une
+    /// colonne `__branch` (le rang de la branche), puis les colonnes de la
+    /// branche ; l'exécuteur range les lignes par sortie. `None` : le dialecte
+    /// ne sait pas, et les branches partent l'une après l'autre.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let _ = (upstream, branches);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1380,6 +1392,35 @@ impl SchemaDialect for Rag3dbDialect {
         ))
     }
 
+    /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
+    /// (une `UNION` de Cypher ne partage pas de préfixe : l'amont est relu
+    /// dans chaque branche, dans la même instruction), et son `RETURN`
+    /// réécrit en `RETURN <rang> AS __branch, <col> AS c0, …` pour que les
+    /// branches aient les mêmes noms de colonnes. Seules les branches sans
+    /// ordre ni limite : sauts, sélections par uuids, degrés.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let mut parties = Vec::with_capacity(branches.len());
+        for (rang, (colonne, texte, forme)) in branches.iter().enumerate() {
+            let colonnes = match forme {
+                rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
+                rag3weaver_ir::Form::Select(s) if s.by_uuids && s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+                rag3weaver_ir::Form::Count(rag3weaver_ir::Count::Edges { .. }) => vec!["u".to_string(), "count(r)".to_string()],
+                _ => return None,
+            };
+            let texte = match upstream {
+                Some((amont, forme_amont)) => self.fuse(amont, forme_amont, *colonne, texte)?,
+                None => texte.to_string(),
+            };
+            let coupe = texte.rfind(" RETURN ")?;
+            if texte[coupe + " RETURN ".len()..] != colonnes.join(", ") {
+                return None;
+            }
+            let nommees = colonnes.iter().enumerate().map(|(i, c)| format!("{c} AS c{i}")).collect::<Vec<_>>().join(", ");
+            parties.push(format!("{} RETURN {rang} AS __branch, {nommees}", &texte[..coupe]));
+        }
+        Some(parties.join(" UNION ALL "))
+    }
+
     fn upsert_scope_node(&self, table: &str, id_param: &str) -> String {
         format!("MERGE (n:{} {{_uuid: ${id_param}}}) ON CREATE SET n.name = ${id_param}", self.quote(table))
     }
@@ -2223,6 +2264,41 @@ impl SchemaDialect for PostgresDialect {
         let colonnes = (0..n).map(|i| format!("c{i}")).collect::<Vec<_>>().join(", ");
         let source = format!("ARRAY(SELECT DISTINCT c{column} FROM __chain WHERE c{column} IS NOT NULL)");
         Some(format!("WITH __chain({colonnes}) AS ({upstream_text}) {}", downstream_text.replace("$uuids", &source)))
+    }
+
+    /// `UNION ALL` de sous-requêtes, chacune préfixée de son rang
+    /// (`SELECT <rang> AS __branch, bN.* FROM (…) AS bN`) ; l'amont, s'il y en
+    /// a un, est une seule CTE partagée par toutes les branches. Jamais une
+    /// écriture, ni en amont ni en branche.
+    fn fuse_fanout(&self, upstream: Option<(&str, &rag3weaver_ir::Form)>, branches: &[(usize, &str, &rag3weaver_ir::Form)]) -> Option<String> {
+        let mut parties = Vec::with_capacity(branches.len());
+        let n = match upstream {
+            Some((_, forme)) if forme.is_write() => return None,
+            Some((_, forme)) => forme.output().len(),
+            None => 0,
+        };
+        for (rang, (colonne, texte, forme)) in branches.iter().enumerate() {
+            if forme.is_write() || texte.starts_with("WITH") || !texte.contains("$uuids") {
+                return None;
+            }
+            let texte = if upstream.is_some() {
+                if *colonne >= n {
+                    return None;
+                }
+                texte.replace("$uuids", &format!("ARRAY(SELECT DISTINCT c{colonne} FROM __chain WHERE c{colonne} IS NOT NULL)"))
+            } else {
+                texte.to_string()
+            };
+            parties.push(format!("SELECT {rang} AS __branch, b{rang}.* FROM ({texte}) AS b{rang}"));
+        }
+        let union = parties.join(" UNION ALL ");
+        Some(match upstream {
+            Some((amont, _)) => {
+                let colonnes = (0..n).map(|i| format!("c{i}")).collect::<Vec<_>>().join(", ");
+                format!("WITH __chain({colonnes}) AS ({amont}) {union}")
+            }
+            None => union,
+        })
     }
 
     /// **Un saut** par la table de relation : `unnest($uuids)` joint aux
