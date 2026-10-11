@@ -64,13 +64,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (26)
+### Ouverts — produit (27)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [`add_ref` et `create_ref_type` jettent le rapport de leur ingestion](2026-10-11-add-ref-et-create-ref-type-jettent-le-rapport-d-ingestion.md) | ouvert (lecture) | réponse fausse (`executed: true` sur une écriture partielle) | oui (gabarit `memory`) | oui (et seulement) |
 | [Un lien vers un bout absent rend `Ok` sans rien écrire — et `AddRefNode` l'annonce comme posé](2026-10-11-un-lien-vers-un-bout-absent-rend-ok-sans-rien-ecrire.md) | ouvert | réponse fausse (un lien annoncé qui n'existe pas) | oui (`add_ref`) | oui (et seulement) |
 | [Une réaction peut écrire dans la cellule qu'un appel d'outil vient de basculer](2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md) | ouvert (lecture) | réponse fausse (transition dans une autre cellule) | en principe, rare, jamais observé | oui (et seulement) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |

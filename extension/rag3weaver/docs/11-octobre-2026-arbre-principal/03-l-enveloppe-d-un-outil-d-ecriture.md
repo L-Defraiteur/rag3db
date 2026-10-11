@@ -21,10 +21,10 @@ resté.*
 | outil | nœud | ce qu'il écrit | atomique aujourd'hui | ce qu'il dit sur un échec |
 |---|---|---|---|---|
 | `put_*`, `save_*`, `submit_result` (tous les gabarits sauf `code`) | `EntityRecordNode` (`put`) | **une** ligne, par `ingest_entities` : la ligne, ses morceaux, son plein texte (fichiers), ses vecteurs si l'entité en déclare | **non** : plusieurs instructions, et des écritures hors de la base | « write/index failure (inspect state before retry) » et les avertissements — **sans dire ce qui est resté**, alors que le drain le sait (`rendu_pret`) |
-| `create_ref_type` (`memory`) | `CreateRefTypeNode` | une ligne `RefType` : même chemin qu'un `put` | non, pour la même raison | *(à relire)* |
-| `add_ref` (`memory`) | `AddRefNode` | une `Ref` (ligne, plein texte), **puis** un lien `CITE` | non : deux écritures séparées | fiche absente ou hors état : « écrite seule », dit. **Lien échoué après la `Ref` : une erreur qui ne dit pas que la `Ref` est restée** |
+| `create_ref_type` (`memory`) | `CreateRefTypeNode` | une ligne `RefType`, par `ingest_entities` | non, pour la même raison qu'un `put` | **rien** : il jette le rapport d'ingestion (`ingest_entities(…)?`), donc un échec compté dans `failed` passe pour un succès |
+| `add_ref` (`memory`) | `AddRefNode` | une `Ref` (ligne, plein texte), **puis** un lien `CITE` | non : deux écritures séparées | fiche absente ou hors état : « écrite seule », dit. **Lien échoué après la `Ref` : une erreur qui ne dit pas que la `Ref` est restée.** Et comme `create_ref_type`, il **jette le rapport d'ingestion** de la `Ref` : un échec partiel passe pour un succès |
 | `anchor`, `supersede_link` (`memory`) | `RelationBatchNode` | des liens | **oui**, ou dit pourquoi pas (`2d0687a71`) | « rolled back, nothing written », ou « writes may be partial » avec sa raison |
-| `edit_file` (`code`) | `EditFileNode` | un fichier sur disque, puis sa réindexation | non : le fichier est hors de toute transaction | *(à relire)* |
+| `edit_file` (`code`) | `EditFileNode` | un fichier sur disque, puis sa réindexation | non : le fichier est hors de toute transaction | **honnête déjà** : une réindexation échouée rend `index_pending`, qui dit que le fichier est écrit et que l'index n'a pas suivi. C'est la forme à donner aux autres |
 | `index` (`code`) | `IndexNode` | un **travail**, avec ses propres transactions par paquet | hors du sujet : un travail long, pas un appel | son journal |
 | `run_command` (`code`) | `RunCommandNode` | rien en base | hors du sujet | son code de sortie |
 
@@ -46,8 +46,14 @@ lignes ».
    Un échec qui le rend dit à l'agent si la ligne existe, sans sa recherche. Et un échec
    qui n'a rien laissé le dit aussi, puisque c'est la bonne nouvelle.
 3. **`add_ref` dit que sa `Ref` est restée** quand le lien échoue après elle, comme il
-   le dit déjà pour une fiche absente.
-4. **Vu d'un client MCP**, rien ne change dans le protocole : le refus part en
+   le dit déjà pour une fiche absente. Et **aucun nœud ne jette le rapport d'une
+   ingestion** : `AddRefNode` et `CreateRefTypeNode` le font aujourd'hui (ticket
+   `2026-10-11-add-ref-et-create-ref-type-jettent-le-rapport-d-ingestion.md`). C'est un
+   défaut ordinaire, qui ne demande pas cette page pour se corriger.
+4. **La forme existe déjà quelque part** : `edit_file` rend `index_pending` quand la
+   réindexation n'a pas suivi le fichier écrit. Ce qui est resté, dit dans la réponse
+   même : c'est le modèle.
+5. **Vu d'un client MCP**, rien ne change dans le protocole : le refus part en
    `isError` avec le texte du nœud, et le succès porte `atomic` dans son JSON. Ce qui
    change, c'est ce que dit le texte.
 
