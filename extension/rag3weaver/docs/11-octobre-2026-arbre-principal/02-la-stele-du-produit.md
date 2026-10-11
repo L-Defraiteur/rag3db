@@ -106,9 +106,10 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
       0 sur rag3db. La cause majeure était les classes exportées (`class RAG3DB_API Foo`), lues
       comme des fonctions ; avec elles, les méthodes gabarits retrouvent leur scope. Appels
       reliés entre fichiers sur rag3db/src : 41,5 → 50,7 %. Reste ensuite en P4 : rien.
-   6. **Le nom seul et les segments de module** (P1) : un paramètre nommé dans une signature et un
-      segment de chemin qui nomme un module ne sont plus des références par le nom. C'est le lot
-      le plus large. Reste ensuite en P1 : la passe de contrôle.
+   6. **Le nom seul et les segments de module** (P1) — fait (codeparsers `a6111cc`, branche
+      `nom-seul`) : les paramètres des méthodes d'un bloc `impl` ne sont plus ses références (96
+      faux liens retirés sur rag3weaver), un préfixe de chemin en minuscules n'est plus une
+      référence (~7 000 non-résolues de moins). Reste ensuite en P1 : la passe de contrôle.
    7. **Fermer « une arête ne dit pas comment elle a été résolue » et « des receveurs restent sans
       type »** sur la passe de contrôle : `e2e_banc_relations` compte les liens par marque. Plus
       aucun lien deviné n'y passe pour un lien lu, et ce qui reste « par le nom » est compté

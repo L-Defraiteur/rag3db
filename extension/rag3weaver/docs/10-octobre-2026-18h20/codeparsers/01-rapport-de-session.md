@@ -232,3 +232,10 @@ Suite : `analyze` en racine relative (P3), puis les prototypes C, les C++ anonym
 - **Le target** : un sous-dossier par worktree (règle de l'orchestration, à partir du piège des
   artefacts partagés) ; `check_features.sh` avant tout hash.
 Reste de ma part de la stèle : le nom seul et les segments de module (P1).
+- **Lot 6, le nom seul et les segments de module** (codeparsers `a6111cc`, branche `nom-seul`,
+  vérifiée, proposée) : un paramètre n'est plus une référence du bloc `impl` (96 faux liens
+  retirés sur rag3weaver, arête par arête) ; un préfixe de chemin en minuscules n'est plus une
+  référence (~7 000 non-résolues de moins sur rag3weaver). **Toute ma part de la stèle (P1, P4)
+  est faite** ; restent les lots 5 et 6 à reprendre par l'arbre principal, puis la passe de
+  contrôle (`e2e_banc_relations`, marques par résolution).
+- **Pousser** : désormais par `poste push <session> -- <commande>` (verrou de master, par poste).
