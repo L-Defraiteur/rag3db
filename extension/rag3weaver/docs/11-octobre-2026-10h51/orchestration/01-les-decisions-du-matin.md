@@ -721,3 +721,58 @@ où elle vit.
   conflit de son lot A avec master dans backend.rs, résolu et repoussé, puis
   B4. Codeparsers : page code-tree du soir (`f5018ed4b`), réindexation de
   luciepc en cours après le « fini » du cœur.
+- **22 h 05 – 22 h 35, nuit : le gel de luciepc expliqué**. code-lourd s'est
+  figé une **quatrième fois** à 22 h 02 (pid 132823, 28 369 / 138 579
+  vecteurs, 20 %), **sans la montre** : l'hypothèse tombe. Codeparsers ne
+  peut pas arrêter l'hôte (permission refusée) ; décision : **personne ne
+  l'arrête cette nuit**, le refus d'une session ne se contourne pas par une
+  autre, et l'état figé est une preuve ; section « Pour Lucie » en tête du
+  rapport de codeparsers (`de35f8036`, mis à jour depuis), note de hotfixs
+  (`c89f24285`). L'enquête, sans gdb (ptrace_scope), par relevés en lecture
+  seule de codeparsers sur /proc et le journal, et par la carte des verrous
+  de l'arbre principal : (a) « interblocage » : non, les fils du moteur sont
+  immobiles mais 24 fils d'indexation avancent (~1 cœur) ; (b) « lucivy
+  bloqué dans la reconstruction du plein texte lancée par search_code » :
+  non, aucune recherche après le démarrage (le cœur n'a rien appelé depuis
+  20 h 29), un seul fragment, et la base écrit encore ; (c) **la boucle de
+  réclamation** : oui, prouvée : les 24 fils sont nés à 22:00:55 de l'appel
+  `index` de codeparsers à la seconde près, et le `.wal` croît régulièrement
+  de 255 à 376 Ko toutes les 10 s (les mêmes lignes de réclamation
+  réécrites à chaque tour), vidé par un point de reprise à 22:21:13 puis
+  repart. Le chemin, lu dans le code par l'arbre principal : `EmbedNode`
+  saute sans le marquer un morceau réclamé dont `_text` est vide ou nul
+  (record_nodes.rs:2063), la passe compte les réclamés comme faits
+  (catalog.rs:3835) et reprend toujours ses propres morceaux ; dès que les
+  512 premiers morceaux dus sont tous de ceux-là, `run_index` tourne sans
+  fin, zéro progrès, aucun appel au service, le catalogue repris et rendu à
+  chaque tour (d'où « catalogue occupé » pour les lecteurs). **Deux défenses
+  écrites** (arbre principal, sur son lot du délai, push dès témoin rouge
+  vérifié) : un morceau sans texte n'est jamais dû (dette, sélection,
+  réclamation, les deux dialectes) ; une passe qui réclame sans faire
+  baisser la dette s'arrête en erreur nommée. Le moteur est hors de cause
+  (cœur et hotfixs : toutes ses attentes sont bornées). **Cause encore
+  ouverte** : d'où viennent des morceaux sans texte (ni codeparsers ni la
+  découpe n'en créent, deux garde-fous) ; candidats : lignes abîmées de la
+  base de code-lourd (deux arrêts brutaux, le COPY refusé après réservation
+  du 5 oct.), binaire lu en lossy ; à compter base fermée après l'arrêt de
+  Lucie (`MATCH (n:Scope_Chunk) WHERE n._text IS NULL OR n._text = ''`),
+  F compte sur sa copie fermée de code-rag3db-depot. **Pour Lucie au
+  réveil** : arrêt propre (`systemctl --user stop rag3weaver-daemon`), la
+  pile gdb facultative, le comptage, la montre remise, le binaire prêt de G
+  (`~/.local/bin/rag3weaver-backend.pret`, master b226c57fe avec la montre,
+  md5 251f757a…, RUNPATH vers rag3db-lourd ; G le rebâtit avec le correctif
+  si le push arrive avant). Hotfixs ne rebâtit pas la lib de luciepc sous
+  l'hôte figé (sa forme par déplacement d'inode refusée par son classifieur,
+  il n'insiste pas, attend l'arrêt de Lucie). **Ici, 23 h** : redémarrage de
+  l'hôte de Lucie par la mémoire sur master ≥ 94354595c, attendu jusqu'à
+  23 h 30 si le correctif de la boucle arrive ; **pas de réindexation
+  entière** ensuite, la montre réconcilie au démarrage et on mesure ce
+  qu'elle reprend ; si l'hôte d'ici se fige, personne ne l'arrête. Lots
+  donnés : banc, le témoin rouge du balayage sous masque (lignes lues ≤ c·k,
+  à 1 et 32 fils) pour le cœur ; hotfixs, le CHECKPOINT explicite ; proto,
+  son lot suivant poussé sans `--lourd` local (rejeu sur luciepc sous le
+  `poste lourd` de là-bas, règle à noter pour G). Magasin de libs : les
+  binaires de luciepc ont un RUNPATH (recette de G), ceux d'ici aucun ;
+  avec le magasin, le RUNPATH visera le dossier d'un identifiant (page 07
+  corrigée). Sur master : visited set (hotfixs `3e0f98f08`, H4 stable après
+  trois semaines, 40/40 au banc), code-tree au soir (`f5018ed4b`).

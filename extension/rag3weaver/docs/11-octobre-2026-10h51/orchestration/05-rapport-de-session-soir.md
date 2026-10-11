@@ -110,8 +110,14 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 
 - Ses sessions s'ouvrent de nouveau : son binaire a été rebâti contre la lib
   B2 à 21 h (mémoire, md5 69adbfe94735) ; son hôte d'ici redémarré à 23 h.
-- Brancher le cœur sur `code-lourd` (l'arbre de luciepc qui suit master)
-  quand sa réindexation est faite : commande dans `01-les-decisions…`.
+- **L'hôte de luciepc, figé depuis 22 h 02 (quatrième fois), gardé pour toi** :
+  la cause est une boucle de la passe de vecteurs sur des morceaux sans
+  texte (prouvée, défenses de l'arbre principal sur master ou en push) ; la
+  suite dans l'ordre est en tête du rapport de codeparsers
+  (`docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`,
+  section « Pour Lucie ») : arrêt propre, comptage des morceaux vides base
+  fermée, montre remise, binaire prêt de G installé, redémarrage.
+- Brancher le cœur sur `code-lourd` ensuite : commande dans `01-les-decisions…`.
 - La séance npm (quatre OTP) quand elle le voudra ; le ménage des branches
   distantes (liste à produire).
 - Rien d'autre : les décisions renversables sont toutes dans
