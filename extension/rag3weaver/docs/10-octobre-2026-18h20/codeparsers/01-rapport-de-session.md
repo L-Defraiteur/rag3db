@@ -239,3 +239,37 @@ Reste de ma part de la stèle : le nom seul et les segments de module (P1).
   est faite** ; restent les lots 5 et 6 à reprendre par l'arbre principal, puis la passe de
   contrôle (`e2e_banc_relations`, marques par résolution).
 - **Pousser** : désormais par `poste push <session> -- <commande>` (verrou de master, par poste).
+
+**Le premier index réel de rag3db par l'hôte** (demande de l'orchestration, 11 oct. après-midi) :
+- **Le montage** : le gabarit `code` copié sous `~/.config/rag3weaver/code-rag3db/templates/`,
+  manifeste actif `backends/code/rag3db.json` (nom `code-rag3db`) : racine l'arbre principal en
+  lecture seule, commandes coupées, `edit_file` et `run_command` retirés, granite-278m sur
+  127.0.0.1:7979, `locks_via` = `acquireLock`, `acquireLocks`, `lockRowForWrite` (à compléter de
+  `lockIndexForWrite`). Base `~/.local/share/rag3weaver/code-rag3db-depot.rag3db`.
+- **La mesure** : `estimate` : 7 310 fichiers (62,3 Mo), ~11 min de vecteurs, tampon ~8 Gio sur
+  8. `index` par l'hôte : **12 min 27 s** (15 h 22 → 15 h 34 ; plein texte en ~30 s, 135 592
+  morceaux), base **1,2 Go + 728 Mo** de plein texte, l'hôte à **9,8 Go résidents au pic**.
+  Aucun mur. Instantané reflink de la mémoire longue avant l'index
+  (`sauvegardes/2026-10-11-15h26/`).
+- **La question du cœur** posée par le client, réponse recopiée et confrontée au source dans
+  `04-ce-qui-manque-a-un-agent-dans-cet-ide.md` : un appelant manqué sur trois, le verrou de
+  l'index absent d'`impact` (présent dans `callees`), 101 usages par le nom hors du C++.
+- **Quatre tickets produit** (`c41e53986`) : on ne peut pas arrêter un index ; l'hôte ne relit
+  pas un manifeste modifié ; pas de gabarit `code` en lecture seule ; on ne peut pas dire ce
+  qu'on indexe.
+- **La recette pour les sessions du cœur et d'hotfixs** (donnée à l'orchestration, non
+  appliquée : la configuration de Lucie n'est pas à moi), sur le modèle de
+  `templates/mcp/README.md` §6 :
+
+  ```
+  claude mcp add code-rag3db \
+    --env LD_LIBRARY_PATH=/home/lucied/git_workspaces/rag3db/build/lecteurs-csv/src \
+    --env RAG3DB_ROOT=/home/lucied/git_workspaces/rag3db \
+    --env RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979 \
+    -- /home/lucied/.local/bin/rag3weaver-backend mcp \
+       --manifest /home/lucied/.config/rag3weaver/code-rag3db/templates/backends/code/rag3db.json \
+       --keys dev
+  ```
+
+  Le client est mince : il parle à l'hôte déjà lancé (127.0.0.1:7970). L'index est fait. La base suit l'arbre principal tel qu'il était
+  à 15 h 22 : à réindexer après le rebâti de l'hôte avec les lots 5 et 6 (qualité C++).
