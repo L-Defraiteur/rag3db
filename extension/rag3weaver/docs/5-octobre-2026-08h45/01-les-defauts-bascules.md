@@ -21,6 +21,13 @@ paquet demande le point de reprise forcé de ses COPY (`force_checkpoint_on_copy
 Ses blobs ne passent donc pas par le journal, où ils seraient écrits deux fois (+30 à
 40 s). En fichiers, c'est le défaut du moteur qui s'applique.
 
+**Filet temporaire, depuis le 11 octobre 2026 (nuit)** : toute connexion de rag3weaver pose
+`force_checkpoint_on_copy=true`, en blobs comme en fichiers. Le COPY journalisé corrompt une
+colonne DOUBLE quand il a deux fils et une colonne tableau (ticket
+`docs/tickets/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md`). Coût
+mesuré : environ 1 % (81 s contre 80). Le filet tombe avec le correctif du moteur. Lucie peut le
+renverser.
+
 ## Ce qui change pour un utilisateur
 
 **Où vit le plein texte sur le disque.** Pour une base neuve sur disque, un dossier
