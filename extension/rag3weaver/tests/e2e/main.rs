@@ -100,6 +100,8 @@ mod e2e_entites_derivees;
 mod e2e_estimate;
 #[path = "../e2e_etat_non_declare.rs"]
 mod e2e_etat_non_declare;
+#[path = "../e2e_garde_des_liens.rs"]
+mod e2e_garde_des_liens;
 #[path = "../e2e_generic_search.rs"]
 mod e2e_generic_search;
 #[path = "../e2e_graph_tool.rs"]
