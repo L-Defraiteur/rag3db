@@ -894,6 +894,19 @@ impl Node for RelationBatchNode {
             ));
         }
         let verified = paires.len();
+        // Combien d'instructions d'écriture ce lot fera : le drain regroupe les
+        // liens d'une relation par ensemble de propriétés non nulles, une
+        // instruction par groupe (un `UNWIND … MERGE`, ou un `COPY`).
+        let instructions = links
+            .iter()
+            .map(|(_, _, p)| {
+                let mut cles: Vec<&String> =
+                    p.iter().filter(|(_, v)| !matches!(v, CypherValue::Null)).map(|(k, _)| k).collect();
+                cles.sort();
+                cles
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         let queued = cat
             .mettre_en_file_les_liens(relation, links)
             .map_err(|e| e.to_string())?;
@@ -901,20 +914,72 @@ impl Node for RelationBatchNode {
         // un bout encore en file est posé avec lui, le reste de la file attend
         // son tour. `drain()` vidait tout ce qui attendait, y compris ce qui
         // n'avait rien à voir avec ces liens.
+        // **Atomique, ou dit pourquoi pas** (11 octobre 2026, relecture de
+        // rag3db-97, décision de l'orchestration). Trois cas :
+        // - la fermeture emporte autre chose que des liens (une création, une
+        //   mise à jour, une dérivation en file) : le plein texte et les
+        //   vecteurs vivent hors de la transaction de la base, un `ROLLBACK`
+        //   ne les défait pas — non atomique, et dit ;
+        // - des liens seuls, en une instruction : atomique par le moteur ;
+        // - des liens seuls, en plusieurs instructions : enveloppés d'une
+        //   transaction quand le dialecte en déclare — un lien n'a aucun effet
+        //   hors de la base, `begin` / `commit` / `rollback` y suffisent.
+        let que_des_liens = {
+            let file = cat.pending_work();
+            file.entities.is_empty()
+                && file.updates.is_empty()
+                && file.deletes.is_empty()
+                && file.derivations.is_empty()
+        };
+        let transactions = cat.dialect_arc().capabilities().transactions;
+        let (atomic, raison, envelopper): (bool, Option<&str>, bool) = if !que_des_liens {
+            (
+                false,
+                Some(
+                    "the closure carries queued creations, updates or derivations; their full text \
+                     and vectors live outside the database transaction (le plein texte et les \
+                     vecteurs vivent hors de la transaction de la base)",
+                ),
+                false,
+            )
+        } else if instructions <= 1 {
+            (true, None, false)
+        } else if transactions {
+            (true, None, true)
+        } else {
+            (false, Some("several write statements, and this dialect declares no transactions"), false)
+        };
         // Au moins la donnée, quel que soit le régime : un outil qui rend sans
         // avoir posé ses liens (régime par lot, exigence vide) mentirait.
         let exige = cat.exigence_d_ecriture_par_defaut() | crate::disponibilite::Disponibilites::DONNEE;
+        if envelopper {
+            cat.conn().begin().map_err(|e| format!("link batch: begin: {e}"))?;
+            cat.set_in_transaction(true);
+        }
         let report = cat.tenir_l_exigence_d_ecriture(&definition.from, exige);
+        if envelopper {
+            cat.set_in_transaction(false);
+            if report.failed > 0 {
+                let defait = cat.conn().rollback();
+                return Err(format!(
+                    "link batch failed and was rolled back ({}): nothing written; {:?}",
+                    match defait {
+                        Ok(()) => "rollback ok".to_string(),
+                        Err(e) => format!("ROLLBACK REFUSED: {e}"),
+                    },
+                    report.warnings
+                ));
+            }
+            cat.conn().commit().map_err(|e| format!("link batch: commit refused, nothing written: {e}"))?;
+        }
         if report.failed > 0 {
             return Err(format!(
                 "link batch failed; writes may be partial: {:?}",
                 report.warnings
             ));
         }
-        // `atomic: false` est dit, pas sous-entendu : le lot n'est pas encore
-        // enveloppé d'une transaction (la page du lien, §2, point 4). Et pas de
-        // `posed` : un `MERGE` ne dit pas s'il a créé — ce compte viendra de
-        // `Write::Link` (rag3db-6f).
+        // Pas de `posed` : un `MERGE` ne dit pas s'il a créé — ce compte
+        // viendra de `Write::Link` (rag3db-6f).
         ctx.set_output(
             "report",
             PortValue::new(json!({
@@ -922,7 +987,8 @@ impl Node for RelationBatchNode {
                 "verified": verified,
                 "processed": report.processed,
                 "unchanged": report.unchanged,
-                "atomic": false,
+                "atomic": atomic,
+                "atomic_reason": raison,
                 "warnings": report.warnings
             })),
         );

@@ -289,7 +289,7 @@ fn deux_bouts_geres_se_lient_par_l_outil_et_leurs_garanties_tiennent() {
         .call("ancrer", json!({"links": [{"from": fiche_id, "to": sujet_id}]}))
         .expect("ANCRE entre deux bouts gérés, par l'outil");
     assert_eq!(r["result"]["verified"], 1, "{r}");
-    assert_eq!(r["result"]["atomic"], false, "le rapport dit qu'il n'est pas atomique : {r}");
+    assert_eq!(r["result"]["atomic"], true, "un lien, une instruction : atomique par le moteur, et dit : {r}");
     backend
         .call("prouver", json!({"links": [{"from": fiche_id, "to": piece_id}]}))
         .expect("PREUVE vers un bout immuable, par l'outil");
@@ -636,6 +636,95 @@ fn la_garde_d_etats_se_verifie_au_chargement_et_se_recharge() {
         .call("ancrer", json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}}]}))
         .expect("la garde rechargée permet maintenant « à revoir »");
     assert_eq!(compter(&backend, "ANCRE"), 1);
+}
+
+// ─── Le rapport dit la vérité sur `atomic` (11 octobre 2026) ────────────────
+
+fn deux_sujets(backend: &Backend) {
+    ecrire_les_trois(backend);
+    backend
+        .call("put_sujet", json!({"record": {"titre": "cartes", "corps": "les GPU du poste"}}))
+        .expect("le second sujet");
+}
+
+/// Un lot qui part en **une seule instruction** est atomique par le moteur, et
+/// le rapport le dit — il disait `false` avant, ce qui était faux.
+#[test]
+#[ignore]
+fn un_lot_en_une_instruction_se_dit_atomique() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    deux_sujets(&backend);
+    let r = backend
+        .call("noter", json!({"links": [
+            {"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}, "props": {"poids": "fort"}},
+            {"from": {"titre": "duty cycle"}, "to": {"titre": "cartes"}, "props": {"poids": "faible"}}
+        ]}))
+        .expect("deux liens, mêmes clés de propriétés : une instruction");
+    assert_eq!(r["result"]["atomic"], true, "{r}");
+}
+
+/// **Le cas a** : un lot qui mêle des liens avec et sans propriétés part en deux
+/// instructions (le drain regroupe par ensemble de propriétés). La seconde
+/// échoue — faute injectée —, et le lot doit être **tout ou rien**. Rouge avant
+/// l'enveloppe : le premier lien restait écrit.
+#[test]
+#[ignore]
+fn un_lot_en_deux_instructions_est_tout_ou_rien() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    deux_sujets(&backend);
+    let mixte = json!({"links": [
+        {"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}, "props": {"poids": "fort"}},
+        {"from": {"titre": "duty cycle"}, "to": {"titre": "cartes"}}
+    ]});
+
+    // Armé, et seulement le temps de cet appel : la relation NOTE, son
+    // second groupe. Aucun autre témoin de ce fichier ne pose deux groupes NOTE.
+    std::env::set_var("RAG3WEAVER_TEST_LINK_FAULT_RELATION", "NOTE");
+    std::env::set_var("RAG3WEAVER_TEST_LINK_FAULT_GROUP", "2");
+    let rendu = backend.call("noter", mixte.clone());
+    std::env::remove_var("RAG3WEAVER_TEST_LINK_FAULT_RELATION");
+    std::env::remove_var("RAG3WEAVER_TEST_LINK_FAULT_GROUP");
+    assert!(rendu.is_err(), "une instruction a échoué : l'appel le dit — {rendu:?}");
+    assert_eq!(
+        compter(&backend, "NOTE"),
+        0,
+        "tout ou rien : la première instruction est défaite avec la seconde — {rendu:?}"
+    );
+
+    // Sans faute, le même lot passe entier, et se dit atomique (enveloppé).
+    let r = backend.call("noter", mixte).expect("sans faute");
+    assert_eq!(compter(&backend, "NOTE"), 2);
+    assert_eq!(r["result"]["atomic"], true, "{r}");
+}
+
+/// **Le cas b** : la fermeture emporte une création en file. La ligne et le lien
+/// partent ensemble, mais le plein texte et les vecteurs vivent hors de la
+/// transaction de la base : le lot n'est pas atomique, et le rapport le dit
+/// avec sa raison.
+#[test]
+#[ignore]
+fn une_fermeture_avec_une_creation_se_dit_non_atomique() {
+    use rag3weaver::disponibilite::Disponibilites;
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    {
+        let mut cat = backend.catalog.lock().unwrap();
+        let mut nouveau = BTreeMap::new();
+        nouveau.insert("titre".to_string(), CypherValue::String("en file".into()));
+        nouveau.insert("corps".to_string(), CypherValue::String("pas encore posé".into()));
+        cat.create_jusqu_a("Sujet", nouveau, Disponibilites::AUCUNE).expect("mis en file");
+    }
+    let r = backend
+        .call("ancrer", json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "en file"}}]}))
+        .expect("le lien et sa création");
+    assert_eq!(r["result"]["atomic"], false, "{r}");
+    assert!(
+        r["result"]["atomic_reason"].as_str().unwrap_or("").contains("plein texte"),
+        "la raison est dite : {r}"
+    );
 }
 
 /// **Un lien vers un bout absent rend `Ok` et n'écrit rien** — mesuré le

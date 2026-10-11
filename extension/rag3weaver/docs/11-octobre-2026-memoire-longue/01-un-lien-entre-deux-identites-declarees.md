@@ -107,11 +107,21 @@ chose se fondent). Ce qui change en lui :
    la fermeture peut emporter des écritures qui ne sont pas des liens — des
    créations en file, avec leurs fichiers de plein texte et leurs vecteurs, hors
    de la transaction de la base. Un `ROLLBACK` ne les défait pas, d'où
-   l'empoisonnement du catalogue dans la transaction par paquet. La marche 1 rend
-   donc `atomic: false`. **La forme légère, pour une marche à elle** (rag3db-97) :
-   si la fermeture à drainer ne contient **que des liens**, `begin`/`commit`
-   autour est sûr, puisqu'un lien n'a aucun effet hors de la base ; sinon,
-   `atomic: false` ;
+   l'empoisonnement du catalogue dans la transaction par paquet. **Fait le 11 octobre à midi, après avoir
+   mesuré la prémisse** : un lot de liens part d'ordinaire en **une** instruction
+   (un `UNWIND … MERGE` par tranche de 5000, ou un `COPY`), atomique par le moteur ;
+   il n'en fait plusieurs que s'il mêle des ensembles de propriétés différents (le
+   drain regroupe par ensemble). Le rapport dit donc la vérité : `atomic: true` en
+   une instruction ; `true` en plusieurs quand la fermeture ne contient que des
+   liens et que le dialecte déclare des transactions — le lot est alors enveloppé
+   de `begin` / `commit` / `rollback`, sûr puisqu'un lien n'a aucun effet hors de la
+   base ; `false` avec sa raison (`atomic_reason`) quand la fermeture emporte une
+   création, une mise à jour ou une dérivation, dont le plein texte et les vecteurs
+   vivent hors de la transaction. Témoin rouge réel par une faute injectée dans le
+   drain (deux variables, jamais l'une sans l'autre) : sans l'enveloppe, le premier
+   lien d'un lot mixte restait écrit ; avec, le lot est tout ou rien. Le cas des
+   outils qui écrivent plusieurs **lignes** est une page à part, avec l'arbre
+   principal ;
 5. **il compte ce qui est posé — avec l'IR, pas sans elle.** Un `MERGE` ne dit pas
    s'il a créé. Sans relire (ce qui ouvrirait une course), le nœud ne peut pas
    distinguer « posé » de « déjà là ». C'est donc le compte que rag3db-6f propose
