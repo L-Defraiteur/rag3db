@@ -47,3 +47,24 @@
   Un vert n'est pas vide quand la sortie montre les tests neufs.
 - Un ticket fermé : `git mv` vers `closed/` **et** sa ligne déplacée au README, les
   comptes des sections à jour, dans le même commit.
+
+## Les éventails et la mesure (après-midi)
+
+- Le relevé des vrais appelants a montré que les chaînes pures sont rares : le coût
+  d'un outil vient des **éventails** (R sauts, R degrés sur la même entrée) et du Rust
+  voulu entre les niveaux (vus, budget, filtre sur le degré).
+- Un éventail se dit `UNION ALL` avec une colonne de rang en tête. Cypher ne partage
+  pas de préfixe entre les branches (l'amont est relu par branche), SQL partage sa CTE.
+  Les branches doivent avoir la même forme de sortie (types des colonnes).
+- **Mesurer avant de choisir.** Moins d'allers-retours n'est pas moins de temps : en
+  local (rag3db dans le processus, PostgreSQL sur la boucle), la fusion des éventails
+  ne gagne rien et coûte 1 à 20 %. D'où `DialectCapabilities::fanout` faux par défaut,
+  levé par un montage distant (`Catalog::set_fanout`).
+- Une mesure avant/après se prend sur un corpus que le lot ne touche pas
+  (`src/daemon` pour impact), sur la même base de code, sous `poste mesure`, avec une
+  empreinte des lignes **triées** : le rendu d'impact change d'ordre d'un processus à
+  l'autre (ticket).
+- Une « redondance » n'en est pas une tant que le rendu n'est pas prouvé identique :
+  les sauts directs de `usages_of` comptent les arêtes devinées que `saut` écarte.
+- Un message de commit doit rester vrai au moment de la fusion : deux commits non
+  fusionnés se réunissent en un seul si le premier annonce un gain que le second retire.
