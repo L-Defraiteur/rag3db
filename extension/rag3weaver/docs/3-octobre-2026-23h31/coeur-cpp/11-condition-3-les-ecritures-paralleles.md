@@ -123,6 +123,20 @@ avant chaque écriture) — ce n'est pas sur le chemin de la stèle, et je ne le
   du fichier. Témoin : `C9_SecondWriterProcessRefused` retourné (il attend puis écrit, les deux
   écritures sont là), le lanceur `Process` du banc en marche pour les cas qui ne demandent pas la
   simultanéité. Petit (un jour).
+  **En cours le 11 octobre (lot `verrous-b2`, passe en cours)** : `SystemConfig::fileLockWaitMs` (5 000 ms par
+  défaut, 0 = le refus immédiat d'avant), porté par `DBConfig` et par la liaison Rust
+  (`file_lock_wait_ms`) ; à l'ouverture en écriture du fichier de données (et du fantôme à la
+  reprise), `F_SETLK` réessayé toutes les 50 ms tant que le verrou est tenu par un autre processus
+  (`EACCES`/`EAGAIN`), jusqu'à la borne ; au-delà, l'`IOException` garde le préfixe d'avant (« Could
+  not set lock on file », que les clients reconnaissent) et dit « waited <N> ms for the database
+  file held by another writer process ». Aucune interruption regardée : à l'ouverture il n'y a pas
+  encore de connexion. Témoins du banc (écrits avant le code, `test/transaction/
+  second_writer_process_test.cpp`) : le second attend puis écrit ; renonce après la borne avec
+  l'erreur nommée ; ouvre sur le rejeu du premier mort en SIGKILL. `C9` retourné en
+  `SecondWriterProcessWaitsThenWrites`, et `C9_SecondWriterProcessRefusedWithoutWait` garde l'ancien
+  contrat (borne nulle : le démon de rag3weaver compte dessus pour se savoir seul). Écart avec
+  PostgreSQL : pas d'attente au fichier chez lui, un postmaster tient le répertoire ; chez Neo4j,
+  le second processus est refusé — notre forme est entre les deux, le relais borné.
 - **B3, un processus tient la base, les autres lui parlent** : c'est la réponse de Neo4j, et elle
   existe déjà chez nous — `rag3daemon`. Avec A allumé, le démon sert plusieurs écrivains à la
   fois ; B3 est côté produit (le démon par défaut, le `takeover` des sessions remplacé par un

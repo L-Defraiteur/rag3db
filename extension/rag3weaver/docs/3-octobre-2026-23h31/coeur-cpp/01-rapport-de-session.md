@@ -1042,7 +1042,7 @@ l'ancienne sémantique. Lib commune de luciepc rebâtie dessus, `rag3db-a9b` eff
 B2, et le ticket de mes verrous relevé par le banc (ligne supprimée par un autre écrivain entre
 le MATCH et le SET → l'erreur nommée de sérialisation, pas un refus inattendu).
 
-## L'erreur de sérialisation nommée sous index (11 octobre 2026, 18 h 30 à PK_FIN) — le ticket relevé par le banc, avant B2
+## L'erreur de sérialisation nommée sous index (11 octobre 2026, 18 h 30 à 19 h 55) — le ticket relevé par le banc, avant B2
 
 Ordre de l'orchestration : ce petit lot avant B2 (P3 du moteur sous le défaut). Branche
 `verrous-pk-lock`, worktree `rag3db-pk`. Le banc avait vu, dans sa passe de preuve sur master,
@@ -1058,4 +1058,18 @@ et que la ligne n'est pas visible au dernier état validé, l'erreur de sériali
 Témoin `IndexLockBench.AnUpdateOfARowDeletedByAnotherCommitIsASerializationError` (deux connexions,
 déterministe ; `ed93237d7`), correctif `a3a68c103`, ticket ouvert et fermé dans le commit. H4 reste
 rouge par l'autre défaut (« HNSW index: node offset … is beyond the visited set », ticket du banc) :
-le banc le passe en known_red avec les deux causes. Passe : PK_PASSE.
+le banc le passe en known_red avec les deux causes. Passe sur luciepc (`rag3db-pk`) : témoin rouge sur master (le message fautif), vert après ; LockBench + IndexLockBench 22 ; transaction_test 260 ; H4 Hot ×3 : « no primary key to lock » 0, « beyond the visited set » 2-3 par essai (le ticket du banc, resté known_red) ; banc conforme 6 rouges / 255 verts. Push par `poste push` : trois tours pour rien (ma garde de branche — l'arbre local avait basculé sur B2 pendant l'attente du verrou ; un conflit sur l'index des tickets réorganisé par G ; la syntaxe `--lourd`), puis le quatrième sous `--lourd` : rebase sur master, branche sous nom neuf, bâti chaud 69 étapes, témoins 22, banc 10 rouges attendus / 255 verts, **master `b4655da39`** (19 h 55, trois contrôles lus). Lib commune de luciepc rebâtie dessus (sous-module remis au pointeur), `rag3db-pk` effacé.
+
+## B2, le second écrivain attend au fichier (11 octobre 2026, 19 h 40, en cours) — condition 3, la voie Neo4j
+
+Branche `verrous-b2` (6d100a583 : les témoins du banc 4a0f7249c en cherry-pick → 5778fa3e7, puis le
+code), worktree `rag3db-verrous-b2` sur luciepc (le nom `rag3db-b2` était pris par le worktree du
+banc — ma commande s'est arrêtée avant d'y toucher ; règle de codeparsers : chaque worktree annoncé
+à rag3db-ab). API convenue avec le banc avant le code : `SystemConfig::fileLockWaitMs` (5 000 ms par
+défaut, 0 = refus immédiat), fragment « waited <N> ms for the database file held by another writer
+process » derrière le préfixe d'avant, pas d'interruption à l'ouverture. Forme : page 11 §2. Les
+témoins du banc rougissent sur master pour la bonne raison (refus en 1 ms) ; C9 retourné avec sa
+variante à borne nulle ; la liaison Rust porte `file_lock_wait_ms` (le e2e Rust « deux processus ne
+peuvent pas ouvrir la même base » garde sa conclusion, l'enfant attend 5 s avant le refus). Passe en cours sur luciepc (`rag3db-verrous-b2`) : le témoin (a) a attrapé une vraie perte à la première forme (voir ci-dessous), corrigée ; sur la tête corrigée, témoins 3, C9 2, transaction_test 263, api 104, c_api 136, copy 23, stockage, vector 74/63, Cypher 1867 verts ; check_features et banc restants.
+
+**La perte attrapée par le témoin (a)** : « opened 1512 1 », 2 lignes sur 3 à la fin. L'ouverture en écriture lisait le journal (taille capturée, rejeu) avant d'attendre le verrou du fichier de données, pris seulement au FileHandle ; le second rejouait le journal tel qu'au début de son attente, la ligne validée par le premier pendant l'attente manquait, et le point de reprise du second à sa fermeture l'effaçait. Forme : `Database` prend une garde sur le fichier de données (verrou exclusif, avec la borne) avant toute lecture, et la tient jusqu'après le gestionnaire de tampons (un verrou fcntl tombe à la fermeture de n'importe quel descripteur du fichier dans le processus) — e5f9da853 ; le banc a demandé un contrôle de plus dans (a), « le second voit à l'ouverture les lignes du premier », bb4a4dc55.
