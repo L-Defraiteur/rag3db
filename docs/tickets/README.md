@@ -62,13 +62,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (24)
+### Ouverts — produit (25)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
 | [L'indexation du code envoie du Cypher brut : le gabarit code ne s'indexe pas sur PostgreSQL](2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md) | ouvert — embarquements, après impact sur `run_plan` | blocage | avec un montage PostgreSQL du backend de code | oui (`code.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | ouvert — l'arbre principal, tri stable | réponse trompeuse | oui | oui (rendu d'impact) |
 | [e2e_impact dépend de la forme du code vivant qu'il indexe](2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md) | ouvert — après la migration (a) | test fragile | non | oui (`tests/e2e_impact.rs`) |

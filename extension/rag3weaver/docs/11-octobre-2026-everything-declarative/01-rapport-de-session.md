@@ -12,11 +12,12 @@ acceptée par l'orchestration. Ce qu'on sait du code est dans `02-knowledge-dump
 | 0 | les flux dans le moteur de graphes | **session recherche** : le saut (`522fa6780`) et les déclarations de flux (`feeb1932b` : `PortKind`, `Posture`, sorties requises respectées) sont sur master, relus ici ; suit l'exécuteur concurrent |
 | 1 | la boucle comme graphe à ports : les points d'accroche, la parité | **sur master** (`d3aa6f281`), relu par la recherche (accord, deux corrections faites) ; lib 1388/1388, toutes les cibles compilent |
 | 2 | `decide` et `route`, posés sur un port | **sur master** (`7b5cda799`), relu par la recherche (trois défauts corrigés) ; lib 1413+, les quatre jeux de features |
-| 3 | `send` et l'annuaire | — |
+| 3 | `send` et l'annuaire | **sur master** (`8918bd072`), relu par la recherche (trois points corrigés) |
 | 4 | `AgentNode`, le parent, un agent appelé en attendant | — |
 | 5 | `spawn`, rester à l'écoute, les bornes | — |
 | 6 | la boîte de session dans l'atelier ; l'interface proposée au chat et au MCP | — |
 | 7 | l'expérience à vrai modèle | — |
+| W | surveiller les fichiers (demande de Lucie, entre les lots 3 et 4) | page `04-surveiller-les-fichiers.md` sur master (`00618a043`) ; W1 (la montre) en cours |
 
 ## Lot 1 — les ports d'agent
 
@@ -86,12 +87,48 @@ retient.
   entrée est **requise** ; `RhaiNode` (entrée `value` optionnelle) tourne
   sans valeur et échoue. La recherche l'écrit dans sa page 04.
 
+## Lot 3 — `send` et l'annuaire
+
+`src/directory.rs` (nouveau) et `send` dans `src/agent.rs`.
+
+- **L'annuaire de la session** : nom → run, fil → participants. `send`
+  adresse un nom, un run, ou tout un fil (sans `to`, chacun sauf
+  l'expéditeur) ; l'expéditeur et le destinataire nommé entrent au fil.
+  `enroll` (l'hôte) et `claim_and_open` (l'agent) **ouvrent la boîte** de
+  l'inscrit : un message écrit avant son run est lu à son run.
+- **Un nom est tenu par son agent** (`claim`, un identifiant par agent posé
+  par `with_messaging`) : deux agents du même nom — le nom par défaut — ne se
+  volent pas leur boîte ; le second ne peut pas écrire sous ce nom, et le
+  refus est dit sur le bus.
+- **`send`** est annoncé par `with_messaging` (qui refuse un outillage ayant
+  déjà un `send`) et traité dans la chaîne ordinaire du résultat : trace,
+  compte des erreurs, ports. Les refus disent quoi faire (un nom inconnu liste
+  les inscrits ; des arguments illisibles le disent).
+- **Un tour reçu dit son fil** quand il est nommé : « [message de X, fil F] ».
+- **Le témoin de la page** : alice écrit à bob par son nom ; c'est le modèle de
+  bob qui choisit de répondre par `send` ; alice lit la réponse à son tour
+  suivant. Le test lance les runs, il ne relaie rien.
+- Ticket ouvert : `2026-10-11-la-pause-n-adresse-pas-par-l-annuaire` —
+  `pause_dialogue` prend encore son `avec` pour un run.
+
+## `Decide` : un gabarit (pour la mémoire)
+
+`prompt`, un gabarit à trous `{instruction}`, `{labels}`, `{text}`, rempli en une
+passe : tout le texte envoyé au decider (le banc de la mémoire y met le ChatML
+de Qwen3), ou le tour `user` du llm. Vide : le texte composé d'avant. Refusé
+sans `{text}` ou avec un trou inconnu. Sur master `a6bfb9b9a`.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).
 - Le pas 2 du lot 0 : d'accord, avec trois remarques, toutes reprises (le saut
   en une seule méthode, le prix du saut écrit dans la page, le témoin
   `NotTaken` contre `NoResult`).
+- La page de l'exécuteur concurrent (05) : cinq points, tous repris (un même
+  code de nœud pour une valeur et un flux, `PortKind::Follows` ; l'arrêt de
+  l'extérieur, `cancel_handle` et un jeton qui réveille une source ;
+  `token_sink` qui ne coupe que sur annulation ; le détecteur et les attentes
+  hors registre ; la longueur d'un `Open` repris).
 - Les déclarations de flux (`flux-declarations`) : d'accord ; la recherche
   corrige ensuite un oubli trouvé par ma relecture du lot 2 (un sous-graphe
   republiait ses ports sans leur genre ni leur posture).
