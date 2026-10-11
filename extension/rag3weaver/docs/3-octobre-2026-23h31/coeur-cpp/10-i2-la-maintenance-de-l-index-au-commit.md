@@ -144,6 +144,16 @@ premier » pour IndexLockBench ×2, H2, H3, H5 ; `writeInTurn` disparaît (les d
 puis valident dans l'ordre) ; le banc réécrit ces témoins sur une branche partie de la mienne au
 premier jet d'I2 — le lui dire à ce moment-là.
 
+**Le défaut du filtre, nommé par le banc (page 04 §10.1, `dd1eae508`, 4 h 30)** : le filtre est
+**local** — il tient pour joignable un nœud perdu vers lequel pointe un voisin qui n'a rien perdu.
+Quand un élagage retire la dernière arête qui menait d'une région à une autre, chaque nœud de la
+région coupée reste désigné par ses propres voisins, et le filtre les laisse tous passer (sonde : 0
+arête de la région atteinte vers 2 033 lignes perdues, 219 dans l'autre sens). C'est la cause du
+rouge grave de l'union, et ça touche aussi « pertes seules filtrée ». **Pour I2** : la maintenance
+filtrée doit garder une recherche pour au moins un nœud de chaque région détachée — par exemple
+une recherche pour chaque nœud écarté par l'élagage dont le seul témoin de joignabilité vient de
+sa propre région. À mesurer avant d'être promis ; l'essai n'est pas repris cette nuit.
+
 ## 4. Les témoins (rouges d'abord)
 
 - **Le banc** : `IndexLockBench.AutoCommitWriterWaitsForTheIndexThenCommits` et
