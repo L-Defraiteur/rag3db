@@ -365,6 +365,48 @@ des formes de l'IR (un nœud scripté ou un nœud qui parle au système y est
 refusé au chargement), et l'exécution enregistrée dit qu'il a été poussé
 d'un bloc, avec le texte produit. À faire quand une mesure le demande.
 
+### L'agent est un graphe à ports, et les ports portent des flux (Lucie, 11 octobre 2026)
+
+« Un agent est un DAG ; un DAG est potentiellement un outil quand on a besoin
+qu'il le soit, dont les agents ; ce que ça veut dire n'est pas forcément
+d'attendre son retour : peut-être juste le lancer en fond avec un message
+initial et la référence de qui je suis, qu'il puisse me parler. » Et : « à
+tout moment pouvoir faire un appel structuré — selon ce qu'a dit
+l'utilisateur une classification, un routage vers un autre agent, une
+action ; selon ce que quelqu'un lui a envoyé, transmettre ou non ; selon un
+retour d'outil ou une réponse d'agent, faire telle chose en plus — que tout
+soit traduisible dans le graphe de l'agent, comme un flot de conversation
+mais beaucoup plus permissif, en synergie avec notre moteur. »
+
+**La boucle est un graphe déclaré, pas du code.** L'agent livré est un graphe
+par défaut à ports nommés — message utilisateur entrant, message d'un pair
+entrant, résultat d'outil entrant, réponse du modèle, appel d'outil sortant,
+réponse finale, fin de tour (le retour au début) — et il se comporte, sans
+rien de branché, comme la boucle d'aujourd'hui. Sur chaque port, n'importe
+quel sous-graphe : un petit jeu de nœuds génériques (décider par un appel
+structuré, router, filtrer, agir en plus) et le nœud scripté pour le reste.
+Les cas cités sont des exemples, pas un catalogue ; il n'y a pas d'états,
+il y a des ports et des sous-graphes. Chaque décision, message et route
+retombe en base avec la trace, rejouable et mesurable, et un nœud de routage
+peut interroger le graphe par l'IR avant de choisir. Deux verbes que le
+modèle choisit, « envoyer » et « lancer en fond », sont aussi des nœuds
+posables sur un port : le déclaré et le choisi, même mécanisme.
+
+**Les ports portent des flux.** Un seul mécanisme : tout port porte un flux —
+des éléments dans le temps, et une fin ; une valeur est un flux d'un seul
+élément, marqué comme tel à la vérification du graphe. Le nœud dit sa
+posture, élément par élément ou sur le flux complété, et la vérification
+commune refuse un nœud « complet » sur un flux sans fin. Il s'ensuit :
+interrompre, c'est fermer un flux avant sa fin ; la politique de livraison,
+c'est quand le nœud modèle lit le flux des pairs ; un agent lancé vit tant
+qu'un de ses flux d'entrée est ouvert ; la voix et le son (STT, TTS) sont
+des ports de flux ordinaires ; le playground à acteurs en est l'exécuteur
+naturel. Consigne de méthode, dite avec : « la complexité n'est jamais un
+argument, l'important c'est que ce soit au top » — la parité prouvée avec la
+boucle d'aujourd'hui en est la condition, pas la charge de l'exécuteur.
+Chantier ouvert chez la session du proto tout déclaratif le 11 octobre
+(page `docs/11-octobre-2026-everything-declarative/03-les-agents-se-parlent.md`).
+
 ## 8. Ce qui n'est pas décidé
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;

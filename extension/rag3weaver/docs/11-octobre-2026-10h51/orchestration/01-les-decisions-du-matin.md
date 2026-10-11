@@ -205,3 +205,11 @@ où elle vit.
   avec une arête à zéro ou plusieurs colonnes) et graphe non atomique
   (recommandé : exécuté et dit, refus seulement si l'appelant exige
   l'atomicité). En attente.
+- **Les ports portent des flux** (Lucie, après-midi) : un seul mécanisme,
+  tout port porte un flux (éléments dans le temps, et une fin), une valeur
+  est un flux de un ; le nœud dit sa posture (élément par élément ou flux
+  complété) ; `interrupt` = fermer un flux ; vie d'un agent lancé = tant
+  qu'un flux d'entrée est ouvert. Consigne : « complexité on s'en fout,
+  jamais un argument, l'important c'est que ce soit au top ». Noté en vision
+  (`visions/00-vision-generale.md`, section « L'agent est un graphe à
+  ports ») et transmis à « everything declarative » comme règle de sa page.
