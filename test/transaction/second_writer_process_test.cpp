@@ -188,6 +188,10 @@ TEST_F(SecondWriterProcess, TheSecondWriterProcessWaitsThenWrites) {
     in >> state >> elapsedMs >> seen;
     EXPECT_EQ(state, "opened") << "[check: second-writer-opens] " << report;
     EXPECT_GE(elapsedMs, 1000) << "[check: second-writer-waited] " << report;
+    // La leçon du 11 octobre : le second rejouait un journal lu avant son attente, et ne voyait
+    // pas la ligne 2 validée par le premier pendant qu'il attendait — la perte ne se lisait
+    // qu'au compte final, après la fermeture du second. Elle se lit ici, à l'ouverture.
+    EXPECT_EQ(seen, 2) << "[check: second-sees-the-first-writers-rows] " << report;
     EXPECT_EQ(itemsAfterBoth(), 3) << "[check: both-writers-rows] " << report;
 }
 
