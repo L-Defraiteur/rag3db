@@ -1,6 +1,6 @@
 # Un index se fige sur un appel d'embarquement sans délai : ni l'index ni l'arrêt de l'hôte ne reprennent
 
-- **État** : ouvert (11 octobre 2026) — quatre fois sur l'hôte de luciepc, `code-lourd` (session codeparsers), autour de 18 à 20 % des vecteurs ; la montre hors de cause ; une attente interne à l'hôte, pas réseau — la pile reste à prendre (voir la dernière section)
+- **État** : corrigé (11 octobre 2026, arbre principal) — quatre fois sur l'hôte de luciepc, `code-lourd` (session codeparsers), autour de 18 à 20 % des vecteurs ; le délai par appel dans `5dfa516d9`, la cause du figement (une boucle) défendue dans le commit suivant
 - **Gravité** : blocage (l'index ne finit jamais, l'hôte ne s'arrête plus proprement ; la première fois, la mémoire est montée jusqu'à 30 Go)
 - **Atteignable en service** : oui, tout index par un service d'embarquement (`RAG3WEAVER_EMBED_SERVICE`)
 - **Touche rag3weaver** : oui (`src/daemon/mod.rs`, `src/daemon/embeddings.rs`, l'indexation)
@@ -95,3 +95,37 @@ figement ; le délai reste à poser pour lui-même.
 L'hôte est gardé figé pour Lucie (pid 132823). La pile (`sudo gdb -p <pid> -batch -ex 'thread
 apply all bt'`) dira où l'attente se tient ; le morceau en cours manque toujours à l'état de
 l'index.
+
+## Correctif
+
+- **Un délai par appel** : `daemon::agent_with_timeout` (connexion, envoi et lecture) ; le client
+  du service d'embarquement le prend de `models.embed.timeout_secs` (ou `embeddings.timeout_secs`),
+  sinon de `RAG3WEAVER_EMBED_TIMEOUT_SECS`, sinon 60 s (le 3 octobre, une requête de 256 morceaux
+  prenait environ 2 s : une marge d'environ ×30 ; la mesure par service est à venir, embarquements).
+  Un délai dépassé devient `DaemonError::SansReponse`, puis `EmbedError::Timeout`.
+- **Le morceau muet est isolé** : un lot qui expire est rejoué morceau par morceau
+  (`appel_suivi`, `src/dataflow/record_nodes.rs`) ; ceux qui répondent s'écrivent, le muet est
+  nommé (`fichier:ligne (morceau n)`, sinon le titre du parent), n'est pas écrit et reste dû. La
+  réclamation de ce run l'exclut (`$exclus`, dans les deux dialectes) : la passe suivante ne paie
+  pas deux délais pour lui ; un run neuf le retente.
+- **L'arrêt** est vérifié avant chaque appel au modèle, pas seulement entre deux passes de 512.
+- **L'état de l'index le dit, même occupé** : `index_states` lit hors du verrou du catalogue
+  (`index_nodes::embed_watch_of`) le lot en cours (`embedding.in_progress` : combien, le premier
+  nommé, depuis combien de secondes), les morceaux muets (`embedding.silent`) et les passes en
+  échec.
+- **Le journal** dit les morceaux laissés dus, nommés, et sa dernière ligne reste
+  « indexation terminée » suivie de ce qui reste à reprendre.
+
+Le verrou du catalogue : la passe de vecteurs le rend déjà toutes les 512 morceaux (une lecture
+passe entre deux passes) et le tient pendant une passe ; ce lot n'y change rien. Réduire la passe
+laisserait passer une lecture plus souvent, au prix de plus de réclamations.
+
+Témoins : `daemon::tests::une_requete_sans_reponse_rend_la_main_dans_le_delai` (un service qui
+accepte et ne répond jamais : `SansReponse` en moins de 2 s, délai 300 ms) ;
+`e2e_generic_search::un_morceau_muet_est_nomme_exclu_du_run_et_reste_du` (un lot expire, deux
+appels pour le muet, les autres écrits, le muet nommé « Rust Book », exclu de la passe suivante,
+retenté par un run neuf). Sans témoin : le journal de bout en bout d'une indexation de code (il
+demande un catalogue de code et un service), et le SIGUSR1 qui écrirait l'état des fils (pas fait).
+
+
+**Le figement lui-même** n'était pas un appel muet : relevés de codeparsers (les fils nés de l'appel `index`, le WAL qui grossit d'environ 330 Ko toutes les 10 s, aucun appel au service), c'était `run_index` qui bouclait sur des morceaux sans texte, réclamés à chaque passe et jamais écrits. Défenses dans le commit suivant : un morceau sans texte n'est jamais dû, une passe sans progrès s'arrête nommée. La perte des textes est un ticket à part (`2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md`).

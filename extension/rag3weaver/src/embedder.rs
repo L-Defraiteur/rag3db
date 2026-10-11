@@ -120,6 +120,13 @@ pub trait Embedder: Send + Sync {
     fn distant(&self) -> bool {
         false
     }
+
+    /// **Le délai d'un appel**, pour un embarqueur qui passe par le réseau :
+    /// au-delà, l'appel rend [`EmbedError::Timeout`] au lieu de tenir son fil.
+    /// `None` : pas de délai (un embarqueur dans ce processus).
+    fn timeout(&self) -> Option<std::time::Duration> {
+        None
+    }
 }
 
 /// **Un embedder partagé en est un.**
@@ -157,6 +164,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn distant(&self) -> bool {
         (**self).distant()
+    }
+    fn timeout(&self) -> Option<std::time::Duration> {
+        (**self).timeout()
     }
 }
 

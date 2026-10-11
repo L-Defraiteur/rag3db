@@ -458,6 +458,16 @@ fn sparse_json(v: &SparseVector) -> serde_json::Value {
 /// [`DaemonEmbedder::from_service`].
 pub const SERVICE_VARIABLE: &str = "RAG3WEAVER_EMBED_SERVICE";
 
+/// Le délai d'un appel au service d'embarquement quand le manifeste n'en
+/// dit pas : `RAG3WEAVER_EMBED_TIMEOUT_SECS`, sinon 60 s. Le 3 octobre, une
+/// requête de 256 morceaux prenait environ 2 s (granite-278m par le tunnel) :
+/// 60 s laisse une marge d'environ ×30 à un lot vivant et coupe un appel muet
+/// au bout d'une minute (mesure par service à venir, embarquements).
+pub fn default_embed_timeout() -> std::time::Duration {
+    let secondes = std::env::var("RAG3WEAVER_EMBED_TIMEOUT_SECS").ok().and_then(|v| v.trim().parse::<u64>().ok()).filter(|s| *s > 0);
+    std::time::Duration::from_secs(secondes.unwrap_or(60))
+}
+
 /// **Un embedder qui vit dans un autre processus.**
 ///
 /// Se comporte comme n'importe quel [`Embedder`] — c'est tout l'intérêt : ni le
@@ -466,6 +476,8 @@ pub struct DaemonEmbedder {
     adresse: String,
     base: String,
     agent: ureq::Agent,
+    /// Le délai d'un appel ([`DaemonEmbedder::with_timeout`]).
+    delai: std::time::Duration,
     identite: Identite,
     /// Gardée pour sa politique de fin ; sans ce champ, un démon lancé en
     /// `Fin::Arreter` mourrait aussitôt après avoir été assuré.
@@ -572,9 +584,18 @@ impl DaemonEmbedder {
     }
 
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
-        let agent = agent();
+        let delai = default_embed_timeout();
+        let agent = super::agent_with_timeout(delai);
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, identite, _attache: attache })
+        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache })
+    }
+
+    /// **Le délai d'un appel** au service, au lieu du défaut
+    /// ([`default_embed_timeout`]) : `models.embed.timeout_secs` au manifeste.
+    pub fn with_timeout(mut self, delai: std::time::Duration) -> Self {
+        self.agent = super::agent_with_timeout(delai);
+        self.delai = delai;
+        self
     }
 
     /// L'adresse où ce client joint le démon — celle que le démon a prise,
@@ -612,8 +633,10 @@ impl DaemonEmbedder {
 
     fn envoyer(&self, route: &str, textes: &[String]) -> Result<serde_json::Value, EmbedError> {
         let corps = serde_json::json!({ "texts": textes }).to_string();
-        let texte = poster(&self.agent, &self.base, route, corps)
-            .map_err(|e| EmbedError::ProviderError(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, route, corps).map_err(|e| match e {
+            DaemonError::SansReponse { .. } => EmbedError::Timeout,
+            e => EmbedError::ProviderError(e.to_string()),
+        })?;
         serde_json::from_str(&texte).map_err(|e| EmbedError::ProviderError(e.to_string()))
     }
 }
@@ -645,6 +668,10 @@ impl Embedder for DaemonEmbedder {
     /// [`Embedder::distant`].
     fn distant(&self) -> bool {
         true
+    }
+
+    fn timeout(&self) -> Option<std::time::Duration> {
+        Some(self.delai)
     }
 }
 

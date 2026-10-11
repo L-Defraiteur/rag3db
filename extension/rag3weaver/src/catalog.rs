@@ -3563,6 +3563,18 @@ impl Catalog {
         marqueur: &str,
         limite: usize,
     ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
+        self.reclamer_le_retard_sauf(table, marqueur, limite, &HashSet::new())
+    }
+
+    /// [`Self::reclamer_le_retard`], sans les morceaux de `exclus` : ceux qu'un
+    /// run a vus sans réponse du service d'embarquement.
+    pub fn reclamer_le_retard_sauf(
+        &mut self,
+        table: &str,
+        marqueur: &str,
+        limite: usize,
+        exclus: &HashSet<String>,
+    ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
         let maintenant = crate::dataflow::checkpoint::timestamp_ms();
         let reclamation = format!("{maintenant:020}|{}", self.writer_id);
         let perime = format!("{:020}|", maintenant.saturating_sub(Self::MARQUE_PERIMEE_MS));
@@ -3578,6 +3590,7 @@ impl Catalog {
                     QueryParam::new("reclamation", CypherValue::String(reclamation)),
                     QueryParam::new("perime", CypherValue::String(perime)),
                     QueryParam::new("mien", CypherValue::String(mien)),
+                    QueryParam::new("exclus", CypherValue::List(exclus.iter().map(|u| CypherValue::String(u.clone())).collect())),
                 ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
@@ -3710,7 +3723,23 @@ impl Catalog {
         limite: usize,
         tables: Option<&HashSet<String>>,
     ) -> Result<usize, CatalogError> {
+        self.embarquer_le_retard_suivi(exige, limite, tables, None)
+    }
+
+    /// [`Self::embarquer_le_retard`], **suivi** par une indexation : les
+    /// morceaux restés sans réponse dans ce run ne sont pas re-réclamés, le
+    /// suivi est donné aux nœuds d'embarquement (l'arrêt entre deux appels, le
+    /// lot en cours, les morceaux muets), et l'échec d'une table entière y est
+    /// relevé au lieu d'être seulement émis — le journal de l'indexation le dira.
+    pub fn embarquer_le_retard_suivi(
+        &mut self,
+        exige: crate::disponibilite::Disponibilites,
+        limite: usize,
+        tables: Option<&HashSet<String>>,
+        suivi: Option<&Arc<crate::dataflow::record_nodes::EmbedWatch>>,
+    ) -> Result<usize, CatalogError> {
         self.check_embedding_model()?;
+        let exclus: HashSet<String> = suivi.map(|w| w.silent_uuids()).unwrap_or_default();
         if !exige.dense() && !exige.sparse() {
             return Ok(0);
         }
@@ -3768,7 +3797,7 @@ impl Catalog {
                 // n'est pas périmée. Et **ne pas avaler cette erreur** : la
                 // première version le faisait, et elle a caché son propre
                 // défaut pendant une demi-heure.
-                let pris = match self.reclamer_le_retard(&table, marqueur, limite) {
+                let pris = match self.reclamer_le_retard_sauf(&table, marqueur, limite, &exclus) {
                     Ok(p) => p,
                     Err(e) => {
                         self.emit_event(CatalogEvent::Warning {
@@ -3813,6 +3842,9 @@ impl Catalog {
 
             let mut services = ServiceRegistry::new();
             let canal = self.enregistrer_les_services_d_ingestion(&mut services);
+            if let Some(w) = suivi {
+                services.register(crate::dataflow::record_nodes::SERVICE_EMBED_WATCH, w.clone());
+            }
 
             let runtime = DataflowRuntime::with_services(8, services);
             let mut ecoute = runtime.subscribe();
@@ -3834,10 +3866,11 @@ impl Catalog {
             match issue {
                 Ok(_) => total += nombre,
                 Err(e) => {
-                    self.emit_event(CatalogEvent::Error {
-                        context: "rattrapage".to_string(),
-                        message: format!("embarquement du retard sur « {table} » : {e}"),
-                    });
+                    let message = format!("embarquement du retard sur « {table} » : {e}");
+                    if let Some(w) = suivi {
+                        w.errors.lock().unwrap_or_else(|p| p.into_inner()).push(message.clone());
+                    }
+                    self.emit_event(CatalogEvent::Error { context: "rattrapage".to_string(), message });
                 }
             }
         }

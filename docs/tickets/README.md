@@ -67,7 +67,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -105,15 +105,15 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [On ne peut pas dire ce qu'on indexe : ni racines multiples, ni chemins inclus](2026-10-11-on-ne-peut-pas-dire-ce-qu-on-indexe.md) | ouvert | friction et coût | oui | oui (`workspace`, source de fichiers) |
 | [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
-| [Un index se fige sur un appel d'embarquement sans délai](2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | ouvert — quatre fois, montre hors de cause, attente interne à l'hôte ; pile à prendre | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (105), dans `closed/`
+### Fermés (107), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Le client mince ne revient pas seul quand l'hôte revient](closed/2026-10-11-le-client-mince-ne-revient-pas-seul-quand-l-hote-revient.md) | corrigé (reprise en fond, list_changed, coupure non rejouée) | blocage | oui | oui (et seulement) |
+| [Un index se fige sur un appel d'embarquement sans délai](closed/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | corrigé | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
 | [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](closed/2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | corrigé (voir le ticket) ; H4 au vert | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
 | [Une mesure attend sans fin derrière des lourds qui « entrent quand même »](closed/2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme.md) | corrigé : priorité à la mesure, délai dans la place, `poste --qui` (11 oct.) | blocage | oui, sur le poste | oui (`poste`) |
 | [« Catalogue occupé » pour un changement localisé](closed/2026-10-11-catalogue-occupe-pour-un-changement-localise.md) | corrigé (la lecture attend un verrou court) | blocage | oui | oui (et seulement) |
@@ -124,6 +124,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [La montre de fichiers coûte sept dixièmes d'un cœur en continu](closed/2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | corrigé (balayage par dates, liste relue quand un dossier bouge) — à remesurer sur l'hôte | coût | oui | oui (et seulement) |
 | [La montre ne réconciliait pas le disque avec l'index à son démarrage](closed/2026-10-11-la-montre-ne-reconciliait-pas-au-demarrage.md) | corrigé (la réconciliation contre File.content_hash) | réponse fausse (état périmé sans retard dit) | oui, au redémarrage de l'hôte | oui (et seulement) |
 | [Un gabarit livré cherche l'extension vector relativement à lui-même](closed/2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | corrigé : `vector_extension` nomme l'extension du bâti (`"vector"`), trouvée par RAG3DB_ROOT, la lib ou le binaire (11 oct.) | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
+| [Un échec d'embarquement est avalé, et le journal dit « terminée »](closed/2026-10-11-un-echec-d-embarquement-est-avale-et-le-journal-dit-terminee.md) | corrigé : relevé dans le suivi, dit au journal et dans l'état (11 oct.) | réponse trompeuse | oui | oui (`catalog.rs`, `index_nodes.rs`) |
 | [L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend](closed/2026-10-11-l-hote-ne-relit-pas-un-manifeste-modifie.md) | corrigé : `POST /backend/open` relit un manifeste modifié, `POST /backend/close` ferme et lâche la base (11 oct.) | réponse trompeuse | oui, à chaque correction d'un manifeste servi | oui (`daemon_host.rs`) |
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](closed/2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | corrigé, témoin vert sur les deux moteurs (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [Le rendu d'impact change d'ordre d'un processus à l'autre](closed/2026-10-11-le-rendu-d-impact-change-d-ordre-d-un-processus-a-l-autre.md) | corrigé (voir le ticket) | réponse trompeuse | oui | oui (rendu d'impact) |

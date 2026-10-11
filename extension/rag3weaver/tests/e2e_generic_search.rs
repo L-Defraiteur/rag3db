@@ -1425,3 +1425,94 @@ fn le_lanceur_honore_detailed_diagnostics_et_contrats() {
     }).unwrap();
     assert_eq!(hybride.meta.signals, SearchSignals::HYBRID, "les signaux demandés, pas ceux qui ont parlé");
 }
+
+/// Le catalogue des produits, en dette de vecteurs (plein texte seul), avec un
+/// embarqueur qui ne répond pas dans le délai pour tout lot contenant `muet`.
+/// Rend le catalogue et le nombre d'appels qui ont contenu le marqueur.
+fn catalogue_avec_un_muet(muet: &'static str) -> (Catalog, Arc<std::sync::atomic::AtomicUsize>) {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    use rag3weaver::embedder::{CallbackEmbedder, EmbedError};
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let appels = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let compte = appels.clone();
+    let embarqueur = CallbackEmbedder::new(4, move |textes: &[String]| -> Result<Vec<Vec<f32>>, EmbedError> {
+        if textes.iter().any(|t| t.contains(muet)) {
+            compte.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            return Err(EmbedError::Timeout);
+        }
+        Ok(textes.iter().map(|t| vec![t.len() as f32, 1.0, 0.5, 0.25]).collect())
+    });
+    let mut catalog = Catalog::new(boxed, Box::new(embarqueur), make_empty_config(4));
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities_jusqu_a("Product", test_products(), D::RECHERCHE_TEXTE).expect("ingestion sans GPU");
+    (catalog, appels)
+}
+
+/// **Un morceau muet n'arrête pas l'embarquement** (ticket du délai
+/// d'embarquement, 11 octobre 2026) : le lot qui le contient expire, il est
+/// rejoué morceau par morceau, les autres s'écrivent, le muet est nommé et
+/// relevé dans le suivi, **exclu** des réclamations de ce run (la passe
+/// suivante ne le retente pas) et **toujours dû** (un run neuf le retente).
+#[test]
+#[ignore]
+fn un_morceau_muet_est_nomme_exclu_du_run_et_reste_du() {
+    use rag3weaver::dataflow::record_nodes::EmbedWatch;
+    use rag3weaver::disponibilite::Disponibilites as D;
+    let (mut catalog, appels) = catalogue_avec_un_muet("zero-cost abstractions");
+    let dus_avant = catalog.index_progress().unwrap().dense_missing();
+    assert!(dus_avant >= 3, "la dette des trois produits : {dus_avant}");
+
+    let run = Arc::new(EmbedWatch::default());
+    let n = catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, Some(&run)).expect("rattrapage");
+    let muets = run.silent.lock().unwrap().clone();
+    eprintln!("[muet] passe 1 : {n} réclamés, muets {muets:?}, appels muets {}", appels.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(muets.len(), 1, "un seul morceau muet : {muets:?}");
+    assert!(muets[0].1.contains("Rust Book"), "le muet est nommé par son parent : {muets:?}");
+    assert_eq!(catalog.index_progress().unwrap().dense_missing(), 1, "les autres sont écrits, le muet reste dû");
+    let appels_passe_1 = appels.load(std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(appels_passe_1, 2, "le lot qui expire, puis le morceau seul");
+
+    // La passe suivante du même run ne le retente pas.
+    let n = catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, Some(&run)).expect("rattrapage");
+    assert_eq!(n, 0, "rien à réclamer : le muet est exclu de ce run");
+    assert_eq!(appels.load(std::sync::atomic::Ordering::SeqCst), appels_passe_1, "pas un appel de plus pour le muet");
+
+    // Un run neuf le retente : il est toujours dû.
+    let neuf = Arc::new(EmbedWatch::default());
+    catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, Some(&neuf)).expect("rattrapage");
+    assert_eq!(neuf.silent.lock().unwrap().len(), 1, "un run neuf le retente et le relève de nouveau");
+    assert!(run.errors.lock().unwrap().is_empty(), "un muet n'est pas un échec de la passe");
+}
+
+/// **Un échec d'embarquement n'est plus avalé** (ticket du même jour) :
+/// toutes les tables échouent, la passe rend zéro comme avant, et le suivi
+/// relève l'échec — le journal de l'indexation le dira au lieu de « terminée ».
+#[test]
+#[ignore]
+fn un_echec_d_embarquement_est_releve_et_non_avale() {
+    use rag3weaver::dataflow::record_nodes::EmbedWatch;
+    use rag3weaver::disponibilite::Disponibilites as D;
+    use rag3weaver::embedder::{CallbackEmbedder, EmbedError};
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let en_panne = CallbackEmbedder::new(4, |_: &[String]| -> Result<Vec<Vec<f32>>, EmbedError> {
+        Err(EmbedError::ProviderError("le service a refusé (503)".into()))
+    });
+    let mut catalog = Catalog::new(boxed, Box::new(en_panne), make_empty_config(4));
+    catalog.initialize().unwrap();
+    catalog.register_entity("Product", make_product_config()).unwrap();
+    catalog.ingest_entities_jusqu_a("Product", test_products(), D::RECHERCHE_TEXTE).expect("ingestion sans GPU");
+
+    let run = Arc::new(EmbedWatch::default());
+    let n = catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, Some(&run)).expect("la passe rend la main");
+    let echecs = run.errors.lock().unwrap().clone();
+    eprintln!("[panne] {n} rattrapés, échecs {echecs:?}");
+    assert_eq!(n, 0);
+    assert_eq!(echecs.len(), 1, "l'échec de la table est relevé : {echecs:?}");
+    assert!(echecs[0].contains("503"), "il dit la cause : {echecs:?}");
+    assert!(catalog.index_progress().unwrap().dense_missing() >= 3, "la dette reste, entière");
+}

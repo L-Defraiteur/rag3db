@@ -30,6 +30,7 @@
 //! que pour sonder le débit de l'embarqueur, la première fois, quand le
 //! catalogue n'en a pas encore noté.
 
+use super::record_nodes::EmbedWatch;
 use std::sync::{Arc, Mutex};
 
 use super::node::{Node, NodeContext};
@@ -255,6 +256,8 @@ pub const STOPPED_PREFIX: &str = "indexation arrêtée";
 struct Indexing {
     catalog: Arc<Mutex<Catalog>>,
     stop: Arc<std::sync::atomic::AtomicBool>,
+    /// Le suivi de sa passe d'embarquement, lu sans le verrou du catalogue.
+    watch: Arc<EmbedWatch>,
     handle: std::thread::JoinHandle<()>,
 }
 static INDEXINGS: std::sync::LazyLock<Mutex<Vec<Indexing>>> = std::sync::LazyLock::new(Default::default);
@@ -268,6 +271,20 @@ pub fn indexings_running(catalog: &Arc<Mutex<Catalog>>) -> usize {
         .iter()
         .filter(|i| Arc::ptr_eq(&i.catalog, catalog) && !i.handle.is_finished())
         .count()
+}
+
+/// **Le suivi de la dernière indexation de ce catalogue** : le lot qu'elle
+/// embarque en ce moment, les morceaux restés sans réponse, les échecs. Lu
+/// sans le verrou du catalogue, que la passe tient : c'est ce que l'état de
+/// l'index dit pendant une passe.
+pub fn embed_watch_of(catalog: &Arc<Mutex<Catalog>>) -> Option<Arc<EmbedWatch>> {
+    INDEXINGS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .iter()
+        .rev()
+        .find(|i| Arc::ptr_eq(&i.catalog, catalog))
+        .map(|i| i.watch.clone())
 }
 
 /// **Arrêter les indexations de ce catalogue**, au prochain paquet validé
@@ -323,20 +340,20 @@ pub fn spawn_index(
     kept_bytes: u64,
     generated: GeneratedPolicy,
 ) -> std::thread::JoinHandle<()> {
-    spawn_index_with_stop(catalog, source, journal, kept_bytes, generated, Arc::new(std::sync::atomic::AtomicBool::new(false)))
+    spawn_index_with_stop(catalog, source, journal, kept_bytes, generated, Arc::new(EmbedWatch::default()))
 }
 
-/// [`spawn_index`], avec le drapeau d'arrêt de l'appelant.
+/// [`spawn_index`], avec le suivi de l'appelant (son drapeau d'arrêt dedans).
 fn spawn_index_with_stop(
     catalog: Arc<Mutex<Catalog>>,
     source: Arc<dyn FileSource>,
     journal: std::path::PathBuf,
     kept_bytes: u64,
     generated: GeneratedPolicy,
-    stop: Arc<std::sync::atomic::AtomicBool>,
+    watch: Arc<EmbedWatch>,
 ) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &stop) {
-        Ok(()) => {
+    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &watch) {
+        Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
             if let Some(root) = source.cursor().strip_prefix("worktree:") {
                 // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
@@ -348,7 +365,9 @@ fn spawn_index_with_stop(
                     }
                 }
             }
-            log(&journal, DONE_LINE)
+            // « terminée » reste en tête de la ligne (ce que `wait` attend), et
+            // dit ce qui reste dû quand l'embarquement n'a pas tout pris.
+            log(&journal, &format!("{DONE_LINE}{}", reste.map(|r| format!(" — {r}")).unwrap_or_default()))
         }
         Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => log(&journal, &format!("{STOPPED_PREFIX} : {e}")),
         Err(e) if e.starts_with(STOPPED_PREFIX) => log(&journal, &e),
@@ -365,11 +384,12 @@ pub fn spawn_stoppable_index(
     kept_bytes: u64,
     generated: GeneratedPolicy,
 ) {
-    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let handle = spawn_index_with_stop(catalog.clone(), source, journal, kept_bytes, generated, stop.clone());
+    let watch = Arc::new(EmbedWatch::default());
+    let stop = watch.stop.clone();
+    let handle = spawn_index_with_stop(catalog.clone(), source, journal, kept_bytes, generated, watch.clone());
     let mut indexings = INDEXINGS.lock().unwrap_or_else(|p| p.into_inner());
     indexings.retain(|i| !i.handle.is_finished());
-    indexings.push(Indexing { catalog, stop, handle });
+    indexings.push(Indexing { catalog, stop, watch, handle });
 }
 
 fn run_index(
@@ -378,9 +398,10 @@ fn run_index(
     journal: &std::path::Path,
     kept_bytes: u64,
     generated: GeneratedPolicy,
-    stop: &Arc<std::sync::atomic::AtomicBool>,
-) -> Result<(), String> {
+    watch: &Arc<EmbedWatch>,
+) -> Result<Option<String>, String> {
     use crate::code_sync::{sync_source, SourceSyncOptions, SourceSyncProgress, SyncPhase};
+    let stop = &watch.stop;
     use crate::disponibilite::Disponibilites;
 
     // L'état que la recherche lit à chaque appel, **par entité** : celui de
@@ -460,7 +481,7 @@ fn run_index(
         }
         let (n, progress) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-            let n = guard.embarquer_le_retard(Disponibilites::TOUT, 512, None).map_err(|e| e.to_string())?;
+            let n = guard.embarquer_le_retard_suivi(Disponibilites::TOUT, 512, None, Some(watch)).map_err(|e| e.to_string())?;
             // Chaque passe rafraîchit les états : « en cours » reste cru tant
             // que quelqu'un travaille.
             let progress = guard.refresh_index_states(&ENTITIES, rate, chars_per_chunk, n > 0).map_err(|e| e.to_string())?;
@@ -484,7 +505,27 @@ fn run_index(
             guard.note_measured_embedding_rate(measured).map_err(|e| e.to_string())?;
         }
     }
-    Ok(())
+    // **Ce qui reste dû, dit** : les morceaux restés sans réponse (nommés), et
+    // les tables qu'une passe n'a pas pu embarquer — avant ce lot, un échec
+    // était avalé et le journal disait « terminée » sur une dette laissée.
+    let muets = watch.silent.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    let echecs = watch.errors.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    if !muets.is_empty() {
+        let noms: Vec<&str> = muets.iter().take(10).map(|(_, nom)| nom.as_str()).collect();
+        let plus = if muets.len() > 10 { format!(", et {} autres", muets.len() - 10) } else { String::new() };
+        log(journal, &format!("embarquement sans réponse : {} morceau(x) laissé(s) dû(s) — {}{plus} ; repris à la prochaine indexation", muets.len(), noms.join(", ")));
+    }
+    if !echecs.is_empty() {
+        log(journal, &format!("{} passe(s) d'embarquement en échec — {}", echecs.len(), echecs.iter().take(3).cloned().collect::<Vec<_>>().join(" ; ")));
+    }
+    if muets.is_empty() && echecs.is_empty() {
+        return Ok(None);
+    }
+    let dus = {
+        let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        guard.index_progress().map(|p| p.dense_missing()).unwrap_or(0)
+    };
+    Ok(Some(format!("{dus} morceau(x) non embarqué(s), à reprendre (relancer index)")))
 }
 
 /// Le refus d'`index` quand l'estimation dépasse le seuil et que l'appelant

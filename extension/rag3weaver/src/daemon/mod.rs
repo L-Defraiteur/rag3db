@@ -74,6 +74,9 @@ pub enum DaemonError {
     Exposition { adresse: String },
     /// Le démon n'a pas répondu.
     Injoignable { adresse: String, cause: String },
+    /// Le démon a pris la requête et n'a pas répondu dans le délai de
+    /// l'agent ([`agent_with_timeout`]) : la requête est perdue, pas le démon.
+    SansReponse { adresse: String, cause: String },
     /// Ce qui répond n'est pas le démon attendu.
     Etranger { adresse: String, attendu: String, trouve: String },
     /// Le démon a répondu une erreur.
@@ -95,6 +98,7 @@ impl std::fmt::Display for DaemonError {
                  que quiconque atteint ce port a les droits du démon."
             ),
             Self::Injoignable { adresse, cause } => write!(f, "{adresse} ne répond pas : {cause}"),
+            Self::SansReponse { adresse, cause } => write!(f, "{adresse} n'a pas répondu dans le délai : {cause}"),
             Self::Etranger { adresse, attendu, trouve } => write!(
                 f,
                 "{adresse} répond, mais se dit « {trouve} » et non « {attendu} »"
@@ -349,6 +353,14 @@ pub fn agent() -> ureq::Agent {
     ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).build())
 }
 
+/// [`agent`], avec un **délai par requête** (connexion, envoi et lecture) :
+/// une requête qui ne revient pas rend [`DaemonError::SansReponse`] au lieu de
+/// tenir son fil sans fin (ticket du 11 octobre 2026 : un `/embed` muet a figé
+/// deux fois l'index de code-lourd, et l'arrêt ne pouvait pas le couper).
+pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
+    ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(delai)).build())
+}
+
 /// `http://<adresse>`, quelle que soit la forme donnée.
 pub fn base_url(adresse: &str) -> String {
     format!("http://{}", adresse.trim_start_matches("http://"))
@@ -392,16 +404,23 @@ pub fn poster(
     route: &str,
     corps: String,
 ) -> Result<String, DaemonError> {
-    let mut reponse = agent
-        .post(format!("{base}{route}"))
-        .header("content-type", "application/json")
-        .send(corps)
-        .map_err(|e| DaemonError::Injoignable { adresse: base.to_string(), cause: e.to_string() })?;
+    // Un délai dépassé, à l'envoi comme à la lecture, se dit pour ce qu'il est.
+    let sans_reponse = |e: &ureq::Error| matches!(e, ureq::Error::Timeout(_));
+    let mut reponse = agent.post(format!("{base}{route}")).header("content-type", "application/json").send(corps).map_err(|e| {
+        if sans_reponse(&e) {
+            DaemonError::SansReponse { adresse: base.to_string(), cause: e.to_string() }
+        } else {
+            DaemonError::Injoignable { adresse: base.to_string(), cause: e.to_string() }
+        }
+    })?;
     let statut = reponse.status().as_u16();
-    let texte = reponse
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| DaemonError::Reponse(e.to_string()))?;
+    let texte = reponse.body_mut().read_to_string().map_err(|e| {
+        if sans_reponse(&e) {
+            DaemonError::SansReponse { adresse: base.to_string(), cause: e.to_string() }
+        } else {
+            DaemonError::Reponse(e.to_string())
+        }
+    })?;
     if statut != 200 {
         return Err(DaemonError::Refus { statut, corps: texte });
     }
@@ -411,6 +430,26 @@ pub fn poster(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Une requête sans réponse rend la main dans le délai** (ticket du
+    /// délai d'embarquement) : un service qui accepte la connexion et ne
+    /// répond jamais ne tient plus le fil ; l'erreur dit ce qu'elle est.
+    #[test]
+    fn une_requete_sans_reponse_rend_la_main_dans_le_delai() {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        let muet = std::thread::spawn(move || {
+            let (flux, _) = ecoute.accept().unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            drop(flux);
+        });
+        let agent = agent_with_timeout(std::time::Duration::from_millis(300));
+        let debut = std::time::Instant::now();
+        let erreur = poster(&agent, &base_url(&adresse), "/embed", "{}".into()).unwrap_err();
+        assert!(matches!(erreur, DaemonError::SansReponse { .. }), "{erreur}");
+        assert!(debut.elapsed() < std::time::Duration::from_secs(2), "rendu après {:?}", debut.elapsed());
+        muet.join().unwrap();
+    }
 
     /// **Le port nul se lie ici et se dit** ; un port non nul est laissé à
     /// `servir`, comme avant.

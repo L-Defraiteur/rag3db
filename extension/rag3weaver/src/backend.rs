@@ -108,6 +108,9 @@ pub struct EmbeddingService {
     pub provider: EmbeddingProvider,
     #[serde(default)]
     pub api_key_env: Option<String>,
+    /// Le délai d'un appel, en secondes (voir `ModelSource::timeout_secs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -133,6 +136,7 @@ impl EmbeddingService {
             dimensions: Some(self.dimensions),
             context_tokens: None,
             params: Default::default(),
+            timeout_secs: self.timeout_secs,
         }
     }
 }
@@ -3013,10 +3017,37 @@ impl Backend {
             // Pas d'index de code déclaré : rien à rapporter, sauf un retard.
             _ => &[],
         };
+        // **L'embarquement en cours, lu hors du verrou** que la passe tient : le
+        // lot qui part (combien, le premier nommé, depuis quand), et les
+        // morceaux laissés dus faute de réponse du service.
+        let embarquement = crate::dataflow::index_nodes::embed_watch_of(&self.catalog).map(|w| {
+            let now = w.now.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            let muets: Vec<String> = w.silent.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|(_, nom)| nom.clone()).collect();
+            let echecs = w.errors.lock().unwrap_or_else(|p| p.into_inner()).len();
+            let mut v = json!({});
+            if let Some(n) = now {
+                let depuis = crate::catalog::retard::now_ms().saturating_sub(n.since_ms) / 1000;
+                v["in_progress"] = json!({"chunks": n.chunks, "first": n.first, "since_s": depuis});
+            }
+            if !muets.is_empty() {
+                v["silent"] = json!({"chunks": muets.len(), "named": muets.iter().take(10).collect::<Vec<_>>()});
+            }
+            if echecs > 0 {
+                v["failed_passes"] = json!(echecs);
+            }
+            v
+        }).filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
         let Ok(cat) = self.catalog.try_lock() else {
-            return Ok(json!({"busy": true}));
+            let mut occupe = json!({"busy": true});
+            if let Some(e) = embarquement {
+                occupe["embedding"] = e;
+            }
+            return Ok(occupe);
         };
         let mut etats = serde_json::Map::new();
+        if let Some(e) = embarquement {
+            etats.insert("embedding".to_string(), e);
+        }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
                 etats.insert(

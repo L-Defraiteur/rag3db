@@ -928,7 +928,11 @@ pub trait SchemaDialect: Send + Sync {
     /// légitime, une passe interrompue ne doit pas s'attendre elle-même. Pose
     /// `$reclamation` dessus, et rend `_uuid, _text, _text_hash`.
     ///
-    /// Paramètres : `$reclamation`, `$perime`, `$mien`.
+    /// `$exclus` (une liste d'uuids, vide le plus souvent) : les morceaux qu'un
+    /// run a déjà vus sans réponse du service ne sont pas re-réclamés par ce
+    /// run — ils restent dus, et le run suivant les retente.
+    ///
+    /// Paramètres : `$reclamation`, `$perime`, `$mien`, `$exclus`.
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String;
 
     // ── Search resolution ────────────────────────────────────────────
@@ -1987,6 +1991,7 @@ impl SchemaDialect for Rag3dbDialect {
              WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash) \
                AND (n._embed_claim IS NULL OR n._embed_claim = '' \
                     OR n._embed_claim < $perime OR n._embed_claim ENDS WITH $mien) \
+               AND NOT n._uuid IN $exclus \
              WITH n LIMIT {limite} \
              SET n._embed_claim = $reclamation \
              RETURN n._uuid, n._text, n._text_hash"
@@ -3143,6 +3148,7 @@ impl SchemaDialect for PostgresDialect {
                 WHERE ({marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash) \
                   AND (_embed_claim IS NULL OR _embed_claim = '' \
                        OR _embed_claim < $perime OR _embed_claim LIKE '%' || $mien) \
+                  AND NOT (_uuid = ANY($exclus)) \
                 LIMIT {limite}) \
              RETURNING _uuid, _text, _text_hash"
         )

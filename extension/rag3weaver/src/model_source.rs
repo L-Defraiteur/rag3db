@@ -169,6 +169,12 @@ pub struct ModelSource {
     /// passe ici — un paramètre que deux capacités partagent devient un champ.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub params: std::collections::BTreeMap<String, String>,
+    /// **Le délai d'un appel**, en secondes, pour un modèle servi par le
+    /// réseau : au-delà, l'appel est perdu et se dit (un embarquement muet ne
+    /// tient plus son fil). Absent : le défaut du client (60 s pour le service
+    /// d'embarquement, `RAG3WEAVER_EMBED_TIMEOUT_SECS`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 impl ModelSource {
@@ -183,6 +189,7 @@ impl ModelSource {
             dimensions: None,
             context_tokens: None,
             params: Default::default(),
+            timeout_secs: None,
         }
     }
     pub fn service(model: impl Into<String>) -> Self {
@@ -318,6 +325,10 @@ pub fn connect_embedder(source: &ModelSource) -> Result<(Box<dyn crate::embedder
     #[cfg(feature = "daemon")]
     let service = |address: &str| -> Result<(Client, String), String> {
         let d = crate::daemon::DaemonEmbedder::joindre(address).map_err(|e| e.to_string())?;
+        let d = match source.timeout_secs.filter(|s| *s > 0) {
+            Some(s) => d.with_timeout(std::time::Duration::from_secs(s)),
+            None => d,
+        };
         let served = d.identite().modele.clone();
         Ok((Box::new(d) as Client, served))
     };

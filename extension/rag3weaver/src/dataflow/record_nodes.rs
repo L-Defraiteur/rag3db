@@ -1804,10 +1804,69 @@ struct SimpleEmbedWork {
 /// le démon, deux requêtes en vol font la même chose de son côté.
 /// Ce que le pipeline a mesuré : le temps passé dans le modèle (cumulé sur
 /// les producteurs) et dans les écritures.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 struct PipelineStats {
     embed_ms: u64,
     write_ms: u64,
+    /// Les positions (dans `works`) des morceaux que le service n'a pas
+    /// embarqués dans le délai, même seuls : ils ne sont pas écrits, et
+    /// restent dus.
+    silent: Vec<usize>,
+}
+
+/// Le lot qu'une passe d'embarquement envoie en ce moment : ce que l'état de
+/// l'index dit pendant la passe, quand le catalogue est tenu.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EmbedBatchNow {
+    /// Combien de morceaux dans l'appel.
+    pub chunks: usize,
+    /// Le premier, nommé (`fichier:ligne (morceau n)` quand on le sait).
+    pub first: String,
+    /// Depuis quand (millisecondes Unix).
+    pub since_ms: u64,
+}
+
+/// **Ce qu'une indexation partage hors du verrou du catalogue** pendant sa
+/// passe d'embarquement (ticket du 11 octobre 2026 : un `/embed` muet tenait
+/// le fil, l'arrêt l'attendait, et personne ne voyait où). Le service
+/// [`SERVICE_EMBED_WATCH`] le donne aux nœuds d'embarquement.
+#[derive(Debug, Default)]
+pub struct EmbedWatch {
+    /// L'arrêt demandé : vérifié avant chaque appel au modèle.
+    pub stop: Arc<std::sync::atomic::AtomicBool>,
+    /// Le lot en cours.
+    pub now: Mutex<Option<EmbedBatchNow>>,
+    /// Les morceaux restés sans réponse, même seuls : (uuid, nom).
+    pub silent: Mutex<Vec<(String, String)>>,
+    /// Les échecs d'une passe entière (une table qu'on n'a pas pu embarquer).
+    pub errors: Mutex<Vec<String>>,
+}
+
+impl EmbedWatch {
+    /// Les uuids sans réponse : ce que la réclamation de ce run exclut.
+    pub fn silent_uuids(&self) -> HashSet<String> {
+        self.silent.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|(u, _)| u.clone()).collect()
+    }
+}
+
+/// Le service qui porte l'[`EmbedWatch`] d'une indexation.
+pub const SERVICE_EMBED_WATCH: &str = "embed_watch";
+
+/// Le début du message d'un appel arrêté entre deux lots.
+pub const EMBED_STOPPED: &str = "embarquement arrêté entre deux appels";
+
+/// Ce qu'un échec de délai porte dans son texte ([`crate::embedder::EmbedError::Timeout`]).
+fn est_un_delai(erreur: &str) -> bool {
+    erreur.contains(&crate::embedder::EmbedError::Timeout.to_string())
+}
+
+/// Le suivi d'un pipeline : l'arrêt, le lot en cours, et le nom d'un
+/// morceau par sa position. Vide : le pipeline d'avant.
+#[derive(Default)]
+struct PipelineWatch<'a> {
+    stop: Option<&'a std::sync::atomic::AtomicBool>,
+    now: Option<&'a Mutex<Option<EmbedBatchNow>>>,
+    name: Option<&'a (dyn Fn(usize) -> String + Sync)>,
 }
 
 /// **Poser des vecteurs sur des lignes qui existent** — le seul endroit qui
@@ -1889,19 +1948,150 @@ fn write_vectors(
     Ok(())
 }
 
+/// **Le nom d'un morceau, pour un humain** : `fichier:ligne (morceau n)` quand
+/// son parent porte un `file_path`, sinon son titre. Lu en base au moment où il
+/// faut le dire (le lot qui part, le morceau muet) ; à défaut, la table et
+/// l'uuid.
+fn nom_du_morceau(
+    conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    configs: Option<&HashMap<String, crate::config::EntityConfig>>,
+    table: &str,
+    uuid: &str,
+) -> String {
+    use rag3weaver_ir::{Column, Select};
+    // `by_uuids` rend l'uuid demandé en tête, puis les colonnes.
+    let lire = |t: &str, u: &str, colonnes: &[&str]| -> Option<Vec<CypherValue>> {
+        let q = dialect.select(&Select::by_uuids(t, colonnes.iter().map(|c| Column::Node((*c).into())).collect())).ok()?;
+        let r = conn.execute_with_params(&q, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(u.into())]))]).ok()?;
+        r.rows.into_iter().next()
+    };
+    let Some(ligne) = lire(table, uuid, &["_parent_uuid", "_index", "_start_line", "_title"]) else {
+        return format!("{table} {uuid}");
+    };
+    let parent = ligne.get(1).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let index = ligne.get(2).and_then(|v| v.as_i64());
+    let debut = ligne.get(3).and_then(|v| v.as_i64());
+    let titre = ligne.get(4).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let entite = table.strip_suffix("_Chunk").unwrap_or(table);
+    let chemin = configs
+        .and_then(|c| c.get(entite))
+        .filter(|c| c.fields.contains_key("file_path"))
+        .and_then(|_| lire(entite, &parent, &["file_path"]))
+        .and_then(|l| l.get(1).and_then(|v| v.as_str()).map(str::to_string))
+        .filter(|c| !c.is_empty());
+    let ou = chemin.unwrap_or(if titre.is_empty() { format!("{entite} {parent}") } else { titre });
+    match (debut, index) {
+        (Some(l), Some(i)) => format!("{ou}:{l} (morceau {i})"),
+        (None, Some(i)) => format!("{ou} (morceau {i})"),
+        _ => ou,
+    }
+}
+
+/// **Relever les morceaux restés muets** : dans le suivi de l'indexation (son
+/// journal les nommera, sa réclamation les exclura pour ce run) et en
+/// avertissement du nœud. Ils ne sont pas écrits : ils restent dus.
+fn relever_les_muets(
+    ctx: &mut NodeContext,
+    watch: Option<&EmbedWatch>,
+    silent: &[usize],
+    delai: &Option<std::time::Duration>,
+    morceau: impl Fn(usize) -> (String, String),
+) {
+    if silent.is_empty() {
+        return;
+    }
+    let secondes = delai.map(|d| format!(" en {} s", d.as_secs())).unwrap_or_default();
+    for &i in silent {
+        let (uuid, nom) = morceau(i);
+        ctx.warn(&format!("embarquement sans réponse{secondes} : {nom} — le morceau reste dû, repris à la prochaine indexation"));
+        if let Some(w) = watch {
+            w.silent.lock().unwrap_or_else(|p| p.into_inner()).push((uuid, nom));
+        }
+    }
+}
+
+/// Sans suivi : ce qu'employaient les nœuds avant le délai d'embarquement,
+/// gardé pour les tests du pipeline.
+#[cfg(test)]
 fn embed_pipeline<W: Sync, V: Send>(
     works: &[W],
     lots: Batches,
     text_of: impl Fn(&W) -> &str + Sync + Send,
     distant: bool,
     embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
-    mut write: impl FnMut(&[W], V) -> Result<(), String>,
+    write: impl FnMut(&[W], V) -> Result<(), String>,
 ) -> Result<PipelineStats, String> {
+    embed_pipeline_suivi(works, lots, text_of, distant, embed, write, &PipelineWatch::default())
+}
+
+/// **Un appel, suivi** : l'arrêt vérifié avant, le lot en cours noté, et un
+/// lot qui dépasse le délai rejoué morceau par morceau — ceux qui répondent
+/// s'envoient seuls (une plage d'un morceau, que l'écriture prend comme une
+/// autre), celui qui reste muet est relevé dans `silent` et n'est pas écrit.
+fn appel_suivi<V>(
+    plage: std::ops::Range<usize>,
+    texts: &[String],
+    embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
+    suivi: &PipelineWatch<'_>,
+    silent: &Mutex<Vec<usize>>,
+    mut envoyer: impl FnMut(std::ops::Range<usize>, Result<V, String>) -> bool,
+) -> bool {
+    let noter = |debut: usize, n: usize| {
+        if let Some(now) = suivi.now {
+            let first = suivi.name.map(|f| f(debut)).unwrap_or_else(|| format!("morceau {debut}"));
+            *now.lock().unwrap_or_else(|p| p.into_inner()) =
+                Some(EmbedBatchNow { chunks: n, first, since_ms: crate::catalog::retard::now_ms() });
+        }
+    };
+    let arrete = || suivi.stop.is_some_and(|s| s.load(std::sync::atomic::Ordering::SeqCst));
+    if arrete() {
+        return envoyer(plage, Err(format!("{EMBED_STOPPED} (arrêt demandé)")));
+    }
+    noter(plage.start, plage.len());
+    match embed(texts) {
+        Err(e) if est_un_delai(&e) => {
+            // Le lot n'a pas répondu : un par un, pour isoler le muet.
+            for (k, texte) in texts.iter().enumerate() {
+                if arrete() {
+                    return envoyer(plage, Err(format!("{EMBED_STOPPED} (arrêt demandé)")));
+                }
+                let i = plage.start + k;
+                noter(i, 1);
+                match embed(std::slice::from_ref(texte)) {
+                    Err(e) if est_un_delai(&e) => silent.lock().unwrap_or_else(|p| p.into_inner()).push(i),
+                    rendu => {
+                        let echec = rendu.is_err();
+                        if !envoyer(i..i + 1, rendu) || echec {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        }
+        rendu => {
+            let echec = rendu.is_err();
+            envoyer(plage, rendu) && !echec
+        }
+    }
+}
+
+fn embed_pipeline_suivi<W: Sync, V: Send>(
+    works: &[W],
+    lots: Batches,
+    text_of: impl Fn(&W) -> &str + Sync + Send,
+    distant: bool,
+    embed: &(dyn Fn(&[String]) -> Result<V, String> + Sync),
+    mut write: impl FnMut(&[W], V) -> Result<(), String>,
+    suivi: &PipelineWatch<'_>,
+) -> Result<PipelineStats, String> {
+    let silent = Mutex::new(Vec::new());
     let embed_ms = std::sync::atomic::AtomicU64::new(0);
     let mut write_ms = 0u64;
     let (tx, rx) = std::sync::mpsc::sync_channel::<Result<(std::ops::Range<usize>, V), String>>(2);
     let suivant = std::sync::atomic::AtomicUsize::new(0);
-    std::thread::scope(|s| {
+    let issue: Result<(u64, u64), String> = std::thread::scope(|s| {
         let text_of = &text_of;
         let lots = &lots;
         let suivant = &suivant;
@@ -1916,19 +2106,19 @@ fn embed_pipeline<W: Sync, V: Send>(
                     .min(plages.len().max(1));
                 for _ in 0..producteurs {
                     let tx = tx.clone();
+                    let silent = &silent;
                     s.spawn(move || loop {
                         let i = suivant.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         let Some(plage) = plages.get(i).cloned() else { return };
                         let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
                         let t = std::time::Instant::now();
-                        let rendu = embed(&texts);
+                        let continuer = appel_suivi(plage, &texts, embed, suivi, silent, |p, rendu| tx.send(rendu.map(|v| (p, v))).is_ok());
                         embed_ms.fetch_add(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
                         // **Celui qui touche la carte souffle.** Voir `Embedder::distant`.
                         if !distant {
                             souffler(t.elapsed());
                         }
-                        let echec = rendu.is_err();
-                        if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
+                        if !continuer {
                             return;
                         }
                     });
@@ -1940,6 +2130,7 @@ fn embed_pipeline<W: Sync, V: Send>(
             // partir, sur la durée du précédent (`crate::burst`).
             Batches::Paced { lens, budget, settings } => {
                 let tx = tx.clone();
+                let silent = &silent;
                 s.spawn(move || {
                     let mut gate = BurstGate::new(BurstPacer::new(*settings, budget.max_chars));
                     let mut start = 0usize;
@@ -1949,12 +2140,11 @@ fn embed_pipeline<W: Sync, V: Send>(
                         let texts: Vec<String> = works[plage.clone()].iter().map(|w| text_of(w).to_string()).collect();
                         gate.wait();
                         let t = std::time::Instant::now();
-                        let rendu = embed(&texts);
+                        let continuer = appel_suivi(plage.clone(), &texts, embed, suivi, silent, |p, rendu| tx.send(rendu.map(|v| (p, v))).is_ok());
                         let took = t.elapsed();
                         embed_ms.fetch_add(took.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
                         gate.done(lens[plage.clone()].iter().sum(), took);
-                        let echec = rendu.is_err();
-                        if tx.send(rendu.map(|v| (plage, v))).is_err() || echec {
+                        if !continuer {
                             return;
                         }
                     }
@@ -1968,8 +2158,13 @@ fn embed_pipeline<W: Sync, V: Send>(
             write(&works[plage], v)?;
             write_ms += t.elapsed().as_millis() as u64;
         }
-        Ok(PipelineStats { embed_ms: embed_ms.load(std::sync::atomic::Ordering::Relaxed), write_ms })
-    })
+        if let Some(now) = suivi.now {
+            *now.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        }
+        Ok((embed_ms.load(std::sync::atomic::Ordering::Relaxed), write_ms))
+    });
+    let (embed_ms, write_ms) = issue?;
+    Ok(PipelineStats { embed_ms, write_ms, silent: silent.into_inner().unwrap_or_else(|p| p.into_inner()) })
 }
 
 impl Node for EmbedNode {
@@ -2007,6 +2202,9 @@ impl Node for EmbedNode {
             .ok_or("EmbedNode: 'embedder' service not registered")?;
         let embedding_dim = ctx.service::<usize>("embedding_dim").copied()
             .ok_or("EmbedNode: 'embedding_dim' service not registered")?;
+        // Le suivi d'une indexation, quand elle en donne un : l'arrêt entre deux
+        // appels, le lot en cours, les morceaux sans réponse.
+        let watch = ctx.service::<Arc<EmbedWatch>>(SERVICE_EMBED_WATCH).cloned();
 
         // **Le stockage du modèle courant, résolu depuis la méta** (7 septembre
         // 2026). Un index porte plusieurs modèles ; celui-ci écrit dans sa
@@ -2239,7 +2437,9 @@ impl Node for EmbedNode {
             // du temps elle attendait le JSON et les écritures.
             let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !embedder.distant());
             let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
-            let stats = embed_pipeline(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
+            let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dense_works[i].entity_name, &dense_works[i].uuid);
+            let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
+            let stats = embed_pipeline_suivi(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
                     return Err(format!(
                         "embedder returned {} vectors for {} texts",
@@ -2286,7 +2486,8 @@ impl Node for EmbedNode {
                     write_vectors(conn.as_ref(), dialect.as_ref(), entity_name, &col, &marker, items)?;
                 }
                 Ok(())
-            })?;
+            }, &suivi)?;
+            relever_les_muets(ctx, watch.as_deref(), &stats.silent, &embedder.timeout(), |i| (dense_works[i].uuid.clone(), nommer(i)));
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
         }
@@ -2304,7 +2505,9 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !sparse_emb.distant());
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
-                let stats = embed_pipeline(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
+                let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &sparse_works[i].entity_name, &sparse_works[i].uuid);
+                let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
+                let stats = embed_pipeline_suivi(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "sparse embedder returned {} vectors for {} texts",
@@ -2399,7 +2602,8 @@ impl Node for EmbedNode {
                         }
                     }
                     Ok(())
-                })?;
+                }, &suivi)?;
+                relever_les_muets(ctx, watch.as_deref(), &stats.silent, &embedder.timeout(), |i| (sparse_works[i].uuid.clone(), nommer(i)));
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
             }
@@ -2426,7 +2630,9 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !dual_emb.distant());
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
-                let stats = embed_pipeline(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
+                let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dual_works[i].entity_name, &dual_works[i].uuid);
+                let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
+                let stats = embed_pipeline_suivi(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
                         return Err(format!(
                             "dual embedder returned {}/{} vectors for {} texts",
@@ -2442,7 +2648,8 @@ impl Node for EmbedNode {
                         sparse_results.push((&dual_works[base_idx + i], sparse));
                     }
                     Ok(())
-                })?;
+                }, &suivi)?;
+                relever_les_muets(ctx, watch.as_deref(), &stats.silent, &embedder.timeout(), |i| (dual_works[i].uuid.clone(), nommer(i)));
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
 
