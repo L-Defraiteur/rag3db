@@ -95,7 +95,19 @@ TEST_F(WalReader, KnownScenario) {
         }
     }
     EXPECT_EQ(begins, 8) << "[check: wal-one-transaction-per-statement] ";
-    const std::vector<std::string> expected = {};
+    // Les identifiants internes s'écrivent « table:décalage ». N a la table 0, R la table 1. Le
+    // DETACH DELETE écrit la suppression du nœud avant les détachements de ses relations, aller
+    // puis retour (relevé sur master du 11 octobre 2026).
+    const std::vector<std::string> expected = {
+        "TABLE_INSERTION table 0 rows 3",
+        "TABLE_INSERTION table 1 rows 1 [0:0] [0:1] [1:0]",
+        "NODE_UPDATE table 0 column 1 offset 2",
+        "REL_DELETION table 1 src [0:0] dst [0:1] rel [1:0]",
+        "TABLE_INSERTION table 1 rows 1 [0:0] [0:2] [1:1]",
+        "NODE_DELETION table 0 offset 0",
+        "REL_DETACH_DELETE table 1 fwd node [0:0]",
+        "REL_DETACH_DELETE table 1 bwd node [0:0]",
+    };
     EXPECT_EQ(dataRecords(reading), expected) << "[check: wal-known-records] ";
 }
 
