@@ -1,6 +1,6 @@
 # Un chemin vers une réexportation reste « par le nom »
 
-- **État** : ouvert — décidé, en attente d'un créneau de l'arbre principal (code.rs)
+- **État** : corrigé — codeparsers `77c8ea6` (le drapeau) et le suivi au rendez-vous (`code.rs`, 11 oct. 2026) ; témoin `e2e_usages::un_chemin_vers_une_reexportation_n_est_pas_par_le_nom`
 - **Gravité** : réponse fausse (une arête sûre marquée « nom », donc tue par le filtre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous, Liens, impact)
@@ -50,3 +50,25 @@ recherche), le seul définisseur suffit et l'appel paraît attribué : c'est le
 repli « un seul définisseur », marqué « nom ». Le témoin est écrit (recette
 en quatre fichiers, deux assertions : un lien, vers runtime.rs, pas « nom »),
 gardé hors de la batterie tant qu'il est rouge ; il entre avec le correctif.
+
+## Correction (11 octobre 2026)
+
+La décision du 4 octobre, avec une forme plus légère que le rendez-vous
+`REEXPORTS` proposé :
+- **codeparsers `77c8ea6`** : `ImportReference.reexport` (un `use` public,
+  `pub` ou `pub(crate)`), avec son module source.
+- **code.rs** : le premier scope de fichier porte un rendez-vous vers chaque
+  nom réexporté (`pub use runtime::X`, sans renommage), marqué
+  `MENTIONS.reexport_from = "runtime"` — la mention d'import elle-même, pas
+  un second rendez-vous entre les mêmes nœuds. À la matérialisation,
+  `choose_target` reçoit les fichiers qui réexportent le nom ; quand l'import
+  désigne l'un d'eux, le module source, résolu depuis le module qui
+  réexporte (`runtime`, `self::`, `super::`, `crate::`), désigne le fichier
+  suivant, sur trois sauts au plus. Un seul définisseur atteint : marque
+  « import ».
+Témoin (la recette en quatre fichiers, avec un homonyme) : rouge avant
+(aucune arête), vert après (`dataflow/runtime.rs`, « import ») ; et le test
+unitaire `un_import_suit_les_reexportations`.
+**Reste** : `pub use x::*` (une réexportation de tout un module), le
+renommage (`pub use a::X as Y`), `export … from` (TypeScript) et
+`__init__.py` (Python).

@@ -484,3 +484,29 @@ fn le_type_d_un_champ_declare_dans_un_autre_fichier_se_lit() {
     let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
     assert_eq!(liens, vec![("Store".to_string(), "type".to_string())], "run → Store::get, par le type");
 }
+
+/// **Un chemin vers une réexportation** (recette du ticket du 4 octobre) :
+/// `crate::dataflow::DataflowEvent` désigne dataflow/mod.rs, qui réexporte
+/// `runtime::DataflowEvent` ; un homonyme ailleurs empêche le seul nom de
+/// conclure. Le lien va à dataflow/runtime.rs, et pas « par le nom ».
+#[test]
+#[ignore]
+fn un_chemin_vers_une_reexportation_n_est_pas_par_le_nom() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/dataflow/mod.rs".to_string(), "pub mod runtime;\npub use runtime::DataflowEvent;\n".to_string()),
+        ("src/dataflow/runtime.rs".to_string(), "pub struct DataflowEvent;\nimpl DataflowEvent {\n    pub fn neuf() -> Self { DataflowEvent }\n}\n".to_string()),
+        ("src/autre.rs".to_string(), "pub struct DataflowEvent;\n".to_string()),
+        ("src/appel.rs".to_string(), "use crate::dataflow::DataflowEvent;\npub fn emet() -> DataflowEvent {\n    DataflowEvent::neuf()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let r = cat
+        .execute_raw("MATCH (a:Scope {name: 'emet'})-[c:CONSUMES]->(b:Scope {name: 'DataflowEvent'}) RETURN b.file_path, c.resolution ORDER BY b.file_path")
+        .unwrap();
+    let liens: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    eprintln!("{liens:?}");
+    assert_eq!(liens.len(), 1, "un seul lien : {liens:?}");
+    assert!(liens[0].0.ends_with("dataflow/runtime.rs"), "vers la définition réexportée : {liens:?}");
+    assert_ne!(liens[0].1, "nom", "pas par le nom : {liens:?}");
+}
