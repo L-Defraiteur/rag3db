@@ -473,3 +473,19 @@ puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
 13. **La mémoire partagée devient le cas par défaut** (§3) : deux sessions sur la mémoire de Lucie
     ne coûtent plus qu'un témoin — mais sa réaction tourne à vide tant que les deux lots de l'ancre
     (acceptés ce matin) ne sont pas faits ; ils sont indépendants de C et peuvent passer avant.
+
+## 9. Les décisions de Lucie (11 octobre, matin)
+
+| Choix | Décision |
+|---|---|
+| 1, 4, 5, 9, 10, 11, 13 | comme proposé (`serve` devient le démon ; `127.0.0.1:7970` + `daemon.json` ; jeton local sur chaque requête ; l'ordre des marches, le paquet après la 4 ; `--daemon` ; les clés liées à la requête ; les lots de l'ancre avant C) |
+| 2 | **un seul démon pour le moment** ; à moyen terme, après ce chantier, un démon routeur et des démons spécialisés (un par base ou portant plusieurs), en vision |
+| 3 | **lancé par le premier client** s'il n'est pas là (et le client le dit) ; l'unité système en option du paquet ; un verrou sur `daemon.json` pour qu'un seul démarre |
+| 6 | **un outil « état du démon »** quand le démon n'est pas là (ce qui se passe, quoi faire, et le lancer) ; les autres outils apparaissent quand il répond ; le même outil dit ses backends, ses travaux et ses sessions quand il est là |
+| 7 | tombe : « on oublie le constructeur de decks pour l'instant, il se refera après » ; l'ouverture directe d'une base reste pour les tests, la CLI et `serve` lui-même, sans exception nommée |
+| 8 | **un rôle du même binaire** (la sous-commande `mcp` devient un client mince) |
+| 12 | **sérialiser par backend dans la marche 1, comme filet** ; puis, **marche nommée de C, pas « quand un usage le demandera »** : plus de « cellule courante » dans le catalogue — **le client s'enregistre auprès du démon** (« je suis tel client, je prends telle cellule, avec telles clés ») et reçoit un identifiant de **session** ; chaque requête porte sa session, la cellule est celle de la session (une requête peut en demander une autre dans les droits de la session) ; deux sessions sur deux cellules ne partagent plus rien de mutable ; l'état du démon dit qui est connecté et sur quoi. C'est le modèle de connexion de PostgreSQL. Le filet de sérialisation saute pour les lectures quand ce lot est fusionné, reste pour les écritures. |
+
+Écart rendu par le cœur en passant (T0) : au COMMIT d'une transaction en échec, Neo4j
+refuse avec une erreur, PostgreSQL répond par un ROLLBACK silencieux ; le cœur prend
+Neo4j, pour qu'un client ne croie jamais avoir validé. Lucie ne l'a pas renversé.
