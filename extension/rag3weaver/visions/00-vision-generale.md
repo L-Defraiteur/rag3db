@@ -294,6 +294,18 @@ Une réponse à débattre (proposition de l'orchestration, rien d'essayé) :
   marche 3 arrive ; d'ici là, la marche 2 doit seulement éviter de coller le
   cœur des graphes à tokio plus qu'il ne l'est.
 
+- **Le playground WASM, « luxe ultime de marketing » (Lucie, 11 octobre)** :
+  une vitrine qui tourne dans le navigateur, « regardez comme mes habits sont
+  saillants ». Pas maintenant, mais la pile est connue : rag3db compilé en
+  WASM (précédent Kuzu, emscripten, ses fils par workers) ; rag3weaver dessus
+  avec tokio à un fil **dans chaque worker** (`rt`, `sync`, `macros` compilent
+  pour wasm32 ; pas de réseau, de fichiers ni de processus) ; **luciole entre
+  les workers** comme couche d'acteurs — la seule forme de parallélisme d'un
+  navigateur sans mémoire partagée, pas un pis-aller ; embarquements et modèle
+  par le réseau vers un service ; le navigateur n'est qu'un client mince de
+  plus du démon. Ni fork de tokio, ni luciole réécrite en exécuteur : les deux
+  sont complémentaires. Un projet à part, de l'ordre de quelques semaines,
+  après ce qu'on fait.
 - **Tranché par Lucie, 8 octobre** : le navigateur (WASM) est **abandonné
   pour l'instant** — « chiant de se passer d'async partout ». Plus aucune
   restriction sur la marche 2 pour le ménager : tokio partout, la boucle
