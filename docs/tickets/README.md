@@ -25,14 +25,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts (52)
+### Ouverts (51)
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [Aucun nœud ne relie deux entités gérées par leur identité](2026-10-11-aucun-noeud-ne-relie-deux-entites-gerees.md) | ouvert — décision de Lucie (signature nouvelle) | capacité absente (une relation déclarée sans verbe) | oui | oui (et seulement) |
 | [Une réaction peut remonter une relation qu'aucun outil n'écrit, et le chargement l'accepte](2026-10-11-une-reaction-peut-remonter-une-relation-qu-aucun-outil-n-ecrit.md) | ouvert — à faire APRÈS le nœud de lien | déclaration inatteignable acceptée en silence | oui | oui (et seulement) |
-| [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | ouvert, filet côté rag3weaver (point de reprise forcé) ; correctif au cœur | perte | oui sans le filet (COPY de plus d'un groupe, grand tampon) | oui |
 | [Aucun outil du gabarit `memory` n'ancre une mémoire à un sujet, donc sa réaction ne peut pas partir](2026-10-11-aucun-outil-n-ancre-une-memoire-a-un-sujet.md) | ouvert | déclaration inatteignable (la réaction ne transitionne jamais rien) | oui | oui (un gabarit) |
 | [Un `put` qui omet le champ de cycle de vie réécrit l'état initial](2026-10-11-un-put-sans-le-champ-de-cycle-de-vie-reecrit-l-etat-initial.md) | ouvert | réponse fausse (transition perdue en silence) | seulement si un schéma rend son champ d'état facultatif ; aucun gabarit livré | oui (et seulement) |
 | [Les échecs de groupe d'une réaction ne sont lus par personne, et s'accumulent](2026-10-11-echecs-de-groupe-d-une-reaction-sans-lecteur.md) | ouvert | perte d'information, croissance sans borne | oui, dès qu'un manifeste déclare une réaction qui écrit | oui (et seulement) |
@@ -83,10 +82,11 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | ouvert, à trancher au matin | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (59), dans `closed/`
+### Fermés (60), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)](closed/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel.md) | corrigé, `eae3863ab` (cœur C++, 11 oct.) ; filet retiré | perte | oui | oui |
 | [Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro](closed/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md) | corrigé `eae3863ab` (un défaut de lecture de l'amont révélé par le COPY journalisé) | perte | oui (reprise après arrêt brutal pendant un COPY) | oui |
 | [Après des écritures annulées et des mises à jour de vecteur validées, la recherche ne rend plus qu'une ligne](closed/2026-10-11-recherche-vectorielle-une-seule-ligne-apres-annulations-et-mises-a-jour.md) | corrigé — fermé par les correctifs de `bfc1434e1`, témoin vert (11 oct.) | réponse fausse | à établir (vu sous le mode multi-écrivains) | si atteignable à un écrivain |
 | [Un appel par chemin vers un type externe prend rendez-vous avec un homonyme du projet](closed/2026-10-04-appel-par-chemin-vers-un-type-externe.md) | corrigé, codeparsers `f91fc58` (11 oct.) | réponse fausse | oui | oui (rendez-vous) |

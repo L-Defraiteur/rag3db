@@ -378,15 +378,6 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        // **Filet temporaire : le point de reprise forcé de chaque COPY**
-        // (orchestration, 11 octobre 2026, nuit ; Lucie peut le renverser). Le
-        // COPY journalisé relit 0 dans une colonne DOUBLE du groupe partiel
-        // sous deux fils avec une colonne tableau, et le journal recopie cette
-        // lecture (ticket « le COPY journalisé lit 0 dans une colonne DOUBLE du
-        // groupe partiel »). Environ 1 % de la passe de référence. Tombe avec
-        // le correctif du moteur ; un moteur qui ne connaît pas le réglage
-        // l'ignore.
-        let _ = conn.query("CALL force_checkpoint_on_copy=true");
         Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None), path: None })
     }
 
@@ -995,12 +986,13 @@ mod tests {
 
     use super::*;
 
-    /// **Le filet du COPY journalisé** (ticket
-    /// `2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel`) :
+    /// **Le COPY journalisé garde ses DOUBLE** (ticket fermé
+    /// `closed/2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel`) :
     /// un COPY de plus d'un groupe de nœuds, sous deux fils, dans une table qui
-    /// porte une colonne tableau, garde ses DOUBLE. Le moteur journalisé y lit
-    /// 0 sur des lignes de fin du groupe partiel, et le journal recopie cette
-    /// lecture. Le seuil du journal est posé comme sous un grand tampon (le
+    /// porte une colonne tableau. Avant le correctif du moteur (`eae3863ab`),
+    /// la lecture d'un second segment ALP oubliait ses exceptions : des DOUBLE
+    /// lus 0, que le journal recopiait. Rouge alors sans le point de reprise
+    /// forcé qui servait de filet ; vert sans lui depuis. Le seuil du journal est posé comme sous un grand tampon (le
     /// défaut le tire du tampon), et le point de reprise automatique est coupé
     /// pour lire ce que le COPY a laissé en mémoire. Six passes : le défaut
     /// se montre d'une passe sur trois à chaque passe.

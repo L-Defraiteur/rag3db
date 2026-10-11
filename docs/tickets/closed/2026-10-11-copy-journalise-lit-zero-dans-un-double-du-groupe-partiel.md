@@ -1,7 +1,7 @@
 # Le COPY journalisé lit 0 dans une colonne DOUBLE du groupe partiel (deux fils, une colonne tableau)
 
-- **État** : ouvert, avec un filet côté rag3weaver depuis le 11 octobre 2026, nuit. Le correctif
-  est au cœur C++ : le chemin vient de `0f4a54b2c`, chargement journalisé étape 2.
+- **État** : corrigé par le cœur C++, `eae3863ab` (master `60d74a4e2`, 11 octobre 2026, nuit), avec
+  son témoin `10a796166` (`JournaledCopyReadBackTest`). Le filet de rag3weaver est retiré.
 - **Gravité** : perte. Les valeurs relues sont fausses, le journal les recopie, et le rejeu après un
   arrêt brutal les écrit pour de bon.
 - **Atteignable en service** : oui, sans le filet. Il faut un COPY de nœuds de plus d'un groupe
@@ -59,3 +59,23 @@ rouge sans le filet et vert avec.
 Le correctif du balayage côté moteur (cœur C++), avec son témoin, la sonde verte en boucle, puis
 `OwnerlessPagesTest.*` en boucle. Ensuite seulement, retirer le filet de `connect` : le témoin
 rag3weaver reste et doit rester vert sans lui.
+
+## La cause et le correctif (cœur C++)
+
+Le groupe plein que le COPY écrit sur disque a deux segments pour la colonne `score`
+([99 840, 31 232] valeurs). Avant son point de reprise, les versions de l'insertion du COPY rendent
+la sélection du balayage filtrée, même quand tout est sélectionné. Le second segment porte des
+exceptions ALP à ses premières positions, et `patchFloatExceptions` (`column_reader_writer.cpp`,
+code repris de l'amont) passait au filtre un index absolu dans le vecteur, là où le lecteur de
+pages lui donne un index relatif au balayage. Pour tout segment après le premier, aucune exception
+n'était rapiécée : ces valeurs se lisaient à leur encodage ALP, 0. La relecture par la clé était
+juste (un seul segment, décalage 0). Le correctif tient en une ligne : l'index relatif.
+
+Les lignes fausses portaient les ids ~199 5xx parce que la pièce du second fil a été fusionnée dans
+le groupe plein. Il fallait plus d'un groupe, et deux fils : sinon la forme n'existe pas.
+
+## Le retrait du filet
+
+Le témoin rag3weaver `un_copy_de_plus_d_un_groupe_avec_un_tableau_garde_ses_doubles` est vert sans
+le filet sur la lib rebâtie à `60d74a4e2`. Le point de reprise forcé n'est plus posé par
+`Rag3dbConnection::connect`, et la page des défauts a perdu sa ligne « filet temporaire ».
