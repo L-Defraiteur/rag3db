@@ -104,3 +104,20 @@ où elle vit.
   l'entrée-sortie, pas l'ordonnanceur ; le navigateur devient un client mince
   du démon, et ce qui y tourne (graphes, ports, nœuds purs, clics) tient
   derrière un exécuteur de poche. Pas maintenant.
+- **Les e2e en un binaire** (recherche, en fusion) : target 23 → 5,5 Go, 97
+  binaires → 1, une retouche de `src/` relie 2 fois au lieu de 98 ; 19,5 Go
+  de restes d'e2e effacés ; un dossier par suite effacé en fin de passe ;
+  plafond du target à 20 Go (accepté par l'orchestration). **La règle du
+  target, tranchée par Lucie** : « gardé entre les lots, une fois qu'on a
+  fini d'investiguer et d'optimiser la taille » — la règle « effacé à chaque
+  fusion » tient jusqu'à la ventilation des 5,5 Go et son lot ; ensuite,
+  gardé entre les lots d'une même session, effacé en fin de session, plafond
+  20 Go.
+- **Les receveurs non typés** (codeparsers, sur master) : visibles, non
+  attribués ; les 45 liens de rag3weaver posés par le nom et marqués « sûrs »
+  passent à « nom » (le chiffre de 1 492 venait d'un mode que rag3weaver
+  n'utilise pas) ; aucun lien perdu.
+- **Le COPY de blobs borné en octets** : page écrite, forme retenue, **lot
+  reporté après la condition 3** (plusieurs jours sur des invariants du
+  stockage pour un chemin de secours couvert par le filet produit) ; hotfixs
+  rejoint le cœur sur la condition 3 (A7 + A8).
