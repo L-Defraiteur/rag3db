@@ -52,8 +52,8 @@ public:
         systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
         createDBAndConn();
         mustRun("CALL auto_checkpoint=false;");
-        mustRun(GetParam() ? "CALL debug_enable_multi_writes=true;" :
-                             "CALL debug_enable_multi_writes=false;");
+        mustRun(GetParam() ? "CALL enable_multi_writes=true;" :
+                             "CALL enable_multi_writes=false;");
     }
 
     void mustRun(const std::string& query) {

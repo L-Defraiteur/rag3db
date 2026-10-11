@@ -6,7 +6,7 @@
 // known_red.txt, et la passe la compare au résultat (concurrence_test.known_red).
 //
 // Réglages communs, et pourquoi :
-// - debug_enable_multi_writes=true : sans lui le second écrivain est refusé et il n'y
+// - enable_multi_writes=true : sans lui le second écrivain est refusé et il n'y
 //   a pas de concurrence à mesurer.
 // - auto_checkpoint=false partout sauf C8 : un point de reprise déclenché par un
 //   commit attend que toutes les autres transactions soient sorties et expire au bout
