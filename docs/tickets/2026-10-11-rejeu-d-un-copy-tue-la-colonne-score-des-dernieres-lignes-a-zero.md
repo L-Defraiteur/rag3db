@@ -13,8 +13,9 @@
 `OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent` (`test/transaction/journaled_copy_test.cpp`,
 ligne 1936 ; témoin de `0aed3c4b5`, l'étendue connue du fichier de la base) : une table
 `Doc(id INT64, name STRING, score DOUBLE, vec FLOAT[4])`, un `COPY` de 200 000 lignes journalisé
-(`copy_journal_threshold` à 1 Gio) dans un enfant tué pendant le `COPY` (`writeThenDie`, l'instant
-de la mort est aléatoire), puis la base rouverte (rejeu), `CHECKPOINT`, et comparée à une base
+(`copy_journal_threshold` à 1 Gio) dans un enfant qui **finit son `COPY`** (validé au journal, sans
+point de reprise : `auto_checkpoint=false`, `force_checkpoint_on_copy=false`) **puis se tue**
+(`writeThenDie`, SIGKILL base ouverte), puis la base rouverte (rejeu), `CHECKPOINT`, et comparée à une base
 témoin qui ne meurt pas. Une fois, sur luciepc, dans la liste de fusion d'I1
 (`verrous-i1-4` = master `5c5feb527` + I1, bâti de 2 h 13) :
 
@@ -31,8 +32,10 @@ réouverture. Journal : luciepc `~/.cache/rag3db-moteur-notes/i1/liste-fusion/tr
 
 - Seul, ×2 (`--gtest_filter='OwnerlessPagesTest.*'`, 9 cas) : vert. Vert aussi dans la liste
   précédente d'I1 (base `81d5c4823`, qui porte déjà `0aed3c4b5`) et dans la liste complète du
-  lecteur affamé d'hotfixs (`f8afe7202`). **Probabiliste** : l'instant de la mort décide de ce que
-  le journal porte.
+  lecteur affamé d'hotfixs (`f8afe7202`), et une fois dans la liste de son lot suivant. **Probabiliste**,
+  mais pas par l'instant de la mort (le fils finit son `COPY` avant de se tuer, remarque d'hotfixs) :
+  le hasard vient d'ailleurs — l'ordre d'écriture des groupes par les fils du `COPY`, ou l'étendue
+  rendue à l'ouverture.
 - **Pas I1** : hors du mode multi-écrivains (`usesLocks` faux ici), I1 ne change rien.
 - Deux candidats :
   1. `e4198f862` (hotfixs, le lecteur affamé) : un verrou de fichier `<base>.readers` autour de
@@ -45,7 +48,9 @@ réouverture. Journal : luciepc `~/.cache/rag3db-moteur-notes/i1/liste-fusion/tr
 ## Témoin
 
 Le cas lui-même ; en boucle : `transaction_test --gtest_filter='OwnerlessPagesTest.*' --gtest_repeat=10`.
-Comptes à venir (hotfixs) : master sans I1 avec `e4198f862` ×10, puis son parent `61bacdd05` ×10.
+Bissection d'hotfixs sur luciepc (en lourd, chaînée) : le parent `61bacdd05` (sans `e4198f862`) ×30 ;
+master `80054b530` ×10 puis ×30 — entre les deux, seul `e4198f862` touche `src/`. Il écrit lui-même
+les comptes et l'imputation ici.
 
 ## Pour le fermer
 

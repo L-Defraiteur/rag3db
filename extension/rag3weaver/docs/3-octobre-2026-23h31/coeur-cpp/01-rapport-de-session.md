@@ -719,7 +719,8 @@ concurrence en tenue exclusive conforme à `known_red.txt`, 9 rouges comparés, 
 attendues) ; api 104, c_api 136, copy 23, stockage 83 + column_stats 2, vector 74 et 63, Cypher
 1867 ; transaction_test 246 verts et **un rouge** : `OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent`
 (après la mort d'un COPY journalisé, rejeu + point de reprise : la colonne DOUBLE des dernières lignes
-lit zéro). Seul ×2 vert, vert dans la liste précédente ; probabiliste (l'instant de la mort) ; pas
+lit zéro). Seul ×2 vert, vert dans la liste précédente ; probabiliste (le fils finit son COPY puis se
+tue : le hasard est ailleurs, l'ordre des fils du COPY ou l'étendue rendue à l'ouverture) ; pas
 I1 (hors du mode, rien ne change) ; ticket ouvert
 (`docs/tickets/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md`),
 hotfixs bissecte entre son `e4198f862` et son parent. **Fusionnée** sur ordre de l'orchestration :
