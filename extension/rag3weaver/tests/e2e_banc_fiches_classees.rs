@@ -21,6 +21,12 @@
 //! `RAG3WEAVER_BANC_SORTIE=<fichier.json>` écrit chaque décision et le résumé,
 //! pour la note de la tentative.
 
+// Le banc décide par le Decider (feature `daemon`) ou par le LLM (feature
+// `openai-llm`, qui ne va pas sans `daemon` dans les jeux joués) : sans `daemon`,
+// la suite n'a rien à jouer et ne se compile pas (deny(warnings) sous
+// `rag3db-native,code`, master rouge le 11 octobre 2026 à 30ce3aadc).
+#![cfg(all(feature = "rag3db-native", feature = "daemon"))]
+
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
