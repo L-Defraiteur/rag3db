@@ -62,13 +62,15 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (29)
+### Ouverts — produit (31)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La montre de fichiers coûte sept dixièmes d'un cœur en continu](2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | ouvert — chez le proto | coût (un cœur en permanence) | oui, dès qu'un manifeste déclare watches | oui (et seulement) |
+| [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
 | [L'hôte du démon hérite de l'environnement du premier client qui le lance](2026-10-11-l-hote-herite-de-l-environnement-du-premier-client.md) | ouvert — côté hôte, arbre principal | réponse fausse ou blocage (un service d'embarquement manque) | oui, dès qu'un hôte sert des backends aux services différents | oui (et seulement) |
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | ouvert — embarquements, après les lots du Cypher brut | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
