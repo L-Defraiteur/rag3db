@@ -996,6 +996,29 @@ TEST_F(IndexLockBench, AutoCommitWriterWaitsForTheIndexThenCommits) {
     expectIntegrity();
 }
 
+// Sous le défaut (le mode multi-écrivains), sur une table à index secondaire : un bloc lit une
+// ligne, un autre écrivain la supprime et valide, le bloc la met à jour. Son instantané est
+// rafraîchi par le verrou de l'index avant que la clé de la ligne soit lue pour le verrou de
+// ligne : la ligne n'est plus visible. Attendu : l'erreur de sérialisation nommée (A4′), pas
+// « has no primary key to lock » (H4 Hot/Crash du banc, rouge 10 fois sur 10 sur master le
+// 11 octobre, relevé par la passe de preuve de la bascule).
+TEST_F(IndexLockBench, AnUpdateOfARowDeletedByAnotherCommitIsASerializationError) {
+    mustRun("BEGIN TRANSACTION;");
+    EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id = 5 RETURN count(n);"), 1);
+    rag3db::main::Connection other(database.get());
+    auto deleted = other.query("MATCH (n:Doc) WHERE n.id = 5 DELETE n;");
+    ASSERT_TRUE(deleted->isSuccess()) << deleted->getErrorMessage();
+    auto result = conn->query("MATCH (n:Doc) WHERE n.id = 5 SET n.vec = [9.0, 9.0, 9.0, 9.0];");
+    ASSERT_FALSE(result->isSuccess()) << "[check: refused] the row is gone";
+    EXPECT_NE(result->getErrorMessage().find("could not serialize access"), std::string::npos)
+        << "[check: named-serialization-error] " << result->getErrorMessage();
+    EXPECT_EQ(result->getErrorMessage().find("no primary key to lock"), std::string::npos)
+        << "[check: not-a-runtime-error] " << result->getErrorMessage();
+    mustRun("ROLLBACK;");
+    EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.id = 5 RETURN count(n);"), 0);
+    expectIntegrity();
+}
+
 // Dans des blocs BEGIN sans annonce : l'attendant attend, puis valide OU échoue sur
 // « could not serialize » (option A : son instantané précède le commit du détenteur) —
 // jamais de corruption. Marche V1.
