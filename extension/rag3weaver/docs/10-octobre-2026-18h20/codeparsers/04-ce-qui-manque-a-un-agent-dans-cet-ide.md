@@ -400,3 +400,19 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
 - **Les temps de luciepc, pour mémoire** : premier index `rag3db-bascule` 450 s (pic de l'hôte
   7,9 Go), `rag3db` (mtg-experiments) 490 s (12,1 Go, deux bases ouvertes) ; l'arrêt de l'hôte
   pendant que la montre retirait un arbre effacé : 42 min, forcé par Lucie (ticket de l'arrêt).
+
+### 11 oct., 20 h 10 (heure luciepc) — cœur C++ — « une petite édition, on l'attend combien ? » (Lucie), depuis ma session reconnectée
+
+- **La question posée** : la même mesure, faite moi-même, montre en main, après la reconnexion de
+  mon client (`/mcp`) sur l'hôte relevé à 19 h 46.
+- **L'outil essayé** : un fichier `test/essai_a_chaud_2.cpp` (une fonction et son appelant)
+  déposé dans `~/git_workspaces/rag3db` sur luciepc à **20:10:52.2**, puis `usages {name:
+  essaiAChaudVingtHeuresTrente}` aussitôt ; puis le fichier retiré à 20:11:08 et `usages` encore.
+- **Ce qu'il a rendu** : la première interrogation, finie avant **20:10:57.9**, rendait déjà la
+  définition (`:4`) **et l'appel** (`appelantVingtHeuresTrente`, `:5`) : **moins de 6 s** entre
+  l'écriture et une réponse complète (borne haute, une seule interrogation). Après le retrait, pas de lecture :
+  l'hôte venait d'être arrêté proprement (journal : « SIGTERM : arrêt propre », 20:11, codeparsers
+  pour son index de code-lourd) — « Connection reset by peer » à ma seconde interrogation.
+- **Ce que j'ai dû faire à côté** : rien.
+- **Ce qui manquait** : rien de neuf — le délai est celui d'une montre, et les deux manques
+  d'avant restent (dire « index à jour au <heure> », un client qui se reconnecte seul).
