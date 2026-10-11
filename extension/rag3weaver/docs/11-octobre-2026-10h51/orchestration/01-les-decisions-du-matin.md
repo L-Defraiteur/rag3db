@@ -889,3 +889,44 @@ où elle vit.
   à le rebâtir une seconde fois avant le redémarrage suivant ; au matin, les
   « fini », le rebâti par l'arbre principal (ABI dite par nm), puis le
   binaire de Lucie dans la foulée, annoncés ensemble.
+- **0 h 10 – 0 h 40, nuit**. **Sur master** : les trois lots de l'arbre
+  principal (`1b8d48dc0` le délai d'embarquement, 60 s au manifeste, lot
+  expiré rejoué morceau par morceau, muet nommé et exclu ; `ab12bd4c2` les
+  défenses contre la boucle, le compte des morceaux sans texte dit au
+  journal, dans l'état et en tête des lectures ; `e5c53d2e2` le reçu occupé
+  qui porte les montres) ; le lot A de G (`068356677`, l'embarqueur absent
+  refusé aux quatre portes, rebâti du moteur et rejeu sous le verrou, 20 min,
+  la fenêtre a marché) ; le poste sous un poste corrigé (G, `ced1f2722`,
+  onze cas, déployé md5 aef06aae : le poste remonte ses parents et passe
+  sous un tenant, sans variable) ; la section ELF du moteur relue par le
+  cœur (`f5fdc7e9a`) et le refus nommé binaire ↔ lib avant le chargeur
+  (`f3d2290ad`, `rag3db-check-lib`, ticket du cœur fermé) ; le magasin de
+  libs 3a (`7927672f8`, `scripts/rag3db_libs.py`, les consommateurs 3b après
+  le rebâti de la lib) ; la règle « au repos = journal soldé » dans la page
+  du démon (`d96efde9b`). **L'hôte de Lucie** : redémarré une première fois
+  à 0 h 00 sans les défenses (la mémoire guettait l'ancien hash, rebasé ; et
+  son contrôle de repos au CPU seul a coupé un rattrapage qui attendait le
+  service), puis **à 0 h 26 sur le binaire avec les défenses** (md5
+  3e95f0302023, eabc53e86), arrêt propre en 17 s, jugé comme la boucle (25
+  min sur 2 096 morceaux, journal muet, un cœur, .wal régulier) ; depuis, il
+  reconstruit son index vectoriel (coupé par l'arrêt, le prix du remède) et
+  répond, lentement ; le rattrapage viendra ensuite avec les défenses ; la
+  mémoire regarde vers 1 h. Manque trouvé : l'état des index n'est pas
+  exposé par l'hôte (seulement par le binaire autonome) : petit lot à
+  l'arbre principal, propriétaire des routes. **La trace par tâche du cœur**
+  (mesure d'impact de F, 3 620 tâches, 3 038 ms) : 91 % du temps dans les
+  tâches dotées de 32 fils, dont 63 % à cardinalité estimée ≤ 2 048 et 37 %
+  sans estimation (le balayage factice sous `UNWIND $uuids`, remarque de
+  F) ; les fils proportionnés couvrent la quasi-totalité des lectures
+  d'outil, « moins de tâches » n'est pas le levier. Règle approuvée (celle
+  de PostgreSQL) : un fil par 2 048 lignes estimées, inconnu = plafond,
+  l'ingestion à 32, `threads=1` explicite jamais défait ; avant/après sur la
+  même trace, parité par les e2e et le banc ×10. Cause profonde trouvée en
+  l'écrivant : l'optimiseur ne remettait les cardinalités à jour que pour
+  EXPLAIN LOGICAL, la jointure née de la descente des filtres n'en avait
+  aucune ; le remetteur tourne après toute optimisation. Le push ABI du
+  cœur (verrou depuis 0 h 34) a été retardé par un rouge connu du banc passé
+  vert par hasard (fuite probabiliste sous sa borne). **luciepc** : toujours
+  figé et gardé ; la mesure de hotfixs attend aussi derrière le client de
+  codeparsers ; personne n'y touche ; le bâti du binaire prêt de G attend là
+  aussi. Le knowledge dump 06 est à jour pour le réveil (`c50d7b454`).
