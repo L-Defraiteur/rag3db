@@ -1,0 +1,39 @@
+# Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte
+
+- **État** : ouvert (11 octobre 2026). Relevé par l'arbre principal à la relecture du lot
+  `embarqueur-absent-portes` de G. **Pris par l'arbre principal**, après sa file.
+- **Gravité** : réponse dégradée sans fin, et une dette qui grossit en silence
+- **Atteignable en service** : oui, dès qu'un hôte démarre avant le service d'embarquement
+  qu'il déclare. C'est le cas d'un démarrage de luciepc, où l'hôte et les services partent
+  ensemble.
+- **Touche rag3weaver** : oui, et seulement (`src/daemon_host.rs`, `src/backend.rs`)
+
+## Ce que c'est
+
+Depuis le lot `embarqueur-absent-portes`, un backend dont le service d'embarquement est déclaré
+mais injoignable à l'ouverture s'ouvre en plein texte seul, avec l'embarqueur absent. Le reçu le
+dit : « service déclaré mais pas joint (…) — démarrez-le ». Avant, l'ouverture échouait, et
+l'appel suivant réessayait. Maintenant, rien ne retente. Un service lancé après l'hôte n'est
+jamais repris, et les vecteurs restent en dette jusqu'à une réouverture du backend.
+
+## La recette
+
+Un hôte qui ouvre un gabarit de code dont `models.embed.address` désigne un port où rien
+n'écoute encore. On démarre ensuite le service à cette adresse, puis on appelle `search_code` :
+le signal dense reste indisponible, et `index_state` garde l'avertissement.
+
+## Le témoin
+
+Il manque. Il faudrait un e2e du cycle de vie qui lance l'hôte avant un démon d'embarquement de
+test au port déclaré, démarre le démon, puis exige au plus tard le second appel servi par un
+backend rouvert, l'avertissement retiré du reçu.
+
+## La forme probable (arbre principal)
+
+L'hôte retente `connect_embedder` au prochain appel quand l'avertissement est « pas joint »,
+pas quand rien n'est déclaré. Si le service répond, il marque le backend à rouvrir, par le
+`must_reopen` qui existe déjà. La réouverture pose le vrai embarqueur, et la dette se paie.
+
+## Ce qu'il faut pour le fermer
+
+La reprise ci-dessus et son témoin.
