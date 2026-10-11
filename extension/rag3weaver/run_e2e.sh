@@ -719,7 +719,8 @@ if [ -d "$TARGET_DE_LA_PASSE" ]; then
   POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
   if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
     echo "✗ le target $TARGET_DE_LA_PASSE pèse ${POIDS_TARGET_GO} Go, au-delà du plafond de ${PLAFOND_TARGET_GO} Go"
-    echo "  (RAG3WEAVER_TARGET_MAX_GO) — l'effacer (rm -rf) ou le vider (cargo clean) avant la passe"
+    echo "  (RAG3WEAVER_TARGET_MAX_GO). Pour repartir d'un target propre (5,5 Go au rebâti) :"
+    echo "    rm -rf $TARGET_DE_LA_PASSE"
     exit 2
   fi
   echo "▸ target : ${POIDS_TARGET_GO} Go (plafond ${PLAFOND_TARGET_GO} Go)"
