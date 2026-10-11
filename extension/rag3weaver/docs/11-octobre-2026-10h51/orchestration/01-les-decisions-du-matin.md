@@ -136,3 +136,11 @@ où elle vit.
   lignes d'un paquet passent au journal) ; le ticket moteur se recentre sur
   « un COPY forcé de plus d'un quart du tampon échoue », forme (a) reportée.
 - **T0 est sur master** (`82a5f4851`) : condition 3, première marche.
+- **Le mode blobs sous petit tampon : le forçage n'était pas la cause** (A,
+  sonde sur luciepc, table au ticket) — avec ou sans point de reprise forcé,
+  deux COPY tombent sur la même assemblée en mémoire (les blobs dans la
+  transaction du paquet au-delà de ~3 000 fichiers, puis les 860 000 liens),
+  alors que tout passe en fichiers. Rien ne change dans le produit ; la
+  limite est dite (mode blobs + petit tampon + gros dépôt) ; la seule forme
+  qui couvre les deux est celle du moteur (un COPY borné en octets à
+  l'assemblage), reportée après la condition 3.
