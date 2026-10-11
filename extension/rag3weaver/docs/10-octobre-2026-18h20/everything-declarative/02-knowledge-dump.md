@@ -112,3 +112,56 @@ Ce que la session sait du code et des dépendances, lu sur `origin/master` à
   `RAG3DB_SHARED=1 RAG3DB_LIBRARY_DIR=$BUILD/src RAG3DB_INCLUDE_DIR=$BUILD/src
   LD_LIBRARY_PATH=$BUILD/src RAG3DB_ROOT=~/git_workspaces/rag3db-lourd
   CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-I`.
+
+## 6. Ce que les lots 2 à 6 ont appris (11 octobre 2026)
+
+### Le code posé, et où
+
+| Pièce | Fichier | Point d'entrée |
+|---|---|---|
+| moteur de script | `src/script/` | `script::prepare(lang, src, &limits)?.call(&input, &limits)` |
+| noms possédés | `dataflow/port.rs`, `node_registry.rs` | `Cow<'static, str>` ; `NodeFactory::node_type() -> &str` ; `Node::node_type() -> &str` |
+| nœud scripté | `dataflow/scripted_node.rs` | `ScriptedNodeFactory::new(decl, limits)`, `discover(dir, limits)` |
+| rechargement | `backend.rs` | `check_reload()` → `apply_reload(pending)` ; `reload()` ; `declarations_version()` |
+| `nodes/`, routes, vues | `backend.rs`, `routes.rs` | `Backend::route(&RouteRequest) -> RouteResponse` |
+| serveur | `serve.rs` (feature `daemon`) | `serve(backend, addr, threads, atelier)`, `serve_with`, `POST /arret` |
+| déclarer | `declare.rs` | `Backend::declare(path, content, reason)`, `DeclarationTools` |
+| outils en processus | `backend_tools.rs` | `BackendTools { backend }` |
+| page vivante | `atelier.rs`, `atelier/page.html` | `Atelier::new(backend, llm)`, `watch`, `look`, `chat`, `handle` |
+| le jouet | `templates/proto/boutique/` | `tests/e2e_proto_boutique.rs` (vraie base) |
+
+Les témoins du backend vivent presque tous dans
+`src/backend_reload_tests.rs` (le jouet `toy()` monté sans base, une
+connexion qui ne rend rien ; `toy_with_routes()`, `toy_in_a_repository()`).
+
+### Les pièges rencontrés
+
+- `warnings = "deny"` : un bouchon de témoin rouge doit toucher ses champs.
+- `PortDef`/`ConfigParam`/`NodeSchema` : un littéral s'écrit `"x".into()`.
+- `minijinja` : `extends`/`block` demandent la feature `multi_template`
+  (posée) ; une erreur d'`add_template` avalée se lit « template not found ».
+- Un paramètre d'outil `json` est un **objet** ; un paramètre de nœud scripté
+  prend le type de son schéma (`string`, `integer`, `number`, `boolean`).
+- `RelationBatchNode` prend ses liens en configuration seulement, et refuse
+  les entités gérées ; une entité doit avoir un champ `isContent`
+  (désormais refusé au chargement, 8b098eb3b) ; un nom réservé (`Order`)
+  est refusé (5800649de).
+- `tiny_http` : une réponse en flux passe par `request.into_writer()` et un
+  `flush` par événement.
+- `git worktree remove` refuse un worktree à sous-modules : `--force` sur un
+  arbre propre vérifié.
+- Sous `set -e`, `x=$(… | grep -c …)` sort quand grep ne compte rien.
+- Pousser depuis luciepc : `git fetch ssh://lucied@luciepc/<worktree> <branche>`
+  ici, puis `git push origin FETCH_HEAD:refs/heads/master` ; un fetch par
+  empreinte n'est pas permis.
+- Les docs seules se posent sur master par un index temporaire
+  (`GIT_INDEX_FILE`, `read-tree`, `apply --cached`, `commit-tree`) sans
+  toucher l'arbre partagé.
+
+### Ce qui reste ouvert
+
+- `declare` et la montre de l'atelier sur `apply_reload_with_reactions` (la
+  porte de la session mémoire) dès sa fusion.
+- Le retour en arrière d'une déclaration ; mermaid embarqué ; plusieurs
+  sessions de chat.
+- La recette jouée par Lucie (page 08, §1).
