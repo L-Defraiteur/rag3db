@@ -705,3 +705,15 @@ commit filtrée garde une recherche pour au moins un nœud de chaque région
 détachée. La même coupure est possible en principe sur master (non vue en 13
 essais) : **ticket ouvert, condition 4 au sens du moteur**, témoin à écrire
 (0 arête entrante vers une région).
+
+## 15. Ajout de 4 h 35 : la corruption est corrigée sur master
+
+`60d74a4e2` (témoin `10a796166`, correctif `eae3863ab` : l'index relatif au
+filtre dans le rapiéçage des exceptions ALP), relu par hotfixs ; avant le
+push : le témoin neuf et OwnerlessPages ×20 verts, liste complète verte,
+banc conforme. Le ticket du rejeu se ferme avec la cause ; la stèle §2 dit
+« condition 2 : reste fermée — un défaut de lecture de l'amont révélé par le
+COPY journalisé, corrigé ». En cours : lib de luciepc (cœur), lib d'ici puis
+**retrait du filet** avec témoin sans filet et mesure de la durée de la lib
+(A), rebase du point de reprise interrompu (hotfixs). Les archives npm avec
+le filet restent bonnes ; l'alpha suivante portera le correctif.
