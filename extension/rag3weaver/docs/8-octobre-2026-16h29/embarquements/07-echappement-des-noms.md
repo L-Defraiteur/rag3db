@@ -75,3 +75,42 @@ Les tests qui épinglent le texte au caractère près (dialecte, graph_walk,
 voisinage, usages) se refont une fois, mécaniquement : la requête attendue
 est celle d'avant, avec les noms cités. Les e2e (code, usages, impact, liens,
 ingestion par paquets, arrêts) prouvent que les lignes sont les mêmes.
+
+## Les questions de Lucie (11 octobre)
+
+**« Les agents ou les utilisateurs se rendent-ils compte de l'échappement ? »**
+Non. Le texte d'une requête n'est produit qu'à un endroit : le dialecte (et
+les deux moteurs de recherche, qui suivent sa règle). Tout ce qui est au-dessus
+porte les noms comme **données** : le gabarit déclare `Order`, l'agent écrit
+`Order`, le catalogue, les formes de l'IR et les résultats disent `Order`. Les
+noms de colonnes rendus par rag3db sont même nettoyés de leurs accents graves
+(`rag3db_connection.rs`, `noms_de_colonnes`), pour qu'un lecteur par nom ne
+voie aucune différence. Seuls voient les accents graves ceux qui regardent le
+texte lui-même : la trace des requêtes, et le Cypher brut (une migration
+écrite à la main, `execute_raw`).
+
+**« L'IR : peut-on y utiliser les échappements ? Des conflits avec nos propres
+verbes ? Des délimitations ? »** L'IR n'a **pas de texte**. Ses formes sont des
+types Rust (`Select`, `Hop`, `Count`, `Write`), et les noms y sont des
+**valeurs** d'un autre domaine : une entité qui s'appelle `Select`, un champ
+`hop`, une relation `Count` ne se confondent avec rien, puisque rien n'est
+analysé (témoin `les_noms_de_nos_formes_sont_des_donnees_comme_les_autres`).
+Il n'y a donc rien à échapper dans l'IR, et le dialecte cite à la traduction.
+
+Les seules délimitations portent sur les **noms déclarés** (entité, champ,
+relation), avec trois refus, chacun avec sa phrase :
+
+| Refus | Exemple | Phrase |
+|---|---|---|
+| un caractère hors `[a-zA-Z0-9_]` (dont l'accent grave et le guillemet, qu'aucune citation ne contiendrait) | ``Ord`er`` | `invalid field name: "Ord`er" — must match [a-zA-Z_][a-zA-Z0-9_]*` |
+| un nom **intégré** : une colonne que rag3weaver pose sur chaque entité, une table qu'il crée dans chaque base | `_uuid`, `_DataflowExecution` | « « _uuid » est un champ intégré, déjà présent sur chaque entité : retirez ce nom de la déclaration » |
+| un **souligné en tête** (le préfixe de nos noms internes) | `_secret` | « « _secret » commence par un souligné, réservé aux colonnes et tables internes de rag3weaver (field) : renommez-le » |
+
+Les noms intégrés viennent du code qui les pose (`schema::builtin_entity_columns`,
+dont la DDL se sert elle-même ; `schema::is_builtin_column` pour les colonnes
+ajoutées ensuite ; `schema::BUILTIN_TABLES`). Deux tests rougissent si une
+colonne ou une table nouvelle n'y est pas : l'un relit une table d'entité
+réelle colonne par colonne, l'autre relit les sources du crate.
+
+Le champ intégré s'appelle `_uuid` (avec le souligné) : un champ déclaré
+`uuid`, sans souligné, est un nom ordinaire et passe.
