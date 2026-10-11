@@ -14,7 +14,7 @@ features de `run_e2e.sh`, `scripts/mesure_e2e.sh` (dans le dépôt, à rejouer).
 
 | | avant : 97 binaires | après : 1 binaire | écart |
 |---|---|---|---|
-| poids du target | 23 Go | **5,5 Go** | −76 % |
+| poids du target | 23 Go | **5,5 Go**, puis **4,4 Go** sans la staticlib (§1 bis) | −81 % |
 | binaires e2e | 97 × 184 Mo = 17,9 Go | **1 × 358 Mo** | −98 % |
 | bâti à froid | 312 s | 292 s | −6 % |
 | rebâti après retouche d'un fichier de `src/` | 43 s, 98 éditions de liens | **25 s**, 2 éditions | −42 % |
@@ -28,6 +28,43 @@ de features différent ou un rebase change l'empreinte de chaque binaire, et
 cargo n'efface jamais les anciens. `run_e2e.sh` lie déjà le moteur en partagé ;
 le binaire unique retire le second multiplicateur à la source (1 empreinte au
 lieu de 97), et le plafond l'arrête s'il revient.
+
+## 1 bis. Ce que pèse un target propre, ventilé (question de Lucie)
+
+« Purement le debug, ou d'autres trucs ? » — **d'autres trucs, surtout**.
+Mesuré sur un target neuf du binaire unique (luciepc, `du` par genre de
+fichier, `readelf` par section).
+
+| part | poids | ce que c'est |
+|---|---|---|
+| `.rlib` + `.rmeta` de 591 crates | **3,2 Go** | le code compilé des dépendances (opt-level 3, **sans** débogage depuis le 10 octobre) et de rag3weaver ; les plus grosses : rag3weaver 417 Mo, burn_dispatch 227, ash 140, pliron_spirv 121, tracel_ash 119, cubecl_ir 73, ld_lucivy 59, burn_nn 58, burn_tensor 56, tracel_rspirv 45 |
+| ~~`librag3weaver.a`~~ | ~~1,1 Go~~ | **retirée** : une `staticlib` déclarée au `crate-type`, que seul le bâti WASM emploie ; chaque bâti natif la reliait pour rien → **5,5 → 4,4 Go** (`f4e306e3a`) |
+| exécutables | 1,1 Go | le binaire e2e (358 Mo), et les trois binaires que les tests lancent : backend (336), service d'embarquement (245), démon (88) — cargo les bâtit pour tout test d'intégration |
+| proc-macros (`.so`) | 0,2 Go | serde, tokio, etc. ; déjà sans débogage (build-override) |
+| `build/` | 0,14 Go | les objets C/C++ des build scripts (tree-sitter, QuickJS, sqlite, ring) |
+
+Le binaire e2e par sections : code 141 Mo, **symboles 122 Mo**, débogage (DWARF)
+42 Mo, déroulement 26 Mo, données 25 Mo. **Le débogage n'est plus la cause** :
+il a été coupé pour les dépendances le 10 octobre, et le profil `test` est déjà
+en `line-tables-only` (essayé en plus sur le profil `dev` : **aucun gain**, 4,4 Go
+au mètre près — les e2e se bâtissent sous le profil `test`).
+
+**Ce qui se gagne encore, et ce que ça coûte** :
+
+- **gratuit, fait** : la `staticlib` (−1,1 Go, et une édition de liens de tout le
+  graphe en moins à chaque bâti).
+- **à Lucie, déconseillé** : retirer les symboles (`strip = "symbols"`) —
+  −0,35 Go sur les quatre exécutables (122 + 115 + 88 + 22 Mo), mais une trace
+  de panique n'aurait plus un seul nom de fonction. C'est la « trace muette ».
+- **à Lucie, structurel** : ne plus bâtir backend, service et démon pour chaque
+  bâti de tests (−0,67 Go) demande de sortir ces binaires dans leur propre
+  paquet ; et les tests en lancent deux sur trois. Pas rentable.
+- **non proposé** : baisser l'optimisation des dépendances — le code rétrécirait
+  un peu, mais burn, cubecl et la tokenisation retourneraient en -O0 dans tous
+  les bancs (la raison écrite au `Cargo.toml`, 6 septembre).
+
+Un target propre fait donc **4,4 Go**, presque tout du code. Le plafond de
+20 Go laisse quatre fois cette taille avant de refuser.
 
 ## 2. Ce qui faisait « à sa sauce », et ce que ça coûtait
 
@@ -90,9 +127,9 @@ Les restes de `/tmp` (8,6 Go de RAM ici, 10,9 Go de disque sur luciepc) sont
 - **Un plafond du target** : `run_e2e.sh` refuse de partir au-delà de
   `RAG3WEAVER_TARGET_MAX_GO` — **20 Go proposés** (un bâti propre en pèse 5,5 ;
   deux jeux de features et les autres tests tiennent dessous ; au-delà, c'est de
-  l'accumulation). **À trancher par Lucie.**
+  l'accumulation). **Accepté** (orchestration, renversable par Lucie).
 - **La référence commitée** : `tests/e2e/poids-reference.txt` (binaire 358 Mo,
-  target 5,5 Go). Chaque bâti s'y compare et prévient au-delà de 1,5 fois.
+  target 4,4 Go). Chaque bâti s'y compare et prévient au-delà de 1,5 fois.
 - **Les vieux binaires par suite** (`e2e_<suite>-<empreinte>`) ne sont plus
   produits : le balayage de sortie les efface tous, au lieu d'en garder un par
   suite (~26 Go morts sinon).
@@ -132,3 +169,20 @@ qui attend derrière une autre attend beaucoup moins. Deux worktrees sur des
 commits différents qui partagent un target se rebâtiront l'un l'autre le
 binaire (une empreinte par chemin de paquet) : un target par worktree reste
 la règle tant que les sessions travaillent sur des branches.
+
+## 7. La relecture de l'arbre principal, et la contre-épreuve
+
+rag3db-73 a trouvé le défaut que mes passes de preuve ne pouvaient pas voir :
+**quatorze suites se relancent elles-mêmes** (`current_exe()`, `--exact <test>`
+— arrêts brutaux, deux processus, rôles d'enfant). Dans le binaire unique, le
+nom court ne désigne plus rien. Corrigé par `common::test_de_cette_suite!`
+(le nom complet par `module_path!()`, 22 sites), avec un filet qui refuse le nom
+littéral, et les filets du binaire qui jouent désormais à chaque passe.
+
+**La contre-épreuve** (la forme d'avant, dans le binaire unique) : les fils
+jouent 0 test, `e2e_tx_par_paquet_arret` tombe — **5 passés, 13 échoués** —, la
+passe rend 1. Le défaut était donc rouge, pas un vert vide ; avec le correctif,
+**18 passés**, et les quinze suites concernées font 73 tests verts. Elle a aussi
+montré que le résumé appariait suites et résultats **par le rang** : la ligne
+d'un fils décalait tout le tableau. Il prend maintenant, pour chaque suite, la
+dernière ligne avant la suivante — celle du parent.
