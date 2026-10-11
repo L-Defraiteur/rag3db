@@ -129,16 +129,56 @@ une réouverture à tous les clients de ce backend.
 
 ## 4. Les formes possibles, et leur coût
 
-*À deux, à écrire.* De la moins chère à la plus chère :
+*À deux. Premier jet de la mémoire longue, écrit sur la §3 de l'arbre principal, qui
+le relira et le corrigera. Coûts en passes, ordre de grandeur relatif.*
 
-- **dire** (§2) : `atomic: false` partout où ce n'est pas sûr, et ce qui est resté après
-  un échec ;
-- **envelopper ce qui est sûr** : comme pour les liens, une transaction seulement quand
-  tout ce que l'outil écrit vit dans la base ;
-- **différer ce qui vit hors de la base au `commit`** : le plein texte et les vecteurs
-  écrits après la validation de la transaction de la base, rattrapés par la dette si le
-  processus meurt entre les deux ;
-- **la machinerie complète du paquet**, empoisonnement compris, avec son prix au §3.
+La §3 change la question. **Pour un outil qui écrit une ligne, tout ce qu'il écrit vit
+déjà dans la transaction de la base, ou y est marqué** : la ligne et ses morceaux, les
+vecteurs (colonnes et index vectoriel du moteur), et le plein texte en fichiers, dont la
+génération voyage dans la transaction. Le cas difficile de la page d'origine (« le plein
+texte et les vecteurs vivent hors de la transaction ») ne vaut donc, pour un `put`, que
+pour les bases au plein texte en blobs d'avant la bascule. Leurs blobs, eux aussi, vont
+dans la transaction : seul le petit tampon les fait casser (ticket du COPY de blobs).
+
+**A. Dire** (§2). *Une demi-passe.*
+Tout outil d'écriture rend `atomic` et, sur un échec, **ce qui est resté**
+(`rendu_pret`), au lieu de « inspect state before retry ». `AddRefNode` et
+`CreateRefTypeNode` cessent de jeter le rapport de leur ingestion (ticket ouvert). Rien
+ne change dans le moteur ni dans le catalogue. Témoin : une faute injectée dans
+l'ingestion, sur le modèle de celle du drain des liens (deux variables, jamais l'une
+sans l'autre).
+
+**B. Envelopper un `put`** : `begin`, l'ingestion d'une ligne, `commit` ; sur un échec,
+`rollback` et **l'invalidation des seuls caches que cette ligne a touchés**, sans
+empoisonner. *Une à deux passes.*
+- C'est la règle de la §3 portée à un outil : un outil n'empoisonne que sur ce que le
+  moteur impose (point de reprise échoué, `COMMIT` refusé). Un échec qu'il sait défaire
+  invalide l'identifiant de nœud de sa ligne et sa génération de plein texte, pas le
+  catalogue entier. Sous la forme C, c'est ce qui épargne une réouverture à toutes les
+  sessions du backend.
+- `AddRefNode` y gagne le plus : la `Ref` et son lien `CITE` dans une seule transaction.
+  La vérification de la fiche passe **avant** l'écriture, et « écrite seule » disparaît
+  pour un échec du moteur.
+- **À vérifier par l'arbre principal avant le code** : qu'un `put` hors d'une
+  synchronisation marque bien sa génération de plein texte dans sa transaction
+  (`flush_blob_store` → `mark_next_generation`), comme le paquet le fait. Et la liste
+  exacte des caches qu'une ligne touche.
+- Témoin rouge d'abord : une faute injectée entre l'écriture de la ligne et le `commit`.
+  Aujourd'hui, la ligne reste. Avec l'enveloppe, la ligne est absente, et le `put`
+  suivant réussit **sans réouverture**.
+
+**C. Différer le hors-base au `COMMIT`**. *Rien à faire pour un `put`* : le plein texte
+en fichiers le fait déjà (§3). La forme ne servirait qu'aux bases en blobs, qui relèvent
+du ticket du COPY de blobs, pas de cette page.
+
+**D. La machinerie complète du paquet**, empoisonnement compris. *Pas pour un outil.*
+Aucun gabarit livré n'a d'outil qui écrive plusieurs lignes (§1). Le jour où l'un d'eux
+en aura un, la forme B s'étend d'abord, en invalidant les caches de plusieurs lignes.
+L'empoisonnement reste réservé à ce que le moteur impose.
+
+**L'ordre que la mémoire longue propose** : **A maintenant**, petit et sans risque, qui
+rend tout outil honnête. Puis **B pour le `put`**, une fois les deux vérifications de
+l'arbre principal faites. C et D restent hors de portée tant que rien ne les demande.
 
 ## 5. Les témoins
 
@@ -153,4 +193,14 @@ une réouverture à tous les clients de ce backend.
 
 ## 6. Ce qui reste à Lucie
 
-*À écrire en dernier.*
+*Premier jet de la mémoire longue ; l'arbre principal complète.*
+
+1. **Le contrat** (§2) : tout outil d'écriture rend `atomic` et, sur un échec, ce qui est
+   resté. C'est la forme A, une demi-passe.
+2. **Un outil n'empoisonne que sur ce que le moteur impose** (§3) : un échec qu'il sait
+   défaire invalide ses caches, pas le catalogue. Sous la forme C, c'est la différence
+   entre une erreur pour une session et une réouverture pour toutes.
+3. **Envelopper un `put`** (forme B), après les deux vérifications de l'arbre principal :
+   une à deux passes.
+4. **Pas de machinerie de paquet pour un outil** tant qu'aucun gabarit livré n'écrit
+   plusieurs lignes d'un coup.
