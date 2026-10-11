@@ -493,6 +493,25 @@ Les marches du client, dans l'ordre : `impl Hote` par le fil (avec `e2e_mcp_stdi
 inchangé) ; puis le lancement et l'absence (§4) ; puis le chat sur le démon ;
 puis le retrait de `--demon`, en dernier, quand plus rien ne s'en sert.
 
+### La marche 1, faite (11 octobre 2026, `deb423288`)
+
+`src/daemon_host.rs`, la sous-commande `rag3weaver-backend daemon`, et le témoin `e2e_demon_hote`
+(5 cas). **Ce qui reste hors de la marche 1, dit tel quel :**
+
+- **Le réacteur tourne hors du verrou de sérialisation.** Les appels d'un backend sont
+  sérialisés par un verrou de l'hôte, mais le réacteur de ce backend vit dans ses propres fils et
+  écrit pendant un appel. La bascule de cellule de `Catalog::rechercher`, et `ReactTransitionNode`
+  qui écrit dans la cellule courante, restent donc exposées (ticket
+  `2026-10-11-une-reaction-ecrit-dans-la-cellule-qu-un-appel-a-basculee.md`). C'est l'objet de la
+  marche 1 bis : plus de cellule courante, et le réacteur sous le même verrou que les appels
+  jusque-là.
+- **Le budget de tampon partagé n'est pas posé.** Chaque backend prend le tampon de son manifeste,
+  ou la règle d'un seul backend (la moitié de la mémoire, au plus 8 Gio). Trois bases ouvertes
+  peuvent donc réserver trois fois cette part. À poser avant que le démon ouvre plus d'une base en
+  service ; il faut une mesure d'abord.
+- **La cellule et les clés de la session sont gardées et dites** (`GET /etat`), pas appliquées :
+  la cellule l'est à la marche 1 bis, les clés à la marche 6.
+
 ## 8. Ce qui reste à Lucie
 
 *Premier jet de l'arbre principal, à compléter par la mémoire longue.*
