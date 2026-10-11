@@ -344,80 +344,127 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
 
 /// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
 /// puis fermer tous ses backends proprement. Sans jeton : les témoins qui
-/// lancent un hôte à la main ; le binaire passe par [`serve_daemon_guarded`].
+/// lancent un hôte à la main ; le binaire passe par [`DaemonServer`].
 pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize) {
-    serve_daemon_guarded(host, server, threads, None)
+    DaemonServer::new(server, threads).serve(host, None)
 }
 
 /// La réponse à une requête sans le jeton local, ou avec un faux. **403, et
 /// pas 401** : 401 dit une session inconnue, que le client rouvre et rejoue.
 pub const BAD_TOKEN: &str = "badToken";
 
-/// **Servir l'hôte, le jeton local exigé** (marche 4, page C §6) : chaque
-/// requête porte `Authorization: Bearer <jeton>`, sauf `GET /sante`, que les
-/// clients sondent avant de connaître le jeton.
-pub fn serve_daemon_guarded(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize, token: Option<String>) {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    let server = Arc::new(server);
-    let stopping = Arc::new(AtomicBool::new(false));
-    let count = threads.max(1);
-    let workers: Vec<_> = (0..count)
-        .map(|i| {
-            let (server, host, stopping) = (server.clone(), host.clone(), stopping.clone());
-            let attendu = token.as_ref().map(|t| format!("Bearer {t}"));
-            std::thread::Builder::new()
-                .name(format!("demon-{i}"))
-                .spawn(move || {
-                    while !stopping.load(Ordering::SeqCst) {
-                        let Ok(mut request) = server.recv() else { break };
-                        let method = request.method().as_str().to_string();
-                        let url = request.url().to_string();
-                        let path = url.split('?').next().unwrap_or("").to_string();
-                        if let Some(attendu) = &attendu {
-                            let porte = request
+/// **L'écoute de l'hôte et sa poignée d'arrêt.** La poignée se prend avant de
+/// servir, pour qu'un fil SIGTERM arrête l'hôte sans passer par une requête —
+/// qui attendrait un fil libre si tous servent des appels longs.
+pub struct DaemonServer {
+    server: Arc<tiny_http::Server>,
+    stopping: Arc<std::sync::atomic::AtomicBool>,
+    threads: usize,
+}
+
+/// **Arrêter l'hôte** : plus aucune requête n'est prise, les fils en attente
+/// sont débloqués ; un appel en cours finit, puis les backends se ferment.
+#[derive(Clone)]
+pub struct Stopper {
+    server: Arc<tiny_http::Server>,
+    stopping: Arc<std::sync::atomic::AtomicBool>,
+    threads: usize,
+}
+
+impl Stopper {
+    pub fn stop(&self) {
+        self.stopping.store(true, std::sync::atomic::Ordering::SeqCst);
+        for _ in 0..self.threads {
+            self.server.unblock();
+        }
+    }
+}
+
+/// Le jeton comparé **à temps constant** : la durée ne dit pas jusqu'où il
+/// était juste.
+fn same_token(given: &str, expected: &str) -> bool {
+    let (a, b) = (given.as_bytes(), expected.as_bytes());
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+impl DaemonServer {
+    pub fn new(server: tiny_http::Server, threads: usize) -> Self {
+        Self {
+            server: Arc::new(server),
+            stopping: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            threads: threads.max(1),
+        }
+    }
+
+    pub fn stopper(&self) -> Stopper {
+        Stopper { server: self.server.clone(), stopping: self.stopping.clone(), threads: self.threads }
+    }
+
+    /// **Servir, le jeton local exigé** s'il est donné (marche 4, page C §6) :
+    /// chaque requête porte `Authorization: Bearer <jeton>`, sauf
+    /// `GET /sante`, que les clients sondent avant de connaître le jeton.
+    pub fn serve(self, host: Arc<DaemonHost>, token: Option<String>) {
+        use std::sync::atomic::Ordering;
+        let stopper = self.stopper();
+        let workers: Vec<_> = (0..self.threads)
+            .map(|i| {
+                let (server, host, stopping, stopper) =
+                    (self.server.clone(), host.clone(), self.stopping.clone(), stopper.clone());
+                let attendu = token.as_ref().map(|t| format!("Bearer {t}"));
+                std::thread::Builder::new()
+                    .name(format!("demon-{i}"))
+                    .spawn(move || {
+                        while !stopping.load(Ordering::SeqCst) {
+                            let Ok(mut request) = server.recv() else { break };
+                            if stopping.load(Ordering::SeqCst) {
+                                let _ = request.respond(json_response(503, &json!({ "ok": false, "error": "l'hôte s'arrête" })));
+                                break;
+                            }
+                            let method = request.method().as_str().to_string();
+                            let url = request.url().to_string();
+                            let path = url.split('?').next().unwrap_or("").to_string();
+                            if let Some(attendu) = &attendu {
+                                let porte = request
+                                    .headers()
+                                    .iter()
+                                    .find(|h| h.field.equiv("Authorization"))
+                                    .is_some_and(|h| same_token(h.value.as_str(), attendu));
+                                if !porte && !(method == "GET" && path == "/sante") {
+                                    let _ = request.respond(json_response(
+                                        403,
+                                        &json!({ "ok": false, BAD_TOKEN: true, "error": "jeton local absent ou faux : \
+                                            il est dans daemon.json, à envoyer en Authorization: Bearer" }),
+                                    ));
+                                    continue;
+                                }
+                            }
+                            if method == "POST" && path == STOP {
+                                let _ = request.respond(json_response(200, &json!({ "stopping": true })));
+                                stopper.stop();
+                                break;
+                            }
+                            let session = request
                                 .headers()
                                 .iter()
-                                .find(|h| h.field.equiv("Authorization"))
-                                .map(|h| h.value.as_str() == attendu.as_str())
-                                .unwrap_or(false);
-                            if !porte && !(method == "GET" && path == "/sante") {
-                                let _ = request.respond(json_response(
-                                    403,
-                                    &json!({ "ok": false, BAD_TOKEN: true, "error": "jeton local absent ou faux : \
-                                        il est dans daemon.json, à envoyer en Authorization: Bearer" }),
-                                ));
-                                continue;
-                            }
+                                .find(|h| h.field.equiv(SESSION_HEADER))
+                                .map(|h| h.value.as_str().to_string());
+                            let mut body = Vec::new();
+                            let (status, answer) = match request.as_reader().read_to_end(&mut body) {
+                                Err(e) => (400, json!({ "ok": false, "error": format!("corps illisible : {e}") })),
+                                Ok(_) => host.handle(&method, &path, session.as_deref(), &body),
+                            };
+                            let _ = request.respond(json_response(status, &answer));
                         }
-                        if method == "POST" && path == STOP {
-                            stopping.store(true, Ordering::SeqCst);
-                            let _ = request.respond(json_response(200, &json!({ "stopping": true })));
-                            for _ in 0..count {
-                                server.unblock();
-                            }
-                            break;
-                        }
-                        let session = request
-                            .headers()
-                            .iter()
-                            .find(|h| h.field.equiv(SESSION_HEADER))
-                            .map(|h| h.value.as_str().to_string());
-                        let mut body = Vec::new();
-                        let (status, answer) = match request.as_reader().read_to_end(&mut body) {
-                            Err(e) => (400, json!({ "ok": false, "error": format!("corps illisible : {e}") })),
-                            Ok(_) => host.handle(&method, &path, session.as_deref(), &body),
-                        };
-                        let _ = request.respond(json_response(status, &answer));
-                    }
-                })
-                .expect("un fil du démon")
-        })
-        .collect();
-    for worker in workers {
-        let _ = worker.join();
-    }
-    for erreur in host.shutdown() {
-        eprintln!("[démon] fermeture : {erreur}");
+                    })
+                    .expect("un fil du démon")
+            })
+            .collect();
+        for worker in workers {
+            let _ = worker.join();
+        }
+        for erreur in host.shutdown() {
+            eprintln!("[démon] fermeture : {erreur}");
+        }
     }
 }
 
@@ -437,7 +484,7 @@ mod tests {
         let adresse = ecoute.local_addr().unwrap().to_string();
         let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
         let jeton = jeton.to_string();
-        let fil = std::thread::spawn(move || serve_daemon_guarded(Arc::new(DaemonHost::new()), server, 2, Some(jeton)));
+        let fil = std::thread::spawn(move || DaemonServer::new(server, 2).serve(Arc::new(DaemonHost::new()), Some(jeton)));
         (adresse, fil)
     }
 
@@ -487,6 +534,27 @@ mod tests {
         assert_eq!(statut, 403, "l'arrêt aussi demande le jeton");
         let (statut, _) = demander("POST", &format!("{base}/arret"), Some("le-bon"));
         assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
+    #[test]
+    fn le_jeton_se_compare_entier() {
+        assert!(same_token("Bearer abc", "Bearer abc"));
+        assert!(!same_token("Bearer abd", "Bearer abc"));
+        assert!(!same_token("Bearer ab", "Bearer abc"));
+        assert!(!same_token("", "Bearer abc"));
+    }
+
+    /// **La poignée d'arrêt** arrête l'hôte sans requête : ce que le fil
+    /// SIGTERM du binaire fait.
+    #[test]
+    fn la_poignee_arrete_sans_requete() {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3);
+        let arret = server.stopper();
+        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        arret.stop();
         fil.join().unwrap();
     }
 }

@@ -320,13 +320,19 @@ fn modele_du_chat(
 /// `POST /arret` ferme l'écoute, puis chaque backend proprement.
 fn servir_le_demon(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
-    let mut adresse = "127.0.0.1:7970".to_string();
+    // L'adresse par défaut : `RAG3WEAVER_DAEMON_ADDRESS`, sinon 127.0.0.1:7970
+    // (c'est ainsi qu'un client lance l'hôte) ; `--address` la donne à la main.
+    let mut adresse = rag3weaver::daemon_lifecycle::launch_address();
+    let mut explicite = false;
     let mut fils = 8usize;
     let mut i = 0;
     while i < args.len() {
         let valeur = args.get(i + 1).cloned().ok_or_else(|| format!("{} attend une valeur\n{USAGE}", args[i]))?;
         match args[i].as_str() {
-            "--address" => adresse = valeur,
+            "--address" => {
+                adresse = valeur;
+                explicite = true;
+            }
             "--threads" => fils = valeur.parse().map_err(|_| format!("--threads attend un nombre\n{USAGE}"))?,
             autre => return Err(format!("option inconnue : {autre}\n{USAGE}")),
         }
@@ -336,6 +342,22 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
         return Err(format!("le démon n'écoute que sur la boucle locale : {adresse}"));
     }
     use rag3weaver::daemon_lifecycle as cycle;
+    // **Un démon** : un hôte vivant qui répond déjà refuse ce démarrage, en
+    // le nommant — deux hôtes pourraient ouvrir les mêmes bases. Seul un
+    // `--address` explicite (un hôte à la main, pour un témoin) passe outre,
+    // en le disant, et sans toucher au fichier de l'autre.
+    let autre = cycle::read().filter(|f| f.pid != std::process::id() && cycle::answers(f));
+    if let (Some(autre), false) = (&autre, explicite) {
+        return Err(format!(
+            "un hôte répond déjà à {} (pid {}, {}) : un seul démon. L'arrêter : kill -TERM {} ; ou \
+             --address pour un second hôte à la main, qui n'écrira pas {}",
+            autre.address,
+            autre.pid,
+            autre.build,
+            autre.pid,
+            cycle::file_path().display()
+        ));
+    }
     // **Le port d'abord, `daemon.json` ensuite** (marche 4, page C §5) : le
     // fichier dit l'adresse réellement servie, un port 0 résolu.
     let ecoute = std::net::TcpListener::bind(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
@@ -353,12 +375,10 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0),
     };
-    // Un hôte vivant qui répond ailleurs garde son fichier : ce démarrage-ci
-    // n'a pas été demandé par un client (qui l'aurait trouvé), il est à la main.
-    if let Some(autre) = cycle::read().filter(|f| f.pid != pid && cycle::answers(f)) {
+    if let Some(autre) = &autre {
         eprintln!(
-            "[démon] un autre hôte répond déjà ({} , pid {}) : {} n'est pas réécrit, les clients \
-             continueront d'aller à lui",
+            "[démon] un autre hôte répond déjà ({}, pid {}) : hôte à la main par --address, {} n'est \
+             pas réécrit, les clients continueront d'aller à lui",
             autre.address,
             autre.pid,
             cycle::file_path().display()
@@ -372,31 +392,22 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
         rag3weaver::daemon_host::SERVICE,
         cycle::file_path().display()
     );
-    // **SIGTERM vaut `POST /arret`** : le même chemin d'arrêt, les bases
+    // **SIGTERM vaut `POST /arret`** : la même poignée d'arrêt, les bases
     // fermées proprement, puis `daemon.json` retiré.
-    {
-        let (adresse, jeton) = (servie.clone(), jeton.clone());
-        std::thread::spawn(move || {
-            let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
-            rt.block_on(async {
-                use tokio::signal::unix::{signal, SignalKind};
-                let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
-                if terme.recv().await.is_some() {
-                    eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
-                    let _ = rag3weaver::daemon::agent()
-                        .post(format!("{}/arret", rag3weaver::daemon::base_url(&adresse)))
-                        .header("Authorization", &format!("Bearer {jeton}"))
-                        .send("");
-                }
-            });
+    let serveur = rag3weaver::daemon_host::DaemonServer::new(server, fils);
+    let arret = serveur.stopper();
+    std::thread::spawn(move || {
+        let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
+        rt.block_on(async {
+            use tokio::signal::unix::{signal, SignalKind};
+            let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
+            if terme.recv().await.is_some() {
+                eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
+                arret.stop();
+            }
         });
-    }
-    rag3weaver::daemon_host::serve_daemon_guarded(
-        std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()),
-        server,
-        fils,
-        Some(jeton),
-    );
+    });
+    serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()), Some(jeton));
     cycle::remove_if_mine(pid);
     eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
     Ok(())

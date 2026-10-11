@@ -10,6 +10,17 @@ montée. Ce qui suit est la recette, puis ce que jouer a appris.
 
 ## La recette, en trois lignes
 
+> **Changé le 11 octobre 2026 (marche 4 de la forme C) — à lire avant de relancer.**
+> `rag3weaver-backend mcp` est désormais un **client mince** par défaut : il ne
+> possède plus la base, il la laisse à l'hôte du démon, qu'il **lance lui-même au
+> premier usage** s'il n'est pas là (et qui survit à la session). La ligne
+> `claude mcp add memoire-longue …` ci-dessous, sans drapeau, fera donc cela : un
+> hôte apparaîtra (`~/.local/share/rag3weaver/daemon.json`, journal dans
+> `~/.local/state/rag3weaver/daemon.log`), et plusieurs sessions partageront ta
+> mémoire. Un outil de plus, `daemon_status`, dit son état. L'ancienne forme (le
+> serveur possède la base, une session à la fois) est `--standalone`. La recette à
+> jour, de zéro : `templates/mcp/README.md`, §6.
+
 Le manifeste est déjà posé à `~/.config/rag3weaver/memoire-longue/` (une copie
 de tout `templates/`, pas du seul dossier `memory` : le gabarit range des
 graphes hors de son dossier). Son `database` et son `vector_extension` sont en

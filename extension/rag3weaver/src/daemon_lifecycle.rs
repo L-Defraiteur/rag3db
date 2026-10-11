@@ -176,7 +176,7 @@ impl Missing {
 }
 
 /// **Assurer l'hôte** : s'attacher à celui de `daemon.json` s'il répond,
-/// sinon en lancer un — `exe daemon --address <launch_address()>`, détaché,
+/// sinon en lancer un — `exe daemon`, à [`launch_address`], détaché,
 /// son journal dans [`log_path`] — et attendre qu'il ait écrit son fichier.
 ///
 /// Sous un verrou exclusif sur `daemon.lock` : deux clients qui démarrent
@@ -226,11 +226,17 @@ fn ensure_locked(exe: &Path) -> Result<DaemonFile, Missing> {
         .append(true)
         .open(&log)
         .map_err(|e| Missing::Absent(format!("journal {} : {e}", log.display())))?;
-    let adresse = launch_address();
-    eprintln!("[mcp] pas d'hôte qui réponde : lancement de `{} daemon --address {adresse}`, journal {}", exe.display(), log.display());
+    // Sans `--address` : l'hôte prend [`launch_address`] lui-même (il hérite de
+    // l'environnement), et un `--address` reste le geste d'un hôte à la main.
+    eprintln!(
+        "[mcp] pas d'hôte qui réponde : lancement de `{} daemon` ({}), journal {}",
+        exe.display(),
+        launch_address(),
+        log.display()
+    );
     let mut commande = std::process::Command::new(exe);
     commande
-        .args(["daemon", "--address", &adresse])
+        .arg("daemon")
         .stdin(std::process::Stdio::null())
         .stdout(journal.try_clone().map_err(|e| Missing::Absent(e.to_string()))?)
         .stderr(journal);

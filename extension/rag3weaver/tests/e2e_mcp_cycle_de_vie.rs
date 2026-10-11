@@ -351,3 +351,35 @@ fn un_daemon_json_perime_est_ignore_et_reecrit() {
     assert_ne!(fiche["token"], "périmé");
     c.fermer();
 }
+
+/// **(6) Un démon** (relecture de l'arbre principal) : un second hôte lancé
+/// sans `--address` alors qu'un hôte vivant répond refuse de démarrer, en
+/// nommant l'autre et comment l'arrêter ; il ne touche pas à son fichier.
+#[test]
+#[ignore = "e2e : un second hôte devant un hôte vivant"]
+fn un_second_hote_devant_un_hote_vivant_refuse_de_demarrer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = boutique(tmp.path());
+    let demon = Demon::new(tmp.path());
+    let mut c = Client::lancer(&manifeste, &demon, LIBRE);
+    c.initialiser();
+    let avant = demon.fiche().expect("le premier hôte");
+
+    let second = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+        .arg("daemon")
+        .env("RAG3WEAVER_DAEMON_DIR", &demon.dir)
+        .env("RAG3WEAVER_DAEMON_ADDRESS", LIBRE)
+        .stdin(Stdio::null())
+        .output()
+        .expect("lancer un second hôte");
+    assert!(!second.status.success(), "un second hôte refuse de démarrer");
+    let erreurs = String::from_utf8_lossy(&second.stderr);
+    let pid = avant["pid"].to_string();
+    assert!(
+        erreurs.contains("un hôte répond déjà") && erreurs.contains(&format!("kill -TERM {pid}")),
+        "le refus nomme l'autre et comment l'arrêter : {erreurs}"
+    );
+    assert_eq!(demon.fiche(), Some(avant), "le fichier du premier hôte est intact");
+    assert_eq!(demon.demarrages(), 1);
+    c.fermer();
+}
