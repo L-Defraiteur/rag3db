@@ -3,6 +3,47 @@
 Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 après-midi, après les correctifs du planificateur et des
 amonts (`8c83c3360`, puis le second lot).
 
+## La nuit du 11 octobre : la mise à jour de vecteurs est sur master (`bfc1434e1`)
+
+Session « banc » (rag3db-10).
+- **La mise à jour massive de vecteurs est fermée.** La cause était double : un contrôle de
+  joignabilité qui n'entrait pas dans le graphe comme une requête, et une réinsertion qui partait de
+  la ligne elle-même. Le code fait 25 lignes dans `hnsw_index.cpp`, relu par le cœur C++. Quatre
+  rouges connus passent au vert, et `SetToAnotherVectorLineByLine` sort des probabilistes. La liste
+  de fusion complète est verte, banc longs compris (17 rouges, 251 verts). Le ticket est fermé, et
+  le ticket « une ligne sur cent » du cœur (eb23e3770) est fermé par les mêmes correctifs. La page
+  04 donne le détail : §9 pour la cause, §10 pour les mesures.
+- **Le crochet de fin d'instruction (§4) a été écrit, mesuré et écarté.** Il faisait régresser le
+  ligne à ligne de ×7 à ×13. Il est gardé sur `essai-fin-d-instruction-maj`.
+- **Les mesures :**
+  - `TenThousand` tient la durée (25,8 / 23,6 / 24,3 s contre 19,5 à 24,3 s) et améliore le
+    rappel, mais reste probabiliste (1 rouge léger sur 13 essais) ;
+  - les vrais vecteurs de l'arbre principal donnent 0 introuvable sur 12 942 ;
+  - pour I2, la fin d'instruction avec l'heuristique en filtre coûte ce que coûte master.
+    « Pertes seules » est retenue pour I2 ; « union » a un rouge grave (7 982 lignes joignables
+    sur 10 000), dont je cherche la cause cette nuit, jusqu'à 5 h au plus.
+- **Aussi cette nuit :**
+  - les témoins d'I1 réécrits dans la forme d'A4′ (`banc-i1-temoins`, repris par le cœur) ;
+  - la borne de l'annonce de V2 confiée au cœur ;
+  - le ticket « le CALL de la recherche rend des nœuds supprimés » ;
+  - la stèle §2, qui dit que la condition 4 n'est pas fermée et nomme les tickets du moteur
+    encore ouverts. Il en reste cinq, depuis que le cœur a fermé eb23e3770 ;
+  - la lib commune de luciepc rebâtie (34315bfa8).
+- **Deux fautes de procédure, sans dégât sur ce qui a été poussé :**
+  - J'ai cru que `poste lourd` sérialisait mes propres travaux. Il prend le verrou en partagé, et
+    un bâti a réécrit l'extension sous mes témoins en cours, dont j'ai jeté les résultats. Depuis,
+    un seul script par `build/`.
+  - J'ai régénéré un patch de sonde depuis un arbre où la sonde n'était plus. Le patch est retiré ;
+    le code de la sonde reste dans les notes (`sonde-vrais-vecteurs-maj.cpp`).
+- **Question pour Lucie :** 21 tickets ouverts de gravité « perte » ou « réponse fausse » sont côté
+  produit (rendez-vous, codeparsers). Comptent-ils pour la stèle du moteur, ou pour celle du
+  produit ?
+
+**Ensuite**, dans l'ordre :
+1. la cause du rouge grave de la variante union, cherchée jusqu'à 5 h ;
+2. l'angle mort du vérificateur : k = vivantes + marge, avec la clé projetée ;
+3. le témoin minimal de C7.
+
 ## Le 10 octobre, tard : l'élagage HNSW est sur master (`9a2818df9`)
 
 - **Poussé en avance rapide** : `2da041058` (i = 0), `c841d507c` (la règle classique, le
