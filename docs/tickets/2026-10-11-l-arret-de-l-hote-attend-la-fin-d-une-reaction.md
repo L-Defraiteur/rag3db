@@ -26,3 +26,14 @@ l'hôte ne ferme.
   par fichier : elle constate que la racine n'existe plus, le dit, et suspend le backend.
 - Témoin : un arbre indexé, la montre active, la racine effacée, puis SIGTERM ; l'hôte s'arrête en
   quelques secondes et la base se rouvre.
+
+## Le dénouement (11 octobre, 18 h 40)
+
+Arrêt forcé par Lucie après 42 minutes (`kill -9` de l'hôte, toujours « deactivating ») : le seul
+`.wal` était celui de `code-bascule`, la base à jeter (mise de côté dans
+`code-bascule.retire-18h40/`) ; les bases gardées (`code-principal`, la boutique de G) avaient été
+fermées proprement à 17 h 58 min 39 s, sans journal. L'unité relancée (MainPID 4051274, `/sante` à
+18 h 40) : `code-principal` rouverte à la première demande, `usages update` sur
+`node_table.cpp` rendu, et le fichier d'essai de Lucie (`essaiIndexationAChaudDixNeufHeures`) vu
+par la montre. Ma session ne pouvait pas forcer l'arrêt (refus du mode automatique) : c'est
+Lucie qui l'a fait.
