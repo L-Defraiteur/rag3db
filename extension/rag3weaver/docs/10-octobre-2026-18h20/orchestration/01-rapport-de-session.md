@@ -695,3 +695,13 @@ reprise (le plein texte n'y vit plus par défaut ; l'index creux encore).
 Correctif générique (segment borné, scindé par morceaux) chez hotfixs sur
 relecture du cœur, après la corruption du COPY. Le crochet de test et le
 message nommé du point de reprise interrompu attendent la même fusion.
+
+**Ajout de 4 h 30 : la cause du rouge grave de l'union** (banc, page 04
+§10.1) : un pont coupé dans un sens par l'élagage d'un nœud de frontière
+(0 arête entrante vers 2 033 lignes, 219 sortantes), invisible au filtre qui
+tient pour joignable un nœud désigné par un voisin qui n'a rien perdu. C'est
+un défaut générique du filtre, et la contrainte d'I2 : une maintenance au
+commit filtrée garde une recherche pour au moins un nœud de chaque région
+détachée. La même coupure est possible en principe sur master (non vue en 13
+essais) : **ticket ouvert, condition 4 au sens du moteur**, témoin à écrire
+(0 arête entrante vers une région).
