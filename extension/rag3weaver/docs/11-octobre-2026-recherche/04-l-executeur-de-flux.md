@@ -164,6 +164,12 @@ le genre et la posture y entrent par moi, le refus par elle.
     nommée, pas un saut ; seule une sortie optionnelle vide fait sauter l'aval.
     Le saut n'est donc jamais ambigu. Mesuré : toute la lib reste verte, aucun
     nœud exercé ne déclare une sortie requise sans la poser.
+  - Un **sous-graphe** (`GraphNode`) reprend le `required` des sorties libres
+    de ses nœuds intérieurs : si sa sortie libre est requise à l'intérieur et
+    que la branche qui y mène n'est pas prise, la faute est nommée sur le nœud
+    intérieur et le sous-graphe échoue avec elle — le bon comportement : une
+    sortie requise ne peut pas finir vide, même à travers un sous-graphe
+    (relecture de la session du proto).
   - `RunStarted` dit la cellule de **sa requête** (le service `scope`) avant
     celle du bus, pour la marche 1 bis de l'arbre principal.
   - Témoins, rouges d'abord : `une_sortie_requise_non_posee_est_une_faute_du_noeud`,
