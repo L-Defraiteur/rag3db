@@ -99,11 +99,17 @@ chose se fondent). Ce qui change en lui :
    file (`drainer(…, Some((graine, pour_ecrire)))`, que `link_jusqu_a` emploie par
    `tenir_l_exigence_d_ecriture`) : `RelationBatchNode` appelle cela, exposé en
    `pub(crate)`, au lieu de `drain()` ;
-4. **il s'enveloppe dans une transaction quand le dialecte en a.** Borner le drain
-   ne le rend pas atomique. `begin`/`commit`/`rollback` sont dans `DbConnection`
-   depuis `bb7dddde5`, rag3db et PostgreSQL les ont, et la transaction par paquet
-   les emploie. Le lot de liens s'y enveloppe quand le dialecte déclare
-   `transactions`, et son rapport dit « non atomique » sinon ;
+4. **il dit qu'il n'est pas atomique, et la transaction vient à part.** Borner le
+   drain ne le rend pas atomique. `begin`/`commit`/`rollback` sont dans
+   `DbConnection` depuis `bb7dddde5`, et la transaction par paquet les emploie.
+   *Constaté en codant la marche 1* : aucun dialecte ne **déclare** de capacité
+   « transactions » à lire, et envelopper un lot proprement, c'est reprendre la
+   machinerie du paquet (`set_in_transaction`, les points de reprise coupés, et
+   surtout le catalogue **empoisonné** après un `ROLLBACK`, parce que ses caches
+   gardent des écritures défaites). Ce n'est pas un détail à glisser dans un nœud
+   d'outil : la marche 1 rend `atomic: false` dans son rapport, et l'enveloppe
+   transactionnelle d'un outil est une marche à elle, qui servira à tout outil
+   d'écriture et pas seulement aux liens ;
 5. **il compte ce qui est posé — avec l'IR, pas sans elle.** Un `MERGE` ne dit pas
    s'il a créé. Sans relire (ce qui ouvrirait une course), le nœud ne peut pas
    distinguer « posé » de « déjà là ». C'est donc le compte que rag3db-6f propose

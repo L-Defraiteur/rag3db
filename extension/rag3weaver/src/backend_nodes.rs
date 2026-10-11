@@ -670,8 +670,17 @@ impl Node for SnapshotUndoNode {
     }
 }
 
-/// Snapshot links use stable endpoint identities, never caller-supplied internal UUIDs.
-/// Intentionally supports property-free relations; payload belongs in an entry entity.
+/// **Poser des liens entre des identités déclarées** — la face dataflow de
+/// `Write::Link` (11 octobre 2026, page
+/// `docs/11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`).
+///
+/// Les bouts se désignent par leurs champs d'identité (`hashsafe`), jamais par
+/// un uuid fourni par l'appelant ; ils doivent exister — en base ou en file —,
+/// et le lot entier est vérifié avant la première écriture. Toute paire
+/// d'entités déclarées, **gérées ou non** : la garde « managed entities » qui
+/// vivait ici ne protégeait aucune garantie déclarée (établi champ à champ par
+/// `tests/e2e_garde_des_liens.rs`), et elle est retirée. Les propriétés sont
+/// permises quand la relation les déclare.
 pub struct RelationBatchFactory;
 struct RelationBatchNode {
     name: String,
@@ -686,12 +695,12 @@ impl NodeFactory for RelationBatchFactory {
             "links",
             ConfigParamType::Json,
             true,
-            "Up to 512 pairs of endpoint identity objects",
+            "Up to 512 pairs of endpoint identity objects, each with optional declared properties",
         );
         links.json_schema = Some(
-            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}}}}}),
+            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"}}}}),
         );
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent snapshot links between existing declared endpoints; validates entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared property-free relation"),links]}
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef{name:"report".into(),port_type:PortType::Map,required:false}],config_params:vec![param("relation",ConfigParamType::String,true,"Declared relation"),links]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         crate::schema::validate_identifier(
@@ -734,40 +743,28 @@ impl Node for RelationBatchNode {
         let definition = ctx
             .service::<HashMap<String, crate::config::RelationDef>>("backend_relations")
             .and_then(|r| r.get(relation))
-            .ok_or("undeclared relation")?;
-        if definition
+            .ok_or("undeclared relation")?
+            .clone();
+        let declarees: Vec<&String> = definition
             .properties
             .as_ref()
-            .is_some_and(|p| !p.is_empty())
-        {
-            return Err(
-                "snapshot links require a property-free relation; use an entry entity for payload"
-                    .into(),
-            );
-        }
-        let policies = ctx
-            .service::<HashMap<String, WritePolicy>>("backend_write_policies")
-            .ok_or("policies missing")?;
+            .map(|p| p.keys().collect())
+            .unwrap_or_default();
         let cat = ctx
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .ok_or("catalog missing")?
             .clone();
         let mut cat = cat.lock().map_err(|e| e.to_string())?;
         for entity in [&definition.from, &definition.to] {
-            let p = policies.get(entity).ok_or("undeclared endpoint")?;
-            if p.immutable
-                || p.revision.is_some()
-                || p.created_at.is_some()
-                || p.updated_at.is_some()
-                || !p.transition_dates.is_empty()
-                || cat.entity_configs()[entity].lifecycle.is_some()
-            {
-                return Err("snapshot links cannot modify relations of managed entities".into());
+            if !cat.entity_configs().contains_key(entity) {
+                return Err(format!("undeclared endpoint {entity}"));
             }
         }
+        // L'identité de chaque bout, gardée pour nommer un absent par ce que
+        // l'appelant a écrit, pas par un uuid qu'il n'a jamais vu.
+        let mut identites: HashMap<(String, String), String> = HashMap::new();
         let mut seen = std::collections::HashSet::new();
-        let mut checked = std::collections::HashSet::new();
-        let mut links = Vec::new();
+        let mut links: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::new();
         for link in self.config["links"].as_array().unwrap() {
             let mut ids = Vec::new();
             for (side, entity) in [("from", &definition.from), ("to", &definition.to)] {
@@ -792,44 +789,89 @@ impl Node for RelationBatchNode {
                 }
                 let data = serde_json::from_value(link[side].clone()).map_err(|e| e.to_string())?;
                 let id = cat.entity_uuid(entity, &data).map_err(|e| e.to_string())?;
-                checked.insert((entity.clone(), id.clone()));
+                identites.insert((entity.clone(), id.clone()), link[side].to_string());
                 ids.push(id);
             }
-            if seen.insert((ids[0].clone(), ids[1].clone())) {
-                links.push((ids[0].clone(), ids[1].clone(), Default::default()));
-            }
-        }
-        // Validate every endpoint before queuing any write, using one read per
-        // entity and chunk rather than one roundtrip (and full row) per link.
-        let mut by_entity: HashMap<String, Vec<String>> = HashMap::new();
-        for (entity, id) in checked {
-            by_entity.entry(entity).or_default().push(id);
-        }
-        for (entity, ids) in by_entity {
-            for batch in ids.chunks(512) {
-                let rows = cat.get_many(&entity, batch).map_err(|e| e.to_string())?;
-                let found: std::collections::HashSet<&str> = rows
-                    .iter()
-                    .filter_map(|row| row.get("_uuid").and_then(CypherValue::as_str))
-                    .collect();
-                if let Some(id) = batch.iter().find(|id| !found.contains(id.as_str())) {
-                    return Err(format!(
-                        "missing endpoint {entity}:{id}; no links in this batch written"
-                    ));
+            // Les propriétés : permises quand la relation les déclare, chacune
+            // nommée si elle ne l'est pas.
+            let mut props = BTreeMap::new();
+            if let Some(donnees) = link.get("props").and_then(Value::as_object) {
+                for (cle, valeur) in donnees {
+                    if !declarees.iter().any(|d| *d == cle) {
+                        return Err(if declarees.is_empty() {
+                            format!("{relation} declares no properties; property {cle} refused")
+                        } else {
+                            format!(
+                                "{relation} does not declare property {cle} (declared: {})",
+                                declarees.iter().map(|d| d.as_str()).collect::<Vec<_>>().join(", ")
+                            )
+                        });
+                    }
+                    let v: CypherValue =
+                        serde_json::from_value(valeur.clone()).map_err(|e| format!("{cle}: {e}"))?;
+                    props.insert(cle.clone(), v);
                 }
             }
+            if seen.insert((ids[0].clone(), ids[1].clone())) {
+                links.push((ids[0].clone(), ids[1].clone(), props));
+            }
         }
+        // **Tout le lot vérifié avant la première écriture** : un bout ni en
+        // base ni en file refuse le lot entier, en le nommant par l'identité
+        // que l'appelant a donnée. Le verbe de lien, lui, poserait « rien » sans
+        // erreur (`MATCH … MERGE`).
+        let paires: Vec<(String, String)> =
+            links.iter().map(|(a, b, _)| (a.clone(), b.clone())).collect();
+        let absents = cat.bouts_absents(relation, &paires).map_err(|e| e.to_string())?;
+        if !absents.is_empty() {
+            let noms: Vec<String> = absents
+                .iter()
+                .map(|(entite, uuid)| {
+                    let qui = identites
+                        .get(&(entite.clone(), uuid.clone()))
+                        .cloned()
+                        .unwrap_or_else(|| uuid.clone());
+                    format!("{entite} {qui}")
+                })
+                .collect();
+            return Err(format!(
+                "missing endpoint(s): {}; no links in this batch written",
+                noms.join(", ")
+            ));
+        }
+        let verified = paires.len();
         let queued = cat
             .mettre_en_file_les_liens(relation, links)
             .map_err(|e| e.to_string())?;
-        let report = cat.drain();
+        // **La fermeture du lien, pas toute la file** (relecture de rag3db-97) :
+        // un bout encore en file est posé avec lui, le reste de la file attend
+        // son tour. `drain()` vidait tout ce qui attendait, y compris ce qui
+        // n'avait rien à voir avec ces liens.
+        // Au moins la donnée, quel que soit le régime : un outil qui rend sans
+        // avoir posé ses liens (régime par lot, exigence vide) mentirait.
+        let exige = cat.exigence_d_ecriture_par_defaut() | crate::disponibilite::Disponibilites::DONNEE;
+        let report = cat.tenir_l_exigence_d_ecriture(&definition.from, exige);
         if report.failed > 0 {
             return Err(format!(
                 "link batch failed; writes may be partial: {:?}",
                 report.warnings
             ));
         }
-        ctx.set_output("report",PortValue::new(json!({"submitted":queued,"processed":report.processed,"unchanged":report.unchanged,"warnings":report.warnings})));
+        // `atomic: false` est dit, pas sous-entendu : le lot n'est pas encore
+        // enveloppé d'une transaction (la page du lien, §2, point 4). Et pas de
+        // `posed` : un `MERGE` ne dit pas s'il a créé — ce compte viendra de
+        // `Write::Link` (rag3db-6f).
+        ctx.set_output(
+            "report",
+            PortValue::new(json!({
+                "submitted": queued,
+                "verified": verified,
+                "processed": report.processed,
+                "unchanged": report.unchanged,
+                "atomic": false,
+                "warnings": report.warnings
+            })),
+        );
         Ok(())
     }
 }

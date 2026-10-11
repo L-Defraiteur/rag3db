@@ -289,6 +289,34 @@ impl Node for AddRefNode {
         let uuid_fiche = cat
             .entity_uuid(&from_entity, &fiche)
             .map_err(|e| format!("AddRefNode: l'identité de la fiche : {e}"))?;
+        // **La fiche doit exister** (11 octobre 2026). `entity_uuid` recompose
+        // un uuid à partir de champs, il ne prouve rien sur l'existence ; et le
+        // verbe de lien pose par `MATCH … MERGE`, qui ne fait rien sans erreur
+        // quand un bout manque. Ce nœud annonçait donc `executed: true` et un
+        // lien pour une fiche qui n'existait pas (une faute dans `claim`, un
+        // autre `reach`). La référence, elle, est écrite : `add_ref` est
+        // idempotent, le rappel avec la bonne fiche ne la doublera pas.
+        let absents = cat
+            .bouts_absents(&relation, &[(uuid_fiche.clone(), uuid_ref.clone())])
+            .map_err(|e| format!("AddRefNode: vérifier la fiche : {e}"))?;
+        if absents.iter().any(|(_, u)| *u == uuid_fiche) {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "why": format!(
+                    "aucune {from_entity} n'a cette identité ({}) : la référence est écrite \
+                     seule, sans lien",
+                    fiche
+                        .iter()
+                        .map(|(k, v)| format!("{k} = {}", v.as_str().unwrap_or("?")))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                "ref": {"genre": genre, "valeur": normale, "uuid": uuid_ref, "ecrite_seule": true},
+                "rappel": "relis la fiche (ses champs d'identité exacts), puis rappelle add_ref \
+                           avec la même valeur : la référence ne sera pas doublée",
+            }));
+            return Ok(());
+        }
         cat.link(&relation, uuid_fiche.clone(), uuid_ref.clone(), BTreeMap::new())
             .map_err(|e| format!("AddRefNode: le lien {relation} : {e}"))?;
 

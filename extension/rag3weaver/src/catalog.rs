@@ -6102,7 +6102,7 @@ impl Catalog {
     /// Une mise à jour ou une suppression dans cette fermeture emmène le
     /// graphe sans GPU même au niveau donnée : ses conséquences sur les
     /// chunks n'ont pas encore de place en base (réconciliation, C5).
-    fn tenir_l_exigence_d_ecriture(
+    pub(crate) fn tenir_l_exigence_d_ecriture(
         &mut self,
         graine: &str,
         exige: crate::disponibilite::Disponibilites,
@@ -6494,6 +6494,118 @@ impl Catalog {
         }
         self.mettre_en_file_les_derivations_avec_dette(derivations);
         Ok(n)
+    }
+
+    /// **Les bouts absents d'un lot de liens** : ceux qui ne sont **ni en base
+    /// ni en file**. Rend `(entité, uuid)` pour chacun, une fois ; vide si tous
+    /// existent.
+    ///
+    /// Le verbe de lien pose ses arêtes par `MATCH … MERGE` : un bout absent
+    /// n'y est pas une erreur, et le lien ne s'écrit pas, sans un mot (mesuré
+    /// le 11 octobre 2026, `tests/e2e_garde_des_liens.rs`). Ceci est la
+    /// vérification qu'un appelant fait **avant** d'écrire, pour refuser en
+    /// nommant le bout manquant — ce qu'aucun compte d'arêtes après coup ne
+    /// peut faire.
+    ///
+    /// Trois règles, pour que « existe » soit juste (relecture de rag3db-97) :
+    ///
+    /// - **en file compte comme existant** : un bout créé plus tôt dans le même
+    ///   run et pas encore drainé sera posé par la fermeture du lien. On lit
+    ///   son `_uuid` dans ses données, pas dans sa référence, que le drain seul
+    ///   résout ;
+    /// - **une suppression en file l'emporte** : un bout présent en base mais
+    ///   en file de suppression est absent — sinon le lien viserait une ligne
+    ///   qui part au même drain, et selon l'ordre du drain il se perdrait ou
+    ///   resterait pendant ;
+    /// - les mises à jour en file ne comptent pas : la ligne est déjà en base.
+    ///
+    /// La lecture passe par l'IR (`Select::by_uuids`, une colonne), par
+    /// tranches de 512, une requête par entité et par tranche — jamais une
+    /// par lien. Un dialecte qui ne la traduit pas se refuse en le disant,
+    /// jamais en rendant « tout existe ».
+    pub fn bouts_absents(
+        &self,
+        rel_name: &str,
+        paires: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, CatalogError> {
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let supprimes: HashSet<(&str, &str)> = self
+            .pending
+            .deletes
+            .iter()
+            .map(|d| (d.entity_name.as_str(), d.uuid.as_str()))
+            .collect();
+        let en_file: HashSet<(&str, &str)> = self
+            .pending
+            .entities
+            .iter()
+            .filter_map(|e| {
+                e.data
+                    .get("_uuid")
+                    .and_then(CypherValue::as_str)
+                    .map(|u| (e.entity_name.as_str(), u))
+            })
+            .collect();
+        let mut absents: Vec<(String, String)> = Vec::new();
+        let mut vus: HashSet<(&str, &str)> = HashSet::new();
+        let mut a_lire: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (de, vers) in paires {
+            for bout in [(rel_def.from.as_str(), de.as_str()), (rel_def.to.as_str(), vers.as_str())] {
+                if !vus.insert(bout) {
+                    continue;
+                }
+                if supprimes.contains(&bout) {
+                    absents.push((bout.0.to_string(), bout.1.to_string()));
+                } else if !en_file.contains(&bout) {
+                    a_lire.entry(bout.0).or_default().push(bout.1);
+                }
+            }
+        }
+        for (entite, uuids) in a_lire {
+            let requete = self
+                .dialect_arc()
+                .select(&rag3weaver_ir::Select::by_uuids(
+                    entite,
+                    vec![rag3weaver_ir::Column::Node("_uuid".into())],
+                ))
+                .map_err(|e| {
+                    CatalogError::SchemaError(format!(
+                        "vérifier les bouts de « {rel_name} » : ce dialecte ne traduit pas la \
+                         lecture par uuids ({e}) — le lien n'est pas posé plutôt que posé sans \
+                         savoir"
+                    ))
+                })?;
+            for tranche in uuids.chunks(512) {
+                let liste = CypherValue::List(
+                    tranche.iter().map(|u| CypherValue::String((*u).to_string())).collect(),
+                );
+                let lignes = self.execute_raw_with_params(
+                    &requete,
+                    &[crate::connection::QueryParam::new("uuids", liste)],
+                )?;
+                // Une ligne par uuid présent ; on retient toute chaîne de la
+                // ligne, pour ne dépendre ni de l'ordre ni du nombre de
+                // colonnes que le dialecte rend (rag3db rend l'uuid demandé
+                // en tête, puis la colonne lue).
+                let trouves: HashSet<&str> = lignes
+                    .rows
+                    .iter()
+                    .flatten()
+                    .filter_map(CypherValue::as_str)
+                    .collect();
+                absents.extend(
+                    tranche
+                        .iter()
+                        .filter(|u| !trouves.contains(**u))
+                        .map(|u| (entite.to_string(), (*u).to_string())),
+                );
+            }
+        }
+        Ok(absents)
     }
 
     fn mettre_en_file_le_lien(

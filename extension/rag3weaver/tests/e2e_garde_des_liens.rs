@@ -1,4 +1,4 @@
-//! E2E : **ce que la garde de `RelationBatchNode` protège — établi, pas supposé.**
+//! E2E : **ce que la garde de `RelationBatchNode` protégeait — établi, puis la garde retirée.**
 //!
 //! `RelationBatchNode` refuse de poser une relation dès qu'un bout est une entité
 //! **gérée** : cycle de vie, révision, dates serveur, dates de transition ou
@@ -13,21 +13,25 @@
 //! d'entités déclarées), on établit **ce qu'elle protège**. Règle du dépôt : une
 //! garde ne se relâche pas sans prouver ce qu'elle mesurait, champ à champ.
 //!
-//! Ce témoin fait trois choses :
+//! **Premier temps** (`49142d58f`) : la garde épinglée telle qu'elle était, puis la
+//! même relation posée par le chemin qu'elle barrait (`Catalog::link`) entre une
+//! entité à cycle de vie, révision, dates serveur et date de transition, une
+//! entité révisée et une entité **immuable** — aucun champ d'aucun bout ne
+//! changeait, et chaque garantie déclarée tenait après. Elle ne protégeait donc
+//! aucune garantie déclarée.
 //!
-//! 1. **il épingle la garde telle qu'elle est** : un outil déclaré sur
-//!    `link_snapshot.mmd` refuse deux bouts gérés, en le disant ;
-//! 2. **il pose la même relation par le chemin que la garde barre** — le verbe du
-//!    catalogue (`Catalog::link`), celui qu'`AddRefNode` emploie déjà, depuis la
-//!    liste blanche de base, entre deux entités gérées du gabarit `memory` — et
-//!    relit chaque bout **champ à champ** avant et après ;
-//! 3. **il vérifie que chaque garantie déclarée tient encore après le lien** : la
-//!    révision attendue est la même, l'immuable rejoue à l'identique, la machine à
-//!    états refuse toujours un passage non déclaré.
+//! **Second temps, ce fichier aujourd'hui** (marche 1 de la page
+//! `docs/11-octobre-2026-memoire-longue/01-un-lien-entre-deux-identites-declarees.md`) :
+//! la garde est retirée, et **les mêmes liens passent par l'outil**, avec les mêmes
+//! relectures champ à champ. Plus ce que le nœud général doit faire de neuf :
 //!
-//! Si ces trois points tiennent, la garde ne protège **aucune garantie déclarée** :
-//! elle délimite une portée (« liens d'un instantané entre entités brutes »), et
-//! c'est ce que la page du nœud générique doit dire avant le code.
+//! - un bout absent refuse le lot entier, nommé par l'identité que l'appelant a
+//!   donnée ;
+//! - « existe » veut dire en base **ou en file**, et une suppression en file
+//!   l'emporte ;
+//! - les propriétés sont permises quand la relation les déclare, et une propriété
+//!   non déclarée se refuse en la nommant ;
+//! - `add_ref` vers une fiche qui n'existe pas ne prétend plus avoir lié.
 //!
 //! Run with: ./run_e2e.sh --test e2e_garde_des_liens
 
@@ -86,7 +90,20 @@ fn manifeste(dir: &Path) -> PathBuf {
     let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
     let put = gabarits.join("backends/notebook/graphs/put.mmd");
     let get = gabarits.join("backends/notebook/graphs/get.mmd");
-    let lien_d_instantane = gabarits.join("tools/link_snapshot.mmd");
+    let lien = gabarits.join("tools/link_snapshot.mmd");
+    let memoire = gabarits.join("backends/memory");
+    // Ref et RefType **recopiées du gabarit livré** puis retirées de leurs
+    // signaux — la leçon du ticket `--demon` : copier un gabarit et en retirer,
+    // jamais deviner ce qui est exigé.
+    let gabarit_memoire: Value =
+        serde_json::from_slice(&std::fs::read(memoire.join("backend.json")).unwrap()).unwrap();
+    let recopier = |nom: &str| {
+        let mut e = gabarit_memoire["entities"][nom].clone();
+        let schema = e["schema"].as_str().unwrap().to_string();
+        e["schema"] = json!(memoire.join(schema).display().to_string());
+        e["config"]["signals"] = json!([]);
+        e
+    };
 
     let ecrire = |nom: &str, v: Value| {
         std::fs::write(dir.join(nom), serde_json::to_vec_pretty(&v).unwrap()).unwrap();
@@ -152,11 +169,16 @@ fn manifeste(dir: &Path) -> PathBuf {
                 "schema": "piece.json",
                 "config": config("cle", "contenu", &[], None),
                 "writes": {"immutable": true, "created_at": "created_at"}
-            }
+            },
+            "Ref": recopier("Ref"),
+            "RefType": recopier("RefType")
         },
         "relations": {
             "ANCRE": {"from": "Fiche", "to": "Sujet"},
-            "PREUVE": {"from": "Fiche", "to": "Piece"}
+            "PREUVE": {"from": "Fiche", "to": "Piece"},
+            // Une relation qui déclare une propriété.
+            "NOTE": {"from": "Fiche", "to": "Sujet", "properties": {"poids": {"type": "string"}}},
+            "CITE": {"from": "Fiche", "to": "Ref"}
         },
         "tools": {
             "put_fiche": {"graph": put, "bindings": {"entity": "Fiche"},
@@ -171,8 +193,14 @@ fn manifeste(dir: &Path) -> PathBuf {
                           "input_payloads": {"record": {"entity": "Sujet", "view": "identity"}}},
             "get_piece": {"graph": get, "bindings": {"entity": "Piece"},
                           "input_payloads": {"record": {"entity": "Piece", "view": "identity"}}},
-            // La garde, telle qu'elle est : l'outil d'instantané sur la même relation.
-            "lier_par_instantane": {"graph": lien_d_instantane, "bindings": {"relation": "ANCRE"}}
+            "ancrer": {"graph": lien, "bindings": {"relation": "ANCRE"}},
+            "prouver": {"graph": lien, "bindings": {"relation": "PREUVE"}},
+            "noter": {"graph": lien, "bindings": {"relation": "NOTE"}},
+            "add_ref": {"graph": memoire.join("graphs/add_ref.mmd"),
+                        "bindings": {"refs_entity": "Ref", "types_entity": "RefType",
+                                     "from_entity": "Fiche", "relation": "CITE"}},
+            "create_ref_type": {"graph": memoire.join("graphs/create_ref_type.mmd"),
+                                "bindings": {"types_entity": "RefType"}}
         }
     });
     let chemin = dir.join("backend.json");
@@ -226,12 +254,7 @@ fn ecarts(avant: &Map<String, Value>, apres: &Map<String, Value>) -> Vec<String>
         .collect()
 }
 
-#[test]
-#[ignore]
-fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
-    let dir = tempfile::tempdir().expect("dossier");
-    let backend = ouvrir(&manifeste(dir.path()));
-
+fn ecrire_les_trois(backend: &Backend) {
     backend
         .call("put_fiche", json!({"record": {"titre": "duty cycle", "corps": "70 %", "etat": "courant"}}))
         .expect("la fiche");
@@ -241,40 +264,40 @@ fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
     backend
         .call("put_piece", json!({"record": {"cle": "mesure-12", "contenu": "à 100 % le compositeur fige"}}))
         .expect("la pièce");
+}
 
+#[test]
+#[ignore]
+fn deux_bouts_geres_se_lient_par_l_outil_et_leurs_garanties_tiennent() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
     let fiche_id = json!({"titre": "duty cycle"});
     let sujet_id = json!({"titre": "régime GPU"});
     let piece_id = json!({"cle": "mesure-12"});
 
-    // ── 1. La garde, telle qu'elle est ───────────────────────────────────
-    let refus = backend
-        .call(
-            "lier_par_instantane",
-            json!({"links": [{"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}}]}),
-        )
-        .expect_err("RelationBatchNode refuse deux bouts gérés aujourd'hui");
-    assert!(
-        refus.contains("managed entities"),
-        "le refus de la garde, mot pour mot : {refus}"
-    );
-    assert_eq!(compter(&backend, "ANCRE"), 0, "le refus n'a rien écrit");
-
-    // ── 2. La même relation par le chemin que la garde barre ──────────────
+    // ── 1. Les liens passent par l'outil, là où la garde les refusait ────
     let avant = [
         lire(&backend, "get_fiche", fiche_id.clone()),
         lire(&backend, "get_sujet", sujet_id.clone()),
         lire(&backend, "get_piece", piece_id.clone()),
     ];
-    {
-        let f = uuid(&backend, "Fiche", "titre", "duty cycle");
-        let s = uuid(&backend, "Sujet", "titre", "régime GPU");
-        let p = uuid(&backend, "Piece", "cle", "mesure-12");
-        let mut cat = backend.catalog.lock().unwrap();
-        cat.link("ANCRE", f.clone(), s, BTreeMap::new()).expect("ANCRE entre deux bouts gérés");
-        cat.link("PREUVE", f, p, BTreeMap::new()).expect("PREUVE vers un bout immuable");
-    }
+    let r = backend
+        .call("ancrer", json!({"links": [{"from": fiche_id, "to": sujet_id}]}))
+        .expect("ANCRE entre deux bouts gérés, par l'outil");
+    assert_eq!(r["result"]["verified"], 1, "{r}");
+    assert_eq!(r["result"]["atomic"], false, "le rapport dit qu'il n'est pas atomique : {r}");
+    backend
+        .call("prouver", json!({"links": [{"from": fiche_id, "to": piece_id}]}))
+        .expect("PREUVE vers un bout immuable, par l'outil");
     assert_eq!(compter(&backend, "ANCRE"), 1, "le lien est posé");
     assert_eq!(compter(&backend, "PREUVE"), 1, "le lien est posé");
+    // Reposé : idempotent, pas d'arête en double.
+    backend
+        .call("ancrer", json!({"links": [{"from": fiche_id, "to": sujet_id}]}))
+        .expect("reposer le même lien");
+    assert_eq!(compter(&backend, "ANCRE"), 1, "reposer ne double pas");
+
     let apres = [
         lire(&backend, "get_fiche", fiche_id.clone()),
         lire(&backend, "get_sujet", sujet_id.clone()),
@@ -290,10 +313,7 @@ fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
         "poser un lien ne doit changer AUCUN champ d'un bout — écarts : {tous:#?}"
     );
 
-    // ── 3. Chaque garantie déclarée tient encore ─────────────────────────
-    //
-    // La révision : l'édition attendue sur la révision lue AVANT le lien passe,
-    // donc le lien ne l'a pas fait monter.
+    // ── 2. Chaque garantie déclarée tient encore ─────────────────────────
     let r = backend
         .call(
             "put_sujet",
@@ -303,7 +323,6 @@ fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
         .expect("la révision lue avant le lien est toujours la bonne");
     assert_eq!(r["result"]["data"]["revision"], 2, "{r}");
 
-    // L'immuable : rejoué à l'identique, il rend « inchangé » ; modifié, il refuse.
     let r = backend
         .call("put_piece", json!({"record": {"cle": "mesure-12", "contenu": "à 100 % le compositeur fige"}}))
         .expect("le rejeu identique d'un immuable");
@@ -313,8 +332,6 @@ fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
         .expect_err("un immuable modifié se refuse toujours");
     assert!(refus.contains("immutable"), "{refus}");
 
-    // La machine à états : la transition déclarée passe et date sa revue ; le
-    // retour non déclaré se refuse toujours.
     let r = backend
         .call(
             "put_fiche",
@@ -333,9 +350,126 @@ fn la_garde_des_liens_ne_protege_aucune_garantie_declaree() {
         .expect_err("a_revoir → courant n'est pas déclaré");
     assert!(!refus.is_empty());
 
-    // Et les liens sont toujours là après ces écritures.
     assert_eq!(compter(&backend, "ANCRE"), 1);
     assert_eq!(compter(&backend, "PREUVE"), 1);
+}
+
+#[test]
+#[ignore]
+fn un_bout_absent_refuse_le_lot_entier_en_le_nommant() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    let refus = backend
+        .call(
+            "ancrer",
+            json!({"links": [
+                {"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}},
+                {"from": {"titre": "duty cycle"}, "to": {"titre": "jamais écrit"}}
+            ]}),
+        )
+        .expect_err("un bout absent refuse le lot");
+    assert!(
+        refus.contains("Sujet") && refus.contains("jamais écrit") && refus.contains("no links"),
+        "le refus nomme le bout par l'identité donnée, et dit que rien n'est écrit : {refus}"
+    );
+    assert_eq!(compter(&backend, "ANCRE"), 0, "ni le bon lien ni le mauvais : le lot entier");
+}
+
+#[test]
+#[ignore]
+fn exister_c_est_en_base_ou_en_file_et_une_suppression_en_file_l_emporte() {
+    use rag3weaver::disponibilite::Disponibilites;
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    let f = uuid(&backend, "Fiche", "titre", "duty cycle");
+    let s = uuid(&backend, "Sujet", "titre", "régime GPU");
+    let mut cat = backend.catalog.lock().unwrap();
+
+    // En base : présent.
+    assert_eq!(cat.bouts_absents("ANCRE", &[(f.clone(), s.clone())]).unwrap(), vec![]);
+
+    // En file, pas encore drainé : présent.
+    let mut nouveau = BTreeMap::new();
+    nouveau.insert("titre".to_string(), CypherValue::String("en file".into()));
+    nouveau.insert("corps".to_string(), CypherValue::String("pas encore posé".into()));
+    cat.create_jusqu_a("Sujet", nouveau, Disponibilites::AUCUNE).expect("mis en file");
+    let en_file = {
+        let mut l = BTreeMap::new();
+        l.insert("titre".to_string(), CypherValue::String("en file".into()));
+        cat.entity_uuid("Sujet", &l).unwrap()
+    };
+    assert_eq!(
+        cat.bouts_absents("ANCRE", &[(f.clone(), en_file.clone())]).unwrap(),
+        vec![],
+        "un bout créé dans le même run et pas encore drainé n'est pas absent"
+    );
+
+    // En base mais en file de suppression : absent.
+    cat.delete_jusqu_a("Sujet", &s, Disponibilites::AUCUNE).expect("suppression en file");
+    assert_eq!(
+        cat.bouts_absents("ANCRE", &[(f.clone(), s.clone())]).unwrap(),
+        vec![("Sujet".to_string(), s.clone())],
+        "une suppression en file l'emporte sur la présence en base"
+    );
+}
+
+#[test]
+#[ignore]
+fn une_propriete_declaree_se_pose_et_une_autre_se_refuse_en_la_nommant() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    let paire = json!({"from": {"titre": "duty cycle"}, "to": {"titre": "régime GPU"}});
+
+    let mut avec = paire.clone();
+    avec["props"] = json!({"poids": "fort"});
+    backend.call("noter", json!({"links": [avec]})).expect("une propriété déclarée");
+    let r = backend
+        .catalog
+        .lock()
+        .unwrap()
+        .execute_raw_with_params("MATCH ()-[r:NOTE]->() RETURN r.poids", &[])
+        .expect("la relecture");
+    assert_eq!(r.rows.len(), 1);
+    assert_eq!(r.rows[0][0].as_str(), Some("fort"), "la propriété est posée");
+
+    let mut faux = paire.clone();
+    faux["props"] = json!({"couleur": "bleu"});
+    let refus = backend.call("noter", json!({"links": [faux]})).expect_err("non déclarée");
+    assert!(refus.contains("couleur") && refus.contains("poids"), "{refus}");
+
+    let mut sur_ancre = paire.clone();
+    sur_ancre["props"] = json!({"poids": "fort"});
+    let refus = backend.call("ancrer", json!({"links": [sur_ancre]})).expect_err("ANCRE n'en déclare aucune");
+    assert!(refus.contains("declares no properties"), "{refus}");
+}
+
+#[test]
+#[ignore]
+fn add_ref_vers_une_fiche_absente_ne_pretend_plus_avoir_lie() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let backend = ouvrir(&manifeste(dir.path()));
+    ecrire_les_trois(&backend);
+    backend
+        .call("create_ref_type", json!({"name": "fichier", "description": "un chemin", "forme": "relatif", "confirm": true}))
+        .expect("le genre");
+
+    let r = backend
+        .call("add_ref", json!({"genre": "fichier", "valeur": "src/a.rs", "fiche": {"titre": "pas de fiche"}}))
+        .expect("l'appel rend une réponse");
+    let rendu = &r["result"];
+    assert_eq!(rendu["executed"], false, "la citation n'est pas liée : {r}");
+    assert!(rendu["why"].as_str().unwrap_or("").contains("pas de fiche"), "la fiche est nommée : {r}");
+    assert_eq!(rendu["ref"]["ecrite_seule"], true, "{r}");
+    assert_eq!(compter(&backend, "CITE"), 0);
+
+    let r = backend
+        .call("add_ref", json!({"genre": "fichier", "valeur": "src/a.rs", "fiche": {"titre": "duty cycle"}}))
+        .expect("avec la bonne fiche");
+    assert_eq!(r["result"]["executed"], true, "{r}");
+    assert_eq!(compter(&backend, "CITE"), 1, "le lien est posé, la référence n'est pas doublée");
 }
 
 /// **Un lien vers un bout absent rend `Ok` et n'écrit rien** — mesuré le
