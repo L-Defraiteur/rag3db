@@ -241,9 +241,45 @@ racine de l'arbre qui l'a bâti. Un autre arbre est **refusé**, nommément
   `CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-<session>/<branche>`,
   effacé à la fusion de la branche ; le plafond de 20 Go vaut pour
   `target-<session>` entier ;
-- `RAG3WEAVER_TARGET_REPRENDRE=1` : `cargo clean -p` de chaque paquet local
-  (aujourd'hui `rag3weaver` et `rag3weaver-ir`, lus par `cargo metadata`), les
-  dépendances gardées, puis le target est noté au nom de l'arbre courant.
+- `RAG3WEAVER_TARGET_REPRENDRE=1` : efface les empreintes
+  (`.fingerprint/<paquet>-<hachage>`) de chaque paquet local, lus par
+  `cargo metadata --all-features` : aujourd'hui `rag3weaver`, `rag3weaver-ir`,
+  `codeparsers`, `rag3db` (tools/rust_api) et `tree-sitter-scss`. Elle le fait
+  dans **chaque profil et chaque triplet**, vérifie qu'il n'en reste aucune,
+  puis note le target au nom de l'arbre courant. Les dépendances sont gardées.
+
+**La première reprise ne reprenait pas tout** (constat de G, 11 octobre). Elle
+passait par `cargo clean -p`, qui ne nettoie que le dossier de l'hôte
+(`debug/`) : les artefacts bâtis sous un triplet explicite
+(`--target x86_64-unknown-linux-gnu`, comme les bâtis du paquet npm) restaient.
+G a obtenu « Removed 0 files » et un target noté comme repris. Le témoin
+`scripts/test_garde_target.sh` rougit sur cette version (deux cas sur huit :
+une empreinte sous le triplet reste, et le triplet ne rebâtit pas `ir`) et
+passe sur la nouvelle. Il couvre aussi le chemin noté canonique, le refus,
+le rebâti de l'hôte et un fichier touché après reprise (ligne « Checking »).
+
+La première version avait un second trou : `cargo metadata` sans
+`--all-features` ne liste pas une dépendance locale optionnelle. Elle ne
+reprenait donc ni `codeparsers` (sous la feature `code`), ni `rag3db`, ni
+`tree-sitter-scss`, alors que le pointeur de codeparsers bouge plusieurs fois
+par jour. Un sous-module non initialisé fait échouer `cargo metadata` : la
+garde le dit et refuse.
+
+**Preuve sur le vrai crate** (target-dossiers, repris du worktree flux effacé) :
+le `cargo check --tests --features rag3db-native,code` suivant revoit les cinq
+paquets locaux (`Compiling rag3weaver`, `rag3db`, `tree-sitter-scss`,
+`Checking rag3weaver-ir`, `codeparsers`, en 61 s). Après `touch src/lib.rs`, le
+check suivant montre `Checking rag3weaver`.
+
+Deux réserves sur le constat :
+- le témoin manuel de G (`touch src/daemon/mod.rs` puis
+  `cargo check --tests --features rag3db-native,code`) ne pouvait pas montrer de
+  ligne « Checking » : `src/daemon` n'est compilé qu'avec la feature `daemon`,
+  absente de ce jeu ;
+- le chemin non canonique noté chez G (`…/extension/rag3weaver/../..`) n'est
+  pas reproduit : la garde canonisait déjà l'arbre (`pwd -P`). Elle canonise
+  désormais aussi le target. Un marqueur écrit à la main ou par un autre script
+  reste possible ; il est refusé comme un autre arbre.
 
 Un `cargo` lancé à la main ne passe pas par la garde : la règle du
 sous-dossier reste la seule protection hors des deux scripts.

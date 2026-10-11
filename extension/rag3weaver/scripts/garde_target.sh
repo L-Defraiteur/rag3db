@@ -8,14 +8,20 @@
 # que l'ir du worktree le définit) : un rouge de cette sorte est faux, un vert
 # peut l'être aussi.
 #
-# Le target garde dans `.arbre-du-target` la racine de l'arbre qui l'a bâti.
-# Un autre arbre est refusé, nommément ; `RAG3WEAVER_TARGET_REPRENDRE=1` efface
-# les artefacts des paquets locaux (pas les dépendances) et le reprend.
+# Le target garde dans `.arbre-du-target` la racine canonique de l'arbre qui
+# l'a bâti. Un autre arbre est refusé, nommément. `RAG3WEAVER_TARGET_REPRENDRE=1`
+# efface les empreintes des paquets locaux (`.fingerprint/<paquet>-<hachage>`,
+# dans chaque profil et chaque triplet), ce qui oblige cargo à les rebâtir,
+# puis **vérifie** qu'il n'en reste aucune avant de reprendre le target.
+# `cargo clean -p` n'est pas employé : chez G il a rendu « Removed 0 files »
+# sans dire pourquoi, et la reprise passait pour faite.
+# Le témoin : scripts/test_garde_target.sh.
 garder_le_target() {
-  local target="$1" arbre="$2" marque note paquets
+  local target="$1" arbre="$2" marque note paquets restes p
+  mkdir -p "$target" || return 2
+  target="$(cd "$target" && pwd -P)" || return 2
+  arbre="$(cd "$arbre" && pwd -P)" || return 2
   marque="$target/.arbre-du-target"
-  mkdir -p "$target"
-  arbre="$(cd "$arbre" && pwd -P)"
   if [ ! -f "$marque" ]; then
     echo "$arbre" > "$marque"
     return 0
@@ -31,23 +37,46 @@ garder_le_target() {
     echo "  frais par les dates). Deux remèdes :"
     echo "    - un sous-dossier par worktree :"
     echo "        CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-<session>/<branche>"
-    echo "    - reprendre ce target (efface les paquets locaux, garde les dépendances) :"
-    echo "        RAG3WEAVER_TARGET_REPRENDRE=1"
+    echo "    - reprendre ce target (efface les empreintes des paquets locaux, garde les"
+    echo "      dépendances) : RAG3WEAVER_TARGET_REPRENDRE=1"
     return 2
   fi
 
-  paquets="$(cd "$arbre" && cargo metadata --format-version 1 2>/dev/null | python3 -c '
+  # --all-features : sans lui, une dépendance locale optionnelle (codeparsers,
+  # sous la feature code) n'est pas listée, et ses empreintes resteraient.
+  local meta err
+  err="$(mktemp)"
+  if ! meta="$(cd "$arbre" && cargo metadata --format-version 1 --all-features 2>"$err")"; then
+    echo "✗ reprise du target : cargo metadata a échoué dans $arbre"
+    grep -E '^(error|Caused by|  )' "$err" | head -4 | sed 's/^/    /'
+    echo "  (un sous-module non initialisé ? git submodule update --init)"
+    rm -f "$err"
+    return 2
+  fi
+  rm -f "$err"
+  paquets="$(echo "$meta" | python3 -c '
 import json, sys
 m = json.load(sys.stdin)
 print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})))
-')" || paquets=""
+' 2>/dev/null)"
   if [ -z "$paquets" ]; then
-    echo "✗ reprise du target : la liste des paquets locaux est vide (cargo metadata a échoué ?)"
+    echo "✗ reprise du target : la liste des paquets locaux est vide"
     return 2
   fi
-  echo "▸ target repris de $note : cargo clean des paquets locaux ($paquets)"
-  local args=() p
-  for p in $paquets; do args+=(-p "$p"); done
-  (cd "$arbre" && CARGO_TARGET_DIR="$target" cargo clean "${args[@]}") || return 2
+  echo "▸ target repris de $note : empreintes effacées pour $paquets"
+  for p in $paquets; do
+    find "$target" -path '*/.fingerprint/*' -prune -regextype posix-extended \
+      -regex ".*/\.fingerprint/${p}-[0-9a-f]{16}" -exec rm -rf {} + 2>/dev/null
+  done
+  restes=""
+  for p in $paquets; do
+    restes="$restes$(find "$target" -path '*/.fingerprint/*' -prune -regextype posix-extended \
+      -regex ".*/\.fingerprint/${p}-[0-9a-f]{16}" -print 2>/dev/null)"
+  done
+  if [ -n "$restes" ]; then
+    echo "✗ reprise du target : des empreintes de paquets locaux restent :"
+    echo "$restes" | sed 's/^/    /'
+    return 2
+  fi
   echo "$arbre" > "$marque"
 }
