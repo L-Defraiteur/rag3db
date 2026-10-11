@@ -72,6 +72,25 @@ protected:
     }
 };
 
+// Sous le mode (le défaut depuis le 11 octobre 2026), CREATE TABLE … AS crée la table et la
+// remplit dans le même plan : le COPY ne peut pas prendre l'index d'une table qui n'est pas
+// encore au catalogue avant l'exécution — il la prend à son initialisation, libre par
+// construction. Rouge sur la bascule (cinq tests Cypher ddl/rel_group : « Person2 does not
+// exist in catalog »), vert depuis.
+TEST_F(InsertLockTest, CreateTableAsTakesTheIndexOfTheTableItCreates) {
+    const auto copy = copyOfKeys(1, 5); // écrit le fichier .keys.csv
+    const auto path = databasePath + ".keys.csv";
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CREATE NODE TABLE Item2 AS LOAD FROM '" + path +
+                       "' (header=false) RETURN column0 AS id, column1 AS v;");
+    EXPECT_GE(locks().getNumResources(), 1u) << "[check: index-of-new-table-locked] ";
+    mustRun(*conn, "COMMIT;");
+    const auto result = conn->query("MATCH (n:Item2) RETURN count(n);");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 5) << "[check: rows-copied] ";
+    (void)copy;
+}
+
 TEST_F(InsertLockTest, WithoutMultiWritesNothingIsLocked) {
     mustRun(*conn, "CALL enable_multi_writes=false;"); // l'ancien défaut, posé
     mustRun(*conn, "BEGIN TRANSACTION;");
