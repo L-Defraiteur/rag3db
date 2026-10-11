@@ -84,17 +84,7 @@ fn racine_moteur() -> String {
 
 /// **Sur disque.** Voir l'en-tête : `/tmp` est de la mémoire vive ici.
 fn dossier_sur_disque(cas: &str) -> PathBuf {
-    let base = std::env::var("HOME").expect("HOME");
-    let d = PathBuf::from(base).join(".cache/rag3weaver-build/arret-brutal").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&d).expect("créer le dossier");
-    d
+    crate::common::dossier_de_suite("arret-brutal", cas)
 }
 
 /// Le chemin de la base : un **fichier** dans le dossier. Le moteur refuse un

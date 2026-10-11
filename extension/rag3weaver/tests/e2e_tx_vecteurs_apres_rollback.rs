@@ -49,13 +49,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/sonde-vecteurs").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d.join("base.rag3db")
+    crate::common::dossier_de_suite("sonde-vecteurs", cas).join("base.rag3db")
 }
 
 fn corpus() -> Vec<(String, String)> {

@@ -221,20 +221,44 @@ mod e2e_verrous;
 #[path = "../e2e_working_tree.rs"]
 mod e2e_working_tree;
 
+/// Les `tests/e2e_*.rs` suivis par git (index compris) — un brouillon non
+/// suivi d'une autre session ne compte pas. Sans git, tous les présents.
+fn suites_suivies() -> Vec<String> {
+    let crate_ = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let par_git = std::process::Command::new("git")
+        .args(["ls-files", "tests/e2e_*.rs"])
+        .current_dir(crate_)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter_map(|l| l.rsplit('/').next().map(str::to_string))
+                .collect::<Vec<_>>()
+        });
+    par_git.unwrap_or_else(|| {
+        std::fs::read_dir(crate_.join("tests"))
+            .map(|d| {
+                d.flatten()
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .filter(|n| n.starts_with("e2e_") && n.ends_with(".rs"))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
 /// **Chaque suite est montée.** Sans ce filet, une suite ajoutée sous
 /// `tests/` sans être montée ici ne serait plus bâtie du tout (`autotests =
 /// false`) — un saut en silence, le pire des défauts d'une batterie.
 #[test]
 fn chaque_suite_est_montee() {
     let ici = include_str!("main.rs");
-    let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let mut manquantes = Vec::new();
-    for e in std::fs::read_dir(&dossier).expect("tests/ lisible").flatten() {
-        let nom = e.file_name().to_string_lossy().to_string();
-        if nom.starts_with("e2e_") && nom.ends_with(".rs") {
-            if !ici.contains(&format!("#[path = \"../{nom}\"]")) {
-                manquantes.push(nom);
-            }
+    for nom in suites_suivies() {
+        if !ici.contains(&format!("#[path = \"../{nom}\"]")) {
+            manquantes.push(nom);
         }
     }
     assert!(
@@ -254,12 +278,8 @@ fn chaque_suite_est_montee() {
 fn aucune_suite_ne_se_relance_par_son_nom_court() {
     let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let mut fautes = Vec::new();
-    for e in std::fs::read_dir(&dossier).expect("tests/ lisible").flatten() {
-        let nom = e.file_name().to_string_lossy().to_string();
-        if !(nom.starts_with("e2e_") && nom.ends_with(".rs")) {
-            continue;
-        }
-        let texte = std::fs::read_to_string(e.path()).unwrap_or_default();
+    for nom in suites_suivies() {
+        let texte = std::fs::read_to_string(dossier.join(&nom)).unwrap_or_default();
         let compact: String = texte.split_whitespace().collect::<Vec<_>>().join(" ");
         if compact.contains("\"--exact\", \"") {
             fautes.push(nom);

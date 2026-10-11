@@ -50,7 +50,19 @@ impl Spiller {
     /// reprise après crash demande. Il vivait dans `temp_dir()`, et `/tmp` est
     /// de la mémoire vive sur ce poste : le 4 octobre 2026, 7 183 dossiers et
     /// 11 Go en quatre heures. Sans dossier de cache connu, `temp_dir()`.
+    ///
+    /// `RAG3WEAVER_CHECKPOINT_DIR`, quand elle est posée (et absolue), passe
+    /// avant tout : qui déploie choisit où vont ses points de reprise, et le
+    /// harnais des e2e y range ceux de chaque suite, effacés derrière elle
+    /// (955 Mo de points de reprise de tests trouvés dans le vrai cache le
+    /// 11 octobre 2026).
     pub fn dossier_par_defaut() -> PathBuf {
+        if let Some(d) = std::env::var_os("RAG3WEAVER_CHECKPOINT_DIR")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+        {
+            return d;
+        }
         let cache = std::env::var_os("XDG_CACHE_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())

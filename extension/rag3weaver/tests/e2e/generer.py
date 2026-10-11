@@ -13,7 +13,25 @@ from pathlib import Path
 CRATE = Path(__file__).resolve().parents[2]
 TESTS = CRATE / "tests"
 
-suites = sorted(p.stem for p in TESTS.glob("e2e_*.rs"))
+def suites_suivies():
+    """Les `tests/e2e_*.rs` SUIVIS par git (index compris : `git add` suffit).
+    Un brouillon non suivi d'une autre session, dans un arbre partagé, n'est
+    jamais monté — sinon main.rs commité référencerait un fichier absent
+    partout ailleurs. Sans git, tous les fichiers présents."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "ls-files", "tests/e2e_*.rs"], cwd=CRATE,
+                           capture_output=True, text=True, check=True)
+        return sorted(pathlib.Path(l).stem for l in r.stdout.split())
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(p.stem for p in TESTS.glob("e2e_*.rs"))
+
+
+import pathlib
+suites = suites_suivies()
+for p in sorted(TESTS.glob("e2e_*.rs")):
+    if p.stem not in suites:
+        print(f"non suivie, non montée : {p.name} (git add, puis rejouer generer.py)")
 
 entete = '''//! **Le binaire unique des suites e2e** (11 octobre 2026, demande de Lucie :
 //! « bâtis une seule fois avec le même cœur, pas instanciés 50 fois »).
@@ -40,20 +58,44 @@ mod common;
 mods = "".join(f'#[path = "../{s}.rs"]\nmod {s};\n' for s in suites)
 
 filet = '''
+/// Les `tests/e2e_*.rs` suivis par git (index compris) — un brouillon non
+/// suivi d'une autre session ne compte pas. Sans git, tous les présents.
+fn suites_suivies() -> Vec<String> {
+    let crate_ = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let par_git = std::process::Command::new("git")
+        .args(["ls-files", "tests/e2e_*.rs"])
+        .current_dir(crate_)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter_map(|l| l.rsplit('/').next().map(str::to_string))
+                .collect::<Vec<_>>()
+        });
+    par_git.unwrap_or_else(|| {
+        std::fs::read_dir(crate_.join("tests"))
+            .map(|d| {
+                d.flatten()
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .filter(|n| n.starts_with("e2e_") && n.ends_with(".rs"))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
 /// **Chaque suite est montée.** Sans ce filet, une suite ajoutée sous
 /// `tests/` sans être montée ici ne serait plus bâtie du tout (`autotests =
 /// false`) — un saut en silence, le pire des défauts d'une batterie.
 #[test]
 fn chaque_suite_est_montee() {
     let ici = include_str!("main.rs");
-    let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let mut manquantes = Vec::new();
-    for e in std::fs::read_dir(&dossier).expect("tests/ lisible").flatten() {
-        let nom = e.file_name().to_string_lossy().to_string();
-        if nom.starts_with("e2e_") && nom.ends_with(".rs") {
-            if !ici.contains(&format!("#[path = \\"../{nom}\\"]")) {
-                manquantes.push(nom);
-            }
+    for nom in suites_suivies() {
+        if !ici.contains(&format!("#[path = \\"../{nom}\\"]")) {
+            manquantes.push(nom);
         }
     }
     assert!(
@@ -75,12 +117,8 @@ filet += '''
 fn aucune_suite_ne_se_relance_par_son_nom_court() {
     let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let mut fautes = Vec::new();
-    for e in std::fs::read_dir(&dossier).expect("tests/ lisible").flatten() {
-        let nom = e.file_name().to_string_lossy().to_string();
-        if !(nom.starts_with("e2e_") && nom.ends_with(".rs")) {
-            continue;
-        }
-        let texte = std::fs::read_to_string(e.path()).unwrap_or_default();
+    for nom in suites_suivies() {
+        let texte = std::fs::read_to_string(dossier.join(&nom)).unwrap_or_default();
         let compact: String = texte.split_whitespace().collect::<Vec<_>>().join(" ");
         if compact.contains("\\"--exact\\", \\"") {
             fautes.push(nom);

@@ -131,13 +131,7 @@ fn ligne<'a>(t: &'a str, p: &str) -> &'a str {
 }
 
 fn dossier(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(format!(
-        ".cache/rag3weaver-build/stockage-fts-{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("stockage-fts", cas)
 }
 
 #[test]

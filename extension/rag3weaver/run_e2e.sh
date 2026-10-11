@@ -236,13 +236,15 @@ a_la_sortie() {
   balayer_les_vieux_binaires
   # Le parent des dossiers de la passe (les suites ont effacé les leurs) :
   # même une passe interrompue nettoie. `RAG3WEAVER_GARDER=1` le garde.
-  if [ -n "${E2E_TMP_PARENT:-}" ] && [ -d "$E2E_TMP_PARENT" ]; then
+  local parent
+  for parent in "${E2E_TMP_PARENT:-}" "${E2E_DISQUE_PARENT:-}"; do
+    [ -n "$parent" ] && [ -d "$parent" ] || continue
     if [ "${RAG3WEAVER_GARDER:-}" = 1 ]; then
-      echo "▸ dossiers de la passe gardés (RAG3WEAVER_GARDER=1) : $E2E_TMP_PARENT"
+      echo "▸ dossiers de la passe gardés (RAG3WEAVER_GARDER=1) : $parent"
     else
-      rm -rf -- "$E2E_TMP_PARENT"
+      rm -rf -- "$parent"
     fi
-  fi
+  done
 }
 trap a_la_sortie EXIT
 
@@ -658,7 +660,9 @@ for ligne in open(sys.argv[1]):
 
   # 3. Chaque suite e2e : son processus, son dossier.
   for nom in "${e2e[@]}"; do
-    mkdir -p "$E2E_TMP_PARENT/$nom"
+    mkdir -p "$E2E_TMP_PARENT/$nom" "$E2E_DISQUE_PARENT/$nom/checkpoints"
+    export RAG3WEAVER_E2E_DOSSIER="$E2E_DISQUE_PARENT/$nom"
+    export RAG3WEAVER_CHECKPOINT_DIR="$E2E_DISQUE_PARENT/$nom/checkpoints"
     echo "     Running tests/$nom.rs (binaire e2e unique, filtre $nom::)"
     if [ -n "$TEST_FILTER" ]; then
       local noms=()
@@ -667,7 +671,7 @@ for ligne in open(sys.argv[1]):
       if [ ${#noms[@]} -eq 0 ]; then
         # La ligne que cargo écrit quand le filtre n'y désigne rien.
         printf '\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n'
-        rm -rf -- "${E2E_TMP_PARENT:?}/$nom"
+        rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
         continue
       fi
       TMPDIR="$E2E_TMP_PARENT/$nom" CARGO_MANIFEST_DIR="$WEAVER" \
@@ -679,9 +683,10 @@ for ligne in open(sys.argv[1]):
     statut=$?
     [ "$statut" -ne 0 ] && code=101
     if [ "${RAG3WEAVER_GARDER:-}" != 1 ]; then
-      rm -rf -- "${E2E_TMP_PARENT:?}/$nom"
+      rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
     fi
   done
+  unset RAG3WEAVER_E2E_DOSSIER RAG3WEAVER_CHECKPOINT_DIR
 
   # 4. Les autres tests nommés (sondes, rendus) : par cargo, comme avant.
   if [ ${#autres[@]} -gt 0 ]; then
@@ -697,10 +702,19 @@ for ligne in open(sys.argv[1]):
 
 # **Une suite non montée ne serait plus bâtie du tout** (autotests = false) :
 # refuser de partir plutôt que de la sauter en silence.
+# Seules les suites SUIVIES par git comptent (index compris : `git add`
+# suffit) : un brouillon non suivi d'une autre session, dans un arbre partagé,
+# n'est qu'annoncé — il ne bloque personne (11 octobre 2026).
 NON_MONTEES=()
+SUIVIES="$(git -C "$WEAVER" ls-files 'tests/e2e_*.rs' 2>/dev/null)"
 for f in "$WEAVER"/tests/e2e_*.rs; do
-  grep -qF "#[path = \"../$(basename "$f")\"]" "$WEAVER/tests/e2e/main.rs" \
-    || NON_MONTEES+=("$(basename "$f")")
+  b="$(basename "$f")"
+  grep -qF "#[path = \"../$b\"]" "$WEAVER/tests/e2e/main.rs" && continue
+  if [ -z "$SUIVIES" ] || printf '%s\n' "$SUIVIES" | grep -qx "tests/$b"; then
+    NON_MONTEES+=("$b")
+  else
+    echo "▸ suite non suivie et non montée, ignorée : $b (git add, puis python3 tests/e2e/generer.py)"
+  fi
 done
 if [ ${#NON_MONTEES[@]} -gt 0 ]; then
   echo "✗ suites non montées dans tests/e2e/main.rs : ${NON_MONTEES[*]}"
@@ -720,6 +734,23 @@ for d in "$E2E_TMP_RACINE"/rag3weaver-e2e-*; do
   fi
 done
 mkdir -p "$E2E_TMP_PARENT"
+
+# **Et un parent sur le vrai disque**, pour les suites qui ne veulent pas la
+# RAM de /tmp (arrêts brutaux, transactions, plein texte en fichiers) et pour
+# les points de reprise des catalogues de test : `RAG3WEAVER_E2E_DOSSIER`
+# (lu par `common::dossier_de_suite`) et `RAG3WEAVER_CHECKPOINT_DIR` pointent
+# dans `<parent>/<suite>/`, effacé derrière la suite comme son TMPDIR. Avant :
+# des bases gardées à chaque passe (arret-brutal, +4 par passe), et 955 Mo de
+# points de reprise de tests dans le vrai cache (11 octobre 2026).
+E2E_DISQUE_RACINE="${HOME}/.cache/rag3weaver-build"
+E2E_DISQUE_PARENT="$E2E_DISQUE_RACINE/e2e-$$"
+for d in "$E2E_DISQUE_RACINE"/e2e-[0-9]*; do
+  [ -d "$d" ] || continue
+  if [ ! -d "/proc/${d##*-}" ]; then
+    rm -rf -- "$d" && echo "▸ restes disque d'une passe morte effacés : $d"
+  fi
+done
+mkdir -p "$E2E_DISQUE_PARENT"
 
 # **Le target a un plafond.** Au-delà, la passe refuse de partir en le
 # disant : un target qui grossit sans fin est ce qui a rempli le disque le

@@ -63,13 +63,7 @@ fn racine_moteur() -> String {
 }
 
 fn dossier_sur_disque(cas: &str) -> PathBuf {
-    let d = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build/tx-par-paquet-arret").join(format!(
-        "{cas}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+    crate::common::dossier_de_suite("tx-par-paquet-arret", cas)
 }
 
 /// 300 fichiers : chacun définit une fonction et appelle la précédente ; un
