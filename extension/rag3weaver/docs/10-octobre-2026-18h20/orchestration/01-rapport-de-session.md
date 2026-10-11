@@ -683,3 +683,15 @@ condition 2 reste fermée. Le filet de rag3weaver reste en place jusqu'à ce que
 A l'ait retiré sur la lib rebâtie, témoin vert sans filet ; les archives npm
 avec le filet restent bonnes, l'alpha suivante portera le correctif. Rien
 vers l'amont (règle de Lucie).
+
+**Ajout de 4 h 20 : le point de reprise sous petit tampon, localisé** (hotfixs,
+ticket `a6905239d`). Pas de fuite : une table de BLOB de plus d'environ un
+quart du tampon fait échouer son point de reprise, même avec un CHECKPOINT
+après chaque validation — la réécriture hors place d'un segment de chaînes,
+relu entier, doublé par `bit_ceil`, recopié ; le segment grandit avec toute la
+colonne au lieu d'être borné. Limite pour le produit en attendant : sous 8 Gio
+de tampon, une table `_index_blobs` de plus de ~2 Gio échoue à son point de
+reprise (le plein texte n'y vit plus par défaut ; l'index creux encore).
+Correctif générique (segment borné, scindé par morceaux) chez hotfixs sur
+relecture du cœur, après la corruption du COPY. Le crochet de test et le
+message nommé du point de reprise interrompu attendent la même fusion.
