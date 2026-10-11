@@ -535,3 +535,20 @@ recherche avant master ; copier un gabarit livré et en retirer ; `pgrep -x`
 ne voit pas un nom de plus de 15 caractères (`pidof` + `/proc/<pid>/exe`) ;
 après un rebase, on ne repousse pas la branche ; jamais un push derrière un
 test non lu.
+
+## 10. Ajout de 2 h 40 : une décision de plus pour le matin
+
+**L'indexation portée par le démon** (page de A :
+`docs/10-octobre-2026-arbre-principal/03-l-indexation-portee-par-le-demon.md`).
+Deux faits lus cette nuit : `--demon` ne sauve pas une indexation
+(`rag3daemon` ne tient que la base, le catalogue reste dans le serveur MCP),
+et la commande en fond a le même défaut (tubes et poignée dans le
+processus) ; relancer `index` après un serveur tué est refusé (reprise qui
+exige le takeover, ticket ouvert). Trois formes : **A** arrêt propre entre
+deux paquets dans le serveur (1-2 j) ; **B** un processus d'index détaché
+(3-4 j, cession de la base pour point dur) ; **C** le démon possède le
+catalogue et les serveurs MCP deviennent des clients minces (1-2 semaines).
+Fait cette nuit : la ligne de vérité dans la réponse d'`index`, les journaux
+de la commande en fond en fichiers. Recommandation portée à Lucie : A puis C
+comme cible (c'est « installer = un démon » jusqu'au bout, et ça va avec le
+paquet npm) ; B ne vaut pas son coût. Rien de plus sans son mot.
