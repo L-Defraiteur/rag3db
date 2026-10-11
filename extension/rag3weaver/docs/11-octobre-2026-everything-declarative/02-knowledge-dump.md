@@ -107,3 +107,23 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
   `required: false`) : c'est la branche non prise la plus simple. `in` est un
   mot réservé de rhai : un port nommé `in` ne se lit pas par
   `input.inputs.in`.
+
+## Ce que le lot 2 a appris (`Decide`, `Route`)
+
+- Les ports d'un type de nœud se lisent sur le **schéma de sa fabrique**
+  (`ports_declares`), qui ne voyait pas la configuration :
+  `NodeFactory::schema_for(config)` existe pour les types dont les ports en
+  dépendent. Le test de dérive (`le_schema_declare_les_memes_ports_que_le_noeud`)
+  compare désormais `schema_for(minimum)` au nœud.
+- Tout nœud intégré est aussi une **fiche d'outil** pour l'agent
+  (`tool_defs(&nodes)` = intégrés + `SearchTool`) : ajouter un nœud change
+  `BUILTIN_NODE_COUNT` (51 + 14 sous `code`).
+- `node_config()` est ce que `to_definition` garde pour la reprise : un
+  paramètre qui n'y est pas est perdu au rebâti.
+- Les valeurs JSON passent entre nœuds en `PortType::Map` portant un
+  `serde_json::Value` (comme les nœuds scriptés) ; la configuration mermaid ne
+  connaît que des scalaires (`infer_scalar`) : une liste s'écrit `a|b`.
+- `MockDecider` refuse lui-même un nombre de probabilités différent du nombre
+  d'options : un témoin du compte passe par un `Decider` à soi.
+- Après un `git reset`/rebase du worktree, `git submodule update` : sinon
+  `codeparsers` reste à l'ancien pointeur et la feature `code` ne compile plus.

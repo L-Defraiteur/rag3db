@@ -9,9 +9,9 @@ acceptée par l'orchestration. Ce qu'on sait du code est dans `02-knowledge-dump
 
 | Lot | Ce qu'il pose | État |
 |---|---|---|
-| 0 | les flux dans le moteur de graphes | **session recherche** : le pas 2 (une branche non prise est sautée, `NotTaken`) est sur master (`522fa6780`) et relu ici ; suivent `PortKind`/`Posture`, puis l'exécuteur concurrent |
+| 0 | les flux dans le moteur de graphes | **session recherche** : le saut (`522fa6780`) et les déclarations de flux (`feeb1932b` : `PortKind`, `Posture`, sorties requises respectées) sont sur master, relus ici ; suit l'exécuteur concurrent |
 | 1 | la boucle comme graphe à ports : les points d'accroche, la parité | **sur master** (`d3aa6f281`), relu par la recherche (accord, deux corrections faites) ; lib 1388/1388, toutes les cibles compilent |
-| 2 | `decide` et `route`, posés sur un port | — (`route` peut s'écrire dès maintenant : une branche non prise = une sortie non posée) |
+| 2 | `decide` et `route`, posés sur un port | **sur master** (`7b5cda799`), relu par la recherche (trois défauts corrigés) ; lib 1413+, les quatre jeux de features |
 | 3 | `send` et l'annuaire | — |
 | 4 | `AgentNode`, le parent, un agent appelé en attendant | — |
 | 5 | `spawn`, rester à l'écoute, les bornes | — |
@@ -59,12 +59,51 @@ des identifiants en double refusés ; un résultat en fond par `tool_result_in` 
 un graphe sur `peer_in` qui retient et réécrit ; une branche non prise qui
 retient.
 
+## Lot 2 — `Decide` et `Route`
+
+`src/dataflow/decide_nodes.rs` (nouveau), le refus `Complete` ← `Open` dans
+`graph.rs`, `NodeFactory::schema_for`.
+
+- **`Decide`** pose sur un élément une étiquette choisie parmi N : par le
+  `Decider` s'il est servi (l'étiquette la plus probable, et sa probabilité
+  sous `<as>_probability`), sinon par le modèle de génération sous une sortie
+  structurée (schéma à `enum`). Une étiquette nue est lue ; une étiquette hors
+  liste, ou un decider qui ne rend pas une probabilité par étiquette, fait une
+  erreur qui le dit.
+- **`Route`** transmet chaque élément sur le port de sa clé (`key`, `label`
+  par défaut) et ne pose pas les autres : leur aval est sauté par le moteur.
+  Une clé inconnue part sur `other`. Les routes s'écrivent en tableau ou en
+  `a|b` (le mermaid n'a pas de tableaux), comme des noms de port.
+- **Les sorties d'un `Route` sont ses routes** : `NodeFactory::schema_for(config)`
+  (défaut : le schéma fixe), lu par la sonde des sous-graphes, la vérification
+  des sorties de route du backend et le test de dérive schéma/nœud.
+- **`Complete` ← `Open` est refusé au montage** (`DataflowGraph::connect`, par
+  où passent toutes les arêtes, définitions comprises).
+- **Le témoin de la page** : sur `peer_in`, un graphe `RhaiNode → Decide →
+  Route` laisse passer les questions et retient le bavardage, le modèle étant
+  faux.
+- **Piège du banc** : l'aval d'une branche non prise n'est sauté que si son
+  entrée est **requise** ; `RhaiNode` (entrée `value` optionnelle) tourne
+  sans valeur et échoue. La recherche l'écrit dans sa page 04.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).
 - Le pas 2 du lot 0 : d'accord, avec trois remarques, toutes reprises (le saut
   en une seule méthode, le prix du saut écrit dans la page, le témoin
   `NotTaken` contre `NoResult`).
+- Les déclarations de flux (`flux-declarations`) : d'accord ; la recherche
+  corrige ensuite un oubli trouvé par ma relecture du lot 2 (un sous-graphe
+  republiait ses ports sans leur genre ni leur posture).
+
+## Contrôles de la soirée
+
+- Toute passe avant un hash : `complet.sh` sur luciepc — le sous-module
+  `codeparsers` au pointeur de l'arbre, un fichier modifié touché et
+  « Compiling rag3weaver » exigé, toute la lib, puis
+  `scripts/check_features.sh` (quatre jeux de features).
+- Un rouge de la soirée n'était pas du code : après un `reset` du worktree,
+  `codeparsers` était resté sur l'ancien pointeur (`reexport` inconnu).
 
 ## Rouges vus en passant
 
@@ -73,7 +112,9 @@ retient.
   attend 2 s qu'un démon lancé dans un fil réponde sur un `port_libre()`
   (port pris puis lâché). C'est la même famille que la course de `daemon::db`
   vue le matin. Ce code n'est pas le mien. Le test est passé aux deux passes
-  complètes suivantes : il est intermittent, pas lié au lot 1.
+  complètes suivantes : il est intermittent, pas lié au lot 1. Le ticket
+  `2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge` a été fermé le
+  même soir par l'arbre principal (`2d3009efc`, le démon lié au port 0).
 
 Le chantier précédent (le proto « tout déclaratif », six lots) est rapporté
 dans `../10-octobre-2026-18h20/everything-declarative/`.
