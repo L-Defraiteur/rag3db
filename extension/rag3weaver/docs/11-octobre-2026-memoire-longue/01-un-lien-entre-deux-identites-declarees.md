@@ -82,7 +82,11 @@ chose se fondent). Ce qui change en lui :
 1. **la garde câblée part.** Elle est remplacée par les gardes **déclarées** du
    §3 ; sans déclaration, un lien entre deux entités déclarées est permis, gérées
    ou non ;
-2. **les propriétés déclarées sont permises.** `RelationDef.properties` existe
+2. **les propriétés déclarées sont permises** — un lien reposé avec d'autres
+   propriétés prend les dernières, sans arête en double, dans les deux dialectes
+   (`MERGE … SET`, `ON CONFLICT … DO UPDATE` ; relu par rag3db-6f, qui signale que
+   le second suppose la contrainte d'unicité `(from_uuid, to_uuid)` sur la table de
+   relation, à vérifier quand PostgreSQL sera monté). `RelationDef.properties` existe
    (`config.rs:123`) et `Write::Link` porte des `props` ; le refus « use an entry
    entity for payload » tombe pour une relation qui déclare ses propriétés, et
    reste pour celle qui n'en déclare pas (une propriété non déclarée se refuse en
@@ -108,7 +112,7 @@ d'existence et le comptage deviennent une fonction partagée avec
 `RelationBatchNode`, appelée par les deux. C'est ce qui ferme le défaut de
 l'annonce fausse pour lui, sans attendre que le verbe du catalogue change.
 
-**Et pourquoi l'IR ne bouge pas** : `Write::Link` reste en uuids. L'identité
+**Et pourquoi l'IR ne bouge pas** (relu et accepté par rag3db-6f) : `Write::Link` reste en uuids. L'identité
 (`hashsafe`) est une notion du manifeste ; l'uuid en dérive de façon
 déterministe (`Catalog::entity_uuid`), et c'est le nœud — l'étage qui connaît le
 manifeste — qui la résout. Un dialecte n'a pas à savoir ce qu'est un champ
@@ -140,10 +144,13 @@ Pour la mémoire : on n'ancre pas une mémoire `superseded`.
   concurrentes **d'un record** ; une ancre n'en est pas une. Si un usage veut
   qu'« ancrer » compte comme « modifier », ce sera une déclaration de plus
   (`touches: ["from"]`), pas un défaut ;
-- **défaire un lien** : `Write::Link` n'a pas d'inverse dans l'IR. Une mémoire
-  remplacée garde ses ancres, et c'est son état (`superseded`) qui dit qu'elles
-  ne comptent plus. Le jour où un lien doit vraiment partir, c'est un
-  `Write::Unlink` à poser dans l'IR d'abord, avec ses deux traductions.
+- **défaire un lien** : pas dans ce lot. Une mémoire remplacée garde ses ancres,
+  et c'est son état (`superseded`) qui dit qu'elles ne comptent plus. *Correction
+  après la relecture de rag3db-6f* : j'avais écrit que `Write::Link` n'avait pas
+  d'inverse dans l'IR. Il en a un, **`Write::Unlink`**, sur master depuis
+  `c3734d975` (des arêtes par leurs bouts, traduit par les deux dialectes ;
+  l'annulation des liens de l'ingestion passe déjà par lui). Le jour où un outil
+  doit défaire un lien, c'est un paramètre de ce même nœud, et l'IR est prête.
 
 ## 4. Ce que le gabarit `memory` en reçoit
 
@@ -186,27 +193,35 @@ des droits par clés.
 | marche | ce qu'elle fait | témoin | coût |
 |---|---|---|---|
 | **1** | `RelationBatchNode` général : garde retirée, propriétés déclarées, drain de ses seuls liens, comptage du posé ; fonction partagée d'existence et de comptage, employée aussi par `AddRefNode` | `e2e_garde_des_liens` retourné (le lien entre bouts gérés **passe par l'outil**, les garanties tiennent) ; `add_ref` vers une fiche absente se refuse en la nommant ; propriétés déclarées posées, non déclarées refusées | 1 |
+| **1 bis** | `Catalog::link` et la mise en file des liens **refusent un bout absent en le nommant**, vérifié par lot (une lecture des uuids par paquet) ; si le coût est visible, la variante par lot qui rapporte les bouts absents pour l'indexation | `un_lien_vers_un_bout_absent_rend_ok_et_n_ecrit_rien` **retourné** (le ticket se ferme) ; `e2e_code` avant/après, durée et comptes identiques | ½ à 1 |
 | **2** | `from_states` / `to_states` dans la déclaration de relation, vérifiés au chargement et à l'écriture | un état hors liste refusé en le nommant ; un état inconnu refusé au chargement | ½ |
 | **3** | `link.mmd`, et `anchor` / `supersede_link` dans le gabarit `memory` | `e2e_reaction_montee` ancre **par l'outil** ; `gabarits` charge | ½ |
 | **4** | le huitième refus, sur la déclaration « relation écrite / lue » des schémas de nœud | le gabarit `memory` charge ; un manifeste à réaction sans écrivain se refuse en nommant la relation | ½ à 1 |
 
-En tout, **deux à trois passes**. Les compteurs de liste blanche ne bougent pas
+En tout, **deux et demie à quatre passes**, la marche 1 bis portant la mesure. Les compteurs de liste blanche ne bougent pas
 (aucun type nouveau) ; le ticket du nœud manquant se ferme à la marche 1 (« il
 n'y avait pas de nœud manquant, il y avait une garde de trop ») ; celui de
 l'ancre à la marche 3 ; celui du huitième refus à la marche 4 ; celui du lien
-vers un bout absent à la marche 1 pour les outils, et reste ouvert pour le verbe
-du catalogue tant qu'il rend `Ok` sans rien écrire.
+vers un bout absent à la marche 1 bis.
 
-## 7. Ce qui reste à décider
+## 7. Les quatre choix — tranchés par l'orchestration, renversables par Lucie
 
-1. **Fondre plutôt qu'ajouter** : `RelationBatchNode` devient le nœud général, pas
-   de type nouveau (§2). L'alternative est un `LinkNode` à côté, et la garde laissée
-   en place : deux nœuds pour un geste.
-2. **Le verbe du catalogue** : laisser `Catalog::link` rendre `Ok` sur un bout
-   absent (les outils s'en gardent par la fonction partagée), ou le faire refuser
-   lui-même — plus sûr pour tous les appelants, y compris l'indexation du code, et
-   à mesurer, puisqu'elle pose des centaines de milliers de liens.
+1. **Fondre** : `RelationBatchNode` devient le nœud général, pas de type nouveau
+   (§2).
+2. **Le verbe du catalogue refuse lui-même un bout absent, en le nommant**
+   (tranché par l'orchestration, renversable par Lucie) : « `Ok` sans rien
+   écrire » est la classe de défaut de toute la nuit. **Mesuré, pas supposé** :
+   l'indexation du code pose des centaines de milliers de liens, donc la
+   vérification se fait **par lot** — une lecture des uuids des deux bouts par
+   paquet, jamais une par lien — et le coût se rend avant/après sur `e2e_code`.
+   S'il est visible, l'indexation passe par une variante par lot qui **rapporte**
+   les bouts absents (jamais un `Ok` muet). Le ticket du bout absent se ferme
+   ici. Et le compte des arêtes posées que rag3db-6f propose dans l'IR
+   (`RETURN count(r)`, `RETURNING`) reste un complément : il constate après
+   coup ce que la vérification refuse avant, et attrape ce qu'elle ne peut pas
+   voir (un bout retiré entre la lecture et l'écriture).
 3. **Une seule garde déclarée** (`from_states`/`to_states`) ; pas de révision qui
-   monte, pas de `Unlink` (§3).
-4. **Le huitième refus par une déclaration dans le schéma des nœuds** (§5), plutôt
-   qu'une liste de types en dur.
+   monte ; pas d'`Unlink` dans ce lot — `Write::Unlink` existe, le nœud y passera
+   dans un lot à lui (§3).
+4. **Le huitième refus par une déclaration dans le schéma des nœuds** (§5), jamais
+   une liste de types en dur.
