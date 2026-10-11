@@ -552,3 +552,33 @@ où elle vit.
   second hôte parce que pid_alive lit /proc ; forme portable, « inconnu » dit
   là où une plateforme ne sait pas, CI Windows/macOS du paquet). L'alpha.3
   Linux se fait ; Windows et macOS après C.
+- **18 h 10** : le client vers un hôte distant est sur master (mémoire,
+  `e60f2342e`, `--daemon-json-command`, jeton jamais en argument, relu sur un
+  403 ; README §7, marche 5 à la page C) ; l'hôte de Lucie redémarré à 17 h 50
+  sur ce binaire, lib neuve prouvée ; Lucie a branché `code-rag3db-luciepc`
+  (sécurité : ssh plus le jeton, l'hôte n'écoute que sur l'adresse locale de
+  luciepc, Tailscale n'est que le réseau). Premier retour réel du cœur par le
+  tunnel : usages juste et complet (un appelant qu'il n'aurait pas cherché),
+  search_code pertinent, « l'outil a gagné sur grep ».
+- **Puis l'essai de Lucie a trouvé quatre défauts** : le serveur était lié à
+  `code-bascule`, dont la racine (le worktree du banc) venait d'être effacée
+  (search_code rend une erreur brute ; la montre retire 6 000 fichiers par lots
+  en tenant le catalogue : « catalogue occupé » pour une lecture ; l'arrêt
+  propre de l'hôte attend la fin de la réaction, plus de six minutes), et une
+  recherche indexée sur un nom inconnu rend trois résultats confiants sans
+  lien. Les trois premiers au proto en un lot (racine absente → montre en
+  pause et dite, rien retiré, filet contre un retrait massif ; lecture qui
+  réessaie une seconde au lieu de refuser ; arrêt qui coupe la réaction entre
+  deux fichiers), le quatrième à l'arbre principal (« aucune correspondance
+  lexicale » dit avant les résultats vectoriels). Le fichier d'essai de Lucie
+  était dans l'arbre de `code-principal` : l'essai est à refaire dessus.
+  Règle : un worktree et sa base vivent et meurent ensemble, la session qui
+  tient le worktree fait créer et retirer le manifeste (page 04, `64c6e351d`).
+- **Autres** : les témoins de B2 écrits par le banc et donnés au cœur
+  (branche, rouges sur master pour la bonne raison) ; les correctifs du
+  produit restés sur paquet-npm reviennent sur master par lots (G : A
+  embarqueur absent relu, B1-B3 par relecteur, B4 les chemins relatifs en
+  « / » décidé, C la marche 4 portable) ; F mesure les 2,2 ms par aller-retour
+  par phase avant tout code de cache ; la recherche clôt le pas 3 du lot 0 par
+  la batterie complète ; les sessions du cœur et d'hotfixs ont été relancées
+  (« coeur c++ », `rag3db-cc`).
