@@ -68,3 +68,27 @@
   les sauts directs de `usages_of` comptent les arêtes devinées que `saut` écarte.
 - Un message de commit doit rester vrai au moment de la fusion : deux commits non
   fusionnés se réunissent en un seul si le premier annonce un gain que le second retire.
+
+## Le Cypher brut de l'indexation (fin d'après-midi)
+
+- Un relevé avant tout lot : fichier, ligne, la forme qui remplace, ou la forme qui
+  manque. Sept endroits, quatre lots, deux prédicats et une forme de plus, deux
+  crochets : chaque manque comblé une fois, pour les deux dialectes.
+- **Le témoin d'une forme nouvelle est le repli qu'elle remplace**, sur le même
+  scénario : `Write::Detach` contre Select → Hop → Unlink (les paires relevées
+  avant, « exactement toutes les autres » après).
+- **Un réglage du moteur est un crochet du dialecte, pas une forme** :
+  `copy_session_setup`, `engine_setting` (`None` hors rag3db, un nom non identifiant
+  ne s'envoie pas).
+- `e2e_code` indexe du code vivant : son relevé d'avant se prend sur **la même base**
+  que l'après. Quand un rebase fait grandir le corpus, refaire le relevé d'avant, lot
+  mis de côté par un patch. Et ne jamais éditer une source pendant qu'un relevé
+  compile : il prendrait l'édition.
+- La parité entre moteurs se prouve par les empreintes des lignes rendues : impact sur
+  `src/daemon` rend les mêmes empreintes sur rag3db et sur PostgreSQL ; le voisinage de
+  `grep`, les mêmes lignes.
+- Une colonne lue sur une table qui ne la déclare pas : `Column::Null`, pas une table
+  fixe — rag3db échoue sur un champ absent d'une table nommée, et l'accepte d'une
+  table quelconque.
+- `poste push` : `pousser.sh` rebase sans rejouer quand seuls des `.md` sont arrivés,
+  et rejoue sur le moteur ancien quand on le lui dit (`MOTEUR_ANCIEN=1`), en l'écrivant.

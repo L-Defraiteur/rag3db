@@ -1,4 +1,4 @@
-# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi (mis à jour vers 16 h)
+# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi (mis à jour vers 18 h)
 
 *Suite du rapport de nuit (`11-octobre-2026-01h14/embarquements/01-rapport-de-session.md`).*
 
@@ -17,6 +17,9 @@
 | `318e7e2cd`, `3d2fb70b2` | les éventails : la page 04, puis le code (UNION ALL, colonne `__branch`), sur les deux moteurs |
 | `b203d2a0d` | deux tickets : le Cypher brut de l'indexation du code, le rendu d'impact instable |
 | `0f62e1d60` | impact passe par `run_plan` ; `fanout` capacité déclarée, fausse par défaut (mesurée sans gain de temps en local) ; callees −2 allers-retours |
+| `0e69ebbfe` | le relevé du Cypher brut de l'indexation (page 05) |
+| `68dbcfc4b`, `da02a612e`, `bcea5ea9e`, `c8fae292a` | les quatre lots du Cypher brut : `Select::by_uuids`, `Predicate::AllOf` et `In`, `Write::Detach`, les crochets des réglages du moteur ; ticket fermé — le gabarit code s'indexe sur PostgreSQL et impact y rend les mêmes lignes que sur rag3db |
+| branche `voisinage-pg` | le voisinage de `grep` saute vers la table d'arrivée de sa relation ; en relecture |
 
 Décisions de Lucie (11 octobre) : pas d'arête d'ordre seul pour commencer, mais
 l'arête porte zéro ou plusieurs colonnes ; un graphe non atomique s'exécute et le
@@ -24,13 +27,14 @@ dit, refusé seulement si l'appelant exige l'atomicité.
 
 ## Ce qui reste
 
-- **En cours** : le ticket du Cypher brut de l'indexation du code
-  (`docs/tickets/2026-10-11-l-indexation-du-code-envoie-du-cypher-brut.md`) —
-  relevé des requêtes, conversion par lots (l'arbre principal relit `code.rs`),
-  `e2e_code` rejoué à l'identique sur rag3db, la mesure d'impact sur PostgreSQL
-  comme témoin final.
+- La branche `voisinage-pg`, en relecture à l'arbre principal, puis sa fusion.
 - La fusion des éventails ne se lève que sur un montage distant mesuré.
 - L'entrée `$items` par arête et l'arête d'ordre seul attendent un appelant.
+- La cellule dans le filtre de `Detach` de la resynchronisation : l'arbre principal,
+  pas d de sa marche 1 bis.
+- Les lots 2 à 4 et le voisinage ont été rejoués sur la lib antérieure à `f024578d5`
+  (C++), en le sachant ; l'arbre principal rebâtit après A9 : rejouer `e2e_postgres`,
+  `e2e_code` et `e2e_chainage` dessus quand il le dit.
 - PostgreSQL : le ticket « rebâti du plein texte en Cypher » reste ouvert.
 - En fin de session : effacer `target-F` ici et `target-embarquements` sur luciepc ;
   le worktree de docs `~/.cache/rag3weaver-build/wt-docs-F`.
