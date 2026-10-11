@@ -34,7 +34,11 @@ poser la version.
 
 - **1, les verrous** : conçus (`docs/3-octobre-2026-15h47/01-note-de-conception-les-verrous.md`),
   témoins écrits au banc ; V1 pas commencée.
-- **2, le chargement journalisé : fait, `ff9bad960` (10 octobre 2026).** Le `COPY`
+- **2, le chargement journalisé : fait, `ff9bad960` (10 octobre 2026) ; reste fermée.** Un défaut
+  de lecture de l'amont révélé par le COPY journalisé (les exceptions ALP d'un second segment non
+  rapiécées sous une sélection filtrée : la colonne `DOUBLE` des dernières lignes d'un groupe plein
+  lue 0, et journalisée telle quelle), corrigé `eae3863ab` le 11 octobre, ticket
+  `closed/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md`. Le `COPY`
   journalisé est le défaut du moteur : plus de point de reprise forcé par `COPY`, plus
   d'attente du départ des autres à sa validation, ses lignes durables par le journal ; au-delà
   de 256 Mio de journal par transaction, repli sur le point de reprise forcé ; l'indexation

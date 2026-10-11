@@ -1,7 +1,9 @@
 # Après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des dernières lignes lit zéro
 
-- **État** : ouvert (11 octobre 2026, 2 h 40, vu par la liste de fusion d'I1 sur luciepc). Bissecté
-  par hotfixs : le défaut existe sans le lecteur affamé ; à l'arbre principal, avec l'étendue.
+- **État** : corrigé `eae3863ab` (11 octobre 2026, 4 h 10 ; ouvert le même jour à 2 h 40, vu par la
+  liste de fusion d'I1 sur luciepc ; bissecté par hotfixs : sans le lecteur affamé ; reproduit sans
+  mort par l'arbre principal ; cause trouvée par le cœur C++). Ce n'est ni l'étendue ni le rejeu :
+  un défaut de lecture de l'amont, révélé par le COPY journalisé.
 - **Gravité** : perte (une colonne à 0 sur les dernières lignes après rejeu + point de reprise,
   encore après réouverture).
 - **Atteignable en service** : oui — c'est le chemin de reprise après un arrêt brutal pendant un
@@ -95,3 +97,31 @@ les comptes et l'imputation ici.
 Imputer par la bissection ; si c'est le lot du lecteur affamé, corriger ou défaire avant tout
 autre push de C++ (orchestration, 11 octobre, 2 h 45) ; si c'est l'étendue, à l'arbre principal.
 Puis le cas vert en boucle (×10 au moins) sur le bâti corrigé.
+
+## La cause, et la fermeture (cœur C++, 11 octobre 2026, 3 h 30 à 4 h 10)
+
+Reproduit sans mort ni rejeu par la sonde de l'arbre principal (`variantes.cpp`, 200 000 lignes,
+deux fils, `FLOAT[4]` à côté d'une `DOUBLE`, journalisé) : 3 sur 4 sur luciepc, 69 à 252 scores
+faux, stables dans un processus. Preuves : une relecture **par la clé** rend la bonne valeur là où
+le balayage lit 0 ; une sonde dans `ColumnChunk::scan` montre que les zéros sortent du **groupe
+plein** écrit sur disque pendant le COPY, découpé en **deux segments** (99 840 + 31 232 valeurs),
+à partir de la première valeur du second ; la sélection du balayage y est **filtrée** (les
+versions de l'insertion du COPY, tant qu'aucun point de reprise ne les a effacées :
+`VectorVersionInfo::getSelVectorForScan`, `CHECK_VERSION`) ; et le second segment porte des
+**exceptions ALP** (les valeurs que l'encodage ne représente pas, stockées à part) aux positions
+0..N-1, N = exactement le nombre de lignes fausses.
+
+Le défaut : `patchFloatExceptions` (`src/storage/table/column_reader_writer.cpp`, code de l'amont,
+mai 2025) passait au filtre de sélection un index **absolu** dans le vecteur de sortie
+(`startOffsetInResult + position`) là où `DefaultColumnReadWriter::readCompressedValues` lui
+donne un index **relatif** au début du balayage : pour tout segment lu après le premier d'un même
+bloc, aucune exception n'était rapiécée, et les valeurs restaient à leur encodage ALP, 0.
+`logInsertedRowsToWAL` balaye pareil : le journal portait ces zéros, le rejeu les écrivait, le
+point de reprise les gardait ; un `CHECKPOINT` **avant** la lecture fusionne les segments et efface
+les versions, d'où « juste après checkpoint ». Un fil, `vec` en `STRING`, le point de reprise
+forcé : le groupe n'a pas cette forme. Rien vers l'amont (règle de Lucie).
+
+Correctif : l'index relatif au filtre, une ligne. Témoin déterministe :
+`JournaledCopyReadBackTest.TwoThreadsAndAnArrayColumnReadEveryScoreBack` (la sonde en gtest, trois
+COPY de suite, la configuration de la sonde : tampon de ~73 Mio, deux fils), rouge d'abord ; le
+témoin de ce ticket rejoué ×20 vert sur le bâti corrigé.

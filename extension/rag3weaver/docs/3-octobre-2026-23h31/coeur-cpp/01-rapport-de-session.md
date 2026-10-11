@@ -737,3 +737,42 @@ fin d'instruction, et pourquoi) ; **la page avant le code est écrite** (3 h 30,
 tranche : son essai `essai-fin-d-instruction-filtre`, `53c742c0b`, en cours sur luciepc). Tickets du
 moteur encore à moi : C7 après un arrêt brutal, la seconde suppression d'une relation, la part
 reprise du journal à doublon.
+
+## Le COPY journalisé qui lisait des zéros (11 octobre 2026, 3 h 10 à 4 h 30) — priorité de l'orchestration
+
+Relais de l'arbre principal (sa sonde `~/.cache/rag3weaver-notes-A/etendue/variantes.cpp` : un COPY
+journalisé de 200 000 lignes, deux fils, `FLOAT[4]` à côté d'une `DOUBLE`, relu **sans mort ni
+rejeu** : 134 à 285 scores à 0 en fin de table, 3 sur 3 ; juste à un fil, sans tableau, sans seuil,
+ou forcé ; juste après un `CHECKPOINT` dans le même processus). Le rouge probabiliste
+`OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent` de ma liste d'I1 en était l'ombre au rejeu.
+
+**Comment la cause a été trouvée** (worktree `rag3db-copie` sur luciepc, moteur instrumenté, sonde
+rebâtie contre lui) : (1) reproduit 3 sur 4 ; les « 0.000000 » n'étaient pas toujours 0,0 à la
+lecture par `WHERE d.score = 0.0` — c'était la carte de zones qui sautait le bloc, piège ; (2) une
+relecture **par la clé** rend la bonne valeur là où le balayage lit 0 : les pages sont bonnes, la
+lecture vectorisée est fausse ; (3) une sonde dans `ColumnChunk::scan` : les zéros sortent du **groupe
+plein** écrit sur disque pendant le COPY (ON_DISK, 131 072 valeurs, **deux segments** 99 840 +
+31 232), à la première valeur du second segment, sous une **sélection filtrée** (les versions de
+l'insertion du COPY, `CHECK_VERSION`, tant qu'aucun point de reprise ne les efface) ; le second
+segment porte des **exceptions ALP** aux positions 0..N-1, N = 69, 223, 241 = exactement le nombre de
+lignes fausses ; (4) le code : `patchFloatExceptions` passe au filtre l'index absolu dans le vecteur
+(`startOffsetInResult + position`) là où `DefaultColumnReadWriter::readCompressedValues` lui donne
+l'index relatif au balayage — pour tout segment après le premier d'un bloc, rien n'est rapiécé, les
+valeurs restent à leur encodage ALP, 0. Code de l'amont (mai 2025) ; rien vers l'amont.
+
+**Correctif** : une ligne (`src/storage/table/column_reader_writer.cpp`, l'index relatif au filtre),
+branche `copie-journalisee-double`. **Témoin** : la sonde en gtest
+(`JournaledCopyReadBackTest.TwoThreadsAndAnArrayColumnReadEveryScoreBack`, trois COPY de suite, la
+configuration de la sonde), rouge sur master (212 faux au premier essai), vert sur le correctif ; la
+sonde elle-même 0 faux ×3 sur le bâti corrigé. Passe, sur luciepc (`rag3db-copie`, bâti de 3 h 52) :
+transaction_test 248, api 104, c_api 136, copy 23, stockage 83 + column_stats 2, vector 74 et 63,
+Cypher 1867 ; banc en tenue exclusive conforme sauf la course de témoin
+`AnnouncedWritersOfOneIndexedTableWaitThenBothCommit` (`announce:done` avant `commit:done`), bornée à
+`commit:start` par la ligne du banc, prise dans ce lot (`60d74a4e2`) ; relu par hotfixs (le banc
+dormait). Rebasée sur master `fc636f7e6` (tests seulement) : `copie-journalisee-double-2`,
+`10a796166` témoin, `eae3863ab` correctif, `60d74a4e2` borne ; OwnerlessPages et le témoin neuf
+rejoués ×20 avant l'avance rapide.
+
+Leçons : un `KU_ASSERT` muet en Release ne prouve rien, la sonde doit imprimer ; un bâti de cible
+(`--target rag3db`) ne relie pas la lib partagée : prouver par la date et par `strings` ; relire par un
+autre chemin (la clé) départage « pages fausses » et « lecture fausse » en une requête.
