@@ -42,6 +42,7 @@ pub mod render_nodes;
 pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
+pub mod decide_nodes;
 pub mod ocr_nodes;
 #[cfg(feature = "code")]
 pub mod code_nodes;
@@ -111,6 +112,7 @@ pub use code_nodes::{
 #[cfg(feature = "code")]
 pub use index_nodes::{EstimateNode, EstimateNodeFactory, IndexNode, IndexNodeFactory};
 pub use llm_nodes::{LlmNode, LlmNodeFactory, LLM_SERVICE, NODE_REGISTRY_SERVICE};
+pub use decide_nodes::{DecideNode, DecideNodeFactory, RouteNode, RouteNodeFactory};
 pub use checkpoint::{
     CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,
     GraphDefinition, NodeDef, EdgeDef,

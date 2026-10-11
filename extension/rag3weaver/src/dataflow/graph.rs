@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use super::checkpoint::GraphDefinition;
 use super::node::Node;
 use super::node_registry::NodeRegistry;
-use super::port::{PortType, PortValue};
+use super::port::{PortType, PortValue, PortDef, PortKind, Posture};
 
 // ─── Edge ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +82,14 @@ impl DataflowGraph {
             .map(|p| p.port_type)
     }
 
+    fn find_output_port(&self, node_name: &str, port_name: &str) -> Option<PortDef> {
+        self.find_node(node_name)?.outputs().into_iter().find(|p| p.name == port_name)
+    }
+
+    fn find_input_port(&self, node_name: &str, port_name: &str) -> Option<PortDef> {
+        self.find_node(node_name)?.inputs().into_iter().find(|p| p.name == port_name)
+    }
+
     fn find_input_port_type(&self, node_name: &str, port_name: &str) -> Option<PortType> {
         let node = self.find_node(node_name)?;
         node.inputs()
@@ -114,6 +122,22 @@ impl DataflowGraph {
             return Err(format!(
                 "port type mismatch: {from_node}.{from_port} ({from_type:?}) → {to_node}.{to_port} ({to_type:?})"
             ));
+        }
+
+        // **Attendre la fin d'un flux ouvert, c'est attendre pour toujours** :
+        // une entrée qui lit le tout (`Complete`) ne se branche pas sur une
+        // sortie qui peut ne jamais finir (`Open`). Refusé au montage, pas
+        // découvert à l'exécution.
+        if let (Some(from), Some(to)) =
+            (self.find_output_port(from_node, from_port), self.find_input_port(to_node, to_port))
+        {
+            if from.kind == PortKind::Open && to.posture == Posture::Complete {
+                return Err(format!(
+                    "{from_node}.{from_port} porte un flux ouvert (Open) : {to_node}.{to_port} le lit en \
+                     entier (Complete) et l'attendrait pour toujours ; il doit le lire élément par \
+                     élément (PerElement)"
+                ));
+            }
         }
 
         self.edges.push(Edge {
@@ -291,6 +315,31 @@ mod tests {
             vec![PortDef::value("in", PortType::Results, true)],
             vec![],
         ))
+    }
+
+    /// **Un flux ouvert ne se lit pas en entier** : `Complete` ← `Open` est
+    /// refusé au montage ; `PerElement` ← `Open` et `Complete` ← `Finite`
+    /// passent (les agents qui se parlent, lot 0).
+    #[test]
+    fn a_complete_input_on_an_open_stream_is_refused() {
+        use crate::dataflow::port::{PortKind, Posture};
+        let source = |name: &str, kind: PortKind| -> Box<dyn Node> {
+            Box::new(TestNode::new(name, vec![], vec![PortDef::value("out", PortType::Results, false).stream(kind)]))
+        };
+        let sink = |name: &str, posture: Posture| -> Box<dyn Node> {
+            Box::new(TestNode::new(name, vec![PortDef::value("in", PortType::Results, true).posture(posture)], vec![]))
+        };
+        let mut g = DataflowGraph::new();
+        g.add_node(source("open", PortKind::Open)).unwrap();
+        g.add_node(source("finite", PortKind::Finite)).unwrap();
+        g.add_node(sink("whole", Posture::Complete)).unwrap();
+        g.add_node(sink("whole2", Posture::Complete)).unwrap();
+        g.add_node(sink("each", Posture::PerElement)).unwrap();
+        let err = g.connect("open", "out", "whole", "in").unwrap_err();
+        assert!(err.contains("open.out") && err.contains("whole.in") && err.contains("PerElement"), "{err}");
+        assert!(g.edges.is_empty(), "l'arête refusée n'est pas posée");
+        g.connect("open", "out", "each", "in").unwrap();
+        g.connect("finite", "out", "whole2", "in").unwrap();
     }
 
     fn passthrough_node(name: &str) -> Box<dyn Node> {

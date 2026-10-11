@@ -82,7 +82,7 @@ impl GraphNode {
         let mut output_defs: Vec<(String, PortType, bool)> = Vec::new();
 
         for node_def in &definition.nodes {
-            let schema = registry.schema(&node_def.node_type).ok_or_else(|| {
+            let schema = registry.schema_for(&node_def.node_type, &node_def.config).ok_or_else(|| {
                 format!(
                     "unknown node type '{}' for inner node '{}'",
                     node_def.node_type, node_def.name

@@ -235,6 +235,13 @@ pub trait NodeFactory: Send + Sync {
 
     /// Declarative schema for this node type.
     fn schema(&self) -> NodeSchema;
+
+    /// Le schéma **d'une configuration** : pour un type dont les ports en
+    /// dépendent (les sorties d'un `Route` sont ses routes). Au défaut,
+    /// [`Self::schema`] — les ports de presque tous les types sont fixes.
+    fn schema_for(&self, _config: &serde_json::Value) -> NodeSchema {
+        self.schema()
+    }
 }
 
 // ─── NodeRegistry ────────────────────────────────────────────────────────────
@@ -296,6 +303,12 @@ impl NodeRegistry {
     /// Get the schema for a registered node type.
     pub fn schema(&self, node_type: &str) -> Option<NodeSchema> {
         self.factories.get(node_type).map(|f| f.schema())
+    }
+
+    /// Le schéma d'un type **sous une configuration** (voir
+    /// [`NodeFactory::schema_for`]).
+    pub fn schema_for(&self, node_type: &str, config: &serde_json::Value) -> Option<NodeSchema> {
+        self.factories.get(node_type).map(|f| f.schema_for(config))
     }
 
     /// List all registered node types.

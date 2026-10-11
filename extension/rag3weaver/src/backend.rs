@@ -1869,7 +1869,7 @@ impl PreparedBackend {
                 .iter()
                 .find(|n| n.name == node)
                 .ok_or_else(|| format!("unknown output node {node}"))?;
-            let schema = self.nodes.schema(&n.node_type).unwrap();
+            let schema = self.nodes.schema_for(&n.node_type, &n.config).unwrap();
             if !schema.outputs.iter().any(|p| p.name == port) {
                 return Err(format!("unknown output {node}.{port}"));
             }

@@ -1436,6 +1436,9 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::ocr_nodes::OcrNodeFactory));
     // Génération
     registry.register(Box::new(super::llm_nodes::LlmNodeFactory));
+    // Décider et aiguiller (les agents qui se parlent, lot 2).
+    registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
+    registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
     // Code
     #[cfg(feature = "code")]
     {
@@ -1458,7 +1461,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 49 + if cfg!(feature = "code") { 14 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 14 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1712,6 +1715,8 @@ mod tests {
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
+                "Decide" => serde_json::json!({ "labels": "a|b" }),
+                "Route" => serde_json::json!({ "routes": "a|b" }),
                 _ => serde_json::json!({}),
             }
         };
@@ -1730,7 +1735,9 @@ mod tests {
                 }
             };
             vus += 1;
-            let schema = registry.schema(node_type).expect("schéma du type créé");
+            // Le schéma **de cette configuration** : les sorties d'un `Route`
+            // sont ses routes.
+            let schema = registry.schema_for(node_type, &minimum(node_type)).expect("schéma du type créé");
             // **Le nom ne suffit pas.** Un port présent des deux côtés mais
             // `required` d'un côté seulement change le comportement du
             // runtime : il attend l'entrée, ou il ne l'attend pas. Comparer

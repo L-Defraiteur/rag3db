@@ -633,3 +633,47 @@ fn a_branch_not_taken_holds_the_element() {
     let heard = ports.on(AgentPort::PeerIn, json!({"from": "ami", "content": "salut"}), "run-a");
     assert_eq!(heard, Ok(Some(json!({"from": "ami", "content": "« salut »"}))));
 }
+
+const CLASSIFY_GRAPH: &str = "%% tool: listen_to_questions
+%% description: ce que l'agent entend : les questions, pas le bavardage
+%% param: element json! -- le message
+%% result: route.question
+graph LR
+    src[\"RhaiNode(script='input', value=$element)\"]
+    decide[\"Decide(labels='question|bavardage', field='content', instruction='Une question attend une réponse.')\"]
+    route[\"Route(routes='question')\"]
+    src -->|result:element| decide
+    decide -->|element:element| route
+";
+
+/// **L'exemple de Lucie, de bout en bout** (lot 2) : sur `peer_in`, le message
+/// est classé par le modèle (`Decide`) puis aiguillé (`Route`) ; la question
+/// arrive à l'agent, le bavardage est retenu — la route qui n'est pas prise
+/// ne pose pas le résultat.
+#[test]
+fn a_decide_then_route_graph_on_peer_in_lets_only_questions_through() {
+    let mut nodes = crate::dataflow::NodeRegistry::new();
+    crate::dataflow::register_builtins(&mut nodes);
+    let classify = CallbackLlm::new("classe", 4096, |turns, opts, sink| {
+        assert!(opts.response_format.is_some(), "une sortie structurée");
+        let label = if turns.last().unwrap().content.contains('?') { "question" } else { "bavardage" };
+        MockLlm::new(&format!(r#"{{"label": "{label}"}}"#)).generate(turns, opts, sink)
+    });
+    let mut services = crate::dataflow::ServiceRegistry::new();
+    services.register(crate::dataflow::LLM_SERVICE, Arc::new(classify) as Arc<dyn Llm>);
+    let graph = crate::dataflow::GraphTool::from_mermaid(CLASSIFY_GRAPH).unwrap();
+    let ports = GraphPorts::new(&nodes, Arc::new(services)).attach(AgentPort::PeerIn, graph);
+
+    let llm = scripted(vec![MockLlm::new("ok")], Arc::default());
+    let tools = echo_tools(Arc::default());
+    let bus = crate::events::EventBus::new(64);
+    bus.cursor(&crate::events::inbox_topic("run-a"), AGENT_INBOX_CURSOR);
+    bus.send_message("run-b", "bavard", "run-a", "lol");
+    bus.send_message("run-c", "ami", "run-a", "comment indexer un dépôt ?");
+    let agent = Agent::new(&llm, &tools).with_events(bus).with_inbox().with_run_id("run-a").with_ports(&ports);
+    let mut turns = start();
+    let run = agent.run(&mut turns, &mut StringSink::default()).unwrap();
+    assert_eq!(run.messages, 1);
+    let users: Vec<_> = turns.iter().filter(|t| t.role == "user").map(|t| t.content.as_str()).collect();
+    assert_eq!(users, ["cherche", "[message de ami] comment indexer un dépôt ?"]);
+}
