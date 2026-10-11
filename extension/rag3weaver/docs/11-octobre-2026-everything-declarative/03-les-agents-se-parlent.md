@@ -184,6 +184,70 @@ on s'en fout, jamais un argument, l'important c'est que ce soit au top ».
   est la répétition du tour à sa frontière (la règle d'août : « une boucle
   réagit à sa frontière, pas au milieu »).
 
+### 4.1 bis Ce que l'exécuteur de flux doit tenir (lot 0, porté par la session recherche)
+
+La session recherche tient l'exécuteur, les points de reprise et le rapport :
+elle porte le lot 0 ; cette page en écrit la spécification et le témoin, et
+cette session relit ses lots.
+
+**Ce qu'il doit faire**
+1. Un port porte un flux : des éléments, puis une fin. Une valeur est un flux
+   d'un élément, **marqué à la vérification du graphe** (la forme d'un port
+   se connaît avant d'exécuter). Le schéma d'un port ne change pas ; c'est le
+   moment où chaque élément arrive qui change (la note du 8 octobre, §4 :
+   « le schéma ne change pas »).
+2. Un nœud émet plusieurs éléments sur un port et le ferme ; il lit un flux
+   d'entrée élément par élément, ou attend sa fin. **Sa posture se déclare**
+   (dans son schéma, comme ses ports) : *élément* ou *complété*.
+3. **Un flux qui se ferme sans élément** saute le nœud aval qui attendait une
+   entrée requise : `NodeStatus::Skipped`, un événement le dit, le rapport
+   le montre, et les nœuds qu'il alimentait reçoivent à leur tour des flux
+   vides. Plus de « deadlock » pour une branche non prise ; l'erreur reste
+   pour un vrai défaut (un producteur qui échoue).
+4. **La vérification commune refuse** un nœud *complété* branché sur un flux
+   sans fin, en le nommant, avant l'exécution.
+5. Les nœuds reliés par des flux tournent ensemble, par des **canaux bornés**
+   (la contre-pression, pas une file qui grossit) ; un fan-out donne un
+   canal par arête (ou une diffusion), un fan-in devient un multiplexage.
+
+**Ce qu'il ne doit pas casser — la parité**
+Tout graphe d'aujourd'hui (des valeurs seules) donne **le même rapport** :
+mêmes nœuds, mêmes statuts, mêmes sorties, même ordre des `NodeCompleted` à
+l'intérieur d'un niveau, les niveaux en parallèle comme aujourd'hui. Les
+témoins qui le verrouillent déjà (`runtime.rs`) :
+`runtime_linear_pipeline`, `runtime_fanout`, `runtime_fanin`,
+`fan_in_waits_for_longer_branches_in_live_and_checkpoint_execution`,
+`nodes_of_one_level_run_in_parallel_and_finish_in_order`,
+`un_niveau_mixte_sequentialise_et_ca_se_voit`,
+`un_noeud_asynchrone_traverse_le_pont_synchrone`, le pont réentrant,
+`runtime_execute_with_report`, les taps (`runtime_tap_specific_edge`,
+`runtime_tap_all`) ; les points de reprise (`checkpoint_full_execution`,
+`checkpoint_resume_after_failure`, `checkpoint_graph_hash_mismatch`,
+`checkpoint_already_completed_is_noop`,
+`un_lot_se_checkpointe_en_octets_et_se_reprend`,
+`en_mode_operations_la_reprise_rejoue_tout`) ; l'annulation dans l'ordre
+inverse (`migration_nodes.rs`, `catalog.rs` `migration_rollback_graph`) ; et
+toute la lib.
+
+**Ce qu'un flux demande aux points de reprise et à l'annulation**, à trancher
+par la recherche et à dire : un flux n'a pas de « valeur finale » — soit il se
+matérialise à sa fin pour le point de reprise, soit ses nœuds se rejouent
+(comme le mode `Operations`) ; l'annulation garde un ordre de fin connu.
+
+**Le témoin de flux** (le premier, avant toute généralisation) : un nœud qui
+émet des jetons un par un, un nœud *élément* qui les voit dans l'ordre pendant
+que le premier travaille, un nœud *complété* qui voit le message entier ; une
+branche qui se ferme vide, sautée et dite au rapport ; un nœud *complété* sur
+un flux sans fin refusé à la vérification.
+
+**La frontière de fichiers** (à confirmer à deux avant le premier commit) :
+la recherche tient `src/dataflow/runtime.rs`, `graph.rs`, `node.rs`,
+`port.rs`, `report.rs`, les points de reprise et `rt.rs` ; cette session tient
+les points d'accroche de la boucle (`agent.rs`, relus par la recherche), un
+fichier neuf pour l'exécution des sous-graphes de ports, les nœuds `decide`
+et `route` (fichiers neufs dans `src/dataflow/`, relus), `send`, `spawn`,
+l'`AgentNode`, et la page vivante.
+
 ### 4.2 Le graphe par défaut d'un agent
 
 L'`AgentNode` est la forme compacte d'un graphe de tour, à ports nommés :
@@ -284,7 +348,7 @@ par la relecture de la session recherche avant master.
 
 | Lot | Ce qu'il pose | Témoin rouge |
 |---|---|---|
-| 0 | **les flux dans le moteur de graphes** : un flux fini vide, `NodeStatus::Skipped`, la posture d'un nœud, la vérification (pas de « complet » sur un flux ouvert), l'exécuteur à canaux bornés — avec la parité exacte des graphes de valeurs | une branche non prise est sautée et dite, pas un « deadlock » ; un flux de jetons lu élément par élément ; un nœud complet sur un flux ouvert refusé à la vérification ; toute la lib verte |
+| 0 | (**porté par la session recherche**, spécification au §4.1 bis) **les flux dans le moteur de graphes** : un flux fini vide, `NodeStatus::Skipped`, la posture d'un nœud, la vérification (pas de « complet » sur un flux ouvert), l'exécuteur à canaux bornés — avec la parité exacte des graphes de valeurs | une branche non prise est sautée et dite, pas un « deadlock » ; un flux de jetons lu élément par élément ; un nœud complet sur un flux ouvert refusé à la vérification ; toute la lib verte |
 | 1 | la boucle comme graphe à ports : les points d'accroche, le premier flux (`model_out` en jetons) | parité : mêmes historiques, appels et jetons sur un scénario à faux modèle |
 | 2 | `decide` et `route`, posés sur un port | un exemple de Lucie : le message de la personne classé, aiguillé vers un outil ou vers rien |
 | 3 | `send` et l'annuaire | c'est l'**agent** qui répond à l'autre par `send`, pas le test |
@@ -293,9 +357,8 @@ par la relecture de la session recherche avant master.
 | 6 | la boîte de session dans la page vivante ; l'interface proposée au chat et au MCP | un pair écrit au chat de l'atelier, le tour suivant le lit |
 | 7 | l'expérience à vrai modèle, gardée avec son artefact | — |
 
-**Le lot 0 est au cœur de `src/dataflow/runtime.rs`**, que la session
-recherche tient : il se fait avec sa relecture à chaque pas, et si elle préfère
-le porter, je prends la suite à partir du lot 1.
+**Le lot 0 est porté par la session recherche** (décidé par l'orchestration) ;
+le lot 1 n'attend pas : ses points d'accroche ne demandent pas de flux.
 
 Hors de ce chantier, dits pour ne pas y tomber : la boîte durable entre
 processus (`MessageSourceNode`), les rôles attachés à une identité, les
