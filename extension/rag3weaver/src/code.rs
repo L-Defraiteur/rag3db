@@ -667,6 +667,12 @@ pub struct CodeRelation {
     /// relation de structure.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sites: Vec<UsageSite>,
+    /// **Posée par le nom seul** (codeparsers `by_name`) : un appel sur un
+    /// receveur non typé relié à un scope du fichier de ce nom. Marquée
+    /// « nom », pas « fichier » : la marque dit comment le lien a été
+    /// établi, pas où (décision du 11 octobre 2026).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_name: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1007,6 +1013,7 @@ pub fn analyze_in_project(
             to_entity: FILE.to_string(),
             to_key: name,
             sites: Vec::new(),
+            by_name: false,
         });
     }
 
@@ -1116,6 +1123,7 @@ pub fn analyze_in_project(
             to_entity: to.0.to_string(),
             to_key: to.1.clone(),
             sites: r.metadata.as_ref().map(|m| m.sites.clone()).unwrap_or_default(),
+            by_name: r.metadata.as_ref().and_then(|m| m.by_name).unwrap_or(false),
         });
     }
     // ── Ce que le lot référence, par nom ────────────────────────────────
@@ -1904,7 +1912,13 @@ impl Catalog {
                 let mut p = usage_properties(&r.sites);
                 // L'analyseur résout dans le fichier ; une bibliothèque, par
                 // l'import qui la nomme.
-                let resolution = if r.rel == "USES_LIBRARY" { Resolution::Import } else { Resolution::File };
+                let resolution = if r.rel == "USES_LIBRARY" {
+                    Resolution::Import
+                } else if r.by_name {
+                    Resolution::Name
+                } else {
+                    Resolution::File
+                };
                 p.insert("resolution".to_string(), s(resolution.as_str()));
                 p
             } else {
