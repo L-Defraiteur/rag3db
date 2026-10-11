@@ -160,9 +160,9 @@ session « everything declarative » qui tient les nœuds scriptés et `serve`).
   §3 de la stèle du produit ; sa part de codeparsers à écrire.
 - **recherche** (`rag3db-97`) : **fini** le lot e2e/disque ; en attente d'un
   top pour `dossier_de_suite()` et `checkpoint_dir` avec banc et cœur.
-- **banc** (`rag3db-90`) : au repos ; C7 témoin minimal à sa reprise ;
+- **banc** (`rag3db-10`) : au repos ; C7 témoin minimal à sa reprise ;
   candidat pour les sept suites à vrai disque.
-- **G, paquet npm** (`rag3db-10`) : en pause, quatre archives `0.0.1-alpha.2`
+- **G, paquet npm** (`rag3db-90`) : en pause, quatre archives `0.0.1-alpha.2`
   prêtes sous `~/.cache/rag3weaver-build/paquet-npm-garde/publier/`.
 - **proto tout déclaratif** (`everything declarative`) : en pause, six lots sur
   master, recette pour Lucie page `everything-declarative/08` §1.
