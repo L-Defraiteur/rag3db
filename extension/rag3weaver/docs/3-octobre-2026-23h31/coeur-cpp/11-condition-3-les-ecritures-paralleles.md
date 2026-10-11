@@ -123,7 +123,7 @@ avant chaque écriture) — ce n'est pas sur le chemin de la stèle, et je ne le
   du fichier. Témoin : `C9_SecondWriterProcessRefused` retourné (il attend puis écrit, les deux
   écritures sont là), le lanceur `Process` du banc en marche pour les cas qui ne demandent pas la
   simultanéité. Petit (un jour).
-  **En cours le 11 octobre (lot `verrous-b2`, passe en cours)** : `SystemConfig::fileLockWaitMs` (5 000 ms par
+  **Fait le 11 octobre (lot `verrous-b2`, master `0a630b764`)** : `SystemConfig::fileLockWaitMs` (5 000 ms par
   défaut, 0 = le refus immédiat d'avant), porté par `DBConfig` et par la liaison Rust
   (`file_lock_wait_ms`) ; à l'ouverture en écriture du fichier de données (et du fantôme à la
   reprise), `F_SETLK` réessayé toutes les 50 ms tant que le verrou est tenu par un autre processus
