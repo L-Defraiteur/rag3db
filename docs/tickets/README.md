@@ -64,7 +64,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (32)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -103,6 +103,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
 | [Un index se fige sur un appel d'embarquement sans délai](2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | ouvert — piste forte, preuve à faire | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
+| [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 
 ### Fermés (94), dans `closed/`
 
