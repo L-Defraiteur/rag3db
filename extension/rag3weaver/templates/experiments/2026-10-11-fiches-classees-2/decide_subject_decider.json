@@ -1,0 +1,21 @@
+{
+  "_tentative": "fiches-classees-2 (11 octobre 2026) : le graphe du Decider en définition JSON — un retour à la ligne y est un retour à la ligne, ce qu'une valeur mermaid ne porte pas (retour de la tentative 1).",
+  "nodes": [
+    {
+      "name": "decide",
+      "node_type": "Decide",
+      "config": {
+        "labels": [
+          "yes",
+          "no"
+        ],
+        "field": "text",
+        "as": "verdict",
+        "via": "decider",
+        "instruction": "Tu ranges des fiches de mémoire sous des sujets. Une fiche va sous un sujet seulement si elle parle de ce que le sujet décrit ; partager un mot ne suffit pas. Réponds yes ou no.",
+        "prompt": "<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      }
+    }
+  ],
+  "edges": []
+}

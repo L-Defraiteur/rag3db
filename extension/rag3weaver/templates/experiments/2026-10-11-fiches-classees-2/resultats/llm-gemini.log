@@ -1,0 +1,3 @@
+  rappel des candidats : 29/31 fiches à sujet ont leur sujet parmi les candidats (3334 ms pour 39 recherches)
+llm (google/gemini-3.5-flash) : la décision n'a pas rendu d'étiquette — Decide : « {"label": "no » n'est pas une étiquette admise (yes, no)
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 659 filtered out; finished in 510.00s

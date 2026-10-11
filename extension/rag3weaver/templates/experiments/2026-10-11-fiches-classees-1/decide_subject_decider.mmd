@@ -1,0 +1,8 @@
+%% tentative: fiches-classees-1 (11 octobre 2026)
+%% description: Le sujet d'une fiche au put_memory, par la voie du Decider à un jeton : oui ou non sur chaque paire (fiche, sujet candidat), avec la probabilité du oui. Le banc pose l'élément {text} en amont et lit {verdict, verdict_probability}.
+%%
+%% Le gabarit est celui de ChatML (Qwen) : le Decider complète un texte brut, et Decide
+%% l'envoie tel quel, sans rien devant ni derrière (le paramètre `prompt`, a6bfb9b9a).
+%% La réflexion de Qwen3 est fermée d'avance (<think></think> vide).
+graph LR
+    decide["Decide(labels='yes|no', field='text', as='verdict', instruction='Tu ranges des fiches de mémoire sous des sujets. Une fiche va sous un sujet seulement si elle parle de ce que le sujet décrit ; partager un mot ne suffit pas. Réponds yes ou no.', prompt='<|im_start|>system\n{instruction}<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n', via='decider')"]

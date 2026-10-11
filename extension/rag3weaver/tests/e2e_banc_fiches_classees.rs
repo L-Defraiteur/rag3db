@@ -1,21 +1,22 @@
 //! **Le banc des fiches classées** (page `docs/11-octobre-2026-memoire-longue/04-…`,
 //! §5) : le sujet d'une fiche au `put_memory`, décidé par oui / non sur chaque
-//! candidat que rend `recall_subjects`, par les deux voies du nœud `decide` à
-//! venir :
+//! candidat que rend `recall_subjects`, **par le graphe d'une tentative datée**
+//! (`templates/experiments/<date>-fiches-classees-<n>/`, un `Decide` par voie) :
 //!
 //! - **le Decider à un jeton** (`RAG3WEAVER_BANC_DECIDE=http://127.0.0.1:8091`,
-//!   un llama-server local) — une probabilité par option, pour éprouver le
-//!   protocole, pas pour juger ;
+//!   un llama-server local) — `decide_subject_decider.mmd`, une probabilité par
+//!   étiquette, pour éprouver le protocole, pas pour juger ;
 //! - **la sortie structurée** (`RAG3WEAVER_BANC_VERTEX=1` avec
-//!   `RAG3WEAVER_LLM=vertex` et les identifiants de `.vault`) — Gemini, qui juge.
+//!   `RAG3WEAVER_LLM=vertex` et les identifiants de `.vault`) —
+//!   `decide_subject_llm.mmd`, Gemini, qui juge.
 //!
-//! Le jeu est `tests/data/banc-fiches-classees/v1.json` : des sujets, des fiches,
-//! et pour chacune le sujet juste ou `null` quand aucun ne lui va. Le banc mesure
-//! le rappel des candidats, les ancrages justes, les **faux ancrages** (un oui sur
-//! un mauvais sujet, la faute qui défait un classeur), les ancrages manqués, le
-//! temps et les jetons. Il n'affirme aucun seuil de qualité : il n'y en a pas
-//! encore, et un seuil ne se pose pas sans mesure. Il affirme le protocole : chaque
-//! décision rend une étiquette de la liste, ou le banc tombe en le disant.
+//! `RAG3WEAVER_BANC_TENTATIVE=<dossier>` choisit la tentative (par défaut la
+//! première). Le jeu est `tests/data/banc-fiches-classees/v1.json` : des sujets,
+//! des fiches, et pour chacune le sujet juste ou `null`. Le banc mesure le rappel
+//! des candidats, les ancrages justes, les **faux ancrages**, les manqués, le
+//! temps et (voie du Decider) les probabilités. Il n'affirme aucun seuil de
+//! qualité ; il affirme le protocole : chaque décision rend une étiquette de la
+//! liste, ou le banc tombe en le disant.
 //!
 //! `RAG3WEAVER_BANC_SORTIE=<fichier.json>` écrit chaque décision et le résumé,
 //! pour la note de la tentative.
@@ -32,9 +33,6 @@ use rag3weaver::Rag3dbConnection;
 /// assez peu pour que chaque fiche coûte quelques décisions.
 const CANDIDATS: usize = 3;
 
-const CONSIGNE: &str = "Tu ranges des fiches de mémoire sous des sujets. Une fiche va sous un \
-                        sujet seulement si elle parle de ce que le sujet décrit ; partager un mot \
-                        ne suffit pas. Réponds yes ou no.";
 
 fn crate_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -45,11 +43,30 @@ fn jeu() -> Value {
     serde_json::from_str(&std::fs::read_to_string(&chemin).expect("le jeu du banc")).expect("du JSON")
 }
 
-/// Le gabarit `memory` chargé **sur place** (ses chemins sont relatifs à son
-/// dossier), sa base dans un dossier temporaire.
+/// Le gabarit `memory` dans une copie de `templates/` (ses chemins sont
+/// relatifs à son dossier), son extension vector prise au bâti (`RAG3DB_ROOT`)
+/// comme le font les autres témoins — le gabarit la cherche relativement à
+/// lui-même, défaut ouvert (`2026-10-11-un-gabarit-livre-cherche-l-extension-vector-…`).
 fn ouvrir(dir: &Path) -> Backend {
-    let prepared = PreparedBackend::load(&crate_dir().join("templates/backends/memory/backend.json"))
-        .expect("le gabarit memory charge");
+    fn copier(src: &Path, dst: &Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap() {
+            let e = e.unwrap();
+            let cible = dst.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copier(&e.path(), &cible);
+            } else {
+                std::fs::copy(e.path(), &cible).unwrap();
+            }
+        }
+    }
+    copier(&crate_dir().join("templates"), &dir.join("templates"));
+    let manifeste = dir.join("templates/backends/memory/backend.json");
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    let racine = std::env::var("RAG3DB_ROOT").map(PathBuf::from).unwrap_or_else(|_| crate_dir().join("../.."));
+    m["vector_extension"] = json!(racine.join("extension/vector/build/libvector.rag3db_extension").to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let prepared = PreparedBackend::load(&manifeste).expect("le gabarit memory charge");
     let (embedder, _) = prepared.connect_embedder().unwrap_or_else(|e| {
         panic!(
             "le banc embarque (bge-m3) : posez RAG3WEAVER_EMBED_SERVICE — un banc sauté n'est \
@@ -71,97 +88,99 @@ fn question(sujet: &Value, fiche: &Value) -> String {
     )
 }
 
-/// Une voie : prend la question, rend « yes » ou « no », sa probabilité quand elle
-/// la connaît, et ses jetons.
+/// Ce qu'une décision rend.
 struct Reponse {
     oui: bool,
-    proba_oui: Option<f64>,
-    jetons: (usize, usize),
+    proba_verdict: Option<f64>,
 }
 
-trait Voie {
-    fn nom(&self) -> String;
-    fn decider(&self, question: &str) -> Result<Reponse, String>;
+/// **Une voie** : le graphe de la tentative pour elle, et les services qu'il
+/// demande (le Decider, ou le LLM).
+struct Voie {
+    nom: String,
+    graphe: rag3weaver::dataflow::checkpoint::GraphDefinition,
+    services: std::sync::Arc<rag3weaver::dataflow::ServiceRegistry>,
 }
 
-#[cfg(feature = "daemon")]
-struct VoieDecider {
-    decider: rag3weaver::decider::LlamaServerDecider,
+fn tentative() -> PathBuf {
+    std::env::var("RAG3WEAVER_BANC_TENTATIVE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| crate_dir().join("templates/experiments/2026-10-11-fiches-classees-1"))
 }
 
-#[cfg(feature = "daemon")]
-impl Voie for VoieDecider {
-    fn nom(&self) -> String {
-        "decider-un-jeton".into()
+impl Voie {
+    fn nouvelle(nom: String, fichier: &str, services: rag3weaver::dataflow::ServiceRegistry) -> Self {
+        let chemin = tentative().join(fichier);
+        // Un graphe `.json` (une définition, où un retour à la ligne en est un)
+        // passe avant le `.mmd` du même nom : retour de la tentative 1.
+        let json = chemin.with_extension("json");
+        let graphe = if json.exists() {
+            let texte = std::fs::read_to_string(&json).unwrap_or_else(|e| panic!("{} : {e}", json.display()));
+            serde_json::from_str(&texte).unwrap_or_else(|e| panic!("{} : {e}", json.display()))
+        } else {
+            let texte = std::fs::read_to_string(&chemin).unwrap_or_else(|e| panic!("{} : {e}", chemin.display()));
+            rag3weaver::dataflow::parse_mermaid(&texte).unwrap_or_else(|e| panic!("{} : {e:?}", chemin.display()))
+        };
+        Self { nom, graphe, services: std::sync::Arc::new(services) }
     }
+
+    /// Le graphe de la tentative, l'élément `{text}` posé devant son `decide`.
     fn decider(&self, question: &str) -> Result<Reponse, String> {
-        use rag3weaver::decider::Decider;
-        // Le Decider complète un texte brut : le gabarit de conversation du
-        // modèle s'écrit ici (ChatML, celui de Qwen), réflexion fermée.
-        let prompt = format!(
-            "<|im_start|>system\n{CONSIGNE}<|im_end|>\n<|im_start|>user\n{question}<|im_end|>\n\
-             <|im_start|>assistant\n<think>\n\n</think>\n\n"
-        );
-        let p = self
-            .decider
-            .decide_at(&prompt, &["yes".to_string(), "no".to_string()], 1.0)
-            .map_err(|e| format!("{e:?}"))?;
-        Ok(Reponse { oui: p[0] > p[1], proba_oui: Some(p[0]), jetons: (0, 1) })
-    }
-}
-
-#[cfg(feature = "openai-llm")]
-struct VoieStructuree {
-    llm: rag3weaver::openai_llm::OpenAiLlm,
-    modele: String,
-}
-
-#[cfg(feature = "openai-llm")]
-impl Voie for VoieStructuree {
-    fn nom(&self) -> String {
-        format!("sortie-structuree ({})", self.modele)
-    }
-    fn decider(&self, question: &str) -> Result<Reponse, String> {
-        use rag3weaver::llm::{generate_to_string, GenOptions, ResponseFormat, Turn};
-        let schema = json!({
-            "type": "object",
-            "properties": {"answer": {"type": "string", "enum": ["yes", "no"]}},
-            "required": ["answer"],
-            "additionalProperties": false
+        use rag3weaver::dataflow::checkpoint::{EdgeDef, NodeDef};
+        let mut def = self.graphe.clone();
+        def.nodes.push(NodeDef {
+            name: "source".into(),
+            node_type: "RhaiNode".into(),
+            config: json!({"script": "input", "value": {"text": question}}),
         });
-        let opts = GenOptions::default()
-            .with_max_tokens(1024)
-            .with_response_format(ResponseFormat::strict_schema("decision", schema));
-        let sortie = generate_to_string(&self.llm, &[Turn::system(CONSIGNE), Turn::user(question)], &opts)
-            .map_err(|e| e.to_string())?;
-        let v: Value = serde_json::from_str(sortie.text.trim())
-            .map_err(|e| format!("pas du JSON ({e}) : {}", sortie.text))?;
-        let oui = match v["answer"].as_str() {
+        def.edges.push(EdgeDef {
+            from_node: "source".into(),
+            from_port: "result".into(),
+            to_node: "decide".into(),
+            to_port: "element".into(),
+        });
+        let mut registre = rag3weaver::dataflow::NodeRegistry::new();
+        rag3weaver::dataflow::register_builtins(&mut registre);
+        let mut g = rag3weaver::dataflow::DataflowGraph::from_definition(&def, &registre)?;
+        let (sortie, _) = rag3weaver::dataflow::DataflowRuntime::with_services_arc(100, self.services.clone())
+            .execute_with_report(&mut g)?;
+        let element = sortie
+            .get("decide", "element")
+            .and_then(|v| v.downcast::<Value>())
+            .cloned()
+            .ok_or("le decide n'a rien rendu")?;
+        let oui = match element["verdict"].as_str() {
             Some("yes") => true,
             Some("no") => false,
-            autre => return Err(format!("étiquette hors liste : {autre:?}")),
+            autre => return Err(format!("étiquette hors liste : {autre:?} — {element}")),
         };
-        Ok(Reponse {
-            oui,
-            proba_oui: None,
-            jetons: (sortie.usage.prompt_tokens, sortie.usage.completion_tokens),
-        })
+        Ok(Reponse { oui, proba_verdict: element["verdict_probability"].as_f64() })
     }
 }
 
-fn voies() -> Vec<Box<dyn Voie>> {
-    let mut v: Vec<Box<dyn Voie>> = Vec::new();
+fn voies() -> Vec<Voie> {
+    let mut v = Vec::new();
     #[cfg(feature = "daemon")]
     if let Ok(adresse) = std::env::var("RAG3WEAVER_BANC_DECIDE") {
         let decider = rag3weaver::decider::LlamaServerDecider::new(&adresse, "banc")
             .unwrap_or_else(|e| panic!("le Decider à {adresse} : {e}"));
-        v.push(Box::new(VoieDecider { decider }));
+        let mut s = rag3weaver::dataflow::ServiceRegistry::new();
+        s.register(
+            rag3weaver::decider::DECIDER_SERVICE,
+            std::sync::Arc::new(decider) as std::sync::Arc<dyn rag3weaver::decider::Decider>,
+        );
+        v.push(Voie::nouvelle(format!("decider ({adresse})"), "decide_subject_decider.mmd", s));
     }
     #[cfg(feature = "openai-llm")]
     if std::env::var("RAG3WEAVER_BANC_VERTEX").is_ok() {
         let (llm, modele) = rag3weaver::regime::modele_agentique_nomme("banc-fiches-classees")
             .expect("RAG3WEAVER_BANC_VERTEX posé, mais pas de modèle : identifiants Vertex ?");
-        v.push(Box::new(VoieStructuree { llm, modele }));
+        let mut s = rag3weaver::dataflow::ServiceRegistry::new();
+        s.register(
+            rag3weaver::dataflow::LLM_SERVICE,
+            std::sync::Arc::new(llm) as std::sync::Arc<dyn rag3weaver::llm::Llm>,
+        );
+        v.push(Voie::nouvelle(format!("llm ({modele})"), "decide_subject_llm.mmd", s));
     }
     v
 }
@@ -175,8 +194,6 @@ struct Compte {
     fiches_justes: usize,
     abstentions_justes: usize,
     ms: u128,
-    jetons_entree: usize,
-    jetons_sortie: usize,
 }
 
 #[test]
@@ -245,11 +262,9 @@ fn le_sujet_d_une_fiche_au_put_memory() {
                 let t = Instant::now();
                 let r = voie
                     .decider(&question(&sujet, f))
-                    .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom()));
+                    .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom));
                 c.ms += t.elapsed().as_millis();
                 c.decisions += 1;
-                c.jetons_entree += r.jetons.0;
-                c.jetons_sortie += r.jetons.1;
                 let juste = Some(nom.as_str()) == gold;
                 match (r.oui, juste) {
                     (true, true) => c.ancrages_justes += 1,
@@ -260,7 +275,7 @@ fn le_sujet_d_une_fiche_au_put_memory() {
                 if r.oui {
                     oui.push(nom.clone());
                 }
-                lignes.push(json!({"claim": f["claim"], "candidat": nom, "gold": gold, "oui": r.oui, "proba_oui": r.proba_oui}));
+                lignes.push(json!({"claim": f["claim"], "candidat": nom, "gold": gold, "oui": r.oui, "proba_verdict": r.proba_verdict}));
             }
             let fiche_juste = match gold {
                 Some(g) => oui == [g.to_string()],
@@ -274,7 +289,7 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             }
         }
         let sans_sujet = fiches.len() - avec_sujet;
-        eprintln!("\n  ── {} ──", voie.nom());
+        eprintln!("\n  ── {} ──", voie.nom);
         eprintln!(
             "  fiches justes {}/{} (abstentions justes {}/{sans_sujet}) ; ancrages justes {}, \
              FAUX ancrages {}, manqués {}",
@@ -286,19 +301,16 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             c.manques
         );
         eprintln!(
-            "  {} décisions, {} ms ({} ms par décision), jetons {} entrée / {} sortie",
+            "  {} décisions, {} ms ({} ms par décision)",
             c.decisions,
             c.ms,
-            c.ms / c.decisions.max(1) as u128,
-            c.jetons_entree,
-            c.jetons_sortie
+            c.ms / c.decisions.max(1) as u128
         );
         sortie["voies"].as_array_mut().unwrap().push(json!({
-            "voie": voie.nom(), "fiches": fiches.len(), "fiches_justes": c.fiches_justes,
+            "voie": voie.nom, "tentative": tentative().file_name().map(|n| n.to_string_lossy().to_string()), "fiches": fiches.len(), "fiches_justes": c.fiches_justes,
             "abstentions_justes": c.abstentions_justes, "sans_sujet": sans_sujet,
             "ancrages_justes": c.ancrages_justes, "faux_ancrages": c.faux_ancrages, "manques": c.manques,
             "decisions": c.decisions, "ms": c.ms as u64,
-            "jetons_entree": c.jetons_entree, "jetons_sortie": c.jetons_sortie,
             "lignes": lignes,
         }));
     }
