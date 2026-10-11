@@ -842,3 +842,49 @@ A8 (le point de reprise sous écrivains permanents) et A9 (la mesure du coût, p
 défaut) ; B = le lecteur (fait), le relais au fichier (B2), le démon (B3, la voie Neo4j) ; le vrai
 multi-processus est une refonte que je ne recommande pas ; quatre écarts rendus à Lucie. Rien à
 coder avant son mot.
+
+## T0, la transaction en échec garde ses verrous (11 octobre 2026, 10 h 30) — condition 3, marche 1
+
+Branche `verrous-t0`. Ce qui existait : après l'échec d'une instruction dans `BEGIN … COMMIT`, la
+connexion refusait déjà tout jusqu'au `ROLLBACK` (`throwIfManualTransactionFailed`), mais la
+transaction était annulée **et fermée** en dessous — ses verrous rendus à l'échec ; celui qui
+attendait derrière écrivait pendant que le bloc était encore ouvert côté client (rouge `waited` du
+banc). T0 : la transaction reste active, ses effets annulés tout de suite
+(`Transaction::failAfterStatement` : rollback, tampon d'annulation vidé — il ne s'applique qu'une
+fois —, journal local vidé, drapeau `failed`), ses verrous tenus ; `ROLLBACK` la ferme ; `COMMIT` la
+ferme en annulant et lève l'erreur nommée. **Écart choisi** : PostgreSQL répond au `COMMIT` d'un
+bloc en échec par `ROLLBACK` sans erreur, Neo4j refuse le commit — Neo4j, pour qu'un client ne
+croie pas avoir validé. **Conséquence en mode un seul écrivain** (relecture d'hotfixs) : un bloc en
+échec non fermé garde la place de l'écrivain jusqu'au `ROLLBACK` — voulu, c'est ce que vaut une
+transaction ouverte ; rag3weaver ferme déjà ses blocs en échec (`code_sync.rs`), dit à l'arbre
+principal. `cleanUp()` du contexte appelé deux fois (à l'échec, à la fermeture) : il ne fait que
+nettoyer les fichiers du contexte dans chaque système de fichiers, idempotent. Témoins : d'un fil
+`AFailedTransactionKeepsItsLocksUntilItIsClosed` (rouge sur master : 0 verrou après l'échec, l'autre
+n'attend pas ; vert après — la transaction garde aussi les verrous de l'instruction qui a échoué) ;
+au banc `FailedTransactionReleasesItsLocksAtRollback` 5 sur 5, sa ligne sort de `known_red` (11
+attendus). Passe, sur luciepc (`rag3db-t0`) : transaction_test 251, api 104, c_api 136, copy 23,
+stockage 83 + column_stats 2 + string_split 2, vector 74 et 63, Cypher 1867 ; banc en tenue
+exclusive conforme (9 rouges / 249 verts). Deux témoins existants adaptés à la règle
+(`FailedTransactionTest` : un `BEGIN`/`CHECKPOINT` refusé dans un bloc en échec ne le ferme plus ;
+en mode un seul écrivain, l'autre connexion lit et son écriture attend le `ROLLBACK`). Cas limite
+nommé par hotfixs, laissé tel quel : un `ROLLBACK` qui lèverait lui-même dans un bloc en échec
+laisse le bloc ouvert jusqu'à un second `ROLLBACK` ou la fin de la connexion — rien n'est perdu.
+Sur master en avance rapide : `e963fb220`…`82a5f4851` (11 h 40).
+
+## A3′ reprise, le journal à doublon (11 octobre 2026, 11 h 30) — condition 3, marche 3
+
+Branche `verrous-a3-reprise`. Le rejeu butait sur « Found duplicated primary key value 7 » et la
+base ne se rouvrait plus (journal fabriqué par le moteur d'avant le verrou de clé, sous le mode
+multi-écrivains : deux transactions validées sur la même clé, mort base ouverte). Forme : une
+exception typée (`DuplicatedPrimaryKeyException`, même message) levée par l'index de clé, la table
+locale et la table de nœuds ; au rejeu, sur cette exception seulement, la transaction de reprise en
+cours est annulée, ses enregistrements lus sans être rejoués jusqu'à son `COMMIT`, la clé nommée sur
+stderr avec les octets [début, fin) ; le rejeu continue ; à la fin les octets sautés sont copiés
+dans `<journal>.ecarte-<ms>` (rien n'est supprimé ; en lecture seule rien n'est écrit). Toute autre
+erreur de rejeu reste une corruption : la base ne s'ouvre pas (les témoins `WalTornEndTest`
+inchangés). La transaction fautive reste dans le journal jusqu'au prochain point de reprise : une
+seconde mort avant lui la fait sauter de nouveau, pareil. Témoins : d'un fil
+`DuplicateKeyJournalTest.TheFaultyTransactionIsSkippedAndTheDatabaseOpens` (la base s'ouvre, une
+ligne de clé 7, un fichier écarté non vide, puis une écriture, un point de reprise, une
+réouverture) ; au banc `RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen`, sa ligne sort de
+`known_red`. Passe : PASSE_A3R.
