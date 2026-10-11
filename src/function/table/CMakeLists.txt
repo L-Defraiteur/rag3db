@@ -5,6 +5,7 @@ add_library(rag3db_table_function
         bind_data.cpp
         bind_input.cpp
         bm_info.cpp
+        build_id.cpp
         cache_column.cpp
         catalog_version.cpp
         clear_warnings.cpp
@@ -33,6 +34,9 @@ add_library(rag3db_table_function
         table_info.cpp
         projected_graph_info.cpp
         )
+
+# build_id.cpp lit l'en-tête généré à chaque bâti (cmake/build_id.cmake).
+add_dependencies(rag3db_table_function rag3db_build_id)
 
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_table_function>

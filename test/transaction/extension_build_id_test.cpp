@@ -127,5 +127,27 @@ TEST_F(ExtensionBuildIdTest, AtRecoveryAnExtensionFromAnotherBuildLeavesTheIndex
     std::filesystem::remove(copy);
 }
 
+// CALL build_id() rend l'identifiant de bâti du moteur, celui que LOAD EXTENSION compare : le
+// même que porte l'extension vector de ce bâti (une seule occurrence de « rag3db-build- » dans son
+// fichier). Pour le démon, qui l'affiche dans son état à la place de la version du crate.
+TEST_F(ExtensionBuildIdTest, CallBuildIdReturnsTheIdentifierOfThisBuild) {
+    createDBAndConn();
+    auto result = conn->query("CALL build_id() RETURN *;");
+    ASSERT_TRUE(result->isSuccess()) << "[check: call-build-id] " << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    const auto engine = result->getNext()->getValue(0)->getValue<std::string>();
+    EXPECT_EQ(engine.rfind("rag3db-build-", 0), 0u) << engine;
+    std::vector<char> bytes;
+    {
+        std::ifstream in(vectorExtension(), std::ios::binary);
+        bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    const std::string marker = "rag3db-build-";
+    const auto it = std::search(bytes.begin(), bytes.end(), marker.begin(), marker.end());
+    ASSERT_NE(it, bytes.end()) << "the vector extension carries no build id";
+    const std::string extension(it, std::find(it, bytes.end(), '\0'));
+    EXPECT_EQ(engine, extension) << "[check: same-build] the engine and its extension disagree";
+}
+
 } // namespace testing
 } // namespace rag3db

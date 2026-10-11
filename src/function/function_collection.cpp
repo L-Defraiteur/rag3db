@@ -222,7 +222,7 @@ FunctionCollection* FunctionCollection::getFunctions() {
 
         // Table functions
         TABLE_FUNCTION(CurrentSettingFunction), TABLE_FUNCTION(CatalogVersionFunction),
-        TABLE_FUNCTION(DBVersionFunction), TABLE_FUNCTION(ShowTablesFunction),
+        TABLE_FUNCTION(DBVersionFunction), TABLE_FUNCTION(BuildIdFunction), TABLE_FUNCTION(ShowTablesFunction),
         TABLE_FUNCTION(FreeSpaceInfoFunction), TABLE_FUNCTION(ShowWarningsFunction),
         TABLE_FUNCTION(TableInfoFunction), TABLE_FUNCTION(ShowConnectionFunction),
         TABLE_FUNCTION(StatsInfoFunction), TABLE_FUNCTION(StorageInfoFunction),
