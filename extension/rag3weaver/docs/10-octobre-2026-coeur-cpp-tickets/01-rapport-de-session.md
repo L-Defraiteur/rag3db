@@ -366,6 +366,17 @@ fenêtre étroite par la session cœur C++.
 - **Pour reprendre** :
   - le rebâti unique de la lib commune de luciepc (pour le cœur et pour moi), après le « fini »
     de codeparsers et le hash de `systemconfig-abi` ; pas d'ABI changée par le visited set ;
+  - **pour Lucie, la lib commune et l'hôte figé** (pid 132823, code-lourd, quatrième gel). La
+    lib de luciepc reste sur `b4655da39`, sans le visited set ni B2. L'orchestration autorisait un
+    rebâti sous l'hôte figé ; ma session l'a refusé (classifieur), je n'ai pas insisté. La forme
+    proposée garde la pile intacte : déplacer par `mv` les deux fichiers mappés (`librag3db.so`,
+    inode 35665439 ; `libvector.rag3db_extension`, inode 35665435) en `.fige-132823`, même inode,
+    puis bâtir à neuf et vérifier que les inodes ont changé. Elle est écrite dans
+    `~/.cache/rag3db-tickets-notes/rebatir-lib-commune.sh` (variable `FIGE_PID`) sur ce poste.
+    **Aucun `.fige-132823` n'existe** : le script n'a pas été lancé. La copie du script vers
+    luciepc a été refusée, et je n'ai pas pu vérifier si elle avait eu lieu. Sans `FIGE_PID`, les
+    deux versions s'arrêtent net (exit 2) tant que l'hôte charge la lib. À trancher : arrêter
+    l'hôte (après en avoir pris la pile), ou accorder la forme par déplacement ;
   - le CHECKPOINT explicite et la validation forcée sur un fil du planificateur (page 06) ;
   - le COPY de blobs (page 04).
 
