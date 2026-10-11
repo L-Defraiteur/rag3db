@@ -342,6 +342,33 @@ fenêtre étroite par la session cœur C++.
     (page 06).
   - Le worktree `rag3db-tickets` de luciepc est gardé, sur master, avec son `build/` chaud.
 
+## Le 11 octobre, le soir — le visited set (`3e0f98f08`)
+
+- **Cause** (l'hypothèse du cœur) : l'état d'une écriture sur le graphe HNSW est créé avant que la
+  table prenne le verrou de l'index ; l'attente reprend l'instantané, et le graphe atteint les
+  lignes que l'autre écrivain a validées, au-delà de l'ensemble visité.
+- **Correctif** : `VisitedState::ensureSize`, appelé par `fitVisitedToTable` au début de `update`,
+  `delete_`, `finalizeDelete`, `commitInsert`, et de `search` par précaution. La borne reste.
+- **Preuves** :
+  - le témoin du banc, rouge 3 sur 3 sur master, vert 5 sur 5 ;
+  - H4 rouge 3 sur 3 sur `cad384056` sans le correctif (seulement « beyond »), vert 5 sur 5 avec ;
+  - la liste complète verte sur `cad384056`, puis le rejeu court vert sur B2 (`332d7027e`).
+  Le témoin et H4 sortent de `known_red`, le ticket est fermé.
+- **Un témoin retiré** : la recherche après un SET qui attend (demandé par le cœur) passait déjà
+  sur master. `QUERY_VECTOR_INDEX` ne cherche qu'une fois par état, compté après le SET.
+- **Fautes** :
+  - mon verdict ajouté à la liste prenait la ligne `FIN` pour un rouge : la liste était verte, la
+    règle est corrigée ;
+  - une boucle H4 sur l'ancienne base est restée orpheline après une coupure ssh ; l'arrêter a
+    été refusé, elle a fini seule. Les passes longues partent maintenant détachées (`setsid`).
+  - deux conflits sur l'index des tickets au rebase : on repart de la version de master et on
+    rejoue ses deux lignes, puis `check_tickets.py`.
+- **Pour reprendre** :
+  - le rebâti unique de la lib commune de luciepc (pour le cœur et pour moi), après le « fini »
+    de codeparsers et le hash de `systemconfig-abi` ; pas d'ABI changée par le visited set ;
+  - le CHECKPOINT explicite et la validation forcée sur un fil du planificateur (page 06) ;
+  - le COPY de blobs (page 04).
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre

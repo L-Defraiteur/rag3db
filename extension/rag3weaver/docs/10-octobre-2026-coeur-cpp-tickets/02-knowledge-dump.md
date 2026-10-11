@@ -130,3 +130,18 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
 - **gdb sous `ptrace_scope=1`** (luciepc) : on ne s'attache pas à un processus ; il faut lancer
   le test sous gdb, avec `timeout --signal=INT 25 gdb -batch -ex run -ex "thread apply all bt"`.
 
+## Le 11 octobre, le soir
+
+- **Un état d'index créé avant le verrou de l'index sert après lui.** Sous le mode multi-écrivains,
+  `lockIndexForWrite` reprend l'instantané (`refreshSnapshot`) si la transaction n'a pas encore
+  écrit ; tout ce qui a été dimensionné avant (ensemble visité, compteurs) doit se réajuster au
+  début de l'opération.
+- **`QUERY_VECTOR_INDEX` cherche une fois par état local** (`hasResultToOutput`) ; son état
+  partagé compte les lignes à l'initialisation, après un SET en amont dans la même instruction.
+- **Le témoin du concurrence_test** : les tests vector du banc (`vector_index_update_test.cpp`)
+  sont dans `concurrence_test`, pas dans `transaction_test` (un filtre là rend « 0 tests »).
+- **Une passe longue sur luciepc part détachée** (`setsid nohup bash script &`), son journal dans
+  un fichier, le guetteur à part : une coupure ssh ne perd plus la sortie.
+- **Un verdict se calcule sur toutes les lignes du fichier des codes**, y compris celles qui ne
+  sont pas des suites (`FIN`) : les admettre explicitement.
+
