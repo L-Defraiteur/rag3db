@@ -33,6 +33,14 @@ use crate::llm::{
 };
 use crate::tools::ToolDef;
 
+pub use crate::agent_ports::{AgentPort, AgentPorts, GraphPorts};
+
+/// Le champ texte `key` d'un élément réécrit par un port ; `fallback` s'il
+/// n'y est pas.
+fn text_field(v: &serde_json::Value, key: &str, fallback: &str) -> String {
+    v.get(key).and_then(|s| s.as_str()).unwrap_or(fallback).to_string()
+}
+
 // ─── ToolBox ────────────────────────────────────────────────────────────────
 
 /// Ce dont la boucle a besoin d'un outillage : le décrire, et l'exécuter.
@@ -520,6 +528,13 @@ pub enum StopReason {
         /// Ce qu'un humain lit.
         reason: String,
     },
+    /// **Un port a retenu ce qui le traversait**, et à ce port, retenir veut
+    /// dire s'arrêter : `user_in`, `model_out`, `answer_out`, `turn_end`
+    /// ([`crate::agent_ports`]). Ce n'est pas une panne : le graphe branché
+    /// a décidé.
+    Held {
+        port: AgentPort,
+    },
 }
 
 /// **Pourquoi un agent se tait**, et donc ce qui le réveillera.
@@ -699,7 +714,28 @@ pub struct Agent<'a> {
     /// Qui sert : `vertex`, `openai`, `local`… Un même modèle chez deux
     /// fournisseurs n'a ni le même prix ni la même disponibilité.
     provider: String,
+    /// Ce qui est branché sur les ports de la boucle. Absent : la boucle
+    /// d'hier, à la lettre.
+    ports: Option<&'a dyn AgentPorts>,
 }
+
+/// Ce qu'un port a fait d'un élément.
+enum Passage {
+    /// Aucun port attaché : l'élément n'a pas même été construit.
+    Free,
+    Held,
+    Passed(serde_json::Value),
+}
+
+/// Le contenu d'un appel ou d'un résultat **retenu par un port** : ni une
+/// erreur (le modèle n'a rien à corriger), ni un succès.
+fn held_content(port: AgentPort) -> String {
+    format!("{{\"statut\": \"retenu\", \"port\": \"{port}\"}}")
+}
+
+/// L'émetteur d'un résultat d'outil en fond, suivi de sa poignée
+/// (`outil #search-1`) : c'est ce qui le distingue d'un message de pair.
+const ASYNC_RESULT_FROM: &str = "outil ";
 
 /// Le curseur sous lequel un agent lit sa boîte. Un message envoyé **avant**
 /// le run n'est vu que si ce curseur a été ouvert avant
@@ -736,6 +772,40 @@ impl<'a> Agent<'a> {
             domain: String::new(),
             resource: None,
             provider: "unknown".to_string(),
+            ports: None,
+        }
+    }
+
+    /// Branche des sous-graphes sur les ports de la boucle
+    /// ([`crate::agent_ports`]).
+    pub fn with_ports(mut self, ports: &'a dyn AgentPorts) -> Self {
+        self.ports = Some(ports);
+        self
+    }
+
+    /// Fait passer un élément par `port`. L'élément n'est construit que si un
+    /// port y est attaché ; une panne du port est dite sur le bus, et
+    /// l'élément passe inchangé.
+    fn pass(
+        &self,
+        port: AgentPort,
+        run_id: &str,
+        element: impl FnOnce() -> serde_json::Value,
+    ) -> Passage {
+        let Some(ports) = self.ports.filter(|p| p.attached(port)) else {
+            return Passage::Free;
+        };
+        let element = element();
+        match ports.on(port, element.clone(), run_id) {
+            Ok(Some(v)) => Passage::Passed(v),
+            Ok(None) => Passage::Held,
+            Err(detail) => {
+                self.emit(crate::events::CatalogEvent::Warning {
+                    context: format!("agent:{}", self.name),
+                    message: format!("port {port} en panne, l'élément passe inchangé : {detail}"),
+                });
+                Passage::Passed(element)
+            }
         }
     }
 
@@ -1046,7 +1116,7 @@ impl<'a> Agent<'a> {
             // l'agent ne le verrait jamais.
             bus.send_message(
                 &child,
-                &format!("outil {handle}"),
+                &format!("{ASYNC_RESULT_FROM}{handle}"),
                 &inbox,
                 &format!(
                     "{handle} ({}) a rendu après {} ms :\n{}",
@@ -1072,7 +1142,35 @@ impl<'a> Agent<'a> {
         let mut n = 0;
         loop {
             match rx.try_recv() {
-                Ok(crate::events::Event::Message { from, content, .. }) => {
+                Ok(crate::events::Event::Message { from, content, conversation, .. }) => {
+                    // **Le résultat d'un outil en fond** arrive par la boîte,
+                    // signé de sa poignée : c'est un résultat d'outil, il passe
+                    // par `tool_result_in`, pas par `peer_in`.
+                    if let Some(handle) = from.strip_prefix(ASYNC_RESULT_FROM) {
+                        let name = handle
+                            .trim_start_matches('#')
+                            .rsplit_once('-')
+                            .map_or(handle, |(name, _)| name);
+                        let content = match self.pass(AgentPort::ToolResultIn, run_id, || {
+                            serde_json::json!({"id": handle, "name": name, "content": content, "async": true})
+                        }) {
+                            Passage::Free => content,
+                            Passage::Held => held_content(AgentPort::ToolResultIn),
+                            Passage::Passed(v) => text_field(&v, "content", &content),
+                        };
+                        turns.push(Turn::user(format!("[message de {from}] {content}")));
+                        n += 1;
+                        continue;
+                    }
+                    let (from, content) = match self.pass(AgentPort::PeerIn, run_id, || {
+                        serde_json::json!({"from": from, "content": content, "conversation": conversation})
+                    }) {
+                        Passage::Free => (from, content),
+                        Passage::Held => continue,
+                        Passage::Passed(v) => {
+                            (text_field(&v, "from", &from), text_field(&v, "content", &content))
+                        }
+                    };
                     turns.push(Turn::user(format!("[message de {from}] {content}")));
                     n += 1;
                 }
@@ -1253,6 +1351,19 @@ impl<'a> Agent<'a> {
         let mut last_finish = Finish::eos();
         // Une pause termine le run **sans texte** : c'est tout l'objet.
         let mut paused = false;
+        // **`user_in`** : le dernier tour `user` de l'appelant, une fois, avant
+        // tout appel au modèle. Retenu, le run s'arrête là.
+        let mut held_at_start = None;
+        if let Some(i) = turns.iter().rposition(|t| t.role == "user") {
+            let content = turns[i].content.clone();
+            match self.pass(AgentPort::UserIn, run_id, || serde_json::json!({"content": content})) {
+                Passage::Free => {}
+                Passage::Held => held_at_start = Some(AgentPort::UserIn),
+                Passage::Passed(v) => {
+                    turns[i].content = text_field(&v, "content", &turns[i].content);
+                }
+            }
+        }
 
         // Un fil de portée pour toute la boucle : les outils asynchrones y
         // travaillent pendant qu'on parle, et il est joint quand le run se
@@ -1281,6 +1392,10 @@ impl<'a> Agent<'a> {
         let interrupted: Result<(), LlmError> = std::thread::scope(|scope| {
         let _vidange = Vidange(portee_du_run.clone());
         loop {
+            if let Some(port) = held_at_start.take() {
+                run.stop = StopReason::Held { port };
+                break;
+            }
             if run.iterations >= self.limits.max_iterations {
                 run.stop = StopReason::MaxIterations;
                 break;
@@ -1451,6 +1566,55 @@ impl<'a> Agent<'a> {
             });
             self.meter_call(run_id, run.iterations, &model, &usage);
 
+            // **`model_out`** : ce que le modèle a dit, une fois l'appel compté
+            // — le compteur et la trace disent ce qui a été payé, pas ce que
+            // le port en a fait. Retenu : le run s'arrête, la sortie n'entre
+            // pas dans l'historique.
+            match self.pass(AgentPort::ModelOut, run_id, || {
+                serde_json::json!({"text": text, "tool_calls": finish.tool_calls})
+            }) {
+                Passage::Free => {}
+                Passage::Held => {
+                    run.text.clear();
+                    run.stop = StopReason::Held { port: AgentPort::ModelOut };
+                    break;
+                }
+                Passage::Passed(v) => {
+                    text = text_field(&v, "text", &text);
+                    if let Some(calls) = v.get("tool_calls") {
+                        // Chaque résultat répond à un identifiant : vide ou en
+                        // double, deux résultats se confondraient.
+                        let parsed = serde_json::from_value::<Vec<ToolCall>>(calls.clone())
+                            .map_err(|e| e.to_string())
+                            .and_then(|calls| {
+                                let mut ids = std::collections::HashSet::new();
+                                match calls.iter().find(|c| c.id.is_empty() || !ids.insert(c.id.as_str())) {
+                                    Some(c) => Err(format!("identifiant vide ou en double : « {} »", c.id)),
+                                    None => Ok(calls),
+                                }
+                            });
+                        match parsed {
+                            Ok(calls) => {
+                                // La raison suit les appels : sans eux, la
+                                // sortie est une réponse ; avec, une demande.
+                                match (&finish.reason, calls.is_empty()) {
+                                    (FinishReason::ToolCall, true) => finish.reason = FinishReason::Eos,
+                                    (FinishReason::Eos, false) => finish.reason = FinishReason::ToolCall,
+                                    _ => {}
+                                }
+                                finish.tool_calls = calls;
+                            }
+                            Err(e) => self.emit(crate::events::CatalogEvent::Warning {
+                                context: format!("agent:{}", self.name),
+                                message: format!("port model_out : appels refusés, ceux du modèle gardés ({e})"),
+                            }),
+                        }
+                    }
+                    run.text = text.clone();
+                    last_finish = finish.clone();
+                }
+            }
+
             // Parler lève sa propre pause : on ne peut pas être en pause et
             // répondre en même temps (doc 12 §2.1). C'est ce qui permet à un
             // pair de réengager sans cérémonie.
@@ -1465,6 +1629,25 @@ impl<'a> Agent<'a> {
                 // Un fragment abandonné reste dans l'historique : l'utilisateur
                 // l'a vu, le cacher ferait mentir la conversation. Un tour vide
                 // (annulation avant le premier jeton), non.
+                //
+                // **`answer_out`** : la réponse, pas un fragment interrompu.
+                // Retenue, elle n'entre pas dans l'historique et le run
+                // s'arrête là : un rappel de complétion relancerait le modèle
+                // sur une réponse qu'il ne verrait plus.
+                if !text.is_empty() && finish.reason != FinishReason::Cancelled {
+                    match self.pass(AgentPort::AnswerOut, run_id, || serde_json::json!({"text": text})) {
+                        Passage::Free => {}
+                        Passage::Held => {
+                            run.text.clear();
+                            run.stop = StopReason::Held { port: AgentPort::AnswerOut };
+                            break;
+                        }
+                        Passage::Passed(v) => {
+                            text = text_field(&v, "text", &text);
+                            run.text = text.clone();
+                        }
+                    }
+                }
                 if !text.is_empty() {
                     turns.push(Turn::assistant(text));
                 }
@@ -1512,10 +1695,52 @@ impl<'a> Agent<'a> {
                 });
                 let started = std::time::Instant::now();
 
+                // **`tool_call_out`** : l'appel annoncé reste dans l'historique
+                // tel que le modèle l'a dit ; ce qui s'exécute est ce que le
+                // port rend, sous le même identifiant. Retenu, il ne s'exécute
+                // pas et son résultat le dit.
+                let rewritten;
+                let mut held_call = false;
+                let call: &ToolCall = match self.pass(AgentPort::ToolCallOut, run_id, || {
+                    serde_json::to_value(call).unwrap_or_default()
+                }) {
+                    Passage::Free => call,
+                    Passage::Held => {
+                        held_call = true;
+                        call
+                    }
+                    Passage::Passed(v) => match serde_json::from_value::<ToolCall>(v) {
+                        Ok(mut c) => {
+                            c.id = call.id.clone();
+                            // `ToolCallStarted` et l'historique disent l'appel
+                            // du modèle : ce qui s'exécute vraiment doit se
+                            // lire aussi, sinon la trace ment.
+                            if c != *call {
+                                self.emit(crate::events::CatalogEvent::Warning {
+                                    context: format!("agent:{}", self.name),
+                                    message: format!(
+                                        "appel {} réécrit par le port tool_call_out : {} {}",
+                                        call.id, c.name, c.arguments
+                                    ),
+                                });
+                            }
+                            rewritten = c;
+                            &rewritten
+                        }
+                        Err(e) => {
+                            self.emit(crate::events::CatalogEvent::Warning {
+                                context: format!("agent:{}", self.name),
+                                message: format!("port tool_call_out : appel illisible, gardé tel quel ({e})"),
+                            });
+                            call
+                        }
+                    },
+                };
+
                 // **Se taire est une décision de la boucle**, pas un appel de
                 // graphe : on intercepte avant l'outillage. Un outil ne peut
                 // pas arrêter la boucle qui l'appelle ; cette action, si.
-                if call.name == PAUSE_DIALOGUE || call.name == CONFIRM_PAUSE {
+                if !held_call && (call.name == PAUSE_DIALOGUE || call.name == CONFIRM_PAUSE) {
                     let (turn, pause) = self.handle_pause(call, run_id);
                     turns.push(turn);
                     run.tool_calls += 1;
@@ -1531,7 +1756,9 @@ impl<'a> Agent<'a> {
                 // protocole impose une réponse à chaque appel dans le même
                 // tour — « plus tard » ne peut donc pas vouloir dire « pas de
                 // réponse », mais « une réponse qui dit que ça travaille ».
-                let result = if self.tools.is_async(&call.name) && self.events.is_some() {
+                let result = if held_call {
+                    Turn::tool_result(call.id.clone(), call.name.clone(), held_content(AgentPort::ToolCallOut))
+                } else if self.tools.is_async(&call.name) && self.events.is_some() {
                     let handle = format!("#{}-{}", call.name, run.tool_calls + 1);
                     self.spawn_async_tool(call, run_id, &handle, scope, portee_du_run.clone());
                     Turn::tool_result(
@@ -1554,6 +1781,25 @@ impl<'a> Agent<'a> {
                             scope: portee_du_run.clone(),
                         },
                     )
+                };
+                // **`tool_result_in`** : ce que l'outil rend, avant que le
+                // modèle le lise. Retenu, le contenu le dit.
+                let result = if held_call {
+                    result
+                } else {
+                    match self.pass(AgentPort::ToolResultIn, run_id, || {
+                        serde_json::json!({
+                            "id": result.tool_call_id,
+                            "name": result.tool_name,
+                            "content": result.content,
+                        })
+                    }) {
+                        Passage::Free => result,
+                        Passage::Held => Turn { content: held_content(AgentPort::ToolResultIn), ..result },
+                        Passage::Passed(v) => {
+                            Turn { content: text_field(&v, "content", &result.content), ..result }
+                        }
+                    }
                 };
                 run.tool_calls += 1;
                 if self.events.is_some() {
@@ -1595,6 +1841,20 @@ impl<'a> Agent<'a> {
 
             if let Some((tool, detail)) = repeated {
                 run.stop = StopReason::RepeatedError { tool, detail };
+                break;
+            }
+
+            // **`turn_end`** : un tour d'outils est fini, le suivant va
+            // commencer. Retenu, le run s'arrête — l'historique est bien
+            // formé, il reprendra où il en est.
+            if let Passage::Held = self.pass(AgentPort::TurnEnd, run_id, || {
+                serde_json::json!({
+                    "iteration": run.iterations,
+                    "tool_calls": run.tool_calls,
+                    "text": run.text,
+                })
+            }) {
+                run.stop = StopReason::Held { port: AgentPort::TurnEnd };
                 break;
             }
         }

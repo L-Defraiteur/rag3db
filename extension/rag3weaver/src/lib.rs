@@ -224,6 +224,8 @@ pub use llm::{
 };
 /// La boucle d'agent : générer, exécuter les outils, réinjecter, recommencer.
 pub mod agent;
+/// Les ports de la boucle d'agent : un sous-graphe sur n'importe lequel.
+pub mod agent_ports;
 pub use agent::{
     Agent, AgentLimits, AgentRun, CallbackToolBox, GraphToolBox, StopReason, ToolBox,
 };
