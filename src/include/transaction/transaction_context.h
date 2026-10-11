@@ -45,8 +45,9 @@ public:
 
     void commit();
     void rollback();
-    // Rolls back after a statement failed. If the transaction was opened by BEGIN, the connection
-    // then refuses every statement until ROLLBACK (see MANUAL_TRANSACTION_FAILED).
+    // Rolls back after a statement failed. If the transaction was opened by BEGIN, it stays open,
+    // marked failed, keeps its locks, and the connection refuses every statement until ROLLBACK
+    // (or COMMIT, which rolls back and says so) — marche T0 (see MANUAL_TRANSACTION_FAILED).
     void rollbackAfterStatementFailure();
 
     // The start of the error every statement gets between the failure of a statement inside a
@@ -57,9 +58,6 @@ public:
     static constexpr const char* MANUAL_TRANSACTION_FAILED =
         "The transaction was rolled back because a statement in it failed";
     bool isManualTransactionFailed() const { return manualTransactionFailed; }
-    // Closes the failed block: what ROLLBACK does, and COMMIT too, since there is nothing left
-    // to commit.
-    void closeFailedManualTransaction() { manualTransactionFailed = false; }
     // Throws MANUAL_TRANSACTION_FAILED if the connection is in a failed block.
     void throwIfManualTransactionFailed() const;
 

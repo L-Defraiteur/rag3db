@@ -25,19 +25,17 @@ bool Transaction::getNextTuplesInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
     auto transactionContext = TransactionContext::Get(*clientContext);
     if (transactionContext->isManualTransactionFailed()) {
-        // A statement failed inside BEGIN ... COMMIT: the transaction is already rolled back,
-        // and the block stays open, refusing everything, until it is closed here.
+        // A statement failed inside BEGIN ... COMMIT: its effects are rolled back, but the
+        // transaction stays open and keeps its locks (marche T0) until it is closed here —
+        // ROLLBACK closes it; COMMIT closes it the same way and says that nothing was committed.
         switch (transactionAction) {
         case TransactionAction::ROLLBACK: {
-            transactionContext->closeFailedManualTransaction();
+            transactionContext->rollback();
             return true;
         }
         case TransactionAction::COMMIT: {
-            // Nothing is left to commit. The block is closed, and the client is told so.
-            transactionContext->closeFailedManualTransaction();
-            throw TransactionManagerException(
-                stringFormat("{}: nothing was committed. The transaction is now closed.",
-                    TransactionContext::MANUAL_TRANSACTION_FAILED));
+            transactionContext->commit(); // annule, ferme, et lève l'erreur nommée
+            return true;
         }
         default: {
             transactionContext->throwIfManualTransactionFailed();

@@ -179,6 +179,11 @@ public:
     // Marche V2, l'annonce en tête (CALL acquire_locks) : la transaction a-t-elle déjà écrit
     // (une ligne, une version, le catalogue) ? a-t-elle déjà annoncé ?
     bool hasWritten() const;
+    // Marche T0 : une instruction de la transaction a échoué. Ses effets sont annulés tout de
+    // suite (rien de ce qu'elle a écrit ne reste), mais elle reste active et garde ses verrous
+    // jusqu'à sa fermeture par ROLLBACK ou COMMIT ; le rollback final n'a plus rien à défaire.
+    bool hasFailed() const { return failed; }
+    void failAfterStatement(storage::WAL* wal);
     bool hasAnnouncedLocks() const { return locksAnnounced; }
     void markLocksAnnounced() { locksAnnounced = true; }
 
@@ -219,6 +224,7 @@ private:
     bool forceCheckpoint;
     std::atomic<bool> hasCatalogChanges;
     bool locksAnnounced = false;
+    bool failed = false;
 };
 
 // TODO(bmwinger): These shouldn't need to be exported
