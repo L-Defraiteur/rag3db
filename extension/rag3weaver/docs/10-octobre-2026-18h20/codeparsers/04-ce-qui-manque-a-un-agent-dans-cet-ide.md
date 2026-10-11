@@ -497,3 +497,13 @@ Parmi les internes d'avant, la plupart étaient des méthodes standard sur un ty
 Le banc de couverture suit désormais les deux comptes (codeparsers f17202b, `absents.externes`
 neutre, `absents.internes_manquees` qui ne doit pas monter). La liste des méthodes standard est
 une donnée déclarée de codeparsers (`scope_extraction::standard`), pas en dur chez un consommateur.
+
+### 12 oct., 0 h 52 — arbre principal — « `usages {name: "NodeTable::update"}` rend zéro sans un mot » (vu par l'orchestration)
+
+**Fait** dans `bc51b0aec`. `usages`, `impact` et `callees` lisent `Classe::methode`, `module::fonction`
+et `Classe.methode` comme le nom seul contraint par son conteneur (`parent_name` des scopes, déclaré au
+gabarit par `qualifier_field`) ou par le nom de son fichier. La réponse dit comment elle a lu
+(« Nom qualifié : « update » dans « NodeTable » ») et combien de définitions du nom seul elle écarte ;
+un conteneur qui n'a pas ce nom le dit (« aucune définition dans ce conteneur : donnez le nom seul,
+avec un chemin, pour les voir toutes ») au lieu de rendre zéro. Témoin :
+`e2e_usages::un_nom_qualifie_rend_le_nom_seul_dans_son_conteneur`.
