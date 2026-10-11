@@ -36,7 +36,7 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 ## 1. Branches ouvertes
 
 - **10 octobre 2026, soir — codeparsers, chantier « indexer nos propres dépôts » (B4, B5, B2/B1, B3), master de codeparsers en avance rapide** (clone `~/git_workspaces/codeparsers-couverture`, target `~/.cache/rag3weaver-build/codeparsers-couverture`, sonde C++ `~/.cache/rag3weaver-build/sonde-cpp`) : la couverture la plus grande possible, C++ et Rust d'abord, mesurée sur nos dépôts. **B4 vert** (`eb41801`) : les références non résolues sont relevées avec leur raison (le relevé rendait 0). Suite : B5, le banc de couverture avec une ligne de référence commitée par dépôt. Mesure de chaque lot : les appelants de `NodeTable::update` (0 aujourd'hui). Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/04-indexer-nos-propres-depots.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`.
-- **10 octobre 2026, 23 h — chantier I « everything declarative », branche `proto-declaratif`** (worktree `~/git_workspaces/rag3db-proto` sur luciepc, target `target-I`) : le proto « tout déclaratif » en six lots (moteur de script générique avec rhai et TypeScript par rquickjs + swc_ts_fast_strip, nœud entièrement scripté, rechargement à chaud, route → graphe → vue, l'outil `declare`, la page vivante) ; lots fusionnés un par un en avance rapide. **Lots 1 et 2 sur master** (1 : le moteur de script générique, `src/script/`, rhai, TypeScript et JavaScript par QuickJS ; 2 : les noms possédés du moteur de graphes — deux fuites en service fermées — et le nœud entièrement scripté, `nodes/<nom>.node.json` ; pages 03 et 04). Lot 3 sur master (le rechargement à chaud : `Backend::reload`, une version par appel, refus nommé de ce qui est une migration ; page 05) ; la montre sur les fichiers viendra sur `watch_bound`. Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/03-le-proto-tout-declaratif.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/everything-declarative/01-rapport-de-session.md`.
+- **10 octobre 2026, 23 h — chantier I « everything declarative », branche `proto-declaratif`** (worktree `~/git_workspaces/rag3db-proto` sur luciepc, target `target-I`) : le proto « tout déclaratif » en six lots (moteur de script générique avec rhai et TypeScript par rquickjs + swc_ts_fast_strip, nœud entièrement scripté, rechargement à chaud, route → graphe → vue, l'outil `declare`, la page vivante) ; lots fusionnés un par un en avance rapide. **Lots 1 et 2 sur master** (1 : le moteur de script générique, `src/script/`, rhai, TypeScript et JavaScript par QuickJS ; 2 : les noms possédés du moteur de graphes — deux fuites en service fermées — et le nœud entièrement scripté, `nodes/<nom>.node.json` ; pages 03 et 04). Lots 3 et 4 sur master (3 : le rechargement à chaud, en deux temps pour l'hôte, page 05 ; 4 : `nodes/` dans un backend, routes → outil → vue, `serve`, le jouet `templates/proto/boutique` et son e2e, page 06). Lot 5 sur master (l'outil `declare` : un geste d'hôte, vérifié, en service, commité par chemin avec la raison de l'agent ; page 07). Lot 6 sur master (la page vivante : `serve --atelier`, le chat au modèle déclaré, le flux d'événements, la montre ; page 08, avec la recette pour Lucie). Les six lots du proto sont faits ; reste la recette jouée par Lucie, et `declare` / la montre sur la porte des réactions de la session mémoire dès sa fusion. Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/03-le-proto-tout-declaratif.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/everything-declarative/01-rapport-de-session.md`.
 - **10 octobre 2026, 20 h 30 — cœur C++, marche A3′ sur master** (`21b6cb370`, `79b7be75f`, `9a57a17b2`) : verrou de clé à l'insertion, verrou d'index du COPY pris avant l'ordonnancement, unicité contre le dernier état validé (une seule visibilité), fil de remplacement de l'ordonnanceur pendant une attente ; sous le mode multi-écrivains seulement, éteint hors du banc ; known_red 59 → 56 ; liste complète verte sur luciepc. Suite : A4′. Rapport : `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/01-rapport-de-session.md`.
 
 **Arrêt du 2 octobre 2026, 01 h 25** : toutes les sessions ont cessé de
@@ -241,7 +241,16 @@ vector ne voit pas les défauts du rejeu sans extension — rouvrir dans un proc
    seule et une huitaine de tests. Dans le même lot : un journal qui porte un
    `LOAD EXTENSION` dont le fichier a disparu empêche aujourd'hui d'ouvrir la base. Ses cinq
    témoins sont rouges au banc.
-2. **La mise à jour massive de vecteurs** (§6) : un contrôle en fin d'instruction sur tout
+2. **La mise à jour massive de vecteurs — fermée le 11 octobre 2026** (banc). La cause était
+   double : un contrôle qui n'entrait pas comme une requête, et une réinsertion qui partait de la
+   ligne elle-même. Le contrôle en fin d'instruction a été mesuré, puis écarté : il fait régresser
+   le ligne à ligne de ×7 à ×13 (branche `essai-fin-d-instruction-maj`). Restent probabilistes
+   `TenThousandRowsInBatchesOf512`, jusqu'à sa mesure, et `TwentyRowsToTheSameVectorInOneStatement`,
+   qui relève des groupes de copies. La condition 4 de la stèle n'est pas fermée : la stèle §2
+   nomme les tickets du moteur encore ouverts (six le 11 octobre à 2 h ; cinq depuis que la
+   recherche à une seule ligne après annulations est fermée par les mêmes correctifs, témoin
+   vert sur I1 rebasée). Le texte d'origine :
+   un contrôle en fin d'instruction sur tout
    ce qu'elle a touché, la dimension 768, les dix mille lignes ; et la ligne lointaine
    injoignable à la construction. Avant V1 seulement si l'invariant « toute ligne à vecteur
    est joignable » rougit en usage réel côté produit ; sinon après. Ladybug n'a ni mise à
@@ -1283,6 +1292,14 @@ sessions, pas d'une vérification.
 
 ## 6. Bugs connus, non corrigés
 
+- ~~Un lecteur en lecture seule est refusé tant que les points de reprise d'un autre processus
+  se suivent~~ — **corrigé le 11 octobre 2026** (`e4198f862`, seconde session cœur C++) : un
+  verrou des lecteurs à côté de la base (`<base>.readers`), comme SQLite en mode WAL.
+  L'ouverture en lecture seule attend un point de reprise en cours, 5 s au plus, puis donne un
+  refus nommé. Le point de reprise attend les ouvertures en cours, 1 s au plus, puis passe. Le
+  constat d'après coup reste le filet ; les lecteurs restés ouverts restent l'affaire de la
+  marche 5. Le cas moteur nu passe de 34 refus sur 80 à 0. Ticket
+  `docs/tickets/closed/2026-10-04-lecteur-affame-par-les-points-de-reprise.md`.
 - ~~Une extension d'un autre bâti que le moteur se charge sans un mot~~ — **corrigé le 10 octobre
   2026** (`458ff7157`, seconde session cœur C++) : identifiant de bâti dans le moteur et chaque extension,
   régénéré à chaque bâti, refus nommé à `LOAD EXTENSION` et au rejeu (l'index se dit en retard avec

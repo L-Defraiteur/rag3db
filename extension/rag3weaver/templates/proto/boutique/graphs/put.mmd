@@ -1,0 +1,7 @@
+%% tool: put_record
+%% description: Crée ou remplace un enregistrement.
+%% param: entity string! -- Entité fixée par le manifeste.
+%% param: record json! -- Les champs de l'enregistrement.
+%% result: write.record
+graph LR
+    write["EntityRecordNode(entity=$entity, action='put', record=$record)"]

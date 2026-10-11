@@ -1,6 +1,6 @@
 # Un NULL en tête d'une liste de paramètres type sa colonne en STRING
 
-- **État** : ouvert — la cause est dans rag3weaver (lue le 10 octobre 2026), pas dans le moteur ; contourné dans rag3weaver (l'écrivain de liens ne
+- **État** : corrigé (11 octobre 2026, arbre principal) — `cypher_to_rag3db_value` unifie le type des éléments d'une liste sur tous ses éléments ; un NULL non typé ne contraint rien, un NULL typé compte avec son type, un inconnu restant prend STRING. Témoin `rag3db_connection::tests::un_null_en_tete_d_une_liste_ne_type_pas_la_liste` (la recette du ticket, et une liste de scalaires `[NULL, 5]`), rouge puis vert. Le contournement de l'écrivain de liens peut rester.
   regroupe plus que les propriétés non nulles).
 - **Gravité** : perte (les écritures du lot entier sont refusées ; rag3weaver les comptait
   sans les dire).

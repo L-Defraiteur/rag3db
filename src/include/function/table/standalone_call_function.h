@@ -12,6 +12,12 @@ struct AnalyzeFunction {
     static function_set getFunctionSet();
 };
 
+// CALL acquire_locks('Table', [clés]) : l'annonce des verrous en tête de transaction (marche V2).
+struct AcquireLocksFunction {
+    static constexpr const char* name = "ACQUIRE_LOCKS";
+    static function_set getFunctionSet();
+};
+
 struct ClearWarningsFunction {
     static constexpr const char* name = "CLEAR_WARNINGS";
 

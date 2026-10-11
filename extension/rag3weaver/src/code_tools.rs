@@ -385,12 +385,37 @@ pub fn indexed_name(source: &dyn FileSource, path: &str) -> (String, String) {
     }
 }
 
+/// **Une base sans le schéma du code** : le catalogue dit « unknown entity:
+/// File », ce qui est vrai et inutilisable. La surface de code, qui sait d'où
+/// vient `File`, dit le remède (ticket « unknown entity: File ne dit pas
+/// d'indexer », 10 octobre 2026). Le catalogue garde son vocabulaire.
+///
+/// Le remède n'est pas « appelle `index` » : le backend déclare le schéma du
+/// code à l'ouverture quand le manifeste porte `workspace.index: "code"`
+/// (`backend.rs`), et une base déclarée mais vide n'a pas cette erreur — elle
+/// n'a rien d'indexé, et le dit autrement. Sans la déclaration, `index` n'a
+/// rien à remplir.
+fn erreur_du_catalogue(e: crate::catalog::CatalogError) -> String {
+    match &e {
+        crate::catalog::CatalogError::UnknownEntity(entite)
+            if [FILE, SCOPE, crate::code::SYMBOL, crate::code::LIBRARY].contains(&entite.as_str()) =>
+        {
+            format!(
+                "cette base n'a pas le schéma du code (l'entité `{entite}` n'existe pas) : le manifeste du \
+                 backend doit déclarer `workspace.index: \"code\"`, puis l'outil `index` remplit l'index \
+                 (`estimate` dit ce que ça coûtera)."
+            )
+        }
+        _ => e.to_string(),
+    }
+}
+
 /// Les scopes d'un fichier, par ligne croissante. Vide sans catalogue.
 fn scopes_of(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
     let Some(catalog) = catalog else { return Ok(vec![]) };
     let rows = catalog
         .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "source", "_uuid"])
-        .map_err(|e| e.to_string())?;
+        .map_err(erreur_du_catalogue)?;
     let mut scopes: Vec<ScopeRef> = rows
         .iter()
         // Le même chemin peut exister dans deux sources : ce sont deux
@@ -426,8 +451,8 @@ fn indexed_hash(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<O
             ("source".to_string(), CypherValue::String(source.to_string())),
             ("path".to_string(), CypherValue::String(path.to_string())),
         ]))
-        .map_err(|e| e.to_string())?;
-    let row = catalog.get(FILE, &uuid).map_err(|e| e.to_string())?;
+        .map_err(erreur_du_catalogue)?;
+    let row = catalog.get(FILE, &uuid).map_err(erreur_du_catalogue)?;
     Ok(row.and_then(|r| col(&r, "content_hash").and_then(|v| v.as_str().map(String::from))))
 }
 
@@ -1384,6 +1409,34 @@ pub fn source_service(ctx: &crate::dataflow::NodeContext) -> Option<Arc<dyn File
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Une base sans le schéma du code dit comment l'avoir**, au lieu de
+    /// « unknown entity: File ». Et une base qui a le schéma, même vide, ne
+    /// rend pas cette erreur : c'est la déclaration qui manque, pas
+    /// l'indexation. On vérifie les mots, pas le texte entier.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn une_base_non_indexee_dit_d_appeler_index() {
+        let racine = tempfile::tempdir().unwrap();
+        std::fs::write(racine.path().join("a.rs"), "pub fn a() {}\n").unwrap();
+        let arbre = WorkingTree::new(racine.path());
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("non-indexee".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::MockEmbedder::new(4)), config);
+        catalog.initialize().unwrap();
+        let e = read_file(&arbre, Some(&catalog), "a.rs", 0, 10).unwrap_err();
+        assert!(e.contains("workspace.index") && e.contains("`index`"), "{e}");
+        assert!(!e.contains("unknown entity"), "le vocabulaire du catalogue ne remonte plus : {e}");
+        // Le schéma déclaré, base toujours vide : plus d'erreur, la lecture passe.
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let lu = read_file(&arbre, Some(&catalog), "a.rs", 0, 10).expect("le schéma déclaré, la lecture passe");
+        assert!(lu.total_lines >= 1, "{lu:?}");
+        // Une autre erreur du catalogue garde la sienne.
+        assert_eq!(
+            erreur_du_catalogue(crate::catalog::CatalogError::UnknownEntity("Ailleurs".into())),
+            "unknown entity: Ailleurs"
+        );
+    }
 
     #[test]
     fn tool_format_has_no_alias() {

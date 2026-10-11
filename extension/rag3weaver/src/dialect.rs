@@ -217,6 +217,13 @@ pub trait SchemaDialect: Send + Sync {
     /// existant, et un dialecte qui ne se prononce pas ne doit rien changer.
     fn speaks_cypher(&self) -> bool { self.capabilities().cypher }
 
+    /// **Les mots que ce dialecte refuse comme nom** (de table, de relation, de
+    /// champ), en majuscules. Un nom réservé est refusé à la création du
+    /// schéma, en le nommant ([`crate::schema::validate_name`]).
+    fn reserved_words(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Ce que ce dialecte déclare savoir faire ([`DialectCapabilities`]).
     fn capabilities(&self) -> DialectCapabilities { DialectCapabilities::CYPHER_ONLY }
 
@@ -1096,6 +1103,30 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             [(field, None)] => d.batch_set_null(table, field),
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Mark" }),
         },
+        // Les trois suppressions que les dialectes savent dire aujourd'hui.
+        rag3weaver_ir::Write::Delete { table, by, cascade, count } => match (by.as_str(), cascade, count) {
+            ("_uuid", true, false) => d.batch_cascade_delete(table),
+            ("_uuid", false, false) => d.batch_delete(table),
+            (field, true, true) => d.batch_cascade_delete_returning_count(table, field),
+            _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
+        },
+        rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
+        rag3weaver_ir::Write::Load { target, path } => {
+            let refus = || rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Load" };
+            if !d.capabilities().bulk_load {
+                return Err(refus());
+            }
+            match target {
+                rag3weaver_ir::LoadTarget::Nodes { table, columns } => {
+                    let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
+                    d.copy_nodes_from_csv(table, &cols, path).ok_or_else(refus)?
+                }
+                rag3weaver_ir::LoadTarget::Links { relation, ends, props } => {
+                    let props: Vec<&str> = props.iter().map(String::as_str).collect();
+                    d.copy_links_from_csv(relation, (&ends.0, &ends.1), &props, path).ok_or_else(refus)?
+                }
+            }
+        }
     })
 }
 
@@ -1120,6 +1151,11 @@ fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
 }
 
 impl SchemaDialect for Rag3dbDialect {
+    /// Tirés de la grammaire du moteur par `scripts/mots_reserves.py`.
+    fn reserved_words(&self) -> &'static [&'static str] {
+        crate::mots_reserves_rag3db::RAG3DB_RESERVED_WORDS
+    }
+
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
@@ -1958,10 +1994,32 @@ impl SchemaDialect for PostgresDialect {
         ]
     }
 
-    /// Pas de transaction : chaque instruction prend sa connexion du pool
-    /// (ticket `2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions`).
+    /// Les mots réservés de PostgreSQL : catégories « reserved » et « reserved
+    /// (can be function or type) » de `src/include/parser/kwlist.h`
+    /// (PostgreSQL 17), écrits ici faute de grammaire à lire sur les postes.
+    /// À revoir contre le `kwlist.h` de la version servie.
+    fn reserved_words(&self) -> &'static [&'static str] {
+        &[
+            "ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "AUTHORIZATION", "BINARY", "BOTH",
+            "CASE", "CAST", "CHECK", "COLLATE", "COLLATION", "COLUMN", "CONCURRENTLY", "CONSTRAINT", "CREATE", "CROSS",
+            "CURRENT_CATALOG", "CURRENT_DATE", "CURRENT_ROLE", "CURRENT_SCHEMA", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "CURRENT_USER", "DEFAULT", "DEFERRABLE", "DESC", "DISTINCT", "DO", "ELSE", "END", "EXCEPT", "FALSE", "FETCH",
+            "FOR", "FOREIGN", "FREEZE", "FROM", "FULL", "GRANT", "GROUP", "HAVING", "ILIKE", "IN", "INITIALLY", "INNER",
+            "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "LATERAL", "LEADING", "LEFT", "LIKE", "LIMIT", "LOCALTIME",
+            "LOCALTIMESTAMP", "NATURAL", "NOT", "NOTNULL", "NULL", "OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER",
+            "OVERLAPS", "PLACING", "PRIMARY", "REFERENCES", "RETURNING", "RIGHT", "SELECT", "SESSION_USER", "SIMILAR",
+            "SOME", "SYMMETRIC", "SYSTEM_USER", "TABLE", "TABLESAMPLE", "THEN", "TO", "TRAILING", "TRUE", "UNION",
+            "UNIQUE", "USER", "USING", "VARIADIC", "VERBOSE", "WHEN", "WHERE", "WINDOW", "WITH",
+        ]
+    }
+
+    /// Des transactions : `PostgresConnection::begin` tient une session du pool
+    /// jusqu'au `commit`/`rollback` (bb7dddde5), et la synchronisation les
+    /// ouvre par la connexion (1d1e1d7de). Prouvé dans le texte ; le témoin
+    /// vivant (`tests/e2e_contrat_transactions.rs`) attend une base
+    /// PostgreSQL sur les postes.
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: false, bulk_load: false, structured_fields: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false }
     }
 
     // ── Les lots passent par JSON ────────────────────────────────────────
@@ -2397,8 +2455,8 @@ impl SchemaDialect for PostgresDialect {
     fn batch_delete_relation(&self, rel_table: &str) -> String {
         format!(
             "DELETE FROM {rel_table} \
-             USING jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT) \
-             WHERE {rel_table}.from_uuid = v.from_uuid AND {rel_table}.to_uuid = v.to_uuid"
+             USING jsonb_to_recordset($items::text::jsonb) AS v(\"from\" TEXT, \"to\" TEXT) \
+             WHERE {rel_table}.from_uuid = v.\"from\" AND {rel_table}.to_uuid = v.\"to\""
         )
     }
 
@@ -2903,7 +2961,7 @@ mod tests {
         assert!(r.cypher && r.transactions && r.bulk_load && r.structured_fields);
         assert!(Rag3dbDialect.speaks_cypher() && Rag3dbDialect.supports_copy_from());
         let p = PostgresDialect.capabilities();
-        assert!(!p.cypher && !p.transactions && !p.bulk_load && !p.structured_fields);
+        assert!(!p.cypher && p.transactions && !p.bulk_load && !p.structured_fields);
         assert!(!PostgresDialect.speaks_cypher() && !PostgresDialect.supports_copy_from());
     }
 
@@ -3014,6 +3072,40 @@ mod tests {
             "UNWIND $uuids AS uuid MATCH (n:Doc {_uuid: uuid}) SET n._snapshot = $session, n._absent_since = NULL"
         );
         assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
+        for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
+            let del = |by: &str, cascade, count| Write::Delete { table: "Doc".into(), by: by.into(), cascade, count };
+            assert_eq!(d.write(&del("_uuid", true, false)).unwrap(), d.batch_cascade_delete("Doc"));
+            assert_eq!(d.write(&del("_uuid", false, false)).unwrap(), d.batch_delete("Doc"));
+            assert_eq!(d.write(&del("_parent_uuid", true, true)).unwrap(), d.batch_cascade_delete_returning_count("Doc", "_parent_uuid"));
+            assert!(d.write(&del("_uuid", false, true)).is_err());
+            assert_eq!(d.write(&Write::Unlink { relation: "CITES".into() }).unwrap(), d.batch_delete_relation("CITES"));
+        }
+        use rag3weaver_ir::LoadTarget;
+        let noeuds = Write::Load { target: LoadTarget::Nodes { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] }, path: "/tmp/x.csv".into() };
+        let liens = Write::Load { target: LoadTarget::Links { relation: "CITES".into(), ends: ("Doc".into(), "Doc".into()), props: vec!["ligne".into()] }, path: "/tmp/y.csv".into() };
+        assert_eq!(Rag3dbDialect.write(&noeuds).unwrap(), Rag3dbDialect.copy_nodes_from_csv("Doc", &["_uuid", "titre"], "/tmp/x.csv").unwrap());
+        assert_eq!(Rag3dbDialect.write(&liens).unwrap(), Rag3dbDialect.copy_links_from_csv("CITES", ("Doc", "Doc"), &["ligne"], "/tmp/y.csv").unwrap());
+        assert_eq!(PostgresDialect.write(&noeuds).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Write::Load");
+    }
+
+    /// La liste rag3db suit la grammaire du moteur : relue ici, elle doit être
+    /// celle que le script a écrite. Sans les fichiers de grammaire (crate hors
+    /// du dépôt), le test se tait.
+    #[test]
+    fn les_mots_reserves_suivent_la_grammaire() {
+        let antlr = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/antlr4");
+        let (Ok(mots), Ok(g4)) = (std::fs::read_to_string(antlr.join("keywords.txt")), std::fs::read_to_string(antlr.join("Cypher.g4"))) else {
+            return;
+        };
+        let debut = g4.find("\nkU_NonReservedKeywords").expect("la règle kU_NonReservedKeywords");
+        let regle = &g4[debut..];
+        let regle = &regle[regle.find(':').unwrap() + 1..regle.find(';').unwrap()];
+        let libres: std::collections::BTreeSet<String> = regle.split('|').map(|m| m.trim().to_uppercase()).filter(|m| !m.is_empty()).collect();
+        let attendus: std::collections::BTreeSet<String> =
+            mots.lines().map(|l| l.trim().to_uppercase()).filter(|m| !m.is_empty() && !libres.contains(m)).collect();
+        let ecrits: std::collections::BTreeSet<String> = Rag3dbDialect.reserved_words().iter().map(|m| m.to_string()).collect();
+        assert_eq!(ecrits, attendus, "la grammaire a changé : relancer scripts/mots_reserves.py");
+        assert!(ecrits.contains("ORDER") && !ecrits.contains("MATCH"));
     }
 
     /// **La jointure chunk→parent, dans les deux langues.**
@@ -3307,8 +3399,10 @@ mod tests {
         let d = PostgresDialect;
         let stmt = d.batch_delete_relation("authored_by");
         assert!(stmt.contains("DELETE FROM authored_by"));
-        // Types déclarés sur place : `jsonb_to_recordset` suffit.
-        assert!(stmt.contains("jsonb_to_recordset($items::text::jsonb) AS v(from_uuid TEXT, to_uuid TEXT)"));
+        // Types déclarés sur place : `jsonb_to_recordset` suffit. Les clés
+        // sont celles que l'annulation d'un lien envoie, `from` et `to`
+        // (ticket 2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien).
+        assert!(stmt.contains(r#"jsonb_to_recordset($items::text::jsonb) AS v("from" TEXT, "to" TEXT)"#), "{stmt}");
         assert!(!stmt.contains("unnest("), "unnest ne déplie pas un tableau en colonnes");
     }
 

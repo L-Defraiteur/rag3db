@@ -31,7 +31,9 @@ thiserror = "2"
 # forme d'une fiche de recherche est une question de goût qui change plus vite
 # que le moteur, et elle doit pouvoir être remplacée sans recompiler la
 # logique. Voir `templates/render/`.
-minijinja = { version = "2", default-features = false, features = ["builtins", "loop_controls", "serde"] }
+# `multi_template` : les vues d'un backend (`views/`) s'étendent et s'incluent
+# (`extends`, `include`, `block`).
+minijinja = { version = "2", default-features = false, features = ["builtins", "loop_controls", "serde", "multi_template"] }
 # Tokio est là pour **attendre** — le réacteur (select sur le bus, minuteurs),
 # plus tard un serveur et les appels cloud en parallèle. Le calcul (catalogue,
 # nœuds, ingestion) reste synchrone, en parallèle par niveau ; les deux cohabitent.

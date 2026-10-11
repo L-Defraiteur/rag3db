@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 11] = [
+pub const RELATIONS: [(&str, &str, &str); 12] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -59,6 +59,10 @@ pub const RELATIONS: [(&str, &str, &str); 11] = [
     // La couche de rendez-vous : ce qu'un scope offre, ce qu'il attend.
     ("DEFINES", SCOPE, SYMBOL),
     ("MENTIONS", SCOPE, SYMBOL),
+    // **Les verrous qu'un scope prend** : vers le symbole du champ mutex,
+    // `Classe::champ`, que la classe définit (DEFINES). Posée à l'ingestion :
+    // le propriétaire se lit sur place (`this`, `self`, un type lu).
+    ("LOCKS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -473,6 +477,8 @@ fn usage_name(u: &UsageKind) -> &'static str {
         UsageKind::Import => "import",
         UsageKind::Inheritance => "inheritance",
         UsageKind::Other => "other",
+        UsageKind::Lock => "lock",
+        UsageKind::SharedLock => "shared_lock",
     }
 }
 
@@ -488,7 +494,8 @@ fn usage_name(u: &UsageKind) -> &'static str {
 /// écrit une colonne par propriété déclarée, un groupe à qui il en manque
 /// une n'y entrerait pas.
 fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
-    const ORDRE: [UsageKind; 5] = [UsageKind::Inheritance, UsageKind::Call, UsageKind::Type, UsageKind::Import, UsageKind::Other];
+    const ORDRE: [UsageKind; 7] =
+        [UsageKind::Inheritance, UsageKind::Call, UsageKind::Type, UsageKind::Import, UsageKind::Other, UsageKind::Lock, UsageKind::SharedLock];
     let Some(retenu) = ORDRE.iter().find(|k| sites.iter().any(|s| &s.usage == *k)) else {
         return BTreeMap::new();
     };
@@ -527,6 +534,17 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // à peler — résolu à la matérialisation, quand les classes sont
             // en base.
             props.insert("deferred".to_string(), field_def(FieldType::String));
+            catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
+        if rel == "LOCKS" {
+            // Le genre (`lock`, `shared_lock`) et la ligne du verrou ; `via` :
+            // d'où il vient — « champ » (une garde sur un champ mutex, que
+            // l'analyse relève) ou « appel » (l'appel d'une fonction de
+            // verrou déclarée, `workspace.locks_via`). Une base d'avant reçoit
+            // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
+            let mut props = usage_property_defs();
+            props.insert("via".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -695,6 +713,9 @@ pub struct CodeAnalysis {
     /// fichiers, et codeparsers reste en fichier seul.
     #[serde(default)]
     pub pending_deferred: Vec<(String, String, Vec<String>)>,
+    /// Les verrous pris : (scope, symbole `Classe::champ`, sites).
+    #[serde(default)]
+    pub pending_locks: Vec<(String, String, Vec<UsageSite>)>,
     pub parse_ms: u128,
     pub relation_ms: u128,
 }
@@ -1122,7 +1143,26 @@ pub fn analyze_in_project(
             let mut englobants_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
             // Par nom : les types à lire ailleurs, pour les références sans type lu.
             let mut differes_lus: BTreeMap<String, Option<Vec<String>>> = BTreeMap::new();
+            // Les verrous pris : symbole `Classe::champ` → sites.
+            let mut verrous: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
             for r in &sc.identifier_references {
+                // Un verrou : le champ mutex de son propriétaire, `this` /
+                // `self` (la classe englobante) ou un receveur typé. Sans
+                // propriétaire lu, rien : on ne devine pas la classe.
+                if let Some(u @ (UsageKind::Lock | UsageKind::SharedLock)) = r.usage.clone() {
+                    let proprietaire = match r.qualifier.as_deref() {
+                        Some("this" | "self") => sc.parent.clone().map(|p| p.rsplit("::").next().unwrap_or(&p).to_string()),
+                        _ => r.qualifier_type.clone(),
+                    };
+                    if let Some(p) = proprietaire.filter(|p| !p.is_empty()) {
+                        let site = UsageSite { usage: u, line: Some(r.line) };
+                        let liste = verrous.entry(format!("{p}::{}", r.identifier)).or_default();
+                        if !liste.contains(&site) {
+                            liste.push(site);
+                        }
+                    }
+                    continue;
+                }
                 use codeparsers::scope_extraction::types::IdentifierReferenceKind as K;
                 if matches!(r.kind, Some(K::Builtin) | Some(K::LocalScope)) {
                     continue;
@@ -1264,6 +1304,9 @@ pub fn analyze_in_project(
                     v.sort();
                     analysis.pending_self_types.push((key.clone(), name, v));
                 }
+            }
+            for (symbole, liste) in verrous {
+                analysis.pending_locks.push((key.clone(), symbole, liste));
             }
             for (name, differes) in differes_lus {
                 if let Some(mut v) = differes.filter(|v| !v.is_empty()) {
@@ -1885,8 +1928,25 @@ impl Catalog {
         use std::collections::{BTreeMap as Map, BTreeSet};
 
         // Les noms en jeu : ceux que le lot définit, ceux qu'il attend.
-        let offered: BTreeSet<&str> = analysis.scopes.iter().map(|s| s.name.as_str()).collect();
-        let expected: BTreeSet<&str> = analysis.pending.iter().map(|(_, n, _)| n.as_str()).collect();
+        // Les champs typés d'une classe : chacun un symbole `Classe::champ`,
+        // que la classe définit — l'identité d'un mutex que des scopes
+        // verrouillent (LOCKS).
+        let champs_definis: Vec<(usize, String)> = analysis
+            .scopes
+            .iter()
+            .enumerate()
+            .filter(|(_, sc)| !sc.field_types.is_empty())
+            .flat_map(|(i, sc)| {
+                let liste: Vec<serde_json::Value> = serde_json::from_str(&sc.field_types).unwrap_or_default();
+                liste
+                    .into_iter()
+                    .filter_map(move |c| c.get("name").and_then(|n| n.as_str()).map(|n| (i, format!("{}::{n}", sc.name))))
+            })
+            .collect();
+        let offered: BTreeSet<&str> =
+            analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).collect();
+        let expected: BTreeSet<&str> =
+            analysis.pending.iter().map(|(_, n, _)| n.as_str()).chain(analysis.pending_locks.iter().map(|(_, n, _)| n.as_str())).collect();
         let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
         if names.is_empty() {
             return Ok(());
@@ -1928,6 +1988,49 @@ impl Catalog {
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
         }
+        for (i, champ) in &champs_definis {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &analysis.scopes[*i].key, ""))?;
+            definitions.push((from, symbol_uuid(self, champ)?, BTreeMap::new()));
+        }
+        let mut verrous: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending_locks.len());
+        for (scope_key, symbole, sites) in &analysis.pending_locks {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+            let mut props = usage_properties(sites);
+            props.insert("via".to_string(), s("champ"));
+            verrous.push((from, symbol_uuid(self, symbole)?, props));
+        }
+        // Les fonctions de verrou déclarées (`workspace.locks_via`) : un appel
+        // à l'une d'elles est un verrou pris, vers le symbole de la fonction —
+        // l'appel résolu dans le fichier comme celui qui attend le
+        // rendez-vous. Par le nom : la liste est celle de ce dépôt.
+        if !self.declared_lock_calls().is_empty() {
+            let declarees: BTreeSet<&str> = self.declared_lock_calls().iter().map(String::as_str).collect();
+            let en_verrou = |sites: &[UsageSite]| -> Vec<UsageSite> {
+                sites.iter().filter(|x| x.usage == UsageKind::Call).map(|x| UsageSite { usage: UsageKind::Lock, line: x.line }).collect()
+            };
+            let nom_de: HashMap<&str, &str> = analysis.scopes.iter().map(|sc| (sc.key.as_str(), sc.name.as_str())).collect();
+            let mut appels: Vec<(&str, &str, Vec<UsageSite>)> = Vec::new();
+            for r in analysis.relations.iter().filter(|r| r.rel == "CONSUMES" && r.from_entity == SCOPE) {
+                if let Some(nom) = nom_de.get(r.to_key.as_str()).filter(|n| declarees.contains(**n)) {
+                    appels.push((r.from_key.as_str(), nom, en_verrou(&r.sites)));
+                }
+            }
+            for (scope_key, nom, sites) in &analysis.pending_sites {
+                if declarees.contains(nom.as_str()) {
+                    appels.push((scope_key.as_str(), nom.as_str(), en_verrou(sites)));
+                }
+            }
+            for (scope_key, nom, sites) in appels {
+                if sites.is_empty() {
+                    continue;
+                }
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                let mut props = usage_properties(&sites);
+                props.insert("via".to_string(), s("appel"));
+                verrous.push((from, symbol_uuid(self, nom)?, props));
+            }
+        }
+        self.mettre_en_file_les_liens("LOCKS", verrous)?;
         // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
         // mentionneurs — pour ne reposer que les arêtes neuves.
         let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -2159,13 +2262,58 @@ impl Catalog {
     /// **Les types différés, résolus** : pour une mention sans type lu qui en
     /// porte un, le type du champ (`FieldOf`) ou du retour (`ReturnOf`) lu
     /// sur les scopes en base, pelé par sa chaîne (`receveur`), devient son
-    /// `qualifier_types` — la branche du type lu fait le reste. Un nom de
-    /// classe ou de fonction porté par deux scopes aux types différents ne
-    /// donne rien : on ne devine pas.
+    /// `qualifier_types` — la branche du type lu fait le reste. Une chaîne de
+    /// champs (`tableInfo.table`) se suit pas à pas : chaque tour charge les
+    /// classes que le tour d'avant a demandées, quatre tours au plus. Un nom
+    /// de classe ou de fonction porté par deux scopes aux types différents
+    /// ne donne rien : on ne devine pas.
     fn resoudre_les_types_differes(&self, mentions: &mut std::collections::HashMap<String, Vec<Mention>>) -> Result<(), CatalogError> {
+        // **Bornée à la source et au dépôt** : une classe homonyme d'une autre
+        // source (un instantané, un dépôt distant) ou d'un autre dépôt de la
+        // même base ne compte pas — chaque mention se résout avec les types
+        // écrits de la source et du dépôt de son scope.
+        let froms: Vec<String> = mentions
+            .values()
+            .flatten()
+            .filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty())
+            .map(|m| m.from.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        if froms.is_empty() {
+            return Ok(());
+        }
+        let param = CypherValue::List(froms.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let result = self
+            .conn()
+            .execute_with_params(
+                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) RETURN u, s.source, s.repo"),
+                &[crate::connection::QueryParam::new("uuids", param)],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let texte = |r: &[CypherValue], i: usize| r.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let source_de: std::collections::HashMap<String, (String, String)> =
+            result.rows.iter().filter_map(|r| Some((r.first()?.as_str()?.to_string(), (texte(r, 1), texte(r, 2))))).collect();
+        let sources: std::collections::BTreeSet<(String, String)> = source_de.values().cloned().collect();
+        for source in sources {
+            self.resoudre_les_types_differes_de(mentions, &source, &source_de)?;
+        }
+        Ok(())
+    }
+
+    /// [`Self::resoudre_les_types_differes`] pour les mentions d'une source.
+    fn resoudre_les_types_differes_de(
+        &self,
+        mentions: &mut std::collections::HashMap<String, Vec<Mention>>,
+        source: &(String, String),
+        source_de: &std::collections::HashMap<String, (String, String)>,
+    ) -> Result<(), CatalogError> {
         use codeparsers::scope_extraction::types::DeferredType as D;
-        let mut noms: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty()) {
+        use std::collections::{BTreeSet, HashMap};
+        let debut = std::time::Instant::now();
+        let de_la_source = |m: &Mention| source_de.get(&m.from) == Some(source);
+        let mut noms: BTreeSet<String> = BTreeSet::new();
+        for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
             for d in &m.deferred {
                 noms.insert(match d {
                     D::FieldOf { owner, .. } => owner.clone(),
@@ -2176,18 +2324,91 @@ impl Catalog {
         if noms.is_empty() {
             return Ok(());
         }
+        // (classe, champ) → type écrit ; fonction → (retour écrit, parent).
+        // `None` : deux déclarations qui ne s'accordent pas.
+        let mut champs: HashMap<(String, String), Option<String>> = HashMap::new();
+        let mut retours: HashMap<String, Option<(String, String)>> = HashMap::new();
+        let mut charges: BTreeSet<String> = BTreeSet::new();
+        let nom_du_type = |ecrit: &str, peel: &[String], champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+            if peel.is_empty() {
+                codeparsers::scope_extraction::usage::base_type_name(ecrit)
+            } else {
+                codeparsers::scope_extraction::receveur::peel_avec(ecrit, peel, champ).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
+            }
+        };
+        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+            match d {
+                D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ)),
+                D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
+                    // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
+                    let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
+                    let lu = nom_du_type(&t, &chaine, champ)?;
+                    if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
+                }),
+            }
+        };
+        let mut tours = 0;
+        loop {
+            let a_charger: Vec<String> = noms.difference(&charges).cloned().collect();
+            if a_charger.is_empty() || tours == 4 {
+                break;
+            }
+            tours += 1;
+            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours)?;
+            charges.extend(a_charger);
+            // Les classes qu'un pas de champ demande, pas encore chargées.
+            let demandes = std::cell::RefCell::new(BTreeSet::new());
+            let champ = |classe: &str, f: &str| -> Option<String> {
+                if !charges.contains(classe) {
+                    demandes.borrow_mut().insert(classe.to_string());
+                }
+                champs.get(&(classe.to_string(), f.to_string())).cloned().flatten()
+            };
+            for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
+                for d in &m.deferred {
+                    let _ = resoudre(d, &champs, &retours, &champ);
+                }
+            }
+            noms.extend(demandes.into_inner());
+        }
+        let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
+        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty() && de_la_source(m)) {
+            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &champ)).collect();
+            if let Some(mut v) = lus {
+                v.sort();
+                v.dedup();
+                m.qualifier_types = v;
+            }
+        }
+        if std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+            eprintln!("[ingest-profile] {:>6} ms  types différés ({} noms, {tours} tours)", debut.elapsed().as_millis(), charges.len());
+        }
+        Ok(())
+    }
+
+    /// Les champs typés et les types de retour des scopes de ces noms, versés
+    /// dans les tables de [`Self::resoudre_les_types_differes`].
+    fn charger_les_types_ecrits(
+        &self,
+        noms: &[String],
+        source: &(String, String),
+        champs: &mut std::collections::HashMap<(String, String), Option<String>>,
+        retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
+    ) -> Result<(), CatalogError> {
         let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
         let result = self
             .conn()
             .execute_with_params(
-                &format!("UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) RETURN n, s.field_types, s.return_type, s.parent_name"),
-                &[crate::connection::QueryParam::new("noms", param)],
+                &format!(
+                    "UNWIND $noms AS n MATCH (s:{SCOPE} {{name: n}}) WHERE s.source = $source AND s.repo = $repo RETURN n, s.field_types, s.return_type, s.parent_name"
+                ),
+                &[
+                    crate::connection::QueryParam::new("noms", param),
+                    crate::connection::QueryParam::new("source", CypherValue::String(source.0.clone())),
+                    crate::connection::QueryParam::new("repo", CypherValue::String(source.1.clone())),
+                ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        // (classe, champ) → type écrit ; fonction → (retour écrit, parent).
-        // `None` : deux déclarations qui ne s'accordent pas.
-        let mut champs: std::collections::HashMap<(String, String), Option<String>> = std::collections::HashMap::new();
-        let mut retours: std::collections::HashMap<String, Option<(String, String)>> = std::collections::HashMap::new();
         for row in &result.rows {
             let texte = |i: usize| row.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
             let nom = texte(0);
@@ -2207,38 +2428,14 @@ impl Catalog {
             let retour = texte(2);
             if !retour.trim().is_empty() {
                 let v = (retour, texte(3));
-                retours.entry(nom).and_modify(|o| {
-                    if o.as_ref() != Some(&v) {
-                        *o = None;
-                    }
-                }).or_insert(Some(v));
-            }
-        }
-        let nom_du_type = |ecrit: &str, peel: &[String]| -> Option<String> {
-            if peel.is_empty() {
-                codeparsers::scope_extraction::usage::base_type_name(ecrit)
-            } else {
-                codeparsers::scope_extraction::receveur::peel(ecrit, peel).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
-            }
-        };
-        for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty()) {
-            let lus: Option<Vec<String>> = m
-                .deferred
-                .iter()
-                .map(|d| match d {
-                    D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel)),
-                    D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
-                        // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
-                        let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
-                        let lu = nom_du_type(&t, &chaine)?;
-                        if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
-                    }),
-                })
-                .collect();
-            if let Some(mut v) = lus {
-                v.sort();
-                v.dedup();
-                m.qualifier_types = v;
+                retours
+                    .entry(nom)
+                    .and_modify(|o| {
+                        if o.as_ref() != Some(&v) {
+                            *o = None;
+                        }
+                    })
+                    .or_insert(Some(v));
             }
         }
         Ok(())

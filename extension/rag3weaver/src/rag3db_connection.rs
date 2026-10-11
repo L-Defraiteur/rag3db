@@ -378,6 +378,15 @@ impl Rag3dbConnection {
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?;
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
+        // **Filet temporaire : le point de reprise forcé de chaque COPY**
+        // (orchestration, 11 octobre 2026, nuit ; Lucie peut le renverser). Le
+        // COPY journalisé relit 0 dans une colonne DOUBLE du groupe partiel
+        // sous deux fils avec une colonne tableau, et le journal recopie cette
+        // lecture (ticket « le COPY journalisé lit 0 dans une colonne DOUBLE du
+        // groupe partiel »). Environ 1 % de la passe de référence. Tombe avec
+        // le correctif du moteur ; un moteur qui ne connaît pas le réglage
+        // l'ignore.
+        let _ = conn.query("CALL force_checkpoint_on_copy=true");
         Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None), path: None })
     }
 
@@ -660,30 +669,131 @@ fn rag3db_value_to_cypher(value: rag3db::Value) -> CypherValue {
 }
 
 /// Convert our `CypherValue` to a rag3db `Value` (for prepared statement params).
+///
+/// Un NULL non typé ne dit rien de son type : il est « inconnu » (`Any`)
+/// pendant la conversion, une liste unifie le type de ses éléments sans
+/// lui, puis les inconnus qui restent prennent STRING, comme un NULL non
+/// typé l'a toujours pris. Un NULL **typé** (la voie typée) garde son type,
+/// et compte dans l'unification.
 fn cypher_to_rag3db_value(value: &CypherValue) -> rag3db::Value {
+    sans_inconnu(convertir(value))
+}
+
+fn convertir(value: &CypherValue) -> rag3db::Value {
     match value {
         CypherValue::Typed { value, field_type } => typed_rag3db_value(value, field_type),
-        CypherValue::Null => rag3db::Value::Null(rag3db::LogicalType::String),
+        CypherValue::Null => rag3db::Value::Null(rag3db::LogicalType::Any),
         CypherValue::Bool(b) => rag3db::Value::Bool(*b),
         CypherValue::Int(i) => rag3db::Value::Int64(*i),
         CypherValue::Float(f) => rag3db::Value::Double(*f),
         CypherValue::String(s) => rag3db::Value::String(s.clone()),
         CypherValue::Blob(b) => rag3db::Value::Blob(b.clone()),
         CypherValue::List(vs) => {
-            let converted: Vec<rag3db::Value> = vs.iter().map(cypher_to_rag3db_value).collect();
-            let elem_type = converted
-                .first()
-                .map(rag3db::LogicalType::from)
-                .unwrap_or(rag3db::LogicalType::String);
+            // **Un NULL ne type pas la liste** : le type des éléments vient de
+            // tous, pas du premier — un NULL ne contraint rien, et les NULL
+            // prennent ensuite le type unifié. `[{line: NULL}, {line: 7}]`
+            // devenait LIST(STRUCT(line STRING)), et le binder refusait le
+            // lot entier sur une colonne INT64 (ticket « un NULL en tête
+            // d'une liste de paramètres type sa colonne en STRING »).
+            let converted: Vec<rag3db::Value> = vs.iter().map(convertir).collect();
+            let unifie = converted.iter().fold(None, type_sans_null);
+            let elem_type = unifie.map(type_complet).unwrap_or(rag3db::LogicalType::String);
+            let converted = converted.into_iter().map(|v| retyper_les_null(v, &elem_type)).collect();
             rag3db::Value::List(elem_type, converted)
         }
         CypherValue::Map(m) => {
             let fields: Vec<(String, rag3db::Value)> = m
                 .iter()
-                .map(|(k, v)| (k.clone(), cypher_to_rag3db_value(v)))
+                .map(|(k, v)| (k.clone(), convertir(v)))
                 .collect();
             rag3db::Value::Struct(fields)
         }
+    }
+}
+
+/// Le type d'une valeur où un NULL ne dit rien, fusionné avec ce qu'on sait
+/// déjà : `None` tant que tout est NULL ; une structure se fusionne champ à
+/// champ, une liste par ses éléments. Un champ toujours NULL reste inconnu
+/// (`LogicalType::Any` en attendant [`type_complet`]).
+fn type_sans_null(connu: Option<rag3db::LogicalType>, v: &rag3db::Value) -> Option<rag3db::LogicalType> {
+    use rag3db::LogicalType as L;
+    match v {
+        // Un NULL non typé ne dit rien ; un NULL typé dit son type.
+        rag3db::Value::Null(L::Any) => connu,
+        rag3db::Value::Null(t) => connu.or_else(|| Some(t.clone())),
+        rag3db::Value::Struct(champs) => {
+            let mut fusion: Vec<(String, L)> = match connu {
+                Some(L::Struct { fields }) => fields,
+                _ => Vec::new(),
+            };
+            for (nom, valeur) in champs {
+                let deja = fusion.iter().position(|(n, _)| n == nom);
+                let avant = deja.map(|i| fusion[i].1.clone()).filter(|t| *t != L::Any);
+                let apres = type_sans_null(avant, valeur).unwrap_or(L::Any);
+                match deja {
+                    Some(i) => fusion[i].1 = apres,
+                    None => fusion.push((nom.clone(), apres)),
+                }
+            }
+            Some(L::Struct { fields: fusion })
+        }
+        rag3db::Value::List(_, elements) => {
+            let avant = match connu {
+                Some(L::List { child_type }) => Some(*child_type),
+                _ => None,
+            };
+            let enfant = elements.iter().fold(avant, type_sans_null).unwrap_or(L::Any);
+            Some(L::List { child_type: Box::new(enfant) })
+        }
+        autre => connu.or_else(|| Some(L::from(autre))),
+    }
+}
+
+/// Le type unifié, sans inconnu : un champ ou un élément toujours NULL prend
+/// STRING, comme un NULL non typé l'a toujours pris.
+fn type_complet(t: rag3db::LogicalType) -> rag3db::LogicalType {
+    use rag3db::LogicalType as L;
+    match t {
+        L::Any => L::String,
+        L::Struct { fields } => L::Struct { fields: fields.into_iter().map(|(n, t)| (n, type_complet(t))).collect() },
+        L::List { child_type } => L::List { child_type: Box::new(type_complet(*child_type)) },
+        autre => autre,
+    }
+}
+
+/// Les inconnus qui restent (un NULL non typé hors de toute liste, ou un
+/// champ toujours NULL) prennent STRING.
+fn sans_inconnu(v: rag3db::Value) -> rag3db::Value {
+    match v {
+        rag3db::Value::Null(t) => rag3db::Value::Null(type_complet(t)),
+        rag3db::Value::Struct(champs) => rag3db::Value::Struct(champs.into_iter().map(|(n, v)| (n, sans_inconnu(v))).collect()),
+        rag3db::Value::List(t, elements) => rag3db::Value::List(type_complet(t), elements.into_iter().map(sans_inconnu).collect()),
+        autre => autre,
+    }
+}
+
+/// Les NULL d'une valeur prennent le type unifié, à leur place.
+fn retyper_les_null(v: rag3db::Value, t: &rag3db::LogicalType) -> rag3db::Value {
+    use rag3db::LogicalType as L;
+    match (v, t) {
+        (rag3db::Value::Null(_), t) => rag3db::Value::Null(t.clone()),
+        (rag3db::Value::Struct(champs), L::Struct { fields }) => rag3db::Value::Struct(
+            champs
+                .into_iter()
+                .map(|(nom, valeur)| {
+                    let tc = fields.iter().find(|(n, _)| *n == nom).map(|(_, t)| t.clone());
+                    let valeur = match tc {
+                        Some(tc) => retyper_les_null(valeur, &tc),
+                        None => valeur,
+                    };
+                    (nom, valeur)
+                })
+                .collect(),
+        ),
+        (rag3db::Value::List(_, elements), L::List { child_type }) => {
+            rag3db::Value::List((**child_type).clone(), elements.into_iter().map(|e| retyper_les_null(e, child_type)).collect())
+        }
+        (v, _) => v,
     }
 }
 
@@ -876,6 +986,50 @@ mod tests {
 
     use super::*;
 
+    /// **Le filet du COPY journalisé** (ticket
+    /// `2026-10-11-copy-journalise-lit-zero-dans-un-double-du-groupe-partiel`) :
+    /// un COPY de plus d'un groupe de nœuds, sous deux fils, dans une table qui
+    /// porte une colonne tableau, garde ses DOUBLE. Le moteur journalisé y lit
+    /// 0 sur des lignes de fin du groupe partiel, et le journal recopie cette
+    /// lecture. Le seuil du journal est posé comme sous un grand tampon (le
+    /// défaut le tire du tampon), et le point de reprise automatique est coupé
+    /// pour lire ce que le COPY a laissé en mémoire. Six passes : le défaut
+    /// se montre d'une passe sur trois à chaque passe.
+    #[test]
+    fn un_copy_de_plus_d_un_groupe_avec_un_tableau_garde_ses_doubles() {
+        let dir = std::env::temp_dir().join(format!("rag3weaver-filet-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let csv = dir.join("rows.csv");
+        {
+            use std::io::Write;
+            let mut f = std::io::BufWriter::new(std::fs::File::create(&csv).unwrap());
+            for id in 0..200_000i64 {
+                writeln!(f, "{id},{id}.5,\"[{}.{},{}.25,{}.0,{}.5]\"", id % 97, id % 7, id % 89, -(id % 11), id % 13).unwrap();
+            }
+        }
+        let config = rag3db::SystemConfig::default().buffer_pool_size(512 << 20).max_num_threads(2);
+        let conn = Rag3dbConnection::with_config(dir.join("base"), config).unwrap();
+        conn.execute("CALL auto_checkpoint=false").unwrap();
+        let mut faux = Vec::new();
+        for passe in 0..6 {
+            conn.execute("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, score DOUBLE, vec FLOAT[4])").unwrap();
+            conn.execute("CHECKPOINT").unwrap();
+            conn.execute("CALL copy_journal_threshold=1073741824").unwrap();
+            conn.execute(&format!("COPY Doc FROM '{}'", csv.display())).unwrap();
+            let r = conn
+                .execute("MATCH (d:Doc) WHERE d.score <> d.id + 0.5 RETURN count(*), min(d.id)")
+                .unwrap();
+            if r.rows[0][0] != CypherValue::Int(0) {
+                faux.push((passe, r.rows[0].clone()));
+            }
+            conn.execute("DROP TABLE Doc").unwrap();
+        }
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(faux.is_empty(), "des scores relus faux après le COPY (passe, [nombre, premier id]) : {faux:?}");
+    }
+
     // ── Unit tests (no DB needed) ──────────────────────────────────────
 
     #[test]
@@ -1022,6 +1176,47 @@ mod tests {
         assert_eq!(result.rows[0][1], CypherValue::Int(25));
         assert_eq!(result.rows[1][0], CypherValue::String("Bob".into()));
         assert_eq!(result.rows[1][1], CypherValue::Int(30));
+    }
+
+    /// **Un NULL en tête d'une liste ne type pas la liste** (ticket « un NULL
+    /// en tête d'une liste de paramètres type sa colonne en STRING »). La
+    /// recette du ticket : `[{line: NULL}, {line: 7}]` devenait
+    /// `LIST(STRUCT(line STRING))`, et le binder refusait le lot entier sur
+    /// une colonne INT64. Et la même chose pour une liste de scalaires.
+    #[test]
+    #[ignore]
+    fn un_null_en_tete_d_une_liste_ne_type_pas_la_liste() {
+        use std::collections::BTreeMap;
+        let conn = Rag3dbConnection::in_memory().unwrap();
+        conn.execute("CREATE NODE TABLE A(id INT64, PRIMARY KEY(id));").unwrap();
+        conn.execute("CREATE REL TABLE R(FROM A TO A, line INT64);").unwrap();
+        conn.execute("CREATE (:A {id: 1}), (:A {id: 2}), (:A {id: 3});").unwrap();
+        let item = |b: i64, line: CypherValue| {
+            CypherValue::Map(BTreeMap::from([
+                ("a".to_string(), CypherValue::Int(1)),
+                ("b".to_string(), CypherValue::Int(b)),
+                ("line".to_string(), line),
+            ]))
+        };
+        let items = CypherValue::List(vec![item(2, CypherValue::Null), item(3, CypherValue::Int(7))]);
+        conn.execute_with_params(
+            "UNWIND $items AS item MATCH (x:A {id: item.a}), (y:A {id: item.b}) MERGE (x)-[r:R]->(y) SET r.line = item.line",
+            &[QueryParam::new("items", items)],
+        )
+        .expect("le lot passe, NULL en tête compris");
+        let r = conn.execute("MATCH (:A {id: 1})-[r:R]->(y:A) RETURN y.id, r.line ORDER BY y.id").unwrap();
+        assert_eq!(r.rows, vec![vec![CypherValue::Int(2), CypherValue::Null], vec![CypherValue::Int(3), CypherValue::Int(7)]]);
+
+        // Une liste de scalaires qui commence par NULL.
+        conn.execute("CREATE NODE TABLE N(id INT64, v INT64, PRIMARY KEY(id));").unwrap();
+        let valeurs = CypherValue::List(vec![CypherValue::Null, CypherValue::Int(5)]);
+        conn.execute_with_params(
+            "UNWIND range(0, size($vs) - 1) AS i CREATE (:N {id: i, v: $vs[i + 1]})",
+            &[QueryParam::new("vs", valeurs)],
+        )
+        .expect("une liste [NULL, 5] passe sur une colonne INT64");
+        let r = conn.execute("MATCH (n:N) RETURN n.id, n.v ORDER BY n.id").unwrap();
+        assert_eq!(r.rows, vec![vec![CypherValue::Int(0), CypherValue::Null], vec![CypherValue::Int(1), CypherValue::Int(5)]]);
     }
 
     #[test]

@@ -63,6 +63,10 @@ public:
     // Les verrous des écritures parallèles. Une transaction les prend pendant ses écritures ;
     // ils sont rendus quand elle quitte le système, validée ou annulée.
     LockManager& getLockManager() { return lockManager; }
+    // Marche V2 : l'instantané d'une transaction qui n'a rien écrit est repris au dernier
+    // horodatage de validation — après l'attente de ses verrous annoncés, elle lit l'état
+    // d'après l'attente, et n'échoue jamais à la sérialisation sur ce qu'elle a annoncé.
+    void refreshSnapshot(Transaction* transaction);
 
 private:
     bool hasNoActiveTransactions() const;

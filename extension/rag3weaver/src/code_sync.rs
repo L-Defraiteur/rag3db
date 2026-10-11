@@ -903,11 +903,17 @@ fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, S
 /// La source a-t-elle déjà des scopes en base ? Sinon, c'est une première
 /// indexation : le chemin de masse.
 fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
+    // La sélection du dialecte, pas un texte Cypher : sur rag3db, la même
+    // requête (seul l'alias change), et un dialecte sans Cypher sait la dire.
+    let mut select = rag3weaver_ir::Select::filtered(
+        crate::code::SCOPE,
+        rag3weaver_ir::Predicate::Equals { field: "source".into(), param: "source".into() },
+        vec![rag3weaver_ir::Column::Node("_uuid".into())],
+    );
+    select.limit = Some(1);
+    let q = catalog.dialect_arc().select(&select).map_err(|e| e.to_string())?;
     let res = catalog
-        .execute_raw_with_params(
-            "MATCH (s:Scope) WHERE s.source = $source RETURN s._uuid LIMIT 1",
-            &[crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string()))],
-        )
+        .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string()))])
         .map_err(|e| e.to_string())?;
     Ok(!res.rows.is_empty())
 }
@@ -981,7 +987,7 @@ fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     if catalog.plein_texte_en_base() {
         let _ = catalog.conn().execute("CALL force_checkpoint_on_copy=true");
     }
-    catalog.conn().execute("BEGIN TRANSACTION").map(|_| ()).map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
+    catalog.conn().begin().map_err(|e| format!("ouvrir la transaction du paquet : {e}"))?;
     catalog.set_in_transaction(true);
     // Les points de reprise du dataflow n'ont rien à reprendre dans la
     // transaction : coupés, sauf `RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE=1`.
@@ -1004,7 +1010,7 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             // rag3db-eb).
             let t = std::time::Instant::now();
             tuer_pendant_la_validation();
-            let r = catalog.conn().execute("COMMIT");
+            let r = catalog.conn().commit();
             crate::ingest_profile::add("sync · COMMIT du paquet (et son point de reprise)", t);
             match r {
                 Ok(_) => return Ok(()),
@@ -1017,7 +1023,7 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
         Err(cause) => {
             // Défait : les lignes posées n'existent plus, la preuve tombe.
             catalog.end_proving_presence();
-            let defait = catalog.conn().execute("ROLLBACK").map_err(|e| e.to_string());
+            let defait = catalog.conn().rollback().map_err(|e| e.to_string());
             format!(
                 "{cause} — le paquet est défait ({})",
                 match defait {

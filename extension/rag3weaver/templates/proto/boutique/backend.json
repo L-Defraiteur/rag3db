@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "name": "boutique",
+  "database": "data/boutique.rag3db",
+  "embeddings": { "address": "127.0.0.1:9", "model": "none", "dimensions": 8 },
+  "vector_extension": "../../../../vector/build/libvector.rag3db_extension",
+  "entities": {
+    "Category": {
+      "schema": "schemas/category.json",
+      "description": "Une catégorie de produits.",
+      "config": {
+        "fields": {
+          "key": { "type": "string", "isTitle": true },
+          "name": { "type": "string", "isContent": true }
+        },
+        "hashsafe": ["key"],
+        "returnFields": ["key", "name"],
+        "signals": []
+      }
+    },
+    "Product": {
+      "schema": "schemas/product.json",
+      "description": "Un produit du catalogue.",
+      "config": {
+        "fields": {
+          "key": { "type": "string", "isTitle": true },
+          "name": { "type": "string", "isContent": true }
+        },
+        "hashsafe": ["key"],
+        "returnFields": ["key", "name", "price", "category"],
+        "signals": []
+      }
+    },
+    "Purchase": {
+      "schema": "schemas/order.json",
+      "description": "Une commande d'un produit.",
+      "config": {
+        "fields": {
+          "key": { "type": "string", "isTitle": true },
+          "product": { "type": "string", "isContent": true }
+        },
+        "hashsafe": ["key"],
+        "returnFields": ["key", "product", "quantity"],
+        "signals": []
+      }
+    }
+  },
+  "tools": {
+    "list_products": { "graph": "graphs/list.mmd", "bindings": { "entity": "Product" } },
+    "list_categories": { "graph": "graphs/list.mmd", "bindings": { "entity": "Category" } },
+    "list_orders": { "graph": "graphs/list.mmd", "bindings": { "entity": "Purchase" } },
+    "get_product": { "graph": "graphs/get.mmd", "bindings": { "entity": "Product", "empty": {} } },
+    "save_product": { "graph": "graphs/save_product.mmd", "bindings": { "empty": {} } },
+    "put_category": { "graph": "graphs/put.mmd", "bindings": { "entity": "Category" },
+                      "input_payloads": { "record": { "entity": "Category", "view": "editable" } } },
+    "put_order": { "graph": "graphs/put.mmd", "bindings": { "entity": "Purchase" },
+                   "input_payloads": { "record": { "entity": "Purchase", "view": "editable" } } }
+  },
+  "routes": {
+    "GET /products": { "tool": "list_products", "view": "products.html" },
+    "GET /products/{key}": { "tool": "get_product", "view": "product.html" },
+    "POST /products": { "tool": "save_product", "view": "saved.html" },
+    "GET /categories": { "tool": "list_categories" },
+    "POST /categories": { "tool": "put_category" },
+    "GET /orders": { "tool": "list_orders" },
+    "POST /orders": { "tool": "put_order" }
+  }
+}

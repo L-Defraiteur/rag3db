@@ -364,3 +364,266 @@ bâti à froid de 85 min lancé à 23 h) ; les « nouveaux projets émergents »
 classification pour la page mémoire ; le conteneur pgvector ; le ménage des
 branches distantes (liste au §6, plus `statistiques-3`, `-avant-rebase`,
 `memoire-longue-6/-8`, `banc-a4-temoins`).
+
+## 8. La nuit, suite (23 h 15 → 0 h 50), ajout de 0 h 50
+
+### Entré sur master (a78481462 → 167eb555f)
+
+- **A4′** (cœur, `9904fefc0..67ff3816b`, docs `ad87cf454`) : la ligne en
+  exclusif à la mise à jour et à la suppression, les extrémités d'une
+  relation (partagé pour créer, exclusif pour supprimer ou mettre à jour),
+  l'erreur de sérialisation après l'attente, la vue du dernier état validé
+  pour les relations d'un nœud supprimé ; les écritures internes de l'index
+  vectoriel ne prennent pas de verrou d'extrémités. Banc de concurrence :
+  **56 → 21 rouges connus** (15 comparés / 238 verts). Tableau des
+  sémantiques en tête de la page 07 (lignes comme PostgreSQL, détachement
+  comme Neo4j) — **pour Lucie au matin**. V2 (`CALL acquire_locks`) codée,
+  page `coeur-cpp/08`, fusion vers 1 h 15 ; puis l'index au commit.
+- **MCP** (mémoire, `69bb9f4a9`) : le serveur, la sous-commande `mcp` avec
+  ses deux modes et `--keys`, le témoin sur stdio, la recette
+  `templates/mcp/`. B7 : le mode `--demon` **ni validé ni réfuté** (trois
+  énigmes : `tables : []`, un MATCH qui pend après le départ des écrivains,
+  un écart d'adresse) → ticket pour le matin ; la recette « une base par
+  session » s'écrit et se joue cette nuit.
+- **Commande en fond** (A, `5948276eb`) : run en fond, tail, journaux en
+  anneau, groupe de processus tué ; chantier A entier.
+- **Connexion PostgreSQL épinglée** (C, `da740cbb4`) ; **transactions par la
+  connexion** (A pour F, `167eb555f`) ; F peut ouvrir `transactions: true`.
+- **Proto** : lot 3 le rechargement à chaud (`f07b6a4af` : version prise au
+  départ de chaque appel, refus nommé de ce qui est fixé à l'ouverture), le
+  rechargement en deux temps pour la mémoire, le trou du nom déclaré au
+  point de reprise fermé ; **la montre sur les fichiers vit dans l'hôte, pas
+  dans un graphe** (sinon la frontière d'exposition serait rechargeable de
+  l'intérieur) — écart à la page, bien argumenté, **pour Lucie**. Lot 4
+  (jouet, `nodes/`, route → graphe → vue, `serve`) en cours.
+- **Codeparsers → rag3weaver** : B2b (types différés résolus à la
+  matérialisation, `0d058d9eb`), B3 LOCKS (`2a29c10c6` : le mutex a une
+  identité `Classe::champ`, 169 verrous relevés sur le moteur) ; B2c (chaînes
+  de champs), « verrous sur le chemin » dans impact, borne à la source :
+  proposés, en test chez A. **Mesure réelle** (tout `rag3db/src` indexé,
+  167 s) : appelants de `NodeTable::update` 0 → 2 (tous les sites réels),
+  marqués « type ». Page de l'exemple réel pour Lucie au matin.
+- **Cœur hotfixs** : B8 fermé (non reproduit sur master, deux montages,
+  32 fils écartés) ; **contrôle de bâti des extensions** (`458ff7157`) :
+  identifiant généré à chaque bâti, vérifié à `LOAD EXTENSION`, refus nommé,
+  toute extension d'avant refusée ; libs des deux postes rebâties. Suite :
+  le lecteur affamé par les points de reprise d'un autre processus → forme
+  (2), coordination à la SQLite par un verrou `<base>.readers` (flock /
+  LockFileEx), bornes nommées des deux côtés, filet gardé — **alignement sur
+  SQLite, pour Lucie**.
+- **Banc** : la mise à jour massive — les rouges venaient de **deux vrais
+  défauts** (le contrôle de joignabilité entrait par la couche basse ; la
+  réinsertion partait du nœud qu'elle insère) ; le crochet de fin
+  d'instruction régresse le ligne à ligne ×7 à ×13 → **option C** (master +
+  les deux correctifs, 25 lignes) retenue si elle tient, le crochet gardé
+  sur branche avec ses chiffres. Export des vrais vecteurs à régénérer par A
+  (effacé par le nettoyage).
+- **npm** : fsync du dossier sans objet sous Windows (cause du rouge FTS),
+  profil `paquet` LTO (61 contre 89 Mo), **tout en 0.0.1-alpha.2** (tête et
+  trois sous-paquets, même commit, épinglage exact) ; les archives se
+  refont sur la tête avec le contrôle de bâti. Rien de publié ; quatre OTP
+  au matin.
+
+### Règles ajoutées
+
+Une session chaîne ses propres travaux lourds (le verrou partagé laisse
+passer ensemble deux lourds d'une même session). Lib et extension du même
+bâti, prouvées ensemble. Tout `src/dataflow/` relu par la recherche avant
+master. Copier un gabarit livré et en retirer, plutôt que composer un
+manifeste de zéro (mémoire, sept interfaces supposées).
+
+### Pour le matin (ajouts)
+
+Le ticket du mode `--demon` ; le lecteur qui pend sur le démon après le
+départ des écrivains (défaut possible) ; la décision sur l'export vivant
+pour le critère « 0 introuvable ».
+
+## 9. La nuit, fin (0 h 50 → 2 h 30) — à lire au réveil
+
+### Les trois priorités de la nuit : tenues
+
+1. **Le poids des tests e2e** : fait (`c9ff68a4f`). Un binaire e2e passe de
+   469 à 273 Mo ; le moteur partagé au bâti ; `cargo check --tests` ; les
+   vieux hachages balayés ; le repli silencieux refusé. Disque à 50 % ici,
+   78 % sur luciepc, stable toute la nuit.
+2. **Indexer notre code** : fait, et prouvé. La page de l'exemple réel pour
+   toi : `../codeparsers/03-impact-node-table-update.md` — « qui appelle
+   `NodeTable::update` » passe de 0 à ses deux appelants réels marqués sûrs ;
+   les verrous de 0 à 181 (169 sur champs mutex, 12 par les fonctions de
+   verrou déclarées) ; `impact` ne montre plus que les appelants sûrs (le
+   compte des autres à part, `include_by_name` pour les voir) ; `callees`,
+   treizième outil ; `locks_via` déclaré au manifeste ; les types différés
+   résolus à la matérialisation (le graphe ne dépend pas du paquet) ; B2a,
+   B2c, B2d côté codeparsers ; appels C++ reliés entre fichiers 35,0 →
+   40,3 % ; B9 Rust : les cinq trous nommés par cas minimaux (impl qui
+   dédouble le type, méthodes de trait homonymes, receveur de boucle muet,
+   corps de macro au scope fichier, fermetures invisibles). Tout
+   `rag3db-lourd` indexé en 20 min sur luciepc (7 172 fichiers), base gardée
+   (1,1 Go), qui survit au rebâti du moteur.
+3. **MCP** : sur master (`69bb9f4a9`), B6 fermé (le refus nomme la
+   déclaration), **B7 : la recette « une base par session » jouée**
+   (`79d56229e`, la question réelle posée par MCP et sa réponse collée) ; le
+   mode `--demon` ni validé ni réfuté (ticket, trois énigmes) ; la page
+   « mémoire par MCP » (`faad33f8e`).
+
+### Entré sur master cette nuit (après 0 h 50)
+
+Mise à jour massive de vecteurs (`bfc1434e1`, deux vrais défauts : le
+contrôle qui n'entrait pas comme une requête, la réinsertion qui partait du
+nœud qu'elle insère ; le crochet de fin d'instruction gardé sur branche, il
+régressait le ligne à ligne) ; **V2** (`11887dc21`, `CALL acquire_locks`) ;
+**le lecteur affamé** (`e4198f862`, coordination à la SQLite, 0 refus sur 80
+contre 34) ; le **contrôle de bâti des extensions** (`458ff7157`) ; **Write
+complet** (sept formes, F) ; les **noms réservés** refusés au chargement
+(liste tirée de la grammaire du moteur) ; les transactions PostgreSQL
+déclarées (non prouvées vivantes : conteneur) ; le NULL en tête de liste ;
+« duplicate node name: sparse » (une fixture, pas le produit ; filet des 31
+fiches d'outils) ; le proto : lots 3, 4 entiers (rechargement à chaud, la
+boutique jouet, routes → graphe → vue, `serve`, **la recette commence : une
+colonne ajoutée à une vue en service apparaît après rechargement, sans
+compilation**), lot 5 (`declare`) en cours ; I1 (verrou d'index exclusif)
+en fusion vers 3 h 30. Banc de concurrence : 56 → 15 rouges connus après
+I1. Le ticket « une ligne sur cent » fermé par les correctifs du banc.
+
+### Les décisions prises à ta place, toutes renversables
+
+| Décision | Où |
+|---|---|
+| tableau des sémantiques A4′ (lignes comme PostgreSQL, détachement comme Neo4j) | `coeur-cpp/07` §0 |
+| forme A du nœud scripté (`nodes/<nom>.node.json` + script relatif, dossier découvert) | proto, lot 2 |
+| sept formes de Write, Mark justifié, Load sous capacité | `embarquements/05` |
+| npm : tout en `0.0.1-alpha.2`, même commit, épinglage exact ; profil `paquet` LTO | G |
+| la montre des fichiers vit dans l'hôte, pas dans un graphe | proto, lot 3 |
+| I1 avant I2 (les écrivains d'une table indexée s'attendent jusqu'à I2 mesurée) | `coeur-cpp/09` §0 |
+| `impact` : les sûrs d'abord, `include_by_name` ; `callees` ; `locks_via` au manifeste | A, codeparsers |
+| le lecteur affamé à la SQLite (verrou `<base>.readers`, bornes nommées, filet gardé) | hotfixs |
+| nom réservé : (a) refus au chargement ; (b) les permettre en échappant tout le texte = ta question | F |
+| `declare` : un commit par chemins dans le dépôt englobant, identité git de la personne, raison de l'agent en message | proto, lot 5 |
+| un crochet de test dans la lib livrée (`RAG3DB_TEST_HOOKS=1` + `RAG3DB_TEST_DIE_AT`), ligne d'avertissement au démarrage | hotfixs |
+| analyze explicite seulement ; estimation des relations : ticket, pas de code | hotfixs |
+
+### Ce qui t'attend
+
+- **Quatre OTP** pour la séance npm (linux, windows, darwin, tête, tout en
+  alpha.2) — Windows 23 en cours à 2 h 20 (fsync des fichiers corrigé) ; si
+  rouge, séance à trois et Windows ensuite. Rien n'est parti.
+- **Relancer les deux sessions cœur C++ avec le serveur MCP** sur la base de
+  `rag3db-lourd` (recette `docs/10-octobre-2026-18h00/04`).
+- Le conteneur `pgvector:pg17` sur 5433 (trois tickets PostgreSQL attendent
+  un témoin vivant) ; `usermod -aG docker`.
+- Le ticket du mode `--demon` ; **l'indexation lancée par un outil MCP meurt
+  avec le tube du client** (le travail long devrait appartenir au démon :
+  page de A à venir).
+- La règle du target : « effacé à chaque fusion » a rendu 101 Go ; la
+  mémoire mesure 8 min de bâti à froid pour 3 min de vérification et
+  propose « gardé entre les lots d'une même session, effacé à la fin de la
+  session ». À toi.
+- Les 21 tickets « perte / réponse fausse » côté produit : comptent-ils pour
+  la stèle du moteur ou pour le produit ?
+- Les « nouveaux projets émergents » de classification, pour la page
+  mémoire ; sa recommandation : brancher le gabarit tel quel (A), voir si
+  Claude range spontanément, puis soigner « ranger » (B).
+- Le ménage des branches distantes (liste au §6, plus celles de la nuit).
+- F a supprimé trois de ses branches de travail fusionnées (ses propres
+  branches, rien de forcé) : à savoir.
+
+### Règles nées de la nuit
+
+Une session chaîne ses propres lourds ; lib et extension du même bâti,
+identifiants vérifiés par le moteur ; tout `src/dataflow/` relu par la
+recherche avant master ; copier un gabarit livré et en retirer ; `pgrep -x`
+ne voit pas un nom de plus de 15 caractères (`pidof` + `/proc/<pid>/exe`) ;
+après un rebase, on ne repousse pas la branche ; jamais un push derrière un
+test non lu.
+
+## 10. Ajout de 2 h 40 : une décision de plus pour le matin
+
+**L'indexation portée par le démon** (page de A :
+`docs/10-octobre-2026-arbre-principal/03-l-indexation-portee-par-le-demon.md`).
+Deux faits lus cette nuit : `--demon` ne sauve pas une indexation
+(`rag3daemon` ne tient que la base, le catalogue reste dans le serveur MCP),
+et la commande en fond a le même défaut (tubes et poignée dans le
+processus) ; relancer `index` après un serveur tué est refusé (reprise qui
+exige le takeover, ticket ouvert). Trois formes : **A** arrêt propre entre
+deux paquets dans le serveur (1-2 j) ; **B** un processus d'index détaché
+(3-4 j, cession de la base pour point dur) ; **C** le démon possède le
+catalogue et les serveurs MCP deviennent des clients minces (1-2 semaines).
+Fait cette nuit : la ligne de vérité dans la réponse d'`index`, les journaux
+de la commande en fond en fichiers. Recommandation portée à Lucie : A puis C
+comme cible (c'est « installer = un démon » jusqu'au bout, et ça va avec le
+paquet npm) ; B ne vaut pas son coût. Rien de plus sans son mot.
+
+## 11. Ajout de 2 h 55
+
+- **I1 est sur master** (`3ad09c8cc`) : la condition 1 n'a plus devant elle
+  que I2 (la maintenance de l'index au commit), après la mesure du banc
+  (en cours). Banc de concurrence : 9 rouges comparés sur 255.
+- **Un rouge de rejeu probabiliste, perte possible** (ticket `584452d9b` et
+  suite) : après le rejeu d'un COPY journalisé tué, la colonne DOUBLE des
+  dernières lignes lit zéro, un cas sur deux passes complètes. Hors d'I1.
+  Bissection par hotfixs (×30 / ×10+×30) ; lecture de A : une page de la
+  colonne rendue au-delà de l'étendue puis réécrite — l'étendue relue après
+  le rejeu ou figée à l'ouverture ? Ce qui désigne plutôt l'étendue du
+  fichier (`0aed3c4b5`, A) que le lecteur affamé. À suivre au réveil si ce
+  n'est pas fermé d'ici là.
+- **Le proto** : lot 5 `declare` sur master (`b460e9ac8`) ; lot 6 (la page
+  vivante `/_atelier`) en cours, avec trois choix pris pour toi : modèle du
+  chat déclaré par `models.llm` (sans modèle la page dit pourquoi le chat
+  est éteint), mermaid chargé du réseau pour le proto seulement, session de
+  chat persistante hors de git. La page 08 portera les trois commandes pour
+  jouer la recette au réveil.
+
+## 12. Ajout de 3 h 20 : une corruption du COPY journalisé, le défaut du moteur
+
+**À lire en premier au réveil.** Le rouge de rejeu de la nuit n'était ni le
+lecteur affamé ni l'étendue du fichier : A a reproduit en 9 s, sans gtest,
+sur master, que **le COPY journalisé** (le défaut du moteur depuis
+`ff9bad960`, hier 15 h 54) **corrompt une colonne DOUBLE en mémoire, dans le
+processus vivant, avant toute mort** : 3 sur 3 avec `copy_journal_threshold`
+à 1 Gio, une colonne FLOAT[4] présente et 2 fils (134 à 241 lignes à 0.0,
+ids ~199 550 à 199 999) ; juste avec 1 fil, juste sans colonne tableau, juste
+sans seuil, juste sous `force_checkpoint_on_copy`. Le journal porte les
+valeurs fausses, le rejeu les écrit, le point de reprise les garde. Chemin :
+`0f4a54b2c` (étape 2 du chargement journalisé). Piste : le groupe partiel
+fusionné par deux fils, relu en mémoire avec une colonne ARRAY.
+
+Décidé cette nuit, renversable : **le cœur C++ prend le correctif en priorité
+absolue** avec la sonde de A (`~/.cache/rag3weaver-notes-A/etendue/variantes.cpp`) ;
+**rag3weaver pose un filet** : `force_checkpoint_on_copy=true` (l'ancien
+défaut, +1 % mesuré) tant que le ticket est ouvert, avec témoin rouge sans le
+filet ; hotfixs ne pousse rien sur `wal_replayer` avant le correctif. La
+**condition 2 de la stèle** (« le COPY journalisé est le défaut du moteur »)
+est de fait rouverte jusqu'au correctif : le cœur l'écrira à la stèle avec le
+ticket. rag3weaver charge ses entités avec des vecteurs FLOAT[768] et à
+plusieurs fils : le chemin fautif est le sien ; les bases indexées depuis hier
+15 h 54 avec une colonne DOUBLE à côté d'un vecteur sont à vérifier (la sonde
+dit comment : `MATCH … WHERE d.score <> …`).
+
+**Ajout de 3 h 25, séance npm** : Windows est vert (23ᵉ essai, tête
+786dfec13 ; l'identifiant de bâti y porte le commit) et les quatre archives
+`0.0.1-alpha.2` sont prêtes — mais elles portent le COPY journalisé
+défectueux. **Séance retenue** : dès que le filet de A est sur master, G
+refait les trois bâtis (caches chauds, ~35 min), ajoute à l'épreuve une
+entité avec un FLOAT[4] et un DOUBLE qui vérifie les valeurs écrites,
+remballe, et rend les quatre commandes. Les archives de 786dfec13 sont
+gardées à part, étiquetées « ne pas publier ». Quatre OTP au matin, sur les
+archives refaites.
+
+## 13. Ajout de 3 h 35 : le proto « tout déclaratif » est entier
+
+Les six lots sont sur master (`0d8482f70`, relevé `8f0180049`), en une nuit,
+chacun avec ses témoins : le moteur de script (TypeScript/JavaScript/rhai), le
+nœud 100 % scripté, le rechargement à chaud, route → graphe → vue avec la
+boutique jouet, `declare` (un commit par chemin avec la raison de l'agent), et
+**la page vivante `/_atelier`** (chat à gauche, la page produite, le graphe
+mermaid de l'outil, le journal des rechargements, un flux d'événements
+serveur), essayée sur luciepc avec le binaire réel. **La recette pour Lucie
+est en trois commandes** : `docs/10-octobre-2026-18h20/everything-declarative/08-lot-6-la-page-vivante.md`
+§1 (bâtir avec `openai-llm` sous `poste lourd` ; copier le jouet dans
+`~/boutique` et lui déclarer Gemini/Vertex ; servir avec les identifiants dans
+l'environnement seulement ; ouvrir `/_atelier` ; dire « ajoute une colonne
+prix à la liste »). Le tour avec un vrai modèle n'a pas été joué cette nuit
+(pas d'accès à `.vault`, et c'est son témoin) ; le chemin modèle → declare →
+page est prouvé avec un modèle enregistré. Reste ouvert : la montre branchée
+sur la porte de la mémoire à sa fusion, le retour en arrière d'une
+déclaration, mermaid embarqué, plusieurs sessions.

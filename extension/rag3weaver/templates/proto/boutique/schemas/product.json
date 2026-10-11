@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "name", "price"],
+  "properties": {
+    "key": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "price": { "type": "number", "minimum": 0 },
+    "category": { "type": "string" }
+  }
+}

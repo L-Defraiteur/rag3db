@@ -433,9 +433,14 @@ add_definitions(-DRAG3DB_EXTENSION_VERSION="0.11.1")
 set(RAG3DB_BUILD_ID_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/include/common/build_id.h")
 set(RAG3DB_BUILD_ID_OPTIONS
     "${CMAKE_BUILD_TYPE}-p${RAG3DB_PAGE_SIZE_LOG2}-v${RAG3DB_VECTOR_CAPACITY_LOG2}-g${RAG3DB_NODE_GROUP_SIZE_LOG2}-s${RAG3DB_MAX_SEGMENT_SIZE_LOG2}-rc${ENABLE_RUNTIME_CHECKS}-st${SINGLE_THREADED}-asan${ENABLE_ADDRESS_SANITIZER}-tsan${ENABLE_THREAD_SANITIZER}-ubsan${ENABLE_UBSAN}")
+# Le dépôt dont ces sources sont une copie, quand elles n'ont pas de `.git` (posé par la crate Rust
+# sous Windows) : l'identifiant y lit git au lieu de dire « nogit ».
+set(RAG3DB_BUILD_ID_GIT_DIR "" CACHE PATH
+    "Dépôt git d'où viennent ces sources, si elles en sont une copie sans .git")
 add_custom_target(rag3db_build_id
     COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DOUTPUT=${RAG3DB_BUILD_ID_HEADER}
-        -DOPTIONS=${RAG3DB_BUILD_ID_OPTIONS} -P ${PROJECT_SOURCE_DIR}/cmake/build_id.cmake
+        -DOPTIONS=${RAG3DB_BUILD_ID_OPTIONS} "-DGIT_DIR=${RAG3DB_BUILD_ID_GIT_DIR}"
+        -P ${PROJECT_SOURCE_DIR}/cmake/build_id.cmake
     BYPRODUCTS ${RAG3DB_BUILD_ID_HEADER}
     COMMENT "Identifiant de bâti du moteur et des extensions")
 

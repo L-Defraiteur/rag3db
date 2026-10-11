@@ -398,3 +398,33 @@ fn a_scripted_node_keeps_its_declared_type_through_a_definition_round_trip() {
     let price = parsed.nodes.iter().find(|n| n.name == "price").unwrap();
     assert_eq!(price.node_type, "PriceWithTax", "{text}");
 }
+
+#[test]
+fn a_config_parameter_takes_the_type_of_its_schema() {
+    let mut d = decl("typescript", TS);
+    for (name, schema) in [
+        ("label", json!({"type": "string"})),
+        ("count", json!({"type": "integer"})),
+        ("ratio", json!({"type": "number"})),
+        ("strict", json!({"type": "boolean"})),
+        ("extra", json!({"type": "object"})),
+    ] {
+        d.config.push(DeclaredParam {
+            name: name.into(),
+            schema,
+            required: false,
+            default: None,
+            description: String::new(),
+        });
+    }
+    let schema = ScriptedNodeFactory::new(d, ScriptLimits::default()).unwrap().schema();
+    let types: Vec<_> = schema
+        .config_params
+        .iter()
+        .map(|p| format!("{}:{:?}", p.name, p.param_type))
+        .collect();
+    assert_eq!(
+        types,
+        ["rate:Float", "label:String", "count:Int", "ratio:Float", "strict:Bool", "extra:Json"]
+    );
+}

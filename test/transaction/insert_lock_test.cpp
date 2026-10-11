@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -375,6 +376,217 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
         rows.emplace_back(row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>());
     }
     EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 10}, {3, 3}}));
+}
+
+// ── Marche V2 : l'annonce des verrous en tête de transaction (CALL acquire_locks) ─────────
+// Le banc prouve que deux annonces dans l'ordre inverse ne s'interbloquent pas ; ici, dans un
+// seul fil : l'instantané repris après l'attente, et les refus nommés.
+
+// A écrit la ligne 1 et la garde ; B annonce [1] (attend, dans un fil), A valide ; B lit la
+// valeur de A, la met à jour SANS erreur de sérialisation (ce que l'option A refuserait sans
+// annonce), et valide.
+TEST_F(InsertLockTest, AnAnnouncedKeyWaitsThenReadsAndWritesWhatTheHolderCommitted) {
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 10;");
+    std::string announceError, readAndWriteError;
+    int64_t seen = -1;
+    std::atomic<bool> announced{false};
+    std::thread waiter([&] {
+        Connection other(database.get());
+        other.query("BEGIN TRANSACTION;");
+        announceError = failureOf(other, "CALL acquire_locks('Item', [1]);");
+        announced = true;
+        auto read = other.query("MATCH (n:Item {id: 1}) RETURN n.v;");
+        if (read->isSuccess() && read->hasNext()) {
+            seen = read->getNext()->getValue(0)->getValue<int64_t>();
+        }
+        readAndWriteError = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = n.v + 1;");
+        if (readAndWriteError.empty()) {
+            readAndWriteError = failureOf(other, "COMMIT;");
+        } else {
+            other.query("ROLLBACK;");
+        }
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_FALSE(announced.load()) << "the announcement must wait for the holder";
+    mustRun(*conn, "COMMIT;");
+    waiter.join();
+    EXPECT_EQ(announceError, "");
+    EXPECT_EQ(seen, 10) << "after the wait, the snapshot is the holder's commit";
+    EXPECT_EQ(readAndWriteError, "") << "no serialization error on an announced key";
+    auto result = conn->query("MATCH (n:Item {id: 1}) RETURN n.v;");
+    ASSERT_TRUE(result->isSuccess());
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 11);
+    EXPECT_EQ(locks().getNumResources(), 0u);
+}
+
+TEST_F(InsertLockTest, AnAnnouncementIsRefusedAfterAWriteOrTwiceOrInAutoCommit) {
+    mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    const auto autoCommit = failureOf(*conn, "CALL acquire_locks('Item', [1]);");
+    EXPECT_NE(autoCommit.find("explicit transaction"), std::string::npos) << autoCommit;
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    const auto afterWrite = failureOf(*conn, "CALL acquire_locks('Item', [1]);");
+    EXPECT_NE(afterWrite.find("before any write"), std::string::npos) << afterWrite;
+    mustRun(*conn, "ROLLBACK;");
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CALL acquire_locks('Item', [1, 2]);");
+    EXPECT_EQ(locks().getNumLocksHeld(transactionIDOf(*conn)), 3u) << "the index and two keys";
+    const auto twice = failureOf(*conn, "CALL acquire_locks('Item', [3]);");
+    EXPECT_NE(twice.find("already called"), std::string::npos) << twice;
+    mustRun(*conn, "ROLLBACK;");
+    EXPECT_EQ(locks().getNumResources(), 0u) << "the rollback gives everything back";
+    const auto unknown = failureOf(*conn, "CALL acquire_locks('Nope', [1]);");
+    EXPECT_NE(unknown.find("does not exist"), std::string::npos) << unknown;
+    const auto notAList = failureOf(*conn, "CALL acquire_locks('Item', 1);");
+    EXPECT_FALSE(notAList.empty());
+}
+
+TEST_F(InsertLockTest, WithoutMultiWritesAnAnnouncementTakesNothing) {
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "CALL acquire_locks('Item', [1, 2]);");
+    EXPECT_EQ(locks().getNumResources(), 0u);
+    mustRun(*conn, "CREATE (:Item {id: 1, v: 0});");
+    mustRun(*conn, "COMMIT;");
+}
+
+// ── Marche I1 : le genre « index » — tout écrivain d'une table indexée tient l'index en exclusif
+// de sa première écriture à sa validation ; après l'attente, l'instantané est repris.
+class IndexedTableLockTest : public InsertLockTest {
+protected:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed";
+        }
+        createDBAndConn();
+        const auto extension = TestHelper::appendRag3dbRootPath(
+            "extension/vector/build/libvector.rag3db_extension");
+        mustRun(*conn, "LOAD EXTENSION '" + extension + "';");
+        mustRun(*conn, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
+        mustRun(*conn, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, vec: [CAST(i % 7 AS FLOAT), "
+                       "CAST(i % 11 AS FLOAT), CAST(i % 13 AS FLOAT), CAST(i AS FLOAT)]});");
+        mustRun(*conn, "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+        mustRun(*conn, "CALL debug_enable_multi_writes=true;");
+    }
+    // Les identifiants que la recherche rend (k au plus), triés.
+    std::vector<int64_t> idsByIndex(Connection& connection, int64_t k) {
+        auto result = connection.query(
+            "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], " +
+            std::to_string(k) + ") RETURN node.id ORDER BY node.id;");
+        EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+        std::vector<int64_t> ids;
+        while (result->isSuccess() && result->hasNext()) {
+            ids.push_back(result->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        return ids;
+    }
+    int64_t liveRowsByIndex(Connection& connection, int64_t k) {
+        return static_cast<int64_t>(idsByIndex(connection, k).size());
+    }
+};
+
+TEST_F(IndexedTableLockTest, EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUntilTheEnd) {
+    Connection other(database.get());
+    mustRun(other, "CALL lock_timeout=300;");
+    for (const auto* write : {"CREATE (:Doc {id: 1000, vec: [1.0, 2.0, 3.0, 4.0]});",
+             "MATCH (d:Doc {id: 1}) SET d.vec = [9.0, 9.0, 9.0, 9.0];",
+             "MATCH (d:Doc {id: 2}) DELETE d;"}) {
+        mustRun(*conn, "BEGIN TRANSACTION;");
+        mustRun(*conn, write);
+        EXPECT_GE(locks().getNumLocksHeld(transactionIDOf(*conn)), 2u) << write;
+        // Une autre clé, une autre ligne : l'index est à un seul écrivain.
+        const auto insert = failureOf(other, "CREATE (:Doc {id: 2000, vec: [5.0, 5.0, 5.0, 5.0]});");
+        EXPECT_NE(insert.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << insert;
+        const auto update = failureOf(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+        EXPECT_NE(update.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << update;
+        const auto remove = failureOf(other, "MATCH (d:Doc {id: 4}) DELETE d;");
+        EXPECT_NE(remove.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << remove;
+        mustRun(*conn, "ROLLBACK;");
+        EXPECT_EQ(locks().getNumResources(), 0u);
+        // Rendu : l'autre écrit.
+        mustRun(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+    }
+    auto count = conn->query("MATCH (d:Doc) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess());
+    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 100);
+}
+
+// Hors du mode multi-écrivains, ce que l'annulation d'une écriture fait à la recherche : après
+// un CREATE, un SET de vecteur ou un DELETE annulé, la recherche doit encore rendre toutes les
+// lignes vivantes. Vu le 11 octobre sous I1 : après les trois annulations (et des SET validés),
+// la recherche ne rendait plus qu'une ligne — les points d'entrée de l'index vivent en mémoire
+// et ne s'annulent pas (hnsw_index.h). Ces trois cas disent lequel des trois casse.
+class IndexedTableRollbackTest : public IndexedTableLockTest {
+protected:
+    void SetUp() override {
+        IndexedTableLockTest::SetUp();
+        if (IsSkipped()) {
+            return;
+        }
+        mustRun(*conn, "CALL debug_enable_multi_writes=false;");
+    }
+    void rolledBack(const char* write) {
+        mustRun(*conn, "BEGIN TRANSACTION;");
+        mustRun(*conn, write);
+        mustRun(*conn, "ROLLBACK;");
+        EXPECT_EQ(liveRowsByIndex(*conn, 100), 100) << "after rolling back: " << write;
+    }
+};
+
+TEST_F(IndexedTableRollbackTest, ARolledBackInsertKeepsTheIndexSearchable) {
+    rolledBack("CREATE (:Doc {id: 1000, vec: [1.0, 2.0, 3.0, 4.0]});");
+}
+
+TEST_F(IndexedTableRollbackTest, ARolledBackVectorUpdateKeepsTheIndexSearchable) {
+    rolledBack("MATCH (d:Doc {id: 1}) SET d.vec = [9.0, 9.0, 9.0, 9.0];");
+}
+
+TEST_F(IndexedTableRollbackTest, ARolledBackDeleteKeepsTheIndexSearchable) {
+    rolledBack("MATCH (d:Doc {id: 2}) DELETE d;");
+}
+
+TEST_F(IndexedTableRollbackTest, CommittedVectorUpdatesKeepTheIndexSearchable) {
+    for (auto i = 0; i < 3; i++) {
+        mustRun(*conn, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+    }
+    EXPECT_EQ(liveRowsByIndex(*conn, 100), 100);
+}
+
+// Deux suppressions aux voisinages recouvrants (H3 du banc, dans un seul fil) : la seconde
+// attend la première, puis recoud sur le graphe validé — les deux valident, l'index rend
+// exactement les lignes vivantes.
+TEST_F(IndexedTableLockTest, TwoDeletesWithOverlappingNeighbourhoodsBothCommitInTurn) {
+    mustRun(*conn, "BEGIN TRANSACTION;");
+    mustRun(*conn, "MATCH (d:Doc {id: 10}) DELETE d;");
+    std::string secondError;
+    std::atomic<bool> secondDone{false};
+    std::thread second([&] {
+        Connection other(database.get());
+        other.query("BEGIN TRANSACTION;");
+        secondError = failureOf(other, "MATCH (d:Doc {id: 11}) DELETE d;");
+        if (secondError.empty()) {
+            secondError = failureOf(other, "COMMIT;");
+        } else {
+            other.query("ROLLBACK;");
+        }
+        secondDone = true;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_FALSE(secondDone.load()) << "the second delete must wait for the index";
+    mustRun(*conn, "COMMIT;");
+    second.join();
+    EXPECT_EQ(secondError, "");
+    auto count = conn->query("MATCH (d:Doc) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess());
+    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 98);
+    const auto ids = idsByIndex(*conn, 100);
+    EXPECT_EQ(ids.size(), 98u) << "the index must return exactly the live rows";
+    EXPECT_EQ(std::count(ids.begin(), ids.end(), 10), 0) << "deleted row 10 came back";
+    EXPECT_EQ(std::count(ids.begin(), ids.end(), 11), 0) << "deleted row 11 came back";
+    EXPECT_EQ(locks().getNumResources(), 0u);
 }
 
 TEST_F(InsertLockTest, WithoutMultiWritesTheSnapshotStillRules) {

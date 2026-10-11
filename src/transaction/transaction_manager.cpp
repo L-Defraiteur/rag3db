@@ -61,6 +61,12 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
     }
 }
 
+void TransactionManager::refreshSnapshot(Transaction* transaction) {
+    std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
+    KU_ASSERT(!transaction->hasWritten());
+    transaction->startTS = lastTimestamp;
+}
+
 void TransactionManager::commit(main::ClientContext& clientContext, Transaction* transaction) {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
     clientContext.cleanUp();

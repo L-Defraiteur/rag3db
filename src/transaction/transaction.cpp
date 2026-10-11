@@ -87,6 +87,10 @@ void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
     }
 }
 
+bool Transaction::hasWritten() const {
+    return (localStorage && !localStorage->isEmpty()) || (undoBuffer && !undoBuffer->isEmpty());
+}
+
 void Transaction::acquireLock(const LockResource& resource, LockMode mode) const {
     const LockRequest request{resource, mode};
     acquireLocks(std::span<const LockRequest>{&request, 1});

@@ -361,6 +361,16 @@ Les témoins sont au banc (`test/transaction/concurrence/lock_bench_test.cpp`), 
   instantané » = `startTS < version < START_TRANSACTION_ID` dans les chaînes d'`UpdateInfo` et
   les `VersionInfo` (`ChunkedNodeGroup::wasWrittenByCommitAfter`). Le tableau des sémantiques :
   page 07 §0.
+- **V2 (11 octobre)** : `CALL acquire_locks('Table', [clés])`, `src/function/table/acquire_locks.cpp`
+  (enregistrée `STANDALONE_TABLE_FUNCTION` dans function_collection.cpp) ; `Transaction::hasWritten`,
+  `hasAnnouncedLocks`/`markLocksAnnounced` ; `TransactionManager::refreshSnapshot`. Un paramètre
+  de fonction de table de type liste se déclare `LogicalTypeID::ANY` (un `LIST` nu ne se lie
+  pas). `TransactionContext::Get(context)->isAutoTransaction()` dit l'auto-commit.
+- **I1 (11 octobre)** : `NodeTable::lockIndexForWrite` / `hasLoadedSecondaryIndex` ; l'index
+  n'a aucun mutex et ses points d'entrée (`HNSWStorageInfo`) vivent en mémoire sans annulation ;
+  un seul écrivain à la fois par table indexée, de la première écriture au commit ; l'instantané
+  repris à la première écriture comme à l'annonce. `QUERY_VECTOR_INDEX` nu rend des nœuds
+  supprimés (projeter `node` filtre) : compter par `node.id`, jamais par `count(*)` sur le CALL.
 - **Fabriquer un état que le moteur ne produit plus** : programme nu contre la bibliothèque
   d'AVANT, gardé au dépôt avec sa base et son journal (`journal_with_duplicate_key/`), comme
   `journal_before_raw_arrays/`. Le faire **avant** de rebâtir.

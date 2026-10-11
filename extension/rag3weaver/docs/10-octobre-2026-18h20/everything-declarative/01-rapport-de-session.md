@@ -60,9 +60,9 @@ dans `02-knowledge-dump.md`, à côté.
 | 1 — moteur de script générique, rhai + TypeScript/JavaScript | **sur master** (`6932a7da2`, page `03-lot-1-le-moteur-de-script.md`) |
 | 2 — nœud entièrement scripté | **sur master** (`a944079a4`, page `04-lot-2-le-noeud-scripte.md`) |
 | 3 — rechargement à chaud | **sur master** (page `05-lot-3-le-rechargement-a-chaud.md`) ; la montre des fichiers attend `watch_bound` |
-| 4 — route → graphe → vue, `serve` | — |
-| 5 — l'outil `declare` | — |
-| 6 — la page vivante | — |
+| 4 — route → graphe → vue, `serve` | **sur master** (page `06-lot-4-route-graphe-vue.md` ; le jouet `templates/proto/boutique`, son e2e vert) |
+| 5 — l'outil `declare` | **sur master** (page `07-lot-5-l-outil-declare.md`) |
+| 6 — la page vivante | **sur master** (page `08-lot-6-la-page-vivante.md`, avec la recette en trois commandes) |
 
 ## 4. Lot 1, ce qui s'est passé (10 oct., nuit)
 
@@ -126,3 +126,57 @@ dans `02-knowledge-dump.md`, à côté.
   (arrêté par son pid, vérifié dans `/proc/<pid>/cwd`) ; le script des
   littéraux qui sautait les littéraux imbriqués et prenait un type de retour
   pour un littéral (corrigé, rejoué depuis les sources).
+
+## 7. Bilan de la nuit du 10 au 11 octobre : les six lots sur master
+
+| Lot | Ce qu'il pose | Commits sur master | Page |
+|---|---|---|---|
+| 1 | le moteur de script générique : TypeScript (effacé, jamais vérifié), JavaScript par QuickJS, rhai derrière la même interface | `ff659a4ca` (dans `01dc4c7ce..6932a7da2`) | 03 |
+| 2 | les noms possédés du moteur de graphes (deux fuites en service fermées) ; le nœud entièrement scripté | `7c9d88795`, `9b17f9234` ; le pas du trait `node_type` `b2f6dac81` | 04 |
+| 3 | le rechargement à chaud, puis en deux temps pour l'hôte | `f07b6a4af`, `ca6273906` | 05 |
+| 4 | `nodes/` dans un backend ; routes → outil → vue ; `serve` ; le jouet `templates/proto/boutique` et son e2e | `8a6ec208b`, `0f01f0093`, `81d5c4823` | 06 |
+| 5 | l'outil `declare`, commit par chemin avec la raison de l'agent | `b460e9ac8` | 07 |
+| 6 | la page vivante (`serve --atelier`) | `0d8482f70` | 08 |
+
+Le relevé de connaissances est à jour (`8f0180049`). Chaque lot : témoins
+rouges d'abord, suites du changement, lib complète sur la tête finale,
+fusion en avance rapide, target et worktree effacés après.
+
+### Les choix pris pour Lucie — renversables
+
+1. **`declare` et la montre sont des gestes d'hôte**, jamais des nœuds de
+   graphe (sinon un graphe déclaré pourrait recharger sa propre frontière
+   d'exposition) — avec la session mémoire et l'orchestration.
+2. **L'historique des déclarations est git** : le dépôt qui englobe le
+   dossier du backend (créé seulement s'il n'y en a aucun), commit de ce
+   chemin seul, sous l'identité git de la personne, la raison de l'agent pour
+   message — décidé par l'orchestration.
+3. **La page vivante** : le modèle du chat est celui déclaré au manifeste
+   (`models.llm`, sans lui le chat est éteint et la page dit pourquoi) ;
+   mermaid chargé du réseau pour le proto (le produit l'embarquera) ; la
+   session gardée dans `.atelier/` hors de git — décidé par l'orchestration.
+
+Et, tranchés par la session : `tiny_http` pour `serve` (déjà au crate) ;
+`Cow<'static, str>` plutôt qu'`Arc<str>` pour les noms ; les nombres sous une
+seule forme à la sortie d'un nœud scripté ; la forme des déclarations de
+nœuds (`nodes/<nom>.node.json` à côté du script, décidée par l'orchestration).
+
+### Ce qui reste ouvert
+
+- **La recette jouée par Lucie** (page 08, §1, trois commandes) : le chemin
+  modèle → `declare` → page n'est prouvé qu'avec un modèle enregistré.
+- `declare` et la montre sur `apply_reload_with_reactions` — **seulement à la
+  fusion** de la session mémoire, pas avant (le jouet n'a pas de réactions).
+- Le retour en arrière d'une déclaration (un commit qui défait) ; mermaid
+  embarqué ; plusieurs sessions de chat ; la surbrillance d'un nœud scripté
+  touché.
+- La branche distante `proto-declaratif` (un commit de docs d'avant le premier
+  rebase) : sur la liste du ménage de Lucie.
+
+### Une erreur à moi, dite
+
+Un push de docs refusé que j'ai d'abord pris pour une course perdue : c'était
+`$C:refs/heads/master` dans le shell zsh de l'outil, où `$C:r…` est un
+modificateur qui mange le début de la référence. Le piège était dans la
+mémoire (« accolades avant deux-points ») ; la forme juste est
+`"${C}:refs/heads/master"`.

@@ -1,0 +1,12 @@
+{
+  "name": "ProductForm",
+  "description": "Un produit à partir des champs du formulaire ; une catégorie vide est omise.",
+  "script": "product_form.ts",
+  "outputs": { "record": { "schema": { "type": "object", "required": ["key", "name", "price"] } } },
+  "config": {
+    "key": { "schema": { "type": "string", "minLength": 1 }, "required": true },
+    "name": { "schema": { "type": "string", "minLength": 1 }, "required": true },
+    "price": { "schema": { "type": "number", "minimum": 0 }, "required": true },
+    "category": { "schema": { "type": "string" }, "default": "" }
+  }
+}

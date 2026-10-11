@@ -53,6 +53,10 @@ const CORPUS: &[(&str, &str)] = &[
     ("rel_table.h", "#pragma once\n\nclass RelTable {\npublic:\n    void update(int v) {\n    }\n};\n"),
     ("set_info.h", "#pragma once\n#include \"node_table.h\"\n\nstruct SetInfo {\n    NodeTable* table;\n};\n"),
     ("set_executor.cpp", "#include \"set_info.h\"\n\nvoid run(SetInfo& info) {\n    info.table->update(1);\n}\n"),
+    // La forme réelle de set_executor.cpp : `tableInfo` est un membre de la
+    // classe, `table` un champ de ce membre.
+    ("executor.h", "#pragma once\n#include \"set_info.h\"\n\nclass Executor {\npublic:\n    void set();\nprivate:\n    SetInfo tableInfo;\n};\n"),
+    ("executor.cpp", "#include \"executor.h\"\n\nvoid Executor::set() {\n    tableInfo.table->update(4);\n}\n"),
     ("holder.h", "#pragma once\n#include \"local_table.h\"\n\nclass Holder {\npublic:\n    void go();\nprivate:\n    LocalTable* localTable;\n};\n"),
     ("holder.cpp", "#include \"holder.h\"\n\nvoid Holder::go() {\n    localTable->update(2);\n}\n"),
     (
@@ -88,4 +92,26 @@ fn les_trois_formes_des_appelants_de_node_table_update() {
     assert_eq!(vers("replay"), vec![("node_table.cpp".to_string(), "type".to_string())], "auto& … cast<NodeTable>() : typé dans le fichier");
     assert_eq!(vers("run"), vec![("node_table.cpp".to_string(), "type".to_string())], "info.table : le champ table de SetInfo, déclaré dans set_info.h");
     assert_eq!(vers("go"), vec![("local_table.cpp".to_string(), "type".to_string())], "localTable : le membre de Holder, déclaré dans holder.h");
+    assert_eq!(vers("set"), vec![("node_table.cpp".to_string(), "type".to_string())], "tableInfo.table : le champ table du membre tableInfo, deux pas de champ");
+}
+
+/// **Bornée à la source** : une classe homonyme d'une autre source (un
+/// instantané dans la même base), aux champs d'un autre type, ne gêne pas la
+/// résolution de la première.
+#[test]
+#[ignore]
+fn une_classe_homonyme_d_une_autre_source_ne_gene_pas() {
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = CORPUS.iter().map(|(p, c)| (p.to_string(), c.to_string())).collect();
+    let autre = vec![("set_info.h".to_string(), "#pragma once\n\nclass Autre;\n\nstruct SetInfo {\n    Autre* table;\n};\n".to_string())];
+    {
+        let mut cat = catalog.lock().unwrap();
+        // Un instantané : sa propre source (`snapshot:autre`).
+        cat.ingest_code(&rag3weaver::code::analyze_with("/autre", autre, "snapshot:autre")).unwrap();
+        cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    }
+    let appels = appels_de_update(&catalog);
+    eprintln!("{appels:#?}");
+    let vers = |de: &str| appels.iter().filter(|(a, _, _)| a == de).map(|(_, f, m)| (f.clone(), m.clone())).collect::<Vec<_>>();
+    assert_eq!(vers("run"), vec![("node_table.cpp".to_string(), "type".to_string())], "le SetInfo de /autre ne compte pas pour /projet");
 }

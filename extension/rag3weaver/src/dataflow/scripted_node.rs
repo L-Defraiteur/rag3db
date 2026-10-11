@@ -127,6 +127,19 @@ impl ScriptedNodeFactory {
     }
 }
 
+/// Le type d'un paramètre de configuration, lu dans son schéma : un outil
+/// qui lie `name string!` à un paramètre déclaré `{"type": "string"}` est
+/// vérifié comme pour un nœud fourni ; sans `type` simple, du JSON.
+fn param_type(schema: &Value) -> ConfigParamType {
+    match schema["type"].as_str() {
+        Some("string") => ConfigParamType::String,
+        Some("integer") => ConfigParamType::Int,
+        Some("number") => ConfigParamType::Float,
+        Some("boolean") => ConfigParamType::Bool,
+        _ => ConfigParamType::Json,
+    }
+}
+
 fn is_identifier(name: &str) -> bool {
     let mut chars = name.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
@@ -246,7 +259,7 @@ impl NodeFactory for ScriptedNodeFactory {
                 .iter()
                 .map(|p| ConfigParam {
                     name: p.name.clone().into(),
-                    param_type: ConfigParamType::Json,
+                    param_type: param_type(&p.schema),
                     required: p.required,
                     default: p.default.clone(),
                     description: p.description.clone().into(),

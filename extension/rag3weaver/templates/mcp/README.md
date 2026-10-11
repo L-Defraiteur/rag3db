@@ -25,8 +25,26 @@ Dans la copie de `backend.json` :
 - `vector_extension` → le chemin absolu de `libvector.rag3db_extension` dans
   l'arbre où le moteur a été bâti.
 
-Les autres chemins du manifeste (les `graph` des outils) sont relatifs au
-manifeste : si vous copiez le dossier entier, ils restent justes.
+**Et copiez tout `templates/`, pas le seul dossier du gabarit** — corrigé le
+11 octobre après avoir joué la recette : le gabarit `code` range ses graphes
+**hors de son dossier** (`../../tools/*.mmd`), donc copier `backends/code/` seul
+donne un manifeste qui ne charge pas. Réécrire les chemins en absolu n'est pas la
+réponse non plus : pointés sur un worktree, ils meurent avec lui. Copier
+l'arborescence préserve les chemins relatifs et rend le manifeste autonome.
+
+```sh
+cp -r <dépôt>/extension/rag3weaver/templates ~/.config/rag3weaver/mon-projet
+# puis éditer mon-projet/backends/code/backend.json
+```
+
+**Gardez la session ouverte pendant le premier index.** `index` rend aussitôt et
+travaille en fond, mais ce travail est un **enfant du serveur** : fermer le tube
+le tue (mesuré deux fois). Une fois l'index fait, la base est persistée et la
+session peut fermer — y compris après un rebâti du moteur. Défaut connu :
+`docs/tickets/2026-10-11-indexation-enfant-du-serveur-mcp.md`.
+
+La recette complète, avec les temps mesurés et une question réelle, est à
+`docs/10-octobre-2026-18h00/04-une-base-par-session-recette-jouee.md`.
 
 **Ne retirez pas `workspace.index`.** Mesuré le 10 octobre 2026, après deux
 passes perdues : ce n'est pas seulement l'indexation qu'il commande, c'est la
@@ -82,7 +100,7 @@ lecture des clés est en place ; le filtrage viendra avec elle. Le serveur
 annonce au démarrage ce qu'il expose et sous quelles clés :
 
 ```
-[mcp] code-poste — 12 outils, clés présentées : dev
+[mcp] code-poste — 13 outils, clés présentées : dev
 ```
 
 Le jour où des déclarations seront écartées, cette ligne est ce qui évitera de
@@ -100,11 +118,10 @@ stdio seulement.
   la même ligne à la main, l'erreur de chargement s'affiche ;
 - **la liste d'outils est vide** : lisez la ligne `[mcp] …` sur stderr, elle dit
   combien d'outils et sous quelles clés ;
-- **un outil refuse « unknown entity: File »** : votre manifeste ne déclare pas
-  `workspace.index: "code"`, donc le schéma du code n'a pas été posé à
-  l'ouverture. Déclarez-le, **puis** appelez l'outil `index` (`estimate` dit ce
-  que ça coûtera). Appeler `index` sans la déclaration ne sert à rien : il n'a
-  pas de schéma à remplir. (Ce refus ne dit pas encore la cause ; défaut connu,
-  relevé le 10 octobre 2026, correctif en cours.)
+- **un outil dit que « cette base n'a pas le schéma du code »** : votre manifeste
+  ne déclare pas `workspace.index: "code"`, donc le schéma du code n'a pas été
+  posé à l'ouverture. Déclarez-le, **puis** appelez l'outil `index` (`estimate`
+  dit ce que ça coûtera). Le refus le dit lui-même depuis le 11 octobre 2026
+  (`9dc3f083a`) ; avant, il ne disait que « unknown entity: File ».
 - **le serveur s'arrête avec le code 75** : la base demande une réouverture, et
   il vous l'a dit par un `notifications/message` avant de partir. Relancez-le.

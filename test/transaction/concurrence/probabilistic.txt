@@ -16,12 +16,6 @@ Launchers/ConcurrencyBench.C7_RandomMix/Thread_Reopen
 Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Hot
 Launchers/ConcurrencyBench.H4_IndexedRandomMix/Thread_Crash
 #
-# Le SET d'un vecteur vers un autre, ligne à ligne (vector_index_update_test.cpp, 4 octobre,
-# après c8fdaf196) : perd des lignes de l'index un essai sur trois environ, et un essai dure
-# près d'une minute ; assez d'essais pour rougir à coup sûr coûteraient dix minutes. Marche
-# « mise à jour de l'index : contrôle en fin d'instruction ».
-VectorIndexUpdate.SetToAnotherVectorLineByLine
-#
 # Dix mille lignes mises à jour par lots de 512 (vector_index_update_test.cpp) : rouge six
 # essais sur six le 4 octobre au matin, vert à la comparaison longue de midi. Long aussi :
 # 25 s avant c8fdaf196, 12 à 27 min après (signalé au cœur C++) ; ctest -LE concurrence-probabiliste

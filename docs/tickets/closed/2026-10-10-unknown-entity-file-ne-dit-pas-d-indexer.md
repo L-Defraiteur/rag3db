@@ -1,6 +1,6 @@
 # « unknown entity: File » ne dit pas ce qui manque — un manifeste sans `workspace.index`
 
-- **État** : ouvert ; correctif en cours par l'arbre principal (branche `unknown-entity`)
+- **État** : corrigé `9dc3f083a` (11 octobre 2026) — la surface de code traduit l'erreur du catalogue : « cette base n'a pas le schéma du code (l'entité `File` n'existe pas) : le manifeste du backend doit déclarer `workspace.index: "code"`, puis l'outil `index` remplit l'index » ; témoin `code_tools::tests::une_base_non_indexee_dit_d_appeler_index` ; la ligne de secours du README MCP est réécrite
 - **Gravité** : réponse fausse d'interprétation — un modèle lira un défaut d'outil là où il y a une **déclaration manquante**
 - **Atteignable en service** : seulement avec un manifeste qui **ne déclare pas** `workspace.index: "code"`
 - **Touche rag3weaver** : oui — toute la surface de code, et le message est le seul indice

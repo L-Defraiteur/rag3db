@@ -77,3 +77,34 @@ signaux répondent seuls en attendant.
 le service d'embarquement du cloud n'est pas défini, et le creux est un
 gain de qualité, pas une condition de marche. Le déclarer quand l'infra
 cloud existera tient en deux clés.
+
+## Les verrous applicatifs — `workspace.locks_via` (11 octobre 2026)
+
+L'analyse relève seule les verrous pris sur un **champ mutex** (gardes
+RAII C++, `.lock()` / `.read()` / `.write()` sur un champ déclaré mutex ou
+RwLock) : la relation LOCKS du scope vers le symbole `Classe::champ`. Un
+gestionnaire de verrous applicatif, lui, ne verrouille aucun champ : il
+**s'appelle**. Le dépôt déclare ses fonctions de verrou :
+
+```json
+"workspace": { "source": "working_tree", "root": "…", "index": "code",
+               "locks_via": ["acquireLock", "acquireLocks", "lockRowForWrite"] }
+```
+
+Un scope qui appelle l'une d'elles reçoit LOCKS vers le symbole de la
+fonction (genre `lock`, ligne du site), que l'appel soit résolu dans le
+fichier ou au rendez-vous ; la correspondance se fait par le nom nu. Sans
+`index: "code"`, la clé est refusée au chargement. **LOCKS par appel,
+marque `via`** : `via = "appel"` pour un verrou posé par une fonction
+déclarée, `via = "champ"` pour une garde sur un mutex ; une base d'avant
+lit la marque nulle. `impact` et `callees` les rendent dans la même
+section, « Verrous pris sur le chemin ».
+
+**L'exemple de rag3db** (le gestionnaire de verrous de la transaction) :
+`acquireLock`, `acquireLocks`, `lockRowForWrite`. Ne pas y mettre
+`lockKeyOf` ni `lockKeyOfRow` : elles **calculent la clé** d'un verrou
+(`pkVector.getAsValue(pos)->toString()`), elles ne le prennent pas — les
+déclarer ferait dire à `impact` que `NodeTable::update` « prend »
+`lockKeyOfRow`. Sur `rag3db/src`, ces trois déclarations ajoutent 9 LOCKS
+aux 169 relevés sur des mutex ; `callees` de `NodeTable::update` rend
+`lockRowForWrite` (au départ) → `acquireLock` → `acquireLocks`.

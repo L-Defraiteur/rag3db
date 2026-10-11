@@ -18,9 +18,31 @@ pub enum SchemaError {
 
     #[error("relation \"{rel}\" references unknown entity \"{entity}\"")]
     UnknownEntity { rel: String, entity: String },
+
+    /// Un nom que la grammaire du dialecte réserve : le moteur refuserait la
+    /// requête qui le porte. Le refus le nomme et dit quoi faire.
+    #[error("« {name} » est un mot réservé du dialecte {dialect} ({kind}) : renommez {quoi}")]
+    ReservedWord { kind: String, name: String, dialect: String, quoi: String },
 }
 
 // ─── Identifier validation ──────────────────────────────────────────────────
+
+/// Un identifiant valide **et** non réservé par le dialecte qui l'écrira
+/// ([`crate::dialect::SchemaDialect::reserved_words`]).
+pub fn validate_name(name: &str, kind: &str, dialect: &dyn crate::dialect::SchemaDialect) -> Result<(), SchemaError> {
+    validate_identifier(name, kind)?;
+    let haut = name.to_ascii_uppercase();
+    if dialect.reserved_words().iter().any(|m| *m == haut) {
+        let quoi = match kind {
+            "entity" => "l'entité",
+            "field" => "le champ",
+            "relation" => "la relation",
+            _ => "ce nom",
+        };
+        return Err(SchemaError::ReservedWord { kind: kind.into(), name: name.into(), dialect: dialect.name().into(), quoi: quoi.into() });
+    }
+    Ok(())
+}
 
 /// Validate that `name` is a safe Cypher identifier.
 ///
@@ -168,7 +190,7 @@ pub fn generate_node_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_identifier(entity_name, "entity")?;
+    validate_name(entity_name, "entity", dialect)?;
 
     let mut columns = vec![
         ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
@@ -200,7 +222,7 @@ pub fn generate_node_table_ddl_with_dialect(
     let mut field_names: Vec<&String> = entity_def.fields.keys().collect();
     field_names.sort();
     for field_name in &field_names {
-        validate_identifier(field_name, "field")?;
+        validate_name(field_name, "field", dialect)?;
         let field_def = &entity_def.fields[*field_name];
         columns.push(ColumnDef {
             name: field_name.to_string(),
@@ -233,7 +255,7 @@ pub fn generate_simple_chunk_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_identifier(entity_name, "entity")?;
+    validate_name(entity_name, "entity", dialect)?;
     let table_name = format!("{entity_name}_Chunk");
 
     let mut columns = vec![
@@ -296,7 +318,7 @@ pub fn generate_simple_chunk_rel_ddl_with_dialect(
     entity_name: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_identifier(entity_name, "entity")?;
+    validate_name(entity_name, "entity", dialect)?;
     let chunk_table = format!("{entity_name}_Chunk");
     let rel_name = format!("{entity_name}_CHUNKED_FROM");
     Ok(dialect.create_rel_table(&rel_name, &chunk_table, entity_name, &[]))
@@ -315,8 +337,8 @@ pub fn generate_derived_rel_ddl_with_dialect(
     from_entity: &str,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
-    validate_identifier(entity_name, "entity")?;
-    validate_identifier(from_entity, "entity")?;
+    validate_name(entity_name, "entity", dialect)?;
+    validate_name(from_entity, "entity", dialect)?;
     Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
 }
 
@@ -335,9 +357,9 @@ pub fn generate_rel_table_ddl_with_dialect(
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<String, SchemaError> {
     use crate::dialect::{ColumnDef, ColumnType};
-    validate_identifier(rel_name, "relation")?;
-    validate_identifier(&rel_def.from, "entity")?;
-    validate_identifier(&rel_def.to, "entity")?;
+    validate_name(rel_name, "relation", dialect)?;
+    validate_name(&rel_def.from, "entity", dialect)?;
+    validate_name(&rel_def.to, "entity", dialect)?;
 
     if !config.entities.contains_key(&rel_def.from) {
         return Err(SchemaError::UnknownEntity {

@@ -60,14 +60,14 @@ def manifest_in(tmp, name, sparse_model):
         entity['schema'] = str(sample.parent / entity['schema'])
     for tool in config['tools'].values():
         tool['graph'] = str((sample.parent / tool['graph']).resolve())
-    # The notebook's search graph has no sparse branch: the same graph, with one.
+    # Le gabarit livré porte SA branche sparse (depuis le 10 octobre) : le
+    # prendre tel quel. L'ancienne injection par remplacements de texte datait
+    # d'un gabarit sans branche sparse — dès qu'il a eu la sienne, l'injection
+    # la DOUBLAIT : « duplicate node name: sparse » à la première recherche
+    # (ticket du 10 octobre). Corpus vivant : on ne garde que le garde.
     graph = (CRATE / 'templates/tools/search_structured.mmd').read_text()
-    graph = graph.replace('    vector["VectorSearchNode"]\n', '    vector["VectorSearchNode"]\n    sparse["SparseSearchNode"]\n')
-    graph = graph.replace("weights='bm25:0.5,vector:0.5'", "weights='bm25:0.4,vector:0.3,sparse:0.3'")
-    graph = graph.replace('    source -->|query| vector\n', '    source -->|query| vector\n    source -->|query| sparse\n')
-    graph = graph.replace('    vector -->|meta| render\n', '    vector -->|meta| render\n    sparse -->|meta| render\n')
-    graph = graph.replace('    vector -->|results:vector| fuse\n', '    vector -->|results:vector| fuse\n    sparse -->|results:sparse| fuse\n')
-    assert 'results:sparse' in graph and 'source -->|query| sparse' in graph, graph
+    assert 'results:sparse' in graph and 'source -->|query| sparse' in graph, \
+        f'le gabarit livré a perdu sa branche sparse : {graph}'
     (Path(tmp) / 'search_with_sparse.mmd').write_text(graph)
     config['tools']['search_notes']['graph'] = str(Path(tmp) / 'search_with_sparse.mmd')
     # With a service variable set, the addresses come from it (chosen by model).

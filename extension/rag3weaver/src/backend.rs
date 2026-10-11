@@ -1,8 +1,9 @@
 //! A backend is a manifest, payload schemas and explicitly exposed graph tools.
 //! No domain vocabulary lives in this module. One host owns the catalogue.
 use crate::dataflow::{
-    build_definition, builtin_graph_tools, port_value_to_checkpoint, DataflowRuntime,
-    GraphDefinition, GraphTool, NodeRegistry, NodeTypePolicy, ServiceRegistry,
+    build_definition, builtin_graph_tools, port_value_to_checkpoint,
+    reactor::{Reactor, ReactorHandle},
+    DataflowRuntime, GraphDefinition, GraphTool, NodeRegistry, NodeTypePolicy, ServiceRegistry,
 };
 use crate::{
     catalog::Catalog,
@@ -54,6 +55,11 @@ pub struct BackendManifest {
     /// (`docs/5-octobre-2026-00h00/01`), tranchée par l'orchestration.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub reactions: BTreeMap<String, ReactionAttachment>,
+    /// **Les routes** : `"GET /products/{key}": {"tool": …, "view": …}`. Une
+    /// adresse mène à un outil déclaré (le contrôleur), son résultat à une vue
+    /// du dossier `views/` ([`crate::routes`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub routes: BTreeMap<String, crate::routes::RouteDecl>,
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
@@ -271,6 +277,7 @@ fn valider_une_reaction(
     graphe: &crate::dataflow::GraphTool,
     bindings: &serde_json::Map<String, Value>,
     est_aussi_un_outil: bool,
+    scripted: &BTreeSet<String>,
 ) -> Result<(), String> {
     // 1. Un nom partagé entre les deux sections n'est pas une coquette
     //    ambiguïté : le curseur du réacteur **est** ce nom
@@ -283,8 +290,33 @@ fn valider_une_reaction(
              le dire — renommez l'une des deux"
         ));
     }
+    // 1 bis. **La clé du manifeste EST le curseur, donc elle doit être le nom
+    //    de la fiche.** `Reactor::watch` ouvre `bus.cursor(sujet,
+    //    tool.name())` — le nom de la FICHE, pas la clé — et la fiche nomme
+    //    elle-même ce curseur dans son `EventSourceNode(cursor='…')`. Déclarée
+    //    sous une autre clé, la réaction se lirait sous un nom et se vérifierait
+    //    sous un autre : le refus homonyme ci-dessus porterait sur une clé que
+    //    le bus ignore, et deux clés sur la même fiche partageraient un curseur
+    //    en silence (le défaut que le point 1 prétend fermer).
+    if graphe.name() != nom {
+        return Err(format!(
+            "la réaction « {nom} » porte la fiche « {} » : pour une réaction, la clé du \
+             manifeste EST le curseur du réacteur, donc elle doit être le nom de la fiche — \
+             renommez la clé en « {} », ou donnez-lui sa propre fiche",
+            graphe.name(),
+            graphe.name()
+        ));
+    }
     // 2. La liste blanche réactive.
-    valider_noeuds_de_reaction(nom, graphe.template().nodes.iter().map(|n| n.node_type.clone()))?;
+    valider_noeuds_de_reaction(
+        nom,
+        graphe
+            .template()
+            .nodes
+            .iter()
+            .map(|n| n.node_type.clone())
+            .filter(|t| !scripted.contains(t)),
+    )?;
     // 3. Sans `%% on:`, le réacteur refuse déjà, mot pour mot — mais il
     //    refuserait au montage, loin du manifeste fautif. Ici le refus nomme
     //    la réaction et l'autre porte de sortie.
@@ -294,6 +326,30 @@ fn valider_une_reaction(
              « %% on: <sujet> ». Ajoutez-la, ou déclarez ce graphe dans \"tools\" si c'est \
              l'agent qui doit l'appeler"
         ));
+    }
+    // 3 bis. **Les deux curseurs doivent porter le même nom.** Le réacteur
+    //    ouvre le curseur du graphe (`bus.cursor(sujet, nom)`) au `watch`,
+    //    AVANT ce qu'on veut observer ; le graphe le relit par le nom écrit
+    //    dans son `EventSourceNode(cursor='…')`. Deux noms différents, et le
+    //    curseur relu n'existe pas encore : il s'ouvre à la première
+    //    exécution, donc il **manque tout ce qui a été émis avant** — une
+    //    réaction qui dort silencieusement sur son premier lot. Vu le
+    //    11 octobre 2026 sur une fiche de témoin (`cursor='r'` pour une
+    //    réaction nommée `watch`), signalé par « everything declarative ».
+    for noeud in &graphe.template().nodes {
+        if noeud.node_type != "EventSourceNode" {
+            continue;
+        }
+        let Some(curseur) = noeud.config.get("cursor").and_then(Value::as_str) else { continue };
+        if curseur != nom {
+            return Err(format!(
+                "la réaction « {nom} » : son {} nomme le curseur « {curseur} », mais le \
+                 réacteur ouvre « {nom} » (le curseur EST le nom de la réaction, et il est \
+                 ouvert avant ce qu'on observe). Écrivez cursor='{nom}' — sinon la réaction \
+                 manque tout ce qui a été émis avant sa première exécution",
+                noeud.name
+            ));
+        }
     }
     for cle in bindings.keys() {
         if !graphe.params().iter().any(|p| p.name == *cle) {
@@ -413,7 +469,8 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
         })
         .map(|n| {
             format!(
-                "{outil} : le port status de {} ne va à aucune fusion — un échec                  de toutes les branches rendra un résultat vide (status non câblé)",
+                "{outil} : le port status de {} ne va à aucune fusion — un échec \
+                 de toutes les branches rendra un résultat vide (status non câblé)",
                 n.name
             )
         })
@@ -451,6 +508,12 @@ pub struct OutputPort {
 pub struct PreparedBackend {
     /// Le manifeste lu, pour le relire : un rechargement repart de lui.
     manifest_path: PathBuf,
+    /// Les types des nœuds scriptés du dossier `nodes/` (lot 2) : purs — ni
+    /// fichiers, ni réseau, ni commande —, ils entrent dans toutes les
+    /// politiques où entre un calcul.
+    scripted_types: BTreeSet<String>,
+    /// Les routes vérifiées et les vues du dossier `views/`.
+    routes: crate::routes::Routes,
     pub manifest: BackendManifest,
     /// L'embarquement dense, résolu au chargement (`BackendManifest::embed_source`).
     embed: crate::model_source::ModelSource,
@@ -459,7 +522,10 @@ pub struct PreparedBackend {
     mappings: HashMap<String, JsonSchemaMapping>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
     tools: BTreeMap<String, GraphTool>,
-    nodes: NodeRegistry,
+    /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
+    /// temps d'un appel, le réacteur des réactions le garde le temps de son
+    /// service.
+    nodes: Arc<NodeRegistry>,
     tool_schemas: BTreeMap<String, Value>,
     tool_validators: HashMap<String, jsonschema::Validator>,
     harnesses: HashMap<String, PreparedHarness>,
@@ -571,6 +637,11 @@ impl PreparedBackend {
             // **Les signaux montés sur le schéma nommé se valident ici, dans
             // les deux sens** : un signal qui demande un modèle refuse sans
             // lui, et un modèle que rien ne lit refuse aussi.
+            if !w.locks_via.is_empty() && w.index.as_deref() != Some("code") {
+                return Err("workspace.locks_via sans workspace.index = \"code\" : les fonctions de \
+                     verrou se lisent à l'ingestion du code — une déclaration que rien ne lit"
+                    .to_string());
+            }
             if !w.index_signals.is_empty() && w.index.is_none() {
                 return Err(
                     "workspace.index_signals sans workspace.index : les signaux se montent \
@@ -661,6 +732,27 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        // ── Les nœuds scriptés du dossier `nodes/` ──────────────────────────
+        //
+        // Découverts, pas listés : un dossier de déclarations se copie tel
+        // quel. Revérifiés à chaque chargement, donc à chaque rechargement.
+        let mut scripted_types = BTreeSet::new();
+        let declared = crate::dataflow::scripted_node::discover(
+            &directory.join("nodes"),
+            &crate::script::ScriptLimits::default(),
+        )
+        .map_err(|errors| format!("nodes/ : {}", errors.join(" ; ")))?;
+        for factory in declared {
+            let name = crate::dataflow::NodeFactory::node_type(&factory).to_string();
+            if nodes.has(&name) {
+                return Err(format!(
+                    "nodes/ : le nœud déclaré « {name} » porte le nom d'un nœud fourni — \
+                     renommez-le"
+                ));
+            }
+            scripted_types.insert(name);
+            nodes.register(Box::new(factory));
+        }
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();
         let mut entities = HashMap::new();
@@ -732,7 +824,20 @@ impl PreparedBackend {
                     return Err(format!("generated field {field} must be an integer"));
                 }
             }
-            config.validate()?;
+            // L'erreur dit de quelle entité elle vient : sans le nom, « Field 'x' »
+            // ne se retrouvait pas dans un manifeste de plusieurs entités.
+            config.validate().map_err(|e| format!("{name}: {e}"))?;
+            // **Une entité sans champ de contenu se refuse ici, au chargement**,
+            // et non plus à l'ouverture (`register_entity`), où le refus ne
+            // disait ni le manifeste ni quoi écrire. Tout ce que le chargement
+            // peut vérifier se refuse au chargement (10-11 octobre 2026).
+            if !config.has_simple_pipeline() && !config.has_kb_participation() {
+                return Err(format!(
+                    "{name}: aucun champ de contenu — marquez au moins un champ `isContent: true` \
+                     (ou `contentFor` / `titleFor` vers une base de connaissances) ; sans contenu, \
+                     l'entité n'est ni cherchable ni découpée"
+                ));
+            }
             if config.hashsafe.as_ref().is_none_or(|v| v.is_empty()) {
                 return Err(format!("{name}: stable hashsafe identity required"));
             }
@@ -822,7 +927,9 @@ impl PreparedBackend {
                     .map_err(|e| format!("{name}: crochet after : {e}"))?;
                 let permis = crate::backend_code::hook_nodes(&hook.policy);
                 for node in &hook_tool.template().nodes {
-                    if !permis.contains(&node.node_type.as_str()) {
+                    if !permis.contains(&node.node_type.as_str())
+                        && !scripted_types.contains(&node.node_type)
+                    {
                         return Err(format!(
                             "{name}: crochet after : le nœud {} n'entre pas dans un \
                              crochet — un crochet n'écrit pas, ne bloque pas, ne lance \
@@ -958,12 +1065,20 @@ impl PreparedBackend {
             if let Some(tool) = tools.get(name) {
                 crate::backend_code::validate_tool_policy(
                     name,
-                    tool.template().nodes.iter().map(|n| n.node_type.clone()),
+                    tool.template()
+                        .nodes
+                        .iter()
+                        .map(|n| n.node_type.clone())
+                        .filter(|t| !scripted_types.contains(t)),
                     &attachment.policy,
                     manifest.workspace.as_ref(),
                 )?;
             }
         }
+        // ── Les routes et les vues ──────────────────────────────────────
+        let routes = crate::routes::Routes::load(&manifest.routes, &directory, &|name| {
+            tools.contains_key(name)
+        })?;
         // ── Les graphes réactifs ─────────────────────────────────────────
         //
         // Lus, construits et liés ici, au même étage que les outils : un
@@ -997,6 +1112,7 @@ impl PreparedBackend {
                 &graphe,
                 &attachment.bindings,
                 manifest.tools.contains_key(name),
+                &scripted_types,
             )?;
             reactions.insert(name.clone(), graphe);
         }
@@ -1045,6 +1161,8 @@ impl PreparedBackend {
         }
         Ok(Self {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
+            scripted_types,
+            routes,
             manifest,
             embed,
             directory,
@@ -1054,7 +1172,7 @@ impl PreparedBackend {
             tools,
             after_hooks,
             reactions,
-            nodes,
+            nodes: Arc::new(nodes),
             tool_schemas,
             tool_validators,
             harnesses,
@@ -1259,6 +1377,10 @@ impl PreparedBackend {
         {
             crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
                 .map_err(|e| e.to_string())?;
+            // Les fonctions de verrou déclarées pour ce dépôt.
+            if let Some(w) = &self.manifest.workspace {
+                cat.declare_lock_calls(w.locks_via.clone());
+            }
             // Les signaux déclarés par le manifeste montent sur les entités
             // du schéma — la déclaration du moteur reste neutre, chaque
             // produit choisit. Une entité inconnue refuse en listant.
@@ -1312,7 +1434,7 @@ impl PreparedBackend {
             Some(source) => Some(crate::decider::connect_decider(source)?.0),
             None => None,
         };
-        Ok(Backend {
+        let backend = Backend {
             decider,
             avertissement_sans_service,
             prepared: std::sync::RwLock::new(Arc::new(self)),
@@ -1322,7 +1444,15 @@ impl PreparedBackend {
             file_source,
             #[cfg(feature = "code")]
             garde,
-        })
+            reactions: Mutex::new(None),
+        };
+        // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
+        // ici, pas sur un appel que l'hôte pourrait oublier : une section
+        // `"reactions"` lue, validée, puis montée par personne serait
+        // exactement la déclaration inerte qu'on écrit en boucle dans ce
+        // dépôt. Sans réaction déclarée, aucun réacteur ne démarre.
+        backend.mount_reactions()?;
+        Ok(backend)
     }
 }
 
@@ -1333,6 +1463,22 @@ impl PreparedBackend {
 /// (27 septembre 2026). Accepté : les textes livrés tels quels ; refusé : les
 /// erreurs ; les avertissements en clair dessous. Une présentation déjà posée
 /// par le graphe de l'outil n'est pas touchée.
+impl PreparedBackend {
+    /// Le graphe déclaré d'un outil — pour le dessiner (la page vivante).
+    pub fn tool_graph(&self, name: &str) -> Option<&GraphTool> {
+        self.tools.get(name)
+    }
+
+    /// Une politique de nœuds, plus les nœuds scriptés déclarés.
+    fn with_scripted<S: Into<String>>(&self, base: impl IntoIterator<Item = S>) -> NodeTypePolicy {
+        NodeTypePolicy::only(
+            base.into_iter()
+                .map(Into::into)
+                .chain(self.scripted_types.iter().cloned()),
+        )
+    }
+}
+
 /// Ce qui, d'une version des déclarations à l'autre, a été fixé à
 /// l'ouverture de la base — nommé par sa clé de manifeste. Les entités sont
 /// comparées après fusion de leur schéma JSON (un champ ajouté au schéma est
@@ -1395,6 +1541,27 @@ pub struct Reloaded {
     /// Les réactions retirées par ce rechargement (voir
     /// [`PendingReload::removed_reactions`]).
     pub removed_reactions: Vec<String>,
+}
+
+/// Ce qu'un rechargement a fait des réactions en service
+/// ([`Backend::reload_reactions`]).
+///
+/// Tout est RENDU, rien n'est seulement journalisé : l'arrêt d'un réacteur
+/// emporte ses erreurs avec lui, et un curseur oublié perd ses événements en
+/// attente. Les taire ici en ferait deux pertes silencieuses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReactionsReloaded {
+    pub reloaded: Reloaded,
+    /// Les erreurs des réactions arrêtées — personne d'autre ne les relira,
+    /// leur réacteur est parti.
+    pub errors_before: Vec<String>,
+    /// Les curseurs oubliés, en clair (`<sujet>@<réaction>`) : **leurs
+    /// événements en attente sont perdus**, c'est le prix de retirer une
+    /// réaction d'un manifeste. Sans cet oubli, le bus garderait un curseur
+    /// que plus rien ne vide.
+    pub dropped_cursors: Vec<String>,
+    /// Les réactions remontées.
+    pub mounted: Vec<String>,
 }
 
 fn harness_presentation(response: &mut Value) {
@@ -1603,6 +1770,17 @@ impl PreparedBackend {
 }
 
 pub struct Backend {
+    /// **Les réactions en service** — le réacteur qui les exécute, ou rien si
+    /// le manifeste n'en déclare aucune. Montées à l'ouverture, arrêtées par
+    /// [`Backend::stop_reactions`] (un arrêt ATTENDU) avant que le catalogue
+    /// ne soit lâché : une réaction qui finit d'écrire pendant qu'on ferme
+    /// écrirait dans un catalogue en train de partir.
+    ///
+    /// **Premier champ, et c'est voulu** : les champs tombent dans l'ordre de
+    /// leur déclaration, donc le `Drop` de la poignée — le filet, qui signale
+    /// l'arrêt sans l'attendre — passe avant que l'`Arc` du catalogue ne soit
+    /// lâché ici. Le contrat reste `stop_reactions`.
+    reactions: Mutex<Option<ReactorHandle>>,
     /// **Les déclarations en service.** Un appel prend la version courante au
     /// départ et la garde jusqu'au bout : un rechargement qui la remplace
     /// pendant ce temps ne change rien à l'appel en cours.
@@ -1654,6 +1832,186 @@ impl Backend {
     /// format du manifeste.
     pub fn declarations_version(&self) -> u64 {
         self.version.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// **Les réactions du manifeste, montées sur le bus du catalogue** — la
+    /// première et seule porte par laquelle un backend exécute ses graphes
+    /// réactifs. Jusqu'au 11 octobre 2026, `Reactor::watch` n'avait aucun
+    /// appelant dans tout `src/` : la section `"reactions"` se lisait, se
+    /// validait, et ne tournait jamais.
+    ///
+    /// Chaque réaction part avec **ses liaisons du manifeste**, telles quelles
+    /// — le chargement a déjà refusé celle qui ne s'instancie pas avec elles
+    /// seules, parce que personne ne complète un argument à l'exécution.
+    ///
+    /// **La politique de nœuds est écrite ICI, jamais dans le manifeste.**
+    /// `ReactionAttachment` n'a pas de champ `policy`, et ce n'est pas un
+    /// oubli : un gabarit qui nommerait sa propre politique s'accorderait une
+    /// capacité de fichier ou de commande en l'écrivant. La liste blanche
+    /// réactive était jusqu'ici le seul garde-fou et il était au chargement ;
+    /// il est maintenant aux deux bouts, et le second refus nomme le nœud.
+    ///
+    /// Rend les noms montés. Sans réaction déclarée, aucun réacteur ne
+    /// démarre et le résultat est vide.
+    pub fn mount_reactions(&self) -> Result<Vec<String>, String> {
+        let prepared = self.prepared();
+        if prepared.reactions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return Err("les réactions sont déjà en service : arrêtez-les par \
+                        Backend::stop_reactions, ou remontez-les sur de nouvelles \
+                        déclarations par Backend::reload_reactions"
+                .into());
+        }
+        let bus = self
+            .catalog
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .event_bus();
+        let mut services = self.build_services(&prepared);
+        // Le bus en LECTURE, sous la clé que demande `EventSourceNode` : le
+        // catalogue n'en donne que `"event_bus"`, par lequel on **publie**.
+        // Le même bus des deux côtés — c'est sur lui que `watch` ouvre les
+        // curseurs, et de lui que le graphe les relit.
+        services.register(
+            crate::dataflow::trace_nodes::EVENTS_SERVICE,
+            Arc::new(bus.clone()),
+        );
+        let mut reactor = Reactor::new(bus, prepared.nodes.clone(), Arc::new(services));
+        let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
+        let mut mounted = Vec::new();
+        for (name, graphe) in prepared.reaction_graphs() {
+            let bindings = prepared
+                .manifest
+                .reactions
+                .get(name)
+                .map(|a| a.bindings.clone())
+                .unwrap_or_default();
+            reactor = reactor
+                .watch_bound(graphe.clone(), Value::Object(bindings), policy.clone())
+                .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?;
+            mounted.push(name.clone());
+        }
+        *slot = Some(reactor.spawn());
+        Ok(mounted)
+    }
+
+    /// **Arrête les réactions et rend leurs erreurs** — un arrêt ATTENDU
+    /// (`ReactorHandle::stop`), pas espéré par un `Drop` : une réaction qui
+    /// finit d'écrire pendant qu'on ferme écrirait dans un catalogue en train
+    /// de partir.
+    ///
+    /// À appeler avant de lâcher le backend. Rien en service : rend vide.
+    pub fn stop_reactions(&self) -> Vec<String> {
+        let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
+        match slot.take() {
+            Some(handle) => {
+                let errors = handle.errors();
+                handle.stop();
+                errors
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// Les erreurs des réactions en service, dans l'ordre — ce qu'un hôte
+    /// affiche, et ce qu'un témoin lit. Une réaction qui échoue n'a aucun
+    /// appelant à qui rendre son erreur : si personne ne demande ici, elle
+    /// n'est nulle part.
+    pub fn reaction_errors(&self) -> Vec<String> {
+        self.reactions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(ReactorHandle::errors)
+            .unwrap_or_default()
+    }
+
+    /// Le nombre d'exécutions de réaction depuis le montage.
+    pub fn reaction_runs(&self) -> usize {
+        self.reactions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(ReactorHandle::runs)
+            .unwrap_or(0)
+    }
+
+    /// Attend que les réactions aient exécuté `n` fois, au plus `timeout` —
+    /// pour un témoin, ou un hôte qui veut synchroniser.
+    pub fn wait_reaction_runs(&self, n: usize, timeout: std::time::Duration) -> bool {
+        let start = std::time::Instant::now();
+        while self.reaction_runs() < n {
+            if start.elapsed() > timeout {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        true
+    }
+
+    /// **Recharge les déclarations ET remonte les réactions**, dans le seul
+    /// ordre qui tienne :
+    ///
+    /// 1. [`Backend::check_reload`] — un refus ici n'arrête rien, les
+    ///    réactions en service continuent ;
+    /// 2. l'arrêt ATTENDU des réactions — après la vérification, parce qu'un
+    ///    refus ne doit pas coûter une interruption ;
+    /// 3. [`Backend::apply_reload`] — d'un seul geste, et il ne peut plus
+    ///    échouer ;
+    /// 4. l'oubli des curseurs des réactions retirées, **en le disant** : ce
+    ///    qui attendait dessus est perdu, et le bus n'accumule plus pour
+    ///    personne ;
+    /// 5. le remontage depuis la nouvelle version.
+    ///
+    /// Ce qui rend l'étape 2 sûre, c'est le refus de l'étape 1 : le schéma,
+    /// la base et l'espace de travail ne se rechargent pas, donc une réaction
+    /// de l'ancienne version qui finit d'écrire écrit dans un catalogue que
+    /// la nouvelle ne change pas.
+    pub fn reload_reactions(&self) -> Result<ReactionsReloaded, String> {
+        self.apply_reload_with_reactions(self.check_reload()?)
+    }
+
+    /// **Les étapes 2 à 5 seules**, sur un [`PendingReload`] déjà vérifié —
+    /// pour un hôte qui veut garder l'étape 1 à lui (un refus avec retour
+    /// arrière doit pouvoir dire « rien n'a été arrêté », ce qu'il ne peut
+    /// plus dire si la vérification et l'arrêt sont dans le même appel).
+    /// Demandé par « everything declarative » pour `Backend::declare`.
+    pub fn apply_reload_with_reactions(
+        &self,
+        pending: PendingReload,
+    ) -> Result<ReactionsReloaded, String> {
+        let before = self.prepared();
+        let removed: Vec<String> = pending.removed_reactions().to_vec();
+        let errors_before = self.stop_reactions();
+        let reloaded = self.apply_reload(pending);
+        let mut dropped_cursors = Vec::new();
+        if !removed.is_empty() {
+            let bus = self
+                .catalog
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .event_bus();
+            for name in &removed {
+                let Some(graphe) = before.reaction_graphs().get(name) else { continue };
+                for topic in graphe.on() {
+                    // Le curseur du GRAPHE seulement. La sonnette du réacteur
+                    // (`<nom>@reactor`) est un abonnement, pas un curseur
+                    // enregistré sur le bus : elle part avec son récepteur.
+                    bus.drop_cursor(topic, name);
+                    dropped_cursors.push(format!("{topic}@{name}"));
+                }
+            }
+        }
+        let mounted = self.mount_reactions()?;
+        Ok(ReactionsReloaded {
+            reloaded,
+            errors_before,
+            dropped_cursors,
+            mounted,
+        })
     }
 
     /// **Relit les déclarations et les met en service d'un coup** :
@@ -1720,6 +2078,49 @@ impl Backend {
         Reloaded {
             version,
             removed_reactions: pending.removed_reactions,
+        }
+    }
+
+    /// **Une adresse mène à un contrôleur, son résultat à une vue.** La
+    /// requête devient les arguments de l'outil déclaré par la route (corps,
+    /// requête, chemin), l'outil s'exécute comme pour l'agent — mêmes
+    /// validateurs, même politique, une seule version des déclarations — et
+    /// son résultat va à la vue. La page et le résultat sortent du même appel.
+    pub fn route(&self, request: &crate::routes::RouteRequest) -> crate::routes::RouteResponse {
+        use crate::routes::{arguments, RouteResponse};
+        let prepared = self.prepared();
+        let (tool, view, path) = match prepared.routes.find(&request.method, &request.path) {
+            Ok((tool, view, path)) => (tool.to_string(), view.map(str::to_string), path),
+            Err(refused) => return refused,
+        };
+        let args = match arguments(request, path, prepared.tool_schemas.get(&tool)) {
+            Ok(args) => args,
+            Err(refused) => return refused,
+        };
+        let mut response = match self.call_tool_on(&prepared, &tool, Value::Object(args.clone())) {
+            Ok(response) => response,
+            Err(error) => return RouteResponse::text(422, error),
+        };
+        harness_presentation(&mut response);
+        let result = response["result"].clone();
+        let (content_type, body) = match &view {
+            Some(view) => {
+                let context = json!({"result": result, "arguments": args, "response": response});
+                match prepared.routes.render(view, &context) {
+                    Ok(page) => ("text/html; charset=utf-8", page),
+                    Err(error) => return RouteResponse::text(500, error),
+                }
+            }
+            None => (
+                "application/json",
+                serde_json::to_string_pretty(&result).unwrap_or_default(),
+            ),
+        };
+        RouteResponse {
+            status: 200,
+            content_type,
+            body,
+            result: Some(result),
         }
     }
 
@@ -1847,9 +2248,7 @@ impl Backend {
         // La politique **déclarée** de l'outil — vérifiée au chargement, elle
         // tient ici le runtime : la base déclarative, plus ce que l'outil a
         // déclaré (fichiers, commandes).
-        let policy = NodeTypePolicy::only(
-            crate::backend_code::allowed_nodes(&attachment.policy),
-        );
+        let policy = prepared.with_scripted(crate::backend_code::allowed_nodes(&attachment.policy));
         // Le crochet qui veut les uuids des résultats les capture au passage
         // de l'outil, par un port de métadonnées de plus — jamais un
         // re-calcul.
@@ -2003,7 +2402,7 @@ impl Backend {
                     graph,
                     &def,
                     &[],
-                    &NodeTypePolicy::only(crate::backend_code::hook_nodes(&hook.policy)),
+                    &prepared.with_scripted(crate::backend_code::hook_nodes(&hook.policy)),
                 )
             });
         match outcome {
@@ -2071,7 +2470,7 @@ impl Backend {
             &hook.tool,
             &def,
             &[],
-            &NodeTypePolicy::only(["RhaiNode", "ValidationRuleNode", "ValidationMergeNode"]),
+            &prepared.with_scripted(["RhaiNode", "ValidationRuleNode", "ValidationMergeNode"]),
         )?;
         Ok(response["result"].clone())
     }
@@ -2113,27 +2512,17 @@ impl Backend {
         }
         combined
     }
-    fn execute_graph(
-        &self,
-        prepared: &PreparedBackend,
-        tool: &GraphTool,
-        def: &GraphDefinition,
-        metadata_ports: &[OutputPort],
-        policy: &NodeTypePolicy,
-    ) -> Result<Value, String> {
-        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
-    }
-    fn execute_plan(
-        &self,
-        prepared: &PreparedBackend,
-        result_port: (&str, &str),
-        def: &GraphDefinition,
-        metadata_ports: &[OutputPort],
-        policy: &NodeTypePolicy,
-    ) -> Result<Value, String> {
-        let mut graph =
-            build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
-        // The host serializes tool calls; services are fresh so shutdown owns all handles.
+    /// **Les services d'un graphe de ce backend, en un seul endroit.** Le
+    /// chemin des outils ([`Backend::execute_plan`]) et le montage des
+    /// réactions ([`Backend::mount_reactions`]) donnent exactement les mêmes :
+    /// sans ce partage, une réaction validée au chargement échouerait à
+    /// l'exécution sur un service absent, et le manifeste aurait menti.
+    ///
+    /// `"events"` (lecture du bus, ce que demande `EventSourceNode`) n'est
+    /// pas ici : le catalogue donne `"event_bus"`, par lequel on **publie**.
+    /// C'est le montage qui ajoute le premier, parce que lui seul sait sur
+    /// quel bus les curseurs ont été ouverts.
+    fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
         let mut services = ServiceRegistry::new();
         self.catalog
             .lock()
@@ -2193,6 +2582,30 @@ impl Backend {
                 .map(|(k, v)| (k.clone(), v.writes.clone()))
                 .collect::<HashMap<_, _>>(),
         );
+        services
+    }
+    fn execute_graph(
+        &self,
+        prepared: &PreparedBackend,
+        tool: &GraphTool,
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+    ) -> Result<Value, String> {
+        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
+    }
+    fn execute_plan(
+        &self,
+        prepared: &PreparedBackend,
+        result_port: (&str, &str),
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+    ) -> Result<Value, String> {
+        let mut graph =
+            build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
+        // The host serializes tool calls; services are fresh so shutdown owns all handles.
+        let services = self.build_services(prepared);
         let output = DataflowRuntime::with_services(100, services).execute(&mut graph)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
@@ -2425,6 +2838,25 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
+    /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
+    /// moteur est bâti), sinon à côté de ce crate. Un worktree n'a pas
+    /// d'extension à lui (il n'en bâtit pas, et n'a plus de lien vers
+    /// l'arbre principal depuis le 10 octobre 2026) : sans la variable,
+    /// le moteur refusait par une « Binder exception » qui ne disait pas
+    /// quoi faire. On refuse ici, en le disant.
+    #[allow(dead_code)]
+    fn extension_vector_de_test() -> String {
+        let racine = std::env::var("RAG3DB_ROOT").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+        });
+        let chemin = racine.join("extension/vector/build/libvector.rag3db_extension");
+        assert!(
+            chemin.exists(),
+            "pas d'extension vector sous {} : posez RAG3DB_ROOT sur l'arbre où le moteur est bâti",
+            racine.display()
+        );
+        chemin.display().to_string()
+    }
     /// Une fiche réactive en mémoire, pour éprouver les refus sans manifeste.
     ///
     /// Elle est calquée sur la vraie
@@ -2449,7 +2881,7 @@ mod tests {
         )
     }
 
-    /// **Les quatre refus d'une réaction disent chacun quoi faire.**
+    /// **Les sept refus d'une réaction disent chacun quoi faire.**
     ///
     /// Ils sont la valeur de la section `"reactions"` : sans eux, un manifeste
     /// faux se découvre à la première panne, dans un flux que personne ne lit.
@@ -2465,10 +2897,10 @@ mod tests {
 
         // Vert d'abord : la forme attendue passe, sinon les rouges ci-dessous
         // ne prouveraient rien.
-        super::valider_une_reaction("review", &bonne, &vide, false).expect("la forme attendue");
+        super::valider_une_reaction("r", &bonne, &vide, false, &BTreeSet::new()).expect("la forme attendue");
 
         // 1. Homonyme d'un outil — le curseur du réacteur EST ce nom.
-        let e = super::valider_une_reaction("review", &bonne, &vide, true).unwrap_err();
+        let e = super::valider_une_reaction("r", &bonne, &vide, true, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("curseur"), "{e}");
 
         // 2. Un nœud hors de la liste réactive, avec sa capacité : le refus
@@ -2478,29 +2910,48 @@ mod tests {
             "    lu[\"ReadFileNode(path='x')\"]\n",
             "lu.content",
         );
-        let e = super::valider_une_reaction("review", &lit, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("r", &lit, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("read_files") && e.contains("tools"), "{e}");
 
         // 3. Pas de `%% on:` — et l'autre porte de sortie est nommée.
         let muette = fiche_reactive("%% param: target string = \"Memory\" -- la cible\n");
-        let e = super::valider_une_reaction("review", &muette, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("r", &muette, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("%% on:") && e.contains("tools"), "{e}");
 
         // 4. Une liaison que la fiche ne déclare pas.
         let mut inconnue = Map::new();
         inconnue.insert("cible".into(), json!("Memory"));
-        let e = super::valider_une_reaction("review", &bonne, &inconnue, false).unwrap_err();
+        let e = super::valider_une_reaction("r", &bonne, &inconnue, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("liaison inconnue cible"), "{e}");
 
         // 5. Non déterminée par ses liaisons : un paramètre obligatoire que
         //    personne ne remplira à l'exécution.
         let exigeante = fiche_reactive("%% on: catalog\n%% param: target string! -- la cible\n");
-        let e = super::valider_une_reaction("review", &exigeante, &vide, false).unwrap_err();
+        let e = super::valider_une_reaction("r", &exigeante, &vide, false, &BTreeSet::new()).unwrap_err();
         assert!(e.contains("n'est pas déterminée par ses liaisons"), "{e}");
         // Liée, la même fiche passe.
         let mut liee = Map::new();
         liee.insert("target".into(), json!("Memory"));
-        super::valider_une_reaction("review", &exigeante, &liee, false).expect("liée");
+        super::valider_une_reaction("r", &exigeante, &liee, false, &BTreeSet::new()).expect("liée");
+
+        // 6. **La clé n'est pas le nom de la fiche** — et le curseur, c'est le
+        //    nom de la fiche. Le refus donne le nom à écrire.
+        let e = super::valider_une_reaction("revoir", &bonne, &vide, false, &BTreeSet::new())
+            .unwrap_err();
+        assert!(e.contains("« r »") && e.contains("curseur"), "{e}");
+
+        // 7. **Le curseur du graphe nomme autre chose que la réaction.** Le
+        //    réacteur ouvre le curseur au `watch`, avant ce qu'on observe :
+        //    deux noms, et la réaction manque son premier lot sans rien dire.
+        let ailleurs = fiche(
+            "%% on: catalog\n%% param: target string = \"Memory\" -- la cible\n",
+            "    events[\"EventSourceNode(topics='catalog', cursor='autre', limit=1000)\"]\n    \
+             react[\"ReactTransitionNode(target=$target)\"]\n    events -->|events| react\n",
+            "react.report",
+        );
+        let e = super::valider_une_reaction("r", &ailleurs, &vide, false, &BTreeSet::new())
+            .unwrap_err();
+        assert!(e.contains("cursor='r'") && e.contains("avant"), "{e}");
     }
 
     /// **Le compte de chaque liste blanche est épinglé.**
@@ -2618,6 +3069,7 @@ mod tests {
             file_source: None,
             #[cfg(feature = "code")]
             garde: None,
+            reactions: Mutex::new(None),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -2799,11 +3251,7 @@ mod tests {
         // trouvait « fermée » (le rouge du 3 octobre au soir ; le scénario
         // de tuyauterie, sur une vraie base, passait). Trouvé par ce test.
         let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
-        let root = std::env::var("RAG3DB_ROOT")
-            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
-        conn.execute(&format!(
-            "LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'"
-        ))
+        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test()))
         .unwrap();
         let mut catalog = Catalog::new(
             Box::new(conn),
@@ -2825,6 +3273,7 @@ mod tests {
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
+            reactions: Mutex::new(None),
         }
     }
 
@@ -2925,10 +3374,7 @@ mod tests {
         manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
         manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
         manifest["embeddings"]["address"] = json!("127.0.0.1:9");
-        let root = std::env::var("RAG3DB_ROOT")
-            .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
-        manifest["vector_extension"] =
-            json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+        manifest["vector_extension"] = json!(extension_vector_de_test());
         std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
         let prepared = PreparedBackend::load(&chemin).unwrap();
         assert!(!prepared.needs_embeddings(), "aucun signal vecteur déclaré");
@@ -2997,11 +3443,7 @@ mod tests {
             manifest["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
             manifest["embeddings"]["address"] = json!("127.0.0.1:9");
             manifest["tools"]["put_note"]["after"] = after;
-            let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string()
-            });
-            manifest["vector_extension"] =
-                json!(format!("{root}/extension/vector/build/libvector.rag3db_extension"));
+            manifest["vector_extension"] = json!(extension_vector_de_test());
             std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
             let prepared = PreparedBackend::load(&chemin);
             (dir, prepared)
@@ -3097,6 +3539,78 @@ mod tests {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
         let e = p.err().unwrap();
         assert!(e.contains("fuzzy"), "{e}");
+    }
+
+    /// **Une entité sans champ de contenu est refusée au chargement**, en la
+    /// nommant, et plus seulement à l'ouverture (relevé du lot 4 d'everything
+    /// declarative). Et une erreur de la configuration d'une entité dit de
+    /// quelle entité elle vient.
+    #[test]
+    fn une_entite_sans_contenu_est_refusee_au_chargement_en_la_nommant() {
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        let charger = |patch: &dyn Fn(&mut Value)| {
+            let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+            let dir = tempfile::tempdir().unwrap();
+            copier(&src, dir.path());
+            std::fs::copy(src.join("../../tools/search_structured.mmd"), dir.path().join("search_structured.mmd")).unwrap();
+            let chemin = dir.path().join("backend.json");
+            let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+            manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+            patch(&mut manifest);
+            std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+            let p = PreparedBackend::load(&chemin);
+            (dir, p)
+        };
+        // Plein texte seul, aucun champ de contenu : refusée au chargement.
+        let (_d, p) = charger(&|m: &mut Value| {
+            m["entities"]["Note"]["config"]["fields"]["text"]["isContent"] = json!(false);
+            m["entities"]["Note"]["config"]["signals"] = json!(["bm25"]);
+        });
+        let e = p.err().expect("refusée au chargement");
+        assert!(e.starts_with("Note: aucun champ de contenu"), "{e}");
+        assert!(e.contains("isContent"), "le refus dit quoi écrire : {e}");
+        // Avec un signal vecteur, c'est `validate()` qui refuse : son erreur
+        // porte maintenant le nom de l'entité.
+        let (_d, p) = charger(&|m: &mut Value| {
+            m["entities"]["Note"]["config"]["fields"]["text"]["isContent"] = json!(false);
+        });
+        let e = p.err().expect("refusée au chargement");
+        assert!(e.starts_with("Note: "), "l'erreur nomme l'entité : {e}");
+        // Le gabarit tel quel se charge.
+        let (_d, p) = charger(&|_m: &mut Value| {});
+        p.expect("le carnet tel quel se charge");
+    }
+
+    /// **Les fonctions de verrou déclarées** (`workspace.locks_via`) se
+    /// lisent à l'ingestion du code : sans `index: "code"`, refusées au
+    /// chargement ; avec, lues telles quelles.
+    #[test]
+    fn locks_via_exige_le_schema_de_code() {
+        let patch = |m: &mut Value| {
+            m["workspace"]["locks_via"] = json!(["acquireLock"]);
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("workspace.locks_via"), "{e}");
+
+        let patch = |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["locks_via"] = json!(["acquireLock", "lockRowForWrite"]);
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let p = p.expect("déclarées avec le schéma de code");
+        assert_eq!(p.manifest.workspace.as_ref().unwrap().locks_via, vec!["acquireLock", "lockRowForWrite"]);
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
@@ -3215,3 +3729,7 @@ mod tests {
 #[cfg(test)]
 #[path = "backend_reload_tests.rs"]
 mod reload_tests;
+
+#[cfg(test)]
+#[path = "backend_reactions_tests.rs"]
+mod reactions_tests;

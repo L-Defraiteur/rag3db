@@ -672,3 +672,68 @@ dont 6 mises de côté par `long.txt` et `probabilistic.txt`) — 56 lignes avan
 Les deux premières comparaisons, jouées pendant qu'un autre banc tournait là-bas, avaient
 montré des « waited » de charge : c'est ce qui a donné la règle du soir (le banc entier en tenue
 exclusive, annoncée). Le message complet du lot : `~/.cache/rag3db-moteur-notes/a4/message.txt`.
+
+## V2 (11 octobre 2026, 0 h 15) — l'annonce en tête, faite
+
+Branche `verrous-v2` (page 08 ; `CALL acquire_locks('Table', [clés])` en tête d'une transaction
+explicite : une prise groupée, index partagé et clés exclusives, puis l'instantané repris après
+l'attente ; refus nommés en auto-commit, après une écriture, deux fois ; rien hors du mode
+multi-écrivains). Témoins : trois d'un fil verts, `AnnouncedLocksNeverDeadlockAndBothCommitInTurn`
+du banc vert (39 ms), sa ligne sortie de `known_red.txt` (20 attendus). La liste de fusion joue
+sur luciepc (suites en lourd, banc en tenue exclusive annoncée) ; push en avance rapide ensuite,
+lib commune rebâtie, worktree effacé. Suite : l'index au commit (page 07 §2, dépend de la page 04
+du banc), et les tickets ouverts d'A4′ (C7 après arrêt brutal, la seconde suppression d'une
+relation), la part reprise du journal à doublon.
+
+Passe, sur luciepc, bâti de la branche rebasée sur master (`97acd579b`, le contrôle de bâti des
+extensions compris) : transaction_test 238, api 104, c_api 136, copy 23, stockage 81 +
+column_stats 2, vector 74 et 63, Cypher 1867 ; banc de concurrence en tenue exclusive conforme à
+`known_red.txt`, 13 rouges comparés, 240 verts (19 lignes attendues). Une course de témoin
+trouvée en route et bornée avec l'accord du banc : « l'une après l'autre » se mesure au début du
+commit du premier (le verrou est rendu pendant le COMMIT, avant sa marque).
+
+## I1 (11 octobre 2026, 2 h 30) — le genre « index », fait
+
+Branche `verrous-i1-2` (page 09 §0 le découpage, §5 ce que le code a tranché) : tout écrivain
+d'une table indexée tient l'index en exclusif de sa première écriture à sa validation,
+l'instantané repris après l'attente. Témoins : six d'un fil, et au banc IndexLockBench ×3, H3 ×2
+verts (sortis de `known_red`, 15 attendus), H2 ×4 et H5 ×4 réécrits par le banc verts. Tickets
+ouverts en route : la recherche qui ne rend plus qu'une ligne après annulations puis mises à jour
+(au banc), le CALL nu qui rend des nœuds supprimés (ticket du banc). I2 (la maintenance au
+commit) attend la mesure du banc.
+
+Le cas Cypher `insert.TwoOpenTransactionsInsertVectors` de l'extension vector (un seul fil, deux
+transactions ouvertes qui insèrent dans une table indexée) supposait deux écrivains simultanés :
+adapté à la règle (délai nommé de 300 ms, annulation, insertion une fois la première validée),
+vert dans les deux modes. Rebasée sur master `6044723a5` (`bfc1434e1` du banc dedans, sans
+conflit ; `known_red` : 11 attendus, les quatre VectorIndexUpdate sortis par le banc) et poussée
+`verrous-i1-3` (`b549e607f`). Sur ce bâti, le témoin composé de la recherche à une seule ligne
+(`liveRowsByIndex == 100`) est **vert** : le ticket est fermé par les correctifs du banc
+(`6b13c6610`, stèle §2 à cinq). Le banc en mesure, lancé puis **retiré** : hotfixs pousse le
+lecteur affamé (du C++ dans `src/storage`) avant ma fusion, et un rebase qui apporte du C++ se
+rejoue — une seule passe, après son « poussé ».
+
+Passe, sur luciepc, bâti de `verrous-i1-4` (`27b90442c`, rebasée sur master `5c5feb527` : le lecteur
+affamé d'hotfixs dedans, 67 étapes, lib et extension datées après le checkout) : banc de
+concurrence en tenue exclusive conforme à `known_red.txt`, 9 rouges comparés, 246 verts (11 lignes
+attendues) ; api 104, c_api 136, copy 23, stockage 83 + column_stats 2, vector 74 et 63, Cypher
+1867 ; transaction_test 246 verts et **un rouge** : `OwnerlessPagesTest.TheReplayReadsNothingBeyondTheExtent`
+(après la mort d'un COPY journalisé, rejeu + point de reprise : la colonne DOUBLE des dernières lignes
+lit zéro). Seul ×2 vert, vert dans la liste précédente ; probabiliste (le fils finit son COPY puis se
+tue : le hasard est ailleurs, l'ordre des fils du COPY ou l'étendue rendue à l'ouverture) ; pas
+I1 (hors du mode, rien ne change) ; ticket ouvert
+(`docs/tickets/2026-10-11-rejeu-d-un-copy-tue-la-colonne-score-des-dernieres-lignes-a-zero.md`),
+hotfixs bissecte entre son `e4198f862` et son parent. **Fusionnée** sur ordre de l'orchestration :
+master `3ad09c8cc` (avance rapide, `83fdf22f3`…`3ad09c8cc`, sur `8b098eb3b` ; le dernier rebase
+n'apportait que du rag3weaver et des docs). Lib commune de luciepc rebâtie dessus, worktree
+`rag3db-i1` effacé.
+
+## La suite : I2 (la maintenance de l'index au commit)
+
+Page 09 §0 et §3 : I2 n'ouvre qu'avec la mesure du banc sur l'état par instruction (ce que coûte la
+fin d'instruction, et pourquoi) ; **la page avant le code est écrite** (3 h 30, page 10 :
+`10-i2-la-maintenance-de-l-index-au-commit.md` — un état par transaction appliqué au commit sous
+`INDEX` pris là ; l'index est l'état validé, comme pour les insertions ; ce que la mesure du banc
+tranche : son essai `essai-fin-d-instruction-filtre`, `53c742c0b`, en cours sur luciepc). Tickets du
+moteur encore à moi : C7 après un arrêt brutal, la seconde suppression d'une relation, la part
+reprise du journal à doublon.

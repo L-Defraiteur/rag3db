@@ -176,6 +176,11 @@ public:
     // la transaction est annulée par là, et rend tout ce qu'elle tient.
     void acquireLocks(std::span<const LockRequest> requests) const;
     void acquireLock(const LockResource& resource, LockMode mode) const;
+    // Marche V2, l'annonce en tête (CALL acquire_locks) : la transaction a-t-elle déjà écrit
+    // (une ligne, une version, le catalogue) ? a-t-elle déjà annoncé ?
+    bool hasWritten() const;
+    bool hasAnnouncedLocks() const { return locksAnnounced; }
+    void markLocksAnnounced() { locksAnnounced = true; }
 
     // Pendant cette portée, la transaction lit le dernier état validé au lieu de son instantané
     // (marche A4′ : après l'attente d'un verrou, ce qu'un autre a validé entre-temps compte —
@@ -213,6 +218,7 @@ private:
     LocalCacheManager localCacheManager;
     bool forceCheckpoint;
     std::atomic<bool> hasCatalogChanges;
+    bool locksAnnounced = false;
 };
 
 // TODO(bmwinger): These shouldn't need to be exported

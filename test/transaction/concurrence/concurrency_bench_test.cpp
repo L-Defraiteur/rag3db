@@ -1106,24 +1106,28 @@ TEST_P(ConcurrencyBench, H1_IndexedInsertsTogether) {
         .isolated = true});
 }
 
-// H2 — un écrivain supprime des documents pendant qu'un autre en insère, dans les deux
-// ordres de commit. Les lignes sont disjointes : les deux doivent valider. Invariant : les
-// deux valident, l'index rend exactement les lignes vivantes.
-static BenchCase indexedDeleteVersusInsert(std::vector<uint32_t> commitOrder) {
+// H2 — un écrivain supprime des documents pendant qu'un autre en insère. Les lignes sont
+// disjointes : les deux doivent valider. Invariant : les deux valident, l'index rend exactement
+// les lignes vivantes. Sous I1, tout écrivain d'une table indexée tient l'index en exclusif de sa
+// première écriture à sa validation : celui qui valide le premier écrit aussi le premier, l'autre
+// attend dans son écriture (writeInTurn), et les validations suivent l'ordre {0, 1}, comme pour
+// A4′. insertFirst : l'écrivain 0 insère et l'écrivain 1 supprime ; sinon l'inverse.
+static BenchCase indexedDeleteVersusInsert(bool insertFirst) {
     return {.numWorkers = 2,
         .setup = createIndexedDocs,
         .scenario =
-            [commitOrder](Worker& worker) {
+            [insertFirst](Worker& worker) {
                 worker.begin();
-                if (worker.index() == 0) {
-                    worker.writeInTurn("MATCH (n:Doc) WHERE n.id < 10 DELETE n;");
-                } else {
+                if ((worker.index() == 0) == insertFirst) {
                     worker.writeInTurn(createDocs(1000, 1009));
+                } else {
+                    worker.writeInTurn("MATCH (n:Doc) WHERE n.id < 10 DELETE n;");
                 }
-                worker.commitInOrderByEvents(commitOrder);
+                worker.commitInOrderByEvents({0, 1});
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
+                expectSecondWriterWaited(area);
                 EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
                 EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS)
                     << "[check: row-count] ";
@@ -1133,11 +1137,11 @@ static BenchCase indexedDeleteVersusInsert(std::vector<uint32_t> commitOrder) {
 }
 
 TEST_P(ConcurrencyBench, H2_IndexedDeleteCommitsFirst) {
-    runCase(indexedDeleteVersusInsert({0, 1}));
+    runCase(indexedDeleteVersusInsert(false));
 }
 
 TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
-    runCase(indexedDeleteVersusInsert({1, 0}));
+    runCase(indexedDeleteVersusInsert(true));
 }
 
 // H5 — deux écrivains insèrent chacun cinq documents placés tout près du même document (le 50),
@@ -1147,12 +1151,15 @@ TEST_P(ConcurrencyBench, H2_IndexedInsertCommitsFirst) {
 // est tenu en partagé par les deux inséreurs : rien ne les sépare. Invariant : les deux valident,
 // et l'index rend exactement les lignes vivantes (le vérificateur d'intégrité). Ce que la marche
 // « l'index au commit » devra garantir ; demandé par le cœur C++ le 10 octobre.
-static BenchCase indexedInsertsSharingANeighbour(std::vector<uint32_t> commitOrder) {
+// Sous I1, l'index est tenu en exclusif par le premier inséreur : celui qui valide le premier
+// écrit le premier, l'autre attend, les validations suivent l'ordre {0, 1}. secondRangeFirst :
+// les documents 1100 à 1104 s'écrivent et se valident avant 1000 à 1004.
+static BenchCase indexedInsertsSharingANeighbour(bool secondRangeFirst) {
     return {.numWorkers = 2,
         .setup = createIndexedDocs,
         .scenario =
-            [commitOrder](Worker& worker) {
-                const int64_t first = 1000 + worker.index() * 100;
+            [secondRangeFirst](Worker& worker) {
+                const int64_t first = 1000 + (worker.index() ^ (secondRangeFirst ? 1 : 0)) * 100;
                 // Le vecteur du document 50, sa première composante décalée d'un cent-millième par
                 // ligne : tout près de lui, et distincts entre eux.
                 auto near = docVector("50");
@@ -1161,10 +1168,11 @@ static BenchCase indexedInsertsSharingANeighbour(std::vector<uint32_t> commitOrd
                 worker.writeInTurn(stringFormat(
                     "UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first, first + 4,
                     near));
-                worker.commitInOrderByEvents(commitOrder);
+                worker.commitInOrderByEvents({0, 1});
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
+                expectSecondWriterWaited(area);
                 EXPECT_EQ(totalCommits(area), 2u) << "[check: all-commit] ";
                 EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS + 10)
                     << "[check: row-count] ";
@@ -1174,11 +1182,11 @@ static BenchCase indexedInsertsSharingANeighbour(std::vector<uint32_t> commitOrd
 }
 
 TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourFirstCommitsFirst) {
-    runCase(indexedInsertsSharingANeighbour({0, 1}));
+    runCase(indexedInsertsSharingANeighbour(false));
 }
 
 TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourSecondCommitsFirst) {
-    runCase(indexedInsertsSharingANeighbour({1, 0}));
+    runCase(indexedInsertsSharingANeighbour(true));
 }
 
 // H3 — deux écrivains suppriment deux documents dont les voisinages dans le graphe de
@@ -1191,7 +1199,8 @@ TEST_P(ConcurrencyBench, H5_IndexedInsertsSharingANeighbourSecondCommitsFirst) {
 // l'index rend exactement les lignes vivantes. Rouge, et attendu tant que la suppression
 // recoud les voisins pendant l'instruction : le second reçoit un « Write-write
 // conflict » (vu le 3 octobre, 10 sur 10). L'étude propose de le régler en faisant toute
-// la maintenance de l'index au commit (§4) ; ce cas en sera le test.
+// la maintenance de l'index au commit (§4) ; ce cas en sera le test. Sous I1, le second attend
+// l'index tenu par le premier, puis recoud sur le graphe validé : l'attente est prouvée.
 TEST_P(ConcurrencyBench, H3_IndexedDeletesWithOverlappingNeighbourhoods) {
     auto chosen = std::make_shared<std::pair<int64_t, int64_t>>(-1, -1);
     runCase({.numWorkers = 2,
@@ -1245,6 +1254,7 @@ TEST_P(ConcurrencyBench, H3_IndexedDeletesWithOverlappingNeighbourhoods) {
             },
         .expect =
             [](ConcurrencyBench& bench, const SharedArea& area) {
+                expectSecondWriterWaited(area);
                 EXPECT_EQ(totalCommits(area), 2u)
                     << "[check: all-commit] two deletes of unrelated rows must both commit";
                 EXPECT_EQ(bench.queryInt("MATCH (n:Doc) RETURN count(n);"), NUM_BASE_DOCS - 2)

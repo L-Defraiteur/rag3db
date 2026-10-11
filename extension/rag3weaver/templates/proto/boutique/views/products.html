@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Produits{% endblock %}
+{% block main %}
+<h1>Produits</h1>
+<table>
+  <thead><tr><th>Clé</th><th>Nom</th></tr></thead>
+  <tbody>
+  {% for product in result %}
+    <tr><td><a href="/products/{{ product.data.key }}">{{ product.data.key }}</a></td><td>{{ product.data.name }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<h2>Ajouter un produit</h2>
+<form method="post" action="/products">
+  <input name="key" placeholder="clé" required>
+  <input name="name" placeholder="nom" required>
+  <input name="price" placeholder="prix" required>
+  <input name="category" placeholder="catégorie">
+  <button>Enregistrer</button>
+</form>
+{% endblock %}

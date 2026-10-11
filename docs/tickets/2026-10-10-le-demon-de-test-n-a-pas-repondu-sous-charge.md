@@ -30,3 +30,10 @@ Le test lui-même, sous charge. Il n'a pas de témoin à part.
 - Lier le démon à `127.0.0.1:0` et rendre l'adresse qu'il a prise : plus de course au port.
 - Porter l'attente à un délai qui tienne sous charge (10 s), en gardant la sortie dès la
   première réponse.
+
+## Observé aussi (11 octobre 2026, chantier I)
+
+`daemon::embeddings::tests::un_gros_envoi_est_decoupe_en_lots` a rendu la même
+panique (« le démon n'a pas répondu », `fn demon`, ligne 843) pendant une lib
+complète sur luciepc, sous une batterie voisine ; rejoué seul, trois fois vert.
+Même cause : le délai de 2 s de `fn demon`, pas le démon.

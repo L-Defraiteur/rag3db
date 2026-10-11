@@ -375,5 +375,17 @@
         "types_entity": "RefType"
       }
     }
+  },
+  "reactions": {
+    "review_anchored": {
+      "graph": "graphs/review_anchored.mmd",
+      "bindings": {
+        "target": "Memory",
+        "relation": "ANCHORED_TO",
+        "transition": "review",
+        "source": "Subject"
+      },
+      "description": "Un sujet qui change fait repasser « à revoir » les mémoires qui l'ancrent."
+    }
   }
 }
