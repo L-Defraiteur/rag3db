@@ -214,3 +214,41 @@ Elle écrit VERT ou ROUGE par jeu et rend 1 dès qu'un jeu est rouge. Un jeu
 seul se vérifie par `cargo check --tests --features <jeu>`. À jouer avant tout
 hash qui touche `tests/` ou les features de `Cargo.toml`. Un jeu nouveau,
 employé par une session ou un script, s'ajoute au tableau **et** au script.
+
+## 9. Un target ne sert qu'un arbre à la fois
+
+Codeparsers l'a vu le 11 octobre : sous un target partagé par deux worktrees,
+cargo a repris l'artefact de `rag3weaver-ir` bâti par l'autre arbre (« Plan
+introuvable » alors que l'ir du worktree le définit). La cause : cargo note
+les sources d'un paquet local par des chemins **relatifs** à l'espace de
+travail (`ir/src/lib.rs` dans `deps/rag3weaver_ir-*.d`) et juge l'artefact
+frais par les dates. L'arbre aux fichiers plus anciens prend donc l'artefact
+du plus récent, que ce dernier existe encore ou non. Effacer un worktree après
+sa fusion ne suffit pas : revenir ensuite à l'arbre principal sur le même
+target reprend ses artefacts.
+
+**Reproduit** sur un espace de travail jouet : deux copies (`ANCIEN` daté du
+1er octobre, `NEUF` d'aujourd'hui), un target partagé. Après le bâti de
+`NEUF`, l'arbre ancien affiche `NEUF`. Après la reprise par la garde, il
+affiche `ANCIEN`.
+
+**La garde** (`scripts/garde_target.sh`, appelée par `run_e2e.sh` et
+`scripts/check_features.sh`) : le target note dans `.arbre-du-target` la
+racine de l'arbre qui l'a bâti. Un autre arbre est **refusé**, nommément
+(code 2), avec deux remèdes :
+
+- un sous-dossier par worktree,
+  `CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-<session>/<branche>`,
+  effacé à la fusion de la branche ; le plafond de 20 Go vaut pour
+  `target-<session>` entier ;
+- `RAG3WEAVER_TARGET_REPRENDRE=1` : `cargo clean -p` de chaque paquet local
+  (aujourd'hui `rag3weaver` et `rag3weaver-ir`, lus par `cargo metadata`), les
+  dépendances gardées, puis le target est noté au nom de l'arbre courant.
+
+Un `cargo` lancé à la main ne passe pas par la garde : la règle du
+sous-dossier reste la seule protection hors des deux scripts.
+
+Les vérifications de ce jour, ma batterie de fusion comprise, n'étaient pas
+exposées : mes deux worktrees partageaient `target-dossiers`, mais l'un n'y a
+fait que des `cargo check` (unités de métadonnées) et l'autre des bâtis (unités
+de bâti), qui ne se reprennent pas l'une l'autre.

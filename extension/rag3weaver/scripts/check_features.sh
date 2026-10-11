@@ -20,6 +20,9 @@ JEUX=(
   # Le minimum natif du backend de code.
   "rag3db-native,code"
 )
+ICI="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ICI/scripts/garde_target.sh"
+garder_le_target "${CARGO_TARGET_DIR:-$ICI/target}" "$ICI" || exit 2
 echec=0
 for jeu in "${JEUX[@]}"; do
   if timeout 1800 cargo check --tests --features "$jeu" > /dev/null 2>&1; then

@@ -787,6 +787,9 @@ if [ -d "$TARGET_DE_LA_PASSE" ]; then
   fi
   echo "▸ target : ${POIDS_TARGET_GO} Go (plafond ${PLAFOND_TARGET_GO} Go)"
 fi
+# Un target ne sert qu'un arbre à la fois (scripts/garde_target.sh).
+. "$WEAVER/scripts/garde_target.sh"
+garder_le_target "$TARGET_DE_LA_PASSE" "$WEAVER" || exit 2
 
 echo "▸ Running: suites ${CARGO_ARGS[*]}"
 
