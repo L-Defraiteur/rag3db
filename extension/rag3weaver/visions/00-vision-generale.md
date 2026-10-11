@@ -339,6 +339,32 @@ C'est aussi la voie Neo4j pour plusieurs processus : un processus tient une
 base, les autres lui parlent ; le multi-processus simultané sur un même
 fichier (mémoire partagée, PostgreSQL) reste une refonte non engagée.
 
+### L'IR, et le chaînage des formes (Lucie et l'orchestration, 11 octobre 2026)
+
+L'IR (`rag3weaver-ir`) n'est pas un langage qu'on écrit : c'est une structure
+de données — des formes typées (`Hop`, `Select`, `Count`, `Write`, bientôt
+`Tx`) dont les noms d'entités, de champs et de relations sont des valeurs.
+Il n'y a pas de texte au-dessus des dialectes, donc pas d'échappement, pas
+de conflit possible entre nos verbes et les noms déclarés ; le texte (Cypher,
+SQL) naît dans le dialecte seul, qui cite chaque identifiant à sa façon. Le
+format de transport (JSON quand le client mince parlera au démon) est à
+part de la structure ; un seul suffit. Les limites de l'IR sont dans ce
+qu'il sait dire, et chaque manque se comble par une forme de plus, que
+chaque dialecte déclare savoir traduire ou refuse en la nommant.
+
+**Le chaînage des formes** : aujourd'hui, c'est le graphe de traitement qui
+compose, une forme par nœud, un aller-retour par forme. Le jour où un fil
+sépare l'outil du moteur (le démon, PostgreSQL), le chaînage utile n'est pas
+une forme « pipeline » de l'IR mais **un sous-graphe de formes confié entier
+au dialecte** : le mermaid reste le même, une frontière y marque le
+sous-graphe « au dialecte » ; un dialecte qui le sait le traduit en une seule
+requête (une chaîne de MATCH, des tables temporaires nommées), un autre
+l'exécute pas à pas comme aujourd'hui — même déclaration, deux exécutions.
+C'est une capacité déclarée de plus. Le sous-graphe confié ne contient que
+des formes de l'IR (un nœud scripté ou un nœud qui parle au système y est
+refusé au chargement), et l'exécution enregistrée dit qu'il a été poussé
+d'un bloc, avec le texte produit. À faire quand une mesure le demande.
+
 ## 8. Ce qui n'est pas décidé
 
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;
