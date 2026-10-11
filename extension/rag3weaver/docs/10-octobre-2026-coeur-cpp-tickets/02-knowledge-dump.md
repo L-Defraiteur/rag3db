@@ -77,3 +77,16 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
   COPIE de l'extension (jamais un lien), `LD_LIBRARY_PATH` vers la lib, les services locaux
   127.0.0.1:7878/7879/7880 ; le python du venv-mcp pour l'aller-retour MCP (sur le poste principal :
   `~/.cache/rag3weaver-build/venv-mcp`). Le target fait ~14 Go : l'effacer à la clôture.
+
+## Le verrou des lecteurs (11 octobre)
+
+- L'identité d'une ouverture en lecture seule, c'est la page 0 et le préfixe du journal :
+  rien de `checkpointStorage` ne les change, puisque le moteur écrit par copie (pages neuves,
+  pages fantômes). Le premier changement visible est `wal->logAndFlushCheckpoint`.
+- Les doublures de test surchargent `logCheckpointAndApplyShadowPages` : un changement de
+  signature les casserait toutes. D'où le verrou en membre, et `holdReadersLock()` appelé de
+  l'intérieur.
+- flock sépare deux descriptions de fichier d'un même processus : un test peut tenir le verrou
+  lui-même pour simuler un autre processus.
+- `poste lourd timeout N cmd`, jamais `timeout N poste lourd cmd` : la borne ne doit compter
+  que le travail.

@@ -230,6 +230,32 @@ cœur C++ (le journal sans borne hors COPY, le lecteur affamé, le point de repr
 tampon) ; geo attend un utilisateur. Rien ne tourne de mon côté, aucun worktree ouvert hors celui
 des docs, effacé après ce push.
 
+## Le lecteur affamé (11 octobre, nuit)
+
+Ticket `2026-10-04-lecteur-affame-par-les-points-de-reprise`, confié par l'orchestration au
+service de l'indexation à plusieurs sessions. Trois formes proposées (une reprise dans le
+moteur, un verrou à la SQLite, la marche 5) ; la forme (2) choisie par l'orchestration, la
+fenêtre étroite par la session cœur C++.
+
+- **Le verrou des lecteurs** (`ReadersLock`, `<base>.readers`, flock ou LockFileEx) : partagé
+  pour l'ouverture en lecture seule (5 s au plus, puis un refus nommé), exclusif pour le point
+  de reprise, de la marque CHECKPOINT au journal supprimé (1 s au plus, puis il passe et le dit
+  sur la sortie d'erreur). Le constat d'après coup reste le filet.
+- **Rouge puis vert**, sur luciepc :
+  - `ReadOnlyReader.SingleOpenIsNotRefusedByBackToBackCheckpoints` : 34 refus sur 80 sur
+    master, 0 après ;
+  - le lecteur insistant : 0 refus à 0,2 ms comme sans pause ;
+  - les trois témoins des bornes dans `ReadOnlyOpenTest`.
+- **Écarts acceptés par l'orchestration** :
+  - le point de reprise ne compte pas les ouvertures qu'il attend (flock ne le permet pas) ;
+  - une ouverture plus longue que 1 s reste refusée par le filet : c'est la marche 5.
+- **Faute de méthode** : mes `timeout` enveloppaient `poste`, et comptaient donc l'attente du
+  verrou. Une mesure tenait le poste, la configuration a expiré, la passe rouge n'a rien
+  prouvé, et la passe enchaînée a lu le FIN de l'ancien journal pour démarrer trop tôt. Les
+  bornes vont maintenant DANS `poste` (`poste lourd timeout N …`), liste comprise. Un
+  enchaînement se fait dans un seul script, jamais par un guetteur qui lit un journal pas encore
+  vidé.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre
