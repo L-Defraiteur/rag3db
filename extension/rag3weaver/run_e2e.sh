@@ -837,9 +837,19 @@ if [ "$SUMMARY" = true ]; then
   # Suites qui ont rendu un résultat sans jouer un seul test.
   VIDES=0
 
-  # Collect Running/result lines in order
+  # **Une ligne de résultat par suite : la dernière avant la suivante.** Les
+  # suites qui relancent un fils par `current_exe()` font imprimer au fils sa
+  # propre ligne « test result » dans le même journal ; apparier par le rang
+  # décalait alors tout le tableau (des « ? », des « AUCUN TEST » à contresens)
+  # — justement quand une suite échoue et qu'on lit le résumé pour savoir
+  # laquelle (contre-épreuve du 11 octobre 2026). La ligne du parent vient
+  # toujours après celles de ses fils.
   mapfile -t SUITE_NAMES < <(grep -oP '(?<=Running tests/)\w+' "$TMPLOG")
-  mapfile -t RESULTS < <(grep '^test result:' "$TMPLOG")
+  mapfile -t RESULTS < <(awk '
+    /Running tests\// { if (n++) print (last == "" ? "test result: ok. 0 passed; 0 failed;" : last); last = ""; next }
+    /^test result:/ { last = $0 }
+    END { if (n) print (last == "" ? "test result: ok. 0 passed; 0 failed;" : last) }
+  ' "$TMPLOG")
 
   for i in "${!RESULTS[@]}"; do
     line="${RESULTS[$i]}"
