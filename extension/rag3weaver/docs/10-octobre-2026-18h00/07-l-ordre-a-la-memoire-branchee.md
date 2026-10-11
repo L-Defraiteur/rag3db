@@ -118,6 +118,13 @@ base indexée reste valide. Mais si tu veux une mémoire qui ne dépende pas d'u
 arbre de travail, il faut copier les deux bibliothèques à côté du binaire, comme
 je l'ai fait pour lui.
 
+**Et c'est éprouvé, pas supposé** : l'arbre principal a rebâti cette lib à
+3 h 49 (`librag3db.so` md5 `098e3ffc3900`, moteur `83fdf22f3` — les verrous I1)
+pendant que j'écrivais cette page. J'ai rejoué la passe dessus : la base écrite
+sous la lib d'avant se rouvre, `recall` et `get_memory` rendent la même chose.
+Je ne nomme pas le md5 dans la recette, justement : il changera encore ce matin,
+et une recette qui épingle un md5 est fausse demain.
+
 **6. Une base, un écrivain.** Sans `--demon`, le serveur possède sa base : deux
 sessions Claude Code ouvertes en même temps, et la seconde est refusée. Pour
 plusieurs sessions, c'est `--demon 127.0.0.1:7979` — mais attention, 7979 est

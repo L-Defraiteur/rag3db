@@ -35,6 +35,8 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
+- **11 octobre 2026, 4 h — mémoire longue, le montage des réactions : FAIT, sur master** (`0387fe401`, `ca9806d06`, `297b4af7a`, `7fcff7d23` ; worktree `~/git_workspaces/rag3db-montage`, target `target-montage`, à effacer) : `Reactor::watch` n'avait aucun appelant dans tout `src/` — `Backend::mount_reactions` l'appelle maintenant à l'ouverture, avec les liaisons du manifeste et la liste blanche réactive **écrite dans le montage et jamais dans le manifeste**. `stop_reactions` (arrêt attendu, appelé par `shutdown` avant le catalogue), `reload_reactions`, `apply_reload_with_reactions(pending)` pour l'hôte qui garde la vérification à lui. `review_anchored` déclaré dans le gabarit `memory`. Deux refus de chargement nouveaux : la clé du manifeste doit être le nom de la fiche, et le `cursor=` de l'`EventSourceNode` doit être ce même nom. Témoin de bout en bout : `tests/e2e_reaction_montee.rs` — un manifeste déclare, `Backend::open` monte, un `put_sujet` ordinaire émet, la fiche ancrée passe `a_revoir`, et **aucun appel ne nomme la réaction**. L'ordre A de la mémoire est joué : le gabarit `memory` branché par MCP, base `~/.local/share/rag3weaver/memoire-longue.rag3db`, binaire release dans `~/.local/bin/` (hors target, qui s'efface), recette et mises en garde dans `extension/rag3weaver/docs/10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`. **Ce qui reste, en tickets** : aucun nœud ne relie deux entités gérées, donc `ANCHORED_TO` et `REPLACES` n'ont pas de verbe et la réaction tourne à vide (une à deux passes, signature nouvelle, décision de Lucie) ; puis le huitième refus de `"reactions"`, **après** le nœud sous peine de rendre le gabarit livré inchargeable.
+
 - **10 octobre 2026, soir — codeparsers, chantier « indexer nos propres dépôts » (B4, B5, B2/B1, B3), master de codeparsers en avance rapide** (clone `~/git_workspaces/codeparsers-couverture`, target `~/.cache/rag3weaver-build/codeparsers-couverture`, sonde C++ `~/.cache/rag3weaver-build/sonde-cpp`) : la couverture la plus grande possible, C++ et Rust d'abord, mesurée sur nos dépôts. **B4 vert** (`eb41801`) : les références non résolues sont relevées avec leur raison (le relevé rendait 0). Suite : B5, le banc de couverture avec une ligne de référence commitée par dépôt. Mesure de chaque lot : les appelants de `NodeTable::update` (0 aujourd'hui). Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/04-indexer-nos-propres-depots.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`.
 - **10 octobre 2026, 23 h — chantier I « everything declarative », branche `proto-declaratif`** (worktree `~/git_workspaces/rag3db-proto` sur luciepc, target `target-I`) : le proto « tout déclaratif » en six lots (moteur de script générique avec rhai et TypeScript par rquickjs + swc_ts_fast_strip, nœud entièrement scripté, rechargement à chaud, route → graphe → vue, l'outil `declare`, la page vivante) ; lots fusionnés un par un en avance rapide. **Lots 1 et 2 sur master** (1 : le moteur de script générique, `src/script/`, rhai, TypeScript et JavaScript par QuickJS ; 2 : les noms possédés du moteur de graphes — deux fuites en service fermées — et le nœud entièrement scripté, `nodes/<nom>.node.json` ; pages 03 et 04). Lots 3 et 4 sur master (3 : le rechargement à chaud, en deux temps pour l'hôte, page 05 ; 4 : `nodes/` dans un backend, routes → outil → vue, `serve`, le jouet `templates/proto/boutique` et son e2e, page 06). Lot 5 sur master (l'outil `declare` : un geste d'hôte, vérifié, en service, commité par chemin avec la raison de l'agent ; page 07). Lot 6 sur master (la page vivante : `serve --atelier`, le chat au modèle déclaré, le flux d'événements, la montre ; page 08, avec la recette pour Lucie). Les six lots du proto sont faits ; reste la recette jouée par Lucie, et `declare` / la montre sur la porte des réactions de la session mémoire dès sa fusion. Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/03-le-proto-tout-declaratif.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/everything-declarative/01-rapport-de-session.md`.
 - **10 octobre 2026, 20 h 30 — cœur C++, marche A3′ sur master** (`21b6cb370`, `79b7be75f`, `9a57a17b2`) : verrou de clé à l'insertion, verrou d'index du COPY pris avant l'ordonnancement, unicité contre le dernier état validé (une seule visibilité), fil de remplacement de l'ordonnanceur pendant une attente ; sous le mode multi-écrivains seulement, éteint hors du banc ; known_red 59 → 56 ; liste complète verte sur luciepc. Suite : A4′. Rapport : `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/01-rapport-de-session.md`.
@@ -538,11 +540,12 @@ l'état avant et on le rétablit après.
 Et l'arrêt se fait **par `pidof`, jamais par un motif** : `pgrep -f` attrape le
 shell qui porte le motif.
 
-## Méthode : neuf façons de prendre son harnais pour un résultat
+## Méthode : dix façons de prendre son harnais pour un résultat
 
 Relevé le 3 octobre 2026 au soir, en une heure, pendant `e2e_arret_brutal` ;
 la cinquième est tombée la nuit suivante, la sixième le 4 octobre
-(quatre fois le même jour), la septième, la huitième et la neuvième le 10. Elles se sont présentées à la suite,
+(quatre fois le même jour), la septième, la huitième et la neuvième le 10, la
+dixième le 11 au petit matin. Elles se sont présentées à la suite,
 chacune sous un visage neuf ; la quatrième a failli faire annoncer une fausse
 régression à une autre session, et la cinquième montre que le remède de la
 quatrième était à moitié écrit.
@@ -850,6 +853,43 @@ verdict**, sinon le verdict se lit tout seul et on le croit.
 La cinquième ajoute une nuance aux quatre autres : une condition de validité
 relevée **avant** le travail ne prouve rien de ce qui s'est passé pendant. Ce
 qui peut changer sous les pieds d'une mesure se vérifie **aux deux bouts**.
+
+**10. Le script qui écrit le code avale la continuation de ligne.** 11 octobre
+2026, 3 h. J'écris du Rust par un script Python, et le message de refus sort en
+service avec dix-huit espaces au milieu d'une phrase :
+
+```
+« … la clé du              manifeste EST le curseur … »
+```
+
+La cause est exactement d'un caractère. En Rust, un `\` en fin de ligne dans une
+chaîne mange le saut **et l'indentation qui suit** — c'est comme ça qu'on écrit
+une phrase longue dans du code indenté. En Python, une chaîne triple **non
+brute** mange ce même `\` et son saut de ligne : le Rust reçoit la phrase sur
+une seule ligne, sans le `\`, **avec l'indentation**. Les deux langages ont
+raison, et le résultat est faux.
+
+Le piège n'est pas « Python mange les antislashs » — c'est que **l'outil entre
+moi et le fichier a changé le texte, et que j'ai relu mon intention au lieu du
+fichier**. Trois messages sont partis comme ça, dont un qui existait avant moi
+dans le même fichier.
+
+Deux remèdes, et le second compte plus :
+
+- écrire le Rust par une chaîne **brute** (préfixe `r`) ou un heredoc protégé,
+  jamais par une chaîne triple interprétée. La règle « un texte à accents graves
+  passe par Write » couvrait déjà le shell ; elle vaut pour tout générateur. Et
+  attention au second tour : une chaîne brute Python délimitée par trois
+  apostrophes se referme sur le `r` + trois apostrophes qu'on voulait écrire
+  **dedans** — c'est le même piège, d'un niveau plus haut, et il m'a eue dix
+  minutes après ;
+- **relire le fichier, pas le script.** Un `grep -nE '"[^"]*     [^"]*"'` sur le
+  diff trouve la classe entière en une seconde ; c'est lui qui a montré que le
+  troisième message avait le défaut avant que j'y touche.
+
+Et ce qui l'a attrapé en premier : un test qui compare le **texte** d'un refus,
+pas seulement qu'il y en ait un. C'est tout l'intérêt de regarder ce que la
+personne lira.
 
 ### Mémoire longue : l'ordre des lots change (3 octobre 2026, au soir)
 
