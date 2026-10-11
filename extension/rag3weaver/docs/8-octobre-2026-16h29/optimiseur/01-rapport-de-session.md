@@ -1,6 +1,6 @@
 # Optimiseur — rapport de session
 
-**Mis à jour le 11 octobre 2026 à 4 h 50.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
+**Mis à jour le 11 octobre 2026 au matin.** Chantier G, le paquet npm de rag3weaver, depuis le matin ; cadrage :
 `../orchestration/03-le-paquet-npm.md`. Le rapport précédent (envois à
 tracel-ai, modèles de décision) est dans `../../3-octobre-2026-23h31/optimiseur/`.
 
@@ -77,13 +77,17 @@ en une phrase chacun :
 
 ## Comment reprendre
 
-1. La séance de publication avec Lucie (quatre `npm publish` dans l'ordre
-   linux, windows, darwin, tête, depuis `paquet-npm-garde/publier/`), puis
-   `npm view rag3weaver@next version optionalDependencies` et la démo sans
-   `DEMO_SOURCE`.
-2. Fondre master (60d74a4e2 et la suite, fc636f7e6), rejouer les trois bâtis
-   (Windows et macOS changent de clé de cache dès que cmake/ ou src/ bougent),
-   vérifier les identifiants ; l'alpha suivante avec le correctif du cœur.
+1. **Publication reportée** (Lucie, 11 octobre au réveil : « on testera et
+   publiera plus tard »). Les archives de 634c52249 restent sous
+   `paquet-npm-garde/publier/` mais ne partiront pas telles quelles : l'alpha
+   publiée portera le correctif ALP du cœur (eae3863ab) et la fin du filet
+   (f9bf4574d), donc elle se rebâtira le jour venu.
+2. Ce jour-là : fondre master, rejouer les trois bâtis (Windows et macOS
+   changent de clé de cache dès que cmake/ ou src/ bougent), vérifier les
+   identifiants, épreuve et sonde, remballer les quatre archives, puis la
+   séance (linux, windows, darwin, tête), `npm view` et la démo sans
+   `DEMO_SOURCE`. Recettes et caches gardés (docker-cache sur luciepc,
+   caches des runners, target-G).
 3. Fusion de `paquet-npm` dans master quand l'orchestration le dit ; puis
    effacer target-G, le worktree, le clone luciepc.
 4. Ensuite : `fetch-depth: 0` sur les runners (identifiants alignés),
