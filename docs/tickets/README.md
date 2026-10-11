@@ -64,7 +64,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (31)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -102,6 +102,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | ouvert | blocage | oui, quand un arbre indexé change d'un coup | oui (hôte, réactions) |
+| [Un index se fige sur un appel d'embarquement sans délai](2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md) | ouvert — piste forte, preuve à faire | blocage | oui, tout index par un service d'embarquement | oui (`daemon::agent`, `DaemonEmbedder`) |
 
 ### Fermés (94), dans `closed/`
 
