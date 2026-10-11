@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (29)
+### Ouverts — moteur (30)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un binaire lié à une autre lib échoue sur un symbole manquant au lieu d'un refus nommé](2026-10-11-un-binaire-lie-a-une-autre-lib-echoue-sur-un-symbole-manquant-au-lieu-d-un-refus-nomme.md) | ouvert (cœur C++, relevé par codeparsers) | exploitation — l'hôte de luciepc a bouclé après B2 | oui (tout lot qui change une signature exportée) | oui |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | ouvert (cœur C++, né de la mesure de F) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
