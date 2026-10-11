@@ -1047,9 +1047,6 @@ uint64_t ColumnChunkData::getSizeOnDiskInMemoryStats() const {
 }
 
 std::vector<std::unique_ptr<ColumnChunkData>> ColumnChunkData::split(bool targetMaxSize) const {
-    // FIXME(bmwinger): we either need to split recursively, or detect individual values which bring
-    // the size above MAX_SEGMENT_SIZE, since this will still sometimes produce segments larger than
-    // MAX_SEGMENT_SIZE
     auto maxSegmentSize = std::max(getMinimumSizeOnDisk(), common::StorageConfig::MAX_SEGMENT_SIZE);
     auto targetSize =
         targetMaxSize ? maxSegmentSize : std::min(getSizeOnDisk() / 2, maxSegmentSize);
@@ -1057,24 +1054,40 @@ std::vector<std::unique_ptr<ColumnChunkData>> ColumnChunkData::split(bool target
     uint64_t pos = 0;
     const uint64_t chunkSize = 64;
     uint64_t initialCapacity = std::min(chunkSize, numValues);
+    // Chaque segment reste sous la taille visée, sauf un segment d'une seule valeur plus grande
+    // qu'elle. Les valeurs entrent par lots de chunkSize ; un lot qui fait déborder le segment en
+    // est retiré, et retenté deux fois plus petit, jusqu'à une valeur. Sans ce recul, un lot de
+    // 64 blobs de 4 Mio faisait un segment de 256 Mio, que chaque point de reprise relisait et
+    // réécrivait hors place (ticket 2026-10-04 « le point de reprise échoue quand le tampon est
+    // petit »).
     while (pos < numValues) {
         std::unique_ptr<ColumnChunkData> newSegment =
             ColumnChunkFactory::createColumnChunkData(getMemoryManager(), getDataType().copy(),
                 isCompressionEnabled(), initialCapacity, ResidencyState::IN_MEMORY, hasNullData());
-
-        while (pos < numValues && newSegment->getSizeOnDiskInMemoryStats() <= targetSize) {
-            if (newSegment->getNumValues() == newSegment->getCapacity()) {
+        uint64_t batch = chunkSize;
+        while (pos < numValues) {
+            const auto numValuesToAppend = std::min(numValues - pos, batch);
+            while (newSegment->getCapacity() - newSegment->getNumValues() < numValuesToAppend) {
                 newSegment->resize(newSegment->getCapacity() * 2);
             }
-            auto numValuesToAppendInChunk = std::min(numValues - pos, chunkSize);
-            newSegment->append(this, pos, numValuesToAppendInChunk);
-            pos += numValuesToAppendInChunk;
-        }
-        if (pos < numValues && newSegment->getNumValues() > chunkSize) {
-            // Size exceeded target size, so we should drop the last batch added (unless they are
-            // the only values)
-            pos -= chunkSize;
-            newSegment->truncate(newSegment->getNumValues() - chunkSize);
+            newSegment->append(this, pos, numValuesToAppend);
+            if (newSegment->getSizeOnDiskInMemoryStats() <= targetSize) {
+                pos += numValuesToAppend;
+                continue;
+            }
+            if (numValuesToAppend == 1 && newSegment->getNumValues() == 1) {
+                // Une seule valeur, plus grande que la taille visée : son segment à elle.
+                pos += 1;
+                break;
+            }
+            // Le lot fait déborder : il est retiré. finalize() rend les octets des valeurs
+            // retirées (chaînes, listes), qu'aucun segment ne doit emporter sur le disque.
+            newSegment->truncate(newSegment->getNumValues() - numValuesToAppend);
+            newSegment->finalize();
+            if (numValuesToAppend == 1) {
+                break; // le segment est plein
+            }
+            batch = numValuesToAppend / 2;
         }
         newSegments.push_back(std::move(newSegment));
     }

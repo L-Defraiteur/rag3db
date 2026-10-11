@@ -283,10 +283,15 @@ uint64_t StringChunkData::getMinimumSizeOnDisk() const {
 }
 
 uint64_t StringChunkData::getSizeOnDiskInMemoryStats() const {
+    // Les octets des chaînes sont copiés par DictionaryChunk::appendString sans tenir à jour les
+    // statistiques de leur bloc : estimés par ces statistiques, ils passeraient pour une colonne
+    // constante, donc vide, et split() mettrait toute la colonne dans un seul segment. On compte
+    // leurs octets, non compressés : une borne haute.
+    const auto stringBytes = dictionaryChunk->getStringDataChunk()->getNumValues();
     return ColumnChunkData::getSizeOnDiskInMemoryStats() +
            indexColumnChunk->getSizeOnDiskInMemoryStats() +
            dictionaryChunk->getOffsetChunk()->getSizeOnDiskInMemoryStats() +
-           dictionaryChunk->getStringDataChunk()->getSizeOnDiskInMemoryStats();
+           (stringBytes + RAG3DB_PAGE_SIZE - 1) / RAG3DB_PAGE_SIZE * RAG3DB_PAGE_SIZE;
 }
 
 uint64_t StringChunkData::getEstimatedMemoryUsage() const {
