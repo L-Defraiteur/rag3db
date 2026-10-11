@@ -23,6 +23,7 @@
 #include "common/exception/exception.h"
 #include "common/exception/runtime.h"
 #include "common/string_format.h"
+#include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
 #include "main/db_config.h"
 #include "processor/processor.h"
@@ -156,6 +157,17 @@ void Database::initMembers(std::string_view dbPath, construct_bm_func_t initBmFu
     if (!dbConfig.readOnly && !DBConfig::isDBPathInMemory(databasePath)) {
         // Avant d'ouvrir le moindre fichier : la reprise rejoue le journal et écrit.
         openForWritingMark = markOpenForWriting(databasePath);
+        // B2 : le verrou du fichier de données, AVANT la lecture du journal. Sans cela, un second
+        // processus écrivain lisait le journal, puis attendait le verrou au FileHandle, et rejouait
+        // un journal périmé (la fin écrite par le premier pendant l'attente manquait, et son
+        // point de reprise l'effaçait). Si le fichier n'existe pas, rien à attendre : le
+        // FileHandle le crée et le verrouille.
+        if (vfs->fileOrPathExists(databasePath, &clientContext)) {
+            FileOpenFlags gateFlags{FileFlags::READ_ONLY | FileFlags::WRITE,
+                FileLockType::WRITE_LOCK};
+            gateFlags.lockWaitMs = dbConfig.fileLockWaitMs;
+            writerGate = vfs->openFile(databasePath, gateFlags, &clientContext);
+        }
     }
 
     bufferManager = initBmFunc(*this);
