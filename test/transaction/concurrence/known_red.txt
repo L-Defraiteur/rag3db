@@ -120,3 +120,8 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-ve
 # La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
 # 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure) : 1,8 à 4,3 Mo en trois morts.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt data-file-bounded
+#
+# Le balayage sous un petit masque (ticket 2026-10-11-un-saut-par-semi-masque-lit-toute-la-table) :
+# un saut vers 72 000 Scope dont le masque retient 117 lignes éparpillées lit toute la table. Le
+# témoin (masked_scan_test.cpp) borne les lignes sorties du SCAN_NODE_TABLE sous le masque à 10·k.
+MaskedScan.ReadsAboutTheMaskNotTheTable scan-reads-the-mask
