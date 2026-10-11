@@ -932,8 +932,18 @@ pub trait SchemaDialect: Send + Sync {
     /// run a déjà vus sans réponse du service ne sont pas re-réclamés par ce
     /// run — ils restent dus, et le run suivant les retente.
     ///
+    /// **Un morceau sans texte n'est jamais dû** (ni compté, ni sélectionné,
+    /// ni réclamé) : rien à embarquer, et l'embarquement le sautait sans le
+    /// marquer — la réclamation le reprenait à chaque passe, et une passe de
+    /// 512 morceaux sans texte ne progressait plus jamais (le gel de code-lourd,
+    /// 11 octobre 2026).
+    ///
     /// Paramètres : `$reclamation`, `$perime`, `$mien`, `$exclus`.
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String;
+
+    /// Combien de morceaux de `table` n'ont pas de texte (`_text` nul ou
+    /// vide) : ni cherchables par leur texte, ni embarqués. Rend `cnt`.
+    fn count_chunks_sans_texte(&self, table: &str) -> String;
 
     // ── Search resolution ────────────────────────────────────────────
 
@@ -1957,15 +1967,21 @@ impl SchemaDialect for Rag3dbDialect {
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> String {
         let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
-            "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash \
+            "MATCH (n:{table}) WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash) \
+               AND n._text IS NOT NULL AND n._text <> '' \
              RETURN count(n) AS cnt"
         )
+    }
+
+    fn count_chunks_sans_texte(&self, table: &str) -> String {
+        format!("MATCH (n:{}) WHERE n._text IS NULL OR n._text = '' RETURN count(n) AS cnt", self.quote(table))
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
-            "MATCH (n:{table}) WHERE n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash \
+            "MATCH (n:{table}) WHERE (n.{marqueur} IS NULL OR n.{marqueur} = '' OR n.{marqueur} <> n._text_hash) \
+               AND n._text IS NOT NULL AND n._text <> '' \
              RETURN n._uuid, n._text, n._text_hash LIMIT {limite}"
         )
     }
@@ -1992,6 +2008,7 @@ impl SchemaDialect for Rag3dbDialect {
                AND (n._embed_claim IS NULL OR n._embed_claim = '' \
                     OR n._embed_claim < $perime OR n._embed_claim ENDS WITH $mien) \
                AND NOT n._uuid IN $exclus \
+               AND n._text IS NOT NULL AND n._text <> '' \
              WITH n LIMIT {limite} \
              SET n._embed_claim = $reclamation \
              RETURN n._uuid, n._text, n._text_hash"
@@ -3114,15 +3131,21 @@ impl SchemaDialect for PostgresDialect {
         let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "SELECT count(*) AS cnt FROM {table} \
-             WHERE {marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash"
+             WHERE ({marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash) \
+               AND _text IS NOT NULL AND _text <> ''"
         )
+    }
+
+    fn count_chunks_sans_texte(&self, table: &str) -> String {
+        format!("SELECT count(*) AS cnt FROM {} WHERE _text IS NULL OR _text = ''", self.quote(table))
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
             "SELECT _uuid, _text, _text_hash FROM {table} \
-             WHERE {marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash LIMIT {limite}"
+             WHERE ({marqueur} IS NULL OR {marqueur} = '' OR {marqueur} <> _text_hash) \
+               AND _text IS NOT NULL AND _text <> '' LIMIT {limite}"
         )
     }
 
@@ -3149,6 +3172,7 @@ impl SchemaDialect for PostgresDialect {
                   AND (_embed_claim IS NULL OR _embed_claim = '' \
                        OR _embed_claim < $perime OR _embed_claim LIKE '%' || $mien) \
                   AND NOT (_uuid = ANY($exclus)) \
+                  AND _text IS NOT NULL AND _text <> '' \
                 LIMIT {limite}) \
              RETURNING _uuid, _text, _text_hash"
         )

@@ -1840,6 +1840,8 @@ pub struct EmbedWatch {
     pub silent: Mutex<Vec<(String, String)>>,
     /// Les échecs d'une passe entière (une table qu'on n'a pas pu embarquer).
     pub errors: Mutex<Vec<String>>,
+    /// Les morceaux reçus sans texte, sautés sans être embarqués.
+    pub empty: std::sync::atomic::AtomicUsize,
 }
 
 impl EmbedWatch {
@@ -2259,7 +2261,15 @@ impl Node for EmbedNode {
 
             let embed_text = match rec.data.get(&self.text_field).and_then(|v| v.as_str()) {
                 Some(t) if !t.is_empty() => t.to_string(),
-                _ => continue,
+                _ => {
+                    // Rien à embarquer : sauté, et compté pour le journal de
+                    // l'indexation (la dette ne le compte plus, voir
+                    // `SchemaDialect::reclamer_chunks_sans_marqueur`).
+                    if let Some(w) = &watch {
+                        w.empty.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    continue;
+                }
             };
             let text_hash = rec.data.get("_text_hash")
                 .and_then(|v| v.as_str())

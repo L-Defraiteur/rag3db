@@ -101,6 +101,13 @@ pub fn read_catalog_in<'a>(
     };
     // **Sur quel code on répond** : l'arbre et le commit du dernier index.
     let arbre = cat.indexed_tree_line(&cell, crate::catalog::retard::now_ms());
+    // L'index est borgne sur ses morceaux sans texte : la réponse le dit.
+    let vides = cat.chunks_sans_texte_notes();
+    let arbre = match (arbre, vides) {
+        (a, 0) => a,
+        (Some(a), n) => Some(format!("{a} — {n} morceaux sans texte, ni cherchables ni embarqués (défaut connu)")),
+        (None, n) => Some(format!("{n} morceaux sans texte, ni cherchables ni embarqués (défaut connu)")),
+    };
     let status = match (arbre, status) {
         (Some(a), Some(s)) => Some(format!("{a} — {s}")),
         (a, s) => a.or(s),

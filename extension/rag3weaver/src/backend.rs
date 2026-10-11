@@ -3048,6 +3048,10 @@ impl Backend {
         if let Some(e) = embarquement {
             etats.insert("embedding".to_string(), e);
         }
+        let vides = cat.chunks_sans_texte_notes();
+        if vides > 0 {
+            etats.insert("chunks_without_text".to_string(), json!(vides));
+        }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
                 etats.insert(

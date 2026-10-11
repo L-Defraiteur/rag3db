@@ -479,17 +479,34 @@ fn run_index(
                 "{STOPPED_PREFIX} entre deux passes de vecteurs : le plein texte est prêt, relancer index embarque le reste"
             ));
         }
-        let (n, progress) = {
+        let muets_avant = watch.silent.lock().unwrap_or_else(|p| p.into_inner()).len();
+        let (n, progress, dus_avant) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+            let dus_avant = guard.index_progress().map(|p| dette(&p)).unwrap_or(usize::MAX);
             let n = guard.embarquer_le_retard_suivi(Disponibilites::TOUT, 512, None, Some(watch)).map_err(|e| e.to_string())?;
             // Chaque passe rafraîchit les états : « en cours » reste cru tant
             // que quelqu'un travaille.
             let progress = guard.refresh_index_states(&ENTITIES, rate, chars_per_chunk, n > 0).map_err(|e| e.to_string())?;
-            (n, progress)
+            (n, progress, dus_avant)
         };
         if n == 0 {
             say(progress.line(rate, chars_per_chunk));
             break;
+        }
+        // **Une passe qui réclame sans rien écrire s'arrête, nommée** : elle
+        // reprendrait les mêmes morceaux à la passe suivante, sans fin (le gel
+        // de code-lourd, 11 octobre 2026 : 512 morceaux réclamés, aucun écrit,
+        // aucun appel au service, le catalogue repris à chaque tour). Un
+        // morceau muet n'en est pas un : il est exclu de la passe suivante.
+        let muets = watch.silent.lock().unwrap_or_else(|p| p.into_inner()).len();
+        if dette(&progress) >= dus_avant && muets == muets_avant {
+            let vides = watch.empty.load(std::sync::atomic::Ordering::Relaxed);
+            say(progress.line(rate, chars_per_chunk));
+            return Err(format!(
+                "passe de vecteurs sans progrès : {n} morceaux réclamés, aucun écrit ({vides} reçus sans texte) — \
+                 la dette reste de {} morceaux ; l'indexation s'arrête au lieu de reprendre les mêmes sans fin",
+                dette(&progress)
+            ));
         }
         embedded += n;
         if progress.dense_percent() != last_percent {
@@ -518,14 +535,33 @@ fn run_index(
     if !echecs.is_empty() {
         log(journal, &format!("{} passe(s) d'embarquement en échec — {}", echecs.len(), echecs.iter().take(3).cloned().collect::<Vec<_>>().join(" ; ")));
     }
+    // **Les morceaux enregistrés sans texte**, dits : la dette ne les compte
+    // pas (rien à embarquer), mais ils ne sont pas cherchables non plus.
+    let vides: Vec<(String, usize)> = catalog.lock().map(|g| g.chunks_sans_texte()).unwrap_or_default();
+    let total_vides: usize = vides.iter().map(|(_, n)| n).sum();
+    if let Ok(g) = catalog.lock() {
+        let _ = g.note_chunks_sans_texte(total_vides);
+    }
+    if total_vides > 0 {
+        let detail: Vec<String> = vides.iter().map(|(t, n)| format!("{t} {n}")).collect();
+        log(journal, &format!(
+            "{total_vides} morceau(x) enregistré(s) sans texte ({}) : ni cherchables par leur texte ni embarqués — défaut d'écriture, ticket « des morceaux de code sont écrits sans texte »",
+            detail.join(", ")
+        ));
+    }
     if muets.is_empty() && echecs.is_empty() {
-        return Ok(None);
+        return Ok((total_vides > 0).then(|| format!("{total_vides} morceau(x) sans texte, ni cherchables ni embarqués")));
     }
     let dus = {
         let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         guard.index_progress().map(|p| p.dense_missing()).unwrap_or(0)
     };
     Ok(Some(format!("{dus} morceau(x) non embarqué(s), à reprendre (relancer index)")))
+}
+
+/// La dette d'embarquement d'un relevé : les vecteurs denses et creux dus.
+fn dette(p: &crate::catalog::IndexProgress) -> usize {
+    p.dense_missing() + p.tables.iter().filter_map(|t| t.sparse_missing).sum::<usize>()
 }
 
 /// Le refus d'`index` quand l'estimation dépasse le seuil et que l'appelant

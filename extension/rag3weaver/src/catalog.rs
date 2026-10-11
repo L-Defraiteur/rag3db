@@ -494,6 +494,10 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
+/// Clé de `_catalog_meta` : le dernier compte des morceaux enregistrés sans
+/// texte ([`Catalog::chunks_sans_texte`]).
+pub const CHUNKS_SANS_TEXTE_KEY: &str = "chunks_without_text";
+
 /// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
 /// quand. Pour qui se demandera dans six mois pourquoi cet index est en 107m.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -3656,6 +3660,42 @@ impl Catalog {
 
     /// Combien de chunks de `table` doivent encore `marqueur`. Zéro si la
     /// requête échoue : on ne bloque pas un rattrapage sur un compteur.
+    /// **Les morceaux enregistrés sans texte**, par table de morceaux qui en
+    /// a : ni cherchables par leur texte, ni embarqués (la dette ne les compte
+    /// pas). Le 11 octobre 2026, 20 % des morceaux d'un index de code : un
+    /// défaut d'écriture à trouver, que l'indexation dit désormais.
+    pub fn chunks_sans_texte(&self) -> Vec<(String, usize)> {
+        let mut out = Vec::new();
+        for (nom, cfg) in &self.entity_configs {
+            if cfg.chunked == Some(false) {
+                continue;
+            }
+            let table = format!("{nom}_Chunk");
+            let n = self
+                .conn
+                .execute(&self.dialect.count_chunks_sans_texte(&table))
+                .ok()
+                .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+                .unwrap_or(0) as usize;
+            if n > 0 {
+                out.push((table, n));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// Noter le compte des morceaux sans texte (fin d'indexation) : l'en-tête
+    /// des lectures et l'état de l'index le disent sans recompter.
+    pub fn note_chunks_sans_texte(&self, n: usize) -> Result<(), CatalogError> {
+        self.persist_meta_key(CHUNKS_SANS_TEXTE_KEY, &n.to_string())
+    }
+
+    /// Le dernier compte noté des morceaux sans texte (0 sans note).
+    pub fn chunks_sans_texte_notes(&self) -> usize {
+        self.read_meta_key(CHUNKS_SANS_TEXTE_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0)
+    }
+
     fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> usize {
         let requete = self.dialect.count_marqueur_manquant(table, marqueur);
         self.conn

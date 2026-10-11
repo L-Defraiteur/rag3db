@@ -1516,3 +1516,27 @@ fn un_echec_d_embarquement_est_releve_et_non_avale() {
     assert!(echecs[0].contains("503"), "il dit la cause : {echecs:?}");
     assert!(catalog.index_progress().unwrap().dense_missing() >= 3, "la dette reste, entière");
 }
+
+/// **Un morceau sans texte n'est jamais dû** (le gel de code-lourd, 11 octobre
+/// 2026) : l'embarquement le sautait sans le marquer, la réclamation le
+/// reprenait à chaque passe, et une passe faite de morceaux sans texte ne
+/// progressait plus jamais — `run_index` bouclait, aucun appel au service, le
+/// catalogue repris à chaque tour. Les morceaux vidés ici ne sont plus comptés
+/// ni réclamés : deux passes rendent zéro, la dette est nulle.
+#[test]
+#[ignore]
+fn un_morceau_sans_texte_n_est_jamais_du() {
+    use rag3weaver::dataflow::record_nodes::EmbedWatch;
+    use rag3weaver::disponibilite::Disponibilites as D;
+    let (mut catalog, _) = catalogue_avec_un_muet("rien ne sera muet ici");
+    assert!(catalog.index_progress().unwrap().dense_missing() >= 3, "la dette des trois produits");
+    catalog.execute_raw("MATCH (n:Product_Chunk) SET n._text = ''").expect("vider les textes");
+    assert_eq!(catalog.index_progress().unwrap().dense_missing(), 0, "un morceau sans texte n'est pas dû");
+    let vides = catalog.chunks_sans_texte();
+    assert_eq!(vides.iter().map(|(_, n)| n).sum::<usize>(), 6, "mais il est compté et dit : {vides:?}");
+    let run = Arc::new(EmbedWatch::default());
+    for passe in 1..=2 {
+        let n = catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, Some(&run)).expect("rattrapage");
+        assert_eq!(n, 0, "passe {passe} : rien à réclamer — avant, les mêmes trois morceaux revenaient à chaque passe");
+    }
+}
