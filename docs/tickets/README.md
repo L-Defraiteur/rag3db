@@ -62,7 +62,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (26)
+### Ouverts — produit (27)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -95,6 +95,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend](2026-10-11-l-hote-ne-relit-pas-un-manifeste-modifie.md) | ouvert | réponse trompeuse | oui, à chaque correction d'un manifeste servi | oui (`daemon_host.rs`) |
 | [Pas de gabarit `code` en lecture seule](2026-10-11-pas-de-gabarit-code-en-lecture-seule.md) | ouvert | friction | oui | oui (gabarit `code`) |
 | [On ne peut pas dire ce qu'on indexe : ni racines multiples, ni chemins inclus](2026-10-11-on-ne-peut-pas-dire-ce-qu-on-indexe.md) | ouvert | friction et coût | oui | oui (`workspace`, source de fichiers) |
+| [L'index ne suit pas l'arbre que l'agent édite](2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md) | ouvert — formes à cadrer avec l'arbre principal | réponse fausse | oui, dès qu'un agent travaille dans un worktree | oui (hôte, manifeste, montre) |
 
 ### Fermés (86), dans `closed/`
 

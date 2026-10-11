@@ -22,6 +22,32 @@ fois, même courte. Ne pas corriger les entrées des autres : en ajouter une.
 - **Ce qui manquait** : l'outil, le paramètre ou la réponse qui m'aurait évité ça.
 ```
 
+## En tête : l'index ne suit pas l'arbre que l'agent édite
+
+*Ajouté le 11 octobre 2026 au soir, à la demande de l'orchestration, après les premiers retours
+du cœur. Les retours ne le disent pas, mais il les touche tous. Ticket :
+`docs/tickets/2026-10-11-l-index-ne-suit-pas-l-arbre-edite.md`.*
+
+**Le fait** : la base `code-rag3db` indexe l'arbre principal de ce poste tel qu'il était sur
+master à 15 h 22. Le cœur édite sa branche dans un worktree sur luciepc. Ses questions portent
+donc sur un code qui n'est pas le sien, et ses propres changements n'entrent jamais dans l'index,
+montre ou pas. Un IDE indexe l'arbre que l'agent édite.
+
+**Les formes possibles**, à cadrer avec l'arbre principal :
+1. **Une base par arbre de travail**, déclarée au manifeste (ou dérivée du chemin de l'arbre),
+   montée par l'hôte à la demande, avec la montre dessus. Simple et juste, mais un premier index
+   par worktree (ici 12 min 27 s et 1,9 Go pour le dépôt entier), à moins de partir d'un
+   instantané reflink de la base de master.
+2. **Un index qui suit la branche de l'arbre** : la base sait de quel commit elle part, et
+   réindexe le delta (`git diff` du commit indexé à l'arbre courant) à chaque changement de
+   branche ou d'arbre. Moins de disque, mais une base ne sert qu'un arbre à la fois.
+3. **Pour luciepc** : la montre d'ici ne peut pas monter un arbre distant. L'index doit tourner
+   sur le poste de l'arbre, donc un hôte par poste et un client qui sait lequel interroger
+   (l'arbre est sur luciepc, l'hôte de luciepc répond).
+
+Les formes 1 et 2 se combinent : une base par arbre, née d'un instantané de la base de master,
+puis tenue à jour par le delta.
+
 ## Les entrées
 
 ### 11 oct., 15 h 30 — codeparsers — monter le MCP du code pour rag3db (avant toute question)
