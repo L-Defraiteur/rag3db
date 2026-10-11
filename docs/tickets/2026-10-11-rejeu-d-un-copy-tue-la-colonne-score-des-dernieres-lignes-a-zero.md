@@ -46,6 +46,14 @@ réouverture. Journal : luciepc `~/.cache/rag3db-moteur-notes/i1/liste-fusion/tr
   2. `0aed3c4b5` (l'étendue, arbre principal) : un état de rejeu non couvert — une page de la
      colonne DOUBLE du dernier groupe rendue à l'étendue puis écrasée par le point de reprise ?
 
+- Lecture de l'arbre principal (auteur de l'étendue, 3 h, sans reproduire) : une seule colonne fausse
+  sur la dernière ligne ressemble à une page de la colonne `score` du dernier groupe **rendue** (au-delà
+  de l'étendue) puis réécrite avant que le rejeu ne la relise — ou l'inverse, lue par le rejeu avant que
+  le `CHECKPOINT` ne la réécrive. L'étendue est posée à chaque point de reprise ; si `e4198f862` change
+  l'ordre entre le rejeu du journal et le premier point de reprise (le lecteur affamé passe par le
+  checkpointer), une page allouée pendant le rejeu peut tomber au-delà d'une étendue lue trop tôt :
+  **regarder d'abord si l'étendue de l'en-tête est relue après le rejeu ou figée à l'ouverture.**
+
 ## Témoin
 
 Le cas lui-même ; en boucle : `transaction_test --gtest_filter='OwnerlessPagesTest.*' --gtest_repeat=10`.
