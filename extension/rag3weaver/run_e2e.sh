@@ -682,6 +682,23 @@ for ligne in open(sys.argv[1]):
     fi
     statut=$?
     [ "$statut" -ne 0 ] && code=101
+    # **Une suite rouge garde son dossier disque** (relecture du banc, 11
+    # octobre 2026) : un rouge d'arrêt brutal tombe une fois sur vingt ou
+    # trente, et sa base est ce qu'on vient chercher — `GARDER=1` demanderait
+    # de prévoir le rouge avant de lancer. Déplacé (mv, sans copie) hors du
+    # parent de la passe, sous e2e-gardes/ que le balayage des passes mortes
+    # (e2e-<pid>) ne touche pas ; les cinq derniers par suite seulement. Une
+    # suite verte reste effacée.
+    if [ "$statut" -ne 0 ] && [ "${RAG3WEAVER_GARDER:-}" != 1 ] \
+       && [ -d "$E2E_DISQUE_PARENT/$nom" ]; then
+      local gardes="$E2E_DISQUE_RACINE/e2e-gardes" garde
+      garde="$gardes/$nom-$(date +%Y%m%d-%H%M%S)-$$"
+      mkdir -p "$gardes" && mv -- "$E2E_DISQUE_PARENT/$nom" "$garde" \
+        && echo "▸ $nom a rougi : son dossier est gardé dans $garde"
+      ls -1dt "$gardes/$nom"-[0-9]* 2>/dev/null | tail -n +6 | while read -r vieux; do
+        rm -rf -- "$vieux"
+      done
+    fi
     if [ "${RAG3WEAVER_GARDER:-}" != 1 ]; then
       rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
     fi
