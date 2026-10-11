@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (25)
+### Ouverts — moteur (26)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un plan de quelques lignes prend un fil par cœur](2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | ouvert — au cœur C++, pas pour maintenant | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
 | [Sous écrivains simultanés, l'index vectoriel refuse une instruction : « node offset N is beyond the visited set »](2026-10-11-index-vectoriel-sous-ecrivains-simultanes-offset-hors-de-l-ensemble-visite.md) | ouvert (10 sur 10 sur master, hors bascule) | refus d'une instruction valide | oui, depuis la bascule | oui en principe |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
